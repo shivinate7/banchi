@@ -10023,6 +10023,36 @@ reader decides it.
 
 **The residual collision is deliberately not closed, and this is the reasoning rather than an oversight.** Reading open pull requests at claim time would put the network and `gh` on the path of `make merge`, for a failure that is already LOUD: `decision index` reconciles `CLAUDE.md`'s index against the headings IN ORDER, so the second merge fails its own commit rather than landing quietly. A guess that is caught is not the same defect as a guess that resolves, and it is the second kind this entry was written for. **Closing it would trade a loud, cheap, mechanical failure for a network dependency in the one command that moves main.**
 
+### Amended 2026-09-11: the claimer is a no-op once a branch has claimed, and that is a gap
+
+**The section above closes the collision it can see and says nothing about the one it makes.** `plan` reads SLUGS. A branch that has already claimed has none left, so `scripts/claim-ids.py` printed `no unclaimed slug in this tree — nothing to do.` and exited — **a true statement about slugs and an incomplete one about safety.** The number it allocated can be taken by main *afterwards*, and nothing looked again.
+
+**It happened TWICE on the evening this entry was written, and a person was the mechanism both times.** PR #262 and PR #265 were allocated the same decision number; #262 merged first, and #265 re-claimed before its own merge. Then PR #265 and PR #270 were allocated the next one; #265 merged first, and #270 had to renumber. **The first was caught before the merge and cost a re-claim. The second was caught only because one session read another session's pull request title.** That asymmetry is the whole argument: both were luck, and only the first had a mechanism anywhere near it.
+
+**`--stale` is the second look, and it is not the residual collision above.** It takes every allocated id this branch ADDS since its merge base with the ref — decision heading, code-card `C` entry, build-order step — and asserts each is still free *on that ref*. The branch's difference against the merge base is exactly the set it is claiming to own; every id main already held is in the branch's copy too, and reporting those would report most of the file.
+
+**The baseline is the MERGE BASE and never the ref, which is the one way to write this check so it cannot see its own subject.** Measured against the ref's current content, an id the ref has just taken reads as already present on both sides, every collision cancels itself out, and the check reports clean forever while being exactly as green as it was before it existed. That mutation is in `scripts/claim-selftest.py` by name, and it is one of seven the staleness arms catch.
+
+**It REPORTS and it never repairs, on this entry's own ordering hazard.** An un-claim has to happen BEFORE a merge and never after: once main is merged in, a substitution on that token reaches main's own copy of the entry too. So it names the collision, says what the id would become, exits non-zero, and leaves the decision to a person or to `make merge`.
+
+**Free is set membership, never a comparison against the ceiling.** D80 culls step 12 and rules the hole correct, so a branch holding an id *below* main's highest that main does not hold is right and must not be refused. `max + 1` still answers what the NEXT id is; only the set answers whether a GIVEN one is taken.
+
+**It needs neither the network nor `gh`, so the ruling above is untouched.** Reading open pull requests is still rejected, and this does not want them: an open pull request's number is not yet a fact about main, and **the branch that merges second is the one that has to move** — so the case that actually bites is the one where the other branch has already LANDED, which a local ref read can see for nothing.
+
+**It runs in two places and they are worth different things.** `make merge` asks for it before every merge, in preview as well as on the press, and that is the authoritative run because the fetch immediately above it makes the answer current. `make check` and `make ci-check` run it too, as `make claim-stale`, where it is the earlier and cheaper warning. **It can only ever under-report against a stale `origin/main`, never over-report**, so a `make check` whose ref is a day old misses a collision it would have caught and invents none — which is what makes it safe on a path that gates. A clone with no `origin/main` at all is ALLOWED and says so, which is `revert-guard`'s call for `revert-guard`'s reason.
+
+**`decision index` stays the backstop and is not weakened or duplicated.** It reconciles `CLAUDE.md`'s index against the headings IN ORDER and still fails the second branch's own commit. What it cannot do is fail it EARLY: by the time that row speaks, two headings already carry one number and the cost falls on whoever merged second. This is the same finding, one step sooner and on the branch that can still cheaply move.
+
+**What it still cannot see is unchanged: two OPEN pull requests, before either has landed.** Neither is a fact about main yet, and nothing local can make them one.
+
+### Amended 2026-09-11: the claim and its guard must walk the same files, and `.js` was in neither
+
+**The substitution reaches a file or it does not, and `.js` did not.** `TEXT_SUFFIXES` carried `.mjs` and not `.js`, and `decision ids in code` walked `.py`, `.ts`, `.tsx` and `.css` — so a slug in a `.js` file survived the claim and no row afterwards could see that it had. Both sets gained it together, which is the only way to add one: a file the claimer rewrites and the guard cannot read is a file this invariant is not asserted over.
+
+**It was found by the first ORDINARY merge, not by the bootstrap, and it fired.** `app/eslint.config.js` cites decisions in its own comments — six of them, listed under its `governed_by` — and the branch that hit this had written its slug there twice. Unfixed, main would now hold two citations of an id that had just been given a number, in the one file neither reader opens. Fixed, that file cites `D142` and the claim covered ten files instead of nine. **The evidence is on main either way**, which is what separates this from the reasoning that preceded it.
+
+**The rule it generalises: the suffix set is every extension that can hold a citation.** A config file's comments are as real as a script's, and nobody had decided otherwise — nobody had considered `.js` at all. `SKIP` is the list that gets a judgement; this one gets completeness.
+
 ### What it does not decide
 
 **Not whether an id may ever be typed as a number again.** A session amending an existing entry cites it by its number, as it always has; the slug is for an entry that does not have a number YET. **Not the commit messages** — a message written on the branch names the slug and cannot be rewritten after a push, so the claim commit's own message is where the pair is recorded. **And not D80's stable-id ruling**, which this strengthens rather than reopens: that entry forbids renumbering an EXISTING step because 218 references would silently follow the number instead of the step, and a number claimed at the merge cannot collide, so nothing is ever renumbered to resolve one.
@@ -10077,6 +10107,140 @@ reader decides it.
 **Locally, everything.** `make check` green with the new row in it; the classifier replayed over 14 real merges as above; a docs-only merge (#260) classified SKIP and a screen merge (#259) classified RUN from their real diffs; the fail-open paths — a push with no payload, a dispatch, a base that does not exist — each printed RUN.
 
 **On the runner, both directions, the same night.** The account's minutes were exhausted when this was written and every run failed before its first step; the repository went public an hour later and runs scheduled again. Pull request #270 — this change — carries `.github/workflows/check.yml` in its own diff, so by its own rule its `browser-scope` job answered RUN and all three shards ran: the run-direction proof. The skip direction cannot be observed on a pull request that touches the workflow, so it was observed on #271, a probe whose BASE was this branch and whose only commit added one HTML comment to `README.md`: `browser-scope` passed in 8 seconds, `design-check` and `design-check-passed` showed as skipped, and `check`, `revert-guard` and `already-passed` ran as before. The probe was closed unmerged. After the merge, every docs-only pull request observes the skip for free.
+
+---
+
+## D142 — The setup outlives the browser, the box list is ordered by the hand, and one value stays on the old clock
+
+**Settled 2026-09-11, on the owner's own words about the screen they spend the most hours in.** Four instructions in one message, three of them about memory and one about what a box is called:
+
+> *same box style sorting in inventory (where most recently selected/most filled go to the top, rather than box #, determines the order of box in Workflow: Capture)*
+>
+> *ideally let it save my last used on capture on all settings ... so the game i picked, camera i picked, all stay saved in some sorta session history*
+>
+> *a quick clear all settings button*
+>
+> *i dont need to see box number in capture screen*
+
+### D27's premise was wrong about shifts, and the owner is the authority on that
+
+**D27 put seven values in `sessionStorage` and gave one reason**: *"a new tab is a new shift and closing the browser ends one."* That is a claim about how the operator works, not about how a browser works, and the person it describes says it is false. A shift ends when they stop feeding cards. The browser closing is a laptop lid; a new tab is a link opened from somewhere else. Neither is a fact about the stack on the desk.
+
+**The camera was already the counter-example and had been since before D27 existed.** `useCamera.ts` has held `banchi.capture.deviceId` and `banchi.capture.rotation` in `localStorage` from the beginning, arguing informally what D27 later generalised — and the owner's message names the camera and the game in one breath, as two things that should behave the same way. They were behaving differently, and nothing about either value explains why.
+
+**So six of the seven move to the device**: box, game, set hint, finish, rarity claim, product. `app/src/deviceMemory.ts` holds them as `banchi.capture.setup`, under the same `banchi.capture.*` prefix the camera already used, so everything this screen remembers about this machine now sits under one name.
+
+### ONE DOCUMENT, NOT SIX KEYS
+
+**It is one habit.** "The setup I work at" is a single thing the operator arranges once and clears in one press. `banchi.orders.fetch-filter` makes this argument already for its own two fields — *"splitting them would put two rows in `CLAUDE.md`'s roster for one habit"* — and it holds harder at six.
+
+**And it makes the clear one removal rather than six that can fail apart.** `localStorage` throws on the accessor in a private window and can throw on quota; six writes have five ways to half-succeed and leave a setup that is neither the old one nor nothing.
+
+**What it gave up is the absent-means-empty trick, and that turned out to be worth nothing.** Each old key stored "empty" as ABSENT so a cleared field and an unwritten one read alike. A document is present or absent as a whole, so `storedCaptureSetup` reads a missing FIELD as the same nothing it reads a missing document as, and an empty list can be stored as an empty list. What the wire carries is unchanged: an empty claim is still no claim (D3), and the screen still omits the key from the capture.
+
+### `captureId` DID NOT MOVE, AND IT IS WHAT THE CARVE-OUT WAS ALWAYS FOR
+
+**A restored setting is a claim on screen that is one press from being right. A restored `captureId` is a request for a card nobody is holding.** It is the in-flight id of a capture whose response was lost; everything about it is scoped to one page load — minted for a photograph being taken now, answered or abandoned within seconds, and the banner it raises asks the operator to put THAT card back at the lens.
+
+**Restoring it into a new shift would be strictly worse than losing it.** The banner would name a capture that resolved yesterday, and the honest answer to it — feed that card again — burns a position under D10's high-water mark. Session scope is what holds the window to "this page load", which is the only window the banner's own sentence is true in.
+
+**D27 is amended rather than overturned.** Its reason for existing is this value; what it got wrong is the six it generalised to. `banchi.run-scope` (D39) is unaffected and stays for its own stated reason: reading nothing is its safe answer by construction.
+
+### THE BOX LIST IS ORDERED BY THE HAND, AND IT IS THE SAME STORE `#/inventory` USES
+
+**The field's own comment had already conceded the point.** It sorted by number and took the highest nine, on the reasoning that *"boxes are allocated upward and recency is not a fact either route carries"*. True of the ROUTES, and it stopped being true of the BROWSER when D132 started recording which boxes the hand opened. The proxy fails exactly where it matters: a drawer fed for three weeks sinks below every box made since, and the one box that can never sink is the one made last — the one case nobody needs help finding.
+
+**Three terms, D132's rail comparator exactly**: the box this browser last reached for, then the box holding the most cards, then the number, which is the last thing the owner thinks in and so the last thing this sorts by. `on_hand` and not `cards`, `fill` or `next_index`, for D132's reason — a box full of sold records is not a box worth reaching for.
+
+**ONE STORE, SHARED, AND THAT IS A RULING RATHER THAN AN ECONOMY.** Capture could have kept a recency store of its own. The argument against it is that there is one operator with one hand: photographing into box 7 and then walking to `#/inventory` is the same person still thinking about box 7, and a rail that opened on some other drawer would be answering a question nobody asked. The shared store is what makes the second screen agree with the first without either knowing about the other.
+
+**So the key is renamed** — `banchi.inventory.box-recency` to `banchi.box-recency`. Two screens write it now, and the old name said which SCREEN had written the fact instead of what the fact is. **No migration**, D27's own second-amendment rule and the reason a read-time fallback was declined there; the cost is one sitting of the fallback order until the first box is opened or captured into.
+
+**A PICK IS A REACH AND A CAPTURE IS NOT.** Only `chooseBox` touches the store. A capture fires once per card at a measured 623 ms cadence, so touching there would put a `localStorage` read-modify-write on the feeder's hot path — hundreds of times a box — to re-record a fact that has not changed since the pick that preceded every one of them. A page LOAD is not a reach either, which is `BoxBrowse`'s own rule: the restore carries the box the operator last picked, and that pick already wrote its stamp.
+
+### A RESTORED BOX IS CHECKED AGAINST THE STORE, AND FAILS SOFTLY
+
+**Photographing into the wrong drawer is the expensive failure on this screen**, and the setup now outlives the browser, so the gap between "the box I last picked" and "a box that still exists and still takes cards" can be days wide. Between two sittings a box can be sealed (D20), deleted (D34's panel), or **deleted and its number handed to a different physical drawer** by `next_box_number`'s lowest-free allocation. The first two are refused at the shutter anyway. The third is refused nowhere, because box 7 exists and takes cards — it is simply not the box the operator thinks they are looking at.
+
+**So the restore falls back to NO SELECTION, never to a guess**, names the box it let go of, says why, and opens the field with focus in the entry — the state `Pick a box` would have put them in, so the remedy is the press they were about to make.
+
+**It waits for the answer, not for a non-empty list.** `boxRecords` starts `[]` and `[]` is also what a store with no boxes returns; judging on emptiness would clear a good box on every slow fetch, which on a cold capture server is every fetch. A separate flag records that `GET /boxes` actually answered.
+
+### THE CLEAR IS ONE PRESS WITH A RECEIPT AND A WAY BACK
+
+**Quick is the requirement, so there is no confirmation dialog.** The press clears, the screen visibly returns to its empty state, and a receipt toast carries an Undo — D28's shape for the review answer, right here for the same reason: a confirmation ahead of a reversible act buys nothing and costs a press every time.
+
+**It clears choices about CARDS and leaves the RIG alone.** Box, game, set hint, rarity, finish and product are decisions about the stack in front of the operator, and the next stack is a different decision. The camera and the rotation are which hardware is plugged in and which way it is mounted (D13) — the same tomorrow as today. Clearing those would mean re-picking a 4K capture card to start a run that needs none of it re-picked, so the control says on its face what it leaves behind.
+
+**It leaves `banchi.box-recency` alone too**, and that is the same line drawn once more: the clear is about the setup, not about which drawers this hand has been in.
+
+**The game goes to the registry's default, not to null.** A null game draws the blocked reason for a registry that has not ARRIVED — *"Waiting for the game list from the server"* — which after a successful load is simply untrue. A fresh browser does not sit on no game either; `loadGames` puts it on `registry.default`. That IS nothing chosen, for this one field.
+
+**Quiet, not danger.** It destroys nothing, `docs/DESIGN.md` reserves red for acts that do, and the sentence under it names the store explicitly. This is the screen where cards are made and "clear" is a word that could be misread.
+
+**No keyboard binding, deliberately.** Every unmodified letter at rest is spoken for by `FIELD_KEYS` plus `c`/`u`/`s`, and a reset on a bare letter at a rig — where the operator is pressing keys fast with a card in hand — is a mis-press that wipes the setup mid-run. The owner asked for a button. `SHORTCUTS` gains nothing, which is the correct outcome rather than an omission.
+
+### THE BOX NUMBER COMES OFF THIS SCREEN, AND OFF THIS SCREEN ONLY
+
+**D20 is what makes the instruction answerable**: a box is addressed by its name and names are unique, so `RB Epics` identifies a drawer as completely as `Box 3` does and identifies it in the word the operator actually thinks in. At the lens they are not walking a shelf or reading a path; they are putting cards into the box open on the desk, and they named it.
+
+**An unnamed box still draws its number, and that is not an exception.** D20 makes a name unique and deliberately NOT required, so a box with none is an ordinary box and its number is the only thing it has to be called. A placeholder in the name's place would draw a fault where there is none (D56). The number is removed as the thing the operator reads PAST, never as the thing a box is.
+
+**`runScope.ts:captureBoxLabel` is that rule, beside `boxLabel` rather than inside it.** Every other screen keeps `Box 3 · RB Epics` for the reason written there: the number is the shelf, the photograph directory, and what every refusal in `server/pipeline_routes.py` names. The capture screen is the one place the operator is holding the physical box.
+
+**The PICKER keeps the number, inverted.** The name leads and `Box 3` trails as a de-emphasised suffix, because the entry above it searches number and name together — a row that hid the number would answer a search for `9` with nine rows that do not visibly contain a 9. That is the one place on this screen where the number is still doing a job.
+
+**Nothing else moved.** `pipeline/join.py:Position` is untouched, including on this screen's own filmstrip and receipts: the Fulfiller reads those, and he is walking a shelf he did not pack. Nothing on the wire changed and no route was added.
+
+### What would reopen it
+
+**A second person at a second rig.** Every argument here assumes one operator with one hand and one desk — the shared recency store most of all. Two people feeding two rigs from one browser profile would make "most recently reached for" a question with two answers, and the right shape then is probably per-rig rather than per-device.
+
+**A box whose name is not the word the operator uses.** The rendering assumes the name is what they recognise. If drawers start being named by content and referred to by position, the number comes back.
+
+## D143 — The claim reads the checked-out tree, so which tree that is must be established before anything reads it
+
+**Ruled 2026-09-11, the same evening D140 landed and a few hours after it.** `make merge ARGS="270 --confirm"` was run from the primary checkout while it was standing on `main`. The claim half read `main`, found no slug in it, printed `no unclaimed id on this branch — nothing to claim`, and merged pull request #270's slug onto main verbatim. Pull request #270's slug sat on `main` as a heading until #273 repaired it with the claimer itself — six files, no hand edits. The slug is deliberately not spelled here: it is a number now, and a spelled one would be a citation of an entry that no longer exists under that name.
+
+**The guard that should have stopped it existed, and was seven lines too late.** D140's own prose says the claim half refuses when the checkout is not standing on the pull request's own head branch. It does — but `if not pending: return 0` sat ABOVE `if here != branch`, so the precondition was unreachable on exactly the path that reaches main: a tree with nothing to claim returns before it is ever asked which tree it is. **"The guard does not exist" and "the guard is seven lines too late" are different defects and get fixed differently, and only the second one is what happened.**
+
+### Every reader here asks its question of the checked-out tree
+
+**That is not a flaw in the readers; it is what they are for.** `claims_pending` reads the working tree because the slug it must substitute is in the working tree. `stale_claim` reads it for the same reason, and standalone `make claim-stale` is CORRECT reading it — there, the tree you are in is the tree you are asking about.
+
+**What neither reader can do is tell whether that tree is the pull request's**, and neither should learn: only `merge-pr.py` knows the head branch, and teaching `claim-ids.py` to care would give it a second job and a reason to grow a `gh` dependency D140 spent a paragraph refusing. **So the precondition belongs where the pointing happens**, and it is one hoist rather than a check in each reader.
+
+### It had to move above the STALENESS read, not merely above the pending check
+
+**The pending check is what let the slug through, and stopping there would leave a second, quieter defect.** A run standing on a branch that itself holds a stale number, merging a DIFFERENT pull request, would refuse with a sentence that is true about the tree it is in and names a pull request it is not merging — sending the reader to the wrong branch to fix the wrong thing. The tree is established first, so every refusal below it is about the right tree by construction.
+
+### What it repairs in the entry above it, which is the part nobody would have looked for
+
+**D140's staleness half was blind in exactly the same way, and fixing the claim alone would have made that worse rather than better.** `stale_claim` reads the checked-out tree, so from `main` it computes what `main` adds over its own merge base — nothing — and reports `every id this branch adds is still free` while the branch's stale number sits untouched. Measured on a throwaway repository before this was written: standing on the branch, exit 3 and a refusal; standing on `main`, exit 0 and clean, with the stale number unmerged in both runs.
+
+**And the same reader had to learn what a merge in progress means.** Mid-merge the working tree already holds the other side's entries while the merge base has NOT moved, so every id that merge brought in reads as this branch's own and every one is on the ref by definition. The advice would be to un-claim an id belonging to somebody else's merged work. **The routine that produces it is the documented pre-merge step** — fetch, merge `origin/main`, resolve, push — and `make claim-stale` is in `make check`, so it is common rather than exotic: this entry's own branch hit it while resolving against D142, one refusal naming an id main had merged an hour earlier. A tree mid-merge is ALLOWED and says so, on the same reasoning as a missing ref: a question that cannot be asked is not a failure.
+
+**A green row asserting something nobody checked is worse than the silence it replaced**, and that is what patching the claim half alone would have shipped. One hoist fixes both, because both readers sit below it.
+
+### Proved from the wrong tree, which is why it was invisible
+
+**Every existing test stood in the right place.** The claim half had no driver at all before this — `main()` reaches it only through `pr_state()`, which is `gh` — so nothing exercised a precondition that looked tested because its prose described it.
+
+**It is drivable with no network**: `claim_half`'s `if not confirm: return 0` sits above its first `gh` call, so `scripts/claim-selftest.py` imports `scripts/merge-pr.py` and calls it in preview against a throwaway repository. Eight arms, and the one that matters reproduces the evening's failure exactly — a slug on the pull request's branch, nothing pending in `main`, the run made from `main`. **Restoring the original ordering turns five of them red.** Five mutations, none survived, including the partial hoist that stops above the pending check but below the staleness read.
+
+### The same question, wrong in the auditor, found by trying to write this entry
+
+**`docs-audit.py`'s `on_main()` said YES about a branch, and its own docstring denied that could happen.** It answers "is this checkout main" three ways, and the third is commit equality — written for a CI runner's DETACHED head, where there is no branch name to read. But **a branch cut from main and not yet committed to sits AT `origin/main`**, so equality called it main.
+
+**The effect is that D140's workflow was unusable on a fresh branch.** `id claims` is gated on `on_main()`, so writing a slug and committing it — the first commit, the one that introduces the slug — was refused with `main carries 1 unclaimed id`, a sentence that is false and whose repair instruction points at main. This entry's own branch hit it, which is how it was found.
+
+**Commit equality is now the detached-head rule and nothing else**: a NAMED branch is not main however recently it was cut, and `--abbrev-ref` prints the literal `HEAD` when detached, so that is the test.
+
+**The deciding logic is pure now, and that is the finding rather than the fix.** It was welded to `git`, so asking it anything required a repository in three states, so nothing ever asked — and it was wrong for as long as that was true. `is_main` takes the four readings as arguments and `--self-test` drives seven cases over it with no repository at all. Two mutations, both caught; restoring the original rule turns the named-branch case red.
+
+### What it does not decide
+
+**Not that the dirty-tree check moves with it.** That one guards the WRITE — the claim commits everything it rewrites — and it is still where it was, below the readers, because a tree can be legitimately dirty while a preview answers a question about it. **Not that `make claim-stale` gains a tree argument**: it is a standalone check about the tree you are standing in and is right as it is. **And not D140's refusal of the network**: nothing here reads a pull request, and the head branch it compares against is a string `make merge` already had in hand.
 
 ## D-settle-rescue — A card that will not settle is photographed off the quietest frame it manages, and there is one trigger again
 

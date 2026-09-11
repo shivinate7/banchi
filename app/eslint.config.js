@@ -149,17 +149,22 @@ const LOCAL_STORAGE =
   '`localStorage` survives closing the browser, and D27 permits it only for facts about THIS ' +
   'MACHINE. Two files are exempt outright and this is neither: app/src/useCamera.ts (the ' +
   'remembered camera and the photo rotation, neither of which can take a photograph on its ' +
-  'own) and app/src/deviceMemory.ts (the theme, the rail and which order statuses this device ' +
-  'bothers fetching — how the screen the operator is sitting at is dressed, and how they work ' +
-  'at it). Put a new device-local key in deviceMemory.ts, where ' +
+  'own) and app/src/deviceMemory.ts (the theme, the rail, which order statuses this device ' +
+  'bothers fetching, how the inventory walk is filtered, which boxes this browser has reached ' +
+  "for, and the capture screen's last setup — how the screen the operator is sitting at is " +
+  'dressed, and how they work at it). Put a new device-local key in deviceMemory.ts, where ' +
   'the argument for it is, rather than at the call site: this rule matches the STORE and not ' +
   'the key, so a named file is the only exception it can express, and that is what puts a new ' +
-  'key in front of a reviewer. Everything the capture screen remembers is a claim about the ' +
-  'stack currently at the lens — the box, the set hint, the finish, the game, the in-flight ' +
-  'capture id — and those belong in `sessionStorage`, where a new tab is a new shift and ' +
-  'closing the browser ends one. Nothing about a card, a position or the inventory goes in ' +
-  'either: D13 puts that one truth on the Mac so two devices cannot disagree about where a ' +
-  "card is, which is what CLAUDE.md's ban on browser storage has always been about."
+  'key in front of a reviewer. ONE VALUE ON THE CAPTURE SCREEN IS STILL `sessionStorage` AND ' +
+  'THIS MESSAGE USED TO SAY SIX MORE WERE: the owner overruled that on 2026-09-11 ' +
+  '(D142) — a shift ends when they stop feeding cards, not when a tab ' +
+  'closes, so the box, the set hint, the finish, the rarity, the game and the product are ' +
+  'remembered on the device. `banchi.session.captureId` is the exception and keeps the old ' +
+  'clock: it is the in-flight id of a capture whose response was lost, and a stale one ' +
+  'restored into a new shift asks for a card nobody is holding. Nothing about a card, a ' +
+  'position or the inventory goes in either store: D13 puts that one truth on the Mac so two ' +
+  "devices cannot disagree about where a card is, which is what CLAUDE.md's ban on browser " +
+  'storage has always been about.'
 
 /* Two selectors, the same pair the facingMode guard needs and for the same reason:
  * `Identifier` covers `window.localStorage` and a bare `localStorage`, `Literal` covers
@@ -217,8 +222,9 @@ export default tseslint.config(
      * was argued informally before it was a
      * decision — the remembered deviceId and the photo rotation, both of which that file
      * justifies at length beside the keys themselves. `deviceMemory.ts` holds the shell's own —
-     * the theme, the rail, and D114's order status filter, which came here rather than to its
-     * call site precisely because this message asks for that. All of them are facts about the
+     * the theme, the rail, D114's order status filter, D132's two inventory-walk habits, and
+     * the capture screen's last setup (D142), every one of which came here
+     * rather than to its call site precisely because this message asks for that. All of them are facts about the
      * machine this browser is running on: meaningless on the Fulfiller's laptop, actively wrong
      * if shared, and none about a card.
      *

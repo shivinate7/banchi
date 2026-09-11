@@ -26,7 +26,17 @@ import type { MotionControls, MotionDiagnostics, MotionPhase } from './motion'
 import { MotionTrace } from './trace'
 import { DEFAULT_PARAMS } from './motion'
 import { useCamera, PIPELINE_LONG_EDGE, ROTATIONS } from './useCamera'
+import {
+  forgetCaptureSetup,
+  rememberCaptureSetup,
+  storedBoxRecency,
+  storedCaptureSetup,
+  touchBox,
+} from './deviceMemory'
+import type { CaptureSetup } from './deviceMemory'
+import { captureBoxLabel } from './runScope'
 import { Button, Icon, Kbd, Notice, Pill, Stat } from './kit'
+import { toast } from './kit/toast'
 import type { IconName, PillTone } from './kit'
 import './CaptureScreen.css'
 
@@ -149,6 +159,44 @@ type BoxOption = {
   name: string | null
   next: number | undefined
   sealed: boolean
+  /** Cards the box HOLDS — `BoxRecord.on_hand`, or its arithmetic where the server sent the
+   *  parts and not the total. The hand order's second term (D142). `null`
+   *  for a box this screen only knows about because `/status` named it: `GET /boxes` is what
+   *  carries the count, and a box the registry did not return has none to read. Null sorts
+   *  after every counted box rather than as zero, which is `BoxBrowse`'s rule for the same
+   *  figure — an uncountable box is not known to be empty. */
+  onHand: number | null
+}
+
+/** THE HAND'S ORDER OVER TWO BOXES, given what this browser remembers reaching for.
+ *
+ *  THREE TERMS, AND THE THIRD IS THE ONE BEING DEMOTED. Recency wins; where neither box has
+ *  been reached for — or both were, in the same millisecond, which `Date.prototype.toISOString`
+ *  makes possible and nothing else does — the fuller box leads; and the number decides what is
+ *  left. `BoxBrowse.tsx`'s rail comparator is this, plus a search term this field has no
+ *  equivalent of (its own exact match is hoisted separately, by `boxRows`).
+ *
+ *  A NEVER-TOUCHED BOX SORTS AFTER EVERY TOUCHED ONE because `''` is below every ISO stamp,
+ *  and an UNCOUNTED one after every counted one because `-1` is below every count. Both are
+ *  the same choice: the rank is what this browser KNOWS, and a box it knows nothing about does
+ *  not get to lead on an absence.
+ *
+ *  A PLAIN FUNCTION RATHER THAN A HOOK, so the box field and anything that later wants this
+ *  order can share one comparator without either owning it, and so it is readable straight
+ *  through — a sort this screen's whole list depends on should not be spread across a closure
+ *  and three dependency arrays. */
+function handOrder(
+  recency: ReadonlyMap<number, string>,
+): (left: BoxOption, right: BoxOption) => number {
+  return (left, right) => {
+    const ra = recency.get(left.box) ?? ''
+    const rb = recency.get(right.box) ?? ''
+    if (ra !== rb) return ra > rb ? -1 : 1
+    const ha = left.onHand ?? -1
+    const hb = right.onHand ?? -1
+    if (ha !== hb) return hb - ha
+    return left.box - right.box
+  }
 }
 
 /** Why the set suggestions are missing, in the operator's terms (D65).
@@ -251,34 +299,38 @@ function hintNoteText(verdict: HintVerdict, game: string): string {
   )
 }
 
-/* THE `pkmnscan.` PREFIX WAS RENAMED TO `banchi.` ON 2026-09-06, ON THE OWNER'S WORD, AND
+/* ONE KEY IS LEFT IN `sessionStorage`, AND IT IS THE ONE D27 WAS ACTUALLY ABOUT.
+ *
+ * THAT ENTRY PUT SEVEN HERE AND THE OWNER HAS SINCE OVERRULED SIX (D142):
+ * *"ideally let it save my last used on capture on all settings ... so the game i picked,
+ * camera i picked, all stay saved in some sorta session history"*. D27's argument for session
+ * scope was that *"a new tab is a new shift and closing the browser ends one"*, and the
+ * operator's own report is that the premise is wrong — a shift ends when they stop feeding
+ * cards, which is neither of those moments. The six SETTINGS moved to `deviceMemory.ts`'s
+ * `banchi.capture.setup`, beside the camera and the rotation `useCamera.ts` has kept in
+ * `localStorage` since before that carve-out was generalised, for this reason.
+ *
+ * `captureId` DID NOT MOVE, AND IT IS THE VALUE THE CARVE-OUT EXISTS FOR. It is the in-flight
+ * id of a capture whose response was lost. D27 records what losing it costs — the ambiguity
+ * becomes permanently unresolvable, and D10's high-water mark hands the burned position to the
+ * next physical card — and everything about it is scoped to ONE PAGE: it is minted for a
+ * photograph being taken now, it is answered or abandoned within seconds, and the banner it
+ * raises asks the operator to put THAT card back at the lens.
+ *
+ * SO A RESTORED ONE IS STRICTLY WORSE THAN NONE, which is the argument the six cannot make. A
+ * setting restored into a new shift is at worst a stale claim that is on screen and one press
+ * from being right. This restored into a new shift is a banner about a card that was at the
+ * lens yesterday, asking for a card nobody is holding — and the honest answer to it, feeding
+ * that card again, would burn a position on a capture that resolved hours ago. Session scope
+ * is what holds the window to "this page load", which is the window the banner's own sentence
+ * is true in.
+ *
+ * THE `pkmnscan.` PREFIX WAS RENAMED TO `banchi.` ON 2026-09-06, ON THE OWNER'S WORD, AND
  * NOTHING MIGRATES. `useCamera.ts` carries the argument in full beside its own two keys; the
  * short of it is that the split between `banchi.*` and `pkmnscan.*` was chronological rather
  * than principled, and the owner declined a read-time fallback because a fallback can never
- * safely be deleted afterwards.
- *
- * IT COSTS MORE HERE THAN ANYWHERE ELSE, AND FOR ONE KEY. These are `sessionStorage`, so the
- * old values were already dying at the end of every shift — except in a tab that was OPEN
- * across the deploy, which then read seven empty keys and drew a capture screen with no box,
- * no set hint, no finish, no game, no rarity claim and no product claim. Six of those are one
- * press each. `captureId` is not: D27 records that it is the in-flight id of a capture whose
- * response was lost, and losing it makes that ambiguity permanently unresolvable while D10's
- * high-water mark hands the burned position to the next physical card. So the window in which
- * this rename could cost a card is exactly "a capture in flight at the moment the new build
- * loaded", and it is named here rather than left to be discovered. */
+ * safely be deleted afterwards. */
 const SESSION_KEYS = {
-  box: 'banchi.session.box',
-  setHint: 'banchi.session.setHint',
-  finish: 'banchi.session.finish',
-  game: 'banchi.session.game',
-  // D23's stack claim, as JSON — the one non-scalar in this store, because the claim is a
-  // LIST of the game's exact Rarity cells and flattening it to a joined string would be a
-  // second spelling of a vocabulary D22 says renders verbatim. Same clock as the rest: a
-  // claim about the stack at the lens, dead when the tab closes.
-  rarityClaim: 'banchi.session.rarityClaim',
-  // C10's product claim. A scalar like `game` and `setHint`, not JSON like the claim above:
-  // a stack came out of one sealed product, so there is nothing to flatten.
-  product: 'banchi.session.product',
   captureId: 'banchi.session.captureId',
 } as const
 
@@ -310,71 +362,20 @@ function writeSession(key: string, value: string | null): void {
 
 /* A STORED VALUE IS INPUT, NOT STATE. It can be hand-edited in devtools, and it can be stale
  * in ways the live control could never produce — a box that was legal when it was typed, a
- * finish claim from before the game was changed. Each reader below is the same shape as the
- * control's own validation rather than a weaker version of it, because a value that skips the
- * control's check is a value the control could not have produced.
+ * finish claim from before the game was changed.
+ *
+ * `deviceMemory.ts` VALIDATES THE SHAPE AND THIS SCREEN VALIDATES THE MEANING, and the split
+ * is where the knowledge is. That file can say a box is a safe integer 1 or higher and that a
+ * claim is a list of strings, because those are rules about the value itself. It cannot say
+ * whether box 7 still exists, is still open, or has been deleted and its number handed to a
+ * different drawer — nor whether `Illustration Rare` is still a rarity `pipeline/games.py`
+ * authors. Every one of those is asked HERE, against the answer that arrives, by the same
+ * check the live control makes:
+ *
+ *   - the game, in `loadGames`, which falls back to the registry's own default
+ *   - the two claims, in the pair of effects beside `offeredFinishes`, member by member
+ *   - the box, in `restoredBoxCheck` below, once `GET /boxes` has actually answered
  */
-
-/** Digits, a safe integer, 1 or higher — the Box entry's own rule exactly, and it has to be: the
- *  box decides which physical drawer a photograph is filed into. `'1e3'` and `'3.7'` are both
- *  things `Number` will read as a different, entirely valid box that nobody typed. */
-function readSessionBox(): number | null {
-  const stored = readSession(SESSION_KEYS.box)
-  if (stored === null || !BOX_DIGITS.test(stored)) return null
-  const value = Number(stored)
-  return Number.isSafeInteger(value) && value >= 1 ? value : null
-}
-
-/** Free text, and there is nothing here to validate beyond its being a string — which
- *  `getItem` already guarantees. Recorded as a decision rather than left as a gap: a length
- *  cap or a set-code pattern would make a restored hint stricter than a typed one, so a hint
- *  the operator legitimately entered could come back changed or missing. The server trims it
- *  and the pipeline treats it as a hint; neither is owed a well-formed one. */
-function readSessionSetHint(): string {
-  return readSession(SESSION_KEYS.setHint) ?? ''
-}
-
-function readSessionFinish(): FinishClaim {
-  const stored = readSession(SESSION_KEYS.finish)
-  if (stored === null) return []
-  try {
-    const parsed: unknown = JSON.parse(stored)
-    if (typeof parsed === 'string') return [parsed]
-    if (!Array.isArray(parsed)) return []
-    return parsed.filter((member): member is string => typeof member === 'string')
-  } catch {
-    /* Not JSON at all — which is exactly what a pre-amendment tab holds, since a bare
-     * `reverse_holo` was written unquoted. One member, not six letters and not nothing. */
-    return [stored]
-  }
-}
-
-/** Likewise unvalidated here and checked against the registry when it lands: a key that was
- *  real this morning can be gone after somebody edits `pipeline/games.py` and restarts. */
-function readSessionGame(): string | null {
-  return readSession(SESSION_KEYS.game)
-}
-
-/** The product claim as stored. A plain string, unlike the two set-valued claims above it:
- *  a stack came out of exactly one sealed product, so "two products at once" is not a state
- *  the operator can be in. Unvalidated here and checked against the registry when it lands,
- *  exactly as `readSessionGame` is. */
-function readSessionProduct(): string | null {
-  const raw = readSession(SESSION_KEYS.product)
-  return raw && raw.trim() ? raw.trim() : null
-}
-
-function readSessionRarityClaim(): string[] {
-  const stored = readSession(SESSION_KEYS.rarityClaim)
-  if (stored === null) return []
-  try {
-    const parsed: unknown = JSON.parse(stored)
-    if (!Array.isArray(parsed)) return []
-    return parsed.filter((member): member is string => typeof member === 'string')
-  } catch {
-    return []
-  }
-}
 
 const CAPTURE_ID_SHAPE = /^[A-Za-z0-9-]{8,64}$/
 
@@ -692,21 +693,27 @@ export function CaptureScreen() {
   const [registry, setRegistry] = useState<GameRegistry | null>(null)
   const [registryNote, setRegistryNote] = useState<Note | null>(null)
 
+  /* THE SETUP THIS BROWSER HAD LAST TIME, read once and then owned by the six `useState`s
+     below (D142). One `localStorage` document rather than six keys, because
+     it is one habit — `deviceMemory.ts` carries that argument beside `banchi.orders.
+     fetch-filter`, which makes it for its own two fields.
+
+     PASSED AS A FUNCTION, NOT CALLED. An initialiser EXPRESSION is evaluated on every render
+     and thrown away, and this one touches a synchronous store; a function is read on the first
+     render and never again. That was already the rule for the per-key readers this replaced,
+     and it matters more now that one read serves six values. */
+  const [restored] = useState<CaptureSetup>(storedCaptureSetup)
+
   // Box, game, set hint and finish are client state resent on every capture (spec 5.2). The
   // server holds no notion of a current box, which is what lets two devices work without a
   // session.
-  //
-  // ALL FOUR ARE RESTORED FROM `sessionStorage` ON THE FIRST RENDER (D27). Passing the reader
-  // rather than calling it — `useState(readSessionBox)` — is what keeps it to the first
-  // render: an initialiser expression is evaluated every render and thrown away, and this one
-  // touches a synchronous store. The restored value is validated; see the readers.
-  const [box, setBox] = useState<number | null>(readSessionBox)
+  const [box, setBox] = useState<number | null>(restored.box)
   const [boxNote, setBoxNote] = useState<string | null>(null)
   // Creating a box is now a REQUEST, where it used to be a local assignment: a name has to
   // reach the store before anything can be captured into it, and it can be refused
   // (`name_taken`). This gates the entry's Enter so a double press cannot post twice.
   const [boxBusy, setBoxBusy] = useState(false)
-  const [setHint, setSetHint] = useState(readSessionSetHint)
+  const [setHint, setSetHint] = useState(restored.setHint)
 
   
   const [tcgSets, setTcgSets] = useState<
@@ -758,7 +765,7 @@ export function CaptureScreen() {
   // A SET since the amendment of 2026-08-23 — any number of members is legal, including all
   // of them, and toggling the last one off IS the clear, exactly as the rarity claim beside
   // it behaves. That sameness is D3's stated point, not a coincidence of implementation.
-  const [finish, setFinish] = useState<FinishClaim>(readSessionFinish)
+  const [finish, setFinish] = useState<FinishClaim>(() => [...restored.finish])
 
   /* D23's stack claim: which of the chosen game's rarities this pre-sorted stack may hold.
    * Empty is NO CLAIM — the wire omits the key, the sidecar records nothing, and the ladder
@@ -766,7 +773,7 @@ export function CaptureScreen() {
    * including all of them; toggling the last one off IS the clear, so the control needs no
    * separate reset. Restored from `sessionStorage` (D27) and validated against the registry
    * by the effect beside the finish one, exactly as the finish claim is. */
-  const [rarityClaim, setRarityClaim] = useState<string[]>(readSessionRarityClaim)
+  const [rarityClaim, setRarityClaim] = useState<string[]>(() => [...restored.rarityClaim])
 
   /* WHICH FIELD IS OPEN, or null for the all-at-rest column. One id rather than a set —
    * pass D's one-field-open rule enforced by the shape of the state. Session-only and
@@ -779,15 +786,34 @@ export function CaptureScreen() {
   
   const [boxRecords, setBoxRecords] = useState<BoxRecord[]>([])
 
+  /* WHETHER `GET /boxes` HAS ACTUALLY ANSWERED, which `boxRecords` cannot say: `[]` is both
+     the starting value and what a store with no boxes returns. Only the restored-box check
+     reads it, and only because judging a restore against a list that has not arrived would
+     clear a good box on every slow fetch. */
+  const [boxesSeen, setBoxesSeen] = useState(false)
+
+  /* WHY THE RESTORED BOX WAS LET GO OF, if it was. Separate from `boxNote` on purpose: that
+     one explains ONE REJECTED ENTRY and is cleared by every change of `openField`, including
+     the change this check itself makes — so a restore message written into it would be wiped
+     by the very act of opening the field to show it. This is about the arrival, and it lives
+     until a box is chosen. */
+  const [restoreNote, setRestoreNote] = useState<string | null>(null)
+
+  /* WHICH BOXES THIS BROWSER HAS REACHED FOR, newest first, shared with `#/inventory`'s rail
+     (D142). Read once into state and advanced by `touchBox`'s return value
+     rather than re-read after every write — `BoxBrowse.tsx` does the same, and it is what keeps
+     the order from depending on a second round trip through `localStorage`. */
+  const [recency, setRecency] = useState<ReadonlyMap<number, string>>(storedBoxRecency)
+
   
-  const [game, setGame] = useState<string | null>(readSessionGame)
+  const [game, setGame] = useState<string | null>(restored.game)
   /* C10's product claim, and it behaves exactly like `game` above: session state, resent
    * with every capture, written to the record and the sidecar, correctable afterwards on the
    * card that got it wrong. `null` is NO CLAIM and is never defaulted to `booster` — being
    * right most of the time is precisely the problem, because the times it is wrong a $1.50
    * Pokemon Center ETB code leaves in a penny lot and nobody finds out. The Codes screen
    * counts unclaimed codes and refuses to put them in either lane for the same reason. */
-  const [product, setProduct] = useState<string | null>(readSessionProduct)
+  const [product, setProduct] = useState<string | null>(restored.product)
 
   /* The note on the LAST capture, and this is the only control on the screen that writes to
    * a card other than the one about to be photographed. `noteBusy` is deliberately separate
@@ -944,23 +970,20 @@ export function CaptureScreen() {
   }, [])
 
   
+  /* THE SETUP, WRITTEN WHOLE ON EVERY CHANGE TO ANY OF IT (D142). One
+     document, so the six can never be stored half-updated and the clear is one removal rather
+     than six that can fail apart.
+
+     THE VALUES GO IN AS THE SCREEN HOLDS THEM, empty lists and all — unlike the six session
+     keys this replaced, which each stored "empty" as ABSENT so a cleared field and an
+     unwritten one read alike. That trick bought nothing here: the document is present or it is
+     not, and `storedCaptureSetup` reads a missing field as the same nothing it reads a missing
+     document as.
+
+     IT RUNS ON MOUNT TOO, writing the restored setup straight back. Harmless and deliberate —
+     it is the same value, and the alternative is a ref that exists only to skip one write. */
   useEffect(() => {
-    writeSession(SESSION_KEYS.box, box === null ? null : String(box))
-    writeSession(SESSION_KEYS.setHint, setHint.trim() === '' ? null : setHint)
-    // Empty stored as absent, and a non-empty claim as JSON — the rarity claim's rule five
-    // lines down, for its reason, now that both claims are lists.
-    writeSession(
-      SESSION_KEYS.finish,
-      finish.length === 0 ? null : JSON.stringify(finish),
-    )
-    writeSession(SESSION_KEYS.game, game)
-    // Empty is stored as absent, the same rule the wire applies: an empty claim is NO
-    // claim, and a stored `[]` would be a record of nothing that still has to be read.
-    writeSession(
-      SESSION_KEYS.rarityClaim,
-      rarityClaim.length === 0 ? null : JSON.stringify(rarityClaim),
-    )
-    writeSession(SESSION_KEYS.product, product)
+    rememberCaptureSetup({ box, game, setHint, finish, rarityClaim, product })
   }, [box, setHint, finish, game, rarityClaim, product])
 
   const loadStatus = useCallback(async () => {
@@ -1115,6 +1138,27 @@ export function CaptureScreen() {
   )
 
   
+  /* THE BOX LIST, IN THE ORDER THE OPERATOR'S HAND WORKS (D142).
+   *
+   * THE OWNER ASKED FOR THIS SORT BY NAME: *"same box style sorting in inventory (where most
+   * recently selected/most filled go to the top, rather than box #, determines the order of
+   * box in Workflow: Capture)"*. It is `BoxBrowse.tsx`'s rail rule and it is the SAME rule
+   * rather than a second one — the box this browser last reached for, then the box holding the
+   * most cards, then the number, which is the last thing the owner thinks in and so the last
+   * thing this sorts by. `deviceMemory.ts:storedBoxRecency` is the one store both read.
+   *
+   * WHAT IT REPLACES WAS A PROXY THAT SAID SO IN ITS OWN COMMENT. The list was sorted by
+   * number and `boxRows` took the highest nine, on the reasoning that *"boxes are allocated
+   * upward and recency is not a fact either route carries"*. That was true of the ROUTES and
+   * stopped being true of the browser when D132 started recording which boxes the hand opened.
+   * The proxy fails exactly where it matters: a long-running drawer the operator has fed for
+   * three weeks sinks below every box made since, and the only box that can never sink is the
+   * one made last — which is the one case a person does not need help finding.
+   *
+   * `on_hand` AND NOT `cards`, `fill` OR `next_index`, for `BoxBrowse`'s reason: a box full of
+   * sold records is not a box worth reaching for, and the three others count records that have
+   * left. `next_index` is the allocator's high-water mark and is what the ROW still trails,
+   * which is a different job — it says where the next photograph lands. */
   const boxOptions = useMemo(() => {
     const byNumber = new Map<number, BoxOption>()
     for (const record of boxRecords) {
@@ -1124,6 +1168,11 @@ export function CaptureScreen() {
         name: record.name,
         next: record.next_index,
         sealed: record.state === 'closed',
+        /* The server's own count first, its arithmetic second — `BoxBrowse` does the same, and
+           for the same reason: `on_hand` is nullable because an uncountable box is not an
+           empty one, and a payload predating the field is not either. */
+        onHand:
+          record.on_hand ?? record.cards - record.sold - record.retired - (record.moved ?? 0),
       })
     }
     for (const key of Object.keys(nextIndex)) {
@@ -1131,13 +1180,19 @@ export function CaptureScreen() {
       if (!Number.isInteger(value)) continue
       const known = byNumber.get(value)
       if (known === undefined) {
-        byNumber.set(value, { box: value, name: null, next: nextIndex[key], sealed: false })
+        byNumber.set(value, {
+          box: value,
+          name: null,
+          next: nextIndex[key],
+          sealed: false,
+          onHand: null,
+        })
       } else {
         known.next = nextIndex[key]
       }
     }
-    return [...byNumber.values()].sort((left, right) => left.box - right.box)
-  }, [boxRecords, nextIndex])
+    return [...byNumber.values()].sort(handOrder(recency))
+  }, [boxRecords, nextIndex, recency])
 
   const boxes = useMemo(() => boxOptions.map((option) => option.box), [boxOptions])
 
@@ -1245,16 +1300,20 @@ export function CaptureScreen() {
   /* THE ROWS THAT DRAW. Nine of them, and the reason for the number is a HEIGHT budget
    * rather than a keyboard one: `OPTION_KEYS` carries twenty-five, but nothing in this field
    * rides a key at all (see the entry — digits are typing here), and boxes are the one
-   * vocabulary on this screen that is unbounded. With nothing typed the highest-numbered
-   * nine stand in for "most recent": boxes are allocated upward and recency is not a fact
-   * either route carries. `boxMatchTotal` is the pre-cap count, so the note can say how many
-   * did not draw. */
+   * vocabulary on this screen that is unbounded. `boxMatchTotal` is the pre-cap count, so the
+   * note can say how many did not draw.
+   *
+   * THE FIRST NINE, TYPED OR NOT, because `boxOptions` is already in the hand's order
+   * (D142). This took the LAST nine with nothing typed until then — the
+   * highest-numbered, standing in for "most recent" on the reasoning that boxes are allocated
+   * upward. The list is now sorted by what this browser actually reached for, so the front of
+   * it is the answer in both cases and the two branches collapse into one. */
   const boxRows = useMemo(() => {
-    const shown = boxQuery === '' ? boxMatchesAll.slice(-9) : boxMatchesAll.slice(0, 9)
+    const shown = boxMatchesAll.slice(0, 9)
     if (boxExact === undefined) return shown
     const rest = shown.filter((option) => option.box !== boxExact.box)
     return [boxExact, ...rest].slice(0, 9)
-  }, [boxMatchesAll, boxExact, boxQuery])
+  }, [boxMatchesAll, boxExact])
 
   /** The row Enter takes, hoisted so the meta and the handler read the same one thing. */
   const boxTop = boxRows.length > 0 ? boxRows[0] : undefined
@@ -1270,12 +1329,29 @@ export function CaptureScreen() {
     return { box: null as number | null, name: boxQuery }
   }, [boxQuery, boxExact])
 
-  /** One selection ends the opening: set the box, drop the note, close, and hand focus back
-   *  so C and U are live again the moment a drawer is chosen. */
+  /** One selection ends the opening: set the box, record the reach, drop the note, close, and
+   *  hand focus back so C and U are live again the moment a drawer is chosen.
+   *
+   *  THE REACH IS RECORDED HERE AND NOWHERE ELSE ON THIS SCREEN (D142).
+   *  Picking a box is the act — it is a deliberate press, it happens once a sitting, and it is
+   *  the moment the operator's attention moves to that drawer. Two things that might look like
+   *  candidates are deliberately not:
+   *
+   *  A CAPTURE IS NOT ONE, and that is a cost argument as much as a semantic one. It fires once
+   *  per card at a measured 623 ms cadence, so touching here would put a `localStorage`
+   *  read-modify-write on the feeder's hot path — hundreds of times a box — to re-record a fact
+   *  that has not changed since the pick that preceded every one of them.
+   *
+   *  A RESTORED BOX IS NOT ONE EITHER, for `BoxBrowse.tsx`'s stated reason: a page load is not
+   *  an opening. The restore carries the box the operator last PICKED, and that pick already
+   *  wrote its stamp; touching again on every mount would let a screen left open overnight
+   *  outrank a box somebody actually reached for this morning. */
   const chooseBox = useCallback(
     (value: number) => {
       setBox(value)
+      setRecency(touchBox(value))
       setBoxNote(null)
+      setRestoreNote(null)
       closeField()
       blurActive()
     },
@@ -1289,15 +1365,62 @@ export function CaptureScreen() {
     void (async () => {
       try {
         const answer = await getBoxes()
-        if (live) setBoxRecords(answer.boxes)
+        if (!live) return
+        setBoxRecords(answer.boxes)
+        setBoxesSeen(true)
       } catch {
-        // see above: the field degrades to numbers, which is what it had before.
+        // see above: the field degrades to numbers, which is what it had before. `boxesSeen`
+        // stays false on purpose — a restored box must never be judged against a list that
+        // did not arrive.
       }
     })()
     return () => {
       live = false
     }
   }, [openField])
+
+  /* A RESTORED BOX IS CHECKED AGAINST THE STORE, ONCE, AND FAILS SOFTLY
+     (D142).
+
+     PHOTOGRAPHING INTO THE WRONG DRAWER IS THE EXPENSIVE FAILURE ON THIS SCREEN, and the
+     setup now outlives the browser, so the gap between "the box I last picked" and "a box that
+     still exists and still takes cards" is a gap that can be days wide. Between two sittings a
+     box can be sealed (D20), deleted (D34's panel), or deleted and its number handed to a
+     different physical drawer by `next_box_number`'s lowest-free allocation. The first two are
+     refused at the shutter anyway; the THIRD is not refused anywhere, because box 7 exists and
+     takes cards — it is simply not the box the operator thinks they are looking at.
+
+     SO THE RESTORE FALLS BACK TO NO SELECTION, NEVER TO A GUESS, and it says which box it let
+     go of and why. The field opens with focus in it, which is the same state `Pick a box` puts
+     the operator in, so the remedy is the press they were going to make anyway.
+
+     IT WAITS FOR `boxesSeen` AND NOT FOR A NON-EMPTY LIST. `boxRecords` starts `[]`, and `[]`
+     is also what a store with no boxes answers — judging on emptiness would clear a perfectly
+     good restored box every time the fetch was merely slow, which on a cold capture server is
+     every time. `boxesSeen` is set only where the answer actually arrived.
+
+     IT RUNS ONCE. `restoredBoxRef` is spent on the first answer — nulled before the verdict,
+     so the good path spends it too — because the operator may deliberately re-pick a box this
+     effect just cleared, or pick a sealed one to see the refusal, and an ungated version would
+     take it straight back off them. What is being judged is the RESTORE, which happens on mount
+     and never again. */
+  const restoredBoxRef = useRef<number | null>(restored.box)
+  useEffect(() => {
+    const wanted = restoredBoxRef.current
+    if (wanted === null || !boxesSeen) return
+    restoredBoxRef.current = null
+    const found = boxRecords.find((record) => record.box === wanted)
+    if (found !== undefined && found.state !== 'closed') return
+    setBox(null)
+    setRestoreNote(
+      found === undefined
+        ? 'The box this browser was last set to is not in the store any more, so nothing is ' +
+            'selected. Pick the drawer in front of you.'
+        : `${captureBoxLabel(found.box, found.name)} has been sealed since you last captured ` +
+            'into it, so nothing is selected. Pick another drawer.',
+    )
+    setOpenField('box')
+  }, [boxesSeen, boxRecords])
 
   
   
@@ -1332,6 +1455,73 @@ export function CaptureScreen() {
     }
   }, [boxBusy, boxOffer, chooseBox])
 
+  /** ONE PRESS PUTS THE SETUP BACK TO NOTHING CHOSEN (D142).
+   *
+   *  THE OWNER ASKED FOR IT IN FOUR WORDS: *"a quick clear all settings button"*. Quick is a
+   *  requirement, so there is no confirmation dialog: the press clears, the screen visibly goes
+   *  back to its empty state, and a receipt toast carries the way back. That is the shape D28
+   *  settled for the review answer — act, receipt, undo — and it is the right one here for the
+   *  same reason: a confirmation ahead of a reversible act buys nothing and costs a press every
+   *  single time.
+   *
+   *  IT CLEARS CHOICES ABOUT CARDS, AND LEAVES THE RIG ALONE. Box, game, set hint, rarity,
+   *  finish and product are things the operator decided about the stack in front of them, and
+   *  the next stack is a different decision. The camera and the rotation are not decisions about
+   *  cards at all — they are which piece of hardware is plugged in and which way it is mounted
+   *  (D13), they are the same tomorrow as today, and `useCamera.ts` owns them. Clearing those
+   *  would mean re-picking a 4K capture card to start a run that needs none of it re-picked, so
+   *  the control says on its face what it leaves behind rather than surprising anybody.
+   *
+   *  NOTHING IN THE STORE IS TOUCHED AND THE CONTROL IS BUILT TO SAY SO. No route is called,
+   *  no card moves, and the copy names the store explicitly — `docs/DESIGN.md`'s register
+   *  reserves danger styling for destructive acts, and this is the opposite of one. A control
+   *  that could be misread as deleting cards, on the screen where cards are created, is worth
+   *  a sentence.
+   *
+   *  THE GAME GOES TO THE REGISTRY'S DEFAULT, NOT TO NULL, and that is what "nothing chosen"
+   *  means for this one field. A fresh browser does not sit on no game: `loadGames` puts it on
+   *  `registry.default` and the operator changes it if they want something else. Clearing to
+   *  null would leave the screen drawing *"Waiting for the game list from the server"* — the
+   *  blocked reason for a registry that has not arrived — which would be a sentence that is
+   *  simply untrue, about a fetch that finished minutes ago. */
+  const clearSetup = useCallback(() => {
+    const before: CaptureSetup = { box, game, setHint, finish, rarityClaim, product }
+    setBox(null)
+    setGame(registry?.default ?? null)
+    setSetHint('')
+    setFinish([])
+    setRarityClaim([])
+    setProduct(null)
+    setBoxNote(null)
+    setRestoreNote(null)
+    closeField()
+    blurActive()
+    /* FORGOTTEN OUTRIGHT RATHER THAN OVERWRITTEN WITH NOTHING. The persist effect below will
+       write the cleared setup back on the next render anyway; removing the key first is what
+       makes the clear true even if this tab is closed before that effect runs. */
+    forgetCaptureSetup()
+    toast({
+      kind: 'receipt',
+      icon: 'refresh',
+      title: 'Setup cleared.',
+      /* WHAT IS *NOT* AFFECTED, because what IS affected is already on screen — every row
+         went back to its empty state as the toast appeared. A receipt that recited the six
+         fields ran to four lines in the stack and said nothing the operator could not see. */
+      body: 'The camera, the rotation and everything in the store are untouched.',
+      action: {
+        label: 'Undo',
+        onPress: () => {
+          setBox(before.box)
+          setGame(before.game)
+          setSetHint(before.setHint)
+          setFinish([...before.finish])
+          setRarityClaim([...before.rarityClaim])
+          setProduct(before.product)
+        },
+      },
+    })
+  }, [box, game, setHint, finish, rarityClaim, product, registry, closeField])
+
   /* WHAT ENTER DOES, which is a POLICY and not a control: take the top row if there is one,
      and otherwise make what the offer names. That ordering is what keeps typing `com` from
      making a junk box when `common box 3` is right there — and it is exactly why the offer
@@ -1342,8 +1532,8 @@ export function CaptureScreen() {
     if (top !== undefined) {
       if (top.sealed) {
         setBoxNote(
-          `Box ${top.box}${top.name === null ? '' : ` · ${top.name}`} is sealed and takes no ` +
-            `more cards. Open it on the Inventory screen, or pick another.`,
+          `${captureBoxLabel(top.box, top.name)} is sealed and takes no more cards. Open it ` +
+            `on the Inventory screen, or pick another.`,
         )
         return
       }
@@ -2122,8 +2312,26 @@ export function CaptureScreen() {
 
   const swallowedTotal = swallowed.busy + swallowed.noBox + swallowed.notReady + swallowed.held
 
-  const boxSentence =
-    box === null ? 'No box' : boxName === null ? `Box ${box}` : `Box ${box} · ${boxName}`
+  /** WHETHER THERE IS ANYTHING TO CLEAR, which is what disables the control rather than hiding
+   *  it (D142). A control that appears and disappears with the state it acts
+   *  on makes the rail's height move under the operator's hand, and D118 forbids exactly that.
+   *
+   *  THE GAME IS COMPARED AGAINST THE REGISTRY'S DEFAULT, not against null, because that is
+   *  what the clear writes — so a screen sitting on the default with no other claim reads as
+   *  nothing chosen, which is what it is. Before the registry lands there is no default to
+   *  compare with, and a null game is then genuinely unchosen. */
+  const setupChosen =
+    box !== null ||
+    setHint.trim() !== '' ||
+    finish.length > 0 ||
+    rarityClaim.length > 0 ||
+    product !== null ||
+    (game !== null && registry !== null && game !== registry.default)
+
+  /* The stage foot's word for the drawer: the name, or the number where there is no name
+     (D142). This read `Box 3 · RB Epics` and carried the number twice on one
+     screen, since the row above it opened with `Box 3` too. */
+  const boxSentence = box === null ? 'No box' : captureBoxLabel(box, boxName)
 
   /* The store's next index for the box, named as the index it is. `#N` is reserved for the
    * counted card number every other screen draws (D58); a high-water mark is not one, and a
@@ -2663,15 +2871,22 @@ export function CaptureScreen() {
                   <Opt
                     key={option.box}
                     on={option.box === box}
-                    name={`Box ${option.box}`}
-                    sfx={option.name === null ? null : ` ${option.name}`}
+                    /* THE NAME LEADS AND THE NUMBER FOLLOWS IT, which is the reverse of what
+                       this drew until 2026-09-11 (D142). The number STAYS
+                       here, unlike everywhere else on the screen, because this is the one place
+                       it is doing a job: the entry above searches number and name together, and
+                       a row that hid the number would answer a search for `9` with nine rows
+                       that do not visibly contain a 9. An unnamed box has only the number, so
+                       `captureBoxLabel` puts it in the name's place and the suffix drops. */
+                    name={captureBoxLabel(option.box, option.name)}
+                    sfx={option.name === null ? null : ` Box ${option.box}`}
                     trail={option.sealed ? 'Sealed' : `next index ${option.next ?? '?'}`}
                     trailWord={option.sealed}
                     onPick={() => {
                       if (option.sealed) {
                         setBoxNote(
-                          `Box ${option.box} is sealed and takes no more cards. Open it ` +
-                            `on the Inventory screen, or pick another.`,
+                          `${captureBoxLabel(option.box, option.name)} is sealed and takes no ` +
+                            `more cards. Open it on the Inventory screen, or pick another.`,
                         )
                         return
                       }
@@ -2682,7 +2897,7 @@ export function CaptureScreen() {
                 {boxOffer === null ? null : (
                   <Opt
                     on={false}
-                    name={boxOffer.box === null ? boxOffer.name ?? '' : `Box ${boxOffer.box}`}
+                    name={boxOffer.box === null ? (boxOffer.name ?? '') : `Box ${boxOffer.box}`}
                     trail="New"
                     trailWord
                     onPick={() => void createOfferedBox()}
@@ -2695,6 +2910,11 @@ export function CaptureScreen() {
                   : 'Enter takes the top row. Anything new is created by name.'}
               </p>
               {boxNote === null ? null : <p className="capture-refused">{boxNote}</p>}
+              {restoreNote === null ? null : (
+                <p className="capture-refused">
+                  <Icon name="alert" size={13} /> {restoreNote}
+                </p>
+              )}
             </OpenField>
           ) : (
             <Row
@@ -2709,11 +2929,14 @@ export function CaptureScreen() {
                     <span>Pick one, or type a new name</span>
                   </span>
                 ) : (
+                  /* THE NAME IS THE HEADLINE AND THE NUMBER IS GONE (D142).
+                     It read `Box 3` over `RB Epics · next index 41`, which made the operator
+                     read past the number to reach the word they think in. `captureBoxLabel`
+                     falls back to `Box 3` for a drawer nobody has named, so an unnamed box is
+                     still identifiable and no placeholder is invented (D56). */
                   <span className="capture-box-val">
-                    <strong>Box {box}</strong>
-                    <span>
-                      {boxName === null ? boxNextText : `${boxName} · ${boxNextText}`}
-                    </span>
+                    <strong>{captureBoxLabel(box, boxName)}</strong>
+                    <span>{boxNextText}</span>
                   </span>
                 )
               }
@@ -2813,7 +3036,12 @@ export function CaptureScreen() {
                 block
                 onClick={() => (window.location.hash = '#/runs')}
               >
-                Identify box {box} on Runs
+                {/* THE NAME HERE TOO (D142), even though the destination
+                    draws `Box 4 · Mixed Singles`. This button is read on THIS screen, by
+                    somebody who has just finished feeding a drawer, and it names the drawer
+                    they fed — `#/runs` composing the pair when they get there is that screen's
+                    job and is right for its own reason (`boxLabel` in `runScope.ts`). */}
+                Identify {captureBoxLabel(box, boxName)} on Runs
               </Button>
             </div>
           ) : null}
@@ -3381,6 +3609,35 @@ export function CaptureScreen() {
               onToggle={() => toggleField('trigger')}
             />
           )}
+
+          {/* THE CLEAR, AT THE FOOT OF THE LAST PANEL IN THE RAIL (D142).
+              It reaches all three panels — the box in Run, the four claims in Stack, the game
+              here — so there is no panel it BELONGS to, and the foot of the column is where a
+              control that ends a sitting reads as ending one. The head was the alternative and
+              was refused: `.capture-head-text` is display:none under 767px, so the head is the
+              odometer alone on a phone and a reset button would be crowding the one row that is
+              already tight there.
+
+              QUIET, NOT DANGER. It destroys nothing — `docs/DESIGN.md` reserves red for acts
+              that do — and the sentence under it names the store explicitly, because this is
+              the screen where cards are made and "clear" is a word that could be misread. */}
+          <div className="capture-clear">
+            <Button
+              variant="quiet"
+              size="sm"
+              block
+              icon="refresh"
+              onClick={clearSetup}
+              disabled={!setupChosen}
+            >
+              Clear the setup
+            </Button>
+            <p className="capture-opennote capture-clear-note">
+              {setupChosen
+                ? 'Puts the box, the game and every claim back to nothing chosen. The camera, the rotation and everything in the store are untouched.'
+                : 'Nothing is chosen, so there is nothing to clear.'}
+            </p>
+          </div>
         </section>
 
       </div>

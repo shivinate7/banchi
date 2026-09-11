@@ -295,7 +295,8 @@ make lint           # eslint over app/ (guards a bug earned, see app/eslint.conf
                     #   the Python packages, scoped to a slice measured against this tree (D82) —
                     #   never ruff's own defaults, never --fix. Config: ruff.toml.
 make check          # harness + docs-audit + audit-self-test + githooks-selftest +
-                    #   merge-selftest + revert-selftest + claim-selftest + revert-guard +
+                    #   merge-selftest + revert-selftest + claim-selftest + claim-stale +
+                    #   revert-guard +
                     #   janitor-selftest + reap-selftest + suite-lock-selftest +
                     #   serve-selftest +
                     #   verdict-selftest + port-agreement + set-hint-agreement +
@@ -431,9 +432,36 @@ make claim-ids      # WHAT THE MERGE WILL ALLOCATE FOR THIS BRANCH'S SLUG IDS. A
                     #   `governed_by` list sorted across the claim.
                     #   Previews; `ARGS=--write` performs it. Reach for it by hand only to LOOK;
                     #   the merge runs it for you.
+make claim-stale    # HAS A NUMBER THIS BRANCH ALREADY CLAIMED BEEN TAKEN BY MAIN SINCE?
+                    #   (D140, amended 2026-09-11.) The claimer above is a NO-OP once a branch
+                    #   has claimed — no slug is left, so it says `nothing to do`, which is a
+                    #   true statement about slugs and an incomplete one about safety. This
+                    #   takes every allocated id the branch ADDS since its merge base with
+                    #   `origin/main` — decision, code-card `C`, build-order step — and asserts
+                    #   each is still free on that ref.
+                    #   IT REPORTS AND NEVER REPAIRS. An un-claim has to happen BEFORE a merge
+                    #   and never after: once main is merged in, a substitution on that token
+                    #   reaches main's own copy of the entry too. It names the collision, says
+                    #   what the id would become, and exits 3.
+                    #   NO NETWORK AND NO `gh` — the local ref is enough, and D140 rejects
+                    #   reading open pull requests deliberately. It does not need them: the
+                    #   case that bites is the one where the other branch has already LANDED.
+                    #   Writes nothing, so it gates: in `check`, in `ci-check`, and `make merge`
+                    #   asks for it before every merge — that last is the authoritative run,
+                    #   because the fetch above it makes the answer current. It can only ever
+                    #   UNDER-report against a stale ref, never over-report, and a clone with no
+                    #   `origin/main` is allowed and says so.
+                    #   It happened TWICE on 2026-09-11 (#262/#265, then #265/#270), caught
+                    #   both times by a person reading PR titles. `decision index` is still the
+                    #   backstop; this is the earlier, cheaper warning.
 make claim-selftest # the claimer, proved where it can be wrong: a throwaway repository in which
-                    #   MAIN MOVES underneath the branch. In `check`, never in the git hook.
+                    #   MAIN MOVES underneath the branch — and, since D140's amendment, in which
+                    #   main takes a number the branch had already claimed. In `check`, never in
+                    #   the git hook.
 make merge          # merge a PR and move main onto it — BOTH HALVES, on your word (D42).
+                    #   IT CHECKS FOR A STALE CLAIM BEFORE ANYTHING ELSE (D140, amended):
+                    #   a number this branch claimed that main has taken since is REFUSED here,
+                    #   in preview as well as on the press, and nothing is rewritten for you.
                     #   IT CLAIMS THIS BRANCH'S IDS FIRST, AND WAITS (D140): it
                     #   substitutes, commits to the PULL REQUEST's branch, pushes, and watches
                     #   that commit's checks to completion before merging — so nothing main has
@@ -626,7 +654,12 @@ sentence**, and see "the census" below for what enforces that.
                               Every figure is the one that stage's own screen draws, read from
                               the same source, so Home can never be a step ahead of it.
 #/capture      Capture        live camera; box / game / set hint / finish / rarity; undo;
-                              the motion trigger and its tuning
+                              the motion trigger and its tuning. THE SETUP IS REMEMBERED ON
+                              THE DEVICE (D142) — all six survive a closed browser, the box
+                              list is ordered the way the inventory rail is (most recently
+                              reached for, then fullest, then the number), one press clears
+                              the lot with an undo on the receipt, and the box is named
+                              rather than numbered
 #/runs         Runs           the pipeline: the free preflight, the two-step money gate, join /
                               emit / reconcile, the run log, and the import CSVs as downloads
 #/review       Review         one card at a time, photo first — the answer writes and advances
@@ -961,16 +994,28 @@ A screen is not finished because it compiles.
   about a card or the inventory in `localStorage`. Inventory state is server-side, in the
   store; the camera uses a device picker. Two devices share one truth.
 
-  **Eight keys are stored on the device, and each is a fact about THIS machine rather than
+  **Nine keys are stored on the device, and each is a fact about THIS machine rather than
   about a card**: `banchi.capture.deviceId` and `banchi.capture.rotation`
   (`app/src/useCamera.ts` — which camera and which way up, meaningless on another machine),
-  `banchi.theme`, `banchi.rail`, `banchi.orders.fetch-filter`, `banchi.inventory.hide-sold`
-  and `banchi.inventory.box-recency` (`app/src/deviceMemory.ts` — how this browser is
-  dressed, which order statuses this device bothers fetching (D114), whether the inventory
-  walk folds sold rows away, and when THIS browser last opened each box, which is what the
-  box rail sorts on, D132), and `banchi.orders.last-check` (`app/src/Orders.tsx` — when THIS
-  device last checked TCGplayer, so a fetch receipt can say what is new since; the owner ruled
-  it belongs there on 2026-09-03). None of them is a card, a position or an order.
+  `banchi.theme`, `banchi.rail`, `banchi.orders.fetch-filter`, `banchi.inventory.hide-sold`,
+  `banchi.box-recency` and `banchi.capture.setup` (`app/src/deviceMemory.ts` — how this
+  browser is dressed, which order statuses this device bothers fetching (D114), whether the
+  inventory walk folds sold rows away, when THIS browser last reached for each box, and the
+  setup the operator last worked at), and `banchi.orders.last-check` (`app/src/Orders.tsx` —
+  when THIS device last checked TCGplayer, so a fetch receipt can say what is new since; the
+  owner ruled it belongs there on 2026-09-03). None of them is a card, a position or an order.
+
+  **TWO OF THE NINE ARRIVED ON 2026-09-11 AND ONE OF THOSE IS A RENAME**
+  (D142). `banchi.capture.setup` is the box, game, set hint, finish, rarity
+  and product the operator last chose — six values that were `sessionStorage` under D27 until
+  the owner overruled the session scope, in ONE document because they are one habit, the
+  argument `banchi.orders.fetch-filter` already makes for its own two fields.
+  `banchi.box-recency` is `banchi.inventory.box-recency` renamed: the capture screen's box
+  list now sorts on it too, so the name had stopped saying what the fact is — which drawer
+  this operator's hand is in — and started saying which screen happened to write it. **No
+  migration, D27's own rule**: what a browser held under the old spelling is abandoned, which
+  costs one sitting of the fallback order (fullest, then number) until the first box is
+  opened or captured into.
 
   **This sentence said FOUR and listed five, from 2026-09-03 until 2026-09-06**, and it named
   the wrong two files for the theme and the rail — `kit/index.tsx` and `App.tsx` are where
@@ -979,14 +1024,22 @@ A screen is not finished because it compiles.
   mechanical rather than hand-corrects: `make docs-audit`'s `storage keys` row reconciles the
   count, the roster and the files this paragraph names against `app/src`, in both directions.
 
-  **A SEPARATE STORE HOLDS EIGHT MORE, AND THEY ARE NOT THESE.** D27's carve-out is
-  `sessionStorage` — the capture screen's claims about the stack at the lens
-  (`banchi.session.box`, `.setHint`, `.finish`, `.game`, `.rarityClaim`, `.product`,
-  `.captureId`) and D39's handoff (`banchi.run-scope`). A new tab is a new shift and closing
-  the browser ends one, which is the whole reason they are in the other store.
+  **A SEPARATE STORE HOLDS TWO MORE, AND THEY ARE NOT THESE.** D27's carve-out is
+  `sessionStorage` — `banchi.session.captureId`, the in-flight id of a capture whose response
+  was lost, and D39's handoff `banchi.run-scope`. A new tab is a new shift and closing the
+  browser ends one, and for these two that is the POINT rather than an accident: a restored
+  `captureId` is a banner asking the operator to re-feed a card that was recorded yesterday,
+  and the honest answer to it burns a position under D10's high-water mark.
+
+  **IT HELD EIGHT UNTIL 2026-09-11.** Six of the capture screen's seven — `banchi.session.box`,
+  `.setHint`, `.finish`, `.game`, `.rarityClaim` and `.product` — moved to the device
+  (D142), on the owner's report that a shift ends when they stop feeding
+  cards rather than when a tab closes. `captureId` did not, and it is the one the carve-out
+  was always about: a stale SETTING is a claim on screen that is one press from being right,
+  and a stale in-flight id is a request for a card nobody is holding.
 
   **EVERY BROWSER-STORAGE KEY IS `banchi.*`, AS OF 2026-09-06** (D27, amended). Ten of the
-  thirteen were `pkmnscan.*` until that day — not by a rule, but because that is what a key
+  thirteen keys there were then were `pkmnscan.*` until that day — not by a rule, but because that is what a key
   written before the rebrand got — and the owner renamed them **with no migration**, having
   declined a read-time fallback on the ground that a fallback can never safely be deleted
   afterwards. The old values are abandoned in place. **This does not reopen D94**, which is
@@ -997,8 +1050,9 @@ A screen is not finished because it compiles.
   can burn a position if a capture was in flight at the moment the new build loaded.
 
   **The rule has a reader now.** `app/eslint.config.js`'s `no-restricted-syntax` bans
-  `localStorage` in `app/src`, with `useCamera.ts` and `deviceMemory.ts` exempted by name and
-  `Orders.tsx`'s two call sites carrying an inline disable that states the argument. A guard
+  `localStorage` across `app/`, with `useCamera.ts` and `deviceMemory.ts` exempted by name and
+  a handful of argued call sites carrying an inline disable: `Orders.tsx`'s two, and the specs
+  that seed or read back the very key they are about. A guard
   that is routinely disabled inline is one the next person disables without reading, so the
   exemptions are few and each one says why beside the key. **The lint rule matches the STORE
   and not the key**, so it can say nothing about which keys exist or what they are called;
@@ -1532,6 +1586,8 @@ D138 One process serves the product, Vite compiles and never serves, and the bui
 D139 Which branch the primary checkout stands on is a fact about the live rig, and a warning is the ceiling
 D140 The number is claimed at the merge, because what main has taken is not knowable before it
 D141 The browser matrix runs when the change reaches what a browser draws, and the path list has a reader
+D142 The setup outlives the browser, the box list is ordered by the hand, and one value stays on the old clock
+D143 The claim reads the checked-out tree, so which tree that is must be established before anything reads it
 D-settle-rescue  A card that will not settle is photographed off the quietest frame it manages, and there is one trigger again
 ```
 

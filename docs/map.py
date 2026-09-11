@@ -1292,7 +1292,8 @@ COMPONENTS = [
                 # amends. D18 governs its shape — the preview is the read-only mode, and the
                 # act is behind a flag rather than a default. D33 is the instrument the two-step
                 # is borrowed from, one register down from a route that can spend money.
-                "governed_by": ["D18", "D33", "D42", "D72", "D111", "D140"],
+                "governed_by": ["D18", "D33", "D42", "D72", "D111", "D140",
+                                "D143"],
                 "note": "IT NEVER SETS PKMNSCAN_MAIN AND NO REFUSAL IT PRINTS SUGGESTS IT. D42 "
                         "is explicit that a session reaching for that variable has left the "
                         "amendment behind; this needs no hatch because allow rule 3 already "
@@ -1691,7 +1692,8 @@ COMPONENTS = [
                                 "D47", "D49", "D50", "D51", "D53", "D60", "D64", "D65", "D67", "D69",
                                 "D70", "D72", "D75", "D76", "D80", "D81", "D83", "D84", "D87",
                                 "D88", "D90", "D92", "D94", "D96", "D101", "D102", "D104", "D111",
-                                "D119", "D122", "D127", "D132", "D135", "D136", "D140", "D141"],
+                                "D119", "D122", "D127", "D132", "D135", "D136", "D140", "D141",
+                                "D142", "D143"],
             },
             "claim-ids.py": {
                 "does": "allocate the numbers this branch's SLUG ids will take, and "
@@ -1709,7 +1711,18 @@ COMPONENTS = [
                         "correct, and reusing it would resurrect every `step 12` in the tree "
                         "onto a step that is not the one meant. IT WRITES, so it is not on "
                         "the commit path (D18) and not in `make check`; `make claim-selftest` "
-                        "is, against a throwaway repository.",
+                        "is, against a throwaway repository. "
+                        "AND IT ANSWERS A SECOND QUESTION SINCE D140 WAS AMENDED 2026-09-11: "
+                        "`--stale` reports allocated ids this branch ADDS since its merge "
+                        "base that the ref has taken in the meantime, and exits 3. The "
+                        "claimer is a no-op once a branch has claimed — no slug is left, so "
+                        "it said `nothing to do` while the number it allocated could have "
+                        "been taken by main since, which happened twice on 2026-09-11 and "
+                        "was caught both times by a person reading PR titles. It REPORTS and "
+                        "never repairs: an un-claim has to happen before a merge and never "
+                        "after, or the substitution reaches main's own copy. That half writes "
+                        "nothing, so it IS in `make check` and `make ci-check` as "
+                        "`make claim-stale`, and `make merge` asks for it before every merge.",
                 # D72 IS THE FAILURE THIS REPLACES and D16 the rule its audit rows answer to.
                 # D80 is cited for the allocator's direction — the culled step 12 is why this
                 # is max+1 rather than lowest-free — and D47/D135 for the symlink the walk
@@ -1723,7 +1736,11 @@ COMPONENTS = [
                         "MAIN MOVES underneath the branch — the only condition that can tell "
                         "an allocation against the ref from one against the branch's own "
                         "copy, and therefore the only one worth building a repository for. "
-                        "Sixteen arms, five of them mutation-tested. THE BOUNDARY ARM FOUND A "
+                        "FORTY-TWO arms, twenty of them mutation-tested — fourteen arms and "
+                        "seven mutants cover the staleness half (D140, amended 2026-09-11), "
+                        "where a branch claims honestly and main takes the number underneath "
+                        "it. The count in this sentence said sixteen over a file that held "
+                        "eighteen, which is what an uncounted prose number does. THE BOUNDARY ARM FOUND A "
                         "REAL BUG IN THE UNMUTATED CODE: `\\b` fires between a letter and a "
                         "hyphen, so a slug was being substituted inside a longer slug that "
                         "extended it, leaving a number with a tail on it. In `make check`, "
@@ -1736,7 +1753,8 @@ COMPONENTS = [
                 # entries are composed from integers for exactly this reason, and the two that
                 # survive are in the prose that explains why. The superset rule reads a citation
                 # literally, which is the trade docs-audit.py's own entry records.
-                "governed_by": ["D1", "D2", "D16", "D18", "D80", "D140"],
+                "governed_by": ["D1", "D2", "D16", "D18", "D80", "D140",
+                                "D143"],
             },
             "docs-audit-allow.txt": {
                 "does": "paths and identifiers the docs name before they exist, one "
@@ -3277,9 +3295,15 @@ COMPONENTS = [
             "src/deviceMemory.ts": {"does": "every `localStorage` key the shell owns — the "
                                             "theme, the rail, which order statuses this "
                                             "device bothers fetching (D114), whether the "
-                                            "inventory walk folds sold rows away, and when this "
-                                            "browser last opened each box (D132) — and nothing else",
-                                    "governed_by": ["D13", "D27", "D91", "D94", "D95", "D114", "D132"],
+                                            "inventory walk folds sold rows away, when this "
+                                            "browser last reached for each box (D132, renamed "
+                                            "`banchi.box-recency` when the capture screen "
+                                            "started sorting on the same fact) and the setup "
+                                            "the operator last worked at — box, game, set hint, "
+                                            "finish, rarity and product, ONE document because "
+                                            "it is one habit (D141) — and nothing else",
+                                    "governed_by": ["D13", "D27", "D91", "D94", "D95", "D114", "D132",
+                                                    "D142"],
                                     "note": "IT EXISTS BECAUSE OF A LINT RULE, which is the "
                                             "rule working rather than being worked around. "
                                             "`app/eslint.config.js` bans the STORE and not the "
@@ -3432,8 +3456,30 @@ COMPONENTS = [
                     "that card and everything captured after it — by walking the same route N "
                     "times, because D10 lets undo reach the newest capture in a box and "
                     "nothing else. The count is drawn on the row, the list is capped and "
-                    "scrolled, and a walk stops at the first refusal and says how far it got.",
-            "governed_by": ["D3", "D10", "D13", "D19", "D20", "D21", "D22", "D23", "D27", "D41", "D58", "D65", "D81", "D92", "D128", "D130", "D131"]},
+                    "scrolled, and a walk stops at the first refusal and says how far it got. "
+                    "IT REMEMBERS THE SETUP BETWEEN SITTINGS AS OF 2026-09-11 (D141, the "
+                    "owner): the box, game, set hint, finish, rarity and product are "
+                    "`localStorage` through `deviceMemory.ts` — six of D27's seven session "
+                    "keys, moved because a shift ends when the operator stops feeding cards "
+                    "rather than when a tab closes. `banchi.session.captureId` is the one key "
+                    "left on the old clock, and it is what that carve-out was always for. "
+                    "A RESTORED BOX IS CHECKED AGAINST `GET /boxes` and falls back to NOTHING "
+                    "when it has been sealed or deleted, naming the box and opening the field "
+                    "with focus in it — a number can be deleted and reallocated to another "
+                    "drawer, which nothing else on this path refuses. "
+                    "THE BOX LIST IS ORDERED BY THE HAND, not the number: `#/inventory`'s own "
+                    "rail rule over the same `banchi.box-recency` store, recency then "
+                    "`on_hand` then the number. `chooseBox` is the only thing here that writes "
+                    "it; a capture never does, at 623 ms a card. "
+                    "AND THE BOX NUMBER IS OFF THE SCREEN — `runScope.ts:captureBoxLabel` "
+                    "draws the NAME, falling back to `Box 3` only where D20 left one unnamed. "
+                    "The picker keeps the number as a de-emphasised suffix because its entry "
+                    "searches on it. `Clear the setup` at the foot of the Rig panel puts all "
+                    "six back to nothing chosen, with a receipt carrying an undo; it touches "
+                    "no route, and the camera and rotation are `useCamera.ts`'s and stay.",
+            "governed_by": ["D3", "D10", "D13", "D19", "D20", "D21", "D22", "D23", "D27", "D28",
+                            "D34", "D41", "D56", "D58", "D65", "D81", "D92", "D118", "D128",
+                            "D130", "D131", "D132", "D142"]},
             # D3 earns its place on a stylesheet: the no-claim finish chip is drawn dashed
             # because rung 1 distinguishes "no metadata recorded" from a recorded claim, and
             # that distinction is carried here in a border style rather than in any logic.
@@ -3443,7 +3489,8 @@ COMPONENTS = [
                                       # D65 for the two accent modifiers the set hint's verdict
                                       # draws — accent's "the system is unsure" job at text
                                       # weight, because nothing there refuses anything.
-                                      "governed_by": ["D3", "D5", "D27", "D41", "D50", "D65", "D117", "D130"]},
+                                      "governed_by": ["D3", "D5", "D27", "D41", "D50", "D65", "D117",
+                                                      "D130", "D142"]},
             "src/PositionLabel.tsx": {
                 "does": "ONE rendering of `pipeline/join.py:Position.label` for every OWNER site "
                         "(D41, amended 2026-08-29). Recomposes `Box N \u00b7 Section N \u00b7 Card N` into a "
@@ -4571,7 +4618,7 @@ COMPONENTS = [
                                         "with a differently-anchored regex.",
                                 # D20 is the name and its optionality; D10 ruling 3 is the deleted
                                 # box whose number a run still remembers; D56 is the entry.
-                                "governed_by": ["D10", "D20", "D56"]},
+                                "governed_by": ["D10", "D20", "D56", "D142"]},
             "src/money.ts": {"does": "A DOLLAR AMOUNT, SAID THE SAME WAY EVERYWHERE — `money` and "
                                      "`roundsToNothing`. Extracted from src/RunsComposer.tsx "
                                      "unchanged on 2026-09-11, when the run panel began "
@@ -4729,7 +4776,7 @@ COMPONENTS = [
                         "it was written and never had: no facingMode (bug 3), no split(\",\") CSV "
                         "parsing (bug 2). No shared preset, no --fix — D18 keeps anything that "
                         "writes off the path `make check` runs.",
-                "governed_by": ["D13", "D16", "D18", "D27", "D114"],
+                "governed_by": ["D13", "D16", "D18", "D27", "D114", "D132", "D142"],
             },
             "tests/motion.spec.ts": {
                 "does": "the MotionMachine against synthetic frame sequences with an exact "
@@ -4780,7 +4827,7 @@ COMPONENTS = [
                         "matters, which is negative — `c` stays the shutter and `b` stays "
                         "the Box field, because a literal a-z would have put Rainbow Rare on "
                         "the capture key. Run by `make design-check`.",
-                "governed_by": ["D3", "D22", "D23", "D27", "D65", "D101"],
+                "governed_by": ["D3", "D22", "D23", "D27", "D65", "D101", "D118", "D142"],
                 "note": "The shutter is never pressed, so no capture is ever taken — "
                         "motion-live.spec.ts's rule, for its reason. The `S` cases DO select a "
                         "box and stub the section route, because the act writes to one; "
@@ -5214,7 +5261,7 @@ COMPONENTS = [
                         "and `product_game` outright — `undefined.find` inside `ClaimEditor`, "
                         "the screen behind its error boundary, and six cases here spending "
                         "thirty seconds each on a switch that had been detached. AND THE HASH'S OWN BOX SINCE 2026-09-05: `#/inventory?box=<n>` was honoured only for a box that already had ROWS, because the shelf list is built from the rows first and the registry second and the ref was consumed on the first list — so every box of code cards, which D24 pools and which therefore has none, was unreachable by the one link that aims at one. Two cases, with `GET /boxes` held back so the ordering is the defect's rather than a race.",
-                "governed_by": ["D5", "D7", "D8", "D9", "D10", "D13", "D20", "D22", "D23", "D24", "D26", "D28", "D30", "D31", "D33", "D34", "D37", "D38", "D40", "D41", "D43", "D45", "D49", "D55", "D57", "D58", "D63", "D67", "D68", "D71", "D83", "D89", "D92", "D101", "D115", "D116", "D118", "D124", "D125", "D119", "D132", "D27", "D134"],
+                "governed_by": ["D5", "D7", "D8", "D9", "D10", "D13", "D20", "D22", "D23", "D24", "D26", "D28", "D30", "D31", "D33", "D34", "D37", "D38", "D40", "D41", "D43", "D45", "D49", "D55", "D57", "D58", "D63", "D67", "D68", "D71", "D83", "D89", "D92", "D101", "D115", "D116", "D118", "D124", "D125", "D119", "D132", "D27", "D134", "D142"],
                 "note": "THE CHECK `CLAUDE.md`'s ROUTE-IS-NOT-A-FEATURE RULE SAYS DOES NOT "
                         "EXIST. That rule was written on 2026-08-23 after three routes shipped "
                         "with full T7 coverage and no client function and no control — green "

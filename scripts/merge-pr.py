@@ -289,6 +289,26 @@ def local_half(root: str, commit: str, confirm: bool) -> int:
 CLAIMER = "scripts/claim-ids.py"
 
 
+# AND THE CLAIM HAS A SECOND HALF, WHICH IS NOT ABOUT SLUGS (D140, amended 2026-09-11). Once
+# a branch has claimed there is no slug left, so `claims_pending` is empty and the claim half
+# used to say `nothing to claim` and wave the merge through. The number it allocated can be
+# taken by main in the meantime, and nothing looked again: on 2026-09-11 that happened TWICE
+# in one evening — #262 and #265 on one id, #265 and #270 on the next — and a person reading
+# PR titles was the only thing that caught either.
+#
+# IT RUNS BEFORE THE PENDING CHECK AND IN PREVIEW TOO, because a preview whose whole job is to
+# say what the merge would do must say this. `decision index` is the backstop and stays; it
+# fails the second branch's own COMMIT, after the collision is written. This is the earlier,
+# cheaper warning, and `make merge` is where it is worth the most — the fetch immediately
+# above it is what makes the answer current.
+
+
+def stale_claim(root: str, ref: str = "origin/main") -> Optional[str]:
+    """The staleness report, or None when every id this branch adds is still free on `ref`."""
+    got = run([sys.executable, CLAIMER, "--stale", "--ref", ref, "--root", root], cwd=root)
+    return None if got.ok else (got.out or got.err).rstrip()
+
+
 def claims_pending(root: str, ref: str = "origin/main") -> List[str]:
     """`slug -> number` lines for every unclaimed id, or [] when there are none."""
     got = run([sys.executable, CLAIMER, "--porcelain", "--ref", ref, "--root", root], cwd=root)
@@ -296,24 +316,63 @@ def claims_pending(root: str, ref: str = "origin/main") -> List[str]:
 
 
 def claim_half(root: str, number: int, branch: str, confirm: bool) -> int:
-    """Allocate, commit, push, and wait for the claim commit's checks. 0 when clear."""
+    """Allocate, commit, push, and wait for the claim commit's checks. 0 when clear.
+
+    THE TREE IS ESTABLISHED BEFORE ANYTHING READS IT, and that ordering is the whole of
+    D143. Both readers below — the staleness check and the pending check — ask
+    their question of the CHECKED-OUT TREE. Neither can tell whether that tree is the pull
+    request's, so a run pointed at the wrong one answers truthfully about the tree in front of
+    it and uselessly about the merge it is performing.
+    """
+    here = run(["git", "rev-parse", "--abbrev-ref", "HEAD"], cwd=root).out.strip()
+    if not branch:
+        return refuse(
+            "PR #{0} did not report a head branch, so there is no tree to check against."
+            .format(number),
+            "",
+            "The claim reads the checked-out tree and has no way to know whether it is the",
+            "pull request's. Without the branch name it cannot be told, and guessing is the",
+            "one thing this path may not do.")
+    if here != branch:
+        return refuse(
+            "this checkout is on `{0}`; PR #{1}'s branch is `{2}`.".format(here, number, branch),
+            "",
+            "The claim is a commit and a push onto that branch, so it has to be made from a",
+            "tree standing on it. Run this from the worktree that holds it.",
+            "",
+            "THIS REFUSAL USED TO BE UNREACHABLE when the checked-out tree had nothing to",
+            "claim. `main` has no slug in it, so a merge run from `main` read `main`, found",
+            "nothing pending, reported `nothing to claim`, and merged the pull request's slug",
+            "onto main verbatim. That happened on 2026-09-11 and `id claims` caught it.")
+
     run(["git", "fetch", "origin", "main"], cwd=root)
+
+    gone_stale = stale_claim(root)
+    if gone_stale is not None:
+        rule("a claimed id has gone stale")
+        say(gone_stale)
+        return refuse(
+            "this branch holds an id that `origin/main` has taken since it was claimed.",
+            "",
+            "Nothing has been merged and main has NOT moved. The claimer reports and never",
+            "repairs: an un-claim has to happen BEFORE the merge and never after, because",
+            "once main is merged in, a substitution on that token reaches main's own copy of",
+            "the entry too.",
+            "",
+            "Put the id back to its slug form on the branch, push, and run this again. The",
+            "claim half then allocates it against main as it stands, which is the whole",
+            "bargain D140 makes.")
+
     pending = claims_pending(root)
     if not pending:
-        say("  no unclaimed id on this branch — nothing to claim.")
+        say("  no unclaimed id on this branch — nothing to claim,",
+            "  and every id it adds is still free on `origin/main`.")
         return 0
 
     rule("the claim")
     for line in pending:
         say("  {0}".format(line.replace("\t", "  ->  ", 1)))
 
-    here = run(["git", "rev-parse", "--abbrev-ref", "HEAD"], cwd=root).out.strip()
-    if here != branch:
-        return refuse(
-            "this checkout is on `{0}`; PR #{1}'s branch is `{2}`.".format(here, number, branch),
-            "",
-            "The claim is a commit and a push onto that branch, so it has to be made from a",
-            "tree standing on it. Run this from the worktree that holds it.")
     dirty = run(["git", "status", "--porcelain"], cwd=root).out.strip()
     if dirty:
         return refuse(

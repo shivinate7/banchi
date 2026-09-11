@@ -18,8 +18,15 @@ reusing it would resurrect every `step 12` in the tree onto a step that is not t
 It also keeps a sorted list sorted, so a slug appended to a `governed_by` list is in the right
 place before the claim and after it.
 
-IT WRITES, SO IT IS NOT ON THE COMMIT PATH (D18) and it is not in `make check`. Its self-test
-is — `make claim-selftest`, against a throwaway repository.
+AND IT ANSWERS A SECOND QUESTION, WHICH IT DID NOT UNTIL D140 WAS AMENDED 2026-09-11. Once a
+branch has claimed, there is no slug left and this command said `nothing to do` — a true statement about
+slugs and an incomplete one about safety, because the number it already allocated can be taken
+by main afterwards and nothing looked again. `--stale` is that second look, and the default run
+performs it before it writes.
+
+IT WRITES, SO IT IS NOT ON THE COMMIT PATH (D18). The staleness half writes nothing and IS in
+`make check`, as its own target. Its self-test is too — `make claim-selftest`, against a
+throwaway repository.
 """
 
 from __future__ import annotations
@@ -30,7 +37,7 @@ import re
 import subprocess
 import sys
 from pathlib import Path
-from typing import Dict, List, NamedTuple, Optional, Sequence, Tuple
+from typing import Dict, List, NamedTuple, Optional, Sequence, Set, Tuple
 
 ROOT = Path(__file__).resolve().parent.parent
 
@@ -55,13 +62,36 @@ CODES_DECISIONS = "docs/CODES-DECISIONS.md"
 MAP = "docs/map.py"
 GATES = "docs/GATES.md"
 
+# THE THREE NAMESPACES, DECLARED ONCE AND READ TWICE. `ceiling_at` asks each for its highest
+# allocated id and `stale_claims` asks the same three for their whole sets. Spelling the list
+# out at both call sites is how a fourth namespace arrives in one of them and not the other,
+# which is the shape `storage keys` and `codex hooks` both exist to catch elsewhere in this
+# repo. The last field is the form a person READS the id in, which is also the token every
+# citation of it carries.
+KINDS = (
+    ("decision", DECISIONS, DECISION_HEADING, "D{0}"),
+    ("codes", CODES_DECISIONS, CODES_HEADING, "C{0}"),
+    ("step", GATES, GATES_NUMBERED, "step {0}"),
+)
+
 # Binary and generated trees the substitution has no business walking. `.git` is the one that
 # would be catastrophic rather than merely slow.
 SKIP = {".git", "node_modules", "dist", "dist-demo", "captures", "inventory", "runs",
         "__pycache__", ".venv", "venv", "test-results", "playwright-report", ".serve",
         "worktrees", "demo-assets", "harness/images"}
+# `.js` JOINED THE SET ON THE FIRST BRANCH TO NEED IT, which is this mechanism working rather
+# than failing. `app/eslint.config.js` cites decisions in its own comments — six of them today,
+# and `docs/map.py` lists them under its `governed_by` — so a branch writing a SLUG there had it
+# survive the claim silently, and main would carry a citation of an id that does not exist.
+# `.mjs` was already here and `.js` was not, which is an omission rather than a rule: nothing
+# about a config file makes its citations less real than a script's.
+#
+# THE GUARD COULD NOT SEE IT EITHER, which is why both moved together. `docs-audit.py`'s
+# `id claims` row walks its own set and gained `.js` in the same change — the invariant this
+# whole design rests on is MAIN CARRIES NO SLUG, and a file neither the claimer nor the guard
+# opens is a file that invariant is not actually asserted over.
 TEXT_SUFFIXES = {".md", ".py", ".ts", ".tsx", ".css", ".html", ".json", ".txt", ".yml",
-                 ".yaml", ".sh", ".mjs", ".toml"}
+                 ".yaml", ".sh", ".js", ".mjs", ".toml"}
 
 
 class Claim(NamedTuple):
@@ -110,9 +140,19 @@ def text_files(root: Path) -> List[Path]:
 # --------------------------------------------------------------------- what main has taken
 
 
+def allocated_ids(text: str, pattern: re.Pattern) -> Set[int]:
+    """Every ALLOCATED id in `text`. A slug heading is not a number and is skipped.
+
+    THE SET AND NOT ONLY THE MAXIMUM, because a hole in the sequence is real and ruled correct:
+    D80 culled step 12 and keeps the gap, so `max` can say what the next id is but cannot say
+    whether a GIVEN id is free. The staleness half needs the second question answered.
+    """
+    return {int(m) for m in pattern.findall(text) if str(m).lstrip("-").isdigit()}
+
+
 def highest(text: str, pattern: re.Pattern) -> int:
     """The largest allocated id in `text`, or 0. Slug headings are not numbers and are skipped."""
-    found = [int(m) for m in pattern.findall(text) if str(m).lstrip("-").isdigit()]
+    found = allocated_ids(text, pattern)
     return max(found) if found else 0
 
 
@@ -123,14 +163,8 @@ def ceiling_at(ref: str, cwd: Optional[str] = None) -> Dict[str, int]:
     what main holds at the moment of the merge; allocating against the branch's own copy is
     the guess this entry exists to delete.
     """
-    decisions = git("show", f"{ref}:{DECISIONS}", cwd=cwd)
-    codes = git("show", f"{ref}:{CODES_DECISIONS}", cwd=cwd)
-    gates = git("show", f"{ref}:{GATES}", cwd=cwd)
-    return {
-        "decision": highest(decisions, DECISION_HEADING),
-        "codes": highest(codes, CODES_HEADING),
-        "step": max([int(n) for n in GATES_NUMBERED.findall(gates)] or [0]),
-    }
+    return {kind: highest(git("show", f"{ref}:{path}", cwd=cwd), pattern)
+            for kind, path, pattern, _ in KINDS}
 
 
 # ------------------------------------------------------------------------- what is unclaimed
@@ -172,6 +206,126 @@ def plan(root: Path, ref: str, cwd: Optional[str] = None) -> List[Claim]:
                 letter = slug[0]
                 claims.append(Claim(kind, slug, f"{letter}{nxt}", slug, f"{letter}{nxt}"))
     return claims
+
+
+# ------------------------------------------------------ a claimed number that has gone stale
+
+# THE CLAIMER IS A NO-OP ONCE A BRANCH HAS CLAIMED, AND THAT IS THE GAP THIS HALF CLOSES.
+# `plan` reads SLUGS, so a branch already holding an allocated number has nothing pending and
+# the command printed `no unclaimed slug in this tree — nothing to do.` That is a true
+# statement about slugs and an incomplete one about safety: the number it allocated can be
+# taken by main afterwards, and nothing looked again.
+#
+# TWICE IN ONE EVENING, 2026-09-11, and both times a PERSON was the mechanism. PR #262 and
+# PR #265 both held one number; #262 merged first and #265 re-claimed, caught before the merge
+# at the cost of a re-claim. Then #265 and #270 both held the next one; #265 merged first and
+# #270 had to renumber, caught only because a session read another session's PR title. The
+# numbers themselves are incidental and are deliberately not spelled here — a spelled id in a
+# comment is a CITATION, which is the rule D140 learned by having its own auditor's fixture
+# eaten by a claim. The asymmetry is
+# the argument: the first was luck with a small cost, the second was luck with no cost at all.
+# `decision index` does catch this, but it catches it by failing the COMMIT of whichever
+# branch is unlucky, after two headings carry one number — loud, late, and paid by whoever
+# happened to merge second.
+#
+# IT REPORTS AND IT NEVER REPAIRS. An un-claim has to happen BEFORE a merge and never after:
+# once main is merged in, a substitution on that token reaches main's own copy of the entry
+# too. So this names the collision, says what the id would become, and exits non-zero so it
+# can gate. What to do about it is a person's call, or `make merge`'s.
+#
+# NO NETWORK AND NO `gh` ON THIS PATH. The local `origin/main` ref is enough, and D140 records
+# the rejection of reading OPEN pull requests deliberately. This half does not need them: an
+# open PR's number is not yet a fact about main, and the branch that merges SECOND is the one
+# that has to move — so the case that actually bites is the one where the other branch has
+# already LANDED, which is exactly what a ref read can see.
+
+
+class Stale(NamedTuple):
+    kind: str      # "decision" | "codes" | "step"
+    taken: str     # the id as a person reads it: `D140`, `C11`, `step 23`
+    becomes: str   # what it would be allocated if it went back to being a slug
+    where: str     # the file whose headings were read
+
+
+def merging(cwd: Optional[str] = None) -> bool:
+    """Whether a merge is in progress and uncommitted.
+
+    WHAT THE BRANCH ADDS IS NOT ANSWERABLE HERE, and answering anyway reports a collision the
+    reader cannot act on. Mid-merge the working tree already holds the other side's entries
+    while the merge base has NOT moved, so every id the other side added reads as this
+    branch's own and every one of them is on the ref by definition. The advice would be to
+    un-claim an id that belongs to somebody else's merged work.
+
+    IT IS THE DOCUMENTED PRE-MERGE STEP THAT PRODUCES IT, which is what makes this worth a
+    guard rather than a footnote: fetch, merge `origin/main`, resolve, push is the routine
+    every branch runs before it is merged, and `make claim-stale` is in `make check`. Measured
+    on this entry's own branch while it resolved a merge: one refusal naming an id that main
+    had merged an hour earlier. The number is not spelled here on purpose — an id in a comment
+    is a CITATION, and this one is somebody else's entry passing through. Committing the merge
+    moves the base and clears it.
+    """
+    return bool(git("rev-parse", "--verify", "--quiet", "MERGE_HEAD", cwd=cwd).strip())
+
+
+def merge_base(ref: str, cwd: Optional[str] = None) -> str:
+    """The commit `ref` and HEAD share — what `git diff <ref>...HEAD` measures from.
+
+    THE BASELINE IS THE MERGE BASE AND NOT THE REF, and getting that backwards is the one way
+    to write this check so that it cannot see its own subject. Asking what the branch adds
+    relative to the ref's CURRENT content answers nothing: an id the ref has just taken reads
+    as already present on both sides, every collision cancels itself out, and the check
+    reports clean forever while being exactly as green as it was before it existed.
+    """
+    return git("merge-base", ref, "HEAD", cwd=cwd).strip()
+
+
+def stale_claims(root: Path, ref: str, base: str, cwd: Optional[str] = None) -> List[Stale]:
+    """Allocated ids this branch ADDS since `base` that `ref` has taken in the meantime.
+
+    ADDS, NEVER HOLDS. Every id main already had is in the branch's copy too, so reporting
+    what the branch merely holds would report most of the file. The difference against the
+    merge base is exactly the set this branch is claiming to own.
+
+    THE WORKING TREE IS THE BRANCH'S SIDE, matching `pending` rather than introducing a second
+    answer about where the branch's ids live. At the merge the two are identical — `make
+    merge` refuses a dirty tree before it reaches this — and before the commit the working
+    tree is the earlier warning.
+
+    `becomes` IS ADVISORY AND NOTHING WRITES IT. It is what the id would be allocated if it
+    went back to a slug and were claimed alone; a branch carrying pending slugs as well
+    interleaves with them, and the claim at merge time is what actually decides.
+    """
+    out: List[Stale] = []
+    ceiling = ceiling_at(ref, cwd=cwd)
+    for kind, path, pattern, shape in KINDS:
+        here = read(root / path) if (root / path).exists() else ""
+        added = allocated_ids(here, pattern) - allocated_ids(
+            git("show", f"{base}:{path}", cwd=cwd), pattern)
+        taken = allocated_ids(git("show", f"{ref}:{path}", cwd=cwd), pattern)
+        nxt = ceiling[kind]
+        for number in sorted(added & taken):
+            nxt += 1
+            out.append(Stale(kind, shape.format(number), shape.format(nxt), path))
+    return out
+
+
+def report_stale(stale: Sequence[Stale], ref: str) -> None:
+    """Name every collision, say what it would become, and say why nothing was rewritten."""
+    say(f"REFUSED: {len(stale)} id(s) this branch adds are already taken on `{ref}`.", "")
+    for item in stale:
+        say(f"  {item.taken}  is taken on {ref}  —  this branch's own would become "
+            f"{item.becomes}",
+            f"      {item.where}")
+    say("",
+        "  The number was allocated against a `main` that did not hold it yet, and `main` has",
+        "  moved since. NOTHING HAS BEEN REWRITTEN FOR YOU, on purpose: an un-claim has to",
+        "  happen BEFORE the merge and never after, because once main is merged in a",
+        "  substitution on that token reaches main's own copy of the entry too.",
+        "",
+        "  Put the id back to the slug form and let the merge allocate it again — a heading",
+        f"  `## {'D-' + 'two-lowercase-segments'}` for an entry, a `0.` list marker carrying",
+        f"  `{'step ' + 'two-lowercase-segments'}` for a build step — then `make claim-ids`",
+        "  previews what it would take against main as it stands now.")
 
 
 # ------------------------------------------------------------------------- the substitution
@@ -269,6 +423,9 @@ def build_parser() -> argparse.ArgumentParser:
                         help="the checkout to act on (default: this one)")
     parser.add_argument("--porcelain", action="store_true",
                         help="one `slug number` line per claim, for a caller")
+    parser.add_argument("--stale", action="store_true",
+                        help="report allocated ids this branch adds that the ref has taken "
+                             "since, and exit 3 if there are any. Writes nothing, ever.")
     return parser
 
 
@@ -279,25 +436,82 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
     # `--verify` AND `^{commit}`, because a bare `git rev-parse foo` prints `foo` on STDOUT
     # and puts the error on stderr — which this reader discards. The refusal below was
     # unreachable without it, and the command went on to allocate against nothing.
-    if not git("rev-parse", "--verify", "--quiet", f"{args.ref}^{{commit}}", cwd=str(root)).strip():
+    resolved = git("rev-parse", "--verify", "--quiet", f"{args.ref}^{{commit}}",
+                   cwd=str(root)).strip()
+    # THE STALENESS HALF ALLOWS WHERE THE CLAIM REFUSES, and the asymmetry is deliberate. A
+    # claim that cannot read the ref must not guess — that is the entire entry. A staleness
+    # check that cannot read it has simply not been asked a question it can answer, and it is
+    # in `make check`, which runs in a fresh clone that may carry no remote-tracking branch at
+    # all. `revert-guard` makes the same call for the same reason and says so on the way past.
+    if args.stale and not resolved:
+        say(f"PKMNSCAN — ids this branch adds, checked against {args.ref}")
+        say("=" * 72, "")
+        say(f"  no `{args.ref}` in this checkout — there is nothing to check against.",
+            "  ALLOWED, and not a failure: a clone with no remote-tracking branch cannot be",
+            "  asked whether an id has gone stale. `make merge` fetches before it asks.")
+        return 0
+    if not resolved:
         say(f"REFUSED: `{args.ref}` does not name a commit in {root}.",
             "",
             "  The allocation reads what that ref has taken. Without it there is nothing to",
             "  allocate against, and guessing is the thing this command exists to delete.")
         return 2
 
-    claims = plan(root, args.ref, cwd=str(root))
+    # `--porcelain` KEEPS ITS CONTRACT EXACTLY, and is the one caller the staleness half does
+    # not run for. scripts/merge-pr.py reads this stream for claim lines and treats a non-zero
+    # exit as "no claims are pending", so refusing here would SKIP the claim silently — the
+    # opposite of what a guard is for. That caller asks for `--stale` in its own right, first.
     if args.porcelain:
         # TAB, not a space: a step's token is the word `step` and a slug, so a space-separated line
         # cannot be split by a caller. scripts/merge-pr.py is that caller.
-        for claim in claims:
+        for claim in plan(root, args.ref, cwd=str(root)):
             say(f"{claim.token}\t{claim.becomes}")
         return 0
 
+    if args.stale and merging(cwd=str(root)):
+        say(f"PKMNSCAN — ids this branch adds, checked against {args.ref}")
+        say("=" * 72, "")
+        say("  a merge is in progress and not yet committed — there is nothing to check yet.",
+            "  ALLOWED, and not a failure: this tree already holds the other side's entries",
+            "  while the merge base has not moved, so every id that merge brought in would",
+            "  read as this branch's own. Commit the merge and run it again.")
+        return 0
+
+    base = merge_base(args.ref, cwd=str(root))
+    if not base:
+        say(f"REFUSED: `{args.ref}` and HEAD share no commit in {root}.",
+            "",
+            "  What this branch ADDS is its difference against the commit the two share.",
+            "  Without one there is no baseline, and treating the whole branch as added would",
+            "  report every id main already holds as a collision.")
+        return 2
+    stale = stale_claims(root, args.ref, base, cwd=str(root))
+
+    if args.stale:
+        say(f"PKMNSCAN — ids this branch adds, checked against {args.ref}")
+        say("=" * 72, "")
+        if not stale:
+            say("  every id this branch adds is still free — nothing has gone stale.")
+            return 0
+        report_stale(stale, args.ref)
+        return 3
+
     say(f"PKMNSCAN — claim ids against {args.ref}{'' if args.write else '  (PREVIEW)'}")
     say("=" * 72, "")
+
+    # CHECKED BEFORE ANYTHING IS WRITTEN. A tree carrying a collision is one no merge may
+    # proceed on, and performing the claim beside it would commit a fresh number and a stale
+    # one together — leaving the branch worse off than the run that refused.
+    if stale:
+        report_stale(stale, args.ref)
+        return 3
+
+    claims = plan(root, args.ref, cwd=str(root))
     if not claims:
-        say("  no unclaimed slug in this tree — nothing to do.")
+        # THE SECOND SENTENCE IS THE WHOLE POINT OF D140's 2026-09-11 amendment. The first line
+        # alone was a true statement about slugs that a reader took for a statement about safety.
+        say("  no unclaimed slug in this tree — nothing to claim.",
+            f"  and every id this branch adds is still free on `{args.ref}`.")
         return 0
     for claim in claims:
         say(f"  {claim.token}  ->  {claim.becomes}")
