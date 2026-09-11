@@ -437,5 +437,13 @@ where a card rests, the beat where it never does. Its first full run, before the
 before §2's escape, photographed 45 of ~47 cards with 6 on a moving frame and one double;
 the owner called it 80-90% and was right.
 
-The 85/85 confirmation in this file's STATUS is **trigger 1's**. Neither the escape nor the
-dual has a rig run yet; that run is what §2's numbers are waiting on.
+**THE ESCAPE HAS ITS RIG RUN (2026-09-11, 04:07 and 04:09).** Two boxes under the bright lamp,
+the settle trigger alone: **70 fires over ~75 cards and 51 over ~54, two stalls each, no
+double**, every fire on a frame under d 10 (median 3.3-3.9), `tLo` reaching 9-11.5 where the
+ratchet had held it at 4.5. About 97%, from 17%. The two to three stalls per run are cards that
+slid past `maxMoveMs` — the beat backstop's case, and the reason to run the dual next. What is
+still unmeasured is the photographs themselves: whether a d 5-8 frame reads clean is a fact
+about the JPEGs, not the trace.
+
+The 85/85 confirmation in this file's STATUS is **trigger 1's**; these two runs are its second.
+The dual has no rig run yet.

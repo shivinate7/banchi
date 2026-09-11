@@ -1026,13 +1026,14 @@ COMPONENTS = [
     {
         "path": "harness/traces/",
         "status": "built",
-        "does": "twelve armed motion sessions saved from the capture screen's HUD between "
+        "does": "fourteen armed motion sessions saved from the capture screen's HUD between "
                 "2026-08-23 and 2026-09-11 — FIVE recorded under the brightness floor D81 "
                 "replaced, THREE recorded 2026-09-01 under the distance gate that "
-                "replaced it (the sessions D84 was derived from), and FOUR recorded 2026-09-11 "
+                "replaced it (the sessions D84 was derived from), and SIX recorded 2026-09-11 "
                 "over a re-arranged feeder under a bright lamp, where the shipped settle trigger "
-                "fired 5 times each on the two the ratchet lost (D130's receipt) and D131's "
-                "escape replays 31, 21, 45 and 85. Each carries every "
+                "fired 5 times each on the two the ratchet lost (D130's receipt), D131's "
+                "escape replays 31, 21, 45 and 85, and the last two — run LIVE under D131 — "
+                "fired 70 and 51 with two stalls each, its rig receipt. Each carries every "
                 "frame's (t, d, luma), v2 adding dBase, and the exact watch-region pixels of "
                 "every verdict, which is what makes a refusal re-scorable a year later; a "
                 "cadence trace also carries `trigger`. T9's "

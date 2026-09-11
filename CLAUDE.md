@@ -1538,7 +1538,9 @@ was open** — the rule is renumber your own, never another's.
   percentile of all of them, and a settle is one quiet frame of the last three. Zero verdicts
   change on the eight earlier sessions; the four bright-lamp sessions replay 31, 21, 45, 85.
   The cadence trigger is a DUAL: the settle fire whenever it comes, the beat as the backstop.
-  The HUD's `escape` count says when the ratchet was overruled.
+  The HUD's `escape` count says when the ratchet was overruled. **Confirmed at the rig the same
+  night**: two boxes, 70/~75 and 51/~54, two stalls each, no double — ~97% from 17%. The
+  photographs and the dual are what remain unmeasured.
 
   **`scripts/score-trace.py` is how a trace is scored, and it is not optional reading before
   changing a number here.** `summary`, `presence`, `sweep` and `contact` — the last one draws
