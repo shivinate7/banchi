@@ -82,7 +82,12 @@ def decision_gists(path: Optional[Path] = None, prefix: str = "D") -> Dict[str, 
             gists[current] = (title, pick_rulings(bolds))
 
     for line in read(DECISIONS_PATH).splitlines():
-        heading = re.match(r"^##\s+(" + prefix + r"[1-9][0-9]{0,2})\s*[—-]\s*(.+)$", line)
+        # The slug form is an id until the merge claims it (D72, rewritten 2026-09-11), and
+        # a session editing a file its branch's own unclaimed entry governs must be shown
+        # that entry — which is the one moment it is least likely to be remembered.
+        heading = re.match(
+            r"^##\s+(" + prefix + r"(?:[1-9][0-9]{0,2}|-[a-z][a-z0-9]*(?:-[a-z0-9]+)+))"
+            r"\s*[—-]\s*(.+)$", line)
         if heading:
             store()
             current, title, bolds = heading.group(1), heading.group(2).strip(), []

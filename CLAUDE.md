@@ -260,7 +260,8 @@ make lint           # eslint over app/ (guards a bug earned, see app/eslint.conf
                     #   the Python packages, scoped to a slice measured against this tree (D82) —
                     #   never ruff's own defaults, never --fix. Config: ruff.toml.
 make check          # harness + docs-audit + audit-self-test + githooks-selftest +
-                    #   merge-selftest + revert-selftest + revert-guard + janitor-selftest +
+                    #   merge-selftest + revert-selftest + claim-selftest +
+                    revert-guard + janitor-selftest +
                     #   reap-selftest + suite-lock-selftest +
                     #   verdict-selftest + port-agreement + set-hint-agreement +
                     #   screen-freshness + sigil-check + ignore-check + lint +
@@ -381,7 +382,30 @@ make revert-guard   # DOES THIS BRANCH PUT A FILE BACK THE WAY MAIN HAD IT BEFOR
                     #   whole first-parent line; the 2026-09-11 walk is in D133.
 make revert-selftest # the guard, proved by rebuilding #218 and #221 in a throwaway repo.
                     #   In `check`, never in the git hook.
+make claim-ids      # WHAT THE MERGE WILL ALLOCATE FOR THIS BRANCH'S SLUG IDS. A branch does
+                    #   NOT take a decision number (D-merge-time-ids): the allocation's only
+                    #   input is what main has taken, and that is not knowable until the merge.
+                    #   So a branch writes its entry's heading as a two-segment slug, cites it everywhere, and
+                    #   `make merge` substitutes the number against main as it stands THEN.
+                    #   Same for the code-card track's `C-` entries and for the build order,
+                    #   whose unclaimed step wears a `0.` marker carrying its slug in backticks
+                    #   because markdown has no list marker that can hold one.
+                    #   `max + 1`, NEVER the lowest free id — D80 culled step 12 and rules the
+                    #   hole correct, and reusing it would resurrect every `step 12` in the tree
+                    #   onto a step that is not the one meant. It also keeps a sorted
+                    #   `governed_by` list sorted across the claim.
+                    #   Previews; `ARGS=--write` performs it. Reach for it by hand only to LOOK;
+                    #   the merge runs it for you.
+make claim-selftest # the claimer, proved where it can be wrong: a throwaway repository in which
+                    #   MAIN MOVES underneath the branch. In `check`, never in the git hook.
 make merge          # merge a PR and move main onto it — BOTH HALVES, on your word (D42).
+                    #   IT CLAIMS THIS BRANCH'S IDS FIRST, AND WAITS (D-merge-time-ids): it
+                    #   substitutes, commits to the PULL REQUEST's branch, pushes, and watches
+                    #   that commit's checks to completion before merging — so nothing main has
+                    #   never run CI over reaches main. It REFUSES if this checkout is not
+                    #   standing on the PR's own head branch, or if the tree is dirty: the claim
+                    #   is a commit, and it would otherwise land on whatever is checked out.
+                    #   `--no-claim` skips it, for a claim already pushed by hand.
                     #   ARGS=<n> previews and presses nothing; ARGS="<n> --confirm" performs it.
                     #   A bare `make merge` refuses: there is no default PR and will not be one.
                     #   IT DELETES THE HEAD BRANCH AFTERWARDS (2026-09-05) — on origin always,
@@ -1468,6 +1492,7 @@ D133 A branch is judged by what it lands, and a file put back the way main had i
 D134 A departed record is buried, not kept; the box goes; and the graveyard is where the departed are read
 D135 Codex reads the same rules a Claude Code session does, through three symlinks and one reconciled hook roster
 D136 The suite is sharded and never widened, a sleep is a wait and not an assertion, and a tree that passed is not tested twice
+D-merge-time-ids The number is claimed at the merge, because what main has taken is not knowable before it
 ```
 
 **THE GAP THIS LIST CARRIED BETWEEN D116 AND D118 IS CLOSED, AND IT CLOSED THE WAY IT SAID IT
