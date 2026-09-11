@@ -1191,11 +1191,15 @@ COMPONENTS = [
                         "the ref hook beside it cannot see because `git push origin HEAD:main` "
                         "never touches refs/heads/main locally. This is what stands in for "
                         "branch protection, which GitHub answers 403 on for a private repo on "
-                        "the free plan.",
+                        "the free plan. AND D133's guard on every BRANCH push since 2026-09-11: "
+                        "it runs `scripts/revert-audit.py branch` on the commit being pushed, "
+                        "so a stale copy of a file main has moved on is refused before it "
+                        "becomes a PR. Fail-open where the script is absent, as in the "
+                        "self-test's fixture repos.",
                 # Same escape hatch and the same fail-open discipline. Weaker than the thing it
                 # substitutes for in one way D42 names outright: it guards this clone, not the
                 # repository.
-                "governed_by": ["D42"],
+                "governed_by": ["D42", "D133"],
                 "note": "Extensionless, unscanned, listed by hand — see the sibling above.",
             },
             "merge-pr.py": {
@@ -1249,6 +1253,35 @@ COMPONENTS = [
                         "branch is now one behind its upstream, the same mutation turns it red, "
                         "and the fixture asserts its own arming. Same lesson githooks-selftest "
                         "records about git's own refusals scoring as the hook's.",
+            },
+            "revert-audit.py": {
+                "does": "one question of a change, asked of every commit on main's first-parent "
+                        "line (`history`) or of what a branch would land there (`branch`, which "
+                        "is `make revert-guard`, the pre-push hook and the PR check): does it "
+                        "put a file back the way main had it BEFORE a commit main already "
+                        "carries? Two detectors — the whole file restored to an earlier blob "
+                        "by object id, and a -U0 hunk that is line for line the reverse of a "
+                        "hunk an earlier commit introduced — over the last 60 first-parent "
+                        "commits. The guard refuses only a file whose WHOLE change is such a "
+                        "reversal and that no commit on the branch names; a partial reversal "
+                        "beside real edits is a note. `selftest` rebuilds PR #218's deletion "
+                        "and PR #221's keep-ours squash in a throwaway repository and proves "
+                        "both refusals and four allowances.",
+                # D133 is the ruling; D42 is the guard it stands beside, and D18 is why the
+                # self-test is in `check` and never in the git hook.
+                # D119 because the docstring tells its story; it is the case, not a governor.
+                "governed_by": ["D18", "D42", "D119", "D133"],
+                "note": "THE `branch` MODE READS THE MERGE, NOT THE BRANCH: `git merge-tree "
+                        "--write-tree origin/main HEAD` and the diff of origin/main against "
+                        "that tree, which is what the PR would land. The #221 shape has a "
+                        "merge-base AFTER the commit it reverses — the branch merged main and "
+                        "kept ours — so `origin/main..HEAD` sees nothing amiss and only the "
+                        "landing diff does. WHAT IT CANNOT SEE is named in D133 rather than "
+                        "here: a reversal older than the window, one re-worded on the way "
+                        "back, and one whose hunk a neighbouring edit widened. A containment "
+                        "test for the third was built and measured — 79 more hits on this "
+                        "history, every one a coincidence of moved code, and still not the "
+                        "map rows it was written for — and was not kept.",
             },
             "githooks-selftest.sh": {
                 "does": "builds an origin and a clone in a temp directory, points "
@@ -1821,7 +1854,7 @@ COMPONENTS = [
                 # for vale. Change one and the entry describing that check goes stale with it,
                 # which is exactly what `governed_by` is for — so they are listed rather than
                 # allowlisted away.
-                "governed_by": ["D16", "D17", "D18", "D43", "D44", "D47", "D53", "D58", "D60", "D65", "D68", "D74", "D76", "D80", "D82", "D92", "D111", "D122", "D127", "D129"],
+                "governed_by": ["D16", "D17", "D18", "D43", "D44", "D47", "D53", "D58", "D60", "D65", "D68", "D74", "D76", "D80", "D82", "D92", "D111", "D122", "D127", "D129", "D133"],
                 "note": "IT DECLARES THE SUITE AND DELIBERATELY DOES NOT DRIVE IT, which is "
                         "the whole shape. A registry that drove `make check` could not "
                         "disagree with the recipe — and could silently stop running a check, "
