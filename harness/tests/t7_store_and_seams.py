@@ -178,6 +178,7 @@ import http.server
 import inspect
 import os
 import shutil
+import subprocess
 import sys
 import tempfile
 import threading
@@ -15673,7 +15674,19 @@ def check_export_fetch(checks: Checks) -> None:
     accepts this client when the request carries a real session. That is one live fetch by the
     owner, and D64 names it as owed rather than implying it has happened.
     """
-    keys = ("PKMNSCAN_TCG_EXPORT_URL", "TCGPLAYER_STORE_COOKIE", "PKMNSCAN_TCG_USER_AGENT")
+    keys = (
+        "PKMNSCAN_TCG_EXPORT_URL",
+        "TCGPLAYER_STORE_COOKIE",
+        "PKMNSCAN_TCG_USER_AGENT",
+        # THE CLAIM HAS A SECOND HOME SINCE 2026-09-11 and clearing the set no longer clears
+        # it: `envfile.FROM_FILE_ENV` carries the lifted names across a spawn, so it lives in
+        # `os.environ` and outlives a `_from_file.clear()`. Saved here and popped below with
+        # the rest of the ritual. Measured when it was not: the PRECEDENCE case at the end of
+        # this block read `two` instead of `from-env`, because the marker published at harness
+        # import still said the cookie came from a file and re-reading the file was the right
+        # answer to that.
+        envfile.FROM_FILE_ENV,
+    )
     previous = {name: os.environ.get(name) for name in keys}
 
     # THE FAKE PORTAL. It serves whatever `stub["mode"]` currently says, which is how one
@@ -15822,6 +15835,7 @@ def check_export_fetch(checks: Checks) -> None:
     env_before = (envfile.ENV_FILE, set(envfile._from_file), envfile._loaded)
     envfile.ENV_FILE = Path(tempfile.gettempdir()) / "t7-export-fetch-no-such.env"
     envfile._from_file.clear()
+    os.environ.pop(envfile.FROM_FILE_ENV, None)  # the third location; see `keys` above
     envfile._loaded = False
 
     try:
@@ -16624,6 +16638,208 @@ def check_export_fetch(checks: Checks) -> None:
                 os.environ.pop(name, None)
             else:
                 os.environ[name] = value
+def check_key_rotation(checks: Checks) -> None:
+    """`identify/batch.py:_client` and `envfile` — the API key survives a rotation (2026-09-11).
+
+    THE DEFECT, ON THE OWNER'S OWN RIG: the key expired, they pasted a new one into `.env`, and
+    `./pkmnscan identify` and the `#/runs` press both kept failing with the dead one. `make
+    down` / `make up` picked it up, and nothing short of that did — which is the restart
+    discipline D53 exists to make unnecessary.
+
+    TWO CAUSES, ONE PER HALF OF THIS BLOCK, AND THE FIRST HALF ALONE DOES NOT FIX IT.
+
+      - `_client` constructed `anthropic.Anthropic()` with NO KEY and let the SDK read
+        `os.environ` itself, so the value the process was STARTED with was the only value it
+        could ever send. `envfile.get_live` is the fix D64 already built, for the cookie.
+      - and `get_live` could not see the rotation either, one process down. `_from_file` — the
+        half of the precedence rule that says "this came out of a file" — is a process global,
+        and every child here is spawned with `dict(os.environ)`. D53's supervisor reads ONE
+        `.env` line (`PKMNSCAN_LAN_NAME`) and `load` lifts them all, so the capture server
+        inherits the key as a REAL environment variable and `get_live`, correctly by its own
+        rule, declines to read the file again. `envfile.FROM_FILE_ENV` carries the set across
+        the spawn.
+
+    DRIVEN THROUGH `_client` AND THROUGH A REAL CHILD PROCESS, not through the reader. What has
+    to be true is that the SDK gets the new key, and that it gets it in the process `identify`
+    actually runs in — a reader that answers correctly in the parent is exactly what this repo
+    already had.
+
+    THE CHILD IS HERMETIC: `envfile.py` is COPIED into a throwaway tree, so `ENV_FILE` resolves
+    beside the copy and the real `.env` is not in the picture at all. `verdict-selftest` runs
+    its reporter the same way and for the same reason.
+
+    NO KEY IS EVER PUT IN AN ASSERTION MESSAGE. Every arm asserts a TAG for the value it
+    resolved, so a red arm on a machine that has a real `.env` cannot print a live credential
+    into a harness log — `.claude/settings.json` denies reading that file for the same reason.
+    """
+    one = "sk-ant-fixture-one"
+    two = "sk-ant-fixture-two"
+    exported = "sk-ant-fixture-exported"
+    argument = "sk-ant-fixture-argument"
+    tags = {one: "one", two: "two", exported: "exported", argument: "argument"}
+
+    def tag(value: str) -> str:
+        return tags.get(value, "other") if value else "nothing"
+
+    env_before = (envfile.ENV_FILE, set(envfile._from_file), envfile._loaded)
+    previous = {
+        name: os.environ.get(name)
+        for name in (batch.API_KEY_ENV, envfile.FROM_FILE_ENV)
+    }
+    with tempfile.TemporaryDirectory() as raw:
+        home = Path(raw)
+        dotenv = home / "rotating.env"
+        try:
+            for name in previous:
+                os.environ.pop(name, None)
+            envfile.ENV_FILE = dotenv
+            envfile._from_file.clear()
+
+            # ------------------------------------------- THE KEY THE SDK IS HANDED, TWICE
+            #
+            # `load` takes the path EXPLICITLY here rather than through `envfile.ENV_FILE`,
+            # because its default is bound at def time and reassigning the module global does
+            # not move it — the trap `check_export_fetch`'s header writes up from the other
+            # side.
+            dotenv.write_text(f"{batch.API_KEY_ENV}={one}\n")
+            envfile.load(path=dotenv, force=True)
+            checks.equal(
+                tag(batch._client().api_key),
+                "one",
+                "the key in `.env` reaches the SDK as an explicit argument — `_client` used "
+                "to construct with none and leave the read to the SDK, which is what made "
+                "the value this process started with the only one it could use",
+            )
+
+            dotenv.write_text(f"{batch.API_KEY_ENV}={two}\n")
+            checks.equal(
+                tag(batch._client().api_key),
+                "two",
+                "AND A REPLACED ONE REACHES IT IN THE SAME PROCESS, which is the whole "
+                "defect: the operator pastes a new key into `.env` and the next construction "
+                "has to send it, with no restart of a server that is meant to run for days",
+            )
+            checks.equal(
+                tag(batch._client(api_key=argument).api_key),
+                "argument",
+                "and an explicit `api_key=` still outranks both, which is how `run_batch`'s "
+                "callers and the harness pass one",
+            )
+
+            # --------------------------------- AND THE DISTINCTION REACHES EVERY CHILD ENV
+            #
+            # READ OFF THE REAL SPAWN SITES rather than a copy of their composition. Both
+            # build `dict(os.environ)`, which is correct — a child that did not inherit
+            # `PKMNSCAN_HOME` would run against another store (D43) — and is also how the
+            # process-global half of the precedence rule was lost at the first boundary.
+            checks.ok(
+                envfile.FROM_FILE_ENV in serve._child_env(_SERVE_ROOT),
+                "the supervisor hands the lifted names to the capture server, so a value it "
+                "took out of `.env` is not mistaken for one the operator exported",
+            )
+            checks.ok(
+                envfile.FROM_FILE_ENV in pipeline_routes._env(),
+                "and the capture server hands them to the `identify` child, which is the "
+                "process that actually spends the key",
+            )
+            checks.equal(
+                os.environ.get(envfile.FROM_FILE_ENV, "").split(),
+                [batch.API_KEY_ENV],
+                "and it carries NAMES ONLY — the values are already in the environment "
+                "beside it, and a secret copied to a second place is a second place to "
+                "leak it",
+            )
+
+            # --------------------------------------- A REAL EXPORT STILL WINS, AS PROMISED
+            #
+            # THE FAITHFUL SETUP IS THE SEQUENCE, not a hand-edited `_from_file`: an exported
+            # variable is one `load` never lifted, so it is set BEFORE the load that would
+            # have — and the marker goes with it, because a process whose parent lifted
+            # nothing inherits no claim about this name. Written the other way round first,
+            # this arm read `two`: a marker left over from the block above still said the key
+            # came from a file, and re-reading the file was the right answer to it.
+            envfile._from_file.clear()
+            envfile._loaded = False
+            os.environ.pop(envfile.FROM_FILE_ENV, None)
+            os.environ[batch.API_KEY_ENV] = exported
+            envfile.load(path=dotenv, force=True)
+            checks.equal(
+                tag(batch._client().api_key),
+                "exported",
+                "a real environment variable still outranks the file, which is the "
+                "precedence `envfile` has always promised so CI can set one without "
+                "editing anything",
+            )
+            checks.ok(
+                envfile.FROM_FILE_ENV not in os.environ,
+                "and nothing is published when nothing was lifted, so a marker cannot "
+                "claim a name the operator exported themselves",
+            )
+
+            # ------------------------------------------------ AND NOW ONE PROCESS FURTHER
+            #
+            # THE CHILD IS THE CASE THAT WAS BROKEN. Reproduced as a real spawn, with the
+            # dead key inherited exactly as the capture server inherits it, and the fresh one
+            # only in the file. The child prints a TAG, never a value.
+            copied = home / "envfile.py"
+            copied.write_bytes((_SERVE_ROOT / "envfile.py").read_bytes())
+            (home / ".env").write_text(f"{batch.API_KEY_ENV}={two}\n")
+            script = home / "inherit.py"
+            script.write_text(
+                "import sys\n"
+                "import envfile\n"
+                "name, fresh, stale = sys.argv[1:4]\n"
+                "value = envfile.get_live(name)\n"
+                "print({fresh: 'fresh', stale: 'stale'}.get(value, 'other' if value "
+                "else 'nothing'))\n"
+            )
+
+            def inherit(marker: Optional[str]) -> str:
+                """One child, started the way the supervisor starts one: with a copy of an
+                environment that already carries the key."""
+                child = dict(os.environ)
+                child[batch.API_KEY_ENV] = one  # the dead key, inherited
+                child.pop(envfile.FROM_FILE_ENV, None)
+                if marker is not None:
+                    child[envfile.FROM_FILE_ENV] = marker
+                done = subprocess.run(
+                    [sys.executable, str(script), batch.API_KEY_ENV, two, one],
+                    cwd=str(home), env=child, capture_output=True, text=True,
+                    timeout=60, check=False,
+                )
+                return done.stdout.strip() or f"child failed: {done.returncode}"
+
+            checks.equal(
+                inherit(batch.API_KEY_ENV),
+                "fresh",
+                "A CHILD SPAWNED WITH THE DEAD KEY IN ITS ENVIRONMENT READS THE LIVE ONE "
+                "OUT OF THE FILE, because the marker tells it that value came from a file "
+                "and not from a shell — this is the arm the whole defect lived in",
+            )
+            checks.equal(
+                inherit(None),
+                "stale",
+                "and WITHOUT the marker the same child answers the dead key, which is this "
+                "block's own mutation: it fails red if the carry is deleted, rather than "
+                "going quietly green on a machine where the parent happened to be right",
+            )
+            checks.equal(
+                inherit("SOMETHING_ELSE"),
+                "stale",
+                "and a marker that does not name this key leaves it alone, so the carry "
+                "widens nothing: a name the operator exported is still theirs",
+            )
+        finally:
+            envfile.ENV_FILE, restore_from_file, envfile._loaded = env_before
+            envfile._from_file.clear()
+            envfile._from_file.update(restore_from_file)
+            for name, value in previous.items():
+                if value is None:
+                    os.environ.pop(name, None)
+                else:
+                    os.environ[name] = value
+
+
 def check_order_resolver(checks: Checks) -> None:
     """`pipeline/orders.py` — an order line resolved to the copies that fill it.
 
@@ -20488,11 +20704,17 @@ def check_order_fetch_route(checks: Checks) -> None:
         f"TCGPLAYER_STORE_COOKIE={cookie}\nPKMNSCAN_TCG_SELLER_KEY=a2ffc195\n",
         encoding="utf-8",
     )
-    env_keys = ("PKMNSCAN_TCG_ORDERS_URL", "TCGPLAYER_STORE_COOKIE", "PKMNSCAN_TCG_SELLER_KEY")
+    env_keys = (
+        "PKMNSCAN_TCG_ORDERS_URL",
+        "TCGPLAYER_STORE_COOKIE",
+        "PKMNSCAN_TCG_SELLER_KEY",
+        envfile.FROM_FILE_ENV,  # check_export_fetch's `keys` says why this is in the ritual
+    )
     previous = {name: os.environ.get(name) for name in env_keys}
     env_before = (envfile.ENV_FILE, set(envfile._from_file), envfile._loaded)
     envfile.ENV_FILE = dotenv
     envfile._from_file.clear()
+    os.environ.pop(envfile.FROM_FILE_ENV, None)
     envfile._loaded = False
 
     # SIXTY ORDERS IN THREE STATUSES: three search pages of 25, and more than any cap this
@@ -21510,6 +21732,7 @@ def run() -> Result:
     check_connection_close(checks)
     check_crop_preview(checks)
     check_export_fetch(checks)
+    check_key_rotation(checks)
     check_price_history(checks)
     check_history_route(checks)
     check_shipping_lane(checks)

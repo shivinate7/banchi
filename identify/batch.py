@@ -42,6 +42,10 @@ MAX_PAYLOAD_BYTES = 180 * 1024 * 1024
 DEFAULT_POLL_SECONDS = 15
 DEFAULT_TIMEOUT_SECONDS = 3_600  # most batches land in minutes; the API's own cap is 24h
 
+# NAMED HERE RATHER THAN LEFT TO THE SDK'S OWN READ OF THE ENVIRONMENT, so the one place this
+# product resolves a paid credential is greppable. `_client` says why it is resolved at all.
+API_KEY_ENV = "ANTHROPIC_API_KEY"
+
 SUCCEEDED = "succeeded"
 
 # The two refusal codes for a request whose strategy names no usable profile. Statuses
@@ -142,7 +146,25 @@ class BatchRun:
 
 
 def _client(api_key: Optional[str] = None):
-    """Import the SDK late so a missing dependency reports as a message, not a traceback."""
+    """Import the SDK late so a missing dependency reports as a message, not a traceback.
+
+    THE KEY IS RESOLVED HERE AND PASSED EXPLICITLY, THROUGH `envfile.get_live` (2026-09-11).
+    This called `envfile.load()` and then constructed with no key at all, leaving the SDK to
+    read `os.environ` itself — which made the value this process was started with the only
+    value it could ever use. The key EXPIRES, and the operator replaces it in `.env`: on
+    2026-09-11 the owner did exactly that and both `./pkmnscan identify` and the `#/runs` press
+    kept failing with the dead one until `make down` / `make up`. `get_live` re-reads the file
+    on every construction, which is what makes the paste enough.
+
+    THE PRECEDENCE IS UNCHANGED and is `get_live`'s own: an explicit `api_key` argument wins —
+    the harness and `run_batch`'s callers pass one — then a real environment variable, so CI
+    still needs no file, then `.env`.
+
+    AN UNRESOLVED KEY STILL CONSTRUCTS WITH NO KEY rather than refusing here, because the SDK's
+    own missing-key error is the message `harness/tests/t1_id_eval.py` quotes, and a second
+    refusal in front of it would be this module answering for a state it cannot see: a key
+    placed some other way the SDK knows about is not this function's to reject.
+    """
     try:
         import anthropic
     except ImportError as exc:  # pragma: no cover - environment problem, not logic
@@ -150,11 +172,10 @@ def _client(api_key: Optional[str] = None):
             "the `anthropic` package is not installed — run `make venv`"
         ) from exc
 
-    if not api_key:
-        envfile.load()  # ANTHROPIC_API_KEY may live in .env; a real env var still wins
+    key = api_key or envfile.get_live(API_KEY_ENV)
 
     try:
-        return anthropic.Anthropic(api_key=api_key) if api_key else anthropic.Anthropic()
+        return anthropic.Anthropic(api_key=key) if key else anthropic.Anthropic()
     except Exception as exc:
         raise BatchError(f"could not construct the Anthropic client: {exc}") from exc
 
