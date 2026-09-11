@@ -391,6 +391,48 @@ def _sweep_scopes(keep_hours: int = 48) -> None:
             continue
 
 
+def _run_box_id(manifest: dict) -> Optional[int]:
+    """The TRUE INDEX this run recorded for its box, or None (D145).
+
+    `_run_box`'s sibling, and deliberately WITHOUT its path fallback. A box number can be
+    recovered from a capture directory's name because the directory is named after it; an id
+    is written in one place and appears nowhere on disk, so there is nothing to fall back to
+    and a run that did not record one simply did not. None is the honest answer, and
+    `_run_drawer` has a rule for it.
+    """
+    scope = manifest.get("scope")
+    if not isinstance(scope, dict):
+        return None
+    bid = scope.get("bid")
+    if isinstance(bid, int) and not isinstance(bid, bool) and bid > 0:
+        return bid
+    return None
+
+
+def _box_bid(box: int) -> Optional[int]:
+    """The TRUE INDEX of the drawer this run is about to read (D145).
+
+    THIS IS THE ONE THING A RUN DIRECTORY MAY RECORD ABOUT ITS BOX BESIDES THE NUMBER, and it
+    does not contradict D56's rule that a name is never written into a manifest. The two are
+    different kinds of fact: a name is a LABEL the owner edits, so a copy of it goes stale the
+    first time they rename the drawer; an id is an IDENTITY that is fixed at the moment the
+    drawer is created and can never be edited, so a copy of it is as true in a year as it is
+    now. Recording the id is what LETS the name go on being joined at read time — against the
+    right drawer.
+
+    None RATHER THAN A REFUSAL when the registry cannot be read or the box has no entry. A run
+    is about photographs on disk and `box_capture_dir` above has already confirmed those; a
+    store that will not open must not stop a run from starting. A run with no id here is read
+    exactly like every run written before this field existed, by the rule `_box_name_for`
+    has kept since D56.
+    """
+    try:
+        entry = Store().read().inventory.box(box)
+    except Exception:  # noqa: BLE001 — an identity is never worth an unstarted run
+        return None
+    return None if entry is None else entry.bid
+
+
 def _resolve_scope(payload: dict) -> Tuple[Path, dict]:
     """`{box}` or `{box, indices}` -> the directory to identify, and what it describes.
 
@@ -416,7 +458,7 @@ def _resolve_scope(payload: dict) -> Tuple[Path, dict]:
 
     raw = payload.get("indices")
     if raw is None:
-        return source, {"box": box, "whole_box": True, "cards": None}
+        return source, {"box": box, "whole_box": True, "cards": None, "bid": _box_bid(box)}
     if not isinstance(raw, list) or not raw:
         # The same refusal `PUT /inventory/<box>` makes about an empty selection, for the
         # same reason: an empty array quietly meaning "the whole box" is how a selection
@@ -442,6 +484,7 @@ def _resolve_scope(payload: dict) -> Tuple[Path, dict]:
         "box": box,
         "whole_box": False,
         "cards": len(indices),
+        "bid": _box_bid(box),
     }
 
 
@@ -683,8 +726,92 @@ def _run_box(manifest: dict) -> Optional[int]:
     return int(found.group(1)) if found else None
 
 
-def _box_names() -> Dict[int, Tuple[str, Optional[str], FrozenSet[str]]]:
-    """`box -> (the name, when the box was created, the runs its cards came from)`.
+@dataclass(frozen=True)
+class BoxFacts:
+    """What the registry knows about the drawer wearing one box number, right now.
+
+    A NAMED TUPLE GREW A FOURTH MEMBER AND STOPPED BEING READABLE (D145). This was
+    `(name, created_at, runs)` and every reader unpacked it positionally; `bid` made it four,
+    and a fourth anonymous slot in a tuple that is built in one place and read in two is how
+    `_box_name_for`'s two conditions get passed in the wrong order by somebody in a hurry.
+    """
+
+    name: Optional[str]
+    bid: Optional[int]
+    created_at: Optional[str]
+    runs: FrozenSet[str]
+
+
+@dataclass(frozen=True)
+class RunDrawer:
+    """Which drawer a run was over, and what to call it on a screen (D145).
+
+    `former` IS THE FIELD THE OWNER ASKED FOR, and `name` changes meaning with it: for a
+    current drawer the name is the registry's LIVE one, joined at read time exactly as D56
+    requires; for a departed one it is the name frozen onto the `box_deleted` history line,
+    because there is no registry entry left to join against.
+    """
+
+    name: Optional[str]
+    former: bool
+
+
+def _run_drawer(
+    box: Optional[int],
+    bid: Optional[int],
+    run: str,
+    ran_at: Optional[str],
+    names: Dict[int, "BoxFacts"],
+    deleted: Optional[Dict[int, str]] = None,
+) -> RunDrawer:
+    """Is the box wearing this number today the drawer this run was over, and what is it called?
+
+    TWO WAYS TO ANSWER, AND THE FIRST ONE IS NOT A HEURISTIC (D145).
+
+      THE ID, where the run recorded one. `bid` is fixed at the drawer's creation and can
+      never be edited or reissued, so comparing it against the id the current box wears is a
+      decision and not an inference: equal is the same drawer, different is not, and there is
+      no third answer. Every run started after this landed takes this arm.
+
+      THE SHAPE OF THE EVIDENCE, where it did not. `store/master.py:box_disowns_run` — the
+      stamp and the card set, both required, argued at length there and in D36. Every run that
+      predates this field takes this arm, which is EVERY RUN ON THE OWNER'S MACHINE INCLUDING
+      THE ONE THAT PRODUCED THE COMPLAINT, so it is the arm that has to keep working rather
+      than a compatibility shim to be deleted next quarter.
+
+    THE ARMS ARE NOT COMBINED, AND THE ID WINS OUTRIGHT WHERE IT EXISTS. The older rule
+    abstains towards the box being the run's own — it must, since it is reasoning from
+    absence — and letting an abstention soften a fact would be a rule that gets LESS certain
+    as it learns more. A run carrying an id that does not match is a departed drawer even
+    though its cards are gone and its timestamps say nothing.
+
+    A BOX THE REGISTRY HAS NEVER SEEN IS NOBODY'S TO DISOWN, which is the same abstention
+    `Inventory.box_disowns_run` makes: a run over a box with no registry entry gets no name
+    and is not called departed, because nothing here knows that it departed rather than that
+    it was never registered.
+    """
+    if box is None:
+        return RunDrawer(name=None, former=False)
+    found = names.get(box)
+    if found is None:
+        return RunDrawer(name=None, former=False)
+
+    if isinstance(bid, int) and not isinstance(bid, bool) and found.bid is not None:
+        if int(bid) == int(found.bid):
+            return RunDrawer(name=found.name, former=False)
+        lookup = _deleted_box_names() if deleted is None else deleted
+        return RunDrawer(name=lookup.get(int(bid)), former=True)
+
+    if not master.box_disowns_run(found.created_at, found.runs, run, ran_at):
+        return RunDrawer(name=found.name, former=False)
+    # The older rule can say THAT the drawer departed and never WHICH it was, so there is no
+    # id to look a name up by. `(deleted)` with no name is the honest rendering, and it is
+    # already the whole of what the complaint asked for.
+    return RunDrawer(name=None, former=True)
+
+
+def _box_names() -> Dict[int, "BoxFacts"]:
+    """`box -> what the registry knows about the drawer wearing that number right now`.
 
     THE SECOND AND THIRD ARE HERE BECAUSE A BOX NUMBER IS REUSED AND A NAME IS NOT TIED TO A
     RUN. `next_box_number` allocates the lowest FREE integer (D20), so a box that goes and
@@ -729,19 +856,66 @@ def _box_names() -> Dict[int, Tuple[str, Optional[str], FrozenSet[str]]]:
                 present.setdefault(int(box), set()).add(run)
     except Exception:  # noqa: BLE001 — a name is never worth an unanswered poll
         return {}
-    names: Dict[int, Tuple[str, Optional[str], FrozenSet[str]]] = {}
+    names: Dict[int, BoxFacts] = {}
     for key, entry in inventory.boxes.items():
         name = entry.name
         if not isinstance(name, str) or not name.strip():
-            continue
+            name = None
         try:
             box = int(key)
         except (TypeError, ValueError):
             # A registry key that will not coerce names no box, exactly as `_box_row`'s walk
             # treats a card whose box will not: skipped, never fatal.
             continue
-        names[box] = (name, entry.created_at, frozenset(present.get(box, ())))
+        # AN UNNAMED BOX IS IN THE MAP NOW, WITH `name=None` (D145). It was
+        # skipped for as long as this answered one question, because a box with no name has
+        # no name to hand back. It answers two questions now — what is this drawer called,
+        # and IS IT THE RUN'S DRAWER — and the second one has a real answer for an unnamed
+        # box: the owner's own case is a `Box 1` nobody ever named.
+        names[box] = BoxFacts(
+            name=name,
+            bid=entry.bid,
+            created_at=entry.created_at,
+            runs=frozenset(present.get(box, ())),
+        )
     return names
+
+
+def _deleted_box_names() -> Dict[int, str]:
+    """`bid -> the name that drawer had when it was deleted` (D145).
+
+    THE HISTORY IS THE ONLY PLACE THIS CAN COME FROM, and that is the point rather than a
+    limitation. D56 forbids writing a name into a run directory because a live name is
+    editable; once the drawer is deleted the name stops being editable — there is nothing
+    left to edit — so the last name it wore is a FACT, and `box_deleted` is where the store
+    recorded it. Joining it back onto a run is D56's read-time join pointed at the one
+    registry entry that no longer exists.
+
+    FROZEN AT THE DELETION AND NEVER LATER. A name shown for a departed drawer cannot go
+    stale in the way D56 guards against, because nothing can rename a box that is gone.
+
+    LAZY AND CACHED FOR ONE RUN LIST. Only a run whose drawer has actually departed needs
+    this, which on a healthy store is no run at all, so a whole poll usually pays nothing.
+
+    IT NEVER RAISES, `_box_names`' rule: a history this cannot read costs a departed run its
+    drawer's name, and it still gets `(deleted)` — which is the half that answers the
+    complaint.
+    """
+    out: Dict[int, str] = {}
+    try:
+        events = Store().named_events("box_deleted")
+    except Exception:  # noqa: BLE001
+        return out
+    # Newest first, so an id that somehow appears twice keeps the name it was last deleted
+    # under — and `setdefault` is what makes "first seen wins" mean that.
+    for event in events:
+        bid = event.get("bid")
+        name = event.get("name")
+        if not isinstance(bid, int) or isinstance(bid, bool):
+            continue
+        if isinstance(name, str) and name.strip():
+            out.setdefault(bid, name.strip())
+    return out
 
 
 def _busy_run(box: int) -> Optional[str]:
@@ -1444,58 +1618,6 @@ def _phase(manifest: dict, live: bool) -> str:
     return "done"
 
 
-def _box_name_for(
-    box: Optional[int],
-    run: str,
-    ran_at: Optional[str],
-    names: Dict[int, Tuple[str, Optional[str], FrozenSet[str]]],
-) -> Optional[str]:
-    """The registry's name for this box, unless the box in it is a different drawer.
-
-    `_box_names` HAS ALWAYS SAID A VANISHED BOX GETS NO NAME — *"the run remembers a box the
-    store no longer has, and a missing name is the honest rendering of that"* — and could not
-    see the case where it matters, because the number is REALLOCATED: D20 hands out the
-    lowest free integer, so the map is never missing the key, it is holding somebody else's
-    answer under it.
-
-    TWO CONDITIONS, BOTH REQUIRED, AND EACH RULES OUT THE OTHER'S FALSE POSITIVE. This is the
-    correction to a first version that used the timestamp alone and was wrong:
-
-      the box was created AFTER the run started
-      and the box's cards DISOWN the run — it holds some, and none of them is this run's
-
-    **The timestamp alone forbids naming a box afterwards, which is an ordinary thing to
-    do.** A run started in a terminal over `captures/cards/box3` can be named the moment the
-    owner opens the registry, and T7 asserts exactly that flow: name the box, and the name
-    reaches the run on the next read. A rule reading the clock refuses it forever.
-
-    **The card set alone forbids naming a box for a run that has not identified yet.** `run`
-    is written onto a card by `identify`, so a fresh run over a box already holding another
-    run's cards owns none of them for as long as it is live — and would lose its box's name
-    for precisely the window the screen is polling it at 4s.
-
-    Together they name the one shape neither can: a box that arrived after the run AND whose
-    contents came from somewhere else. An empty box disowns nobody, which is what keeps the
-    name-it-later flow working.
-
-    IT ABSTAINS TOWARDS NAMING. An unparseable or absent timestamp means this cannot tell,
-    and withholding on ignorance would strip the name off every run whose manifest predates
-    the field — a claim of its own, made about runs this knows nothing about.
-
-    THE RULE LIVES IN THE STORE, `store/master.py:box_disowns_run`, because
-    `cli/resolve.py:refuse_reallocated` refuses the JOIN on it (D36 amended) — one function,
-    so the screen that withholds the name and the command that refuses the run cannot decide
-    the same case two ways. The argument above is the argument for that function.
-    """
-    if box is None:
-        return None
-    found = names.get(box)
-    if found is None:
-        return None
-    name, made_at, runs_present = found
-    return None if master.box_disowns_run(made_at, runs_present, run, ran_at) else name
-
-
 def _summary(directory: Path, names: Optional[Dict[int, str]] = None) -> dict:
     """One run, as every route that mentions one answers with it.
 
@@ -1514,8 +1636,10 @@ def _summary(directory: Path, names: Optional[Dict[int, str]] = None) -> dict:
     manifest = _manifest(directory)
     pid = _live_pid(directory)
     box = _run_box(manifest)
+    bid = _run_box_id(manifest)
     if names is None:
         names = _box_names()
+    drawer = _run_drawer(box, bid, directory.name, manifest.get("created_at"), names)
     return {
         "run": directory.name,
         "path": str(directory),
@@ -1527,9 +1651,17 @@ def _summary(directory: Path, names: Optional[Dict[int, str]] = None) -> dict:
         # holds; `box_name` is a join against the registry as it stands right now, so a
         # rename shows up on the next poll rather than on the next run.
         "box": box,
-        "box_name": _box_name_for(
-            box, directory.name, manifest.get("created_at"), names
-        ),
+        "box_name": drawer.name,
+        # THE TRUE INDEX OF THE DRAWER THIS RUN WAS OVER, and the only field here a run
+        # directory stores for itself (D145). `null` for every run written
+        # before the field existed, which `_run_drawer` reads as "decide by the older rule"
+        # rather than as "no drawer".
+        "box_bid": bid,
+        # THE DRAWER THIS RUN WAS OVER IS NOT THE BOX WEARING ITS NUMBER TODAY. The whole of
+        # the owner's complaint: *"i deleted an old box 1, started writing into a new box
+        # (now new box 1) and ... it shows that i'd run a 'Box 1' run a long time ago etc.
+        # it's confusing."* `runScope.ts:runBoxLabel` draws `Box 1 (deleted)`.
+        "box_former": drawer.former,
         "started_by": manifest.get("started_by"),
         "live": pid is not None,
         "pid": pid,

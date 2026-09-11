@@ -1224,6 +1224,74 @@ test('a run row names the drawer, and takes the name from the server', async ({ 
   await expect(rowScope('2026-08-24-box9-01')).toHaveText('Box 9')
 })
 
+test('a run over a deleted drawer says so, and the drawer on the shelf does not', async ({
+  page,
+}) => {
+  /* D145. THE OWNER'S REPORT: *"i deleted an old box 1, started writing into a new
+     box (now new box 1) and if i go on say my runs tab it shows that i'd run a 'Box 1' run a
+     long time ago etc. it's confusing."*
+
+     The store could already tell — D36 refuses the join and D56 withholds the name, both on
+     `box_disowns_run` — and withholding a name is not a sentence: the departed drawer drew
+     `Box 1`, which on this screen is indistinguishable from a live box nobody named. The
+     server decides it (`box_former`, off the run's own `box_bid` where it has one) and this is
+     the half a person reads.
+
+     BOTH ROWS, AND THE SECOND IS THE ONE THAT WOULD HAVE CAUGHT A BLUNT FIX. Marking every run
+     over a reused number would have traded one confusing row for two; the drawer on the shelf
+     is an ordinary row with an ordinary name.
+
+     THE NUMBER SURVIVES THE MARKER. `Box 1 (deleted)` and never a bare id: the number is the
+     run directory's own name, the directory its photographs are in, and what every refusal in
+     `server/pipeline_routes.py` names — D56's argument for carrying both halves. And the TRUE
+     INDEX is drawn nowhere, which is the owner's ruling in their own words: *"an index # not
+     visible anywhere in the app"*. */
+  await open(page, {
+    runs: [
+      runRow({
+        run: '2026-08-22-box1-03',
+        box: 1,
+        box_bid: 1,
+        box_former: true,
+        box_name: 'Pokemon shakedown',
+      }),
+      runRow({ run: '2026-08-29-box1-01', box: 1, box_bid: 2, box_former: false, box_name: 'RB Epics' }),
+    ],
+  })
+
+  const rowScope = (run: string) =>
+    page.locator('.run-row').filter({ hasText: run }).locator('.run-row-scope')
+
+  await expect(rowScope('2026-08-22-box1-03')).toHaveText('Box 1 (deleted) · Pokemon shakedown')
+  await expect(rowScope('2026-08-29-box1-01')).toHaveText('Box 1 · RB Epics')
+
+  /* AND THE TRUE INDEX IS DRAWN NOWHERE. `toHaveText` is exact, so these two assertions ARE
+     that proof for this row: both runs carry a `box_bid` and neither label contains it. A
+     separate sweep over the page for the word would pass whether or not the id were rendered
+     as a bare number, which is the shape it would actually take. */
+})
+
+test('a run that predates the true index is still marked, and has no name to recover', async ({
+  page,
+}) => {
+  /* THE ARM THE OWNER'S OWN MACHINE TAKES, and it needs its own `test` rather than a second
+     `open` inside the one above: `open` re-stubs the wire, and the list the first fixture
+     already painted is what `.first()` would read. That is the click-then-mutate race
+     docs/DEBTS.md section 23 names, one register up — and it cost this case a red on its first
+     run, which is the guard working.
+
+     Every run on the owner's machine predates `box_bid`, so the server answers by the older
+     rule (`box_disowns_run`, D36/D56). It can say THAT the drawer departed and not WHICH, so
+     there is no name to recover — and `(deleted)` alone is already the whole of what the
+     complaint asked for. A placeholder in the name's place would draw a fault where there is
+     none (D56). */
+  await open(page, {
+    runs: [runRow({ run: '2026-08-22-box1-03', box: 1, box_bid: null, box_former: true, box_name: null })],
+  })
+
+  await expect(page.locator('.run-row-scope').first()).toHaveText('Box 1 (deleted)')
+})
+
 test('a run predating the box field still finds its box, and is grouped by it', async ({
   page,
 }) => {

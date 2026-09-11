@@ -1925,6 +1925,23 @@ export type RunSummary = {
    *  drawer is relabelled. `null` where the box has no name (D20 leaves names optional) or
    *  where the registry no longer holds it (D10 ruling 3). */
   box_name?: string | null
+  /** The TRUE INDEX of the drawer this run was over — never displayed, and the owner said so
+   *  twice (D145). It is on the wire so the SERVER can tell two drawers wearing
+   *  one number apart; `box_former` below is the answer it produces, and that is what a screen
+   *  draws. `null` for a run written before the field existed.
+   *
+   *  NOTHING IN `app/` MAY RENDER THIS. *"a box needs an index # not visible anywhere in the
+   *  app"* — it is a join key, in the same relationship to `box` that `Place.index` is to
+   *  `Place.slot` (D58): the key the machine joins on, beside the number a person counts to. */
+  box_bid?: number | null
+  /** The drawer this run was over is not the box wearing its number today: it was deleted, and
+   *  D20 handed its number straight back out to the next drawer.
+   *
+   *  THE COMPLAINT THIS ANSWERS, 2026-09-11: *"i deleted an old box 1, started writing into a
+   *  new box (now new box 1) and if i go on say my runs tab it shows that i'd run a 'Box 1' run
+   *  a long time ago etc. it's confusing."* Absent or false is the ordinary case and reads
+   *  exactly as it always did. */
+  box_former?: boolean | null
   started_by?: string | null
   /** A child process is still driving this run.
    *

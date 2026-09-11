@@ -4842,6 +4842,13 @@ def do_delete_box(box: int) -> dict:
                     BURIED,
                     card_key,
                     box=int(box),
+                    # THE DRAWER'S TRUE INDEX, FROZEN ONTO THE RECORD THAT OUTLIVES IT
+                    # (D145). `box_name` beside it is already frozen for this
+                    # reason; the number is the one field here that is handed straight back
+                    # out to the next drawer (D20), so on its own it cannot say which `Box 1`
+                    # this card was buried out of. Nothing draws it — `#/graveyard` reads the
+                    # name — and it is what lets a later question be answered at all.
+                    bid=registered.bid if registered is not None else None,
                     index=at,
                     box_name=box_name,
                     state=card.state,
@@ -4876,7 +4883,15 @@ def do_delete_box(box: int) -> dict:
             parked_dropped += parked_gone
             cache_dropped += cache_gone
 
-        registry_deleted = inventory.boxes.pop(str(int(box)), None) is not None
+        registry_entry = inventory.boxes.pop(str(int(box)), None)
+        registry_deleted = registry_entry is not None
+        # WHAT THE DRAWER WAS, CAPTURED BEFORE ITS ROW GOES (D145). The number is
+        # handed straight back out by `next_box_number` (D20), so after this line nothing in
+        # the store can say which drawer `Box 1` meant — except this history line. The id is
+        # what a run joins against; the name is what a screen draws for a run that outlived
+        # its box.
+        deleted_bid = None if registry_entry is None else registry_entry.bid
+        deleted_name = None if registry_entry is None else registry_entry.name
 
         directory_removed = False
         folder = captures_root() / f"box{int(box)}"
@@ -4890,7 +4905,8 @@ def do_delete_box(box: int) -> dict:
             directory_removed = False
 
         _history(
-            inventory, BOX_DELETED, None, box=int(box), cards=len(holds), buried=buried
+            inventory, BOX_DELETED, None, box=int(box), bid=deleted_bid,
+            name=deleted_name, cards=len(holds), buried=buried,
         )
 
     return {

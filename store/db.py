@@ -53,6 +53,7 @@ a fallback (D86's rule): `make status` reports one, this module ignores it.
 
 from __future__ import annotations
 
+import contextlib
 import hashlib
 import json
 import os
@@ -69,7 +70,11 @@ from store.rows import Rows, payload_text
 DB_NAME = "store.sqlite"
 LEGACY_DIRNAME = "legacy-json"
 RECEIPT_NAME = "MIGRATED.json"
-SCHEMA_VERSION = 1
+MIGRATIONS_DIRNAME = "migrations"
+BOX_ID_RECEIPT = "box-ids.json"
+# The `meta` key holding `Inventory.box_ids_issued` (D145).
+BOX_IDS_ISSUED = "box_ids_issued"
+SCHEMA_VERSION = 2
 
 # The six files a legacy store is made of, and the one that is a log rather than a document.
 LEGACY_INVENTORY = "inventory.json"
@@ -94,7 +99,7 @@ TABLES: Dict[str, Tuple[str, ...]] = {
         "box", "idx", "state", "sku", "condition", "capture_id", "name", "number", "game",
         "set_hint", "run", "captured_at", "state_at",
     ),
-    "boxes": ("box", "name", "state"),
+    "boxes": ("box", "bid", "name", "state"),
     "listings": ("condition", "pushed", "staged", "live"),
     "identifications": ("photo_sha256", "cleared_by_human", "at"),
     "queues": ("box", "idx", "reason", "cleared_by_human", "first_seen"),
@@ -102,13 +107,14 @@ TABLES: Dict[str, Tuple[str, ...]] = {
     "fulfilment": (),
 }
 
-_INTEGER = {"box", "idx", "pushed", "staged", "live", "cleared_by_human"}
+_INTEGER = {"box", "bid", "idx", "pushed", "staged", "live", "cleared_by_human"}
 
 _INDEXES = (
     ("cards", "box"), ("cards", "sku"), ("cards", "capture_id"), ("cards", "state"),
     ("cards", "idx"),
     ("queues", "box"),
     ("events", "position"),
+    ("boxes", "bid"),
 )
 
 
@@ -141,23 +147,52 @@ def _ddl(table: str, columns: Sequence[str]) -> str:
     return f"CREATE TABLE IF NOT EXISTS {table} ({body}payload TEXT NOT NULL)"
 
 
-def _schema_present(conn: sqlite3.Connection) -> bool:
+def _stored_version(conn: sqlite3.Connection) -> Optional[int]:
+    """The schema version this file was last stamped with, or None for an empty file.
+
+    None and 0 are different answers: None is "no tables here yet, create them", and any
+    integer is "these tables exist and may need an upgrade". An unreadable stamp reads as
+    version 0, which routes it through every upgrade step — the safe direction, since each
+    step below is written to be a no-op against a file that already has its column.
+    """
     row = conn.execute(
         "SELECT name FROM sqlite_master WHERE type = 'table' AND name = 'meta'"
     ).fetchone()
     if row is None:
-        return False
+        return None
     stored = conn.execute("SELECT value FROM meta WHERE key = 'schema'").fetchone()
-    return stored is not None and str(stored[0]) == str(SCHEMA_VERSION)
+    if stored is None:
+        return 0
+    try:
+        return int(stored[0])
+    except (TypeError, ValueError):
+        return 0
 
 
-def _ensure_schema(conn: sqlite3.Connection) -> None:
-    """Create the tables once. A READ-ONLY CHECK ON EVERY LATER OPEN, and that matters:
-    `Store(snapshot.directory).history()` opens a second connection inside a write
-    session, and a DDL or an `INSERT OR IGNORE` here would be a second writer waiting
-    on the first until `busy_timeout` — measured as a 30-second stall on the first sale
-    T7 recorded after D88."""
-    if _schema_present(conn):
+def _ensure_schema(
+    conn: sqlite3.Connection,
+    *,
+    directory: Optional[Path] = None,
+    locked: bool = False,
+) -> None:
+    """Create the tables once, and upgrade them when this build's schema has moved on.
+
+    A READ-ONLY CHECK ON EVERY LATER OPEN, and that matters: `Store(snapshot.directory)
+    .history()` opens a second connection inside a write session, and a DDL or an
+    `INSERT OR IGNORE` here would be a second writer waiting on the first until
+    `busy_timeout` — measured as a 30-second stall on the first sale T7 recorded after D88.
+    So the version check comes first and every other statement is behind it.
+
+    AN UPGRADE TAKES THE STORE LOCK, exactly as `_import_legacy` does and for the same
+    reason: it is a write, it can be reached from `Store.read()` — the first read after a
+    `git pull` is the ordinary case — and two processes discovering the same pending upgrade
+    at once must not both run it. `locked=True` says the caller already holds it.
+    """
+    stored = _stored_version(conn)
+    if stored == SCHEMA_VERSION:
+        return
+    if stored is not None:
+        _upgrade(conn, stored, directory=directory, locked=locked)
         return
     for table, columns in TABLES.items():
         conn.execute(_ddl(table, columns))
@@ -170,6 +205,202 @@ def _ensure_schema(conn: sqlite3.Connection) -> None:
         conn.execute(f"CREATE INDEX IF NOT EXISTS {table}_{column} ON {table}({column})")
     conn.execute(
         "INSERT OR IGNORE INTO meta (key, value) VALUES ('schema', ?)", (str(SCHEMA_VERSION),)
+    )
+
+
+def _upgrade(
+    conn: sqlite3.Connection,
+    stored: int,
+    *,
+    directory: Optional[Path] = None,
+    locked: bool = False,
+) -> None:
+    """Bring a store built by an older build up to `SCHEMA_VERSION`, under the store lock.
+
+    ONE STEP PER VERSION, IN ORDER, AND EVERY STEP IS ADDITIVE. Nothing here drops a column,
+    rewrites a payload's existing key or removes a row, so an upgrade cannot lose data and a
+    half-applied one is repaired by running it again — which is what a crash between the step
+    and the stamp leaves behind, and why each step is written to be a no-op on a file that
+    already has its column.
+
+    THE STAMP IS THE LAST STATEMENT IN THE TRANSACTION, never a separate commit. A file
+    stamped 2 whose boxes have no ids would be a store this function would then refuse to
+    look at again.
+    """
+    directory = Path(directory) if directory is not None else None
+    guard = (
+        _already_locked()
+        if (locked or directory is None)
+        else files.exclusive(directory)
+    )
+    with guard:
+        # Re-read inside the lock: another process may have done the whole thing while this
+        # one waited for it, which is the ordinary shape when a server and a CLI start together.
+        stored = _stored_version(conn) or 0
+        if stored == SCHEMA_VERSION:
+            return
+        conn.execute("BEGIN IMMEDIATE")
+        try:
+            receipt: Optional[dict] = None
+            if stored < 2:
+                receipt = _add_box_ids(conn)
+            conn.execute(
+                "INSERT OR REPLACE INTO meta (key, value) VALUES ('schema', ?)",
+                (str(SCHEMA_VERSION),),
+            )
+            conn.execute("COMMIT")
+        except BaseException:
+            with contextlib.suppress(Exception):
+                conn.execute("ROLLBACK")
+            raise
+        if receipt is not None and directory is not None:
+            _write_migration_receipt(directory, BOX_ID_RECEIPT, receipt)
+
+
+def _add_box_ids(conn: sqlite3.Connection) -> dict:
+    """Schema 1 -> 2: give every box in an existing store its true index (D145).
+
+    IN ASCENDING BOX NUMBER, which is the only stable order available. The rows carry a
+    `created_at` and it would be the more meaningful sequence, but it is optional — the v1
+    migration in `Inventory.parse` creates a registry entry for every box a card names and
+    gives it none — so ordering on it would put every such box in an arbitrary bucket and
+    make the result depend on SQLite's row order. The number is present on every row by
+    construction, unique by construction, and sorts. Which box got id 3 does not matter; that
+    the same store always produces the same answer does.
+
+    IT IS ADDITIVE AND LOSSLESS. One column is added, one key is added to each payload, and
+    no existing key is touched — so the reverse is dropping the field, and every reader that
+    has not learned about `bid` yet goes on reading these rows unchanged (`Inventory.parse`
+    filters on `Box.__annotations__`, so an unknown key was always survivable in the other
+    direction too).
+
+    A BOX THAT ALREADY HAS AN ID KEEPS IT, and its id still counts against the high-water
+    mark. That is what makes a re-run after a crash a no-op rather than a renumbering.
+    """
+    columns = {row[1] for row in conn.execute("PRAGMA table_info(boxes)").fetchall()}
+    if "bid" not in columns:
+        conn.execute("ALTER TABLE boxes ADD COLUMN bid INTEGER")
+    conn.execute("CREATE INDEX IF NOT EXISTS boxes_bid ON boxes(bid)")
+
+    rows = conn.execute("SELECT key, payload FROM boxes").fetchall()
+    numbered = []
+    for key, text in rows:
+        record = json.loads(text)
+        try:
+            number = int(record.get("box", key))
+        except (TypeError, ValueError):
+            number = None
+        numbered.append((number, str(key), record))
+    # A row whose box will not coerce sorts last rather than stopping the migration: it is
+    # already unreachable through `Inventory.box`, and refusing to upgrade the store over it
+    # would strand every healthy box behind one bad row.
+    numbered.sort(key=lambda item: (item[0] is None, item[0] if item[0] is not None else 0, item[1]))
+
+    issued = 0
+    for _, (_number, key, record) in enumerate(numbered):
+        existing = record.get("bid")
+        try:
+            existing = None if existing is None else int(existing)
+        except (TypeError, ValueError):
+            existing = None
+        if existing is None:
+            issued += 1
+            bid = issued
+        else:
+            bid = existing
+            issued = max(issued, existing)
+        record["bid"] = bid
+        conn.execute(
+            "UPDATE boxes SET bid = ?, payload = ? WHERE key = ?",
+            (bid, payload_text(record), key),
+        )
+    conn.execute(
+        "INSERT OR REPLACE INTO meta (key, value) VALUES (?, ?)",
+        (BOX_IDS_ISSUED, str(issued)),
+    )
+    return {
+        "migrated_at": datetime.now(timezone.utc).isoformat(timespec="milliseconds"),
+        "schema": {"from": 1, "to": SCHEMA_VERSION},
+        "what": (
+            "every box gained a `bid`: a true index that is never reused, so a record that "
+            "outlives its drawer can say which drawer it meant after the number is handed "
+            "out again (D20)"
+        ),
+        "order": "ascending box number",
+        "box_ids_issued": issued,
+        "boxes": {key: record["bid"] for _n, key, record in numbered},
+        "reverse": (
+            "additive only — no column was dropped, no payload key was overwritten, no row "
+            "was removed. To undo: `UPDATE boxes SET bid = NULL`, remove the `bid` key from "
+            "each payload, delete the `box_ids_issued` row from `meta`, and set the `schema` "
+            "row back to 1."
+        ),
+    }
+
+
+def _number_legacy_boxes(inventory) -> None:
+    """Assign `Box.bid` across a legacy inventory, in ascending box number.
+
+    `_add_box_ids`' rule applied to objects rather than to rows, and it is deliberately a
+    second implementation of four lines rather than a shared one: that function edits SQL
+    payloads in a database that already exists, this one edits dataclasses on their way into
+    a database being created, and the only thing they share is the ORDER — which is stated in
+    both docstrings because it is the part a reader has to be able to check.
+    """
+    def number_of(key, box):
+        try:
+            return int(box.box)
+        except (TypeError, ValueError):
+            try:
+                return int(key)
+            except (TypeError, ValueError):
+                return None
+
+    entries = [(number_of(key, box), str(key), box) for key, box in inventory.boxes.items()]
+    entries.sort(key=lambda item: (item[0] is None, item[0] if item[0] is not None else 0, item[1]))
+    issued = 0
+    for _number, key, box in entries:
+        if box.bid is None:
+            issued += 1
+            box.bid = issued
+        else:
+            issued = max(issued, int(box.bid))
+        inventory.boxes[key] = box
+    inventory.box_ids_issued = max(inventory.box_ids_issued, issued)
+
+
+def _write_migration_receipt(directory: Path, name: str, receipt: dict) -> None:
+    """The receipt beside the store, in `legacy-json/MIGRATED.json`'s shape and for its
+    reason: a later question about what a migration did has an answer that is not a diff of
+    two builds. Best effort — a read-only or full disk must not make an already-committed
+    upgrade look like a failure."""
+    with contextlib.suppress(OSError):
+        folder = Path(directory) / MIGRATIONS_DIRNAME
+        folder.mkdir(parents=True, exist_ok=True)
+        files.write_json(folder / name, receipt)
+
+
+def box_ids_issued(conn: sqlite3.Connection) -> int:
+    """The high-water mark for `Box.bid` (D145). 0 where none has been issued."""
+    row = conn.execute("SELECT value FROM meta WHERE key = ?", (BOX_IDS_ISSUED,)).fetchone()
+    if row is None:
+        return 0
+    try:
+        return max(0, int(row[0]))
+    except (TypeError, ValueError):
+        return 0
+
+
+def set_box_ids_issued(conn: sqlite3.Connection, value: int) -> None:
+    """Record the mark. NEVER LOWERED: a caller handing back a smaller figure than the file
+    holds is a snapshot that was read before somebody else issued an id, and honouring it
+    would hand that id out twice."""
+    current = box_ids_issued(conn)
+    wanted = max(current, max(0, int(value or 0)))
+    if wanted == current:
+        return
+    conn.execute(
+        "INSERT OR REPLACE INTO meta (key, value) VALUES (?, ?)", (BOX_IDS_ISSUED, str(wanted))
     )
 
 
@@ -199,7 +430,7 @@ def connect(directory: Path, *, locked: bool = False) -> sqlite3.Connection:
         if legacy_present(directory):
             _import_legacy(directory, locked=locked)
     conn = _open(db_path)
-    _ensure_schema(conn)
+    _ensure_schema(conn, directory=directory, locked=locked)
     return conn
 
 
@@ -444,6 +675,11 @@ def _import_legacy(directory: Path, *, locked: bool = False) -> None:
             return files.read_json(sources[name]) if name in sources else None
 
         inventory = Inventory.parse(document(LEGACY_INVENTORY))
+        # THE LEGACY STORE'S BOXES GET THEIR TRUE INDEX HERE (D145), because the
+        # staging database is created fresh at the CURRENT schema version and so never passes
+        # through `_add_box_ids`. Same rule and same order as that step: ascending box number,
+        # additive, and a box that somehow already has an id keeps it.
+        _number_legacy_boxes(inventory)
         cache = Cache.parse(document(LEGACY_CACHE))
         review = Queue.parse(MAIN, document(LEGACY_REVIEW))
         parked = Queue.parse(PARKED, document(LEGACY_PARKED))
@@ -473,6 +709,7 @@ def _import_legacy(directory: Path, *, locked: bool = False) -> None:
                     src.upsert(key, queue.entries.spec.columns(obj), queue.entries.spec.dump(obj))
                 counts[f"queues.{queue.name}"] = len(queue.entries)
             counts["events"] = append_events(conn, events)
+            set_box_ids_issued(conn, inventory.box_ids_issued)
             conn.execute(
                 "INSERT OR REPLACE INTO meta (key, value) VALUES ('migrated_at', ?)",
                 (datetime.now(timezone.utc).isoformat(timespec="milliseconds"),),
