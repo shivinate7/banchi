@@ -9254,7 +9254,24 @@ silently repairing.
 
 ### What it costs now
 
-RUNNER_FIGURES_PENDING
+**Measured on the runner, from two `workflow_dispatch` runs of this branch on 2026-09-11, read out of `gh run view <id> --json jobs`.** Run 34636356214 carried the shards alone; run 34637306388 carried the shards, the fake clock and the gate. Before is the 56-job window above.
+
+| | before | shards alone | shards + fake clock + gate |
+|---|---|---|---|
+| wall-clock, first job start to last job end | 940-1,020s | 567s (9m27s) | 504s (8m24s) |
+| `make design-check` step, per shard | 913s, one job | 534s / 292s (red at 160) / 393s | 390s / 391s / 447s |
+| Playwright's own total, per shard | `481 passed (15.2m)` | 8.9m / 4.8m / 6.5m | 7.4m / 6.5m / 6.5m |
+| setup before the step (checkout, node, chromium from cache) | ~40s | ~35-55s per shard | ~35-40s per shard |
+| `already-passed` gate | — | — | 9s, and the matrix started 12s after the run |
+| `check` job | 120s | 101s | 97s |
+
+**Runner-minutes did not fall and were not meant to**: three shards of ~6.5-7.4 minutes plus three setups is ~20-23 minutes against ~16, and the owner ruled that acceptable once it was known not to multiply. What fell is the wait: a PR's browser verdict lands in eight and a half minutes rather than sixteen. **A shard runs its third of the cases slower than the single job ran all of them** — 2.4-2.8s per case against 1.9s — which is runner variance this entry can only report; both dispatches ran in the same half hour.
+
+**The six rewritten cases on the runner, run 34637306388**: the alternation case 2.6s (46.5s before), the Fulfiller's tab 1.6s (17.5s), reduced motion 2.3s (17.0s), the undo window 3.9s (22.8s), the search-result undo 6.2s (15.4s), the review receipt 1.8s (2s of sleep gone). On the rig, 1.0-4.6s.
+
+**The gate's lookup half is proven on the runner and the record half is not, and the reason is main's.** Both dispatches printed `0 unexpired pass record(s)` for their tree and released the matrix, and `design-check-passed` was correctly SKIPPED when a shard went red. It went red on `phone.spec.ts`'s thumb-floor case at 390, which main's own run at `591285b` fails on Linux too — PR #252's fix for it was red on the runner at the time of writing — so no tree that includes today's main has had a green matrix to upload a record from. The upload is `actions/upload-artifact@v4` with a name computed by the job, and it runs on this PR's own check the first time main's Linux reds are fixed and merged in; a re-dispatch of the same tree then prints `1 unexpired pass record(s)`. Reported as unexercised rather than claimed.
+
+**One more red was seen and is main's, not this entry's**: `inventory.spec.ts:5074`'s D132 case failed on main's push run and on the first dispatch's shard 2, and passed on the second dispatch — a `toHaveText` over the walk's position cells, not the Escape shape docs/DEBTS.md section 11 records. Written down here because it is a second shape, and left to that section.
 
 ### What is left, and flagged rather than done
 
