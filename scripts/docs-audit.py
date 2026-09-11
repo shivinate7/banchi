@@ -4915,6 +4915,8 @@ MOTION_MIRROR = {
     "dSeed": "D_SEED",
     "dFloor": "D_FLOOR",
     "noiseWindowMs": "NOISE_WINDOW_MS",
+    "stillFractionMin": "STILL_FRACTION_MIN",
+    "restQuantile": "REST_QUANTILE",
     "stillFrames": "STILL_FRAMES",
     "stillWindow": "STILL_WINDOW",
     "refractoryMs": "REFRACTORY_MS",

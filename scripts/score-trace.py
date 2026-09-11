@@ -52,8 +52,10 @@ MOVE_K = (2.0 * 16) / 9
 D_SEED = 2.25
 D_FLOOR = 1.0
 NOISE_WINDOW_MS = 8000.0
-STILL_FRAMES = 2
-STILL_WINDOW = 4
+STILL_FRACTION_MIN = 0.3
+REST_QUANTILE = 0.25
+STILL_FRAMES = 1
+STILL_WINDOW = 3
 REFRACTORY_MS = 250.0
 PRESENCE_K = 3.0
 PRESENCE_MIN = 16.0
@@ -97,7 +99,10 @@ def _replay(rows, still_k=STILL_K, move_k=MOVE_K, d_seed=D_SEED):
 
     Only frames the machine already calls STILL feed the noise estimate — motion.ts's
     `noiseWindowMs` carries the argument, and dropping that condition here would score a
-    machine nobody is running.
+    machine nobody is running. UNLESS THE STILL POPULATION IS A MINORITY OF THE WINDOW
+    (D131): under `STILL_FRACTION_MIN` of all frames, the ratchet has lost the still level
+    and `REST_QUANTILE` of every frame in the window stands in for it, `t_hi` keeping its
+    ratio. Mirrors `trackNoise` exactly; the bright-lamp sessions are where it decides.
 
     STILLNESS IS `STILL_FRAMES` OF THE LAST `STILL_WINDOW` (D84), completing only on a
     frame that is itself quiet, and the stall clock is cleared by a COMPLETED SETTLE rather
@@ -107,6 +112,7 @@ def _replay(rows, still_k=STILL_K, move_k=MOVE_K, d_seed=D_SEED):
 
     Returns (verdicts, (tLo min, tLo max), stalls)."""
     window: list[tuple[float, float]] = []
+    everything: list[tuple[float, float]] = []
     d_typical = d_seed
     t_lo, t_hi = d_typical * still_k, d_typical * move_k
     judged, refractory = False, 0.0
@@ -125,14 +131,36 @@ def _replay(rows, still_k=STILL_K, move_k=MOVE_K, d_seed=D_SEED):
             stall_flagged = True
             stalls.append(now)
 
-    for index, (now, d, _dbase, _luma) in enumerate(rows[1:], start=1):
+    for index, (now, d, dbase, _luma) in enumerate(rows[1:], start=1):
+        # THE FRACTION IS TAKEN OVER FRAMES WITH A CARD IN VIEW (D131): an empty stand is
+        # still on every frame, and a window that had just watched thirty seconds of it
+        # called the first cards a still majority for six seconds after feeding began. A v1
+        # trace carries no dBase and counts every frame; the machine's own gate is
+        # `presenceFloor`, which on every session here is PRESENCE_MIN.
+        present = dbase is None or dbase >= PRESENCE_MIN
         if d < t_lo:
             window.append((now, d))
+        everything.append((now, d, present))
         while window and now - window[0][0] > NOISE_WINDOW_MS:
             window.pop(0)
+        while everything and now - everything[0][0] > NOISE_WINDOW_MS:
+            everything.pop(0)
         if index % 10 == 0 and len(window) >= 25:
-            d_typical = max(D_FLOOR, statistics.median(value for _, value in window))
-            t_lo, t_hi = d_typical * still_k, d_typical * move_k
+            in_view = [value for _, value, seen in everything if seen]
+            still_in_view = sum(1 for value in in_view if value < t_lo)
+            rest = (
+                max(D_FLOOR, _quantile(in_view, REST_QUANTILE))
+                if len(in_view) >= 25 and still_in_view / len(in_view) < STILL_FRACTION_MIN
+                else None
+            )
+            # A rest must be smaller than a card arriving: a quantile at or above the
+            # presence floor is a motion level, and the ratchet keeps the word.
+            if rest is not None and rest < PRESENCE_MIN:
+                d_typical = rest
+                t_lo, t_hi = rest, max(rest * (move_k / still_k), rest + 1)
+            else:
+                d_typical = max(D_FLOOR, statistics.median(value for _, value in window))
+                t_lo, t_hi = d_typical * still_k, d_typical * move_k
         lows.append(t_lo)
         if d > t_hi:
             marks, judged = [], False

@@ -166,12 +166,34 @@ export type MotionParams = {
    *  86 cards vanished while everything looked normal. A median over a window that admitted
    *  motion would have been quieter and wronger. */
   noiseWindowMs: number
+  /** THE RATCHET'S ESCAPE, 2026-09-11 (D131). The tracker above admits only frames already
+   *  under `tLo`, so it can lower the still level and never raise it: a rig whose rest sits
+   *  ABOVE the seeded 4.5 — the owner's bright lamp, where a resting card reads d 5-8 from
+   *  brightness jitter alone — is never learned, and the settle rule fires on 5 of 29 cards
+   *  while everything looks normal. That is the exact shape of the 2026-08-23 loss with the
+   *  sign flipped. When the frames the machine calls still fall below this FRACTION of the
+   *  window, its idea of still is wrong, and `dTypical` is taken instead from `restQuantile`
+   *  of ALL the window's frames. 0.30: every one of the eight earlier sessions keeps 46-83%
+   *  of its frames under tLo and never trips this; the three bright-lamp sessions sit at
+   *  9-18% and trip it at once. Measured in both directions — 0 quantile-mode refreshes on
+   *  the old corpus, 100/95/94% coverage on the new. */
+  stillFractionMin: number
+  /** Which quantile of ALL window frames stands in for the still level when the ratchet
+   *  has lost it. 0.25: on the bright-lamp sessions the rest phase is the lowest quarter of
+   *  frames (p25 7-9 against a transit at 13-30), so this lands `tLo` in the gap between
+   *  them. `stillK` is NOT applied on this path — the quantile is already a threshold, not a
+   *  level — and `tHi` keeps its ratio to `tLo`. */
+  restQuantile: number
   /** Still frames that mean "settled" — counted as `stillFrames` of the last
    *  `stillWindow`, not as a consecutive run. 2 frames = 67 ms at 30fps. The original
    *  guess of 6 (200 ms), plus a blinding 400 ms cooldown, summed to more than the 458 ms
    *  worst cycle Gate B measured — infeasible at the MEAN cycle, not just the worst. */
   stillFrames: number
-  /** How many recent frames `stillFrames` is counted over. 4 SINCE 2026-09-01 (D84). It
+  /** How many recent frames `stillFrames` is counted over. ONE OF THREE SINCE 2026-09-11
+   *  (D131): the bright-lamp feeder rests a card for two to four frames, so a window of four
+   *  never fills before the next card slides in — half the cards never completed a settle.
+   *  One quiet frame among the last three, on a quiet frame, is what those rests can
+   *  satisfy; swept against every old session it changes no count. 4 FROM 2026-09-01 (D84). It
    *  was effectively 2 until then, because the rule was a consecutive run.
    *
    *  A CONSECUTIVE RUN IS DEFEATED BY A TWO-FRAME ALTERNATION, and that is measured rather
@@ -283,8 +305,10 @@ export const DEFAULT_PARAMS: MotionParams = {
   dSeed: 2.25,
   dFloor: 1.0,
   noiseWindowMs: 8000,
-  stillFrames: 2,
-  stillWindow: 4,
+  stillFractionMin: 0.3,
+  restQuantile: 0.25,
+  stillFrames: 1,
+  stillWindow: 3,
   refractoryMs: 250,
   tNovel: 4.0,
   presenceK: 3.0,
@@ -348,6 +372,8 @@ export type MotionDiagnostics = {
    *  screen renders it as the sentence it means rather than as a number that goes up. */
   noCardRun: number
   stalled: number
+  /** Refreshes on which the ratchet was overruled by the quantile path (D131). */
+  escapes: number
 }
 
 /** What the screen can ask the machine to do. Deliberately NOT on the `Trigger` seam:
@@ -400,6 +426,22 @@ export class MotionMachine {
   private dHead = 0
   private dCount = 0
   private dScratch: Float32Array
+  /* EVERY frame's d over the window, still or not — the second population the ratchet's
+   * escape reads (D131). The still ring above stays the first word; this is the check on it. */
+  private readonly aTimes: Float64Array
+  private readonly aVals: Float32Array
+  /** Whether a card was in view on that frame. THE FRACTION IS TAKEN OVER FRAMES WITH A
+   *  CARD IN VIEW (D131): an empty stand is still on every frame, and a window that had just
+   *  watched thirty seconds of it called the first cards a still majority for six seconds
+   *  after feeding began — 7 of 29 cards on the first bright-lamp session, before the escape
+   *  could see the population it exists to judge. */
+  private readonly aPresent: Uint8Array
+  private aHead = 0
+  private aCount = 0
+  private aScratch: Float32Array
+  /** How many refreshes took the quantile path — on the HUD as `escape`, so a session can
+   *  see the ratchet was overruled. */
+  private escapes = 0
   private dTypical: number
   private tLo: number
   private tHi: number
@@ -429,6 +471,7 @@ export class MotionMachine {
     suppressedNoCard: 0,
     noCardRun: 0,
     stalled: 0,
+    escapes: 0,
   }
 
   constructor(params: MotionParams = DEFAULT_PARAMS) {
@@ -441,6 +484,10 @@ export class MotionMachine {
     this.dTimes = new Float64Array(capacity)
     this.dVals = new Float32Array(capacity)
     this.dScratch = new Float32Array(capacity)
+    this.aTimes = new Float64Array(capacity)
+    this.aVals = new Float32Array(capacity)
+    this.aPresent = new Uint8Array(capacity)
+    this.aScratch = new Float32Array(capacity)
     this.dTypical = Math.max(params.dFloor, params.dSeed)
     this.tLo = this.dTypical * params.stillK
     this.tHi = this.dTypical * params.moveK
@@ -482,6 +529,7 @@ export class MotionMachine {
   }
 
   private publishThresholds(): void {
+    this.diag.escapes = this.escapes
     this.diag.dTypical = this.dTypical
     this.diag.tLo = this.tLo
     this.diag.tHi = this.tHi
@@ -493,7 +541,7 @@ export class MotionMachine {
    *  60-87% of every session measured, so the median IS the still level and a motion burst
    *  cannot pull it — which is precisely the objection this file used to raise against
    *  adapting at all. */
-  private trackNoise(nowMs: number, d: number): void {
+  private trackNoise(nowMs: number, d: number, present: boolean): void {
     const capacity = this.dVals.length
     /* ONLY STILL FRAMES DEFINE STILLNESS. See `noiseWindowMs` for the argument; the short
      * form is that this one comparison is what stops a hand hovering in frame from teaching
@@ -504,6 +552,11 @@ export class MotionMachine {
       this.dHead = (this.dHead + 1) % capacity
       if (this.dCount < capacity) this.dCount += 1
     }
+    this.aTimes[this.aHead] = nowMs
+    this.aVals[this.aHead] = d
+    this.aPresent[this.aHead] = present ? 1 : 0
+    this.aHead = (this.aHead + 1) % capacity
+    if (this.aCount < capacity) this.aCount += 1
 
     if (this.diag.frames % NOISE_REFRESH_FRAMES !== 0) return
 
@@ -519,6 +572,40 @@ export class MotionMachine {
      * until it is. `dSeed` is chosen to reproduce Gate C's hand-tuned pair exactly, so the
      * machine boots at the constants that run was confirmed on. */
     if (n < 25) return
+
+    /* THE RATCHET'S ESCAPE (D131). Count the whole window; if the still population is a
+     * minority of it, the still level is being under-estimated and the quantile path
+     * decides. `stillFractionMin` carries the measurement. */
+    let all = 0
+    let stillPresent = 0
+    for (let i = 0; i < this.aCount; i += 1) {
+      const at = (this.aHead - 1 - i + capacity * 2) % capacity
+      if ((this.aTimes[at] as number) < cutoff) break
+      if ((this.aPresent[at] as number) === 0) continue
+      const v = this.aVals[at] as number
+      this.aScratch[all] = v
+      all += 1
+      if (v < this.tLo) stillPresent += 1
+    }
+    const rest =
+      all >= 25 && stillPresent / all < this.p.stillFractionMin
+        ? Math.max(this.p.dFloor, quantileOf(this.aScratch.subarray(0, all), this.p.restQuantile))
+        : null
+    /* A REST MUST BE SMALLER THAN A CARD ARRIVING. The quantile of a window that is nothing
+     * but motion — a jam, a hand, a synthetic churn — is a motion level, and taking it as
+     * the still level would call everything still. The presence floor is the change a card
+     * makes to the scene; a frame-to-frame change at or above it is not a resting card, and
+     * the ratchet keeps the word. No new constant: on every session here rest sits 2-9
+     * against a floor of 16. */
+    if (rest !== null && rest < this.presenceFloor) {
+      this.escapes += 1
+      this.dTypical = rest
+      this.tLo = rest
+      this.tHi = Math.max(rest * (this.p.moveK / this.p.stillK), rest + 1)
+      this.presenceFloor = Math.max(this.p.presenceMin, this.dTypical * this.p.presenceK)
+      this.publishThresholds()
+      return
+    }
 
     /* The MEDIAN of the still frames, not their mean and not their p95. The sweep across
      * all five traces puts the median at the centre of the plateau; the high quantiles fall
@@ -565,7 +652,7 @@ export class MotionMachine {
     const d = sum / cells.length
     this.diag.d = d
     this.prev.set(cells)
-    this.trackNoise(nowMs, d)
+    this.trackNoise(nowMs, d, this.baseline !== null && this.diag.dBase >= this.presenceFloor)
 
     if (d > this.tHi) {
       // MOVING. A new episode: whatever verdict the last settle got, the next one is new.

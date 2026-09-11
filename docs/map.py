@@ -1026,13 +1026,13 @@ COMPONENTS = [
     {
         "path": "harness/traces/",
         "status": "built",
-        "does": "ten armed motion sessions saved from the capture screen's HUD between "
+        "does": "twelve armed motion sessions saved from the capture screen's HUD between "
                 "2026-08-23 and 2026-09-11 — FIVE recorded under the brightness floor D81 "
                 "replaced, THREE recorded 2026-09-01 under the distance gate that "
-                "replaced it (the sessions D84 was derived from), and TWO recorded 2026-09-11 "
-                "over a re-arranged feeder with a beat and no rest, on which the SETTLE trigger "
-                "fired 5 times each against 29 and ~34 cards (the receipt D130's cadence trigger "
-                "was built on). Each carries every "
+                "replaced it (the sessions D84 was derived from), and FOUR recorded 2026-09-11 "
+                "over a re-arranged feeder under a bright lamp, where the shipped settle trigger "
+                "fired 5 times each on the two the ratchet lost (D130's receipt) and D131's "
+                "escape replays 31, 21, 45 and 85. Each carries every "
                 "frame's (t, d, luma), v2 adding dBase, and the exact watch-region pixels of "
                 "every verdict, which is what makes a refusal re-scorable a year later; a "
                 "cadence trace also carries `trigger`. T9's "
@@ -1041,7 +1041,7 @@ COMPONENTS = [
                 "NAMED IN T9 AND NEVER SUMMED: `38 real cards were refused live` is a receipt "
                 "for what the brightness floor cost, and summing across corpora "
                 "would turn a fixed number into one that grows whenever a trace is banked.",
-        "governed_by": ["D19", "D81", "D84", "D130"],
+        "governed_by": ["D19", "D81", "D84", "D130", "D131"],
         "tested_by": ["T9"],
         "note": "NO CARD IS IDENTIFIABLE AND NO CODE CARD IS PRESENT. A stored frame is 1,064 "
                 "luma cells at 38x28 — the watch region, quantised — which cannot carry a "
@@ -1711,7 +1711,7 @@ COMPONENTS = [
                         "against them by scripts/docs-audit.py's `motion params` row, which "
                         "D84 built after finding the row had been CLAIMED in this file's own "
                         "header since D81 and never written.",
-                "governed_by": ["D18", "D19", "D81", "D84", "D130"],
+                "governed_by": ["D18", "D19", "D81", "D84", "D130", "D131"],
                 "note": "WRITTEN BECAUSE THE SAME PASS HAD BEEN DONE BY HAND THREE TIMES AND "
                         "THE SECOND ONE GOT IT WRONG, 2026-08-31. The 2026-08-29 presence fix "
                         "derived its 'empty stand' brightness from twenty frames that were "
@@ -3126,7 +3126,7 @@ COMPONENTS = [
                                       "rather than to lamp drift. That floor now BINDS over "
                                       "presenceK x dTypical on this rig, which D84 records as "
                                       "a debt rather than a design.",
-                              "governed_by": ["D13", "D19", "D81", "D84", "D130"]},
+                              "governed_by": ["D13", "D19", "D81", "D84", "D130", "D131"]},
             "src/cadence.ts": {"does": "TRIGGER 2 (D130): fires on the feeder's BEAT, not on a "
                                        "settle, for a rig that never lets a card sit still. "
                                        "Built 2026-09-11 after the settle trigger fired on 5 of "
@@ -3152,7 +3152,7 @@ COMPONENTS = [
                                        "been taken by it, and whether a blind fire is an image or a "
                                        "blur is a camera-exposure fact the first armed run "
                                        "measures. The 85/85 run is trigger 1's.",
-                               "governed_by": ["D13", "D19", "D81", "D130"]},
+                               "governed_by": ["D13", "D19", "D81", "D130", "D131"]},
             # ---- 7a's screens ----
             "src/CaptureScreen.tsx": {"does": "the capture screen, rebuilt 2026-08-23 to the owner-approved Pass D: "
                     "every control one hairline row at rest (key chip, label, value), one "
@@ -3200,7 +3200,7 @@ COMPONENTS = [
                     "times, because D10 lets undo reach the newest capture in a box and "
                     "nothing else. The count is drawn on the row, the list is capped and "
                     "scrolled, and a walk stops at the first refusal and says how far it got.",
-            "governed_by": ["D3", "D10", "D13", "D19", "D20", "D21", "D22", "D23", "D27", "D41", "D58", "D65", "D81", "D92", "D128", "D130"]},
+            "governed_by": ["D3", "D10", "D13", "D19", "D20", "D21", "D22", "D23", "D27", "D41", "D58", "D65", "D81", "D92", "D128", "D130", "D131"]},
             # D3 earns its place on a stylesheet: the no-claim finish chip is drawn dashed
             # because rung 1 distinguishes "no metadata recorded" from a recorded claim, and
             # that distinction is carried here in a border style rather than in any logic.
@@ -4407,7 +4407,7 @@ COMPONENTS = [
                         "frame lands in the Schmitt band still settles and fires, and a scene "
                         "that never completes a settle is STALLED however quiet its odd "
                         "frame. Both fail on the code that preceded D84.",
-                "governed_by": ["D19", "D81", "D84"],
+                "governed_by": ["D19", "D81", "D84", "D131"],
                 "note": "NOT a harness test, same as its siblings. Pure arithmetic — no page, "
                         "no server: the machine takes (nowMs, cells) and that is the whole "
                         "reason it is a class apart from the DOM wrapper.",
@@ -4441,7 +4441,7 @@ COMPONENTS = [
                         "period. The replay hands the schedule a frame-counter for pixels, "
                         "which disables the novelty gate on purpose; the synthetic half proves "
                         "that gate where the pixels exist. Run by `make design-check`.",
-                "governed_by": ["D19", "D81", "D130"],
+                "governed_by": ["D19", "D81", "D130", "D131"],
                 "note": "NO page, NO server on the replay path — CadenceMachine is pure, "
                         "motion.spec.ts's reason. The synthetic half uses `step` (the live "
                         "path with the settle machine underneath) so presence, baseline and "
