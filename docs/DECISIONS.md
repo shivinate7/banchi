@@ -8917,8 +8917,11 @@ manifest is already relative (D108) and needs no edit; the reinstall is one pres
 
 ### The plan — build order step 22
 
-Recorded in `docs/map.py`'s `OPEN` and `docs/GATES.md`'s open list under one id. In order,
-and each one a PR:
+**The full plan is `docs/specs/one-process.md`**, written the same day after three more
+questions: the cold start, a failed build, and the verbs. It also names the one thing this
+entry missed — a port is part of the origin, so the camera grant and every `localStorage` key
+(D27) reset once at `:8000`. Recorded in `docs/map.py`'s `OPEN` and `docs/GATES.md`'s open
+list under one id. In order, and each one a PR:
 
 1. **The static serve.** The capture server serves `app/dist/` for non-route paths with the
    `index.html` fallback, and refuses to start serving the app (API still up) when `dist/` is
@@ -8937,5 +8940,5 @@ port, which does not move.
 
 ### What is BUILT, RECORDED, and NEITHER
 
-**BUILT:** nothing. **RECORDED:** this entry, step 22 in both build-order lists, and the D132
-line in `CLAUDE.md`'s index. **NEITHER:** every line of the plan above.
+**BUILT:** nothing. **RECORDED:** this entry, `docs/specs/one-process.md`, step 22 in both
+build-order lists, and the D132 line in `CLAUDE.md`'s index. **NEITHER:** every line of the plan above.
