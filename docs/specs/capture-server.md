@@ -707,7 +707,9 @@ row proved nothing.
 `curl` sends no preflight, so it reaches the origin gate and reads the 403 — whose message
 names the remedy. A browser never gets that far. Measured on the rig 2026-09-06: an origin the
 server does not know is answered `Access-Control-Allow-Methods: GET, OPTIONS`, so a POST fails
-the preflight and **the browser refuses to send the request at all**. `fetch` then rejects with
+the preflight and **the browser refuses to send the request at all**. (`HEAD` joined that list
+on 2026-09-11 with `do_HEAD`, and the measurement is left as it was taken: what it is evidence
+of is that POST is absent, and POST is still absent.) `fetch` then rejects with
 a bare `TypeError` carrying no reason, and the 403 and its message are never delivered to the
 page.
 

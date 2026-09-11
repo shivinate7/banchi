@@ -591,7 +591,7 @@ async function request(path: string, init?: RequestInit): Promise<unknown> {
      * the reason for THIS request; it does not stop us asking a different question. A write
      * from an origin the server does not know is refused by the BROWSER at the preflight —
      * measured on the rig, an unknown origin is answered `Access-Control-Allow-Methods:
-     * GET, OPTIONS` — so the request is never sent and the 403's own message, which names
+     * GET, HEAD, OPTIONS` — so the request is never sent and the 403's own message, which names
      * the remedy, is never delivered to the page.
      *
      * `GET /status` settles it, and it is the one probe that can: no custom headers, so it
