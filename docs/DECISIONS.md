@@ -3719,7 +3719,7 @@ is why a $40 bulk order carries no subsidy and the seller absorbs the postage.
 
 ### Retired 2026-09-11: a branch does not take a number, so nothing renumbers
 
-**`renumbered ids` and `vacated ids` are both DELETED, and this entry stops being a live mechanism.** Everything above repairs a renumber. The owner's ruling the same day is that a renumber should not happen: *"rework the decision system so that branches claim decision numbers only at merge time"*. A branch now writes a SLUG and `scripts/claim-ids.py` allocates the number inside `make merge`. D-merge-time-ids carries the design, the vocabulary and what it cost.
+**`renumbered ids` and `vacated ids` are both DELETED, and this entry stops being a live mechanism.** Everything above repairs a renumber. The owner's ruling the same day is that a renumber should not happen: *"rework the decision system so that branches claim decision numbers only at merge time"*. A branch now writes a SLUG and `scripts/claim-ids.py` allocates the number inside `make merge`. D140 carries the design, the vocabulary and what it cost.
 
 **The reason it could be retired rather than kept as a backstop.** Both rows guard a path that no longer exists: a branch that never takes a number never vacates one. Keeping them was argued and declined — a row that fires only when somebody works around the convention is a row nobody has read in a year, which is D16's own account of what an unread check is worth. What replaces them is `id claims`, whose load-bearing clause is that **main carries no slug**: that one is checkable, is checked on main after every merge, and cannot be satisfied by accident.
 
@@ -4334,7 +4334,7 @@ Unsorted scanning is **not** deferred: it works today via the optional hints, wi
 **Culling is affordable now, and it was not before.** `docs/GATES.md` carried a paragraph explaining that steps were appended rather than inserted because renumbering "would have to land in four files at once" and nothing watched them. `build order mirror` reconciles the ids in both files, per list, in both directions — so adding, moving or removing a step is a two-file edit a machine refuses to let you do halfway.
 
 
-**Amended 2026-09-11: a step whose number is not allocated yet wears a `0.` marker, and this strengthens the ruling above rather than reopening it.** The rule that `n` is stable and never renumbered is about an EXISTING step, and its named mechanism is D72's citation drift over 218 references. **A number claimed at the merge cannot collide, so nothing is ever renumbered to resolve one** — the pressure that would force a renumber is what D-merge-time-ids deletes, and this entry's ruling is what made it worth deleting for the build order too.
+**Amended 2026-09-11: a step whose number is not allocated yet wears a `0.` marker, and this strengthens the ruling above rather than reopening it.** The rule that `n` is stable and never renumbered is about an EXISTING step, and its named mechanism is D72's citation drift over 218 references. **A number claimed at the merge cannot collide, so nothing is ever renumbered to resolve one** — the pressure that would force a renumber is what D140 deletes, and this entry's ruling is what made it worth deleting for the build order too.
 
 **Markdown has no ordered-list marker that can hold a slug**, so an unclaimed step is written with a `0.` marker carrying its slug in backticks in `docs/GATES.md` and carries the slug as its `n` in this file. `0.` is never an id: `build order mirror` reads the marker as its slug and never as zero, and `scripts/claim-ids.py` rewrites the marker and the token together at the merge. **The allocator is `max + 1` and never lowest-free, and step 12 is why**: this entry culled it and rules the hole correct, and reusing 12 would resurrect every `step 12` in the tree onto a step that is not the one meant.
 
@@ -9742,10 +9742,162 @@ port, which does not move.
 **BUILT:** nothing. **RECORDED:** this entry, `docs/specs/one-process.md`, step 22 in both
 build-order lists, and the D138 line in `CLAUDE.md`'s index. **NEITHER:** every line of the plan above.
 
+## D139 — Which branch the primary checkout stands on is a fact about the live rig, and a warning is the ceiling
+
+**Settled 2026-09-11, on the owner's instruction**, after `/Users/shivinate/Developer/pkmnscan`
+— the primary worktree — was found standing on `claude/env-key-rotation` with three live
+sessions in it. Nothing in the tree said so: `make status` printed every section it always
+prints, the SessionStart worktree guard printed the ports, and neither mentioned the branch
+anywhere near the server it qualifies.
+
+**This is D43's hazard reached through the other door.** D43 was the PORT pointing at the wrong
+store, and it was fixed by making the port follow the store. This is the DIRECTORY pointing at
+the wrong code, and it cannot be fixed the same way, because the directory is not derived from
+anything — somebody types `git switch`.
+
+What makes it a hazard rather than untidiness is D53. `make launch-agent` keeps a supervisor
+alive at login out of that **one** directory, over the owner's real `inventory/store.sqlite`,
+and the supervisor rebuilds from whatever the directory holds.
+**D138 widened this on the day this was written**: the capture server now serves the built app
+as well, and the supervisor is
+what builds it, so the directory decides the front end a person is looking at and not only the
+Python answering it. So the branch that directory
+stands on silently decides which code photographs the owner's real cards into their real store.
+The repo guards `refs/heads/main` with two hooks and a remote protection rule (D42) and guarded
+this not at all.
+
+### A warning is the ceiling, and that is git's limit rather than a choice
+
+**There is no `pre-checkout` hook.** Git's checkout hooks are `post-checkout`: it is called
+after the switch has happened, with the new HEAD already in place and the working tree already
+rewritten. Nothing available here can refuse the move, and an entry that promised otherwise
+would be promising a hook git does not have.
+
+So what is achievable is a loud, specific warning, and the design question becomes *when*. It
+is deliberately **not** made enforceable by some other means — a wrapper script around `git
+switch`, a `reference-transaction` arm on `HEAD`, a hook that switches the branch back. The
+first is a guard nobody types; the second refuses moves that are legitimate in every linked
+worktree of the clone, which is D43's whole point; the third decides for the operator and is
+the thing `scripts/worktree-guard.sh` already refuses to do in as many words:
+**it reports and never switches.** A session working in that directory is a normal, expected
+state. What was missing was that it was invisible.
+
+### Three readers of one fact, because any one of them is missable
+
+1. **`scripts/githooks/post-checkout`** — at the moment of the switch, which is the one moment
+   the person responsible is present and reading output. It already fired only on a branch move
+   (`$3 = 1`) for the `make hooks` staleness reminder; the branch check is a second block in the
+   same file, and the staleness block is untouched. Seen by a person who types `git switch`, and
+   by nothing else: a session that arrives later never sees it, and `git pull` does not fire it.
+2. **`scripts/status.py`, under SERVING** — beside `capture :8000 answering`, which is the line
+   a reader believes and is the same line whether the process was built from main or from a
+   branch nobody is reading any more. `repo()` has always named the branch and that is a
+   different claim: it says where *you* are, in a section about the tree, which is exactly how a
+   reader reads past it. Seen by whoever runs `make status`, which is the thing nobody ran on
+   2026-08-30 when it was already reporting `0 ahead of main, 70 behind it`.
+3. **`scripts/worktree-guard.sh`, at SessionStart** — to a session that arrives after the fact
+   and would otherwise never ask. Seen unasked, before any work.
+
+**The third one already existed** and landed in commit `096de75` on 2026-08-30, written for the
+narrower case of the main checkout parked on a *merged* branch. It is not reimplemented here.
+What it was missing was the reason: the live server went unmentioned in the arm a working
+session actually lands in — a tree somebody is working in has uncommitted files by definition,
+so it took the `else` branch, which said only *"Do not switch blind"*. That reads as a tidiness
+notice. One line naming D53 was added above both arms, and its header comment was widened to
+say what its code always did: any branch that is not main, merged or not.
+
+**Why three and not one.** Each covers a different person at a different moment and none
+subsumes another: the switcher, the reader, the arriver. The 2026-08-30 incident is the proof
+that one reader is not enough — `make status` had the answer and the tree sat wrong for a day
+because nobody ran it. A fourth would be the `#/` screen, and it is refused on the ground that
+which branch a directory stands on is not a fact about the store and has no place on a screen
+the owner uses to sell cards.
+
+### What is built
+
+1. **`scripts/githooks/post-checkout`'s second block.** On a branch move, in the primary
+   checkout, to anything that is not main: what happened, one sentence on why it matters, and
+   the exact undo (`git switch -`, with `git switch main` named beside it). A detached HEAD is
+   reported as one rather than as a branch called `HEAD`. Gated on `main` existing as a local
+   branch, so the hook stays quiet in a foreign repository — the same gate the SessionStart
+   guard already used.
+2. **`scripts/status.py:serving_branch()`**, leading the SERVING section so it qualifies the
+   rest of it, plus `sidecar()` — one loader where `serving()` and `ports_and_store()` each had
+   their own copy of the same eight lines. That dedupe is the point and not a tidy-up: the new
+   line needs `server/ports.py:is_linked_worktree`, and a third copy of the dance would have
+   been a third place for the primary/linked test to be spelled differently.
+3. **`scripts/worktree-guard.sh`** — the D53 sentence in both arms, and a widened header.
+4. **Six cases in `scripts/githooks-selftest.sh`**, and a pair of assertions beside `expect`.
+
+**The primary/linked test has exactly one spelling**, and it is
+`server/ports.py:is_linked_worktree`'s: a linked worktree's `.git` is a FILE, a primary
+checkout's is a DIRECTORY. `app/devPort.ts`, `scripts/worktree-guard.sh` and
+`scripts/docs-audit.py` all detect on that same one fact. `git rev-parse --git-dir` against
+`--git-common-dir` decides it too and is the same fact with a subprocess in front of it; it is
+not used, because two answers to one question is the defect this repo keeps declining to add.
+**A linked worktree says nothing at all** — it has its own store and its own ports to be wrong
+on its own, which is what D43 bought, and warning there would teach the line to be ignored where
+it matters.
+
+### What it is tested by, and what that cannot prove
+
+`make githooks-selftest` gained six cases in the throwaway repository it already builds: a
+branch switch in a primary checkout warns, a detached HEAD warns, switching back to main is
+silent, and both creating a linked worktree and switching branches *inside* one are silent.
+**`main` is a real local branch in the worktree cases**, so their silence can only come from the
+primary/linked test rather than from the gate beside it — otherwise they would pass for a second
+reason and prove nothing.
+
+They assert OUTPUT and not exit status, which is why they are not `expect` cases: the hook exits
+0 whichever way it decides, so `expect allow` would pass on a hook that printed nothing at all.
+That is the whole failure mode, so the warning leads with a marker (`PRIMARY CHECKOUT:`) for the
+same reason the refusing hooks print `REFUSED:`.
+
+**Mutation-tested 2026-09-11, eight arms**, by copying the hooks to a scratch directory and
+re-running with `PKMNSCAN_HOOKS_DIR` pointed at the copy. Six are caught: inverting the
+primary/linked test (`-d "$top/.git"` → `-f`) fails 4, deleting the `!= "main"` arm fails 2,
+deleting the block fails 2, dropping the detached-HEAD naming fails 1, dropping the `main`-exists
+gate fails 1, and deleting the **pre-existing** `make hooks` staleness reminder fails 1.
+
+**Two arms survive, and both survive for a reason that is recorded rather than chased.** Removing
+`[ -n "$top" ]` changes no behavior — it is a defensive guard whose absence merely tests
+`[ -d "/.git" ]`. Removing the `$3 = 1` branch-move gate changes none either, because git passes
+the same sha as `$1` and `$2` for a file-level checkout and the `$old != $new` guard beside it
+covers the same ground: **the two are redundant, which the sweep is how anyone found out.**
+Mutating the pair together fails the file-level-checkout case, so that case is load-bearing for
+the pair and for neither alone.
+**Three cases in this section were green for the wrong reason before the sweep ran**: two
+linked-worktree switches created a branch at the commit already
+checked out, so `$1 = $2` and the hook's own no-op guard dropped them before the block under test,
+and the detached-HEAD case asserted the warning fired without asserting it named a detached HEAD.
+A guard must see its subject, and a mutation arm is the only thing that says whether it did.
+
+**Nothing here blocks a commit.** D18: these are two warnings and a status line, and the
+self-test writes, so it stays in `make check` beside the others and out of the git hook.
+
+**It answers "is this main" and not "is this current", and those came apart on the day written.**
+`main` is the local ref, and a clone that moves main only by pull request can leave it
+well behind origin: measured 2026-09-11 in this checkout, local main at `c34ccdc` against
+`origin/main` at `2caa001`, six commits. So returning that directory to current code is two
+steps — switch, then advance — and the second is behind the owner's word (D42). The hook names
+`git switch main` as the undo of the switch and says in the next line that local main can itself
+be behind; `make status` and the SessionStart guard print the ahead/behind counts that answer the
+second question.
+**A reader who read it as a currency check would be wrong exactly when a tree is stale**, which
+is why it is stated rather than left to be inferred.
+
+**What it cannot prove, and the gap is real.** A warning is only as good as the output somebody
+reads. `git pull`, `git merge` and `git rebase` do not fire `post-checkout`, so a tree that
+drifts without a checkout is caught only by the other two readers; and a session that pipes git
+to a log, or an agent that does not read stderr, sees nothing at the moment of the switch. The
+warning also cannot distinguish a deliberate ten-minute switch from a tree abandoned on a branch
+for a day — `make status` prints the ahead/behind counts that answer that, and no automatic
+reader decides it.
+
 
 ---
 
-## D-merge-time-ids — The number is claimed at the merge, because what main has taken is not knowable before it
+## D140 — The number is claimed at the merge, because what main has taken is not knowable before it
 
 **Ruled by the owner 2026-09-11, the same day D72's repair half was built.** That work made the provable half of a renumber block the commit. This entry is the owner's answer to why a renumber happens at all: *"rework the decision system so that branches claim decision numbers only at merge time"*. A branch no longer takes a number. It writes a SLUG, and `scripts/claim-ids.py` substitutes the number at the moment the merge knows what main has taken.
 
@@ -9753,11 +9905,11 @@ build-order lists, and the D138 line in `CLAUDE.md`'s index. **NEITHER:** every 
 
 ### The vocabulary is a slug, and two segments is what keeps it out of prose
 
-**`## D-merge-time-ids`, cited as `(D-merge-time-ids)`, in prose and in code comments and in `governed_by` alike.** `C-<slug>` for the code-card track, and `step <slug>` for the build order, which has no letter in front of it. The letter says which namespace; the slug says which entry, which is more than a number ever said while the branch was open.
+**`## D140`, cited as `(D140)`, in prose and in code comments and in `governed_by` alike.** `C-<slug>` for the code-card track, and `step <slug>` for the build order, which has no letter in front of it. The letter says which namespace; the slug says which entry, which is more than a number ever said while the branch was open.
 
-**Two segments minimum.** `D-pad` is one and is ordinary prose; `D-merge-time-ids` is three and is an id. Measured over every `.md`, `.py`, `.ts`, `.tsx` and `.css` in the tree the day the vocabulary was chosen: **zero tokens of either shape existed**, so nothing had to be renamed to make room and no existing sentence changed meaning.
+**Two segments minimum.** `D-pad` is one and is ordinary prose; `D140` is three and is an id. Measured over every `.md`, `.py`, `.ts`, `.tsx` and `.css` in the tree the day the vocabulary was chosen: **zero tokens of either shape existed**, so nothing had to be renamed to make room and no existing sentence changed meaning.
 
-**Lowercase, because the letter carries the namespace.** A mixed-case slug would make `D-Merge-Time-Ids` and `D-merge-time-ids` two ids for one entry with nothing to say so — the duplicate-heading problem D16 blocks, reintroduced through spelling.
+**Lowercase, because the letter carries the namespace.** A mixed-case slug would make `D-Merge-Time-Ids` and `D140` two ids for one entry with nothing to say so — the duplicate-heading problem D16 blocks, reintroduced through spelling.
 
 **A step's slug lives in its list marker's place, which markdown cannot hold.** There is no ordered-list marker that can read a slug, so an unclaimed step is written with a `0.` marker carrying its slug in backticks ahead of the title, and the claim rewrites the marker and the token together. `0.` is never an id, so the mirror row reads it as the slug and never as zero.
 
@@ -9781,9 +9933,17 @@ build-order lists, and the D138 line in `CLAUDE.md`'s index. **NEITHER:** every 
 
 **Every pull request after it claims automatically, because main has the tool by then.** A hand-claim anywhere in this history is the bootstrap and is not the intended workflow; the workflow is `make merge` and nothing else. This paragraph exists so a reader finding that commit does not copy it.
 
-**And it found a second one, in this file's own auditor.** `scripts/docs-audit.py` used a real, live slug as its self-test fixture — deliberately, so the citations would resolve — and the claim substituted it, turning two assertions about a SLUG into assertions about a NUMBER. **A claim is exhaustive text replacement and cannot tell a fixture from prose.** So: **never name a live slug in a comment or a fixture.** Compose a fixture's ids from pieces, the way this repo already composes numeric ones for the same reason one level down, and describe a shape in prose rather than spelling an id that exists. A comment block in that file came back reading *"a branch writes `## D-merge-time-ids`"*, which is how the rule was found.
+**And it found a second one, in this file's own auditor.** `scripts/docs-audit.py` used a real, live slug as its self-test fixture — deliberately, so the citations would resolve — and the claim substituted it, turning two assertions about a SLUG into assertions about a NUMBER. **A claim is exhaustive text replacement and cannot tell a fixture from prose.** So: **never name a live slug in a comment or a fixture.** Compose a fixture's ids from pieces, the way this repo already composes numeric ones for the same reason one level down, and describe a shape in prose rather than spelling an id that exists. A comment block in that file came back reading *"a branch writes `## D140`"*, which is how the rule was found.
 
 **The bootstrap earned its keep by finding a bug the self-test could not see.** A step is cited in prose as `step <slug>`, so that is the token — but `docs/map.py` stores the id BARE, as the `n` field, which no token of that shape reaches. The fixture had no map, so sixteen green arms said nothing about it, and the first real claim would have left the map holding a slug while `docs/GATES.md` took the number. `build order mirror` would have failed the commit, so it was never going to reach main silently — but it would have failed it in a way nobody had predicted. `renumber_map` is the second edit here that is not a token substitution, it writes an INTEGER because that row compares by equality against `int()`, and two arms with a real map now cover it.
+
+### The known limit: two OPEN pull requests can still pick the same number
+
+**This removes the treadmill, not the collision, and the distinction is the whole of what it is worth.** The claim reads main at claim time, so it cannot see a number held by a pull request that has not merged yet. Two open branches can still be allocated the same id, and whichever merges second is wrong.
+
+**Both halves were measured on one evening, 2026-09-11, which is why this paragraph can be exact.** A branch renumbered **three times in one session** — D132 to D135 to D137 to D138 — each one a hand-audited sweep across a dozen files where a stale citation still resolves and nothing mechanical separates it from a real reference to the number's new occupant; **three sites were missed on the first pass** and found afterwards by a separate audit. That same evening this entry's own branch was allocated D139, another open pull request merged first and took it, and the repair was **one command over ten files** with a row asserting that no slug survived it. Same class of event. Two very different costs.
+
+**The residual collision is deliberately not closed, and this is the reasoning rather than an oversight.** Reading open pull requests at claim time would put the network and `gh` on the path of `make merge`, for a failure that is already LOUD: `decision index` reconciles `CLAUDE.md`'s index against the headings IN ORDER, so the second merge fails its own commit rather than landing quietly. A guess that is caught is not the same defect as a guess that resolves, and it is the second kind this entry was written for. **Closing it would trade a loud, cheap, mechanical failure for a network dependency in the one command that moves main.**
 
 ### What it does not decide
 

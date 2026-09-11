@@ -1404,7 +1404,7 @@ _ID_DIGITS = r"[1-9][0-9]{0,2}"
 #
 # NEVER NAME A LIVE SLUG IN A COMMENT OR A FIXTURE. The claim is exhaustive text replacement,
 # so an illustration that borrows a real slug is rewritten with it — this block named one and
-# came back reading "a branch writes `## D-merge-time-ids`", and two self-test fixtures below became
+# came back reading "a branch writes `## D140`", and two self-test fixtures below became
 # assertions about the number. Compose a fixture's ids from pieces; describe a shape in prose
 # rather than spelling an id that exists.
 #
@@ -1585,7 +1585,7 @@ def check_decision_ids(report: Report, docs: List[Path]) -> None:
 
 # ------------------------------------------------------------------ ids are claimed at merge
 
-# A BRANCH DOES NOT TAKE A NUMBER (D-merge-time-ids). The allocation's only input is what main
+# A BRANCH DOES NOT TAKE A NUMBER (D140). The allocation's only input is what main
 # has taken, and a branch cannot have that: every renumber in this repo's history is one
 # branch reading `origin/main`, taking the next free id, and being wrong the moment another
 # branch merged first. Thirteen of those are recorded in D72, and D16 carries three entries
@@ -1694,7 +1694,7 @@ def check_id_claims(report: Report) -> None:
             "docs/DECISIONS.md",
             "main carries {0} unclaimed id: {1}.\n"
             "  A slug is a branch's placeholder and `make merge` is what turns it into a "
-            "number (D-merge-time-ids). One on main means a claim half-landed — every "
+            "number (D140). One on main means a claim half-landed — every "
             "citation of it now resolves to nothing.\n"
             "  Repair: `python3 scripts/claim-ids.py --ref origin/main --write` on a branch, "
             "then a pull request.".format(

@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Allocate the numbers a branch's slug ids will take, and substitute them (D-merge-time-ids).
+"""Allocate the numbers a branch's slug ids will take, and substitute them (D140).
 
 A branch cannot allocate a decision number, because the allocation's only input is what
 `main` has taken and that is not knowable until the merge. So a branch writes a SLUG —
@@ -260,7 +260,7 @@ def perform(root: Path, claims: Sequence[Claim], write: bool) -> Dict[str, int]:
 
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
-        description="claim the numbers this branch's slug ids will take (D-merge-time-ids)")
+        description="claim the numbers this branch's slug ids will take (D140)")
     parser.add_argument("--ref", default="origin/main",
                         help="allocate against this ref's ids (default: origin/main)")
     parser.add_argument("--write", action="store_true",

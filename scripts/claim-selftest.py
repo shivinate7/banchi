@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""`scripts/claim-ids.py` proved against a throwaway repository (D-merge-time-ids).
+"""`scripts/claim-ids.py` proved against a throwaway repository (D140).
 
 THE ALLOCATION IS THE PART THAT CANNOT BE ASSERTED ABOUT. Everything else in that script is
 text substitution, and the one thing it must get right — allocating against what MAIN has

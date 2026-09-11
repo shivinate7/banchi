@@ -250,13 +250,13 @@ SHIPPED = [
               "(D108's amendment — a port is part of an origin, so the camera grant and the six "
               "device-local keys reset once), and `make lan-check` from the phone. "
               "docs/specs/one-process.md §10 is the list."},
-    # `n` IS A SLUG UNTIL THE MERGE CLAIMS IT (D-merge-time-ids). A branch cannot allocate a
+    # `n` IS A SLUG UNTIL THE MERGE CLAIMS IT (D140). A branch cannot allocate a
     # step number any more than it can allocate a decision number — the input is what main has
     # taken — so this carries the slug and `scripts/claim-ids.py` substitutes it inside
     # `make merge`, here and in the `0.` marker docs/GATES.md wears for the same reason.
-    {"n": "merge-time-ids", "on": "2026-09-11",
+    {"n": 23, "on": "2026-09-11",
      "title": "The number is claimed at the merge, not guessed on the branch",
-     "note": "D-merge-time-ids, amending D72 and D80. A branch writes its entry's heading as a slug "
+     "note": "D140, amending D72 and D80. A branch writes its entry's heading as a slug "
               "and cites it; "
               "scripts/claim-ids.py allocates max+1 against main INSIDE make merge, commits the "
               "substitution to the PR branch, waits for that commit's checks, and only then "
@@ -1246,8 +1246,15 @@ COMPONENTS = [
             "githooks/post-checkout": {
                 "does": "the same reminder on a branch switch, for the same reason: "
                         "core.hooksPath never travels, so a checkout can leave the armed "
-                        "copy behind the tree.",
-                "governed_by": ["D42"],
+                        "copy behind the tree. AND D139's second, unrelated job since "
+                        "2026-09-11: when the PRIMARY checkout moves to anything that is "
+                        "not main it says so, because D53 serves the owner's real store out "
+                        "of that one directory and the branch it stands on decides which "
+                        "code does it. A linked worktree is silent — D43 gave it its own "
+                        "store and its own ports to be wrong on its own. It WARNS and never "
+                        "refuses: git has no `pre-checkout` hook, so by the time this runs "
+                        "the switch has already happened.",
+                "governed_by": ["D42", "D43", "D53", "D139"],
                 "note": "Extensionless, unscanned, listed by hand.",
             },
             "githooks/pre-push": {
@@ -1283,7 +1290,7 @@ COMPONENTS = [
                 # amends. D18 governs its shape — the preview is the read-only mode, and the
                 # act is behind a flag rather than a default. D33 is the instrument the two-step
                 # is borrowed from, one register down from a route that can spend money.
-                "governed_by": ["D18", "D33", "D42", "D72", "D111", "D-merge-time-ids"],
+                "governed_by": ["D18", "D33", "D42", "D72", "D111", "D140"],
                 "note": "IT NEVER SETS PKMNSCAN_MAIN AND NO REFUSAL IT PRINTS SUGGESTS IT. D42 "
                         "is explicit that a session reaching for that variable has left the "
                         "amendment behind; this needs no hatch because allow rule 3 already "
@@ -1354,11 +1361,18 @@ COMPONENTS = [
                         "legitimate pull, the escape hatch and a fresh clone. A refusal must "
                         "carry the hook's own marker to count, because git declines some of "
                         "these by itself and two cases were green on that before the check "
-                        "existed.",
+                        "existed. AND SIX CASES OVER D139's BRANCH WARNING since "
+                        "2026-09-11, which assert OUTPUT and not exit status: post-checkout "
+                        "exits 0 whichever way it decides, so an `expect allow` case would "
+                        "pass on a hook that printed nothing at all. `main` is a real local "
+                        "branch in the two worktree cases, so their silence can only come "
+                        "from the primary/linked test rather than from the gate beside it.",
                 # D18 is why it is in `make check` and never in the git hook: it writes. It has
                 # a second reason the audit's self-test does not — it exercises the guard by
                 # violating it, so wired into the commit path it would refuse its own commits.
-                "governed_by": ["D18", "D42"],
+                # D43 and D53 join with D139: the cases turn on a linked worktree having its own
+                # store, and on the primary checkout being the one the live server is built from.
+                "governed_by": ["D18", "D42", "D43", "D53", "D139"],
             },
             "lan-check.py": {
                 "does": "answers whether the owner's LAN URL still works, end to end and from "
@@ -1650,11 +1664,11 @@ COMPONENTS = [
                                 "D47", "D49", "D50", "D51", "D53", "D60", "D64", "D65", "D67", "D69",
                                 "D70", "D72", "D75", "D76", "D80", "D81", "D83", "D84", "D87",
                                 "D88", "D90", "D92", "D94", "D96", "D101", "D102", "D104", "D111",
-                                "D119", "D122", "D127", "D132", "D135", "D-merge-time-ids"],
+                                "D119", "D122", "D127", "D132", "D135", "D140"],
             },
             "claim-ids.py": {
                 "does": "allocate the numbers this branch's SLUG ids will take, and "
-                        "substitute them (D-merge-time-ids). A branch cannot allocate a "
+                        "substitute them (D140). A branch cannot allocate a "
                         "decision number — the allocation's only input is what main has "
                         "taken, which is not knowable until the merge — so a branch writes "
                         "its heading as a two-segment slug, or a `0.` list marker carrying one, "
@@ -1675,7 +1689,7 @@ COMPONENTS = [
                 # skips, `AGENTS.md` being the same file as `CLAUDE.md` under another name.
                 # D18 is why it is not in `make check`: it writes.
                 "governed_by": ["D16", "D18", "D42", "D47", "D72", "D80", "D135",
-                                "D-merge-time-ids"],
+                                "D140"],
             },
             "claim-selftest.py": {
                 "does": "scripts/claim-ids.py proved against a throwaway repository in which "
@@ -1687,7 +1701,7 @@ COMPONENTS = [
                         "hyphen, so a slug was being substituted inside a longer slug that "
                         "extended it, leaving a number with a tail on it. In `make check`, "
                         "never in the git hook — it writes (D18).",
-                # D-merge-time-ids is the ruling; D18 is why it is off the commit path; D16
+                # D140 is the ruling; D18 is why it is off the commit path; D16
                 # is the severity rule its subject's rows answer to; D80 is the allocator's
                 # direction, max+1 rather than lowest-free, because a culled id's citations
                 # would come back onto a step that is not the one meant.
@@ -1695,7 +1709,7 @@ COMPONENTS = [
                 # entries are composed from integers for exactly this reason, and the two that
                 # survive are in the prose that explains why. The superset rule reads a citation
                 # literally, which is the trade docs-audit.py's own entry records.
-                "governed_by": ["D1", "D2", "D16", "D18", "D80", "D-merge-time-ids"],
+                "governed_by": ["D1", "D2", "D16", "D18", "D80", "D140"],
             },
             "docs-audit-allow.txt": {
                 "does": "paths and identifiers the docs name before they exist, one "
@@ -1738,14 +1752,21 @@ COMPONENTS = [
                         "it. Reports and never switches: `git switch` is the operator's to "
                         "type, and what this can do is say whether it is safe, which turns on "
                         "AHEAD being zero rather than on how far behind it is. A worktree on a "
-                        "feature branch is correct and is never reported.",
+                        "feature branch is correct and is never reported. THAT BLOCK IS WIDER "
+                        "THAN THE MERGED CASE IT WAS WRITTEN FOR and says so since 2026-09-11 "
+                        "(D139): any branch that is not main, merged or not, and it now names "
+                        "D53's live server in BOTH arms rather than only the clean one — the "
+                        "arm a working session lands in is the other one, since a tree somebody "
+                        "is working in has uncommitted files by definition, and it carried the "
+                        "warning without the reason. One of D139's three readers of this fact; "
+                        "the other two are githooks/post-checkout and status.py.",
                 # D18 is the one that decides where this may run rather than what it does.
                 # It WRITES — a venv and a cache copy — so it belongs at session start and
                 # must never be moved onto the commit path or into `make check`. D16 is
                 # cited for the sibling rule it sets over guard-opsec.sh and inherits here:
                 # a hook that can break a session gets disabled, and a disabled hook guards
                 # nothing, so every failure exits 0.
-                "governed_by": ["D16", "D18", "D43", "D47", "D42"],
+                "governed_by": ["D16", "D18", "D43", "D47", "D42", "D53", "D139"],
             },
             "worktree-provision.sh": {
                 "does": "the cache-copy, image-mirror-symlink and node_modules report "
@@ -1792,7 +1813,7 @@ COMPONENTS = [
                 # pipeline/pricing.py by merging package lists into modules. Both are cited,
                 # and the superset rule takes a citation at face value — same trade as
                 # docs-audit.py above.
-                "governed_by": ["D2", "D3", "D17", "D72", "D80", "D-merge-time-ids"],
+                "governed_by": ["D2", "D3", "D17", "D72", "D80", "D140"],
             },
             "prose-guard.py": {
                 "does": "D60's two guards over the four docs CLAUDE.md names. `--structure` asserts "
@@ -1819,7 +1840,7 @@ COMPONENTS = [
                 # a whole-file diff. Cited, so listed — the superset rule takes a citation
                 # at face value, the same trade decision-context.py's entry records.
                 "governed_by": ["D10", "D16", "D17", "D18", "D57", "D58", "D60", "D72",
-                                "D-merge-time-ids"],
+                                "D140"],
             },
             "typecheck-hook.py": {
                 "does": "PostToolUse hook: runs app/'s own tsc --noEmit, and only after a "
@@ -1995,7 +2016,7 @@ COMPONENTS = [
                 # for vale. Change one and the entry describing that check goes stale with it,
                 # which is exactly what `governed_by` is for — so they are listed rather than
                 # allowlisted away.
-                "governed_by": ["D16", "D17", "D18", "D43", "D44", "D47", "D53", "D58", "D60", "D65", "D68", "D74", "D76", "D80", "D82", "D92", "D111", "D122", "D127", "D129", "D133", "D138", "D-merge-time-ids"],
+                "governed_by": ["D16", "D17", "D18", "D43", "D44", "D47", "D53", "D58", "D60", "D65", "D68", "D74", "D76", "D80", "D82", "D92", "D111", "D122", "D127", "D129", "D133", "D138", "D140"],
                 "note": "IT DECLARES THE SUITE AND DELIBERATELY DOES NOT DRIVE IT, which is "
                         "the whole shape. A registry that drove `make check` could not "
                         "disagree with the recipe — and could silently stop running a check, "
@@ -2047,7 +2068,15 @@ COMPONENTS = [
                         "Every path it reads OR RUNS is declared in one SOURCES literal so "
                         "the audit's status-sources check can verify the reader without "
                         "importing it, and a source it cannot read prints MISSING and exits "
-                        "non-zero rather than quietly printing less.",
+                        "non-zero rather than quietly printing less. SERVING LEADS WITH "
+                        "WHICH BRANCH THE LIVE SERVER IS SERVING when the primary checkout is "
+                        "off main (D139, `serving_branch`) — `repo()` has always named the "
+                        "branch, and that is a claim about where YOU are, in a section about "
+                        "the tree, which is how a reader reads past it. `sidecar()` is the one "
+                        "loader the three sections that import a sibling module now share: the "
+                        "new line needs `ports.is_linked_worktree`, and a third copy of that "
+                        "dance would have been a third place for the primary/linked test to be "
+                        "spelled differently.",
                 # D17 is the map it reads, including the `step` field it resolves "do this
                 # next" through — which is why an entry without one prints a dead end. D16
                 # is the audit it shells out to for its health line, and the reason SOURCES
@@ -2059,7 +2088,8 @@ COMPONENTS = [
                 # kept now that the repo has left iCloud for that entry's amended reason: the
                 # hazard belongs to a synced directory, and a tree can be put inside one
                 # without telling this script.
-                "governed_by": ["D16", "D17", "D42", "D43", "D44", "D80", "D86", "D88", "D111", "D127", "D138"],
+                "governed_by": ["D16", "D17", "D42", "D43", "D44", "D53", "D80", "D86", "D88",
+                                "D111", "D127", "D138", "D139"],
                 "note": "IT READS `--json`, NOT THE RENDER, since 2026-08-13. This line "
                         "said the opposite until integration: the debt was closed and this "
                         "entry rewritten in the same run by different hands, and nothing "

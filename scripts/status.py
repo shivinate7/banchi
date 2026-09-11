@@ -684,6 +684,86 @@ def hooks() -> List[str]:
     return out
 
 
+def serving_branch() -> List[str]:
+    """WHICH BRANCH THE LIVE SERVER IS SERVING, when that is not main (D139).
+
+    `serving()` below answers whether anything is up and whose store it answers for.
+    This answers the third question in that family and the one nothing asked: whose CODE.
+    D53 keeps a supervisor alive at login out of the PRIMARY checkout over the owner's real
+    store, and the supervisor rebuilds from whatever this directory holds — so the branch this
+    one directory stands on silently decides which code photographs the owner's real cards.
+    D43 made the PORT follow the store; this is the same hazard through the other door, the
+    DIRECTORY pointing at the wrong code, and it was guarded nowhere.
+
+    IT LEADS THE SECTION BECAUSE IT QUALIFIES THE REST OF IT. `capture :8000 answering` is the
+    line a reader believes, and it is the same line whether the process was built from main or
+    from a branch nobody is reading any more. Observed 2026-09-11: this checkout sat on
+    `claude/env-key-rotation` with three live sessions in it, and `make status` printed every
+    section it always prints without mentioning the branch anywhere near the server.
+
+    `repo()` already names the branch, and that is not this claim: it says where YOU are, in a
+    section about the tree, which is exactly how a reader reads past it. A LINKED WORKTREE SAYS
+    NOTHING — it has its own store and its own ports to be wrong on its own (D43), which is the
+    whole point of it, and warning there would teach the line to be ignored here.
+
+    IT SITS BESIDE `app_build_lines()` RATHER THAN ARGUING WITH IT. That one answers whether the
+    bundle matches the tree; this answers which tree. Since D138 the supervisor builds the app and
+    the capture server serves it, so both questions are now about this one directory and the pair
+    reads as one account: which branch, then whether what is being served is built from it.
+
+    AND IT CLAIMS NOTHING ABOUT BEING CURRENT, which is a second question with a different answer:
+    `main` is the local ref, and a clone that merges by pull request can leave it well behind
+    origin — six commits on 2026-09-11. `repo()` prints the ahead/behind counts; this line says
+    only that the branch is not main.
+    """
+    module, problem = sidecar("server/ports.py", "_pkmnscan_ports")
+    if problem:
+        return []  # ports_and_store() reports this; one absent file is one problem
+    if module.is_linked_worktree(module.REPO_ROOT):
+        return []
+    branch = git("branch", "--show-current")
+    if branch is None:
+        return []
+    if not branch:  # a detached HEAD is off main as surely as a branch is
+        branch = "a detached HEAD at " + (git("log", "-1", "--format=%h") or "?")
+    elif branch == "main":
+        return []
+    return [
+        field("the code", f"{branch} — NOT main"),
+        cont("this is the PRIMARY checkout, the one `make launch-agent` serves the"),
+        cont("owner's REAL store out of, so the live capture server is running"),
+        cont("THIS branch's code (D53, D139). `git switch main` when it is done."),
+    ]
+
+
+def sidecar(rel: str, name: str) -> Tuple[object, str]:
+    """Load a module this repo already has, by path, without importing the package.
+
+    THREE SECTIONS NEEDED THE SAME EIGHT LINES and two of them already had their own copy.
+    `serving()` loads `scripts/serve.py`, `ports_and_store()` loads `server/ports.py`, and
+    D139's branch line needs `server/ports.py:is_linked_worktree` — which is the one function
+    in this file's reach whose job is to answer a question that must have exactly one answer.
+    A third copy of the dance would have been a third place for the primary/linked test to be
+    spelled differently, which is the defect, not the chore.
+
+    Returns `(module, "")` or `(None, why)`. The caller owns the wording of its own failure
+    because the field label differs; every message the two callers printed before this existed
+    is reproduced verbatim.
+    """
+    found = resolve(rel)
+    if not found:
+        return None, f"MISSING: {rel}"
+    spec = importlib.util.spec_from_file_location(name, found[0])
+    if spec is None or spec.loader is None:
+        return None, f"{rel} could not be loaded"
+    module = importlib.util.module_from_spec(spec)
+    try:
+        spec.loader.exec_module(module)
+    except Exception as exc:  # a broken sidecar is not a reason to kill `make status`
+        return None, f"{rel} raised: {exc}"
+    return module, ""
+
+
 def serving() -> List[str]:
     """Whether anything is actually up, and whose store it is answering for.
 
@@ -700,20 +780,15 @@ def serving() -> List[str]:
     Read-only, like everything else here: `serve.report()` opens nothing for writing, signals
     nothing and starts nothing.
     """
-    found = resolve("scripts/serve.py")
-    if not found:
-        return [field("Serving", "MISSING: scripts/serve.py")]
-    spec = importlib.util.spec_from_file_location("_pkmnscan_serve", found[0])
-    if spec is None or spec.loader is None:
-        return [field("Serving", "scripts/serve.py could not be loaded")]
-    module = importlib.util.module_from_spec(spec)
+    module, problem = sidecar("scripts/serve.py", "_pkmnscan_serve")
+    if problem:
+        return [field("Serving", problem)]
     try:
-        spec.loader.exec_module(module)
         data = module.report()
     except Exception as exc:  # a broken probe is not a reason to kill `make status`
         return [field("Serving", f"scripts/serve.py raised: {exc}")]
 
-    out: List[str] = []
+    out: List[str] = serving_branch()
     sup = data.get("supervisor")
     if sup:
         out.append(field("supervisor", f"up (pid {sup}) — `make up`"))
@@ -792,17 +867,9 @@ def ports_and_store() -> List[str]:
     numbers nobody has memorised. `make status` is what CLAUDE.md tells a cold session to run
     first, which makes it the right place to say which tree it has landed in.
     """
-    found = resolve("server/ports.py")
-    if not found:
-        return [field("Ports", "MISSING: server/ports.py")]
-    spec = importlib.util.spec_from_file_location("_pkmnscan_ports", found[0])
-    if spec is None or spec.loader is None:
-        return [field("Ports", "server/ports.py could not be loaded")]
-    module = importlib.util.module_from_spec(spec)
-    try:
-        spec.loader.exec_module(module)
-    except Exception as exc:  # a broken derivation is not a reason to kill `make status`
-        return [field("Ports", f"server/ports.py raised: {exc}")]
+    module, problem = sidecar("server/ports.py", "_pkmnscan_ports")
+    if problem:
+        return [field("Ports", problem)]
 
     linked = module.is_linked_worktree(module.REPO_ROOT)
     out = [
