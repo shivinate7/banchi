@@ -31,6 +31,7 @@ import type {
   MoveResult,
   MoveCardsResult,
   BoxDeleteResult,
+  GraveyardPayload,
   BoxListingPlan,
   BoxPhotoPlan,
   ListingReleaseResult,
@@ -1681,22 +1682,38 @@ export async function moveCards(
 
 /**
  * Delete a whole box — records, photos, sidecars, queue entries, cache, registry entry
- * (D10 ruling 3).
+ * (D10 ruling 3, amended D134).
  *
  * THE MOST DESTRUCTIVE ACTION IN THE PRODUCT, and the one place `docs/DESIGN.md`'s
  * "genuinely destructive actions may still gate" clause is meant to bite. There is no undo:
  * unlike capture-undo, the cards are not in your hand.
  *
- * It refuses `box_not_empty_of_commitments` while the box holds anything sold, retired or
- * listing-held, naming up to eight of them. That refusal is the guard rail — those records
- * are history and commitments, not clutter — so a screen should show what it says rather
- * than reducing it to "cannot delete".
+ * It refuses `box_not_empty_of_commitments` only while the box holds an on-hand card with an
+ * active listing hold, naming up to eight. A sold, retired or moved record no longer blocks
+ * this (D134) — it is buried instead, readable afterward from `graveyard()`, so a screen
+ * should show the refusal as naming only what still stands in the way.
  *
- * The result is a per-kind receipt and should be drawn as one. `directory_removed: false`
- * is not a failure; see `BoxDeleteResult`.
+ * The result is a per-kind receipt and should be drawn as one. `buried` is the subset of
+ * `cards` that left through a departure door rather than as ordinary on-hand junk.
+ * `directory_removed: false` is not a failure; see `BoxDeleteResult`.
  */
 export async function deleteBox(box: number): Promise<BoxDeleteResult> {
   return (await request(`/boxes/${box}`, { method: 'DELETE' })) as BoxDeleteResult
+}
+
+/**
+ * Every departed card the store still knows about, newest departure first (D134).
+ *
+ * TWO SOURCES, ONE SHAPE. A sold, retired or moved record can be standing in a box nobody
+ * has deleted — the same records `#/inventory` already draws as departed — or it can be the
+ * retained half of a record whose box WAS deleted, read back from the `buried` history line.
+ * `DepartedCard.buried` is which one a row came from; nothing else about the shape differs,
+ * and a record is never counted from both sources at once.
+ *
+ * Free and read-only. `#/graveyard` is the one screen that calls this.
+ */
+export async function getGraveyard(): Promise<GraveyardPayload> {
+  return (await request('/graveyard')) as GraveyardPayload
 }
 
 /**
@@ -2208,11 +2225,16 @@ export async function emitMerged(
      standing cap any more: every copy this run holds that TCGplayer does not already have
      goes out, and this is how one press says otherwise. Omitted rather than sent as a
      sentinel, so "no cap" is the absence of a claim rather than a number meaning none. */
+  /* `quantities` IS THE OPERATOR'S OWN FIGURE FOR A CARD, THIS PRESS ONLY (D7, amended 2026-09-11):
+     SKU -> how many of its copies go in this file, bounded server-side by the copies on hand
+     that are not already listed. A send quantity and not a ceiling, which is what `cap` is.
+     Omitted when empty, for the reason `cap` is: a press that named no card sends no claim. */
   options: {
     listedOnly?: boolean
     splitGames?: boolean
     splitThreshold?: boolean
     cap?: number | null
+    quantities?: Record<string, number>
   } = {},
 ): Promise<RunStepResult & { runs: string[] }> {
   return (await request('/pipeline/emit', {
@@ -2224,6 +2246,7 @@ export async function emitMerged(
       split_games: Boolean(options.splitGames),
       split_threshold: Boolean(options.splitThreshold),
       ...(typeof options.cap === 'number' ? { cap: options.cap } : {}),
+      ...quantitiesClaim(options.quantities),
     }),
   })) as RunStepResult & { runs: string[] }
 }
@@ -2450,6 +2473,8 @@ export async function runStep(
        command, so an option offered on one and not the other would be answering a question
        about how many runs happen to be open. */
     cap?: number | null
+    /* THE PER-CARD FIGURES, for the same reason — one card or three runs, one control. */
+    quantities?: Record<string, number>
   } = {},
 ): Promise<RunStepResult> {
   return (await request(`/pipeline/runs/${encodeURIComponent(name)}/${step}`, {
@@ -2470,8 +2495,17 @@ export async function runStep(
          route refuses `cap: 0` by name, and a screen spelling "none" as a number would turn
          the ordinary press into a refusal. */
       ...(typeof options.cap === 'number' ? { cap: options.cap } : {}),
+      ...quantitiesClaim(options.quantities),
     }),
   })) as RunStepResult
+}
+
+/** The `quantities` key for an emit body, or nothing at all when no card was given a figure.
+ *  The route refuses a malformed map by name; an empty one would be a claim about nothing,
+ *  so — as with `cap` — the ordinary press carries no key rather than an empty object. */
+function quantitiesClaim(asked: Record<string, number> | undefined): { quantities?: Record<string, number> } {
+  if (asked === undefined || Object.keys(asked).length === 0) return {}
+  return { quantities: asked }
 }
 
 /**

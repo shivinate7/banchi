@@ -14,6 +14,7 @@ import { CaptureScreen } from './CaptureScreen'
 import { Runs } from './Runs'
 import { ReviewQueue } from './ReviewQueue'
 import { Inventory } from './Inventory'
+import { Graveyard } from './Graveyard'
 import { Pricing } from './Pricing'
 import { Orders } from './Orders'
 import { Shipping } from './Shipping'
@@ -83,6 +84,7 @@ export const ROUTES: readonly Route[] = [
    * `route rosters`, and every spec's pinned roster), so it is a deliberate edit and never a
    * side effect. */
   { path: '/inventory', label: 'Inventory', icon: 'box', view: Inventory, persona: 'owner', group: 'library', hotkey: 'i', nav: true, tab: true, keywords: 'boxes find a card where search sold retire move' },
+  { path: '/graveyard', label: 'Graveyard', icon: 'history', view: Graveyard, persona: 'owner', group: 'library', hotkey: 'g', nav: true, keywords: 'sold retired moved buried departed history gone deleted box' },
   { path: '/codes', label: 'Codes', icon: 'qr', view: Codes, persona: 'owner', group: 'library', hotkey: 'd', nav: true, keywords: 'code cards qr redeem read a box' },
   { path: '/fulfillment', label: 'Cards to pull', icon: 'hand', view: Fulfillment, persona: 'fulfiller', group: 'aside' },
   { path: '/gallery', label: 'Kit', icon: 'grid', view: Gallery, persona: 'owner', group: 'aside' },
@@ -581,6 +583,7 @@ const SHORTCUTS: readonly KeyGroup[] = [
       { keys: [',O'], does: 'Orders' },
       { keys: [',S'], does: 'Shipping' },
       { keys: [',I'], does: 'Inventory' },
+      { keys: [',G'], does: 'Graveyard' },
       { keys: [',D'], does: 'Codes' },
     ],
   },

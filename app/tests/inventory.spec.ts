@@ -3221,12 +3221,13 @@ test('a listing hold is named on the delete panel rather than discovered by pres
   await openBoxOps(page)
   await page.getByRole('button', { name: /^Delete box 2/ }).click()
 
-  /* The three grounds of `box_not_empty_of_commitments` have three different remedies, and
-     before D34 added `listed` and `retired` to the box row a screen could say a box has
-     commitments and never which kind. */
-  await expect(page.locator('.boxops-confirm')).toContainText('1 card sold')
-  await expect(page.locator('.boxops-confirm')).toContainText('1 card retired')
+  /* D134: a listed copy is the only remaining ground for `box_not_empty_of_commitments` — a
+     sold or retired record no longer blocks and is named as something that will be BURIED
+     instead, never as a reason the box is refused. This fixture's sold (1) and retired (1)
+     read as "2 other departed records". */
   await expect(page.locator('.boxops-confirm')).toContainText('3 cards listed')
+  await expect(page.locator('.boxops-confirm')).toContainText('2 other departed records')
+  await expect(page.locator('.boxops-confirm')).toContainText('will be buried')
 })
 
 test('the control that releases does not exist until the free plan has answered', async ({
@@ -3567,7 +3568,7 @@ test('the ticked selection is handed to the runs screen, and never lost silently
  *
  * A STORE OF ITS OWN rather than neighbours on `CARDS`, because the block is ~31px and the band
  * and copy-row measurements in this file are taken against a fixture that does not draw one. */
-const NEIGHBOURLY: Cards = {
+const NEIGHBORLY: Cards = {
   '2/1': card({
     index: 1,
     state: 'identified',
@@ -3622,8 +3623,8 @@ test('the neighbours are ranked, not joined — the names are the only thing dra
   page,
 }) => {
   await open(page, BOXES, {
-    cards: NEIGHBOURLY,
-    search: (query) => searchAnswer(query, NEIGHBOURLY),
+    cards: NEIGHBORLY,
+    search: (query) => searchAnswer(query, NEIGHBORLY),
   })
 
   const band = page.locator('.card-locations-row.is-current .nb')
@@ -3652,8 +3653,8 @@ test('the neighbours are ranked, not joined — the names are the only thing dra
 
 test('the neighbour names are read as words, not as metadata', async ({ page }) => {
   await open(page, BOXES, {
-    cards: NEIGHBOURLY,
-    search: (query) => searchAnswer(query, NEIGHBOURLY),
+    cards: NEIGHBORLY,
+    search: (query) => searchAnswer(query, NEIGHBORLY),
   })
 
   /* THE TWO DEFECTS THIS REPLACED, ASSERTED AS THE PROPERTIES THEY ARE.
@@ -3700,8 +3701,8 @@ test('the neighbour names are read as words, not as metadata', async ({ page }) 
 
 test('a card at the front of the box gets one row, not a pretend between', async ({ page }) => {
   await open(page, BOXES, {
-    cards: NEIGHBOURLY,
-    search: (query) => searchAnswer(query, NEIGHBOURLY),
+    cards: NEIGHBORLY,
+    search: (query) => searchAnswer(query, NEIGHBORLY),
   })
 
   /* READ OFF THE COPIES LIST RATHER THAN THE BAND, because both copies of this SKU are drawn
@@ -3722,8 +3723,8 @@ test('a card at the front of the box gets one row, not a pretend between', async
 
 test('a landmark the walk had to reach says how far it reached (D116)', async ({ page }) => {
   await open(page, BOXES, {
-    cards: NEIGHBOURLY,
-    search: (query) => searchAnswer(query, NEIGHBOURLY),
+    cards: NEIGHBORLY,
+    search: (query) => searchAnswer(query, NEIGHBORLY),
   })
 
   /* THE OWNER READ A BARE FIGURE IN THIS BLOCK AS A SOLD CARD (2026-09-07). It was not one —
@@ -3866,8 +3867,8 @@ test('selling a card moves the landmark on the rows beside it, with no reload', 
 
 test('the gap clause is gone from every site that drew it', async ({ page }) => {
   await open(page, BOXES, {
-    cards: NEIGHBOURLY,
-    search: (query) => searchAnswer(query, NEIGHBOURLY),
+    cards: NEIGHBORLY,
+    search: (query) => searchAnswer(query, NEIGHBORLY),
   })
 
   /* "· 2 slots in this section are empty" (owner, 2026-08-30: deleted outright).
@@ -4024,16 +4025,16 @@ test('a photo the store has lost gets a sentence, never a card-shaped hole', asy
      photograph here" and not the defect above: what that defect was is a tall box with the
      sentence stranded at the top of it and the remedy pushed off the viewport. So this asserts
      the two facts that tell them apart — the panel occupies the whole slot rather than sitting
-     inside a second reserved box, and its text is centred in the panel rather than orphaned at
+     inside a second reserved box, and its text is centered in the panel rather than orphaned at
      the top. A 592px box around a 149px sentence puts that centre 37% out. */
   expect(shot.width - box.width).toBeLessThan(8)
-  const centred = await panel.evaluate((node) => {
+  const centered = await panel.evaluate((node) => {
     const said = node.querySelector('p') as HTMLElement
     const own = node.getBoundingClientRect()
     const text = said.getBoundingClientRect()
     return Math.abs((text.top + text.height / 2 - own.top) / own.height - 0.5)
   })
-  expect(centred).toBeLessThan(0.25)
+  expect(centered).toBeLessThan(0.25)
 
   /* And the only thing the column holds beyond the sentence is the re-shoot control — 24px and a
      gap, not 440px of reserved nothing. */

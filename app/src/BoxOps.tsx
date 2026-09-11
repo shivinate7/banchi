@@ -1708,7 +1708,12 @@ function megabytes(bytes: number): string {
 
 /* THE WHOLE-BOX DELETE — the most destructive action in the product, and the one place that
  * gates. Two presses that both name the box; the server keeps the refusal
- * (`box_not_empty_of_commitments`) and it is shown whole. */
+ * (`box_not_empty_of_commitments`) and it is shown whole.
+ *
+ * D134 (2026-09-11): a sold, retired or moved record no longer answers that refusal — it is
+ * buried instead, readable afterward on `#/graveyard`, and only a listed copy still blocks.
+ * The Notice below draws that distinction before the press: what will be buried and lost is
+ * separate from what will refuse outright. */
 function DeleteBox({
   record,
   onChanged,
@@ -1733,7 +1738,9 @@ function DeleteBox({
         kind: 'ok',
         icon: 'trash',
         title: `Box ${result.deleted_box} is gone. There is no undo.`,
-        body: `${result.cards} ${result.cards === 1 ? 'card' : 'cards'}, ${result.photos} ${result.photos === 1 ? 'photograph' : 'photographs'} and ${result.sidecars} ${result.sidecars === 1 ? 'sidecar' : 'sidecars'} are gone, with ${result.review_deleted} review, ${result.parked_deleted} parked and ${result.cache_deleted} cache ${result.cache_deleted === 1 ? 'entry' : 'entries'}.${
+        body: `${result.cards} ${result.cards === 1 ? 'card' : 'cards'} gone${
+          result.buried > 0 ? ` — ${count(result.buried, 'departed record', 'departed records')} buried in the graveyard` : ''
+        }, with ${result.photos} ${result.photos === 1 ? 'photograph' : 'photographs'} and ${result.sidecars} ${result.sidecars === 1 ? 'sidecar' : 'sidecars'}, and ${result.review_deleted} review, ${result.parked_deleted} parked and ${result.cache_deleted} cache ${result.cache_deleted === 1 ? 'entry' : 'entries'}.${
           result.directory_removed ? '' : ' The photo directory was left in place: it still holds a file this delete did not account for.'
         }`,
         ttlMs: 12000,
@@ -1765,16 +1772,18 @@ function DeleteBox({
             — {count(record.cards, 'card', 'cards')} — along with its queue entries, its
             identification cache and the box itself. <strong>There is no undo.</strong>
           </p>
-          <Notice tone={record.sold + record.retired + record.listed === 0 ? 'info' : 'warn'}>
-            {record.sold + record.retired + record.listed === 0
-              ? 'A box holding a sold, retired or listed card is refused: those records are history and commitments, not clutter.'
-              : `This box will be refused: ${[
-                  record.sold ? `${count(record.sold, 'card', 'cards')} sold` : null,
-                  record.retired ? `${count(record.retired, 'card', 'cards')} retired` : null,
-                  record.listed ? `${count(record.listed, 'card', 'cards')} listed` : null,
-                ]
-                  .filter((part): part is string => part !== null)
-                  .join(', ')}. Sold and retired cards reverse on their own controls; a listing hold is released above.`}
+          <Notice tone={record.listed === 0 ? 'info' : 'warn'}>
+            {record.listed === 0
+              ? `${
+                  record.sold + record.retired + record.moved === 0
+                    ? 'Nothing in this box has departed.'
+                    : `${count(record.sold + record.retired + record.moved, 'departed record', 'departed records')} will be buried in the graveyard, and their photographs deleted.`
+                } There is no undo.`
+              : `This box will be refused: ${count(record.listed, 'card', 'cards')} listed — release the hold above first.${
+                  record.sold + record.retired + record.moved > 0
+                    ? ` ${count(record.sold + record.retired + record.moved, 'other departed record', 'other departed records')} will be buried once it goes through.`
+                    : ''
+                }`}
           </Notice>
           <Trouble failure={trouble} />
           <div className="boxops-actions">
