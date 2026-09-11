@@ -120,6 +120,24 @@ jobs:
       - name: make ci-check
         run: make ci-check
 
+  # D133's guard as its own check on the PR, so a refusal reads as what it is rather than as one
+  # red line inside ninety seconds of `make ci-check` (which runs it too, as `revert-guard`).
+  # THIS IS THE PLATFORM THE GATE RUNS ON: a PR checkout here is GitHub's own merge of the
+  # branch into its base, so `HEAD` is exactly what would land and `origin/<base>` is what it
+  # lands on — the two things the script compares. No venv, no node, no browser: python3 and a
+  # full-depth clone, because the window is the base's last sixty first-parent commits.
+  revert-guard:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      # `github.base_ref` is set on pull_request only; on a push to main HEAD IS origin/main
+      # and the script says nothing would land.
+      - name: revert guard
+        run: python3 scripts/revert-audit.py branch --upstream "origin/${{ github.base_ref || 'main' }}"
+
   # The browser half. Same tree, different question: what a person actually sees.
   design-check:
     runs-on: ubuntu-latest

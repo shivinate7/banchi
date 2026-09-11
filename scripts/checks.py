@@ -144,6 +144,44 @@ CHECKS = (
         "governed_by": ("D18", "D42"),
     },
     {
+        "target": "revert-selftest",
+        "runs": "python3 scripts/revert-audit.py selftest",
+        "asserts": "The revert guard, against a throwaway origin and clone that rebuild the "
+                   "#218/#221 sequence: a deletion merged, a branch cut from before it that "
+                   "merges main keeping `ours` and squashes onto main. Ten cases: the fixture's "
+                   "own arming, the squash refused, the history walk naming the merge AND the "
+                   "deleting commit inside it, a clean branch allowed, a partial reversal "
+                   "noted and allowed, a declared restoration allowed, a silent one refused at "
+                   "hunk level, the escape hatch honoured, and main itself landing nothing.",
+        "needs": ("python3", "git"),
+        "writes": "a bare repo and a clone, under `mktemp -d`.",
+        "commit_path": False,
+        "why_off_commit_path": "D18 — it writes — and githooks-selftest's second reason: it "
+                               "drives the guard by defeating it.",
+        "gates": True,
+        "governed_by": ("D18", "D42", "D133"),
+    },
+    {
+        "target": "revert-guard",
+        "runs": "python3 scripts/revert-audit.py branch",
+        "asserts": "What this branch would land on origin/main — the clean merge's tree, or "
+                   "the branch's diff off the merge-base when the merge conflicts — puts no "
+                   "file back the way main had it before a commit in main's last 60, unless a "
+                   "commit on the branch names that file. A partial reversal beside real edits "
+                   "is a note. On main itself, and in a clone with no origin/main, it allows "
+                   "and says so.",
+        "needs": ("python3", "git"),
+        "writes": "",
+        "commit_path": False,
+        "why_off_commit_path": "It is on the PUSH path, not the commit path: "
+                               "scripts/githooks/pre-push runs it on every branch push. The "
+                               "question it asks is about origin/main, which a commit never "
+                               "consults and a fresh clone may not have, and a commit on a "
+                               "branch is not yet a claim about main — the push is.",
+        "gates": True,
+        "governed_by": ("D42", "D133"),
+    },
+    {
         "target": "janitor-selftest",
         "runs": "bash scripts/janitor-selftest.sh",
         "asserts": "scripts/janitor.py, against a throwaway clone with real worktrees, a fake "
