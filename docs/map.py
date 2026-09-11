@@ -1308,6 +1308,31 @@ COMPONENTS = [
                         "and the fixture asserts its own arming. Same lesson githooks-selftest "
                         "records about git's own refusals scoring as the hook's.",
             },
+            "browser-scope.py": {
+                "does": "does a change reach what a browser draws? The list of every path "
+                        "`make design-check` loads, each with the reason it is there, and the "
+                        "classifier `.github/workflows/check.yml`'s `browser-scope` job runs "
+                        "on a pull request to decide whether the three-shard browser matrix "
+                        "runs at all (D140). `classify` diffs what the branch would LAND from "
+                        "the merge-base; `history N` replays main's last N merges, which is "
+                        "how D140's measurement was taken; `selftest` proves the matcher and "
+                        "the Makefile narrowing. Never acts on a push to main — there it "
+                        "prints its answer and the matrix runs unless D136's pass record says "
+                        "the tree was tested.",
+                # D136 is the gate this composes with, D18 is why it writes nothing, D16 is
+                # why the list has a reader before it has a filter.
+                "governed_by": ["D16", "D18", "D136", "D140"],
+                "note": "THE LIST IS DERIVED AND HAS A READER: `make docs-audit`'s `browser "
+                        "scope` row reconciles SCOPE against Playwright's config, Vite's "
+                        "config, every code string in app/tests and app/src naming a tracked "
+                        "file outside app/, and the `design-check` recipe, in both directions "
+                        "— and reads the workflow's wiring for the fail-open spelling. "
+                        "`server/` is deliberately outside it: app/tests/shell.ts seals the "
+                        "capture port, so the suite cannot observe a server change. The "
+                        "Makefile is narrowed to the `design-check` recipe's own text, "
+                        "because every third merge touches the Makefile and the browser "
+                        "reads four lines of it.",
+            },
             "revert-audit.py": {
                 "does": "one question of a change, asked of every commit on main's first-parent "
                         "line (`history`) or of what a branch would land there (`branch`, which "
@@ -1647,7 +1672,7 @@ COMPONENTS = [
                                 "D47", "D49", "D50", "D51", "D53", "D60", "D64", "D65", "D67", "D69",
                                 "D70", "D72", "D75", "D76", "D80", "D81", "D83", "D84", "D87",
                                 "D88", "D90", "D92", "D94", "D96", "D101", "D102", "D104", "D111",
-                                "D119", "D122", "D127", "D132", "D135"],
+                                "D119", "D122", "D127", "D132", "D135", "D136", "D140"],
             },
             "docs-audit-allow.txt": {
                 "does": "paths and identifiers the docs name before they exist, one "

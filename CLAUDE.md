@@ -219,6 +219,20 @@ make design-check   # DESIGN.md's Fulfillment floors, asserted in a browser. IT 
                     #   it right for an ESM spec and is the pin; this arm sees a bump bring it back.
                     #   It launches NO BROWSER and NO DEV SERVER, so it is in `check`
                     #   and `ci-check` and takes no lock.
+                    #   ON CI IT RUNS ONLY WHEN THE CHANGE REACHES WHAT A BROWSER DRAWS (D140).
+                    #   `.github/workflows/check.yml` gates its three-shard matrix on a pull
+                    #   request by `scripts/browser-scope.py`, whose list is DERIVED from what
+                    #   this target loads — `app/**`, the traces `cadence.spec.ts` reads off
+                    #   disk, this recipe's own text, the lock script, and the gate's two files.
+                    #   `server/` is deliberately out: `sealEveryTest` means this suite cannot
+                    #   see a server change. The list has a reader before it has a filter —
+                    #   `make docs-audit`'s `browser scope` row, both directions — because a
+                    #   filter that is too narrow silently stops testing something and the
+                    #   green is believed. A push to main is never skipped by it; D136's
+                    #   gate, on the tree, is the only one that acts there. Replayed over
+                    #   main's last 14 merges the night it landed: 9 skip, 5 run.
+                    #   `python3 scripts/browser-scope.py classify --base origin/main` says
+                    #   what CI will do with this branch; `history 20` replays main.
 make design-check-quiet  # the same run with the 450-line progress stream dropped. Same tests,
                     #   same verdict file, and THE SAME MACHINE-WIDE LOCK — a quiet variant
                     #   that skipped it would be D122's starvation reachable by typing a
@@ -1492,6 +1506,7 @@ D136 The suite is sharded and never widened, a sleep is a wait and not an assert
 D137 The catalog is Near Mint by rule, because it was only ever Near Mint by accident of the file
 D138 One process serves the product, Vite compiles and never serves, and the build is the server's job
 D139 Which branch the primary checkout stands on is a fact about the live rig, and a warning is the ceiling
+D140 The browser matrix runs when the change reaches what a browser draws, and the path list has a reader
 ```
 
 **THE GAP THIS LIST CARRIED BETWEEN D116 AND D118 IS CLOSED, AND IT CLOSED THE WAY IT SAID IT

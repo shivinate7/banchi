@@ -10441,6 +10441,313 @@ def check_suite_lock(report: Report) -> None:
                    len(fleets), "" if len(fleets) == 1 else "s", len(FLEET_RUNNER_SCRIPTS)))
 
 
+# ------------------------------------------------------------ the browser matrix's scope
+#
+# `.github/workflows/check.yml` runs its browser matrix on a pull request only when the change
+# touches a path `scripts/browser-scope.py:SCOPE` names (D140). A path filter is the one gate
+# whose failure is INVISIBLE: too narrow, and the matrix stops running for a class of change,
+# the run is green because it never happened, and the green is believed. That is the armed
+# hook's defect from `scripts/githooks/pre-commit`'s own header, one level up — and the reason
+# D140 rules that the filter does not ship without this row.
+#
+# THE LIST IS RECONCILED AGAINST WHAT THE SUITE LOADS, NOT AGAINST A SECOND LIST. Each
+# dependency below is READ from the thing that creates it: Playwright's `testDir`, its reporter
+# and its imports out of `app/playwright.config.ts`; Vite's root out of `app/vite.config.ts`,
+# with any relative literal there that reaches outside `app/`; every code string in a spec or
+# a module that names a tracked file outside `app/` (how `cadence.spec.ts`'s traces are found);
+# every `scripts/` file the `design-check` recipe names; and the gate's own two files. A
+# dependency the scope does not cover fails; an entry that covers nothing tracked fails; a
+# `within` narrowing that names a recipe the Makefile no longer has fails.
+#
+# AND THE WIRING IS READ, because a list nothing consults is a list. The workflow must run the
+# classifier from some job, `design-check` must need that job and read its answer in the
+# FAIL-OPEN spelling — `!= 'false'` under `!cancelled()` — the `on:` block may carry no path
+# filter (that would gate `check`, `revert-guard` and `already-passed` too, which D140
+# forbids), and `design-check-passed` may not run on a skipped matrix, or a tree no browser
+# saw would earn D136's pass record.
+#
+# WHAT IT CANNOT SEE, by name: a path a spec composes at runtime from pieces; a Vite
+# `server.fs.allow` widening written in a form these regexes do not read; and a code string
+# on the same line as a `//` inside a URL, which the comment blanker takes with it. Each is a
+# miss and never a false finding.
+BROWSER_SCOPE_SCRIPT = ROOT / "scripts" / "browser-scope.py"
+CHECK_WORKFLOW = ROOT / ".github" / "workflows" / "check.yml"
+PLAYWRIGHT_CONFIG = ROOT / "app" / "playwright.config.ts"
+VITE_CONFIG = ROOT / "app" / "vite.config.ts"
+APP_DIR = ROOT / "app"
+
+#: A code string naming something tracked outside `app/` — the shape `cadence.spec.ts` keys
+#: its TRACES table by. The prefixes are the tree's top-level directories a spec could plausibly
+#: read; a literal that resolves to nothing tracked is prose and is ignored.
+_REPO_LITERAL_RE = re.compile(
+    r"""['"`]((?:harness|docs|fixtures|scripts|server|store|pipeline|cli|identify|geometry|"""
+    r"""codes|demo-assets|inventory)/[\w./@+-]+)['"`]"""
+)
+#: A `./x` or `../x` literal in one of the two configs — an import, a `testDir`, a reporter
+#: path, an alias target. Resolved against `app/`; the ones that leave it are dependencies.
+_RELATIVE_LITERAL_RE = re.compile(r"""['"`](\.\.?/[^'"`\n]*)['"`]""")
+_TESTDIR_RE = re.compile(r"\btestDir:\s*['\"]([^'\"]+)['\"]")
+_VITE_ROOT_RE = re.compile(r"^\s*root:\s*['\"]([^'\"]+)['\"]", re.M)
+_SCOPE_STEP_RE = re.compile(r"python3\s+scripts/browser-scope\.py\s+classify\b")
+_YAML_JOB_KEY_RE = re.compile(r"^  ([a-z][\w-]*):\s*$")
+
+
+def _tracked_paths() -> Set[str]:
+    """Every tracked path, from the index in staged mode and from git otherwise."""
+    return set(_INDEX_PATHS) if _INDEX_PATHS is not None else _nul_list("ls-files", "-z")
+
+
+def _app_relative(literal: str, base_dir: Path = APP_DIR) -> str:
+    """A relative literal from a file in `base_dir`, as a repo-relative path (never resolved
+    through the filesystem, so a target that does not exist still has a name)."""
+    return os.path.relpath(os.path.normpath(str(base_dir / literal)), str(ROOT))
+
+
+def _import_target(name: str, tracked: Set[str]) -> str:
+    """`./devPort` is `app/devPort.ts` on disk; try the resolutions Node would."""
+    for suffix in ("", ".ts", ".tsx", "/index.ts"):
+        candidate = _app_relative(name + suffix)
+        if candidate in tracked:
+            return candidate
+    return _app_relative(name)
+
+
+def _yaml_top_block(text: str, key: str) -> Optional[str]:
+    """The lines of one top-level key of a workflow file, up to the next top-level key."""
+    lines = text.split("\n")
+    out: List[str] = []
+    inside = False
+    for line in lines:
+        if re.match(r"^" + re.escape(key) + r":", line):
+            inside = True
+            out.append(line)
+            continue
+        if inside:
+            if re.match(r"^[a-z]", line):
+                break
+            out.append(line)
+    return "\n".join(out) if out else None
+
+
+def _yaml_job_block(text: str, name: str) -> Optional[str]:
+    """One job's lines, from its key to the next job key at the same indent."""
+    lines = text.split("\n")
+    out: List[str] = []
+    inside = False
+    for line in lines:
+        key = _YAML_JOB_KEY_RE.match(line)
+        if key and key.group(1) == name:
+            inside = True
+            out.append(line)
+            continue
+        if inside:
+            if key:
+                break
+            out.append(line)
+    return "\n".join(out) if out else None
+
+
+def browser_gate_findings(text: str) -> List[Tuple[str, str]]:
+    """The workflow's wiring, as (where, message) pairs. Pure, so `--self-test` can mutate it."""
+    where = rel(CHECK_WORKFLOW)
+    out: List[Tuple[str, str]] = []
+
+    step = _SCOPE_STEP_RE.search(text)
+    job: Optional[str] = None
+    if step is None:
+        out.append((where, (
+            "no job runs `python3 scripts/browser-scope.py classify`, so the scope list is\n"
+            "  consulted by nothing and `design-check` is gated by whatever its `if:` says.")))
+    else:
+        for line in text[: step.start()].split("\n"):
+            key = _YAML_JOB_KEY_RE.match(line)
+            if key:
+                job = key.group(1)
+        if job is None:
+            out.append((where, "the classifier step is not inside a job this reader can name."))
+
+    on = _yaml_top_block(text, "on")
+    if on is None:
+        out.append((where, "has no `on:` block."))
+    elif re.search(r"^\s*paths(?:-ignore)?:", on, re.M):
+        out.append((where, (
+            "the `on:` block carries a `paths` filter. That gates EVERY job — `check`,\n"
+            "  `revert-guard` and `already-passed` included — and D140 scopes the browser\n"
+            "  matrix alone. The filter is `browser-scope`'s output, read by one job's `if:`.")))
+
+    design = _yaml_job_block(text, "design-check")
+    if design is None:
+        out.append((where, "has no `design-check` job for the scope to gate."))
+    elif job is not None:
+        needs = re.search(r"^\s*needs:.*?(?=^\s*(?:if|runs-on):)", design, re.M | re.S)
+        if needs is None or job not in needs.group(0):
+            out.append((where, f"`design-check` does not `need` `{job}`, so its answer is not waited for."))
+        cond = re.search(r"^\s*if:\s*(.+)$", design, re.M)
+        answer = f"needs.{job}.outputs.run"
+        if cond is None or f"{answer} != 'false'" not in cond.group(1):
+            out.append((where, (
+                f"`design-check`'s `if:` does not read `{answer} != 'false'`.\n"
+                "  That spelling is the fail-open one: a classifier that errored, a job that\n"
+                "  never ran and an empty output all RUN the matrix. `== 'true'` would skip it\n"
+                "  on every one of those, silently (D140).")))
+        if cond is not None and "!cancelled()" not in cond.group(1):
+            out.append((where, (
+                "`design-check`'s `if:` has no `!cancelled()`, so GitHub prepends `success()`\n"
+                "  and a FAILED gate job skips the matrix instead of releasing it.")))
+
+    passed = _yaml_job_block(text, "design-check-passed")
+    if passed is not None:
+        cond = re.search(r"^\s*if:\s*(.+)$", passed, re.M)
+        if cond is not None and re.search(r"always\(\)|cancelled\(\)", cond.group(1)):
+            out.append((where, (
+                "`design-check-passed` runs on a skipped matrix, so a tree no browser saw\n"
+                "  would earn D136's pass record and skip the matrix on main too.")))
+    return out
+
+
+def _repo_literals(code: str, tracked: Set[str]) -> List[str]:
+    """Tracked paths outside `app/` that a file's CODE names. Comments are blanked first."""
+    found: List[str] = []
+    for match in _REPO_LITERAL_RE.finditer(_blank_ts_comments(code)):
+        candidate = match.group(1)
+        # A tracked file, or a directory literal (trailing `/`) with tracked files under it.
+        is_dir = candidate.endswith("/") and any(p.startswith(candidate) for p in tracked)
+        if candidate in tracked or is_dir:
+            found.append(candidate)
+    return found
+
+
+def _browser_requirements(module, tracked: Set[str], makefile: str) -> List[Tuple[str, str]]:
+    """Every path the browser suite depends on, with where the dependency was read from.
+
+    A path ending in `/` is a directory and means every tracked file under it.
+    """
+    out: List[Tuple[str, str]] = [
+        (rel(CHECK_WORKFLOW), "the gate's own workflow"),
+        (rel(BROWSER_SCOPE_SCRIPT), "the classifier the workflow runs"),
+        ("Makefile", "holds the `design-check` recipe the job runs"),
+    ]
+    recipe = module.recipe_text(makefile, "design-check") or ""
+    for name in sorted(set(re.findall(r"scripts/[\w.-]+", recipe))):
+        out.append((name, "named in the Makefile's `design-check` recipe"))
+
+    if exists(PLAYWRIGHT_CONFIG):
+        code = _blank_ts_comments(read(PLAYWRIGHT_CONFIG))
+        out.append((rel(PLAYWRIGHT_CONFIG), "Playwright's config"))
+        test_dir = _TESTDIR_RE.search(code)
+        if test_dir:
+            out.append((_app_relative(test_dir.group(1)).rstrip("/") + "/", "Playwright's `testDir`"))
+        for literal in _RELATIVE_LITERAL_RE.findall(code):
+            target = _import_target(literal, tracked)
+            if target in tracked:
+                out.append((target, f"named in app/playwright.config.ts as `{literal}`"))
+            elif not target.startswith("app/"):
+                out.append((target, f"named in app/playwright.config.ts as `{literal}`, outside app/"))
+
+    if exists(VITE_CONFIG):
+        code = _blank_ts_comments(read(VITE_CONFIG))
+        out.append((rel(VITE_CONFIG), "Vite's config"))
+        root = _VITE_ROOT_RE.search(code)
+        root_dir = _app_relative(root.group(1)) if root else "app"
+        out.append((root_dir.rstrip("/") + "/", "Vite's root, which is what the dev server serves"))
+        for literal in _RELATIVE_LITERAL_RE.findall(code):
+            target = _import_target(literal, tracked)
+            if not target.startswith("app/"):
+                out.append((target, f"named in app/vite.config.ts as `{literal}`, outside app/"))
+
+    for anchor, why in (("app/index.html", "the page Vite serves"),
+                        ("app/package.json", "the `dev` and `design-check` scripts and the pins"),
+                        ("app/package-lock.json", "what `npm ci` installs, Playwright included")):
+        out.append((anchor, why))
+
+    for path in _walk(APP_TESTS, (".ts",)) + _walk(APP_SRC, (".ts", ".tsx")):
+        for literal in _repo_literals(read(path), tracked):
+            out.append((literal, f"read by {rel(path)}"))
+    return out
+
+
+def check_browser_scope(report: Report) -> None:
+    """`scripts/browser-scope.py:SCOPE` against what the browser suite loads, both ways (D140).
+
+    MECHANICAL: a dependency the scope does not cover is a class of change the browser matrix
+    has silently stopped running for, and an entry covering nothing tracked is a pattern that
+    was renamed away. Neither is a judgement. The wiring findings are the same kind — the
+    fail-open spelling either is in the `if:` or it is not.
+    """
+    if not exists(BROWSER_SCOPE_SCRIPT):
+        report.add("browser scope", MECHANICAL, [Finding(
+            rel(BROWSER_SCOPE_SCRIPT),
+            "does not exist, and `.github/workflows/check.yml` gates its browser matrix on it.")])
+        return
+    if not exists(CHECK_WORKFLOW):
+        report.add("browser scope", MECHANICAL, [Finding(
+            rel(CHECK_WORKFLOW), "does not exist, so nothing consults the scope list.")])
+        return
+    module = _sibling("browser-scope.py")
+    scope = literals_from_module(BROWSER_SCOPE_SCRIPT).get("SCOPE")
+    if module is None or not isinstance(scope, tuple) or not scope or not all(
+        isinstance(entry, dict) and isinstance(entry.get("path"), str) for entry in scope
+    ):
+        report.add("browser scope", MECHANICAL, [Finding(
+            rel(BROWSER_SCOPE_SCRIPT),
+            "`SCOPE` is not a tuple of `{\"path\": …}` literals this row can read, or the\n"
+            "  module does not import. A list nothing can read gates nothing knowingly.")])
+        return
+
+    findings: List[Finding] = []
+    tracked = _tracked_paths()
+    makefile = read(ROOT / "Makefile") if exists(ROOT / "Makefile") else ""
+
+    def covered(path: str) -> bool:
+        return any(module.matches(str(entry["path"]), path) for entry in scope)
+
+    for entry in scope:
+        pattern = str(entry["path"])
+        if not any(module.matches(pattern, path) for path in tracked):
+            findings.append(Finding(rel(BROWSER_SCOPE_SCRIPT), (
+                f"`{pattern}` matches nothing tracked. A pattern that covers nothing is one\n"
+                "  that was renamed away, and the class of change it named now runs no browser.")))
+        within = entry.get("within")
+        if within is not None:
+            kind, _, target = str(within).partition(":")
+            if kind != "recipe":
+                findings.append(Finding(rel(BROWSER_SCOPE_SCRIPT), (
+                    f"`{pattern}` narrows with `{within}`, which is not a narrowing the\n"
+                    "  classifier knows; it will count the whole file, which is safe and unmeant.")))
+            elif module.recipe_text(makefile, target) is None:
+                findings.append(Finding(rel(BROWSER_SCOPE_SCRIPT), (
+                    f"`{pattern}` is narrowed to the `{target}` recipe, and the Makefile has no\n"
+                    "  such rule. The classifier answers RUN for every Makefile change until it does.")))
+
+    required = _browser_requirements(module, tracked, makefile)
+    seen: Set[str] = set()
+    for path, why in required:
+        if path in seen:
+            continue
+        seen.add(path)
+        if path.endswith("/"):
+            files = [p for p in tracked if p.startswith(path)]
+            if not files:
+                findings.append(Finding(rel(BROWSER_SCOPE_SCRIPT), (
+                    f"the suite depends on `{path}` ({why}) and nothing tracked is under it.")))
+                continue
+            missing = [p for p in files if not covered(p)]
+            if missing:
+                findings.append(Finding(rel(BROWSER_SCOPE_SCRIPT), (
+                    f"`{path}` is {why}, and {len(missing)} of its {len(files)} tracked files are\n"
+                    f"  outside SCOPE — first: `{missing[0]}`. A change there would run no browser.")))
+        elif not covered(path):
+            findings.append(Finding(rel(BROWSER_SCOPE_SCRIPT), (
+                f"`{path}` is {why}, and no SCOPE entry covers it. A change to it would run\n"
+                "  no browser, and the green would be believed.")))
+
+    for where, message in browser_gate_findings(read(CHECK_WORKFLOW)):
+        findings.append(Finding(where, message))
+
+    report.add("browser scope", MECHANICAL, findings,
+               f"{len(scope)} entries cover {len(seen)} derived dependencies, read fail-open")
+
+
 def check_check_census(report: Report) -> None:
     """Every published list of what `make check` runs, against scripts/checks.py.
 
@@ -13081,6 +13388,35 @@ def self_test() -> int:
         str(_ramps.get("chrome")),
     )
 
+    # THE BROWSER MATRIX'S GATE, READ BOTH WAYS (D140). The wiring reader is pure, so each
+    # way the workflow could quietly stop gating is mutated into it here; the classifier is
+    # imported the way `prose-guard.py` is and asked the two questions the gate exists for.
+    print("\nthe browser scope's wiring is read, and each silent failure is mutated in")
+    _workflow = read(CHECK_WORKFLOW) if exists(CHECK_WORKFLOW) else ""
+    _gate = browser_gate_findings(_workflow)
+    ok(not _gate, "the workflow as it stands reads the scope fail-open", "\n".join(m for _, m in _gate))
+    _closed = _workflow.replace("outputs.run != 'false'", "outputs.run == 'true'")
+    ok(any("fail-open" in m for _, m in browser_gate_findings(_closed)),
+       "the fail-closed spelling `== 'true'` is refused by name")
+    _gated_on = _workflow.replace("on:\n  pull_request:", "on:\n  pull_request:\n    paths: ['app/**']", 1)
+    ok(any("`on:` block" in m for _, m in browser_gate_findings(_gated_on)),
+       "a `paths` filter in the `on:` block, which would gate every job, is refused")
+    _unwired = _SCOPE_STEP_RE.sub("python3 scripts/other.py classify", _workflow)
+    ok(any("consulted by nothing" in m for _, m in browser_gate_findings(_unwired)),
+       "a workflow that never runs the classifier is reported as gating nothing")
+    _recording = _workflow.replace("if: github.event_name != 'push'", "if: always()")
+    ok(any("skipped matrix" in m for _, m in browser_gate_findings(_recording)),
+       "a pass record written for a skipped matrix is refused")
+    _module = _sibling("browser-scope.py")
+    ok(_module is not None, "scripts/browser-scope.py imports")
+    if _module is not None:
+        _read = lambda side, path: None  # noqa: E731 - no recipe is consulted by these paths
+        ok(not _module.classify_paths(["docs/DECISIONS.md"], _read).run, "a docs-only change skips")
+        ok(_module.classify_paths(["app/src/App.tsx"], _read).run, "a screen change runs")
+    _code = "const T = {\n  'harness/traces/x.json': 1,\n} // docs/DEBTS.md\n"
+    ok(_repo_literals(_code, {"harness/traces/x.json", "docs/DEBTS.md"}) == ["harness/traces/x.json"],
+       "a code string naming a tracked file is a dependency and a comment naming one is not")
+
     report = Report()
     check_dispatch(report)
     by_label = {check: findings for check, _, findings, _ in report.checks}
@@ -13183,6 +13519,7 @@ def audit(staged_only: bool) -> Report:
     check_commit_path(report)
     check_check_census(report)
     check_suite_lock(report)
+    check_browser_scope(report)
     check_positional_references(report, docs)
     check_audit_invocation(report)
     check_identifier_spelling(report)

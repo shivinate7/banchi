@@ -72,6 +72,30 @@
 # was already partial. No write to git, no commit status, nothing D42 forbids — an artifact
 # is the one thing a job here may leave behind.
 #
+# AND NOT ON A PULL REQUEST THAT REACHES NOTHING A BROWSER DRAWS (D140). D136's gate answers
+# one question — has this exact TREE passed? — and a docs-only branch is always a new tree, so
+# it paid the full matrix on every push: measured 2026-09-11, seven PRs plus re-runs in one
+# evening, most touching no screen code, at about 27 billed minutes each, until the account's
+# Actions minutes ran out. Replayed over main's last 14 merges, 9 would have skipped. The
+# `browser-scope` job below asks the other question — does what this branch LANDS touch a file
+# the suite reads? — and `scripts/browser-scope.py` holds that list, DERIVED from what the run
+# loads rather than typed: Vite's root, Playwright's `testDir`, the traces a spec reads off
+# disk, the `design-check` recipe, and the gate's own two files. `server/` is deliberately not
+# in it — `app/tests/shell.ts` seals the capture port, so the suite cannot see a server change
+# by construction. Acted on for `pull_request` only: on a push to main the classifier prints
+# its answer and the matrix runs unless D136's record says the tree passed, and a dispatch
+# always runs. The two gates never act on the same event, and a docs-only merge still pays
+# the matrix ONCE, on main, because its tree was never tested — that is the price of leaving
+# `already-passed` exactly as D136 built it.
+#
+# THE LIST HAS A READER, OR THE FILTER DOES NOT SHIP. A path filter that is too narrow silently
+# stops testing something, and a gate that quietly stops running is worse than no gate, because
+# the green is believed — scripts/githooks/pre-commit says the same of its own armed copy.
+# `make docs-audit`'s `browser scope` row reconciles the list against what the suite genuinely
+# depends on, in both directions, and fails the commit when they drift. AND THE GATE FAILS OPEN:
+# `design-check`'s `if:` reads `!= 'false'` under `!cancelled()`, so a classifier that errors, a
+# job that never ran and an empty output all RUN the matrix. Only an explicit `false` skips.
+#
 # D122's MACHINE-WIDE LOCK IS NOT A HAZARD HERE AND IS NOT DISARMED FOR IT. A runner is one
 # checkout with one suite, so `browsers.lock` is uncontended and taken in the same breath it is
 # asked for; the refusal it exists to produce is about two worktrees on the owner's Mac.
@@ -192,6 +216,24 @@ jobs:
             echo "skip=false" >> "$GITHUB_OUTPUT"
           fi
 
+  # DOES THE CHANGE REACH WHAT A BROWSER DRAWS? Asked on every event and ACTED ON only for a
+  # pull request (D140) — `scripts/browser-scope.py` answers RUN for a push and a dispatch and
+  # prints what it would have said, so the mechanism is exercised on every run. `fetch-depth: 0`
+  # because the answer is a diff from the merge-base against the PR's base, and the classifier
+  # answers RUN, out loud, whenever it cannot compute one. Nothing here writes.
+  browser-scope:
+    runs-on: ubuntu-latest
+    outputs:
+      run: ${{ steps.scope.outputs.run }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Does the change reach what a browser draws?
+        id: scope
+        run: python3 scripts/browser-scope.py classify
+
   # The browser half. Same tree, different question: what a person actually sees.
   #
   # THREE SHARDS, ONE WORKER EACH, AND THE WORKER COUNT IS THE DELIBERATE HALF (D136). One
@@ -204,8 +246,12 @@ jobs:
   # shard; wall-clock is a third. `fail-fast: false` because a red shard is a claim about
   # its own cases and the other two are still worth their verdict.
   design-check:
-    needs: already-passed
-    if: needs.already-passed.outputs.skip != 'true'
+    needs: [already-passed, browser-scope]
+    # TWO GATES, EACH SKIPPING ONLY ON ITS OWN EXPLICIT ANSWER. `!cancelled()` replaces the
+    # implicit `success()`, so a gate job that FAILED releases the matrix instead of skipping
+    # it — a broken lookup or a broken classifier is not a reason to test less (D140). Until
+    # this line, a failed `already-passed` skipped the matrix; now it runs it.
+    if: ${{ !cancelled() && needs.already-passed.outputs.skip != 'true' && needs.browser-scope.outputs.run != 'false' }}
     runs-on: ubuntu-latest
     strategy:
       fail-fast: false

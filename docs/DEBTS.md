@@ -1062,6 +1062,22 @@ reference and compares the resolved value, which is a small CSS color engine and
 worth building for 69 tokens. Until then the row's summary line says how many hexes it compared,
 so a green row cannot be read as full coverage.
 
+### The browser matrix's path scope reads literals, and a dependency built from pieces walks past it
+
+**D140 gates `check.yml`'s browser matrix on a pull request by `scripts/browser-scope.py:SCOPE`, and
+`make docs-audit`'s `browser scope` row derives what the suite depends on from the two configs, the
+`design-check` recipe and every code string in `app/tests` and `app/src` that names a tracked file
+outside `app/`.** That last reader is what found `cadence.spec.ts`'s two traces under `harness/`. It
+sees a literal. A spec that builds a path from pieces — `` `harness/${dir}/${name}` `` — names no
+tracked file this reader can resolve, and a Vite `server.fs.allow` widening spelled through a
+variable rather than a string literal is invisible to it in the same way. Neither exists today.
+Either would leave the matrix skipping a class of change it should run for, with the row green.
+
+**Deliberately unfixed**: the honest reader for the first is running the suite under a file-access
+trace, which is a browser on the commit path; for the second it is a Vite config evaluator, which
+is `node` on the commit path. Both are what `make check` is built not to need. The row's own
+docstring names the gap, and `route rosters` and `storage keys` carry the same shape.
+
 ## 9 — The sigil check matches text, so a renamed local walks past it
 
 `make sigil-check` (D92) refuses a bare `#` composed from an expression naming `index`, which is
