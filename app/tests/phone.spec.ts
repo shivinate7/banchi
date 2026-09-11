@@ -63,8 +63,12 @@ const auditSource = (mode: Mode) => `(() => {
      on purpose and each is written here: the phone's top bar, its tab bar, and #/gallery's
      index. A fourth is a deliberate edit.
 
-     THE FOURTH IS .browse-mobilebar, ADDED 2026-09-11, AND IT IS THE ANSWER THE [DEBUG ...]
-     SUFFIX BELOW WAS ADDED TO GET. PR #252 widened the review-queue link's pseudo-element inset
+     A FOURTH WAS ADDED ON 2026-09-11 AND REMOVED THE SAME DAY, AND THE ROUND TRIP IS THE POINT.
+     .browse-mobilebar was named here to unblock a red main, correctly — the diagnosis behind it
+     is kept below because it is right, and what replaced it is the clearance retry further down
+     rather than a different name.
+
+     WHAT THE DEBUG SUFFIX ANSWERED. PR #252 widened the review-queue link's pseudo-element inset
      from -12px to -16px on a font-metric theory, confirmed from the trace that the wider inset
      had applied on CI, and watched the job fail with the identical error — and said so: "the
      vertical-margin theory is wrong and the real cause is unknown." The debug line answered it
@@ -76,17 +80,25 @@ const auditSource = (mode: Mode) => `(() => {
      phone's box bar is sticky at top: var(--bn-topbar-h) with z-index 20, and --bn-topbar-h is
      52px over a --bn-control-h-lg of 46px at phone widths — so it occupies roughly y=52 to
      y=106 and the probe lands inside it. NOTHING IS WRONG WITH THE LINK: its ::after spans
-     y=21 to y=69, a 48px hit area against a 40px floor. What it hits is chrome, at one of the
-     90%-viewport scroll steps this sweep takes, and one scroll-line either way clears it. That
-     is what the other three entries are for, and it is why CI saw it and this rig did not — the
-     two disagree about the page's height, so they stop at different offsets.
+     y=21 to y=69, a 48px hit area against a 40px floor. The pad's SIZE is not the variable
+     either — measured at -16px and at -12px, the link gives byte-identical results, so #252
+     could not have fixed this and did not cause it.
 
-     IT IS SITED WITH THE OTHER THREE AND NOT WITH THE SHIP BAR, which is the distinction worth
-     keeping: .browse-mobilebar is position: sticky — the top bar's own continuation on
-     #/inventory, and content passes under it by design. .browse-actionbar on the same screen is
-     position: fixed, never moves, and is exactly what this list must not excuse. */
-  const chrome = (n) =>
-    n !== null && n.closest('.bn-topbar, .bn-tabbar, .kit-index, .browse-mobilebar') !== null
+     AND IT IS NOT ONE KNIFE-EDGE OFFSET, which is the one thing the entry above had wrong.
+     Measured at every whole-pixel scroll offset rather than at the ~40 this sweep samples: the
+     link is clean at 457 of 558 and intercepted at 101, one CONSECUTIVE band. It reads as a
+     knife edge only because this page is short enough to sample at two offsets. That makes it
+     MORE fragile than a knife edge, not less — any font-metric drift moves the sample into a
+     101-wide band, which is exactly what the 143x16 rig and the 148x16 runner did.
+
+     SO THE NAME CAME BACK OUT, BECAUSE A NAME CANNOT REACH THE NEXT ONE. .browse-actionbar on
+     this same screen is position: fixed — never movable into this list, by the rule above — and
+     it intercepts .browse-details-summary at 99 of its 197 offsets, pressable at the other 98:
+     the identical non-defect, silent only because the 40-step sweep has never sampled it. A
+     list of names is a list somebody adds to, and one of the two cases on one screen could not
+     be added. The clearance retry below answers both without naming either, and this file is
+     green with these three entries and no fourth. */
+  const chrome = (n) => n !== null && n.closest('.bn-topbar, .bn-tabbar, .kit-index') !== null
   for (const el of over.querySelectorAll('button, a[href], input, select, textarea, summary, [role="button"]')) {
     // A checkbox's own box is 16px by design; the label that wraps it is the target.
     const t = el.closest('label') ?? el
