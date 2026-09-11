@@ -3,7 +3,7 @@
 
 A branch cannot allocate a decision number, because the allocation's only input is what
 `main` has taken and that is not knowable until the merge. So a branch writes a SLUG —
-`## D-merge-time-ids`, `## C-qr-ledger`, ``0. `step merge-time-ids` `` — and this runs at the
+a heading of two or more lowercase segments, or a `0.` list marker carrying one — and it runs at the
 merge, once, against main as it stands THEN.
 
 PREVIEWS BY DEFAULT. `--write` performs it. Nothing here is clever: the slug is a token that
@@ -66,7 +66,7 @@ TEXT_SUFFIXES = {".md", ".py", ".ts", ".tsx", ".css", ".html", ".json", ".txt", 
 
 class Claim(NamedTuple):
     kind: str      # "decision" | "codes" | "step"
-    slug: str      # "D-merge-time-ids", "C-qr-ledger", "merge-time-ids"
+    slug: str      # the unclaimed form, with its letter for D and C and bare for a step
     number: str    # the allocated form: a letter and digits, or a bare number for a step
     token: str     # the exact text replaced
     becomes: str   # the exact text written

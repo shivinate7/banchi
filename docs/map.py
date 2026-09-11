@@ -1609,7 +1609,7 @@ COMPONENTS = [
                         "substitute them (D-merge-time-ids). A branch cannot allocate a "
                         "decision number — the allocation's only input is what main has "
                         "taken, which is not knowable until the merge — so a branch writes "
-                        "`## D-a-two-segment-slug`, `## C-...` or a ``0. `step ...` `` marker, "
+                        "its heading as a two-segment slug, or a `0.` list marker carrying one, "
                         "and this runs INSIDE `make merge` against main as it stands then. "
                         "PREVIEWS BY DEFAULT; `--write` performs it. The substitution is "
                         "exhaustive text replacement of a token that occurs nowhere else in "
