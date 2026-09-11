@@ -229,9 +229,22 @@ function OwnerRows({
   const stays = (copy: SearchCopy) => copy.key === currentKey || soldKeys.has(copy.key)
   const kept = hideSold ? gone.filter(stays) : gone
   const sinks = (copy: SearchCopy) => isSold(copy, soldKeys) && !stays(copy)
-  const drawn = hideSold
-    ? group.copies.filter((copy) => !isSold(copy, soldKeys) || kept.includes(copy))
-    : [...group.copies.filter((copy) => !sinks(copy)), ...group.copies.filter(sinks)]
+  /* THE FULLEST SECTION LEADS (D132, amended on the owner's rule of 2026-09-11): the copies
+     are grouped by box and section and the section holding the most of them is drawn first,
+     because that is the place a hand can pull the most from. Within a section the server's
+     card order holds. A copy sold from THIS screen still counts for its section while its
+     receipt stands, so the press that sold it moves no row (D118); the store's own sold copies
+     count for nothing and, when shown, sink under everything. */
+  const counts = new Map<string, number>()
+  const sectionOf = (copy: SearchCopy) => `${copy.place.box}/${copy.place.section ?? '?'}`
+  for (const copy of group.copies) {
+    if (copy.state === SOLD || copy.state === RETIRED) continue
+    counts.set(sectionOf(copy), (counts.get(sectionOf(copy)) ?? 0) + 1)
+  }
+  const byFullest = (a: SearchCopy, b: SearchCopy) =>
+    (counts.get(sectionOf(b)) ?? 0) - (counts.get(sectionOf(a)) ?? 0)
+  const standing = group.copies.filter((copy) => !sinks(copy) && (!hideSold || !isSold(copy, soldKeys) || kept.includes(copy)))
+  const drawn = [...[...standing].sort(byFullest), ...(hideSold ? [] : group.copies.filter(sinks))]
   const hidden = gone.length - kept.length
 
   /* A GROUP WITH NO SKU HAS NO LISTING TO REPORT, AND THE HEADER MUST NOT INVENT ONE (D119).
