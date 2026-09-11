@@ -49,7 +49,7 @@ const GALLERY = '/#/gallery'
  *  conjunction is still what is under test; one half of it has a new spelling. */
 const DEPARTED_ROW = '.card-locations-row.is-gone:has(.position-bar[data-gone])'
 
-/** A row with no bar that has NOT left — the pooled copy, and the copy the walk stands on. */
+/** A row with no bar that has NOT left — the pooled copy, and only the pooled copy since D119. */
 const NOBAR_PRESENT = '.card-locations-row.is-nobar:not(.is-gone)'
 
 /** Page-wide and not scoped to the owner specimen, deliberately. `CardLocations`'s Fulfiller
@@ -96,10 +96,12 @@ test('the departed row says one state and offers no action', async ({ page }) =>
   expect(slot?.width ?? 0, 'the action slot keeps its width with nothing in it').toBeGreaterThanOrEqual(137)
 })
 
-test('the pooled row is a second no-bar shell, and it has not left', async ({ page }) => {
-  /* Two rows carry no bar without having left: the pooled copy and the current one. Both are
-     real shells and the count is asserted so a fixture that quietly loses one is caught. */
-  await expect(page.locator(NOBAR_PRESENT)).toHaveCount(2)
+test('the pooled row is the only no-bar shell that has not left', async ({ page }) => {
+  /* ONE, not two. The copy the walk stands on used to be the second — its lens was drawn in the
+     location card above the list — and D119 gave it a bar like every other row. A pooled copy is
+     now the only row that carries no bar without having left the box, and the count is asserted
+     so a fixture that quietly loses it is caught. */
+  await expect(page.locator(NOBAR_PRESENT)).toHaveCount(1)
 
   /* The pooled one names itself. `.card-locations-boxname` is rendered only by the pooled branch
      of `OwnerRows` — a located row puts the box's name inside `PositionLabel`'s note instead —
@@ -114,14 +116,47 @@ test('the pooled row is a second no-bar shell, and it has not left', async ({ pa
   await expect(pooled.locator('.position-parts')).toHaveCount(0)
 })
 
-test('the current row is drawn, and it is a shell of its own', async ({ page }) => {
+test('the current row is drawn, and it is a row like every other', async ({ page }) => {
   /* `currentKey` is passed to the owner specimen so the `is-current` treatment is on the sheet
-     too — the third of the three reasons a row carries no bar, and the only one that is a
-     statement about where the walk stands rather than about the card. */
+     too — a marker and a rail saying where the walk stands, and a statement about the walk
+     rather than about the card. */
   const current = page.locator('.card-locations-row.is-current')
   await expect(current).toHaveCount(1)
   await expect(current).toHaveAttribute('aria-current', 'true')
   await expect(current.locator('.card-locations-viewing')).toHaveText('Viewing')
+
+  /* AND IT DRAWS A BAR (D119). This is the assertion the retitle is for: `is-current` is a
+     marker on an ORDINARY row now, not a third reason to carry no bar. The specimen's current
+     copy sits in an open box and has a slot to draw. */
+  await expect(current.locator('.position-bar')).toHaveCount(1)
+  await expect(current).not.toHaveClass(/is-nobar/)
+})
+
+/** A path-led specimen on the kit sheet — the flow `PositionLabel.css`'s re-rank fires under. */
+const PATH_LED = ".kit-poslabel:has(.position-parts[data-lead='path'])"
+
+test('a label with no figure re-ranks its path, and a live one does not (D71)', async ({ page }) => {
+  /* THE SITE THIS MOVED FROM IS GONE. It was asserted on `#/inventory`'s location card until
+     D119 deleted that card, and after the deletion NO screen in this product renders a
+     `lead='path'` label with a void in it — the copies list, the order picker and the walk are
+     all `lead='slot'`, and `PositionLabel.css`'s re-rank fires under `path` alone. The rule
+     survives with this sheet as its only renderer, which is exactly the condition CLAUDE.md
+     calls an exception with no reader: assert it here or nowhere.
+
+     The two specimens sit side by side in the `position-label` section at one inline size, so
+     the comparison is between the rule and nothing else. */
+  const size = (sel: string) =>
+    page.locator(sel).evaluate((node) => Number.parseFloat(window.getComputedStyle(node).fontSize))
+  /* BOTH SPECIMENS PINNED TO `lead='path'`, so the only thing that differs between them is the
+     void. The sheet draws a slot-led live label too, and comparing against that one would be a
+     measurement of the LEAD as much as of the re-rank — which is the rule's own condition and
+     not a control for it. */
+  const departed = await size(`${PATH_LED}:has(.position-void) .position-path`)
+  const live = await size(`${PATH_LED}:not(:has(.position-void)) .position-path`)
+  expect(
+    departed,
+    `a departed path at ${departed}px is drawn in a live label's metadata register`,
+  ).toBeGreaterThan(live)
 })
 
 /* THE SPECIMEN IS DRAWN IN THE LAYOUT THE PRODUCT DRAWS, AND UNTIL 2026-09-05 IT WAS NOT.
