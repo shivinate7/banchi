@@ -316,7 +316,35 @@ def claims_pending(root: str, ref: str = "origin/main") -> List[str]:
 
 
 def claim_half(root: str, number: int, branch: str, confirm: bool) -> int:
-    """Allocate, commit, push, and wait for the claim commit's checks. 0 when clear."""
+    """Allocate, commit, push, and wait for the claim commit's checks. 0 when clear.
+
+    THE TREE IS ESTABLISHED BEFORE ANYTHING READS IT, and that ordering is the whole of
+    D-claim-right-tree. Both readers below — the staleness check and the pending check — ask
+    their question of the CHECKED-OUT TREE. Neither can tell whether that tree is the pull
+    request's, so a run pointed at the wrong one answers truthfully about the tree in front of
+    it and uselessly about the merge it is performing.
+    """
+    here = run(["git", "rev-parse", "--abbrev-ref", "HEAD"], cwd=root).out.strip()
+    if not branch:
+        return refuse(
+            "PR #{0} did not report a head branch, so there is no tree to check against."
+            .format(number),
+            "",
+            "The claim reads the checked-out tree and has no way to know whether it is the",
+            "pull request's. Without the branch name it cannot be told, and guessing is the",
+            "one thing this path may not do.")
+    if here != branch:
+        return refuse(
+            "this checkout is on `{0}`; PR #{1}'s branch is `{2}`.".format(here, number, branch),
+            "",
+            "The claim is a commit and a push onto that branch, so it has to be made from a",
+            "tree standing on it. Run this from the worktree that holds it.",
+            "",
+            "THIS REFUSAL USED TO BE UNREACHABLE when the checked-out tree had nothing to",
+            "claim. `main` has no slug in it, so a merge run from `main` read `main`, found",
+            "nothing pending, reported `nothing to claim`, and merged the pull request's slug",
+            "onto main verbatim. That happened on 2026-09-11 and `id claims` caught it.")
+
     run(["git", "fetch", "origin", "main"], cwd=root)
 
     gone_stale = stale_claim(root)
@@ -345,13 +373,6 @@ def claim_half(root: str, number: int, branch: str, confirm: bool) -> int:
     for line in pending:
         say("  {0}".format(line.replace("\t", "  ->  ", 1)))
 
-    here = run(["git", "rev-parse", "--abbrev-ref", "HEAD"], cwd=root).out.strip()
-    if here != branch:
-        return refuse(
-            "this checkout is on `{0}`; PR #{1}'s branch is `{2}`.".format(here, number, branch),
-            "",
-            "The claim is a commit and a push onto that branch, so it has to be made from a",
-            "tree standing on it. Run this from the worktree that holds it.")
     dirty = run(["git", "status", "--porcelain"], cwd=root).out.strip()
     if dirty:
         return refuse(

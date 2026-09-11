@@ -1560,6 +1560,7 @@ D138 One process serves the product, Vite compiles and never serves, and the bui
 D139 Which branch the primary checkout stands on is a fact about the live rig, and a warning is the ceiling
 D140 The number is claimed at the merge, because what main has taken is not knowable before it
 D141 The browser matrix runs when the change reaches what a browser draws, and the path list has a reader
+D-claim-right-tree The claim reads the checked-out tree, so which tree that is must be established before anything reads it
 ```
 
 **THE GAP THIS LIST CARRIED BETWEEN D116 AND D118 IS CLOSED, AND IT CLOSED THE WAY IT SAID IT
