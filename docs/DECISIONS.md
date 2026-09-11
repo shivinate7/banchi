@@ -10354,6 +10354,22 @@ gap; only ruling 3, the dual, goes, and it never ran at a rig. Its case, the two
 sliding cards per run, is the rescue's case now: replayed over D131's own two rig sessions the
 rescue picks up exactly two and three of them.
 
+**The deletion reaches D141's path list, and that is the rule working rather than an exception.**
+`harness/traces/`, every trace under it, is in the browser matrix's scope because that spec read two
+recordings off disk with `readFileSync`. That spec is gone and no spec under `app/tests/` reads
+a trace any more, so the entry is removed rather than left standing as a widening nothing
+justifies — the same disease the `map sections` row exists for. The list is DERIVED from what
+the suite loads; when the suite stops loading something, the entry goes, and
+`scripts/browser-scope.py`'s own selftest flips with it: a trace now SKIPS.
+
+**A gate that edits the gate is where a reader wonders, so: no hole, and here is why.**
+The filter that decides whether CI runs the browser matrix is
+one of the files this branch edits. It still covers `app/**`, and this diff touches `app/**`,
+so the branch classifies RUN and the suite that would catch a broken screen is the suite that
+ran. The narrowing is in the other direction — a trace-only change skips — and a trace-only
+change cannot reach a browser. Had the narrowing gone the other way, the gate would have been
+judging itself by a rule it had just relaxed, which is the shape to refuse.
+
 ### What is BUILT, RECORDED, and NEITHER
 
 **BUILT:** `rescueK` and `rescueAfter` in `app/src/motion.ts`, mirrored in
