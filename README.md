@@ -273,3 +273,5 @@ Then `/clear` and execute the spec in a clean session.
   Staged accepted verbatim (Gate A). Byte-format ground truth.
 
 Both are read-only, enforced by hook and by `.claude/settings.json` deny rules.
+
+<!-- CI probe: this branch exists to observe D140 skip the browser matrix and is never merged. -->
