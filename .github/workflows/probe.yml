@@ -12,7 +12,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        shard: [1, 2, 3]
+        shard: [1, 2, 3, 4]
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -29,14 +29,10 @@ jobs:
       - name: Install chromium
         working-directory: app
         run: npx playwright install --with-deps chromium
-      - name: probe helper x80
+      - name: full suite, one worker, trace on failure
         working-directory: app
         continue-on-error: true
-        run: npx playwright test tests/zz-flake-probe.spec.ts --repeat-each=80 --workers=1 --trace=retain-on-failure --reporter=list
-      - name: capture-claims x5
-        working-directory: app
-        continue-on-error: true
-        run: npx playwright test tests/capture-claims.spec.ts --repeat-each=5 --workers=1 --trace=retain-on-failure --reporter=list
+        run: npx playwright test --workers=1 --trace=retain-on-failure --reporter=list
       - uses: actions/upload-artifact@v4
         if: always()
         with:
