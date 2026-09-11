@@ -812,6 +812,16 @@ COMPONENTS = [
             "sidecar.py": {"does": "reading a capture directory: photos, JSON sidecars, position", "governed_by": ["D2", "D3", "D10", "D21", "D22", "D23"]},
             "images.py": {"does": "downscale, encode, hash a photograph for the API, and refuse a crop that is not the card",
                           "governed_by": ["D2", "D23", "D75"], "tested_by": ["T6"]},
+            "cost.py": {"does": "the price sheet, and the ONE place it is applied — the preflight's "
+                                "estimate before a send, the collect's record of what the send used, "
+                                "and server/pipeline_routes.py:_usage filling the figure in for a run "
+                                "written before the field existed. Dependency-free (decimal alone) "
+                                "because the server imports it at module scope, where that file's own "
+                                "rule is stdlib-only. NOT lifted from the log the way the preflight's "
+                                "figure is: _console_tail is a 20,000-byte tail and the report prints "
+                                "its token counts BEFORE the per-card refusal lists, so a 544-card run "
+                                "with a few hundred refusals pushes the line out of the window.",
+                        "governed_by": ["D2", "D33"], "tested_by": ["T7"]},
         },
     },
     {
@@ -2362,7 +2372,15 @@ COMPONENTS = [
                 "does": "the pipeline seam: POST /pipeline/preflight (free, creates no run), "
                         "POST /pipeline/identify (THE ONE THAT SPENDS — spawns a detached "
                         "child and returns the run name), GET /pipeline/runs and "
-                        "/pipeline/runs/<name> (read the run directory, hold nothing), "
+                        "/pipeline/runs/<name> (read the run directory, and hold no "
+                    "ANSWER about a run — a HANDLE on each child this process "
+                    "spawned is held and is not the same thing: `start_new_session` "
+                    "is a new session and not a new parent, so an unwaited child that "
+                    "exits is a zombie whose pid signal 0 accepts, and a finished run "
+                    "read `Running 8m` until something else happened to spawn and "
+                    "reap it by accident. An absent handle means ASK THE FILES, so a "
+                    "restarted server reads every run exactly as before and a run "
+                    "still outlives this one), "
                         "GET .../file (the import CSVs and the report, matched by shape and "
                         "then by membership) and POST .../<join|emit|reconcile> (free, run "
                         "inside the request, stdout returned verbatim). "
@@ -3818,7 +3836,15 @@ COMPONENTS = [
                                           "stage ahead of another; `runningFor` is a live run's "
                                           "age and is deliberately not used on a finished one, "
                                           "where the same arithmetic answers a different "
-                                          "question.",
+                                          "question. WHAT MAKES THAT SECOND HALF TRUE IS THE "
+                                          "SERVER'S `live`, AND IT WAS NOT UNTIL 2026-09-11: a "
+                                          "detached child nobody waited on left a ZOMBIE whose "
+                                          "pid signal 0 accepts, so a run that finished in 3m52s "
+                                          "drew `Running 8m` and went on counting. Nothing in "
+                                          "this file changed — `stageOf` reads `live || phase == "
+                                          "identifying` and both were wrong together — which is "
+                                          "the argument for one reader rather than a defence of "
+                                          "it: there was one place to fix, and it was not here.",
                                   "governed_by": ["D33", "D39", "D48", "D56", "D94"]},
             "src/RunsComposer.tsx": {"does": "THE IDENTIFY COMPOSER: the one press in this product "
                                              "that spends money, as a staged dialog — which "
@@ -4377,6 +4403,24 @@ COMPONENTS = [
                                 # D20 is the name and its optionality; D10 ruling 3 is the deleted
                                 # box whose number a run still remembers; D56 is the entry.
                                 "governed_by": ["D10", "D20", "D56"]},
+            "src/money.ts": {"does": "A DOLLAR AMOUNT, SAID THE SAME WAY EVERYWHERE — `money` and "
+                                     "`roundsToNothing`. Extracted from src/RunsComposer.tsx "
+                                     "unchanged on 2026-09-11, when the run panel began "
+                                     "reporting what a finished run COST rather than only how "
+                                     "many tokens it read; src/position.ts states the mechanical "
+                                     "half of why it could not stay there, which is that React "
+                                     "Refresh reloads the whole page for one exported function "
+                                     "beside a component. NOTHING HERE COMPUTES MONEY: "
+                                     "identify/cost.py holds the only rate sheet in the repo and "
+                                     "the server sends the figure, which is the rule "
+                                     "types.ts:RunPreflightTotal and pipeline_routes.py state "
+                                     "three times between them. `roundsToNothing` is the one "
+                                     "judgement it does make, and it is a fact about "
+                                     "`toFixed(2)`: a run that spent a third of a cent and a run "
+                                     "that spent nothing both render $0.00, and they are "
+                                     "different sentences.",
+                             # D33 is the money gate, whose receipt this now carries.
+                             "governed_by": ["D33"]},
             "src/pricingSource.ts": {"does": "WHERE `#/pricing`'s ROWS CAME FROM, AND WHAT MAY "
                                              "BE ASKED ABOUT THEM (D103). One type, two "
                                              "builders, the hash parsing, and the adapter that "
@@ -4429,7 +4473,21 @@ COMPONENTS = [
                                          "every figure is read from "
                                          "`GET /pipeline/runs/<name>`, so a run started in a "
                                          "terminal appears here and a run started here survives "
-                                         "the tab closing. Every command's stdout is shown "
+                                         "the tab closing. AND THE IDENTIFY STEP REPORTS WHAT THE "
+                                         "RUN COST (2026-09-11), a figure the SERVER sends: "
+                                         "identify/cost.py holds the only rate sheet in the repo "
+                                         "and src/money.ts only formats it. That pill read "
+                                         "`Costs money` in every state, including on a finished "
+                                         "run beside a six-figure token count and no dollar "
+                                         "figure at all — a warning about a decision this screen "
+                                         "does not offer, since a run directory exists only "
+                                         "because the spend route already spawned a child. It "
+                                         "settles now: `Spending now` while a batch is in flight, "
+                                         "`Cost $0.15` once it is done, and `Costs money` only "
+                                         "where nothing was ever submitted. The figure is drawn "
+                                         "in the step BODY as well, because the head's cost slot "
+                                         "is display:none below a 640px container. "
+                                         "Every command's stdout is shown "
                                          "verbatim in src/RunsLog.tsx's well and the import CSVs "
                                          "are downloads, which is the gap docs/GATES.md names as "
                                          "what Gate B did not close. THE EXPORT IS FETCHED "

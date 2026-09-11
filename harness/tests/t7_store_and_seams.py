@@ -178,6 +178,10 @@ import http.server
 import inspect
 import os
 import shutil
+# THE ONLY TEST IN THIS HARNESS THAT STARTS A CHILD PROCESS, and `check_pipeline_routes` argues
+# it at the site: the defect it poses is a detached child nobody waited on, which no fixture can
+# stand in for. The child reads a pipe this process holds, so it cannot outlive the harness.
+import subprocess
 import sys
 import tempfile
 import threading
@@ -199,7 +203,7 @@ import envfile  # noqa: E402
 from harness.tests import Checks, Result  # noqa: E402
 
 from cli import cmd_reprice, resolve, runs  # noqa: E402
-from identify import batch, prompt, sidecar  # noqa: E402
+from identify import batch, cost, prompt, sidecar  # noqa: E402
 from pipeline import (  # noqa: E402
     corpus,
     games,
@@ -14897,6 +14901,305 @@ def check_pipeline_routes(checks: Checks) -> None:
             (terminal.directory / "running.pid").unlink()
             for stale in (live.directory, terminal.directory):
                 shutil.rmtree(stale)
+
+            # ------------------------------------- the pid the server itself is holding
+            #
+            # THE FIRST CHILD PROCESS ANY TEST IN THIS HARNESS HAS STARTED, and the argument
+            # for it is in `_live_pid`'s own docstring: a detached child is still a CHILD
+            # (`start_new_session` is setsid, a new session and not a new parent), nothing
+            # ever waited on one, and an unwaited child that exits is a ZOMBIE whose pid
+            # `os.kill(pid, 0)` accepts. The route said `Running 8m` about a run that had
+            # finished in 3m52s, and `_busy_run` refused that run's own box for just as long.
+            #
+            # IT CANNOT LEAK. The child's only instruction is to read a pipe this process
+            # holds, so it exits by itself the moment this process does — pass, fail, raise or
+            # kill. It is ended by CLOSING that pipe and never by a signal, and it is waited
+            # on, here, before the block ends. Compare scripts/reap-selftest.sh, which spawns
+            # `sleep 300` in its own session and needs a trap to clean up after itself.
+            #
+            # A REAL ZOMBIE IS NOT POSED AND IS NOT WHAT NEEDS PROVING. `os.waitid` — the one
+            # call that waits for exit while LEAVING the zombie — is absent on macOS, and the
+            # pipe-EOF approximation races the kernel: fds close in exit_files() before
+            # exit_notify() marks the task reapable, so the assertion would flake at every
+            # turn end. `os.getpid()` in the marker is the STRONGER lie anyway — not a pid
+            # that is merely unreaped, but one that is unambiguously alive. That
+            # `os.kill(<zombie>, 0)` succeeds is a fact about Darwin, measured by hand.
+            #
+            # OBSERVED FAILING FIRST, AND EACH ONE THROUGH THE ASSERTION THAT OWNS IT. Seven
+            # mutations were run against this block before it was kept:
+            #
+            #   the marker read before the table            5 red, headed by the finished child
+            #   the table's "exited" read as "silent"       4 red, headed by the finished child
+            #   the running branch demoted by the files     3 red, the live-and-collected case
+            #   the dead handle DELETED rather than kept    3 red, headed by the SECOND read
+            #   `_spawn` registering nothing (as it stood)  2 red, the `_spawn` case below
+            #   the orphan floor dropped (signal 0 alone)   2 red, the orphan case
+            #   `pid <= 0` admitted                         2 red, the marker-holding-zero case
+            #
+            # AND THE FIFTH ARM SURVIVED THE FIRST TIME, WHICH IS WHY THE `_spawn` CASE EXISTS.
+            # That arm deletes the registration from `_spawn` — it is not a hypothetical, it is
+            # the code as it stood and the whole defect — and every case in this block stayed
+            # GREEN through it, because the block hands the handle to `_remember_child` itself
+            # rather than earning it. A guard has to see its subject. The case further down
+            # monkeypatches `Popen` and drives the real `_spawn`, and the arm is red now.
+            #
+            # `_busy_run` is given no arms of its own: it consumes `_live_pid` and nothing
+            # else, so every arm above is red at the preflight too — the two preflight cases
+            # here prove the CONSUMPTION, not new coverage. Two lines carry no arm at all and
+            # are named rather than implied: the eviction guard, which cannot be posed without
+            # 64 spawns, and the false-alive answer `_CHILDREN_LOCK` prevents, which is a
+            # CPython race that cannot be produced on demand. Both are argued against the
+            # stdlib source in `_child_of`'s docstring; neither is asserted.
+            child = subprocess.Popen(
+                [sys.executable, "-c",
+                 "import sys; sys.stdout.write('u'); sys.stdout.flush(); sys.stdin.read()"],
+                stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.DEVNULL,
+            )
+            held = None
+            try:
+                checks.equal(
+                    child.stdout.read(1),
+                    b"u",
+                    "the stand-in child is up before anything is asserted about it — a child "
+                    "that died on startup would make the live case green for the wrong reason",
+                )
+                held = runs.create("box3")
+                held.set(
+                    capture_dir=str(box_dir),
+                    scope={"box": 3, "whole_box": True},
+                    # COLLECTED, AND NO `identifications.json`. Both halves are load-bearing:
+                    # the first is what a rule letting the files demote a RUNNING child fails
+                    # on, and the second is what stops the orphan floor answering for the
+                    # table here.
+                    collected=True,
+                )
+                (held.directory / "running.pid").write_text(f"{os.getpid()}\n")
+                pipeline_routes._remember_child(held.directory, child)
+
+                status, body, _ = request(
+                    port, "GET", f"/pipeline/runs/{held.directory.name}")
+                payload = json.loads(body)
+                checks.equal(
+                    (status, payload["live"], payload["phase"]),
+                    (200, True, "identifying"),
+                    "a run whose child this server is still holding is live, and the files do "
+                    "NOT demote it — cmd_identify.py writes collected before the record and "
+                    "before a whole locked store write, so a rule letting them outrank a "
+                    "running child puts `Needs join` on the screen while identify is writing",
+                )
+                status, body, _ = request(
+                    port, "POST", "/pipeline/preflight", payload={"box": 3})
+                checks.equal(
+                    json.loads(body)["scopes"][0]["busy_run"],
+                    held.directory.name,
+                    "and the box is busy while it runs — one function answers the panel and "
+                    "the 409, so the double-click guard cannot disagree with the row the "
+                    "operator is looking at",
+                )
+
+                # THE CHILD ENDS BY LOSING ITS PIPE. No signal is sent to anything.
+                child.stdin.close()
+                checks.equal(
+                    child.wait(timeout=10),
+                    0,
+                    "the child exits on its own when its pipe closes, and is waited on here — "
+                    "this test reaps what it starts rather than leaving the harness to",
+                )
+
+                status, body, _ = request(
+                    port, "GET", f"/pipeline/runs/{held.directory.name}")
+                payload = json.loads(body)
+                checks.equal(
+                    (payload["live"], payload["pid"], payload["phase"]),
+                    (False, None, "join"),
+                    "THE CASE THAT WAS THE BUG: the child is gone and `running.pid` still "
+                    "names a pid signal 0 accepts — this test's own — and the run is NOT "
+                    "live. Signal 0 answers yes to a zombie exactly as it answers yes here, "
+                    "which is how a finished run said `Running 8m` until something else in "
+                    "the process happened to construct a Popen and reap it by accident",
+                )
+                status, body, _ = request(
+                    port, "POST", "/pipeline/preflight", payload={"box": 3})
+                checks.equal(
+                    json.loads(body)["scopes"][0]["busy_run"],
+                    None,
+                    "and the box is released with it — the second blast radius, and the one "
+                    "that costs the operator a send: a finished run went on refusing its own "
+                    "box with `run_already_live`",
+                )
+
+                status, body, _ = request(
+                    port, "GET", f"/pipeline/runs/{held.directory.name}")
+                checks.equal(
+                    json.loads(body)["live"],
+                    False,
+                    "and it is still not live on the SECOND read — a dead handle is a "
+                    "TOMBSTONE and is not dropped when it is found dead. A table that forgot "
+                    "the pid it had just buried would fall back to the marker, whose pid is "
+                    "alive, and report Running again",
+                )
+
+                (held.directory / "running.pid").write_text("0\n")
+                with pipeline_routes._CHILDREN_LOCK:
+                    pipeline_routes._CHILDREN.pop(
+                        pipeline_routes._child_key(held.directory), None)
+                status, body, _ = request(
+                    port, "GET", f"/pipeline/runs/{held.directory.name}")
+                checks.equal(
+                    json.loads(body)["live"],
+                    False,
+                    "a marker holding 0 is not a pid — `os.kill(0, 0)` probes the CALLER'S "
+                    "own process group and always succeeds, so this read as live forever",
+                )
+            finally:
+                with contextlib.suppress(Exception):
+                    child.stdin.close()
+                if child.poll() is None:
+                    child.kill()          # last resort, and only ever at a handle we own
+                child.wait(timeout=5)
+                if held is not None:
+                    with pipeline_routes._CHILDREN_LOCK:
+                        pipeline_routes._CHILDREN.pop(
+                            pipeline_routes._child_key(held.directory), None)
+                    shutil.rmtree(held.directory, ignore_errors=True)
+
+            # AND `_spawn` ITSELF REGISTERS, WHICH THE BLOCK ABOVE CANNOT SEE. It hands the
+            # handle to `_remember_child` by hand, so deleting that call from `_spawn` — which
+            # IS the code as it stood, and the whole defect — left every case above green. A
+            # guard has to see its subject. `subprocess.Popen` is monkeypatched so nothing is
+            # started and no money can be spent: this section's own header says a test proving
+            # the happy path would have to submit a real Batch, and that is still true of
+            # everything except the two lines at the end of `_spawn`.
+            real_popen = pipeline_routes.subprocess.Popen
+            started = {}
+
+            class _FakePopen:
+                def __init__(self, argv, **kwargs):
+                    started["argv"] = argv
+                    self.pid = 424242
+                    self.returncode = None
+
+                def poll(self):
+                    return self.returncode
+
+            pipeline_routes.subprocess.Popen = _FakePopen
+            try:
+                leg = pipeline_routes.Leg(
+                    directory=box_dir,
+                    scope={"box": 3, "whole_box": True},
+                    flags=[],
+                    label="box3",
+                )
+                answer = pipeline_routes._spawn(leg)
+                spawned = Path(answer["path"])
+                checks.equal(
+                    (
+                        pipeline_routes._child_of(spawned) is not None,
+                        (spawned / "running.pid").read_text().strip(),
+                    ),
+                    (True, "424242"),
+                    "`_spawn` puts the child in the table AND writes the marker — the table "
+                    "first, so a poll landing between the two still reads a just-started run "
+                    "as live. Without the first of those nothing ever reaped a detached child "
+                    "and `_live_pid` fell through to a pid that signal 0 accepts forever",
+                )
+            finally:
+                pipeline_routes.subprocess.Popen = real_popen
+                with pipeline_routes._CHILDREN_LOCK:
+                    pipeline_routes._CHILDREN.pop(
+                        pipeline_routes._child_key(spawned), None)
+                shutil.rmtree(spawned, ignore_errors=True)
+
+            # The orphan: no handle, a pid that is alive by construction, and a record on
+            # disk. This is the case that fixes `Running 8m` ACROSS A RESTART, where the child
+            # belongs to launchd and this server has never heard of it.
+            orphan = runs.create("box3")
+            orphan.set(capture_dir=str(box_dir), scope={"box": 3, "whole_box": True},
+                       collected=True)
+            orphan.write_identifications({"prompt_fingerprint": "x", "cards": {}})
+            (orphan.directory / "running.pid").write_text(f"{os.getpid()}\n")
+            status, body, _ = request(port, "GET", f"/pipeline/runs/{orphan.directory.name}")
+            payload = json.loads(body)
+            checks.equal(
+                (payload["live"], payload["phase"]),
+                (False, "join"),
+                "a run THIS SERVER DID NOT START — an orphan across a restart — is judged by "
+                "the marker AND by the run's own record: the pid is alive by construction, "
+                "and a run that has already written identifications.json has finished the "
+                "step this liveness is about, so whatever holds that pid now it is not this "
+                "run's identify. The floor is that file and not `collected`, which stays true "
+                "through the whole tail after it",
+            )
+            shutil.rmtree(orphan.directory)
+
+            # ------------------------------------------ what the run cost, and whose figure
+            #
+            # OBSERVED FAILING FIRST. Four mutations of `_usage`, all red:
+            #
+            #   the branch order INVERTED (compute wins)    2 red, the $9.99 case
+            #   a missing token count answers zero          3 red, the empty and bogus cases
+            #   the backfill not declared on the wire       1 red, the filled-in case
+            #   the backfill dropped entirely               1 red, the filled-in case
+            #
+            # The first is the one worth the $9.99: an inverted order is otherwise SILENT,
+            # because today's rates and a figure recorded today are the same number. Only a
+            # recorded figure the rates cannot produce can tell the two apart.
+            priced = runs.create("box3")
+            priced.set(collected=True,
+                       usage={"input_tokens": 290470, "output_tokens": 3761})
+            status, body, _ = request(port, "GET", f"/pipeline/runs/{priced.directory.name}")
+            usage = json.loads(body)["usage"]
+            checks.equal(
+                (usage["cost_usd"], usage["cost_backfilled"]),
+                (cost.recorded(290470, 3761), True),
+                "a run that recorded its tokens and not its cost gets the figure filled in at "
+                "the READ, from identify/cost.py and not from a second rate sheet here — and "
+                "SAYS it was filled in, because the two answers are the same number only "
+                "until the price sheet moves. Every run written before 2026-09-11 is this "
+                "case, including the one the defect was reported against",
+            )
+            shutil.rmtree(priced.directory)
+
+            kept = runs.create("box3")
+            kept.set(collected=True,
+                     usage={"input_tokens": 290470, "output_tokens": 3761, "cost_usd": 9.99})
+            status, body, _ = request(port, "GET", f"/pipeline/runs/{kept.directory.name}")
+            usage = json.loads(body)["usage"]
+            checks.equal(
+                (usage["cost_usd"], usage.get("cost_backfilled")),
+                (9.99, None),
+                "and a RECORDED figure is passed through untouched even where today's rates "
+                "would say otherwise — a run is an immutable input and what it cost is what "
+                "it cost. $9.99 against tokens that price at $0.15 is deliberate: nothing but "
+                "the correct branch order can make this pass, and an inverted one is silent",
+            )
+            shutil.rmtree(kept.directory)
+
+            blank = runs.create("box3")
+            blank.set(collected=True, usage={})
+            status, body, _ = request(port, "GET", f"/pipeline/runs/{blank.directory.name}")
+            checks.equal(
+                json.loads(body)["usage"],
+                {},
+                "a run with no token counts answers NOTHING rather than zero — a confident "
+                "$0.00 is worse than a blank, because a blank is visibly a blank and a zero "
+                "is a claim that the run was free. `_total` states the same rule",
+            )
+            shutil.rmtree(blank.directory)
+
+            bogus = runs.create("box3")
+            bogus.set(collected=True,
+                      usage={"input_tokens": True, "output_tokens": "3761"})
+            status, body, _ = request(port, "GET", f"/pipeline/runs/{bogus.directory.name}")
+            checks.equal(
+                json.loads(body)["usage"].get("cost_usd"),
+                None,
+                "and a token count that is not a whole number is refused rather than coerced "
+                "— `isinstance(True, int)` is True in Python, so `bool` is excluded BY NAME, "
+                "and a hand-edited manifest is exactly what `_phase`'s own comment braces "
+                "against one field over",
+            )
+            shutil.rmtree(bogus.directory)
 
             # -------------------------------------------------- reading runs, and refusals
             status, body, _ = request(port, "GET", "/pipeline/runs")
