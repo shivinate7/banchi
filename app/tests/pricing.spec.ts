@@ -3125,3 +3125,32 @@ test('a row with nothing sold since draws exactly what it drew before', async ({
   await expect(live).toContainText('4 live')
   await expect(live).not.toContainText('when read')
 })
+
+test('a listing frozen before the counter existed draws the reading, not NaN', async ({ page }) => {
+  /* THE FIELD IS ABSENT, NOT ZERO, AND THAT IS THE WHOLE CASE (D115, amended). `listing` is a
+     record `cli/cmd_join.py` froze into `pricing.json`, and D115 is newer than every stored
+     run on the owner's store: measured 2026-09-09, **all 171** non-null listings across the
+     eight run directories carry no `sold_here` at all. `GET .../pricing` serves the file
+     through, so the client was handed `undefined`, `Math.max(0, undefined)` gave `NaN`, and
+     the Smite row of `runs/2026-09-02-box6-01` drew `NaN live · read 8 days ago` on the screen
+     where money is decided.
+
+     THE OMISSION IS SPELT WITH NO KEY RATHER THAN `sold_here: undefined`, because those are
+     different bytes on the wire and only one of them is what a stored file sends. The two
+     cases above both SUPPLY the key and would both stay green through the defect — which is
+     exactly why neither caught it.
+
+     `NaN` IS ASSERTED AGAINST BY NAME as well as the figure being right. A row that regressed
+     to some other wrong number would fail the first assertion; a row that regressed to the
+     original defect fails both, and says which in its message. */
+  await open(page, {
+    skus: [sku({ sku: '9191230', name: 'Smite', listing: { pushed: 1, staged: 0, live: 1 } })],
+  })
+  const live = page.locator('.pricing-row .pricing-live').first()
+  await expect(live).toContainText('1 live')
+  await expect(live).not.toContainText('NaN')
+  /* AND NO "SOLD SINCE" CLAUSE. An absent counter is not a counter reading zero-point-something
+     — the row must draw byte-identically to the one above it, which is the pre-D115 rendering
+     and correct as of the join. */
+  await expect(live).not.toContainText('when read')
+})

@@ -7127,6 +7127,73 @@ reading `at` was defensible; after it, a sale touches `at` while observing nothi
 **What would reopen this**: an operator who wants a price or a quantity they assert here to
 outrank what TCGplayer reports. This entry keeps the export as the authority on the figure and
 this store as the authority only on what it has done since.
+
+### Amended 2026-09-10 — the run file is frozen, so the reader is what floors it
+
+**"Nothing needed a migration" was true of the STORE and false of the RUN FILE.** The half it
+was false about put `NaN` on the pricing screen. The paragraph above is about
+`Inventory.parse`'s filter on `__annotations__` (D88), which defaults an absent key to 0 on the
+way out of SQLite. `cli/cmd_join.py` freezes a copy of the same record into
+`runs/<n>/pricing.json`, `do_pipeline_pricing` serves that file through, and
+**nothing on that path defaults anything.**
+
+Measured on the owner's store, 2026-09-09: across the eight run directories, **171 of 171**
+non-null `listing` objects carry no `sold_here` — every one, because all eight were joined on
+2026-09-01/02 and this entry is dated 2026-09-07. The client subtracted `undefined`, and the
+"Smite" row (SKU 9191230) of `runs/2026-09-02-box6-01` drew **`NaN live · read 8 days ago`** on
+the screen where money is decided.
+
+**`NaN` is the worst possible failure here and that is why the fix is a floor.** It is not
+loud: it throws nothing, logs nothing, and fails no type. It propagates — every `Math.max`,
+every subtraction, every comparison and every template literal downstream of it stays `NaN`
+without complaint — and it renders as a word.
+
+### The reader supplies the zero, not the route
+
+**Two places could have supplied it and only one of them is the reader.** The route was the
+tempting fix and is refused on three grounds:
+
+**It could not do better than the constant anyway.** `sold_here` counts sales since a
+particular reading. The store's counter counts since **the store's own** `live_as_of`; the run
+file's `live` is a **frozen, older** reading. Pairing the two would subtract, from a stale
+reading, every sale that a `reconcile --live` since the join has already subtracted — the exact
+double-count `pricingSource.ts:asRow` already spends a paragraph refusing when it writes
+`sold_here: 0` for a live-lens row, and that `cli/resolve.py:_copies_out` and `Listing.held`
+each refuse in their own terms. So the honest server fill is `0`, which is the reader's answer
+carried further from the reader.
+
+**It would not be a floor.** A default on that route fixes one key on one route; the next field
+added to a frozen record produces an identical defect at an identical cost. The guard belongs
+where the arithmetic is, and the arithmetic is `cardState.ts:forSale` — a helper whose own
+header already says it exists so the rule does not live in six places. It is now seven, and the
+seventh — `Pricing.tsx:LiveCount`, which wrote the expression out rather than calling it — is
+the copy that shipped the defect.
+
+**`do_pipeline_pricing` composes exactly one thing and it is not this.** That handler's
+docstring stakes out the boundary in as many words — it re-renders position labels because D58
+makes a stored label wrong, and computes nothing else. A second composed value, invented rather
+than derived, is a route acquiring an opinion about a record it is serving through.
+
+### A type cannot catch this class, so the type stops claiming it can
+
+`PricingSku.listing.sold_here` was declared `number` while 171 of 171 records lacked it.
+**A declaration on a record read back off disk describes what the writer emits today**, and
+every file written before a field existed contradicts it — silently, because the payload is
+cast and not validated. It is `sold_here?: number` now, which made the compiler name the single
+unguarded reader on the first run. `PricingPayload.written_at` is the same class and was
+already declared this way; that is the precedent, not an exception.
+
+**The sweep this came with found no second live case.** Every other optional wire number the
+client does arithmetic on is honestly typed and therefore already `tsc`-guarded — `BoxRecord`'s
+`on_hand ?? cards - sold - retired - moved`, `to_send`, `estimate_usd`, `cache_hits`. Of the
+other four fields the eight stored `pricing.json` files disagree on, `copies_out` is read by no
+client code, `nothing_to_add` is `??`-guarded, `over_cap` is boolean-coerced, and the
+worklist route composes `over_cap` itself.
+
+**What would reopen this**: a run file gaining a field the client must do arithmetic on where
+absence and zero mean *different* things. `0` is right here only because a table written before
+the counter existed genuinely recorded no sales-since — the difference is then the reading
+itself, which is what the screen drew before this entry and correct as of the join.
 ## D116 — A card nobody has named is not a landmark, and the distance is what keeps the skip honest
 
 **The after/before ladder names the nearest NAMED card still in the box on each side.**

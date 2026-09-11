@@ -63,6 +63,7 @@ import {
   type PricingSource,
   type SectionSpec,
 } from './pricingSource'
+import { forSale, soldSince } from './cardState'
 import { useCardCropWhenSeen } from './cardCrop'
 import { Button, cropStyle, EmptyState, Icon, Kbd, Notice, Segmented } from './kit'
 import { toast } from './kit/toast'
@@ -616,7 +617,11 @@ function LiveCount({
   age,
 }: {
   live: number
-  soldHere: number
+  /** ABSENT ON A TABLE `join` WROTE BEFORE D115, which is every stored run on the owner's
+   *  store — 171 of 171 listings. Optional here rather than defaulted at the call site so the
+   *  compiler carries the fact this far, and read through `soldSince` below rather than
+   *  tested raw. */
+  soldHere: number | undefined
   age: string | null
 }) {
   /* TWO NUMBERS SINCE D115, AND THE BIG ONE IS THE ESTIMATE. `live` is the export's READING as
@@ -626,16 +631,23 @@ function LiveCount({
      reachable two ways, and a row reading `0 live` while the reading says 4 is exactly the row
      worth muting.
      A ROW WITH NOTHING SOLD SINCE DRAWS BYTE-IDENTICALLY to before, which is what keeps the
-     common row unchanged and makes the difference legible where there is one. */
-  const forSaleNow = Math.max(0, Math.max(0, live) - Math.max(0, soldHere))
+     common row unchanged and makes the difference legible where there is one.
+
+     THROUGH `forSale` RATHER THAN INLINE (D115, amended). This was the seventh copy of an
+     expression `cardState.ts:forSale` exists to keep in one place, and it is the copy that
+     shipped the defect: `Math.max(0, undefined)` is `NaN`, `NaN` survives the subtraction and
+     the template literal, and the row drew `NaN live`. The helper coerces; nothing here
+     subtracts. */
+  const forSaleNow = forSale(live, soldHere)
+  const sold = soldSince(soldHere)
   return (
     <span
       className="pricing-live"
       data-none={forSaleNow === 0 ? 'true' : undefined}
       title={
-        soldHere > 0
+        sold > 0
           ? `TCGplayer was holding ${live} for this SKU when the run was joined${age === null ? '' : `, ${age}`}. ` +
-            `${soldHere} ${soldHere === 1 ? 'copy has' : 'copies have'} been marked sold here since, ` +
+            `${sold} ${sold === 1 ? 'copy has' : 'copies have'} been marked sold here since, ` +
             `so ${forSaleNow} ${forSaleNow === 1 ? 'is' : 'are'} believed live. ` +
             'A reconcile on Runs takes a fresh reading.'
           : `What TCGplayer was holding live for this SKU when the run was joined${age === null ? '' : `, ${age}`}. ` +
@@ -645,9 +657,9 @@ function LiveCount({
       <span className="bn-dot bn-dot-live" aria-hidden="true" />
       {forSaleNow} live
       {age === null ? null : <span className="pricing-live-age">· read {age}</span>}
-      {soldHere > 0 ? (
+      {sold > 0 ? (
         <span className="pricing-live-age">
-          · {live} when read, {soldHere} sold since
+          · {live} when read, {sold} sold since
         </span>
       ) : null}
     </span>

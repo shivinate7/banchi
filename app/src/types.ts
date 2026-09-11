@@ -1267,7 +1267,12 @@ export type SearchGroup = {
    *  BESIDE `listed` AND NOT INSIDE IT, because it is not a stage: `store/master.py` keeps it
    *  out of `LISTING_STAGES` so D34's box-delete release cannot surrender it and it is not
    *  summed into the store's stage totals. What a screen draws is `listed.live - sold_here`,
-   *  floored — see `app/src/cardState.ts:forSale`. */
+   *  floored — see `app/src/cardState.ts:forSale`.
+   *
+   *  REQUIRED HERE AND OPTIONAL ON `PricingSku.listing`, WHICH IS NOT AN INCONSISTENCY. This
+   *  one is composed per request by `capture_server.py` off the live store, so the server
+   *  decides it exists; that one is read back out of a file `join` wrote at some earlier
+   *  moment, and a file cannot gain a field it was written before. */
   sold_here: number
 
   /** When `listed.live` was read, or null where nothing has read it. Drawn beside the figure:
@@ -1669,8 +1674,19 @@ export type PricingSku = {
   positions: { box: number; index: number; label: string | null }[]
   /** The listing record as it stood WHEN THE RUN WAS JOINED, frozen into `pricing.json`.
    *  `sold_here` rides with it since D115: `live` is the export's reading, and a screen
-   *  drawing the reading alone would over-report by exactly the copies sold since. */
-  listing: { pushed: number; staged: number; live: number; sold_here: number } | null
+   *  drawing the reading alone would over-report by exactly the copies sold since.
+   *
+   *  `sold_here` IS OPTIONAL BECAUSE THE RECORD IS FROZEN AND D115 IS NEWER THAN THE FILE
+   *  (D115, amended). This is read back off disk rather than composed by the server — the
+   *  route serves `pricing.json` through — so the declaration describes what `cli/cmd_join.py`
+   *  writes TODAY, and every table written before a field existed contradicts it. Measured on
+   *  the owner's store: **all 171** non-null listings across the eight stored runs carry no
+   *  `sold_here`, and reading it as a `number` had the screen draw `NaN live`.
+   *  `written_at` below is the same class and was already declared this way.
+   *
+   *  NEVER READ IT BARE. `cardState.ts:forSale` takes the pair and `soldSince` takes this
+   *  one; both coerce, and the `?` here is what makes the compiler say so. */
+  listing: { pushed: number; staged: number; live: number; sold_here?: number } | null
 }
 
 export type PricingTable = {
