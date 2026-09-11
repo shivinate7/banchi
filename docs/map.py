@@ -1314,6 +1314,23 @@ COMPONENTS = [
                 # branch is judged by ancestry rather than by `git branch -d`.
                 "governed_by": ["D18", "D42", "D44", "D53"],
             },
+            "serve-selftest.py": {
+                "does": "THE SUPERVISOR'S BUILD JOB, PROVED AGAINST A THROWAWAY TREE (D132). "
+                        "Starts real supervisors over two copied checkouts whose `vite build` "
+                        "is a shell stub, because what is under test is the supervisor and "
+                        "never the compiler: the cold start that builds BEFORE the port opens, "
+                        "the screen edit that rebuilds without restarting the capture child, "
+                        "the Python edit that does the reverse, the failed build that leaves "
+                        "the previous bundle byte-identical, the build in flight that answers "
+                        "200 throughout, and a PATH with no node on it — the API up, `GET /` "
+                        "503, the log naming `make launch-agent`. THE PORT IS PINNED with "
+                        "`PKMNSCAN_PORT` and that is not a shortcut: a copied tree is not a "
+                        "LINKED worktree, so the derivation calls it the main checkout and it "
+                        "claims :8000 — measured, against the owner's live server, the first "
+                        "time this ran. In `check`, never in the git hook (D18).",
+                "governed_by": ["D18", "D43", "D53", "D132"],
+                "tested_by": [],
+            },
             "janitor-selftest.sh": {
                 "does": "proves janitor.py against a throwaway origin, clone and four linked "
                         "worktrees, with a fake liveness oracle and four short-lived processes "
@@ -1705,7 +1722,7 @@ COMPONENTS = [
                 # targets may reach `make check` or the git hook, and launch-agent writes to
                 # ~/Library. D13 because the store stays on this Mac and the LAN reach is the
                 # tunnel case that entry already names.
-                "governed_by": ["D13", "D18", "D43", "D47", "D53", "D70", "D85"],
+                "governed_by": ["D13", "D18", "D43", "D47", "D53", "D70", "D85", "D132"],
                 "tested_by": ["T7"],
                 "status": "built",
             },
@@ -1830,7 +1847,7 @@ COMPONENTS = [
                 # for vale. Change one and the entry describing that check goes stale with it,
                 # which is exactly what `governed_by` is for — so they are listed rather than
                 # allowlisted away.
-                "governed_by": ["D16", "D17", "D18", "D43", "D44", "D47", "D53", "D58", "D60", "D65", "D68", "D74", "D76", "D80", "D82", "D92", "D111", "D122", "D127", "D129"],
+                "governed_by": ["D16", "D17", "D18", "D43", "D44", "D47", "D53", "D58", "D60", "D65", "D68", "D74", "D76", "D80", "D82", "D92", "D111", "D122", "D127", "D129", "D132"],
                 "note": "IT DECLARES THE SUITE AND DELIBERATELY DOES NOT DRIVE IT, which is "
                         "the whole shape. A registry that drove `make check` could not "
                         "disagree with the recipe — and could silently stop running a check, "
@@ -1894,7 +1911,7 @@ COMPONENTS = [
                 # kept now that the repo has left iCloud for that entry's amended reason: the
                 # hazard belongs to a synced directory, and a tree can be put inside one
                 # without telling this script.
-                "governed_by": ["D16", "D17", "D42", "D43", "D44", "D80", "D86", "D88", "D111", "D127"],
+                "governed_by": ["D16", "D17", "D42", "D43", "D44", "D80", "D86", "D88", "D111", "D127", "D132"],
                 "note": "IT READS `--json`, NOT THE RENDER, since 2026-08-13. This line "
                         "said the opposite until integration: the debt was closed and this "
                         "entry rewritten in the same run by different hands, and nothing "

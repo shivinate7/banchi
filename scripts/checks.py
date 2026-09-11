@@ -202,6 +202,29 @@ CHECKS = (
         "governed_by": ("D18", "D43", "D122"),
     },
     {
+        "target": "serve-selftest",
+        "runs": "python3 scripts/serve-selftest.py",
+        "asserts": "the supervisor's build job (D132), against a throwaway checkout whose "
+                   "`vite build` is a shell stub. What is under test is the supervisor and "
+                   "never the compiler: that a cold tree builds BEFORE the port opens, that a "
+                   "screen edit rebuilds and does not restart the capture child, that a "
+                   "Python edit restarts it and does not rebuild, that a failed build leaves "
+                   "the previous bundle byte-identical, that every request during a build "
+                   "answers 200 — the swap is two renames — and that with no node on PATH the "
+                   "API comes up anyway while `GET /` says 503. Five mutations were observed "
+                   "failing it, including building straight into `dist/`.",
+        "needs": ("python3",),
+        "writes": "two throwaway checkouts, their `.serve/` directories and the supervisors "
+                  "and capture servers running under them, all inside `mktemp -d`. The "
+                  "capture port is PINNED with `PKMNSCAN_PORT` rather than derived: a copied "
+                  "tree is not a linked worktree, so it would call itself the main checkout "
+                  "and claim :8000 — the owner's live server.",
+        "commit_path": False,
+        "why_off_commit_path": "D18 — it writes, and it starts and signals real processes.",
+        "gates": True,
+        "governed_by": ("D18", "D43", "D53", "D132"),
+    },
+    {
         "target": "verdict-selftest",
         "runs": "python3 scripts/verdict-selftest.py",
         "asserts": "app/design-check-reporter.ts, run for real against one passing and one "

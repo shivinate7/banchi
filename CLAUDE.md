@@ -244,7 +244,7 @@ make lint           # eslint over app/ (guards a bug earned, see app/eslint.conf
                     #   never ruff's own defaults, never --fix. Config: ruff.toml.
 make check          # harness + docs-audit + audit-self-test + githooks-selftest +
                     #   merge-selftest + janitor-selftest + reap-selftest +
-                    #   suite-lock-selftest +
+                    #   suite-lock-selftest + serve-selftest +
                     #   verdict-selftest + port-agreement + set-hint-agreement +
                     #   screen-freshness + sigil-check + ignore-check + lint +
                     #   vale + typecheck.
