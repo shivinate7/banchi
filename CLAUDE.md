@@ -1588,7 +1588,7 @@ D140 The number is claimed at the merge, because what main has taken is not know
 D141 The browser matrix runs when the change reaches what a browser draws, and the path list has a reader
 D142 The setup outlives the browser, the box list is ordered by the hand, and one value stays on the old clock
 D143 The claim reads the checked-out tree, so which tree that is must be established before anything reads it
-D-settle-rescue  A card that will not settle is photographed off the quietest frame it manages, and there is one trigger again
+D144  A card that will not settle is photographed off the quietest frame it manages, and there is one trigger again
 ```
 
 **THE GAP THIS LIST CARRIED BETWEEN D116 AND D118 IS CLOSED, AND IT CLOSED THE WAY IT SAID IT

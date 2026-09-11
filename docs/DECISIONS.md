@@ -10242,7 +10242,7 @@ reader decides it.
 
 **Not that the dirty-tree check moves with it.** That one guards the WRITE — the claim commits everything it rewrites — and it is still where it was, below the readers, because a tree can be legitimately dirty while a preview answers a question about it. **Not that `make claim-stale` gains a tree argument**: it is a standalone check about the tree you are standing in and is right as it is. **And not D140's refusal of the network**: nothing here reads a pull request, and the head branch it compares against is a string `make merge` already had in hand.
 
-## D-settle-rescue — A card that will not settle is photographed off the quietest frame it manages, and there is one trigger again
+## D144 — A card that will not settle is photographed off the quietest frame it manages, and there is one trigger again
 
 **Settled 2026-09-11, on the owner's own account of what the rig was doing.** Their words:
 *"considering you can see the hit rate and the non hit rate, can't you create code that
