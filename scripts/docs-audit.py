@@ -1573,9 +1573,38 @@ def check_decision_ids(report: Report, docs: List[Path]) -> None:
 # every event in the history above. Reading the branch's own commits catches it however it
 # was committed, and the Stop hook runs this at turn end.
 #
-# ADVISORY. A branch may legitimately cite the new occupant of the freed number, and only a
-# human can tell that from the mistake. What the row is for is naming the sites: the triage
-# list is the whole cost of getting this right, and it is what nobody had.
+# TWO ROWS, SPLIT BY WHETHER THE SITE IS THIS BRANCH'S OWN LINE (D72 amended 2026-09-11).
+# The sentence above — "nothing mechanical can tell them apart" — is true of a site the branch
+# INHERITED and false of one the branch WROTE. `vacated ids` is the second half and it BLOCKS;
+# `renumbered ids` keeps the first half, its wording and its ADVISORY severity.
+#
+# WHAT MAKES A SITE PROVABLE. A line citing `old` is this branch's mistake when it is present
+# in the tree NOW, absent at the merge base, and already present at the commit just before the
+# one that vacated `old`. That last clause is the whole argument: two headings may not share an
+# id (`decision ids` blocks it), so at the moment that line was written `old` named exactly one
+# entry in this branch's tree — the entry that has since moved. The citation therefore means
+# the moved entry, and the move left it behind. No judgement remains, which is D16's own test
+# for MECHANICAL.
+#
+# AND IT IS WHY THE CLAUSE IS THERE RATHER THAN "every line this branch added". A branch that
+# vacates D132 and LATER writes prose about main's D132 has added a line citing the old id that
+# is perfectly correct. Blocking that one would be the false positive D16 says is worse than a
+# printed line. It goes to the advisory row with the inherited sites, where a human reads it.
+#
+# THE DEFECT IT WAS BUILT FOR, 2026-09-11. A branch holding `## D132` merged main twice; main
+# had taken 132, 133 and 134, so the branch moved to D135, and four commits later main had taken
+# 135 and 136 too, so it moved again. After the FIRST renumber three prose citations in
+# `CLAUDE.md` — the `make up` block, the `make dev` block, and the pointer to
+# `docs/specs/one-process.md` — still said D132, and all three silently named main's unrelated
+# inventory decision. A stale id RESOLVES, so `make check` was green, the commit hook passed, and
+# the branch was pushed. They were found afterwards by a separate audit, not by the tree.
+#
+# PER LINE, NEVER PER FILE. After a merge both ids legitimately live in one file — `docs/map.py`
+# carried 24 wrong and 9 right — so a file naming both is not evidence about any line in it.
+#
+# AND DEDUPED BY RESOLVED PATH, because `AGENTS.md` is a symlink to `CLAUDE.md` (D47, D135) and
+# `branch_files` lists it by name the moment the link itself is added or changed. Reading both
+# names reports one line twice under two paths, one of which a person cannot edit.
 
 
 def branch_base() -> str:
@@ -1642,21 +1671,74 @@ def moves_across(states: Sequence[Dict[str, str]]) -> List[Tuple[str, str, str]]
     )
 
 
-def renumbered_on_branch(base: str) -> List[Tuple[str, str, str]]:
-    """Every entry this branch moved to a different number, from the branch's own history.
+def branch_states(base: str) -> Tuple[List[Optional[str]], List[Dict[str, str]]]:
+    """(revisions, states) for the branch's history of docs/DECISIONS.md, oldest first.
 
-    Walks only the commits that TOUCHED the file — usually one or two — and compares each
-    against the state before it. The title is the identity: a renumber keeps it and changes
-    the id, which is exactly the pair no id-based check can see.
+    Walks only the commits that TOUCHED the file — usually one or two. The two lists are
+    parallel, and `None` is the last revision: the WORKING TREE, which is a state with no
+    commit to name it. Reading them together is what lets `vacated ids` ask a question about
+    the tree as it stood one step before a renumber.
     """
     revisions = [line for line in git(
         "log", "--format=%H", f"{base}..HEAD", "--", "docs/DECISIONS.md"
     ).split() if line]
+    revs: List[Optional[str]] = [base]
     states = [headings_at(base)]
     for revision in reversed(revisions):
+        revs.append(revision)
         states.append(headings_at(revision))
+    revs.append(None)
     states.append(headings_now())
-    return moves_across(states)
+    return revs, states
+
+
+def renumbered_on_branch(base: str) -> List[Tuple[str, str, str]]:
+    """Every entry this branch moved to a different number, from the branch's own history.
+
+    The title is the identity: a renumber keeps it and changes the id, which is exactly the
+    pair no id-based check can see.
+    """
+    return moves_across(branch_states(base)[1])
+
+
+def vacating_index(states: Sequence[Dict[str, str]], title: str, old: str) -> int:
+    """The index at which `title` STOPPED being numbered `old`, or -1 if it never did.
+
+    Pure, and split out for `moves_across`'s reason: the git walk that produces `states`
+    cannot run without a repository, and this is the part that could be wrong. The state
+    BEFORE this index is the last one in which `old` named this entry, and a citation of
+    `old` that already existed then is a citation of this entry — no other reading is
+    available, because `decision ids` blocks two headings sharing one id.
+
+    The FIRST such index, to match `moves_across` reporting the FIRST id: an entry that moved
+    D50 -> D51 -> D53 vacated D50 at the first step, and that is when its citations were
+    written.
+    """
+    for index in range(1, len(states)):
+        if states[index - 1].get(title) == old and states[index].get(title) != old:
+            return index
+    return -1
+
+
+def text_at(rev: Optional[str], name: str) -> str:
+    """`name`'s content at `rev`, or from disk when `rev` is None (the working tree).
+
+    Empty when the path did not exist there, which is what `git show` already returns on a
+    bad object — a file this branch created reads as absent at the base, which is the right
+    answer rather than an error.
+    """
+    if rev is None:
+        return read(ROOT / name)
+    return git("show", f"{rev}:{name}")
+
+
+def scrubbed_lines(text: str) -> Set[str]:
+    """The distinct lines of `text`, compared the way the scan compares them.
+
+    `without_noqa` on both sides, so a suppression directive added or removed beside a
+    citation cannot make one line look like two.
+    """
+    return {without_noqa(line) for line in text.splitlines()}
 
 
 def branch_files(base: str) -> List[str]:
@@ -1672,34 +1754,65 @@ def branch_files(base: str) -> List[str]:
     names = set(git("diff", "--name-only", base, "HEAD").split("\n"))
     names.update(git("diff", "--name-only", "HEAD").split("\n"))
     names.update(git("diff", "--cached", "--name-only").split("\n"))
-    return sorted(
-        name for name in names
+    kept = [
+        name for name in sorted(names)
         if name and name != "docs/DECISIONS.md" and exists(ROOT / name)
         and not (ROOT / name).is_dir()
-    )
+    ]
+    # AND A FILE SYMLINK IS THE SAME FILE, NOT A SECOND ONE (D47, D135). `AGENTS.md ->
+    # CLAUDE.md` is tracked, so git names it here the moment the LINK is added or changed, and
+    # `read()` follows it — which reported every one of CLAUDE.md's citations twice, once under
+    # a path nobody can edit. The real path wins where both are listed: a person opens the file
+    # git will diff, and `text_at` can only read a blob at that name.
+    by_real: Dict[str, str] = {}
+    for name in kept:
+        real = str((ROOT / name).resolve())
+        if real not in by_real or (ROOT / by_real[real]).is_symlink():
+            by_real[real] = name
+    return sorted(by_real.values())
 
 
 def check_renumbered_decisions(report: Report) -> None:
-    findings: List[Finding] = []
+    inherited: List[Finding] = []
+    own: List[Finding] = []
     base = branch_base()
     if not base or base == git("rev-parse", "HEAD").strip():
-        report.add("renumbered ids", ADVISORY, findings, "not a branch off main — nothing to compare")
+        nothing = "not a branch off main — nothing to compare"
+        report.add("renumbered ids", ADVISORY, inherited, nothing)
+        report.add("vacated ids", MECHANICAL, own, nothing)
         return
 
-    moves = renumbered_on_branch(base)
+    revs, states = branch_states(base)
+    moves = moves_across(states)
     occupant = {number: title for title, number in headings_now().items()}
     touched = branch_files(base)
     for old, new, title in moves:
         was = re.compile(r"\b" + old + r"\b")
         now = re.compile(r"\b" + new + r"\b")
+        # The last state in which `old` still named this entry. Everything present in the
+        # tree THEN and written by this branch is a citation of the entry that moved.
+        vacated = vacating_index(states, title, old)
         sites: List[str] = []
+        mine: List[str] = []
         for name in touched:
             text = "\n".join(without_noqa(line) for line in read(ROOT / name).splitlines())
-            lines = [
-                number
+            cited = [
+                (number, line)
                 for number, line in enumerate(text.splitlines(), start=1)
                 if was.search(line)
             ]
+            if not cited:
+                continue
+            # Read only where there is something to decide — usually no file at all, and the
+            # two blobs are a subprocess each.
+            before = scrubbed_lines(text_at(revs[vacated - 1], name)) if vacated > 0 else set()
+            at_base = scrubbed_lines(text_at(base, name)) if vacated > 0 else set()
+            lines = []
+            for number, line in cited:
+                if line in before and line not in at_base:
+                    mine.append(f"{name}:{number}   {line.strip()[:96]}")
+                else:
+                    lines.append(number)
             if not lines:
                 continue
             shown = ", ".join(str(number) for number in lines[:6])
@@ -1707,10 +1820,25 @@ def check_renumbered_decisions(report: Report) -> None:
                 shown += f", +{len(lines) - 6} more"
             both = "" if now.search(text) else f"   <- and never names {new}"
             sites.append(f"{name}:{shown}{both}")
+        if mine:
+            listed = "\n  ".join(mine)
+            own.append(
+                Finding(
+                    f"docs/DECISIONS.md -> {new}",
+                    f"`{title}` moved {old} -> {new} on this branch, and {len(mine)} line(s) "
+                    f"THIS BRANCH WROTE still cite {old}.\n"
+                    f"  {old} now names: {occupant.get(old) or 'nothing — the number is free'}\n"
+                    f"  {listed}\n"
+                    f"  Each of those lines is absent at the merge base and was already in the "
+                    f"tree when {old} still named `{title}` — so it cites this entry, and the "
+                    f"renumber left it behind. Move it to {new}. This is the half of the "
+                    f"advisory row below that needs no judgement (D72).",
+                )
+            )
         if not sites:
             continue
         listed = "\n  ".join(sites)
-        findings.append(
+        inherited.append(
             Finding(
                 f"docs/DECISIONS.md -> {new}",
                 f"`{title}` moved {old} -> {new} on this branch, and {len(sites)} file(s) "
@@ -1728,7 +1856,9 @@ def check_renumbered_decisions(report: Report) -> None:
         ", ".join(f"{old}->{new}" for old, new, _ in moves)
         if moves else "no entry changed number on this branch"
     )
-    report.add("renumbered ids", ADVISORY, findings, detail)
+    report.add("renumbered ids", ADVISORY, inherited, detail)
+    report.add("vacated ids", MECHANICAL, own,
+               detail if moves else "no entry changed number on this branch")
 
 # ------------------------------------------------------------------------- env vars
 
@@ -10873,7 +11003,7 @@ def british_spelling(name: str) -> Optional[Tuple[str, str]]:
     """(british word, american word) for the first British fragment in an identifier, or None.
 
     The name is split into words at `_`, `-`, `$`, digits and camelCase boundaries, so
-    `fetchCatalogueRows` and `NEIGHBOURLY` are both read, and each fragment pattern sees one
+    `fetchCatalogueRows` and `NEIGHBORLY` are both read, and each fragment pattern sees one
     lower-cased word at a time — which is what lets `$` anchors mean the end of a WORD.
     """
     lowered = name.lower()
@@ -11447,6 +11577,149 @@ def self_test() -> int:
 
     one = moves_across([{ORDER: "D67", LINK: "D53"}, {ORDER: "D69", LINK: "D53"}])
     ok(one == [("D67", "D69", ORDER)], "only the entry that moved is reported, not its neighbors", str(one))
+
+    print("\nand the index it was vacated at is the FIRST one, which is where its citations are")
+    chain = [{LINK: "D50"}, {LINK: "D51"}, {LINK: "D53"}]
+    ok(vacating_index(chain, LINK, "D50") == 1,
+       "an entry that moved twice vacated its FIRST id at the first step",
+       str(vacating_index(chain, LINK, "D50")))
+    ok(vacating_index(chain, LINK, "D53") == -1,
+       "the id it landed on was never vacated, so there is nothing to hunt for",
+       str(vacating_index(chain, LINK, "D53")))
+    ok(vacating_index([{LINK: "D53"}, {LINK: "D53"}], LINK, "D53") == -1,
+       "and an entry that never moved reports no vacating point")
+
+    # ------------------------------------------------------------------ vacated ids, end to end
+    #
+    # THE GIT PLUMBING IS WHERE THIS ROW CAN BE WRONG, so it is exercised against a real
+    # repository rather than asserted about. `moves_across` and `vacating_index` above are pure
+    # and floored on their own; what is left is the part that reads blobs, follows a symlink and
+    # decides per LINE — all three of which this row got wrong in draft.
+    #
+    # ROOT IS SWAPPED, not parameterised: `git()` reads it at call time for its cwd and every
+    # path in the check is built from it, so pointing the module at a throwaway repo runs the
+    # real function over a real branch. Restored in a `finally`, the same save/restore the
+    # `check dispatch` cases already make for UNDISPATCHED.
+    #
+    # THE IDS ARE COMPOSED, for this file's standing reason: a literal id here is a citation,
+    # and `decision ids in code` reads this file. The NEW id is deliberately one this repo has
+    # not reached, which is exactly the shape a renumber lands on.
+    print("\na citation this branch wrote of a number it has since vacated is not a judgement")
+    OLD, NEW, NEIGHBOR = "D" + "133", "D" + "1" + "40", "D" + "131"
+    with tempfile.TemporaryDirectory() as tmp:
+        repo = Path(tmp) / "repo"
+        (repo / "docs").mkdir(parents=True)
+
+        def run(*args: str) -> None:
+            subprocess.run(["git"] + list(args), cwd=str(repo),
+                           stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, check=False)
+
+        def write(name: str, body: str) -> None:
+            (repo / name).write_text(body, encoding="utf-8")
+
+        def commit(message: str) -> None:
+            run("add", "-A")
+            run("-c", "user.email=t@t", "-c", "user.name=t", "commit", "-qm", message)
+
+        def rows() -> Dict[str, List[Finding]]:
+            saved, globals()["ROOT"] = ROOT, repo
+            try:
+                report = Report()
+                check_renumbered_decisions(report)
+                severity.update({check: sev for check, sev, _, _ in report.checks})
+                return {check: found for check, _, found, _ in report.checks}
+            finally:
+                globals()["ROOT"] = saved
+
+        severity: Dict[str, str] = {}
+
+        # main: one entry, and one sentence citing OLD that main itself wrote.
+        run("init", "-q", ".")
+        write("docs/DECISIONS.md", "## " + NEIGHBOR + " — Neighbor\n\nbody\n")
+        write("CLAUDE.md", "# Fixture\n"
+                           "inherited: the walk is ranked (" + OLD + ") and main wrote this\n")
+        commit("base")
+        run("branch", "-M", "main")
+        base_sha = subprocess.run(["git", "rev-parse", "HEAD"], cwd=str(repo),
+                                  stdout=subprocess.PIPE, check=False).stdout.decode().strip()
+
+        # the branch: its own entry at OLD, its own citation of it, and the symlink main's D135
+        # put in this tree — the one that reported CLAUDE.md's lines twice under two names.
+        run("checkout", "-q", "-b", "work")
+        write("docs/DECISIONS.md",
+              "## " + NEIGHBOR + " — Neighbor\n\nbody\n\n## " + OLD + " — One process\n\nbody\n")
+        write("CLAUDE.md", "# Fixture\n"
+                           "inherited: the walk is ranked (" + OLD + ") and main wrote this\n"
+                           "branch: the supervisor builds it (" + OLD + ")\n")
+        os.symlink("CLAUDE.md", repo / "AGENTS.md")
+        commit("the branch writes its entry and cites it")
+
+        # the merge: main took OLD, so the entry moves. The prose does not follow — and the
+        # branch adds a line naming the NEW id, so the file now carries both.
+        write("docs/DECISIONS.md",
+              "## " + NEIGHBOR + " — Neighbor\n\nbody\n\n## " + NEW + " — One process\n\nbody\n")
+        write("CLAUDE.md", "# Fixture\n"
+                           "inherited: the walk is ranked (" + OLD + ") and main wrote this\n"
+                           "branch: the supervisor builds it (" + OLD + ")\n"
+                           "branch: and the entry itself is " + NEW + " now\n")
+        commit("merge main: " + OLD + " was taken twice over")
+
+        found = rows()
+        blocking = found["vacated ids"]
+        ok(severity.get("vacated ids") == MECHANICAL and severity.get("renumbered ids") == ADVISORY,
+           "the provable half BLOCKS and the half needing context still only asks (D16)",
+           str(severity))
+        ok(len(blocking) == 1, "one blocking finding, for the one entry that moved", str(blocking))
+        message = blocking[0].message if blocking else ""
+        ok("CLAUDE.md:3" in message,
+           "and it names the line THIS BRANCH wrote, by file and line", message)
+        ok("CLAUDE.md:2" not in message,
+           "while the line main wrote is not this branch's to move", message)
+        advisory = found["renumbered ids"]
+        both_rows = message + "\n" + "\n".join(f.message for f in advisory)
+        ok("AGENTS.md" not in both_rows,
+           "a symlink to the same file is the same file, reported once under the real path",
+           both_rows)
+        # PER LINE, NOT PER FILE: CLAUDE.md names OLD and NEW both, which after a merge is the
+        # ordinary state. A reader that took that as evidence would have found nothing here.
+        ok(NEW in read(repo / "CLAUDE.md") and len(blocking) == 1,
+           "a file naming BOTH ids still fails on the line that is wrong", message)
+
+        ok(len(advisory) == 1 and "CLAUDE.md:2" in advisory[0].message,
+           "the inherited citation goes to the advisory row, which still asks", str(advisory))
+        ok("CLAUDE.md:3" not in (advisory[0].message if advisory else ""),
+           "and is not asked about twice", str(advisory))
+
+        # THE MUTATION: the branch never wrote a citation of its own. Nothing is provable, and
+        # the row must go green rather than inheriting the advisory's list.
+        write("CLAUDE.md", "# Fixture\n"
+                           "inherited: the walk is ranked (" + OLD + ") and main wrote this\n"
+                           "branch: and the entry itself is " + NEW + " now\n")
+        commit("drop the branch's own citation")
+        found = rows()
+        ok(not found["vacated ids"],
+           "an inherited stale citation alone does NOT block", str(found["vacated ids"]))
+        ok(len(found["renumbered ids"]) == 1,
+           "and it is still asked about", str(found["renumbered ids"]))
+
+        # A LINE THE BRANCH WROTE **AFTER** VACATING is a reference to the new occupant as often
+        # as it is a mistake, and blocking it would be D16's false positive.
+        write("CLAUDE.md", "# Fixture\n"
+                           "inherited: the walk is ranked (" + OLD + ") and main wrote this\n"
+                           "branch: and the entry itself is " + NEW + " now\n"
+                           "branch: main's own " + OLD + " folds sold rows away\n")
+        commit("cite main's entry at the freed number")
+        found = rows()
+        ok(not found["vacated ids"],
+           "a citation written after the move is a question, not a defect",
+           str(found["vacated ids"]))
+
+        # On main there is no branch, and both rows are empty for nothing.
+        run("checkout", "-q", "main")
+        found = rows()
+        ok(not found["vacated ids"] and not found["renumbered ids"],
+           "on main, base is HEAD and neither row has anything to compare", str(found))
+        ok(base_sha != "", "the fixture repository really was built", base_sha)
 
     # EVERY PATTERN THAT READS A DECISION ID, AT THE DIGIT THAT USED TO END THEM (D16).
     # docs/DEBTS.md recorded this as a TRIGGERED debt: seven patterns in this file and four

@@ -125,7 +125,7 @@ everything after `#`, which never reaches the server, so the fallback is only ev
 for a path somebody typed.
 
 **What is refused.** A path with `..` or a NUL, a path resolving outside `dist/` after
-`realpath`, and any method but `GET`. `dist/` is compiled output and holds no photograph, no
+`realpath`, and any method but `GET` and `HEAD`. `dist/` is compiled output and holds no photograph, no
 code-card image and no store, which is why serving a directory from this process is not an
 opsec question; `GET /photo/<box>/<index>` is still the only way bytes from `captures/` leave.
 
@@ -153,6 +153,58 @@ not styled, not a screen.
 returns `index.html`; `GET /../etc/passwd` and `GET /assets/../../inventory/store.sqlite`
 return 404 and read nothing; `POST /` is 405; with `dist/` removed, `GET /` is 503 and
 `GET /status` is 200. Nine assertions.
+
+### 3.1 `HEAD` — added 2026-09-11
+
+**501 was the answer until the app moved here, and nobody could tell.**
+`BaseHTTPRequestHandler` dispatches on the method name and this class defined no `do_HEAD`,
+so `curl -I http://localhost:8000/` answered `501 Unsupported method ('HEAD')`. That was
+invisible for as long as this process was an API with one HTML-free surface, because nothing
+HEADs a JSON route. It stopped being invisible the moment `/` and `/assets/` moved onto the
+same port: `HEAD` is the first thing an uptime monitor, a link checker, a proxy and `curl -I`
+reach for, and 501 to all four reads as a broken server rather than as an unused verb.
+
+**It is the same dispatch with the body withheld.** RFC 9110 requires the header field values
+of a `HEAD` response to be the ones the `GET` would have sent, which is only truthfully
+achievable by producing the response and dropping the body — so `do_HEAD` runs `do_GET` behind
+a flag that `_send` reads, and `Content-Length` is still the length the body would have had.
+A second set of headers spelled out beside a second table of paths was refused: the boot
+header, the CORS block and `Connection: close` are each composed in exactly one place, and a
+hand-rolled `HEAD` would be a second spelling of all three with nothing comparing it to the
+first.
+
+**Every `GET` route, not only the app surface, and that is the deliberate half.** The narrow
+answer — `HEAD` for `/` and the assets, a 405 everywhere else — was considered and refused on
+the grounds the change is about: `/status` is the likeliest thing of all to have a monitor
+pointed at it, and 405 there reproduces the defect one route over. It also needs a second
+place that knows which paths the app claims, and a route written later would silently lack
+`HEAD`. What it costs is that a `HEAD` does the handler's work and discards the bytes — an
+`/inventory` payload built and thrown away, a photograph read and digested for its ETag. That
+is the cost of the `GET` the same client could have sent instead, and no `GET` route here
+writes.
+
+**`HEAD` joins `SAFE_METHODS`, which does not weaken the origin gate.** That tuple is the
+list of methods that do not write, and the gate is one `in` against it. `do_HEAD` reaches only
+`do_GET`'s routes, so a `HEAD` cannot arrive at a mutating one; gating it would answer 403 to
+a read, which is the one thing this server does not do. It joins `ALL_METHODS` too, because an
+origin the server knows may never be told less than one it does not.
+
+**The two paths that never reach `_send` were already right.** `_photo`'s 304 branch sends no
+body under any verb, which is what a 304 is. `BaseHTTPRequestHandler.send_error` tests
+`self.command` itself and withholds the body while still sending its `Content-Type` and
+`Content-Length`; with `do_HEAD` defined it no longer answers a `HEAD` at all, only a request
+whose line did not parse.
+
+**Proof, in T7's `check_app_serve`:** `HEAD /`, a hashed asset and the manifest each answer
+200 under the `GET`'s own headers — compared as a whole dict rather than against a list this
+test writes out, so a header added to `_send` later cannot drift past it — with
+`Content-Length` equal to the `GET` body's length; `HEAD /status` answers, which is the scope
+decision above; `HEAD` on a mistyped route is still 404 with its `Content-Length` intact; with
+`dist/` removed `HEAD /` is 503. **And the "no body" half is read off a bare socket**, because
+`urllib` cannot see it: `http.client` knows a `HEAD` response carries no content and returns
+`b""` without reading, so that assertion passes against a server that wrote every byte —
+measured by mutation, and the raw-socket arm is the only one that fails when the suppression
+is removed. Six mutations, all caught.
 
 **Nothing else moves in PR 1.** The supervisor still runs Vite; the new route sits unused
 until PR 2 because there is no `dist/` on a machine that never built one. That is deliberate:

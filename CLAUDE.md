@@ -1491,6 +1491,7 @@ D135 Codex reads the same rules a Claude Code session does, through three symlin
 D136 The suite is sharded and never widened, a sleep is a wait and not an assertion, and a tree that passed is not tested twice
 D137 The catalog is Near Mint by rule, because it was only ever Near Mint by accident of the file
 D138 One process serves the product, Vite compiles and never serves, and the build is the server's job
+D139 Which branch the primary checkout stands on is a fact about the live rig, and a warning is the ceiling
 ```
 
 **THE GAP THIS LIST CARRIED BETWEEN D116 AND D118 IS CLOSED, AND IT CLOSED THE WAY IT SAID IT

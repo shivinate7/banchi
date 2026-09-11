@@ -21,4 +21,57 @@ if git diff --name-only "$old" "$new" -- scripts/githooks 2>/dev/null | grep -q 
   echo "" >&2
 fi
 
+# ------------------------------------------------- the primary checkout left off main (D139)
+# WHICH BRANCH THIS DIRECTORY STANDS ON DECIDES WHICH CODE SERVES THE OWNER'S REAL STORE.
+#
+# D53 keeps a supervisor alive at login out of the PRIMARY checkout, over the real
+# `inventory/store.sqlite`. So a branch switch here is not a private act: the capture server
+# on :8000 is rebuilt from whatever this directory now holds, and the owner goes on
+# photographing cards into their real store through a branch's code. That is D43's hazard
+# reached through the other door — D43 was the PORT pointing at the wrong store, this is the
+# DIRECTORY pointing at the wrong code — and the repo guarded `refs/heads/main` with two hooks
+# (D42) while guarding this not at all. Observed 2026-09-11: this tree sat on
+# `claude/env-key-rotation` with three live sessions in it and nothing anywhere said so.
+#
+# A WARNING IS THE CEILING AND NOT A CHOICE. There is no `pre-checkout` hook: git calls this
+# one AFTER the switch has happened, with the new HEAD already in place, so nothing here can
+# refuse. What it can do is be loud at the moment the move is made, which is the one moment
+# the person responsible is present. D139 names the other two moments — `make status` and the
+# SessionStart guard — because any one of the three alone is missable.
+#
+# THE PRIMARY/LINKED TEST IS `server/ports.py:is_linked_worktree`'s, SPELLED ITS WAY: a linked
+# worktree's `.git` is a FILE, a primary checkout's is a DIRECTORY. `app/devPort.ts`,
+# `scripts/worktree-guard.sh` and `scripts/docs-audit.py` all detect on that same one fact and
+# a second answer to one question is the thing this repo keeps refusing to add.
+# `git rev-parse --git-dir` against `--git-common-dir` decides it too; it is the same fact with
+# a subprocess in front of it. A worktree ON a branch is CORRECT and says nothing: the whole
+# point of D43 is that a worktree has its own store and its own ports to be wrong on its own.
+#
+# Hooks run from the top of the working tree, and `--show-toplevel` is read rather than assumed
+# so the test cannot be answered by whatever directory a caller happened to be standing in.
+top="$(git rev-parse --show-toplevel 2>/dev/null)" || top=""
+if [ -n "$top" ] && [ -d "$top/.git" ] && git rev-parse --verify --quiet main >/dev/null 2>&1; then
+  branch="$(git rev-parse --abbrev-ref HEAD 2>/dev/null || echo "")"
+  # `--abbrev-ref` answers the literal string `HEAD` for a detached head, which is off main as
+  # surely as a branch is and is named as what it is rather than printed as a branch called HEAD.
+  if [ "$branch" = "HEAD" ]; then
+    branch="a detached HEAD at $(git rev-parse --short HEAD 2>/dev/null || echo "$new")"
+  fi
+  if [ -n "$branch" ] && [ "$branch" != "main" ]; then
+    echo "" >&2
+    echo "PRIMARY CHECKOUT: now on $branch, not main." >&2
+    echo "  This is the directory \`make launch-agent\` serves the owner's REAL store out of," >&2
+    echo "  so the live capture server now runs THIS branch's code (D53, D139)." >&2
+    echo "  Undo: git switch -   ·   on main again: git switch main" >&2
+    # ON MAIN AND CURRENT ARE TWO QUESTIONS, and this hook can only answer the first. `main` here
+    # is the LOCAL ref, which a clone that merges by pull request can leave well behind origin —
+    # measured 2026-09-11 in this very checkout: local main at c34ccdc, origin/main at 2caa001,
+    # six commits apart. So `git switch main` is the undo of the switch and not a claim that the
+    # code is current, and saying otherwise would be wrong in exactly the situation a stale tree
+    # is in. `make status` prints the counts that answer the second question.
+    echo "  (local main can itself sit behind origin/main — \`make status\` says by how much)" >&2
+    echo "" >&2
+  fi
+fi
+
 exit 0

@@ -121,7 +121,8 @@ def preflight(url: str, origin: str, method: str = "POST") -> Tuple[Optional[int
     THIS IS THE ROW THAT SPEAKS FOR THE PHONE, and it is not the same question as the one
     below it. `curl` sends no preflight, so it reaches the origin gate and reads a 403 with a
     message naming the remedy. A browser never gets that far: an origin the server does not
-    know is answered `Access-Control-Allow-Methods: GET, OPTIONS`, POST is not among them, and
+    know is answered `Access-Control-Allow-Methods: GET, HEAD, OPTIONS`, POST is not among
+    them, and
     the browser refuses to send the request at all. `fetch` then rejects with a bare TypeError
     carrying no reason — so the 403 and its message are never seen by the page.
 

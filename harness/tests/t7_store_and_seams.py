@@ -178,6 +178,7 @@ import http.server
 import inspect
 import os
 import shutil
+import socket
 # THE TWO TESTS IN THIS HARNESS THAT START A CHILD PROCESS, each arguing it at its own site.
 # `check_pipeline_routes` poses a detached child nobody waited on, which no fixture can stand in
 # for; its child reads a pipe this process holds, so it cannot outlive the harness.
@@ -7577,11 +7578,48 @@ def request(port, method, path, *, origin=None, payload=None, extra_headers=None
         return int(refused.code), refused.read(), dict(refused.headers)
 
 
+def raw_head(port, path):
+    """One HEAD over a bare socket, returning `(head, rest)` — every byte the server sent.
+
+    `urllib` CANNOT ANSWER THIS QUESTION, and finding that out is the whole reason this
+    exists. `http.client` knows a HEAD response carries no content and sets its own length
+    to zero before reading a byte, so `response.read()` returns `b""` whether the server
+    withheld the body or wrote all of it. Measured by mutation: `_send` was made to write
+    the body under HEAD and every `urllib`-based assertion in `check_app_serve` stayed green.
+
+    IT IS NOT A PEDANTIC VIOLATION. Bytes after the headers are the NEXT response as far as
+    a proxy or a keep-alive client is concerned — `Connection: close` is what hides it here,
+    which makes it exactly the kind of defect that surfaces on somebody else's infrastructure
+    and never on this rig.
+    """
+    with socket.create_connection(("127.0.0.1", port), timeout=30) as sock:
+        sock.sendall(
+            f"HEAD {path} HTTP/1.1\r\nHost: 127.0.0.1:{port}\r\n"
+            f"Connection: close\r\n\r\n".encode("utf-8")
+        )
+        seen = b""
+        while True:
+            chunk = sock.recv(65536)
+            if not chunk:
+                break
+            seen += chunk
+    head, _, rest = seen.partition(b"\r\n\r\n")
+    return head, rest
+
+
 def error_code(body):
     try:
         return (json.loads(body or b"{}").get("error") or {}).get("code")
     except (json.JSONDecodeError, UnicodeDecodeError, AttributeError):
         return None
+
+
+def error_message(body) -> str:
+    """`error_code`'s other half — the sentence a person reads, for the cases that assert on it."""
+    try:
+        return str((json.loads(body or b"{}").get("error") or {}).get("message") or "")
+    except (json.JSONDecodeError, UnicodeDecodeError, AttributeError):
+        return ""
 
 
 def check_origin_gate(checks: Checks) -> None:
@@ -8101,6 +8139,121 @@ def check_app_serve(checks: Checks) -> None:
                     "own mime table does not know at all",
                 )
 
+                # ------------------------------------------------------------------ HEAD
+                # THE HEADERS OF THE GET, WITH NO BODY. `BaseHTTPRequestHandler` dispatches
+                # on the method name and this class defined no `do_HEAD`, so until it did
+                # `curl -I http://localhost:8000/` answered 501 — invisible while this
+                # process was an API nothing HEADs, and the first thing a monitor, a link
+                # checker or a proxy asks the moment the app is served from the same port.
+                #
+                # EQUALITY WITH THE GET IS THE ASSERTION, rather than a second list of the
+                # headers this test expects. RFC 9110 asks for the GET's own header field
+                # values, and a list written out here is exactly what stops being true the
+                # day `_send` gains a header — which is the drift `do_HEAD` is a flag rather
+                # than a second header block to avoid. `Date` is dropped because it is the
+                # one header that legitimately differs between two requests.
+                def without_date(headers):
+                    return {
+                        key: value
+                        for key, value in headers.items()
+                        if key.lower() != "date"
+                    }
+
+                for path in ("/", "/assets/main-a1b2c3.js", "/manifest.webmanifest"):
+                    _, got_body, got_headers = request(port, "GET", path)
+                    status, _, headers = request(port, "HEAD", path)
+                    checks.equal(status, 200, f"`HEAD {path}` answers 200 and not 501")
+                    checks.equal(
+                        without_date(headers),
+                        without_date(got_headers),
+                        "under the GET's own headers, every one of them — the boot header, "
+                        "the CORS block and `Connection: close` included",
+                    )
+                    checks.equal(
+                        headers.get("Content-Length"),
+                        str(len(got_body)),
+                        "with `Content-Length` the length the body WOULD have had, which is "
+                        "the one header a HEAD is usually sent to read",
+                    )
+                    # OVER A BARE SOCKET, BECAUSE `urllib` CANNOT SEE THIS. `raw_head` carries
+                    # the measurement: the client discards a HEAD body without reading it, so
+                    # asserting `response.read() == b""` passes against a server that wrote
+                    # every byte. Mutation-tested — this is the only arm here that fails when
+                    # `_send`'s suppression is removed.
+                    _, rest = raw_head(port, path)
+                    checks.equal(
+                        rest, b"", f"and nothing follows the headers on the wire for {path}"
+                    )
+
+                # The two named in the ask, asserted on their own so a failure says which is
+                # wrong rather than only that the dicts differ.
+                _, _, headers = request(port, "HEAD", "/")
+                checks.equal(
+                    headers.get("Content-Type"),
+                    "text/html; charset=utf-8",
+                    "`HEAD /` carries the app's own Content-Type",
+                )
+                checks.equal(
+                    headers.get("Cache-Control"),
+                    "no-store",
+                    "and its `no-store`, so a proxy that decides on a HEAD decides the same "
+                    "way the GET would have made it decide",
+                )
+                _, _, headers = request(port, "HEAD", "/assets/main-a1b2c3.js")
+                checks.equal(
+                    headers.get("Cache-Control"),
+                    capture_server.APP_IMMUTABLE,
+                    "and a hashed asset carries the immutable one under HEAD too",
+                )
+
+                # HEAD REACHES EVERY GET ROUTE AND NOT ONLY THE APP, which is `do_HEAD`'s own
+                # recorded decision and the half a narrow implementation would have got
+                # wrong: `/status` is the likeliest thing of all to have a monitor pointed at
+                # it, and a 405 there would reproduce the 501 one route over.
+                status, _, headers = request(port, "HEAD", "/status")
+                checks.equal(status, 200, "`HEAD /status` answers, because HEAD is not the "
+                             "app's private verb")
+                _, rest = raw_head(port, "/status")
+                checks.equal(rest, b"", "with the JSON withheld on the wire")
+                checks.ok(
+                    int(headers.get("Content-Length") or 0) > 0,
+                    "and a Content-Length describing the JSON it withheld",
+                )
+
+                # A REFUSAL IS STILL A REFUSAL UNDER HEAD, headers and status intact and the
+                # sentence withheld. Worth its own arm because `_dispatch` answers a refusal
+                # through `_fail` -> `_json` -> `_send`, which is the same suppression point
+                # by a different road.
+                status, _, headers = request(port, "HEAD", "/statuss")
+                checks.equal(status, 404, "`HEAD` on a mistyped route is still 404")
+                head, rest = raw_head(port, "/statuss")
+                checks.equal(rest, b"", "with the refusal's JSON withheld on the wire")
+                checks.ok(
+                    b"Content-Length: " in head,
+                    "and a Content-Length still describing it — a refusal is a response "
+                    "like any other and HEAD withholds only its body",
+                )
+
+                # THE ORIGIN GATE IS NOT WEAKENED BY HEAD BEING SAFE. A read is open to any
+                # origin and a write is not, and `SAFE_METHODS` gaining HEAD must not have
+                # moved the second half — the whole gate is one `in` against that tuple.
+                checks.ok(
+                    "HEAD" in capture_server.SAFE_METHODS
+                    and "POST" not in capture_server.SAFE_METHODS
+                    and "PUT" not in capture_server.SAFE_METHODS
+                    and "DELETE" not in capture_server.SAFE_METHODS,
+                    "HEAD is a safe method and the three mutating verbs still are not",
+                    f"safe methods: {capture_server.SAFE_METHODS}",
+                )
+                status, body, _ = request(
+                    port, "POST", "/", payload={}, origin="http://evil.example"
+                )
+                checks.equal(
+                    error_code(body),
+                    "origin_not_allowed",
+                    "and a foreign origin's write is still refused before anything is read",
+                )
+
                 # ------------------------------------------------- the API is still the API
                 status, body, _ = request(port, "GET", "/status")
                 checks.equal(status, 200, "`GET /status` is untouched")
@@ -8165,6 +8318,19 @@ def check_app_serve(checks: Checks) -> None:
                     200,
                     "AND THE API IS STILL UP: a TypeScript file that will not compile may "
                     "never stop this server handing out cards",
+                )
+                status, _, headers = request(port, "HEAD", "/")
+                checks.equal(
+                    status,
+                    503,
+                    "`HEAD /` is 503 with no build too — a monitor asking the cheap way "
+                    "must not be told the app is fine while the GET says it is not ready",
+                )
+                _, rest = raw_head(port, "/")
+                checks.equal(rest, b"", "with the refusal's sentence withheld, as HEAD asks")
+                checks.ok(
+                    int(headers.get("Content-Length") or 0) > 0,
+                    "and its `Content-Length` still describing that sentence",
                 )
                 status, body, _ = request(port, "POST", "/", payload={})
                 checks.equal(
@@ -21045,7 +21211,28 @@ def check_request_slots(checks: Checks) -> None:
     the count rather than before it, the supervisor's drain would wait out its whole grace on
     work that is not happening and then kill it. That is the exact shape of the incident this
     bound came from, one layer down.
+
+    THREE LEGS, AND THE SECOND AND THIRD EXIST BECAUSE THE FIRST WAS MEASURED VACUOUS OVER THE
+    SEMAPHORE ON 2026-09-08. Leg 1 read the bound through `slots_in_use()`, which is
+    `REQUEST_SLOTS - _slots._value` — the semaphore's own counter. Delete the semaphore and that
+    instrument reads **0**, so `held <= REQUEST_SLOTS` and `max(seen) <= REQUEST_SLOTS` both pass
+    while measuring an absence. Mutation run: `_slots.acquire(...)` replaced by an unconditional
+    pass and the matching `release()` removed — the whole check stayed GREEN, reporting
+    `held 0`. Section 11's claim that this was "observed failing … with the semaphore removed"
+    is corrected there; what fails under that mutation is nothing, and leg 2 is why it does now.
+
+    AND THE POOL IS THE CONFOUND, WHICH IS WHY LEG 2 WIDENS IT. `ThreadPoolExecutor(REQUEST_SLOTS)`
+    plus one request per worker means the pool ALREADY bounds execution at four, so an
+    independent counter over the shipped transport reads four whether the semaphore exists or
+    not — section 11 says exactly this: *"With one request per worker the pool size is also the
+    bound on concurrent execution, so `REQUEST_SLOTS` never blocks today."* A guard that cannot
+    see the difference is not guarding the semaphore, it is guarding the pool twice. Leg 2 hands
+    the server a DELIBERATELY OVERSIZED pool, so the semaphore is the only thing left that can
+    hold execution at the bound — which is the invariant section 11 says the semaphore is kept
+    for: *"on the day keep-alive returns, the pool bounds threads and the semaphore is the only
+    thing still bounding execution."* Leg 2 is that day, staged.
     """
+    import concurrent.futures
     import http.client
 
     checks.equal(
@@ -21054,27 +21241,92 @@ def check_request_slots(checks: Checks) -> None:
         "no request holds a slot before one is made — the counter starts where it says it does",
     )
 
-    seen: list[int] = []
-    gate = threading.Event()
-
-    # PATCHED AT THE ROUTE AND NOT AT `do_GET`, AND THE FIRST DRAFT GOT THAT WRONG. The slot is
-    # acquired inside `_dispatch`, which `do_GET` calls — so a hold placed in `do_GET` parks the
-    # thread OUTSIDE the bound, every reading is 0, and all three assertions below pass while
-    # measuring nothing. `do_status` is invoked by the dispatcher after the slot is taken, so a
-    # hold here is a hold on a slot.
+    # ------------------------------------------------------------------ shared instrumentation
+    # AN INDEPENDENT COUNTER, NOT `slots_in_use()`. This one is incremented by the route itself
+    # on entry and decremented on the way out, so it reports what actually got inside `_dispatch`
+    # regardless of what mechanism was supposed to stop it. That is the whole repair: an
+    # instrument that is part of the mechanism it measures reports zero when the mechanism is
+    # deleted, and zero passes every assertion of the form `<= REQUEST_SLOTS`.
     original = capture_server.do_status
 
-    def slow_status(*args, **kwargs):
-        """Hold a slot long enough for the others to pile up behind the bound."""
-        seen.append(capture_server.slots_in_use())
-        gate.wait(timeout=5.0)
-        return original(*args, **kwargs)
+    def instrumented(gate: threading.Event, state: dict):
+        """Patch `do_status` — the route the dispatcher calls AFTER taking a slot.
 
+        PATCHED AT THE ROUTE AND NOT AT `do_GET`, AND THE FIRST DRAFT GOT THAT WRONG. The slot is
+        acquired inside `_dispatch`, which `do_GET` calls — so a hold placed in `do_GET` parks the
+        thread OUTSIDE the bound, every reading is 0, and the assertions pass while measuring
+        nothing. `do_status` is invoked by the dispatcher after the slot is taken, so a hold here
+        is a hold on a slot.
+        """
+
+        def slow_status(*args, **kwargs):
+            with state["lock"]:
+                state["depth"] += 1
+                state["entered"] += 1
+                state["peak"] = max(state["peak"], state["depth"])
+                state["reported"].append(capture_server.slots_in_use())
+            try:
+                gate.wait(timeout=5.0)
+                return original(*args, **kwargs)
+            finally:
+                with state["lock"]:
+                    state["depth"] -= 1
+
+        return slow_status
+
+    def fresh_state() -> dict:
+        return {
+            "lock": threading.Lock(),
+            "depth": 0,
+            "peak": 0,
+            "entered": 0,
+            "reported": [],
+            "outcomes": [],
+        }
+
+    def fire(port: int, count: int, state: dict) -> list:
+        """`count` callers at `GET /status`, each recording the status it was answered with.
+
+        THE OUTCOME IS RECORDED BECAUSE LEG 2 NEEDS THE EXCESS CALLERS TO SAY SOMETHING. A caller
+        that is refused 503 has demonstrably reached the semaphore and been turned away; a caller
+        that is merely absent from the occupancy count has demonstrated nothing, and telling those
+        two apart is the difference between evidence and a wall-clock guess.
+        """
+        callers = []
+        for _ in range(count):
+
+            def one() -> None:
+                outcome = "error"
+                try:
+                    conn = http.client.HTTPConnection("127.0.0.1", port, timeout=30)
+                    conn.request("GET", "/status")
+                    response = conn.getresponse()
+                    response.read()
+                    outcome = int(response.status)
+                    conn.close()
+                except Exception:  # noqa: BLE001 — the outcome is the assertion, not the raise
+                    pass
+                with state["lock"]:
+                    state["outcomes"].append(outcome)
+
+            caller = threading.Thread(target=one, daemon=True, name="t7-caller")
+            caller.start()
+            callers.append(caller)
+        return callers
+
+    asking = capture_server.REQUEST_SLOTS + 6
+
+    # ------------------------------------------------------- leg 1: the transport, as it ships
+    checks.note("")
+    checks.note("REQUEST SLOTS — leg 1: the shipped transport bounds THREADS")
+
+    state = fresh_state()
+    gate = threading.Event()
     httpd = capture_server.CaptureServer(("127.0.0.1", 0), QuietHandler)
     port = httpd.server_address[1]
     thread = threading.Thread(target=httpd.serve_forever, daemon=True)
     thread.start()
-    capture_server.do_status = slow_status
+    capture_server.do_status = instrumented(gate, state)
     try:
         # EVERY THREAD ALIVE BEFORE THE LOAD, so the ones the SERVER makes can be told from the
         # ones this check makes. Naming the pool's workers and counting those was the first
@@ -21082,25 +21334,12 @@ def check_request_slots(checks: Checks) -> None:
         # `Thread-N`, the filter matched none of them, and `0 <= REQUEST_SLOTS` passed while
         # measuring nothing at all.
         before = set(threading.enumerate())
-
-        callers = []
-        for _ in range(capture_server.REQUEST_SLOTS + 6):
-            def one() -> None:
-                with contextlib.suppress(Exception):
-                    conn = http.client.HTTPConnection("127.0.0.1", port, timeout=10)
-                    conn.request("GET", "/status")
-                    conn.getresponse().read()
-                    conn.close()
-
-            caller = threading.Thread(target=one, daemon=True, name="t7-caller")
-            caller.start()
-            callers.append(caller)
+        callers = fire(port, asking, state)
 
         deadline = time.monotonic() + 5.0
-        while time.monotonic() < deadline and len(seen) < capture_server.REQUEST_SLOTS:
+        while time.monotonic() < deadline and state["peak"] < capture_server.REQUEST_SLOTS:
             time.sleep(0.02)
 
-        held = capture_server.slots_in_use()
         inflight = capture_server.inflight()
         # READ WHILE THE LOAD IS ON, beside the other two. Taken after `gate.set()` the callers
         # have finished and the server's threads have gone with them, so the count is 0 whatever
@@ -21111,21 +21350,11 @@ def check_request_slots(checks: Checks) -> None:
             caller.join(timeout=10)
 
         checks.ok(
-            held <= capture_server.REQUEST_SLOTS,
-            f"no more than REQUEST_SLOTS ({capture_server.REQUEST_SLOTS}) requests execute at "
-            f"once, with {capture_server.REQUEST_SLOTS + 6} asking — held {held}",
-        )
-        checks.ok(
-            max(seen, default=0) <= capture_server.REQUEST_SLOTS,
-            "and no handler ever observed the count above the bound from inside itself",
-        )
-        checks.ok(
             inflight <= capture_server.REQUEST_SLOTS,
-            f"and the queue is NOT counted as in flight — {inflight} in flight against "
-            f"{capture_server.REQUEST_SLOTS + 6} callers, which is what keeps `drain()` from "
-            f"waiting out its grace on requests that have not started",
+            f"the queue is NOT counted as in flight — {inflight} in flight against {asking} "
+            f"callers, which is what keeps `drain()` from waiting out its grace on requests "
+            f"that have not started",
         )
-
         # AND THE THREADS ARE BOUNDED TOO, which is the half the semaphore deliberately does not
         # do. `ThreadingMixIn` would have one per CONNECTION here — more callers, more threads,
         # without limit. The pool plus `Connection: close` makes a worker's life one REQUEST, so
@@ -21133,15 +21362,207 @@ def check_request_slots(checks: Checks) -> None:
         # threads against 153 without it, at identical throughput.
         checks.ok(
             len(serving) <= capture_server.REQUEST_SLOTS,
-            f"and the SERVER holds no more than REQUEST_SLOTS threads for "
-            f"{capture_server.REQUEST_SLOTS + 6} callers — {len(serving)}, where one per "
-            f"connection would be all of them",
+            f"and the SERVER holds no more than REQUEST_SLOTS "
+            f"({capture_server.REQUEST_SLOTS}) threads for {asking} callers — {len(serving)}, "
+            f"where one per connection would be all of them",
         )
     finally:
         capture_server.do_status = original
         gate.set()
         httpd.shutdown()
         httpd.server_close()
+
+    # ------------------------------------- leg 2: the semaphore, with the pool taken out of it
+    checks.note("")
+    checks.note(
+        "REQUEST SLOTS — leg 2: the semaphore bounds EXECUTION, over a pool too wide to help"
+    )
+
+    state = fresh_state()
+    gate = threading.Event()
+    httpd = capture_server.CaptureServer(("127.0.0.1", 0), QuietHandler)
+    port = httpd.server_address[1]
+    # THE POOL, WIDENED BEFORE THE FIRST CONNECTION. `process_request` builds one lazily only
+    # when `_pool` is None, and `_pool` is a CLASS attribute — assigning here binds an INSTANCE
+    # attribute, so nothing about this leaks into the server leg 1 built or the one the operator
+    # runs. Three times the bound: enough that every caller below could execute at once if the
+    # semaphore were not there, which is precisely the case this leg has to be able to see.
+    wide = concurrent.futures.ThreadPoolExecutor(
+        max_workers=asking, thread_name_prefix="t7-wide"
+    )
+    httpd._pool = wide  # noqa: SLF001 — the transport is the confound this leg removes
+    thread = threading.Thread(target=httpd.serve_forever, daemon=True)
+    thread.start()
+    capture_server.do_status = instrumented(gate, state)
+    # THE WAIT FOR A SLOT, SHORTENED FOR THIS LEG, AND IT IS WHAT MAKES THE READING DETERMINISTIC
+    # RATHER THAN TIMED. The first draft of this leg slept half a second after the bound was met
+    # and then read the occupancy, on the reasoning that an unbounded build would have filled up
+    # by then. That is a wall-clock bet on a machine running the rest of this suite, and it can
+    # only ever fail SILENTLY — a loaded box where the excess callers are late reports a green
+    # bound it never observed. With the timeout short, every excess caller RESOLVES: it is
+    # refused 503 rather than parking for thirty seconds, so the condition below is a fact about
+    # the callers instead of an interval, and `peak` is read once every one of them is accounted
+    # for. `_dispatch` reads this attribute at call time, which is the seam; `files.exclusive`
+    # binds it as a DEFAULT ARGUMENT at import and is untouched.
+    real_timeout = files.LOCK_TIMEOUT_SECONDS
+    files.LOCK_TIMEOUT_SECONDS = 0.3
+    try:
+        callers = fire(port, asking, state)
+
+        # EVERY CALLER ACCOUNTED FOR, WHICH IS A CONDITION AND NOT A DURATION. In the shipped
+        # tree exactly `REQUEST_SLOTS` get inside and hold, and the other six are refused — so
+        # this resolves as soon as the last refusal lands. With the semaphore deleted all ten get
+        # inside and it resolves on the tenth entry. Either way the count below is read after the
+        # last caller has done whatever it was going to do; there is no window to be unlucky in.
+        deadline = time.monotonic() + 20.0
+        while time.monotonic() < deadline:
+            # A CALLER IS ACCOUNTED FOR WHEN IT IS INSIDE `_dispatch` OR HAS BEEN ANSWERED, and
+            # the two are disjoint while the gate is shut: a holder is inside and has answered
+            # nobody, a refused caller is answered and is not inside.
+            with state["lock"]:
+                answered = len(state["outcomes"])
+                inside = state["depth"]
+            if answered + inside >= asking:
+                break
+            time.sleep(0.01)
+
+        with state["lock"]:
+            peak = state["peak"]
+            entered = state["entered"]
+            answered = len(state["outcomes"])
+            inside = state["depth"]
+            reported = list(state["reported"])
+        inflight = capture_server.inflight()
+        gate.set()
+        for caller in callers:
+            caller.join(timeout=30)
+        with state["lock"]:
+            refused = sum(1 for outcome in state["outcomes"] if outcome == 503)
+
+        checks.equal(
+            answered + inside,
+            asking,
+            f"every one of the {asking} callers is accounted for before anything is read — "
+            f"{inside} inside `_dispatch` and {answered} already answered. THIS ASSERTION IS THE "
+            f"GUARD ON THE ONES BELOW: read on a timer instead, a slow machine reports a bound "
+            f"it never watched fill up, and the failure is a silent green",
+        )
+        checks.ok(
+            peak <= capture_server.REQUEST_SLOTS,
+            f"no more than REQUEST_SLOTS ({capture_server.REQUEST_SLOTS}) requests are inside "
+            f"`_dispatch` at once, with {asking} asking and a pool of {asking} that would let "
+            f"every one of them in — peak {peak}, counted by the route itself rather than by "
+            f"the semaphore's own counter",
+        )
+        checks.equal(
+            refused,
+            asking - capture_server.REQUEST_SLOTS,
+            f"and the excess SAID SO — {asking - capture_server.REQUEST_SLOTS} callers reached "
+            f"the semaphore and were refused 503, which is evidence that the bound turned them "
+            f"away rather than the absence of evidence that they arrived. Entered {entered}, "
+            f"refused {refused}",
+        )
+        checks.ok(
+            inflight <= capture_server.REQUEST_SLOTS,
+            f"and the queue is still NOT in flight with the transport widened — {inflight} "
+            f"against {asking} callers, so the slot is taken BEFORE `_inflight_enter` and the "
+            f"drain sees only work that has started",
+        )
+        checks.ok(
+            max(reported, default=0) <= capture_server.REQUEST_SLOTS,
+            f"and no handler observed the semaphore's own count above the bound from inside "
+            f"itself — {max(reported, default=0)}. Kept as a cross-check on the counter above "
+            f"and NOT as the guard: this reading is the mechanism reporting on itself",
+        )
+    finally:
+        files.LOCK_TIMEOUT_SECONDS = real_timeout
+        capture_server.do_status = original
+        gate.set()
+        httpd.shutdown()
+        httpd.server_close()
+        wide.shutdown(wait=False)
+
+    # --------------------------------------- leg 3: the caller that cannot get a slot is REFUSED
+    checks.note("")
+    checks.note("REQUEST SLOTS — leg 3: a caller that waits out the timeout is refused, not hung")
+
+    # UNREACHABLE OVER THE SHIPPED TRANSPORT, AND THAT IS THE POINT OF SAYING SO. With the pool
+    # sized at `REQUEST_SLOTS`, caller five never gets a worker, so it never reaches `_dispatch`
+    # and never asks for a slot — it waits in the accept backlog instead. The refusal below is
+    # therefore the same staged future leg 2 stages: the branch that answers on the day keep-alive
+    # or a wider pool returns. A branch nothing can reach is a branch nothing has ever run.
+    checks.ok(
+        files.LOCK_TIMEOUT_SECONDS < serve.DRAIN_GRACE_SECONDS,
+        f"the wait for a slot ({files.LOCK_TIMEOUT_SECONDS:.0f}s, "
+        f"`store/files.py:LOCK_TIMEOUT_SECONDS`) sits inside the supervisor's drain "
+        f"({serve.DRAIN_GRACE_SECONDS:.0f}s, `scripts/serve.py:DRAIN_GRACE_SECONDS`), so a "
+        f"queued request always resolves one way or the other before the drain gives up and "
+        f"kills a write in flight",
+    )
+
+    state = fresh_state()
+    gate = threading.Event()
+    httpd = capture_server.CaptureServer(("127.0.0.1", 0), QuietHandler)
+    port = httpd.server_address[1]
+    wide = concurrent.futures.ThreadPoolExecutor(
+        max_workers=asking, thread_name_prefix="t7-wide"
+    )
+    httpd._pool = wide  # noqa: SLF001 — as leg 2: the pool must not be what refuses
+    thread = threading.Thread(target=httpd.serve_forever, daemon=True)
+    thread.start()
+    capture_server.do_status = instrumented(gate, state)
+    # THE TIMEOUT, SHORTENED FOR THE LENGTH OF THIS LEG ONLY. `_dispatch` reads
+    # `files.LOCK_TIMEOUT_SECONDS` at call time, so the module attribute is the seam; nothing
+    # else picks it up, because `files.exclusive` binds it as a DEFAULT ARGUMENT at import and
+    # is therefore untouched by this. Thirty seconds is the shipped figure and is asserted
+    # above; waiting it out here would put half a minute on the Stop hook to learn nothing more.
+    real_timeout = files.LOCK_TIMEOUT_SECONDS
+    files.LOCK_TIMEOUT_SECONDS = 0.3
+    try:
+        callers = fire(port, capture_server.REQUEST_SLOTS, state)
+        deadline = time.monotonic() + 5.0
+        while time.monotonic() < deadline and state["peak"] < capture_server.REQUEST_SLOTS:
+            time.sleep(0.02)
+
+        started = time.monotonic()
+        status, body, _ = request(port, "GET", "/status")
+        waited = time.monotonic() - started
+
+        gate.set()
+        for caller in callers:
+            caller.join(timeout=10)
+
+        checks.equal(
+            status,
+            int(HTTPStatus.SERVICE_UNAVAILABLE),
+            "with every slot held, the next caller is REFUSED 503 rather than parked forever — "
+            "a hang is the failure shape this whole bound exists to avoid, and it is the one a "
+            "suite reports as a timeout naming nothing",
+        )
+        checks.equal(
+            error_code(body),
+            "server_busy",
+            "and it is `server_busy` and not `store_busy` — the two refusals name different "
+            "processes, and this one is about THIS server rather than the lock",
+        )
+        checks.ok(
+            str(capture_server.REQUEST_SLOTS) in error_message(body),
+            f"and the message says how many it is already answering "
+            f"({capture_server.REQUEST_SLOTS}), so the operator is not told to retry against a "
+            f"figure nothing on screen names",
+        )
+        checks.ok(
+            waited < 3.0,
+            f"and it refused after the wait rather than after the drain — {waited:.2f}s against "
+            f"a timeout patched to 0.3s for this leg",
+        )
+    finally:
+        files.LOCK_TIMEOUT_SECONDS = real_timeout
+        capture_server.do_status = original
+        gate.set()
+        httpd.shutdown()
+        httpd.server_close()
+        wide.shutdown(wait=False)
 
     checks.equal(
         capture_server.slots_in_use(),
