@@ -77,6 +77,24 @@ export function stateLabel(state: string): string {
   return raw.charAt(0).toUpperCase() + raw.slice(1)
 }
 
+/** A wire number this screen is about to do arithmetic on, as a number it can.
+ *
+ *  THE ONE PLACE `NaN` IS STOPPED, AND IT IS STOPPED BY COERCION RATHER THAN BY A CHECK AT
+ *  EACH READER (D115, amended). `Math.max(0, undefined)` is `NaN`, and `NaN` survives every
+ *  `Math.max`, every subtraction and every template literal after it — so an absent counter
+ *  does not fail loudly, it renders `NaN live` on the screen where money is decided. That is
+ *  what shipped: `cli/cmd_join.py` froze `listing` into `pricing.json` before D115 existed,
+ *  and all 171 stored listings on the owner's store carry no `sold_here` at all.
+ *
+ *  A TYPE CANNOT CATCH THIS ONE. `PricingSku.listing` is a record read back off disk, not a
+ *  value the server composes, so its declaration describes what `join` writes TODAY and every
+ *  table written before a field existed contradicts it. `PricingPayload.written_at` is the
+ *  same class and says so; what this adds is that the arithmetic is guarded even where the
+ *  declaration has not caught up. */
+function figure(n: number | null | undefined): number {
+  return typeof n === 'number' && Number.isFinite(n) ? Math.max(0, n) : 0
+}
+
 /** What this store believes TCGplayer is holding NOW: the reading, less what has sold here
  *  since it (D115).
  *
@@ -85,9 +103,29 @@ export function stateLabel(state: string): string {
  *  numbers travel and the client subtracts. Six inline `Math.max(0, …)` is the rule living in
  *  six places, which is what `SearchGroup.listable` exists to avoid for the shelf count.
  *
+ *  AND BECAUSE THE CLIENT IS THE SUBTRACTOR, THE CLIENT OWNS THE GUARD ON ITS INPUTS (D115,
+ *  amended). Both are taken as `number | null | undefined` and read through `figure` above,
+ *  so a `listing` object written before `sold_here` existed draws the reading itself — which
+ *  is what this screen drew before D115, and correct as of the join. The route is deliberately
+ *  NOT where that zero is supplied: `do_pipeline_pricing` serves `pricing.json` through and
+ *  the honest fill is the same constant, because the store's counter counts sales since THE
+ *  STORE'S OWN reading and pairing it with the run's frozen one double-counts every
+ *  `reconcile --live` run since the join — the arbitration `pricingSource.ts:asRow` already
+ *  spends a paragraph refusing for the very same reason.
+ *
  *  FLOORED, AND THE FLOOR IS NOT AN ERROR CASE. A counter above the reading is the ordinary
  *  state of a store whose reading predates its sales, and the honest answer there is "we
  *  believe none is for sale" — which is what zero says. */
-export function forSale(live: number, soldHere: number): number {
-  return Math.max(0, Math.max(0, live) - Math.max(0, soldHere))
+export function forSale(live: number | null | undefined, soldHere: number | null | undefined): number {
+  return Math.max(0, figure(live) - figure(soldHere))
+}
+
+/** How many copies have sold here since the reading, as a figure a sentence may be built on.
+ *
+ *  EXPORTED SO A READER NEVER TESTS THE RAW FIELD. `soldHere > 0` on an absent counter is
+ *  `false`, which is the right answer by accident; `${soldHere} sold since` on the same value
+ *  is `undefined sold since`, which is the same defect one branch over. One reading, one
+ *  coercion, and the clause and the figure can never disagree. */
+export function soldSince(soldHere: number | null | undefined): number {
+  return figure(soldHere)
 }
