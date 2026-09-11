@@ -704,6 +704,32 @@ word.
   `ECONNREFUSED`, and `app/src/server.ts` deliberately has no retry, so it surfaces as
   `unreachable`. Tens of milliseconds. Named in D53 with the fix considered and declined.
 
+### The one-process supervisor builds against a stub, and the reaping it deferred is now spent
+
+**Nothing in this file was discharged by D138.** The supervisor's four gaps above are each about
+the capture child, the drain and the swap, and one process changes none of them; section 11's
+bounded pool is an argument about real clients and is untouched by where the app is served from.
+Walked entry by entry on 2026-09-11, when the `restart` alias and the `VITE_*` remnants were
+retired.
+
+**What it adds is one gap, and the gap is deliberate.** `make serve-selftest` proves the build
+behaviors — a missing `dist/` builds before the port opens, a screen edit rebuilds and restarts
+nothing, a failed build leaves the old bundle serving — against a STUB `app/` whose "build" is a
+script that writes one file. Its own header says why: *"WHAT IS UNDER TEST IS THE SUPERVISOR, NOT
+VITE."* That is the right subject for a self-test, and the cost is that the supervisor's contract
+with the REAL `vite build` is asserted by nothing here — its exit code on a type error, the
+`dist.next` rename, the shape of what it writes. The first thing that would notice a regression
+is `make up` on a rig.
+
+**The deferred reaping is spent, not abandoned.** `VITE_PID`, `VITE_LOG` and the `VITE` child
+entry outlived D138 on purpose, so that the first `make up` or `make down` after it landed could
+reap a detached `npm run dev` left behind by a supervisor running the previous code. That run
+happened on the main checkout at 15:24 on 2026-09-11, and at the retirement **0 of 20 checkouts
+on this machine held a `.serve/vite.pid`** — the entry had nothing left anywhere to find. What is
+given up is the checkout that somehow still holds one: `scripts/serve.py` can no longer name it,
+and it falls to `make reap` and `scripts/janitor.py`, which read the process table rather than a
+pidfile and are not bounded by what a pidfile happens to be called.
+
 ### A Playwright line number is not a line in the file
 
 Playwright strips the TypeScript and reports against the generated file, so a spec loses the
@@ -1183,8 +1209,9 @@ sweep that was supposed to size the bound below, reproduced nothing — see what
 2. **80 Playwright browsers under `make design-check`: 969 threads inside ten minutes at 338% CPU**,
    measured immediately after that landed, which is how we know the idle timeout does not cover it.
 3. **2026-09-04, a session's own doing.** It ran `make design-check` about eight times against the
-   owner's live server while also driving it from hand-rolled Playwright scripts, then ran
-   `make restart`. The supervisor's drain — `DRAIN_GRACE_SECONDS`, which is
+   owner's live server while also driving it from hand-rolled Playwright scripts, then ran the
+   `restart` target — the spelling of that day, folded into `make up ARGS=--restart` and removed
+   by D138. The supervisor's drain — `DRAIN_GRACE_SECONDS`, which is
    `store/files.py:LOCK_TIMEOUT_SECONDS` (30) plus ten — expired with requests still in flight, and
    it killed the server outright: *"capture server did not stop within 40s — killing it. a request in
    flight was cut."* That crashed Python out from under the owner mid-use. No data was lost.

@@ -67,8 +67,6 @@ SUPERVISOR_PID = "supervisor.pid"
 SUPERVISOR_LOG = "supervisor.log"
 CAPTURE_PID = "capture.pid"
 CAPTURE_LOG = "capture.log"
-VITE_PID = "vite.pid"
-VITE_LOG = "vite.log"
 
 # THE APP'S BUILD STATE, WRITTEN HERE AND READ BY `make status` (D138). One file, the shape
 # `.serve/design-check.json` already uses: a verdict, a stamp, and the first line of what went
@@ -290,11 +288,6 @@ class Child(NamedTuple):
 
 
 CAPTURE = Child("capture", CAPTURE_PID, CAPTURE_LOG)
-# THE APP IS NO LONGER A CHILD (D138) AND THIS ENTRY OUTLIVES IT ON PURPOSE. A supervisor
-# running the previous code left `vite.pid` and a detached `npm run dev` behind; the first
-# `make up` or `make down` after this lands is the only thing that will ever reap them, and it
-# can only do that if it still knows the name. Nothing writes this pidfile any more.
-VITE = Child("app", VITE_PID, VITE_LOG)
 
 
 def state_dir(root: Path = REPO_ROOT) -> Path:
@@ -1348,8 +1341,9 @@ def _sweep_orphans(root: Path = REPO_ROOT) -> None:
     """Children of a supervisor that was killed with -9, in `root`'s own `.serve/`.
 
     This is why there is a pidfile per child rather than one for the supervisor alone: without
-    them an orphaned `npm run dev` keeps the dev port, and `strictPort` turns the next start
-    into a failure rather than a silent move.
+    it an orphaned capture server holds the port, and the next start fails to bind rather than
+    moving somewhere quieter. There were two children until D138 made the app a build instead
+    of a process; the loop keeps its shape because the argument is per-child, not per-count.
 
     IT ANSWERS FOR ONE TREE AND CANNOT REACH ANOTHER, WHICH IS THE POINT OF THE ARGUMENT.
     `root` was `REPO_ROOT` and nothing else until 2026-09-06, so `scripts/janitor.py` — which
@@ -1358,7 +1352,7 @@ def _sweep_orphans(root: Path = REPO_ROOT) -> None:
     was deleted has no `.serve/` left to read, because `.serve/` lives inside the tree. That
     case is the janitor's, and it is answered from the process table instead.
     """
-    for child in (CAPTURE, VITE):
+    for child in (CAPTURE,):
         pid = live_pid(child, root)
         if pid is None:
             clear_pidfile(child, root)
@@ -1390,8 +1384,9 @@ def refuse_unconfirmed(args: argparse.Namespace, verb: str) -> bool:
 
     WHY IT EXISTS. On 2026-09-04 a session ran `make design-check` about eight times against the
     owner's live server, degraded it the way `docs/DEBTS.md` section 11 describes, and then ran
-    `make restart` to fix what it had done. The drain expired and the supervisor killed the
-    process with a request in flight, which crashed Python out from under the owner mid-use. The
+    the `restart` target to fix what it had done — since removed by D138, the bounce now being
+    `make up ARGS=--restart`. The drain expired and the supervisor killed the process with a
+    request in flight, which crashed Python out from under the owner mid-use. The
     wedge is survivable; the kill past the drain is what was not. Nothing on this path said a
     word, because nothing on it knew the process was anyone else's.
     """
@@ -1469,18 +1464,6 @@ def do_down(_args: argparse.Namespace) -> int:
         print("  the launch agent starts it again at your next login —")
         print("  `make launch-agent ARGS=--remove` to stop that.")
     return 0
-
-
-def do_restart(args: argparse.Namespace) -> int:
-    """`make up ARGS=--restart` is the spelling now (D138 §1.3). Kept for one release.
-
-    An alias rather than a deletion, because `make restart` is in the owner's fingers, in this
-    repo's own docs and in two of its refusal messages. It says the new spelling and then does
-    the thing, which is what a rename owes anyone who types the old name.
-    """
-    print("`make restart` is now `make up ARGS=--restart`. Running that.")
-    args.restart = True
-    return do_up(args)
 
 
 # ---------------------------------------------------------------------------- launch agent
@@ -1654,12 +1637,6 @@ def main(argv: Optional[list[str]] = None) -> int:
     down.add_argument("--confirm", action="store_true",
                       help="stop the main tree's agent-kept server anyway")
     down.set_defaults(func=do_down)
-
-    restart = sub.add_parser("restart", help="stop then start")
-    restart.add_argument("--no-watch", action="store_true")
-    restart.add_argument("--confirm", action="store_true",
-                         help="bounce the main tree's agent-kept server anyway")
-    restart.set_defaults(func=do_restart)
 
     rep = sub.add_parser("report", help="read-only state, for `make status`")
     rep.add_argument("--json", action="store_true")

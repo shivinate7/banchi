@@ -8451,7 +8451,7 @@ two commands.
 
 **THREE SESSION NOTES ALREADY WARNED ABOUT THIS CLASS AND IT HAPPENED TWICE ANYWAY.** This
 project's memory carries `pkill-f-is-machine-wide.md` (a worktree cleanup that killed the main
-tree's servers), `dont-bounce-the-owners-servers.md` (`make restart` killing the live capture
+tree's servers), `dont-bounce-the-owners-servers.md` (the `restart` target killing the live capture
 server mid-request) and `a-pgrep-waiter-matches-itself.md`. **A note that has to be remembered is not a guard**, which is the preference this repo already acts on everywhere else — D16 checks the
 docs mechanically rather than asking, D42 refuses a move of `main` in a hook rather than in a
 sentence, D111 sweeps rather than reminding.

@@ -675,7 +675,7 @@ The address is reached from a phone, the parts that hold it up sit in two differ
 and the way it breaks does not look like breakage. `make lan-check` runs the whole chain from
 this machine and says.
 
-**Six things hold `http://pkmnscan.lan:5173` up. Two of them are not this repo's** — D43 is
+**Six things hold `http://pkmnscan.lan:8000` up. Two of them are not this repo's** — D43 is
 explicit that the owner's DNS is theirs and nothing here touches it:
 
 | Where | What | If it is wrong |
