@@ -1,6 +1,6 @@
 # One process serves the product
 
-**Status: specified and BUILT 2026-09-11.** D137 is the decision and this file is the plan;
+**Status: specified and BUILT 2026-09-11.** D138 is the decision and this file is the plan;
 all three PRs in §9 landed the same day, in order, each with the proof it names. What is NOT
 done is in §10 — the dock app's reinstall and the LAN check from a phone are both presses on
 the owner's own machine and neither has been made.
@@ -23,7 +23,7 @@ the same live `:8000` it talks to today.
 
 ## 1. The three answers the interview left open
 
-D137 records the owner's interview. Three questions were asked afterwards and answered with a
+D138 records the owner's interview. Three questions were asked afterwards and answered with a
 question back; the tradeoffs and the ruling for each are here so the entry does not re-argue
 them.
 
@@ -255,7 +255,7 @@ a FIRST install; D108's manifest is already relative and needs no edit.
 **What is not optional is that the ordinary Chrome tab moves**, from `:5173` to `:8000`, and
 that is a different origin whether or not anything is in the dock.
 
-**A port is part of the origin, and D137 did not say so.** Two things are keyed by origin in
+**A port is part of the origin, and D138 did not say so.** Two things are keyed by origin in
 Chrome and both reset once:
 
 - **The camera grant.** D108 measured that the grant lives in the profile's content settings,
@@ -303,7 +303,7 @@ unmeasured.
 
 ## 7. The frozen form, deferred
 
-D137 defers a promoted snapshot until a second person needs the app. If that day comes, the
+D138 defers a promoted snapshot until a second person needs the app. If that day comes, the
 shape is: a release target writes `app/dist/` plus the Python packages into a directory with
 its own `PKMNSCAN_HOME`, and the launch agent points at that directory instead of the
 checkout. Everything in §3 and §4 is a prerequisite for it and nothing in it is wasted. It is

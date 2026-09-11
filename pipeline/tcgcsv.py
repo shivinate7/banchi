@@ -68,10 +68,30 @@ NUMBER_COLUMN = "Number"
 NAME_COLUMN = "Product Name"
 CONDITION_COLUMN = "Condition"
 
-# The partition pair (D25). Both sat in CANONICAL_HEADER unread until 2026-08-23; they are
-# read now — `product_lines` below is the reader, and `pipeline/join.py:Catalog.from_export`
-# filters on the pair — but the reason they are named as constants is unchanged and worth
-# keeping.
+# The condition a TCGplayer export gives SEALED PRODUCT — booster displays, bundles, blisters,
+# event kits. Named here because `pipeline/join.py:Catalog.from_export` keeps it through the
+# Near Mint narrowing D137 added, and a bare `"Unopened"` literal in that predicate would read
+# as one more grade rather than as the thing that is NOT a grade.
+#
+# A SEALED ROW IS NOT A GRADED ROW AND THAT IS WHY IT SURVIVES. Every play grade — Lightly
+# Played through Damaged — is one reading of a card this product sells at Near Mint and nothing
+# else (D12), so it is noise in the catalog. `Unopened` is the ONLY condition a sealed product
+# is ever listed in: one row per product, never a sibling, carrying no `Number`, so it lives in
+# `Catalog._blank_number_by_name` alone and cannot change what any numbered card resolves to.
+# Measured across both wide fixtures: zero sealed `Product Name` cells collide with a single's,
+# exact or folded, so keeping them cannot put a Booster Box on a card.
+SEALED_CONDITION = "Unopened"
+
+# The partition pair (D25), and a third axis beside it (D137). Both sat in CANONICAL_HEADER
+# unread until 2026-08-23; they are read now — `product_lines` below is the reader, and
+# `pipeline/join.py:Catalog.from_export` filters on the pair — but the reason they are named as
+# constants is unchanged and worth keeping.
+#
+# THE PAIR IS NO LONGER THE WHOLE OF WHAT `from_export` CUTS ON, and this sentence said it was
+# until 2026-09-11. `Condition` is the third axis: the pair says WHICH GAME'S rows these are,
+# and the condition narrowing says WHICH READING OF A CARD this product sells. They are not the
+# same kind of fact, which is why the pair keeps its name and the third one is not folded into
+# it — a game is a partition and a grade is a scope.
 #
 # `Product Line` is the one that matters, and D25 is exact about why. The Deferred entry in
 # docs/DECISIONS.md used to call the catalog join "product-line-agnostic". Measured, it was

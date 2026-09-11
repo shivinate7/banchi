@@ -338,7 +338,7 @@ BOOT_HEADER = "X-Pkmnscan-Boot"
 PORT = ports.capture_port()
 
 # WHERE THE BUILT APP IS, AND IT IS A PROPERTY OF THE CHECKOUT RATHER THAN OF THE STORE
-# (D137). `app/dist/` beside this tree's own `app/src/`, so a worktree serves the bundle it
+# (D138). `app/dist/` beside this tree's own `app/src/`, so a worktree serves the bundle it
 # built from its own source on its own port, exactly as it serves its own store (D43) — the
 # two facts are the same fact and neither needs a new variable to say it.
 #
@@ -2674,7 +2674,7 @@ def app_dist() -> Path:
 def app_claims(path: str) -> bool:
     """Is this a path the built app answers? The root, or a file of the build.
 
-    NARROW ON PURPOSE, AND THE HASH ROUTER IS WHY (D137). The usual SPA host serves
+    NARROW ON PURPOSE, AND THE HASH ROUTER IS WHY (D138). The usual SPA host serves
     `index.html` for every unmatched path, because its router owns real URLs and a deep link
     has to survive a reload. `App.tsx` is a HASH router: every screen is `/#/inventory`, the
     part after `#` is never sent, and so the only paths the app has are `/` and its own
@@ -2693,7 +2693,7 @@ def app_claims(path: str) -> bool:
 
 
 def do_app_file(path: str) -> Tuple[bytes, str, str]:
-    """A file out of the built app. `app_claims` decides what reaches here (D137).
+    """A file out of the built app. `app_claims` decides what reaches here (D138).
 
     THE LAST RESORT OF `do_GET` AND NEVER A ROUTE. Every route in this server is matched
     first and this is what the fall-through reaches, so a path this product serves on the
@@ -2723,7 +2723,7 @@ def do_app_file(path: str) -> Tuple[bytes, str, str]:
     if not (root / "index.html").is_file():
         # THE APP IS NOT BUILT, AND THIS IS THE ONLY SENTENCE THAT SAYS SO. Not a page and
         # not styled: a screen here would be a second front end, maintained forever, for the
-        # ten seconds before the supervisor's first build lands (D137 §1.1). 503 rather than
+        # ten seconds before the supervisor's first build lands (D138 §1.1). 503 rather than
         # 404 because the resource is not missing, it is not ready — and a 404 would read to
         # a browser, and to the operator, as a wrong address.
         raise BadRequest(
@@ -5449,6 +5449,46 @@ def _answer_target(
             "condition_mismatch",
             f"{sku} is offered as {offered_condition!r}, not {condition!r}. The screen "
             f"was drawn from an older queue file — reload it and choose again.",
+        )
+
+    # D137 — AND THE GRADE ITSELF IS CHECKED, NOT ONLY THAT THE TWO AGREE.
+    #
+    # The three refusals above ask whether this answer matches the row that was OFFERED. None
+    # of them asks whether the row should have been offered at all, and for ten days it should
+    # not have been: the catalog carried every play grade, so `Damaged Foil` sat on screen as a
+    # tappable chip beside `Near Mint Foil` and answering it would have written that SKU onto a
+    # card this product sells at Near Mint (D12). Nothing downstream would have disagreed —
+    # `join_batch` rung 0 re-finds the answered row by its own condition string, so the wrong
+    # grade travels all the way into the import file.
+    #
+    # `Catalog.from_export` now makes this unreachable from the screen, which is exactly why it
+    # is worth having: the entries in the store TODAY were written before that filter existed
+    # and still carry their played rows until the next join rewrites them. This is the floor
+    # under those, and under any client that builds its own POST.
+    #
+    # THE SET IS THE CATALOG'S, NOT A SECOND OPINION ABOUT IT. Near Mint plus sealed, the same
+    # two clauses `from_export` keeps — a row that survives the catalog satisfies this by
+    # construction, so the two can never drift into disagreeing about one row.
+    #
+    # `or DEFAULT_GAME` IS D21'S READ-SIDE BACKFILL AND NOT A GUESS, and it is the same
+    # expression `cli/resolve.py` uses to decide which catalog a card is joined against. A
+    # record predating D21 carries no claim, is READ as the default game, and is therefore
+    # offered the default game's rows — so asking a different question here would refuse a card
+    # the join had just answered correctly. T7 found this on the first run with a `game`-less
+    # fixture card; `games.require` raises `UnknownGame` on `None` rather than defaulting,
+    # which is right for a registry lookup and wrong for a read of an old record.
+    listable = _near_mint_conditions(
+        str(getattr(card, "game", None) or games.DEFAULT_GAME)
+    ) | {tcgcsv.SEALED_CONDITION}
+    if offered_condition not in listable:
+        raise BadRequest(
+            HTTPStatus.CONFLICT,
+            "condition_not_listed",
+            f"{sku} is a {offered_condition!r} row, and this product lists "
+            f"{', '.join(sorted(listable))} (D12). It was offered by a queue entry written "
+            f"before the catalog stopped carrying play grades — re-join this run and the "
+            f"entry will be rewritten with the rows the ladder would actually pick. Nothing "
+            f"was written.",
         )
 
     return card, holders, offering, governing, chosen, offered_condition
@@ -10460,7 +10500,7 @@ class CaptureHandler(BaseHTTPRequestHandler):
                     kind,
                     (("Content-Disposition", 'attachment; filename="pirateship-import.csv"'),),
                 )
-            # THE APP ITSELF, AND IT IS THE LAST THING TRIED (D137). Every route above is
+            # THE APP ITSELF, AND IT IS THE LAST THING TRIED (D138). Every route above is
             # matched first, so nothing in `app/dist/` can shadow a route; what reaches here
             # is `/`, an asset, or an address somebody typed. `parsed.path` rather than the
             # stripped `path`, because a trailing slash is part of a file's name to a
@@ -10747,7 +10787,7 @@ class CaptureHandler(BaseHTTPRequestHandler):
                     ),
                 )
             if app_owns(path):
-                # The app is served here and is read-only (D137). 405 and not 404,
+                # The app is served here and is read-only (D138). 405 and not 404,
                 # because the resource exists — saying "no such route" about a path
                 # this server answers on GET is a lie that reads as a routing bug.
                 raise BadRequest(
@@ -10798,7 +10838,7 @@ class CaptureHandler(BaseHTTPRequestHandler):
                     HTTPStatus.OK, pipeline_routes.do_pricing_corpus_write(self._body())
                 )
             if app_owns(path):
-                # The app is served here and is read-only (D137). 405 and not 404,
+                # The app is served here and is read-only (D138). 405 and not 404,
                 # because the resource exists — saying "no such route" about a path
                 # this server answers on GET is a lie that reads as a routing bug.
                 raise BadRequest(
@@ -10850,7 +10890,7 @@ class CaptureHandler(BaseHTTPRequestHandler):
                     HTTPStatus.OK, shipping_routes.do_shipping_forget(match.group(1))
                 )
             if app_owns(path):
-                # The app is served here and is read-only (D137). 405 and not 404,
+                # The app is served here and is read-only (D138). 405 and not 404,
                 # because the resource exists — saying "no such route" about a path
                 # this server answers on GET is a lie that reads as a routing bug.
                 raise BadRequest(

@@ -2130,7 +2130,7 @@ On surface / bg / hover it is 5.12 / 4.99 / 4.69:1, clearing 1.4.11's 3:1 on all
 
 **Rejected, and it led until the owner answered: building the app to `dist` and serving it from the capture server.** It collapses two processes into one, and `app/package.json` has carried an unused `build` script the whole time. It is the wrong answer to *this* request, because a built bundle has to be rebuilt — it would ADD a step to remember in exchange for removing one. Vite stays, and it was already the half that worked.
 
-**Amended 2026-09-11 — that rejection is reversed, on the one ground it gave (D137).** The owner asked for an easier way to package this, and the answer to "a built bundle has to be rebuilt" is that the rebuild is now the SUPERVISOR's job: `app/src` and `app/public` get their own watch set, a change there runs `vite build` into a sibling directory and renames it in, and nothing is added to anybody's memory. Measured before it was built: a cold build of this app is 1.2 seconds, which is what makes the old bundle answering meanwhile a moment nobody notices rather than a window to design around. **Everything else in this entry stands and now governs one child instead of two** — the drain, the parse pre-check, the fast-failure cap, the self-watch, the liveness probe and the launch agent are untouched. What is gone from this file is `spawn_vite`; what is gone from the operator's day is a second port. The full argument is D137 and the plan it names is `docs/specs/one-process.md`.
+**Amended 2026-09-11 — that rejection is reversed, on the one ground it gave (D138).** The owner asked for an easier way to package this, and the answer to "a built bundle has to be rebuilt" is that the rebuild is now the SUPERVISOR's job: `app/src` and `app/public` get their own watch set, a change there runs `vite build` into a sibling directory and renames it in, and nothing is added to anybody's memory. Measured before it was built: a cold build of this app is 1.2 seconds, which is what makes the old bundle answering meanwhile a moment nobody notices rather than a window to design around. **Everything else in this entry stands and now governs one child instead of two** — the drain, the parse pre-check, the fast-failure cap, the self-watch, the liveness probe and the launch agent are untouched. What is gone from this file is `spawn_vite`; what is gone from the operator's day is a second port. The full argument is D138 and the plan it names is `docs/specs/one-process.md`.
 
 One thing in this entry's own list changed with it, and it is the guard rather than the list: **`make dev` is no longer refused beside a running supervisor.** That guard existed because both ways of starting wanted the same two ports, and the supervisor no longer holds `:5173` at all. `make server` is still refused, because `:8000` is still the supervisor's and the squatter this entry measured is still exactly what would happen.
 
@@ -6315,7 +6315,7 @@ measured carries a drop shadow out to 87.5% and the mark carries none, so it sit
 dock's shelf. Section 17 names what would settle it — a sweep at 128, 64 and 32px against the
 same three icons — rather than a value typed into a generator.
 
-### Amended 2026-09-11 — the URL is `:8000`, and a port is part of an origin (D137)
+### Amended 2026-09-11 — the URL is `:8000`, and a port is part of an origin (D138)
 
 **The installed app would be created from `http://localhost:8000` now**, because the capture server serves the page itself and `:5173` belongs to `make dev`. Everything above is unchanged: the same Chrome, the same profile, the same manifest — which is already relative and needed no edit — and the same argument that the dock app is a CLIENT and never a second supervisor.
 
@@ -9315,6 +9315,10 @@ box therefore sits inert beneath a live one rather than being cleaned up — the
 D36's `refuse_reallocated` already treats as a hazard worth refusing a run over, not worth
 silently repairing.
 
+---
+
+
+
 ## D135 — Codex reads the same rules a Claude Code session does, through three symlinks and one reconciled hook roster
 
 **Settled 2026-09-11.** OpenAI Codex was installed in this repository on 2026-09-09 and left
@@ -9448,8 +9452,154 @@ regardless; it was never one of the three copies.
 **Branch protection names no required status check.** `gh api repos/shivinate7/banchi/branches/main/protection` shows `checks: []`: a PR is required and a red CI blocks nothing today. Making `check` and the three shards required is a settings change on GitHub, which is the owner's, not a session's.
 
 **Whether the runner minutes are billed at all is unverified.** The billing endpoint needs a `user` token scope this machine's `gh` lacks, and the per-run timing endpoint reports zero billable milliseconds; whether the ~6,800 minutes a month the old shape projected were drawn against Pro's included 3,000 is not known either way, and this entry does not assert it. 
+---
 
-## D137 — One process serves the product, Vite compiles and never serves, and the build is the server's job
+
+
+## D137 — The catalog is Near Mint by rule, because it was only ever Near Mint by accident of the file
+
+**Settled 2026-09-11, from the owner asking where a feature had gone.** *"how come on
+review/pricing in the runs, ive somehow lost the ability to fast forward through the review
+by just stating all were near mint?"* — and then, when the first account of it was wrong,
+the correction that located it: *"I've never once been asked to judge the condition of cards
+in a review queue until today. They always were just pre-assumed to be Near Mint."*
+
+They were pre-assumed. That is the whole finding.
+**D12 hardcodes Near Mint and nothing in this tree had ever enforced it on the catalog.**
+`pipeline/join.py:Catalog.from_export` has
+been touched once since it was written (2026-08-23, when games became data) and has never
+carried a `Condition` predicate. Every rung of `variant.resolve` resolves to a Near Mint
+string, so the *ladder* was never in doubt — but the candidate list a queue entry carries is
+`found.rows`, straight off the export, ungated. The catalog was narrow because the operator
+was producing narrow files by hand.
+
+### What changed was the input, and the date is exact
+
+D65 (2026-08-30, `fb516df`) built the automatic fetch. `Scope.condition_ids` was declared in
+that commit, has never been populated by any caller since — one commit in the whole history
+touches that name — and `Scope.model`'s `ids()` turns `()` into `["0"]`, the portal's *All
+Conditions*. On **2026-09-01** every run was re-joined against fetched exports, including
+`2026-08-24-box2-01`, whose original hand-downloaded CSV is still sitting unused beside the
+file its manifest now names.
+
+| run | export | grades |
+|---|---|---|
+| `2026-08-29-box1` … `2026-08-31-box3` | hand-downloaded | 2 conditions, **0 played** |
+| `2026-09-01-box3/4/5` onward | fetched | 11 conditions, **8,032 played** |
+
+**And the experience changed ten days after the mechanism did.**
+Counted off the store's own `answered` events, the operator has
+answered **8** grade-bearing questions against a wide export in total, all on 2026-09-01, out
+of 240 answers; on 2026-09-11 it was **108 of 131**. Before that the work was
+`number_unread_name_matched` — one candidate, one press — and the handful of `set_ambiguous`
+cards were 2-row choices between two *sets*, both Near Mint. A session telling the operator
+they had had this since the 1st was reading a mechanism as an experience.
+
+### Three costs, and only one of them is the one that was reported
+
+**The group press stopped qualifying.** D29 requires every card in the worklist to offer
+exactly one candidate. Nothing in `app/src/ReviewQueue.tsx` changed — `groupOffer` is
+byte-identical to its pre-Banchi self and `G` is still the key. With five grades per finish
+no entry can ever carry one row, so the control correctly never draws.
+
+**D3 rung 2 died outright, and that is the larger cost.** `CATALOG_FORCED` fires on
+`len(candidates) == 1`. Measured on the owner's 2026-09-11 Riftbound export: **0 of 1,246**
+numbers held a single row as fetched; **629** do once the grades are gone. Replaying that
+day's 122 queued cards through the narrowed rows,
+**50 would never have been queued at all** — 32 `detected_finish_not_stocked`, 17
+`ambiguous_no_signal`, 1
+`rarity_claim_mismatch` — and the 57 `set_ambiguous` that remain offer 3 rows rather than 15.
+Rows offered per card across that queue: **8.6 → 1.8**.
+
+**A mis-tap was listable.** `_answer_target` validated that the answer matched the row
+*offered* and never that the row should have been offered. Answering `Damaged Foil` would
+have written that SKU, and `join_batch` rung 0 re-finds an answered row by its own condition
+string, so the wrong grade would have travelled into the import file. Nothing went wrong:
+all 1,967 conditioned card records in the store read `Near Mint` or `Near Mint Foil`.
+
+### The rule lives in the join, not on the wire
+
+`Catalog.from_export` keeps a row whose `Condition` is one of the game's own
+`condition_by_finish` values — read off the registry, as
+`server/capture_server.py:_near_mint_conditions` already reads it — plus
+`tcgcsv.SEALED_CONDITION`. `cli/cmd_join.py` reports the two drops separately, because
+"8,077 row(s) of other product lines dropped" would have been false and a number nobody can
+account for is a number the next person deletes the filter to explain.
+
+**`ConditionIds` stays unpopulated and `STANDING_FILTERS` does not grow.** This is D76's last
+paragraph amended rather than repealed, and the amendment is narrow: that paragraph left the
+condition axis unspent citing D64's finding that "a condition filter thins a number's rows and
+D3 rung 2 then decides a card from whichever row survived" — which is D64's measurement of the
+**printing** axis, not the condition one. D64 itself says so in as many words two sections
+earlier: *"Play conditions are not finishes… all 153 numbers read as thinned and not one had
+lost a finish."* Re-measured here on the owner's own export:
+**0 of 1,246 numbers lose a finish**, because each finish keeps its own Near Mint row.
+The rarity axis stays unspent for
+its own separate reason, untouched.
+
+Given that, the fetch could safely narrow too — and deliberately does not. The rule belongs
+where it cannot depend again on how the CSV was produced, which is the exact dependency that
+broke on 2026-09-01; a hand-downloaded or re-used wide file must join correctly. Leaving the
+wire wide also keeps the filter's subject present in every real export rather than in
+fixtures alone.
+
+### Sealed product survives, and it is not an exception
+
+Booster displays, bundles, blisters and event kits carry `Unopened`:
+**one row per product, never a sibling, no `Number` at all**, so they live only in
+`Catalog._blank_number_by_name`
+and cannot change what any numbered card resolves to. Measured across both wide fixtures,
+**zero sealed `Product Name` cells collide with a single's**, exact or folded, so keeping
+them cannot put a Booster Box on a card. Riftbound's own export prices an Origins Booster
+Display at $250.78. The owner's call, and the measurement makes it free rather than a
+judgement: *"idk if you needed to drop sealed items"* — it did not.
+
+A play grade is a second reading of a card this product sells at one grade. `Unopened` is the
+only condition its product is ever listed in. They are not the same kind of cell, which is why
+the rule is "drop the play grades" rather than "keep only Near Mint".
+
+### What the guard had to be, because the old one could not see this
+
+**T3's `SOURCE_FIXTURE` is `sv09_export_untouched.csv`, which is Near-Mint-only.** Its whole
+`from_export` block passes identically with the filter present and absent, and was green
+through all ten days. `_check_condition_scope` runs against the two **wide** fixtures instead
+— Riftbound 10,078 rows over 11 conditions, Pokemon 7,802 over 16 — and begins by asserting
+they really are wide, because without that every assertion under it passes by accident.
+
+Mutation-tested in three arms, each killed by a different assertion and no assertion
+redundant: the predicate deleted (rung 2 and the play-grade and refusal checks go red), sealed
+dropped from the keep set (only the four sealed checks), and the set narrowed to one condition
+so a foil finish is thinned (only the finish-preservation check — D64's real worry, caught).
+
+**The first draft of the rung-2 assertion survived arm 1 and had to be rewritten.** It counted
+distinct *finishes* per number, and a set of finishes collapses the exact multiplicity the bug
+was made of: five grades of one finish is one finish and five candidates. Rung 2 is
+`len(candidates) == 1` over **rows**. It counts rows now and resolves one through the real
+ladder, because a count is not a resolution.
+
+### Not the whole of what made 2026-09-11 hurt
+
+Box 4 was captured with **no set hint on 448 of its 464 cards**, where boxes 5 and 6 are 100%
+`Unleashed`. 178 of the 1,246 Riftbound numbers collide across sets, and an unhinted collision
+goes straight to `set_ambiguous` (D65/D76 rung 4). That is the other factor, it is an
+operating fact rather than a defect, and it is named here so this entry is not read as having
+cured it: the 57 `set_ambiguous` cards left after this change are the ones a set hint would
+have answered.
+
+### Deliberately not done
+
+**The live queue is not repaired by this change and no command was run against the store.**
+`Queue.upsert` replaces an open entry wholesale and `Queue.release` drops one that no longer
+belongs, so the next join of a run rewrites its entries and the stale ones self-heal.
+`_answer_target`'s new `condition_not_listed` refusal is the floor under the entries written
+before this landed — unreachable from the screen once a run is re-joined, which is the point.
+
+**`scripts/demo-seed.py:export_variants` has the same defect, left alone on the owner's word.**
+It groups the raw fixtures by `Product Name`, so the published demo can offer
+10,452 played rows as review candidates. Recorded, not fixed.
+
+
+## D138 — One process serves the product, Vite compiles and never serves, and the build is the server's job
 
 **Settled 2026-09-11 by interview, from the owner asking for an easier way to package this.**
 Their words: "rather than two servers." The interview started broad and the answers are the
@@ -9563,4 +9713,4 @@ port, which does not move.
 ### What is BUILT, RECORDED, and NEITHER
 
 **BUILT:** nothing. **RECORDED:** this entry, `docs/specs/one-process.md`, step 22 in both
-build-order lists, and the D137 line in `CLAUDE.md`'s index. **NEITHER:** every line of the plan above.
+build-order lists, and the D138 line in `CLAUDE.md`'s index. **NEITHER:** every line of the plan above.

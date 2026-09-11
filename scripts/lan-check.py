@@ -152,7 +152,7 @@ def error_code(body: str) -> str:
 
 def check() -> List[Result]:
     results: List[Result] = []
-    # ONE PORT, BECAUSE THERE IS ONE SERVER (D137). The dev port was read here until the app
+    # ONE PORT, BECAUSE THERE IS ONE SERVER (D138). The dev port was read here until the app
     # moved onto the capture port; `make dev` still uses it and is still reachable on the LAN,
     # but it is a development loop rather than the address the phone is pointed at, and a row
     # about it would be asking whether a thing nobody opens from a phone is answering.
@@ -209,7 +209,7 @@ def check() -> List[Result]:
             continue
         results.append(Result(f"{name} resolves", True, f"-> {address} (this Mac)"))
 
-        # 3 — the app, WHICH IS NOW ON THE CAPTURE PORT (D137). The supervisor serves
+        # 3 — the app, WHICH IS NOW ON THE CAPTURE PORT (D138). The supervisor serves
         # `app/dist/` beside the API, so the phone's one address is the capture port and
         # `allowedHosts` no longer decides anything here: Vite's Host check was a property of
         # Vite's dev server, and nothing on the LAN path runs it any more. A 503 is its own
@@ -267,7 +267,7 @@ def check() -> List[Result]:
 
         # 5 — THE PREFLIGHT, which is what the phone actually runs into. See `preflight`.
         #
-        # IT IS THE SAME ORIGIN ON BOTH SIDES NOW (D137) AND THE ROW IS KEPT ANYWAY. A page
+        # IT IS THE SAME ORIGIN ON BOTH SIDES NOW (D138) AND THE ROW IS KEPT ANYWAY. A page
         # served from `name:capture` calling `name:capture` is same-origin, so a browser sends
         # no preflight at all and the gate cannot refuse it — which is the one real
         # simplification this change buys the LAN path. The row stays because the gate itself

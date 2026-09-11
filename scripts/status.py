@@ -733,7 +733,7 @@ def serving() -> List[str]:
     else:
         out.append(field("banchi", f":{port} not answering"))
 
-    # THE APP IS A BUILD NOW, NOT A SECOND PORT (D137), so what there is to report is whether
+    # THE APP IS A BUILD NOW, NOT A SECOND PORT (D138), so what there is to report is whether
     # the bundle is current and what the last build said. This and the supervisor log are the
     # only two places a failed build is ever reported: the app cannot say anything about the
     # build that produced it, and CI typechecks every PR before main moves, so a failure here

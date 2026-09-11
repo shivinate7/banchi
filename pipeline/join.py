@@ -1172,12 +1172,22 @@ class Catalog:
         *,
         game: Optional[str] = None,
         dropped_rows: int = 0,
+        dropped_off_condition: int = 0,
     ):
         # Which game's rows these are (None for a direct, pre-scoped build) and how many
         # rows of the source file the game's filter dropped — reported by the caller, per
         # D25's "reports the drop count".
+        #
+        # TWO COUNTS, BECAUSE THEY ARE TWO DIFFERENT FACTS AND ONE OF THEM USED TO LIE (D137).
+        # `dropped_rows` is other games' rows: zero for a file exported per game, large for a
+        # combined file working as intended. `dropped_off_condition` is THIS game's rows in a
+        # play grade. `cli/cmd_join.py` reported the first as "row(s) of other product lines
+        # dropped", and after D137 that sentence would have covered 8,077 Riftbound rows and
+        # called them another product line's. A number nobody can account for is a number the
+        # next person deletes the filter to explain.
         self.game = game
         self.dropped_rows = dropped_rows
+        self.dropped_off_condition = dropped_off_condition
         self.export = export
         self._by_number: Dict[str, List[tcgcsv.Row]] = {}
         self._blank_number_by_name: Dict[str, List[tcgcsv.Row]] = {}
@@ -1241,22 +1251,81 @@ class Catalog:
         against, and `misc` refuses here as `NotCatalogued` — its `product_line` is `None`
         precisely so this comparison could never be true anyway.
 
-        Refuses on zero rows — see `EmptyCatalog`. The drop count is carried on the
-        catalog (`dropped_rows`) for the caller to report: zero is the ordinary case for a
+        AND THEN NARROWED TO THE CONDITIONS THIS PRODUCT SELLS (D137) — the game's own Near
+        Mint strings plus `Unopened`, so sealed product survives and every play grade goes.
+        That is a SCOPE and not a partition: the pair above says which game's rows these are,
+        this says which reading of a card the product lists, and the block beside the
+        predicate carries the argument and the measurements.
+
+        Refuses on zero rows — see `EmptyCatalog`, which now tells the two emptinesses apart:
+        the wrong file for this game, and the right file in the wrong grades.
+
+        TWO DROP COUNTS, carried on the catalog for the caller to report. `dropped_rows` is
+        other games' rows, per D25's "reports the drop count": zero is the ordinary case for a
         file exported per game, and a large number is a combined file working as intended.
+        `dropped_off_condition` is this game's own rows in a grade it does not list — on the
+        owner's fetched Riftbound export, 8,077 of 10,191.
         """
         entry = games.require(game)
         line = entry["product_line"]
         rarities = entry.get("product_line_rarities")
+        # D137 — THE THIRD AXIS, AND IT IS A SCOPE RATHER THAN A PARTITION.
+        #
+        # The game's own Near Mint strings, read off the registry exactly as
+        # `server/capture_server.py:_near_mint_conditions` reads them for the catalog search,
+        # so a game whose finishes move changes in one place. D12 hardcodes Near Mint: every
+        # rung of `variant.resolve` resolves to one of THESE strings and to nothing else, so a
+        # `Lightly Played Foil` row is a row the ladder would never pick and a row the operator
+        # must never be offered.
+        #
+        # IT WAS ONLY EVER NEAR MINT BY ACCIDENT OF THE FILE. Until 2026-08-31 the operator
+        # downloaded the export by hand with the portal's Near Mint filter checked, so the
+        # catalog was narrow as a property of the CSV and not as a rule anywhere in this tree.
+        # D65's fetch declares `Scope.condition_ids` and has never populated it — `ids()` turns
+        # `()` into `["0"]`, the portal's *All Conditions* — and on 2026-09-01 every run was
+        # re-joined against a fetched file. The rule lives HERE rather than on the wire (D76's
+        # last paragraph, amended) precisely so it cannot depend again on how the file was made.
+        #
+        # WHAT IT COSTS IS NOTHING, AND THAT IS MEASURED RATHER THAN ARGUED. A play grade is not
+        # a finish — D64's own words, and its own measurement: "all 153 numbers read as thinned
+        # and not one had lost a finish". Re-measured on the owner's 2026-09-11 export, 0 of
+        # 1,246 numbers lose a finish here, because each finish keeps its own Near Mint row.
+        # What it RESTORES is D3 rung 2, which the wide file had killed outright: 0 of those
+        # 1,246 numbers held a single row as fetched, and 629 do once the grades are gone.
+        #
+        # SEALED PRODUCT SURVIVES and is not an exception to the rule so much as outside it —
+        # see `tcgcsv.SEALED_CONDITION`, which carries the argument and the measurement.
+        conditions = {str(v) for v in dict(entry["condition_by_finish"]).values()}
+        conditions.add(tcgcsv.SEALED_CONDITION)
+
+        def this_game(row) -> bool:
+            return row.get(tcgcsv.PRODUCT_LINE_COLUMN) == line and (
+                not rarities or row.get(tcgcsv.RARITY_COLUMN) in rarities
+            )
+
+        mine = [row for row in export.rows if this_game(row)]
         kept = tuple(
-            row
-            for row in export.rows
-            if row.get(tcgcsv.PRODUCT_LINE_COLUMN) == line
-            and (not rarities or row.get(tcgcsv.RARITY_COLUMN) in rarities)
+            row for row in mine if row.get(tcgcsv.CONDITION_COLUMN) in conditions
         )
         if not kept:
             lines = ", ".join(repr(v) for v in tcgcsv.product_lines(export)) or "none"
             source = f" {export.source}" if export.source else ""
+            # THE CONDITION AXIS IS NAMED HERE OR THE SENTENCE IS FALSE. An export carrying
+            # this game's rows in play grades ONLY — a plausible hand-download with the wrong
+            # box ticked — used to refuse with a message about `Product Line`, sending the
+            # operator to look at the one column that was right. The two cases are told apart
+            # rather than blurred: `mine` is what the partition kept.
+            if mine:
+                offered = ", ".join(
+                    sorted({str(r.get(tcgcsv.CONDITION_COLUMN) or "") for r in mine})
+                ) or "none"
+                raise EmptyCatalog(
+                    f"the export{source} holds {len(mine)} row(s) for game {game!r} and not "
+                    f"one of them is a condition this product lists (D12 — Near Mint): it "
+                    f"offers {offered}, and this join reads {', '.join(sorted(conditions))}. "
+                    f"Re-export without the condition filter — nothing was joined and nothing "
+                    f"was written."
+                )
             raise EmptyCatalog(
                 f"the export{source} holds no rows for game {game!r} "
                 f"(Product Line {line!r}"
@@ -1267,7 +1336,8 @@ class Catalog:
         return cls(
             tcgcsv.Export(header=export.header, rows=kept, source=export.source),
             game=game,
-            dropped_rows=len(export.rows) - len(kept),
+            dropped_rows=len(export.rows) - len(mine),
+            dropped_off_condition=len(mine) - len(kept),
         )
 
     @property

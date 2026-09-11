@@ -242,7 +242,7 @@ CHECKS = (
     {
         "target": "serve-selftest",
         "runs": "python3 scripts/serve-selftest.py",
-        "asserts": "the supervisor's build job (D137), against a throwaway checkout whose "
+        "asserts": "the supervisor's build job (D138), against a throwaway checkout whose "
                    "`vite build` is a shell stub. What is under test is the supervisor and "
                    "never the compiler: that a cold tree builds BEFORE the port opens, that a "
                    "screen edit rebuilds and does not restart the capture child, that a "
@@ -260,7 +260,7 @@ CHECKS = (
         "commit_path": False,
         "why_off_commit_path": "D18 — it writes, and it starts and signals real processes.",
         "gates": True,
-        "governed_by": ("D18", "D43", "D53", "D137"),
+        "governed_by": ("D18", "D43", "D53", "D138"),
     },
     {
         "target": "verdict-selftest",

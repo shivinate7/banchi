@@ -188,7 +188,7 @@ letter to jump anywhere, ⌘← / ⌘→ to step the workflow ring, and a keyboa
 `?` that lists every binding in the product. A screen crash is caught per route; the
 Fulfiller's crash page has one button and no way out of his view.
 
-**`make up` is how you run it, and it is one process** (D137). The capture server serves the
+**`make up` is how you run it, and it is one process** (D138). The capture server serves the
 built app out of `app/dist/` beside its own routes, so Banchi and the wire are one origin on one
 port. It prints the link, **restarts itself whenever you edit Python** under `server/`, `store/`,
 `pipeline/`, `cli/`, `identify/` or `geometry/`, and **rebuilds the app whenever you edit a

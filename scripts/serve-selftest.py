@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""The supervisor's build job, proved against a throwaway tree (D137).
+"""The supervisor's build job, proved against a throwaway tree (D138).
 
 WHAT IS UNDER TEST IS THE SUPERVISOR, NOT VITE. The behaviours that matter here are all the
 supervisor's own: when it decides the bundle is behind, what it does while a build is running,
@@ -207,7 +207,7 @@ def supervisor_log(tree: Path) -> str:
 
 
 def main() -> int:
-    print("supervisor self-test — the build job, against a throwaway tree (D137)")
+    print("supervisor self-test — the build job, against a throwaway tree (D138)")
     with tempfile.TemporaryDirectory() as tmp:
         where = Path(tmp)
         tree = build_tree(where)
@@ -416,7 +416,7 @@ def main() -> int:
         for line in failures:
             print(f"       {line}")
         return 1
-    print(f"{PASS}  the supervisor builds, swaps and refuses as D137 says it does")
+    print(f"{PASS}  the supervisor builds, swaps and refuses as D138 says it does")
     return 0
 
 

@@ -97,7 +97,7 @@ help:
 	@echo "  ./pkmnscan reconcile <run-dir> <staged-export>    confirm what TCGplayer staged."
 	@echo "  make up           THE server, detached: the API and the app on one port, and it"
 	@echo "                    reloads itself when you edit Python and rebuilds the app when"
-	@echo "                    you edit a screen (D137). Prints the link. Start here."
+	@echo "                    you edit a screen (D138). Prints the link. Start here."
 	@echo "  make merge        merge a PR and move main onto it (D42). ARGS=<n> previews;"
 	@echo "                    ARGS=\"<n> --confirm\" performs it. On the owner's word only."
 	@echo "  make down         stop it.  make up ARGS=--restart  stop and start."
@@ -595,7 +595,7 @@ janitor:
 janitor-selftest:
 	@bash scripts/janitor-selftest.sh
 
-# THE SUPERVISOR'S BUILD JOB (D137), against a throwaway tree with a stub `vite build`. Same
+# THE SUPERVISOR'S BUILD JOB (D138), against a throwaway tree with a stub `vite build`. Same
 # standing and the same reason as the three self-tests around it: it starts and stops real
 # supervisors and swaps real directories, so it is in `check` and never in the git hook.
 # No node — the stub is a shell script — so it runs anywhere the rest of `check` does.
@@ -672,7 +672,7 @@ janitor-install:
 lan-check:
 	@python3 scripts/lan-check.py
 
-# THE SERVER, DETACHED. ONE PROCESS: the API and the built app on one port (D137), restarting
+# THE SERVER, DETACHED. ONE PROCESS: the API and the built app on one port (D138), restarting
 # itself when you edit Python and rebuilding the app when you edit a screen.
 # `make dev` and `make server` below still work; `dev` is now the hot-reload loop that runs
 # BESIDE this rather than instead of it.
@@ -720,7 +720,7 @@ launch-agent:
 #
 # strictPort in app/vite.config.ts, so a busy 5173 fails here instead of quietly serving on
 # 5174 — where CLAUDE.md, this target and scripts/views.txt would all three be wrong.
-# NO `guard-foreground` HERE SINCE D137, and its removal is the feature. The supervisor used
+# NO `guard-foreground` HERE SINCE D138, and its removal is the feature. The supervisor used
 # to hold :5173 and this would have collided with it; it holds only the capture port now, so
 # Vite runs here with hot reload against the live server — which is what alternating between
 # building and operating actually needs.

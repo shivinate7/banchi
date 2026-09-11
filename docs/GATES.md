@@ -156,6 +156,12 @@ Required cases:
 - Multi-set key collisions: a key that maps to rows in two `Set Name`s resolves by the
   sidecar set hint, reviews as `set_ambiguous` without one, and leaves non-colliding keys
   untouched
+- The condition scope (D137): against a WIDE export — one carrying Lightly Played through
+  Damaged — the catalog holds only this game's Near Mint strings and `Unopened`, no number
+  loses a finish, and a number stocked in one finish resolves `catalog_forced` rather than
+  queueing. Asserted against the wide fixtures on purpose: the Near-Mint-only
+  `SOURCE_FIXTURE` cannot see this rule, and was green through the ten days the real
+  catalog carried every grade
 
 - **Pass**: zero unmatched, or every unmatched card reported both ways and routed to a
   standing queue with its position, before any output is written
@@ -1396,7 +1402,7 @@ named lives in `docs/DECISIONS.md` and is that file's to open or close.
     this step did NOT do**: the 2,000-card probe that decides whether the 100k run is worth
     making is physical work at the rig and has not been run; nothing here measures the pile.
 
-22. ~~**One process serves the product**~~ — **done 2026-09-11.** D137, three PRs the same
+22. ~~**One process serves the product**~~ — **done 2026-09-11.** D138, three PRs the same
     day. The capture server serves `app/dist/` beside the API, narrowly — the root and the
     build's own files, never a catch-all, because a hash router has no deep links and a
     catch-all turned `GET /boxes/abc` into 200 HTML and would have retired a dozen named
