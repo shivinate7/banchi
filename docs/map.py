@@ -240,6 +240,16 @@ SHIPPED = [
               "digest kept — on #/inventory's box operations, gated like the delete. WHAT THIS STEP DID "
               "NOT DO: the 2,000-card probe that decides whether the 100k run is worth making is work "
               "at the rig and has not been run; nothing here measures the pile."},
+    {"n": 22, "on": "2026-09-11", "title": "One process serves the product: the capture server serves app/dist, the supervisor builds it",
+     "note": "D132, three PRs the same day. The capture server serves `app/dist/` beside the API "
+              "(`app_claims`, `do_app_file`, T7's check_app_serve); the supervisor dropped its Vite "
+              "child and runs `vite build` into a sibling directory it renames in, on its own watch "
+              "set over app/src and app/public (`serve-selftest`, 25 assertions, five mutations). "
+              "`make dev` runs BESIDE it now and `restart` folded into `make up ARGS=--restart`. "
+              "TWO PRESSES ARE THE OWNER'S AND ARE NOT DONE: reinstalling the dock app at :8000 "
+              "(D108's amendment — a port is part of an origin, so the camera grant and the six "
+              "device-local keys reset once), and `make lan-check` from the phone. "
+              "docs/specs/one-process.md §10 is the list."},
 ]
 
 OPEN = [
@@ -264,15 +274,6 @@ OPEN = [
               "being measured and were deliberately left alone: writing a tracking number back is the "
               "first thing this project would do that a buyer sees, and D69 ruled that the screen comes "
               "before the transport. Nothing blocks it but the doing of it."},
-    {"n": 22, "title": "One process serves the product: the capture server serves app/dist, the supervisor builds it",
-     "note": "D132, settled 2026-09-11 by interview and NOT built. Three PRs in order: the static "
-              "serve with the index.html fallback and T7 coverage; the supervisor dropping its app "
-              "child and running `vite build` when app/src is newer than dist/, serving the old bundle "
-              "until it lands; the dock app reinstalled at :8000 and the docs amended. Vite stays as "
-              "the compiler and `make dev` keeps hot reload on its own port, untouched. The code the "
-              "operating form runs is the checkout, live; a frozen copy is deferred until a second "
-              "person needs the app. D53's rejection of serving dist is reversed by this, on the one "
-              "ground it gave: the build is the server's job now, not a step to remember."},
 ]
 
 # --------------------------------------------------------------------------------- gates

@@ -1387,11 +1387,25 @@ named lives in `docs/DECISIONS.md` and is that file's to open or close.
     this step did NOT do**: the 2,000-card probe that decides whether the 100k run is worth
     making is physical work at the rig and has not been run; nothing here measures the pile.
 
+22. ~~**One process serves the product**~~ — **done 2026-09-11.** D132, three PRs the same
+    day. The capture server serves `app/dist/` beside the API, narrowly — the root and the
+    build's own files, never a catch-all, because a hash router has no deep links and a
+    catch-all turned `GET /boxes/abc` into 200 HTML and would have retired a dozen named
+    refusals with nothing failing. The supervisor dropped its Vite child and builds into a
+    sibling directory it renames in, on its own watch set over `app/src` and `app/public`: a
+    Python edit restarts the capture child and never builds, and a screen edit does the
+    reverse. `make dev` runs beside it now on its own port, which is the loop the owner
+    alternates into. Covered by T7's `check_app_serve` and the new `serve-selftest`; seven
+    mutations were observed failing the two. **What this step did NOT do**: the dock app is
+    still installed at `:5173` and `make lan-check` has not been run from the phone. Both are
+    presses on the owner's own machine, and the first resets the camera grant and the six
+    device-local keys once, because a port is part of an origin (D108, amended).
+
 ## What is open
 
-**Three things, and they are not ranked.** There is no `next` here and no `blocked`: all
-are unblocked, and which one matters more is the owner's to say on the day. `docs/map.py`'s
-`OPEN` carries the same three ids.
+**Two things, and they are not ranked.** There is no `next` here and no `blocked`: both are
+unblocked, and which one matters more is the owner's to say on the day. `docs/map.py`'s
+`OPEN` carries the same two ids.
 
 9. **Vendor the pokemontcg.io catalog** — see D15. Three pieces, in order:
     - Snapshot `PokemonTCG/pokemon-tcg-data` into the repo (183 files, 27.4 MB) with a
@@ -1415,13 +1429,6 @@ are unblocked, and which one matters more is the owner's to say on the day. `doc
     were deliberately left alone: writing a tracking number back is the first thing this
     project would do that a **buyer** sees, and D69 ruled that the screen comes before the
     transport. Nothing blocks it but the doing of it.
-
-22. **One process serves the product** — D132, settled 2026-09-11 by interview and not built.
-    The capture server serves `app/dist/` beside the API with an `index.html` fallback; the
-    supervisor drops its Vite child and runs `vite build` when `app/src` is newer than `dist/`,
-    serving the old bundle until the new one lands; the dock app is reinstalled at `:8000`.
-    Vite stays as the compiler and `make dev` keeps hot reload on its own port. Three PRs, in
-    the order D132 lists them. Nothing blocks it but the doing of it.
 
 **Nothing in this list is blocked on a third-party benchmark.** A sub-floor T1 is worked
 directly — see the T1 section above. The TCGplayer Scan & Identify comparison was removed
