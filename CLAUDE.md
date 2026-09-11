@@ -83,7 +83,7 @@ make harness        # all NINE verification tests; the Stop hook runs it at turn
                     #   drew for itself. It exists because both Playwright specs over the
                     #   motion trigger stayed green while 38 real cards were refused as an
                     #   empty stand (D81). RECOUNT from `harness/run.py`'s TESTS list.
-make up             # THE server, detached — ONE PROCESS AS OF 2026-09-11 (D132). The capture
+make up             # THE server, detached — ONE PROCESS AS OF 2026-09-11 (D135). The capture
                     #   server serves `app/dist/` beside the API, so the app and the wire are
                     #   one origin on one port, and `:5173` belongs to `make dev` alone.
                     #   It RELOADS ITSELF when you edit Python under
@@ -122,7 +122,7 @@ make launch-agent   # start at login, so the link is always live. MAIN TREE ONLY
                     #   is one press in Chrome, once, and `app/public/manifest.webmanifest` is
                     #   the part of it that lives here.
 make dev            # Vite with HOT RELOAD. :5173 in the main tree, its own port in a worktree.
-                    #   Blocks. It runs BESIDE `make up` since D132 and talks to that server
+                    #   Blocks. It runs BESIDE `make up` since D135 and talks to that server
                     #   over the same store — the supervisor stopped holding this port, so the
                     #   refusal that used to stand here is gone. `make server` is still refused.
 make server         # Python capture server. :8000 in the main tree, its own port in a
@@ -1549,7 +1549,7 @@ was open** — the rule is renumber your own, never another's.
   measurement that refused it a route is history — and §6 names the three things the first
   real upload would measure.
 - `docs/specs/batch-script.md` — the four commands, storage, routing, pricing. Built.
-- `docs/specs/one-process.md` — D132's plan: the capture server serves `app/dist/` beside the
+- `docs/specs/one-process.md` — D135's plan: the capture server serves `app/dist/` beside the
   API, the supervisor runs `vite build` when the source is newer than the bundle, and `restart`
   folds into `up`. SPECIFIED 2026-09-11, NOT BUILT. Three PRs in its §9;
   read its §5 before the reinstall, because the port change resets the camera grant and every

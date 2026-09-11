@@ -361,9 +361,28 @@ def main() -> int:
         (second / "bin" / "npx").unlink()
         (second / "bin" / "npm").unlink()
         port2 = PORTS[tree2]
-        # `/usr/bin:/bin` and nothing else, so the shell and python still resolve and node
-        # genuinely does not — which is what a launchd agent's environment looks like.
-        serve(tree2, "up", env={"PATH": f"{second / 'bin'}:/usr/bin:/bin"})
+        # A PATH WITH PYTHON ON IT AND NO NODE, BUILT RATHER THAN TYPED. The first version of
+        # this was `/usr/bin:/bin`, which is where macOS keeps python3 and is NOT where the
+        # Ubuntu CI runner keeps it — the throwaway tree has no `.venv`, so
+        # `serve.python_executable` returns a bare "python3" resolved off PATH, and with that
+        # PATH the CAPTURE SERVER could not start either. Two arms failed on CI and passed
+        # here, which is the "a green check proves its own platform" trap exactly.
+        minimal = os.pathsep.join(
+            [str(second / "bin"), str(Path(sys.executable).parent), "/usr/bin", "/bin"]
+        )
+        # AND THE TEST CHECKS ITS OWN PREMISE, because a PATH that accidentally still had node
+        # on it would make every assertion below pass while proving nothing. If a platform ever
+        # ships node beside python, this says so instead of going quietly green.
+        check(
+            shutil.which("npx", path=minimal) is None,
+            "the minimal PATH genuinely has no node on it",
+        )
+        check(
+            shutil.which("python3", path=minimal) is not None
+            or Path(sys.executable).name.startswith("python"),
+            "and still has python, which the supervisor needs to spawn the capture server",
+        )
+        serve(tree2, "up", env={"PATH": minimal})
         try:
             wait_until(lambda: get(port2, "/status")[0] == 200, seconds=60)
             check(get(port2, "/status")[0] == 200, "with no node on PATH the API still comes up")
@@ -388,7 +407,7 @@ def main() -> int:
                 "node on it is the documented cause and the operator should not have to guess",
             )
         finally:
-            serve(tree2, "down", "--confirm", env={"PATH": f"{second / 'bin'}:/usr/bin:/bin"})
+            serve(tree2, "down", "--confirm", env={"PATH": minimal})
             wait_until(lambda: get(port2, "/status")[0] == 0, seconds=60)
 
     print()
