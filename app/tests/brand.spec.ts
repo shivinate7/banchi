@@ -376,13 +376,23 @@ async function screens(page: import('@playwright/test').Page) {
   return { named: named!, fulfiller: fulfiller! }
 }
 
+/* THE CLOCK IS FAKED AND ONLY EVER ADVANCED, WHICH IS A CHANGE TO THE WAIT AND NOT TO THE
+ * ASSERTION (D136). These three cases were the suite's longest by a distance — 46.5s, 17.5s and
+ * 17.0s on the runner, all of it `waitForTimeout` on a 6s + 4s cadence — and the owner ruled on
+ * 2026-09-11 that a sleep on a real clock may become a fake one. `page.clock.install()` goes in
+ * BEFORE the first navigation, with no fixed time: the page's clock starts at the real time and
+ * keeps ticking at the real pace (measured, not assumed — a probe against 1.58 saw a 500ms
+ * interval fire on schedule under it), so the 63 `toLocaleDateString` sites draw today. What
+ * `runFor` adds is a jump: every timer and interval due inside the span fires, in order, with
+ * `Date.now()` moving in step. The title timer is a chained `setTimeout`, so a jump of 500ms is
+ * exactly one real 500ms to it. Same samples, same window, same expected set.
+ *
+ * MUTATION-TESTED, because a faked wait that stays green through a broken app is worse than the
+ * sleep it replaced: with the first `setTimeout(flip, ...)` deleted from App.tsx the alternation
+ * case fails on the sampled set, and with the effect's cleanup deleted the Home case fails on
+ * `after` — the surviving timer keeps writing the old route's halves. */
 test('the tab title alternates on a named screen, and holds still where it should', async ({ page }) => {
-  /* A LONGER BUDGET, AND IT IS THE CADENCE THAT NEEDS IT. One cycle is now 6s + 4s, and a case
-     that proves alternation has to watch more than one of them — then prove the timer STOPPED,
-     which means waiting past the longer dwell twice. That sums past Playwright's 30s default.
-     Set explicitly rather than raised globally: every other spec in this suite should still fail
-     fast, and a default nudged up to suit one file hides a hang in all of them. */
-  test.setTimeout(90_000)
+  await page.clock.install()
   const { named } = await screens(page)
 
   await page.goto(`/${named.href}`)
@@ -391,23 +401,24 @@ test('the tab title alternates on a named screen, and holds still where it shoul
      than the name — so the window has to clear the sum of both, not twice the shorter one. Sixteen
      seconds at 500ms covers a 6s + 4s cycle with room for the machine to be slow, and it is
      deliberately not derived from the constants: a test that reads the value it is checking
-     passes when that value is wrong. */
+     passes when that value is wrong. A fake clock advanced by an explicit number honours that
+     just the same — the number is still this file's and not App.tsx's. */
   const seen = new Set<string>()
-  for (let i = 0; i < 32; i++) { seen.add(await page.title()); await page.waitForTimeout(500) }
+  for (let i = 0; i < 32; i++) { seen.add(await page.title()); await page.clock.runFor(500) }
   expect([...seen].sort(), 'the tab shows each half in turn, neither truncated into the other')
     .toEqual([named.label.toLowerCase(), '番地 banchi'].sort())
 
   // Home: one word for both the screen and the product, so nothing to take turns with
   await page.goto('/#/')
-  await page.waitForTimeout(8000)   // past the longer dwell, so a timer would have shown by now
+  await page.clock.runFor(8000)   // past the longer dwell, so a timer would have shown by now
   const home = await page.title()
-  await page.waitForTimeout(8000)
+  await page.clock.runFor(8000)
   expect(await page.title(), 'Home has nothing to alternate with and must hold still').toBe(home)
   expect(home).toBe('番地 banchi')
 
   // and the timer from the screen we just left must not have survived to fight this one
   const after = new Set<string>()
-  for (let i = 0; i < 26; i++) { after.add(await page.title()); await page.waitForTimeout(500) }
+  for (let i = 0; i < 26; i++) { after.add(await page.title()); await page.clock.runFor(500) }
   expect([...after], 'a timer from the previous route is still running').toEqual(['番地 banchi'])
 
   /* THE TAB IS LOWERCASE AND THE NAV IS NOT, which is the whole shape of this change. The label
@@ -419,12 +430,12 @@ test('the tab title alternates on a named screen, and holds still where it shoul
 })
 
 test("the Fulfiller's tab names his task, not the product", async ({ page }) => {
-  test.setTimeout(60_000)   // two waits past the longer dwell, to prove it does not move
+  await page.clock.install()   // two jumps past the longer dwell, to prove it does not move
   const { fulfiller } = await screens(page)
   await page.goto(`/${fulfiller.href}`)
-  await page.waitForTimeout(8000)
+  await page.clock.runFor(8000)
   const first = await page.title()
-  await page.waitForTimeout(8000)
+  await page.clock.runFor(8000)
   expect(first, 'his tab says what he is doing, lowercase like every other tab').toBe('cards to pull')
   expect(await page.title(), 'and it does not alternate at him').toBe(first)
 })
@@ -432,14 +443,14 @@ test("the Fulfiller's tab names his task, not the product", async ({ page }) => 
 /* `reducedMotion` is set on an explicit CONTEXT rather than through `test.use`, which this
    Playwright's fixture types do not accept it in. */
 test('with reduced motion the tab stops taking turns and shows both at once', async ({ browser, baseURL }) => {
-  test.setTimeout(60_000)   // a full cycle's worth of samples, to prove none of them differ
   const ctx = await browser.newContext({ reducedMotion: 'reduce', baseURL })
   const page = await ctx.newPage()
+  await page.clock.install()   // a full cycle's worth of samples, to prove none of them differ
   const { named } = await screens(page)
   await page.goto(`/${named.href}`)
   await page.waitForTimeout(600)
   const seen = new Set<string>()
-  for (let i = 0; i < 32; i++) { seen.add(await page.title()); await page.waitForTimeout(500) }
+  for (let i = 0; i < 32; i++) { seen.add(await page.title()); await page.clock.runFor(500) }
   await ctx.close()
   expect([...seen], 'reduced motion gets one steady title, concatenated')
     .toEqual([`${named.label.toLowerCase()} · 番地 banchi`])
