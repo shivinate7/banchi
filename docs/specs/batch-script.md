@@ -254,6 +254,14 @@ production value is that it is *recorded*, making a targeted re-read possible.
 
 Catalog is built from the TCGplayer Filtered CSV export. Nothing else.
 
+**AND IT IS NARROWED TO THE CONDITIONS THIS PRODUCT LISTS (D135, 2026-09-11)** — the game's
+own `condition_by_finish` values plus `Unopened`, so sealed product survives and every play
+grade goes. `Catalog.from_export` had never cut on `Condition` at all, which was invisible
+while the export was downloaded by hand with the portal's Near Mint filter checked and cost
+D3 rung 2 outright once the fetch started sending all eleven: 0 of 1,246 numbers held a
+single row, against 629 once the grades are gone. A play grade is not a finish — no number
+loses one.
+
 **THE JOIN KEY IS PER GAME, AND THIS SECTION DESCRIBED ONLY POKEMON'S UNTIL 2026-08-29.**
 It read *"Join key stays `zfill(3)(number) + "/" + printedTotal`"* full stop, which was true
 the day it was written and was overtaken by D25 in August when the join learned to partition
