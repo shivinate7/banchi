@@ -455,8 +455,27 @@ ALL_METHODS = ("GET", "HEAD", "POST", "PUT", "DELETE", "OPTIONS")
 # has no input that can change while the process runs: `dev_port` reads no environment and
 # the checkout does not move. The env var is what is read fresh, and it is read fresh for
 # the reason stated there.
+# AND THE CAPTURE PORT ITSELF, SINCE D138 — THE APP IS SERVED FROM HERE NOW. That entry made
+# this process serve `app/dist/` beside its own routes, so the product's own page is
+# same-origin with the server it writes to, and a browser sends `Origin` on a same-origin
+# write. The list named only the dev port, so the FIRST WRITE THE OWNER MADE FROM THE REAL
+# APP WAS REFUSED — a box delete, 403 `origin_not_allowed`, reported 2026-09-11. Reads are
+# ungated, so every screen drew correctly and only writing was broken: D43's own failure
+# shape, arriving through the one control meant to stop a page writing where it should not,
+# for the third time.
+#
+# SAME-ORIGIN IS THE SAFEST ENTRY IN THIS LIST, not a relaxation of it. A page this server
+# itself served, asking this server to write, is the case the gate exists to permit; the
+# cross-tree write it exists to refuse is unaffected, because a linked worktree derives its
+# own capture port and still allows only its own.
+#
+# BOTH PORTS STAY. `make dev` runs beside `make up` (D138) on the dev port, against this
+# server, and that loop is what a session editing screens uses — dropping it would refuse
+# every write from the development app while looking like a tidy-up.
 DEFAULT_ALLOWED_ORIGINS = tuple(
-    f"http://{host}:{ports.dev_port()}" for host in ("localhost", "127.0.0.1")
+    f"http://{host}:{port}"
+    for port in (ports.capture_port(), ports.dev_port())
+    for host in ("localhost", "127.0.0.1")
 )
 
 # EXTENDED, NEVER REPLACED, and deliberately not able to re-enable `*`. The LAN move above

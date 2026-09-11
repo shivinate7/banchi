@@ -515,7 +515,14 @@ def _child_env(root: Path = REPO_ROOT) -> dict:
     names = lan_hostnames()
     if not names:
         return env
-    origins = [f"http://{name}:{dev}" for name in names]
+    # BOTH PORTS PER NAME, SINCE D138. The app is served from the CAPTURE port now, so the
+    # phone at `http://pkmnscan.lan:8000` is same-origin with the server it writes to and its
+    # Origin is that, not the dev port. Naming only the dev port here is what made the owner's
+    # first real write 403 on localhost; the LAN path had the identical hole one step further
+    # out, where `make lan-check` presses a write precisely because looking at a screen cannot
+    # tell you. The dev port stays: `make dev` still runs on it, against this server.
+    capture = ports.capture_port(root)
+    origins = [f"http://{name}:{port}" for name in names for port in (capture, dev)]
     # EXTEND whatever the operator already set rather than replacing it — the same rule the
     # variable itself follows one process over. Somebody who exported their own origin for a
     # reason should not lose it by starting the server a different way.
