@@ -1371,7 +1371,7 @@ def check_evidence_freshness(report: Report, staged_only: bool) -> None:
 # `[1-9][0-9]?` read decision ids for a year and went vacuous at the hundredth entry: a
 # heading stops being a heading to this file and a citation stops being a citation, so
 # `decision ids`, `decision ids in code`, `decision index`, `decision structure` and
-# `renumbered ids` all report GREEN over a file they can no longer see. docs/DEBTS.md carried
+# `id claims` all report GREEN over a file they can no longer see. docs/DEBTS.md carried
 # that as a triggered debt from 2026-08-30 until this landed; the trigger fired at the
 # ninetieth entry and the file reached D92 before anyone discharged it. The entry is gone from
 # that file rather than rewritten as closed — its own preamble sends closure narrative to git,
