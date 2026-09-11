@@ -1794,10 +1794,10 @@ COMPONENTS = [
 
             # ---- diagnostics. Neither may grow an exit code a gate could read ----
             "serve.py": {
-                "does": "`make up` / `make down` / `make restart` / `make launch-agent`. One "
-                        "supervisor over two children — the capture server and Vite — with a "
-                        "pidfile each under `.serve/`, so a supervisor killed with -9 leaves "
-                        "orphans that can still be found and swept. It watches the Python "
+                "does": "`make up` / `make down` / `make launch-agent`. One "
+                        "supervisor over one child — the capture server — with a "
+                        "pidfile under `.serve/`, so a supervisor killed with -9 leaves an "
+                        "orphan that can still be found and swept. It watches the Python "
                         "trees the capture server imports and restarts THAT child when they "
                         "change, which is the machinery replacing the restart discipline "
                         "docs/GATES.md records as a defect: a long-running `make server` "
