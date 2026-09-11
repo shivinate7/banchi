@@ -278,8 +278,8 @@ export class CadenceMachine {
      * from it is `d`, `dBase`, `tLo`, `tHi`, the presence floor and whether a baseline
      * exists. Its counters are overwritten in `publish`, so the HUD shows this machine's
      * fires and not a settle count nobody acted on. */
-    this.inner.step(nowMs, cells)
-    return this.stepSignal(nowMs, cells, this.inner.diag)
+    const settled = this.inner.step(nowMs, cells) === 'fire'
+    return this.stepSignal(nowMs, cells, this.inner.diag, settled)
   }
 
   /** The decision alone, on a signal somebody else measured. `step` is the live path; this
@@ -299,11 +299,15 @@ export class CadenceMachine {
       presenceFloor: number
       hasBaseline: boolean
     },
+    /** Whether the settle machine fired on this frame. THE DUAL (D131): a settle is the
+     *  photograph of choice — it lands on a frame the machine could call still — and the
+     *  beat is the backstop for the card that never rests. */
+    settled = false,
   ): CadenceEvent | null {
     this.frameNo += 1
     const { d, dBase, tLo, tHi, presenceFloor, hasBaseline } = signal
     this.signal = { d, dBase, tLo, tHi, presenceFloor, hasBaseline }
-    const event = this.decide(nowMs, cells, d, dBase, tLo, tHi, presenceFloor, hasBaseline)
+    const event = this.decide(nowMs, cells, d, dBase, tLo, tHi, presenceFloor, hasBaseline, settled)
     this.publish()
     return event
   }
@@ -317,6 +321,7 @@ export class CadenceMachine {
     tHi: number,
     presenceFloor: number,
     hasBaseline: boolean,
+    settled: boolean,
   ): CadenceEvent | null {
     /* No baseline, no opinion about presence, no fire — the fifty-millisecond window at
      * arm time while the settle machine takes its first still run. */
@@ -356,9 +361,9 @@ export class CadenceMachine {
       /* THE FIRST CARD. Quiet fires it; a card that never goes quiet is fired on anyway
        * after `firstWait` of a period, because the alternative is the loss this machine
        * exists to end. Either way this fire anchors the seeded schedule. */
-      if (quiet || nowMs - this.presentSince >= this.p.firstWait * this.periodMs) {
+      if (settled || quiet || nowMs - this.presentSince >= this.p.firstWait * this.periodMs) {
         this.beat = this.measuredMs !== null ? 'locked' : 'seeded'
-        return this.fire(nowMs, cells, !quiet) ?? event
+        return this.fire(nowMs, cells, !(settled || quiet)) ?? event
       }
       return event
     }
@@ -388,6 +393,15 @@ export class CadenceMachine {
      * frame the machine could not call still, whichever tier took it. */
     const nextAt = this.nextAt as number
     const P = this.periodMs
+    /* SETTLE FIRST (D131). A settle verdict from the signal machine is a card at rest,
+     * photographed on a frame it could call still — the accuracy the settle trigger has on
+     * a feeder that pauses. It is taken whenever it comes, at least half a period after the
+     * last fire (the `schedule` floor, so a late settle cannot chain onto the beat's fire
+     * for the same card), and it re-anchors the beat. The scheduled fire below is then the
+     * BACKSTOP: it only runs when a whole rest window has passed with no settle. */
+    if (settled && nowMs >= nextAt - 0.5 * P) {
+      return this.fire(nowMs, cells, false) ?? event
+    }
     if (nowMs >= nextAt - this.p.restLead * P) {
       const calm = d < tHi
       if (quiet || (nowMs >= nextAt && calm) || nowMs >= nextAt + this.p.quietWait * P) {

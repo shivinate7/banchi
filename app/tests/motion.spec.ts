@@ -314,17 +314,18 @@ test('a card whose every other frame lands in the band still settles and fires',
   expect(machine.diag.stalled).toBe(0)
 })
 
-test('a scene that never completes a settle is STALLED, however quiet its odd frame', () => {
-  /* D84'S SECOND HALF, and the failure it closes was silent by construction. The stall
-     clock used to be cleared by ANY single frame under tLo while a fire needed two in a
-     row, so a scene quiet often enough to reset the clock but never often enough to settle
-     could sit in front of the lens forever: no fire, no stall, nothing on screen. Across
-     the three 2026-09-01 sessions — 93 seconds, four cards left unphotographed — the live
-     machine raised not one `stalled`.
+test('one quiet frame in four is a settle now, and a scene with none still stalls', () => {
+  /* D84'S SECOND HALF, AMENDED BY D131. The clock is still cleared only by a COMPLETED
+     settle — that half stands, and the band-hover case above proves it. What moved is what
+     completes one: `stillFrames` of `stillWindow` is ONE OF THREE since 2026-09-11, because
+     the bright-lamp feeder rests a card for two to four frames and a window of four never
+     filled. Under that rule the scene D84 used here — one frame under tLo in every four —
+     SETTLES on its quiet frame and is photographed there: a frame under tLo is still by
+     definition, and on the bright-lamp sessions it is the only kind of rest there is. The
+     2026-09-01 21:10 card this fixture was modelled on is captured now rather than stalled.
 
-     One quiet frame in every four here: enough to have cleared the old clock every time,
-     never enough for `stillFrames` of `stillWindow`. Cleared by a COMPLETED SETTLE instead,
-     the clock expires and says so. */
+     The silent failure D84 closed cannot come back through this door: a scene with NO quiet
+     frame at all — the band hover two tests up — still expires the clock and says so. */
   const machine = new MotionMachine()
   const bases: number[] = [60]
   for (let i = 1; i < 60; i += 1) {
@@ -332,9 +333,9 @@ test('a scene that never completes a settle is STALLED, however quiet its odd fr
     bases.push(i % 4 === 0 ? last : last === 60 ? 66 : 60)
   }
   const events = run(machine, [...armEmpty(), ...bases])
-  expect(events.map((e) => e.event)).toEqual(['suppressed:no-card', 'stalled'])
-  expect(machine.diag.fires).toBe(0)
-  expect(machine.diag.stalled).toBe(1)
+  expect(events[0]?.event).toBe('suppressed:no-card')
+  expect(machine.diag.fires).toBeGreaterThanOrEqual(1)
+  expect(machine.diag.stalled).toBe(0)
 })
 
 test('the refractory defers a fast settle instead of dropping it', () => {

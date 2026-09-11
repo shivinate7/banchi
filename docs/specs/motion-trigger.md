@@ -4,7 +4,7 @@ Written 2026-08-22, the day it was built. D19 is the decision; this file is the 
 the derivations, and the protocol for the part no computer can do — tuning at the rig.
 `docs/GATES.md`'s Gate C section carries the measurements every number here leans on.
 
-## STATUS — CONFIRMED LIVE AT 85/85, REBUILT ON MEASUREMENTS 2026-08-31, CORRECTED 2026-09-01
+## STATUS — CONFIRMED LIVE AT 85/85, REBUILT ON MEASUREMENTS 2026-08-31, CORRECTED 2026-09-01, THE RATCHET GIVEN AN ESCAPE 2026-09-11
 
 The trigger exists: `app/src/motion.ts` behind `app/src/trigger.ts`'s seam, armed from a
 mode toggle on the capture screen, with a live HUD, a swallowed-fire counter and a
@@ -285,6 +285,37 @@ A parameter that a sweep says should move is a decision entry, not an edit: the 
 `app/src/motion.ts` are now ratios with derivations attached, and moving one without moving
 its argument is how the file got into the state D81 found it in.
 
+### The ratchet's escape, and one quiet frame of three (D131, 2026-09-11)
+
+**The noise tracker could lower its idea of still and never raise it, and a bright lamp put
+the rest above it.** Still frames were defined only by frames already under `tLo`, so on a
+rig where a resting card reads d 5-8 — brightness jitter under the owner's lamp, |Δluma| p90
+of 6-8 at rest against 2-3 on every earlier session — the tracker converged to 4.5-7 while the
+rest sat at 7-9, and the settle rule fired on 5 of 29 cards with every readout looking normal.
+D130 read that as a scene that was never still. It was still; the machine's word for still
+was wrong in the one direction the ratchet could not move.
+
+**The escape.** When the frames the machine calls still fall under `stillFractionMin` (0.30)
+of the frames with a card in view over the noise window, the still level is taken from
+`restQuantile` (0.25) of all of them, `tHi` keeping its ratio — and only when that quantile is
+under the presence floor, because a frame-to-frame change no smaller than a card arriving is
+not a rest. The fraction is over frames with a card in view because an empty stand is still on
+every frame. **Measured in both directions**: the eight earlier sessions keep 46-83% of their
+frames under `tLo` and change zero verdicts (the escape trips a handful of refreshes on the
+three 2026-09-01 sessions and decides nothing); the four 2026-09-11 sessions replay **31, 21,
+45, 85** against 5 and 5 live on the two the ratchet lost. The HUD's `escape` count is how a
+session sees it happen.
+
+**One quiet frame of the last three.** D84's two-of-four, amended: the bright-lamp feeder
+rests a card two to four frames with calm frames around it, and a window of four never filled.
+A frame under `tLo` is still by definition and is photographed on; a scene with NO quiet frame
+still expires the stall clock, which is D84's silent-loss guard unchanged. Swept against every
+old session it changes no count and recovers the cards D84 counted as stalls.
+
+**The dim lamp was not a fix**, and the trace says so: 65 fires and 13 stalls live, ten real
+misses on cards that slid for 1.7 s, seven gaps that were pauses — about 87%, with worse
+photographs.
+
 ## 5. Known limits, and what this deliberately does not do
 
 **A manual capture in motion mode does not update the machine's last-fired frame.** The
@@ -399,4 +430,12 @@ and only a photograph says whether that is a usable image or a blur. So the firs
 - If the blind fires blur, the lever is the camera's exposure, not a constant here: a shorter
   shutter freezes the motion the feeder never removes. That is a rig fact, and D130 says so.
 
-The 85/85 confirmation in this file's STATUS is **trigger 1's**. Trigger 2 has none yet.
+**THE DUAL (D131, the same night).** The cadence trigger takes the settle machine's own fire
+whenever it comes — at least half a period after the last, re-anchoring the beat on it — and
+the scheduled fire runs only when a rest window has passed with no settle. Settle accuracy
+where a card rests, the beat where it never does. Its first full run, before the dual and
+before §2's escape, photographed 45 of ~47 cards with 6 on a moving frame and one double;
+the owner called it 80-90% and was right.
+
+The 85/85 confirmation in this file's STATUS is **trigger 1's**. Neither the escape nor the
+dual has a rig run yet; that run is what §2's numbers are waiting on.

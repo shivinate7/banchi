@@ -1399,6 +1399,7 @@ D127 A session may stop what it started, and the checkout is what decides which 
 D128 The key listener is attached before the paint, because a press answers to what is on the screen and not to the render before it
 D129 The verdict's line is fixed by the first Playwright that counts it right, and the rig's Node is not the thing that moves
 D130 A feeder that never rests gets a second trigger, and the beat is measured not typed
+D131 The ratchet gets an escape, a settle is one quiet frame of three, and the beat is the backstop
 ```
 
 **THE GAP THIS LIST CARRIED BETWEEN D116 AND D118 IS CLOSED, AND IT CLOSED THE WAY IT SAID IT
@@ -1527,7 +1528,17 @@ was open** — the rule is renumber your own, never another's.
   least motion. Armed from the same Rig panel Trigger track (a third `cadence` cell) with a
   period pin. Replayed 27/29 and 20/~21 against 5/5 live, banked as T9's third corpus. **It is
   NOT confirmed at the rig — no photograph has been taken by it** — and its §7 is the first
-  run's checklist. Trigger 1 (settle) is unchanged and keeps its 85/85.
+  run's checklist.
+
+  **AND THE SETTLE TRIGGER WAS FIXABLE AFTER ALL, WHICH D130 SAID IT WAS NOT (D131, the same
+  night, on the owner's refusal).** The rest existed at d 5-8 under the bright lamp; the noise
+  tracker's ratchet — still frames defined only by frames already under `tLo` — could lower
+  its idea of still and never raise it, and sat under the rest. It has an ESCAPE now: still
+  frames under 30% of the frames with a card in view hand the still level to the 25th
+  percentile of all of them, and a settle is one quiet frame of the last three. Zero verdicts
+  change on the eight earlier sessions; the four bright-lamp sessions replay 31, 21, 45, 85.
+  The cadence trigger is a DUAL: the settle fire whenever it comes, the beat as the backstop.
+  The HUD's `escape` count says when the ratchet was overruled.
 
   **`scripts/score-trace.py` is how a trace is scored, and it is not optional reading before
   changing a number here.** `summary`, `presence`, `sweep` and `contact` — the last one draws

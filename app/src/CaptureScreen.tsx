@@ -2466,6 +2466,10 @@ export function CaptureScreen() {
                     <span>same {motionDiag.suppressedUnchanged}</span>
                     <span>empty {motionDiag.suppressedNoCard}</span>
                     <span>stall {motionDiag.stalled}</span>
+                    {/* D131: how often the ratchet was overruled by the rest quantile. Non-zero
+                        on a bright lamp is the machine working; non-zero on a dim one is worth a
+                        trace. */}
+                    <span>escape {motionDiag.escapes}</span>
                     {triggerMode !== 'cadence' ? null : (
                       /* The beat's own instruments (D130). `beat` is a word and the live spec's
                          parser skips it by shape; the rest are `name value` like every span. */
@@ -3331,7 +3335,7 @@ export function CaptureScreen() {
                   {triggerMode === 'motion'
                     ? 'Motion · the machine fires it'
                     : triggerMode === 'cadence'
-                      ? 'Cadence · the beat fires it'
+                      ? 'Cadence · settle first, beat as backstop'
                       : `Manual · ${CAPTURE_KEY_LABEL} fires it`}
                   <span className="bn-sr capture-trigger">{captureTrigger.name}</span>
                 </>
@@ -3407,7 +3411,7 @@ export function CaptureScreen() {
                 {triggerMode === 'motion'
                   ? 'The machine fires the shutter when a card settles at the lens. Arming starts the run; it never survives a reload.'
                   : triggerMode === 'cadence'
-                    ? 'The first card fires the shutter; after that it fires once per beat of the feeder, measured from the motion itself. For a feeder that never lets a card sit still. Leave the period blank to let it measure.'
+                    ? 'The dual: a card that settles is photographed the moment it does, and a card that never does is photographed on the feeder\'s beat, measured from the motion itself. Leave the period blank to let it measure.'
                     : 'The shutter fires on C. Motion arms a machine that fires it when a card settles; Cadence arms one that fires on a feeder\'s beat.'}
               </p>
             </OpenField>

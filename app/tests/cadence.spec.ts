@@ -208,14 +208,23 @@ test('a card that never goes quiet is still photographed, blind, and counted as 
   expect(feed.machine.diag.blindFires).toBe(1)
 })
 
-test('on the seed, a feeder that allows two quiet frames a card gets one fire per card', () => {
+test('on the seed, a feeder that allows three quiet frames a card gets one fire per card', () => {
   const feed = new Feed().hold(EMPTY, 40)
   const P = DEFAULT_CADENCE.periodSeedMs
-  for (let i = 0; i < 12; i += 1) feed.card(120 + i * 8, P, 2)
-  /* Twelve cards, twelve fires, give or take the first cycle's anchoring. The settle rule
-   * cannot reach a verdict on two quiet frames out of a window of four. */
+  /* THREE quiet frames, not two: since D131 the settle machine underneath fires on one
+   * quiet frame of the last three under tHi, and a synthetic card that switches from
+   * violent churn to rest and back in two frames never fills that window — the real
+   * feeder's rest is two to four frames with calm frames around it. Two would leave every
+   * fire here to the beat's backstop, which is a different claim from the one this test
+   * makes. */
+  for (let i = 0; i < 12; i += 1) feed.card(120 + i * 8, P, 3)
+  /* Twelve cards, twelve fires, give or take the first cycle's anchoring. */
   expect(feed.fires()).toBeGreaterThanOrEqual(11)
   expect(feed.fires()).toBeLessThanOrEqual(13)
+  /* THE DUAL (D131): every one of those came from the settle machine underneath, on a frame
+   * it could call still — none from the beat's backstop. The backstop's own proof is the
+   * never-quiet card above, where it is the only path that fires. */
+  expect(feed.machine.diag.blindFires).toBe(0)
   expect(feed.machine.diag.beat).toBe('locked')
   expect(feed.machine.diag.measuredMs).toBeGreaterThanOrEqual(P - 60)
   expect(feed.machine.diag.measuredMs).toBeLessThanOrEqual(P + 60)

@@ -7,12 +7,13 @@ own frames — synthetic arrays, a flat canvas fill — so they can only ever pr
 agrees with the test's own idea of a card. Until this file, nothing in the repo had ever put
 the motion machine in front of a photograph.
 
-The traces in `harness/traces/` are the only real-rig evidence this subsystem has: ten
+The traces in `harness/traces/` are the only real-rig evidence this subsystem has: twelve
 armed sessions saved from the HUD by the owner — FIVE recorded under the brightness floor
 D81 replaced, THREE recorded on 2026-09-01 under the distance gate that replaced it,
-which is what convicted the stillness rule and the presence floor in D84, and TWO recorded
-on 2026-09-11 over a re-arranged feeder with a beat and no rest, which convicted the settle
-rule itself and are what the cadence trigger (D130) was built on. Each carries every
+which is what convicted the stillness rule and the presence floor in D84, and FOUR recorded
+on 2026-09-11 over a re-arranged feeder under a bright lamp, where a resting card reads
+d 5-8 and the ratchet never learned it — the sessions that convicted the noise tracker
+(D131) and on which the cadence trigger (D130) and the dual were built. Each carries every
 frame's (t, d, luma), v2 adding dBase, and the exact watch-region pixels of every verdict,
 which is what makes a refusal re-scorable years later.
 
@@ -38,7 +39,7 @@ WHAT IS ASSERTED, AND THE TWO KINDS ARE NOT EQUALLY VALUABLE:
                      fired" would pass on a stall in the wrong place.
 
 WHAT A GREEN T9 DOES NOT MEAN. It does not mean the trigger works at the rig today. These
-are ten recordings of a handful of rig states, and the next rig can differ from all of
+are twelve recordings of a handful of rig states, and the next rig can differ from all of
 them — the same honest limit T6 and T8 carry, in the same words. What it does mean is that the machine
 still tells a card from an empty stand on every session anybody has ever recorded.
 
@@ -59,7 +60,7 @@ from pathlib import Path
 from harness.tests import Checks, Result
 
 NAME = "T9"
-DESCRIPTION = "Motion trigger against ten recorded rig sessions"
+DESCRIPTION = "Motion trigger against twelve recorded rig sessions"
 PASS_CRITERIA = (
     "on every saved trace an empty stand sits within 2 of its own baseline and every card "
     "sits 17 or more away; the dimmest card on one rig is dimmer than the empty stand on "
@@ -67,8 +68,9 @@ PASS_CRITERIA = (
     "least as many verdicts as the hand-tuned constants did live on all ten; and on the "
     "three sessions D84 was derived from, the presence floor refuses both settles that "
     "photographed the bare stand while a card that never settles is reported as a stall; "
-    "and on the two 2026-09-11 sessions the settle rule fired five times each on a feeder "
-    "with a 0.87 s beat and no rest, the receipt the cadence trigger (D130) was built on"
+    "and on the four 2026-09-11 sessions the settle rule as shipped fired five times each "
+    "on the two the ratchet lost, while D131's rule replays 31, 21, 45 and 85 verdicts "
+    "across the four"
 )
 
 # NAMED LITERALLY, resolved against the repo root, rather than composed out of `parent`
@@ -117,15 +119,20 @@ PRE_D81 = {
 # stand, and four cards fed and never photographed at all. `plate_fires` is when the live
 # gate fired on the arm-time scene; `stalls` is what the corrected clock reports, and every
 # one of those times sits on a card that was in the watch region and never settled.
+# THE STALL TIMES MOVED UNDER D131, AND THAT IS THE ENTRY'S OWN CLAIM. The 21:10 card at
+# 14.1 s showed one quiet frame in its window and D84's two-of-four could not settle on it;
+# one-of-three does, so it is a fire now and no stall. The 21:16 stall moved 8.6 -> 9.5 s for
+# the same reason one frame later. The silence check over the five earlier sessions is
+# unchanged: a scene with no quiet frame at all still expires the clock.
 D84 = {
     "harness/traces/motion-trace-2026-09-01T21-10-36-920Z.json": {
-        "plate_fires": [12.4], "stalls": [14.1],
+        "plate_fires": [12.4], "stalls": [],
     },
     "harness/traces/motion-trace-2026-09-01T21-14-34-791Z.json": {
         "plate_fires": [5.4], "stalls": [],
     },
     "harness/traces/motion-trace-2026-09-01T21-16-13-772Z.json": {
-        "plate_fires": [], "stalls": [8.6],
+        "plate_fires": [], "stalls": [9.5],
     },
 }
 
@@ -158,9 +165,13 @@ EXPECTED = {
     # `arrival` is EARLIER than the first fire in the first two, deliberately and by this
     # key's own definition: the 12.4 s and 5.4 s verdicts are re-settles of the arm-time
     # scene, which is why the floor may refuse them without that being a missed card.
-    "harness/traces/motion-trace-2026-09-01T21-10-36-920Z.json": {"live": 46, "adaptive": 48, "arrival": 13000},
-    "harness/traces/motion-trace-2026-09-01T21-14-34-791Z.json": {"live": 13, "adaptive": 14, "arrival": 5700},
-    "harness/traces/motion-trace-2026-09-01T21-16-13-772Z.json": {"live": 10, "adaptive": 11, "arrival": 8400},
+    #
+    # 48 -> 49, 14 -> 16, 11 -> 12 UNDER D131 (2026-09-11): a settle is one quiet frame of the
+    # last three, and the ratchet's escape is live. The extra verdicts are the cards D84
+    # counted as stalls, photographed on their quiet frame — see the stall times below.
+    "harness/traces/motion-trace-2026-09-01T21-10-36-920Z.json": {"live": 46, "adaptive": 49, "arrival": 13000},
+    "harness/traces/motion-trace-2026-09-01T21-14-34-791Z.json": {"live": 13, "adaptive": 16, "arrival": 5700},
+    "harness/traces/motion-trace-2026-09-01T21-16-13-772Z.json": {"live": 10, "adaptive": 12, "arrival": 8400},
 }
 
 
@@ -176,9 +187,22 @@ EXPECTED = {
 # TypeScript machine with no Python mirror, which is why its counts are asserted there and not
 # here. `cycles` is the luma-crossing count read off each trace; `feeding` is when the first
 # card reached the lens, read off `dBase` crossing the floor.
+# WIDENED TO FOUR UNDER D131, and what the block asserts changed from a receipt into a
+# receipt AND a repair. `fires` and `cycles` are the settle rule AS SHIPPED, live, on the
+# two sessions the ratchet lost — the receipt, never rewritten. `adaptive` is what D131's
+# rule replays on each: the ratchet's escape (still frames a minority of the frames with a
+# card in view -> the rest quantile of all of them) and one quiet frame of the last three.
+# The third session was recorded under the cadence trigger and the fourth under the settle
+# trigger with the lamp dimmed (the owner's own experiment: 65 fires and 13 stalls live);
+# both are scored under the settle rule here because that is what the scorer replays.
 CADENCE = {
-    "harness/traces/motion-trace-2026-09-11T01-48-49-706Z.json": {"fires": 5, "cycles": 29, "feeding": 31500},
-    "harness/traces/motion-trace-2026-09-11T01-51-27-783Z.json": {"fires": 5, "cycles": 34, "feeding": 13500},
+    # `cards` is the box: the feeding span over the beat's period. `cycles` is the luma
+    # crossing count, which over-reads the second session (a hand in the region) and is kept
+    # as the measurement it is rather than corrected into the card count.
+    "harness/traces/motion-trace-2026-09-11T01-48-49-706Z.json": {"fires": 5, "cycles": 29, "cards": 29, "feeding": 31500, "adaptive": 31},
+    "harness/traces/motion-trace-2026-09-11T01-51-27-783Z.json": {"fires": 5, "cycles": 34, "cards": 21, "feeding": 13500, "adaptive": 21},
+    "harness/traces/motion-trace-2026-09-11T03-20-03-144Z.json": {"fires": None, "cycles": None, "feeding": 89100, "adaptive": 45},
+    "harness/traces/motion-trace-2026-09-11T03-25-00-875Z.json": {"fires": 65, "cycles": None, "feeding": 20000, "adaptive": 85},
 }
 
 
@@ -213,7 +237,7 @@ def run() -> Result:
         for path in sorted(TRACES.glob("*.json"))
     }
     checks.equal(sorted(traces), sorted(set(EXPECTED) | set(CADENCE)),
-                 "all ten recorded sessions are present")
+                 "all twelve recorded sessions are present")
     checks.equal(sorted(PRE_D81 | set(D84) | set(CADENCE)), sorted(set(EXPECTED) | set(CADENCE)),
                  "and every one is in exactly one corpus — the brightness floor's, D84's, or D130's")
     if sorted(traces) != sorted(set(EXPECTED) | set(CADENCE)):
@@ -229,34 +253,48 @@ def run() -> Result:
         trace = traces[name]
         key = CADENCE[name]
         fired = [e for e in trace["events"] if e["event"] == "fire"]
-        checks.equal(
-            len(fired), key["fires"],
-            f"{_label(name)}: the settle trigger fired {key['fires']} times live on ~{key['cycles']} cards",
-        )
+        if key["fires"] is not None:
+            checks.equal(
+                len(fired), key["fires"],
+                f"{_label(name)}: the trigger fired {key['fires']} times live",
+            )
         rows = score._rows(trace)
         feeding = [d for t, d, _b, _l in rows if t >= key["feeding"]]
-        # The beat, read the same way the cadence machine reads it: the cycles the luma makes.
-        crossings = sum(
-            1 for (_t0, _d0, _b0, l0), (_t1, _d1, _b1, l1) in zip(rows, rows[1:])
-            if _t1 >= key["feeding"] and l0 >= 170 > l1
-        )
-        checks.equal(
-            crossings, key["cycles"],
-            f"{_label(name)}: the region's luma cycles {crossings} times while feeding (a card every "
-            f"{(rows[-1][0] - key['feeding']) / max(crossings, 1) / 1000:.2f} s)",
-        )
-        quiet_share = sum(1 for d in feeding if d < 3.5) / max(len(feeding), 1)
-        checks.ok(
-            quiet_share < 0.25,
-            f"{_label(name)}: under a quarter of feeding frames are under tLo ({quiet_share:.0%}) — "
-            f"the feeder never lets a card sit, which is why a settle rule cannot fire on it",
-        )
+        if key["cycles"] is not None:
+            # The beat, read the same way the cadence machine reads it: the cycles the luma makes.
+            crossings = sum(
+                1 for (_t0, _d0, _b0, l0), (_t1, _d1, _b1, l1) in zip(rows, rows[1:])
+                if _t1 >= key["feeding"] and l0 >= 170 > l1
+            )
+            checks.equal(
+                crossings, key["cycles"],
+                f"{_label(name)}: the region's luma cycles {crossings} times while feeding (a card every "
+                f"{(rows[-1][0] - key['feeding']) / max(crossings, 1) / 1000:.2f} s)",
+            )
+            quiet_share = sum(1 for d in feeding if d < 3.5) / max(len(feeding), 1)
+            checks.ok(
+                quiet_share < 0.25,
+                f"{_label(name)}: under a quarter of feeding frames are under the SHIPPED tLo "
+                f"({quiet_share:.0%}) — the rest sits above where the ratchet could look",
+            )
         base = _cells(trace["keyframes"][0]["frame"])
         for event in fired:
             distance = _distance(_cells(event["frame"]), base)
             checks.ok(
                 distance >= 17.0,
                 f"{_label(name)} {event['t'] / 1000:.1f}s: the fired frame is a card ({distance:.1f} from baseline)",
+            )
+        # THE REPAIR (D131), as a tripwire in the same sense as EXPECTED's: what the rule
+        # in the tree replays on a session the shipped rule lost.
+        verdicts, (lo, hi), _stalls = score._replay(rows)
+        checks.equal(
+            len(verdicts), key["adaptive"],
+            f"{_label(name)}: D131's rule replays {key['adaptive']} verdicts (tLo reached {hi:.1f})",
+        )
+        if key["fires"] is not None and key.get("cards") is not None:
+            checks.ok(
+                len(verdicts) >= 0.9 * key["cards"] and len(verdicts) >= 4 * key["fires"],
+                f"{_label(name)}: which covers the box the shipped rule photographed a sixth of",
             )
 
     # ---- the separation, on the one trace that contains a real empty stand ----------
@@ -284,10 +322,13 @@ def run() -> Result:
 
     # ---- the cross-rig overlap: why no CONSTANT can do this job ---------------------
     empty_bright = max(score._quantile([float(v) for v in frame], 0.9) for frame in empty)
+    # OVER THE PRE-D81 CORPUS ONLY. This is D81's receipt about the two rigs it was written
+    # on; the 2026-09-11 dimmed-lamp session has verdict frames darker than either, and
+    # summing it in would turn a fixed receipt into a number that moves with the lamp.
     dimmest = min(
         (score._quantile([float(v) for v in _cells(event["frame"])], 0.9), name, event["t"])
         for name, trace in traces.items()
-        if name != REFERENCE
+        if name in PRE_D81 and name != REFERENCE
         for event in trace["events"]
     )
     # WRITTEN BACKWARDS THE FIRST TIME, and this test caught it: the dimmest card is not
