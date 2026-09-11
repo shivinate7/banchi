@@ -337,6 +337,40 @@ BOOT_HEADER = "X-Pkmnscan-Boot"
 # `server/ports.py` carries the argument and `PKMNSCAN_PORT` overrides.
 PORT = ports.capture_port()
 
+# WHERE THE BUILT APP IS, AND IT IS A PROPERTY OF THE CHECKOUT RATHER THAN OF THE STORE
+# (D138). `app/dist/` beside this tree's own `app/src/`, so a worktree serves the bundle it
+# built from its own source on its own port, exactly as it serves its own store (D43) — the
+# two facts are the same fact and neither needs a new variable to say it.
+#
+# NOT AN ENVIRONMENT VARIABLE, and the frozen-release form of `docs/specs/one-process.md` §7
+# is the only thing that would want one. Read through `app_dist()` at call time rather than
+# baked into a default argument, which is what lets T7 point one server at a temporary build
+# without a knob this product does not otherwise have.
+APP_DIST = Path(__file__).resolve().parent.parent / "app" / "dist"
+
+# The eight types `vite build` emits, and nothing else is served. A map rather than
+# `mimetypes.guess_type`: that module reads the machine's own `/etc/mime.types`, so the
+# Content-Type of this product's JavaScript would depend on which Mac it is running on —
+# and `.webmanifest` is absent from it entirely on macOS, which is the one file whose type
+# decides whether the dock app installs (D108).
+APP_TYPES = {
+    ".html": "text/html; charset=utf-8",
+    ".js": "text/javascript; charset=utf-8",
+    ".css": "text/css; charset=utf-8",
+    ".svg": "image/svg+xml",
+    ".png": "image/png",
+    ".webmanifest": "application/manifest+json",
+    ".woff2": "font/woff2",
+    ".json": "application/json",
+}
+
+# Vite content-hashes everything under `assets/`, so a name that changes when the bytes do can
+# be cached forever; `index.html` and the manifest are the two files whose NAME is stable and
+# whose bytes move on every build, so they must never be held — a cached index would go on
+# asking for hashed assets that the swap has already deleted.
+APP_IMMUTABLE = "public, max-age=31536000, immutable"
+APP_NO_STORE = "no-store"
+
 CAPTURES_DIRNAME = "captures"
 CARDS_DIRNAME = "cards"
 PHOTO_SUFFIX = ".jpg"
@@ -2630,6 +2664,105 @@ def do_games() -> dict:
             for entry in products.PRODUCTS
         ],
     }
+
+
+def app_dist() -> Path:
+    """The built app's directory, read at call time. See `APP_DIST` for why not a constant."""
+    return APP_DIST
+
+
+def app_claims(path: str) -> bool:
+    """Is this a path the built app answers? The root, or a file of the build.
+
+    NARROW ON PURPOSE, AND THE HASH ROUTER IS WHY (D138). The usual SPA host serves
+    `index.html` for every unmatched path, because its router owns real URLs and a deep link
+    has to survive a reload. `App.tsx` is a HASH router: every screen is `/#/inventory`, the
+    part after `#` is never sent, and so the only paths the app has are `/` and its own
+    asset files. A catch-all here would buy nothing and cost the thing this server cannot
+    afford to lose — `GET /boxes/abc` and `GET /statuss` would answer 200 with HTML instead
+    of the JSON refusal that names what was wrong, and every such refusal in this file would
+    quietly stop being reachable.
+
+    So: the root, or a final segment whose extension is one `vite build` emits. Everything
+    else is still `no_such_route`, exactly as it was before the app moved in here.
+    """
+    wanted = path.lstrip("/")
+    if not wanted:
+        return True
+    return Path(wanted).suffix in APP_TYPES
+
+
+def do_app_file(path: str) -> Tuple[bytes, str, str]:
+    """A file out of the built app. `app_claims` decides what reaches here (D138).
+
+    THE LAST RESORT OF `do_GET` AND NEVER A ROUTE. Every route in this server is matched
+    first and this is what the fall-through reaches, so a path this product serves on the
+    wire can never be shadowed by a file somebody dropped into `app/dist/` — which is the
+    one way a static serve bolted onto an API goes wrong.
+
+    WHAT IT REFUSES, AND WHY EACH ONE IS CHECKED RATHER THAN ARGUED. `..` and a NUL byte are
+    refused by shape, before anything touches the filesystem, and the resolved path is then
+    required to be inside `app/dist/` — belt and braces on purpose, because the first check
+    is about the string the client sent and the second is about the file it reached, and a
+    symlink inside `dist/` satisfies the first while defeating it. The alternative to both is
+    `GET /..%2f..%2finventory/store.sqlite` reading the store over a route whose whole job is
+    to hand out bytes.
+
+    IT SERVES EIGHT EXTENSIONS AND REFUSES THE REST. `dist/` holds nothing else after a
+    `vite build`, so an unknown extension there means something that is not the build — and a
+    404 for it is the honest answer rather than `application/octet-stream` over a file this
+    server was never meant to have an opinion about.
+
+    NO PHOTOGRAPH AND NO STORE IS REACHABLE FROM HERE, which is what makes serving a
+    directory out of this process an ordinary thing rather than an opsec question:
+    `app/dist/` is compiled output under the CHECKOUT, and every card, sidecar and code-card
+    image lives under `PKMNSCAN_HOME`, which this function cannot name. `GET /photo` is
+    still the only way a captured byte leaves this server.
+    """
+    root = app_dist()
+    if not (root / "index.html").is_file():
+        # THE APP IS NOT BUILT, AND THIS IS THE ONLY SENTENCE THAT SAYS SO. Not a page and
+        # not styled: a screen here would be a second front end, maintained forever, for the
+        # ten seconds before the supervisor's first build lands (D138 §1.1). 503 rather than
+        # 404 because the resource is not missing, it is not ready — and a 404 would read to
+        # a browser, and to the operator, as a wrong address.
+        raise BadRequest(
+            HTTPStatus.SERVICE_UNAVAILABLE,
+            "app_not_built",
+            "The app is not built. `make up` builds it; see .serve/supervisor.log.",
+        )
+    wanted = path.lstrip("/")
+    if "\x00" in wanted or ".." in wanted.split("/"):
+        raise BadRequest(
+            HTTPStatus.NOT_FOUND, "no_such_file", "No such file."
+        )
+    candidate = (root / wanted) if wanted else (root / "index.html")
+    try:
+        resolved = candidate.resolve()
+        inside = resolved.is_relative_to(root.resolve())
+    except (OSError, ValueError):
+        inside = False
+    if not inside or not resolved.is_file() or resolved.suffix not in APP_TYPES:
+        # A NAMED FILE THAT IS NOT THERE IS A 404, NOT THE APP. `app_claims` has already
+        # decided this path looks like a file of the build, so reaching here means the build
+        # does not have it — a stale `index.html` asking for an asset the swap deleted, or a
+        # typo. Answering with HTML under a `.js` name would hand the browser a syntax error
+        # to report instead of the missing file.
+        raise BadRequest(HTTPStatus.NOT_FOUND, "no_such_file", f"No such file {path}.")
+    cache = APP_IMMUTABLE if wanted.startswith("assets/") else APP_NO_STORE
+    return resolved.read_bytes(), APP_TYPES[resolved.suffix], cache
+
+
+def app_owns(path: str) -> bool:
+    """Is the app answering this path right now? For the write verbs' 405.
+
+    A write to a path the app is serving is a METHOD error and not a missing route, and that
+    is the whole of what this decides: `POST /` against a server handing out the app at `/`
+    should say the method is wrong rather than that there is nothing there. Both halves are
+    required — the path has to be one the app claims AND there has to be a build behind it,
+    because an unbuilt tree genuinely has nothing at `/` and 404 is then the truth.
+    """
+    return app_claims(path) and (app_dist() / "index.html").is_file()
 
 
 def do_photo(box: int, index: int) -> Tuple[bytes, str]:
@@ -5316,6 +5449,46 @@ def _answer_target(
             "condition_mismatch",
             f"{sku} is offered as {offered_condition!r}, not {condition!r}. The screen "
             f"was drawn from an older queue file — reload it and choose again.",
+        )
+
+    # D137 — AND THE GRADE ITSELF IS CHECKED, NOT ONLY THAT THE TWO AGREE.
+    #
+    # The three refusals above ask whether this answer matches the row that was OFFERED. None
+    # of them asks whether the row should have been offered at all, and for ten days it should
+    # not have been: the catalog carried every play grade, so `Damaged Foil` sat on screen as a
+    # tappable chip beside `Near Mint Foil` and answering it would have written that SKU onto a
+    # card this product sells at Near Mint (D12). Nothing downstream would have disagreed —
+    # `join_batch` rung 0 re-finds the answered row by its own condition string, so the wrong
+    # grade travels all the way into the import file.
+    #
+    # `Catalog.from_export` now makes this unreachable from the screen, which is exactly why it
+    # is worth having: the entries in the store TODAY were written before that filter existed
+    # and still carry their played rows until the next join rewrites them. This is the floor
+    # under those, and under any client that builds its own POST.
+    #
+    # THE SET IS THE CATALOG'S, NOT A SECOND OPINION ABOUT IT. Near Mint plus sealed, the same
+    # two clauses `from_export` keeps — a row that survives the catalog satisfies this by
+    # construction, so the two can never drift into disagreeing about one row.
+    #
+    # `or DEFAULT_GAME` IS D21'S READ-SIDE BACKFILL AND NOT A GUESS, and it is the same
+    # expression `cli/resolve.py` uses to decide which catalog a card is joined against. A
+    # record predating D21 carries no claim, is READ as the default game, and is therefore
+    # offered the default game's rows — so asking a different question here would refuse a card
+    # the join had just answered correctly. T7 found this on the first run with a `game`-less
+    # fixture card; `games.require` raises `UnknownGame` on `None` rather than defaulting,
+    # which is right for a registry lookup and wrong for a read of an old record.
+    listable = _near_mint_conditions(
+        str(getattr(card, "game", None) or games.DEFAULT_GAME)
+    ) | {tcgcsv.SEALED_CONDITION}
+    if offered_condition not in listable:
+        raise BadRequest(
+            HTTPStatus.CONFLICT,
+            "condition_not_listed",
+            f"{sku} is a {offered_condition!r} row, and this product lists "
+            f"{', '.join(sorted(listable))} (D12). It was offered by a queue entry written "
+            f"before the catalog stopped carrying play grades — re-join this run and the "
+            f"entry will be rewritten with the rows the ladder would actually pick. Nothing "
+            f"was written.",
         )
 
     return card, holders, offering, governing, chosen, offered_condition
@@ -10327,6 +10500,16 @@ class CaptureHandler(BaseHTTPRequestHandler):
                     kind,
                     (("Content-Disposition", 'attachment; filename="pirateship-import.csv"'),),
                 )
+            # THE APP ITSELF, AND IT IS THE LAST THING TRIED (D138). Every route above is
+            # matched first, so nothing in `app/dist/` can shadow a route; what reaches here
+            # is `/`, an asset, or an address somebody typed. `parsed.path` rather than the
+            # stripped `path`, because a trailing slash is part of a file's name to a
+            # filesystem and stripping it turned `/assets/` into a request for `/assets`.
+            if app_claims(parsed.path):
+                blob, kind, cache = do_app_file(parsed.path)
+                return self._send(
+                    HTTPStatus.OK, blob, kind, (("Cache-Control", cache),)
+                )
             raise BadRequest(HTTPStatus.NOT_FOUND, "no_such_route", f"No GET route {path}.")
 
         self._dispatch(run)
@@ -10603,6 +10786,15 @@ class CaptureHandler(BaseHTTPRequestHandler):
                         match.group(1), self._body(), _order_stamps
                     ),
                 )
+            if app_owns(path):
+                # The app is served here and is read-only (D138). 405 and not 404,
+                # because the resource exists — saying "no such route" about a path
+                # this server answers on GET is a lie that reads as a routing bug.
+                raise BadRequest(
+                    HTTPStatus.METHOD_NOT_ALLOWED,
+                    "method_not_allowed",
+                    f"POST is not allowed on {path}. The app is served here.",
+                )
             raise BadRequest(HTTPStatus.NOT_FOUND, "no_such_route", f"No POST route {path}.")
 
         self._dispatch(run)
@@ -10644,6 +10836,15 @@ class CaptureHandler(BaseHTTPRequestHandler):
                 # the file it edited.
                 return self._json(
                     HTTPStatus.OK, pipeline_routes.do_pricing_corpus_write(self._body())
+                )
+            if app_owns(path):
+                # The app is served here and is read-only (D138). 405 and not 404,
+                # because the resource exists — saying "no such route" about a path
+                # this server answers on GET is a lie that reads as a routing bug.
+                raise BadRequest(
+                    HTTPStatus.METHOD_NOT_ALLOWED,
+                    "method_not_allowed",
+                    f"PUT is not allowed on {path}. The app is served here.",
                 )
             raise BadRequest(HTTPStatus.NOT_FOUND, "no_such_route", f"No PUT route {path}.")
 
@@ -10687,6 +10888,15 @@ class CaptureHandler(BaseHTTPRequestHandler):
             if match:
                 return self._json(
                     HTTPStatus.OK, shipping_routes.do_shipping_forget(match.group(1))
+                )
+            if app_owns(path):
+                # The app is served here and is read-only (D138). 405 and not 404,
+                # because the resource exists — saying "no such route" about a path
+                # this server answers on GET is a lie that reads as a routing bug.
+                raise BadRequest(
+                    HTTPStatus.METHOD_NOT_ALLOWED,
+                    "method_not_allowed",
+                    f"DELETE is not allowed on {path}. The app is served here.",
                 )
             raise BadRequest(
                 HTTPStatus.NOT_FOUND, "no_such_route", f"No DELETE route {path}."

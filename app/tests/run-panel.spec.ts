@@ -136,7 +136,14 @@ function runRow(overrides: Record<string, unknown> = {}) {
     collected: true,
     joined: false,
     counts: {},
-    usage: {},
+    /* A RECORDED RUN, BECAUSE `{}` IS THE DEGENERATE SHAPE AND NOT THE ORDINARY ONE. These are
+       the owner's own 2026-09-11 run — 290,470 in, 3,761 out, $0.154638 at identify/cost.py's
+       rates — which is the run that made the money pill a defect: it drew `Costs money` beside a
+       six-figure token count and no dollar figure at all, four minutes after finishing. A
+       fixture that is a RECORDING is the same argument T9 makes against frames a test drew for
+       itself. `usage: {}` still has a case of its own below; that is what a run written before
+       the field looks like, which is every run on the owner's machine. */
+    usage: { input_tokens: 290470, output_tokens: 3761, cost_usd: 0.154638 },
     ...overrides,
   }
 }
@@ -667,7 +674,12 @@ test('which steps cost money is on the heading line, not buried in the prose', a
 }) => {
   await open(page)
   await openRun(page)
-  await expect(page.locator('.run-step-money')).toHaveText('Costs money')
+
+  /* AND THE FIGURE IS THE LABEL, which is this case's amendment rather than a second assertion
+     beside it. docs/DESIGN.md's register — "money moments are deliberate and carry the figure in
+     the label" — was satisfied by `Costs money` only for as long as there was no figure to
+     carry. The fixture's run is a collected, recorded one, so there is. */
+  await expect(page.locator('.run-step-money')).toHaveText('Cost $0.15')
 
   /* `allTextContents` and not `allInnerTexts`: the stylesheet uppercases these labels, and
      `innerText` returns what is PAINTED while `textContent` returns what is written. The
@@ -676,11 +688,92 @@ test('which steps cost money is on the heading line, not buried in the prose', a
   await expect(page.locator('.runs-step .runs-step-cost')).toHaveCount(4)
   const costs = await page.locator('.runs-step .runs-step-cost').allTextContents()
   expect(costs).toEqual([
-    'Costs money',
+    'Cost $0.15',
     'Free · re-runnable',
     'Free · re-runnable',
     'Free · re-runnable',
   ])
+})
+
+/* THE MONEY PILL SETTLES, AND UNTIL 2026-09-11 IT NEVER DID.
+ *
+ * `Costs money` was hardcoded on the Identify step in every state, which is a warning about a
+ * decision this screen does not offer: a run directory exists only because the spend route
+ * already spawned a child (D33 — the preflight creates none), so the money on this card is
+ * always already spent, in flight, or dead in the water. The owner read it on a FINISHED run
+ * beside `290,470 tokens in · 3,761 out` and no dollar figure at all, while the console inside
+ * the same card said `estimated cost $0.14`. The run cost $0.15 and had finished four minutes
+ * earlier.
+ *
+ * ONE CASE PER STATE, AND NOT ONE CASE WITH FOUR `open()` CALLS IN IT. Every route in this file
+ * is registered inside `open`, and a second call would register a competing handler that
+ * Playwright resolves in reverse order — the exact trap `open`'s own `detail` option exists to
+ * keep a test out of.
+ *
+ * OBSERVED FAILING FIRST. Four mutations of `RunPanel.tsx`, all red:
+ *
+ *   the pill reverts to a hardcoded `Costs money`   3 red — and NOT the fourth case below,
+ *                                                     which is the one that expects it
+ *   the body figure dropped                         1 red, the beside-the-tokens case
+ *   the live state loses its tone                   1 red, the in-flight case
+ *   `Already paid` falls back to the warning        1 red, the predates-the-figure case
+ */
+
+test('the cost is beside the tokens too, which is where a phone still sees it', async ({
+  page,
+}) => {
+  await open(page)
+  await openRun(page)
+
+  /* THE IDENTIFY STEP HAS TO BE OPENED FIRST, and which one is open is derived rather than
+     fixed: `setOpenStep(COMMANDS[min(stageOf(detail).step, 3)])`, so the fixture's `phase:
+     'join'` opens JOIN and the identify body is not in the document at all. A test that read
+     `.runs-kv-row` without this click was asserting against an element that had never been
+     rendered — which is the shape that makes a new sweep go green for the wrong reason. */
+  await page.locator('.runs-step').first().locator('.runs-step-head').click()
+
+  /* NOT A DUPLICATE OF THE PILL — the narrow-width copy of it. `.runs-step-cost` is
+     `display: none` below a 640px container (RunPanel.css), and the same rule drops the head
+     from four grid columns to three, so the head's figure is gone on a phone and this row is
+     what remains. */
+  const row = page.locator('.runs-step').first().locator('.runs-kv-row')
+  await expect(row).toContainText('290,470 tokens in · 3,761 out')
+  await expect(row).toContainText('Cost $0.15')
+})
+
+test('a run still in flight says the money is moving, in the live register', async ({ page }) => {
+  /* `live` ON THE LIST ROW IS NOT ENOUGH — the steps are drawn against the DETAIL, so this
+     passes `detail` rather than the `live` option, which is a different fixture. */
+  await open(page, {
+    detail: { live: true, pid: 999, phase: 'identifying', collected: false, usage: {} },
+  })
+  await openRun(page)
+  await expect(page.locator('.run-step-money')).toHaveText('Spending now')
+  await expect(page.locator('.run-step-money')).toHaveClass(/bn-pill-live/)
+})
+
+test('a run that predates the recorded figure does not warn about money already spent', async ({
+  page,
+}) => {
+  /* THE STATE EVERY RUN ON THE OWNER'S MACHINE WAS IN: collected, with no usable `usage` block.
+     The server fills the figure in from the token counts where it has them (`_usage`) and
+     cannot where it does not — and a finished run with nothing to report must still not claim
+     the spend is ahead of it. */
+  await open(page, { detail: { usage: {} } })
+  await openRun(page)
+  await expect(page.locator('.run-step-money')).toHaveText('Already paid')
+  await expect(page.locator('.run-step-money')).not.toHaveClass(/bn-pill-warn/)
+})
+
+test('the warning survives for the one state that has not spent anything', async ({ page }) => {
+  /* A CHILD THAT DIED BEFORE IT SUBMITTED — `phase: 'ready'` is a manifest with no batch ids
+     (server/pipeline_routes.py:_phase) — is the only state this card can be drawn in where
+     nothing has been bought. Deleting the warning outright would have been the easy repair and
+     the wrong one: the pill is not noise, it was lit in the wrong three states out of four. */
+  await open(page, { detail: { collected: false, batch_ids: [], phase: 'ready', usage: {} } })
+  await openRun(page)
+  await expect(page.locator('.run-step-money')).toHaveText('Costs money')
+  await expect(page.locator('.run-step-money')).toHaveClass(/bn-pill-warn/)
 })
 
 // --------------------------------------------------------------------------- the reading

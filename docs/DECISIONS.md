@@ -945,6 +945,12 @@ What replaces it, because a guarantee deleted and not replaced is a regression:
 
 **The money step spawns and is never awaited; every other step runs in the request.** Not a preference — the shape of the work. A Batch takes minutes to hours and no HTTP request may be held open for that; `join`, `emit` and `reconcile` are local arithmetic over a parsed CSV. The child is detached and logs into the run directory, so **a run outlives the server that started it**: the Mac sleeps, `make server` restarts, a tab closes, and the poll still reads the run directory. `cli/runs.py` already makes a run an immutable input rather than state, and this leans on that entirely — nothing is held between requests.
 
+**Amended 2026-09-11: a handle on each child IS held between requests, and the last clause above was paid for.** `start_new_session` is `setsid` — a new SESSION, not a new parent — so a detached child is still a CHILD of the capture server. Nothing ever called `.wait()` or `.poll()` on it, there is no `SIGCHLD` handler, and an unwaited child that exits becomes a ZOMBIE holding its pid. **`os.kill(<zombie>, 0)` succeeds**, which is the whole defect: `_live_pid` decided liveness by signal 0 alone over a `running.pid` file nothing ever deletes, so a finished run went on reporting `live`. Measured on the owner's `2026-09-11-box4-04`: created 18:37:33, last write 18:41:25 — **a run that finished in 3m52s drew `Running 8m` and was still counting**, and `_busy_run` refused that box for a new identify the whole time. It corrected itself only when this process happened to construct another `Popen` — CPython reaps `subprocess._active` inside `Popen.__init__` — or when the server restarted.
+
+**What is held is a handle, and it is deliberately not an answer about a run.** `_CHILDREN` maps a run directory to the `Popen` of the child this process spawned, and `poll()` is both the question and the reap. Its ABSENCE means *ask the files*, never *not running*, so a restarted server holds none and reads every run exactly as before — **the promise above is intact and a run still outlives this server**. The three answers are ordered: a handle that says running wins outright, a handle that says exited ends it, and only with no handle at all do the files decide. That order is what closes a race the manifest would otherwise lose: `cli/cmd_identify.py` writes `collected=True` *before* the record and before a whole locked store write over every card — seconds on a 544-card run — so a rule letting the files demote a running child would put `Needs join` on screen while identify was still writing. In the no-handle case the floor is the run's own `identifications.json`, which is written atomically and is what the next step actually reads, rather than `collected`, which stays true through that entire tail. D111 already ruled that liveness is read rather than guessed; this is that rule applied to a process instead of a session.
+
+**Amended the same day: the receipt carries the actual figure, not only the estimate.** The gate above puts the estimate in front of the operator before they spend, and nothing ever told them what the send *cost*. The Identify step drew `290,470 tokens in · 3,761 out` beside a hardcoded `Costs money` pill — a warning about a decision that screen does not offer, since a run directory exists only because the spend route already spawned a child — while the console inside the same card said `estimated cost $0.14`. **The run cost $0.1546.** `identify/cost.py` is now the only place in the repo that multiplies a token count by a rate; `cli/cmd_identify.py` records `cost_usd` into the manifest at collect time, which makes true a claim `cli/runs.py` and `docs/specs/batch-script.md` had both been making since they were written; and the server fills the figure in at the read for runs that predate the field, saying so on the wire, because otherwise the fix would have been invisible on every run that exists. The pill settles: `Spending now` in flight, `Cost $0.15` after, `Costs money` only where nothing was ever submitted.
+
 **Scope is a box, or a selection inside one.** A subset becomes a directory of symlinks built **outside `captures/cards/`**, which is load-bearing: `identify.sidecar.scan` walks its root recursively, so a scope directory under it would be walked by the next run pointed at the box above and every card submitted twice. Gitignored under the opsec rule as well as the derived one — a bearer instrument reached through a symlink is still a bearer instrument.
 
 **Exports are uploaded, never named by path.** A screen cannot know what is on the server's disk, and a route that opened any absolute path a request named would be a file-read primitive guarded by an origin header. It also leaves the run holding the exact bytes it was joined against, which the manifest could only describe by hash.
@@ -2129,6 +2135,10 @@ On surface / bg / hover it is 5.12 / 4.99 / 4.69:1, clearing 1.4.11's 3:1 on all
 **`make server` and `make dev` are untouched.** A session wanting a foreground server in a terminal it is watching still has one, and that one still does not watch files, so `docs/GATES.md`'s discipline goes on governing it.
 
 **Rejected, and it led until the owner answered: building the app to `dist` and serving it from the capture server.** It collapses two processes into one, and `app/package.json` has carried an unused `build` script the whole time. It is the wrong answer to *this* request, because a built bundle has to be rebuilt — it would ADD a step to remember in exchange for removing one. Vite stays, and it was already the half that worked.
+
+**Amended 2026-09-11 — that rejection is reversed, on the one ground it gave (D138).** The owner asked for an easier way to package this, and the answer to "a built bundle has to be rebuilt" is that the rebuild is now the SUPERVISOR's job: `app/src` and `app/public` get their own watch set, a change there runs `vite build` into a sibling directory and renames it in, and nothing is added to anybody's memory. Measured before it was built: a cold build of this app is 1.2 seconds, which is what makes the old bundle answering meanwhile a moment nobody notices rather than a window to design around. **Everything else in this entry stands and now governs one child instead of two** — the drain, the parse pre-check, the fast-failure cap, the self-watch, the liveness probe and the launch agent are untouched. What is gone from this file is `spawn_vite`; what is gone from the operator's day is a second port. The full argument is D138 and the plan it names is `docs/specs/one-process.md`.
+
+One thing in this entry's own list changed with it, and it is the guard rather than the list: **`make dev` is no longer refused beside a running supervisor.** That guard existed because both ways of starting wanted the same two ports, and the supervisor no longer holds `:5173` at all. `make server` is still refused, because `:8000` is still the supervisor's and the squatter this entry measured is still exactly what would happen.
 
 ### The drain is counted on requests, never on threads
 
@@ -6339,6 +6349,19 @@ measured carries a drop shadow out to 87.5% and the mark carries none, so it sit
 dock's shelf. Section 17 names what would settle it — a sweep at 128, 64 and 32px against the
 same three icons — rather than a value typed into a generator.
 
+### Amended 2026-09-11 — the URL is `:8000`, and a port is part of an origin (D138)
+
+**The installed app would be created from `http://localhost:8000` now**, because the capture server serves the page itself and `:5173` belongs to `make dev`. Everything above is unchanged: the same Chrome, the same profile, the same manifest — which is already relative and needed no edit — and the same argument that the dock app is a CLIENT and never a second supervisor.
+
+**And no dock app has ever been installed, which this amendment first said the opposite of.** Checked on the owner's Mac 2026-09-11: `~/Applications/Chrome Apps.localized/` holds `My Hue.app` and nothing else — the very bundle this entry inspected to prove the mechanism. So this entry is an investigation that was never acted on, the owner's own words are *"I never had/used a dock app"*, and the install below is a FIRST one, optional, rather than a repair the port move forces. The entry is otherwise unaffected: what it measured about Chrome, the profile and the camera is all still true of whoever presses it first.
+
+**What the move costs is two resets, and it costs them WITH OR WITHOUT the dock app, which is the part that matters.** The owner opens this product in an ordinary Chrome tab at `http://localhost:5173`; a browser origin is scheme, host AND port, so `:8000` is a different origin to that tab just as it would be to an installed app:
+
+- **The camera grant prompts once more.** This entry measured that the grant lives in the profile's content settings, which is true and is keyed by origin — so the rig re-grants on first open. One press.
+- **Every `localStorage` key resets once** (D27): the capture screen's remembered camera and rotation, the theme, the rail, and the two order keys. The rig re-picks its camera and its rotation, which is the only one of the six that costs a moment. This is D27's rename cost repeated, and the same ruling applies for a better reason — a fallback ACROSS origins is not merely undesirable, it is impossible.
+
+**Move between shifts rather than mid-capture**, for the reason D27 names by name: `banchi.session.captureId` is `sessionStorage` and a capture in flight when the tab closes can burn a position.
+
 ### What would reopen this
 
 *A second person needing the app*, which wants something signed and installable rather than a click in one profile. *Chrome going away* on this machine. *The page needing a capability a browser withholds* — a real filesystem, a background process, a global hotkey. *The demo being meant to install*, which it is not: the manifest is correct there now, but a demo with no server behind it is a page to look at.
@@ -9326,6 +9349,10 @@ box therefore sits inert beneath a live one rather than being cleaned up — the
 D36's `refuse_reallocated` already treats as a hazard worth refusing a run over, not worth
 silently repairing.
 
+---
+
+
+
 ## D135 — Codex reads the same rules a Claude Code session does, through three symlinks and one reconciled hook roster
 
 **Settled 2026-09-11.** OpenAI Codex was installed in this repository on 2026-09-09 and left
@@ -9459,3 +9486,265 @@ regardless; it was never one of the three copies.
 **Branch protection names no required status check.** `gh api repos/shivinate7/banchi/branches/main/protection` shows `checks: []`: a PR is required and a red CI blocks nothing today. Making `check` and the three shards required is a settings change on GitHub, which is the owner's, not a session's.
 
 **Whether the runner minutes are billed at all is unverified.** The billing endpoint needs a `user` token scope this machine's `gh` lacks, and the per-run timing endpoint reports zero billable milliseconds; whether the ~6,800 minutes a month the old shape projected were drawn against Pro's included 3,000 is not known either way, and this entry does not assert it. 
+---
+
+
+
+## D137 — The catalog is Near Mint by rule, because it was only ever Near Mint by accident of the file
+
+**Settled 2026-09-11, from the owner asking where a feature had gone.** *"how come on
+review/pricing in the runs, ive somehow lost the ability to fast forward through the review
+by just stating all were near mint?"* — and then, when the first account of it was wrong,
+the correction that located it: *"I've never once been asked to judge the condition of cards
+in a review queue until today. They always were just pre-assumed to be Near Mint."*
+
+They were pre-assumed. That is the whole finding.
+**D12 hardcodes Near Mint and nothing in this tree had ever enforced it on the catalog.**
+`pipeline/join.py:Catalog.from_export` has
+been touched once since it was written (2026-08-23, when games became data) and has never
+carried a `Condition` predicate. Every rung of `variant.resolve` resolves to a Near Mint
+string, so the *ladder* was never in doubt — but the candidate list a queue entry carries is
+`found.rows`, straight off the export, ungated. The catalog was narrow because the operator
+was producing narrow files by hand.
+
+### What changed was the input, and the date is exact
+
+D65 (2026-08-30, `fb516df`) built the automatic fetch. `Scope.condition_ids` was declared in
+that commit, has never been populated by any caller since — one commit in the whole history
+touches that name — and `Scope.model`'s `ids()` turns `()` into `["0"]`, the portal's *All
+Conditions*. On **2026-09-01** every run was re-joined against fetched exports, including
+`2026-08-24-box2-01`, whose original hand-downloaded CSV is still sitting unused beside the
+file its manifest now names.
+
+| run | export | grades |
+|---|---|---|
+| `2026-08-29-box1` … `2026-08-31-box3` | hand-downloaded | 2 conditions, **0 played** |
+| `2026-09-01-box3/4/5` onward | fetched | 11 conditions, **8,032 played** |
+
+**And the experience changed ten days after the mechanism did.**
+Counted off the store's own `answered` events, the operator has
+answered **8** grade-bearing questions against a wide export in total, all on 2026-09-01, out
+of 240 answers; on 2026-09-11 it was **108 of 131**. Before that the work was
+`number_unread_name_matched` — one candidate, one press — and the handful of `set_ambiguous`
+cards were 2-row choices between two *sets*, both Near Mint. A session telling the operator
+they had had this since the 1st was reading a mechanism as an experience.
+
+### Three costs, and only one of them is the one that was reported
+
+**The group press stopped qualifying.** D29 requires every card in the worklist to offer
+exactly one candidate. Nothing in `app/src/ReviewQueue.tsx` changed — `groupOffer` is
+byte-identical to its pre-Banchi self and `G` is still the key. With five grades per finish
+no entry can ever carry one row, so the control correctly never draws.
+
+**D3 rung 2 died outright, and that is the larger cost.** `CATALOG_FORCED` fires on
+`len(candidates) == 1`. Measured on the owner's 2026-09-11 Riftbound export: **0 of 1,246**
+numbers held a single row as fetched; **629** do once the grades are gone. Replaying that
+day's 122 queued cards through the narrowed rows,
+**50 would never have been queued at all** — 32 `detected_finish_not_stocked`, 17
+`ambiguous_no_signal`, 1
+`rarity_claim_mismatch` — and the 57 `set_ambiguous` that remain offer 3 rows rather than 15.
+Rows offered per card across that queue: **8.6 → 1.8**.
+
+**A mis-tap was listable.** `_answer_target` validated that the answer matched the row
+*offered* and never that the row should have been offered. Answering `Damaged Foil` would
+have written that SKU, and `join_batch` rung 0 re-finds an answered row by its own condition
+string, so the wrong grade would have travelled into the import file. Nothing went wrong:
+all 1,967 conditioned card records in the store read `Near Mint` or `Near Mint Foil`.
+
+### The rule lives in the join, not on the wire
+
+`Catalog.from_export` keeps a row whose `Condition` is one of the game's own
+`condition_by_finish` values — read off the registry, as
+`server/capture_server.py:_near_mint_conditions` already reads it — plus
+`tcgcsv.SEALED_CONDITION`. `cli/cmd_join.py` reports the two drops separately, because
+"8,077 row(s) of other product lines dropped" would have been false and a number nobody can
+account for is a number the next person deletes the filter to explain.
+
+**`ConditionIds` stays unpopulated and `STANDING_FILTERS` does not grow.** This is D76's last
+paragraph amended rather than repealed, and the amendment is narrow: that paragraph left the
+condition axis unspent citing D64's finding that "a condition filter thins a number's rows and
+D3 rung 2 then decides a card from whichever row survived" — which is D64's measurement of the
+**printing** axis, not the condition one. D64 itself says so in as many words two sections
+earlier: *"Play conditions are not finishes… all 153 numbers read as thinned and not one had
+lost a finish."* Re-measured here on the owner's own export:
+**0 of 1,246 numbers lose a finish**, because each finish keeps its own Near Mint row.
+The rarity axis stays unspent for
+its own separate reason, untouched.
+
+Given that, the fetch could safely narrow too — and deliberately does not. The rule belongs
+where it cannot depend again on how the CSV was produced, which is the exact dependency that
+broke on 2026-09-01; a hand-downloaded or re-used wide file must join correctly. Leaving the
+wire wide also keeps the filter's subject present in every real export rather than in
+fixtures alone.
+
+### Sealed product survives, and it is not an exception
+
+Booster displays, bundles, blisters and event kits carry `Unopened`:
+**one row per product, never a sibling, no `Number` at all**, so they live only in
+`Catalog._blank_number_by_name`
+and cannot change what any numbered card resolves to. Measured across both wide fixtures,
+**zero sealed `Product Name` cells collide with a single's**, exact or folded, so keeping
+them cannot put a Booster Box on a card. Riftbound's own export prices an Origins Booster
+Display at $250.78. The owner's call, and the measurement makes it free rather than a
+judgement: *"idk if you needed to drop sealed items"* — it did not.
+
+A play grade is a second reading of a card this product sells at one grade. `Unopened` is the
+only condition its product is ever listed in. They are not the same kind of cell, which is why
+the rule is "drop the play grades" rather than "keep only Near Mint".
+
+### What the guard had to be, because the old one could not see this
+
+**T3's `SOURCE_FIXTURE` is `sv09_export_untouched.csv`, which is Near-Mint-only.** Its whole
+`from_export` block passes identically with the filter present and absent, and was green
+through all ten days. `_check_condition_scope` runs against the two **wide** fixtures instead
+— Riftbound 10,078 rows over 11 conditions, Pokemon 7,802 over 16 — and begins by asserting
+they really are wide, because without that every assertion under it passes by accident.
+
+Mutation-tested in three arms, each killed by a different assertion and no assertion
+redundant: the predicate deleted (rung 2 and the play-grade and refusal checks go red), sealed
+dropped from the keep set (only the four sealed checks), and the set narrowed to one condition
+so a foil finish is thinned (only the finish-preservation check — D64's real worry, caught).
+
+**The first draft of the rung-2 assertion survived arm 1 and had to be rewritten.** It counted
+distinct *finishes* per number, and a set of finishes collapses the exact multiplicity the bug
+was made of: five grades of one finish is one finish and five candidates. Rung 2 is
+`len(candidates) == 1` over **rows**. It counts rows now and resolves one through the real
+ladder, because a count is not a resolution.
+
+### Not the whole of what made 2026-09-11 hurt
+
+Box 4 was captured with **no set hint on 448 of its 464 cards**, where boxes 5 and 6 are 100%
+`Unleashed`. 178 of the 1,246 Riftbound numbers collide across sets, and an unhinted collision
+goes straight to `set_ambiguous` (D65/D76 rung 4). That is the other factor, it is an
+operating fact rather than a defect, and it is named here so this entry is not read as having
+cured it: the 57 `set_ambiguous` cards left after this change are the ones a set hint would
+have answered.
+
+### Deliberately not done
+
+**The live queue is not repaired by this change and no command was run against the store.**
+`Queue.upsert` replaces an open entry wholesale and `Queue.release` drops one that no longer
+belongs, so the next join of a run rewrites its entries and the stale ones self-heal.
+`_answer_target`'s new `condition_not_listed` refusal is the floor under the entries written
+before this landed — unreachable from the screen once a run is re-joined, which is the point.
+
+**`scripts/demo-seed.py:export_variants` has the same defect, left alone on the owner's word.**
+It groups the raw fixtures by `Product Name`, so the published demo can offer
+10,452 played rows as review candidates. Recorded, not fixed.
+
+
+## D138 — One process serves the product, Vite compiles and never serves, and the build is the server's job
+
+**Settled 2026-09-11 by interview, from the owner asking for an easier way to package this.**
+Their words: "rather than two servers." The interview started broad and the answers are the
+constraints; the ruling is what they leave standing. Nothing is built under this entry.
+
+### What the owner answered
+
+- **Audience: unknown.** Just them today; maybe the Fulfiller's device; maybe another seller
+  one day. So: prefer what costs least to reverse.
+- **What bothers them: everything.** Not one step but the shape — two processes, a supervisor,
+  two ports, a launch agent, and a restart for an expired key the morning this was asked.
+- **The dev loop stays untouched.** Hot reload on every `.tsx` edit under `make dev` is not
+  something packaging may cost. They alternate building and operating "in split sessions of
+  equal time intensities", so neither half is the minor one.
+- **Kept, if packaging meant choosing:** self-reload on Python edits, and per-checkout ports
+  and stores (D43). Not kept by name: start at login, the LAN name — and then start-at-login was
+  kept when asked directly what happens after a reboot.
+- **The window is Chrome, as today.** D108's dock app; the camera work is not re-litigated.
+- **The build is the server's, when `dist` is stale.** Not a command they type, not a nag.
+- **Scope for the session: record the decision and plan the rest.**
+
+### The ruling
+
+**The operating form is ONE process: the capture server, serving the compiled app itself.**
+Static files on its own port, beside the API. `app/dist/` is served for any path that is not a route,
+and an unknown path serves `index.html` so the hash router works. The port is the one the tree
+already has — `:8000` in the main checkout, the slot's own in a worktree — so D43's property
+holds with nothing new: the bundle bakes only the capture port and resolves the host from the
+address bar (D53's LAN change), and when the page and the API come from one origin that
+composition is trivially right.
+
+**Vite compiles and never serves at run time.** That is the answer to the owner's question about
+the value of keeping it, and to "everyone says build in Rust": Vite does two jobs, compiling
+TypeScript and JSX into a bundle and, in development, serving that bundle with hot reload.
+Nobody ships the second job. The Rust tools are replacements for the first — Vite itself is
+moving onto one, Rolldown — and swapping compilers changes the process count by zero. Tauri is
+Rust for a native window, which D108 already declined and the owner declined again. So the
+compiler stays, and `make dev` keeps it on its own port with hot reload exactly as it is.
+
+**The supervisor loses its app child and gains a build.** It watches `app/src` alongside the
+Python packages; when a source file is newer than `dist/` it runs `vite build` and serves the old
+bundle until the new one lands. That is the one thing D53 held against this shape — *"a built
+bundle has to be rebuilt; it would ADD a step to remember in exchange for removing one"* — and
+the owner's answer removes the step by giving it to the process that already watches files. D53's
+rejection is reopened here and reversed on exactly that ground, and nothing else in D53 moves:
+the drain, the parse pre-check, the fast-failure cap, the self-watch and the launch agent all
+carry over to a supervisor with one child instead of two.
+
+**The code it runs is the checkout, live.** A frozen copy promoted by a release target was
+offered and is deferred: the owner alternates building and operating, wants Python self-reload,
+and already operates on the checkout today, so a frozen form protects against nothing that is
+happening and adds a promote step that, forgotten, is a rig session on last week's code with no
+sign of it. **What reopens the frozen form is a second person needing the app** — then a snapshot with its own store and no worktree in sight is the right shape, and
+D108's "signed artifact" clause is the same reopening from the other side.
+
+**The dock app moves to the capture port, once.** D108 stands in every argument — the page
+Chrome already renders, the profile's camera grant, the app as a client and never a second
+supervisor — and is amended in one fact: the installed URL is `:8000` rather than `:5173`. The
+manifest is already relative (D108) and needs no edit; the reinstall is one press in Chrome.
+
+### Rejected
+
+- **A native window** — Tauri, Electron, pywebview. D108's reasons, unchanged, and the owner
+  chose Chrome without hesitation.
+- **A Rust bundler as the packaging change.** It is a compiler swap; the process count is the
+  complaint, and it does not touch that.
+- **Keeping Vite's dev server inside the package, hidden.** Two processes behind one icon is
+  the current shape with the lid on. It keeps Node as a run-time requirement and keeps every
+  failure mode D53 measured.
+- **Dropping start-at-login.** Asked twice; "always just there" won over "one icon, quit when
+  done" once the reboot case was named.
+
+### What it costs
+
+- **A `.tsx` edit takes a build to reach the operating form** — seconds, run by the supervisor,
+  and the old bundle answers in the meantime. A half-finished edit that does not compile leaves
+  the last bundle serving, which is the parse pre-check's rule applied to the other language.
+- **Node stays a build-time requirement on the operating machine**, and the launch agent's
+  baked `PATH` still has to find it. What goes away is Node as a run-time process.
+- **`make dev` must coexist with the supervisor rather than refuse it.** D53's guard refuses
+  a foreground `make dev` while this checkout's supervisor holds `:5173`; with the supervisor no
+  longer holding it, the guard is wrong and must narrow to `make server` alone. The dev app then
+  talks to the live `:8000`, which is the same store it talks to today.
+- **The key-expiry restart is untouched by this.** One process reads `.env` once exactly as
+  two did. The per-press re-read (`envfile.get_live` for `ANTHROPIC_API_KEY`) is the fix for that
+  and is a separate, small change the owner declined for now.
+
+### The plan — build order step 22
+
+**The full plan is `docs/specs/one-process.md`**, written the same day after three more
+questions: the cold start, a failed build, and the verbs. It also names the one thing this
+entry missed — a port is part of the origin, so the camera grant and every `localStorage` key
+(D27) reset once at `:8000`. Recorded in `docs/map.py`'s `OPEN` and `docs/GATES.md`'s open
+list under one id. In order, and each one a PR:
+
+1. **The static serve.** The capture server serves `app/dist/` for non-route paths with the
+   `index.html` fallback, and refuses to start serving the app (API still up) when `dist/` is
+   absent, saying so. T7 covers the route, the fallback, and the absence.
+2. **The supervisor's second job.** Drop the app child; watch `app/src`, `app/public`,
+   `app/index.html` and the Vite config; build when stale, log the build, serve the old bundle
+   until it lands. Relax `make dev`'s refusal. `make up` prints one link, on the capture port.
+3. **The dock app and the docs.** Reinstall the Chrome app at `:8000`; amend the `make up`
+   block in `CLAUDE.md`, `README.md`, D53 and D108 by pointer to here; `make status` reports
+   `dist/` staleness beside the ports.
+
+Unaffected and checked before writing this: `make demo-record` spawns its own capture server
+and `make demo-static` already builds `dist-demo/` under a base path; `make design-check` starts
+a Vite server per worker and never touches the supervisor; `make screenshot` renders `make dev`'s
+port, which does not move.
+
+### What is BUILT, RECORDED, and NEITHER
+
+**BUILT:** nothing. **RECORDED:** this entry, `docs/specs/one-process.md`, step 22 in both
+build-order lists, and the D138 line in `CLAUDE.md`'s index. **NEITHER:** every line of the plan above.
