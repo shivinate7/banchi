@@ -658,6 +658,40 @@ const SALE: SaleStub = (box, index, undo) => ({
   },
 })
 
+/** THE STORE MOVES WHILE THE POST IS BEING ANSWERED, WHICH IS THE ONE MOMENT THAT CANNOT RACE.
+ *
+ *  A case that writes its fixture move on the line AFTER the press is racing the browser.
+ *  `click()` resolves when the click is DISPATCHED, and the press triggers its own re-read —
+ *  `Inventory.tsx:doSell` awaits the sale and then bumps `reloads`, which is `BoxBrowse`'s
+ *  `reloadToken`. When that `GET /inventory` is served before Node reaches the next statement,
+ *  the stub hands back the card still on hand, the screen draws that faithfully, and nothing
+ *  re-reads again — so the assertion retries a STABLE wrong answer until it times out. No wait
+ *  and no retry can fix that, because nothing is in flight to wait for.
+ *
+ *  MEASURED, NOT ARGUED. `inventory.spec.ts:5074` lost this race on CI four runs in five while
+ *  passing on a Mac every time, and was carried as a design-check flake for a day; its trace
+ *  (job 103412668362) holds the post-sale `GET /inventory` still answering all three cards
+ *  `identified`. Inserting a 300ms wait between a click and its mutation reproduces it here on
+ *  demand, and that probe is what says which cases below need this and which do not.
+ *
+ *  THE SALE HANDLER IS ORDERED AGAINST BOTH ENDS, which is the whole reason the move belongs
+ *  here. It runs when the POST arrives — necessarily after the row's own fetch, and before the
+ *  re-read that its response triggers — so the move is visible to every read the press causes
+ *  and to none before it. Moving the fixture ABOVE the press is not the same fix and fails the
+ *  other way where the row is selected by the press itself: that selection's fetch answers from
+ *  an already-sold store, draws `Undo`, and `Mark sold` is never there to click. The one case
+ *  that does move its store early (`a departed key is reserved...`) resolves and scrolls its
+ *  press first, so nothing re-reads between the move and the click.
+ *
+ *  `move` IS HANDED THE DIRECTION, because a reversal is a move too: a stub that stayed sold
+ *  through an undo answers the re-read with a card the server has just put back. */
+function movesOnSale(move: (undo: boolean) => void, answers: SaleStub = SALE): SaleStub {
+  return (box, index, undo) => {
+    move(undo)
+    return answers(box, index, undo)
+  }
+}
+
 /** The three things one case below needs that every other case must not notice.
  *
  *  `route` is the hash to open, for the deep link — `#/inventory?box=<n>`, the form `#/codes`
@@ -1266,7 +1300,26 @@ test('a card with no name and no SKU is a one-copy list, not a special case', as
 /** A mutable copy of the five-card fixture. `searchAnswer` reads whatever it is handed, so
  *  flipping a card to `sold` here is what makes the RE-READ after a write answer the way the
  *  server would — without it the row would be resting on the optimistic overlay alone and a test
- *  could pass against a stub that contradicts the wire. */
+ *  could pass against a stub that contradicts the wire.
+ *
+ *  WHEN TO MOVE THE STORE, WHICH IS THE PART THAT BITES. These three movers are safe to call
+ *  before a press and inside a sale stub, and are a race when called on the line AFTER one —
+ *  `movesOnSale` above carries the mechanism and the measurement. Whether a given case loses
+ *  that race depends on what it asserts, and the two halves are worth telling apart:
+ *
+ *    THE OPTIMISTIC OVERLAY ANSWERS WITHOUT ANY RE-READ. `Inventory.tsx:doSell` adds the copy to
+ *    `sold` before it bumps `reloads`, on the success path AND on `already_sold` — so the
+ *    receipt, the row's `Undo`, the state pill and the wire log are all already right whatever
+ *    the re-read says. Four cases below assert only those and pass with a 300ms wait wedged
+ *    into the gap: `one press marks a copy sold`, `the receipt is the undo that survives`,
+ *    `another device having sold the copy` and `a sale the store cannot put back`. They keep
+ *    the plain shape deliberately — it is not a latent version of the same bug, it is a case
+ *    whose subject is the overlay.
+ *
+ *    ANYTHING READ BACK OFF THE WIRE NEEDS THE MOVE ORDERED. `data-gone`, a neighbour's
+ *    landmark, a slot number, and the row after an UNDO are all recomputed by the server, so a
+ *    stale answer to the press's own re-read is the last word. The three cases that assert
+ *    those take `movesOnSale`, and the same probe turns each of them red without it. */
 function sellableStore(): {
   store: Store
   sell: (key: string) => void
@@ -1451,7 +1504,13 @@ function whatMoved(before: Record<string, string>, after: Record<string, string>
 
 test('the press that sells a copy moves nothing outside the panel it lands in', async ({ page }) => {
   const { store, sell, depart } = sellableStore()
-  await open(page, BOXES, store)
+  /* THE STORE MOVES INSIDE THE SALE (see `movesOnSale`). This case reads `data-gone`, which is
+     the re-read landing rather than the optimistic overlay — so it is one of the three here that
+     the 300ms probe turns red when the move is written after the press. */
+  await open(page, BOXES, store, () => PRICING, movesOnSale(() => {
+    sell('2/1')
+    depart('2/1')
+  }))
 
   /* Bring the press into view BEFORE the sweep, so the click itself does not scroll. */
   /* THE ROW IS NAMED BY WHERE THE WALK STANDS AND NOT BY ITS LABEL (D119). `copyRow` filters on
@@ -1478,8 +1537,6 @@ test('the press that sells a copy moves nothing outside the panel it lands in', 
   const rowBox = await row.boundingBox()
 
   await press.click()
-  sell('2/1')
-  depart('2/1')
   await expect(page.locator('.inventory-receipt')).toContainText('Undo')
 
   /* AND THE RE-READ, WAITED FOR RATHER THAN ASSUMED. The receipt is optimistic — it is drawn from
@@ -1632,11 +1689,14 @@ test('the card panel holds one height for the whole walk', async ({ page }) => {
 
 test('the row that sold the copy becomes the way to take it back', async ({ page }) => {
   const { store, sell, unsell } = sellableStore()
-  const wire = await open(page, BOXES, store)
+  /* BOTH DIRECTIONS MOVE INSIDE THE SALE (see `movesOnSale`), and the REVERSAL is the half that
+     measurably needed it: the undo's own re-read, answered by a stub still holding the card
+     sold, leaves the row offering `Undo` forever and `Mark sold` never comes back. */
+  const wire = await open(page, BOXES, store, () => PRICING,
+    movesOnSale((undo) => (undo ? unsell('2/1') : sell('2/1'))))
 
   const row = copyRow(page, CARD_1)
   await row.getByRole('button', { name: 'Mark sold' }).click()
-  sell('2/1')
 
   /* The slot draws `Undo` ALONE — no `Retire` beside it, because the server refuses the
      retirement of a sold card and a control that can only fail is not a control. */
@@ -1654,7 +1714,6 @@ test('the row that sold the copy becomes the way to take it back', async ({ page
   await expect(receiptToast(page)).toContainText(CARD_1)
 
   await rowUndo.click()
-  unsell('2/1')
   const sales = wire.filter((call) => call.path.endsWith('/sold'))
   expect(sales.map((call) => call.body)).toEqual([{}, { undo: true }])
 
@@ -3827,6 +3886,10 @@ test('selling a card moves the landmark on the rows beside it, with no reload', 
   page,
 }) => {
   const { store, sell } = laddersAfterSale()
+  /* THE STORE MOVES INSIDE THE SALE (see `movesOnSale`). The landmark this case is about is
+     recomputed by the server and read back by the press's own re-read, so a move written after
+     the click is answered too late and the ladder never changes. */
+  const sale = movesOnSale(() => sell('2/3'))
 
   /* COUNTED OFF THE REQUESTS THEMSELVES rather than off `open()`'s wire log, which records the
      writes and the reads it has an opinion about — `GET /inventory` is stubbed there and not
@@ -3837,7 +3900,7 @@ test('selling a card moves the landmark on the rows beside it, with no reload', 
     if (request.method() === 'GET' && path === '/inventory') walkReads.push(path)
   })
 
-  await open(page, BOXES, store)
+  await open(page, BOXES, store, () => PRICING, sale)
 
   /* Copy 5 counts from copy 3, which is about to be sold out from under it. */
   const behind = copyRow(page, 'Box 2 · Section 1 · Card 3')
@@ -3847,7 +3910,6 @@ test('selling a card moves the landmark on the rows beside it, with no reload', 
   const before = walkReads.length
 
   await behind.getByRole('button', { name: 'Mark sold' }).click()
-  sell('2/3')
 
   /* THE PRESS IS THE REFRESH. `Inventory.tsx:doSell` bumps `reloads`, which is `BoxBrowse`'s
      `reloadToken` — so `GET /inventory` and the copies search both run again and every place
