@@ -1198,7 +1198,7 @@ def _manifest(directory: Path) -> dict:
         return {}
 
 
-def _artefacts(directory: Path) -> List[dict]:
+def _artifacts(directory: Path) -> List[dict]:
     """Every file in the run a screen may offer for download, newest-relevant first.
 
     Listed off the DIRECTORY rather than off a table of names this file knows, because
@@ -1395,7 +1395,7 @@ def do_pipeline_run(name: str) -> dict:
     directory = _open_run(name)
     body = _summary(directory)
     body["console"] = _console_tail(directory)
-    body["files"] = _artefacts(directory)
+    body["files"] = _artifacts(directory)
     body["manifest"] = _manifest(directory)
     return body
 
@@ -1999,7 +1999,7 @@ def _markdown_summary(stamp: str) -> dict:
         "source": (payload.get("source") or {}).get("path"),
         "skus": len(payload.get("skus") or {}),
         "files": [
-            row["name"] for row in _artefacts(directory)
+            row["name"] for row in _artifacts(directory)
         ],
         # WHAT TCGPLAYER IS HOLDING FOR THIS MARKDOWN, so a reload has a way back to it. The
         # push receipt is a server write, and CLAUDE.md's rule is that every server write has
@@ -2533,7 +2533,7 @@ def do_markdown_file(stamp: str, filename: str) -> Tuple[bytes, str]:
             "file_name_invalid",
             f"{filename!r} is not a downloadable markdown artefact.",
         )
-    if filename not in {row["name"] for row in _artefacts(directory)}:
+    if filename not in {row["name"] for row in _artifacts(directory)}:
         raise PipelineRefusal(
             HTTPStatus.NOT_FOUND,
             "no_such_file",
@@ -2924,7 +2924,7 @@ def do_pipeline_merged_emit(payload: dict) -> dict:
         # screen finds it — `GET /pipeline/runs/<name>/file` already serves it and needed no
         # widening. Answered here so the client does not have to re-derive which run that was.
         "run": newest,
-        "files": _artefacts(_open_run(newest)),
+        "files": _artifacts(_open_run(newest)),
         "summary": _summary(_open_run(newest)),
     }
 
@@ -3401,7 +3401,7 @@ def do_pipeline_file(name: str, filename: str) -> Tuple[bytes, str]:
             "file_name_invalid",
             f"{filename!r} is not a downloadable run artefact.",
         )
-    if filename not in {row["name"] for row in _artefacts(directory)}:
+    if filename not in {row["name"] for row in _artifacts(directory)}:
         raise PipelineRefusal(
             HTTPStatus.NOT_FOUND,
             "no_such_file",
@@ -4249,7 +4249,7 @@ def do_pipeline_step(name: str, step: str, payload: dict) -> dict:
         "run": directory.name,
         "console": text,
         "dry_run": bool(payload.get("dry_run")) and step == "join",
-        "files": _artefacts(directory),
+        "files": _artifacts(directory),
         "summary": _summary(directory),
     }
 

@@ -1560,7 +1560,7 @@ COMPONENTS = [
                                 "D18", "D22", "D23", "D24", "D26", "D27", "D31", "D39", "D43",
                                 "D49", "D50", "D51", "D53", "D60", "D64", "D65", "D67", "D69",
                                 "D70", "D72", "D75", "D76", "D80", "D81", "D83", "D84", "D87",
-                                "D90", "D92", "D94", "D96", "D101", "D102", "D104", "D122", "D119", "D132"],
+                                "D88", "D90", "D92", "D94", "D96", "D101", "D102", "D104", "D122", "D119", "D132"],
             },
             "docs-audit-allow.txt": {
                 "does": "paths and identifiers the docs name before they exist, one "

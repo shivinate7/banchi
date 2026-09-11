@@ -502,7 +502,7 @@ test('collapsing the sidebar moves nothing sideways off its spine', async ({ pag
   await page.goto('/')
   await page.setViewportSize({ width: 1440, height: 900 })
 
-  const centres = () =>
+  const centers = () =>
     page.evaluate(() => {
       const box = (sel: string) => {
         const el = document.querySelector(sel)
@@ -520,7 +520,7 @@ test('collapsing the sidebar moves nothing sideways off its spine', async ({ pag
       }
     })
 
-  const open = await centres()
+  const open = await centers()
   expect(open.mark, 'the brand is drawn').not.toBeNull()
   expect(open.foot, 'the footer is drawn').not.toBeNull()
 
@@ -532,10 +532,10 @@ test('collapsing the sidebar moves nothing sideways off its spine', async ({ pag
   const during: Array<Record<'mark' | 'nav' | 'foot', number | null>> = []
   for (let i = 0; i < 8; i++) {
     await page.waitForTimeout(40)
-    during.push(await centres())
+    during.push(await centers())
   }
   await page.waitForTimeout(400)
-  const rail = await centres()
+  const rail = await centers()
 
   // the corridor: every mid-flight sample sits between the two resting positions, with 2px of
   // slack for subpixel layout. Before the fix these read ~114 against a corridor of 31.5 to 36.

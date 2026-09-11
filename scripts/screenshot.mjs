@@ -122,13 +122,13 @@ function decodePngRegions(buffer, rects) {
       width = body.readUInt32BE(0)
       height = body.readUInt32BE(4)
       const depth = body[8]
-      const colour = body[9]
+      const color = body[9]
       const interlace = body[12]
       if (depth !== 8 || interlace !== 0) {
         throw new Error(`unsupported PNG: depth ${depth}, interlace ${interlace}`)
       }
-      channels = { 0: 1, 2: 3, 4: 2, 6: 4 }[colour]
-      if (!channels) throw new Error(`unsupported PNG colour type ${colour}`)
+      channels = { 0: 1, 2: 3, 4: 2, 6: 4 }[color]
+      if (!channels) throw new Error(`unsupported PNG color type ${color}`)
     } else if (type === 'IDAT') {
       idat.push(body)
     } else if (type === 'IEND') {

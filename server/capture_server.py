@@ -439,7 +439,7 @@ DEFAULT_ALLOWED_ORIGINS = tuple(
 ORIGINS_ENV = "PKMNSCAN_ALLOWED_ORIGINS"
 
 
-def _normalise_origin(origin: str) -> str:
+def _normalize_origin(origin: str) -> str:
     """Fold an origin to something two spellings of the same thing compare equal on.
 
     Scheme and host are case-insensitive and a trailing slash is not part of an origin at
@@ -465,7 +465,7 @@ def allowed_origins() -> Tuple[str, ...]:
     extra = os.environ.get(ORIGINS_ENV) or ""
     configured = [value for value in re.split(r"[,\s]+", extra) if value]
     return tuple(
-        _normalise_origin(origin) for origin in DEFAULT_ALLOWED_ORIGINS + tuple(configured)
+        _normalize_origin(origin) for origin in DEFAULT_ALLOWED_ORIGINS + tuple(configured)
     )
 
 _PHOTO_RE = re.compile(r"^/photo/(\d+)/(\d+)$")
@@ -9746,7 +9746,7 @@ class CaptureHandler(BaseHTTPRequestHandler):
     def _origin(self) -> Optional[str]:
         """The request's `Origin`, folded, or None when it did not send one."""
         raw = self.headers.get("Origin")
-        return _normalise_origin(raw) if raw else None
+        return _normalize_origin(raw) if raw else None
 
     def _origin_allowed(self) -> bool:
         """May this request WRITE? A request with no `Origin` may.
