@@ -2869,6 +2869,65 @@ def _cap_flag(payload: dict) -> list:
     return ["--cap", str(asked)]
 
 
+#: The most SKUs one send may name a quantity for. The worklist is hundreds of rows at most and
+#: every named pair is two argv entries; a request naming thousands is not a press.
+MAX_QUANTITIES = 2000
+
+
+def _quantity_flags(payload: dict) -> list:
+    """`--quantity SKU=N` per card this send named a figure for, or nothing (D7, amended
+    2026-09-11 on the operator's ruling).
+
+    A SEND QUANTITY, NOT A CEILING. `{"quantities": {"8608859": 2}}` puts two copies of that
+    card in the file whatever TCGplayer holds, bounded at emit time by the copies on hand that
+    are not already listed. `0` sends none of that card this press. Absent or empty is the
+    ordinary press: every copy that can go, goes.
+
+    VALIDATED HERE FOR `_cap_flag`'s REASON: every pair reaches a child process's argv. The SKU
+    must be a TCGplayer id — digits — and the figure a whole number in `decisions`' range,
+    refused by name rather than forwarded. ONE PARSER FOR BOTH EMIT ROUTES, also for the
+    reason that function gives.
+    """
+    asked = payload.get("quantities")
+    if asked is None:
+        return []
+    if not isinstance(asked, dict):
+        raise PipelineRefusal(
+            HTTPStatus.BAD_REQUEST,
+            "quantities_invalid",
+            "`quantities` must be an object of TCGplayer id -> whole number of copies.",
+        )
+    if len(asked) > MAX_QUANTITIES:
+        raise PipelineRefusal(
+            HTTPStatus.BAD_REQUEST,
+            "quantities_invalid",
+            f"At most {MAX_QUANTITIES} SKUs may carry a quantity in one send.",
+        )
+    flags = []
+    for sku, count in asked.items():
+        if not isinstance(sku, str) or not sku.isdigit():
+            raise PipelineRefusal(
+                HTTPStatus.BAD_REQUEST,
+                "quantities_invalid",
+                f"`quantities` is keyed by TCGplayer id, got {sku!r}.",
+            )
+        if isinstance(count, bool) or not isinstance(count, int):
+            raise PipelineRefusal(
+                HTTPStatus.BAD_REQUEST,
+                "quantities_invalid",
+                f"`quantities[{sku}]` must be a whole number of copies, got {count!r}.",
+            )
+        if count < 0 or count > decisions.MAX_SEND_QUANTITY:
+            raise PipelineRefusal(
+                HTTPStatus.BAD_REQUEST,
+                "quantities_invalid",
+                f"`quantities[{sku}]` must be between 0 and {decisions.MAX_SEND_QUANTITY}, "
+                f"got {count}.",
+            )
+        flags += ["--quantity", f"{sku}={count}"]
+    return flags
+
+
 def do_pipeline_merged_emit(payload: dict) -> dict:
     """`POST /pipeline/emit` — one import file over several runs (D86).
 
@@ -2914,6 +2973,7 @@ def do_pipeline_merged_emit(payload: dict) -> dict:
     if payload.get("split_threshold"):
         argv.append("--split-threshold")
     argv += _cap_flag(payload)
+    argv += _quantity_flags(payload)
     code, console = _run_sync(argv, STEP_TIMEOUT_S)
     return {
         "ok": code == 0,
@@ -4230,6 +4290,8 @@ def do_pipeline_step(name: str, step: str, payload: dict) -> dict:
         # send of three and withheld from a send of one would be exactly the question that
         # comment refuses to answer.
         argv += _cap_flag(payload)
+        # AND THE PER-CARD QUANTITIES, for the same reason (D7, amended 2026-09-11).
+        argv += _quantity_flags(payload)
     else:  # reconcile
         staged = payload.get("staged_export")
         if not isinstance(staged, dict):

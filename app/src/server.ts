@@ -2208,11 +2208,16 @@ export async function emitMerged(
      standing cap any more: every copy this run holds that TCGplayer does not already have
      goes out, and this is how one press says otherwise. Omitted rather than sent as a
      sentinel, so "no cap" is the absence of a claim rather than a number meaning none. */
+  /* `quantities` IS THE OPERATOR'S OWN FIGURE FOR A CARD, THIS PRESS ONLY (D7, amended 2026-09-11):
+     SKU -> how many of its copies go in this file, bounded server-side by the copies on hand
+     that are not already listed. A send quantity and not a ceiling, which is what `cap` is.
+     Omitted when empty, for the reason `cap` is: a press that named no card sends no claim. */
   options: {
     listedOnly?: boolean
     splitGames?: boolean
     splitThreshold?: boolean
     cap?: number | null
+    quantities?: Record<string, number>
   } = {},
 ): Promise<RunStepResult & { runs: string[] }> {
   return (await request('/pipeline/emit', {
@@ -2224,6 +2229,7 @@ export async function emitMerged(
       split_games: Boolean(options.splitGames),
       split_threshold: Boolean(options.splitThreshold),
       ...(typeof options.cap === 'number' ? { cap: options.cap } : {}),
+      ...quantitiesClaim(options.quantities),
     }),
   })) as RunStepResult & { runs: string[] }
 }
@@ -2450,6 +2456,8 @@ export async function runStep(
        command, so an option offered on one and not the other would be answering a question
        about how many runs happen to be open. */
     cap?: number | null
+    /* THE PER-CARD FIGURES, for the same reason — one card or three runs, one control. */
+    quantities?: Record<string, number>
   } = {},
 ): Promise<RunStepResult> {
   return (await request(`/pipeline/runs/${encodeURIComponent(name)}/${step}`, {
@@ -2470,8 +2478,17 @@ export async function runStep(
          route refuses `cap: 0` by name, and a screen spelling "none" as a number would turn
          the ordinary press into a refusal. */
       ...(typeof options.cap === 'number' ? { cap: options.cap } : {}),
+      ...quantitiesClaim(options.quantities),
     }),
   })) as RunStepResult
+}
+
+/** The `quantities` key for an emit body, or nothing at all when no card was given a figure.
+ *  The route refuses a malformed map by name; an empty one would be a claim about nothing,
+ *  so — as with `cap` — the ordinary press carries no key rather than an empty object. */
+function quantitiesClaim(asked: Record<string, number> | undefined): { quantities?: Record<string, number> } {
+  if (asked === undefined || Object.keys(asked).length === 0) return {}
+  return { quantities: asked }
 }
 
 /**
