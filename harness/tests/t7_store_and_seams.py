@@ -8003,6 +8003,170 @@ def check_photo_cache(checks: Checks) -> None:
             httpd.server_close()
 
 
+def check_app_serve(checks: Checks) -> None:
+    """The capture server hands out the built app, and does not stop being an API (D138).
+
+    WHAT THIS IS GUARDING IS NOT "can Python send a file". It is the seam: a static serve
+    bolted onto an API is one ordering mistake away from shadowing a route, and one missing
+    `resolve()` away from serving the store. Both are asserted here against a real socket,
+    because both are properties of the dispatch order and the filesystem rather than of any
+    function called on its own.
+
+    THE ROUTES ARE THE FIRST ASSERTION AND THE LOUDEST. `app_claims` is narrow — the root,
+    or a final segment whose extension `vite build` emits — precisely so that every JSON
+    refusal in this server survives the app moving in beside it. The catch-all an SPA host
+    would normally use was written, measured against this file, and withdrawn: it turned
+    `GET /boxes/abc` into 200 HTML and would have made a dozen named refusals unreachable
+    with nothing failing.
+
+    THE BUILD IS A STUB, NOT A `vite build`. The point is the server, and a real bundle
+    would make this test depend on Node, on the app compiling, and on ~1.7 MB of output
+    whose bytes say nothing about the seam. Four files with known extensions is the whole
+    surface the server has an opinion about.
+    """
+    checks.note("")
+    checks.note("GET / — the built app, served beside the API (D138)")
+
+    original = capture_server.APP_DIST
+    with tempfile.TemporaryDirectory() as tmp:
+        dist = Path(tmp) / "dist"
+        (dist / "assets").mkdir(parents=True)
+        (dist / "index.html").write_text("<!doctype html><title>Banchi</title>", "utf-8")
+        (dist / "assets" / "main-a1b2c3.js").write_text("export const x = 1\n", "utf-8")
+        (dist / "assets" / "main-a1b2c3.css").write_text(":root{--bn-ink:#000}\n", "utf-8")
+        (dist / "manifest.webmanifest").write_text('{"id": "/"}', "utf-8")
+        # The escape a `..` check alone does not catch: a symlink INSIDE the build pointing
+        # out of it satisfies every string test and resolves somewhere else entirely.
+        secret = Path(tmp) / "outside.json"
+        secret.write_text('{"secret": true}', "utf-8")
+        with contextlib.suppress(OSError, NotImplementedError):
+            (dist / "escape.json").symlink_to(secret)
+
+        capture_server.APP_DIST = dist
+        with isolated_home():
+            httpd = capture_server.CaptureServer(("127.0.0.1", 0), QuietHandler)
+            port = httpd.server_address[1]
+            thread = threading.Thread(target=httpd.serve_forever, daemon=True)
+            thread.start()
+            try:
+                status, body, headers = request(port, "GET", "/")
+                checks.equal(status, 200, "`GET /` answers with the app")
+                checks.ok(b"<!doctype html>" in body, "and the bytes are index.html's")
+                checks.equal(
+                    headers.get("Content-Type"),
+                    "text/html; charset=utf-8",
+                    "as HTML, from this server's own eight-entry map rather than from "
+                    "whichever `/etc/mime.types` the machine happens to have",
+                )
+                checks.equal(
+                    headers.get("Cache-Control"),
+                    "no-store",
+                    "and NEVER cached: `index.html` keeps its name while its bytes move on "
+                    "every build, so a held copy asks for assets the swap has deleted",
+                )
+
+                status, body, headers = request(port, "GET", "/assets/main-a1b2c3.js")
+                checks.equal(status, 200, "a hashed asset answers with its bytes")
+                checks.equal(body, b"export const x = 1\n", "all of them")
+                checks.equal(
+                    headers.get("Content-Type"),
+                    "text/javascript; charset=utf-8",
+                    "under the type a browser will execute",
+                )
+                checks.equal(
+                    headers.get("Cache-Control"),
+                    capture_server.APP_IMMUTABLE,
+                    "held forever, which is safe for exactly the files whose NAME changes "
+                    "when their bytes do",
+                )
+
+                status, _, headers = request(port, "GET", "/manifest.webmanifest")
+                checks.equal(status, 200, "the dock app's manifest is served (D108)")
+                checks.equal(
+                    headers.get("Content-Type"),
+                    "application/manifest+json",
+                    "under the type that makes it installable — the one extension macOS's "
+                    "own mime table does not know at all",
+                )
+
+                # ------------------------------------------------- the API is still the API
+                status, body, _ = request(port, "GET", "/status")
+                checks.equal(status, 200, "`GET /status` is untouched")
+                status, body, _ = request(port, "GET", "/boxes/abc")
+                checks.equal(status, 404, "AND SO IS EVERY REFUSAL: a non-numeric box is 404")
+                checks.equal(
+                    error_code(body),
+                    "no_such_route",
+                    "with the code that names what was wrong — a catch-all `index.html` "
+                    "fallback would have answered 200 HTML here and silently retired a "
+                    "dozen refusals in this file",
+                )
+                status, body, _ = request(port, "GET", "/statuss")
+                checks.equal(
+                    error_code(body), "no_such_route", "a mistyped route is still JSON"
+                )
+
+                # ------------------------------------------------------------ the traversals
+                for attempt in ("/../outside.json", "/assets/../../outside.json"):
+                    status, body, _ = request(port, "GET", attempt)
+                    checks.ok(
+                        status == 404 and b"secret" not in body,
+                        f"`GET {attempt}` reads nothing outside the build",
+                    )
+                if (dist / "escape.json").is_symlink():
+                    status, body, _ = request(port, "GET", "/escape.json")
+                    checks.ok(
+                        status == 404 and b"secret" not in body,
+                        "and a SYMLINK out of the build is refused too — the string check "
+                        "passes it and only the resolved path catches it",
+                    )
+                status, body, _ = request(port, "GET", "/assets/gone-9z9z9z.js")
+                checks.equal(
+                    error_code(body),
+                    "no_such_file",
+                    "a named file the build does not have is 404 and not HTML — a browser "
+                    "asked for `.js` and given a page reports a syntax error instead",
+                )
+
+                # ------------------------------------------------------------ read-only
+                status, body, _ = request(port, "POST", "/", payload={})
+                checks.equal(status, 405, "`POST /` is a method error")
+                checks.equal(
+                    error_code(body),
+                    "method_not_allowed",
+                    "not `no_such_route`: the resource is there, the verb is wrong",
+                )
+
+                # ------------------------------------------------------ with nothing built
+                capture_server.APP_DIST = Path(tmp) / "never-built"
+                status, body, _ = request(port, "GET", "/")
+                checks.equal(status, 503, "with no build, `GET /` is 503 and not 404")
+                checks.equal(
+                    error_code(body),
+                    "app_not_built",
+                    "naming the state rather than the address — the app is not missing, it "
+                    "is not ready, and the supervisor is what makes it ready",
+                )
+                status, _, _ = request(port, "GET", "/status")
+                checks.equal(
+                    status,
+                    200,
+                    "AND THE API IS STILL UP: a TypeScript file that will not compile may "
+                    "never stop this server handing out cards",
+                )
+                status, body, _ = request(port, "POST", "/", payload={})
+                checks.equal(
+                    error_code(body),
+                    "no_such_route",
+                    "and with nothing built, a write to `/` is 404 again — 405 would be a "
+                    "claim about a resource that is not there",
+                )
+            finally:
+                httpd.shutdown()
+                httpd.server_close()
+    capture_server.APP_DIST = original
+
+
 def check_cli_seams(checks: Checks) -> None:
     """The wiring that feeds rules T3-T5 already check.
 
@@ -21493,6 +21657,7 @@ def run() -> Result:
     check_concurrency(checks)
     check_origin_gate(checks)
     check_photo_cache(checks)
+    check_app_serve(checks)
     check_cli_seams(checks)
     check_code_ledger(checks)
     check_review_stand_down(checks)

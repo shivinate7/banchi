@@ -60,7 +60,7 @@ from pathlib import Path
 
 from harness.tests import Checks, Result
 from cli import resolve, runs
-from pipeline import join, pricing, routing, tcgcsv, variant
+from pipeline import games, join, pricing, routing, tcgcsv, variant
 from store import files, master
 from store.session import Store
 
@@ -1254,6 +1254,194 @@ def _check_game_partition(c, export) -> None:
     )
 
 
+def _check_condition_scope(c) -> None:
+    """D137 — the catalog holds the conditions this product lists, and nothing else.
+
+    EVERY ASSERTION HERE RUNS AGAINST A WIDE FIXTURE, AND THAT IS THE WHOLE LESSON. T3's
+    `SOURCE_FIXTURE` is `sv09_export_untouched.csv`, which is Near-Mint-only — so the
+    `from_export` block above cannot see this rule at all, passed identically before and after
+    it existed, and was green through the ten days the owner's real catalog carried every play
+    grade. A guard that cannot see its subject is not a guard. The two wide fixtures ARE the
+    subject: Riftbound 10,078 rows over 11 conditions, Pokemon 7,802 over 16.
+
+    What this is defending, in the order the failures actually bite:
+
+      1. no play grade survives — the operator is never offered `Damaged Foil` for a card
+         D12 says this product sells at Near Mint, and `_answer_target` cannot be handed one;
+      2. NO NUMBER LOSES A FINISH — the one that separates this from D64's variant-thinning
+         worry, and the one that must never be weakened. D64 measured it in as many words:
+         "all 153 numbers read as thinned and not one had lost a finish";
+      3. D3 rung 2 is alive — a number stocked in ONE finish resolves `catalog_forced` rather
+         than queueing. The wide file had killed it outright: zero of the owner's 1,246
+         numbers held a single row;
+      4. sealed product survives, because it is not a grade (`tcgcsv.SEALED_CONDITION`);
+      5. D25's carve-out survives — `pokemon` still keeps the Code Card rows the name
+         fallback resolves, one per product instead of five.
+    """
+    rift = tcgcsv.read_export(REPO_ROOT / RIFTBOUND_FIXTURE)
+    wide = tcgcsv.read_export(REPO_ROOT / WIDE_FIXTURE)
+
+    # The fixtures have to BE wide or every assertion below is vacuous — the shape of failure
+    # that let this bug live. Asserted, not assumed.
+    c.ok(
+        len({r[tcgcsv.CONDITION_COLUMN] for r in rift.rows}) > 2
+        and len({r[tcgcsv.CONDITION_COLUMN] for r in wide.rows}) > 3,
+        "the wide fixtures really do carry play grades — without that this whole block "
+        "passes by accident, which is exactly how the sv09-only coverage stayed green",
+    )
+
+    for label, source, game in (
+        ("riftbound", rift, "riftbound"),
+        ("pokemon", wide, "pokemon"),
+    ):
+        catalog = join.Catalog.from_export(source, game)
+        listable = {
+            str(v) for v in dict(games.require(game)["condition_by_finish"]).values()
+        } | {tcgcsv.SEALED_CONDITION}
+
+        # 1. no play grade survives
+        held = {r[tcgcsv.CONDITION_COLUMN] for r in catalog.export.rows}
+        c.equal(
+            sorted(held - listable),
+            [],
+            f"{label}: the catalog holds only the conditions this product lists — no "
+            f"Lightly Played, no Damaged, nothing the ladder would never pick",
+        )
+
+        # 2. no number loses a finish. Keyed the way the row is FOUND, so this is a
+        # statement about what the join can reach and not about the file's own spelling.
+        def finishes(rows):
+            out = {}
+            for row in rows:
+                number = row[tcgcsv.NUMBER_COLUMN].strip()
+                if not number:
+                    continue
+                out.setdefault(join.number_index_key(number), set()).add(
+                    (row[tcgcsv.SET_COLUMN], row[tcgcsv.CONDITION_COLUMN].endswith(
+                        ("Foil", "Holofoil")
+                    ))
+                )
+            return out
+
+        mine = [r for r in source.rows if r[tcgcsv.PRODUCT_LINE_COLUMN] == games.require(
+            game
+        )["product_line"]]
+        before, after = finishes(mine), finishes(catalog.export.rows)
+        c.equal(
+            sorted(k for k in before if before[k] != after.get(k)),
+            [],
+            f"{label}: NOT ONE number loses a finish — a play grade is not a finish (D64), "
+            f"and this is the assertion that keeps the narrowing honest",
+        )
+
+        # 3. rung 2 is alive — COUNTED IN ROWS, NOT IN FINISHES, and the first draft of this
+        # counted finishes and passed with the filter deleted. `variant.resolve`'s rung 2 is
+        # `len(candidates) == 1` over ROWS, so five grades of one finish is five candidates
+        # and the rung does not fire. A set of finishes cannot see that; it collapses the
+        # exact multiplicity the bug was made of. Mutation-tested, which is the only reason
+        # this comment exists.
+        rows_per_key = {}
+        for row in catalog.export.rows:
+            number = row[tcgcsv.NUMBER_COLUMN].strip()
+            if number:
+                rows_per_key.setdefault(join.number_index_key(number), []).append(row)
+        singles = [k for k, rows in rows_per_key.items() if len(rows) == 1]
+        c.ok(
+            len(singles) > 0,
+            f"{label}: numbers resolving to exactly ONE ROW exist again, so D3 rung 2 can "
+            f"fire — against the unfiltered file there were ZERO, which is what took the "
+            f"catalog_forced rung out of service entirely",
+            f"{len(singles)} of {len(rows_per_key)}",
+        )
+        # And through the ladder itself, because a count is not a resolution. This is the
+        # behaviour the operator feels: the card decides itself instead of queueing.
+        if singles:
+            lone = rows_per_key[singles[0]][0]
+            resolved = variant.resolve(
+                [lone], metadata_finish=None, detected_finish=None, game=game
+            )
+            c.equal(
+                resolved.stage,
+                variant.CATALOG_FORCED,
+                f"{label}: and a one-row number really does resolve catalog_forced through "
+                f"the ladder rather than reaching rung 4 and facing a human "
+                f"({lone[tcgcsv.NAME_COLUMN]} {lone[tcgcsv.NUMBER_COLUMN]})",
+            )
+
+        # 4. sealed survives
+        sealed_in = [
+            r
+            for r in mine
+            if r[tcgcsv.CONDITION_COLUMN] == tcgcsv.SEALED_CONDITION
+        ]
+        sealed_out = [
+            r
+            for r in catalog.export.rows
+            if r[tcgcsv.CONDITION_COLUMN] == tcgcsv.SEALED_CONDITION
+        ]
+        c.ok(sealed_in, f"{label}: the fixture really does hold sealed product to keep")
+        c.equal(
+            len(sealed_out),
+            len(sealed_in),
+            f"{label}: every sealed row survives — it is not a grade, it carries no "
+            f"Number, and it is reachable by name at $250 a Booster Display",
+        )
+        if sealed_in:
+            name = sealed_in[0][tcgcsv.NAME_COLUMN].strip()
+            c.equal(
+                [
+                    r[tcgcsv.SKU_COLUMN]
+                    for r in catalog.rows_for_blank_number_name(name)
+                ],
+                [sealed_in[0][tcgcsv.SKU_COLUMN]],
+                f"{label}: and it is still findable through the blank-Number index that "
+                f"is the only rung that ever reaches it",
+            )
+
+    # 5. D25's carve-out, and the code-card track getting rung 2 back with it.
+    code_rows = [r for r in wide.rows if r[tcgcsv.RARITY_COLUMN] == "Code Card"]
+    pokemon = join.Catalog.from_export(wide, "pokemon")
+    kept_codes = [
+        r
+        for r in pokemon.export.rows
+        if r[tcgcsv.RARITY_COLUMN] == "Code Card"
+    ]
+    c.equal(
+        len(kept_codes),
+        len({r[tcgcsv.NAME_COLUMN] for r in code_rows}),
+        "`pokemon` still keeps the Code Card rows D25 keeps them for — ONE per product "
+        "now rather than one per grade, which is the same fix one register down: a code "
+        "card looked up by name used to offer five rows and resolve none of them",
+    )
+
+    # And the emptiness that is NOT the wrong file. An export carrying this game's rows in
+    # play grades only is a plausible hand-download with the wrong box ticked, and it used to
+    # refuse with a sentence about `Product Line` — sending the operator to check the one
+    # column that was right.
+    played_only = tcgcsv.Export(
+        header=rift.header,
+        rows=tuple(
+            r
+            for r in rift.rows
+            if r[tcgcsv.CONDITION_COLUMN].startswith(("Lightly", "Damaged"))
+        ),
+        source="played-only.csv",
+    )
+    caught = c.raises(
+        join.EmptyCatalog,
+        lambda: join.Catalog.from_export(played_only, "riftbound"),
+        "an export holding this game's rows in play grades only refuses rather than "
+        "joining nothing",
+    )
+    if caught is not None:
+        c.ok(
+            "Near Mint" in str(caught) and "Product Line" not in str(caught),
+            "and the refusal names the CONDITION axis rather than blaming the one column "
+            "that was correct",
+            str(caught),
+        )
+
+
 def _check_number_fold(c, sv09: join.Catalog) -> None:
     """`number_index_key` — the fold both sides of the number comparison now pass through.
 
@@ -1559,6 +1747,7 @@ def run() -> Result:
     _check_overrun_is_named(c, export)
     _check_answer_off_the_record(c, export)
     _check_game_partition(c, export)
+    _check_condition_scope(c)
 
     # --- required case: secret rare ---------------------------------------------------
     c.ok(SECRET_RARE_SKU in report.matches, "secret rare 161/159 matched")

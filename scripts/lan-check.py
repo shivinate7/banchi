@@ -10,7 +10,7 @@ ignore, and a check people ignore is worse than an absent one.
 
 So it is a target you RUN, on the machine the URL points at, when you want to know.
 
-WHAT IT IS FOR. The owner reaches this product from a phone at `http://pkmnscan.lan:5173`,
+WHAT IT IS FOR. The owner reaches this product from a phone at `http://pkmnscan.lan:8000`,
 and that address is held up by six things in two places. Two are the owner's, on their UniFi,
 and this repo does not touch them (D43): a DHCP reservation pinning this Mac to an address,
 and a local DNS record mapping the name to it. Four are here: Vite's `allowedHosts`, the
@@ -152,7 +152,10 @@ def error_code(body: str) -> str:
 
 def check() -> List[Result]:
     results: List[Result] = []
-    dev = ports.dev_port(REPO_ROOT)
+    # ONE PORT, BECAUSE THERE IS ONE SERVER (D138). The dev port was read here until the app
+    # moved onto the capture port; `make dev` still uses it and is still reachable on the LAN,
+    # but it is a development loop rather than the address the phone is pointed at, and a row
+    # about it would be asking whether a thing nobody opens from a phone is answering.
     capture = ports.capture_port(REPO_ROOT)
 
     # 1 — the name itself. `lan_hostnames()` is the supervisor's own reader, so this row is
@@ -166,8 +169,8 @@ def check() -> List[Result]:
                 False,
                 "not set — no LAN name is in the origin allowlist",
                 "Add `PKMNSCAN_LAN_NAME=pkmnscan.lan` to .env (see .env.example), then "
-                "`make restart` when the rig is idle. Reads will work without it and every "
-                "write from the LAN will answer 403 origin_not_allowed.",
+                "`make up ARGS=--restart` when the rig is idle. Reads will work without it and "
+                "every write from the LAN will answer 403 origin_not_allowed.",
             )
         )
         return results
@@ -206,33 +209,35 @@ def check() -> List[Result]:
             continue
         results.append(Result(f"{name} resolves", True, f"-> {address} (this Mac)"))
 
-        # 3 — the app. `host: true` makes Vite listen everywhere; it does not make it ACCEPT
-        # every name, and a Host it does not recognise is refused with a 403 page rather than
-        # a connection error. That is what `allowedHosts: ['.lan', '.local']` is for, and it
-        # is invisible from `localhost`.
-        status, body, _ = request(f"http://{name}:{dev}/")
+        # 3 — the app, WHICH IS NOW ON THE CAPTURE PORT (D138). The supervisor serves
+        # `app/dist/` beside the API, so the phone's one address is the capture port and
+        # `allowedHosts` no longer decides anything here: Vite's Host check was a property of
+        # Vite's dev server, and nothing on the LAN path runs it any more. A 503 is its own
+        # answer and gets its own sentence — the network is fine and the build is not.
+        status, body, _ = request(f"http://{name}:{capture}/")
         if status is None:
             results.append(
                 Result(
-                    f"app on {name}:{dev}",
+                    f"app on {name}:{capture}",
                     False,
                     "nothing answered",
-                    "Is the dev server up? `make status`, then `make up` if it is not.",
+                    "Is the server up? `make status`, then `make up` if it is not.",
                 )
             )
-        elif "host is not allowed" in body.lower() or "blocked request" in body.lower():
+        elif status == 503:
             results.append(
                 Result(
-                    f"app on {name}:{dev}",
+                    f"app on {name}:{capture}",
                     False,
-                    "Vite refused the Host header",
-                    f"`{name}` is outside app/vite.config.ts's allowedHosts. Add its suffix.",
+                    "the app is not built",
+                    "The network is fine and the bundle is not. `make status` says what the "
+                    "last build did; see .serve/supervisor.log.",
                 )
             )
         elif status != 200:
-            results.append(Result(f"app on {name}:{dev}", False, f"HTTP {status}"))
+            results.append(Result(f"app on {name}:{capture}", False, f"HTTP {status}"))
         else:
-            results.append(Result(f"app on {name}:{dev}", True, f"HTTP {status}"))
+            results.append(Result(f"app on {name}:{capture}", True, f"HTTP {status}"))
 
         # 4 — the capture server on the same name. The client composes this base from
         # `location.hostname` plus the checkout's baked port, so this is the address the page
@@ -261,7 +266,15 @@ def check() -> List[Result]:
         )
 
         # 5 — THE PREFLIGHT, which is what the phone actually runs into. See `preflight`.
-        origin = f"http://{name}:{dev}"
+        #
+        # IT IS THE SAME ORIGIN ON BOTH SIDES NOW (D138) AND THE ROW IS KEPT ANYWAY. A page
+        # served from `name:capture` calling `name:capture` is same-origin, so a browser sends
+        # no preflight at all and the gate cannot refuse it — which is the one real
+        # simplification this change buys the LAN path. The row stays because the gate itself
+        # is unchanged and still governs `make dev` on its own port and any second device
+        # pointed here by `VITE_CAPTURE_SERVER`; a green row that has become easy to pass is
+        # worth more than a deleted one nobody notices the absence of.
+        origin = f"http://{name}:{capture}"
         status, allowed = preflight(f"http://{name}:{capture}/capture", origin)
         if status is None:
             results.append(Result(f"browser preflight from {origin}", None, "no answer"))

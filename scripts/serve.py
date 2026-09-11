@@ -29,7 +29,9 @@ from __future__ import annotations
 
 import argparse
 import contextlib
+import hashlib
 import json
+import shutil
 import os
 import signal
 import socket
@@ -68,6 +70,12 @@ CAPTURE_LOG = "capture.log"
 VITE_PID = "vite.pid"
 VITE_LOG = "vite.log"
 
+# THE APP'S BUILD STATE, WRITTEN HERE AND READ BY `make status` (D138). One file, the shape
+# `.serve/design-check.json` already uses: a verdict, a stamp, and the first line of what went
+# wrong. `make status` is the only reader; nothing in the product asks, because the app cannot
+# report on the build that produced it.
+APP_BUILD_VERDICT = "app-build.json"
+
 # launchd appends to StandardOutPath forever, so a Mac left on for a month grows a few hundred
 # megabytes in a directory nobody looks at. Rotated at startup rather than on every write: the
 # check is one `stat` and the failure it prevents is slow.
@@ -93,6 +101,12 @@ DRAIN_GRACE_SECONDS = store_files.LOCK_TIMEOUT_SECONDS + 10
 # crash path below covers a child that dies — but silence while a page will not load is worse
 # than a line saying what is being waited for.
 READY_SECONDS = 10.0
+
+# A ceiling on one build, so a hung `npm ci` cannot make the supervisor stop reaping children.
+# Generous against the measurement — a cold `vite build` of this app is 1.2s and an `npm ci`
+# about thirty seconds — because the cost of being wrong in one direction is a spurious
+# failure and in the other is a supervisor that has stopped supervising.
+BUILD_TIMEOUT_SECONDS = 300.0
 
 RESTART_BACKOFF = (1, 2, 4, 8, 15, 30)
 
@@ -132,6 +146,52 @@ WATCH_DIRS = (
     "codes",
 )
 WATCH_FILES = ("envfile.py", "scripts/serve.py")
+
+# ---------------------------------------------------------------- the app's own watch set
+
+# WHAT A `vite build` READS, AND IT IS A SEPARATE SET ON PURPOSE (D138). A change here does
+# not restart anything — it schedules a BUILD, and a change under `WATCH_DIRS` restarts the
+# capture child and never builds. Two loops that cannot trip each other: the alternative is a
+# `.tsx` save bouncing the server the owner is capturing with.
+#
+# `app/dist/` is deliberately absent, and it is the one exclusion that matters: the build
+# WRITES there, so watching it would make every build schedule the next one forever.
+APP_SOURCE_DIRS = ("app/src", "app/public")
+APP_SOURCE_FILES = (
+    "app/index.html",
+    "app/vite.config.ts",
+    "app/devPort.ts",
+    "app/tsconfig.json",
+    "app/package.json",
+    "app/package-lock.json",
+)
+
+# Where the build lands, and the two names the swap needs. NEVER BUILT IN PLACE: `vite build`
+# empties its output directory before it writes, so building into `dist/` would 404 every
+# asset for the second it takes and race any tab mid-load. Build beside it, then rename.
+DIST = "app/dist"
+DIST_NEXT = "app/dist.next"
+DIST_PREV = "app/dist.prev"
+
+# The stamp a successful build leaves inside `dist/`, holding the newest source mtime it built
+# from. Inside rather than beside, so the atomic swap carries it: a stamp outside `dist/` would
+# survive a failed swap and claim a build that is not there.
+BUILD_STAMP = ".built"
+
+# THIS SUPERVISOR'S OWN RECEIPT FOR WHAT IT INSTALLED: the sha256 of the `package-lock.json`
+# that `npm ci` last ran against, written inside `node_modules` so it is removed with it.
+#
+# A DIGEST AND NOT AN MTIME, WHICH IS THE OPPOSITE OF WHAT THE BUILD STAMP DOES, and the
+# asymmetry is deliberate. Git rewrites a file's mtime on checkout whether or not its bytes
+# changed, so `git switch` between two branches with identical dependencies would make the
+# lockfile look newer than any receipt and fire an `npm ci` every time. A spurious BUILD costs
+# 1.2 seconds and is measured; a spurious INSTALL costs about thirty and would land on every
+# branch switch, which is often enough to teach the operator to distrust the supervisor.
+NPM_RECEIPT = "app/node_modules/.pkmnscan-lock"
+
+# Every line the build child writes is prefixed, because it shares the supervisor's log with
+# the restart lines and a bare `vite` banner in there reads as the supervisor talking.
+BUILD_PREFIX = "[build]"
 
 # THE FILES THIS SUPERVISOR IS ITSELF MADE OF, and a change to any of them means the running
 # process is stale no matter how many times it restarts its children.
@@ -198,6 +258,24 @@ def fingerprint(root: Path = REPO_ROOT) -> Fingerprint:
     return seen
 
 
+def app_fingerprint(root: Path = REPO_ROOT) -> Fingerprint:
+    """The app's sources as `{path: (mtime_ns, size)}`, the same shape `fingerprint` uses.
+
+    A SECOND FINGERPRINT RATHER THAN A WIDER FIRST ONE, because the two answer different
+    questions and produce different actions: a Python change RESTARTS the capture child and an
+    app change BUILDS. Folding them into one set would mean a `.tsx` save bouncing the server
+    the owner is capturing with, which is the one thing this supervisor exists not to do.
+    """
+    seen = Fingerprint()
+    for path in app_sources(root):
+        try:
+            stat = path.stat()
+        except OSError:
+            continue
+        seen[str(path)] = (stat.st_mtime_ns, stat.st_size)
+    return seen
+
+
 def changed_between(old: Fingerprint, new: Fingerprint) -> list[str]:
     names = set(old) | set(new)
     return sorted(name for name in names if old.get(name) != new.get(name))
@@ -212,6 +290,10 @@ class Child(NamedTuple):
 
 
 CAPTURE = Child("capture", CAPTURE_PID, CAPTURE_LOG)
+# THE APP IS NO LONGER A CHILD (D138) AND THIS ENTRY OUTLIVES IT ON PURPOSE. A supervisor
+# running the previous code left `vite.pid` and a detached `npm run dev` behind; the first
+# `make up` or `make down` after this lands is the only thing that will ever reap them, and it
+# can only do that if it still knows the name. Nothing writes this pidfile any more.
 VITE = Child("app", VITE_PID, VITE_LOG)
 
 
@@ -472,31 +554,217 @@ def spawn_capture(root: Path = REPO_ROOT) -> Optional[subprocess.Popen]:
     return child
 
 
-def spawn_vite(root: Path = REPO_ROOT) -> Optional[subprocess.Popen]:
-    if not (root / "app" / "node_modules").is_dir():
-        # Deliberately not an install. The Makefile's NPM_GUARD argument stands: an implicit
-        # 80 MB network fetch hidden inside a command that says "serve" is a surprise, and the
-        # capture server is useful without the app.
-        log("app/node_modules is missing — not starting the app.")
-        log("  fix: npm --prefix app install")
-        return None
-    argv = ["npm", "--prefix", str(root / "app"), "run", "dev"]
-    logfile = state_dir(root) / VITE_LOG
-    logfile.parent.mkdir(parents=True, exist_ok=True)
-    _rotate(logfile)
-    handle = open(logfile, "a", buffering=1)  # noqa: SIM115 — outlives this function as the detached child's stdout
+# ---------------------------------------------------------------------------- the build
+
+def app_sources(root: Path = REPO_ROOT) -> list[Path]:
+    """Every file a `vite build` reads. Walked, not globbed, so a new screen is covered."""
+    found: list[Path] = []
+    for name in APP_SOURCE_DIRS:
+        base = root / name
+        if not base.is_dir():
+            continue
+        for dirpath, dirnames, filenames in os.walk(base, followlinks=False):
+            dirnames[:] = [d for d in dirnames if d not in SKIP_DIRS]
+            found.extend(Path(dirpath) / f for f in filenames)
+    found.extend(root / name for name in APP_SOURCE_FILES)
+    return [path for path in found if path.exists()]
+
+
+def newest_source(root: Path = REPO_ROOT) -> int:
+    """The newest mtime across the app's sources, in nanoseconds. 0 if there are none."""
+    newest = 0
+    for path in app_sources(root):
+        try:
+            newest = max(newest, path.stat().st_mtime_ns)
+        except OSError:
+            # Vanished between the walk and the stat, which `fingerprint` also tolerates and
+            # for the same reason: the next pass sees the truth.
+            continue
+    return newest
+
+
+def built_stamp(root: Path = REPO_ROOT) -> Optional[int]:
+    """What the last successful build recorded, or None if there has not been one."""
     try:
-        child = subprocess.Popen(
-            argv, cwd=str(root), env=_child_env(root),
-            stdin=subprocess.DEVNULL, stdout=handle, stderr=subprocess.STDOUT,
-            start_new_session=True,
-        )
-    except OSError as exc:
-        log(f"could not start the app: {exc}")
-        log("  is npm on PATH? under launchd it often is not — see `make launch-agent`.")
+        return int((root / DIST / BUILD_STAMP).read_text("utf-8").strip())
+    except (OSError, ValueError):
         return None
-    write_pidfile(VITE, child.pid, argv, root)
-    return child
+
+
+def app_built(root: Path = REPO_ROOT) -> bool:
+    return (root / DIST / "index.html").is_file()
+
+
+def app_stale(root: Path = REPO_ROOT) -> bool:
+    """Is the bundle behind its source?
+
+    ONE COMPARISON AND NOT A FINGERPRINT DIFF, which is the difference between this and
+    `_check_files`. That watcher has to NAME the file that caused a restart, because a restart
+    nobody asked for is otherwise unexplainable. A build needs no such story: either the bundle
+    is current or it is not, and an mtime against a stamp answers that after a fresh clone, a
+    `git pull`, a branch switch and a checkout of an older commit — all four of which move
+    mtimes without the supervisor having been running to see them.
+    """
+    stamp = built_stamp(root)
+    if stamp is None or not app_built(root):
+        return True
+    return newest_source(root) > stamp
+
+
+def lock_digest(root: Path = REPO_ROOT) -> str:
+    try:
+        return hashlib.sha256((root / "app" / "package-lock.json").read_bytes()).hexdigest()
+    except OSError:
+        return ""
+
+
+def npm_install_owed(root: Path = REPO_ROOT) -> bool:
+    """Do the installed packages match the lockfile? The owner's ruling, 2026-09-11.
+
+    A merged PR that bumps a dependency is otherwise a build failure with a fix the operator
+    has to know, so the supervisor runs `npm ci` itself and a pull becomes fully
+    self-applying. See `NPM_RECEIPT` for why this compares bytes where `app_stale` compares
+    mtimes — a spurious install is twenty-five times more expensive than a spurious build, and
+    a branch switch would fire one on every hop.
+
+    A `node_modules` WITH NO RECEIPT IS LEFT ALONE. It is what `make worktree-setup` and a
+    hand-run `npm install` produce, both of which are current by construction; adopting it —
+    writing the receipt on the next successful build — is what makes the first install after
+    this lands silent rather than a thirty-second surprise.
+    """
+    if not (root / "app" / "package-lock.json").is_file():
+        return False
+    if not (root / "app" / "node_modules").is_dir():
+        return True
+    try:
+        return (root / NPM_RECEIPT).read_text("utf-8").strip() != lock_digest(root)
+    except OSError:
+        return False
+
+
+def write_build_verdict(verdict: str, detail: str = "", root: Path = REPO_ROOT) -> None:
+    """What `make status` reads. Written on every outcome, including the ones that are fine."""
+    path = state_dir(root) / APP_BUILD_VERDICT
+    path.parent.mkdir(parents=True, exist_ok=True)
+    payload = {"verdict": verdict, "at": time.time(), "detail": detail}
+    with contextlib.suppress(OSError):
+        path.write_text(json.dumps(payload) + "\n", "utf-8")
+
+
+def read_build_verdict(root: Path = REPO_ROOT) -> dict:
+    try:
+        loaded = json.loads((state_dir(root) / APP_BUILD_VERDICT).read_text("utf-8"))
+        return loaded if isinstance(loaded, dict) else {}
+    except (OSError, json.JSONDecodeError):
+        return {}
+
+
+def _run_build_step(argv: list[str], root: Path, label: str) -> tuple[int, str]:
+    """One child, its output into the supervisor's log under `BUILD_PREFIX`.
+
+    CAPTURED RATHER THAN INHERITED, because the verdict has to carry the first line of what
+    went wrong and a child writing straight into the log leaves nothing to quote. The whole
+    output still reaches the log; only the ORDER changes, which is the price of being able to
+    say on `make status` what the failure was.
+    """
+    try:
+        finished = subprocess.run(  # noqa: S603
+            argv, cwd=str(root / "app"), env=_child_env(root),
+            stdin=subprocess.DEVNULL, stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
+            text=True, timeout=BUILD_TIMEOUT_SECONDS,
+        )
+    except FileNotFoundError:
+        # THE ONE FAILURE THAT IS NOT THE CODE'S FAULT, and D53's plist section already names
+        # it: launchd hands an agent a minimal PATH and `npm` is routinely not on it.
+        log(f"{BUILD_PREFIX} {argv[0]}: not found — is node on PATH?")
+        log(f"{BUILD_PREFIX}   under launchd it often is not; see `make launch-agent`.")
+        return (127, f"{argv[0]}: not found on PATH")
+    except subprocess.TimeoutExpired:
+        log(f"{BUILD_PREFIX} {label} timed out after {BUILD_TIMEOUT_SECONDS:.0f}s")
+        return (124, f"{label} timed out")
+    for line in (finished.stdout or "").splitlines():
+        if line.strip():
+            log(f"{BUILD_PREFIX} {line.rstrip()}")
+    first = ""
+    if finished.returncode != 0:
+        for line in (finished.stdout or "").splitlines():
+            if line.strip():
+                first = line.strip()
+                break
+    return (finished.returncode, first)
+
+
+def build_app(root: Path = REPO_ROOT) -> bool:
+    """Compile the app into `dist/`, atomically. True if `dist/` now holds a current build.
+
+    THE SWAP IS TWO RENAMES AND THAT IS THE WHOLE DESIGN. `vite build` empties its output
+    directory before writing, so building into `dist/` directly would 404 every asset for the
+    second the build takes — against a live rig, mid-capture. Building into `dist.next/` and
+    renaming means the old bundle answers every request until the instant the new one is
+    complete, and a request in flight holds an open descriptor through the rename and
+    finishes.
+
+    A FAILED BUILD CHANGES NOTHING. `dist.next/` is removed and `dist/` is not touched, so the
+    last bundle that compiled goes on serving — which is `_restart_for`'s parse pre-check
+    applied to the other language, for its reason: auto-build guarantees this sees half-written
+    code, and taking the app down for it would be worse than serving yesterday's.
+    """
+    if npm_install_owed(root):
+        log(f"{BUILD_PREFIX} package-lock.json moved — npm ci")
+        code, first = _run_build_step(["npm", "ci"], root, "npm ci")
+        if code != 0:
+            log(f"{BUILD_PREFIX} npm ci failed ({code}) — the app was NOT rebuilt")
+            write_build_verdict("install-failed", first or f"npm ci exited {code}", root)
+            return app_built(root)
+    elif not (root / "app" / "node_modules").is_dir():
+        # Deliberately not an install. The Makefile's NPM_GUARD argument stands and predates
+        # this: an implicit 80 MB fetch inside a command that says "serve" is a surprise. What
+        # changed is only the case ABOVE — a lockfile that moved under an install that already
+        # exists, which is a pull applying itself rather than a first install.
+        log(f"{BUILD_PREFIX} app/node_modules is missing — not building.")
+        log(f"{BUILD_PREFIX}   fix: npm --prefix app install")
+        write_build_verdict("no-modules", "app/node_modules is missing", root)
+        return app_built(root)
+
+    stamp = newest_source(root)
+    nxt, prev = root / DIST_NEXT, root / DIST_PREV
+    for leftover in (nxt, prev):
+        # A previous build that was killed mid-swap. Removed before rather than after, so a
+        # supervisor that was SIGKILLed does not leave a directory that poisons every later
+        # build with `--outDir` refusing a non-empty target.
+        shutil.rmtree(leftover, ignore_errors=True)
+
+    started = time.monotonic()
+    code, first = _run_build_step(
+        ["npx", "vite", "build", "--outDir", "dist.next", "--emptyOutDir"], root, "vite build"
+    )
+    if code != 0 or not (nxt / "index.html").is_file():
+        shutil.rmtree(nxt, ignore_errors=True)
+        log(f"{BUILD_PREFIX} FAILED ({code}) — serving the last bundle that compiled")
+        write_build_verdict("fail", first or f"vite build exited {code}", root)
+        return app_built(root)
+
+    with contextlib.suppress(OSError):
+        (nxt / BUILD_STAMP).write_text(f"{stamp}\n", "utf-8")
+    try:
+        if (root / DIST).exists():
+            os.replace(root / DIST, prev)
+        os.replace(nxt, root / DIST)
+    except OSError as exc:
+        log(f"{BUILD_PREFIX} could not swap the build in: {exc}")
+        write_build_verdict("fail", f"swap failed: {exc}", root)
+        return app_built(root)
+    finally:
+        shutil.rmtree(prev, ignore_errors=True)
+    # THE RECEIPT IS WRITTEN ON A SUCCESSFUL BUILD AND NOT AFTER THE INSTALL, because a build
+    # that compiled is the only proof the installed tree actually works. It also adopts an
+    # existing `node_modules` that predates this file, which is what keeps the first run after
+    # this lands from spending thirty seconds re-installing a current tree.
+    with contextlib.suppress(OSError):
+        (root / NPM_RECEIPT).write_text(lock_digest(root) + "\n", "utf-8")
+    log(f"{BUILD_PREFIX} app built in {time.monotonic() - started:.1f}s")
+    write_build_verdict("pass", "", root)
+    return True
 
 
 def stop_child(child: subprocess.Popen, grace: float, label: str) -> bool:
@@ -616,15 +884,22 @@ def report(root: Path = REPO_ROOT) -> dict:
     dev_port = ports.dev_port(root)
     sup = supervisor_pid(root)
     capture = live_pid(CAPTURE, root)
-    vite = live_pid(VITE, root)
+    verdict = read_build_verdict(root)
     return {
         "supervisor": sup,
         "capture_pid": capture,
         "capture_port": capture_port,
         "capture_answering": port_answering(capture_port),
-        "app_pid": vite,
+        # THE APP IS THIS PROCESS NOW, so what there is to report is the BUILD rather than a
+        # second pid and a second port (D138). `dev_port` stays because `make dev` still uses
+        # it and `make status` still has to say which port that would be.
+        "app_built": app_built(root),
+        "app_stale": app_stale(root),
+        "app_build_verdict": verdict.get("verdict"),
+        "app_build_at": verdict.get("at"),
+        "app_build_detail": verdict.get("detail"),
         "dev_port": dev_port,
-        "app_answering": port_answering(dev_port),
+        "dev_answering": port_answering(dev_port),
         "worktree": ports.is_linked_worktree(root),
         "state_dir": str(state_dir(root)),
         # PRESENCE, LABELLED AS SUCH — not "running under launchd". `launchctl print` is slow
@@ -644,10 +919,18 @@ def urls(root: Path = REPO_ROOT) -> tuple[str, str]:
 
 
 def print_where(root: Path = REPO_ROOT) -> None:
-    app_url, capture_url = urls(root)
+    """ONE LINK, because there is one server (D138). The app and the API are the same origin
+    now, which is also what makes the bundle's own composition trivially right: it bakes the
+    capture port and resolves the host from the address bar (D53)."""
+    _, capture_url = urls(root)
     print("pkmnscan is up.")
-    print(f"  app       {app_url}     <- bookmark this")
-    print(f"  capture   {capture_url}")
+    print(f"  banchi    {capture_url}     <- bookmark this")
+    for name in lan_hostnames():
+        print(f"            http://{name}:{ports.capture_port(root)}")
+    if not app_built(root):
+        print("  app       NOT BUILT — the API is up; see .serve/supervisor.log")
+    elif app_stale(root):
+        print("  app       rebuilding; the previous bundle is being served meanwhile")
     print(f"  logs      {STATE_DIRNAME}/supervisor.log · {STATE_DIRNAME}/capture.log")
     print("  stop      make down")
     if ports.is_linked_worktree(root):
@@ -665,9 +948,11 @@ class Supervisor:
         self.root = root
         self.watch = watch
         self.capture: Optional[subprocess.Popen] = None
-        self.vite: Optional[subprocess.Popen] = None
         self.stopping = False
         self.fingerprint = fingerprint(root) if watch else Fingerprint()
+        self.app_fingerprint = app_fingerprint(root) if watch else Fingerprint()
+        self.app_pending = False
+        self.app_quiet_since = 0.0
         self.pending: set[str] = set()
         self.quiet_since = 0.0
         self.fast_failures = 0
@@ -679,14 +964,27 @@ class Supervisor:
     # -- lifecycle ---------------------------------------------------------
 
     def start(self) -> None:
-        """Capture first, and the app ONLY if capture came up.
+        """One child, and the app built into the directory it serves from (D138).
 
-        A HALF-STARTED STACK IS NOT A STARTED STACK, and shipping one is worse than failing.
-        This used to start the app unconditionally, so a capture server that could not bind
-        left the operator with a working-looking screen served by whatever else held the port
-        — reading the right store, and never reloading on an edit. The app alone is not a
-        product; the whole reason this supervisor exists is the half that did not start.
+        THE ORDER IS DECIDED BY WHETHER THERE IS ANYTHING TO SERVE. With no build at all — a
+        fresh clone, a fresh worktree — the build runs FIRST, because `make up` blocking for
+        the 1.2 seconds it takes is cheaper than opening a port that answers 503. With a build
+        already there, the capture server comes up immediately and a stale bundle is rebuilt
+        behind it: the old one answers every request meanwhile, which is the whole point of
+        the swap in `build_app`.
+
+        A FAILED BUILD NEVER STOPS THE CAPTURE SERVER, in either order. A TypeScript file that
+        will not compile may not take the API down with it — that is one process holding the
+        other hostage, and the half that matters to a rig mid-capture is the half that has
+        nothing to do with the app.
+
+        The half-started-stack rule this method has always carried is unchanged and now has
+        nothing to guard: there is no second long-lived child to start after capture. What
+        replaced it is `_refuse_capture` below, which still stops rather than retrying a wall.
         """
+        if self.watch and not app_built(self.root):
+            log("no build to serve — building the app before opening the port")
+            build_app(self.root)
         capture_port = ports.capture_port(self.root)
         self.capture = spawn_capture(self.root)
         if self.capture is None:
@@ -698,9 +996,11 @@ class Supervisor:
         self.capture_started = time.time()
         log(f"capture server ready on :{capture_port} (pid {self.capture.pid}) in {took:.1f}s")
 
-        self.vite = spawn_vite(self.root)
-        if self.vite is not None:
-            log(f"app starting on :{ports.dev_port(self.root)} (pid {self.vite.pid})")
+        if self.watch and app_stale(self.root):
+            # Behind the capture server rather than in front of it: the old bundle is already
+            # answering, so nothing waits on this.
+            log("the bundle is behind its source — rebuilding")
+            build_app(self.root)
 
     def _refuse_capture(self, capture_port: int) -> None:
         """The capture server did not come up. Say why, and stop — do not retry a wall.
@@ -728,9 +1028,6 @@ class Supervisor:
 
     def stop(self) -> None:
         self.stopping = True
-        if self.vite is not None:
-            stop_child(self.vite, 10, "app")
-            clear_pidfile(VITE, self.root)
         if self.capture is not None:
             stop_child(self.capture, DRAIN_GRACE_SECONDS, "capture server")
             clear_pidfile(CAPTURE, self.root)
@@ -757,6 +1054,7 @@ class Supervisor:
         self.start()
         if self.watch:
             log(f"watching {', '.join(WATCH_DIRS)} for changes")
+            log(f"watching {', '.join(APP_SOURCE_DIRS)} to rebuild the app")
 
         try:
             while True:
@@ -764,6 +1062,7 @@ class Supervisor:
                 self._reap()
                 if self.watch:
                     self._check_files()
+                    self._check_app()
         except KeyboardInterrupt:
             self.stop()
         return 0
@@ -789,11 +1088,6 @@ class Supervisor:
                 # path has always probed and logged; this one is the half that matters more,
                 # because nobody chose to be here.
                 self._await_capture()
-        if self.vite is not None and self.vite.poll() is not None:
-            log(f"app exited ({self.vite.returncode}).")
-            self._tail(VITE_LOG)
-            clear_pidfile(VITE, self.root)
-            self.vite = None
 
     def _await_capture(self) -> None:
         """Wait for the child THIS supervisor just spawned, and record when it came up.
@@ -854,6 +1148,39 @@ class Supervisor:
             self.pending.clear()
             self._restart_for(changed)
 
+    def _check_app(self) -> None:
+        """The app's own watch: a change here builds, and restarts nothing (D138).
+
+        THE SAME DEBOUNCE AND FOR THE SAME REASON. An editor saves twice — once mid-keystroke
+        and once when a formatter runs a beat later — and a build fired on the first save is a
+        build of half a file. The Python watcher has always waited out the quiet window; this
+        waits out the same one.
+
+        NO PARSE PRE-CHECK, BECAUSE THE BUILD IS ITS OWN. `_restart_for` compiles a `.py` file
+        before restarting into it because a restart into a SyntaxError leaves NOTHING serving.
+        A `vite build` that fails leaves the previous bundle exactly where it was, so the
+        failure is already contained and a pre-check would be a second, worse TypeScript
+        parser living in this file.
+        """
+        current = app_fingerprint(self.root)
+        if current != self.app_fingerprint:
+            self.app_fingerprint = current
+            self.app_pending = True
+            self.app_quiet_since = time.monotonic()
+            return
+        if self.app_pending and time.monotonic() - self.app_quiet_since >= QUIET_SECONDS:
+            self.app_pending = False
+            if app_stale(self.root):
+                log("app source changed — rebuilding")
+                build_app(self.root)
+                # THE FINGERPRINT IS NOT RE-TAKEN HERE, and the temptation to is a real bug.
+                # A build takes a second or more and an edit can land inside it; re-reading
+                # the tree afterwards would absorb that edit as though it had been built, and
+                # the operator's last save would silently never reach the bundle. Nothing the
+                # build writes is in this watch set — `app/dist/` is excluded by
+                # `APP_SOURCE_DIRS` precisely so that it cannot schedule itself — so leaving
+                # the fingerprint alone is both safe and what catches the edit.
+
     def _touches_self(self, changed: list[str]) -> list[str]:
         """Which of the changed paths are files this supervisor is made of."""
         mine = {str((self.root / name).resolve()) for name in SELF_FILES}
@@ -882,7 +1209,7 @@ class Supervisor:
             # Exec failed, and the children are already down. Say so and rebuild them rather
             # than leaving a supervisor that supervises nothing.
             log(f"could not restart myself: {exc}")
-            log("  running on with the OLD code. `make restart` to pick up the change.")
+            log("  running on with the OLD code. `make up ARGS=--restart` picks it up.")
             self.stopping = False
             self.start()
 
@@ -964,6 +1291,11 @@ def do_run(args: argparse.Namespace) -> int:
 
 
 def do_up(args: argparse.Namespace) -> int:
+    # Through `do_down`, which is the only stop path, so there is one refusal and not two to
+    # keep in step. A refusal there must not go on to start a second supervisor over the one
+    # still running.
+    if getattr(args, "restart", False) and do_down(args) != 0:
+        return 1
     existing = supervisor_pid()
     if existing is not None:
         print(f"already running (pid {existing}).")
@@ -1140,11 +1472,14 @@ def do_down(_args: argparse.Namespace) -> int:
 
 
 def do_restart(args: argparse.Namespace) -> int:
-    """Guarded through `do_down`, which is the only stop path — so there is one refusal and not
-    two to keep in step. It returns non-zero without stopping anything when it refuses, and this
-    must NOT go on to start a second supervisor over the one still running."""
-    if do_down(args) != 0:
-        return 1
+    """`make up ARGS=--restart` is the spelling now (D138 §1.3). Kept for one release.
+
+    An alias rather than a deletion, because `make restart` is in the owner's fingers, in this
+    repo's own docs and in two of its refusal messages. It says the new spelling and then does
+    the thing, which is what a rename owes anyone who types the old name.
+    """
+    print("`make restart` is now `make up ARGS=--restart`. Running that.")
+    args.restart = True
     return do_up(args)
 
 
@@ -1246,7 +1581,16 @@ FOREGROUND_ENV = "PKMNSCAN_FOREGROUND"
 
 
 def do_guard_foreground(_args: argparse.Namespace) -> int:
-    """`make dev` and `make server` refuse while this checkout's supervisor is up.
+    """`make server` refuses while this checkout's supervisor is up. `make dev` no longer does.
+
+    THE NARROWING IS D138's, AND IT IS THE POINT RATHER THAN A RELAXATION. This guard existed
+    because both ways of starting a server wanted the same two ports; the supervisor no longer
+    holds the dev port at all, so `make dev` can no longer collide with it. What it now does
+    is the thing the owner alternates between sessions to do: run Vite with hot reload on its
+    own port, against the live capture server on :8000, over the same store.
+
+    `make server` is unchanged and still refused, because :8000 is still the supervisor's and
+    the squatter below is still exactly what would happen.
 
     THIS IS WHERE THE SQUATTER COMES FROM. Both ways of starting a server are legitimate and
     neither knew about the other, so a foreground `make server` would take :8000 and the
@@ -1263,15 +1607,15 @@ def do_guard_foreground(_args: argparse.Namespace) -> int:
     pid = supervisor_pid()
     if pid is None:
         return 0
-    app_url, capture_url = urls()
+    _, capture_url = urls()
     print(f"a supervisor is already running in this checkout (pid {pid}).")
-    print(f"  app       {app_url}")
-    print(f"  capture   {capture_url}")
+    print(f"  banchi    {capture_url}")
     print()
     print("  Starting a foreground server now would take the port its capture child needs,")
     print("  and you would be left with an app that does not reload when you edit Python.")
     print()
-    print("  make restart          bounce the supervisor instead")
+    print("  make dev              hot reload on its own port, against this server")
+    print("  make up ARGS=--restart   bounce the supervisor instead")
     print("  make down             stop it, then run this again")
     print(f"  {FOREGROUND_ENV}=ok make …   run anyway")
     return 1
@@ -1297,6 +1641,13 @@ def main(argv: Optional[list[str]] = None) -> int:
 
     up = sub.add_parser("up", help="start detached")
     up.add_argument("--no-watch", action="store_true")
+    # `--restart` folds `restart` into the verb a person already types (D138 §1.3). The
+    # `--confirm` guard rides with it, because bouncing the main tree's server is the thing
+    # that cut a write in flight — fewer words never means fewer guards.
+    up.add_argument("--restart", action="store_true",
+                    help="stop it first if it is already running")
+    up.add_argument("--confirm", action="store_true",
+                    help="bounce the main tree's agent-kept server anyway")
     up.set_defaults(func=do_up)
 
     down = sub.add_parser("down", help="stop")
