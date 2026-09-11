@@ -178,6 +178,7 @@ import http.server
 import inspect
 import os
 import shutil
+import socket
 import sys
 import tempfile
 import threading
@@ -7565,6 +7566,35 @@ def request(port, method, path, *, origin=None, payload=None, extra_headers=None
         return int(refused.code), refused.read(), dict(refused.headers)
 
 
+def raw_head(port, path):
+    """One HEAD over a bare socket, returning `(head, rest)` — every byte the server sent.
+
+    `urllib` CANNOT ANSWER THIS QUESTION, and finding that out is the whole reason this
+    exists. `http.client` knows a HEAD response carries no content and sets its own length
+    to zero before reading a byte, so `response.read()` returns `b""` whether the server
+    withheld the body or wrote all of it. Measured by mutation: `_send` was made to write
+    the body under HEAD and every `urllib`-based assertion in `check_app_serve` stayed green.
+
+    IT IS NOT A PEDANTIC VIOLATION. Bytes after the headers are the NEXT response as far as
+    a proxy or a keep-alive client is concerned — `Connection: close` is what hides it here,
+    which makes it exactly the kind of defect that surfaces on somebody else's infrastructure
+    and never on this rig.
+    """
+    with socket.create_connection(("127.0.0.1", port), timeout=30) as sock:
+        sock.sendall(
+            f"HEAD {path} HTTP/1.1\r\nHost: 127.0.0.1:{port}\r\n"
+            f"Connection: close\r\n\r\n".encode("utf-8")
+        )
+        seen = b""
+        while True:
+            chunk = sock.recv(65536)
+            if not chunk:
+                break
+            seen += chunk
+    head, _, rest = seen.partition(b"\r\n\r\n")
+    return head, rest
+
+
 def error_code(body):
     try:
         return (json.loads(body or b"{}").get("error") or {}).get("code")
@@ -8089,6 +8119,121 @@ def check_app_serve(checks: Checks) -> None:
                     "own mime table does not know at all",
                 )
 
+                # ------------------------------------------------------------------ HEAD
+                # THE HEADERS OF THE GET, WITH NO BODY. `BaseHTTPRequestHandler` dispatches
+                # on the method name and this class defined no `do_HEAD`, so until it did
+                # `curl -I http://localhost:8000/` answered 501 — invisible while this
+                # process was an API nothing HEADs, and the first thing a monitor, a link
+                # checker or a proxy asks the moment the app is served from the same port.
+                #
+                # EQUALITY WITH THE GET IS THE ASSERTION, rather than a second list of the
+                # headers this test expects. RFC 9110 asks for the GET's own header field
+                # values, and a list written out here is exactly what stops being true the
+                # day `_send` gains a header — which is the drift `do_HEAD` is a flag rather
+                # than a second header block to avoid. `Date` is dropped because it is the
+                # one header that legitimately differs between two requests.
+                def without_date(headers):
+                    return {
+                        key: value
+                        for key, value in headers.items()
+                        if key.lower() != "date"
+                    }
+
+                for path in ("/", "/assets/main-a1b2c3.js", "/manifest.webmanifest"):
+                    _, got_body, got_headers = request(port, "GET", path)
+                    status, _, headers = request(port, "HEAD", path)
+                    checks.equal(status, 200, f"`HEAD {path}` answers 200 and not 501")
+                    checks.equal(
+                        without_date(headers),
+                        without_date(got_headers),
+                        "under the GET's own headers, every one of them — the boot header, "
+                        "the CORS block and `Connection: close` included",
+                    )
+                    checks.equal(
+                        headers.get("Content-Length"),
+                        str(len(got_body)),
+                        "with `Content-Length` the length the body WOULD have had, which is "
+                        "the one header a HEAD is usually sent to read",
+                    )
+                    # OVER A BARE SOCKET, BECAUSE `urllib` CANNOT SEE THIS. `raw_head` carries
+                    # the measurement: the client discards a HEAD body without reading it, so
+                    # asserting `response.read() == b""` passes against a server that wrote
+                    # every byte. Mutation-tested — this is the only arm here that fails when
+                    # `_send`'s suppression is removed.
+                    _, rest = raw_head(port, path)
+                    checks.equal(
+                        rest, b"", f"and nothing follows the headers on the wire for {path}"
+                    )
+
+                # The two named in the ask, asserted on their own so a failure says which is
+                # wrong rather than only that the dicts differ.
+                _, _, headers = request(port, "HEAD", "/")
+                checks.equal(
+                    headers.get("Content-Type"),
+                    "text/html; charset=utf-8",
+                    "`HEAD /` carries the app's own Content-Type",
+                )
+                checks.equal(
+                    headers.get("Cache-Control"),
+                    "no-store",
+                    "and its `no-store`, so a proxy that decides on a HEAD decides the same "
+                    "way the GET would have made it decide",
+                )
+                _, _, headers = request(port, "HEAD", "/assets/main-a1b2c3.js")
+                checks.equal(
+                    headers.get("Cache-Control"),
+                    capture_server.APP_IMMUTABLE,
+                    "and a hashed asset carries the immutable one under HEAD too",
+                )
+
+                # HEAD REACHES EVERY GET ROUTE AND NOT ONLY THE APP, which is `do_HEAD`'s own
+                # recorded decision and the half a narrow implementation would have got
+                # wrong: `/status` is the likeliest thing of all to have a monitor pointed at
+                # it, and a 405 there would reproduce the 501 one route over.
+                status, _, headers = request(port, "HEAD", "/status")
+                checks.equal(status, 200, "`HEAD /status` answers, because HEAD is not the "
+                             "app's private verb")
+                _, rest = raw_head(port, "/status")
+                checks.equal(rest, b"", "with the JSON withheld on the wire")
+                checks.ok(
+                    int(headers.get("Content-Length") or 0) > 0,
+                    "and a Content-Length describing the JSON it withheld",
+                )
+
+                # A REFUSAL IS STILL A REFUSAL UNDER HEAD, headers and status intact and the
+                # sentence withheld. Worth its own arm because `_dispatch` answers a refusal
+                # through `_fail` -> `_json` -> `_send`, which is the same suppression point
+                # by a different road.
+                status, _, headers = request(port, "HEAD", "/statuss")
+                checks.equal(status, 404, "`HEAD` on a mistyped route is still 404")
+                head, rest = raw_head(port, "/statuss")
+                checks.equal(rest, b"", "with the refusal's JSON withheld on the wire")
+                checks.ok(
+                    b"Content-Length: " in head,
+                    "and a Content-Length still describing it — a refusal is a response "
+                    "like any other and HEAD withholds only its body",
+                )
+
+                # THE ORIGIN GATE IS NOT WEAKENED BY HEAD BEING SAFE. A read is open to any
+                # origin and a write is not, and `SAFE_METHODS` gaining HEAD must not have
+                # moved the second half — the whole gate is one `in` against that tuple.
+                checks.ok(
+                    "HEAD" in capture_server.SAFE_METHODS
+                    and "POST" not in capture_server.SAFE_METHODS
+                    and "PUT" not in capture_server.SAFE_METHODS
+                    and "DELETE" not in capture_server.SAFE_METHODS,
+                    "HEAD is a safe method and the three mutating verbs still are not",
+                    f"safe methods: {capture_server.SAFE_METHODS}",
+                )
+                status, body, _ = request(
+                    port, "POST", "/", payload={}, origin="http://evil.example"
+                )
+                checks.equal(
+                    error_code(body),
+                    "origin_not_allowed",
+                    "and a foreign origin's write is still refused before anything is read",
+                )
+
                 # ------------------------------------------------- the API is still the API
                 status, body, _ = request(port, "GET", "/status")
                 checks.equal(status, 200, "`GET /status` is untouched")
@@ -8153,6 +8298,19 @@ def check_app_serve(checks: Checks) -> None:
                     200,
                     "AND THE API IS STILL UP: a TypeScript file that will not compile may "
                     "never stop this server handing out cards",
+                )
+                status, _, headers = request(port, "HEAD", "/")
+                checks.equal(
+                    status,
+                    503,
+                    "`HEAD /` is 503 with no build too — a monitor asking the cheap way "
+                    "must not be told the app is fine while the GET says it is not ready",
+                )
+                _, rest = raw_head(port, "/")
+                checks.equal(rest, b"", "with the refusal's sentence withheld, as HEAD asks")
+                checks.ok(
+                    int(headers.get("Content-Length") or 0) > 0,
+                    "and its `Content-Length` still describing that sentence",
                 )
                 status, body, _ = request(port, "POST", "/", payload={})
                 checks.equal(

@@ -412,8 +412,14 @@ JPEG_MAGIC = b"\xff\xd8\xff"
 # WHY THIS IS WORTH MORE THAN IT LOOKS: the roadmap puts this server on the LAN so the
 # Fulfiller can reach it from his phone (D5, D13). At that point `*` is not exposed to the
 # owner's own tabs, it is exposed to every device on the network.
-SAFE_METHODS = ("GET", "OPTIONS")
-ALL_METHODS = ("GET", "POST", "PUT", "DELETE", "OPTIONS")
+#
+# HEAD IS IN BOTH LISTS, FOR THE REASON GET IS IN THEM: it writes nothing. `do_HEAD` runs
+# `do_GET` with the body withheld, so a HEAD cannot reach a mutating route at all — and
+# gating it would answer 403 to a READ, which is the one thing every paragraph above says
+# this server does not do. It is in `ALL_METHODS` as well because an origin this server
+# knows may never be told less than one it does not.
+SAFE_METHODS = ("GET", "HEAD", "OPTIONS")
+ALL_METHODS = ("GET", "HEAD", "POST", "PUT", "DELETE", "OPTIONS")
 
 # The Vite dev server (`make dev`), on both spellings of this machine. Two entries and not
 # one because a browser's `Origin` is the literal string in the address bar: `localhost` and
@@ -9914,6 +9920,15 @@ class CaptureHandler(BaseHTTPRequestHandler):
     #: the last time connections were refused rather than queued. That is its own task.
     timeout = 15
 
+    #: IS THE REQUEST IN HAND A HEAD? Set by `do_HEAD` for the length of one request and read
+    #: by `_send`, which sends every header and withholds the body when it is true.
+    #:
+    #: A CLASS ATTRIBUTE so `_send` has an answer on every response without `do_HEAD` having
+    #: run. A flag that only existed once HEAD had been asked for would make the other four
+    #: verbs depend on this one, which is a coupling nothing would notice until an
+    #: `AttributeError` reached a 500 on an ordinary GET.
+    _head = False
+
     # -------------------------------------------------------------------- responding
 
     def _origin(self) -> Optional[str]:
@@ -10029,7 +10044,13 @@ class CaptureHandler(BaseHTTPRequestHandler):
         for header, value in extra:
             self.send_header(header, value)
         self.end_headers()
-        self.wfile.write(body)
+        # THE BODY, UNLESS THIS IS A HEAD — and every header above was sent either way, which
+        # is the whole of what RFC 9110 asks of a HEAD response and the reason the suppression
+        # is one flag HERE rather than a second set of headers in `do_HEAD`. `Content-Length`
+        # is still the length this body WOULD have had, because it was written before the flag
+        # was consulted.
+        if not self._head:
+            self.wfile.write(body)
 
     def _photo(self, box: int, index: int) -> None:
         """`GET /photo/<box>/<index>`, as a conditional request. See `do_photo`.
@@ -10513,6 +10534,57 @@ class CaptureHandler(BaseHTTPRequestHandler):
             raise BadRequest(HTTPStatus.NOT_FOUND, "no_such_route", f"No GET route {path}.")
 
         self._dispatch(run)
+
+    def do_HEAD(self) -> None:  # noqa: N802 — BaseHTTPRequestHandler's naming
+        """`GET` with the body withheld. Every GET route, not only the app.
+
+        UNTIL THIS EXISTED THE ANSWER WAS 501. `BaseHTTPRequestHandler` dispatches on the
+        method name and this class defined no `do_HEAD`, so `curl -I http://localhost:8000/`
+        answered `501 Unsupported method ('HEAD')`. That was harmless while this process was
+        an API with no HTML on it — nothing HEADs a JSON route — and stopped being harmless
+        the day D137 put the built app at `/` and its assets under `/assets/` on this same
+        port. HEAD is the first thing an uptime monitor, a link checker, a proxy and `curl -I`
+        reach for, and 501 to all four reads as "this server is broken" rather than as "this
+        verb is unused".
+
+        IT IS THE SAME DISPATCH, AND THAT IS THE POINT. RFC 9110 requires the header field
+        values of a HEAD response to be the ones the GET would have sent, which is only
+        truthfully achievable by PRODUCING the response and withholding the body — so this
+        runs `do_GET` behind a flag `_send` reads. The alternative, a second table of paths
+        with their headers spelled out beside them, is the drift this repo keeps audit rows
+        to prevent: `X-Pkmnscan-Boot`, the CORS block and `Connection: close` are each
+        composed in exactly one place, and a hand-rolled HEAD would be a second spelling of
+        all three with nothing comparing it against the first.
+
+        EVERY GET ROUTE AND NOT ONLY THE APP SURFACE, DELIBERATELY. The narrow answer — HEAD
+        for `/` and the assets, a 405 everywhere else — was considered and refused on the
+        grounds this change is about: `/status` is the likeliest thing of all to have a
+        monitor pointed at it, and answering that 405 reproduces the defect one route over. It
+        also needs a second place that knows which paths the app claims, and a route written
+        later would silently lack HEAD with nothing failing. WHAT THE BROAD ANSWER COSTS is
+        that a HEAD does the handler's work and throws the bytes away: an `/inventory` payload
+        built and discarded, a photograph read and digested for its ETag, `/tcg/sets` opening
+        its socket to TCGplayer. That is accepted, because every one of those is the cost of
+        the GET the same client could have sent instead, and because no GET route in this
+        server writes — the origin gate is on the mutating verbs and this verb is not one.
+
+        THE TWO PATHS THAT DO NOT REACH `_send` ARE ALREADY RIGHT, and `end_headers`'s own
+        override names them for this reason. `_photo`'s 304 branch sends no body under any
+        verb, which is what RFC 9110 gives a 304. `BaseHTTPRequestHandler.send_error` tests
+        `self.command` itself and withholds the body while still sending its `Content-Type`
+        and `Content-Length` — the rule, kept by stdlib — and with this method defined it is
+        no longer what answers a HEAD at all, only a request whose line did not parse.
+        """
+        self._head = True
+        try:
+            self.do_GET()
+        finally:
+            # RESET RATHER THAN TRUST THE CONNECTION TO CLOSE. `end_headers` sends
+            # `Connection: close` on every response, so `handle_one_request` does not loop and
+            # this instance answers one request — but a flag whose correctness rests on
+            # another header staying the way it is today is the coupling this file spends its
+            # comments removing.
+            self._head = False
 
     def do_POST(self) -> None:  # noqa: N802
         """Capture, and 7b's two writes.
