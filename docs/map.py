@@ -924,7 +924,7 @@ COMPONENTS = [
                                   "number is still a run's own drawer, read off the store by "
                                   "`Inventory.box_disowns_run` — the route withholds the name on "
                                   "it (D56) and the join refuses on it (D36 amended)",
-                          "governed_by": ["D3", "D7", "D8", "D10", "D11", "D20", "D21", "D23", "D26", "D34", "D36", "D56", "D58", "D59", "D83", "D87", "D88", "D89", "D100", "D115"], "tested_by": ["T7"]},
+                          "governed_by": ["D3", "D7", "D8", "D10", "D11", "D20", "D21", "D23", "D26", "D34", "D36", "D56", "D58", "D59", "D83", "D87", "D88", "D89", "D100", "D115", "D132"], "tested_by": ["T7"]},
             "queues.py": {"does": "the standing queues — the `queues` table, one mapping per queue "
                                   "name — and the cross-queue release a re-routed position needs",
                           "governed_by": ["D4", "D9", "D22", "D26", "D28", "D37", "D88"], "tested_by": ["T7"]},
@@ -2230,7 +2230,7 @@ COMPONENTS = [
                                 "D62", "D63", "D64", "D65", "D66", "D67", "D69", "D70", "D76",
                                 "D77", "D79", "D83", "D86", "D87", "D88", "D89", "D90", "D91",
                                 "D92", "D93", "D96", "D100", "D103", "D104", "D113", "D115",
-                                "D116"],
+                                "D116", "D132"],
                 "tested_by": ["T7"],
             },
             "tcg_import.py": {"does": "THE OUTBOUND WRITE to the seller admin, and the only "
@@ -2961,7 +2961,7 @@ COMPONENTS = [
                                               "D61", "D62", "D63", "D64", "D65", "D68", "D69",
                                               "D70", "D73", "D76", "D79", "D83", "D86", "D87",
                                               "D89", "D90", "D91", "D92", "D100", "D103",
-                                              "D104", "D113", "D116"]},
+                                              "D104", "D113", "D116", "D132"]},
             "src/demoFlag.d.ts": {"does": "declares `__BN_DEMO__`, the build-time demo flag "
                                           "`vite.config.ts` substitutes with a boolean "
                                           "literal. It exists because three other forms of "
@@ -3020,11 +3020,13 @@ COMPONENTS = [
                                              "D63", "D64", "D65", "D67", "D69", "D73", "D76",
                                              "D79", "D83", "D86", "D87", "D89", "D91", "D92",
                                              "D93", "D100", "D103", "D104", "D113", "D115",
-                                             "D116"]},
+                                             "D116", "D132"]},
             "src/deviceMemory.ts": {"does": "every `localStorage` key the shell owns — the "
-                                            "theme, the rail, and which order statuses this "
-                                            "device bothers fetching (D114) — and nothing else",
-                                    "governed_by": ["D13", "D27", "D91", "D94", "D95", "D114"],
+                                            "theme, the rail, which order statuses this "
+                                            "device bothers fetching (D114), whether the "
+                                            "inventory walk folds sold rows away, and when this "
+                                            "browser last opened each box (D132) — and nothing else",
+                                    "governed_by": ["D13", "D27", "D91", "D94", "D95", "D114", "D132"],
                                     "note": "IT EXISTS BECAUSE OF A LINT RULE, which is the "
                                             "rule working rather than being worked around. "
                                             "`app/eslint.config.js` bans the STORE and not the "
@@ -3228,7 +3230,7 @@ COMPONENTS = [
                         "number column EMPTY, because what D58 refuses is the figure. Refusing "
                         "the whole treatment over it is what put the pre-D41 plain string back "
                         "on two screens for exactly the cards that had been sold.",
-                "governed_by": ["D10", "D20", "D24", "D30", "D31", "D41", "D58", "D68", "D71", "D92"]},
+                "governed_by": ["D10", "D20", "D24", "D30", "D31", "D41", "D58", "D68", "D71", "D92", "D132"]},
             "src/PositionLabel.css": {
                 "does": "the shape, and one knob per site. `--pos-slot` is the only number a site "
                         "chooses; the key is a single clamp and the gap is a token by rule "
@@ -3344,7 +3346,7 @@ COMPONENTS = [
             # D90 is main's order-driven mode, whose two props this file no longer carries; the
             # citation stays so a session reading main's history knows they were removed on
             # purpose rather than lost.
-            "governed_by": ["D6", "D8", "D9", "D10", "D16", "D19", "D20", "D21", "D22", "D23", "D24", "D26", "D27", "D30", "D31", "D33", "D35", "D38", "D39", "D41", "D45", "D46", "D49", "D52", "D58", "D67", "D68", "D89", "D90", "D92", "D118", "D125"]},
+            "governed_by": ["D6", "D8", "D9", "D10", "D16", "D19", "D20", "D21", "D22", "D23", "D24", "D26", "D27", "D30", "D31", "D33", "D35", "D38", "D39", "D41", "D45", "D46", "D49", "D52", "D58", "D67", "D68", "D89", "D90", "D92", "D118", "D125", "D132", "D119"]},
             "src/BoxBrowse.css": {"does": "its layout, and why no accent appears anywhere in it. Its list keeps an "
                                   "INSET focus ring and says so — it clips its own overflow, which is the "
                                   "case base.css's standing ring cannot serve. D38's band lives here: the "
@@ -3357,7 +3359,7 @@ COMPONENTS = [
                                   "NO BANNER SLOT: `.browse-banner` came with main's envelope walk "
                                   "(D90) and went with it (D96 amended 2026-09-04), along with the "
                                   "only stylesheet that ever filled it.",
-                                  "governed_by": ["D5", "D6", "D13", "D30", "D31", "D32", "D33", "D38", "D39", "D40", "D41", "D90", "D118", "D119", "D117"]},
+                                  "governed_by": ["D5", "D6", "D13", "D30", "D31", "D32", "D33", "D38", "D39", "D40", "D41", "D90", "D118", "D119", "D117", "D132"]},
             # ---- 7b's screens. Built 2026-08-13, BEFORE Gate B; routed the same day ----
             #
             # Every entry in this block describes a file that exists, typechecks, lints clean
@@ -3468,7 +3470,7 @@ COMPONENTS = [
                 # was removed on purpose rather than lost.
                 "governed_by": ["D5", "D6", "D7", "D8", "D10", "D13", "D24", "D26", "D27", "D28",
                                 "D31", "D33", "D36", "D38", "D39", "D41", "D45", "D49", "D57",
-                                "D58", "D68", "D71", "D90", "D93", "D118", "D125"],
+                                "D58", "D68", "D71", "D90", "D93", "D118", "D125", "D132"],
             },
             "src/Inventory.css": {
                 "does": "its layout, at the dense owner-side end of the one system, two "
@@ -3545,7 +3547,7 @@ COMPONENTS = [
                         "pipeline/join.py:Position is the only label formula in the repo; the "
                         "spans, the rendered divider list and the denominator are all read back "
                         "off the wire.",
-                "governed_by": ["D5", "D10", "D13", "D20", "D21", "D22", "D26", "D27", "D31", "D33", "D34", "D36", "D38", "D41", "D58", "D70", "D83", "D89", "D115"],
+                "governed_by": ["D5", "D10", "D13", "D20", "D21", "D22", "D26", "D27", "D31", "D33", "D34", "D36", "D38", "D41", "D58", "D70", "D83", "D89", "D115", "D132"],
             },
             "src/BoxOps.css": {
                 "does": "the box header, the section track and the editors, at the dense "
@@ -3560,7 +3562,7 @@ COMPONENTS = [
                         "no border of its own, and its sections list is DELETED rather than "
                         "styled — the walk beside it drew the same rows, foldable and tickable, "
                         "while this drew them as inert text.",
-                "governed_by": ["D5", "D20", "D22", "D31", "D38", "D40", "D41", "D50", "D83"],
+                "governed_by": ["D5", "D20", "D22", "D31", "D38", "D40", "D41", "D50", "D83", "D132"],
             },
             "src/Fulfillment.tsx": {
                 "does": "D5's second persona's entire product: cards to pull in box-walk "
@@ -3611,7 +3613,7 @@ COMPONENTS = [
                                         "no outside caller, because where a card sits said three ways "
                                         "is one concept. Nothing here decides where a divider is; every "
                                         "bound is a card COUNT and not a stored index (D58).",
-                                "governed_by": ["D5", "D10", "D20", "D24", "D30", "D58", "D68", "D118"]},
+                                "governed_by": ["D5", "D10", "D20", "D24", "D30", "D58", "D68", "D118", "D132"]},
             "src/PositionBar.css": {"does": "the track at two densities, and the marker",
                                     "governed_by": ["D5", "D20", "D118"]},
             "src/cardState.ts": {"does": "the card-state vocabulary and the age of a reading, with no "
@@ -3637,12 +3639,12 @@ COMPONENTS = [
                                               "PositionLabel, not a second treatment; the label "
                                               "and not the row, because the row already holds an "
                                               "action.",
-                                      "governed_by": ["D4", "D5", "D6", "D7", "D10", "D20", "D24", "D26", "D30", "D31", "D38", "D41", "D45", "D58", "D67", "D68", "D71", "D92", "D115", "D118"]},
+                                      "governed_by": ["D4", "D5", "D6", "D7", "D10", "D20", "D24", "D26", "D30", "D31", "D38", "D41", "D45", "D58", "D67", "D68", "D71", "D92", "D115", "D118", "D132", "D119"]},
             "src/CardLocations.css": {"does": "the group at two densities. The Fulfiller's copy is a "
                                               "card with a photo; the owner's is a row. The walk-to "
                                               "wrapper takes the button chrome back off and shows "
                                               "its affordance on hover and focus only (D45).",
-                                      "governed_by": ["D5", "D7", "D30", "D31", "D40", "D41", "D45", "D58", "D71", "D115", "D118"]},
+                                      "governed_by": ["D5", "D7", "D30", "D31", "D40", "D41", "D45", "D58", "D71", "D115", "D118", "D132"]},
             # ---- the runs screen (D39, 2026-08-29) ----
             #
             # The pipeline moved off #/inventory onto a route of its own at the owner's
@@ -4743,7 +4745,7 @@ COMPONENTS = [
                                              "asserts NOTHING about the order walk; that is "
                                              "app/tests/order-walk.spec.ts. Not a harness test — "
                                              "it starts a browser; `make design-check` runs it.",
-                                     "governed_by": ["D24", "D27", "D28", "D36", "D49", "D58", "D63", "D69", "D73", "D90", "D91", "D96", "D113", "D114", "D118", "D123"]},
+                                     "governed_by": ["D24", "D27", "D28", "D36", "D49", "D58", "D63", "D69", "D73", "D90", "D91", "D96", "D113", "D114", "D118", "D123", "D132"]},
             "tests/shipping.spec.ts": {"does": "the shipping screen in a browser, and its "
                                                "strongest cases are ABSENCES: no buyer name, "
                                                "address, city or postcode appears anywhere on "
@@ -4888,7 +4890,7 @@ COMPONENTS = [
                         "and `product_game` outright — `undefined.find` inside `ClaimEditor`, "
                         "the screen behind its error boundary, and six cases here spending "
                         "thirty seconds each on a switch that had been detached. AND THE HASH'S OWN BOX SINCE 2026-09-05: `#/inventory?box=<n>` was honoured only for a box that already had ROWS, because the shelf list is built from the rows first and the registry second and the ref was consumed on the first list — so every box of code cards, which D24 pools and which therefore has none, was unreachable by the one link that aims at one. Two cases, with `GET /boxes` held back so the ordering is the defect's rather than a race.",
-                "governed_by": ["D5", "D7", "D8", "D9", "D10", "D13", "D20", "D22", "D23", "D24", "D26", "D28", "D30", "D31", "D33", "D34", "D37", "D38", "D40", "D41", "D43", "D45", "D49", "D55", "D57", "D58", "D63", "D67", "D68", "D71", "D83", "D89", "D92", "D101", "D115", "D116", "D118", "D124", "D125"],
+                "governed_by": ["D5", "D7", "D8", "D9", "D10", "D13", "D20", "D22", "D23", "D24", "D26", "D28", "D30", "D31", "D33", "D34", "D37", "D38", "D40", "D41", "D43", "D45", "D49", "D55", "D57", "D58", "D63", "D67", "D68", "D71", "D83", "D89", "D92", "D101", "D115", "D116", "D118", "D124", "D125", "D119", "D132", "D27"],
                 "note": "THE CHECK `CLAUDE.md`'s ROUTE-IS-NOT-A-FEATURE RULE SAYS DOES NOT "
                         "EXIST. That rule was written on 2026-08-23 after three routes shipped "
                         "with full T7 coverage and no client function and no control — green "

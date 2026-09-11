@@ -188,3 +188,80 @@ export function rememberOrderFilter(filter: OrderFetchFilter): void {
        asked again. */
   }
 }
+
+/* ------------------------------------------------------------- the inventory walk's habits */
+
+/**
+ * TWO FACTS ABOUT HOW THE PERSON AT THIS SCREEN WALKS THE BOXES (D132), and neither is a fact
+ * about a card. Whether sold rows are worth scrolling past is the same kind of statement as
+ * "I do not want to look at completed orders" above; which boxes this browser opened lately
+ * is `banchi.orders.last-check`'s kind — when THIS device did something, so a list can be
+ * ordered by it. Both were put to the owner on 2026-09-10 and both were ruled device-local:
+ * the phone in the garage and the laptop at the desk are looking for different boxes.
+ *
+ * SOLD IS HIDDEN UNTIL SOMEBODY SAYS OTHERWISE. The absent key reads as `true`, which is the
+ * owner's default and the one that costs a press only when a sold row is what you came for.
+ */
+const HIDE_SOLD_KEY = 'banchi.inventory.hide-sold'
+
+/** Whether the walk and the copies list fold departed copies away. Default true. */
+export function storedHideSold(): boolean {
+  try {
+    return localStorage.getItem(HIDE_SOLD_KEY) !== 'show'
+  } catch {
+    return true
+  }
+}
+
+export function rememberHideSold(hide: boolean): void {
+  try {
+    localStorage.setItem(HIDE_SOLD_KEY, hide ? 'hide' : 'show')
+  } catch {
+    /* storage unavailable — the choice still holds for this tab */
+  }
+}
+
+/**
+ * WHEN THIS BROWSER LAST OPENED EACH BOX, by box number, as an ISO stamp. The rail sorts on
+ * it, newest first, and a box never opened here sorts after every box that was. Capped so a
+ * store with hundreds of boxes cannot grow the value without bound: the fifty most recent are
+ * kept, which is more boxes than a rail shows without scrolling.
+ *
+ * A PAGE LOAD IS NOT AN OPENING. `BoxBrowse` touches a box from a press on the rail and from a
+ * walk-to, never from the `?box=` landing — otherwise every visit would reorder the rail.
+ */
+const BOX_RECENCY_KEY = 'banchi.inventory.box-recency'
+const BOX_RECENCY_KEEP = 50
+
+export function storedBoxRecency(): ReadonlyMap<number, string> {
+  try {
+    const raw = localStorage.getItem(BOX_RECENCY_KEY)
+    if (raw === null) return new Map()
+    const parsed: unknown = JSON.parse(raw)
+    if (typeof parsed !== 'object' || parsed === null) return new Map()
+    const out = new Map<number, string>()
+    for (const [key, value] of Object.entries(parsed as Record<string, unknown>)) {
+      const box = Number.parseInt(key, 10)
+      if (Number.isInteger(box) && box > 0 && typeof value === 'string') out.set(box, value)
+    }
+    return out
+  } catch {
+    return new Map()
+  }
+}
+
+/** Record that this browser opened `box` now; returns the map as it stands after. */
+export function touchBox(box: number, at: Date = new Date()): ReadonlyMap<number, string> {
+  const held = new Map(storedBoxRecency())
+  held.set(box, at.toISOString())
+  const kept = [...held.entries()]
+    .sort((a, b) => (a[1] < b[1] ? 1 : a[1] > b[1] ? -1 : 0))
+    .slice(0, BOX_RECENCY_KEEP)
+  const next = new Map(kept)
+  try {
+    localStorage.setItem(BOX_RECENCY_KEY, JSON.stringify(Object.fromEntries(next)))
+  } catch {
+    /* storage unavailable — the order still holds for this tab */
+  }
+  return next
+}

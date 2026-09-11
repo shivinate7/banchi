@@ -665,7 +665,12 @@ const SALE: SaleStub = (box, index, undo) => ({
  *  first, which is the ORDERING THE DEFECT LIVES IN and is otherwise a race a test cannot pin.
  *  `settle` replaces the section-fold wait, because a box with no cards has no folds and
  *  waiting for one there would fail on the arrangement rather than on the claim. */
-type OpenOptions = { route?: string; boxesDelayMs?: number; settle?: string }
+/** `hideSold` — the walk's `Hide sold` chip as this browser remembers it (D132). The PRODUCT
+ *  defaults to hidden; this FIXTURE defaults to shown, because the store above carries a sold
+ *  and a retired card in section 1 and forty cases in this file walk past them on purpose.
+ *  `true` hides them; `null` writes nothing to storage, which is the one way a case reaches
+ *  the product's own default and asserts it. */
+type OpenOptions = { route?: string; boxesDelayMs?: number; settle?: string; hideSold?: boolean | null }
 
 async function open(
   page: Page,
@@ -983,6 +988,25 @@ async function open(
       }),
     })
   })
+
+  /* The chip's memory, written before the first paint so the walk renders with it. `null`
+     writes nothing, which is the one way to reach the product's own default. */
+  const hideSold = options.hideSold === undefined ? false : options.hideSold
+  if (hideSold !== null) {
+    await page.addInitScript((hide: boolean) => {
+      try {
+        /* eslint-disable-next-line no-restricted-syntax -- SEEDING THE CHIP'S OWN DEVICE KEY
+           before first paint, not introducing one. `banchi.inventory.hide-sold` lives in
+           `app/src/deviceMemory.ts` where D27's argument for it is, which is what the rule
+           exists to force; the fixture's store carries departed records that forty cases walk
+           past, and the product's default would fold them away. `orders.spec.ts:remember` and
+           `wide.spec.ts:withRail` are the other calls of this shape. */
+        window.localStorage.setItem('banchi.inventory.hide-sold', hide ? 'hide' : 'show')
+      } catch {
+        /* storage blocked — the default applies */
+      }
+    }, hideSold)
+  }
 
   await page.goto(options.route ?? VIEW_ROUTE)
   await settleFonts(page)
@@ -1776,7 +1800,9 @@ const ACROSS: Store = { cards: ELSEWHERE, search: (query) => searchAnswer(query,
 test('a copy in another box is reached by pressing its position, and the walk goes there', async ({
   page,
 }) => {
-  await open(page, TWO_BOXES, ACROSS)
+  /* `?box=2`: the rail sorts by the hand and cards on hand now (D132), and box 7 holds more —
+     this case is about the walk-to, so it starts where it always started, by the deep link. */
+  await open(page, TWO_BOXES, ACROSS, () => PRICING, SALE, { route: '/#/inventory?box=2' })
 
   /* Three copies of one SKU in two boxes, and the walk is standing on the first. The row it is
      standing on offers no walk-to — it is already here — which is what makes the button that
@@ -1790,7 +1816,7 @@ test('a copy in another box is reached by pressing its position, and the walk go
   /* THE BOX, THE CARD AND THE PHOTOGRAPH ALL FOLLOW, which is the whole of the feature: every
      one of them is drawn for whatever the walk points at, so moving the mark is the only thing
      the press has to do. */
-  await expect(page.locator('.browse-boxcell[aria-current="true"] .browse-boxcell-num')).toHaveText('7')
+  await expect(page.locator('.browse-boxcell[aria-current="true"]')).toHaveAttribute('aria-label', /^Box 7/)
   await expect(page.locator('.inventory-location-label .position-parts')).toHaveAttribute('aria-label', FAR)
   await expect(page.locator('.browse-photo')).toHaveAttribute('src', /\/photo\/7\/40(\?|$)/)
 
@@ -1826,7 +1852,7 @@ test('a walk-to scrolls the walk and never the page — the top bars stay put', 
      case reads y 0 -> 280 with the nav at -280; the assertion is that the press moves the page
      by nothing at all, which is the only version of it a later refactor cannot satisfy by
      accident. */
-  await open(page, TWO_BOXES, ACROSS)
+  await open(page, TWO_BOXES, ACROSS, () => PRICING, SALE, { route: '/#/inventory?box=2' })
 
   /* THE PAGE IS AT REST AND THE PRESS IS DISPATCHED RATHER THAN CLICKED. Playwright's own
      `.click()` scrolls its target into view first, which is a page scroll this test cannot tell
@@ -1843,7 +1869,7 @@ test('a walk-to scrolls the walk and never the page — the top bars stay put', 
     .getByRole('button', { name: `Walk to ${FAR}` })
     .evaluate((button: HTMLElement) => button.click())
 
-  await expect(page.locator('.browse-boxcell[aria-current="true"] .browse-boxcell-num')).toHaveText('7')
+  await expect(page.locator('.browse-boxcell[aria-current="true"]')).toHaveAttribute('aria-label', /^Box 7/)
 
   /* THE PAGE HAS NOT MOVED, AND THE CARD ASKED FOR IS ON SCREEN ANYWAY — both halves, because
      either alone is satisfiable by doing the wrong thing. A screen that scrolled nothing and
@@ -1889,8 +1915,8 @@ test('a filtered walk gives up the filter rather than swallowing the jump', asyn
      count. What must not happen is a row of box 7's in the walk, and there is none. */
   const cells = page.locator('.browse-boxcell')
   await expect(cells).toHaveCount(2)
-  await expect(cells.filter({ has: page.locator('.browse-boxcell-num', { hasText: '2' }) })).toBeEnabled()
-  await expect(cells.filter({ has: page.locator('.browse-boxcell-num', { hasText: '7' }) })).toBeDisabled()
+  await expect(page.getByRole('button', { name: /^Box 2/ })).toBeEnabled()
+  await expect(page.getByRole('button', { name: /^Box 7/ })).toBeDisabled()
 
   await page.getByRole('button', { name: `Walk to ${FAR}` }).click()
 
@@ -1899,7 +1925,7 @@ test('a filtered walk gives up the filter rather than swallowing the jump', asyn
      mark falls to the first row the filter still holds and this reads `Box 2 · Section 1 ·
      Card 1` under box 2's photograph. */
   await expect(page.locator('.inventory-location-label .position-parts')).toHaveAttribute('aria-label', FAR)
-  await expect(page.locator('.browse-boxcell[aria-current="true"] .browse-boxcell-num')).toHaveText('7')
+  await expect(page.locator('.browse-boxcell[aria-current="true"]')).toHaveAttribute('aria-label', /^Box 7/)
 
   // And the query goes, because it was a way of finding the card and the card has been found.
   await expect(page.locator('.search-field-input')).toHaveValue('')
@@ -2203,7 +2229,7 @@ test('a sold card with no group is ranked too, and its lens keeps the box but lo
 
   const lone = page.locator('.inventory-location-label .position-parts')
   await expect(lone).toHaveAttribute('aria-label', 'Box 2 · departed · B2 #4')
-  await expect(page.locator('.inventory-location-label .position-path')).toHaveText('BOX 2DEPARTED B2 #4')
+  await expect(page.locator('.inventory-location-label .position-path')).toHaveText('BOX ME01 commonsBox 2DEPARTED B2 #4')
   await expect(page.locator('.inventory-location-label .position-num')).toHaveCount(0)
   await expect(page.locator('.inventory-location-label .position-void')).toHaveCount(1)
   await expect(page.locator('.inventory-location-label .position-plain')).toHaveCount(0)
@@ -2307,7 +2333,8 @@ test('a departed card draws no number, and the cards behind it count past it', a
    * At the shipped 11px the whole answer sat in the metadata register and the panel read as one
    * that had failed to load, which is the second half of what selling a card did to this screen. */
   const path = page.locator('.inventory-location-label .position-path')
-  await expect(path).toHaveText('BOX 2DEPARTED B2 #4')
+  /* THE NAME LEADS AND THE INDEX IS THE NOTE (D132): `BOX ME01 commons` with `Box 2` beside it. */
+  await expect(path).toHaveText('BOX ME01 commonsBox 2DEPARTED B2 #4')
   const departed = await path.evaluate((node) => Number.parseFloat(window.getComputedStyle(node).fontSize))
 
   /* MEASURED AGAINST A LIVE CARD'S OWN PATH RATHER THAN AGAINST A NUMBER. The literal 19.8px was
@@ -2426,11 +2453,12 @@ test('the operations are rows on one edge, and the delete is the only bordered o
   await expect(rows.locator('.boxops-op-label')).toHaveText([
     'Rename',
     'Edit sections',
+    'Name sections',
     'Seal box',
     'Set claims',
     'Move to box',
   ])
-  await expect(rows).toHaveCount(5)
+  await expect(rows).toHaveCount(6)
 
   /* FULL MEASURE, WHICH IS THE PROPERTY THE OLD LITERAL STOOD FOR. The panel is a sheet rather
      than the foot of the walk's own column, so the walk's left edge is no longer the measure to
@@ -2444,7 +2472,7 @@ test('the operations are rows on one edge, and the delete is the only bordered o
       return { dx: Math.abs(own.x - held.x), dw: Math.abs(own.width - held.width) }
     }),
   )
-  expect(measures.length).toBe(5)
+  expect(measures.length).toBe(6)
   for (const measure of measures) {
     expect(measure.dx).toBeLessThanOrEqual(1)
     expect(measure.dw).toBeLessThanOrEqual(1)
@@ -2932,7 +2960,7 @@ test('a registered box with no cards is still reachable, and can still be delete
 
   /* THE CELL EXISTS. Box 6 owns no card in `CARDS`, so before the fix this count was 1. */
   await expect(page.locator('.browse-boxcell')).toHaveCount(2)
-  const cell = page.locator('.browse-boxcell').filter({ has: page.locator('.browse-boxcell-num', { hasText: /^6$/ }) })
+  const cell = page.locator('.browse-boxcell[aria-label^="Box 6"]')
   await expect(cell).toBeVisible()
   await cell.click()
 
@@ -2979,8 +3007,7 @@ test('a search still hides a box holding no match, which is the rule the fix did
      could be pressed would still lead to the empty list the rule is about. The boundary is
      unchanged; what changed is whether a box with no match is drawn as absent or as unreachable. */
   const empty = page
-    .locator('.browse-boxcell')
-    .filter({ has: page.locator('.browse-boxcell-num', { hasText: /^6$/ }) })
+    .locator('.browse-boxcell[aria-label^="Box 6"]')
   await expect(empty).toBeDisabled()
 })
 
@@ -4682,8 +4709,8 @@ test('two departed copies of one card draw two different rows', async ({ page })
      read `.position-storekey` — the orphan sub-line under a raw string — and the raw string was
      the pre-D41 rendering, drawn here at 28px as the loudest thing in a list whose live rows are
      ranked. The pair is still what separates the two records, which is all D68 asked for. */
-  await expect(gone.nth(0).locator('.position-path')).toHaveText('BOX 2ME01 commonsDEPARTED B2 #4')
-  await expect(gone.nth(1).locator('.position-path')).toHaveText('BOX 2ME01 commonsDEPARTED B2 #5')
+  await expect(gone.nth(0).locator('.position-path')).toHaveText('BOX ME01 commonsBox 2DEPARTED B2 #4')
+  await expect(gone.nth(1).locator('.position-path')).toHaveText('BOX ME01 commonsBox 2DEPARTED B2 #5')
 
   /* AND THE COLUMN HOLDS ACROSS A ROW THAT HAS NO FIGURE, which is the assertion the reserve in
      `PositionLabel.css` promises and cannot make about itself. `lead='slot'` exists so every
@@ -4894,7 +4921,7 @@ test('a box with no cards is still the box the hash asked for', async ({ page })
     settle: '.browse-boxcell',
   })
 
-  await expect(page.locator('.browse-boxcell[aria-current="true"] .browse-boxcell-num')).toHaveText('6')
+  await expect(page.locator('.browse-boxcell[aria-current="true"]')).toHaveAttribute('aria-label', /^Box 6/)
 })
 
 /* AND THE THREE PATHS THAT MUST NOT HAVE MOVED, in one case rather than three files of setup.
@@ -4910,5 +4937,206 @@ test('a hash naming no box falls back, and does not hold the walk open', async (
 
   /* The only shelf there is. The point is not that it chose 2 — there was nothing else to
      choose — but that it chose at all rather than waiting for a box 99 that is never coming. */
-  await expect(page.locator('.browse-boxcell[aria-current="true"] .browse-boxcell-num')).toHaveText('2')
+  await expect(page.locator('.browse-boxcell[aria-current="true"]')).toHaveAttribute('aria-label', /^Box 2/)
+})
+
+/* ================================================================== D132: sold folded away,
+ * the name leads, the rail is ordered by the hand, and a section can be named. Each case here
+ * was run once against the shipped tree with its own arm reverted — the chip absent, the sort
+ * numeric, the note in the corner, the name missing from the sentence — and failed there. */
+
+test('D132 — the product hides sold by default, and the chip says how many it folded away', async ({ page }) => {
+  /* `hideSold: null` writes NOTHING to storage: this is the product's own default, asserted. */
+  await open(page, BOXES, STORE, () => PRICING, SALE, { hideSold: null })
+  await expandAll(page)
+
+  const chip = page.locator('.browse-hidesold')
+  await expect(chip).toHaveAttribute('aria-pressed', 'true')
+  await expect(chip.locator('.bn-chip-count')).toHaveText('2')
+
+  /* Seven records, one sold and one retired; five rows drawn, none of them departed. */
+  const slots = page.locator('.browse-row .browse-row-position')
+  await expect(slots).toHaveText(['#1', '#2', '#3', '#1', '#2'])
+  await expect(page.locator('.browse-rowline.is-departed')).toHaveCount(0)
+
+  /* AND THE COPIES LIST FOLDS THE SAME WAY, with a line saying so. Thievul's group holds two
+     live copies and none departed; Eiscue's holds the sold one alone — so walk to a live card
+     whose SKU group carries a departed copy is not in this fixture, and the line is asserted
+     off the shared-SKU case below. What holds here is the absence: no `is-gone` row. */
+  await page.locator('.browse-row').nth(0).click()
+  await expect(page.locator('.card-locations-row')).toHaveCount(2)
+  await expect(page.locator('.card-locations-row.is-gone')).toHaveCount(0)
+})
+
+test('D132 — unticked, departed rows sink under the live ones in their own section, and the choice is remembered', async ({ page }) => {
+  await open(page, BOXES, STORE, () => PRICING, SALE, { hideSold: null })
+  await expandAll(page)
+  await page.locator('.browse-hidesold').click()
+  await expect(page.locator('.browse-hidesold')).toHaveAttribute('aria-pressed', 'false')
+
+  /* Section 1 held #1 #2 #3 · B2 #4 · B2 #5 in arrival order already; the fixture's departed
+     records are LAST there by construction, so a sunk order is indistinguishable from the
+     arrival order. The store below puts the sold card FIRST in the section, which is the shape
+     a real box takes after its first card sells — and the one a stable partition has to move. */
+  const store: Store = {
+    cards: {
+      '2/1': card({ index: 1, state: 'sold', name: 'Eiscue', sku: '8937371', section: 1, sectionStart: 1, sectionEnd: 3 }),
+      '2/2': card({ index: 2, at: 1, state: 'identified', name: 'Thievul', sku: '8937370', section: 1, sectionStart: 1, sectionEnd: 3 }),
+      '2/3': card({ index: 3, at: 2, state: 'identified', name: 'Thievul', sku: '8937370', section: 1, sectionStart: 1, sectionEnd: 3 }),
+      '2/6': card({ index: 6, at: 3, state: 'identified', name: 'Inteleon', sku: '8937373', section: 2, sectionStart: 3, sectionEnd: 4 }),
+    },
+    search: (query) => searchAnswer(query, {
+      '2/1': card({ index: 1, state: 'sold', name: 'Eiscue', sku: '8937371', section: 1, sectionStart: 1, sectionEnd: 3 }),
+      '2/2': card({ index: 2, at: 1, state: 'identified', name: 'Thievul', sku: '8937370', section: 1, sectionStart: 1, sectionEnd: 3 }),
+      '2/3': card({ index: 3, at: 2, state: 'identified', name: 'Thievul', sku: '8937370', section: 1, sectionStart: 1, sectionEnd: 3 }),
+      '2/6': card({ index: 6, at: 3, state: 'identified', name: 'Inteleon', sku: '8937373', section: 2, sectionStart: 3, sectionEnd: 4 }),
+    }),
+  }
+  await page.reload()
+  await open(page, BOXES, store, () => PRICING, SALE, { hideSold: null })
+  await expandAll(page)
+  /* REMEMBERED: the press above wrote `show`, and this open wrote nothing over it. */
+  await expect(page.locator('.browse-hidesold')).toHaveAttribute('aria-pressed', 'false')
+  await expect(page.locator('.browse-row .browse-row-position')).toHaveText(['#1', '#2', 'B2 #1', '#1'])
+  /* The section header the sold card led is still ONE section, folded open, not two. */
+  await expect(page.locator('.browse-sectfold')).toHaveCount(2)
+})
+
+test('D132 — the row the walk stands on survives its own sale while sold is hidden, and goes when the walk moves', async ({ page }) => {
+  /* A store whose sale LANDS on the re-read — the record comes back DEPARTED, place and all,
+     which is the shape the fold rule has to look past. `laddersAfterSale` flips only `state`. */
+  const live = (index: number, at: number) =>
+    card({ index, at, state: 'identified', name: 'Bashful Bloom', sku: '8937370', section: 1, sectionStart: 1, sectionEnd: 6 })
+  const cards: Cards = { '2/1': live(1, 1), '2/3': live(3, 2), '2/5': live(5, 3) }
+  const store: Store = { cards, search: (query) => searchAnswer(query, cards) }
+  await open(page, BOXES, store, () => PRICING, SALE, { hideSold: true })
+  await expandAll(page)
+  await expect(page.locator('.browse-row .browse-row-position')).toHaveText(['#1', '#2', '#3'])
+  await page.locator('.browse-row').nth(1).click()
+  await page.locator('.inventory-location').getByRole('button', { name: 'Mark sold' }).click()
+  cards['2/3'] = card({ index: 3, state: 'sold', name: 'Bashful Bloom', sku: '8937370', section: 1, sectionStart: 1, sectionEnd: 6 })
+  cards['2/5'] = live(5, 2)
+
+  /* The receipt lands where the sale was pressed (D119) — which needs the row to still exist,
+     and to still be where it was (D118): the re-read draws it departed, in its place. */
+  await expect(page.locator('.inventory-location').getByRole('button', { name: /Undo/ })).toBeVisible()
+  await expect(page.locator('.browse-row .browse-row-position')).toHaveText(['#1', 'B2 #3', '#2'])
+  await expect(page.locator('.browse-row[aria-current="true"] .browse-row-position')).toHaveText('B2 #3')
+
+  /* Step off it and it is folded away with the rest. */
+  await page.locator('.browse-row').nth(2).click()
+  await expect(page.locator('.browse-row .browse-row-position')).toHaveText(['#1', '#2'])
+})
+
+test('D132 — the rail draws names and no numbers, ordered by this browser\'s recency, then cards on hand, then number', async ({ page }) => {
+  const boxes = {
+    boxes: [
+      { ...BOXES.boxes[0] },
+      { ...BOXES.boxes[0], box: 6, name: 'Bulk', cards: 40, on_hand: 40, fill: 40, next_index: 41, sold: 0, retired: 0, sections: [], sections_detail: [] },
+      { ...BOXES.boxes[0], box: 7, name: null, cards: 12, on_hand: 12, fill: 12, next_index: 13, sold: 0, retired: 0, sections: [], sections_detail: [] },
+      { ...BOXES.boxes[0], box: 9, name: 'Twelve too', cards: 12, on_hand: 12, fill: 12, next_index: 13, sold: 0, retired: 0, sections: [], sections_detail: [] },
+    ],
+  }
+  /* Box 7 was opened here yesterday; nothing else ever was. */
+  await page.addInitScript(() => {
+    /* eslint-disable-next-line no-restricted-syntax -- SEEDING THE VERY KEY UNDER TEST, in the
+       one file whose subject it is: `banchi.inventory.box-recency` lives in
+       `app/src/deviceMemory.ts` (D132), and asserting the order it produces means writing it. */
+    window.localStorage.setItem('banchi.inventory.box-recency', JSON.stringify({ '7': '2026-09-09T10:00:00.000Z' }))
+  })
+  await open(page, boxes, STORE, () => PRICING, SALE, { settle: '.browse-boxcell' })
+
+  const names = page.locator('.browse-boxcell .browse-boxcell-name')
+  /* Recency first (7), then on hand descending (40, 5), then the number breaks the tie (7 is
+     recent; 9 and 7 both hold 12 — 9 is the only one left of the pair here). */
+  await expect(names).toHaveText(['Box 7', 'Bulk', 'Twelve too', 'ME01 commons'])
+  await expect(page.locator('.browse-boxcell-num')).toHaveCount(0)
+  /* The number survives where it is READ rather than looked at. */
+  await expect(page.locator('.browse-boxcell').nth(1)).toHaveAttribute('aria-label', 'Box 6')
+
+  /* A PAGE LOAD IS NOT AN OPENING: the walk landed on box 7 (recency put it first) and the
+     order is exactly what storage said, untouched. A press IS one — open Bulk and it leads. */
+  await page.locator('.browse-boxcell', { hasText: 'Bulk' }).click()
+  await expect(names).toHaveText(['Bulk', 'Box 7', 'Twelve too', 'ME01 commons'])
+  const stored = await page.evaluate(
+    /* eslint-disable-next-line no-restricted-syntax -- READING THE SAME KEY BACK, to see that a
+       press wrote it and a page load did not. */
+    () => JSON.parse(window.localStorage.getItem('banchi.inventory.box-recency') ?? '{}') as Record<string, string>,
+  )
+  expect(Object.keys(stored).sort()).toEqual(['6', '7'])
+  expect((stored['6'] ?? '') > (stored['7'] ?? '')).toBe(true)
+})
+
+test('D132 — the address leads with the name, the corner says the index, and the copies rows agree', async ({ page }) => {
+  await open(page)
+  await expandAll(page)
+  await page.locator('.browse-row').nth(0).click()
+
+  const label = page.locator('.inventory-location-label .position-parts')
+  await expect(label.locator('.position-path')).toHaveText('BOX ME01 commonsBox 2SECTION 1')
+  /* The server's string is untouched: this is a rendering, not an edit (D41's invariant). */
+  await expect(label).toHaveAttribute('aria-label', 'Box 2 · Section 1 · Card 1')
+  await expect(page.locator('.inventory-location-boxname')).toHaveText('Box 2')
+
+  const rows = page.locator('.card-locations-row .position-path')
+  await expect(rows.nth(0)).toHaveText('BOX ME01 commonsBox 2SECTION 1')
+})
+
+test('D132 — an unnamed box keeps the index in the address and draws no corner note', async ({ page }) => {
+  const store: Store = {
+    cards: { '2/1': card({ index: 1, state: 'identified', name: 'Thievul', sku: '8937370', section: 1, sectionStart: 1, sectionEnd: 3, boxName: '' }) },
+    search: (query) => searchAnswer(query, { '2/1': card({ index: 1, state: 'identified', name: 'Thievul', sku: '8937370', section: 1, sectionStart: 1, sectionEnd: 3, boxName: '' }) }),
+  }
+  await open(page, { boxes: [{ ...BOXES.boxes[0], name: null }] }, store)
+  await expandAll(page)
+  await page.locator('.browse-row').nth(0).click()
+  await expect(page.locator('.inventory-location-label .position-path')).toHaveText('BOX 2SECTION 1')
+  await expect(page.locator('.inventory-location-boxname')).toHaveCount(0)
+})
+
+test('D132 — a named section is said in the walk header, in the bar\'s sentence and on the label', async ({ page }) => {
+  const named = (input: Parameters<typeof card>[0]) => {
+    const one = card(input)
+    return { ...one, place: { ...one.place, section_name: 'Rares' } }
+  }
+  const cards = {
+    '2/1': named({ index: 1, state: 'identified', name: 'Thievul', sku: '8937370', section: 1, sectionStart: 1, sectionEnd: 3 }),
+    '2/2': named({ index: 2, state: 'identified', name: 'Thievul', sku: '8937370', section: 1, sectionStart: 1, sectionEnd: 3 }),
+  }
+  const boxes = {
+    boxes: [{
+      ...BOXES.boxes[0],
+      cards: 2, on_hand: 2, fill: 2, next_index: 3, sold: 0, retired: 0,
+      sections_detail: [
+        { section: 1, start: 1, end: 3, count: 2, name: 'Rares' },
+        { section: 2, start: 4, end: 5, count: 0, name: null },
+      ],
+    }],
+  }
+  await open(page, boxes, { cards, search: (query) => searchAnswer(query, cards) })
+  await expandAll(page)
+  await expect(page.locator('.browse-secttitle').first()).toHaveText('Section 1 · Rares · #1–#3')
+  await page.locator('.browse-row').nth(0).click()
+  await expect(page.locator('.inventory-location .position-bar-text').nth(1)).toHaveText('Section 1 · Rares · card 1 of 3 slots')
+  await expect(page.locator('.inventory-location-label .position-path')).toHaveText('BOX ME01 commonsBox 2SECTION 1Rares')
+
+  /* AND THE NAME IS WRITTEN FROM THE MANAGE SHEET, keyed by the section's number. */
+  await page.route(/\/boxes\/2$/, async (route) => {
+    const body = route.request().postDataJSON() as { section_names?: Record<string, string> }
+    expect(route.request().method()).toBe('PUT')
+    /* Every section goes in the PUT, blanks included — a blank CLEARS (D132). */
+    expect(body.section_names).toEqual({ '1': 'Top rares', '2': '' })
+    await route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify({ ...boxes.boxes[0], sections_detail: [{ section: 1, start: 1, end: 3, count: 2, name: 'Top rares' }, { section: 2, start: 4, end: 5, count: 0, name: null }] }),
+    })
+  })
+  await openBoxOps(page)
+  await page.getByRole('button', { name: /^Name sections/ }).click()
+  const field = page.locator('.boxops-section-names input').first()
+  await expect(field).toHaveValue('Rares')
+  await field.fill('Top rares')
+  await page.getByRole('button', { name: 'Save names' }).click()
+  await expect(page.locator('.boxops-editor')).toHaveCount(0)
 })

@@ -1090,6 +1090,8 @@ export type Place = {
   /** What the owner calls this box, or null when he has not named it. A label for humans and
    *  never an identifier: `box` is the identifier, and two boxes may carry the same name. */
   box_name: string | null
+  /** The section's own name, or null. D132 — read-time join, never stored on a card. */
+  section_name?: string | null
 
   /** The first and last `index` of the section this card is in. `section_end` is null when
    *  the section has no end yet — the open end of an open box, and the whole of a box that
@@ -1329,6 +1331,9 @@ export type SectionDetail = {
   start: number
   end: number
   count: number
+  /** The operator's own word for the section — `Rares` — or null where none was given.
+   *  Joined at read time by ordinal (D132), the way `box_name` is (D56). */
+  name: string | null
 }
 
 /** What a box's `state` may be SET to, which is one thing and not the same thing as what may

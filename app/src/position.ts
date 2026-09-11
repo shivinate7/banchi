@@ -141,6 +141,9 @@ export function sectionDepthOf(place: Place): SectionDepth | null {
   const { card: slot, section, section_start: start, section_end: end, box_total: total } = place
   const gone = isDeparted(place)
   if (section === null) return null
+  /* THE SECTION'S NAME IS SAID WITH ITS NUMBER (D132) — `Section 6 · Rares · card 54 of 153
+     so far`. The number is what a hand counts to and the name is what the owner calls it. */
+  const named = place.section_name ? `Section ${section} · ${place.section_name}` : `Section ${section}`
   /* A DEPARTED COPY KEEPS THE SECOND SCALE AND LOSES ONLY ITS MARK (D118). `card` is null the
      moment it leaves, and returning null here used to take the whole zoom block with it — 40 of
      the 85px the lens was worth, and the reason the panel changed size on the press that sold
@@ -165,8 +168,8 @@ export function sectionDepthOf(place: Place): SectionDepth | null {
       growing,
       marker: null,
       sentence: growing
-        ? `Section ${section} · ${of} cards so far · this copy is not among them`
-        : `Section ${section} · ${of} slots · this copy is not in one`,
+        ? `${named} · ${of} cards so far · this copy is not among them`
+        : `${named} · ${of} slots · this copy is not in one`,
     }
   }
 
@@ -176,8 +179,8 @@ export function sectionDepthOf(place: Place): SectionDepth | null {
     growing,
     marker,
     sentence: growing
-      ? `Section ${section} · card ${slot} of ${of} so far`
-      : `Section ${section} · card ${slot} of ${of} slots`,
+      ? `${named} · card ${slot} of ${of} so far`
+      : `${named} · card ${slot} of ${of} slots`,
   }
 }
 

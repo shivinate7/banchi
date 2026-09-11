@@ -466,3 +466,10 @@
 }
 
 .card-locations-fulfiller .pull-confirm { width: 100%; }
+
+/* D132 — the line under the owner's list saying how many departed copies were folded away. */
+.card-locations-hidden {
+  margin: var(--bn-2) 0 0;
+  font-size: var(--bn-fs-xs);
+  color: var(--bn-ink-3);
+}

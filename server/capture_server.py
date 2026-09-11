@@ -775,7 +775,7 @@ BOX_POST_FIELDS = ("box", "name", "sections")
 # body that could rename a box NUMBER would be a renumber, which D10 forbids outright: every
 # position key in `inventory.json`, every photo directory and every printed label is built
 # from it.
-BOX_PUT_FIELDS = ("name", "sections", "state")
+BOX_PUT_FIELDS = ("name", "sections", "state", "section_names")
 
 # ----------------------------------------------------------- the order screen, on the wire
 #
@@ -1657,6 +1657,48 @@ def _optional_sections(payload: dict) -> Optional[Tuple[int, ...]]:
         ) from None
 
 
+def _optional_section_names(payload: dict) -> Optional[Dict[int, Optional[str]]]:
+    """Section names by ORDINAL, or None when the body carries none. D132.
+
+    THE BODY SPEAKS ORDINALS — `Section 6` is what every screen prints and what the operator
+    types beside — and the store keeps the divider INDEX the section starts at
+    (`Box.section_names`), so a moved divider keeps its name. `Inventory.set_section_names`
+    is the one place the two are joined; this only checks the shape of what arrived.
+
+    A blank or null value CLEARS that section's name, the same edit a cleared text field
+    sends for `name`. A key that is not a section number refuses here; a number the layout
+    does not reach refuses in the store as `section_unknown`.
+    """
+    raw = payload.get("section_names")
+    if raw is None:
+        return None
+    if not isinstance(raw, dict):
+        raise BadRequest(
+            HTTPStatus.BAD_REQUEST,
+            "section_names_invalid",
+            f"section_names was {raw!r}; send an object keyed by section number, like "
+            f'{{"2": "Rares"}}. A blank value clears the name.',
+        )
+    out: Dict[int, Optional[str]] = {}
+    for key, value in raw.items():
+        try:
+            ordinal = int(str(key).strip())
+        except (TypeError, ValueError):
+            raise BadRequest(
+                HTTPStatus.BAD_REQUEST,
+                "section_names_invalid",
+                f"section_names key {key!r} is not a section number.",
+            ) from None
+        if value is not None and not isinstance(value, str):
+            raise BadRequest(
+                HTTPStatus.BAD_REQUEST,
+                "section_names_invalid",
+                f"section {ordinal}'s name was {value!r}; a name is text.",
+            )
+        out[ordinal] = value
+    return out
+
+
 def _optional_box_state(payload: dict) -> Optional[str]:
     """`open` or `closed`, or None when the request does not mention the lid.
 
@@ -2087,6 +2129,7 @@ class _Places:
                 "section": None,
                 "card": None,
                 "box_name": None,
+                "section_name": None,
                 "section_start": None,
                 "section_end": None,
                 "box_total": 0,
@@ -2103,6 +2146,7 @@ class _Places:
             }
 
         entry, layout, total, occupied = self.view(number)
+        section_names = self._inventory.section_names_for(number)
 
         # D58 — THE LABEL COUNTS THE CARDS IN THE BOX, and this is the one line that puts
         # it in that space. `occupied` is None only when the walk met a record it could not
@@ -2122,6 +2166,7 @@ class _Places:
                 "section": None,
                 "card": None,
                 "box_name": entry.name if entry is not None else None,
+                "section_name": None,
                 "section_start": None,
                 "section_end": None,
                 "box_total": 0,
@@ -2185,6 +2230,9 @@ class _Places:
             "section": position.section,
             "card": position.card,
             "box_name": entry.name if entry is not None else None,
+            # D132 — the section's own name, joined at read time like the box's and for the
+            # same reason: a run directory never holds one, so a rename reaches every label.
+            "section_name": section_names.get(position.section),
             # Bounds of the SECTION rather than of the card, for the reason above: the walk
             # draws a section header from whichever row it meets first, and a departed one
             # must describe the same section its neighbours do.
@@ -7369,7 +7417,11 @@ def do_search(query: str) -> dict:
 
 
 def _section_spans(
-    box: int, layout: Tuple[int, ...], total: int, occupied: Tuple[int, ...]
+    box: int,
+    layout: Tuple[int, ...],
+    total: int,
+    occupied: Tuple[int, ...],
+    names: Optional[Dict[int, str]] = None,
 ) -> List[dict]:
     """Every section of one box: where it starts, where it ends, how many cards are in it.
 
@@ -7421,6 +7473,9 @@ def _section_spans(
                 "start": position.section_start,
                 "end": end if end is not None else (total or None),
                 "count": per_section.get(position.section, 0),
+                # D132 — the operator's word for the section, joined by ordinal at read time
+                # the way `box_name` is (D56); null where none was given.
+                "name": (names or {}).get(position.section),
             }
         )
         seen.add(position.section)
@@ -7437,6 +7492,7 @@ def _section_spans(
                 "start": start,
                 "end": mapped[ordinal] - 1 if ordinal < len(mapped) else None,
                 "count": per_section.get(ordinal, 0),
+                "name": (names or {}).get(ordinal),
             }
         )
 
@@ -7536,7 +7592,7 @@ def _box_row(
     # spans with it, exactly as an invalid layout already does one line down.
     on_hand: Optional[int] = len(occupied) if occupied is not None else None
     detail = (
-        _section_spans(int(box), layout, len(occupied), occupied)
+        _section_spans(int(box), layout, len(occupied), occupied, inventory.section_names_for(box))
         if layout is not None and occupied is not None
         else []
     )
@@ -7701,9 +7757,10 @@ def do_create_box(payload: dict) -> Tuple[HTTPStatus, dict]:
 
 
 def do_put_box(box: int, payload: dict) -> dict:
-    """Rename a box, declare its dividers, seal it, or open it again.
+    """Rename a box, declare its dividers, name its sections, seal it, or open it again.
 
-    THE THREE FIELDS ARE THE THREE THINGS A BOX HAS THAT A HUMAN DECIDES. Its number is not
+    THE FOUR FIELDS ARE THE FOUR THINGS A BOX HAS THAT A HUMAN DECIDES — `section_names` is
+    the fourth as of D132, keyed by the ordinal the screen prints. Its number is not
     among them — it is in the path, and a body that could change it would be a renumber,
     which D10 forbids outright: every position key, every photo directory and every label the
     operator has read off a screen is built from that number.
@@ -7745,6 +7802,7 @@ def do_put_box(box: int, payload: dict) -> dict:
     _reject_unknown(payload, BOX_PUT_FIELDS)
     name = _optional_name(payload)
     sections = _optional_sections(payload)
+    section_names = _optional_section_names(payload)
     state = _optional_box_state(payload)
 
     with Store().write() as snapshot:
@@ -7788,6 +7846,14 @@ def do_put_box(box: int, payload: dict) -> dict:
                     [join.divider_index(k, occupied, gone) for k in sections]
                 )
             inventory.set_sections(box, sections)
+        if section_names is not None:
+            # AFTER the layout, so a body that declares dividers and names them in one
+            # request names the sections it just made. The store speaks divider indices and
+            # refuses an ordinal past the layout — a typo, not a declaration (D132).
+            try:
+                inventory.set_section_names(box, section_names)
+            except master.BadSections as exc:
+                raise BadRequest(HTTPStatus.BAD_REQUEST, "section_unknown", str(exc)) from None
 
         # THE LID IS MOVED LAST, after any layout change in the same request, so a box that
         # is being declared and sealed together freezes its capacity with the layout already

@@ -344,3 +344,8 @@
   .boxops-check::before { width: 22px; height: 22px; }
   .boxops-check:checked::before { transform: translateX(18px); }
 }
+
+/* D132 — the section-name editor: a lead sentence and one field per section. */
+.boxops-editor-lead { margin: 0; font-size: var(--bn-fs-sm); color: var(--bn-ink-2); line-height: 1.5; }
+.boxops-editor-lead b { font-weight: 600; color: var(--bn-ink); }
+.boxops-section-names { display: flex; flex-direction: column; gap: var(--bn-3); }
