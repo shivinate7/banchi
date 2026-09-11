@@ -1396,7 +1396,7 @@ named lives in `docs/DECISIONS.md` and is that file's to open or close.
     this step did NOT do**: the 2,000-card probe that decides whether the 100k run is worth
     making is physical work at the rig and has not been run; nothing here measures the pile.
 
-22. ~~**One process serves the product**~~ — **done 2026-09-11.** D135, three PRs the same
+22. ~~**One process serves the product**~~ — **done 2026-09-11.** D137, three PRs the same
     day. The capture server serves `app/dist/` beside the API, narrowly — the root and the
     build's own files, never a catch-all, because a hash router has no deep links and a
     catch-all turned `GET /boxes/abc` into 200 HTML and would have retired a dozen named

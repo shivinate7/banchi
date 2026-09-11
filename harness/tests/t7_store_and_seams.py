@@ -8004,7 +8004,7 @@ def check_photo_cache(checks: Checks) -> None:
 
 
 def check_app_serve(checks: Checks) -> None:
-    """The capture server hands out the built app, and does not stop being an API (D135).
+    """The capture server hands out the built app, and does not stop being an API (D137).
 
     WHAT THIS IS GUARDING IS NOT "can Python send a file". It is the seam: a static serve
     bolted onto an API is one ordering mistake away from shadowing a route, and one missing
@@ -8025,7 +8025,7 @@ def check_app_serve(checks: Checks) -> None:
     surface the server has an opinion about.
     """
     checks.note("")
-    checks.note("GET / — the built app, served beside the API (D135)")
+    checks.note("GET / — the built app, served beside the API (D137)")
 
     original = capture_server.APP_DIST
     with tempfile.TemporaryDirectory() as tmp:

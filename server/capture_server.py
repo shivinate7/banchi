@@ -338,7 +338,7 @@ BOOT_HEADER = "X-Pkmnscan-Boot"
 PORT = ports.capture_port()
 
 # WHERE THE BUILT APP IS, AND IT IS A PROPERTY OF THE CHECKOUT RATHER THAN OF THE STORE
-# (D135). `app/dist/` beside this tree's own `app/src/`, so a worktree serves the bundle it
+# (D137). `app/dist/` beside this tree's own `app/src/`, so a worktree serves the bundle it
 # built from its own source on its own port, exactly as it serves its own store (D43) — the
 # two facts are the same fact and neither needs a new variable to say it.
 #
@@ -2674,7 +2674,7 @@ def app_dist() -> Path:
 def app_claims(path: str) -> bool:
     """Is this a path the built app answers? The root, or a file of the build.
 
-    NARROW ON PURPOSE, AND THE HASH ROUTER IS WHY (D135). The usual SPA host serves
+    NARROW ON PURPOSE, AND THE HASH ROUTER IS WHY (D137). The usual SPA host serves
     `index.html` for every unmatched path, because its router owns real URLs and a deep link
     has to survive a reload. `App.tsx` is a HASH router: every screen is `/#/inventory`, the
     part after `#` is never sent, and so the only paths the app has are `/` and its own
@@ -2693,7 +2693,7 @@ def app_claims(path: str) -> bool:
 
 
 def do_app_file(path: str) -> Tuple[bytes, str, str]:
-    """A file out of the built app. `app_claims` decides what reaches here (D135).
+    """A file out of the built app. `app_claims` decides what reaches here (D137).
 
     THE LAST RESORT OF `do_GET` AND NEVER A ROUTE. Every route in this server is matched
     first and this is what the fall-through reaches, so a path this product serves on the
@@ -2723,7 +2723,7 @@ def do_app_file(path: str) -> Tuple[bytes, str, str]:
     if not (root / "index.html").is_file():
         # THE APP IS NOT BUILT, AND THIS IS THE ONLY SENTENCE THAT SAYS SO. Not a page and
         # not styled: a screen here would be a second front end, maintained forever, for the
-        # ten seconds before the supervisor's first build lands (D135 §1.1). 503 rather than
+        # ten seconds before the supervisor's first build lands (D137 §1.1). 503 rather than
         # 404 because the resource is not missing, it is not ready — and a 404 would read to
         # a browser, and to the operator, as a wrong address.
         raise BadRequest(
@@ -10460,7 +10460,7 @@ class CaptureHandler(BaseHTTPRequestHandler):
                     kind,
                     (("Content-Disposition", 'attachment; filename="pirateship-import.csv"'),),
                 )
-            # THE APP ITSELF, AND IT IS THE LAST THING TRIED (D135). Every route above is
+            # THE APP ITSELF, AND IT IS THE LAST THING TRIED (D137). Every route above is
             # matched first, so nothing in `app/dist/` can shadow a route; what reaches here
             # is `/`, an asset, or an address somebody typed. `parsed.path` rather than the
             # stripped `path`, because a trailing slash is part of a file's name to a
@@ -10747,7 +10747,7 @@ class CaptureHandler(BaseHTTPRequestHandler):
                     ),
                 )
             if app_owns(path):
-                # The app is served here and is read-only (D135). 405 and not 404,
+                # The app is served here and is read-only (D137). 405 and not 404,
                 # because the resource exists — saying "no such route" about a path
                 # this server answers on GET is a lie that reads as a routing bug.
                 raise BadRequest(
@@ -10798,7 +10798,7 @@ class CaptureHandler(BaseHTTPRequestHandler):
                     HTTPStatus.OK, pipeline_routes.do_pricing_corpus_write(self._body())
                 )
             if app_owns(path):
-                # The app is served here and is read-only (D135). 405 and not 404,
+                # The app is served here and is read-only (D137). 405 and not 404,
                 # because the resource exists — saying "no such route" about a path
                 # this server answers on GET is a lie that reads as a routing bug.
                 raise BadRequest(
@@ -10850,7 +10850,7 @@ class CaptureHandler(BaseHTTPRequestHandler):
                     HTTPStatus.OK, shipping_routes.do_shipping_forget(match.group(1))
                 )
             if app_owns(path):
-                # The app is served here and is read-only (D135). 405 and not 404,
+                # The app is served here and is read-only (D137). 405 and not 404,
                 # because the resource exists — saying "no such route" about a path
                 # this server answers on GET is a lie that reads as a routing bug.
                 raise BadRequest(

@@ -1660,13 +1660,22 @@ def renumbered_on_branch(base: str) -> List[Tuple[str, str, str]]:
 
 
 def branch_files(base: str) -> List[str]:
-    """Paths this branch changed, committed or not. The renumber's own file is not one."""
+    """Paths this branch changed, committed or not. The renumber's own file is not one.
+
+    A DIRECTORY SYMLINK IS A CHANGED PATH WITH NO TEXT TO SCAN, and `check_renumbered_decisions`
+    is the only caller — it reads every name here as a file's content. `Path.is_dir()` follows
+    symlinks, so a tracked directory link (D47 — `.agents/skills -> ../.claude/skills`) reads as
+    a directory here exactly as a real one would, and is excluded the same way: `exists()` alone
+    said yes and `read_text()` crashed with `IsADirectoryError`, which is the git-tracked shape
+    D47 legitimizes and this reader had never seen before one landed on a branch.
+    """
     names = set(git("diff", "--name-only", base, "HEAD").split("\n"))
     names.update(git("diff", "--name-only", "HEAD").split("\n"))
     names.update(git("diff", "--cached", "--name-only").split("\n"))
     return sorted(
         name for name in names
         if name and name != "docs/DECISIONS.md" and exists(ROOT / name)
+        and not (ROOT / name).is_dir()
     )
 
 
@@ -4090,6 +4099,176 @@ def check_hook_roster(report: Report) -> None:
         MECHANICAL,
         findings,
         f"{len(on_disk)} hooks, all in docs/map.py",
+    )
+
+
+# --------------------------------------------------------------------- codex hooks (D135)
+
+CODEX_HOOKS = ROOT / ".codex" / "hooks.json"
+CLAUDE_SETTINGS = ROOT / ".claude" / "settings.json"
+
+
+def _hook_triples(data: object) -> Set[Tuple[str, str, str]]:
+    """(event, matcher, command) out of a settings-shaped `hooks` block.
+
+    Both files share one shape — `hooks.<Event> = [{matcher?, hooks: [{type, command}]}]` —
+    because `.codex/hooks.json` was written by copying `.claude/settings.json`'s own block
+    out of its wrapper (D135). `matcher` is absent on an event with no tool to match
+    (`SessionStart`, `Stop`, `SessionEnd`, `WorktreeRemove`), so it is read as `""` rather
+    than skipped — an event that gains a matcher in one file and not the other is exactly
+    the drift this reads for, and a triple can only report that by carrying the field.
+
+    `timeout` is deliberately not part of the triple. It changes how patient a hook is, not
+    which hooks fire, and folding it in would make a slower `session-teardown.sh` in one
+    file read as a MISSING hook rather than as a timing difference nobody asked this row to
+    referee.
+    """
+    triples: Set[Tuple[str, str, str]] = set()
+    if not isinstance(data, dict):
+        return triples
+    events = data.get("hooks")
+    if not isinstance(events, dict):
+        return triples
+    for event, entries in events.items():
+        if not isinstance(entries, list):
+            continue
+        for entry in entries:
+            if not isinstance(entry, dict):
+                continue
+            matcher = entry.get("matcher") or ""
+            for hook in entry.get("hooks") or []:
+                if not isinstance(hook, dict):
+                    continue
+                if hook.get("type") != "command":
+                    continue
+                command = hook.get("command")
+                if isinstance(command, str) and command:
+                    triples.add((str(event), str(matcher), command))
+    return triples
+
+
+def check_codex_hooks(report: Report) -> None:
+    """`.codex/hooks.json` and `.claude/settings.json`'s `hooks` block name the same hooks.
+
+    BUILT SO A CODEX SESSION IS NOT A SECOND, UNGUARDED WAY INTO THIS REPO (D135). Codex
+    reads `.codex/hooks.json` the way Claude Code reads `.claude/settings.json`'s `hooks`
+    key, and until this row nothing compared the two: a guard added to one tool's config and
+    not the other's is a guard that only some sessions run, silently, and the file's own
+    prose cannot say so — `.codex/hooks.json` carries none of `.claude/settings.json`'s
+    `_*_note` fields explaining what each hook is for or why it fails open, because those
+    notes are keys JSON tolerates and nothing reads.
+
+    MEASURED AT THE MOMENT THIS ROW WAS WRITTEN: the two files already disagreed.
+    `.claude/settings.json` runs `scripts/reap.py --hook` on every `Bash` call (D127, added
+    2026-09-10 for the pkill/lsof incidents) and `scripts/session-teardown.sh` on
+    `WorktreeRemove` (added with D111's sweep) — `.codex/hooks.json` was written a day
+    earlier, on 2026-09-09, and has neither. A Codex session could run an unrestricted
+    `pkill` this repo's own Claude sessions cannot, and its `git worktree remove` would
+    never notify a supervisor to stop. Both are added to `.codex/hooks.json` in the same
+    change that adds this row, which is what makes the row start green rather than start by
+    reporting the gap it was built to close.
+
+    EVENT AND MATCHER ARE PART OF THE COMPARISON, NOT ONLY THE COMMAND. A command string
+    reused under a different event or a narrowed matcher is a different guard wearing the
+    same name — `scripts/guard-opsec.sh` on `Write|Edit` is the opsec check; the same script
+    on `Bash` would be a no-op with a name that reads as coverage. Comparing the full triple
+    is what catches that; comparing commands alone would not.
+
+    A COMMAND NAMED IN EITHER FILE MUST NAME A REAL FILE IN THE TREE. `.codex/hooks.json`
+    is untracked history's copy of a moving target, and a hook whose script has since been
+    renamed or deleted is silent in exactly the way `make reap` and `make janitor`'s own
+    liveness checks refuse to be — it does not error, it simply never runs.
+    """
+    findings: List[Finding] = []
+    if not exists(CODEX_HOOKS):
+        report.add(
+            "codex hooks",
+            MECHANICAL,
+            [
+                Finding(
+                    ".codex/hooks.json",
+                    "does not exist. Codex reads no hooks at all here, which is a silent "
+                    "downgrade from what .claude/settings.json enforces for Claude Code — "
+                    "restore the file or delete this row with it (D135).",
+                )
+            ],
+            "",
+        )
+        return
+    if not exists(CLAUDE_SETTINGS):
+        report.add(
+            "codex hooks",
+            MECHANICAL,
+            [Finding(".claude/settings.json", "does not exist; nothing to reconcile against.")],
+            "",
+        )
+        return
+
+    try:
+        codex_data = json.loads(read(CODEX_HOOKS))
+    except json.JSONDecodeError as exc:
+        report.add(
+            "codex hooks",
+            MECHANICAL,
+            [Finding(".codex/hooks.json", f"does not parse as JSON: {exc}")],
+            "",
+        )
+        return
+    try:
+        claude_data = json.loads(read(CLAUDE_SETTINGS))
+    except json.JSONDecodeError as exc:
+        report.add(
+            "codex hooks",
+            MECHANICAL,
+            [Finding(".claude/settings.json", f"does not parse as JSON: {exc}")],
+            "",
+        )
+        return
+
+    codex_triples = _hook_triples(codex_data)
+    claude_triples = _hook_triples(claude_data)
+
+    def describe(event: str, matcher: str, command: str) -> str:
+        return f"{event}" + (f" (matcher `{matcher}`)" if matcher else "") + f" -> `{command}`"
+
+    for event, matcher, command in sorted(claude_triples - codex_triples):
+        findings.append(
+            Finding(
+                ".codex/hooks.json",
+                f"missing {describe(event, matcher, command)}, which .claude/settings.json "
+                "runs.\n"
+                "  A hook armed for Claude Code and not for Codex is a guard some sessions "
+                "skip. Add the same event, matcher and command here.",
+            )
+        )
+    for event, matcher, command in sorted(codex_triples - claude_triples):
+        findings.append(
+            Finding(
+                ".claude/settings.json",
+                f"does not run {describe(event, matcher, command)}, which .codex/hooks.json "
+                "runs.\n"
+                "  Either arm it here too, or drop it from .codex/hooks.json — a hook only "
+                "Codex runs is one no Claude Code session's behavior reflects, and the two "
+                "tools are meant to read the same guards.",
+            )
+        )
+
+    for event, _matcher, command in sorted(codex_triples | claude_triples):
+        script = command.split()[0] if command else ""
+        if script and not exists(ROOT / script):
+            findings.append(
+                Finding(
+                    script,
+                    f"the {event} hook names `{command}` and no such file exists in the tree.",
+                )
+            )
+
+    report.add(
+        "codex hooks",
+        MECHANICAL,
+        findings,
+        f"{len(claude_triples)} hooks in .claude/settings.json, all mirrored in "
+        f".codex/hooks.json",
     )
 
 
@@ -12201,6 +12380,87 @@ def self_test() -> int:
         str(by_label["storage keys"]),
     )
 
+    # ------------------------------------------------------------------ codex hooks (D135)
+    #
+    # `_hook_triples` is the extractor, pure and file-free, so the mutation this row exists
+    # for can be driven on synthetic dicts rather than on the real tree — the same split
+    # `_storage_sites` uses above, for the same reason: the logic that could be wrong lives
+    # here, not in which two paths the real check reads.
+    print("\ncodex hooks reads (event, matcher, command) out of a settings-shaped dict")
+    claude_shaped = {
+        "hooks": {
+            "PreToolUse": [
+                {"matcher": "Write|Edit", "hooks": [{"type": "command", "command": "scripts/guard-opsec.sh"}]},
+                {"matcher": "Bash", "hooks": [{"type": "command", "command": "scripts/reap.py --hook"}]},
+            ],
+            "Stop": [{"hooks": [{"type": "command", "command": "scripts/stop-gate.sh"}]}],
+        }
+    }
+    triples = _hook_triples(claude_shaped)
+    ok(
+        ("PreToolUse", "Write|Edit", "scripts/guard-opsec.sh") in triples
+        and ("PreToolUse", "Bash", "scripts/reap.py --hook") in triples,
+        "a matcher on the entry is carried into the triple",
+        str(sorted(triples)),
+    )
+    ok(
+        ("Stop", "", "scripts/stop-gate.sh") in triples,
+        "an event with no tool to match reads its matcher as the empty string, not skipped",
+        str(sorted(triples)),
+    )
+    ok(not _hook_triples({"hooks": "not a dict"}) and not _hook_triples("not even a dict"),
+       "a malformed hooks block reads as no hooks, not a crash")
+    ok(not _hook_triples({"hooks": {"Stop": [{"hooks": [{"type": "prompt", "text": "x"}]}]}}),
+       "a non-command hook (a prompt, say) contributes nothing to the roster")
+
+    # THE MUTATION: drop one hook from the Codex side, prove the row reports exactly the
+    # drop, restore it, prove the row is silent again. This is D135's own worked example —
+    # `.codex/hooks.json` really did ship a day behind `WorktreeRemove` and `reap.py --hook`
+    # — replayed here as data so it never depends on the two files staying out of sync.
+    print("\nremoving one hook from one side is reported, and restoring it clears the report")
+    codex_shaped = {
+        "hooks": {
+            "PreToolUse": [
+                {"matcher": "Write|Edit", "hooks": [{"type": "command", "command": "scripts/guard-opsec.sh"}]},
+            ],
+            "Stop": [{"hooks": [{"type": "command", "command": "scripts/stop-gate.sh"}]}],
+        }
+    }
+    missing = _hook_triples(claude_shaped) - _hook_triples(codex_shaped)
+    ok(
+        missing == {("PreToolUse", "Bash", "scripts/reap.py --hook")},
+        "the row's own diff finds exactly the hook the mutation removed",
+        str(missing),
+    )
+    codex_shaped["hooks"]["PreToolUse"].append(
+        {"matcher": "Bash", "hooks": [{"type": "command", "command": "scripts/reap.py --hook"}]}
+    )
+    ok(
+        not (_hook_triples(claude_shaped) - _hook_triples(codex_shaped))
+        and not (_hook_triples(codex_shaped) - _hook_triples(claude_shaped)),
+        "restoring the hook clears the diff in both directions",
+        str(_hook_triples(claude_shaped) ^ _hook_triples(codex_shaped)),
+    )
+    ok(
+        ("PreToolUse", "Bash", "scripts/reap.py --hook") in _hook_triples(claude_shaped)
+        and ("PreToolUse", "Write|Edit", "scripts/decision-context.py")
+        not in _hook_triples(claude_shaped),
+        "the triple is exact — same event and matcher, a different command is not a match",
+    )
+
+    # And the real tree: the two files this row actually reads should already agree, because
+    # the change that added the row is the same change that brought .codex/hooks.json to
+    # parity (D135) — a self-test that could not pass against its own repository would be
+    # asserting a rule this tree does not follow.
+    report = Report()
+    check_codex_hooks(report)
+    by_label = {check: findings for check, _, findings, _ in report.checks}
+    ok(
+        not by_label["codex hooks"],
+        ".codex/hooks.json and .claude/settings.json name the same hooks in this tree",
+        str(by_label["codex hooks"]),
+    )
+
     # The staged-mode primitives, which have no loud failure mode: every one of them
     # answers plausibly against the worktree while auditing a tree the commit will not
     # produce. Driven through the module globals because that is how audit() drives them.
@@ -12610,6 +12870,7 @@ def audit(staged_only: bool) -> Report:
     check_transport_standing(report)
     check_map(report, allowed)
     check_hook_roster(report)
+    check_codex_hooks(report)
     check_map_sections(report)
     check_build_order_mirror(report)
     check_game_vocabulary(report)

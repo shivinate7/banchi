@@ -70,7 +70,7 @@ CAPTURE_LOG = "capture.log"
 VITE_PID = "vite.pid"
 VITE_LOG = "vite.log"
 
-# THE APP'S BUILD STATE, WRITTEN HERE AND READ BY `make status` (D135). One file, the shape
+# THE APP'S BUILD STATE, WRITTEN HERE AND READ BY `make status` (D137). One file, the shape
 # `.serve/design-check.json` already uses: a verdict, a stamp, and the first line of what went
 # wrong. `make status` is the only reader; nothing in the product asks, because the app cannot
 # report on the build that produced it.
@@ -149,7 +149,7 @@ WATCH_FILES = ("envfile.py", "scripts/serve.py")
 
 # ---------------------------------------------------------------- the app's own watch set
 
-# WHAT A `vite build` READS, AND IT IS A SEPARATE SET ON PURPOSE (D135). A change here does
+# WHAT A `vite build` READS, AND IT IS A SEPARATE SET ON PURPOSE (D137). A change here does
 # not restart anything — it schedules a BUILD, and a change under `WATCH_DIRS` restarts the
 # capture child and never builds. Two loops that cannot trip each other: the alternative is a
 # `.tsx` save bouncing the server the owner is capturing with.
@@ -290,7 +290,7 @@ class Child(NamedTuple):
 
 
 CAPTURE = Child("capture", CAPTURE_PID, CAPTURE_LOG)
-# THE APP IS NO LONGER A CHILD (D135) AND THIS ENTRY OUTLIVES IT ON PURPOSE. A supervisor
+# THE APP IS NO LONGER A CHILD (D137) AND THIS ENTRY OUTLIVES IT ON PURPOSE. A supervisor
 # running the previous code left `vite.pid` and a detached `npm run dev` behind; the first
 # `make up` or `make down` after this lands is the only thing that will ever reap them, and it
 # can only do that if it still knows the name. Nothing writes this pidfile any more.
@@ -891,7 +891,7 @@ def report(root: Path = REPO_ROOT) -> dict:
         "capture_port": capture_port,
         "capture_answering": port_answering(capture_port),
         # THE APP IS THIS PROCESS NOW, so what there is to report is the BUILD rather than a
-        # second pid and a second port (D135). `dev_port` stays because `make dev` still uses
+        # second pid and a second port (D137). `dev_port` stays because `make dev` still uses
         # it and `make status` still has to say which port that would be.
         "app_built": app_built(root),
         "app_stale": app_stale(root),
@@ -919,7 +919,7 @@ def urls(root: Path = REPO_ROOT) -> tuple[str, str]:
 
 
 def print_where(root: Path = REPO_ROOT) -> None:
-    """ONE LINK, because there is one server (D135). The app and the API are the same origin
+    """ONE LINK, because there is one server (D137). The app and the API are the same origin
     now, which is also what makes the bundle's own composition trivially right: it bakes the
     capture port and resolves the host from the address bar (D53)."""
     _, capture_url = urls(root)
@@ -964,7 +964,7 @@ class Supervisor:
     # -- lifecycle ---------------------------------------------------------
 
     def start(self) -> None:
-        """One child, and the app built into the directory it serves from (D135).
+        """One child, and the app built into the directory it serves from (D137).
 
         THE ORDER IS DECIDED BY WHETHER THERE IS ANYTHING TO SERVE. With no build at all — a
         fresh clone, a fresh worktree — the build runs FIRST, because `make up` blocking for
@@ -1149,7 +1149,7 @@ class Supervisor:
             self._restart_for(changed)
 
     def _check_app(self) -> None:
-        """The app's own watch: a change here builds, and restarts nothing (D135).
+        """The app's own watch: a change here builds, and restarts nothing (D137).
 
         THE SAME DEBOUNCE AND FOR THE SAME REASON. An editor saves twice — once mid-keystroke
         and once when a formatter runs a beat later — and a build fired on the first save is a
@@ -1472,7 +1472,7 @@ def do_down(_args: argparse.Namespace) -> int:
 
 
 def do_restart(args: argparse.Namespace) -> int:
-    """`make up ARGS=--restart` is the spelling now (D135 §1.3). Kept for one release.
+    """`make up ARGS=--restart` is the spelling now (D137 §1.3). Kept for one release.
 
     An alias rather than a deletion, because `make restart` is in the owner's fingers, in this
     repo's own docs and in two of its refusal messages. It says the new spelling and then does
@@ -1583,7 +1583,7 @@ FOREGROUND_ENV = "PKMNSCAN_FOREGROUND"
 def do_guard_foreground(_args: argparse.Namespace) -> int:
     """`make server` refuses while this checkout's supervisor is up. `make dev` no longer does.
 
-    THE NARROWING IS D135's, AND IT IS THE POINT RATHER THAN A RELAXATION. This guard existed
+    THE NARROWING IS D137's, AND IT IS THE POINT RATHER THAN A RELAXATION. This guard existed
     because both ways of starting a server wanted the same two ports; the supervisor no longer
     holds the dev port at all, so `make dev` can no longer collide with it. What it now does
     is the thing the owner alternates between sessions to do: run Vite with hot reload on its
@@ -1641,7 +1641,7 @@ def main(argv: Optional[list[str]] = None) -> int:
 
     up = sub.add_parser("up", help="start detached")
     up.add_argument("--no-watch", action="store_true")
-    # `--restart` folds `restart` into the verb a person already types (D135 §1.3). The
+    # `--restart` folds `restart` into the verb a person already types (D137 §1.3). The
     # `--confirm` guard rides with it, because bouncing the main tree's server is the thing
     # that cut a write in flight — fewer words never means fewer guards.
     up.add_argument("--restart", action="store_true",

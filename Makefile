@@ -97,7 +97,7 @@ help:
 	@echo "  ./pkmnscan reconcile <run-dir> <staged-export>    confirm what TCGplayer staged."
 	@echo "  make up           THE server, detached: the API and the app on one port, and it"
 	@echo "                    reloads itself when you edit Python and rebuilds the app when"
-	@echo "                    you edit a screen (D135). Prints the link. Start here."
+	@echo "                    you edit a screen (D137). Prints the link. Start here."
 	@echo "  make merge        merge a PR and move main onto it (D42). ARGS=<n> previews;"
 	@echo "                    ARGS=\"<n> --confirm\" performs it. On the owner's word only."
 	@echo "  make down         stop it.  make up ARGS=--restart  stop and start."
@@ -114,6 +114,8 @@ help:
 	@echo "                    checkout (D122). ARGS=--wait queues instead of refusing."
 	@echo "                    Leaves the verdict in .serve/design-check.json — read that,"
 	@echo "                    never a \`tail\` pipe, which buffers the whole run."
+	@echo "                    PW_ARGS=<flags> reaches Playwright itself (--shard, one spec);"
+	@echo "                    ARGS never does. CI shards it three ways this way (D136)."
 	@echo "  make design-check-quiet  the same run without the per-test progress stream."
 	@echo
 	@echo "  make demo         seed a demo store and record the wire into a fixture bundle."
@@ -593,7 +595,7 @@ janitor:
 janitor-selftest:
 	@bash scripts/janitor-selftest.sh
 
-# THE SUPERVISOR'S BUILD JOB (D135), against a throwaway tree with a stub `vite build`. Same
+# THE SUPERVISOR'S BUILD JOB (D137), against a throwaway tree with a stub `vite build`. Same
 # standing and the same reason as the three self-tests around it: it starts and stops real
 # supervisors and swaps real directories, so it is in `check` and never in the git hook.
 # No node — the stub is a shell script — so it runs anywhere the rest of `check` does.
@@ -670,7 +672,7 @@ janitor-install:
 lan-check:
 	@python3 scripts/lan-check.py
 
-# THE SERVER, DETACHED. ONE PROCESS: the API and the built app on one port (D135), restarting
+# THE SERVER, DETACHED. ONE PROCESS: the API and the built app on one port (D137), restarting
 # itself when you edit Python and rebuilding the app when you edit a screen.
 # `make dev` and `make server` below still work; `dev` is now the hot-reload loop that runs
 # BESIDE this rather than instead of it.
@@ -718,7 +720,7 @@ launch-agent:
 #
 # strictPort in app/vite.config.ts, so a busy 5173 fails here instead of quietly serving on
 # 5174 — where CLAUDE.md, this target and scripts/views.txt would all three be wrong.
-# NO `guard-foreground` HERE SINCE D135, and its removal is the feature. The supervisor used
+# NO `guard-foreground` HERE SINCE D137, and its removal is the feature. The supervisor used
 # to hold :5173 and this would have collided with it; it holds only the capture port now, so
 # Vite runs here with hot reload against the live server — which is what alternating between
 # building and operating actually needs.
@@ -788,10 +790,21 @@ screenshot:
 # can be mistaken for a verdict. What the `rm` buys is that the PREVIOUS run's `pass` is
 # never left sitting there for a reader to believe, which is the only silent failure of the
 # three. app/design-check-reporter.ts carries the rest of the argument.
+#
+# `ARGS` REACHES THE LOCK AND `PW_ARGS` REACHES PLAYWRIGHT, and the two are kept apart by the
+# `--` on each side (D136). Until 2026-09-11 nothing here could hand Playwright a flag at all,
+# and the one that mattered was `--shard`: `.github/workflows/check.yml` runs this suite as
+# three shards on three 2-vCPU runners — `PW_ARGS="--shard=1/3 --workers=1"` — because one
+# runner ran all 481 cases on ONE worker in 15 minutes, against 89-175s for the rig's seven.
+# Sharding splits the CASES and leaves the worker count alone, which is the half that matters:
+# docs/DEBTS.md section 11 measured a one-in-thirteen red whose only known mechanism is "the
+# suite around it", and more workers on one box is more suite around it. On the rig `PW_ARGS`
+# is for a session that wants one spec — `PW_ARGS=tests/brand.spec.ts` — and nothing else.
+# Each shard leaves its own `.serve/design-check.json`; on a runner that is one file per job.
 design-check:
 	$(NPM_GUARD)
 	@rm -f .serve/design-check.json
-	@python3 scripts/suite-lock.py run $(ARGS) -- npm --prefix app run design-check
+	@python3 scripts/suite-lock.py run $(ARGS) -- npm --prefix app run design-check -- $(PW_ARGS)
 
 # The lock itself, exercised by violating it — a holder, a refusal, a wait, and a holder
 # killed with -9 to prove the OS releases what it took. In `check`, never in the git hook: it
@@ -807,7 +820,7 @@ suite-lock-selftest:
 design-check-quiet:
 	$(NPM_GUARD)
 	@rm -f .serve/design-check.json
-	@DESIGN_CHECK_QUIET=1 python3 scripts/suite-lock.py run $(ARGS) -- npm --prefix app run design-check
+	@DESIGN_CHECK_QUIET=1 python3 scripts/suite-lock.py run $(ARGS) -- npm --prefix app run design-check -- $(PW_ARGS)
 
 # eslint over app/, config and rules in app/eslint.config.js. It began 2026-08-13 as the two
 # guards docs/DECISIONS.md's v1 bug table promised — no `facingMode` (bug 3), no `split(",")`

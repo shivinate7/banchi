@@ -4,6 +4,16 @@ Bulk-list pre-sorted TCG singles on TCGplayer with zero attention per card, and 
 every card physically is. Two tracks share one rig: singles (this file) and code cards
 (`code-card-fork/CLAUDE.md`, auto-loaded in that directory).
 
+**Codex reads this same file, not a copy of it (D135).** `AGENTS.md` at the root and
+`code-card-fork/AGENTS.md` are relative symlinks to the `CLAUDE.md` beside each, and
+`.agents/skills` is a directory symlink to `.claude/skills` — one edit reaches both tools'
+readers, because a copy is a fork with a diff nobody watches and a symlink has no diff to
+drift. `.codex/hooks.json` is tracked beside `.claude/settings.json` and names the same
+hooks by the same scripts; `make docs-audit`'s `codex hooks` row reconciles the two rosters
+in both directions and fails a commit that adds a hook to one tool and not the other.
+`.codex/config.toml` is the one file of the three Codex left that stays untracked — a
+shell-environment policy, machine-local the same way `.claude/settings.local.json` is.
+
 ## The name is the app's, and nothing beneath it
 
 **Banchi** — 番地, a lot number, the address of a thing — is the name of the PRODUCT a person
@@ -83,7 +93,7 @@ make harness        # all NINE verification tests; the Stop hook runs it at turn
                     #   drew for itself. It exists because both Playwright specs over the
                     #   motion trigger stayed green while 38 real cards were refused as an
                     #   empty stand (D81). RECOUNT from `harness/run.py`'s TESTS list.
-make up             # THE server, detached — ONE PROCESS AS OF 2026-09-11 (D135). The capture
+make up             # THE server, detached — ONE PROCESS AS OF 2026-09-11 (D137). The capture
                     #   server serves `app/dist/` beside the API, so the app and the wire are
                     #   one origin on one port, and `:5173` belongs to `make dev` alone.
                     #   It RELOADS ITSELF when you edit Python under
@@ -122,7 +132,7 @@ make launch-agent   # start at login, so the link is always live. MAIN TREE ONLY
                     #   is one press in Chrome, once, and `app/public/manifest.webmanifest` is
                     #   the part of it that lives here.
 make dev            # Vite with HOT RELOAD. :5173 in the main tree, its own port in a worktree.
-                    #   Blocks. It runs BESIDE `make up` since D135 and talks to that server
+                    #   Blocks. It runs BESIDE `make up` since D137 and talks to that server
                     #   over the same store — the supervisor stopped holding this port, so the
                     #   refusal that used to stand here is gone. `make server` is still refused.
 make server         # Python capture server. :8000 in the main tree, its own port in a
@@ -156,6 +166,13 @@ make design-check   # DESIGN.md's Fulfillment floors, asserted in a browser. IT 
                     #   `PKMNSCAN_SUITE_LOCK=off` runs it anyway, and is printed in every
                     #   refusal. `make harness` and `make check` deliberately do NOT take it;
                     #   docs/DEBTS.md §16 is why, and which half of that is measured.
+                    #   `PW_ARGS=<flags>` REACHES PLAYWRIGHT AND `ARGS` NEVER DOES (D136): the
+                    #   `--` on each side keeps them apart. CI runs this as three shards of one
+                    #   worker each — `PW_ARGS="--shard=1/3 --workers=1"` — because one runner
+                    #   ran all 481 cases on one worker in 15 minutes; on the rig it is for one
+                    #   spec (`PW_ARGS=tests/brand.spec.ts`). NEVER RAISE THE WORKER COUNT TO GO
+                    #   FASTER: docs/DEBTS.md §11's one-in-thirteen red has "the suite around
+                    #   it" as its only known mechanism.
                     #   AND IT LEAVES A VERDICT, WHICH IS HOW A SESSION WAITS FOR IT. 89-175s
                     #   measured across five runs, against a 120s tool timeout — so a session
                     #   ALWAYS backgrounds it, and the answer is a file rather than the
@@ -1470,7 +1487,9 @@ D131 The ratchet gets an escape, a settle is one quiet frame of three, and the b
 D132 Sold is folded away by default, the address leads with the name, the rail is ordered by the hand, and a section can be named
 D133 A branch is judged by what it lands, and a file put back the way main had it is refused unless the branch says so
 D134 A departed record is buried, not kept; the box goes; and the graveyard is where the departed are read
-D135 One process serves the product, Vite compiles and never serves, and the build is the server's job
+D135 Codex reads the same rules a Claude Code session does, through three symlinks and one reconciled hook roster
+D136 The suite is sharded and never widened, a sleep is a wait and not an assertion, and a tree that passed is not tested twice
+D137 One process serves the product, Vite compiles and never serves, and the build is the server's job
 ```
 
 **THE GAP THIS LIST CARRIED BETWEEN D116 AND D118 IS CLOSED, AND IT CLOSED THE WAY IT SAID IT
@@ -1549,7 +1568,7 @@ was open** — the rule is renumber your own, never another's.
   measurement that refused it a route is history — and §6 names the three things the first
   real upload would measure.
 - `docs/specs/batch-script.md` — the four commands, storage, routing, pricing. Built.
-- `docs/specs/one-process.md` — D135's plan: the capture server serves `app/dist/` beside the
+- `docs/specs/one-process.md` — D137's plan: the capture server serves `app/dist/` beside the
   API, the supervisor runs `vite build` when the source is newer than the bundle, and `restart`
   folds into `up`. SPECIFIED 2026-09-11, NOT BUILT. Three PRs in its §9;
   read its §5 before the reinstall, because the port change resets the camera grant and every

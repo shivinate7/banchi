@@ -241,7 +241,7 @@ SHIPPED = [
               "NOT DO: the 2,000-card probe that decides whether the 100k run is worth making is work "
               "at the rig and has not been run; nothing here measures the pile."},
     {"n": 22, "on": "2026-09-11", "title": "One process serves the product: the capture server serves app/dist, the supervisor builds it",
-     "note": "D135, three PRs the same day. The capture server serves `app/dist/` beside the API "
+     "note": "D137, three PRs the same day. The capture server serves `app/dist/` beside the API "
               "(`app_claims`, `do_app_file`, T7's check_app_serve); the supervisor dropped its Vite "
               "child and runs `vite build` into a sibling directory it renames in, on its own watch "
               "set over app/src and app/public (`serve-selftest`, 25 assertions, five mutations). "
@@ -1342,7 +1342,7 @@ COMPONENTS = [
                 # hermetic: it answers from the tree alone. A row that resolves DNS and needs a
                 # server up would go red on a train and in every worktree, and a check that
                 # fails for reasons unrelated to the commit is one people learn to ignore.
-                "governed_by": ["D43", "D47", "D53", "D135"],
+                "governed_by": ["D43", "D47", "D53", "D137"],
             },
             "janitor.py": {
                 "does": "the sweep: what a finished session left behind, and — where it is "
@@ -1365,7 +1365,7 @@ COMPONENTS = [
                 "governed_by": ["D18", "D42", "D44", "D53"],
             },
             "serve-selftest.py": {
-                "does": "THE SUPERVISOR'S BUILD JOB, PROVED AGAINST A THROWAWAY TREE (D135). "
+                "does": "THE SUPERVISOR'S BUILD JOB, PROVED AGAINST A THROWAWAY TREE (D137). "
                         "Starts real supervisors over two copied checkouts whose `vite build` "
                         "is a shell stub, because what is under test is the supervisor and "
                         "never the compiler: the cold start that builds BEFORE the port opens, "
@@ -1378,7 +1378,7 @@ COMPONENTS = [
                         "LINKED worktree, so the derivation calls it the main checkout and it "
                         "claims :8000 — measured, against the owner's live server, the first "
                         "time this ran. In `check`, never in the git hook (D18).",
-                "governed_by": ["D18", "D43", "D53", "D135"],
+                "governed_by": ["D18", "D43", "D53", "D137"],
                 "tested_by": [],
             },
             "janitor-selftest.sh": {
@@ -1594,11 +1594,25 @@ COMPONENTS = [
                 # and `pkmnscan.*` both stand and a row demanding one of them would be
                 # demanding a rename that silently discards what a browser holds under the
                 # old spelling.
+                # D111 AND D127 JOIN AS CITED FAILURES, the same shape D70 and D101 already
+                # carry above: `check_codex_hooks`'s docstring names the two incidents its
+                # missing hooks would have reopened had the row not backfilled them —
+                # `reap.py --hook` on every `Bash` call (D127) and `session-teardown.sh` on
+                # `WorktreeRemove` (D111's sweep) — because a reader who does not know why
+                # those two hooks matter reads a bare roster diff as pedantry. D135 is the
+                # ruling the row enforces: Codex reads the same guards a Claude Code session
+                # does, through `.codex/hooks.json` reconciled against `.claude/settings.json`.
+                # D47 IS CITED IN `branch_files`, NOT IN THE CODEX ROW: a tracked directory
+                # symlink (D47's own subject) is a changed path with no text to scan, and that
+                # function's `is_dir()` guard is what keeps `check_renumbered_decisions` from
+                # crashing on one — found the moment `.agents/skills` became the first such
+                # link this repo's own history ever produced.
                 "governed_by": ["D2", "D3", "D6", "D7", "D8", "D9", "D10", "D12", "D16", "D17",
                                 "D18", "D22", "D23", "D24", "D26", "D27", "D31", "D39", "D43",
-                                "D49", "D50", "D51", "D53", "D60", "D64", "D65", "D67", "D69",
+                                "D47", "D49", "D50", "D51", "D53", "D60", "D64", "D65", "D67", "D69",
                                 "D70", "D72", "D75", "D76", "D80", "D81", "D83", "D84", "D87",
-                                "D88", "D90", "D92", "D94", "D96", "D101", "D102", "D104", "D122", "D119", "D132"],
+                                "D88", "D90", "D92", "D94", "D96", "D101", "D102", "D104", "D111",
+                                "D119", "D122", "D127", "D132", "D135"],
             },
             "docs-audit-allow.txt": {
                 "does": "paths and identifiers the docs name before they exist, one "
@@ -1772,7 +1786,7 @@ COMPONENTS = [
                 # targets may reach `make check` or the git hook, and launch-agent writes to
                 # ~/Library. D13 because the store stays on this Mac and the LAN reach is the
                 # tunnel case that entry already names.
-                "governed_by": ["D13", "D18", "D43", "D47", "D53", "D70", "D85", "D135"],
+                "governed_by": ["D13", "D18", "D43", "D47", "D53", "D70", "D85", "D137"],
                 "tested_by": ["T7"],
                 "status": "built",
             },
@@ -1897,7 +1911,7 @@ COMPONENTS = [
                 # for vale. Change one and the entry describing that check goes stale with it,
                 # which is exactly what `governed_by` is for — so they are listed rather than
                 # allowlisted away.
-                "governed_by": ["D16", "D17", "D18", "D43", "D44", "D47", "D53", "D58", "D60", "D65", "D68", "D74", "D76", "D80", "D82", "D92", "D111", "D122", "D127", "D129", "D133", "D135"],
+                "governed_by": ["D16", "D17", "D18", "D43", "D44", "D47", "D53", "D58", "D60", "D65", "D68", "D74", "D76", "D80", "D82", "D92", "D111", "D122", "D127", "D129", "D133", "D137"],
                 "note": "IT DECLARES THE SUITE AND DELIBERATELY DOES NOT DRIVE IT, which is "
                         "the whole shape. A registry that drove `make check` could not "
                         "disagree with the recipe — and could silently stop running a check, "
@@ -1961,7 +1975,7 @@ COMPONENTS = [
                 # kept now that the repo has left iCloud for that entry's amended reason: the
                 # hazard belongs to a synced directory, and a tree can be put inside one
                 # without telling this script.
-                "governed_by": ["D16", "D17", "D42", "D43", "D44", "D80", "D86", "D88", "D111", "D127", "D135"],
+                "governed_by": ["D16", "D17", "D42", "D43", "D44", "D80", "D86", "D88", "D111", "D127", "D137"],
                 "note": "IT READS `--json`, NOT THE RENDER, since 2026-08-13. This line "
                         "said the opposite until integration: the debt was closed and this "
                         "entry rewritten in the same run by different hands, and nothing "
@@ -2313,7 +2327,7 @@ COMPONENTS = [
                                 "D62", "D63", "D64", "D65", "D66", "D67", "D69", "D70", "D76",
                                 "D77", "D79", "D83", "D86", "D87", "D88", "D89", "D90", "D91",
                                 "D92", "D93", "D96", "D100", "D103", "D104", "D108", "D113",
-                                "D115", "D116", "D132", "D134", "D135"],
+                                "D115", "D116", "D132", "D134", "D137"],
                 "tested_by": ["T7"],
             },
             "tcg_import.py": {"does": "THE OUTBOUND WRITE to the seller admin, and the only "
@@ -4754,7 +4768,7 @@ COMPONENTS = [
                         "64px carrying no filter and no cap discs, the DISPLAY cut is what "
                         "`#/gallery` shows at 64 and above, all six locked palettes are drawn "
                         "and differ, and the mark does not invert with the theme.",
-                "governed_by": ["D94", "D102", "D134"],
+                "governed_by": ["D94", "D102", "D134", "D136"],
                 "note": "IT EXISTS BECAUSE NOTHING IN app/tests MENTIONED THE MARK AT ALL. No "
                         "snapshot, no brand assertion, no reference to `Logo` — the mark could "
                         "have stopped rendering in all six of its call sites with `make check` "
@@ -5099,7 +5113,7 @@ COMPONENTS = [
                 # constant case argues from D32's measured 39-81% card fill, and the reason the
                 # old fixed centre was wrong is that it magnified the Pokedex strip — D35's
                 # misread-as-collector-number string exactly.
-                "governed_by": ["D4", "D13", "D24", "D28", "D29", "D32", "D35", "D16", "D41", "D37", "D46", "D77"],
+                "governed_by": ["D4", "D13", "D24", "D28", "D29", "D32", "D35", "D16", "D41", "D37", "D46", "D77", "D136"],
                 "note": "NOT a harness test — it starts a browser, which docs/GATES.md keeps "
                         "off the seven-test contract deliberately. The photograph stub is "
                         "2160x3840 and that is load-bearing: the rig's stored frame is 9:16 "
@@ -5114,7 +5128,7 @@ COMPONENTS = [
                         "rendered view, with every contrast ratio computed from the colors "
                         "the page actually painted rather than from a number published in "
                         "docs/DESIGN.md. Run by `make design-check`.",
-                "governed_by": ["D5", "D10", "D13", "D24", "D31", "D41", "D115", "D125"],
+                "governed_by": ["D5", "D10", "D13", "D24", "D31", "D41", "D115", "D125", "D136"],
                 "note": "NOT a harness test, same as its sibling above. It failed 16 of the 30 "
                         "assertions `make design-check` runs for the few hours between the view "
                         "being built and being routed — all of them because every test asserts "

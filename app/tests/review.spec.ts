@@ -515,6 +515,7 @@ test('nothing the loupe did survives the pointer leaving', async ({ page }) => {
 /* ---------------------------------------------------------------- answering, and undo */
 
 test('a digit answers the card and the answer stays reversible', async ({ page }) => {
+  await page.clock.install()   // D136: the two seconds below are jumped, not slept
   const sent = await open(page)
 
   await page.locator('.review-candidate').first().click()
@@ -531,7 +532,9 @@ test('a digit answers the card and the answer stays reversible', async ({ page }
      whole of that change and the one thing a timer regression would silently undo. */
   const receipt = page.locator('.review-note[role="status"]')
   await expect(receipt.first()).toBeVisible()
-  await page.waitForTimeout(2000)
+  // A fake clock advanced two seconds fires every timer due in them; a receipt that a timer
+  // would have taken away is gone by the second read. Mutation-tested against exactly that.
+  await page.clock.runFor(2000)
   await expect(receipt.first()).toBeVisible()
 })
 
