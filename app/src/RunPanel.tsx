@@ -210,8 +210,8 @@ function Spent({ usd }: { readonly usd: number }) {
  *  a token count by anything — `RunPreflightTotal`'s rule for the number the confirm is gated
  *  on, kept for the number the receipt reports. `identify/cost.py` is the only rate sheet.
  *
- *  MONEY IS NOT A COLOUR — docs/DESIGN.md: "`--bn-money` = ink in both themes: money is not a
- *  colour, it is a weight" — so a settled figure is a DEFAULT pill, never `ok`. `live` is
+ *  MONEY IS NOT A COLOR — docs/DESIGN.md: "`--bn-money` = ink in both themes: money is not a
+ *  color, it is a weight" — so a settled figure is a DEFAULT pill, never `ok`. `live` is
  *  vermilion and is reserved for a batch actually in flight, the one state on this card where
  *  the money is still moving.
  *
