@@ -186,7 +186,16 @@ def spec_key(sets: Sequence[SetSpec] = EVAL_SETS) -> Dict[str, object]:
 
 
 def api_key() -> str:
-    """The pokemontcg.io key, from the environment or `.env`. Empty means keyless."""
+    """The pokemontcg.io key, from the environment or `.env`. Empty means keyless.
+
+    `get` AND NOT `get_live`, DECIDED 2026-09-11 when the Anthropic key moved the other way
+    (D64, amended). Two things separate them. The harness is one process per run, started
+    fresh and gone in minutes, so there is no long-running process for a replaced key to
+    rotate under — which is the whole subject of `get_live`. And this key is not a bearer
+    instrument that expires: it raises a rate limit, `_headers` sends it to the API host and
+    never the CDN, and keyless covers this eval. `_MIRROR` above keeps `get` for a stronger
+    reason still — it is a module constant, so nothing about it could be live whatever it read.
+    """
     return envfile.get(API_KEY_ENV)
 
 
