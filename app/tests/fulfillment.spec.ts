@@ -667,7 +667,7 @@ type Rgb = { r: number; g: number; b: number; a: number }
 
 /* Parsed with one regex and no `split(',')`. eslint bans that call across this app — v1 bug 2,
  * naive CSV parsing — and the pull-confirm spec needed a named exemption in
- * `app/eslint.config.js` to use it on a colour string. A regex needs no exemption, which is
+ * `app/eslint.config.js` to use it on a color string. A regex needs no exemption, which is
  * the better shape for a rule whose whole point is that nobody should have to decide when it
  * does not apply. */
 const RGB = /^rgba?\(\s*([\d.]+)[\s,]+([\d.]+)[\s,]+([\d.]+)(?:[\s,/]+([\d.]+))?\s*\)$/
@@ -697,7 +697,7 @@ function contrastRatio(one: Rgb, two: Rgb): number {
 }
 
 /** One run of text on screen, with everything needed to judge it and to find it again. */
-type Run = { text: string; where: string; size: number; colour: string; ground: string }
+type Run = { text: string; where: string; size: number; color: string; ground: string }
 
 /* Every text node the view renders, with the computed style of the element that carries it.
  *
@@ -721,10 +721,10 @@ async function runsIn(view: Locator): Promise<Run[]> {
      *
      * A translucent layer is a real ground — what the eye reads is it painted over whatever is
      * behind it — and this view has one that is only ever translucent for 120ms: a disclosure
-     * head with a hover transition from nothing to a surface colour. Read at the wrong instant,
-     * the first-colour-found form returned `rgba(247, 248, 250, 0.96)` and the opacity guard
+     * head with a hover transition from nothing to a surface color. Read at the wrong instant,
+     * the first-color-found form returned `rgba(247, 248, 250, 0.96)` and the opacity guard
      * below failed on a screen that is fine, intermittently, under load. Compositing answers
-     * the same colour once the transition lands and the right one while it is running.
+     * the same color once the transition lands and the right one while it is running.
      *
      * THE GUARD IS UNTOUCHED: the walk still ends at a fully transparent answer when NOTHING
      * behind the text is opaque, which is what a stylesheet that did not load looks like, and
@@ -780,7 +780,7 @@ async function runsIn(view: Locator): Promise<Run[]> {
           text,
           where: describe(parent),
           size: Number.parseFloat(style.fontSize),
-          colour: style.color,
+          color: style.color,
           ground: groundOf(parent),
         })
       }
@@ -929,9 +929,9 @@ async function noThinContrast(page: Page, where: string): Promise<void> {
   const runs = await runsIn(view(page))
   expect(runs.length, `${where}: nothing rendered`).toBeGreaterThan(0)
   for (const run of runs) {
-    const ink = parseRgb(run.colour)
+    const ink = parseRgb(run.color)
     const ground = parseRgb(run.ground)
-    expect(ink, `${where} ${run.where}: unreadable colour ${run.colour}`).not.toBeNull()
+    expect(ink, `${where} ${run.where}: unreadable color ${run.color}`).not.toBeNull()
     expect(ground, `${where} ${run.where}: unreadable ground ${run.ground}`).not.toBeNull()
     // A see-through ground makes the ratio below a measurement of nothing, and is exactly
     // what a stylesheet that failed to load looks like.
@@ -1640,7 +1640,7 @@ test('no destructive action and no route out is reachable from any screen of thi
 test(`undo is offered on every mark-sold and stays for at least ${UNDO_FLOOR_MS / 1000}s`, async ({
   page,
 }) => {
-  test.setTimeout(60_000)
+  await page.clock.install()   // before the first navigation; see the note at the wait below
   const wire: Wire[] = []
   await openList(page, wire)
 
@@ -1661,12 +1661,18 @@ test(`undo is offered on every mark-sold and stays for at least ${UNDO_FLOOR_MS 
   // the sale triggers — the stub store moved with the sale, so this is the server agreeing.
   await expect(page.getByRole('button', { name: 'Charizard ex' })).toHaveCount(0)
 
-  /* Real time, not a fake clock. The window is a promise to a person who has just put a card
-   * in an envelope and looked up, and the thing worth proving is that the control survives
-   * ten seconds of that — including a React re-render, a timer, and anything else the page
-   * does in between. A fake clock proves the arithmetic instead. Ten seconds of wall time is
-   * the cost, once, in the one test that measures a duration. */
-  await page.waitForTimeout(UNDO_FLOOR_MS + 500)
+  /* A FAKE CLOCK, ADVANCED PAST THE FLOOR, AND THIS COMMENT ARGUED THE OPPOSITE UNTIL
+   * 2026-09-11 (D136). It said real time was the point: that the control has to survive ten
+   * seconds of a React re-render, a timer and whatever else the page does, and that a fake
+   * clock proves the arithmetic instead. The owner ruled the sleep may go, and the reasoning
+   * that lets it go is that `runFor` fires EVERY timer the page holds inside the span — the
+   * 500ms tick that redraws the receipt's seconds, the expiry timeout that would take the
+   * control away, and each re-render those cause — in order, with `Date.now()` moving in step.
+   * What it no longer proves is that wall time passes, and that is the browser's promise, not
+   * this screen's. The clock starts at the real time and is never set, only advanced, so the
+   * dates this view draws are today's. Mutation-tested: with the window cut to five seconds in
+   * Fulfillment.tsx this assertion fails on the faked wait exactly as it did on the real one. */
+  await page.clock.runFor(UNDO_FLOOR_MS + 500)
   await expect(undo, `undo left before ${UNDO_FLOOR_MS}ms`).toBeVisible()
 
   await undo.click()
@@ -2231,7 +2237,7 @@ test('only one copy is ever past its first step, so only one fill is on screen',
 test(`a copy sold from a search result leaves both lists, and keeps its undo for ${UNDO_FLOOR_MS / 1000}s`, async ({
   page,
 }) => {
-  test.setTimeout(60_000)
+  await page.clock.install()   // before the first navigation, as in the list case above
   const wire: Wire[] = []
   await openSearch(page, 'Eiscue', 2, wire)
 
@@ -2257,10 +2263,10 @@ test(`a copy sold from a search result leaves both lists, and keeps its undo for
   await page.getByRole('button', { name: 'Show every card' }).click()
   await expectWalk(page, WALK.filter((place) => place !== EISCUE_FIRST))
 
-  /* Real time, not a fake clock, and the receipt has survived clearing the search since it is
-   * rendered above every screen this view has. The window is a promise to a person who has
-   * just put a card in an envelope and looked up. */
-  await page.waitForTimeout(UNDO_FLOOR_MS + 500)
+  /* The same fake clock as the list case, for the same reason (D136), and the receipt has
+   * survived clearing the search since it is rendered above every screen this view has. The
+   * window is a promise to a person who has just put a card in an envelope and looked up. */
+  await page.clock.runFor(UNDO_FLOOR_MS + 500)
   await expect(undo, `undo left before ${UNDO_FLOOR_MS}ms`).toBeVisible()
 
   await undo.click()

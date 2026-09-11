@@ -1172,12 +1172,22 @@ class Catalog:
         *,
         game: Optional[str] = None,
         dropped_rows: int = 0,
+        dropped_off_condition: int = 0,
     ):
         # Which game's rows these are (None for a direct, pre-scoped build) and how many
         # rows of the source file the game's filter dropped — reported by the caller, per
         # D25's "reports the drop count".
+        #
+        # TWO COUNTS, BECAUSE THEY ARE TWO DIFFERENT FACTS AND ONE OF THEM USED TO LIE (D137).
+        # `dropped_rows` is other games' rows: zero for a file exported per game, large for a
+        # combined file working as intended. `dropped_off_condition` is THIS game's rows in a
+        # play grade. `cli/cmd_join.py` reported the first as "row(s) of other product lines
+        # dropped", and after D137 that sentence would have covered 8,077 Riftbound rows and
+        # called them another product line's. A number nobody can account for is a number the
+        # next person deletes the filter to explain.
         self.game = game
         self.dropped_rows = dropped_rows
+        self.dropped_off_condition = dropped_off_condition
         self.export = export
         self._by_number: Dict[str, List[tcgcsv.Row]] = {}
         self._blank_number_by_name: Dict[str, List[tcgcsv.Row]] = {}
@@ -1241,22 +1251,81 @@ class Catalog:
         against, and `misc` refuses here as `NotCatalogued` — its `product_line` is `None`
         precisely so this comparison could never be true anyway.
 
-        Refuses on zero rows — see `EmptyCatalog`. The drop count is carried on the
-        catalog (`dropped_rows`) for the caller to report: zero is the ordinary case for a
+        AND THEN NARROWED TO THE CONDITIONS THIS PRODUCT SELLS (D137) — the game's own Near
+        Mint strings plus `Unopened`, so sealed product survives and every play grade goes.
+        That is a SCOPE and not a partition: the pair above says which game's rows these are,
+        this says which reading of a card the product lists, and the block beside the
+        predicate carries the argument and the measurements.
+
+        Refuses on zero rows — see `EmptyCatalog`, which now tells the two emptinesses apart:
+        the wrong file for this game, and the right file in the wrong grades.
+
+        TWO DROP COUNTS, carried on the catalog for the caller to report. `dropped_rows` is
+        other games' rows, per D25's "reports the drop count": zero is the ordinary case for a
         file exported per game, and a large number is a combined file working as intended.
+        `dropped_off_condition` is this game's own rows in a grade it does not list — on the
+        owner's fetched Riftbound export, 8,077 of 10,191.
         """
         entry = games.require(game)
         line = entry["product_line"]
         rarities = entry.get("product_line_rarities")
+        # D137 — THE THIRD AXIS, AND IT IS A SCOPE RATHER THAN A PARTITION.
+        #
+        # The game's own Near Mint strings, read off the registry exactly as
+        # `server/capture_server.py:_near_mint_conditions` reads them for the catalog search,
+        # so a game whose finishes move changes in one place. D12 hardcodes Near Mint: every
+        # rung of `variant.resolve` resolves to one of THESE strings and to nothing else, so a
+        # `Lightly Played Foil` row is a row the ladder would never pick and a row the operator
+        # must never be offered.
+        #
+        # IT WAS ONLY EVER NEAR MINT BY ACCIDENT OF THE FILE. Until 2026-08-31 the operator
+        # downloaded the export by hand with the portal's Near Mint filter checked, so the
+        # catalog was narrow as a property of the CSV and not as a rule anywhere in this tree.
+        # D65's fetch declares `Scope.condition_ids` and has never populated it — `ids()` turns
+        # `()` into `["0"]`, the portal's *All Conditions* — and on 2026-09-01 every run was
+        # re-joined against a fetched file. The rule lives HERE rather than on the wire (D76's
+        # last paragraph, amended) precisely so it cannot depend again on how the file was made.
+        #
+        # WHAT IT COSTS IS NOTHING, AND THAT IS MEASURED RATHER THAN ARGUED. A play grade is not
+        # a finish — D64's own words, and its own measurement: "all 153 numbers read as thinned
+        # and not one had lost a finish". Re-measured on the owner's 2026-09-11 export, 0 of
+        # 1,246 numbers lose a finish here, because each finish keeps its own Near Mint row.
+        # What it RESTORES is D3 rung 2, which the wide file had killed outright: 0 of those
+        # 1,246 numbers held a single row as fetched, and 629 do once the grades are gone.
+        #
+        # SEALED PRODUCT SURVIVES and is not an exception to the rule so much as outside it —
+        # see `tcgcsv.SEALED_CONDITION`, which carries the argument and the measurement.
+        conditions = {str(v) for v in dict(entry["condition_by_finish"]).values()}
+        conditions.add(tcgcsv.SEALED_CONDITION)
+
+        def this_game(row) -> bool:
+            return row.get(tcgcsv.PRODUCT_LINE_COLUMN) == line and (
+                not rarities or row.get(tcgcsv.RARITY_COLUMN) in rarities
+            )
+
+        mine = [row for row in export.rows if this_game(row)]
         kept = tuple(
-            row
-            for row in export.rows
-            if row.get(tcgcsv.PRODUCT_LINE_COLUMN) == line
-            and (not rarities or row.get(tcgcsv.RARITY_COLUMN) in rarities)
+            row for row in mine if row.get(tcgcsv.CONDITION_COLUMN) in conditions
         )
         if not kept:
             lines = ", ".join(repr(v) for v in tcgcsv.product_lines(export)) or "none"
             source = f" {export.source}" if export.source else ""
+            # THE CONDITION AXIS IS NAMED HERE OR THE SENTENCE IS FALSE. An export carrying
+            # this game's rows in play grades ONLY — a plausible hand-download with the wrong
+            # box ticked — used to refuse with a message about `Product Line`, sending the
+            # operator to look at the one column that was right. The two cases are told apart
+            # rather than blurred: `mine` is what the partition kept.
+            if mine:
+                offered = ", ".join(
+                    sorted({str(r.get(tcgcsv.CONDITION_COLUMN) or "") for r in mine})
+                ) or "none"
+                raise EmptyCatalog(
+                    f"the export{source} holds {len(mine)} row(s) for game {game!r} and not "
+                    f"one of them is a condition this product lists (D12 — Near Mint): it "
+                    f"offers {offered}, and this join reads {', '.join(sorted(conditions))}. "
+                    f"Re-export without the condition filter — nothing was joined and nothing "
+                    f"was written."
+                )
             raise EmptyCatalog(
                 f"the export{source} holds no rows for game {game!r} "
                 f"(Product Line {line!r}"
@@ -1267,7 +1336,8 @@ class Catalog:
         return cls(
             tcgcsv.Export(header=export.header, rows=kept, source=export.source),
             game=game,
-            dropped_rows=len(export.rows) - len(kept),
+            dropped_rows=len(export.rows) - len(mine),
+            dropped_off_condition=len(mine) - len(kept),
         )
 
     @property
@@ -1418,6 +1488,13 @@ class SkuMatch:
     #: was deleted 2026-09-08. `LIVE_QUANTITY_CAP` survives as a figure a press MAY propose
     #: and as the harness's fixture bound; nothing falls back to it.
     live_cap: Optional[int] = None
+    #: THE COPIES THIS SEND ASKED TO LIST FOR THIS CARD, or `None` for every copy that can go
+    #: (D7, amended 2026-09-11 on the operator's ruling). A SEND QUANTITY and not a ceiling:
+    #: `2` puts two copies in the file whatever TCGplayer already holds, bounded by the copies
+    #: on hand that are not already listed. `0` is a real answer — none of this card this
+    #: press, without a standing hold. Named per SKU because the ruling was *case by case*:
+    #: `emit --quantity SKU=N`, and the Qty field on every `#/pricing` row.
+    asked: Optional[int] = None
     rule: pricing.Rule = pricing.MATCH
     basis: str = pricing.BASIS_MARKET
     # The D9 cut-off this match was partitioned against — the operator's stored
@@ -1549,10 +1626,29 @@ class SkuMatch:
         # is simply absent: every copy this run holds that TCGplayer does not already have
         # goes. `uncommitted_positions` is what still stops a copy being sent twice — this
         # method's own docstring separates the two jobs, and only the second was retired.
+        room = self.room
+        # AND THE SEND'S OWN ANSWER FOR THIS CARD BOUNDS IT LAST (D7, amended 2026-09-11). A
+        # quantity is what the operator typed for THIS press; it can only take copies out of
+        # the file, never put in copies the ceiling or the shelf refuse. `0` is honoured as
+        # "none of this card this press", and `nothing_to_add` names it in those words.
+        if self.asked is None:
+            return room
+        return max(0, min(self.asked, room))
+
+    @property
+    def room(self) -> int:
+        """What could go before this send's own quantity is applied: every copy TCGplayer does
+        not already hold, under the ceiling when one was asked for. `add_to_quantity` is this
+        bounded by `asked`, and the report reads both to say *asked 5, 3 can go*."""
         if self.live_cap is None:
             return len(self.uncommitted_positions)
-        room = self.live_cap - self.copies_out
-        return max(0, min(room, len(self.uncommitted_positions)))
+        ceiling = self.live_cap - self.copies_out
+        return max(0, min(ceiling, len(self.uncommitted_positions)))
+
+    @property
+    def asked_short(self) -> bool:
+        """The send asked for more of this card than can go. Named, never clamped silently."""
+        return self.asked is not None and self.asked > self.room
 
     @property
     def nothing_to_add(self) -> Optional[str]:
@@ -1569,6 +1665,11 @@ class SkuMatch:
             return None
         if not self.uncommitted_positions:
             return "every copy in this run is already listed or has left the box"
+        # THE SEND'S OWN ANSWER, BEFORE ANY SENTENCE ABOUT A CAP (D7, amended 2026-09-11): a
+        # zero typed for this card is why nothing goes, and it is not a hold, so the way
+        # back is the field and not the corpus.
+        if self.asked == 0:
+            return "this send asked for none of this card"
         # `live_now`, never `live_before`: the sentence names the reading the cap was
         # computed from, which is the newer of the store's and the export's (D87, amended).
         pending = self.copies_out - self.live_now
@@ -1967,6 +2068,7 @@ def join_batch(
     copies_out: Optional[Mapping[str, int]] = None,
     threshold: Decimal = pricing.THRESHOLD,
     live_now: Optional[Mapping[str, int]] = None,
+    quantities: Optional[Mapping[str, int]] = None,
 ) -> JoinReport:
     """Resolve every card to exactly one catalog row, aggregating copies by SKU.
 
@@ -2114,6 +2216,8 @@ def join_batch(
                 sku=sku,
                 row=resolution.row,
                 live_cap=live_cap,
+                # The send's own quantity for this card, or none (D7, amended 2026-09-11).
+                asked=None if quantities is None else quantities.get(sku),
                 rule=rule,
                 basis=basis,
                 threshold=threshold,

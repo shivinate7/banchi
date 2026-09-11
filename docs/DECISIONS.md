@@ -131,6 +131,10 @@ The capture server serves stored photos at `GET /photo/<box>/<position>`. The re
 
 **The operator was asked which control they wanted and chose the ceiling**, having first picked the send-quantity reading on an estimate of implementation cost that was wrong: the ceiling needed four label edits and no test changes, while the send quantity needed one arithmetic line and **19 harness assertions rewritten**, because D59's tests encode the ceiling throughout. The estimate was corrected and the choice retaken; the wording is the fix and the arithmetic was never in question.
 
+**A NUMBER ON EACH CARD'S ROW, AND IT IS A SEND QUANTITY (amended 2026-09-11, on the operator's report).** *"I actually found I can no longer select quantities to sell at all, which wasn't the goal. Yes I wanted caps eliminated at the store level, but I still wanted to be able to select quantities to list if on a case-by-case basis I want to."* Established before anything was built: the ship-bar field was present on both bars, labelled *hold to N live per card*, and doing exactly what the paragraph above says — a ceiling on copies live, counting what is already out. It could not say "two of THIS card", and on a SKU with copies already out it said nothing at all, which is the shape the owner read as the control being gone. The Qty column beside it was a read-only *N of M*. Nothing had been removed; the control that existed was the one the owner had been asked to choose on 2026-09-08, and the one they were now asking for was the OTHER reading, per card.
+
+**Asked in plain words which control they meant — a number on each row, one ceiling for the send, or both — and what a typed number should mean, they ruled for a number on each row meaning COPIES TO SEND IN THIS FILE**: type 2 and two copies go, whatever TCGplayer already holds, bounded by the copies on hand that are not already listed. The ceiling stays as it is, in the ship bar, for the send that wants one; the two compose to the tighter. So this entry now names two per-send controls and still no standing one: `--cap N` and the field beside the emit options hold every card to a ceiling; `--quantity SKU=N`, repeatable, and the Qty field on every `#/pricing` row send that many of that card. **Neither is written anywhere.** A quantity is not a fact about the card — D49's hold is, and lives in the corpus — it is a fact about one press, held in the screen as typed and SPENT by the write: the map clears on a successful emit, because a figure that survived it would send the same copies again on the next press, on top of what went. `0` is a real answer — none of this card this press — and is not a hold. `pipeline/join.py:SkuMatch.asked` carries it; `add_to_quantity` is `min(asked, room)` where `room` is what the ceiling and the shelf allow; `nothing_to_add` names a zero in its own words. A figure past what can go is clamped on the way out of the field and NAMED in the report — *asked 9, only 3 can go* — and a SKU named that the send does not hold is named back, because a typo behind an accepted flag and a written file would otherwise vanish. Every leg of a merged send carries the same map and `pipeline/merge.py` spends it once across the union, the way it spends the cap. Covered by `harness/tests/t7_store_and_seams.py:check_emit_send_quantity` and four cases in `app/tests/pricing.spec.ts`. The ship-bar cap field's placeholder was also found clipped to *no ca* at 56px on the same look and widened.
+
 **`min` WAS HIDING THE ONE FIGURE THAT EXPLAINS A REFUSAL.** `nothing_to_add` printed `min(copies_out, live_cap)`, so five copies out against a cap of two read as *"2 of the 2 this SKU may have out"* — true about the cap, false about the store, on the row whose entire question is why nothing is going out. The original argument was that *"6 of the 4 is not a sentence"*; that is a reason to WORD an overrun, not to suppress it. Both arms now name it: *"5 live, over the 2 this send asked for"*, and *"5 already out against the 2 this send asked for"*.
 
 **A merged send names what it dropped, which it did only in the total case.** `MergedSku.rows()` filters `add_to_quantity == 0` out of the file, and `cli/cmd_emit.py` printed the dropped list only inside `if not rows:` — so a partial capped send wrote the file, reported `import  10 row(s)` and named the other forty nowhere. The single-run path had a `no room` block doing exactly this and the two had simply diverged. That was the silent drop `CLAUDE.md` forbids by name, reachable from the ordinary press.
@@ -2034,7 +2038,19 @@ On surface / bg / hover it is 5.12 / 4.99 / 4.69:1, clearing 1.4.11's 3:1 on all
 
 **A screen wanting no dip writes `translate: none`** — one property and one comment, the same cheap exception the other two floors offer. `.fulfillment-row`, `.ff-row` and `.runs-box` each take it, and each needed the edit: they had opted out with `transform: none`, which stopped saying so the moment the dip moved to a different property. **That is the hazard this kind of floor carries and it is worth naming** — an opt-out written against one property is silently repealed when the mechanism moves to another.
 
-**What is STILL not done, and is not declined:** the 22 controls that give no hover response at all. Nine are the current page's own nav link and the rest are active tabs and segments, which have nowhere to move to; whether the current page should respond to a hover is a design question for the owner rather than a defect.
+**THE INERT CONTROLS WERE PUT TO THE OWNER AS IMAGES AND RULED ON, 2026-09-07.** (Restored 2026-09-11: PR #192 put the paragraph this replaces back the same day it was written, D133 has the account.) 22 controls gave no hover response at all. That was never one fact — it was two, failing for unrelated reasons, and rendering both at 3x beside their unhovered selves is what separated them.
+
+**The current page's nav link — 9 of the 22, one per route, and the largest inert group in the product — now responds.** It was never a missing rule: `.bn-nav-link:hover` is (0,2,0) and `.bn-nav-link[aria-current='page']` is (0,2,0) too, so the tie went to source order and selection silently outranked hover three lines further down. **A rule that loses a tie does not look broken in a stylesheet; it looks like a rule.** The fix layers D110's alpha over the selection tint — one step, in the colour the row already has, rather than a second colour competing with itself.
+
+**The selected tab stays inert, deliberately, and the owner chose it from the images.** It fails for a different reason and no specificity is involved: `:hover` sets `--bn-ink` and a selected tab is ALREADY `--bn-ink`, so there is nothing left to change. Any fix would have to introduce a NEW property, and the only one available is a background — which these tabs do not have. They are underline-styled and carry no ground, so a plate appearing under the pointer changes their character more than it fixes. The ruling is recorded beside the rule in `kit.css`, not only here.
+
+**AND THE FIRST FIX SNAPPED, WHICH IS THE PART WORTH CARRYING FORWARD.** The obvious spelling of "composite an alpha over a background" is a flat one-colour `linear-gradient` as a second background layer, and it was written that way, reviewed, and passed by this entry's own guard. **`background-image` is not animatable** — interpolation from `none` to a gradient is discrete — so it repainted correctly and landed in one frame: the exact defect the response floor exists to remove, reintroduced on the row that prompted the whole entry. It was caught by sampling mid-transition, not by reading.
+
+**The guard had a hole of precisely the shape it was built to refuse, and it is closed.** `eased()` maps the `background` shorthand to `background-color`, finds that transitioned and passes — blind to the fact that the property which actually changed was `background-image`. **A guard that cannot see the property that changed is the same class of hole as a roster that has stopped listing a route**, which is the failure this file's header spends three paragraphs on. A `:hover` rule painting a gradient, `url()` or `image-set` is now reported by name. The live fix is an inset `box-shadow` at a spread larger than the row: same alpha, same ground, and it interpolates.
+
+**A component's own `transition` REPLACES the floor's rather than adding to it**, so the shadow still snapped until `box-shadow` was named in `.bn-nav-link`'s own list. That is not a quirk of this rule; it is true of every screen that declares a transition, and it is why the floor is a floor rather than a guarantee.
+
+**Measured after: 15 controls inert, down from 22, and 310 of 325 respond.** What remains is the selected tab and segment (ruled above), four `.search-field-input`s whose WRAPPER carries the response, and single rows — none of them a case anybody has argued is wrong.
 
 **What would reopen this: a screen that wants a control to say something else.** The floor is overridden by a class, deliberately, so a genuine exception costs one rule and one comment saying why. What must not happen is a screen going back to saying nothing at all — that is what the guard is for, and a spec that starts skipping routes has repealed this entry without anyone arguing with it.
 
@@ -2672,6 +2688,20 @@ Frozen because a parser reads them: the `## D<n> — <title>` heading with its d
 
 **What would reopen this: a session that reasons from the index alone.** The index names 60 entries and argues none of them. If decisions start being cited from their titles — or worse, re-litigated because nobody opened the entry — the honest answer is not a longer index but a louder instruction, and `CLAUDE.md` is where it would go.
 
+### Amended 2026-09-11 — every identifier is American, and prose outside these four docs is not governed
+
+**Every identifier in the repository is spelled American; comments, docstrings, string literals and markdown outside the four docs this entry already governs are left as they are.** Ruled by the owner on 2026-09-11 during the D133 reversal interview, after `server/pipeline_routes.py:_artefacts` was found beside docs this entry rules American, and after the walk found `docs/DECISIONS.md` itself flipping the word between the two spellings across PRs #65 and #110.
+
+**Measured before the ruling, over 291 tracked source and markdown files.** 1,580 British spellings in 198 files: 869 in comments and docstrings across 169 files, 289 in markdown across 23, 119 in identifiers across 24, and the rest in string literals. The American side already held wherever the language itself has a say — 1,405 `color` and 463 `center` in CSS, 951 `fulfill`, 868 `catalog`.
+
+**Why the ruling stopped at identifiers.** The owner's question was whether standardizing had value at all, the worry being that mixed spelling might one day confuse a model reading the code. It does not: a model reads `artefact` and `artifact` as one word, so mixed prose costs nothing at read time. A grep does not. A search for `artifact` never found `_artefacts`, and a session reading `Fulfillment.tsx` and then searching the store for `fulfillment` never found the `fulfilment` table — a search that returns half the sites and looks complete. That hazard exists only for names, so names are what the ruling covers. The full sweep was declined by name: 198 files against five open PRs and sixteen live worktrees, and a rewrite of text in this file and in `docs/GATES.md` whose only job is to be a record.
+
+**Two names are out of scope, by name, with the reason recorded.** `fulfilment` is a table in `inventory/store.sqlite` and the ledger payload key the legacy-JSON migration reads (D88). `catalogued` is the game registry key in `pipeline/games.py`, a field on the wire in `GET /games`, and the stem of the `not_catalogued` reason code. A rename of either is a migration, not a spelling. Their relatives — `is_catalogued`, `NotCatalogued`, `_parse_fulfilment` — stay with them so no file is split between spellings. `aria-labelledby` is the platform's own name and is allow-listed for the same reason.
+
+**The reader is `identifier spelling`, a blocking row in `scripts/docs-audit.py`.** It reads every tracked `.py`, `.ts`, `.tsx`, `.mjs`, `.sh` and `.css`; blanks comments, docstrings, strings, template literals, regex literals and JSX text byte for byte before a token is read; and names the American form in every finding. Its -ise stems are a closed list, because an open pattern flags `raise`, `Promise` and `otherwise`, and a miss is the cheaper error on a row that blocks. `SPELLING_ALLOWED` is the allow-list, each entry a name with its reason. Vale's `AmericanSpelling` rule keeps its advisory watch over markdown and is unchanged. Mutation-tested under `--self-test`, in both directions per language: a British name is found in each of the six file kinds, the same word in a comment, a string, a regex, JSX text and a docstring is not, a template literal's `${}` is read, a generic parameter list is not mistaken for a tag, an allow-listed stem passes, and the tree is clean.
+
+**What landed with it.** The 119 identifiers renamed in place across 24 files — `_artefacts` to `_artifacts`, `summarise` to `summarize`, `humanise` to `humanize`, `_normalise_origin`, the `cancelled` flags, the test locals — and the three documents that named `_artefacts` following it.
+
 ---
 
 ## D61 — The shipping lane is three lanes, and the third answer is "I cannot tell"
@@ -3128,7 +3158,7 @@ This is cookie-session auth, not the order-management API, which is another host
 
 **The cookie is a bearer instrument and `.env` is the only place it lives.** Never logged, never in a refusal message, never written into a run directory; T7 asserts the last over every file the run holds. `PKMNSCAN_TCG_EXPORT_URL` refuses to carry it anywhere but https or loopback, because a knob that redirects a session cookie is an exfiltration channel wearing a test seam. One redirect hop is followed, and the cookie is not re-sent across a host change.
 
-**What was fetched is downloadable.** `_artefacts` lists off the run directory, so the operator can open the file this route summarizes rather than trust the summary.
+**What was fetched is downloadable.** `_artifacts` lists off the run directory, so the operator can open the file this route summarizes rather than trust the summary.
 
 **The WAF does not block an authenticated stdlib client, measured 2026-08-30.** The owner placed a session cookie and the fetch returned 68,363 bytes over 394 rows. This was the one thing the entry recorded as owed, and it is the reason `PKMNSCAN_TCG_USER_AGENT` exists: the earlier unauthenticated measurement said nothing about a request carrying a session, so a block was a plausible outcome the build had to survive. It did not occur. `tcg_blocked` stays, because one measurement on one day is not a guarantee about a rule somebody else maintains.
 
@@ -5681,7 +5711,7 @@ screen.
 
 **D54's empty guard is per file and was widened, not weakened.** `emit` still never opens an import file until it has at least one row for it, and merging gives that failure one more way to happen — a file can now be empty for every game at once, and under `--split-threshold` a send whose every row is above the cut-off would otherwise write a header-only `import-subthreshold.csv` over a good one. `_warn_stale` globs `import*.csv` now: it named the two bucket files and would have said nothing about the one the default press leaves behind, which is exactly the stale file it exists to name.
 
-**`_artefacts`' `is_import` was wrong from the day the merged file was added** — it tested `startswith("import-")` and `IMPORT_MERGED` is `import.csv` with no hyphen, so the run panel's import affordance never appeared over it. Fixed here because the default now lands on it.
+**`_artifacts`' `is_import` was wrong from the day the merged file was added** — it tested `startswith("import-")` and `IMPORT_MERGED` is `import.csv` with no hyphen, so the run panel's import affordance never appeared over it. Fixed here because the default now lands on it.
 
 ### What is NOT built, named rather than left to be discovered
 
@@ -7435,6 +7465,8 @@ The copies list is what absorbs the difference because it is the only part of th
 
 **`make design-check` is a job in `.github/workflows/check.yml` now.** It was in neither `make check` nor CI, so every floor above — and D50's three, and D117's thumb floor, and the Fulfiller's contractual constraints — fired only when a person typed the command, on one Mac. That is the defect the top of that file already describes: a mechanism that is thorough, correct and never re-evaluated. It is a separate job rather than a step in `check` (a chromium install is a real cost, and a red `check` and a red `design-check` are claims about different things), it runs on `pull_request` and on `push: main`, and it costs twelve to fifteen minutes against ninety seconds — parallel, so it is the last word rather than the first. It gets no `scripts/checks.py` entry, because `check registry` refuses an entry for a target `make check` does not run.
 
+**The "twelve to fifteen minutes" above is what it cost from 2026-09-07 to 2026-09-11 and is left as written; D136 is what it costs now.** Measured over 56 jobs before that entry: 940-1,020s wall-clock per run, `481 passed (15.2m)` on one worker, because a private repo's `ubuntu-latest` has two vCPUs and Playwright's default of half of them floors to one. The job is three shards of one worker each now, the seven real-clock sleeps are a fake clock, and the post-merge run is skipped when the tree already passed on the PR — the new figures, from a dispatch, are in D136.
+
 **Its first run went red on the sale case, on a tree the rig had passed 166 times.** The walk row's slot cell is `minmax(34px, max-content)`; selling the copy rewrites that cell from `#1` to the store key `B2 #1` in the mono face (D68), which is wider — so the column grows and the name and the badges slide right ON THE PRESS. `B2 #1` sets at **33.0px in macOS's monospace fallback and over 34px in Linux's**, either side of the column's own 34px floor. One platform swallowed the movement; the other reported it as one pixel.
 
 **The pixel was the messenger and never the subject.** `B2 #1` is the shortest key a store can produce — box 2, card 1. `B3 #96`, which the owner's store already draws, is 40px, and `B12 #133` is 46px: those sales moved the name six and twelve pixels on **both** platforms, and the case never saw them, because the fixture it walks is the one box whose key fits under the floor. **A tolerance would have been the wrong fix in the most exact way available** — it would have silenced the one measurement that was small enough to look like noise and left every larger one unguarded.
@@ -9095,17 +9127,18 @@ retiring comments whose code fixes survive — `Pricing.tsx` still reads the has
 commit, all of whose reversals were later re-applied or were D31's own deletions.
 
 **One is real and unrecorded.** `5b79982` (PR #192, "t1-fingerprints", D112) put back the
-paragraph of D110 that PR #191 (`efc2444`, the same day) had replaced: eight paragraphs
+paragraph of D50 that PR #191 (`efc2444`, the same day) had replaced — this entry said D110
+until the restoration, because the lost text cites D110: eight paragraphs
 recording the owner's 2026-09-07 ruling on the 22 inert controls — the current page's nav link
 now responds, the selected tab stays inert by their choice from the images, the first fix
 snapped because `background-image` does not animate, and `cursor.spec.ts`'s guard gained a
 reader for gradients by name. The code survived in full: `App.css`'s
 `.bn-nav-link[aria-current='page']:hover`, the gradient test in `cursor.spec.ts`, and the
-ruling's comment in `kit.css`. **The decision does not.** D110 at HEAD says the current page's
+ruling's comment in `kit.css`. **The decision does not.** D50 at HEAD says the current page's
 hover is "a design question for the owner rather than a defect" — a question the owner
 answered four days ago, whose answer is now recorded only in a stylesheet comment. What the
 screen does is right; what the record says about it is a day old. Not fixed here: the owner's
-call, one branch, restoring the text of `efc2444` into D110 as an amendment dated to both
+call, one branch, restoring the text of `efc2444` into D50 as an amendment dated to both
 days.
 
 The seven files D119's own re-application (`521dbfd`) put back in `Inventory.tsx`,
@@ -9130,6 +9163,45 @@ other side.
   seventy-nine additional hits, every one a coincidence of code moved within a rewrite, and the
   map rows still not among them. It was not kept. The whole-file detector is the answer to the
   common form of this: a keep-ours merge restores the whole blob, and a blob is compared by id.
+
+### Amended 2026-09-11, the same day: the walk was put to the owner, one reversal at a time
+
+**Every reversal above was read to the owner in plain English and ruled on**, so none of it is
+re-litigated. Their standing instruction from that interview binds every future pass:
+*"I need you to tell me these in english, the terminology of codes is for your ease."* A PR
+number, a decision number or a file name is not an answer they can rule on.
+
+**Restored, on their word: D50's lost paragraphs.** `efc2444`'s eight paragraphs are back in
+D50, dated to both days, on `claude/d50-amendment-restored`. The commit names the file, which is
+this entry's own declaration rule, and the guard passed it.
+
+**Kept, on their word, each one presented and not overturned:** the location panel stays
+deleted and each row names its box once (#246); the crop stays off the four screens (#233); the
+separate rail icon stays gone and the logo morphs into the bracket as the sidebar collapses
+(#176); the four allow-list placeholders stay deleted (#164); the Review screen's per-file
+`/status` stub stays folded into the shared seal — they asked what keeping it costs, and the
+answer recorded is *nothing*, against a weaker second copy (#145); the Codes screen's box load
+stays as the redesign wrote it (#136); the "Fetch anyway" buttons stay as rebuilt (#110); the
+iCloud-era `node_modules` shortcut stays untracked (#9); the six pre-PR self-reworks stand.
+
+**Kept, with the owner correcting this record's framing of it (#114, D96).** This entry and
+D96 describe the retired order walk as "the walk picking for me" and its replacement as one
+copy at a time. Their words on 2026-09-11: *"It's still a guided walk, it's just I get to pick
+from all the copies rather than just spoonfed one specific copy to go find."* The walk through
+the boxes on `#/orders` IS guided; what changed is who chooses the copy. Read D96 with that
+sentence beside it.
+
+**Kept, and it surfaced a loss the walk did not find (#222, D7).** The standing cap's removal
+stands. But their words: *"I actually found I can no longer select quantities to sell at all,
+which wasn't the goal. Yes I wanted caps eliminated at the store level, but I still wanted to be
+able to select quantities to list if on a case-by-case basis I want to, and I've somehow lost
+that functionality."* D7 says `--cap` and a field on `#/pricing`'s ship bar are that control;
+the owner cannot find or use it. Out of this walk's scope and handed to its own task rather than
+guessed at here — it is a D7 question, and the first step is to look at the screen with them.
+
+**Two spellings of one word, ruled on rather than kept (#110, D60).** `_artefacts` flipped
+between spellings in this file across two PRs and the owner ruled: standardise repo-wide. Its own
+task, under D60, which already rules American for the loaded docs.
 
 ## D134 — A departed record is buried, not kept; the box goes; and the graveyard is where the departed are read
 
@@ -9231,3 +9303,286 @@ newer lines for the same keys, which those readers find first. A stale line from
 box therefore sits inert beneath a live one rather than being cleaned up — the same shape
 D36's `refuse_reallocated` already treats as a hazard worth refusing a run over, not worth
 silently repairing.
+
+---
+
+
+
+## D135 — Codex reads the same rules a Claude Code session does, through three symlinks and one reconciled hook roster
+
+**Settled 2026-09-11.** OpenAI Codex was installed in this repository on 2026-09-09 and left
+three untracked paths in the main checkout: a 117 KB `AGENTS.md` that is `sed
+'s/AGENTS\.md/CLAUDE.md/g' AGENTS.md | diff - CLAUDE.md` away from `CLAUDE.md` — 139 lines of
+drift, missing `make reap`, D129, the eight-key storage roster and D132 — a byte-identical copy
+of `.claude/skills/tcgplayer-csv/SKILL.md` at the equivalent path under a separate,
+untracked `.agents/skills/` directory, and
+`.codex/` holding `config.toml` (a shell-environment policy, machine-local) and `hooks.json`
+(the same six-then-eight hooks `.claude/settings.json` runs, by the same scripts). None of the
+three was tracked, so none of it reached a clone, a worktree, or a PR — every Codex session
+anywhere but that one Mac read stale prose, a stale skill, or no hooks at all.
+
+**A copy is a fork with a diff nobody watches. A symlink has no diff to drift.** The fix is not
+a sync script — this repo already argued that case for the eval-image mirror and lost it (D47)
+— it is to point Codex at the files Claude Code already reads, so one edit reaches both readers
+by construction:
+
+- **`AGENTS.md -> CLAUDE.md`**, at the root. A relative link, same directory, committed.
+- **`code-card-fork/AGENTS.md -> CLAUDE.md`**, inside that directory — because the codex-track
+  auto-load `CLAUDE.md` itself documents (`code-card-fork/CLAUDE.md`, "auto-loaded in that
+  directory") needs the same door for Codex that the root file gets, or a session working the
+  code-card track reads the singles rules and nothing about codes.
+- **`.agents/skills -> ../.claude/skills`**, a directory link. Every skill added under
+  `.claude/skills/` from now on is a skill Codex can load too, with no second copy and no
+  second place to remember it.
+
+**Both are D47's allowed shape and neither is its refused one.** All three are relative and
+resolve inside the repository — `python3 -c "os.path.realpath(...)"` was run against each
+before committing, the check this entry's own mechanism performs at every commit thereafter.
+The pre-commit hook that reads mode `120000` out of the index (D47) is what makes that
+durable rather than a one-time check: a future session cannot silently turn one of these into
+an absolute path or a copy without the hook refusing it.
+
+**This retires the allowlist line that predicted it.** `scripts/docs-audit-allow.txt` carried
+`code-card-fork/AGENTS.md` from 2026-09-09, on the owner's instruction, with its own reason
+stating the condition for its removal: *"Delete this line if a tracked AGENTS.md is ever
+adopted here, at which point the pointer should be fixed rather than excused."* That day is
+this one. The line is deleted, not edited — the entry it named now exists and the audit
+confirms it rather than excusing its absence.
+
+### The hook roster is reconciled, mechanically, in both directions
+
+**`.codex/hooks.json` and `.claude/settings.json`'s `hooks` block disagreed on arrival.**
+Codex's file was written 2026-09-09; `.claude/settings.json` gained a `Bash`-matched
+`scripts/reap.py --hook` PreToolUse entry the next day (D127, for the pkill/lsof incidents)
+and has always carried `scripts/session-teardown.sh` on `WorktreeRemove` (D111's sweep),
+neither of which `.codex/hooks.json` had. A Codex session could have run an unrestricted
+`pkill` a Claude Code session in this repo cannot, and a worktree it removed would never
+notify a supervisor to stop. Both are added to `.codex/hooks.json` in the same change that
+adds the guard below, so the row starts green rather than starts by reporting the gap.
+
+**`scripts/docs-audit.py:check_codex_hooks` reads both files as `(event, matcher, command)` triples and reports whichever side is missing what the other runs**, plus any command that
+names a script no longer in the tree. It is MECHANICAL — a hook roster is a literal, checkable
+the same way `check_hook_roster` already checks `scripts/githooks/` against `docs/map.py` — and
+it is registered in `audit()` and covered by `--self-test`, which drives the extractor on
+synthetic dicts (so the mutation this row exists to catch — one hook removed from one file —
+is provable without touching either real file) and then asserts the two real files agree.
+
+**What this is not.** `.codex/config.toml` stays untracked, gitignored beside
+`.claude/settings.local.json` with a comment saying why: a shell-environment policy is
+machine-local the same way a local Claude Code settings override is, and neither belongs in
+the tree that ships to every checkout. Nothing about `PKMNSCAN_GATE` or any other value in it
+is asserted here.
+
+### What is BUILT, RECORDED, NEITHER
+
+**BUILT**: the three symlinks, committed and verified to resolve inside the repository;
+`.codex/hooks.json` tracked and brought to parity with `.claude/settings.json`'s hook roster;
+the `codex hooks` mechanical row in `scripts/docs-audit.py`, registered in `audit()` and
+covered by `--self-test`; the stale allowlist line removed; the `.gitignore` line for
+`.codex/config.toml`; `docs/map.py`'s `governed_by` for `docs-audit.py` extended with D111,
+D127 and this entry.
+
+**RECORDED**: this entry, and the CLAUDE.md paragraph naming it.
+
+**NEITHER, left for the owner**: the three untracked copies in the main checkout
+(`~/Developer/pkmnscan/AGENTS.md`, its `.agents/skills/` mirror, and `.codex/`) are deleted
+only after this change is merged and pulled there — deleting them from a worktree
+would not remove the main checkout's own untracked files, and doing it before the merge would
+leave that Mac's Codex session with nothing to read in between. `.codex/config.toml` is kept
+regardless; it was never one of the three copies.
+
+## D136 — The suite is sharded and never widened, a sleep is a wait and not an assertion, and a tree that passed is not tested twice
+
+**Settled 2026-09-11, on the owner's interview.** Wall-clock per PR and flake exposure are what matter; sharding is fine now that it is known not to multiply runner minutes; a test that sleeps on a real clock may be rewritten to Playwright's fake clock; and the post-merge run on main is skipped only when the tree it would test already passed on the PR. Not one assertion or asserted value changed under this entry — D16 is the test it is held to, and every change here is to how long a true statement is given to become true, or to which machine says it.
+
+### What it cost, measured before anything moved
+
+**Until 2026-09-07 `.github/workflows/check.yml` was one job at 80-95s.** PR #227 (`6631a9d`, D118 amended) added `design-check`, and every run since was 940-1,020s wall-clock. Of the job's 954s, 913 were the `make design-check` step, and the runner's own log says why: `Running 481 tests using 1 worker` and `481 passed (15.2m)`. `app/playwright.config.ts` sets no `workers`, Playwright 1.58's default is half of `os.cpus()`, a private repo's `ubuntu-latest` is 2 vCPU, and half of two floors to one. The rig runs seven workers in 89-175s. **Since 2026-09-07: 56 design-check jobs, 820 runner-minutes, 34 green, 14 red, 8 cancelled** — the cancellations are the `concurrency` group doing its job, and four of them were main runs cancelled because a second merge landed inside fifteen minutes, so the post-merge coverage was already partial. The `check` job grew from 82s to 120s over the same window and is not the problem. The 8.8-hour and 33-minute outliers in the run list are hand re-runs hours later, not queueing.
+
+**The sleepers, serial on one worker**: `app/tests/brand.spec.ts`'s three title-alternation cases at 46.5s, 17.5s and 17.0s — four `waitForTimeout(8000)` and two polling loops of 32 and 26 half-second waits; `app/tests/fulfillment.spec.ts`'s two undo-window cases at 22.8s and 15.4s, each a `waitForTimeout(UNDO_FLOOR_MS + 500)`; `app/tests/review.spec.ts`'s receipt case, 2s of it a sleep. About 2.3 minutes of the serial run.
+
+### Three changes, each proven before the next
+
+**1. Three shards, one worker each, and the worker count is the deliberate half.** The matrix runs `make design-check PW_ARGS="--shard=N/3 --workers=1"`; `--shard` splits the CASES across three runners and each still runs one worker. `workers` was not raised, and the reason is docs/DEBTS.md section 11: a one-in-thirteen red whose only known mechanism is "the suite around it" — the case passes 555 times outside the suite on the box it fails in — and more workers on one box is more suite around it. The owner ranked flakes beside wall-clock, so the lever that buys wall-clock by widening the suite is the one lever not pulled. That section already records three shards of one worker as the shape the runner was measured in (240 of 240, 315 of 315). `PW_ARGS` is the Makefile's new way to hand Playwright a flag: `ARGS` reaches `scripts/suite-lock.py` and stops at its `--`, and until this entry nothing could reach `playwright test` at all. `make docs-audit`'s `verdict file` row still reconciles both recipes, since each shard leaves its own `.serve/design-check.json` on its own runner. The failure-trace artifact is named per shard, or the second red shard's upload collides with the first's.
+
+**2. The seven sleeps become a fake clock, installed before the first navigation and only ever advanced.** `page.clock.install()` with no fixed time: measured against 1.58 with a probe page rather than assumed, the installed clock starts at the real time and keeps ticking at the real pace — a 500ms interval fired on schedule under it — so the 63 `toLocaleDateString` sites and every stubbed wire draw today. `page.clock.runFor(n)` replaces `waitForTimeout(n)` with the SAME `n`: it fires every timer and interval due inside the span, in order, with `Date.now()` moving in step. The sampled windows, the sample counts and the expected values are untouched, and `brand.spec.ts` keeps its sentence that the window is deliberately not derived from the app's constants — a fake clock advanced by an explicit number honours that just the same.
+
+**`fulfillment.spec.ts` argued the opposite in its own comment, and the argument is answered rather than deleted.** It said real time was the point: the control has to survive ten seconds of a React re-render, a timer and whatever else the page does, and a fake clock proves the arithmetic instead. What `runFor` fires inside those ten seconds is exactly that list — the 500ms tick that redraws the receipt's seconds, the expiry timeout that would take the control away, and each re-render those cause. What it no longer proves is that wall time passes, and that is the browser's promise rather than the screen's. The comment now says so, dated.
+
+**Every rewrite was mutation-tested on the app side, and a faked wait that stayed green through its mutation would not have shipped.** With the first `setTimeout(flip, ...)` deleted from `App.tsx` the alternation case fails on the sampled set; with the effect's cleanup deleted, the Home case fails on `after` — the surviving timer wrote `capture` into a tab that must read `番地 banchi`. With `UNDO_WINDOW_MS` cut to 5,000 in `Fulfillment.tsx`, both undo cases fail on `toBeVisible` at the faked 10.5s. With a one-second timer clearing `receipts` in `ReviewQueue.tsx`, the review case fails on its second read. Four mutations, four reds, each on the assertion the sleep existed to guard; every file restored from a `.bak` copy and `git status` clean afterwards. On the rig the six cases now run in 1.0-4.6s against 15-47s.
+
+**3. The post-merge run is skipped when its tree already passed, and only then.** A PR run checks out GitHub's own merge of the branch into its base, so `git rev-parse HEAD^{tree}` there IS the tree a merge commit or a squash will carry, for as long as main has not moved. A green matrix on a PR is followed by `design-check-passed`, one job after all three shards, which uploads a one-line artifact named `design-check-pass-<tree>`. On `push: main`, `already-passed` lists artifacts by that name through the API with `actions: read` and the matrix's `if:` reads its output; the lookup runs and prints its answer on every event and is acted on only for the push, so the mechanism is exercised on every PR rather than watched once a day. Nothing is written to git, no commit status is set, and nothing D42 forbids happens — an artifact is the one thing a job here may leave behind. The `check` job and `demo.yml` run on every push to main as before.
+
+**What the skip cannot see, named.** A PR tested against an older main whose tree still coincides with the landing tree is a pass, and that is correct: the tree is the thing the browser looked at, and the same bytes are the same claim. A record older than thirty days has expired and the matrix runs — the conservative side. A PR whose tree passed and which then merges AFTER main moved has a different tree and runs the full matrix, which is exactly the semantic-conflict case the workflow's header argues for and the only reason the main run ever existed.
+
+### What it costs now
+
+**Measured on the runner, from two `workflow_dispatch` runs of this branch on 2026-09-11, read out of `gh run view <id> --json jobs`.** Run 34636356214 carried the shards alone; run 34637306388 carried the shards, the fake clock and the gate. Before is the 56-job window above.
+
+| | before | shards alone | shards + fake clock + gate |
+|---|---|---|---|
+| wall-clock, first job start to last job end | 940-1,020s | 567s (9m27s) | 504s (8m24s) |
+| `make design-check` step, per shard | 913s, one job | 534s / 292s (red at 160) / 393s | 390s / 391s / 447s |
+| Playwright's own total, per shard | `481 passed (15.2m)` | 8.9m / 4.8m / 6.5m | 7.4m / 6.5m / 6.5m |
+| setup before the step (checkout, node, chromium from cache) | ~40s | ~35-55s per shard | ~35-40s per shard |
+| `already-passed` gate | — | — | 9s, and the matrix started 12s after the run |
+| `check` job | 120s | 101s | 97s |
+
+**Runner-minutes did not fall and were not meant to**: three shards of ~6.5-7.4 minutes plus three setups is ~20-23 minutes against ~16, and the owner ruled that acceptable once it was known not to multiply. What fell is the wait: a PR's browser verdict lands in eight and a half minutes rather than sixteen. **A shard runs its third of the cases slower than the single job ran all of them** — 2.4-2.8s per case against 1.9s — which is runner variance this entry can only report; both dispatches ran in the same half hour.
+
+**The six rewritten cases on the runner, run 34637306388**: the alternation case 2.6s (46.5s before), the Fulfiller's tab 1.6s (17.5s), reduced motion 2.3s (17.0s), the undo window 3.9s (22.8s), the search-result undo 6.2s (15.4s), the review receipt 1.8s (2s of sleep gone). On the rig, 1.0-4.6s.
+
+**The gate's lookup half is proven on the runner and the record half is not, and the reason is main's.** Both dispatches printed `0 unexpired pass record(s)` for their tree and released the matrix, and `design-check-passed` was correctly SKIPPED when a shard went red. It went red on `phone.spec.ts`'s thumb-floor case at 390, which main's own run at `591285b` fails on Linux too — PR #252's fix for it was red on the runner at the time of writing — so no tree that includes today's main has had a green matrix to upload a record from. The upload is `actions/upload-artifact@v4` with a name computed by the job, and it runs on this PR's own check the first time main's Linux reds are fixed and merged in; a re-dispatch of the same tree then prints `1 unexpired pass record(s)`. Reported as unexercised rather than claimed.
+
+**One more red was seen and is main's, not this entry's**: `inventory.spec.ts:5074`'s D132 case failed on main's push run and on the first dispatch's shard 2, and passed on the second dispatch — a `toHaveText` over the walk's position cells, not the Escape shape docs/DEBTS.md section 11 records. Written down here because it is a second shape, and left to that section.
+
+### What is left, and flagged rather than done
+
+**Branch protection names no required status check.** `gh api repos/shivinate7/banchi/branches/main/protection` shows `checks: []`: a PR is required and a red CI blocks nothing today. Making `check` and the three shards required is a settings change on GitHub, which is the owner's, not a session's.
+
+**Whether the runner minutes are billed at all is unverified.** The billing endpoint needs a `user` token scope this machine's `gh` lacks, and the per-run timing endpoint reports zero billable milliseconds; whether the ~6,800 minutes a month the old shape projected were drawn against Pro's included 3,000 is not known either way, and this entry does not assert it. 
+---
+
+
+
+## D137 — The catalog is Near Mint by rule, because it was only ever Near Mint by accident of the file
+
+**Settled 2026-09-11, from the owner asking where a feature had gone.** *"how come on
+review/pricing in the runs, ive somehow lost the ability to fast forward through the review
+by just stating all were near mint?"* — and then, when the first account of it was wrong,
+the correction that located it: *"I've never once been asked to judge the condition of cards
+in a review queue until today. They always were just pre-assumed to be Near Mint."*
+
+They were pre-assumed. That is the whole finding.
+**D12 hardcodes Near Mint and nothing in this tree had ever enforced it on the catalog.**
+`pipeline/join.py:Catalog.from_export` has
+been touched once since it was written (2026-08-23, when games became data) and has never
+carried a `Condition` predicate. Every rung of `variant.resolve` resolves to a Near Mint
+string, so the *ladder* was never in doubt — but the candidate list a queue entry carries is
+`found.rows`, straight off the export, ungated. The catalog was narrow because the operator
+was producing narrow files by hand.
+
+### What changed was the input, and the date is exact
+
+D65 (2026-08-30, `fb516df`) built the automatic fetch. `Scope.condition_ids` was declared in
+that commit, has never been populated by any caller since — one commit in the whole history
+touches that name — and `Scope.model`'s `ids()` turns `()` into `["0"]`, the portal's *All
+Conditions*. On **2026-09-01** every run was re-joined against fetched exports, including
+`2026-08-24-box2-01`, whose original hand-downloaded CSV is still sitting unused beside the
+file its manifest now names.
+
+| run | export | grades |
+|---|---|---|
+| `2026-08-29-box1` … `2026-08-31-box3` | hand-downloaded | 2 conditions, **0 played** |
+| `2026-09-01-box3/4/5` onward | fetched | 11 conditions, **8,032 played** |
+
+**And the experience changed ten days after the mechanism did.**
+Counted off the store's own `answered` events, the operator has
+answered **8** grade-bearing questions against a wide export in total, all on 2026-09-01, out
+of 240 answers; on 2026-09-11 it was **108 of 131**. Before that the work was
+`number_unread_name_matched` — one candidate, one press — and the handful of `set_ambiguous`
+cards were 2-row choices between two *sets*, both Near Mint. A session telling the operator
+they had had this since the 1st was reading a mechanism as an experience.
+
+### Three costs, and only one of them is the one that was reported
+
+**The group press stopped qualifying.** D29 requires every card in the worklist to offer
+exactly one candidate. Nothing in `app/src/ReviewQueue.tsx` changed — `groupOffer` is
+byte-identical to its pre-Banchi self and `G` is still the key. With five grades per finish
+no entry can ever carry one row, so the control correctly never draws.
+
+**D3 rung 2 died outright, and that is the larger cost.** `CATALOG_FORCED` fires on
+`len(candidates) == 1`. Measured on the owner's 2026-09-11 Riftbound export: **0 of 1,246**
+numbers held a single row as fetched; **629** do once the grades are gone. Replaying that
+day's 122 queued cards through the narrowed rows,
+**50 would never have been queued at all** — 32 `detected_finish_not_stocked`, 17
+`ambiguous_no_signal`, 1
+`rarity_claim_mismatch` — and the 57 `set_ambiguous` that remain offer 3 rows rather than 15.
+Rows offered per card across that queue: **8.6 → 1.8**.
+
+**A mis-tap was listable.** `_answer_target` validated that the answer matched the row
+*offered* and never that the row should have been offered. Answering `Damaged Foil` would
+have written that SKU, and `join_batch` rung 0 re-finds an answered row by its own condition
+string, so the wrong grade would have travelled into the import file. Nothing went wrong:
+all 1,967 conditioned card records in the store read `Near Mint` or `Near Mint Foil`.
+
+### The rule lives in the join, not on the wire
+
+`Catalog.from_export` keeps a row whose `Condition` is one of the game's own
+`condition_by_finish` values — read off the registry, as
+`server/capture_server.py:_near_mint_conditions` already reads it — plus
+`tcgcsv.SEALED_CONDITION`. `cli/cmd_join.py` reports the two drops separately, because
+"8,077 row(s) of other product lines dropped" would have been false and a number nobody can
+account for is a number the next person deletes the filter to explain.
+
+**`ConditionIds` stays unpopulated and `STANDING_FILTERS` does not grow.** This is D76's last
+paragraph amended rather than repealed, and the amendment is narrow: that paragraph left the
+condition axis unspent citing D64's finding that "a condition filter thins a number's rows and
+D3 rung 2 then decides a card from whichever row survived" — which is D64's measurement of the
+**printing** axis, not the condition one. D64 itself says so in as many words two sections
+earlier: *"Play conditions are not finishes… all 153 numbers read as thinned and not one had
+lost a finish."* Re-measured here on the owner's own export:
+**0 of 1,246 numbers lose a finish**, because each finish keeps its own Near Mint row.
+The rarity axis stays unspent for
+its own separate reason, untouched.
+
+Given that, the fetch could safely narrow too — and deliberately does not. The rule belongs
+where it cannot depend again on how the CSV was produced, which is the exact dependency that
+broke on 2026-09-01; a hand-downloaded or re-used wide file must join correctly. Leaving the
+wire wide also keeps the filter's subject present in every real export rather than in
+fixtures alone.
+
+### Sealed product survives, and it is not an exception
+
+Booster displays, bundles, blisters and event kits carry `Unopened`:
+**one row per product, never a sibling, no `Number` at all**, so they live only in
+`Catalog._blank_number_by_name`
+and cannot change what any numbered card resolves to. Measured across both wide fixtures,
+**zero sealed `Product Name` cells collide with a single's**, exact or folded, so keeping
+them cannot put a Booster Box on a card. Riftbound's own export prices an Origins Booster
+Display at $250.78. The owner's call, and the measurement makes it free rather than a
+judgement: *"idk if you needed to drop sealed items"* — it did not.
+
+A play grade is a second reading of a card this product sells at one grade. `Unopened` is the
+only condition its product is ever listed in. They are not the same kind of cell, which is why
+the rule is "drop the play grades" rather than "keep only Near Mint".
+
+### What the guard had to be, because the old one could not see this
+
+**T3's `SOURCE_FIXTURE` is `sv09_export_untouched.csv`, which is Near-Mint-only.** Its whole
+`from_export` block passes identically with the filter present and absent, and was green
+through all ten days. `_check_condition_scope` runs against the two **wide** fixtures instead
+— Riftbound 10,078 rows over 11 conditions, Pokemon 7,802 over 16 — and begins by asserting
+they really are wide, because without that every assertion under it passes by accident.
+
+Mutation-tested in three arms, each killed by a different assertion and no assertion
+redundant: the predicate deleted (rung 2 and the play-grade and refusal checks go red), sealed
+dropped from the keep set (only the four sealed checks), and the set narrowed to one condition
+so a foil finish is thinned (only the finish-preservation check — D64's real worry, caught).
+
+**The first draft of the rung-2 assertion survived arm 1 and had to be rewritten.** It counted
+distinct *finishes* per number, and a set of finishes collapses the exact multiplicity the bug
+was made of: five grades of one finish is one finish and five candidates. Rung 2 is
+`len(candidates) == 1` over **rows**. It counts rows now and resolves one through the real
+ladder, because a count is not a resolution.
+
+### Not the whole of what made 2026-09-11 hurt
+
+Box 4 was captured with **no set hint on 448 of its 464 cards**, where boxes 5 and 6 are 100%
+`Unleashed`. 178 of the 1,246 Riftbound numbers collide across sets, and an unhinted collision
+goes straight to `set_ambiguous` (D65/D76 rung 4). That is the other factor, it is an
+operating fact rather than a defect, and it is named here so this entry is not read as having
+cured it: the 57 `set_ambiguous` cards left after this change are the ones a set hint would
+have answered.
+
+### Deliberately not done
+
+**The live queue is not repaired by this change and no command was run against the store.**
+`Queue.upsert` replaces an open entry wholesale and `Queue.release` drops one that no longer
+belongs, so the next join of a run rewrites its entries and the stale ones self-heal.
+`_answer_target`'s new `condition_not_listed` refusal is the floor under the entries written
+before this landed — unreachable from the screen once a run is re-joined, which is the point.
+
+**`scripts/demo-seed.py:export_variants` has the same defect, left alone on the owner's word.**
+It groups the raw fixtures by `Product Name`, so the published demo can offer
+10,452 played rows as review candidates. Recorded, not fixed.

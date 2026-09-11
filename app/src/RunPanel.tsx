@@ -71,7 +71,7 @@ const REVIEW_BELOW = [
 
 /* Who started a run, as words rather than the manifest's own token. */
 const STARTER: Record<string, string> = { app: 'this app', cli: 'a terminal', terminal: 'a terminal' }
-function capitalise(word: string): string {
+function capitalize(word: string): string {
   return word.length === 0 ? word : word[0]!.toUpperCase() + word.slice(1)
 }
 
@@ -313,27 +313,27 @@ export function RunPanel({ cart, openRun, onOpenRun, reloadTick, onIdentify, pag
   /* Re-read while on screen: fast while something is live, slow otherwise. Chained timeouts
      so a slow answer never stacks; the first failure is reported and later ones swallowed. */
   useEffect(() => {
-    let cancelled = false
+    let canceled = false
     let timer = 0
     let announced = false
     const tick = async () => {
       let anyLive = false
       try {
         const rows = await getRuns()
-        if (cancelled) return
+        if (canceled) return
         setRuns(rows)
         setLoaded(true)
         anyLive = rows.some((row) => row.live)
       } catch (err) {
-        if (!cancelled && !announced) setTrouble({ key: 'poll', failure: describeFailure(err) })
+        if (!canceled && !announced) setTrouble({ key: 'poll', failure: describeFailure(err) })
         announced = true
         setLoaded(true)
       }
-      if (!cancelled) timer = window.setTimeout(() => void tick(), anyLive ? POLL_MS : IDLE_POLL_MS)
+      if (!canceled) timer = window.setTimeout(() => void tick(), anyLive ? POLL_MS : IDLE_POLL_MS)
     }
     void tick()
     return () => {
-      cancelled = true
+      canceled = true
       window.clearTimeout(timer)
     }
   }, [])
@@ -362,22 +362,22 @@ export function RunPanel({ cart, openRun, onOpenRun, reloadTick, onIdentify, pag
       setDetail(null)
       return
     }
-    let cancelled = false
+    let canceled = false
     let timer = 0
     const tick = async () => {
       try {
         const next = await getRun(openRun)
-        if (cancelled) return
+        if (canceled) return
         setDetail(next)
         if (next.live) timer = window.setTimeout(() => void tick(), POLL_MS)
         else void loadRuns()
       } catch (err) {
-        if (!cancelled) setTrouble({ key: 'detail', failure: describeFailure(err) })
+        if (!canceled) setTrouble({ key: 'detail', failure: describeFailure(err) })
       }
     }
     void tick()
     return () => {
-      cancelled = true
+      canceled = true
       window.clearTimeout(timer)
     }
   }, [openRun, loadRuns])
@@ -778,7 +778,7 @@ export function RunPanel({ cart, openRun, onOpenRun, reloadTick, onIdentify, pag
                   {' · '}
                   {whenLabel(detail.updated_at ?? detail.created_at)}
                   {detail.started_by
-                    ? ` · started from ${STARTER[detail.started_by] ?? capitalise(detail.started_by)}`
+                    ? ` · started from ${STARTER[detail.started_by] ?? capitalize(detail.started_by)}`
                     : ''}
                 </span>
                 <h2 className="runs-detail-h">{runBoxLabel(detail) ?? detail.run}</h2>

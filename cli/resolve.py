@@ -1261,6 +1261,7 @@ def load(
     review_below: str = routing.CONFIDENCE_LOW,
     live_cap: Optional[int] = None,
     threshold: Decimal = pricing.THRESHOLD,
+    quantities: Optional[Mapping[str, int]] = None,
 ) -> Resolved:
     """Read the run, build one catalog per game, walk the ladder, route every card.
 
@@ -1506,6 +1507,8 @@ def load(
             game_cards,
             catalog,
             live_cap=live_cap,
+            # Per-SKU send quantities, keyed by SKU across every game (D7, amended 2026-09-11).
+            quantities=quantities,
             # BOTH HALVES OF THE THRESHOLD, AND THEY ARE NOT THE SAME DECISION. The router
             # reads it to decide whether a low-confidence card is worth a human's attention
             # (D9 through `pipeline/routing.py`); the batch reads it to partition the matches

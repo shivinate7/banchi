@@ -585,7 +585,7 @@ export function useCamera(): Camera {
   /* Open the chosen device, attach it, and tear it down again on every change of mind — and
    * on every `retry`, which is what `attempt` is doing in the dependencies below.
    *
-   * The `cancelled` flag is not defensive programming: StrictMode mounts, unmounts and
+   * The `canceled` flag is not defensive programming: StrictMode mounts, unmounts and
    * remounts, so a stream that resolves after the cleanup has run must stop itself. Left
    * out, the first stream stays live with no element and no reference — the camera's tally
    * light stays on and the device stays busy for the next getUserMedia. */
@@ -600,12 +600,12 @@ export function useCamera(): Camera {
       return
     }
 
-    let cancelled = false
+    let canceled = false
     let opened: MediaStream | null = null
     let attached: HTMLVideoElement | null = null
     let watched: MediaStreamTrack | null = null
     const onMetadata = () => {
-      if (!cancelled) setReady(true)
+      if (!canceled) setReady(true)
     }
 
     /* The three track events, and the only things besides a device change that move `ready`.
@@ -617,17 +617,17 @@ export function useCamera(): Camera {
      * message. `ready` is recomputed from the element on the way back rather than assumed
      * true — the track can unmute before the element has metadata again. */
     const onTrackEnded = () => {
-      if (cancelled) return
+      if (canceled) return
       setReady(false)
       setStreamError(SIGNAL_ENDED_MESSAGE)
     }
     const onTrackMuted = () => {
-      if (cancelled) return
+      if (canceled) return
       setReady(false)
       setStreamError(SIGNAL_MUTED_MESSAGE)
     }
     const onTrackUnmuted = () => {
-      if (cancelled) return
+      if (canceled) return
       setStreamError(null)
       const video = videoRef.current
       setReady(video !== null && video.readyState >= HTMLMediaElement.HAVE_METADATA)
@@ -648,10 +648,10 @@ export function useCamera(): Camera {
           stream = await media.getUserMedia(videoConstraints(deviceId))
         }
       } catch (cause) {
-        if (!cancelled) setStreamError(describeCameraError(cause))
+        if (!canceled) setStreamError(describeCameraError(cause))
         return
       }
-      if (cancelled) {
+      if (canceled) {
         stopTracks(stream)
         return
       }
@@ -695,7 +695,7 @@ export function useCamera(): Camera {
     })()
 
     return () => {
-      cancelled = true
+      canceled = true
       if (attached !== null) {
         attached.removeEventListener('loadedmetadata', onMetadata)
         attached.srcObject = null

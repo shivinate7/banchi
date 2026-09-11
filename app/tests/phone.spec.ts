@@ -97,10 +97,14 @@ const auditSource = (mode: Mode) => `(() => {
     }
     const owns = (n) => n !== null && (t.contains(n) || n.contains(t) || chrome(n))
     const inClip = (x, y) => clipBox === null || (x >= clipBox.left && x <= clipBox.right && y >= clipBox.top && y <= clipBox.bottom)
-    const hits = [[-r, 0], [r, 0], [0, -r], [0, r]]
-      .filter(([dx, dy]) => inClip(cx + dx, cy + dy))
-      .map(([dx, dy]) => document.elementFromPoint(cx + dx, cy + dy))
-    const misses = hits.filter((n) => !owns(n)).length
+    const probeNames = [['left', -r, 0], ['right', r, 0], ['top', 0, -r], ['bottom', 0, r]]
+    const hitDetail = probeNames
+      .filter(([, dx, dy]) => inClip(cx + dx, cy + dy))
+      .map(([name, dx, dy]) => {
+        const n = document.elementFromPoint(cx + dx, cy + dy)
+        return { name, x: Math.round(cx + dx), y: Math.round(cy + dy), tag: n ? n.tagName.toLowerCase() + (n.className ? '.' + (n.className + '').split(' ')[0] : '') : null, owns: owns(n) }
+      })
+    const misses = hitDetail.filter((h) => !h.owns).length
     // rounded, because a 39.6px control reports 40 and a floor nobody can see is a floor nobody fixes
     const small = Math.round(box.width) < FLOOR || Math.round(box.height) < FLOOR
     const covered = !owns(document.elementFromPoint(cx, cy))
@@ -111,12 +115,13 @@ const auditSource = (mode: Mode) => `(() => {
     if (seen.has(key)) continue
     seen.add(key)
     const label = (el.getAttribute('aria-label') ?? t.textContent ?? '').trim().replace(/\\s+/g, ' ').slice(0, 40)
-    out.push({ key, w: Math.round(box.width), h: Math.round(box.height), misses, covered, label })
+    const missDetail = hitDetail.filter((h) => !h.owns).map((h) => \`\${h.name}@(\${h.x},\${h.y})->\${h.tag ?? 'null'}\`).join(', ')
+    out.push({ key, w: Math.round(box.width), h: Math.round(box.height), misses, covered, label, missDetail, top: Math.round(box.top), left: Math.round(box.left) })
   }
   return out
 })()`
 
-type Short = { key: string; w: number; h: number; misses: number; covered: boolean; label: string }
+type Short = { key: string; w: number; h: number; misses: number; covered: boolean; label: string; missDetail: string; top: number; left: number }
 
 /* TWO PROPERTIES, AND THE KIT SHEET CAN ONLY ANSWER ONE OF THEM.
  *
@@ -177,7 +182,7 @@ async function audit(page: Page, where: string, mode: Mode): Promise<string[]> {
         ? `${where}: ${s.key} draws ${s.w}x${s.h} and its centre is covered — it cannot be pressed at all${name}`
         : mode === 'box'
           ? `${where}: ${s.key} draws ${s.w}x${s.h}, under the ${FLOOR}px floor${name}`
-          : `${where}: ${s.key} draws ${s.w}x${s.h} and misses ${s.misses} of 4 probes at ${FLOOR / 2 - 1}px — its hit area does not reach the floor${name}`,
+          : `${where}: ${s.key} draws ${s.w}x${s.h} and misses ${s.misses} of 4 probes at ${FLOOR / 2 - 1}px — its hit area does not reach the floor${name} [DEBUG top=${s.top} left=${s.left} miss=${s.missDetail}]`,
     )
   }
   return lines

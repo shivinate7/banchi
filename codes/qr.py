@@ -253,8 +253,8 @@ def decode_image(image: "Image.Image") -> Optional[QrRead]:
     framing problem the ledger will surface as a duplicate position, which is precisely the
     finding `codes/ledger.py:merge` exists to raise rather than resolve.
     """
-    grey = image.convert("L")
-    for rung, candidate in _rungs(grey):
+    gray = image.convert("L")
+    for rung, candidate in _rungs(gray):
         answer = _read(candidate)
         if answer is None:
             continue
