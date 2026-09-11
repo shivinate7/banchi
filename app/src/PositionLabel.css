@@ -175,6 +175,7 @@
   color: var(--bn-ink-3);
 }
 .position-run-path { margin-right: var(--bn-2); }
+.position-run-note { margin-left: 4px; font-weight: 500; text-transform: none; letter-spacing: 0; color: var(--bn-ink-3); }
 .position-run-path b { font-weight: 700; color: var(--bn-ink); letter-spacing: 0; }
 .position-run-key { margin-right: var(--bn-1); }
 .position-run-num { font-weight: 800; color: var(--bn-ink); letter-spacing: 0; font-variant-numeric: tabular-nums; }

@@ -13867,6 +13867,80 @@ def check_listing_commands(checks: Checks) -> None:
 # ------------------------------------------------------------- boxes, listings, migration
 
 
+def check_section_names(checks: Checks) -> None:
+    """D132 — a section can be named, and the name follows its divider.
+
+    THE BODY SPEAKS ORDINALS AND THE STORE KEEPS DIVIDER INDICES, exactly the split
+    `do_put_box` already makes for `sections`. What is asserted is the round trip through both
+    renderers — `sections_detail[].name` on the box row and `place.section_name` on every card
+    in the section — and the two edges: an ordinal past the layout refuses by name, and a
+    blank clears. Then the divider moves and the name is still on the section that starts at
+    that index, because that is the physical fact: the label is on the plastic divider.
+    """
+    checks.note("")
+    checks.note("D132 — A SECTION CAN BE NAMED, AND THE NAME FOLLOWS ITS DIVIDER")
+
+    with isolated_home():
+        capture_server.do_create_box({"box": 3, "sections": [1, 7]})
+        for _ in range(12):
+            capture_server.do_capture(capture_payload(3))
+
+        row = capture_server.do_put_box(3, {"section_names": {"2": "Rares"}})
+        checks.equal(
+            [(d["section"], d["name"]) for d in row["sections_detail"]],
+            [(1, None), (2, "Rares")],
+            "PUT /boxes/<box> with `section_names` keyed by ordinal names that section on "
+            "`sections_detail`, and an unnamed one stays null rather than blank",
+        )
+        cards = capture_server.do_inventory()["cards"]
+        checks.equal(
+            (cards["3/3"]["place"]["section_name"], cards["3/9"]["place"]["section_name"]),
+            (None, "Rares"),
+            "and every card's place block carries its own section's name, joined at read "
+            "time like `box_name` (D56) — nothing is written onto the card",
+        )
+
+        # An ordinal the layout does not reach is a typo, not a declaration.
+        try:
+            capture_server.do_put_box(3, {"section_names": {"5": "Nope"}})
+            checks.equal(True, False, "naming section 5 of a two-section box is refused")
+        except capture_server.BadRequest as exc:
+            checks.equal(exc.code, "section_unknown", "naming section 5 of a two-section box is refused, as `section_unknown`")
+        checks.equal(
+            [d["name"] for d in capture_server.do_boxes()["boxes"][0]["sections_detail"]],
+            [None, "Rares"],
+            "and the refusal wrote nothing",
+        )
+
+        # The name is on the DIVIDER. Moving the divider one card later keeps the name on the
+        # section that starts there; a layout that drops the divider drops the name with it.
+        row = capture_server.do_put_box(3, {"sections": [1, 8]})
+        checks.equal(
+            [(d["section"], d["start"], d["name"]) for d in row["sections_detail"]],
+            [(1, 1, None), (2, 8, "Rares")],
+            "a moved divider carries its name — the label is on the plastic, not on a number",
+        )
+        row = capture_server.do_put_box(3, {"section_names": {"2": "  "}})
+        checks.equal(
+            [d["name"] for d in row["sections_detail"]],
+            [None, None],
+            "and a blank clears it, the shape a cleared text field sends",
+        )
+        named = [e for e in Store().history() if e["event"] == "section_named"]
+        checks.equal(
+            len(named),
+            2,
+            "two writes changed a name and two `section_named` events carry the maps "
+            "before and after — the refusal wrote none, and the divider move is on its own "
+            "`resectioned` line rather than a second event",
+        )
+        checks.equal(
+            (named[0]["names_from"], named[0]["names_to"]),
+            ({}, {"2": "Rares"}),
+            "the event carries both maps, by ordinal, so the trail says what a section was called",
+        )
+
+
 def check_boxes_and_listings(checks: Checks) -> None:
     """D20's box object, D7's fungible copies, and the v1 -> v2 migration between them.
 
@@ -21029,6 +21103,7 @@ def run() -> Result:
     check_box_claim_product(checks)
     check_place_neighbors(checks)
     check_open_section(checks)
+    check_section_names(checks)
     check_consolidated_numbering(checks)
     check_concurrency(checks)
     check_origin_gate(checks)

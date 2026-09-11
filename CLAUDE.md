@@ -551,7 +551,12 @@ sentence**, and see "the census" below for what enforces that.
 #/shipping     Shipping       which envelope an order goes in, out of TCGplayer's own shipping
                               export, in three lanes
 #/inventory    Inventory      the box walk and everything that hangs off it: search, a card's
-                              copies and its sale, and the box's own operations
+                              copies and its sale, and the box's own operations. SOLD IS
+                              HIDDEN BY DEFAULT (D132): one `Hide sold` chip folds departed
+                              rows out of the walk and the copies list, or sinks them under
+                              the live ones. The address leads with the box's NAME and the
+                              rail orders boxes by when this browser last opened them; a
+                              section can be named from the Manage box sheet.
 #/codes        Codes          the code-card track: read a box's QRs into the ledger, the lanes
                               the pile is tiered into, and a lane handed to a buyer
 #/fulfillment  Cards to pull  the second persona's whole product: pull, photo-confirm, mark
@@ -846,14 +851,16 @@ A screen is not finished because it compiles.
   about a card or the inventory in `localStorage`. Inventory state is server-side, in the
   store; the camera uses a device picker. Two devices share one truth.
 
-  **Six keys are stored on the device, and each is a fact about THIS machine rather than
+  **Eight keys are stored on the device, and each is a fact about THIS machine rather than
   about a card**: `banchi.capture.deviceId` and `banchi.capture.rotation`
   (`app/src/useCamera.ts` — which camera and which way up, meaningless on another machine),
-  `banchi.theme`, `banchi.rail` and `banchi.orders.fetch-filter` (`app/src/deviceMemory.ts` —
-  how this browser is dressed, and which order statuses this device bothers fetching, D114),
-  and `banchi.orders.last-check` (`app/src/Orders.tsx` — when THIS device last checked
-  TCGplayer, so a fetch receipt can say what is new since; the owner ruled it belongs there
-  on 2026-09-03). None of them is a card, a position or an order.
+  `banchi.theme`, `banchi.rail`, `banchi.orders.fetch-filter`, `banchi.inventory.hide-sold`
+  and `banchi.inventory.box-recency` (`app/src/deviceMemory.ts` — how this browser is
+  dressed, which order statuses this device bothers fetching (D114), whether the inventory
+  walk folds sold rows away, and when THIS browser last opened each box, which is what the
+  box rail sorts on, D132), and `banchi.orders.last-check` (`app/src/Orders.tsx` — when THIS
+  device last checked TCGplayer, so a fetch receipt can say what is new since; the owner ruled
+  it belongs there on 2026-09-03). None of them is a card, a position or an order.
 
   **This sentence said FOUR and listed five, from 2026-09-03 until 2026-09-06**, and it named
   the wrong two files for the theme and the rail — `kit/index.tsx` and `App.tsx` are where
@@ -1400,6 +1407,7 @@ D128 The key listener is attached before the paint, because a press answers to w
 D129 The verdict's line is fixed by the first Playwright that counts it right, and the rig's Node is not the thing that moves
 D130 A feeder that never rests gets a second trigger, and the beat is measured not typed
 D131 The ratchet gets an escape, a settle is one quiet frame of three, and the beat is the backstop
+D132 Sold is folded away by default, the address leads with the name, the rail is ordered by the hand, and a section can be named
 ```
 
 **THE GAP THIS LIST CARRIED BETWEEN D116 AND D118 IS CLOSED, AND IT CLOSED THE WAY IT SAID IT

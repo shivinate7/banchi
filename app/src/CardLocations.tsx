@@ -135,6 +135,13 @@ export type CardLocationsProps = {
    *  its own undo. */
   renderAction?: (copy: SearchCopy) => ReactNode
 
+  /** FOLD THE DEPARTED COPIES AWAY (D132, the owner's default). Hidden, a sold or retired copy
+   *  is not drawn — except the copy the walk stands on and a copy sold from THIS screen whose
+   *  receipt is still standing, both of which are the row the person is looking at. Shown, the
+   *  departed copies sort after every live one. Owner skin only; the Fulfiller's list is his
+   *  order and this never reaches it. */
+  hideSold?: boolean
+
   /** Where a copy's photograph comes from. Omitted by every screen in the product, which is
    *  how they all get D6's `GET /photo/<box>/<index>` and stay the single caller shape.
    *
@@ -181,8 +188,11 @@ function isPooled(copy: SearchCopy): boolean {
 /* EVERY COPY OF THIS CARD, AND WHERE EACH ONE PHYSICALLY IS — the panel the owner picks a copy
  * out of, so three rules bind it:
  *
- *   1. Every copy is drawn, in full. No copy is folded away for being the one the walk happens
- *      to be standing on, and none is dropped for being far away, sold or spoken for.
+ *   1. Every LIVE copy is drawn, in full. No copy is folded away for being the one the walk
+ *      happens to be standing on, and none is dropped for being far away or spoken for. SOLD
+ *      is the one exception, and it is the owner's (D132, 2026-09-10): with `hideSold` the
+ *      departed copies are folded away and a line says how many, and without it they sink
+ *      under the live ones. Either way the copy the walk stands on is drawn.
  *   2. Nothing is preselected and nothing is recommended. The row the walk stands on carries a
  *      quiet `Viewing` marker and a neutral rail — a statement of where you are, not a nudge —
  *      and it keeps its own controls like every other row.
@@ -203,8 +213,26 @@ function OwnerRows({
   claims,
   onGoTo,
   renderAction,
+  hideSold = false,
 }: Omit<CardLocationsProps, 'persona'>) {
   const number = collectorNumber(group)
+
+  /* WHICH COPIES ARE DRAWN, AND IN WHAT ORDER (D132). Rule 1 below used to say no copy is
+     dropped for being sold; the owner amended that on 2026-09-10 — a sold copy is not a place
+     a hand can go, and scrolling past them to find the live ones was the whole complaint. What
+     survives of the rule: the copy the walk stands on and a copy just sold here stay, so the
+     press that sold it is still on screen with its receipt (D119); and nothing is preselected.
+     A stable partition, so within each half the server's `(box, index)` order is untouched. */
+  const gone = group.copies.filter((copy) => isSold(copy, soldKeys))
+  /* Stays where it is: the copy the walk stands on, and a copy sold from this screen while its
+     receipt stands — the press may not move the rows beneath it (D118). */
+  const stays = (copy: SearchCopy) => copy.key === currentKey || soldKeys.has(copy.key)
+  const kept = hideSold ? gone.filter(stays) : gone
+  const sinks = (copy: SearchCopy) => isSold(copy, soldKeys) && !stays(copy)
+  const drawn = hideSold
+    ? group.copies.filter((copy) => !isSold(copy, soldKeys) || kept.includes(copy))
+    : [...group.copies.filter((copy) => !sinks(copy)), ...group.copies.filter(sinks)]
+  const hidden = gone.length - kept.length
 
   /* HOW MANY DIGITS THIS LIST'S SLOT COLUMN HAS TO HOLD, which is the one term of that column
      that is DATA rather than typography (`CardLocations.css`'s `--pos-slot-key` is the other).
@@ -220,7 +248,7 @@ function OwnerRows({
      before this existed. */
   const slotDigits = Math.max(
     3,
-    ...group.copies.map((copy) =>
+    ...drawn.map((copy) =>
       copy.place.card === null ? 0 : String(copy.place.card).length,
     ),
   )
@@ -290,7 +318,7 @@ function OwnerRows({
         className="card-locations-rows bn-stagger"
         style={{ ['--pos-slot-digits']: slotDigits } as CSSProperties}
       >
-        {group.copies.map((copy, i) => {
+        {drawn.map((copy, i) => {
           const sold = isSold(copy, soldKeys)
           const pooled = isPooled(copy)
           const departed = isDeparted(copy.place)
@@ -342,7 +370,7 @@ function OwnerRows({
                         caller offers a walk-to, the same rendering sits inside a button. */}
                     <span className="card-locations-label">
                       {label === null ? null : goesTo === null ? (
-                        <PositionLabel label={label} lead="slot" boxNote={copy.place.box_name} />
+                        <PositionLabel label={label} lead="slot" boxName={copy.place.box_name} sectionName={copy.place.section_name ?? null} />
                       ) : (
                         <button
                           className="card-locations-goto"
@@ -350,7 +378,7 @@ function OwnerRows({
                           aria-label={`Walk to ${label}`}
                           onClick={goesTo}
                         >
-                          <PositionLabel label={label} lead="slot" boxNote={copy.place.box_name} />
+                          <PositionLabel label={label} lead="slot" boxName={copy.place.box_name} sectionName={copy.place.section_name ?? null} />
                           <Icon name="arrowUpRight" size={14} className="card-locations-goto-icon" />
                         </button>
                       )}
@@ -416,6 +444,11 @@ function OwnerRows({
           )
         })}
       </ul>
+      {hidden === 0 ? null : (
+        <p className="card-locations-hidden">
+          {hidden === 1 ? '1 sold copy hidden' : `${hidden} sold copies hidden`}
+        </p>
+      )}
     </section>
   )
 }

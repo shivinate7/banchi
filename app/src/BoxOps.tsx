@@ -157,11 +157,14 @@ function Op({
   danger = false,
   expanded,
   running,
+  disabled = false,
   onClick,
 }: {
   icon: IconName
   label: string
   detail?: string
+  /** This row has nothing to do yet — the detail says why — and is not pressable. */
+  disabled?: boolean
   /** The accessible name in full, where the drawn label is shorter than the sentence. */
   said?: string
   busy: boolean
@@ -181,7 +184,7 @@ function Op({
       aria-expanded={expanded}
       aria-busy={running ? true : undefined}
       data-running={running ? 'true' : undefined}
-      disabled={busy}
+      disabled={busy || disabled}
       onClick={onClick}
     >
       <span className="boxops-op-icon">
@@ -354,7 +357,7 @@ export function BoxIdentity({
               className="boxops-span"
               key={`${span.start}-${span.end}`}
               style={{ flexGrow: span.end - span.start + 1 }}
-              title={`Section ${i + 1} · #${span.start}–#${span.end}`}
+              title={`Section ${i + 1}${record.sections_detail[i]?.name ? ` · ${record.sections_detail[i]?.name}` : ''} · #${span.start}–#${span.end}`}
             />
           ))}
           {at === null ? null : (
@@ -372,7 +375,7 @@ export function BoxIdentity({
 
 /* ------------------------------------------------------------------------ the sheet ---- */
 
-type Editing = 'name' | 'sections' | 'claims' | 'move' | null
+type Editing = 'name' | 'sections' | 'section-names' | 'claims' | 'move' | null
 
 export function BoxOps({
   record,
@@ -397,8 +400,14 @@ export function BoxOps({
   onClose: () => void
 }) {
   const { busy, trouble, write } = useBoxWrite(onChanged)
-  const onWrite = (patch: { name?: string; sections?: number[]; state?: 'open' | 'closed' }) =>
-    write(() => updateBox(record.box, patch))
+  const onWrite = (patch: {
+    name?: string
+    sections?: number[]
+    state?: 'open' | 'closed'
+    section_names?: Record<number, string>
+  }) => write(() => updateBox(record.box, patch))
+  /* D132 — one draft per section, keyed by ordinal, seeded from what the wire says now. */
+  const [sectionNames, setSectionNames] = useState<Record<number, string>>({})
   const [editing, setEditing] = useState<Editing>(null)
   const [draft, setDraft] = useState('')
   const [refused, setRefused] = useState<string | null>(null)
@@ -460,6 +469,15 @@ export function BoxOps({
     setMoveTo('')
     setEditing(which)
     setDraft(which === 'name' ? (record.name ?? '') : writeIndices(record))
+    setSectionNames(
+      Object.fromEntries(record.sections_detail.map((detail) => [detail.section, detail.name ?? ''])),
+    )
+  }
+
+  /* Every section's name goes in one PUT, blanks included — a blank CLEARS, which is how a
+     name is taken off again, and the server refuses nothing for a section left unnamed. */
+  const saveSectionNames = async () => {
+    if (await onWrite({ section_names: sectionNames })) closeEdit()
   }
 
   const closeEdit = () => {
@@ -570,6 +588,21 @@ export function BoxOps({
                   }
                   busy={busy}
                   onClick={() => startEdit('sections')}
+                />
+                <Op
+                  icon="tag"
+                  label="Name sections"
+                  detail={
+                    record.sections_detail.length === 0
+                      ? 'declare sections first'
+                      : (() => {
+                          const named = record.sections_detail.filter((detail) => detail.name).length
+                          return named === 0 ? 'none named' : `${named} of ${record.sections_detail.length} named`
+                        })()
+                  }
+                  busy={busy}
+                  disabled={record.sections_detail.length === 0}
+                  onClick={() => startEdit('section-names')}
                 />
                 {sealed ? (
                   <Op
@@ -746,6 +779,34 @@ export function BoxOps({
               </Button>
               <Button variant="primary" busy={busy} onClick={() => void doMove()}>
                 Move
+              </Button>
+            </div>
+          </EditorFrame>
+        ) : editing === 'section-names' ? (
+          <EditorFrame title="Name sections" onBack={closeEdit}>
+            <p className="boxops-editor-lead">
+              A word for each section, drawn beside its number on every label — <b>Section 2 · Rares</b>.
+              Leave one blank to clear it. The name follows its divider if the layout is edited later.
+            </p>
+            <div className="boxops-section-names">
+              {record.sections_detail.map((detail) => (
+                <Field
+                  key={detail.section}
+                  label={`Section ${detail.section} · #${detail.start}${detail.end === null ? ' onward' : `–#${detail.end}`}`}
+                  value={sectionNames[detail.section] ?? ''}
+                  onChange={(next) => setSectionNames((held) => ({ ...held, [detail.section]: next }))}
+                  placeholder="unnamed"
+                  autoFocus={detail.section === 1}
+                />
+              ))}
+            </div>
+            <Trouble failure={trouble} />
+            <div className="boxops-actions">
+              <Button variant="ghost" onClick={closeEdit}>
+                Cancel
+              </Button>
+              <Button variant="primary" busy={busy} onClick={() => void saveSectionNames()}>
+                Save names
               </Button>
             </div>
           </EditorFrame>

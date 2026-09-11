@@ -1438,16 +1438,23 @@ export async function createBox(input: {
  */
 export async function updateBox(
   box: number,
-  patch: { name?: string; sections?: number[]; state?: BoxState },
+  patch: {
+    name?: string
+    sections?: number[]
+    state?: BoxState
+    /** Section names by ORDINAL, as the screen numbers them (D132). A blank clears one. */
+    section_names?: Record<number, string>
+  },
 ): Promise<BoxRecord> {
   /* Built key by key rather than spread, so an `undefined` cannot reach `JSON.stringify` and
    * be dropped there instead. Both routes end at the same place today; the difference is that
    * this one is readable — a reader can see that omitted means untouched without knowing what
    * `JSON.stringify` does with an undefined value. */
-  const payload: Record<string, string | number[]> = {}
+  const payload: Record<string, string | number[] | Record<number, string>> = {}
   if (patch.name !== undefined) payload.name = patch.name
   if (patch.sections !== undefined) payload.sections = patch.sections
   if (patch.state !== undefined) payload.state = patch.state
+  if (patch.section_names !== undefined) payload.section_names = patch.section_names
 
   return (await request(`/boxes/${box}`, {
     method: 'PUT',

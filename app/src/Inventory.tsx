@@ -33,6 +33,7 @@ import { PositionLabel } from './PositionLabel'
 import { useSearch } from './useSearch'
 import { Button, Icon, Notice, Pill } from './kit'
 import { dismissToast, toast } from './kit/toast'
+import { rememberHideSold, storedHideSold } from './deviceMemory'
 import { Overlay } from './InventoryOverlay'
 import './Inventory.css'
 
@@ -408,6 +409,16 @@ export function Inventory() {
   const soldKeys = useMemo(() => new Set(sold), [sold])
   const retiredKeys = useMemo(() => new Set(retired), [retired])
 
+  /* WHETHER SOLD ROWS ARE WORTH SCROLLING PAST (D132). One control on the walk's status bar,
+     one answer for the walk AND the copies list, remembered by this browser. */
+  const [hideSold, setHideSold] = useState<boolean>(() => storedHideSold())
+  const toggleHideSold = useCallback(() => {
+    setHideSold((held) => {
+      rememberHideSold(!held)
+      return !held
+    })
+  }, [])
+
   /** The sales a row may still take back, by copy key. Only sales, only reversible ones. */
   const undoableSales = useMemo(
     () =>
@@ -463,6 +474,7 @@ export function Inventory() {
           onGoTo={walkTo}
           onCurrent={setCurrentCopy}
           renderAction={actionFor}
+          hideSold={hideSold}
         />
       </div>
     )
@@ -478,6 +490,8 @@ export function Inventory() {
         onScope={setRunScope}
         goTo={goTo}
         reloadToken={reloads}
+        hideSold={hideSold}
+        onHideSold={toggleHideSold}
         boxPanel={<BoxRuns box={runScope.box} indices={runScope.indices} />}
         actionBar={currentCopy === null || selected === null || currentCopy.key !== selected.key ? null : actionFor(currentCopy, true)}
       />
@@ -516,6 +530,7 @@ function CopiesPanel({
   onGoTo,
   onCurrent,
   renderAction,
+  hideSold,
 }: {
   row: Row
   layouts: ReadonlyMap<number, readonly SectionDetail[]>
@@ -528,6 +543,7 @@ function CopiesPanel({
   onGoTo: (copy: SearchCopy) => void
   onCurrent: (copy: SearchCopy | null) => void
   renderAction: (copy: SearchCopy, primary: boolean) => ReactNode
+  hideSold: boolean
 }) {
   const { query, setQuery, results, loading, failure, reload } = useSearch()
 
@@ -630,6 +646,7 @@ function CopiesPanel({
              at row size here — and that is the trade: a list where one row alone is inert is a
              list that has quietly picked for you. */
           renderAction={(copy) => renderAction(copy, false)}
+          hideSold={hideSold}
         />
       )}
     </section>
@@ -659,7 +676,11 @@ function LocationCard({
         <span className="bn-label">
           <Icon name="pin" size={12} /> Location
         </span>
-        {place?.box_name ? <span className="inventory-location-boxname">{place.box_name}</span> : null}
+        {/* THE CORNER SAYS THE INDEX AND THE ADDRESS SAYS THE NAME (D132). `Box 3` is what the
+            store keys the drawer by and `WB1 R1` is what the owner knows it as, so the name
+            leads the address below and the index sits where the name used to. Drawn only when
+            there IS a name; an unnamed box already reads `BOX 3` in the address. */}
+        {place?.box_name ? <span className="inventory-location-boxname">Box {place.box}</span> : null}
       </div>
 
       {pooled ? (
@@ -675,7 +696,7 @@ function LocationCard({
       ) : (
         <>
           <div className="inventory-location-label">
-            <PositionLabel label={label} />
+            <PositionLabel label={label} boxName={place?.box_name ?? null} sectionName={place?.section_name ?? null} />
           </div>
           <PlaceNeighbors place={place} />
           {/* THE LENS IS DRAWN FOR A DEPARTED COPY TOO (D118), and `departed` no longer gates it.

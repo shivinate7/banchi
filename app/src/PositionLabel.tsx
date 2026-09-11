@@ -61,6 +61,18 @@ type PositionLabelProps = {
      it is +17px on every row. Deliberately not a general slot: it attaches to the first path
      part and nowhere else, because the first path part is the only one it can be true about. */
   boxNote?: ReactNode
+
+  /* THE BOX'S NAME LEADS THE ADDRESS (D132). When given, the first path part's VALUE is the
+     name — `BOX WB1 R1` — and the index it stood in for becomes the note beside it, `Box 3`,
+     because the name is how the owner knows the drawer and the index is what the store keys
+     it by. Null or empty draws the index as before. `aria-label` still carries the server's
+     string verbatim: this is a rendering of the record, not an edit of it. Wins over `boxNote`
+     when both are given, since the note slot is spent on the index. */
+  boxName?: string | null
+
+  /* THE SECTION'S NAME RIDES ITS OWN PART THE SAME WAY (D132): `SECTION 6 Rares`. The number
+     stays the value — a section is counted to — and the name is the note beside it. */
+  sectionName?: string | null
 }
 
 type Part = { key: string; value: string }
@@ -98,6 +110,8 @@ export function PositionLabel({
   flow = 'stack',
   lead = 'path',
   boxNote = null,
+  boxName = null,
+  sectionName = null,
 }: PositionLabelProps): ReactNode {
   const all = label.split(' · ')
 
@@ -198,8 +212,24 @@ export function PositionLabel({
 
   if (!numbered && !stated) return whole(parts.join(' · '))
 
-  const path = stated ? [...coarse, { key: terminal.value, value: storeKey ?? '' }] : coarse
+  const ranked = stated ? [...coarse, { key: terminal.value, value: storeKey ?? '' }] : coarse
   const slot = numbered ? terminal : null
+
+  /* THE NAMES ARE JOINED HERE, ONCE, FOR BOTH FLOWS. A part's `note` is what rides beside its
+     value; the box's index moves into the note when the name takes the value, so nothing the
+     server said is lost from the eye either — it is re-ranked, not dropped. Matched by KEY and
+     not by position, so a label whose first part is not `Box` (none today) is left alone. */
+  const named = boxName !== null && boxName.trim() !== '' ? boxName.trim() : null
+  const sectioned = sectionName !== null && sectionName.trim() !== '' ? sectionName.trim() : null
+  const path = ranked.map((part, at) => {
+    if (part.key.toLowerCase() === 'box' && named !== null) {
+      return { ...part, value: named, note: `Box ${part.value}` as ReactNode }
+    }
+    if (part.key.toLowerCase() === 'section' && sectioned !== null) {
+      return { ...part, note: sectioned as ReactNode }
+    }
+    return { ...part, note: at === 0 && named === null ? boxNote : null }
+  })
 
   /* THE RUN FORM: the treatment's ranking without its geometry. Inline spans only — no flex, no
      column — so the label stays inside the line it was written into. Measured on the halt
@@ -211,6 +241,9 @@ export function PositionLabel({
           <span className="position-run-path" key={part.key + part.value + at}>
             {part.key === '' ? null : `${part.key.toUpperCase()} `}
             {part.value === '' ? null : <b>{part.value}</b>}
+            {part.note === null || part.note === undefined ? null : (
+              <span className="position-run-note">{part.note}</span>
+            )}
           </span>
         ))}
         {/* NO VOID MARK INLINE, and that is the one place the two flows differ about a state.
@@ -240,9 +273,9 @@ export function PositionLabel({
                 a state terminal reaching here without a store key beside it is the pre-D68
                 spelling of the same label, and `DEPARTED` alone is the true thing to draw. */}
             {part.value === '' ? null : <b>{part.value}</b>}
-            {at === 0 && boxNote !== null ? (
-              <span className="position-path-note">{boxNote}</span>
-            ) : null}
+            {part.note === null || part.note === undefined ? null : (
+              <span className="position-path-note">{part.note}</span>
+            )}
           </span>
         ))}
       </span>
