@@ -346,3 +346,57 @@ screen**: `typ` idling near 2.2 with nothing moving is healthy and creeping past
 fault, and `dbase` reading tens with a card under the lens against under 1.5 with the stand
 empty is the separation the presence gate lives on. Either one going wrong is the cue to run
 one 60-second trace and score it — `scripts/score-trace.py`, §4 — *before* it costs cards.
+
+## 7. The cadence trigger — trigger 2, for a feeder that never rests (D130)
+
+Added 2026-09-11. The settle trigger the rest of this file describes fires on stillness; this
+one fires on a beat, and the two live behind one seam with the operator choosing per run. D130
+is the decision; this section is the mechanism and what the first rig run owes.
+
+**Why it exists, in one measurement.** The owner ran the settle trigger over a re-arranged
+feeder and it fired on **5 of 29 cards** one session and **5 of ~34** the next. Every fire
+reached disk and photographed a card — the plumbing was never in question. The feeder now lays
+a card down every **0.867 s** (29 luma cycles, p10-p90 0.85-0.92) and never lets one sit: the
+longest run of frames under `tLo` per card has a **median of one**, and 13 of 28 cards never
+had four consecutive frames under `tHi`. A settle is `stillFrames` of the last `stillWindow`
+(§2, D84) and a feeder that never stills produces none. `scripts/score-trace.py sweep` reaches
+9 of 29 at its best `stillK`. The two traces are banked in `harness/traces/` and are T9's third
+corpus.
+
+**What it does.** `app/src/cadence.ts`:
+
+1. Waits for the first card on the settle machine's own presence gate (§2, the
+   distance-from-baseline of D81).
+2. Fires on it — first quiet frame, or blind after `firstWait` of a period.
+3. Fires once per period thereafter. The period is **seeded at 870 ms** (`dSeed`'s sense — the
+   boot value until measured) and **measured** from the autocorrelation of the motion signal
+   over the last `windowMs` once `lockAfterMs` of feeding exist; a half/third-period peak is a
+   harmonic and the shorter lag is taken.
+4. Locked, it folds the window by the period to find the rest — the phase of least motion — and
+   fires there, on the first still frame in a window opening `restLead` early, a calm frame at
+   the rest, or blind at the deadline. Every non-still fire is counted `blind` on the HUD.
+5. Same presence and novelty gates as the settle machine. Two `same` verdicts in a row is a
+   stopped feeder; the beat goes idle and motion wakes it. A stand empty `lostAfter` periods
+   drops the beat.
+
+Replayed causally over the two traces: **27 fires over 29 cards, 20 over ~21**, against 5 and
+5 live. `app/tests/cadence.spec.ts` pins those counts and the synthetic contract.
+
+**The operator's control.** The Rig panel's Trigger track has a third cell, `cadence`. Arming
+it shows a period field: blank measures the beat (the default, and what the traces say it does
+well), a number pins the period while the phase is still measured.
+
+**What the first rig run must measure, and this section is that run's checklist.** No
+photograph has been taken by this machine at the rig. The replay says a fire lands on a frame
+with median `d` of 3-4 on the faster session and higher on the slower one — moving, a little —
+and only a photograph says whether that is a usable image or a blur. So the first armed run:
+
+- Save the trace and score it: `scripts/score-trace.py summary` reports the trigger and the
+  fire cadence; the HUD's `blind` count is how many fires were taken off a still frame.
+- Downsample the run's own JPEGs to the 38x28 watch region and match frame against photograph,
+  the way D84's four lost cards were only provable that way — a trace says what the machine
+  decided, only the photograph says what was on the stand.
+- If the blind fires blur, the lever is the camera's exposure, not a constant here: a shorter
+  shutter freezes the motion the feeder never removes. That is a rig fact, and D130 says so.
+
+The 85/85 confirmation in this file's STATUS is **trigger 1's**. Trigger 2 has none yet.

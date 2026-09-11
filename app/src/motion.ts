@@ -730,7 +730,115 @@ function toLuma(rgba: Uint8ClampedArray, out: Float32Array): void {
  *  suppression, stall) report immediately; this is only the heartbeat that keeps the live
  *  `d` readout moving. 30 setState calls a second on a screen holding a live 4K preview is
  *  the kind of main-thread load b4aca0c exists to warn about. */
-const DIAG_INTERVAL_MS = 200
+export const DIAG_INTERVAL_MS = 200
+
+/** One decoded frame of the watch region, delivered to whoever is deciding on it.
+ *
+ *  THE SAMPLER IS SHARED AND THE MACHINES ARE NOT (D130). Two triggers read the lens now —
+ *  the settle machine above and `src/cadence.ts`'s beat-locked one — and both want exactly
+ *  this: one 64x36 luma grid per decoded frame, the watch region cut out of it, on one
+ *  monotonic clock. Everything below the `onRoi` call is a fact about the <video> element
+ *  and the browser's frame pacing, none of it about cards, which is why it lives once. */
+export function startWatchSampler(
+  video: RefObject<HTMLVideoElement | null>,
+  onRoi: (nowMs: number, roi: Float32Array) => void,
+): () => void {
+  /* ONE canvas for the session, reused every frame — 8e9a46b's lesson, which applies
+   * here with 30x the frequency it applied to captures. At 64x36 the backing store is
+   * trivial, but a per-frame allocation at 30fps is the same shape of leak. */
+  const canvas = document.createElement('canvas')
+  canvas.width = GRID_W
+  canvas.height = GRID_H
+  const context = canvas.getContext('2d', { willReadFrequently: true })
+  const grid = new Float32Array(GRID_W * GRID_H)
+  const roi = new Float32Array(ROI_CELLS)
+
+  let stopped = false
+  /* rAF fallback only: a 60 Hz rAF over a 30 fps stream must not diff a frame against
+   * itself — d would read zero on alternate ticks, the still-counter would
+   * double-count, and the trigger would fire at half the configured settle time with
+   * no symptom anywhere. The currentTime guard alone is NOT enough on a live
+   * MediaStream, where currentTime advances continuously between frames rather than
+   * stepping per frame — so a minimum spacing near the frame period backs it up.
+   * rVFC engines never reach this: rVFC fires once per decoded frame by contract. */
+  let lastMediaTime = -1
+  let lastConsumeAt = 0
+  const MIN_FRAME_SPACING_MS = 28
+
+  const consume = (nowMs: number) => {
+    const element = video.current
+    /* No element, no stream, or a stream with no decoded frame yet: idle, do not
+     * error. The trigger is armed at mount, before any camera is open, and must pick
+     * frames up whenever they start without being re-armed (the screen arms once and
+     * dispatches through a ref, by design). */
+    if (element === null || context === null) return
+    if (element.videoWidth === 0 || element.videoHeight === 0) return
+    if (element.readyState < HTMLMediaElement.HAVE_CURRENT_DATA) return
+
+    context.drawImage(element, 0, 0, GRID_W, GRID_H)
+    const rgba = context.getImageData(0, 0, GRID_W, GRID_H).data
+    toLuma(rgba, grid)
+    let w = 0
+    for (let y = ROI_Y0; y < ROI_Y1; y += 1) {
+      for (let x = ROI_X0; x < ROI_X1; x += 1) {
+        roi[w] = grid[y * GRID_W + x] as number
+        w += 1
+      }
+    }
+    onRoi(nowMs, roi)
+  }
+
+  /* One callback per DECODED frame where the browser offers it; display-rate rAF with
+   * a mediaTime guard where it does not. */
+  const hasRvfc = 'requestVideoFrameCallback' in HTMLVideoElement.prototype
+
+  const loopRvfc = () => {
+    if (stopped) return
+    const element = video.current
+    if (element === null) {
+      window.setTimeout(loopRvfc, DIAG_INTERVAL_MS)
+      return
+    }
+    /* rVFC is used for its PACING — one callback per decoded frame — but the machine's
+     * clock is performance.now(), not meta.mediaTime. mediaTime restarts near zero
+     * whenever the stream is replaced (a device change, a retry after a halt), and the
+     * machine holds absolute deadlines across frames: a refractoryUntil minted on the
+     * old timeline would then sit minutes ahead of the new clock and silently block
+     * every fire until it caught up. One monotonic clock, immune to stream swaps. */
+    element.requestVideoFrameCallback(() => {
+      /* A callback registered before teardown still fires once. Without this check
+       * that last frame could fire the machine AFTER the mode toggled away, and the
+       * dispatch ref — already rewired to manual — would treat it as a manual fire
+       * and capture a card nobody asked for. */
+      if (stopped) return
+      consume(performance.now())
+      loopRvfc()
+    })
+  }
+
+  const loopRaf = () => {
+    if (stopped) return
+    const element = video.current
+    const now = performance.now()
+    if (
+      element !== null &&
+      element.currentTime !== lastMediaTime &&
+      now - lastConsumeAt >= MIN_FRAME_SPACING_MS
+    ) {
+      lastMediaTime = element.currentTime
+      lastConsumeAt = now
+      consume(now)
+    }
+    window.requestAnimationFrame(loopRaf)
+  }
+
+  if (hasRvfc) loopRvfc()
+  else window.requestAnimationFrame(loopRaf)
+
+  return () => {
+    stopped = true
+  }
+}
 
 export function motionTrigger(
   video: RefObject<HTMLVideoElement | null>,
@@ -763,29 +871,7 @@ export function motionTrigger(
       const machine = new MotionMachine(params)
       if (controls !== undefined) controls.current = { rebaseline: () => machine.rebaseline() }
 
-      /* ONE canvas for the session, reused every frame — 8e9a46b's lesson, which applies
-       * here with 30x the frequency it applied to captures. At 64x36 the backing store is
-       * trivial, but a per-frame allocation at 30fps is the same shape of leak. */
-      const canvas = document.createElement('canvas')
-      canvas.width = GRID_W
-      canvas.height = GRID_H
-      const context = canvas.getContext('2d', { willReadFrequently: true })
-      const grid = new Float32Array(GRID_W * GRID_H)
-      const roi = new Float32Array(ROI_CELLS)
-
-      let stopped = false
       let lastDiagAt = 0
-      /* rAF fallback only: a 60 Hz rAF over a 30 fps stream must not diff a frame against
-       * itself — d would read zero on alternate ticks, the still-counter would
-       * double-count, and the trigger would fire at half the configured settle time with
-       * no symptom anywhere. The currentTime guard alone is NOT enough on a live
-       * MediaStream, where currentTime advances continuously between frames rather than
-       * stepping per frame — so a minimum spacing near the frame period backs it up.
-       * rVFC engines never reach this: rVFC fires once per decoded frame by contract. */
-      let lastMediaTime = -1
-      let lastConsumeAt = 0
-      const MIN_FRAME_SPACING_MS = 28
-
       const report = (now: number, always: boolean) => {
         if (onDiagnostics === undefined) return
         if (!always && now - lastDiagAt < DIAG_INTERVAL_MS) return
@@ -793,84 +879,17 @@ export function motionTrigger(
         onDiagnostics({ ...machine.diag })
       }
 
-      const consume = (nowMs: number) => {
-        const element = video.current
-        /* No element, no stream, or a stream with no decoded frame yet: idle, do not
-         * error. The trigger is armed at mount, before any camera is open, and must pick
-         * frames up whenever they start without being re-armed (the screen arms once and
-         * dispatches through a ref, by design). */
-        if (element === null || context === null) return
-        if (element.videoWidth === 0 || element.videoHeight === 0) return
-        if (element.readyState < HTMLMediaElement.HAVE_CURRENT_DATA) return
-
-        context.drawImage(element, 0, 0, GRID_W, GRID_H)
-        const rgba = context.getImageData(0, 0, GRID_W, GRID_H).data
-        toLuma(rgba, grid)
-        let w = 0
-        for (let y = ROI_Y0; y < ROI_Y1; y += 1) {
-          for (let x = ROI_X0; x < ROI_X1; x += 1) {
-            roi[w] = grid[y * GRID_W + x] as number
-            w += 1
-          }
-        }
-
+      const stop = startWatchSampler(video, (nowMs, roi) => {
         const event = machine.step(nowMs, roi)
         if (event === 'fire') onFire()
         if (onFrame !== undefined) {
           onFrame(nowMs, machine.diag.d, machine.diag.dBase, machine.diag.luma, event, roi)
         }
         report(nowMs, event !== null)
-      }
-
-      /* One callback per DECODED frame where the browser offers it; display-rate rAF with
-       * a mediaTime guard where it does not. */
-      const hasRvfc = 'requestVideoFrameCallback' in HTMLVideoElement.prototype
-
-      const loopRvfc = () => {
-        if (stopped) return
-        const element = video.current
-        if (element === null) {
-          window.setTimeout(loopRvfc, DIAG_INTERVAL_MS)
-          return
-        }
-        /* rVFC is used for its PACING — one callback per decoded frame — but the machine's
-         * clock is performance.now(), not meta.mediaTime. mediaTime restarts near zero
-         * whenever the stream is replaced (a device change, a retry after a halt), and the
-         * machine holds absolute deadlines across frames: a refractoryUntil minted on the
-         * old timeline would then sit minutes ahead of the new clock and silently block
-         * every fire until it caught up. One monotonic clock, immune to stream swaps. */
-        element.requestVideoFrameCallback(() => {
-          /* A callback registered before teardown still fires once. Without this check
-           * that last frame could fire the machine AFTER the mode toggled away, and the
-           * dispatch ref — already rewired to manual — would treat it as a manual fire
-           * and capture a card nobody asked for. */
-          if (stopped) return
-          consume(performance.now())
-          loopRvfc()
-        })
-      }
-
-      const loopRaf = () => {
-        if (stopped) return
-        const element = video.current
-        const now = performance.now()
-        if (
-          element !== null &&
-          element.currentTime !== lastMediaTime &&
-          now - lastConsumeAt >= MIN_FRAME_SPACING_MS
-        ) {
-          lastMediaTime = element.currentTime
-          lastConsumeAt = now
-          consume(now)
-        }
-        window.requestAnimationFrame(loopRaf)
-      }
-
-      if (hasRvfc) loopRvfc()
-      else window.requestAnimationFrame(loopRaf)
+      })
 
       return () => {
-        stopped = true
+        stop()
         if (controls !== undefined) controls.current = null
       }
     },

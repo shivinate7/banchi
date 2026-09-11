@@ -277,6 +277,8 @@
 /* ---- text entry inside a field ---------------------------------------------------------------------- */
 .capture-entry { display: flex; }
 .capture-entrybox { width: 100%; }
+/* The cadence trigger's period pin sits under the track it belongs to (D130). */
+.capture-period { margin-top: var(--bn-s2); }
 .capture-entrybox .capture-filter { padding-right: 104px; min-height: 36px; font-size: var(--bn-fs-md); }
 /* The state of what is typed, in sentence case beside the entry: `Next index 134`, `Sealed`,
    `New box`. Capped, and the placeholder is `Number or name`, so neither is cut mid-word in
