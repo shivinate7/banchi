@@ -507,6 +507,15 @@ prices and writes each SKU once. The live cap is spent ONCE across everything on
 writes — `add_to_quantity` is per SKU inside a run, and `pipeline/merge.py` re-derives it
 over the union of positions across runs.
 
+**A card's quantity can be named per send** (D7, amended 2026-09-11): `--quantity SKU=N`,
+repeatable, puts exactly N copies of that card in the file this press — a send quantity,
+bounded by the copies on hand that are not already listed and never by what TCGplayer holds,
+which is what distinguishes it from `--cap`. `0` sends none of the card without holding it.
+The report names every card given a figure, says *asked 9, only 3 can go* where the shelf is
+short, and names back a SKU the send does not hold. A merged send spends the figure once across
+the union. Nothing is recorded: the figure is the press's, and `#/pricing`'s Qty field clears
+on a successful write.
+
 Byte format is `pipeline.tcgcsv` unchanged: unquoted header, fully quoted data fields, CRLF,
 only `Add to Quantity` and `TCG Marketplace Price` ever written, `TCGplayer Id` never
 modified. `check_only_writable_changed` runs per row against the catalog original.
@@ -644,7 +653,8 @@ report — catching an import that was staged and never moved live.
 | `--basis` | `market` | `market` \| `low` |
 | `--rule` | `match` | `inventory/prices.json` `policy.rule`, seeded by the flag on the first join of an empty corpus (D86) |
 | threshold / floor | `$0.40` / `$0.40` | D9, `pipeline/pricing.py`. ONE FIGURE, not two (D9 amended 2026-09-09): both are the default for a store that has never set `policy.threshold` (D99), and both follow it when it is set |
-| live cap | 4 | D7, `join.LIVE_QUANTITY_CAP` |
+| `--cap N` (emit) | *none* | D7 rewritten 2026-09-07: no standing cap; a CEILING on copies live per SKU, asked for per send. `join.LIVE_QUANTITY_CAP` (4) is only the figure a press may offer |
+| `--quantity SKU=N` (emit) | *none* | D7 amended 2026-09-11: a SEND QUANTITY per card, this press only — bounded by the copies on hand not already listed, never by what TCGplayer holds; `0` sends none. Composes with `--cap` to the tighter |
 | cards per section | *no default* | D10 — dividers are declared, never assumed |
 | staged-stale warning | 14 days | run report only |
 | `--force-resubmit` | off | pay again for an existing batch |

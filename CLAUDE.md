@@ -4,6 +4,16 @@ Bulk-list pre-sorted TCG singles on TCGplayer with zero attention per card, and 
 every card physically is. Two tracks share one rig: singles (this file) and code cards
 (`code-card-fork/CLAUDE.md`, auto-loaded in that directory).
 
+**Codex reads this same file, not a copy of it (D135).** `AGENTS.md` at the root and
+`code-card-fork/AGENTS.md` are relative symlinks to the `CLAUDE.md` beside each, and
+`.agents/skills` is a directory symlink to `.claude/skills` — one edit reaches both tools'
+readers, because a copy is a fork with a diff nobody watches and a symlink has no diff to
+drift. `.codex/hooks.json` is tracked beside `.claude/settings.json` and names the same
+hooks by the same scripts; `make docs-audit`'s `codex hooks` row reconciles the two rosters
+in both directions and fails a commit that adds a hook to one tool and not the other.
+`.codex/config.toml` is the one file of the three Codex left that stays untracked — a
+shell-environment policy, machine-local the same way `.claude/settings.local.json` is.
+
 ## The name is the app's, and nothing beneath it
 
 **Banchi** — 番地, a lot number, the address of a thing — is the name of the PRODUCT a person
@@ -402,6 +412,15 @@ make merge          # merge a PR and move main onto it — BOTH HALVES, on your 
                                    #                      — a SKU at or over N adds nothing
                                    #                      and the report says by how much.
                                    #                      Omit for no cap, the default
+                                   #   --quantity SKU=N   put exactly N copies of THIS card in
+                                   #                      the file this press (D7, amended
+                                   #                      2026-09-11): a SEND QUANTITY, not a
+                                   #                      ceiling — bounded by the copies on hand
+                                   #                      that are not already listed, never by
+                                   #                      what TCGplayer holds. Repeat per card;
+                                   #                      0 sends none of it without a hold. The
+                                   #                      Qty field on every `#/pricing` row is
+                                   #                      the same answer, spent by the write.
                                    #   --listed-only      above-threshold rows only (a filter,
                                    #                      not a split — the rest wait)
                                    #   --split-threshold  the old pair back: import-listed.csv
@@ -524,7 +543,7 @@ client call is written and `app/src/types.ts` the only place the wire's shapes a
 
 ### The screens
 
-**The app has eleven screens and eleven routes** — ten the owner's, one the Fulfiller's.
+**The app has twelve screens and twelve routes** — eleven the owner's, one the Fulfiller's.
 `app/src/App.tsx`'s `ROUTES` table is the count. **Recount from the table; never increment a
 sentence**, and see "the census" below for what enforces that.
 
@@ -578,6 +597,10 @@ sentence**, and see "the census" below for what enforces that.
                               the live ones. The address leads with the box's NAME and the
                               rail orders boxes by when this browser last opened them; a
                               section can be named from the Manage box sheet.
+#/graveyard    Graveyard      every departed card, sold or retired or moved (D134) — merged
+                              from two sources, a record still standing in a box nobody has
+                              deleted and a `buried` history line for one whose box was.
+                              Read-only: nothing here can be undone, and nothing here prices
 #/codes        Codes          the code-card track: read a box's QRs into the ledger, the lanes
                               the pile is tiered into, and a lane handed to a buyer
 #/fulfillment  Cards to pull  the second persona's whole product: pull, photo-confirm, mark
@@ -735,12 +758,12 @@ the only carrier of information.
 
 ### The shell
 
-`App.tsx` is a hand-written hash router and the whole chrome. Read it as the shell: eleven
+`App.tsx` is a hand-written hash router and the whole chrome. Read it as the shell: twelve
 hash routes, no routing library, no nested routes, one table. Every screen renders inside it
 except the Fulfiller's:
 
 - **A sidebar that collapses to a rail** on wide windows — 236px or 64px, ⌘. toggles it, the
-  choice is remembered in `banchi.rail`. Nine nav items in four groups; the brand, the
+  choice is remembered in `banchi.rail`. Ten nav items in four groups; the brand, the
   hand-off link, the palette, the theme toggle and the capture server's own state sit in the
   foot.
 - **A top bar and a bottom tab bar on phones**, with the rest of the screens in a left drawer
@@ -922,7 +945,12 @@ A screen is not finished because it compiles.
   to each was *"neither still applies"*.
 
   **A cap is now something a SEND asks for**: `emit --cap N`, and the field beside the other
-  emit options on `#/pricing`'s ship bar. **`policy.live_cap` IS DELETED as of 2026-09-08** —
+  emit options on `#/pricing`'s ship bar. **AND A QUANTITY IS SOMETHING A SEND ASKS FOR PER
+  CARD** (D7, amended 2026-09-11, on the owner's report that they could *"no longer select
+  quantities to sell at all"*): `emit --quantity SKU=N`, and the Qty field on every `#/pricing`
+  row. That one is a SEND QUANTITY and not a ceiling — 2 sends two whatever TCGplayer holds,
+  bounded by the copies on hand that are not already listed; 0 sends none without a hold — and
+  it is spent by the write, so nothing standing changes. The two compose to the tighter. **`policy.live_cap` IS DELETED as of 2026-09-08** —
   `--cap` is the only place a cap is named, and a store still holding the key is refused by
   name rather than silently uncapped. `policy.per_run` survives for its other four keys.
   It was a promise D7 made and nothing built until 2026-09-06: the parameter was threaded
@@ -1430,6 +1458,8 @@ D130 A feeder that never rests gets a second trigger, and the beat is measured n
 D131 The ratchet gets an escape, a settle is one quiet frame of three, and the beat is the backstop
 D132 Sold is folded away by default, the address leads with the name, the rail is ordered by the hand, and a section can be named
 D133 A branch is judged by what it lands, and a file put back the way main had it is refused unless the branch says so
+D134 A departed record is buried, not kept; the box goes; and the graveyard is where the departed are read
+D135 Codex reads the same rules a Claude Code session does, through three symlinks and one reconciled hook roster
 ```
 
 **THE GAP THIS LIST CARRIED BETWEEN D116 AND D118 IS CLOSED, AND IT CLOSED THE WAY IT SAID IT

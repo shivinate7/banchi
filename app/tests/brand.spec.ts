@@ -502,7 +502,7 @@ test('collapsing the sidebar moves nothing sideways off its spine', async ({ pag
   await page.goto('/')
   await page.setViewportSize({ width: 1440, height: 900 })
 
-  const centres = () =>
+  const centers = () =>
     page.evaluate(() => {
       const box = (sel: string) => {
         const el = document.querySelector(sel)
@@ -520,7 +520,7 @@ test('collapsing the sidebar moves nothing sideways off its spine', async ({ pag
       }
     })
 
-  const open = await centres()
+  const open = await centers()
   expect(open.mark, 'the brand is drawn').not.toBeNull()
   expect(open.foot, 'the footer is drawn').not.toBeNull()
 
@@ -532,10 +532,10 @@ test('collapsing the sidebar moves nothing sideways off its spine', async ({ pag
   const during: Array<Record<'mark' | 'nav' | 'foot', number | null>> = []
   for (let i = 0; i < 8; i++) {
     await page.waitForTimeout(40)
-    during.push(await centres())
+    during.push(await centers())
   }
   await page.waitForTimeout(400)
-  const rail = await centres()
+  const rail = await centers()
 
   // the corridor: every mid-flight sample sits between the two resting positions, with 2px of
   // slack for subpixel layout. Before the fix these read ~114 against a corridor of 31.5 to 36.
@@ -721,6 +721,12 @@ test('the phone wordmark is the lockup roman, set as text', async ({ page }) => 
  * THE OWNER RULED TO SHRINK THE GROUP HEADINGS RATHER THAN DROP THEM. Both were built and drawn
  * side by side; dropping them was one rule and 85px, keeping them costs five and lands the
  * drawer's own lockup at kanji 34. This case is what stops the five drifting back apart.
+ *
+ * AMENDED BY D134'S TENTH ROW: the iPhone 14 no longer fits nine rows' worth of arithmetic
+ * shrunk down to eight rows plus headroom — it fits ten rows at the 40px floor instead, the
+ * same step the mini already needed (see App.css and the case below). This case still measures
+ * the SAME fold — headings, lockup, and every row reachable without scrolling — it is the row
+ * height itself, asserted next door, that moved.
  */
 const SHORT_PHONE = { width: 390, height: 754 }
 
@@ -759,47 +765,65 @@ test('the drawer fits an iPhone in Safari, with its headings intact', async ({ p
   expect(seen.lockup, 'the drawer draws the short-screen lockup').toBeCloseTo((34 * BLOCK.w) / BLOCK.ref, 0)
 })
 
-test('the second step reaches the mini, and stops short of the phone that already fits', async ({ page }) => {
-  /* THE FIRST STEP LEFT ONE FAMILY 29px SHORT. 375 x 812 — the mini, the X, the XS, the 11 Pro —
-     is 722px in Safari and the drawer needs 751. The rows were the only thing left with anything
-     to give: nine at 44 against a 40px floor is 36px, which covers it.
-     BOTH HALVES MATTER. A step that reached the iPhone 14 as well would take four pixels off a
-     thumb target on a screen that already fits, for nothing — which is exactly what a `clamp()`
-     ramp does, and why this is a step. */
-  await page.setViewportSize({ width: 375, height: 722 })
+test('the second step reaches the mini and the iPhone 14, and stops short of a taller phone', async ({ page }) => {
+  /* D134's TENTH ROW MOVED WHAT THIS STEP HAS TO REACH. It used to stop short of the iPhone 14
+     at 754 on purpose — that phone fit nine rows at 44 with nothing to spare. A tenth row costs
+     every phone in this family one more 44px row than the arithmetic had, and 754 no longer
+     "already fits": ten rows at 44 measured 41px over, and ten at the 40px floor measured 0. So
+     the step's own boundary moved to 754 (see App.css), and this case moved with it. */
+  await page.setViewportSize(SHORT_PHONE)
   await page.goto('/')
   await page.getByText('More', { exact: true }).click()
   await expect(page.locator('.bn-drawer')).toBeVisible()
   await page.waitForTimeout(400)
 
+  const iphone14 = await page.evaluate(() => {
+    const nav = document.querySelector('.bn-drawer .bn-nav')!
+    return {
+      overflow: nav.scrollHeight - nav.clientHeight,
+      row: Math.round(document.querySelector('.bn-drawer .bn-nav a.bn-nav-link')!.getBoundingClientRect().height),
+    }
+  })
+  expect(iphone14.overflow, `the iPhone 14's nav runs ${iphone14.overflow}px past the fold`).toBeLessThanOrEqual(0)
+  expect(iphone14.row, 'the rows sit ON the thumb floor at 754, not at 44').toBe(40)
+
+  /* THE MINI GENUINELY DOES NOT FIT TEN ROWS AT THE FLOOR, AND THAT IS THE HONEST ANSWER. 375 x
+     722 needs more than ten rows at 40 plus the head, the foot and three headings leave room
+     for — 29px short, measured — and there is no third step: the next one would break the thumb
+     floor CLAUDE.md sets. What covers it is the fade-scroll fallback already built for a phone
+     this cannot reach at all (the iPhone SE, below), now doing the same job one family up: the
+     row is on the floor, the list scrolls, and the scroll-driven mask says there is more. */
+  await page.setViewportSize({ width: 375, height: 722 })
+  await page.goto('/')
+  await page.getByText('More', { exact: true }).click()
+  await page.waitForTimeout(400)
+
   const mini = await page.evaluate(() => {
     const nav = document.querySelector('.bn-drawer .bn-nav')!
-    const box = nav.getBoundingClientRect()
     const links = [...document.querySelectorAll('.bn-drawer .bn-nav a.bn-nav-link')]
     return {
       overflow: nav.scrollHeight - nav.clientHeight,
-      shown: links.filter((l) => {
-        const r = l.getBoundingClientRect()
-        return r.top >= box.top - 1 && r.bottom <= box.bottom + 1
-      }).length,
       total: links.length,
       row: Math.round(links[0]!.getBoundingClientRect().height),
+      scrollable: getComputedStyle(nav).overflowY === 'auto' || getComputedStyle(nav).overflowY === 'scroll',
     }
   })
-  expect(mini.overflow, `the mini's nav runs ${mini.overflow}px past the fold`).toBeLessThanOrEqual(0)
-  expect(mini.shown).toBe(mini.total)
-  // 40 is `--bn-control-h-sm` under a coarse pointer — CLAUDE.md's thumb floor exactly, and the
-  // reason there is no third step: the next one would break it.
   expect(mini.row, 'the rows sit ON the thumb floor, not under it').toBe(40)
+  expect(mini.overflow, 'the mini genuinely does not fit ten rows at the floor').toBeGreaterThan(0)
+  expect(mini.scrollable, 'what does not fit scrolls, rather than clipping silently').toBe(true)
+  // every row is still reachable, just not without scrolling
+  await page.locator('.bn-drawer .bn-nav a.bn-nav-link').last().scrollIntoViewIfNeeded()
+  await expect(page.locator('.bn-drawer .bn-nav a.bn-nav-link').last()).toBeVisible()
 
-  // AND THE 14 IS UNTOUCHED, which is the half a threshold gets wrong when it is placed by feel
-  await page.setViewportSize(SHORT_PHONE)
+  // AND A TALLER PHONE IS UNTOUCHED, which is the half a threshold gets wrong when it is placed
+  // by feel rather than by where the arithmetic actually changes.
+  await page.setViewportSize({ width: 390, height: 900 })
   await page.goto('/')
   await page.getByText('More', { exact: true }).click()
   await page.waitForTimeout(400)
   const tall = await page.locator('.bn-drawer .bn-nav a.bn-nav-link').first()
     .evaluate((el) => Math.round(el.getBoundingClientRect().height))
-  expect(tall, 'a phone that already fits keeps its 44px rows').toBe(44)
+  expect(tall, 'a phone with room to spare keeps its 44px rows').toBe(44)
 })
 
 test('a tall phone keeps the full lockup, because it has the room', async ({ page }) => {

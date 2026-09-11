@@ -667,7 +667,7 @@ type Rgb = { r: number; g: number; b: number; a: number }
 
 /* Parsed with one regex and no `split(',')`. eslint bans that call across this app — v1 bug 2,
  * naive CSV parsing — and the pull-confirm spec needed a named exemption in
- * `app/eslint.config.js` to use it on a colour string. A regex needs no exemption, which is
+ * `app/eslint.config.js` to use it on a color string. A regex needs no exemption, which is
  * the better shape for a rule whose whole point is that nobody should have to decide when it
  * does not apply. */
 const RGB = /^rgba?\(\s*([\d.]+)[\s,]+([\d.]+)[\s,]+([\d.]+)(?:[\s,/]+([\d.]+))?\s*\)$/
@@ -697,7 +697,7 @@ function contrastRatio(one: Rgb, two: Rgb): number {
 }
 
 /** One run of text on screen, with everything needed to judge it and to find it again. */
-type Run = { text: string; where: string; size: number; colour: string; ground: string }
+type Run = { text: string; where: string; size: number; color: string; ground: string }
 
 /* Every text node the view renders, with the computed style of the element that carries it.
  *
@@ -721,10 +721,10 @@ async function runsIn(view: Locator): Promise<Run[]> {
      *
      * A translucent layer is a real ground — what the eye reads is it painted over whatever is
      * behind it — and this view has one that is only ever translucent for 120ms: a disclosure
-     * head with a hover transition from nothing to a surface colour. Read at the wrong instant,
-     * the first-colour-found form returned `rgba(247, 248, 250, 0.96)` and the opacity guard
+     * head with a hover transition from nothing to a surface color. Read at the wrong instant,
+     * the first-color-found form returned `rgba(247, 248, 250, 0.96)` and the opacity guard
      * below failed on a screen that is fine, intermittently, under load. Compositing answers
-     * the same colour once the transition lands and the right one while it is running.
+     * the same color once the transition lands and the right one while it is running.
      *
      * THE GUARD IS UNTOUCHED: the walk still ends at a fully transparent answer when NOTHING
      * behind the text is opaque, which is what a stylesheet that did not load looks like, and
@@ -780,7 +780,7 @@ async function runsIn(view: Locator): Promise<Run[]> {
           text,
           where: describe(parent),
           size: Number.parseFloat(style.fontSize),
-          colour: style.color,
+          color: style.color,
           ground: groundOf(parent),
         })
       }
@@ -929,9 +929,9 @@ async function noThinContrast(page: Page, where: string): Promise<void> {
   const runs = await runsIn(view(page))
   expect(runs.length, `${where}: nothing rendered`).toBeGreaterThan(0)
   for (const run of runs) {
-    const ink = parseRgb(run.colour)
+    const ink = parseRgb(run.color)
     const ground = parseRgb(run.ground)
-    expect(ink, `${where} ${run.where}: unreadable colour ${run.colour}`).not.toBeNull()
+    expect(ink, `${where} ${run.where}: unreadable color ${run.color}`).not.toBeNull()
     expect(ground, `${where} ${run.where}: unreadable ground ${run.ground}`).not.toBeNull()
     // A see-through ground makes the ratio below a measurement of nothing, and is exactly
     // what a stylesheet that failed to load looks like.

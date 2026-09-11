@@ -392,7 +392,15 @@ COMPONENTS = [
                                     "one voice since 2026-09-08 — the standing policy key is "
                                     "deleted and a store still holding it is refused by name; "
                                     "the flag applies to every leg of a merged send "
-                                    "because that send is ONE file. The cut-off that decides "
+                                    "because that send is ONE file. `--quantity SKU=N` (D7 "
+                                    "amended 2026-09-11, on the owner's report) is the per-card "
+                                    "SEND quantity — this press puts exactly N copies of that "
+                                    "card in the file, bounded by the copies on hand not already "
+                                    "listed and never by what TCGplayer holds; `0` sends none "
+                                    "without a hold. Parsed beside the cap before the store is "
+                                    "read, and `_say_quantities` names every card given a "
+                                    "figure, the shortfall (`asked 9, only 3 can go`) and any "
+                                    "SKU the send does not hold. The cut-off that decides "
                                     "the buckets is the corpus's stored `policy.threshold`. Prices "
                                     "from inventory/prices.json (D86) rather than from the run manifest (D49); "
                                     "refuses a run still carrying a legacy "
@@ -717,7 +725,10 @@ COMPONENTS = [
                                  "emitted each believe the whole cap is theirs. Measured at the "
                                  "old standing cap of 4: three separate emits over three real "
                                  "runs wrote two SKUs past it; one merged emit wrote "
-                                 "none. Writes nothing — cli/cmd_emit.py owns the file and the "
+                                 "none. A per-card quantity the send named (D7 amended "
+                                 "2026-09-11) is spent the same way, once over the union — "
+                                 "`_merged_asked` takes the tightest any leg carries, as "
+                                 "`_merged_cap` does. Writes nothing — cli/cmd_emit.py owns the file and the "
                                  "store. `_agree_policy` refuses a send whose runs override "
                                  "`threshold` differently, for the reason it already refused "
                                  "two `sub_threshold`s: one file needs one answer (D99).",
@@ -981,8 +992,10 @@ COMPONENTS = [
             # are what a kill still tears.
             "session.py": {"does": "lock-free read, or locked read-modify-write, over one SQLite "
                                    "transaction — `Snapshot` is the API and every field of it "
-                                   "loads only the rows a caller names",
-                           "governed_by": ["D13", "D53", "D63", "D88"], "tested_by": ["T7"]},
+                                   "loads only the rows a caller names. `buried()` (D134) is "
+                                   "`history()`'s narrower sibling: the `buried` events alone, "
+                                   "for `#/graveyard`'s read.",
+                           "governed_by": ["D13", "D53", "D63", "D88", "D134"], "tested_by": ["T7"]},
             "rows.py": {"does": "`Rows`: a keyed mapping of records that is a dict to every "
                                 "caller and, bound to a `Source`, loads one row, one indexed "
                                 "column's matches, or column values with no object built at all. "
@@ -993,8 +1006,11 @@ COMPONENTS = [
                               "indexed columns derived beside it), `SqliteSource` behind every "
                               "`Rows`, the per-session flush, the events table that is the "
                               "history, and the one-time lossless import of a legacy JSON store "
-                              "into it — under the lock, files moved to legacy-json/ with a receipt",
-                      "governed_by": ["D86", "D88"], "tested_by": ["T7"]},
+                              "into it — under the lock, files moved to legacy-json/ with a receipt. "
+                              "`events_named` (D134) is an unindexed `WHERE event = ?` scan over "
+                              "that same table — no new index, because this repo has no schema "
+                              "migration to add one to a store already on disk.",
+                      "governed_by": ["D86", "D88", "D134"], "tested_by": ["T7"]},
         },
     },
     {
@@ -1551,11 +1567,25 @@ COMPONENTS = [
                 # and `pkmnscan.*` both stand and a row demanding one of them would be
                 # demanding a rename that silently discards what a browser holds under the
                 # old spelling.
+                # D111 AND D127 JOIN AS CITED FAILURES, the same shape D70 and D101 already
+                # carry above: `check_codex_hooks`'s docstring names the two incidents its
+                # missing hooks would have reopened had the row not backfilled them —
+                # `reap.py --hook` on every `Bash` call (D127) and `session-teardown.sh` on
+                # `WorktreeRemove` (D111's sweep) — because a reader who does not know why
+                # those two hooks matter reads a bare roster diff as pedantry. D135 is the
+                # ruling the row enforces: Codex reads the same guards a Claude Code session
+                # does, through `.codex/hooks.json` reconciled against `.claude/settings.json`.
+                # D47 IS CITED IN `branch_files`, NOT IN THE CODEX ROW: a tracked directory
+                # symlink (D47's own subject) is a changed path with no text to scan, and that
+                # function's `is_dir()` guard is what keeps `check_renumbered_decisions` from
+                # crashing on one — found the moment `.agents/skills` became the first such
+                # link this repo's own history ever produced.
                 "governed_by": ["D2", "D3", "D6", "D7", "D8", "D9", "D10", "D12", "D16", "D17",
                                 "D18", "D22", "D23", "D24", "D26", "D27", "D31", "D39", "D43",
-                                "D49", "D50", "D51", "D53", "D60", "D64", "D65", "D67", "D69",
+                                "D47", "D49", "D50", "D51", "D53", "D60", "D64", "D65", "D67", "D69",
                                 "D70", "D72", "D75", "D76", "D80", "D81", "D83", "D84", "D87",
-                                "D90", "D92", "D94", "D96", "D101", "D102", "D104", "D122", "D119", "D132"],
+                                "D88", "D90", "D92", "D94", "D96", "D101", "D102", "D104", "D111",
+                                "D119", "D122", "D127", "D132", "D135"],
             },
             "docs-audit-allow.txt": {
                 "does": "paths and identifiers the docs name before they exist, one "
@@ -2219,6 +2249,12 @@ COMPONENTS = [
                         "together or neither does. NOT ONE OF THEM is a member of "
                         "master.STATES, which is what keeps _state_before_sale from "
                         "restoring a reversed sale to one of them. "
+                        "DELETE /boxes/<box> BURIES A DEPARTED RECORD RATHER THAN "
+                        "REFUSING ON IT (D134): a sold, retired or moved record no longer "
+                        "blocks the delete — one `buried` event per record, carrying it "
+                        "whole, before the record and its photograph go. `GET /graveyard` "
+                        "reads those lines merged with every departed record still "
+                        "standing in an un-deleted box, one shape either way. "
                         "THERE IS ONE ORDER-PULL DOOR AND THERE WERE BRIEFLY TWO. `do_order_fill` "
                         "— D90's envelope, every line of one order in one write — arrived with "
                         "main's merge, was reachable from no screen here for a day and a half, "
@@ -2264,7 +2300,7 @@ COMPONENTS = [
                                 "D62", "D63", "D64", "D65", "D66", "D67", "D69", "D70", "D76",
                                 "D77", "D79", "D83", "D86", "D87", "D88", "D89", "D90", "D91",
                                 "D92", "D93", "D96", "D100", "D103", "D104", "D113", "D115",
-                                "D116", "D132"],
+                                "D116", "D132", "D134"],
                 "tested_by": ["T7"],
             },
             "tcg_import.py": {"does": "THE OUTBOUND WRITE to the seller admin, and the only "
@@ -2489,18 +2525,20 @@ COMPONENTS = [
         # rest of Gate C is physical. scripts/status.py resolves "do this next" through
         # this field, and without it step 10 printed as claimed by nobody.
         "does": "the web app, REBUILT AS BANCHI in 2026-09: a new shell, a shared kit, two "
-                "themes, and every screen redrawn against it. ELEVEN routes behind a "
-                "hand-written hash router, TEN of them the owner's — home, which took the root "
-                "hash and is where the six-stage spine is drawn; the capture screen that Gate B "
-                "runs on, now at `#/capture`; the runs screen the pipeline lives on; the review "
-                "queue; the pricing worklist; the order screen and the shipping lane (D69 gave "
-                "each its own route rather than making one a mode of the other); the one "
-                "inventory view (D31 folded the box walk and the pull preview into it); the "
-                "code-card screen D70 gave its own route; and `#/gallery`, which is the KIT — "
-                "step 6's component page grown into every primitive the product is built from. "
-                "One is the Fulfiller's, and the shell deliberately draws no chrome over it. "
-                "The count here is RECOUNTED off src/App.tsx's ROUTES table and never "
-                "incremented: it has been wrong more often than right — it said "
+                "themes, and every screen redrawn against it. TWELVE routes behind a "
+                "hand-written hash router, ELEVEN of them the owner's — home, which took the "
+                "root hash and is where the six-stage spine is drawn; the capture screen that "
+                "Gate B runs on, now at `#/capture`; the runs screen the pipeline lives on; the "
+                "review queue; the pricing worklist; the order screen and the shipping lane "
+                "(D69 gave each its own route rather than making one a mode of the other); the "
+                "one inventory view (D31 folded the box walk and the pull preview into it); "
+                "`#/graveyard`, where a departed card is read whether its box still stands or "
+                "was deleted out from under it (D134); the code-card screen D70 gave its own "
+                "route; and `#/gallery`, which is the KIT — step 6's component page grown into "
+                "every primitive the product is built from. One is the Fulfiller's, and the "
+                "shell deliberately draws no chrome over it. The count here is RECOUNTED off "
+                "src/App.tsx's ROUTES table and never incremented: it has been wrong more "
+                "often than right — it said "
                 "NINE from D70 until 2026-08-31, and #/codes was missing from the list above "
                 "outright. TWO ROWS RECONCILE IT NOW and neither existed when the sentence "
                 "here ended `and nothing reconciles it`: scripts/docs-audit.py's "
@@ -2632,8 +2670,12 @@ COMPONENTS = [
                                              "Playwright's 5s: fullyParallel puts every worker's "
                                              "first visibility wait against a cold Vite, and that "
                                              "wait — never an assertion — was the whole of the "
-                                             "flake DEBTS.md recorded on 2026-08-30",
-                                     "governed_by": ["D5", "D16"]},
+                                             "flake DEBTS.md recorded on 2026-08-30. Under CI a "
+                                             "failing case keeps its trace (`retain-on-failure`) "
+                                             "and check.yml uploads it: the one-test runner red "
+                                             "has never reproduced on the rig (D128), so the run "
+                                             "that fails is the only witness there is",
+                                     "governed_by": ["D5", "D16", "D128"]},
             "design-check-reporter.ts": {"does": "THE VERDICT, AS ONE SMALL FILE. A Playwright "
                                                  "reporter that writes `.serve/design-check.json` "
                                                  "— pass/fail, the counts, and every failing title "
@@ -2830,11 +2872,12 @@ COMPONENTS = [
             # and its render off a single ROUTES table rather than a table plus a switch, and
             # cites D16 for why two lists of the same strings are the drift to avoid.
             "src/App.tsx": {"does": "THE BANCHI SHELL, and the ROUTES table it is all driven "
-                                    "off. ELEVEN hash routes, TEN the owner's and one the "
+                                    "off. TWELVE hash routes, ELEVEN the owner's and one the "
                                     "Fulfiller's: `#/` is Home, which took the root hash in the "
                                     "2026-09 rebuild and moved capture to `#/capture`; then "
                                     "capture, runs, review, pricing, orders, shipping, "
-                                    "inventory, codes, the Fulfiller's `#/fulfillment`, and "
+                                    "inventory, `#/graveyard` (D134), codes, the Fulfiller's "
+                                    "`#/fulfillment`, and "
                                     "`#/gallery`, which is the KIT now rather than step 6's "
                                     "component page. RECOUNT FROM THE TABLE, NEVER INCREMENT — "
                                     "`route census` fails a commit where this file, CLAUDE.md or "
@@ -2896,7 +2939,7 @@ COMPONENTS = [
                             "governed_by": ["D5", "D10", "D13", "D14", "D16", "D20", "D27",
                                             "D28", "D31", "D33", "D39", "D49", "D51", "D53",
                                             "D57", "D61", "D63", "D66", "D69", "D70", "D94",
-                                            "D95", "D100", "D105", "D120"]},
+                                            "D95", "D100", "D105", "D120", "D134"]},
             "src/Codes.tsx": {"does": "the code-card screen: read a box's QRs into the ledger, "
                                       "see the two lanes C11 tiers the pile into, and hand a "
                                       "lane's codes to a buyer against a named order. The "
@@ -2939,7 +2982,7 @@ COMPONENTS = [
                                     "deliberately does not wear that class, because it is never "
                                     "armed.",
                             "governed_by": ["D5", "D10", "D13", "D31", "D41", "D49", "D50", "D51", "D94",
-                                             "D95", "D110", "D117", "D118"]},
+                                             "D95", "D110", "D117", "D118", "D134"]},
             # THE TWO `ServerReloaded` FILES ARE GONE AND THE NOTICE IS NOT (Banchi, 2026-09-03).
             # D53's rule is that the boot header is SUBSCRIBED to and never polled, and that the
             # notice demands nothing; neither needed a component of its own once the shell had a
@@ -2995,7 +3038,7 @@ COMPONENTS = [
                                               "D61", "D62", "D63", "D64", "D65", "D68", "D69",
                                               "D70", "D73", "D76", "D79", "D83", "D86", "D87",
                                               "D89", "D90", "D91", "D92", "D100", "D103",
-                                              "D104", "D113", "D116", "D132"]},
+                                              "D104", "D113", "D116", "D132", "D134"]},
             "src/demoFlag.d.ts": {"does": "declares `__BN_DEMO__`, the build-time demo flag "
                                           "`vite.config.ts` substitutes with a boolean "
                                           "literal. It exists because three other forms of "
@@ -3054,7 +3097,7 @@ COMPONENTS = [
                                              "D63", "D64", "D65", "D67", "D69", "D73", "D76",
                                              "D79", "D83", "D86", "D87", "D89", "D91", "D92",
                                              "D93", "D100", "D103", "D104", "D113", "D115",
-                                             "D116", "D132"]},
+                                             "D116", "D132", "D134"]},
             "src/deviceMemory.ts": {"does": "every `localStorage` key the shell owns — the "
                                             "theme, the rail, which order statuses this "
                                             "device bothers fetching (D114), whether the "
@@ -3574,7 +3617,9 @@ COMPONENTS = [
                         "Two destructive-adjacent controls sit "
                         "beneath them: D34's listing release, drawn over a free plan and "
                         "budgeted by this box's own copies, and D10 ruling 3's whole-box "
-                        "delete behind a typed box number.",
+                        "delete behind a typed box number — which no longer refuses on a "
+                        "sold, retired or moved record (D134): those are buried, and only a "
+                        "listing hold still stands in the way.",
                 "note": "TWO CONTROLS SAY WHAT THEY WILL DO BEFORE THEY DO IT, and both "
                         "sentences are the decision rather than a nicety. Sealing reads 'Seal "
                         "box — freezes capacity at 59', because from that press every fraction "
@@ -3596,7 +3641,7 @@ COMPONENTS = [
                         "pipeline/join.py:Position is the only label formula in the repo; the "
                         "spans, the rendered divider list and the denominator are all read back "
                         "off the wire.",
-                "governed_by": ["D5", "D10", "D13", "D20", "D21", "D22", "D26", "D27", "D31", "D33", "D34", "D36", "D38", "D41", "D58", "D70", "D83", "D89", "D115", "D132"],
+                "governed_by": ["D5", "D10", "D13", "D20", "D21", "D22", "D26", "D27", "D31", "D33", "D34", "D36", "D38", "D41", "D58", "D70", "D83", "D89", "D115", "D132", "D134"],
             },
             "src/BoxOps.css": {
                 "does": "the box header, the section track and the editors, at the dense "
@@ -3612,6 +3657,30 @@ COMPONENTS = [
                         "styled — the walk beside it drew the same rows, foldable and tickable, "
                         "while this drew them as inert text.",
                 "governed_by": ["D5", "D20", "D22", "D31", "D38", "D40", "D41", "D50", "D83", "D132"],
+            },
+            "src/Graveyard.tsx": {
+                "does": "`#/graveyard` (D134): every departed card the store still knows "
+                        "about, newest departure first. TWO SOURCES, ONE TABLE — a "
+                        "sold/retired/moved record still standing in a box nobody has "
+                        "deleted, the same records `#/inventory` already draws as departed, "
+                        "and a `buried` history line for one whose box WAS deleted by "
+                        "`do_delete_box`. `GET /graveyard` merges both server-side; this "
+                        "screen reads one shape and a `buried` pill says which door a row "
+                        "came from. A Segmented filter (All/Sold/Retired/Moved/Buried) and a "
+                        "text search over name, number, SKU and box name; no photograph, no "
+                        "price, no control that writes anything — a ledger for looking, not "
+                        "a screen that spends. ITS `#` IS ALWAYS A KEY, NEVER A COUNT (D92): "
+                        "a departed record has no slot to count to, so `positionOf` and the "
+                        "Where column both go through `storeKey.ts:storeKeyText` — `B9 #3`, "
+                        "D68's own spelling — rather than composing `#{index}` by hand.",
+                "governed_by": ["D26", "D58", "D68", "D83", "D92", "D134"],
+            },
+            "src/Graveyard.css": {
+                "does": "a smaller sheet than a working screen's, because this one has no "
+                        "form and no write: a toolbar, a `.bn-table` that becomes a stacked "
+                        "card at 639px on the same idiom `Codes.css` established, and a "
+                        "loading skeleton. Every color is a `--bn-*` token.",
+                "governed_by": ["D50", "D94", "D134"],
             },
             "src/Fulfillment.tsx": {
                 "does": "D5's second persona's entire product: cards to pull in box-walk "
@@ -3901,7 +3970,15 @@ COMPONENTS = [
                                         "keeps every copy of a SKU out of this run's import file "
                                         "with a reason, a note and an optional watch price. "
                                         "NOTHING HERE SPENDS: the box, the cart and the money "
-                                        "gate stay on #/runs.",
+                                        "gate stay on #/runs. THE QTY CELL IS A FIELD (D7 amended "
+                                        "2026-09-11, on the owner's report): a per-card SEND "
+                                        "quantity for this press — blank sends every copy that "
+                                        "can go and the placeholder is that figure, a number "
+                                        "sends that many, 0 sends none without a hold — held in "
+                                        "the screen as typed, clamped on blur to what can go, "
+                                        "counted on the deck, cleared per row by Escape or for "
+                                        "the send by the ship bar's chip, and SPENT by a "
+                                        "successful write.",
                                 # D9 is the threshold, the floor and the rule that nothing is
                                 # defaulted on the operator's behalf; D7 is why this is SKU-scoped
                                 # and never card-scoped; D28 is the list-must-not-move rule its
@@ -4664,7 +4741,7 @@ COMPONENTS = [
                         "64px carrying no filter and no cap discs, the DISPLAY cut is what "
                         "`#/gallery` shows at 64 and above, all six locked palettes are drawn "
                         "and differ, and the mark does not invert with the theme.",
-                "governed_by": ["D94", "D102"],
+                "governed_by": ["D94", "D102", "D134"],
                 "note": "IT EXISTS BECAUSE NOTHING IN app/tests MENTIONED THE MARK AT ALL. No "
                         "snapshot, no brand assertion, no reference to `Logo` — the mark could "
                         "have stopped rendering in all six of its call sites with `make check` "
@@ -4752,7 +4829,7 @@ COMPONENTS = [
                         "re-add the link and all 20 brand cases fail naming the URL. Not "
                         "a harness test; it has no test of its own and is "
                         "exercised by every spec that imports it.",
-                "governed_by": ["D16", "D37", "D43", "D46", "D56", "D58", "D63", "D70", "D86", "D124", "D125"]},
+                "governed_by": ["D16", "D37", "D43", "D46", "D56", "D58", "D63", "D70", "D86", "D124", "D125", "D134"]},
             "tests/fontsReady.ts": {
                 "does": "one helper, `settleFonts`, awaited after every `page.goto` in the seven "
                         "specs that measure type — it said FOUR until 2026-09-06, and the "
@@ -4774,7 +4851,7 @@ COMPONENTS = [
                         "arrow belongs to the screens, a held Cmd in a text field belongs to the "
                         "caret, and a screen outside the ring keeps the browser's key. Not a "
                         "harness test; `make design-check` runs it.",
-                "governed_by": ["D5", "D31", "D39", "D43", "D51", "D69", "D70", "D86", "D100", "D105"],
+                "governed_by": ["D5", "D31", "D39", "D43", "D51", "D69", "D70", "D86", "D100", "D105", "D134"],
                 "note": "ITS RING IS PINNED ON PURPOSE AND RECONCILED AT THE COMMIT. A ring "
                         "derived from App.tsx could not assert the ORDER against anything "
                         "independent, so the copy stays and carries a `ROUTE-ROSTER hotkey` "
@@ -4965,7 +5042,7 @@ COMPONENTS = [
                         "and `product_game` outright — `undefined.find` inside `ClaimEditor`, "
                         "the screen behind its error boundary, and six cases here spending "
                         "thirty seconds each on a switch that had been detached. AND THE HASH'S OWN BOX SINCE 2026-09-05: `#/inventory?box=<n>` was honoured only for a box that already had ROWS, because the shelf list is built from the rows first and the registry second and the ref was consumed on the first list — so every box of code cards, which D24 pools and which therefore has none, was unreachable by the one link that aims at one. Two cases, with `GET /boxes` held back so the ordering is the defect's rather than a race.",
-                "governed_by": ["D5", "D7", "D8", "D9", "D10", "D13", "D20", "D22", "D23", "D24", "D26", "D28", "D30", "D31", "D33", "D34", "D37", "D38", "D40", "D41", "D43", "D45", "D49", "D55", "D57", "D58", "D63", "D67", "D68", "D71", "D83", "D89", "D92", "D101", "D115", "D116", "D118", "D124", "D125", "D119", "D132", "D27"],
+                "governed_by": ["D5", "D7", "D8", "D9", "D10", "D13", "D20", "D22", "D23", "D24", "D26", "D28", "D30", "D31", "D33", "D34", "D37", "D38", "D40", "D41", "D43", "D45", "D49", "D55", "D57", "D58", "D63", "D67", "D68", "D71", "D83", "D89", "D92", "D101", "D115", "D116", "D118", "D124", "D125", "D119", "D132", "D27", "D134"],
                 "note": "THE CHECK `CLAUDE.md`'s ROUTE-IS-NOT-A-FEATURE RULE SAYS DOES NOT "
                         "EXIST. That rule was written on 2026-08-23 after three routes shipped "
                         "with full T7 coverage and no client function and no control — green "

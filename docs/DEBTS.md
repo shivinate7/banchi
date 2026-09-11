@@ -747,6 +747,73 @@ which runs 7 workers here.**
 failed once in nine runs. Its message was not captured.~~ **CLOSED 2026-09-08 — it was the
 select, and the rate at that width is 16%.** See the survey below, which reproduces it on demand.
 
+### The runner's one-test red is measured, instrumented, and still open, 2026-09-11
+
+**D128 did not close it.** That entry found one real defect — a `keydown` listener a render behind
+the screen — and fixed it, and its own last section declined to promise a green CI. The promise
+would have been wrong: on 2026-09-11, with D128 merged, PR #245's `design-check` job went red on
+`capture-claims.spec.ts:264` at the helper's own line 191, `toHaveCount(0)` polled nineteen times
+at 3 — the same locator, the same shape, the same fifteen seconds as the two instances D128
+attributed to the closure. The re-run was green. So the shape D128 named survives its fix, and the
+mechanism is not known.
+
+**What was measured, over every completed `design-check` job since it landed on 2026-09-08.**
+
+| | completed runs | red | rate |
+|---|---|---|---|
+| all | 113 | 6 | 1 in 19 |
+| since D128 merged (2026-09-10 18:27Z) | 13 | 1 | 1 in 13 |
+
+Never more than one test per run except the job's first, which had three — two of them the D118
+platform difference `check.yml` records, fixed the same day and not counted below. **The five
+that remain are one shape: the assertion right after a `keyboard.press('Escape')`** —
+`capture-claims.spec.ts` three times (lines 264, 314, 816), `live-reconcile.spec.ts:236`,
+`markdown.spec.ts:539`. The failing case never runs slow: today's began its fifteen-second wait
+1.4s into the test, and the two earlier capture instances 0.8s and 0.6s in — page load, the `f`
+press and the track drawing all landed inside a second, and then one Escape was not honoured for
+fifteen. **The three capture instances began between 111 and 121 seconds after the run's first
+test**, at three different cases; the other two at 470 and 531. Three points is not a clock, and
+it is written down because it is the only regularity in the set.
+
+**What does not reproduce it, on this Mac and on the runner.**
+
+- 40 of 40: the helper's exact sequence under a 6x `Emulation.setCPUThrottlingRate`, one worker,
+  the lever that reproduced D128's held-sheet shape 3 in 20.
+- 240 of 240: the same sequence on `ubuntu-latest`, three shards, one worker, traces armed.
+- 315 of 315: the whole of `capture-claims.spec.ts` on the runner, `--repeat-each=5`, three shards.
+
+- 0 of 5: the WHOLE suite on the runner with tracing armed — four shards on this branch and the
+  PR's own job — produced no Escape-shaped failure at all. What those five runs did produce, each
+  with a trace, was that afternoon's main: the location card PR #244's merge had brought back
+  (4 of 4 on `inventory.spec.ts`'s D118 case, gone once D119 was re-applied) and PR #246's
+  `Open the review queue` link under the thumb floor at 390 (`phone.spec.ts:206`, which main's
+  own untraced run fails identically). The instrument's first catch was somebody else's defect,
+  which is what an instrument is for.
+
+So the case that fails one run in thirteen inside the suite passes 555 times outside it, on the
+box it fails on. **The suite around it is part of the mechanism** and nothing measured says which
+part. The candidates read and ruled out by evidence rather than by argument: a Vite dependency
+re-optimisation forcing a reload (the app's only runtime dependencies are React's, all bundled at
+scan, and a reload would EMPTY the track rather than hold it at 3); a second listener eating the
+press (the leader's capture-phase `stopPropagation` fires only while armed, and nothing arms it);
+worker oversubscription (there is one worker); an exit animation keeping the cells in the DOM
+(there is none — `openField` has three setters and none animates).
+
+**What changed, and it is instrumentation rather than a fix.** `app/playwright.config.ts` turns
+`trace: 'retain-on-failure'` on under `CI`, and `check.yml` uploads `app/test-results` when the
+job is red — the DOM before and after every action, the console and the network of the case that
+failed, beside the `error-context.md` snapshot Playwright already wrote and the runner already
+threw away. Five instances have been diagnosed from four reporter lines each; the sixth will have
+its trace. Open it with `npx playwright show-trace <zip>` and read the DOM at the `Escape` and at
+the first `toHaveCount` poll — whether the track is open in both is the first fact nobody has.
+
+**What was refused, again, for D128's reasons and one more.** `retries: 1` would retire the count
+this section is built on. A longer timeout answers nothing that resolved to 3 nineteen times. A
+retry loop around the Escape in the helper would make every recorded instance green and would be
+the one change that could hide the mechanism from the trace that is now armed to catch it. **The
+workaround stands and is named**: `gh run rerun <id> --failed`, about seventeen minutes, until the
+trace says what the runner is doing.
+
 ### The suite was surveyed rather than argued about, 2026-09-08
 
 **Ten clean runs of the whole suite, then the offenders hammered on their own.** The trigger was

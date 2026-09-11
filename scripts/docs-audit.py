@@ -67,6 +67,8 @@ import subprocess
 from functools import lru_cache
 import sys
 import tempfile
+import tokenize
+import keyword
 from fnmatch import fnmatch
 from pathlib import Path
 from typing import Dict, Iterable, List, NamedTuple, Optional, Sequence, Set, Tuple
@@ -1032,7 +1034,7 @@ def check_harness_tests(report: Report, docs: List[Path], allowed: Dict[str, str
     report.add("harness tests", MECHANICAL, findings, f"{len(names)} registered and documented")
 
 
-def normalise(text: str) -> str:
+def normalize(text: str) -> str:
     """Collapse whitespace. docs/GATES.md wraps at 96 columns, so a criteria line that
     agrees perfectly still arrives split across two lines with two spaces of indent."""
     return " ".join(text.split())
@@ -1164,7 +1166,7 @@ def check_pass_criteria(report: Report) -> None:
             )
             continue
         claim = docstring_pass_claim(source)
-        if claim is not None and normalise(criteria) not in normalise(claim):
+        if claim is not None and normalize(criteria) not in normalize(claim):
             wording.append(
                 Finding(
                     rel(path),
@@ -1658,13 +1660,22 @@ def renumbered_on_branch(base: str) -> List[Tuple[str, str, str]]:
 
 
 def branch_files(base: str) -> List[str]:
-    """Paths this branch changed, committed or not. The renumber's own file is not one."""
+    """Paths this branch changed, committed or not. The renumber's own file is not one.
+
+    A DIRECTORY SYMLINK IS A CHANGED PATH WITH NO TEXT TO SCAN, and `check_renumbered_decisions`
+    is the only caller — it reads every name here as a file's content. `Path.is_dir()` follows
+    symlinks, so a tracked directory link (D47 — `.agents/skills -> ../.claude/skills`) reads as
+    a directory here exactly as a real one would, and is excluded the same way: `exists()` alone
+    said yes and `read_text()` crashed with `IsADirectoryError`, which is the git-tracked shape
+    D47 legitimizes and this reader had never seen before one landed on a branch.
+    """
     names = set(git("diff", "--name-only", base, "HEAD").split("\n"))
     names.update(git("diff", "--name-only", "HEAD").split("\n"))
     names.update(git("diff", "--cached", "--name-only").split("\n"))
     return sorted(
         name for name in names
         if name and name != "docs/DECISIONS.md" and exists(ROOT / name)
+        and not (ROOT / name).is_dir()
     )
 
 
@@ -4091,6 +4102,176 @@ def check_hook_roster(report: Report) -> None:
     )
 
 
+# --------------------------------------------------------------------- codex hooks (D135)
+
+CODEX_HOOKS = ROOT / ".codex" / "hooks.json"
+CLAUDE_SETTINGS = ROOT / ".claude" / "settings.json"
+
+
+def _hook_triples(data: object) -> Set[Tuple[str, str, str]]:
+    """(event, matcher, command) out of a settings-shaped `hooks` block.
+
+    Both files share one shape — `hooks.<Event> = [{matcher?, hooks: [{type, command}]}]` —
+    because `.codex/hooks.json` was written by copying `.claude/settings.json`'s own block
+    out of its wrapper (D135). `matcher` is absent on an event with no tool to match
+    (`SessionStart`, `Stop`, `SessionEnd`, `WorktreeRemove`), so it is read as `""` rather
+    than skipped — an event that gains a matcher in one file and not the other is exactly
+    the drift this reads for, and a triple can only report that by carrying the field.
+
+    `timeout` is deliberately not part of the triple. It changes how patient a hook is, not
+    which hooks fire, and folding it in would make a slower `session-teardown.sh` in one
+    file read as a MISSING hook rather than as a timing difference nobody asked this row to
+    referee.
+    """
+    triples: Set[Tuple[str, str, str]] = set()
+    if not isinstance(data, dict):
+        return triples
+    events = data.get("hooks")
+    if not isinstance(events, dict):
+        return triples
+    for event, entries in events.items():
+        if not isinstance(entries, list):
+            continue
+        for entry in entries:
+            if not isinstance(entry, dict):
+                continue
+            matcher = entry.get("matcher") or ""
+            for hook in entry.get("hooks") or []:
+                if not isinstance(hook, dict):
+                    continue
+                if hook.get("type") != "command":
+                    continue
+                command = hook.get("command")
+                if isinstance(command, str) and command:
+                    triples.add((str(event), str(matcher), command))
+    return triples
+
+
+def check_codex_hooks(report: Report) -> None:
+    """`.codex/hooks.json` and `.claude/settings.json`'s `hooks` block name the same hooks.
+
+    BUILT SO A CODEX SESSION IS NOT A SECOND, UNGUARDED WAY INTO THIS REPO (D135). Codex
+    reads `.codex/hooks.json` the way Claude Code reads `.claude/settings.json`'s `hooks`
+    key, and until this row nothing compared the two: a guard added to one tool's config and
+    not the other's is a guard that only some sessions run, silently, and the file's own
+    prose cannot say so — `.codex/hooks.json` carries none of `.claude/settings.json`'s
+    `_*_note` fields explaining what each hook is for or why it fails open, because those
+    notes are keys JSON tolerates and nothing reads.
+
+    MEASURED AT THE MOMENT THIS ROW WAS WRITTEN: the two files already disagreed.
+    `.claude/settings.json` runs `scripts/reap.py --hook` on every `Bash` call (D127, added
+    2026-09-10 for the pkill/lsof incidents) and `scripts/session-teardown.sh` on
+    `WorktreeRemove` (added with D111's sweep) — `.codex/hooks.json` was written a day
+    earlier, on 2026-09-09, and has neither. A Codex session could run an unrestricted
+    `pkill` this repo's own Claude sessions cannot, and its `git worktree remove` would
+    never notify a supervisor to stop. Both are added to `.codex/hooks.json` in the same
+    change that adds this row, which is what makes the row start green rather than start by
+    reporting the gap it was built to close.
+
+    EVENT AND MATCHER ARE PART OF THE COMPARISON, NOT ONLY THE COMMAND. A command string
+    reused under a different event or a narrowed matcher is a different guard wearing the
+    same name — `scripts/guard-opsec.sh` on `Write|Edit` is the opsec check; the same script
+    on `Bash` would be a no-op with a name that reads as coverage. Comparing the full triple
+    is what catches that; comparing commands alone would not.
+
+    A COMMAND NAMED IN EITHER FILE MUST NAME A REAL FILE IN THE TREE. `.codex/hooks.json`
+    is untracked history's copy of a moving target, and a hook whose script has since been
+    renamed or deleted is silent in exactly the way `make reap` and `make janitor`'s own
+    liveness checks refuse to be — it does not error, it simply never runs.
+    """
+    findings: List[Finding] = []
+    if not exists(CODEX_HOOKS):
+        report.add(
+            "codex hooks",
+            MECHANICAL,
+            [
+                Finding(
+                    ".codex/hooks.json",
+                    "does not exist. Codex reads no hooks at all here, which is a silent "
+                    "downgrade from what .claude/settings.json enforces for Claude Code — "
+                    "restore the file or delete this row with it (D135).",
+                )
+            ],
+            "",
+        )
+        return
+    if not exists(CLAUDE_SETTINGS):
+        report.add(
+            "codex hooks",
+            MECHANICAL,
+            [Finding(".claude/settings.json", "does not exist; nothing to reconcile against.")],
+            "",
+        )
+        return
+
+    try:
+        codex_data = json.loads(read(CODEX_HOOKS))
+    except json.JSONDecodeError as exc:
+        report.add(
+            "codex hooks",
+            MECHANICAL,
+            [Finding(".codex/hooks.json", f"does not parse as JSON: {exc}")],
+            "",
+        )
+        return
+    try:
+        claude_data = json.loads(read(CLAUDE_SETTINGS))
+    except json.JSONDecodeError as exc:
+        report.add(
+            "codex hooks",
+            MECHANICAL,
+            [Finding(".claude/settings.json", f"does not parse as JSON: {exc}")],
+            "",
+        )
+        return
+
+    codex_triples = _hook_triples(codex_data)
+    claude_triples = _hook_triples(claude_data)
+
+    def describe(event: str, matcher: str, command: str) -> str:
+        return f"{event}" + (f" (matcher `{matcher}`)" if matcher else "") + f" -> `{command}`"
+
+    for event, matcher, command in sorted(claude_triples - codex_triples):
+        findings.append(
+            Finding(
+                ".codex/hooks.json",
+                f"missing {describe(event, matcher, command)}, which .claude/settings.json "
+                "runs.\n"
+                "  A hook armed for Claude Code and not for Codex is a guard some sessions "
+                "skip. Add the same event, matcher and command here.",
+            )
+        )
+    for event, matcher, command in sorted(codex_triples - claude_triples):
+        findings.append(
+            Finding(
+                ".claude/settings.json",
+                f"does not run {describe(event, matcher, command)}, which .codex/hooks.json "
+                "runs.\n"
+                "  Either arm it here too, or drop it from .codex/hooks.json — a hook only "
+                "Codex runs is one no Claude Code session's behavior reflects, and the two "
+                "tools are meant to read the same guards.",
+            )
+        )
+
+    for event, _matcher, command in sorted(codex_triples | claude_triples):
+        script = command.split()[0] if command else ""
+        if script and not exists(ROOT / script):
+            findings.append(
+                Finding(
+                    script,
+                    f"the {event} hook names `{command}` and no such file exists in the tree.",
+                )
+            )
+
+    report.add(
+        "codex hooks",
+        MECHANICAL,
+        findings,
+        f"{len(claude_triples)} hooks in .claude/settings.json, all mirrored in "
+        f".codex/hooks.json",
+    )
+
+
 def check_map_sections(report: Report) -> None:
     """Every top-level section of docs/map.py is read by something, and the docstring's
     consumer list is true.
@@ -5610,7 +5791,7 @@ def _refusals_reachable(tree: ast.AST, root: str) -> Optional[Set[str]]:
     A CLOSURE OVER THE CALL GRAPH, not a grep of the file and not a read of one function.
     `filters` raises two of the nine itself; the other seven come out of `_cookie`, `_open`,
     `_check_status` and the endpoint accessors. A reader that stopped at the function the route
-    names would have reported two — which is exactly the number the screen already labelled,
+    names would have reported two — which is exactly the number the screen already labeled,
     so it would have blessed the defect it was written to find. Measured by removing the
     recursion: seven codes flip to unreachable.
 
@@ -5742,7 +5923,7 @@ def check_hint_reasons(report: Report) -> None:
         MECHANICAL,
         findings,
         f"{len(reachable)} refusals reachable from {HINT_REASON_ROOT}(), "
-        f"{len(named)} labelled by the screen",
+        f"{len(named)} labeled by the screen",
     )
 
 
@@ -6207,22 +6388,22 @@ def check_reason_emissions(report: Report) -> None:
             continue
         published.update(roster)
 
-    labelled = _reason_labels()
-    if labelled is None:
+    labeled = _reason_labels()
+    if labeled is None:
         findings.append(
             Finding(rel(REVIEW_QUEUE_TSX), "no `REASON_LABELS` block to read.")
         )
     elif not missing_roster:
-        for reason in sorted(labelled - published):
+        for reason in sorted(labeled - published):
             findings.append(
                 Finding(
                     rel(REVIEW_QUEUE_TSX),
-                    f"`{reason}` is labelled on the screen and named by no roster.\n"
+                    f"`{reason}` is labeled on the screen and named by no roster.\n"
                     f"  Add it to `LADDER_REASONS` or `ROUTING_REASONS` — whichever module "
                     f"produces it — so the code publishes the vocabulary it can emit.",
                 )
             )
-        for reason in sorted(published - labelled):
+        for reason in sorted(published - labeled):
             findings.append(
                 Finding(
                     rel(REVIEW_QUEUE_TSX),
@@ -6252,7 +6433,7 @@ def check_reason_emissions(report: Report) -> None:
             findings.append(
                 Finding(
                     module,
-                    f"`{reason}` is declared, labelled and documented, and nothing in "
+                    f"`{reason}` is declared, labeled and documented, and nothing in "
                     f"{', '.join(EMISSION_ROOTS)} ever assigns it.\n"
                     f"  No card can carry it, so its label and its doc line describe a state "
                     f"the product cannot reach. Emit it, retire it, or argue it into "
@@ -6386,7 +6567,7 @@ def check_reason_codes(report: Report) -> None:
         "reason codes",
         MECHANICAL,
         findings,
-        f"{len(documented)} enumerated, {len(labels)} labelled, all defined",
+        f"{len(documented)} enumerated, {len(labels)} labeled, all defined",
     )
 
 
@@ -6745,7 +6926,7 @@ def check_status_sources(report: Report) -> None:
 DESIGN = ROOT / "docs" / "DESIGN.md"
 TOKENS_CSS = ROOT / "app" / "src" / "tokens.css"
 
-COLOUR = "color"
+COLOR = "color"
 TYPEFACE = "typeface"
 LENGTH = "length"
 
@@ -6805,7 +6986,7 @@ def token_value(kind: str, text: str) -> str:
       length     whitespace only. `4px` and `4 px` are not the same value to CSS and are not
                  collapsed here.
     """
-    if kind == COLOUR:
+    if kind == COLOR:
         text = " ".join(text.split()).lower()
         return "#" + "".join(ch * 2 for ch in text[1:]) if _SHORTHAND_RE.match(text) else text
     if kind == TYPEFACE:
@@ -7118,7 +7299,7 @@ def token_findings(
                 # token, which the block states in words rather than as a second hex. There is
                 # nothing to compare, and reporting it would be reporting the design.
                 continue
-            if token_value(COLOUR, rendered) != token_value(COLOUR, locked):
+            if token_value(COLOR, rendered) != token_value(COLOR, locked):
                 findings.append(
                     Finding(
                         f"{rel(DESIGN)} + {rel(TOKENS_CSS)}",
@@ -10594,6 +10775,445 @@ def check_coupling(report: Report) -> None:
     report.add("coupling", ADVISORY, findings, "staged code and its docs move together")
 
 
+# ---------------------------------------------------------- identifier spelling (D60)
+#
+# ONE SPELLING FOR EVERY NAME A SESSION CAN SEARCH FOR. The owner ruled on 2026-09-11 (D60,
+# amended) that identifiers are spelled American across the whole repository, and that prose
+# and comments are NOT governed here. The reasoning is the difference between reading and
+# searching: a model reads `artefact` and `artifact` as one word, and a grep does not. Measured
+# before the ruling: 119 British identifiers in 24 files, beside 951 `fulfill`, 868 `catalog`
+# and 1,405 `color` — so `_artefacts` was unfindable by the word every other file used, and
+# `Fulfillment.tsx` sat over a table spelled `fulfilment`. Comments and docstrings held 869
+# British words in 169 files and were left alone: a rewrite there is churn against five open
+# branches for no search a session runs.
+#
+# IDENTIFIERS ONLY, BY CONSTRUCTION. Comments, docstrings, string and template literals, regex
+# literals and JSX text are blanked before a token is read, byte for byte so line numbers
+# survive. Vale keeps its advisory watch over markdown (`.vale.ini`), which this row never
+# reads. A British word that reaches this row is therefore a NAME — a function, a variable, a
+# class, a key spelled as an attribute, a CSS class or custom property, a shell variable.
+#
+# THE -ISE LIST IS CLOSED, DELIBERATELY. An open `\w+ise` pattern flags `raise`, `Promise`,
+# `otherwise`, `pairwise` and `exercise`, every one of them -ise in American English too; a
+# closed stem list can miss a British verb it has not met, and a miss is the cheaper error on
+# a row that blocks a commit. The stems are what this tree showed plus the common programming
+# verbs. Add one when a name shows it.
+#
+# THE ALLOW-LIST IS BY NAME AND CARRIES ITS REASON, and each entry is a name the owner ruled
+# out of scope on 2026-09-11 because a rename there is a migration and not a spelling.
+SPELLING_SUFFIXES = (".py", ".ts", ".tsx", ".mjs", ".sh", ".css")
+
+# Lower-cased identifier fragment -> why it is allowed. Matched as a substring of the whole
+# lower-cased name, so `is_catalogued`, `NotCatalogued` and `_parse_fulfilment` are covered
+# by the stem they carry rather than listed one by one — the owner's ruling was that the
+# relatives of a wire name stay with it so one file is never split between spellings.
+SPELLING_ALLOWED: Dict[str, str] = {
+    "catalogued": (
+        "the game registry key in pipeline/games.py, a field on the wire in GET /games "
+        "(app/src/types.ts declares it) and the stem of the `not_catalogued` reason code; "
+        "a rename is a wire change and a reason-code migration, not a spelling (D60, "
+        "2026-09-11)"
+    ),
+    "fulfilment": (
+        "a table in inventory/store.sqlite (store/db.py) and the ledger payload key the "
+        "legacy-JSON migration reads (store/orders.py); a rename is a store migration under "
+        "D88, not a spelling (D60, 2026-09-11)"
+    ),
+    "labelledby": "`aria-labelledby` is the DOM's own attribute name, spelled by the platform",
+}
+
+_ISE_STEMS = (
+    "alphabet|anonym|apolog|author|canonical|capital|categor|central|character|civil|colon|"
+    "critic|custom|digit|ellips|emphas|energ|equal|external|famil|final|formal|general|global|"
+    "harmon|human|hypothes|ideal|immun|initial|internal|item|legal|linear|local|magnet|"
+    "material|maxim|mechan|memo|memor|minim|mobil|modern|modular|monet|national|neutral|"
+    "normal|optim|organ|oxid|parallel|parameter|parenthes|personal|polar|popular|priorit|"
+    "public|quant|random|raster|rational|real|recogn|regular|sanit|scrutin|serial|social|"
+    "special|stabil|standard|steril|summar|symbol|synchron|synthes|token|trivial|urban|util|"
+    "vapor|vector|verbal|virtual|visual|vocal"
+)
+_ISE_PREFIX = r"(?:un|re|de|dis|non|pre|auto|mis|over|under)?"
+
+# (pattern over ONE lower-cased word of a name, replacement). The replacement is the
+# American form of the matched fragment, so the message can name it.
+_BRITISH_FRAGMENTS: Tuple[Tuple["re.Pattern[str]", str], ...] = tuple(
+    (re.compile(pattern), american)
+    for pattern, american in (
+        (r"artefact", "artifact"),
+        (r"colour", "color"),
+        (r"behaviour", "behavior"),
+        (r"honour", "honor"),
+        (r"centre", "center"),
+        (r"licence", "license"),
+        (r"grey", "gray"),
+        (r"cataloguing", "cataloging"),
+        (r"catalogue", "catalog"),
+        (r"favour", "favor"),
+        (r"neighbour", "neighbor"),
+        (r"judgement", "judgment"),
+        (r"defence", "defense"),
+        (r"offence", "offense"),
+        (r"acknowledgement", "acknowledgment"),
+        (r"programme(?![rd])", "program"),
+        (r"fulfil(?!l)", "fulfill"),
+        (r"cancell(?!ation)", "cancel"),
+        (r"aluminium", "aluminum"),
+        (r"analys(e|ed|es|ing|er|ers)$", r"analyz\1"),
+        (r"paralys(e|ed|es|ing)$", r"paralyz\1"),
+        (r"(label|model|travel|signal|total|level|channel|fuel|dial|pencil|marshal)l(ed|ing)$", r"\1\2"),
+        (r"^(" + _ISE_PREFIX + r"(?:" + _ISE_STEMS + r"))is(e|es|ed|er|ers|ing|ation|ations|able)$", r"\1iz\2"),
+    )
+)
+
+_NAME_WORDS = re.compile(r"[A-Z]+(?=[A-Z][a-z])|[A-Z]?[a-z]+|[A-Z]+")
+_JS_REGEX_WORDS = {"return", "typeof", "case", "do", "else", "in", "instanceof", "new", "throw", "void", "delete", "yield", "await"}
+
+
+def british_spelling(name: str) -> Optional[Tuple[str, str]]:
+    """(british word, american word) for the first British fragment in an identifier, or None.
+
+    The name is split into words at `_`, `-`, `$`, digits and camelCase boundaries, so
+    `fetchCatalogueRows` and `NEIGHBOURLY` are both read, and each fragment pattern sees one
+    lower-cased word at a time — which is what lets `$` anchors mean the end of a WORD.
+    """
+    lowered = name.lower()
+    if any(allowed in lowered for allowed in SPELLING_ALLOWED):
+        return None
+    for word in _NAME_WORDS.findall(name):
+        low = word.lower()
+        for pattern, american in _BRITISH_FRAGMENTS:
+            if pattern.search(low):
+                return low, pattern.sub(american, low, count=1)
+    return None
+
+
+def _blank(text: str) -> str:
+    """Every character but a newline replaced by a space: positions and lines survive."""
+    return re.sub(r"[^\n]", " ", text)
+
+
+def _js_code_only(text: str) -> str:
+    """A .ts/.tsx/.mjs file with every comment, string, template and regex literal blanked.
+
+    A real lexer rather than TS_COMMENT's regex, because a `//` inside a string is not a
+    comment and a quote inside a regex is not a string — and either misreading would expose
+    part of a literal as code, which is the one error this row must not make. Blanking is
+    byte-for-byte so a finding's line number is the file's. A template literal's `${...}`
+    expressions are code and are kept, recursively, so `${humanise(x)}` is read.
+
+    The regex-or-division question is answered the way every JS lexer answers it: by the
+    token before the slash. `<` is deliberately NOT in the set — a closing JSX tag `</p>`
+    read as a regex swallowed the rest of the line, which is how the first draft of this
+    reader lost every closing tag in `app/src/Fulfillment.tsx` and read its text as names.
+    Nor is `}`: `size={16} />` is a self-closing tag, and the draft read `/>}` as a regex
+    and never saw the element close.
+    """
+    out: List[str] = []
+    i, n = 0, len(text)
+    last = ""  # last significant character, for the regex-or-division question
+    last_at = -1
+    last_word = ""
+    while i < n:
+        c = text[i]
+        nxt = text[i + 1] if i + 1 < n else ""
+        if c == "/" and nxt == "/":
+            j = text.find("\n", i)
+            j = n if j < 0 else j
+            out.append(_blank(text[i:j]))
+            i = j
+            continue
+        if c == "/" and nxt == "*":
+            j = text.find("*/", i + 2)
+            j = n if j < 0 else j + 2
+            out.append(_blank(text[i:j]))
+            i = j
+            continue
+        if c in "'\"":
+            j = i + 1
+            while j < n and text[j] not in (c, "\n"):
+                j += 2 if text[j] == "\\" else 1
+            j = min(j + 1, n)
+            out.append(_blank(text[i:j]))
+            i, last, last_at = j, c, j - 1
+            continue
+        if c == "`":
+            j, spans = _template_end(text, i)
+            piece = list(_blank(text[i:j]))
+            for a, b in spans:  # the `${...}` expressions, lexed on their own
+                piece[a - i:b - i] = list(_js_code_only(text[a:b]))
+            out.append("".join(piece))
+            i, last, last_at = j, c, j - 1
+            continue
+        arrow = last == ">" and last_at > 0 and text[last_at - 1] == "="
+        if c == "/" and (
+            last == "" or last in "(,=:[!&|?{;+-*%~^" or arrow or last_word in _JS_REGEX_WORDS
+        ):
+            j = i + 1
+            in_class = False
+            while j < n and text[j] != "\n":
+                if text[j] == "\\":
+                    j += 2
+                    continue
+                if text[j] == "[":
+                    in_class = True
+                elif text[j] == "]":
+                    in_class = False
+                elif text[j] == "/" and not in_class:
+                    break
+                j += 1
+            j = min(j + 1, n)
+            while j < n and text[j].isalpha():  # flags
+                j += 1
+            out.append(_blank(text[i:j]))
+            i, last, last_at = j, "/", j - 1
+            continue
+        out.append(c)
+        if not c.isspace():
+            if c.isalnum() or c in "_$":
+                last_word = last_word + c if last and (last.isalnum() or last in "_$") else c
+            last, last_at = c, i
+        i += 1
+    return "".join(out)
+
+
+def _template_end(text: str, start: int) -> Tuple[int, List[Tuple[int, int]]]:
+    """(index after the closing backtick, [(a, b) of each `${...}` expression's inside]).
+
+    Walks the template from its opening backtick. An expression is code and may itself hold
+    strings, comments and nested templates, so its end is found by lexing it — a brace inside
+    a nested string is not its closer.
+    """
+    n = len(text)
+    spans: List[Tuple[int, int]] = []
+    i = start + 1
+    while i < n:
+        c = text[i]
+        if c == "\\":
+            i += 2
+            continue
+        if c == "`":
+            return i + 1, spans
+        if c == "$" and i + 1 < n and text[i + 1] == "{":
+            j = i + 2
+            depth = 0
+            while j < n:
+                d = text[j]
+                if d in "'\"":
+                    k = j + 1
+                    while k < n and text[k] not in (d, "\n"):
+                        k += 2 if text[k] == "\\" else 1
+                    j = k + 1
+                    continue
+                if d == "`":
+                    j, _ = _template_end(text, j)
+                    continue
+                if d == "{":
+                    depth += 1
+                elif d == "}":
+                    if depth == 0:
+                        break
+                    depth -= 1
+                j += 1
+            spans.append((i + 2, min(j, n)))
+            i = j + 1
+            continue
+        i += 1
+    return n, spans
+
+
+def _jsx_text_blanked(code: str) -> str:
+    """JSX children text blanked out of a .tsx file whose literals are already blank.
+
+    A small state machine rather than a regex, because `>` and `<` are also comparison and
+    generic-parameter delimiters: a `<` opens a tag only when the character right before it
+    is not part of a name (`useState<T>` is a generic, `return <div>` is a tag) and the
+    character after it begins a tag name, a `/`, or a fragment. Inside an element's children,
+    text runs to the next `<` or `{`; a `{...}` child is code again, to its matching brace.
+    A misjudged tag costs recall, never a false finding: the only thing this can do to code
+    is blank it.
+    """
+    out = list(code)
+    n = len(code)
+    stack: List[Tuple[str, int]] = [("js", 0)]  # ("js", brace depth) | ("jsx", 0)
+    i = 0
+
+    def tag_end(start: int) -> Tuple[int, bool, bool]:
+        """(index after the tag's `>`, is_closing, is_self_closing) for a tag at `start`."""
+        closing = code.startswith("</", start)
+        depth = 0
+        j = start + 1
+        while j < n:
+            ch = code[j]
+            if ch == "{":
+                depth += 1
+            elif ch == "}":
+                depth = max(0, depth - 1)
+            elif ch == ">" and depth == 0:
+                return j + 1, closing, code[j - 1] == "/"
+            j += 1
+        return n, closing, False
+
+    def _generic_not_tag(at: int, end: int) -> bool:
+        """`<T,>(x)` and `write: <T>(run)` are type-parameter lists, not elements. A tag
+        header never holds a bare comma, and an element is never followed by `(`."""
+        header = code[at:end]
+        depth = 0
+        for ch in header:
+            if ch == "{":
+                depth += 1
+            elif ch == "}":
+                depth -= 1
+            elif ch == "," and depth == 0:
+                return True
+        after = end
+        while after < n and code[after] in " \t":
+            after += 1
+        return after < n and code[after] == "("
+
+    def opens_tag(at: int) -> bool:
+        before = code[at - 1] if at > 0 else " "
+        after = code[at + 1] if at + 1 < n else ""
+        if before.isalnum() or before in "_$)]":
+            return False
+        return after.isalpha() or after in "/>_$"
+
+    while i < n:
+        state, depth = stack[-1]
+        c = code[i]
+        if state == "js":
+            if c == "{":
+                stack[-1] = (state, depth + 1)
+            elif c == "}":
+                if depth == 0 and len(stack) > 1:
+                    stack.pop()
+                else:
+                    stack[-1] = (state, max(0, depth - 1))
+            elif c == "<" and opens_tag(i):
+                end, closing, selfclosing = tag_end(i)
+                if _generic_not_tag(i, end):
+                    i += 1
+                    continue
+                if not closing and not selfclosing:
+                    stack.append(("jsx", 0))
+                i = end
+                continue
+            i += 1
+            continue
+        # jsx children
+        if c == "{":
+            stack.append(("js", 0))
+            i += 1
+            continue
+        if c == "<":
+            end, closing, selfclosing = tag_end(i)
+            if closing:
+                stack.pop()
+            elif not selfclosing:
+                stack.append(("jsx", 0))
+            i = end
+            continue
+        j = i
+        while j < n and code[j] not in "<{":
+            j += 1
+        for k in range(i, j):
+            if code[k] != "\n":
+                out[k] = " "
+        i = j
+    return "".join(out)
+
+
+def _shell_code_only(text: str) -> str:
+    lines = []
+    for line in text.split("\n"):
+        if line.lstrip().startswith("#!"):
+            lines.append(_blank(line))
+            continue
+        line = re.sub(r"'[^']*'|\"[^\"]*\"", lambda m: _blank(m.group(0)), line)
+        line = re.sub(r"(^|\s)#(?!\{).*$", lambda m: m.group(1) + _blank(m.group(0)[len(m.group(1)):]), line)
+        lines.append(line)
+    return "\n".join(lines)
+
+
+def _css_code_only(text: str) -> str:
+    text = re.sub(r"/\*.*?\*/", lambda m: _blank(m.group(0)), text, flags=re.S)
+    return re.sub(r"'[^'\n]*'|\"[^\"\n]*\"", lambda m: _blank(m.group(0)), text)
+
+
+_PY_NAME = re.compile(r"(?<![\w.])[A-Za-z_]\w*")
+_JS_NAME = re.compile(r"[A-Za-z_$][\w$]*")
+_CSS_NAME = re.compile(r"-{0,2}[A-Za-z_][\w-]*")
+
+
+def spelling_findings(text: str, suffix: str) -> List[Tuple[int, str, str, str]]:
+    """(line, name, british word, american word) for every British identifier in one file's
+    text. `suffix` picks the reader; an unknown suffix is read as nothing."""
+    found: List[Tuple[int, str, str, str]] = []
+    if suffix == ".py":
+        try:
+            tokens = list(tokenize.generate_tokens(io.StringIO(text).readline))
+        except (tokenize.TokenError, SyntaxError, IndentationError):
+            tokens = []
+        for tok in tokens:
+            if tok.type == tokenize.NAME and not keyword.iskeyword(tok.string):
+                hit = british_spelling(tok.string)
+                if hit:
+                    found.append((tok.start[0], tok.string, hit[0], hit[1]))
+        return found
+    if suffix in (".ts", ".tsx", ".mjs"):
+        code = _js_code_only(text)
+        if suffix == ".tsx":
+            code = _jsx_text_blanked(code)
+        pattern = _JS_NAME
+    elif suffix == ".sh":
+        code = _shell_code_only(text)
+        pattern = _JS_NAME
+    elif suffix == ".css":
+        code = _css_code_only(text)
+        pattern = _CSS_NAME
+    else:
+        return found
+    for match in pattern.finditer(code):
+        hit = british_spelling(match.group(0))
+        if hit:
+            found.append((code.count("\n", 0, match.start()) + 1, match.group(0), hit[0], hit[1]))
+    return found
+
+
+def check_identifier_spelling(report: Report) -> None:
+    """A name spelled British, anywhere a session might grep for its American twin.
+
+    **Blocking, on D16's test.** Under D60 as amended 2026-09-11 an identifier either carries a
+    British fragment or it does not; there is nothing to judge. Prose and comments are not read
+    and are not governed — see the section comment above for why the ruling stopped there.
+
+    **What it cannot see, by name.** A British word outside the fragment table (the -ise stems
+    are a closed list); a name inside a template literal's `${}` (the whole literal is blanked);
+    and code a misjudged JSX tag blanks along with the text. Each of those is a miss, never a
+    false finding, and `--self-test` proves the blanking in both directions.
+    """
+    findings: List[Finding] = []
+    scanned = 0
+    for path in _walk(ROOT, SPELLING_SUFFIXES):
+        scanned += 1
+        for line, name, british, american in spelling_findings(read(path), path.suffix):
+            findings.append(
+                Finding(
+                    f"{rel(path)}:{line}",
+                    f"`{name}` carries the British `{british}`; D60 (amended 2026-09-11) "
+                    f"spells every identifier American — `{american}`. A name that is "
+                    f"stored or on the wire is not renamed: allow-list it by name in "
+                    f"SPELLING_ALLOWED with the reason.",
+                )
+            )
+    report.add(
+        "identifier spelling",
+        MECHANICAL,
+        findings,
+        f"{len(findings)} British identifiers" if findings
+        else f"every identifier in {scanned} files is spelled American",
+    )
+
+
 # ------------------------------------------------------------------------- self-test
 
 # Every string here is real prose from this repo's markdown that a naive path extractor
@@ -11403,9 +12023,9 @@ def self_test() -> int:
     # comparison that runs in one direction only.
     print("\nthe locked palette is compared against the stylesheet, both ways")
     ok(
-        token_value(COLOUR, "#FFF") == token_value(COLOUR, "#ffffff"),
+        token_value(COLOR, "#FFF") == token_value(COLOR, "#ffffff"),
         "case and shorthand are spelling, not disagreement",
-        f'{token_value(COLOUR, "#FFF")} vs {token_value(COLOUR, "#ffffff")}',
+        f'{token_value(COLOR, "#FFF")} vs {token_value(COLOR, "#ffffff")}',
     )
     ok(
         token_value(TYPEFACE, "'Cabinet Grotesk', sans-serif") == token_value(TYPEFACE, "Cabinet Grotesk"),
@@ -11647,6 +12267,87 @@ def self_test() -> int:
         str(by_label["raw color"]),
     )
 
+    # ------------------------------------------------------------ identifier spelling
+    #
+    # Both directions, per language: the name is found, and the same word in every place
+    # that is not a name is not. A reader that only proved the first half would go green on
+    # a file it had stopped reading.
+    print("\na British identifier is found, and the same word in prose is not")
+    ok(
+        british_spelling("fetchCatalogueRows") == ("catalogue", "catalog"),
+        "camelCase is split into words and the American form is named",
+        str(british_spelling("fetchCatalogueRows")),
+    )
+    ok(
+        british_spelling("NEIGHBOURLY") == ("neighbourly", "neighborly")
+        and british_spelling("_normalise_origin") == ("normalise", "normalize"),
+        "an all-caps name and a snake_case name, the second through the -ise list",
+        f"{british_spelling('NEIGHBOURLY')} {british_spelling('_normalise_origin')}",
+    )
+    ok(
+        all(british_spelling(w) is None for w in ("cancellation", "pairwise", "Promise", "otherwise", "programmer", "exercised", "color")),
+        "words that are -ise, -ll- or -mme in American English too are not findings",
+        str([w for w in ("cancellation", "pairwise", "Promise", "otherwise", "programmer", "exercised", "color") if british_spelling(w)]),
+    )
+    ok(
+        all(british_spelling(w) is None for w in ("is_catalogued", "NotCatalogued", "_parse_fulfilment", "labelledby")),
+        "an allow-listed stem covers every relative that carries it",
+        "",
+    )
+    ts_text = (
+        "const colour = 1 // colour\n"
+        "/* colour */ const s = 'colour' + `colour ${humanise(x)}`\n"
+        "const r = /colour'/; const d = a / colourless / 2\n"
+    )
+    found = [(line, name) for line, name, _, _ in spelling_findings(ts_text, ".ts")]
+    ok(
+        found == [(1, "colour"), (2, "humanise"), (3, "colourless")],
+        "a .ts file: a comment, a string and a regex are blank, a template's `${}` and a "
+        "division's operand are read",
+        str(found),
+    )
+    tsx_text = (
+        "const A = () => (\n"
+        "  <p className=\"x\">The box is labelled <b>{labelled}</b> {n} colour</p>\n"
+        ")\n"
+        "const f = <T,>(x: T) => x\n"
+        "const g = <T>(x: T) => colourOf(x)\n"
+        "const h = <Icon name=\"pin\" size={22} />\n"
+        "const i = <p>{running ? <b size={1} /> : <i />} colour</p>\n"
+    )
+    found = [(line, name) for line, name, _, _ in spelling_findings(tsx_text, ".tsx")]
+    ok(
+        found == [(2, "labelled"), (5, "colourOf")],
+        "a .tsx file: JSX text is blank, a `{}` child is read, a closing tag is not a regex, "
+        "and a generic parameter list is not a tag",
+        str(found),
+    )
+    py_text = '"""colour"""\n# colour\ndef normalise(x):\n    return "colour" + f"{colour}"\n'
+    found = [(line, name) for line, name, _, _ in spelling_findings(py_text, ".py")]
+    ok(
+        found == [(3, "normalise")],
+        "a .py file: the docstring, the comment and both strings are skipped",
+        str(found),
+    )
+    found = [(line, name) for line, name, _, _ in spelling_findings(
+        "#!/bin/sh\n# colour\nCOLOUR=\"colour\" # colour\necho ${COLOUR}\n", ".sh")]
+    ok(found == [(3, "COLOUR"), (4, "COLOUR")], "a .sh file: the comment and the string are blank", str(found))
+    found = [(line, name) for line, name, _, _ in spelling_findings(
+        "/* colour */\n.bn-colour-chip { color: var(--bn-colour); content: 'colour' }\n", ".css")]
+    ok(
+        found == [(2, "bn-colour-chip"), (2, "--bn-colour")],
+        "a .css file: a class and a custom property are names, `color` and the string are not",
+        str(found),
+    )
+    report = Report()
+    check_identifier_spelling(report)
+    by_label = {check: findings for check, _, findings, _ in report.checks}
+    ok(
+        not by_label["identifier spelling"],
+        "every identifier in this tree is spelled American",
+        "\n".join(f.where for f in by_label["identifier spelling"][:12]),
+    )
+
     # ------------------------------------------------------------------ storage keys
     #
     # The reader binds a key to a store BY ITS FILE, which is sound only while no file in
@@ -11677,6 +12378,87 @@ def self_test() -> int:
         not by_label["storage keys"],
         "every storage key the app writes is published where the docs promise it is",
         str(by_label["storage keys"]),
+    )
+
+    # ------------------------------------------------------------------ codex hooks (D135)
+    #
+    # `_hook_triples` is the extractor, pure and file-free, so the mutation this row exists
+    # for can be driven on synthetic dicts rather than on the real tree — the same split
+    # `_storage_sites` uses above, for the same reason: the logic that could be wrong lives
+    # here, not in which two paths the real check reads.
+    print("\ncodex hooks reads (event, matcher, command) out of a settings-shaped dict")
+    claude_shaped = {
+        "hooks": {
+            "PreToolUse": [
+                {"matcher": "Write|Edit", "hooks": [{"type": "command", "command": "scripts/guard-opsec.sh"}]},
+                {"matcher": "Bash", "hooks": [{"type": "command", "command": "scripts/reap.py --hook"}]},
+            ],
+            "Stop": [{"hooks": [{"type": "command", "command": "scripts/stop-gate.sh"}]}],
+        }
+    }
+    triples = _hook_triples(claude_shaped)
+    ok(
+        ("PreToolUse", "Write|Edit", "scripts/guard-opsec.sh") in triples
+        and ("PreToolUse", "Bash", "scripts/reap.py --hook") in triples,
+        "a matcher on the entry is carried into the triple",
+        str(sorted(triples)),
+    )
+    ok(
+        ("Stop", "", "scripts/stop-gate.sh") in triples,
+        "an event with no tool to match reads its matcher as the empty string, not skipped",
+        str(sorted(triples)),
+    )
+    ok(not _hook_triples({"hooks": "not a dict"}) and not _hook_triples("not even a dict"),
+       "a malformed hooks block reads as no hooks, not a crash")
+    ok(not _hook_triples({"hooks": {"Stop": [{"hooks": [{"type": "prompt", "text": "x"}]}]}}),
+       "a non-command hook (a prompt, say) contributes nothing to the roster")
+
+    # THE MUTATION: drop one hook from the Codex side, prove the row reports exactly the
+    # drop, restore it, prove the row is silent again. This is D135's own worked example —
+    # `.codex/hooks.json` really did ship a day behind `WorktreeRemove` and `reap.py --hook`
+    # — replayed here as data so it never depends on the two files staying out of sync.
+    print("\nremoving one hook from one side is reported, and restoring it clears the report")
+    codex_shaped = {
+        "hooks": {
+            "PreToolUse": [
+                {"matcher": "Write|Edit", "hooks": [{"type": "command", "command": "scripts/guard-opsec.sh"}]},
+            ],
+            "Stop": [{"hooks": [{"type": "command", "command": "scripts/stop-gate.sh"}]}],
+        }
+    }
+    missing = _hook_triples(claude_shaped) - _hook_triples(codex_shaped)
+    ok(
+        missing == {("PreToolUse", "Bash", "scripts/reap.py --hook")},
+        "the row's own diff finds exactly the hook the mutation removed",
+        str(missing),
+    )
+    codex_shaped["hooks"]["PreToolUse"].append(
+        {"matcher": "Bash", "hooks": [{"type": "command", "command": "scripts/reap.py --hook"}]}
+    )
+    ok(
+        not (_hook_triples(claude_shaped) - _hook_triples(codex_shaped))
+        and not (_hook_triples(codex_shaped) - _hook_triples(claude_shaped)),
+        "restoring the hook clears the diff in both directions",
+        str(_hook_triples(claude_shaped) ^ _hook_triples(codex_shaped)),
+    )
+    ok(
+        ("PreToolUse", "Bash", "scripts/reap.py --hook") in _hook_triples(claude_shaped)
+        and ("PreToolUse", "Write|Edit", "scripts/decision-context.py")
+        not in _hook_triples(claude_shaped),
+        "the triple is exact — same event and matcher, a different command is not a match",
+    )
+
+    # And the real tree: the two files this row actually reads should already agree, because
+    # the change that added the row is the same change that brought .codex/hooks.json to
+    # parity (D135) — a self-test that could not pass against its own repository would be
+    # asserting a rule this tree does not follow.
+    report = Report()
+    check_codex_hooks(report)
+    by_label = {check: findings for check, _, findings, _ in report.checks}
+    ok(
+        not by_label["codex hooks"],
+        ".codex/hooks.json and .claude/settings.json name the same hooks in this tree",
+        str(by_label["codex hooks"]),
     )
 
     # The staged-mode primitives, which have no loud failure mode: every one of them
@@ -12088,6 +12870,7 @@ def audit(staged_only: bool) -> Report:
     check_transport_standing(report)
     check_map(report, allowed)
     check_hook_roster(report)
+    check_codex_hooks(report)
     check_map_sections(report)
     check_build_order_mirror(report)
     check_game_vocabulary(report)
@@ -12129,6 +12912,7 @@ def audit(staged_only: bool) -> Report:
     check_suite_lock(report)
     check_positional_references(report, docs)
     check_audit_invocation(report)
+    check_identifier_spelling(report)
     # Last, and it is the row that says the rows above are all of them. It reconciles this
     # file's check definitions against the calls in this function.
     #
