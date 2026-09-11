@@ -96,6 +96,38 @@ const auditSource = (mode: Mode) => `(() => {
       clipBox = c
     }
     const owns = (n) => n !== null && (t.contains(n) || n.contains(t) || chrome(n))
+    /* BEHIND THE CHROME IS SCROLLED AWAY, NOT CROWDED (D139), and this is the third exclusion
+       of the same kind as the two above it: off-screen, clipped by a scroller, and now under
+       the shell's own fixed bars. A control whose OWN CENTER is painted over by the top bar or
+       the tab bar is not somewhere a person is looking — it has scrolled under the chrome, and
+       every probe around it is measuring the chrome rather than the control.
+
+       The chrome() test below already excuses a single probe that lands on a bar; what it could
+       not see is the control ITSELF sitting under one, where the probes that happen to land on
+       a screen control instead of on chrome are counted as misses. That is what produced the
+       long-running #/inventory failure this exclusion was written for, and it took two attempts
+       to find because the number it reports is so plausible: "misses 1 of 4 probes" reads as a
+       control crowded by one neighbour.
+
+       MEASURED, by reproducing the CI position locally rather than reasoning about it. The
+       queued notice's "Open the review queue" link at top=37: left and right probes hit
+       header.bn-topbar, the top probe hits span.bn-topbar-wordmark, the bottom probe hits
+       button.browse-boxchip — the screen's own sticky box chip, pinned under the bar. Three
+       misses excused as chrome, one counted, and the center itself resolving to
+       header.bn-topbar. At rest the same link sits at top=576 with all four probes clean.
+
+       WHAT THIS REPLACES IS A CSS FIX THAT COULD NOT HAVE WORKED. The link takes its floor from
+       an ::after with a negative inset, and the previous attempt widened that inset from -12px
+       to -16px on a font-metric theory; its own commit message records that the wider inset
+       applied correctly on CI and the job failed identically. No inset reaches a hit area that
+       a fixed bar is painted over.
+
+       IT CANNOT HIDE A REAL DEFECT, which is the test any exclusion here has to pass. At rest
+       no owner control is painted over by a fixed bar — if one were, that is a louder bug than
+       a thumb floor and belongs to whatever put it there. Box mode is untouched, so a control
+       that is genuinely too small is still caught wherever it sits. */
+    const center = document.elementFromPoint(cx, cy)
+    if (center !== null && chrome(center) && !t.contains(center) && !center.contains(t)) continue
     const inClip = (x, y) => clipBox === null || (x >= clipBox.left && x <= clipBox.right && y >= clipBox.top && y <= clipBox.bottom)
     const probeNames = [['left', -r, 0], ['right', r, 0], ['top', 0, -r], ['bottom', 0, r]]
     const hitDetail = probeNames
@@ -115,13 +147,12 @@ const auditSource = (mode: Mode) => `(() => {
     if (seen.has(key)) continue
     seen.add(key)
     const label = (el.getAttribute('aria-label') ?? t.textContent ?? '').trim().replace(/\\s+/g, ' ').slice(0, 40)
-    const missDetail = hitDetail.filter((h) => !h.owns).map((h) => \`\${h.name}@(\${h.x},\${h.y})->\${h.tag ?? 'null'}\`).join(', ')
-    out.push({ key, w: Math.round(box.width), h: Math.round(box.height), misses, covered, label, missDetail, top: Math.round(box.top), left: Math.round(box.left) })
+    out.push({ key, w: Math.round(box.width), h: Math.round(box.height), misses, covered, label })
   }
   return out
 })()`
 
-type Short = { key: string; w: number; h: number; misses: number; covered: boolean; label: string; missDetail: string; top: number; left: number }
+type Short = { key: string; w: number; h: number; misses: number; covered: boolean; label: string }
 
 /* TWO PROPERTIES, AND THE KIT SHEET CAN ONLY ANSWER ONE OF THEM.
  *
@@ -182,7 +213,7 @@ async function audit(page: Page, where: string, mode: Mode): Promise<string[]> {
         ? `${where}: ${s.key} draws ${s.w}x${s.h} and its centre is covered — it cannot be pressed at all${name}`
         : mode === 'box'
           ? `${where}: ${s.key} draws ${s.w}x${s.h}, under the ${FLOOR}px floor${name}`
-          : `${where}: ${s.key} draws ${s.w}x${s.h} and misses ${s.misses} of 4 probes at ${FLOOR / 2 - 1}px — its hit area does not reach the floor${name} [DEBUG top=${s.top} left=${s.left} miss=${s.missDetail}]`,
+          : `${where}: ${s.key} draws ${s.w}x${s.h} and misses ${s.misses} of 4 probes at ${FLOOR / 2 - 1}px — its hit area does not reach the floor${name}`,
     )
   }
   return lines
@@ -235,6 +266,57 @@ test('every owner screen holds the thumb floor at 390, and none scrolls sideways
 /* THE SHELL'S OWN SURFACES, which belong to no screen and so were in no spec's scope. The palette
    is the only way to `#/gallery` on a phone and the fastest way to the six screens behind More;
    its field measured 24px and its rows 37 before D117. */
+/* THE EXCLUSION ABOVE, PROVED BY SETTING UP THE CASE IT EXISTS FOR (D139). Without a test of
+   its own it is a `continue` anybody can delete and every screen stays green — which is exactly
+   how the thing it fixes survived two attempts.
+
+   IT ASSERTS ITS OWN SETUP FIRST, and that is the half that matters: a guard that cannot see
+   its subject passes for the wrong reason. If the queued notice does not render, or the scroll
+   does not put it under the bar, this test says so instead of reporting a clean sweep. */
+test('a control scrolled under the chrome is not reported as crowded (D139)', async ({ page }) => {
+  await page.setViewportSize(PHONE)
+  /* THE SCREEN IS FOUND, NOT NAMED. A hand-typed route goes stale silently — `route rosters`
+     blocks a commit over exactly that — and the subject here is the QUEUED NOTICE rather than
+     any particular screen, so the honest way to reach it is to walk the nav and stop at the
+     screen that draws one. If the notice moves, this test follows it. */
+  const routes = await phoneRoutes(page)
+  let where: string | null = null
+  for (const hash of routes) {
+    await page.goto(hash)
+    await page.waitForTimeout(400)
+    if ((await page.locator('.browse-queued .bn-notice a').count()) > 0) {
+      where = hash
+      break
+    }
+  }
+  expect(where, 'no screen drew a queued-card notice, so this test proves nothing').not.toBeNull()
+
+  const top = await page.evaluate(() => {
+    const a = document.querySelector('.browse-queued .bn-notice a')
+    if (a === null) return null
+    window.scrollBy(0, a.getBoundingClientRect().top - 37)
+    return Math.round(a.getBoundingClientRect().top)
+  })
+  expect(top, 'the queued notice never rendered, so this test proves nothing').not.toBeNull()
+  expect(top, 'the link did not land under the top bar, so the case under test is not set up')
+    .toBeLessThan(50)
+
+  const center = await page.evaluate(() => {
+    const a = document.querySelector('.browse-queued .bn-notice a')
+    if (a === null) return null
+    const b = a.getBoundingClientRect()
+    const n = document.elementFromPoint(b.left + b.width / 2, b.top + b.height / 2)
+    return n === null ? null : n.className + ''
+  })
+  expect(center ?? '', 'the chrome is not painted over the link, so the exclusion is not exercised')
+    .toContain('bn-topbar')
+
+  expect(
+    await sweep(page, where as string),
+    'a control the shell has scrolled under its own fixed bar is scrolled away, not crowded',
+  ).toEqual([])
+})
+
 test('the phone shell holds the floor: the drawer, the palette and the tab bar', async ({ page }) => {
   await page.setViewportSize(PHONE)
   await page.goto('/')

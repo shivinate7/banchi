@@ -9714,3 +9714,103 @@ port, which does not move.
 
 **BUILT:** nothing. **RECORDED:** this entry, `docs/specs/one-process.md`, step 22 in both
 build-order lists, and the D138 line in `CLAUDE.md`'s index. **NEITHER:** every line of the plan above.
+
+---
+
+
+
+## D139 — A control the shell has scrolled under its own fixed bar is scrolled away, not crowded
+
+**Settled 2026-09-11, from an instrument another session left behind.** `make design-check`'s
+`design-check (2)` shard had been failing on `main` itself — `e06eb8af`, `e7a76758`, and every
+branch cut from them — on one line of `app/tests/phone.spec.ts`:
+
+```
+#/inventory: a draws 148x16 and misses 1 of 4 probes at 19px — its hit area does not reach
+the floor — "Open the review queue"
+```
+
+**PR #252 tried a CSS fix and its own commit message records that it failed.** The link takes
+D117's 40px thumb floor from an `::after` with a negative inset; that change widened the inset
+from -12px to -16px on the theory that Ubuntu's font rendering (148 x 16 against this rig's
+143 x 16) had eaten the 1px of margin. *"The -16px inset fix applied correctly on CI's own run
+(confirmed from the trace) but the design-check job failed with the identical error as before
+the fix… the vertical-margin theory is wrong and the real cause is unknown."* So it landed a
+`[DEBUG ...]` suffix on the failure line — *"diagnostic only, to be reverted once the CI log
+gives a real answer"* — and stopped.
+
+**The instrument fired on the next red run and named the answer in one field:**
+
+```
+[DEBUG top=37 left=76 miss=bottom@(150,64)->button.browse-boxchip]
+```
+
+### What it actually is
+
+**The link is not crowded by a neighbour. It is underneath the shell's fixed top bar.**
+Reproduced locally by scrolling `#/inventory` until the link sat where CI reported it, which
+put every number on the same values CI had printed:
+
+| probe | lands on | counted |
+|---|---|---|
+| left `(128,45)` | `header.bn-topbar` | excused as chrome |
+| right `(166,45)` | `header.bn-topbar` | excused as chrome |
+| top `(147,26)` | `span.bn-topbar-wordmark` | excused as chrome |
+| bottom `(147,64)` | `button.browse-boxchip` | **counted as a miss** |
+
+and the control's own centre resolving to `header.bn-topbar`. At rest the same link sits at
+`top=576` with all four probes clean.
+
+**So "misses 1 of 4" was the most misleading number it could have printed.** Three of the four
+probes miss; `owns` excuses a probe that lands on chrome, and the one that lands on the
+screen's own sticky box chip — pinned under the bar — is the one that survives to be counted.
+A control under a bar reads exactly like a control crowded by a single neighbour, which is why
+the first reading of it was a CSS one and why the second attempt widened a padding.
+
+**No inset could ever have fixed it.** A hit area cannot reach through an element painted over
+it, whatever its size; `.browse-mobilebar` is `position: sticky` at `z-index: 20` and the
+`::after` carries no `z-index` at all. The fix that was tried was not a smaller version of the
+right fix — it was in the wrong file.
+
+### The ruling
+
+**A control whose own CENTRE is painted over by the shell's chrome is skipped, not measured.**
+This is the third exclusion of its kind in that sweep and the file already argues the other
+two at length: off-screen or hard against a viewport edge, and clipped by a scrolling ancestor.
+Each says the same thing — *the probe is measuring something other than this control* — and
+this one says it about the case where the shell has moved on and the control has not.
+
+**It cannot hide a real defect, and that was mutation-tested rather than asserted.** Deleting
+the link's `::after` floor outright still turns the floor test red with the same message, so
+the exclusion narrows what is measured and not whether it is measured. Removing the exclusion
+turns the new guard red with the CI string verbatim.
+
+**The exclusion has a test of its own, which is the half that decides whether it survives.**
+`a control scrolled under the chrome is not reported as crowded` sets the case up — scrolls the
+queued notice under the bar — and **asserts its own setup before it asserts the outcome**: that
+the notice rendered, that the scroll put it under 50px, and that the centre really resolves to
+`bn-topbar`. Without those three it would pass on a screen that never drew the notice, which is
+this repo's recorded way for a new sweep to go green while seeing nothing.
+
+### What is reverted, and what is kept
+
+**The `[DEBUG ...]` suffix is gone**, with the two fields it was the only reader of, exactly as
+#252 asked once the log answered.
+
+**The -16px inset stays and its comment is corrected.** -12px cleared the floor by 1px at a
+16px line box and 1px is not a margin, so the value is defensible on its own terms; what is
+deleted is the font-metric reason it was given, which this entry falsifies.
+**A value kept for a reason that has been disproved is a value nobody can re-derive** — the same
+failure
+this repo records against the map's unread sections.
+
+### What is still unexplained, and is named rather than papered over
+
+**Why CI puts the link at `top=37` and this rig puts it at `top=576` is not established.**
+Four hypotheses were measured and all four are false: scroll does not survive a hash `goto`
+(it resets to 0), a blocked photograph does not collapse the panel (371px either way), there is
+no slow-settle transient (the link is within 4px of its final position 50ms after navigation),
+and the 5px glyph-run difference cannot move a block 539px. The shard runs under contention —
+`docs/DEBTS.md` §16 and D122 both carry that — and a starved render is the standing suspicion,
+not a finding. **This entry fixes the measurement, not the layout difference**, and that
+difference is the thing to look at next if this line ever returns.

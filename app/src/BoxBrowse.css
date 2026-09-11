@@ -810,13 +810,20 @@
 @media (max-width: 767px), (hover: none) and (pointer: coarse) {
   .browse-status { min-height: var(--bn-control-h-sm); }
   /* AN INLINE LINK INSIDE A SENTENCE IS STILL A TARGET (D117). The queued notice ends with
-     `Open the review queue`, which is the only way out of a card the pipeline could not place —
-     and it measured 143 x 16 at 390 on this rig, 148 x 16 on the CI runner's own font
-     rendering. It cannot become a block without breaking the sentence it ends, so it takes the
-     padding as a pseudo-element the way the ticks do. A -12px vertical inset clears the 40px
-     floor by exactly 1px at a 16px line box — real on this Mac, and gone on Ubuntu's Chromium,
-     which is the same class of font-metric drift `BoxBrowse.css` already reserves width against
-     elsewhere for the store key. -16px leaves several pixels of room instead of one. */
+     `Open the review queue`, which is the only way out of a card the pipeline could not place.
+     It cannot become a block without breaking the sentence it ends, so it takes the padding as
+     a pseudo-element the way the ticks do.
+
+     -16px RATHER THAN -12px, AND THE REASON THIS COMMENT USED TO GIVE WAS WRONG (D139). It
+     said the widening was for font-metric drift — 143 x 16 on this rig against 148 x 16 on the
+     CI runner — because a CI failure named this link and a wider glyph run was the visible
+     difference. It was not the cause: the same job failed identically with the wider inset,
+     which that change's own message recorded. The real fault was in the probe sweep, which
+     measured this link while the shell's fixed top bar was painted over it, and it is fixed in
+     `app/tests/phone.spec.ts`.
+
+     THE VALUE STAYS, because -12px cleared the 40px floor by exactly 1px at a 16px line box and
+     1px is not a margin. What is deleted is the false reason, not the padding. */
   .browse-queued .bn-notice a { position: relative; }
   .browse-queued .bn-notice a::after { content: ''; position: absolute; inset: -16px -4px; }
 }
