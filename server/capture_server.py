@@ -22,7 +22,11 @@
     POST   /inventory/<box>/<index>/remove delete one capture mid-box and slide every higher
                                            card down one index (D10, owner ruling 1)
     DELETE /boxes/<box>                    delete a whole box — records, photos, sidecars,
-                                           queue entries, cache, registry (D10, owner ruling 3)
+                                           queue entries, cache, registry (D10, owner ruling
+                                           3, amended D134 — a departed record no longer
+                                           blocks the delete; it is buried instead)
+    GET    /graveyard                      every departed card: still sold/retired/moved in
+                                           a standing box, or buried by a deleted one (D134)
     GET    /boxes/<box>/listings           what this box's SKUs are believed to be holding,
                                            and what a release would give up. FREE (D34)
     GET    /boxes/<box>/photos             what a reclaim would delete: sold cards whose
@@ -334,7 +338,7 @@ BOOT_HEADER = "X-Pkmnscan-Boot"
 PORT = ports.capture_port()
 
 # WHERE THE BUILT APP IS, AND IT IS A PROPERTY OF THE CHECKOUT RATHER THAN OF THE STORE
-# (D132). `app/dist/` beside this tree's own `app/src/`, so a worktree serves the bundle it
+# (D135). `app/dist/` beside this tree's own `app/src/`, so a worktree serves the bundle it
 # built from its own source on its own port, exactly as it serves its own store (D43) — the
 # two facts are the same fact and neither needs a new variable to say it.
 #
@@ -469,7 +473,7 @@ DEFAULT_ALLOWED_ORIGINS = tuple(
 ORIGINS_ENV = "PKMNSCAN_ALLOWED_ORIGINS"
 
 
-def _normalise_origin(origin: str) -> str:
+def _normalize_origin(origin: str) -> str:
     """Fold an origin to something two spellings of the same thing compare equal on.
 
     Scheme and host are case-insensitive and a trailing slash is not part of an origin at
@@ -495,7 +499,7 @@ def allowed_origins() -> Tuple[str, ...]:
     extra = os.environ.get(ORIGINS_ENV) or ""
     configured = [value for value in re.split(r"[,\s]+", extra) if value]
     return tuple(
-        _normalise_origin(origin) for origin in DEFAULT_ALLOWED_ORIGINS + tuple(configured)
+        _normalize_origin(origin) for origin in DEFAULT_ALLOWED_ORIGINS + tuple(configured)
     )
 
 _PHOTO_RE = re.compile(r"^/photo/(\d+)/(\d+)$")
@@ -809,7 +813,7 @@ BOX_POST_FIELDS = ("box", "name", "sections")
 # body that could rename a box NUMBER would be a renumber, which D10 forbids outright: every
 # position key in `inventory.json`, every photo directory and every printed label is built
 # from it.
-BOX_PUT_FIELDS = ("name", "sections", "state")
+BOX_PUT_FIELDS = ("name", "sections", "state", "section_names")
 
 # ----------------------------------------------------------- the order screen, on the wire
 #
@@ -1008,13 +1012,24 @@ RESHOT = "reshot"
 #                looking for. Not a state: nothing about any one card changed but its
 #                address, and the card that changed STATE got its own `removed` line in the
 #                same commit.
-#   box_deleted  a whole box left the store (D10, ruling 3): records, photos, sidecars,
-#                queue entries, cache entries and the registry entry, in one write.
-#                Carries the box and the card count. A box-level event like D20's five, so
-#                it is the first line `_history` writes with no `position` key — a box is
-#                not at a position, and `Inventory._log` draws the same line.
+#   box_deleted  a whole box left the store (D10, ruling 3, amended D134): records, photos,
+#                sidecars, queue entries, cache entries and the registry entry, in one
+#                write. Carries the box, the card count and the buried count. A box-level
+#                event like D20's five, so it is the first line `_history` writes with no
+#                `position` key — a box is not at a position, and `Inventory._log` draws
+#                the same line.
 RENUMBERED = "renumbered"
 BOX_DELETED = "box_deleted"
+
+# THE TENTH ROUTE-WRITTEN EVENT (D134, 2026-09-11). `box_deleted` used to be refused
+# outright while any card in the box was sold, retired or moved — ruling 3's "history and
+# commitments, not clutter". D134 keeps that sentence and gives it a different answer: the
+# record IS the history, and it survives the box by being buried here rather than by the
+# box standing undeletable forever. ONE LINE PER DEPARTED RECORD, WITH A `position` KEY —
+# unlike `box_deleted`'s summary, this is the retained record itself and not a duplicate of
+# one, so it carries the record whole rather than a count. `#/graveyard` reads these lines
+# merged with the sold/retired/moved records still standing in boxes nobody has deleted.
+BURIED = "buried"
 
 # THE NINTH ROUTE-WRITTEN EVENT (D34): the operator stated that TCGplayer holds nothing for
 # the SKUs a box's cards belong to, and every listing stage on them was zeroed. Box-level
@@ -1088,6 +1103,7 @@ SERVER_EVENTS = (
     RESHOT,
     RENUMBERED,
     BOX_DELETED,
+    BURIED,
     LISTINGS_RELEASED,
     RESECTIONED,
     BOX_CREATED,
@@ -1691,6 +1707,48 @@ def _optional_sections(payload: dict) -> Optional[Tuple[int, ...]]:
         ) from None
 
 
+def _optional_section_names(payload: dict) -> Optional[Dict[int, Optional[str]]]:
+    """Section names by ORDINAL, or None when the body carries none. D132.
+
+    THE BODY SPEAKS ORDINALS — `Section 6` is what every screen prints and what the operator
+    types beside — and the store keeps the divider INDEX the section starts at
+    (`Box.section_names`), so a moved divider keeps its name. `Inventory.set_section_names`
+    is the one place the two are joined; this only checks the shape of what arrived.
+
+    A blank or null value CLEARS that section's name, the same edit a cleared text field
+    sends for `name`. A key that is not a section number refuses here; a number the layout
+    does not reach refuses in the store as `section_unknown`.
+    """
+    raw = payload.get("section_names")
+    if raw is None:
+        return None
+    if not isinstance(raw, dict):
+        raise BadRequest(
+            HTTPStatus.BAD_REQUEST,
+            "section_names_invalid",
+            f"section_names was {raw!r}; send an object keyed by section number, like "
+            f'{{"2": "Rares"}}. A blank value clears the name.',
+        )
+    out: Dict[int, Optional[str]] = {}
+    for key, value in raw.items():
+        try:
+            ordinal = int(str(key).strip())
+        except (TypeError, ValueError):
+            raise BadRequest(
+                HTTPStatus.BAD_REQUEST,
+                "section_names_invalid",
+                f"section_names key {key!r} is not a section number.",
+            ) from None
+        if value is not None and not isinstance(value, str):
+            raise BadRequest(
+                HTTPStatus.BAD_REQUEST,
+                "section_names_invalid",
+                f"section {ordinal}'s name was {value!r}; a name is text.",
+            )
+        out[ordinal] = value
+    return out
+
+
 def _optional_box_state(payload: dict) -> Optional[str]:
     """`open` or `closed`, or None when the request does not mention the lid.
 
@@ -2121,6 +2179,7 @@ class _Places:
                 "section": None,
                 "card": None,
                 "box_name": None,
+                "section_name": None,
                 "section_start": None,
                 "section_end": None,
                 "box_total": 0,
@@ -2137,6 +2196,7 @@ class _Places:
             }
 
         entry, layout, total, occupied = self.view(number)
+        section_names = self._inventory.section_names_for(number)
 
         # D58 — THE LABEL COUNTS THE CARDS IN THE BOX, and this is the one line that puts
         # it in that space. `occupied` is None only when the walk met a record it could not
@@ -2156,6 +2216,7 @@ class _Places:
                 "section": None,
                 "card": None,
                 "box_name": entry.name if entry is not None else None,
+                "section_name": None,
                 "section_start": None,
                 "section_end": None,
                 "box_total": 0,
@@ -2219,6 +2280,9 @@ class _Places:
             "section": position.section,
             "card": position.card,
             "box_name": entry.name if entry is not None else None,
+            # D132 — the section's own name, joined at read time like the box's and for the
+            # same reason: a run directory never holds one, so a rename reaches every label.
+            "section_name": section_names.get(position.section),
             # Bounds of the SECTION rather than of the card, for the reason above: the walk
             # draws a section header from whichever row it meets first, and a departed one
             # must describe the same section its neighbours do.
@@ -2610,7 +2674,7 @@ def app_dist() -> Path:
 def app_claims(path: str) -> bool:
     """Is this a path the built app answers? The root, or a file of the build.
 
-    NARROW ON PURPOSE, AND THE HASH ROUTER IS WHY (D132). The usual SPA host serves
+    NARROW ON PURPOSE, AND THE HASH ROUTER IS WHY (D135). The usual SPA host serves
     `index.html` for every unmatched path, because its router owns real URLs and a deep link
     has to survive a reload. `App.tsx` is a HASH router: every screen is `/#/inventory`, the
     part after `#` is never sent, and so the only paths the app has are `/` and its own
@@ -2629,7 +2693,7 @@ def app_claims(path: str) -> bool:
 
 
 def do_app_file(path: str) -> Tuple[bytes, str, str]:
-    """A file out of the built app. `app_claims` decides what reaches here (D132).
+    """A file out of the built app. `app_claims` decides what reaches here (D135).
 
     THE LAST RESORT OF `do_GET` AND NEVER A ROUTE. Every route in this server is matched
     first and this is what the fall-through reaches, so a path this product serves on the
@@ -2659,7 +2723,7 @@ def do_app_file(path: str) -> Tuple[bytes, str, str]:
     if not (root / "index.html").is_file():
         # THE APP IS NOT BUILT, AND THIS IS THE ONLY SENTENCE THAT SAYS SO. Not a page and
         # not styled: a screen here would be a second front end, maintained forever, for the
-        # ten seconds before the supervisor's first build lands (D132 §1.1). 503 rather than
+        # ten seconds before the supervisor's first build lands (D135 §1.1). 503 rather than
         # 404 because the resource is not missing, it is not ready — and a 404 would read to
         # a browser, and to the operator, as a wrong address.
         raise BadRequest(
@@ -4630,44 +4694,62 @@ def do_reclaim_box_photos(box: int, payload: dict) -> dict:
 def do_delete_box(box: int) -> dict:
     """Delete a whole box: records, photos, sidecars, queue entries, cache, registry.
 
-    D10, OWNER RULING 3 (2026-08-23), and the third door out of the store. Undo walks back
-    the newest capture, the remove route above excises one record and closes its gap, and
-    this deletes a box entire — the case both of those are too small for: a shakedown box
-    of junk frames, a box captured under a mistyped number, a test run that was never
-    real. Gated as the genuinely destructive action `docs/DESIGN.md`'s clause means: the
-    UI adds a typed confirmation on top, and this route is the refusal side it sits on.
+    D10, OWNER RULING 3 (2026-08-23), AMENDED BY D134 (2026-09-11), and the third door out
+    of the store. Undo walks back the newest capture, the remove route above excises one
+    record and closes its gap, and this deletes a box entire — the case both of those are
+    too small for: a shakedown box of junk frames, a box captured under a mistyped number,
+    a test run that was never real, or — since D134 — a box every on-hand card has left,
+    by a sale, a retirement, or a merge into another box (D83) that carried the on-hand
+    cards and left the departed ones behind. Gated as the genuinely destructive action
+    `docs/DESIGN.md`'s clause means: the UI adds a typed confirmation on top, and this
+    route is the refusal side it sits on.
 
-    `box_not_empty_of_commitments` IS THE WHOLE GATE, and it is checked before anything is
-    touched. A box may not go while ANY card in it is sold, retired, or listing-held —
-    those records are history and commitments, not clutter (the ruling's own words). A
-    sold or retired record is the permanent account of a departure; a held SKU has copies
-    in an import file, or on TCGplayer itself, and deleting the copy here would leave the
-    listing counts claiming a card that is no longer anywhere. The refusal names up to
-    eight of them, oldest position first, so the operator knows exactly what stands in
-    the way and which route reverses each.
+    `box_not_empty_of_commitments` NOW NAMES ONLY LISTING HOLDS (D134). Ruling 3 read "a
+    departure is history and a commitment, not clutter" as a reason to refuse the whole
+    box; D134 keeps the sentence and changes what answers it — a sold, retired or moved
+    record IS the history, and it survives the box by being BURIED (below) rather than by
+    the box standing forever with nothing left to do in it. What still blocks is a held
+    SKU: copies in an import file, or on TCGplayer itself, where deleting the copy here
+    would leave the listing counts claiming a card that is no longer anywhere. The refusal
+    names up to eight of them, oldest position first.
 
     AN UNREADABLE RECORD REFUSES THE WHOLE OPERATION, the same rule the remove route and
     `next_index` follow: a record whose box will not coerce cannot be proven to be
     OUTSIDE this box, and a whole-box delete that skipped it might strand it — or destroy
     it — either way silently. `BadPosition` escapes as `inventory_conflict`.
 
+    A DEPARTED RECORD IS BURIED BEFORE ITS FILES GO (D134). One `buried` history line per
+    sold, retired or moved record, carrying the record whole: name, number, game, set
+    hint, SKU, condition, state and when it changed, when it was captured, the run, the
+    box's own name as it stood, the order this copy was pulled against if `holder_of`
+    finds one, and the photograph's digest — read off the card if `record_photo_reclaimed`
+    already set it, or computed from the bytes here if not (a moved tombstone's file
+    already relocated with the transplant, so its digest is whatever the card already
+    carries, usually none). That line is what "a history log" means for a card leaving
+    through a deleted box: it is no longer a row anywhere, it is not undoable, and its
+    photograph goes with everything else in the box — but what it was, and how and when
+    it left, is not lost. `#/graveyard` reads exactly these lines, merged with every
+    sold/retired/moved record still standing in a box nobody has deleted, so one screen
+    answers both.
+
     FILES GO INSIDE THE BLOCK, PHOTO BEFORE SIDECAR PER CARD — `do_delete_card`'s money
-    rule at box scale. A failing unlink escapes and nothing commits; a crash after some
-    unlinks leaves records whose photos are gone, and retrying the delete finishes the
-    job, since `_unlink` treats absence as no failure. The box DIRECTORY is removed only
-    if the record-named files were all it held: a stray file this route never enumerated
-    is not silently destroyed, the `rmdir` quietly fails, and the response says so in
-    `directory_removed` — a leftover directory under `captures/cards/` is visible, and a
-    photo-suffixed stray in it is a paid Batch request waiting to happen, which is worth
-    a person looking at.
+    rule at box scale, unchanged for every record, buried or on hand. A failing unlink
+    escapes and nothing commits; a crash after some unlinks leaves records whose photos are
+    gone, and retrying the delete finishes the job, since `_unlink` treats absence as no
+    failure. The box DIRECTORY is removed only if the record-named files were all it held:
+    a stray file this route never enumerated is not silently destroyed, the `rmdir` quietly
+    fails, and the response says so in `directory_removed` — a leftover directory under
+    `captures/cards/` is visible, and a photo-suffixed stray in it is a paid Batch request
+    waiting to happen, which is worth a person looking at.
 
     THE REGISTRY ENTRY GOES TOO, sections, capacity and name with it. A deleted box is
     not a sealed box and not an empty box; it is a box the store has never heard of, and
     recreating the number later starts from nothing — same as a number that was never
-    used. One `box_deleted` history line carries the box and the card count; the
-    per-card `removed` lines are deliberately NOT written, because a hundred lines
-    describing one decision would bury the decision, and the count is on the one line
-    that describes it.
+    used. One `box_deleted` history line carries the box, the card count and the buried
+    count; the per-card `removed` lines stay deliberately unwritten for an on-hand card —
+    a hundred lines describing one decision would bury the decision, and the count is on
+    the one line that describes it — but a departed card's own `buried` line is not that
+    kind of line: it is the retained record itself, not a duplicate of one.
     """
     with Store().write() as snapshot:
         inventory = snapshot.inventory
@@ -4677,17 +4759,9 @@ def do_delete_box(box: int) -> dict:
         blockers: List[Tuple[int, str]] = []
         for at, card_key, card in inventory.records_in(box):
             holds.append((at, card_key, card))
-            if card.state == master.SOLD:
-                blockers.append((at, f"card {at} is sold"))
-            elif card.state == master.RETIRED:
-                blockers.append((at, f"card {at} is retired ({card.retire_reason})"))
-            elif card.state == master.MOVED:
-                # D83's third door, named exactly like the other two: a moved card's
-                # tombstone is a departure record, not clutter, so a box left holding only
-                # tombstones (the residue of a merge) stays undeletable until each is
-                # accounted for — the same gate `box_not_empty_of_commitments` already is.
-                blockers.append((at, f"card {at} was moved to {card.moved_to}"))
-            else:
+            if card.state not in master.TERMINAL_STATES:
+                # D134: a departed record (sold, retired, moved) no longer blocks — it is
+                # buried below. Only an ON-HAND card can still hold a listing.
                 held = _listing_hold(inventory, card)
                 if held:
                     summary = ", ".join(f"{count} {stage}" for stage, count in held)
@@ -4709,11 +4783,11 @@ def do_delete_box(box: int) -> dict:
             raise BadRequest(
                 HTTPStatus.CONFLICT,
                 "box_not_empty_of_commitments",
-                f"Box {box} cannot be deleted: {named}{more}. Sold and retired records "
-                f"are history and listed copies are commitments, not clutter (D10, "
-                f"ruling 3). Reverse a departure recorded in error on its own route "
-                f"(`/sold`, `/retire`), wait for held listings to reconcile away — or "
-                f"leave the box standing.",
+                f"Box {box} cannot be deleted: {named}{more}. Listed copies are "
+                f"commitments, not clutter (D10, ruling 3): wait for them to reconcile "
+                f"away, release them, or leave the box standing. Sold, retired and moved "
+                f"cards no longer stand in the way (D134) — they are buried in the "
+                f"graveyard when the box goes.",
             )
 
         holds.sort()
@@ -4722,8 +4796,51 @@ def do_delete_box(box: int) -> dict:
         review_dropped = 0
         parked_dropped = 0
         cache_dropped = 0
-        for at, card_key, _ in holds:
+        buried = 0
+        box_name = registered.name if registered is not None else None
+        for at, card_key, card in holds:
             photo = photo_path(box, at)
+            if card.state in master.TERMINAL_STATES:
+                digest = card.photo_sha256
+                if digest is None:
+                    try:
+                        digest = hashlib.sha256(photo.read_bytes()).hexdigest()
+                    except OSError:
+                        digest = None
+                order = None
+                if card.capture_id:
+                    held_by = snapshot.ledger.holder_of(card.capture_id)
+                    if held_by is not None:
+                        order = held_by[0]
+                _history(
+                    inventory,
+                    BURIED,
+                    card_key,
+                    box=int(box),
+                    index=at,
+                    box_name=box_name,
+                    state=card.state,
+                    state_at=card.state_at,
+                    captured_at=card.captured_at,
+                    capture_id=card.capture_id,
+                    run=card.run,
+                    game=card.game,
+                    name=card.name,
+                    number=card.number,
+                    printed_total=card.printed_total,
+                    set_hint=card.set_hint,
+                    sku=card.sku,
+                    condition=card.condition,
+                    rarity_claim=card.rarity_claim,
+                    product=card.product,
+                    note=card.note,
+                    retire_reason=card.retire_reason,
+                    moved_to=card.moved_to,
+                    photo_sha256=digest,
+                    photo_reclaimed_at=card.photo_reclaimed_at,
+                    order=order,
+                )
+                buried += 1
             if _unlink(photo):
                 photos += 1
             if _unlink(sidecar_path(photo)):
@@ -4747,14 +4864,18 @@ def do_delete_box(box: int) -> dict:
             # swept — the docstring has why.
             directory_removed = False
 
-        _history(inventory, BOX_DELETED, None, box=int(box), cards=len(holds))
+        _history(
+            inventory, BOX_DELETED, None, box=int(box), cards=len(holds), buried=buried
+        )
 
     return {
         "deleted_box": int(box),
         # What went, counted per kind the way `do_delete_card` reports booleans — these
         # are counts because a box holds many of each, and the numbers are the receipt
-        # the confirmation screen shows.
+        # the confirmation screen shows. `buried` is the subset of `cards` that left
+        # through a departure door rather than as on-hand junk (D134).
         "cards": len(holds),
+        "buried": buried,
         "photos": photos,
         "sidecars": sidecars,
         "review_deleted": review_dropped,
@@ -4763,6 +4884,146 @@ def do_delete_box(box: int) -> dict:
         "registry_deleted": registry_deleted,
         "directory_removed": directory_removed,
     }
+
+
+def _departed_row(
+    *,
+    left_at,
+    how,
+    box,
+    index,
+    box_name,
+    name,
+    number,
+    game,
+    set_hint,
+    sku,
+    condition,
+    retire_reason,
+    moved_to,
+    order,
+    run,
+    captured_at,
+    photo_sha256,
+    buried,
+    buried_at,
+) -> dict:
+    """One `#/graveyard` row, the same shape whether it came from a live box or a burial
+    line (D134) — the merge point `do_graveyard` exists to make, so the screen reads one
+    kind of record rather than two."""
+    return {
+        "left_at": left_at,
+        "how": how,
+        "box": box,
+        "index": index,
+        "box_name": box_name,
+        "name": name,
+        "number": number,
+        "game": game,
+        "set_hint": set_hint,
+        "sku": sku,
+        "condition": condition,
+        "retire_reason": retire_reason,
+        "moved_to": moved_to,
+        "order": order,
+        "run": run,
+        "captured_at": captured_at,
+        "photo_sha256": photo_sha256,
+        "buried": buried,
+        "buried_at": buried_at,
+    }
+
+
+def do_graveyard() -> dict:
+    """Every departed card the store still knows about, newest departure first (D134).
+
+    TWO SOURCES, ONE SHAPE. A SOLD, RETIRED or MOVED record can be standing in a box
+    nobody has deleted — the same records `#/inventory` already renders as departed
+    (`isDeparted`, `join.departed_label`) — or it can be a `buried` event, the retained
+    half of a record whose box WAS deleted (`do_delete_box`). `_departed_row` is the one
+    shape both become, so this screen never has to know which door a card left through.
+
+    THE TWO SOURCES NEVER OVERLAP, BY CONSTRUCTION. A record moves from "in a box" to
+    "buried" exactly once, at the moment `do_delete_box` deletes its box, and there is no
+    route that un-buries one — burial has no reversal, the same as the delete it rides in
+    on. So a card counted here is never counted twice.
+
+    LOCK-FREE ON BOTH HALVES. The in-box half is `Store().read()`'s ordinary snapshot,
+    filtered by the indexed `state` column — three `where()` calls, one per member of
+    `master.TERMINAL_STATES`, the same shape `_positions_in`'s callers already use rather
+    than a full-table load. The buried half is `Store().buried()`, its own second
+    connection over the `event = 'buried'` rows only (`store/db.py:events_named`) — never
+    `history()`'s whole log.
+
+    `order` IS A BEST-EFFORT JOIN, NOT A STORED FIELD. Neither a `Card` nor a buried line
+    carries an order number; `Ledger.holder_of(capture_id)` is the reverse index D63 built
+    for exactly this question, walked once per departed record with a capture id. A record
+    from before capture ids existed, or one never pulled against an order, answers `None`.
+    """
+    snapshot = Store().read()
+    inventory = snapshot.inventory
+    ledger = snapshot.ledger
+
+    rows: List[dict] = []
+    for state in master.TERMINAL_STATES:
+        for card in inventory.cards.where(state=state):
+            registered = inventory.box(card.box)
+            order = None
+            if card.capture_id:
+                held_by = ledger.holder_of(card.capture_id)
+                if held_by is not None:
+                    order = held_by[0]
+            rows.append(
+                _departed_row(
+                    left_at=card.state_at,
+                    how=card.state,
+                    box=int(card.box),
+                    index=int(card.index),
+                    box_name=registered.name if registered is not None else None,
+                    name=card.name,
+                    number=card.number,
+                    game=card.game,
+                    set_hint=card.set_hint,
+                    sku=card.sku,
+                    condition=card.condition,
+                    retire_reason=card.retire_reason,
+                    moved_to=card.moved_to,
+                    order=order,
+                    run=card.run,
+                    captured_at=card.captured_at,
+                    photo_sha256=card.photo_sha256,
+                    buried=False,
+                    buried_at=None,
+                )
+            )
+
+    for event in Store().buried():
+        rows.append(
+            _departed_row(
+                left_at=event.get("state_at"),
+                how=event.get("state"),
+                box=event.get("box"),
+                index=event.get("index"),
+                box_name=event.get("box_name"),
+                name=event.get("name"),
+                number=event.get("number"),
+                game=event.get("game"),
+                set_hint=event.get("set_hint"),
+                sku=event.get("sku"),
+                condition=event.get("condition"),
+                retire_reason=event.get("retire_reason"),
+                moved_to=event.get("moved_to"),
+                order=event.get("order"),
+                run=event.get("run"),
+                captured_at=event.get("captured_at"),
+                photo_sha256=event.get("photo_sha256"),
+                buried=True,
+                buried_at=event.get("at"),
+            )
+        )
+
+    rows.sort(key=lambda row: row["left_at"] or "", reverse=True)
+    return {"departed": rows}
 
 
 # ------------------------------------------------------------------------ standing queues
@@ -7502,7 +7763,11 @@ def do_search(query: str) -> dict:
 
 
 def _section_spans(
-    box: int, layout: Tuple[int, ...], total: int, occupied: Tuple[int, ...]
+    box: int,
+    layout: Tuple[int, ...],
+    total: int,
+    occupied: Tuple[int, ...],
+    names: Optional[Dict[int, str]] = None,
 ) -> List[dict]:
     """Every section of one box: where it starts, where it ends, how many cards are in it.
 
@@ -7554,6 +7819,9 @@ def _section_spans(
                 "start": position.section_start,
                 "end": end if end is not None else (total or None),
                 "count": per_section.get(position.section, 0),
+                # D132 — the operator's word for the section, joined by ordinal at read time
+                # the way `box_name` is (D56); null where none was given.
+                "name": (names or {}).get(position.section),
             }
         )
         seen.add(position.section)
@@ -7570,6 +7838,7 @@ def _section_spans(
                 "start": start,
                 "end": mapped[ordinal] - 1 if ordinal < len(mapped) else None,
                 "count": per_section.get(ordinal, 0),
+                "name": (names or {}).get(ordinal),
             }
         )
 
@@ -7669,7 +7938,7 @@ def _box_row(
     # spans with it, exactly as an invalid layout already does one line down.
     on_hand: Optional[int] = len(occupied) if occupied is not None else None
     detail = (
-        _section_spans(int(box), layout, len(occupied), occupied)
+        _section_spans(int(box), layout, len(occupied), occupied, inventory.section_names_for(box))
         if layout is not None and occupied is not None
         else []
     )
@@ -7834,9 +8103,10 @@ def do_create_box(payload: dict) -> Tuple[HTTPStatus, dict]:
 
 
 def do_put_box(box: int, payload: dict) -> dict:
-    """Rename a box, declare its dividers, seal it, or open it again.
+    """Rename a box, declare its dividers, name its sections, seal it, or open it again.
 
-    THE THREE FIELDS ARE THE THREE THINGS A BOX HAS THAT A HUMAN DECIDES. Its number is not
+    THE FOUR FIELDS ARE THE FOUR THINGS A BOX HAS THAT A HUMAN DECIDES — `section_names` is
+    the fourth as of D132, keyed by the ordinal the screen prints. Its number is not
     among them — it is in the path, and a body that could change it would be a renumber,
     which D10 forbids outright: every position key, every photo directory and every label the
     operator has read off a screen is built from that number.
@@ -7878,6 +8148,7 @@ def do_put_box(box: int, payload: dict) -> dict:
     _reject_unknown(payload, BOX_PUT_FIELDS)
     name = _optional_name(payload)
     sections = _optional_sections(payload)
+    section_names = _optional_section_names(payload)
     state = _optional_box_state(payload)
 
     with Store().write() as snapshot:
@@ -7921,6 +8192,14 @@ def do_put_box(box: int, payload: dict) -> dict:
                     [join.divider_index(k, occupied, gone) for k in sections]
                 )
             inventory.set_sections(box, sections)
+        if section_names is not None:
+            # AFTER the layout, so a body that declares dividers and names them in one
+            # request names the sections it just made. The store speaks divider indices and
+            # refuses an ordinal past the layout — a typo, not a declaration (D132).
+            try:
+                inventory.set_section_names(box, section_names)
+            except master.BadSections as exc:
+                raise BadRequest(HTTPStatus.BAD_REQUEST, "section_unknown", str(exc)) from None
 
         # THE LID IS MOVED LAST, after any layout change in the same request, so a box that
         # is being declared and sealed together freezes its capacity with the layout already
@@ -9600,7 +9879,7 @@ class CaptureHandler(BaseHTTPRequestHandler):
     def _origin(self) -> Optional[str]:
         """The request's `Origin`, folded, or None when it did not send one."""
         raw = self.headers.get("Origin")
-        return _normalise_origin(raw) if raw else None
+        return _normalize_origin(raw) if raw else None
 
     def _origin_allowed(self) -> bool:
         """May this request WRITE? A request with no `Origin` may.
@@ -9948,6 +10227,10 @@ class CaptureHandler(BaseHTTPRequestHandler):
                 return self._json(HTTPStatus.OK, do_queues())
             if path == "/boxes":
                 return self._json(HTTPStatus.OK, do_boxes())
+            # D134's graveyard: an exact string, matched by no other route's pattern, over
+            # a lock-free read on both its sources.
+            if path == "/graveyard":
+                return self._json(HTTPStatus.OK, do_graveyard())
             if path == "/games":
                 return self._json(HTTPStatus.OK, do_games())
             # D66's order screen. An exact string and therefore no ordering hazard, and a
@@ -10177,7 +10460,7 @@ class CaptureHandler(BaseHTTPRequestHandler):
                     kind,
                     (("Content-Disposition", 'attachment; filename="pirateship-import.csv"'),),
                 )
-            # THE APP ITSELF, AND IT IS THE LAST THING TRIED (D132). Every route above is
+            # THE APP ITSELF, AND IT IS THE LAST THING TRIED (D135). Every route above is
             # matched first, so nothing in `app/dist/` can shadow a route; what reaches here
             # is `/`, an asset, or an address somebody typed. `parsed.path` rather than the
             # stripped `path`, because a trailing slash is part of a file's name to a
@@ -10464,7 +10747,7 @@ class CaptureHandler(BaseHTTPRequestHandler):
                     ),
                 )
             if app_owns(path):
-                # The app is served here and is read-only (D132). 405 and not 404,
+                # The app is served here and is read-only (D135). 405 and not 404,
                 # because the resource exists — saying "no such route" about a path
                 # this server answers on GET is a lie that reads as a routing bug.
                 raise BadRequest(
@@ -10515,7 +10798,7 @@ class CaptureHandler(BaseHTTPRequestHandler):
                     HTTPStatus.OK, pipeline_routes.do_pricing_corpus_write(self._body())
                 )
             if app_owns(path):
-                # The app is served here and is read-only (D132). 405 and not 404,
+                # The app is served here and is read-only (D135). 405 and not 404,
                 # because the resource exists — saying "no such route" about a path
                 # this server answers on GET is a lie that reads as a routing bug.
                 raise BadRequest(
@@ -10567,7 +10850,7 @@ class CaptureHandler(BaseHTTPRequestHandler):
                     HTTPStatus.OK, shipping_routes.do_shipping_forget(match.group(1))
                 )
             if app_owns(path):
-                # The app is served here and is read-only (D132). 405 and not 404,
+                # The app is served here and is read-only (D135). 405 and not 404,
                 # because the resource exists — saying "no such route" about a path
                 # this server answers on GET is a lie that reads as a routing bug.
                 raise BadRequest(

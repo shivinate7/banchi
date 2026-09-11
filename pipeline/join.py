@@ -1418,6 +1418,13 @@ class SkuMatch:
     #: was deleted 2026-09-08. `LIVE_QUANTITY_CAP` survives as a figure a press MAY propose
     #: and as the harness's fixture bound; nothing falls back to it.
     live_cap: Optional[int] = None
+    #: THE COPIES THIS SEND ASKED TO LIST FOR THIS CARD, or `None` for every copy that can go
+    #: (D7, amended 2026-09-11 on the operator's ruling). A SEND QUANTITY and not a ceiling:
+    #: `2` puts two copies in the file whatever TCGplayer already holds, bounded by the copies
+    #: on hand that are not already listed. `0` is a real answer — none of this card this
+    #: press, without a standing hold. Named per SKU because the ruling was *case by case*:
+    #: `emit --quantity SKU=N`, and the Qty field on every `#/pricing` row.
+    asked: Optional[int] = None
     rule: pricing.Rule = pricing.MATCH
     basis: str = pricing.BASIS_MARKET
     # The D9 cut-off this match was partitioned against — the operator's stored
@@ -1549,10 +1556,29 @@ class SkuMatch:
         # is simply absent: every copy this run holds that TCGplayer does not already have
         # goes. `uncommitted_positions` is what still stops a copy being sent twice — this
         # method's own docstring separates the two jobs, and only the second was retired.
+        room = self.room
+        # AND THE SEND'S OWN ANSWER FOR THIS CARD BOUNDS IT LAST (D7, amended 2026-09-11). A
+        # quantity is what the operator typed for THIS press; it can only take copies out of
+        # the file, never put in copies the ceiling or the shelf refuse. `0` is honoured as
+        # "none of this card this press", and `nothing_to_add` names it in those words.
+        if self.asked is None:
+            return room
+        return max(0, min(self.asked, room))
+
+    @property
+    def room(self) -> int:
+        """What could go before this send's own quantity is applied: every copy TCGplayer does
+        not already hold, under the ceiling when one was asked for. `add_to_quantity` is this
+        bounded by `asked`, and the report reads both to say *asked 5, 3 can go*."""
         if self.live_cap is None:
             return len(self.uncommitted_positions)
-        room = self.live_cap - self.copies_out
-        return max(0, min(room, len(self.uncommitted_positions)))
+        ceiling = self.live_cap - self.copies_out
+        return max(0, min(ceiling, len(self.uncommitted_positions)))
+
+    @property
+    def asked_short(self) -> bool:
+        """The send asked for more of this card than can go. Named, never clamped silently."""
+        return self.asked is not None and self.asked > self.room
 
     @property
     def nothing_to_add(self) -> Optional[str]:
@@ -1569,6 +1595,11 @@ class SkuMatch:
             return None
         if not self.uncommitted_positions:
             return "every copy in this run is already listed or has left the box"
+        # THE SEND'S OWN ANSWER, BEFORE ANY SENTENCE ABOUT A CAP (D7, amended 2026-09-11): a
+        # zero typed for this card is why nothing goes, and it is not a hold, so the way
+        # back is the field and not the corpus.
+        if self.asked == 0:
+            return "this send asked for none of this card"
         # `live_now`, never `live_before`: the sentence names the reading the cap was
         # computed from, which is the newer of the store's and the export's (D87, amended).
         pending = self.copies_out - self.live_now
@@ -1967,6 +1998,7 @@ def join_batch(
     copies_out: Optional[Mapping[str, int]] = None,
     threshold: Decimal = pricing.THRESHOLD,
     live_now: Optional[Mapping[str, int]] = None,
+    quantities: Optional[Mapping[str, int]] = None,
 ) -> JoinReport:
     """Resolve every card to exactly one catalog row, aggregating copies by SKU.
 
@@ -2114,6 +2146,8 @@ def join_batch(
                 sku=sku,
                 row=resolution.row,
                 live_cap=live_cap,
+                # The send's own quantity for this card, or none (D7, amended 2026-09-11).
+                asked=None if quantities is None else quantities.get(sku),
                 rule=rule,
                 basis=basis,
                 threshold=threshold,

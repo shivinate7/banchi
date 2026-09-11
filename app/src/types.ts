@@ -680,10 +680,16 @@ export type MoveCardsResult = {
  *
  *  `directory_removed` false is not a failure. The server removes the photo directory only
  *  when the files it enumerated were all it held; a stray left behind keeps the directory
- *  and says so, rather than deleting something nobody accounted for. */
+ *  and says so, rather than deleting something nobody accounted for.
+ *
+ *  `buried` is D134's amendment to ruling 3 (2026-09-11): a sold, retired or moved record no
+ *  longer blocks this delete — it is buried, and `cards` counts it same as before while
+ *  `buried` says how many of those `cards` left through a departure door rather than as
+ *  ordinary on-hand junk. `#/graveyard` is where a buried record is read afterward. */
 export type BoxDeleteResult = {
   deleted_box: number
   cards: number
+  buried: number
   photos: number
   sidecars: number
   review_deleted: number
@@ -691,6 +697,47 @@ export type BoxDeleteResult = {
   cache_deleted: number
   registry_deleted: boolean
   directory_removed: boolean
+}
+
+/** One row of `GET /graveyard` (D134): a card that has left inventory, whichever of the
+ *  two doors it went through, drawn in one shape regardless of which.
+ *
+ *  `buried` is what tells the two sources apart. `false` means this record is a sold,
+ *  retired or moved card still standing in a box nobody has deleted — the same records
+ *  `#/inventory` already draws as departed. `true` means its box WAS deleted (D134): the
+ *  record itself is gone, and this row is read out of the `buried` history line instead.
+ *  `buried_at` is null in the first case and the burial's own timestamp in the second.
+ *
+ *  `box_name` and `order` are best-effort: the box may never have been named, and `order`
+ *  is only ever set when `Ledger.holder_of` finds this copy pulled against one. Every other
+ *  field mirrors the departed `Card` (or the buried line's copy of it) whole — `null` means
+ *  the record never carried that claim, not that it was withheld. */
+export type DepartedCard = {
+  left_at: string | null
+  how: 'sold' | 'retired' | 'moved'
+  box: number
+  index: number
+  box_name: string | null
+  name: string | null
+  number: string | null
+  game: string | null
+  set_hint: string | null
+  sku: string | null
+  condition: string | null
+  retire_reason: string | null
+  moved_to: string | null
+  order: string | null
+  run: string | null
+  captured_at: string | null
+  photo_sha256: string | null
+  buried: boolean
+  buried_at: string | null
+}
+
+/** `GET /graveyard` (D134): every departed card the store still knows about, newest
+ *  departure first — the merge of what is still standing and what was buried. */
+export type GraveyardPayload = {
+  departed: DepartedCard[]
 }
 
 /** `GET /boxes/<box>/photos` — what a reclaim over this box would delete (D89). FREE and
@@ -1090,6 +1137,8 @@ export type Place = {
   /** What the owner calls this box, or null when he has not named it. A label for humans and
    *  never an identifier: `box` is the identifier, and two boxes may carry the same name. */
   box_name: string | null
+  /** The section's own name, or null. D132 — read-time join, never stored on a card. */
+  section_name?: string | null
 
   /** The first and last `index` of the section this card is in. `section_end` is null when
    *  the section has no end yet — the open end of an open box, and the whole of a box that
@@ -1329,6 +1378,9 @@ export type SectionDetail = {
   start: number
   end: number
   count: number
+  /** The operator's own word for the section — `Rares` — or null where none was given.
+   *  Joined at read time by ordinal (D132), the way `box_name` is (D56). */
+  name: string | null
 }
 
 /** What a box's `state` may be SET to, which is one thing and not the same thing as what may
@@ -1398,9 +1450,10 @@ export type BoxRecord = {
   retired: number
 
   /** Cards moved OUT of this box to another one (D83) — `retired`'s sibling on the same
-   *  panel. A box left holding only these after a merge stays undeletable exactly as a
-   *  box holding sold or retired cards does, and this is what lets the delete panel say
-   *  so before the press rather than after the refusal. */
+   *  panel. A box left holding only sold, retired or moved records after a merge no longer
+   *  blocks a delete (D134): those records are buried, and only `listed` below still
+   *  refuses. Drawn for the same reason it always was — so the delete panel can say what
+   *  the box holds before the press, not just after a refusal. */
   moved: number
   listed: number
   sections_detail: SectionDetail[]

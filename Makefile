@@ -4,7 +4,7 @@
 # the project would be built on top of — `make check` green means every check ran.
 
 .DEFAULT_GOAL := help
-.PHONY: help status map explain harness check ignore-check docs-audit vale audit-self-test verdict-selftest githooks-selftest merge merge-selftest port-agreement set-hint-agreement screen-freshness sigil-check suite-lock-selftest icloud-sweep audit-history dev server screenshot design-check design-check-quiet lint typecheck venv launch-config worktree-setup hooks up down restart launch-agent demo demo-photos demo-seed demo-record demo-static demo-preview demo-freshness
+.PHONY: help status map explain harness check ignore-check docs-audit vale audit-self-test verdict-selftest githooks-selftest merge merge-selftest revert-guard revert-selftest port-agreement set-hint-agreement screen-freshness sigil-check suite-lock-selftest icloud-sweep audit-history dev server screenshot design-check design-check-quiet lint typecheck venv launch-config worktree-setup hooks up down restart launch-agent demo demo-photos demo-seed demo-record demo-static demo-preview demo-freshness
 
 # Prefer the venv if it exists, so `make harness` works without anyone remembering to
 # activate anything. Falls back to system python3, which still runs T2-T5 — T1 needs the
@@ -63,6 +63,9 @@ help:
 	@echo "  make audit-self-test  the checker checks itself. In \`check\`, never in the git hook."
 	@echo "  make githooks-selftest  main's guard, proved in a throwaway repo. Never in the git hook."
 	@echo "  make merge-selftest  the merge wrapper's local half, in a throwaway repo and worktree."
+	@echo "  make revert-guard  does this branch put a file back the way main had it before a"
+	@echo "                    commit main already carries? Refuses an unexplained reversal (D133)."
+	@echo "  make revert-selftest  the guard, proved by rebuilding PR #218/#221 in a throwaway repo."
 	@echo "  make janitor-selftest  the sweep, proved against a throwaway clone. In \`check\`, never in the hook."
 	@echo "  make reap-selftest  the kill guard, proved by pointing it at what it must not kill."
 	@echo "  make suite-lock-selftest  one browser fleet at a time, proved by violating it."
@@ -82,9 +85,8 @@ help:
 	@echo "  make lan-check    is the LAN URL still good? DNS, both servers, and a real"
 	@echo "                    write. Reaches the network, so it never gates a commit."
 	@echo "  make check        harness + docs-audit + audit-self-test + githooks-selftest +"
-	@echo "                    merge-selftest + janitor-selftest + reap-selftest +"
-	@echo "                    serve-selftest +"
-	@echo "                    suite-lock-selftest +"
+	@echo "                    merge-selftest + revert-selftest + revert-guard + janitor-selftest +"
+	@echo "                    reap-selftest + suite-lock-selftest + serve-selftest +"
 	@echo "                    verdict-selftest + port-agreement + set-hint-agreement +"
 	@echo "                    screen-freshness + sigil-check + ignore-check + lint +"
 	@echo "                    vale + typecheck"
@@ -95,7 +97,7 @@ help:
 	@echo "  ./pkmnscan reconcile <run-dir> <staged-export>    confirm what TCGplayer staged."
 	@echo "  make up           THE server, detached: the API and the app on one port, and it"
 	@echo "                    reloads itself when you edit Python and rebuilds the app when"
-	@echo "                    you edit a screen (D132). Prints the link. Start here."
+	@echo "                    you edit a screen (D135). Prints the link. Start here."
 	@echo "  make merge        merge a PR and move main onto it (D42). ARGS=<n> previews;"
 	@echo "                    ARGS=\"<n> --confirm\" performs it. On the owner's word only."
 	@echo "  make down         stop it.  make up ARGS=--restart  stop and start."
@@ -379,6 +381,8 @@ check:
 	@$(MAKE) --no-print-directory audit-self-test
 	@$(MAKE) --no-print-directory githooks-selftest
 	@$(MAKE) --no-print-directory merge-selftest
+	@$(MAKE) --no-print-directory revert-selftest
+	@$(MAKE) --no-print-directory revert-guard
 	@$(MAKE) --no-print-directory janitor-selftest
 	@$(MAKE) --no-print-directory reap-selftest
 	@$(MAKE) --no-print-directory suite-lock-selftest
@@ -418,6 +422,8 @@ ci-check:
 	@$(MAKE) --no-print-directory audit-self-test
 	@$(MAKE) --no-print-directory githooks-selftest
 	@$(MAKE) --no-print-directory merge-selftest
+	@$(MAKE) --no-print-directory revert-selftest
+	@$(MAKE) --no-print-directory revert-guard
 	@$(MAKE) --no-print-directory janitor-selftest
 	@$(MAKE) --no-print-directory reap-selftest
 	@$(MAKE) --no-print-directory suite-lock-selftest
@@ -497,6 +503,33 @@ merge:
 merge-selftest:
 	@bash scripts/merge-selftest.sh
 
+# A MERGE CAN UNDO A RULING WITHOUT ANYBODY WRITING A LINE (D133). PR #221 landed on main from
+# a tree that still held the pre-#218 copy of ten files, its message about `--cap` wording, and
+# D119's deletion came back with every guard that had asserted it — because every guard lived
+# in the files that came back. `make check` was green on both sides. This asks the one question
+# nothing on the commit path asked: does what this branch would land on origin/main put a file
+# back the way main had it BEFORE a commit main already carries, in a file no commit here names?
+# The clean merge's tree against origin/main is the diff it reads, so a branch merged-with-
+# keep-ours and squashed reads the same as the PR GitHub would show.
+#
+# ON THE COMMIT PATH TWICE: here, and in pre-push (scripts/githooks/pre-push runs the same
+# script on the branch being pushed), and once more as its own job in .github/workflows/check.yml
+# so it shows as a check on the PR. It writes nothing and needs only python3 and git. Absent
+# `origin/main` — a fixture clone, a throwaway — it allows and says so, which is the same
+# fail-open rule the two D42 hooks state. `PKMNSCAN_REVERT=off` runs nothing, printed in every
+# refusal. `scripts/revert-audit.py history` is the same engine walked over main's whole
+# first-parent line, which is how the 2026-09-11 audit was taken.
+revert-guard:
+	@python3 scripts/revert-audit.py branch
+
+# The guard, proved by violating it: PR #218's deletion and PR #221's keep-ours squash rebuilt
+# in a throwaway repository with its own origin, then a clean branch, a declared restoration,
+# a partial one and the escape hatch. In `check` and `ci-check`, never in the git hook — D18,
+# it writes a repository under `mktemp -d`; and githooks-selftest's second reason, it drives
+# the guard by defeating it.
+revert-selftest:
+	@python3 scripts/revert-audit.py selftest
+
 # HERE BECAUSE TWO LANGUAGES HOLD ONE ALGORITHM AND NEITHER CAN IMPORT THE OTHER (D43).
 # Python serves the capture port, TypeScript addresses it, and a disagreement is silent and
 # total — the app asks for a port nothing is listening on, or one ANOTHER tree is listening
@@ -560,7 +593,7 @@ janitor:
 janitor-selftest:
 	@bash scripts/janitor-selftest.sh
 
-# THE SUPERVISOR'S BUILD JOB (D132), against a throwaway tree with a stub `vite build`. Same
+# THE SUPERVISOR'S BUILD JOB (D135), against a throwaway tree with a stub `vite build`. Same
 # standing and the same reason as the three self-tests around it: it starts and stops real
 # supervisors and swaps real directories, so it is in `check` and never in the git hook.
 # No node — the stub is a shell script — so it runs anywhere the rest of `check` does.
@@ -637,7 +670,7 @@ janitor-install:
 lan-check:
 	@python3 scripts/lan-check.py
 
-# THE SERVER, DETACHED. ONE PROCESS: the API and the built app on one port (D132), restarting
+# THE SERVER, DETACHED. ONE PROCESS: the API and the built app on one port (D135), restarting
 # itself when you edit Python and rebuilding the app when you edit a screen.
 # `make dev` and `make server` below still work; `dev` is now the hot-reload loop that runs
 # BESIDE this rather than instead of it.
@@ -685,7 +718,7 @@ launch-agent:
 #
 # strictPort in app/vite.config.ts, so a busy 5173 fails here instead of quietly serving on
 # 5174 — where CLAUDE.md, this target and scripts/views.txt would all three be wrong.
-# NO `guard-foreground` HERE SINCE D132, and its removal is the feature. The supervisor used
+# NO `guard-foreground` HERE SINCE D135, and its removal is the feature. The supervisor used
 # to hold :5173 and this would have collided with it; it holds only the capture port now, so
 # Vite runs here with hot reload against the live server — which is what alternating between
 # building and operating actually needs.

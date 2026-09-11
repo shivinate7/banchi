@@ -264,8 +264,8 @@ make lint           # eslint over app/ (guards a bug earned, see app/eslint.conf
                     #   the Python packages, scoped to a slice measured against this tree (D82) —
                     #   never ruff's own defaults, never --fix. Config: ruff.toml.
 make check          # harness + docs-audit + audit-self-test + githooks-selftest +
-                    #   merge-selftest + janitor-selftest + reap-selftest +
-                    #   suite-lock-selftest + serve-selftest +
+                    #   merge-selftest + revert-selftest + revert-guard + janitor-selftest +
+                    #   reap-selftest + suite-lock-selftest + serve-selftest +
                     #   verdict-selftest + port-agreement + set-hint-agreement +
                     #   screen-freshness + sigil-check + ignore-check + lint +
                     #   vale + typecheck.
@@ -364,6 +364,27 @@ make merge-selftest # the merge wrapper's local half, against a throwaway origin
                     #   worktree. Its FOOTGUN case is the one that matters: main checked out
                     #   nowhere while another tree sits on a branch BEHIND its upstream, where
                     #   the wrong command advances that branch and no hook says a word.
+make revert-guard   # DOES THIS BRANCH PUT A FILE BACK THE WAY MAIN HAD IT BEFORE A COMMIT
+                    #   MAIN ALREADY CARRIES? (D133). PR #221 landed from a tree still holding
+                    #   the pre-#218 copy of ten files and D119's deletion came back with every
+                    #   guard that asserted it, under a message about `--cap` wording. This
+                    #   reads what the branch would LAND on origin/main — the clean merge's
+                    #   tree, so a keep-ours merge squashed into one commit reads the same as
+                    #   the PR — and refuses a file whose whole change is the exact reverse of
+                    #   a commit in main's last 60, when no commit on the branch names that
+                    #   file. A reversal you MEAN is one sentence: name the file in a commit
+                    #   message. A partial reversal beside real edits is a `note`, never a
+                    #   refusal. Runs in `check`, in pre-push on every branch push, and as its
+                    #   own job on the PR. `PKMNSCAN_REVERT=off` runs nothing, printed in every
+                    #   refusal. WHAT IT CANNOT SEE is in D133 by name: a reversal older than
+                    #   the window, one re-worded on the way back, and one whose hunk a
+                    #   neighbouring edit widened — the last is how #221's map rows escaped it,
+                    #   and a containment test that would have caught them produced 79
+                    #   coincidences of moved code on this history, so it was not kept.
+                    #   `python3 scripts/revert-audit.py history` is the same engine over main's
+                    #   whole first-parent line; the 2026-09-11 walk is in D133.
+make revert-selftest # the guard, proved by rebuilding #218 and #221 in a throwaway repo.
+                    #   In `check`, never in the git hook.
 make merge          # merge a PR and move main onto it — BOTH HALVES, on your word (D42).
                     #   ARGS=<n> previews and presses nothing; ARGS="<n> --confirm" performs it.
                     #   A bare `make merge` refuses: there is no default PR and will not be one.
@@ -402,6 +423,15 @@ make merge          # merge a PR and move main onto it — BOTH HALVES, on your 
                                    #                      — a SKU at or over N adds nothing
                                    #                      and the report says by how much.
                                    #                      Omit for no cap, the default
+                                   #   --quantity SKU=N   put exactly N copies of THIS card in
+                                   #                      the file this press (D7, amended
+                                   #                      2026-09-11): a SEND QUANTITY, not a
+                                   #                      ceiling — bounded by the copies on hand
+                                   #                      that are not already listed, never by
+                                   #                      what TCGplayer holds. Repeat per card;
+                                   #                      0 sends none of it without a hold. The
+                                   #                      Qty field on every `#/pricing` row is
+                                   #                      the same answer, spent by the write.
                                    #   --listed-only      above-threshold rows only (a filter,
                                    #                      not a split — the rest wait)
                                    #   --split-threshold  the old pair back: import-listed.csv
@@ -524,7 +554,7 @@ client call is written and `app/src/types.ts` the only place the wire's shapes a
 
 ### The screens
 
-**The app has eleven screens and eleven routes** — ten the owner's, one the Fulfiller's.
+**The app has twelve screens and twelve routes** — eleven the owner's, one the Fulfiller's.
 `app/src/App.tsx`'s `ROUTES` table is the count. **Recount from the table; never increment a
 sentence**, and see "the census" below for what enforces that.
 
@@ -572,7 +602,16 @@ sentence**, and see "the census" below for what enforces that.
 #/shipping     Shipping       which envelope an order goes in, out of TCGplayer's own shipping
                               export, in three lanes
 #/inventory    Inventory      the box walk and everything that hangs off it: search, a card's
-                              copies and its sale, and the box's own operations
+                              copies and its sale, and the box's own operations. SOLD IS
+                              HIDDEN BY DEFAULT (D132): one `Hide sold` chip folds departed
+                              rows out of the walk and the copies list, or sinks them under
+                              the live ones. The address leads with the box's NAME and the
+                              rail orders boxes by when this browser last opened them; a
+                              section can be named from the Manage box sheet.
+#/graveyard    Graveyard      every departed card, sold or retired or moved (D134) — merged
+                              from two sources, a record still standing in a box nobody has
+                              deleted and a `buried` history line for one whose box was.
+                              Read-only: nothing here can be undone, and nothing here prices
 #/codes        Codes          the code-card track: read a box's QRs into the ledger, the lanes
                               the pile is tiered into, and a lane handed to a buyer
 #/fulfillment  Cards to pull  the second persona's whole product: pull, photo-confirm, mark
@@ -730,12 +769,12 @@ the only carrier of information.
 
 ### The shell
 
-`App.tsx` is a hand-written hash router and the whole chrome. Read it as the shell: eleven
+`App.tsx` is a hand-written hash router and the whole chrome. Read it as the shell: twelve
 hash routes, no routing library, no nested routes, one table. Every screen renders inside it
 except the Fulfiller's:
 
 - **A sidebar that collapses to a rail** on wide windows — 236px or 64px, ⌘. toggles it, the
-  choice is remembered in `banchi.rail`. Nine nav items in four groups; the brand, the
+  choice is remembered in `banchi.rail`. Ten nav items in four groups; the brand, the
   hand-off link, the palette, the theme toggle and the capture server's own state sit in the
   foot.
 - **A top bar and a bottom tab bar on phones**, with the rest of the screens in a left drawer
@@ -867,14 +906,16 @@ A screen is not finished because it compiles.
   about a card or the inventory in `localStorage`. Inventory state is server-side, in the
   store; the camera uses a device picker. Two devices share one truth.
 
-  **Six keys are stored on the device, and each is a fact about THIS machine rather than
+  **Eight keys are stored on the device, and each is a fact about THIS machine rather than
   about a card**: `banchi.capture.deviceId` and `banchi.capture.rotation`
   (`app/src/useCamera.ts` — which camera and which way up, meaningless on another machine),
-  `banchi.theme`, `banchi.rail` and `banchi.orders.fetch-filter` (`app/src/deviceMemory.ts` —
-  how this browser is dressed, and which order statuses this device bothers fetching, D114),
-  and `banchi.orders.last-check` (`app/src/Orders.tsx` — when THIS device last checked
-  TCGplayer, so a fetch receipt can say what is new since; the owner ruled it belongs there
-  on 2026-09-03). None of them is a card, a position or an order.
+  `banchi.theme`, `banchi.rail`, `banchi.orders.fetch-filter`, `banchi.inventory.hide-sold`
+  and `banchi.inventory.box-recency` (`app/src/deviceMemory.ts` — how this browser is
+  dressed, which order statuses this device bothers fetching (D114), whether the inventory
+  walk folds sold rows away, and when THIS browser last opened each box, which is what the
+  box rail sorts on, D132), and `banchi.orders.last-check` (`app/src/Orders.tsx` — when THIS
+  device last checked TCGplayer, so a fetch receipt can say what is new since; the owner ruled
+  it belongs there on 2026-09-03). None of them is a card, a position or an order.
 
   **This sentence said FOUR and listed five, from 2026-09-03 until 2026-09-06**, and it named
   the wrong two files for the theme and the rail — `kit/index.tsx` and `App.tsx` are where
@@ -915,7 +956,12 @@ A screen is not finished because it compiles.
   to each was *"neither still applies"*.
 
   **A cap is now something a SEND asks for**: `emit --cap N`, and the field beside the other
-  emit options on `#/pricing`'s ship bar. **`policy.live_cap` IS DELETED as of 2026-09-08** —
+  emit options on `#/pricing`'s ship bar. **AND A QUANTITY IS SOMETHING A SEND ASKS FOR PER
+  CARD** (D7, amended 2026-09-11, on the owner's report that they could *"no longer select
+  quantities to sell at all"*): `emit --quantity SKU=N`, and the Qty field on every `#/pricing`
+  row. That one is a SEND QUANTITY and not a ceiling — 2 sends two whatever TCGplayer holds,
+  bounded by the copies on hand that are not already listed; 0 sends none without a hold — and
+  it is spent by the write, so nothing standing changes. The two compose to the tighter. **`policy.live_cap` IS DELETED as of 2026-09-08** —
   `--cap` is the only place a cap is named, and a store still holding the key is refused by
   name rather than silently uncapped. `policy.per_run` survives for its other four keys.
   It was a promise D7 made and nothing built until 2026-09-06: the parameter was threaded
@@ -1421,7 +1467,10 @@ D128 The key listener is attached before the paint, because a press answers to w
 D129 The verdict's line is fixed by the first Playwright that counts it right, and the rig's Node is not the thing that moves
 D130 A feeder that never rests gets a second trigger, and the beat is measured not typed
 D131 The ratchet gets an escape, a settle is one quiet frame of three, and the beat is the backstop
-D132 One process serves the product, Vite compiles and never serves, and the build is the server's job
+D132 Sold is folded away by default, the address leads with the name, the rail is ordered by the hand, and a section can be named
+D133 A branch is judged by what it lands, and a file put back the way main had it is refused unless the branch says so
+D134 A departed record is buried, not kept; the box goes; and the graveyard is where the departed are read
+D135 One process serves the product, Vite compiles and never serves, and the build is the server's job
 ```
 
 **THE GAP THIS LIST CARRIED BETWEEN D116 AND D118 IS CLOSED, AND IT CLOSED THE WAY IT SAID IT

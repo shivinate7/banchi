@@ -131,6 +131,10 @@ The capture server serves stored photos at `GET /photo/<box>/<position>`. The re
 
 **The operator was asked which control they wanted and chose the ceiling**, having first picked the send-quantity reading on an estimate of implementation cost that was wrong: the ceiling needed four label edits and no test changes, while the send quantity needed one arithmetic line and **19 harness assertions rewritten**, because D59's tests encode the ceiling throughout. The estimate was corrected and the choice retaken; the wording is the fix and the arithmetic was never in question.
 
+**A NUMBER ON EACH CARD'S ROW, AND IT IS A SEND QUANTITY (amended 2026-09-11, on the operator's report).** *"I actually found I can no longer select quantities to sell at all, which wasn't the goal. Yes I wanted caps eliminated at the store level, but I still wanted to be able to select quantities to list if on a case-by-case basis I want to."* Established before anything was built: the ship-bar field was present on both bars, labelled *hold to N live per card*, and doing exactly what the paragraph above says — a ceiling on copies live, counting what is already out. It could not say "two of THIS card", and on a SKU with copies already out it said nothing at all, which is the shape the owner read as the control being gone. The Qty column beside it was a read-only *N of M*. Nothing had been removed; the control that existed was the one the owner had been asked to choose on 2026-09-08, and the one they were now asking for was the OTHER reading, per card.
+
+**Asked in plain words which control they meant — a number on each row, one ceiling for the send, or both — and what a typed number should mean, they ruled for a number on each row meaning COPIES TO SEND IN THIS FILE**: type 2 and two copies go, whatever TCGplayer already holds, bounded by the copies on hand that are not already listed. The ceiling stays as it is, in the ship bar, for the send that wants one; the two compose to the tighter. So this entry now names two per-send controls and still no standing one: `--cap N` and the field beside the emit options hold every card to a ceiling; `--quantity SKU=N`, repeatable, and the Qty field on every `#/pricing` row send that many of that card. **Neither is written anywhere.** A quantity is not a fact about the card — D49's hold is, and lives in the corpus — it is a fact about one press, held in the screen as typed and SPENT by the write: the map clears on a successful emit, because a figure that survived it would send the same copies again on the next press, on top of what went. `0` is a real answer — none of this card this press — and is not a hold. `pipeline/join.py:SkuMatch.asked` carries it; `add_to_quantity` is `min(asked, room)` where `room` is what the ceiling and the shelf allow; `nothing_to_add` names a zero in its own words. A figure past what can go is clamped on the way out of the field and NAMED in the report — *asked 9, only 3 can go* — and a SKU named that the send does not hold is named back, because a typo behind an accepted flag and a written file would otherwise vanish. Every leg of a merged send carries the same map and `pipeline/merge.py` spends it once across the union, the way it spends the cap. Covered by `harness/tests/t7_store_and_seams.py:check_emit_send_quantity` and four cases in `app/tests/pricing.spec.ts`. The ship-bar cap field's placeholder was also found clipped to *no ca* at 56px on the same look and widened.
+
 **`min` WAS HIDING THE ONE FIGURE THAT EXPLAINS A REFUSAL.** `nothing_to_add` printed `min(copies_out, live_cap)`, so five copies out against a cap of two read as *"2 of the 2 this SKU may have out"* — true about the cap, false about the store, on the row whose entire question is why nothing is going out. The original argument was that *"6 of the 4 is not a sentence"*; that is a reason to WORD an overrun, not to suppress it. Both arms now name it: *"5 live, over the 2 this send asked for"*, and *"5 already out against the 2 this send asked for"*.
 
 **A merged send names what it dropped, which it did only in the total case.** `MergedSku.rows()` filters `add_to_quantity == 0` out of the file, and `cli/cmd_emit.py` printed the dropped list only inside `if not rows:` — so a partial capped send wrote the file, reported `import  10 row(s)` and named the other forty nowhere. The single-run path had a `no room` block doing exactly this and the two had simply diverged. That was the silent drop `CLAUDE.md` forbids by name, reachable from the ordinary press.
@@ -2114,7 +2118,7 @@ On surface / bg / hover it is 5.12 / 4.99 / 4.69:1, clearing 1.4.11's 3:1 on all
 
 **Rejected, and it led until the owner answered: building the app to `dist` and serving it from the capture server.** It collapses two processes into one, and `app/package.json` has carried an unused `build` script the whole time. It is the wrong answer to *this* request, because a built bundle has to be rebuilt — it would ADD a step to remember in exchange for removing one. Vite stays, and it was already the half that worked.
 
-**Amended 2026-09-11 — that rejection is reversed, on the one ground it gave (D132).** The owner asked for an easier way to package this, and the answer to "a built bundle has to be rebuilt" is that the rebuild is now the SUPERVISOR's job: `app/src` and `app/public` get their own watch set, a change there runs `vite build` into a sibling directory and renames it in, and nothing is added to anybody's memory. Measured before it was built: a cold build of this app is 1.2 seconds, which is what makes the old bundle answering meanwhile a moment nobody notices rather than a window to design around. **Everything else in this entry stands and now governs one child instead of two** — the drain, the parse pre-check, the fast-failure cap, the self-watch, the liveness probe and the launch agent are untouched. What is gone from this file is `spawn_vite`; what is gone from the operator's day is a second port. The full argument is D132 and the plan it names is `docs/specs/one-process.md`.
+**Amended 2026-09-11 — that rejection is reversed, on the one ground it gave (D135).** The owner asked for an easier way to package this, and the answer to "a built bundle has to be rebuilt" is that the rebuild is now the SUPERVISOR's job: `app/src` and `app/public` get their own watch set, a change there runs `vite build` into a sibling directory and renames it in, and nothing is added to anybody's memory. Measured before it was built: a cold build of this app is 1.2 seconds, which is what makes the old bundle answering meanwhile a moment nobody notices rather than a window to design around. **Everything else in this entry stands and now governs one child instead of two** — the drain, the parse pre-check, the fast-failure cap, the self-watch, the liveness probe and the launch agent are untouched. What is gone from this file is `spawn_vite`; what is gone from the operator's day is a second port. The full argument is D135 and the plan it names is `docs/specs/one-process.md`.
 
 One thing in this entry's own list changed with it, and it is the guard rather than the list: **`make dev` is no longer refused beside a running supervisor.** That guard existed because both ways of starting wanted the same two ports, and the supervisor no longer holds `:5173` at all. `make server` is still refused, because `:8000` is still the supervisor's and the squatter this entry measured is still exactly what would happen.
 
@@ -2670,6 +2674,20 @@ Frozen because a parser reads them: the `## D<n> — <title>` heading with its d
 
 **What would reopen this: a session that reasons from the index alone.** The index names 60 entries and argues none of them. If decisions start being cited from their titles — or worse, re-litigated because nobody opened the entry — the honest answer is not a longer index but a louder instruction, and `CLAUDE.md` is where it would go.
 
+### Amended 2026-09-11 — every identifier is American, and prose outside these four docs is not governed
+
+**Every identifier in the repository is spelled American; comments, docstrings, string literals and markdown outside the four docs this entry already governs are left as they are.** Ruled by the owner on 2026-09-11 during the D133 reversal interview, after `server/pipeline_routes.py:_artefacts` was found beside docs this entry rules American, and after the walk found `docs/DECISIONS.md` itself flipping the word between the two spellings across PRs #65 and #110.
+
+**Measured before the ruling, over 291 tracked source and markdown files.** 1,580 British spellings in 198 files: 869 in comments and docstrings across 169 files, 289 in markdown across 23, 119 in identifiers across 24, and the rest in string literals. The American side already held wherever the language itself has a say — 1,405 `color` and 463 `center` in CSS, 951 `fulfill`, 868 `catalog`.
+
+**Why the ruling stopped at identifiers.** The owner's question was whether standardizing had value at all, the worry being that mixed spelling might one day confuse a model reading the code. It does not: a model reads `artefact` and `artifact` as one word, so mixed prose costs nothing at read time. A grep does not. A search for `artifact` never found `_artefacts`, and a session reading `Fulfillment.tsx` and then searching the store for `fulfillment` never found the `fulfilment` table — a search that returns half the sites and looks complete. That hazard exists only for names, so names are what the ruling covers. The full sweep was declined by name: 198 files against five open PRs and sixteen live worktrees, and a rewrite of text in this file and in `docs/GATES.md` whose only job is to be a record.
+
+**Two names are out of scope, by name, with the reason recorded.** `fulfilment` is a table in `inventory/store.sqlite` and the ledger payload key the legacy-JSON migration reads (D88). `catalogued` is the game registry key in `pipeline/games.py`, a field on the wire in `GET /games`, and the stem of the `not_catalogued` reason code. A rename of either is a migration, not a spelling. Their relatives — `is_catalogued`, `NotCatalogued`, `_parse_fulfilment` — stay with them so no file is split between spellings. `aria-labelledby` is the platform's own name and is allow-listed for the same reason.
+
+**The reader is `identifier spelling`, a blocking row in `scripts/docs-audit.py`.** It reads every tracked `.py`, `.ts`, `.tsx`, `.mjs`, `.sh` and `.css`; blanks comments, docstrings, strings, template literals, regex literals and JSX text byte for byte before a token is read; and names the American form in every finding. Its -ise stems are a closed list, because an open pattern flags `raise`, `Promise` and `otherwise`, and a miss is the cheaper error on a row that blocks. `SPELLING_ALLOWED` is the allow-list, each entry a name with its reason. Vale's `AmericanSpelling` rule keeps its advisory watch over markdown and is unchanged. Mutation-tested under `--self-test`, in both directions per language: a British name is found in each of the six file kinds, the same word in a comment, a string, a regex, JSX text and a docstring is not, a template literal's `${}` is read, a generic parameter list is not mistaken for a tag, an allow-listed stem passes, and the tree is clean.
+
+**What landed with it.** The 119 identifiers renamed in place across 24 files — `_artefacts` to `_artifacts`, `summarise` to `summarize`, `humanise` to `humanize`, `_normalise_origin`, the `cancelled` flags, the test locals — and the three documents that named `_artefacts` following it.
+
 ---
 
 ## D61 — The shipping lane is three lanes, and the third answer is "I cannot tell"
@@ -3126,7 +3144,7 @@ This is cookie-session auth, not the order-management API, which is another host
 
 **The cookie is a bearer instrument and `.env` is the only place it lives.** Never logged, never in a refusal message, never written into a run directory; T7 asserts the last over every file the run holds. `PKMNSCAN_TCG_EXPORT_URL` refuses to carry it anywhere but https or loopback, because a knob that redirects a session cookie is an exfiltration channel wearing a test seam. One redirect hop is followed, and the cookie is not re-sent across a host change.
 
-**What was fetched is downloadable.** `_artefacts` lists off the run directory, so the operator can open the file this route summarizes rather than trust the summary.
+**What was fetched is downloadable.** `_artifacts` lists off the run directory, so the operator can open the file this route summarizes rather than trust the summary.
 
 **The WAF does not block an authenticated stdlib client, measured 2026-08-30.** The owner placed a session cookie and the fetch returned 68,363 bytes over 394 rows. This was the one thing the entry recorded as owed, and it is the reason `PKMNSCAN_TCG_USER_AGENT` exists: the earlier unauthenticated measurement said nothing about a request carrying a session, so a block was a plausible outcome the build had to survive. It did not occur. `tcg_blocked` stays, because one measurement on one day is not a guarantee about a rule somebody else maintains.
 
@@ -5679,7 +5697,7 @@ screen.
 
 **D54's empty guard is per file and was widened, not weakened.** `emit` still never opens an import file until it has at least one row for it, and merging gives that failure one more way to happen — a file can now be empty for every game at once, and under `--split-threshold` a send whose every row is above the cut-off would otherwise write a header-only `import-subthreshold.csv` over a good one. `_warn_stale` globs `import*.csv` now: it named the two bucket files and would have said nothing about the one the default press leaves behind, which is exactly the stale file it exists to name.
 
-**`_artefacts`' `is_import` was wrong from the day the merged file was added** — it tested `startswith("import-")` and `IMPORT_MERGED` is `import.csv` with no hyphen, so the run panel's import affordance never appeared over it. Fixed here because the default now lands on it.
+**`_artifacts`' `is_import` was wrong from the day the merged file was added** — it tested `startswith("import-")` and `IMPORT_MERGED` is `import.csv` with no hyphen, so the run panel's import affordance never appeared over it. Fixed here because the default now lands on it.
 
 ### What is NOT built, named rather than left to be discovered
 
@@ -6285,11 +6303,11 @@ measured carries a drop shadow out to 87.5% and the mark carries none, so it sit
 dock's shelf. Section 17 names what would settle it — a sweep at 128, 64 and 32px against the
 same three icons — rather than a value typed into a generator.
 
-### Amended 2026-09-11 — the URL is `:8000`, and a port is part of an origin (D132)
+### Amended 2026-09-11 — the URL is `:8000`, and a port is part of an origin (D135)
 
 **The installed app is created from `http://localhost:8000` now**, because the capture server serves the page itself and `:5173` belongs to `make dev`. Everything above is unchanged: the same Chrome, the same profile, the same manifest — which is already relative and needed no edit — and the same argument that the dock app is a CLIENT and never a second supervisor.
 
-**What the move costs is one reinstall and two resets, and D132 did not say so when it was settled.** A browser origin is scheme, host AND port, so the installed app at the new address is a different origin to the browser:
+**What the move costs is one reinstall and two resets, and D135 did not say so when it was settled.** A browser origin is scheme, host AND port, so the installed app at the new address is a different origin to the browser:
 
 - **The camera grant prompts once more.** This entry measured that the grant lives in the profile's content settings, which is true and is keyed by origin — so the rig re-grants on first open. One press.
 - **Every `localStorage` key resets once** (D27): the capture screen's remembered camera and rotation, the theme, the rail, and the two order keys. The rig re-picks its camera and its rotation, which is the only one of the six that costs a moment. This is D27's rename cost repeated, and the same ruling applies for a better reason — a fallback ACROSS origins is not merely undesirable, it is impossible.
@@ -7563,6 +7581,46 @@ a group with more than one copy in it.
 **What would reopen this**: an operator who wants the address readable at arm's length while
 standing at the boxes. That is the one thing the hero did that a 22px row does not, and it is
 named here as the cost of the deletion rather than as a reason to keep a split hierarchy.
+
+### Amended 2026-09-11 — the deletion was undone by a merge nobody read, and it is re-applied with a guard that lives outside the files it touched
+
+**The hero came back three commits after it left, and stayed for four days.** `4bf5a44` (PR #218)
+deleted it on 2026-09-07. `9439765` — PR #221, *"The cap is a ceiling on copies live"*, merged
+2026-09-08 — was committed from a tree that still held the PRE-deletion copy of every file #218
+had touched, and its single commit carried all of them back onto main under a message about
+`--cap` wording: `Inventory.tsx` with `LocationCard`, `Inventory.css` with its rules,
+`CardLocations.tsx` with the `current` term back in `noBar`, `Gallery.tsx` without the re-rank
+specimen, both specs with the pre-deletion assertions, `docs/DEBTS.md`'s section 5 note, and
+`docs/map.py`'s prose about all of it. `docs/DECISIONS.md` alone was not reverted — this entry
+survived, and CLAUDE.md's index line for it — so for four days the record said deleted and the
+tree said otherwise, which is the exact shape D16 is written against.
+
+**Every guard the deletion had came back with the thing it guarded.** That is why nothing on the
+commit path could catch it: `inventory.spec.ts`'s re-pointed cases and `gallery.spec.ts`'s
+relocated re-rank were inside the revert that commit carried, so the suite that went green on 2026-09-08
+was the pre-deletion suite asserting the pre-deletion screen. **And a session then ratified it.**
+D132 (2026-09-11) found `LocationCard`, traced it to `9439765`, read the owner's screenshot of
+the restored hero as evidence they were using it, and recorded *"it stays"*. The owner's next
+question — *"didn't we have one that stopped making the first landing spot of a card be the main
+header?"* — is what reopened it.
+
+**Re-applied 2026-09-11, on the owner's word, as a three-way merge rather than a cherry-pick**:
+base `9439765`, theirs `42e6d5a` (main as #218 left it), ours today's main — so D132's own work
+on the same files (the sold fold, the name leading the address, the section name on the label)
+is kept and the hero is not. Two fields the restored fixtures carried had left the wire in
+between (`SearchGroup.cap`, D7 rewritten), and D132's seven cases that aimed at
+`.inventory-location` now aim at `.card-locations-row.is-current`, which is where D132's own
+address rendering already was for every other row.
+
+**The guard is `make docs-audit`'s `recorded deletions` row, and it is deliberately not a Playwright case.**
+A test that lives beside the component is reverted with it — measured above. The row is a
+hand-written table in `scripts/docs-audit.py` (`RECORDED_DELETIONS`) of symbols a decision
+records as deleted, checked against `app/src` on every commit; a merge that carries
+`LocationCard` back fails the commit that carries it, in a file no screen change edits. Adding a
+row to that table is how a deletion is declared meant to last; removing one, with the entry
+amended, is how a deletion is deliberately undone.
+**What it cannot see is a re-implementation under another name** — that is a design question,
+and D16 leaves those to a reader.
 
 ## D120 — The shell speaks one brand at every width, and the phone bar is a rail
 
@@ -8842,7 +8900,366 @@ D130 wrote that "no adaptation of a stillness detector answers a scene that is n
 The scene was still; the detector's idea of still was wrong, in the one direction its ratchet
 could not move. D130's cadence trigger stands as the backstop it has become.
 
-## D132 — One process serves the product, Vite compiles and never serves, and the build is the server's job
+## D132 — Sold is folded away by default, the address leads with the name, the rail is ordered by the hand, and a section can be named
+
+**Settled 2026-09-10, on the owner's four asks about `#/inventory` and their three answers.**
+Their words: *"there's no point in me scrolling through them
+in positioning"*, *"WB1 R1 is how i actually know it by"*, *"sort them by most recently clicked,
+followed by a secondary sort (tie-breaker) of quantity of cards"*, and *"I want Section 6 RARES
+rather than just section 6"*. Every one of these is a screen answering to the person walking the
+boxes rather than to the store's own keys.
+
+### What is built
+
+1. **`Hide sold`, one chip on the walk's status bar, ticked by default.** The state is the
+   route's (`Inventory.tsx`) so one press reaches both the walk (`BoxBrowse`) and the copies
+   list (`CardLocations:OwnerRows`). Hidden, a sold or retired row is not drawn; the chip's count
+   says how many, and the copies list adds a line, `N sold copies hidden`.
+   **Unticked, departed rows SINK under the live ones** — within their own section in the walk,
+   because a sold card
+   still belongs to the part of the box it sat in; across the list in the copies panel — and never
+   sit in place. The owner chose sinking over leaving them where they were.
+
+   **The row the walk stands on is never folded away**, whatever its state. `selectedRow` is
+   found in the visible list, a sale must leave its receipt where it was pressed (D118, D119),
+   and a walk-to from the copies list may land on a sold copy (D45). A just-sold copy in the
+   copies list is kept for the same reason while its optimistic `soldKeys` overlay stands. The
+   row goes the moment the walk steps off it.
+
+   **The walk's sections are keyed by box and section number now**, not by their first row: with
+   sold rows folded away, the first row of a section whose first card had left was a different
+   record, and every fold closed on the press. A section number survives a sale (D58's wire keeps
+   `section` on a departed record) and survives the toggle.
+
+   **`CardLocations` rule 1 is amended.** It read *"none is dropped for being far away, sold or
+   spoken for"*; sold is now the exception, on the owner's word, and the comment says so.
+
+2. **The address leads with the box's NAME.** `PositionLabel` takes `boxName`: the first path
+   part's VALUE becomes the name (`BOX WB1 R1`) and the index moves into the note beside it
+   (`Box 3`). The location card's corner, which used to say the name, says `Box 3` — and only
+   when there is a name, since an unnamed box already reads `BOX 3` in the address. The copies
+   rows do the same (`boxName` in place of `boxNote`), on the owner's answer that the two panels
+   should agree. **The server string is still never edited**: `aria-label` carries it verbatim,
+   which is the property every spec asserts and the reason this is a rendering and not a write.
+
+3. **The rail draws no box numbers and is ordered by the hand.** `.browse-boxcell-num` is gone;
+   the name column already fell back to `Box N` for an unnamed box and every cell's accessible
+   name still says `Box N`, so nothing is lost to a screen reader or a locator. Boxes sort by
+   **when this browser last opened them**, newest first; then by **cards on hand**, most first —
+   `on_hand` and not `cards`, because a box full of sold records is not a box worth reaching for,
+   and "quantity of cards" was read that way on purpose; then by number, the last thing the owner
+   thinks in. The collapsed rail's 36px tiles draw the first word of the name, four characters at
+   most, and the number only where there is no name.
+
+   **Recency is device-local** — `banchi.inventory.box-recency` in `deviceMemory.ts`, put to
+   the owner and chosen over a server field. It is `banchi.orders.last-check`'s kind of fact:
+   when THIS device did something. The phone in the garage and the laptop at the desk are
+   looking for different boxes, and a write per click on the store for a sort order would be
+   D13's one truth carrying a habit. It is bumped from a rail press and from a walk-to, and
+   **never from the `?box=` landing** — a page load must not reorder the rail. Capped at fifty.
+   `banchi.inventory.hide-sold` is the other new key, the chip's memory; CLAUDE.md's roster says
+   eight now and `make docs-audit`'s `storage keys` row holds it.
+
+4. **A section can be named.** `store/master.py:Box.section_names` had existed since D83's
+   move-cards work, keyed by the divider INDEX a section starts at, persisted in the box's JSON
+   payload — and was read by nothing and written only by the demo seed. Now: `PUT /boxes/<box>`
+   takes `section_names` keyed by **ordinal**, the number every screen prints, and
+   `Inventory.set_section_names` joins ordinal to divider index the way `do_put_box` already
+   maps a count-space layout to indices. An ordinal past the layout refuses as `section_unknown`;
+   a blank clears. `sections_detail[].name` and every `place.section_name` are joined at read
+   time (D56's rule: never written into a run directory, so a rename reaches every label). The
+   walk's headers read `Section 6 · Rares · #101–#153`, the bar's sentence
+   `Section 6 · Rares · card 54 of 153 so far`, and `PositionLabel` draws the name as a note on
+   the `SECTION 6` part. The editor is a **Name sections** row in the Manage box sheet, one field
+   per section. `section_named` carries both maps, by ordinal, for `set_name`'s reason.
+
+   **The name rides the divider, and `set_sections` is where that is kept true.** Keyed by index,
+   a divider nudged one card later would leave its name on an index no section starts at — T7
+   found exactly that on the first run. A layout with the SAME number of dividers is read as the
+   same dividers moved and every name goes with its divider; a layout that adds or drops one
+   keeps names by exact index only, because nothing can say which new divider is "the same" one,
+   and a name on the wrong plastic is worse than a name lost with its layout on the
+   `resectioned` line.
+
+### What is recorded rather than re-litigated
+
+**`LocationCard` existed in `Inventory.tsx` while this was built, and D119 says it was deleted.**
+This paragraph said, until 2026-09-11, that it *"stays, as the owner is using it"* — reading their
+screenshot of 2026-09-10 as a wish to keep it. That was wrong on the evidence: the screenshot
+showed it because `9439765` had put it back by accident, not because anybody had asked for it
+back, and the owner's ruling in D119 stood the whole time.
+**The deletion is re-applied and D119 is amended with the account** (its final section).
+What this entry changed on the card — the
+corner saying `Box 3` and the address leading with the name — survives on the copies row the walk
+stands on, which is where D119 says the address is drawn.
+
+### Amended 2026-09-11: a search lands on the fullest section, and the index is said once
+
+**Three corrections on the owner's first day with it, each on their word.**
+
+**A search never lands on a sold copy.** Their screenshot: a search "pulled up a sold listing
+as the front runner" while copies were in stock. The walk kept the box it was on because that
+box had *a* match — the sold one — and landed on the only row it had; the live copies were in
+the next box. Under a query a box now counts only if one of its matches is still on hand.
+
+**The order is the largest quantity of the answer, by section.** Repeated back and confirmed:
+*"the largest quantity of whatever I searched by section is the order"*. The copies list groups
+by box and section and draws the section holding the most live copies first; within a section
+the server's card order holds. The rail under a query ranks a box by its **fullest section** and
+not by its total — three in one section outranks one-plus-two across two — so the rail, the
+list and the landing agree. A fresh answer moves the walk to the first live row of that section,
+in that box, and a rail press under the same query lands in *that* box's fullest section. A
+copy sold from this screen still counts for its section while its receipt stands, so the press
+moves no row (D118). With nothing live anywhere the older rules stand.
+
+**The index is said once on the location card.** `BOX WB1 R2  Box 4` beside a corner also
+saying `Box 4` was the same fact twice; `PositionLabel`'s `indexNote` is off there. The copies
+rows have no corner and keep the note.
+**Overtaken the same day by D119's re-application**: the location card is deleted again, so
+there is no corner and no second saying of it; every row keeps the note and `indexNote` is
+gone with its only caller.
+
+### What is not built
+
+No server-side recency, no first-listed stamp, no name uniqueness for sections (a section is
+never addressed by its name the way a box is, D20 amended), and the Fulfiller's screens are
+untouched — his list is his order, his place labels are plain text, and none of the four asks
+was about him.
+
+## D133 — A branch is judged by what it lands, and a file put back the way main had it is refused unless the branch says so
+
+**Settled 2026-09-11, on the owner's instruction, after D119's deletion was found undone.**
+The commit that undid it was about something else.
+
+### What happened, in commits
+
+`4bf5a44` (PR #218, D119, 2026-09-07) deleted `LocationCard` from `app/src/Inventory.tsx` and
+re-pointed the two specs that had asserted it. The next commit on main's first-parent line is
+the merge of PR #221, "The cap is a ceiling on copies live" (`121cfe5`, 2026-09-08), and what
+that merge brought onto main included the PRE-deletion copy of nine front-end files #218 had
+touched — the component, its stylesheet, `CardLocations.*`, `Gallery.*`, `BoxBrowse.css` and
+both specs. `9439765`, the commit inside it, is a single-parent commit on top of the #218
+merge whose diff on those files is, line for line, the reverse of `4bf5a44`. Its message names
+none of them. The mechanism, reconstructed: the #221 session merged main into its branch,
+resolved by keeping `ours`, and squashed onto main as one commit; the PR lists a merge commit
+(`e2b9b4f`) that is not an ancestor of what landed.
+
+**Every guard the deletion had lived in the files that came back**, so every guard came back
+with the thing it guarded against. `make check` was green on both sides, the Playwright suite
+was green on both sides, and three days later D132's session found the component, read the
+owner's screenshot of it as a wish, and wrote that down. PR #246 re-applied the deletion and
+added the `recorded deletions` audit row — a hand-written table of symbols a decision says are
+gone — which covers a deletion a session remembers to register and nothing else.
+
+### The ruling
+
+**A branch is judged by what it would land on main, not by its own commits.** The #221 shape
+has a merge-base AFTER the commit it reverses — the branch merged main and kept ours — so
+`origin/main..HEAD` shows a tidy cap-wording change and only the landing diff shows the revert.
+`scripts/revert-audit.py branch` reads `git merge-tree --write-tree origin/main HEAD` and diffs
+origin/main against that tree, which is exactly what the PR page shows and what the merge
+button would do; when the merge conflicts it falls back to the branch's diff off the merge-base
+and says so. On GitHub, a pull-request checkout IS that merge, so the CI job reads `HEAD`
+against `origin/<base>` and compares the same two things.
+
+**A file whose whole change is the exact reverse of a commit main already carries is refused**
+unless a commit on the branch names the file. Two detectors, both exact:
+
+- **whole-file** — the change takes the file from blob `a` to blob `b`, and a commit within
+  main's last sixty first-parent commits took it from `b` to `a`. By object id; no diff is
+  read. A file deleted that a recent commit created counts, because a keep-ours merge deletes
+  every file main added.
+- **hunk** — a `-U0` hunk of the change is, line for line, the reverse of a hunk an earlier
+  commit in that window introduced on the same file. Whitespace-only hunks are dropped. A
+  merge on the first-parent line is compared as what it brought onto main, and the branch
+  commits inside it that touched the file are named beside it, because the merge is never the
+  commit a person would cite.
+
+**Refused** means: every hunk the change makes to the file is such a reversal, or the whole
+file is restored. **A partial reversal beside real edits is a note and never a refusal** — a
+line changed and changed back inside a rewrite is ordinary work, and a guard that refused it
+would be switched off within the week. **Declared** means a commit message on the branch names
+the file — its path, its basename or its stem. `git revert` exists, D125's crop came off four
+screens on the owner's word (PR #233), and D119 itself was re-applied by reversing #221; each of
+those is a reversal somebody meant, and the cost of meaning it is one file name in one commit
+message. `PKMNSCAN_REVERT=off` runs nothing and is printed in every refusal, on the same terms
+as `PKMNSCAN_MAIN=off`.
+
+**It runs three times, for D42's reason: the local and the remote halves fail separately.**
+`make revert-guard` in `check` and `ci-check`; `scripts/githooks/pre-push` on
+every branch push, before the branch becomes a PR; and its own job in
+`.github/workflows/check.yml`, so a refusal is a named red check on the PR rather than one line
+inside `ci-check`'s output. It writes nothing, needs python3 and git, and with no `origin/main`
+in reach — a fixture clone — it allows and says so.
+
+**`make revert-selftest` proves it by rebuilding the sequence**: a throwaway origin, a deletion
+merged as #218 was, a branch cut from before it that merges main with `-s ours` and is squashed
+onto main with a message naming nothing. The fixture asserts its own arming — the squashed
+branch really does carry the pre-deletion blob — then asserts the refusal, the history walk
+naming both the merge and the deleting commit inside it and reading `D1` out of the reverted
+decision text, a clean branch allowed, a partial reversal noted and allowed, a declared
+restoration allowed, a silent restoration refused at hunk level after main has moved the file
+again, the escape hatch honoured and named, and main itself landing nothing. Mutation-tested, three arms:
+with the whole-file detector disabled the #221 case stays refused on the hunk detector and the
+history case fails; with the hunk detector disabled the silent restoration and the partial case
+both fail; with `entire` made to return true for a partial hit, the partial case fails.
+
+### The 2026-09-11 walk over main, and what it found
+
+`scripts/revert-audit.py history` is the same engine over every commit on main's first-parent
+line — 367 commits, window 60 — and it reports every reversal whose commit message does not
+name the file. **Fifty-two file-level reversals across eighteen commits**, every one read on
+both sides rather than trusted to the diff arithmetic. Fifty of them are reversals somebody
+meant, and the record already says so: #221 undoing #218 (the case above); #246 undoing #221
+(the re-application, D119 amended) and #244's `indexNote` (D132 amended the same day); #233
+undoing #231 on five files (D125 amended, `docs/DEBTS.md` §7 reopened); #222 removing the
+`cap_the_store` helper #216 had added to T7 (`policy.live_cap` was deleted, D7); #176 removing
+`RailMark`'s export while deleting `RailMark.tsx` itself; #164 removing four
+`docs-audit-allow.txt` lines that each said "delete when built"; #145 moving `review.spec.ts`'s
+`/status` stub into the shared seal; #114's overhaul removing the T6 order walk (D96) and
+retiring comments whose code fixes survive — `Pricing.tsx` still reads the hash in its
+`useState` initialiser; and six pre-PR commits where one author iterated on their own previous
+commit, all of whose reversals were later re-applied or were D31's own deletions.
+
+**One is real and unrecorded.** `5b79982` (PR #192, "t1-fingerprints", D112) put back the
+paragraph of D110 that PR #191 (`efc2444`, the same day) had replaced: eight paragraphs
+recording the owner's 2026-09-07 ruling on the 22 inert controls — the current page's nav link
+now responds, the selected tab stays inert by their choice from the images, the first fix
+snapped because `background-image` does not animate, and `cursor.spec.ts`'s guard gained a
+reader for gradients by name. The code survived in full: `App.css`'s
+`.bn-nav-link[aria-current='page']:hover`, the gradient test in `cursor.spec.ts`, and the
+ruling's comment in `kit.css`. **The decision does not.** D110 at HEAD says the current page's
+hover is "a design question for the owner rather than a defect" — a question the owner
+answered four days ago, whose answer is now recorded only in a stylesheet comment. What the
+screen does is right; what the record says about it is a day old. Not fixed here: the owner's
+call, one branch, restoring the text of `efc2444` into D110 as an amendment dated to both
+days.
+
+The seven files D119's own re-application (`521dbfd`) put back in `Inventory.tsx`,
+`inventory.spec.ts`, `Gallery.tsx` and `docs/map.py` are partial — 19 of 21, 43 of 58, 3 of 4,
+3 of 9 — because #246 also moved on from what #218 had; they are the same event read from the
+other side.
+
+### What it cannot see, named rather than papered over
+
+- **A reversal older than the window.** Sixty first-parent commits is about twelve days of
+  this repository's history; a branch a fortnight stale that merges main keeping ours reverses
+  commits the guard no longer looks at. `--window 0` is unbounded for a one-off audit and is
+  not the default, because the walk has to finish on every push.
+- **A reversal re-worded on the way back.** A line changed as well as restored is a new edit,
+  and the guard is exact on purpose: a similarity threshold is a dial, and every dial on a gate
+  gets turned until the gate is quiet.
+- **A reversal whose hunk a neighbouring edit widened.** #221 also put back D119's rows in
+  `docs/map.py` and `docs/DEBTS.md`, and the guard does not report them: the branch's own D7
+  edits sat on adjacent lines, so the reversed lines and the new ones share one hunk and the
+  hunk is no longer the reverse of anything. A containment test — the reversed hunk found as a
+  contiguous run inside a larger one — was built and measured against the same history:
+  seventy-nine additional hits, every one a coincidence of code moved within a rewrite, and the
+  map rows still not among them. It was not kept. The whole-file detector is the answer to the
+  common form of this: a keep-ours merge restores the whole blob, and a blob is compared by id.
+
+## D134 — A departed record is buried, not kept; the box goes; and the graveyard is where the departed are read
+
+**Settled 2026-09-11, on the owner's word.** Told that a whole-box merge (D83) carries only
+the on-hand cards, leaving sold and retired records behind in a box that ruling 3 would then
+refuse to delete forever, the owner's answer was direct: *"I just need a history log
+frankly"*, and asked for a screen to read it — *"having a graveyard accessible just for
+potential data giggles is worthwhile having"* — and confirmed the photographs should go with
+it: *"yes it should auto delete the photos."*
+
+This amends D10's owner ruling 3 (2026-08-23): "a box may not go while ANY card in it is
+sold, retired, or listing-held — those records are history and commitments, not clutter."
+The sentence was right and the remedy it named was too small. A departed record's history is
+not lost by letting its box go; it is lost only if nothing keeps the record when the box
+does. So ruling 3 keeps its shape and gets a second door: a sold, retired or moved record no
+longer blocks the delete — it is **buried** first.
+
+### What is built
+
+1. **`DELETE /boxes/<box>` no longer refuses on a departed record.** `do_delete_box`
+   (`server/capture_server.py`) still refuses `box_not_empty_of_commitments` for an on-hand
+   card an active listing holds — D34's ground, untouched — but a card in
+   `master.TERMINAL_STATES` (sold, retired, moved) is no longer a blocker at all.
+
+2. **A departed record is buried before its files go.** One `buried` event per record,
+   carrying it whole. A new route-written event, `BURIED = "buried"`, added beside
+   `BOX_DELETED` in `SERVER_EVENTS`. Written through the same `_history` call every other
+   route-level event uses, inside the same `Store.write()` as the record's own deletion, so
+   the line and the deletion commit together or neither does. The line carries: `box`,
+   `index`, the box's own name as it stood, `state`, `state_at`, `captured_at`,
+   `capture_id`, `run`, `game`, `name`, `number`, `printed_total`, `set_hint`, `sku`,
+   `condition`, `rarity_claim`, `product`, `note`, `retire_reason`, `moved_to`,
+   `photo_sha256`, `photo_reclaimed_at`, and `order` — the order this copy was pulled
+   against, if `Ledger.holder_of(capture_id)` finds one.
+   **The digest is computed from the photograph's bytes in the moment before they go**, the
+   same way D89's reclaim already does it, if the record does not already carry one; a
+   moved tombstone's file already relocated with the transplant at move time, so its digest
+   stays whatever the tombstone already had — usually none.
+
+3. **The photographs go, on the owner's word.** Every departed record's photo and sidecar
+   are unlinked in the same loop that unlinks an on-hand junk card's — D10's "files inside
+   the block, photo before sidecar" rule, unchanged. This is a real loss and it is
+   deliberate: `docs/DEBTS.md`-style, named here rather than discovered later. What is kept
+   is the digest, not the bytes — the same trade D89 already made for a sold card's
+   photograph, now made for every door a card can leave a deleted box through.
+
+4. **`GET /graveyard`, the merge of two sources into one shape.** A departed card is either
+   still standing in a box nobody has deleted (a `sold`/`retired`/`moved` record, read by
+   the indexed `state` column, three `where()` calls) or it survives only as a `buried`
+   line (`store/db.py:events_named`, `store/session.py:Store.buried()` — `history()`'s
+   narrower sibling, an unindexed scan over the `event = 'buried'` rows rather than the
+   whole log). `do_graveyard` merges both into `_departed_row`'s one shape, newest departure
+   first. The two sources never overlap by construction: a record moves from the first to
+   the second exactly once, at the moment its box is deleted, and there is no route back.
+
+5. **`#/graveyard`, the twelfth route.** `app/src/Graveyard.tsx` + `.css`, modelled on
+   `Codes.tsx`'s fetch-a-list shape: a Segmented filter (All/Sold/Retired/Moved/Buried), a
+   text search over name, number, SKU and box name, and a `.bn-table` that becomes a
+   stacked card at 639px. Read-only — no photograph (buried cards have none, and the
+   screen stays out of `scripts/views.txt`'s exposure rows), no price, no control that
+   writes. `library` group, hotkey `g`.
+
+6. **The Manage box sheet's delete panel draws the new boundary.** `BoxOps.tsx:DeleteBox`'s
+   pre-emptive `Notice` no longer says a sold or retired card refuses the box; it says how
+   many departed records will be buried and that their photographs will be deleted, and
+   names only a listing hold as a real refusal. The success toast's receipt gains a buried
+   count. `BoxDeleteResult.buried` is the wire field both read.
+
+### What is lost, stated rather than discovered later
+
+**Sale and retirement undo on a deleted box.** Reversing a sale or a retirement is a route
+over the still-existing record; once a record is buried there is no record to reverse, only
+a line describing what happened. This was already true the moment a card's box was deleted
+in the old world too — the box simply could never be deleted while such a record stood. The
+practical change is that the box no longer has to stand forever for the undo option to keep
+existing; the undo option and the box now go together.
+
+**The departed rows and copies-list entries for that box on `#/inventory`.** A buried record
+is not a row anywhere a box is rendered — only `#/graveyard` reads it. Searching by name
+still finds it there.
+
+**D36's realign by digest, for a run still un-joined over a deleted box.** A moved card's
+digest and its photograph both travel with the transplant, so realign still works for those.
+A sold or retired card's digest is kept in the burial line, but the photograph it would be
+checked against is gone — the same boundary D89's reclaim already draws for a sold card
+whose photograph was reclaimed while its box still stood.
+
+**`next_index` for a deleted box number restarts at 1.** Already true before this decision —
+"a deleted box is a box the store has never heard of" (D10) — and unchanged: this decision
+only widens which boxes may reach that state. D10's permanent-gap promise holds inside every
+box that still exists.
+
+### What is recorded rather than mitigated
+
+**Old per-position `sold`/`retired` history lines are not rewritten or removed.**
+`_state_before_sale` and `_state_before_retirement` scan backwards from the most
+recent line for a given position key; a box number reused after a delete writes its own
+newer lines for the same keys, which those readers find first. A stale line from a deleted
+box therefore sits inert beneath a live one rather than being cleaned up — the same shape
+D36's `refuse_reallocated` already treats as a hazard worth refusing a run over, not worth
+silently repairing.
+
+## D135 — One process serves the product, Vite compiles and never serves, and the build is the server's job
 
 **Settled 2026-09-11 by interview, from the owner asking for an easier way to package this.**
 Their words: "rather than two servers." The interview started broad and the answers are the
@@ -8956,4 +9373,4 @@ port, which does not move.
 ### What is BUILT, RECORDED, and NEITHER
 
 **BUILT:** nothing. **RECORDED:** this entry, `docs/specs/one-process.md`, step 22 in both
-build-order lists, and the D132 line in `CLAUDE.md`'s index. **NEITHER:** every line of the plan above.
+build-order lists, and the D135 line in `CLAUDE.md`'s index. **NEITHER:** every line of the plan above.

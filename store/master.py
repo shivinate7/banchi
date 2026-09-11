@@ -1836,11 +1836,97 @@ class Inventory:
         entry = self.ensure_box(number)
         before = list(entry.sections)
         layout = check_sections(sections)
+        # THE NAMES RIDE THE DIVIDERS (D132). `section_names` is keyed by the index a divider
+        # sits at, so a divider nudged one card later would otherwise leave its name behind on
+        # an index no section starts at. A layout with the SAME NUMBER of dividers is read as
+        # the same dividers moved — the i-th old one is the i-th new one — and every name goes
+        # with its divider. A layout that adds or drops a divider keeps names by exact index
+        # only: nothing here can say which of the new dividers is "the same" one, and guessing
+        # would put a name on the wrong plastic. An index that vanished loses its name, and
+        # the `resectioned` line below carries both layouts so the loss is on the record.
+        old_layout = list(check_sections(before)) if before else [1]
+        new_layout = list(layout) if layout else [1]
+        held = dict(entry.section_names)
+        if len(old_layout) == len(new_layout):
+            moved: Dict[str, str] = {}
+            for was, now in zip(old_layout, new_layout):
+                name = held.get(str(int(was)))
+                if name:
+                    moved[str(int(now))] = name
+            entry.section_names = moved
+        else:
+            entry.section_names = {
+                key: name for key, name in held.items()
+                if name and any(str(int(at)) == key for at in new_layout)
+            }
         entry.sections = list(layout)
         self._log(
             "resectioned", None, box=entry.box, sections_from=before, sections_to=list(layout)
         )
         return layout
+
+    def section_names_for(self, number) -> Dict[int, str]:
+        """A box's section names by ORDINAL — `Position.section`'s space, 1-based.
+
+        `Box.section_names` is keyed by the divider INDEX the section starts at, so a moved
+        divider carries its name with it; every screen speaks in ordinals, so this is the
+        one place the two are joined. An undeclared box has one section starting at index 1,
+        which is the key `open_section` materialises its first divider under — so a name
+        given to "section 1" of an undivided box survives the first divider going in.
+        """
+        entry = self.box(number)
+        if entry is None or not entry.section_names:
+            return {}
+        try:
+            layout = entry.layout() or (1,)
+        except BadSections:
+            return {}
+        out: Dict[int, str] = {}
+        for ordinal, start in enumerate(layout, start=1):
+            name = entry.section_names.get(str(int(start)))
+            if isinstance(name, str) and name.strip():
+                out[ordinal] = name
+        return out
+
+    def set_section_names(self, number, names: Dict[int, Optional[str]]) -> Dict[int, str]:
+        """Name sections by ordinal, or clear names with None/blank. Logs both maps.
+
+        THE SAME ARGUMENT AS `set_name` AND `set_sections`: a name is a label the operator
+        reads a box by, and a relabel with no record of what it used to say is a rename that
+        never happened. `section_named` carries the whole before/after, keyed by ordinal as
+        the operator sees it. A no-op writes no event.
+
+        REFUSES AN ORDINAL THE LAYOUT DOES NOT HAVE, as `BadSections` — naming section 4 of
+        a three-section box is a typo, not a declaration, and quietly storing it under a
+        divider that does not exist would surface the day a divider lands there.
+        """
+        entry = self.ensure_box(number)
+        layout = entry.layout() or (1,)
+        before = self.section_names_for(number)
+        held = dict(entry.section_names)
+        for ordinal, name in names.items():
+            try:
+                at = int(ordinal)
+            except (TypeError, ValueError):
+                raise BadSections(f"section {ordinal!r} is not a number") from None
+            if at < 1 or at > len(layout):
+                raise BadSections(
+                    f"section {at} does not exist: box {entry.box} has "
+                    f"{len(layout)} section{'s' if len(layout) != 1 else ''}"
+                )
+            key = str(int(layout[at - 1]))
+            wanted = None if name is None or not str(name).strip() else str(name).strip()
+            if wanted is None:
+                held.pop(key, None)
+            else:
+                held[key] = wanted
+        entry.section_names = held
+        after = self.section_names_for(number)
+        if after != before:
+            self._log(
+                "section_named", None, box=entry.box, names_from=before, names_to=after
+            )
+        return after
 
     def open_section(self, number) -> Tuple[int, ...]:
         """Put a divider in front of the next card. The capture screen's `S`.

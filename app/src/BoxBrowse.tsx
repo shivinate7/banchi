@@ -34,7 +34,8 @@ import { readingAgo, stateLabel, stateTone } from './cardState'
 import { storeKeyText } from './storeKey'
 import { SearchField } from './SearchField'
 import { useSearch } from './useSearch'
-import { Button, EmptyState, Icon, Kbd, Notice, PageHeader, Pill } from './kit'
+import { Button, Chip, EmptyState, Icon, Kbd, Notice, PageHeader, Pill } from './kit'
+import { storedBoxRecency, touchBox } from './deviceMemory'
 import { toast } from './kit/toast'
 import { Overlay } from './InventoryOverlay'
 import './BoxBrowse.css'
@@ -70,6 +71,29 @@ function landingOf(rows: readonly Row[]): Row | undefined {
   return rows.find((row) => !hasDeparted(row.card)) ?? rows[0]
 }
 
+/* Where a SEARCH lands (D132 amended, the owner's rule): the first live row of the section
+ * holding the most live rows — the place a hand can pull the most from. Ties go to the section
+ * met first in walk order; with nothing live, `landingOf`'s answer. */
+function landingInFullest(rows: readonly Row[]): Row | undefined {
+  const counts = new Map<string, number>()
+  const keyOf = (row: Row) => `${row.card.box}/${row.card.section ?? '?'}`
+  for (const row of rows) {
+    if (hasDeparted(row.card)) continue
+    counts.set(keyOf(row), (counts.get(keyOf(row)) ?? 0) + 1)
+  }
+  let best: Row | undefined
+  let most = 0
+  for (const row of rows) {
+    if (hasDeparted(row.card)) continue
+    const n = counts.get(keyOf(row)) ?? 0
+    if (n > most) {
+      most = n
+      best = row
+    }
+  }
+  return best ?? landingOf(rows)
+}
+
 // ------------------------------------------------------------------ the walk, in sections
 
 /* Which shelf a row is on: a box number, `pooled` for a card whose game says `located: false`
@@ -89,10 +113,21 @@ function shelfLabel(shelf: Shelf): string {
   return `Box ${shelf}`
 }
 
+/* What a 36px tile can say about a box (D132): the first word of its name, at most four
+ * characters — `WB1` — and the number only where there is no name to shorten. */
+function miniLabel(name: string | null, box: number): string {
+  const word = name?.trim().split(/\s+/)[0] ?? ''
+  return word === '' ? String(box) : word.slice(0, 4)
+}
+
 /* Every shelf the current walk touches, boxes first, plus every box the registry knows when
  * nothing is being searched for — an empty box is the only state from which it can be renamed,
  * sealed or deleted. */
-function shelvesOf(rows: Row[], registry: readonly number[] = []): Shelf[] {
+function shelvesOf(
+  rows: Row[],
+  registry: readonly number[] = [],
+  order: (a: number, b: number) => number = (a, b) => a - b,
+): Shelf[] {
   const boxes: number[] = []
   let pooled = false
   let unplaced = false
@@ -103,7 +138,7 @@ function shelvesOf(rows: Row[], registry: readonly number[] = []): Shelf[] {
     else if (!boxes.includes(shelf)) boxes.push(shelf)
   }
   for (const box of registry) if (!boxes.includes(box)) boxes.push(box)
-  boxes.sort((a, b) => a - b)
+  boxes.sort(order)
   const out: Shelf[] = [...boxes]
   if (pooled) out.push('pooled')
   if (unplaced) out.push('unplaced')
@@ -120,24 +155,50 @@ function sectionTitleOf(row: Row): string {
 
   const start = row.card.place?.section_start
   const end = row.card.place?.section_end
-  if (typeof start !== 'number') return `Section ${row.card.section}`
-  return typeof end === 'number'
-    ? `Section ${row.card.section} · #${start}–#${end}`
-    : `Section ${row.card.section} · #${start} onward`
+  /* THE SECTION'S NAME RIDES ITS NUMBER (D132): `Section 6 · Rares · #101–#153`. Off the place
+     block, where the server joined it at read time, so a rename reaches every header at once. */
+  const named = row.card.place?.section_name
+    ? `Section ${row.card.section} · ${row.card.place.section_name}`
+    : `Section ${row.card.section}`
+  if (typeof start !== 'number') return named
+  return typeof end === 'number' ? `${named} · #${start}–#${end}` : `${named} · #${start} onward`
 }
 
 type Section = { key: string; title: string; first: Row; rows: Row[] }
 
+function sectionKeyOf(row: Row, title: string): string {
+  const box = row.card.box
+  const section = row.card.section
+  return typeof box === 'number' && typeof section === 'number'
+    ? `section @ ${box}/${section}`
+    : `section @ ${title}`
+}
+
 /* Run-length over the walk, so whatever order the rows arrive in survives exactly. Keyed by
- * the first row's store key rather than by the title, so a fold survives the re-read after a
- * sale — which changes the title's card range but not which section this is. */
-function sectionsOf(rows: Row[]): Section[] {
+ * the BOX AND SECTION NUMBER rather than by the title or by the first row, so a fold survives
+ * the re-read after a sale — which changes the title's card range but not which section this
+ * is — and survives the sold rows being folded away or shown again (D132), which changes which
+ * row comes first in a section whose first card has left. A section with no number (pooled,
+ * unlabelled) keys on its title, which is all it has. */
+function sectionsOf(rows: Row[], sinkDeparted = false, keep: string | null = null): Section[] {
   const out: Section[] = []
   for (const row of rows) {
     const open = out[out.length - 1]
     const title = sectionTitleOf(row)
     if (open !== undefined && open.title === title) open.rows.push(row)
-    else out.push({ key: `section @ ${row.key}`, title, first: row, rows: [row] })
+    else out.push({ key: sectionKeyOf(row, title), title, first: row, rows: [row] })
+  }
+  /* DEPARTED ROWS SINK UNDER THE LIVE ONES, WITHIN THEIR OWN SECTION (D132). A stable partition
+     so the walk's order survives in each half, and per section rather than over the whole list,
+     because a sold card still belongs to the part of the box it sat in.
+     THE ROW THE WALK STANDS ON DOES NOT SINK (D118): the press that sold it may change what is
+     on the screen and never where the rest of it is, and a row dropping to the foot of its
+     section on the press moves every row beneath it. It sinks when the walk steps off it. */
+  if (sinkDeparted) {
+    const sinks = (row: Row) => hasDeparted(row.card) && row.key !== keep
+    for (const section of out) {
+      section.rows = [...section.rows.filter((row) => !sinks(row)), ...section.rows.filter(sinks)]
+    }
   }
   return out
 }
@@ -240,6 +301,13 @@ type BoxBrowseProps = {
 
   /** What a run would be scoped to: the box being walked, and the ticked cards inside it. */
   onScope?: (scope: { box: number | null; indices: readonly number[] }) => void
+
+  /** FOLD DEPARTED ROWS AWAY (D132). The state is the route's, because the same answer reaches
+   *  the copies list beside this walk; this component draws the control and applies it. Hidden,
+   *  a sold or retired row is not in the walk — except the row the walk is standing on, which
+   *  keeps its receipt (D119). Shown, departed rows sink under the live ones in each section. */
+  hideSold?: boolean
+  onHideSold?: () => void
 }
 
 /* Bring a row into view without moving the page: each scrollable ancestor from the row up to
@@ -537,6 +605,8 @@ export function BoxBrowse({
   onScope,
   goTo,
   reloadToken = 0,
+  hideSold = false,
+  onHideSold,
 }: BoxBrowseProps) {
   const [rows, setRows] = useState<Row[] | null>(null)
   const [failure, setFailure] = useState<Failure | null>(null)
@@ -556,6 +626,9 @@ export function BoxBrowse({
      itself — `[]` is both "not yet" and "no boxes" — and the shelf effect needs to tell those
      apart to know whether a box the hash asked for is genuinely absent or merely not here yet. */
   const [boxesAnswered, setBoxesAnswered] = useState(false)
+  /* WHEN THIS BROWSER LAST OPENED EACH BOX (D132) — the rail's first sort key. Read once and
+     then held here, so a press reorders the rail from the map it just wrote. */
+  const [recency, setRecency] = useState<ReadonlyMap<number, string>>(() => storedBoxRecency())
   /* Every SKU's listing record, off the same read as the cards. Read for `at` — how old the
      live figures are — and never for a second copy of the counts. */
   const [listings, setListings] = useState<Readonly<Record<string, Listing>>>(NO_LISTINGS)
@@ -612,17 +685,71 @@ export function BoxBrowse({
 
   const filtered = searching && matched !== null
 
+  /* THE RAIL'S ORDER IS THE HAND'S (D132): the box opened most recently on this browser first,
+     then the box holding the most cards, then the number — which is the LAST thing the owner
+     thinks in, so it is the last thing this sorts by. `on_hand` and not `cards`: a box full of
+     sold records is not a box worth reaching for. */
+  const order = useMemo(() => {
+    const onHandOf = new Map(
+      boxRecords.map((record) => [
+        record.box,
+        record.on_hand ?? record.cards - record.sold - record.retired - record.moved,
+      ]),
+    )
+    /* UNDER A SEARCH THE BOX WHOSE FULLEST SECTION HOLDS THE MOST LIVE COPIES OF THE ANSWER
+       LEADS (D132, amended on the owner's rule of 2026-09-11): "the largest quantity of
+       whatever I searched, BY SECTION, is the order". A box is ranked by its best section and
+       not by its total, so the rail agrees with the copies list and with where the walk lands:
+       three in one section outranks one-plus-two across two. Sold copies count for nothing —
+       a box full of departed matches is not where the hand goes. With no query this term is
+       zero everywhere and the rail is the hand's again. */
+    const liveMatches = new Map<number, number>()
+    if (filtered) {
+      const perSection = new Map<string, number>()
+      for (const row of inQuery) {
+        const shelf = shelfOf(row)
+        if (typeof shelf !== 'number' || hasDeparted(row.card)) continue
+        const key = `${shelf}/${row.card.section ?? '?'}`
+        const n = (perSection.get(key) ?? 0) + 1
+        perSection.set(key, n)
+        liveMatches.set(shelf, Math.max(liveMatches.get(shelf) ?? 0, n))
+      }
+    }
+    return (a: number, b: number): number => {
+      const ma = liveMatches.get(a) ?? 0
+      const mb = liveMatches.get(b) ?? 0
+      if (ma !== mb) return mb - ma
+      const ra = recency.get(a) ?? ''
+      const rb = recency.get(b) ?? ''
+      if (ra !== rb) return ra > rb ? -1 : 1
+      const ha = onHandOf.get(a) ?? -1
+      const hb = onHandOf.get(b) ?? -1
+      if (ha !== hb) return hb - ha
+      return a - b
+    }
+  }, [boxRecords, recency, filtered, inQuery])
+
   const shelves = useMemo(
-    () => shelvesOf(inQuery, filtered ? [] : boxRecords.map((record) => record.box)),
-    [inQuery, filtered, boxRecords],
+    () => shelvesOf(inQuery, filtered ? [] : boxRecords.map((record) => record.box), order),
+    [inQuery, filtered, boxRecords, order],
   )
 
-  const visible = useMemo(() => {
+  const onShelf = useMemo(() => {
     if (shelf === null) return NO_ROWS
     return inQuery.filter((row) => shelfOf(row) === shelf)
   }, [inQuery, shelf])
 
-  const sections = useMemo(() => sectionsOf(visible), [visible])
+  /* THE WALK, WITH SOLD FOLDED AWAY (D132). The row the walk stands on is kept whatever its
+     state: `selectedRow` is found in this list, a sale must leave its receipt on screen (D119),
+     and a walk-to from the copies list may land on a sold copy (D45). It goes the moment the
+     walk steps off it. */
+  const departedHere = useMemo(() => onShelf.filter((row) => hasDeparted(row.card)).length, [onShelf])
+  const visible = useMemo(() => {
+    if (!hideSold) return onShelf
+    return onShelf.filter((row) => !hasDeparted(row.card) || row.key === selected)
+  }, [onShelf, hideSold, selected])
+
+  const sections = useMemo(() => sectionsOf(visible, !hideSold, selected), [visible, hideSold, selected])
 
   /* How many matches each shelf holds under a query, for the box list. */
   const matchesByShelf = useMemo(() => {
@@ -775,25 +902,53 @@ export function BoxBrowse({
      cannot honour it. That bounds the window: while it is open a live request outranks `prev`,
      which is what lets the late-arriving box win the shelf it was asked for; once closed the
      rule is the old one and a stale hash can never yank a walk somebody has moved. */
+  const shelfAnswered = useRef<string | null>(null)
   useEffect(() => {
     if (shelves.length === 0) return
     const askedFor = wanted.current
-    const honourable = askedFor !== null && shelves.includes(askedFor)
-    if (honourable || boxesAnswered) wanted.current = null
+    const honorable = askedFor !== null && shelves.includes(askedFor)
+    if (honorable || boxesAnswered) wanted.current = null
+    /* A SEARCH LANDS ON A LIVE COPY, NEVER ON A SOLD ONE (D132, the owner's report of
+       2026-09-11: "it pulled up a sold listing as the front runner"). Under a query a shelf
+       counts as holding the answer only if one of its matches is still on hand — a box whose
+       only match has departed is a box the hand does not go to. The box the walk was on keeps
+       the walk only by that test, and the first box in rail order with a live match takes it
+       otherwise. With nothing live anywhere the old rule stands, so a sold-out card still
+       shows where its copies were. */
+    const holdsLive = (candidate: Shelf) =>
+      !filtered || inQuery.some((row) => shelfOf(row) === candidate && !hasDeparted(row.card))
+    const live = shelves.filter(holdsLive)
+    const pool = live.length > 0 ? live : shelves
+    /* A FRESH ANSWER GOES TO THE FULLEST BOX (D132 amended, the owner's rule): `shelves` is in
+       rail order, and under a query the rail leads with the box holding the most live copies
+       of the answer — so on the first render of each new answer the walk takes `pool[0]`
+       rather than staying where it was. A rail press afterwards still moves it anywhere. */
+    const query = filtered ? (results?.query ?? null) : null
+    const fresh = query !== null && query !== shelfAnswered.current
+    shelfAnswered.current = query
     setShelf((prev) => {
-      if (honourable) return askedFor
-      if (prev !== null && shelves.includes(prev)) return prev
-      return shelves[0] ?? null
+      if (honorable) return askedFor
+      if (!fresh && prev !== null && pool.includes(prev)) return prev
+      return pool[0] ?? null
     })
-  }, [shelves, boxesAnswered])
+  }, [shelves, boxesAnswered, filtered, inQuery, results])
 
-  /* The selection follows the filter. When nothing matches it is left alone. */
+  /* The selection follows the filter. When nothing matches it is left alone.
+     A NEW ANSWER LANDS IN THE FULLEST SECTION (D132 amended): the query's answer is drawn by
+     where the most live copies are, so the walk goes to the first live row of the section
+     holding the most of them — the same row the copies list puts at its top — and it does so
+     on every fresh answer, not only when the old selection fell out of the filter. */
+  const answered = useRef<string | null>(null)
   useEffect(() => {
     if (visible.length === 0) return
-    setSelected((prev) =>
-      prev !== null && visible.some((row) => row.key === prev) ? prev : (landingOf(visible)?.key ?? null),
-    )
-  }, [visible])
+    const query = filtered ? (results?.query ?? null) : null
+    const fresh = query !== null && query !== answered.current
+    answered.current = query
+    setSelected((prev) => {
+      if (!fresh && prev !== null && visible.some((row) => row.key === prev)) return prev
+      return (filtered ? landingInFullest(visible) : landingOf(visible))?.key ?? null
+    })
+  }, [visible, filtered, results])
 
   /* The ticks are the box's, so they go when the box does. */
   useEffect(() => {
@@ -886,7 +1041,9 @@ export function BoxBrowse({
    * to the list, arming the deep keys. The landing comes off `inQuery`, not `visible`. */
   const selectShelf = (next: Shelf) => {
     setShelf(next)
-    const landing = landingOf(inQuery.filter((row) => shelfOf(row) === next))
+    if (typeof next === 'number') setRecency(touchBox(next))
+    const rowsThere = inQuery.filter((row) => shelfOf(row) === next)
+    const landing = filtered ? landingInFullest(rowsThere) : landingOf(rowsThere)
     if (landing !== undefined) {
       jumpRef.current = landing.key
       setSelected(landing.key)
@@ -1014,6 +1171,7 @@ export function BoxBrowse({
       setOpened((held) => (held.includes(holding.key) ? held : [...held, holding.key]))
     }
     setShelf(landing)
+    if (typeof landing === 'number') setRecency(touchBox(landing))
     jumpRef.current = jump
     setSelected(jump)
     listRef.current?.focus(FOCUS)
@@ -1069,14 +1227,14 @@ export function BoxBrowse({
         if (!shelves.includes(record.box)) out.push({ shelf: record.box, reachable: false })
       }
       out.sort((a, b) => {
-        const an = typeof a.shelf === 'number' ? a.shelf : Infinity
-        const bn = typeof b.shelf === 'number' ? b.shelf : Infinity
-        if (an !== bn) return an - bn
+        if (typeof a.shelf === 'number' && typeof b.shelf === 'number') return order(a.shelf, b.shelf)
+        if (typeof a.shelf === 'number') return -1
+        if (typeof b.shelf === 'number') return 1
         return String(a.shelf).localeCompare(String(b.shelf))
       })
     }
     return out
-  }, [shelves, filtered, boxRecords])
+  }, [shelves, filtered, boxRecords, order])
 
   const shelfName = shelfBox?.name ?? null
   const shelfChip =
@@ -1125,9 +1283,15 @@ export function BoxBrowse({
                 disabled={!reachable}
                 onClick={() => selectShelf(cell)}
               >
-                <span className="browse-boxcell-num">
-                  {typeof cell === 'number' ? cell : <Icon name={cell === 'pooled' ? 'layers' : 'alert'} size={14} />}
-                </span>
+                {/* NO NUMBER TILE (D132). The name is how the owner knows a drawer, the index
+                    is how the store keys it; an unnamed box still reads `Box N` in the name
+                    column and every cell's accessible name still says `Box N`. The two pseudo
+                    shelves keep their glyph, which was never a number. */}
+                {typeof cell === 'number' ? null : (
+                  <span className="browse-boxcell-glyph">
+                    <Icon name={cell === 'pooled' ? 'layers' : 'alert'} size={14} />
+                  </span>
+                )}
                 <span className="browse-boxcell-text">
                   <span
                     className="browse-boxcell-name"
@@ -1245,6 +1409,18 @@ export function BoxBrowse({
                   : `${visible.length} here · ${inQuery.length} of ${rows?.length ?? 0} match`}
               </span>
             ) : null}
+
+            {onShelf.length === 0 || onHideSold === undefined ? null : (
+              <Chip
+                pressed={hideSold}
+                count={departedHere}
+                className="browse-hidesold"
+                title={hideSold ? 'Sold and retired cards are folded away' : 'Sold and retired cards sink under the live ones'}
+                onClick={onHideSold}
+              >
+                Hide sold
+              </Chip>
+            )}
 
             <span className="bn-spacer" />
 
@@ -1448,20 +1624,21 @@ export function BoxBrowse({
         Expand the box rail
       </Button>
       {cells
-        .filter((cell) => typeof cell.shelf === 'number')
-        .map(({ shelf: cell }) => (
+        .flatMap(({ shelf: cell }) => (typeof cell === 'number' ? [cell] : []))
+        .map((cell) => (
           <button
             key={String(cell)}
             type="button"
             className="browse-boxcell-mini"
             aria-label={`Box ${cell}`}
+            title={boxMap.get(cell)?.name ?? `Box ${cell}`}
             aria-current={cell === shelf ? 'true' : undefined}
             onClick={() => {
               selectShelf(cell)
               setRailCollapsed(false)
             }}
           >
-            {cell}
+            {miniLabel(boxMap.get(cell)?.name ?? null, cell)}
           </button>
         ))}
     </div>

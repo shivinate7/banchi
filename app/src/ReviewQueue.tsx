@@ -54,7 +54,7 @@ type Segment =
 
 const say = (text: string): Segment => ({ kind: 'text', text })
 const value = (text: string): Segment => ({ kind: 'value', text })
-const claim = (raw: string, word: string = humanise(raw)): Segment => ({ kind: 'claim', text: word, raw })
+const claim = (raw: string, word: string = humanize(raw)): Segment => ({ kind: 'claim', text: word, raw })
 
 /** A trimmed field, or null. Every field of `read` is treated as absent-or-blank. */
 function text(field: string | null | undefined): string | null {
@@ -110,7 +110,7 @@ function sentence(entry: QueueEntryWire): Segment[] {
   const number = collectorNumber(entry.read)
   const sortedMembers = claimMembers(entry.read.metadata_finish)
   const toggle = sortedMembers?.join(' or ') ?? null
-  const toggleWord = sortedMembers?.map(humanise).join(' or ') ?? null
+  const toggleWord = sortedMembers?.map(humanize).join(' or ') ?? null
   const detected = text(entry.read.detected_finish)
   const hint = text(entry.read.set_hint)
   const name = text(entry.read.name)
@@ -253,7 +253,7 @@ const FINISH_WORDS: Readonly<Record<string, string>> = {
   non_holo: 'Normal',
 }
 
-function humanise(raw: string): string {
+function humanize(raw: string): string {
   const known = FINISH_WORDS[raw.toLowerCase()]
   if (known !== undefined) return known
   const spaced = raw.replace(/[_-]+/g, ' ').trim()
@@ -907,16 +907,16 @@ export function ReviewQueue() {
     setLookupFailed(null)
     setTyped('')
     if (lookupFor === null) return
-    let cancelled = false
+    let canceled = false
     void reviewCatalog(lookupFor.entry.box, lookupFor.entry.index, '')
       .then((answer) => {
-        if (!cancelled) setLookup(answer)
+        if (!canceled) setLookup(answer)
       })
       .catch((err: unknown) => {
-        if (!cancelled) setLookupFailed(describeFailure(err).message)
+        if (!canceled) setLookupFailed(describeFailure(err).message)
       })
     return () => {
-      cancelled = true
+      canceled = true
     }
     // `lookupKey` rather than the row object, which is rebuilt on every read; `looking` is
     // the second dependency because pressing L does not change the key.
@@ -1727,7 +1727,7 @@ function Claims({ entry, claims }: { entry: QueueEntryWire; claims: Claims }) {
         <span key="sorted" className="review-chip review-chip-sorted" title={`Finish at capture: ${claims.sorted.join(' or ')}`}>
           <Icon name="hand" size={12} />
           <span className="review-chip-key">Sorted as</span>
-          <span className="review-chip-value">{claims.sorted.map(humanise).join(' or ')}</span>
+          <span className="review-chip-value">{claims.sorted.map(humanize).join(' or ')}</span>
         </span>,
       )
     }
@@ -1736,7 +1736,7 @@ function Claims({ entry, claims }: { entry: QueueEntryWire; claims: Claims }) {
         <span key="photo" className="review-chip review-chip-photo" title={`The photograph read as ${claims.photo}`}>
           <Icon name="camera" size={12} />
           <span className="review-chip-key">Photo</span>
-          <span className="review-chip-value">{humanise(claims.photo)}</span>
+          <span className="review-chip-value">{humanize(claims.photo)}</span>
         </span>,
       )
     }
@@ -1756,7 +1756,7 @@ function Claims({ entry, claims }: { entry: QueueEntryWire; claims: Claims }) {
       <span key="conf" className="review-chip review-chip-warn" title={`Confidence: ${confidence}`}>
         <Icon name="eye" size={12} />
         <span className="review-chip-key">Confidence</span>
-        <span className="review-chip-value">{humanise(confidence)}</span>
+        <span className="review-chip-value">{humanize(confidence)}</span>
       </span>,
     )
   }
@@ -2009,11 +2009,11 @@ function Facts({ row }: { row: Row }) {
     { label: 'Card', value: text(entry.read.name) ?? 'not identified' },
     { label: 'Number', value: collectorNumber(entry.read) ?? 'none', mono: true },
     { label: 'Market', value: priceText(entry.market), mono: true },
-    { label: 'Confidence', value: humanise(text(entry.confidence) ?? 'none recorded') },
+    { label: 'Confidence', value: humanize(text(entry.confidence) ?? 'none recorded') },
     { label: 'Set hint', value: text(entry.read.set_hint) ?? 'none', mono: true },
     { label: 'Sorted as', value: claimMembers(entry.read.metadata_finish)?.join(' · ') ?? 'no claim', mono: true },
     { label: 'Photo read', value: text(entry.read.detected_finish) ?? 'none', mono: true },
-    { label: 'Queue', value: row.shadow === undefined ? humanise(row.queue) : `${humanise(row.queue)} · also ${humanise(row.shadow)}` },
+    { label: 'Queue', value: row.shadow === undefined ? humanize(row.queue) : `${humanize(row.queue)} · also ${humanize(row.shadow)}` },
     { label: 'Waiting', value: seenText(entry) },
     { label: 'Position', value: entry.label },
   ]

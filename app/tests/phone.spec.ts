@@ -74,22 +74,32 @@ const auditSource = (mode: Mode) => `(() => {
     // Off-screen or hard against an edge: the probe would leave the viewport and elementFromPoint
     // answers null, which is not a fact about the control.
     if (cx < r || cy < r || cx > innerWidth - r || cy > innerHeight - r) continue
-    /* CLIPPED BY A SCROLLER IS NOT COVERED BY A CONTROL. The palette's list is a 50vh scroller
-       and its last rows sit below the fold of it, so the probe lands on the list and the row
-       reads as unpressable — it is simply not scrolled to. Anything whose centre is outside its
-       nearest scrolling ancestor is skipped rather than judged. */
+    /* CLIPPED BY A SCROLLER IS NOT COVERED BY A CONTROL. The palette's list is a 50vh scroller,
+       and a row near its fold is real ordinary scroll behaviour — not a neighbour crowding it —
+       so a PROBE that falls outside the scroller's own box is excluded rather than counted as a
+       miss. A whole-row skip on the CENTRE alone is not enough: a row whose centre sits just
+       inside the fold can still have its lower probe land past it, on the chrome below the
+       scroller (the palette's own footer, in one measured case), which reads as a miss on a row
+       that is mostly visible and fully reachable one scroll-line down. Anything whose centre is
+       outside its nearest scrolling ancestor is still skipped outright — that row is not
+       rendered where a person would look for it at all. */
     let clip = t.parentElement
     while (clip !== null && clip !== document.body) {
       const o = getComputedStyle(clip).overflowY
       if (o === 'auto' || o === 'scroll') break
       clip = clip.parentElement
     }
+    let clipBox = null
     if (clip !== null && clip !== document.body) {
       const c = clip.getBoundingClientRect()
       if (cy < c.top || cy > c.bottom || cx < c.left || cx > c.right) continue
+      clipBox = c
     }
     const owns = (n) => n !== null && (t.contains(n) || n.contains(t) || chrome(n))
-    const hits = [[-r, 0], [r, 0], [0, -r], [0, r]].map(([dx, dy]) => document.elementFromPoint(cx + dx, cy + dy))
+    const inClip = (x, y) => clipBox === null || (x >= clipBox.left && x <= clipBox.right && y >= clipBox.top && y <= clipBox.bottom)
+    const hits = [[-r, 0], [r, 0], [0, -r], [0, r]]
+      .filter(([dx, dy]) => inClip(cx + dx, cy + dy))
+      .map(([dx, dy]) => document.elementFromPoint(cx + dx, cy + dy))
     const misses = hits.filter((n) => !owns(n)).length
     // rounded, because a 39.6px control reports 40 and a floor nobody can see is a floor nobody fixes
     const small = Math.round(box.width) < FLOOR || Math.round(box.height) < FLOOR

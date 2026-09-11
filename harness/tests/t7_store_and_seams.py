@@ -2183,13 +2183,32 @@ def check_remove_and_box_delete(checks: Checks) -> None:
             "box_not_found",
             "deleting a box nothing has heard of refuses",
         )
+
+        # D134: box 3 holds 3/1 (never identified, on hand), 3/2 (N3), 3/3 (N4), 3/4 (N5).
+        # One of each terminal door, plus an on-hand card carrying a listing hold, so the
+        # refusal and the burial are both exercised in one setup.
+        blob_3 = base64.b64decode(blob(3))
+        blob_5 = base64.b64decode(blob(5))
         with Store().write() as snapshot:
-            snapshot.inventory.set_state("3/3", master.SOLD)
+            # 3/2 is r3 (originally 3/3), which the remove test above assigned SKU
+            # "8608859" to and then released — that leftover claim is cleared here so
+            # this sold card's burial line is asserted against a clean sku=None.
+            snapshot.inventory.cards["3/2"].sku = None
+            snapshot.inventory.set_state("3/2", master.SOLD)
+            snapshot.inventory.retire("3/4", "damaged")
+        move_result = capture_server.do_move_card(3, 3, {"capture_id": "r4", "to_box": 9})
+        moved_to = move_result["to"]
+        with Store().write() as snapshot:
+            snapshot.inventory.set_state("3/1", master.IDENTIFIED, sku="8608859")
+            snapshot.inventory.listing("8608859", condition="Near Mint").set(
+                master.PUSHED, 1
+            )
+
         caught = checks.raises(
             capture_server.BadRequest,
             lambda: capture_server.do_delete_box(3),
-            "a box holding a sold card refuses deletion — those records are history and "
-            "commitments, not clutter (D10, ruling 3)",
+            "an on-hand card holding a listing still refuses deletion — that copy is a "
+            "commitment TCGplayer already knows about (D10, ruling 3)",
         )
         if caught is not None:
             checks.equal(
@@ -2198,24 +2217,36 @@ def check_remove_and_box_delete(checks: Checks) -> None:
                 "in its own code",
             )
             checks.ok(
-                "card 3 is sold" in str(caught),
-                "and the refusal names what stands in the way",
+                "8608859" in str(caught) and "1 pushed" in str(caught)
+                and "is sold" not in str(caught) and "is retired" not in str(caught)
+                and "was moved" not in str(caught),
+                "and the refusal names only the listed copy — the sold, retired and "
+                "moved records no longer stand in the way (D134)",
                 f"message was: {caught}",
             )
         checks.equal(
-            len(Store().read().inventory.cards), 4, "and the refusal deleted nothing"
+            len(Store().read().inventory.cards), 5,
+            "and the refusal deleted nothing — not the departed records it did not name "
+            "either, box 3 plus the moved card's fresh home in box 9",
         )
-        capture_server.do_mark_sold(3, 3, {"undo": True})
+        with Store().write() as snapshot:
+            snapshot.inventory.listing("8608859").set(master.PUSHED, 0)
 
         body = capture_server.do_delete_box(3)
         checks.equal(
-            (body["cards"], body["photos"], body["sidecars"]),
-            (4, 4, 4),
-            "the delete reports what it removed, counted per kind",
+            (body["cards"], body["buried"], body["photos"], body["sidecars"]),
+            (4, 3, 3, 3),
+            "the delete reports what it removed — 4 records, 3 of them departed and "
+            "buried rather than counted as ordinary deletions. The moved tombstone's "
+            "photo and sidecar already relocated with the transplant, so only 3 of the "
+            "4 records still had files at this box for the delete to unlink",
         )
         checks.ok(
             body["review_deleted"] == 1 and body["cache_deleted"] == 1,
-            "including the queue entry and the paid answer",
+            "the queue entry and the paid answer that were re-keyed onto 3/4 by the "
+            "earlier remove are dropped along with the RETIRED record they now belong "
+            "to — a buried record is cleared from every other store exactly as an "
+            "ordinary deletion is",
             f"body was: {body}",
         )
         checks.ok(
@@ -2224,26 +2255,156 @@ def check_remove_and_box_delete(checks: Checks) -> None:
         )
         after = Store().read()
         checks.ok(
-            not after.inventory.cards
+            not after.inventory.records_in(3)
             and after.inventory.boxes.get("3") is None
             and not capture_server.photo_path(3, 1).parent.exists(),
-            "a deleted box is a box the store has never heard of",
+            "a deleted box is a box the store has never heard of — box 9, holding the "
+            "card that moved out before the delete, is untouched",
         )
         checks.ok(
             any(
                 e.get("event") == "box_deleted" and e.get("cards") == 4
-                and "position" not in e
+                and e.get("buried") == 3 and "position" not in e
                 for e in Store().history()
             ),
-            "one `box_deleted` line carries the box and the card count, with no "
-            "`position` key — a box is not at a position",
+            "one `box_deleted` line carries the box, the card count and the buried "
+            "count, with no `position` key — a box is not at a position",
         )
+
+        buried = Store().buried()
+        by_key = {e.get("position"): e for e in buried}
+        checks.equal(
+            sorted(by_key), ["3/2", "3/3", "3/4"],
+            "one `buried` line per departed record, keyed like every other position line",
+        )
+        checks.ok(
+            by_key["3/2"].get("state") == master.SOLD
+            and by_key["3/2"].get("name") == "N3"
+            and by_key["3/2"].get("sku") is None
+            and by_key["3/2"].get("box") == 3
+            and by_key["3/2"].get("index") == 2
+            and by_key["3/2"].get("box_name") is None
+            and by_key["3/2"].get("capture_id") == "r3"
+            and by_key["3/2"].get("order") is None
+            and by_key["3/2"].get("photo_sha256")
+            == hashlib.sha256(blob_3).hexdigest(),
+            "the sold line carries the record whole, including a photograph digest "
+            "computed from the bytes in the moment before they were deleted — this "
+            "card's photo_sha256 was never set by a reclaim",
+            f"line was: {by_key['3/2']!r}",
+        )
+        checks.ok(
+            by_key["3/3"].get("state") == master.MOVED
+            and by_key["3/3"].get("moved_to") == moved_to
+            and by_key["3/3"].get("capture_id") is None
+            and by_key["3/3"].get("photo_sha256") is None,
+            "the moved tombstone's line names where the card went, and carries no "
+            "capture_id or digest — `move_card` clears the first and the file the "
+            "second would be computed from already relocated with the transplant",
+            f"line was: {by_key['3/3']!r}",
+        )
+        checks.ok(
+            by_key["3/4"].get("state") == master.RETIRED
+            and by_key["3/4"].get("retire_reason") == "damaged"
+            and by_key["3/4"].get("name") == "N5"
+            and by_key["3/4"].get("capture_id") == "r5"
+            and by_key["3/4"].get("photo_sha256")
+            == hashlib.sha256(blob_5).hexdigest(),
+            "the retired line names why it left, alongside the same digest and record "
+            "detail the sold line carries",
+            f"line was: {by_key['3/4']!r}",
+        )
+
         _, fresh = capture_server.do_capture(
             {"box": 3, "capture_id": "fresh", "image": blob(9)}
         )
         checks.equal(
             fresh["index"], 1,
             "and recreating the number starts from nothing, like a box never used",
+        )
+
+
+def check_graveyard(checks: Checks) -> None:
+    """GET /graveyard — D134's merge of two sources into one screen.
+
+    A DEPARTED CARD READS THE SAME WAY WHETHER ITS BOX STILL EXISTS OR NOT, which is the
+    whole reason this route is a merge rather than a pass-through of `do_boxes` or
+    `Store().buried()` alone. This walks a card through both: sold and standing, then
+    sold and buried once its box is deleted — the same record, the same shape, and the
+    count never doubles or drops it along the way.
+    """
+    checks.note("")
+    checks.note("GRAVEYARD — D134's two-source merge")
+
+    def blob(i: int) -> str:
+        return base64.b64encode(b"\xff\xd8\xff" + bytes([i]) * 64).decode("ascii")
+
+    with isolated_home():
+        checks.equal(
+            capture_server.do_graveyard(), {"departed": []},
+            "an empty store has nothing departed",
+        )
+
+        # ---------------------------------------------- source 1: standing in a box
+        capture_server.do_capture({"box": 1, "capture_id": "g1", "image": blob(1)})
+        capture_server.do_capture({"box": 1, "capture_id": "g2", "image": blob(2)})
+        with Store().write() as snapshot:
+            snapshot.inventory.record_identification(
+                "1/1", name="Alpha", number="001", printed_total="100", confidence="high",
+            )
+        capture_server.do_mark_sold(1, 1, {})
+
+        body = capture_server.do_graveyard()
+        checks.equal(
+            len(body["departed"]), 1,
+            "the sold card is the one departed row — the on-hand card beside it in the "
+            "same box is not",
+        )
+        row = body["departed"][0]
+        checks.ok(
+            row["how"] == "sold" and row["buried"] is False and row["buried_at"] is None
+            and row["box"] == 1 and row["index"] == 1 and row["name"] == "Alpha",
+            "read straight off the standing record — no burial needed for a card whose "
+            "box still exists",
+            f"row was: {row!r}",
+        )
+
+        # A second box, a second departure, standing too — proves the merge is not
+        # scoped to one box, and gives the ordering assertion below something real to
+        # order.
+        capture_server.do_capture({"box": 2, "capture_id": "g3", "image": blob(3)})
+        with Store().write() as snapshot:
+            snapshot.inventory.record_identification(
+                "2/1", name="Beta", number="002", printed_total="100", confidence="high",
+            )
+        capture_server.do_retire(2, 1, {"reason": "lost"})
+
+        rows = capture_server.do_graveyard()["departed"]
+        checks.equal(len(rows), 2, "two standing departures, from two different boxes")
+        checks.ok(
+            [r["how"] for r in rows] == ["retired", "sold"],
+            "newest departure first — the retirement happened after the sale",
+            f"rows were: {rows!r}",
+        )
+
+        # ---------------------------------------------------- source 2: buried
+        capture_server.do_delete_box(1)
+        rows = capture_server.do_graveyard()["departed"]
+        checks.equal(
+            len(rows), 2,
+            "still two — the sold card moved from one source to the other, never "
+            "doubled and never dropped",
+        )
+        by_how = {r["how"]: r for r in rows}
+        checks.ok(
+            by_how["sold"]["buried"] is True
+            and by_how["sold"]["buried_at"] is not None
+            and by_how["sold"]["box"] == 1
+            and by_how["sold"]["name"] == "Alpha"
+            and by_how["retired"]["buried"] is False,
+            "the deleted box's departure now reads `buried: true` with a `buried_at` "
+            "stamp; the standing one still reads `buried: false`",
+            f"rows were: {rows!r}",
         )
 
 
@@ -2481,24 +2642,30 @@ def check_listing_release(checks: Checks) -> None:
         with Store().write() as snapshot:
             for sku in ("SHARED", "SOLDCOPY"):
                 snapshot.inventory.listings[sku].release(99)
-        caught = checks.raises(
-            capture_server.BadRequest,
-            lambda: capture_server.do_delete_box(4),
-            "a box held open by a SOLD card still refuses once every listing in it is clear "
-            "— the release answers one of the three grounds and must not reach the others",
-        )
-        if caught is not None:
-            checks.ok(
-                "is sold" in str(caught),
-                "and it refuses for the sale, naming it",
-                f"message was: {caught}",
-            )
         refusal(
             checks,
             lambda: capture_server.do_release_box_listings(4, {"confirm": True}),
             "nothing_to_release",
             "and with every stage at zero a replay refuses rather than answering a cheerful "
             "200 — what keeps a stale screen distinguishable from a release that worked",
+        )
+
+        # D134: every listing hold on box 4 is now clear, and the SOLD card at 4/6 no
+        # longer stands on its own — it is buried rather than blocking. The delete D34
+        # was built to unblock (`_listing_hold` is what remains of the gate) succeeds.
+        body = capture_server.do_delete_box(4)
+        checks.equal(
+            (body["cards"], body["buried"]),
+            (6, 1),
+            "all 6 records go — the 5 on-hand cards as ordinary deletions, the one SOLD "
+            "record buried rather than counted among the blockers a listing hold answers",
+        )
+        buried = {e.get("position"): e for e in Store().buried() if e.get("box") == 4}
+        checks.ok(
+            "4/6" in buried and buried["4/6"].get("state") == master.SOLD,
+            "the sold card's departure survives the box as a `buried` line rather than "
+            "as the box's own permanent refusal",
+            f"buried lines were: {buried!r}",
         )
 
 
@@ -7837,7 +8004,7 @@ def check_photo_cache(checks: Checks) -> None:
 
 
 def check_app_serve(checks: Checks) -> None:
-    """The capture server hands out the built app, and does not stop being an API (D132).
+    """The capture server hands out the built app, and does not stop being an API (D135).
 
     WHAT THIS IS GUARDING IS NOT "can Python send a file". It is the seam: a static serve
     bolted onto an API is one ordering mistake away from shadowing a route, and one missing
@@ -7858,7 +8025,7 @@ def check_app_serve(checks: Checks) -> None:
     surface the server has an opinion about.
     """
     checks.note("")
-    checks.note("GET / — the built app, served beside the API (D132)")
+    checks.note("GET / — the built app, served beside the API (D135)")
 
     original = capture_server.APP_DIST
     with tempfile.TemporaryDirectory() as tmp:
@@ -12061,6 +12228,222 @@ def check_cap_flag_refusals(checks: Checks) -> None:
         )
 
 
+def check_emit_send_quantity(checks: Checks) -> None:
+    """A number on the card's row is a SEND quantity, this press only (D7, amended 2026-09-11).
+
+    THE OWNER'S REPORT, ON 2026-09-11: *"I can no longer select quantities to sell at all"*. The
+    ceiling `--cap N` holds every SKU to N live at TCGplayer, counting what is already out — so
+    it cannot say "two of THIS card", and on a SKU with copies already out it says nothing at
+    all. Asked which control they meant, the owner ruled for a number on each row, meaning
+    COPIES TO SEND IN THIS FILE: type 2 and two go, whatever TCGplayer holds, bounded by the
+    copies on hand that are not already listed.
+
+    WHAT IS ASSERTED IS THE FILE AND THE STORE, `check_merged_emit_cap`'s rule. The figure
+    bounds the LISTING and never the RECORD (D7 amended, `check_emit_identity_stamp`): every
+    copy still carries the SKU. A second press asking past what remains gets the remainder
+    and SAYS SO; `0` sends none of the card and is named as the reason; the ceiling and the
+    quantity compose to the tighter; a merged send spends the figure once across the union;
+    and every unusable pair is a sentence before the store is read, on both doors — the flag
+    and the route's parser.
+    """
+    checks.note("")
+    checks.note("EMIT QUANTITY — a number on the card's row, this press only")
+
+    from cli import __main__ as entry
+
+    copies = 5
+    cards = [(3, i, "Articuno", "161", None) for i in range(1, copies + 1)]
+    # A second card, given no figure, so the file always has a row and the ordinary case is
+    # asserted beside the typed one rather than assumed.
+    cards.append((3, copies + 1, "Dunsparce", "120", "normal"))
+
+    def quantity_written(run_dir):
+        rows = tcgcsv.read_export(run_dir.path(runs.IMPORT_MERGED)).rows
+        return {row[tcgcsv.SKU_COLUMN]: row[tcgcsv.QUANTITY_COLUMN] for row in rows}
+
+    with isolated_home():
+        run_dir, _ = seam_run(checks, cards)
+        said = command(
+            checks, "emit", str(run_dir.directory),
+            "--quantity", f"{ARTICUNO_SKU}=2", "--quantity", "999999=1",
+        )
+        written = quantity_written(run_dir)
+        checks.equal(
+            written.get(ARTICUNO_SKU),
+            "2",
+            "THE ROW CARRIES THE FIGURE TYPED, not the five on hand: a send quantity is what "
+            "goes in the file this press, and the file is what D7 is about",
+        )
+        checks.equal(
+            written.get(DUNSPARCE_SKU),
+            "1",
+            "and a card given no figure sends every copy that can go — the ordinary press is "
+            "untouched by a figure on another row",
+        )
+        inventory = Store().read().inventory
+        checks.equal(
+            inventory.listings[ARTICUNO_SKU].pushed,
+            2,
+            "THE STORE AGREES WITH THE FILE: `pushed` is a commitment that a CSV row was "
+            "written, so it follows the figure and not the shelf",
+        )
+        checks.equal(
+            [c.index for c in inventory.positions_for_sku(ARTICUNO_SKU)],
+            list(range(1, copies + 1)),
+            "AND EVERY COPY STILL CARRIES THE SKU. The figure bounds the listing and never the "
+            "record — the same seam D7's identity-stamp amendment closed for the cap",
+        )
+        checks.ok(
+            "quantities" in said and "2 of 5 on hand" in said,
+            f"the report names the card and the figure in a `quantities` block rather than "
+            f"counting it. Got: {said[-400:]!r}",
+        )
+        checks.ok(
+            "does not hold: 999999" in said,
+            "and a SKU named that the send does not hold is named back — a typo that would "
+            "otherwise vanish behind an accepted flag and a written file",
+        )
+
+        # ------------------------------------------------ a second press asks past the shelf
+        said = command(checks, "emit", str(run_dir.directory), "--quantity", f"{ARTICUNO_SKU}=9")
+        checks.equal(
+            quantity_written(run_dir).get(ARTICUNO_SKU),
+            "3",
+            "ASKED 9 WITH THREE UNSENT, THREE GO. Bounded by the copies on hand that are not "
+            "already listed — never by what TCGplayer holds, which is the ceiling's job and "
+            "the reading the owner ruled against for this control",
+        )
+        checks.equal(
+            Store().read().inventory.listings[ARTICUNO_SKU].pushed,
+            5,
+            "and the second press ADDS on top of the first (D54): two then three, never two "
+            "sent twice — `uncommitted_positions` is still what stops a copy going twice",
+        )
+        checks.ok(
+            "asked 9, only 3 can go" in said,
+            f"and the shortfall is NAMED, not clamped in silence. Got: {said[-400:]!r}",
+        )
+
+    # ---------------------------------------------------------- zero, and the ceiling composing
+    with isolated_home():
+        run_dir, _ = seam_run(checks, cards)
+        said = command(checks, "emit", str(run_dir.directory), "--quantity", f"{ARTICUNO_SKU}=0")
+        written = quantity_written(run_dir)
+        checks.ok(
+            ARTICUNO_SKU not in written and written.get(DUNSPARCE_SKU) == "1",
+            "`0` SENDS NONE OF THAT CARD and the file still carries the rest — it is a "
+            "quantity, not a refusal, and not a hold",
+        )
+        inventory = Store().read().inventory
+        listing = inventory.listings.get(ARTICUNO_SKU)
+        checks.equal(
+            listing.pushed if listing else 0,
+            0,
+            "nothing is pushed for a card sent at zero",
+        )
+        checks.equal(
+            len(inventory.positions_for_sku(ARTICUNO_SKU)),
+            copies,
+            "and its five copies are still stamped — asked-for-none is not unknown",
+        )
+        checks.ok(
+            "asked 0, none sent" in said,
+            f"and the zero is named as the reason in the report. Got: {said[-400:]!r}",
+        )
+
+        said = command(
+            checks, "emit", str(run_dir.directory), "--cap", "2", "--quantity", f"{ARTICUNO_SKU}=4",
+        )
+        checks.equal(
+            quantity_written(run_dir).get(ARTICUNO_SKU),
+            "2",
+            "THE CEILING AND THE QUANTITY COMPOSE TO THE TIGHTER: a cap of 2 over a figure of 4 "
+            "sends 2 — the quantity can only ever take copies out of the file, never put in "
+            "copies the ceiling refuses",
+        )
+        checks.ok(
+            "asked 4, only 2 can go" in said,
+            "and that, too, is named",
+        )
+
+    # ---------------------------------------------------------- once across a merged send
+    with isolated_home():
+        first, _ = seam_run(checks, [(3, i, "Articuno", "161", None) for i in range(1, 4)])
+        second, _ = seam_run(checks, [(4, i, "Articuno", "161", None) for i in range(1, 3)])
+        book = corpus.Corpus.read()
+        book.sub_threshold = "floor"
+        book.write()
+        said = command(
+            checks, "emit", str(first.directory), str(second.directory),
+            "--quantity", f"{ARTICUNO_SKU}=4",
+        )
+        checks.equal(
+            quantity_written(second).get(ARTICUNO_SKU),
+            "4",
+            "A MERGED SEND SPENDS THE FIGURE ONCE OVER THE UNION: five copies across two runs, "
+            "asked at 4, is one row of 4 — not 4 per leg and not 3 + 2",
+        )
+        checks.equal(
+            Store().read().inventory.listings[ARTICUNO_SKU].pushed,
+            4,
+            "and the store pushed four, across both runs' copies",
+        )
+        checks.ok(
+            "4 of 5 on hand" in said,
+            f"and the merged report reads the figure off the merged match. Got: {said[-400:]!r}",
+        )
+
+    # ---------------------------------------------------------- an unusable pair is a sentence
+    with isolated_home():
+        run_dir, _ = seam_run(checks, [(3, 1, "Articuno", "161", None)])
+        before = run_dir.path(runs.IMPORT_MERGED).exists()
+        for bad in (
+            ["abc=1"], [f"{ARTICUNO_SKU}=x"], [f"{ARTICUNO_SKU}=-1"], [ARTICUNO_SKU],
+            [f"{ARTICUNO_SKU}=1000"], [f"{ARTICUNO_SKU}=1", f"{ARTICUNO_SKU}=2"],
+        ):
+            argv = ["emit", str(run_dir.directory)]
+            for pair in bad:
+                argv += ["--quantity", pair]
+            with quiet() as buf:
+                code = entry.main(argv)
+            said = buf.getvalue()
+            checks.equal(code, 1, f"`--quantity {' '.join(bad)}` exits 1")
+            checks.ok(
+                "Traceback" not in said and "--quantity" in said,
+                f"and answers in a sentence naming the flag. Got: {said.strip()[:160]!r}",
+            )
+        checks.equal(
+            run_dir.path(runs.IMPORT_MERGED).exists(),
+            before,
+            "AND NOTHING WAS WRITTEN: parsed beside `--cap`, before the store is read",
+        )
+
+    # ---------------------------------------------------------- the route's own door
+    checks.equal(
+        pipeline_routes._quantity_flags({}),
+        [],
+        "the route forwards nothing when no card was given a figure — absence is the ordinary press",
+    )
+    checks.equal(
+        pipeline_routes._quantity_flags({"quantities": {ARTICUNO_SKU: 2, DUNSPARCE_SKU: 0}}),
+        ["--quantity", f"{ARTICUNO_SKU}=2", "--quantity", f"{DUNSPARCE_SKU}=0"],
+        "and turns the screen's map into the flag, one pair per card, zero included",
+    )
+    for bad in (
+        [1], {"abc": 1}, {ARTICUNO_SKU: "2"}, {ARTICUNO_SKU: True},
+        {ARTICUNO_SKU: -1}, {ARTICUNO_SKU: 2.5}, {ARTICUNO_SKU: 1000},
+    ):
+        refused = None
+        try:
+            pipeline_routes._quantity_flags({"quantities": bad})
+        except pipeline_routes.PipelineRefusal as caught:
+            refused = caught
+        checks.ok(
+            refused is not None and getattr(refused, "code", None) == "quantities_invalid",
+            f"the route refuses {bad!r} by name rather than forwarding it into argv",
+        )
+
+
 def check_merged_cap_is_the_tightest(checks: Checks) -> None:
     """Legs carrying different caps merge to the SMALLEST, and a leg with none does not win.
 
@@ -14029,6 +14412,80 @@ def check_listing_commands(checks: Checks) -> None:
 
 
 # ------------------------------------------------------------- boxes, listings, migration
+
+
+def check_section_names(checks: Checks) -> None:
+    """D132 — a section can be named, and the name follows its divider.
+
+    THE BODY SPEAKS ORDINALS AND THE STORE KEEPS DIVIDER INDICES, exactly the split
+    `do_put_box` already makes for `sections`. What is asserted is the round trip through both
+    renderers — `sections_detail[].name` on the box row and `place.section_name` on every card
+    in the section — and the two edges: an ordinal past the layout refuses by name, and a
+    blank clears. Then the divider moves and the name is still on the section that starts at
+    that index, because that is the physical fact: the label is on the plastic divider.
+    """
+    checks.note("")
+    checks.note("D132 — A SECTION CAN BE NAMED, AND THE NAME FOLLOWS ITS DIVIDER")
+
+    with isolated_home():
+        capture_server.do_create_box({"box": 3, "sections": [1, 7]})
+        for _ in range(12):
+            capture_server.do_capture(capture_payload(3))
+
+        row = capture_server.do_put_box(3, {"section_names": {"2": "Rares"}})
+        checks.equal(
+            [(d["section"], d["name"]) for d in row["sections_detail"]],
+            [(1, None), (2, "Rares")],
+            "PUT /boxes/<box> with `section_names` keyed by ordinal names that section on "
+            "`sections_detail`, and an unnamed one stays null rather than blank",
+        )
+        cards = capture_server.do_inventory()["cards"]
+        checks.equal(
+            (cards["3/3"]["place"]["section_name"], cards["3/9"]["place"]["section_name"]),
+            (None, "Rares"),
+            "and every card's place block carries its own section's name, joined at read "
+            "time like `box_name` (D56) — nothing is written onto the card",
+        )
+
+        # An ordinal the layout does not reach is a typo, not a declaration.
+        try:
+            capture_server.do_put_box(3, {"section_names": {"5": "Nope"}})
+            checks.equal(True, False, "naming section 5 of a two-section box is refused")
+        except capture_server.BadRequest as exc:
+            checks.equal(exc.code, "section_unknown", "naming section 5 of a two-section box is refused, as `section_unknown`")
+        checks.equal(
+            [d["name"] for d in capture_server.do_boxes()["boxes"][0]["sections_detail"]],
+            [None, "Rares"],
+            "and the refusal wrote nothing",
+        )
+
+        # The name is on the DIVIDER. Moving the divider one card later keeps the name on the
+        # section that starts there; a layout that drops the divider drops the name with it.
+        row = capture_server.do_put_box(3, {"sections": [1, 8]})
+        checks.equal(
+            [(d["section"], d["start"], d["name"]) for d in row["sections_detail"]],
+            [(1, 1, None), (2, 8, "Rares")],
+            "a moved divider carries its name — the label is on the plastic, not on a number",
+        )
+        row = capture_server.do_put_box(3, {"section_names": {"2": "  "}})
+        checks.equal(
+            [d["name"] for d in row["sections_detail"]],
+            [None, None],
+            "and a blank clears it, the shape a cleared text field sends",
+        )
+        named = [e for e in Store().history() if e["event"] == "section_named"]
+        checks.equal(
+            len(named),
+            2,
+            "two writes changed a name and two `section_named` events carry the maps "
+            "before and after — the refusal wrote none, and the divider move is on its own "
+            "`resectioned` line rather than a second event",
+        )
+        checks.equal(
+            (named[0]["names_from"], named[0]["names_to"]),
+            ({}, {"2": "Rares"}),
+            "the event carries both maps, by ordinal, so the trail says what a section was called",
+        )
 
 
 def check_boxes_and_listings(checks: Checks) -> None:
@@ -19543,7 +20000,7 @@ def check_shipping_routes(checks: Checks) -> None:
 
       no PII on the list wire   the union of every row's keys is asserted as a set, and the
                                 fixture's own first buyer name and street are asserted absent
-                                from the whole serialised answer. A later field is then
+                                from the whole serialized answer. A later field is then
                                 argued for here rather than slipped in.
       the abstention is not in  none of the 39 unjudged order ids appears in the rendered
       the file                  import. Being swept into the parcel lane to be safe is a
@@ -19654,11 +20111,11 @@ def check_shipping_routes(checks: Checks) -> None:
             "is argued for HERE rather than slipped in behind a lookup that still passes",
         )
         cells = list(csv.reader(io.StringIO(fixture)))[1]
-        serialised = json.dumps(answer)
+        serialized = json.dumps(answer)
         checks.ok(
-            cells[1] not in serialised and cells[3] not in serialised,
+            cells[1] not in serialized and cells[3] not in serialized,
             "and the fixture's own first buyer name and first street address appear NOWHERE "
-            "in the serialised answer. Asserted against the file's real cells rather than "
+            "in the serialized answer. Asserted against the file's real cells rather than "
             "against a literal, so the case cannot go stale against a re-exported fixture",
             f"name {cells[1]!r} / street {cells[3]!r}",
         )
@@ -19698,10 +20155,10 @@ def check_shipping_routes(checks: Checks) -> None:
             "parcel weighs, so writing it buys postage for less than the package weighs and "
             "the bill arrives at the far end weeks later",
         )
-        signalled = next(row for row in rows if row["reason"] == "non_card_signal")
-        signalled_line = [row for row in parsed[1:] if row[8] == signalled["order"]]
+        signaled = next(row for row in rows if row["reason"] == "non_card_signal")
+        signaled_line = [row for row in parsed[1:] if row[8] == signaled["order"]]
         checks.equal(
-            [row[7] for row in signalled_line],
+            [row[7] for row in signaled_line],
             [""],
             "AND IT IS STILL EMPTY ON A `non_card_signal` ORDER, which is the case where "
             "carrying it across would look most reasonable: that order was routed BY its "
@@ -21150,6 +21607,7 @@ def run() -> Result:
     check_merged_emit_cap(checks)
     check_merged_emit_uncapped(checks)
     check_cap_flag_refusals(checks)
+    check_emit_send_quantity(checks)
     check_merged_cap_is_the_tightest(checks)
     check_threshold_and_file_shape(checks)
     check_live_reconcile(checks)
@@ -21174,6 +21632,7 @@ def run() -> Result:
     check_supervisor_recovery(checks)
     check_undo(checks)
     check_remove_and_box_delete(checks)
+    check_graveyard(checks)
     check_queues(checks)
     check_queue_starvation(checks)
     check_listing_release(checks)
@@ -21193,6 +21652,7 @@ def run() -> Result:
     check_box_claim_product(checks)
     check_place_neighbors(checks)
     check_open_section(checks)
+    check_section_names(checks)
     check_consolidated_numbering(checks)
     check_concurrency(checks)
     check_origin_gate(checks)
