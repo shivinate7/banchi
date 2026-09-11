@@ -170,8 +170,8 @@ successful build holding the newest source mtime it built from. Stale means any 
 tick, stale means build. The same 300 ms debounce the Python watcher uses, for the same
 reason: an editor saves twice.
 
-**The build is a child, and the swap is atomic.** `npx vite build --outDir dist.next`, cwd
-`app/`, stdout and stderr to the supervisor log under a `[build]` prefix. **Never into `dist/`
+**The build is a child, and the swap is atomic.** `npx vite build --outDir dist.next`, run in
+`app/`, its output to the supervisor log under a `[build]` prefix. **Never into `dist/`
 directly**: Vite empties its output directory before writing, so building in place would 404
 every asset for the second the build takes and race any tab mid-load. On success:
 `dist/ → dist.prev/`, `dist.next/ → dist/`, delete `dist.prev/`. Two renames on one
@@ -180,7 +180,7 @@ delete `dist.next/`, leave `dist/` alone, write `.serve/app-build.json` with
 `{"verdict": "fail", "at": ..., "error": "<first line>"}`, and log it. On success the same
 file says `pass` and the stamp.
 
-**The lockfile is watched, and `npm ci` is the supervisor's too** (owner's answer, 2026-09-11).
+**The lock file is watched, and `npm ci` is the supervisor's too** (owner's answer, 2026-09-11).
 `app/package-lock.json` newer than `app/node_modules/.package-lock.json` means `npm ci` runs
 before the build, so a pull that bumps a dependency is fully self-applying. It fires rarely and
 costs about thirty seconds when it does; the old bundle serves meanwhile. A failed install is
@@ -214,9 +214,9 @@ untouched.
 **`make status` grows one line**: `app: built 14:02 from 3 minutes ago` / `app: building` /
 `app: stale — build failed 14:02, see .serve/supervisor.log` / `app: not built`.
 
-**Proof, in a new selftest target for the supervisor** (`serve-selftest`, which PR 2 adds beside `janitor-selftest` and `merge-selftest` in `check`), against a throwaway checkout the way
+**Proof, in a new self-test target for the supervisor** (`serve-selftest`, which PR 2 adds beside `janitor-selftest` and `merge-selftest` in `check`), against a throwaway checkout the way
 `janitor-selftest` and `merge-selftest` already work — a copied tree with a stub `app/` whose
-"build" is a script that writes one file, because the point is the supervisor's behaviour and
+"build" is a script that writes one file, because the point is the supervisor's behavior and
 not Vite's:
 
 - up with no `dist/` builds before the port opens; the link prints after `dist/index.html`
