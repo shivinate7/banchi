@@ -1209,7 +1209,7 @@ class Supervisor:
             # Exec failed, and the children are already down. Say so and rebuild them rather
             # than leaving a supervisor that supervises nothing.
             log(f"could not restart myself: {exc}")
-            log("  running on with the OLD code. `make restart` to pick up the change.")
+            log("  running on with the OLD code. `make up ARGS=--restart` picks it up.")
             self.stopping = False
             self.start()
 

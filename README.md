@@ -186,24 +186,32 @@ letter to jump anywhere, ⌘← / ⌘→ to step the workflow ring, and a keyboa
 `?` that lists every binding in the product. A screen crash is caught per route; the
 Fulfiller's crash page has one button and no way out of his view.
 
-**`make up` is how you run it.** It starts both servers detached, prints the link to bookmark,
-and — the half worth having — **restarts the capture server by itself whenever you edit Python**
-under `server/`, `store/`, `pipeline/`, `cli/`, `identify/` or `geometry/`. `docs/GATES.md`
-records what that replaces: a run whose timestamps came from a server started before the fix
-that was written for it. `make down` stops both; `make launch-agent` starts them at login, from
-the main checkout only.
+**`make up` is how you run it, and it is one process** (D132). The capture server serves the
+built app out of `app/dist/` beside its own routes, so Banchi and the wire are one origin on one
+port. It prints the link, **restarts itself whenever you edit Python** under `server/`, `store/`,
+`pipeline/`, `cli/`, `identify/` or `geometry/`, and **rebuilds the app whenever you edit a
+screen**. `docs/GATES.md` records what the first of those replaces: a run whose timestamps came
+from a server started before the fix that was written for it. `make down` stops it;
+`make launch-agent` starts it at login, from the main checkout only.
 
-**And it goes in the dock from there** (D108). With the servers up, open `http://localhost:5173`
+**A build is about a second and the old bundle answers all the way through it.** The build goes
+into a sibling directory and is renamed in, because `vite build` empties its output directory
+before it writes — in place, every asset would 404 for as long as the build took, against a live
+rig. A build that fails changes nothing: the last bundle that compiled goes on serving and
+`make status` says the app is stale and why. Vite is still the compiler and only the compiler.
+
+**And it goes in the dock from there** (D108). With the server up, open `http://localhost:8000`
 in Chrome and use *Install page as app* — you get a real bundle with the Banchi mark, its own
 window, its own ⌘-Tab entry and a remembered size, on the same engine and the same profile, so
 the camera permission and the rig's 4K carry over untouched. It is a **client**: the launch agent
 is still what keeps the link answering, and nothing about the dock app owns a server. There is no
 `make` target because there is nothing to automate — the install is one press, once.
 
-`make dev` and `make server` still run the two halves in the foreground, one terminal each, and
-neither watches anything — use them when you want a server you are looking at. Running either
-beside `make up` fails loudly rather than quietly moving to another port, because a server that
-moved would be serving a **different** store (D43). `make screenshot` renders `scripts/views.txt`
+`make dev` runs Vite with hot reload on `:5173` **alongside** `make up`, against that same server
+and the same store; it is the loop for working on screens. `make server` runs the capture server
+in the foreground, watching nothing, and is refused beside `make up` — that collision fails
+loudly rather than quietly moving to another port, because a server that moved would be serving a
+**different** store (D43). `make screenshot` renders `scripts/views.txt`
 into `captures/ui/`, and `make design-check` asserts `docs/DESIGN.md`'s Fulfillment floors in a
 real browser — behind a machine-wide lock, because two checkouts running that suite at once
 starve each other into failures that are not in the code (D122). It refuses rather than queues

@@ -2114,6 +2114,10 @@ On surface / bg / hover it is 5.12 / 4.99 / 4.69:1, clearing 1.4.11's 3:1 on all
 
 **Rejected, and it led until the owner answered: building the app to `dist` and serving it from the capture server.** It collapses two processes into one, and `app/package.json` has carried an unused `build` script the whole time. It is the wrong answer to *this* request, because a built bundle has to be rebuilt — it would ADD a step to remember in exchange for removing one. Vite stays, and it was already the half that worked.
 
+**Amended 2026-09-11 — that rejection is reversed, on the one ground it gave (D132).** The owner asked for an easier way to package this, and the answer to "a built bundle has to be rebuilt" is that the rebuild is now the SUPERVISOR's job: `app/src` and `app/public` get their own watch set, a change there runs `vite build` into a sibling directory and renames it in, and nothing is added to anybody's memory. Measured before it was built: a cold build of this app is 1.2 seconds, which is what makes the old bundle answering meanwhile a moment nobody notices rather than a window to design around. **Everything else in this entry stands and now governs one child instead of two** — the drain, the parse pre-check, the fast-failure cap, the self-watch, the liveness probe and the launch agent are untouched. What is gone from this file is `spawn_vite`; what is gone from the operator's day is a second port. The full argument is D132 and the plan it names is `docs/specs/one-process.md`.
+
+One thing in this entry's own list changed with it, and it is the guard rather than the list: **`make dev` is no longer refused beside a running supervisor.** That guard existed because both ways of starting wanted the same two ports, and the supervisor no longer holds `:5173` at all. `make server` is still refused, because `:8000` is still the supervisor's and the squatter this entry measured is still exactly what would happen.
+
 ### The drain is counted on requests, never on threads
 
 Both halves measured on this machine's Python, and the obvious implementation is a no-op that looks like it works:
@@ -6280,6 +6284,17 @@ reason to revisit it.
 measured carries a drop shadow out to 87.5% and the mark carries none, so it sits flatter on the
 dock's shelf. Section 17 names what would settle it — a sweep at 128, 64 and 32px against the
 same three icons — rather than a value typed into a generator.
+
+### Amended 2026-09-11 — the URL is `:8000`, and a port is part of an origin (D132)
+
+**The installed app is created from `http://localhost:8000` now**, because the capture server serves the page itself and `:5173` belongs to `make dev`. Everything above is unchanged: the same Chrome, the same profile, the same manifest — which is already relative and needed no edit — and the same argument that the dock app is a CLIENT and never a second supervisor.
+
+**What the move costs is one reinstall and two resets, and D132 did not say so when it was settled.** A browser origin is scheme, host AND port, so the installed app at the new address is a different origin to the browser:
+
+- **The camera grant prompts once more.** This entry measured that the grant lives in the profile's content settings, which is true and is keyed by origin — so the rig re-grants on first open. One press.
+- **Every `localStorage` key resets once** (D27): the capture screen's remembered camera and rotation, the theme, the rail, and the two order keys. The rig re-picks its camera and its rotation, which is the only one of the six that costs a moment. This is D27's rename cost repeated, and the same ruling applies for a better reason — a fallback ACROSS origins is not merely undesirable, it is impossible.
+
+**Do it between shifts rather than mid-capture**, for the reason D27 names by name: `banchi.session.captureId` is `sessionStorage` and a capture in flight when the tab closes can burn a position.
 
 ### What would reopen this
 

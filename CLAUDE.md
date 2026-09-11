@@ -83,27 +83,48 @@ make harness        # all NINE verification tests; the Stop hook runs it at turn
                     #   drew for itself. It exists because both Playwright specs over the
                     #   motion trigger stayed green while 38 real cards were refused as an
                     #   empty stand (D81). RECOUNT from `harness/run.py`'s TESTS list.
-make up             # BOTH servers, detached, and the capture server RELOADS ITSELF when you
-                    #   edit Python under server/ store/ pipeline/ cli/ identify/ geometry/ codes/.
+make up             # THE server, detached — ONE PROCESS AS OF 2026-09-11 (D132). The capture
+                    #   server serves `app/dist/` beside the API, so the app and the wire are
+                    #   one origin on one port, and `:5173` belongs to `make dev` alone.
+                    #   It RELOADS ITSELF when you edit Python under
+                    #   server/ store/ pipeline/ cli/ identify/ geometry/ codes/, and REBUILDS
+                    #   THE APP when you edit under app/src or app/public — two watch sets,
+                    #   two actions, and neither can trigger the other: a `.tsx` save never
+                    #   bounces the server a rig is capturing with.
+                    #   A BUILD IS 1.2s AND THE OLD BUNDLE ANSWERS THROUGHOUT. The swap is two
+                    #   renames through a sibling of `app/dist`, because `vite build` empties its own
+                    #   output directory first — in place, every asset would 404 for the
+                    #   second it takes. A FAILED BUILD CHANGES NOTHING: the last bundle that
+                    #   compiled goes on serving and `make status` says so, which is the parse
+                    #   pre-check's rule applied to the other language.
+                    #   `npm ci` runs itself when the lock file's CONTENT moves, so a pull is
+                    #   fully self-applying. Not its mtime — git rewrites those on checkout,
+                    #   and a branch switch would spend thirty seconds re-installing a tree
+                    #   that was already current.
                     #   The SUPERVISOR reloads itself too, by re-exec, when one of the four
                     #   files it is made of changes (D53) — so nothing here goes stale on a
                     #   `git pull`. The Makefile is not one of them: nothing reads it at run
                     #   time.
-                    #   Prints the link. `make down` stops them, `make restart` bounces them.
-                    #   Do NOT run it alongside `make dev`/`make server` — the second loses,
-                    #   loudly (strictPort, EADDRINUSE), which is deliberate: a server that
-                    #   quietly moved would serve a DIFFERENT store (D43).
+                    #   Prints ONE link. `make down` stops it; `make up ARGS=--restart`
+                    #   bounces it, and `make restart` still works and says the new spelling.
+                    #   Do NOT run it alongside `make server` — the second loses, loudly
+                    #   (EADDRINUSE), which is deliberate: a server that quietly moved would
+                    #   serve a DIFFERENT store (D43). `make dev` alongside is FINE and is the
+                    #   point — the supervisor no longer holds :5173.
 make launch-agent   # start at login, so the link is always live. MAIN TREE ONLY — it refuses
                     #   in a worktree, whose plist would outlive the worktree. ARGS=--remove.
                     #   THE DOCK APP IS A CLIENT OF THIS AND NEVER A SECOND COPY OF IT (D108):
-                    #   Chrome's `Install page as app` over http://localhost:5173 writes a real
+                    #   Chrome's `Install page as app` over http://localhost:8000 writes a real
                     #   bundle with its own icon, window and ⌘-Tab entry, on the same engine and
                     #   the same profile — so the camera grant and the rig's 4K carry unchanged.
                     #   A wrapper that also started the server would be D53's two-supervisor
                     #   defect with a GUI in front of it. There is no `make` target: the install
                     #   is one press in Chrome, once, and `app/public/manifest.webmanifest` is
                     #   the part of it that lives here.
-make dev            # Vite app. :5173 in the main tree, its own port in a worktree. Blocks.
+make dev            # Vite with HOT RELOAD. :5173 in the main tree, its own port in a worktree.
+                    #   Blocks. It runs BESIDE `make up` since D132 and talks to that server
+                    #   over the same store — the supervisor stopped holding this port, so the
+                    #   refusal that used to stand here is gone. `make server` is still refused.
 make server         # Python capture server. :8000 in the main tree, its own port in a
                     #   worktree — it prints which, and whose store it is serving. Blocks.
 make screenshot     # renders scripts/views.txt to captures/ui/. Needs `make dev` running.
@@ -785,9 +806,9 @@ A screen is not finished because it compiles.
 
   **`make launch-agent` keeps that process alive at login over the owner's real store**, so the
   thing on `:8000` in the main checkout is theirs. Run the full suite ONCE at the end rather than
-  after every edit, and **never `make restart` / `make down` / `make up` to fix a wedge** — `down`
-  and `restart` now refuse there without `--confirm`, and the refusal is the answer, not an
-  obstacle. The drain is 40s and a kill past it cuts a write in flight; that same session did
+  after every edit, and **never `make up ARGS=--restart` / `make down` / `make up` to fix a
+  wedge** — `down` and a restarting `up` refuse there without `--confirm`, and the refusal is
+  the answer, not an obstacle. The drain is 40s and a kill past it cuts a write in flight; that same session did
   exactly that and crashed Python out from under the owner mid-use.
 
 - **The join key is PER-GAME, and matching is normalized on both sides.** Pokemon composes

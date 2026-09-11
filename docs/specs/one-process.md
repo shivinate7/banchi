@@ -1,8 +1,14 @@
 # One process serves the product
 
-**Status: specified 2026-09-11, not built.** D132 is the decision; this file is the plan. The
-three PRs in §9 are the whole of it, in order, and each names what proves it. Nothing in this
-file is running anywhere.
+**Status: specified and BUILT 2026-09-11.** D132 is the decision and this file is the plan;
+all three PRs in §9 landed the same day, in order, each with the proof it names. What is NOT
+done is in §10 — the dock app's reinstall and the LAN check from a phone are both presses on
+the owner's own machine and neither has been made.
+
+**Where each section now stands.** §3 and §4 describe code that exists and is covered:
+`check_app_serve` in T7 (24 assertions, two mutations) and `serve-selftest` (25 assertions,
+five mutations). §5 is written and waiting on the two presses. §1's three rulings are the
+owner's own and were taken after the first draft of this file.
 
 ## 0. What this is
 
@@ -308,12 +314,37 @@ recorded here so it is not re-derived, and not planned further because no such p
   `:5173`. Same engine, same profile, new origin. There is no reason they would not, and it
   is the one thing here that touches the rig, so it is measured rather than assumed.
 
-## 9. The PRs, in order, and what each must show
+## 9. The PRs, in order, and what each showed
 
-| PR | Lands | Proof | Owner sees |
+| PR | Landed | Proof | What the owner sees |
 |---|---|---|---|
-| 1 | The static serve in `capture_server.py` | T7's nine assertions, `make harness` green | Nothing changes on their machine |
-| 2 | The supervisor's build, the verbs, `make status`'s line, the guard narrowed | the new `serve-selftest` target, the `app build files` audit row, `make check` green | `make up` prints one link; two processes become one |
-| 3 | The dock app at `:8000`, `lan-check`, the docs and both amendments | `make docs-audit` green, `make lan-check` green from the phone | One reinstall, one camera prompt, one theme reset |
+| 1 | The static serve in `capture_server.py` | T7's `check_app_serve`, 24 assertions; `make harness` green | Nothing changed on their machine |
+| 2 | The supervisor's build, the verbs, `make status`'s line, the guard narrowed | `serve-selftest`, 25 assertions over two throwaway trees; `make check` green | `make up` prints one link; two processes become one |
+| 3 | `lan-check` on the capture port, the docs, D53 and D108 amended | `make docs-audit` green; `make lan-check` still to run from the phone | One reinstall, one camera prompt, one theme reset |
 
-PR 2 is the one to read before merging. PR 1 and PR 3 change nothing a person notices.
+**PR 1 narrowed as it was built, and the narrowing is the interesting part.** The plan said the
+fallback would serve `index.html` for any unmatched path, which is what every SPA host does. Written
+that way and measured against this server, it turned `GET /boxes/abc` into 200 HTML and would have
+made a dozen named JSON refusals unreachable with nothing failing. The hash router is why it is not
+needed: `App.tsx` never puts a screen in the path, so the only paths the app has are `/` and its own
+asset files, and `app_claims` is exactly that. The catch-all was withdrawn.
+
+**PR 2 changed one of the plan's own mechanisms.** `npm ci` was to fire when `package-lock.json`
+was newer than npm's receipt. Measured in this worktree: it was, with identical content, because
+git rewrites a file's modification time on checkout — so every branch switch would have spent thirty seconds
+re-installing a current tree. The comparison is a content digest now. The BUILD still compares
+those times, and the asymmetry is deliberate: a spurious build costs 1.2 seconds.
+
+## 10. What is NEITHER built nor recorded: the two presses
+
+Both are the owner's, on their own machine, and neither can be done from a session:
+
+1. **Reinstall the dock app at `http://localhost:8000`** and remove the old one at `:5173`.
+   Expect one camera prompt and one reset of the six device-local keys; §5 says why and D108's
+   amendment records it. Between shifts, not mid-capture.
+2. **Run `make lan-check` with the phone on the network.** The rows now press `:8000` for the
+   app; nothing about the UniFi record changes, and the phone's bookmark moves to that port.
+
+Until the first of those, the main checkout serves the app on `:8000` and the dock icon still
+points at `:5173`, which after a `make up` on the new code is a Chrome error page. That is the
+one moment this change is visible as a chore, and it is one press.

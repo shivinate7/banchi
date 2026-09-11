@@ -1292,7 +1292,7 @@ COMPONENTS = [
                 # hermetic: it answers from the tree alone. A row that resolves DNS and needs a
                 # server up would go red on a train and in every worktree, and a check that
                 # fails for reasons unrelated to the commit is one people learn to ignore.
-                "governed_by": ["D43", "D47", "D53"],
+                "governed_by": ["D43", "D47", "D53", "D132"],
             },
             "janitor.py": {
                 "does": "the sweep: what a finished session left behind, and — where it is "
