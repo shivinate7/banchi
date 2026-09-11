@@ -140,7 +140,40 @@ const auditSource = (mode: Mode) => `(() => {
     // rounded, because a 39.6px control reports 40 and a floor nobody can see is a floor nobody fixes
     const small = Math.round(box.width) < FLOOR || Math.round(box.height) < FLOOR
     const covered = !owns(document.elementFromPoint(cx, cy))
-    const fails = mode === 'box' ? small : misses > 0
+    let fails = mode === 'box' ? small : misses > 0
+    /* A BAR THE CONTENT SCROLLS UNDER IS NOT A NEIGHBOUR CROWDING THE CONTROL, and only one of
+       those two is a floor violation. D117 states the property this sweep is for in as many
+       words — the ship bar left Pick a run "visible, and impossible to press at any scroll
+       position" — and what the sweep actually asked until now was narrower: pressable at
+       whichever offset the scroll steps happened to sample. Those differ for every control that
+       passes UNDER a sticky or fixed bar on its way up the page, and the difference is what made
+       #/inventory red on the runner and green on this Mac.
+       SO A MISS IS RE-ASKED WITH THE CONTROL SCROLLED CLEAR, at the one offset that is maximally
+       far from both the top and the bottom chrome: its own centre at the middle of the viewport.
+       REAL CROWDING SURVIVES THIS AND BAR OCCLUSION DOES NOT, which is what makes it safe — a
+       sibling that paints over a pad moves WITH the control and crowds it at every offset, while
+       a bar the page scrolls under is behind it at some offsets and not at others. Measured on
+       #/inventory at 390, every whole-pixel offset: the queued notice's link is intercepted by
+       .browse-mobilebar at 101 of 558 and clean at 457, and .browse-details-summary by the
+       fixed .browse-actionbar at 99 of 197 — that second one the 40-step sweep has simply
+       never landed on, so naming the bars one at a time would have left it armed.
+       THE SIZE FLOOR IS NOT TOUCHED and neither is #/gallery's box sweep: scrolling cannot
+       make a 22px control 40px, so the retry is asked only of the probe. */
+    if (fails && mode === 'probe' && clipBox === null) {
+      const y0 = window.scrollY
+      window.scrollTo(0, y0 + cy - innerHeight / 2)
+      const b2 = t.getBoundingClientRect()
+      const cx2 = b2.left + b2.width / 2, cy2 = b2.top + b2.height / 2
+      if (cx2 >= r && cy2 >= r && cx2 <= innerWidth - r && cy2 <= innerHeight - r) {
+        const clean = [[-r, 0], [r, 0], [0, -r], [0, r]]
+          .every(([dx, dy]) => owns(document.elementFromPoint(cx2 + dx, cy2 + dy)))
+        if (clean) fails = false
+      }
+      // RESTORE IT EXACTLY. The caller's loop scrolls by a fraction of the viewport and reads
+      // window.scrollY back to decide whether the page moved at all; a retry that left the
+      // page somewhere else would end the sweep early and report the rest of the route clean.
+      window.scrollTo(0, y0)
+    }
     if (!fails) continue
     const cls = (t.className + '').split(' ').filter(Boolean)
     const key = t.tagName.toLowerCase() + (cls.length ? '.' + cls[0] : '')
