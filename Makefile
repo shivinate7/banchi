@@ -4,7 +4,7 @@
 # the project would be built on top of — `make check` green means every check ran.
 
 .DEFAULT_GOAL := help
-.PHONY: help status map explain harness check ignore-check docs-audit vale audit-self-test verdict-selftest githooks-selftest merge merge-selftest revert-guard revert-selftest port-agreement set-hint-agreement screen-freshness sigil-check suite-lock-selftest icloud-sweep audit-history dev server screenshot design-check design-check-quiet lint typecheck venv launch-config worktree-setup hooks up down launch-agent demo demo-photos demo-seed demo-record demo-static demo-preview demo-freshness
+.PHONY: help status map explain harness check ignore-check docs-audit vale audit-self-test verdict-selftest githooks-selftest merge merge-selftest revert-guard revert-selftest claim-ids claim-selftest port-agreement set-hint-agreement screen-freshness sigil-check suite-lock-selftest icloud-sweep audit-history dev server screenshot design-check design-check-quiet lint typecheck venv launch-config worktree-setup hooks up down launch-agent demo demo-photos demo-seed demo-record demo-static demo-preview demo-freshness
 
 # Prefer the venv if it exists, so `make harness` works without anyone remembering to
 # activate anything. Falls back to system python3, which still runs T2-T5 — T1 needs the
@@ -66,6 +66,8 @@ help:
 	@echo "  make revert-guard  does this branch put a file back the way main had it before a"
 	@echo "                    commit main already carries? Refuses an unexplained reversal (D133)."
 	@echo "  make revert-selftest  the guard, proved by rebuilding PR #218/#221 in a throwaway repo."
+	@echo "  make claim-ids        what the merge will allocate for this branch's slug ids. ARGS=--write."
+	@echo "  make claim-selftest   the claimer, proved with main moving underneath the branch."
 	@echo "  make janitor-selftest  the sweep, proved against a throwaway clone. In \`check\`, never in the hook."
 	@echo "  make reap-selftest  the kill guard, proved by pointing it at what it must not kill."
 	@echo "  make suite-lock-selftest  one browser fleet at a time, proved by violating it."
@@ -85,8 +87,9 @@ help:
 	@echo "  make lan-check    is the LAN URL still good? DNS, both servers, and a real"
 	@echo "                    write. Reaches the network, so it never gates a commit."
 	@echo "  make check        harness + docs-audit + audit-self-test + githooks-selftest +"
-	@echo "                    merge-selftest + revert-selftest + revert-guard + janitor-selftest +"
-	@echo "                    reap-selftest + suite-lock-selftest + serve-selftest +"
+	@echo "                    merge-selftest + revert-selftest + claim-selftest + revert-guard +"
+	@echo "                    janitor-selftest + reap-selftest + suite-lock-selftest +"
+	@echo "                    serve-selftest +"
 	@echo "                    verdict-selftest + port-agreement + set-hint-agreement +"
 	@echo "                    screen-freshness + sigil-check + ignore-check + lint +"
 	@echo "                    vale + typecheck"
@@ -383,6 +386,7 @@ check:
 	@$(MAKE) --no-print-directory githooks-selftest
 	@$(MAKE) --no-print-directory merge-selftest
 	@$(MAKE) --no-print-directory revert-selftest
+	@$(MAKE) --no-print-directory claim-selftest
 	@$(MAKE) --no-print-directory revert-guard
 	@$(MAKE) --no-print-directory janitor-selftest
 	@$(MAKE) --no-print-directory reap-selftest
@@ -530,6 +534,18 @@ revert-guard:
 # the guard by defeating it.
 revert-selftest:
 	@python3 scripts/revert-audit.py selftest
+
+# A BRANCH DOES NOT TAKE A DECISION NUMBER (D-merge-time-ids). It writes a slug and this
+# allocates the number against main INSIDE `make merge`, which is the first moment the
+# allocation's only input — what main has taken — is knowable. Reach for this by hand only to
+# see what a merge would claim; the merge runs it for you.
+claim-ids:
+	@python3 scripts/claim-ids.py $(ARGS)
+
+# The claimer, proved where it can actually be wrong: a throwaway repository in which main
+# moves underneath the branch. In `check`, never in the git hook — it writes (D18).
+claim-selftest:
+	@python3 scripts/claim-selftest.py
 
 # HERE BECAUSE TWO LANGUAGES HOLD ONE ALGORITHM AND NEITHER CAN IMPORT THE OTHER (D43).
 # Python serves the capture port, TypeScript addresses it, and a disagreement is silent and

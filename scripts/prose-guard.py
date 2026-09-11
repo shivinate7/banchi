@@ -71,8 +71,15 @@ MAX_RULINGS = 3
 # THE CEILING IS WRITTEN AS A WORD AND NEVER AS AN ID, here and in scripts/docs-audit.py:
 # this file is scanned for citations, so an id past the end of docs/DECISIONS.md is a
 # dangling one wherever it is written, comment or not.
-HEADING_RE = re.compile(r"^##\s+(D[1-9][0-9]{0,2})\s*[—-]\s*(.+)$")
-ANY_H2_RE = re.compile(r"^##\s+(D[1-9][0-9]{0,2})\b")
+# AND AN ID IS A SLUG UNTIL THE MERGE CLAIMS IT (D72, rewritten 2026-09-11). A branch cannot
+# allocate a number — what main will take is not knowable until the merge — so it writes
+# `## D140` and `scripts/claim-ids.py` substitutes at merge time. This file is
+# scanned for citations by the audit, so the two shapes are spelled once here and the id
+# bound stays docs-audit's `_ID_ANY`; widening one of the two and not the other is how the
+# three-digit ceiling went silently vacuous once already.
+_ID = r"(?:[1-9][0-9]{0,2}|-[a-z][a-z0-9]*(?:-[a-z0-9]+)+)"
+HEADING_RE = re.compile(r"^##\s+(D" + _ID + r")\s*[—-]\s*(.+)$")
+ANY_H2_RE = re.compile(r"^##\s+(D" + _ID + r")\b")
 BOLD_RE = re.compile(r"\*\*(.+?)\*\*")
 # Fenced blocks are lifted out BEFORE inline backticks are read, and this was a real
 # defect rather than a refinement. The inline pattern is `` `([^`]+)` ``, so a ``` fence

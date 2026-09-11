@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
-"""DOES THIS CHANGE REACH WHAT A BROWSER DRAWS? (D140)
+"""DOES THIS CHANGE REACH WHAT A BROWSER DRAWS? (D-ci-browser-scope)
 
 `.github/workflows/check.yml`'s `design-check` job is three shards of roughly nine minutes
-each, so one push costs about 27 billed runner-minutes, and until D140 it ran on every push
+each, so one push costs about 27 billed runner-minutes, and until D-ci-browser-scope it ran on every push
 to every branch. Measured 2026-09-11: seven pull requests plus re-runs landed in one evening
 and most touched no screen code at all — a docs auditor (#260), a key-rotation fix (#261), a
 harness test (#267), a supervisor guard (#262). Each paid the full browser cost, three times
@@ -47,7 +47,7 @@ regardless — D136's pass record is the only thing that skips the matrix on mai
         what this branch would land.
     scripts/browser-scope.py history [N]
         The verdict for each of main's last N first-parent commits, which is how the
-        measurement in D140 was taken and how it is re-taken.
+        measurement in D-ci-browser-scope was taken and how it is re-taken.
     scripts/browser-scope.py list
     scripts/browser-scope.py selftest
 
@@ -363,7 +363,7 @@ def write_output(run: bool) -> None:
 
 
 def history(count: int) -> int:
-    """The verdict for main's last `count` first-parent commits — the D140 measurement."""
+    """The verdict for main's last `count` first-parent commits — the D-ci-browser-scope measurement."""
     out = git("log", "--first-parent", "--format=%H %s", f"-{count}", "main")
     if out is None:
         out = git("log", "--first-parent", "--format=%H %s", f"-{count}")

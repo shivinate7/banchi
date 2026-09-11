@@ -72,7 +72,7 @@
 # was already partial. No write to git, no commit status, nothing D42 forbids — an artifact
 # is the one thing a job here may leave behind.
 #
-# AND NOT ON A PULL REQUEST THAT REACHES NOTHING A BROWSER DRAWS (D140). D136's gate answers
+# AND NOT ON A PULL REQUEST THAT REACHES NOTHING A BROWSER DRAWS (the browser-scope entry in docs/DECISIONS.md). D136's gate answers
 # one question — has this exact TREE passed? — and a docs-only branch is always a new tree, so
 # it paid the full matrix on every push: measured 2026-09-11, seven PRs plus re-runs in one
 # evening, most touching no screen code, at about 27 billed minutes each, until the account's
@@ -220,7 +220,7 @@ jobs:
           fi
 
   # DOES THE CHANGE REACH WHAT A BROWSER DRAWS? Asked on every event and ACTED ON only for a
-  # pull request (D140) — `scripts/browser-scope.py` answers RUN for a push and a dispatch and
+  # pull request (the browser-scope entry in docs/DECISIONS.md) — `scripts/browser-scope.py` answers RUN for a push and a dispatch and
   # prints what it would have said, so the mechanism is exercised on every run. `fetch-depth: 0`
   # because the answer is a diff from the merge-base against the PR's base, and the classifier
   # answers RUN, out loud, whenever it cannot compute one. Nothing here writes.
@@ -252,7 +252,7 @@ jobs:
     needs: [already-passed, browser-scope]
     # TWO GATES, EACH SKIPPING ONLY ON ITS OWN EXPLICIT ANSWER. `!cancelled()` replaces the
     # implicit `success()`, so a gate job that FAILED releases the matrix instead of skipping
-    # it — a broken lookup or a broken classifier is not a reason to test less (D140). Until
+    # it — a broken lookup or a broken classifier is not a reason to test less (the browser-scope entry in docs/DECISIONS.md). Until
     # this line, a failed `already-passed` skipped the matrix; now it runs it.
     if: ${{ !cancelled() && needs.already-passed.outputs.skip != 'true' && needs.browser-scope.outputs.run != 'false' }}
     runs-on: ubuntu-latest
