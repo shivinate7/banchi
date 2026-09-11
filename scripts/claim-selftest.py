@@ -13,7 +13,11 @@ and never in the git hook: it writes, into a directory it creates and destroys (
 
 from __future__ import annotations
 
+import contextlib
+import importlib.util
+import io
 import re
+import shutil
 import subprocess
 import sys
 import tempfile
@@ -22,6 +26,37 @@ from typing import Tuple
 
 ROOT = Path(__file__).resolve().parent.parent
 CLAIMER = ROOT / "scripts" / "claim-ids.py"
+MERGER = ROOT / "scripts" / "merge-pr.py"
+
+
+def merge_pr_module():
+    """`scripts/merge-pr.py`, imported, so `claim_half` can be driven directly.
+
+    IT NEVER REACHES `gh` IN PREVIEW. `claim_half`'s `if not confirm: return 0` sits above its
+    first `gh` call, so every precondition in it is exercisable with no network, no pull
+    request and no stub. Nothing drove this function before D143, which is the
+    whole reason its precondition could sit seven lines out of place and look tested.
+    """
+    spec = importlib.util.spec_from_file_location("merge_pr", MERGER)
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
+
+
+def drive_claim_half(repo: Path, branch: str, number: int = 99) -> Tuple[str, int]:
+    """`claim_half` in PREVIEW against `repo`, with everything it prints captured."""
+    buf = io.StringIO()
+    with contextlib.redirect_stdout(buf):
+        code = merge_pr_module().claim_half(str(repo), number, branch, False)
+    return buf.getvalue(), code
+
+
+def with_claimer(repo: Path) -> None:
+    """Put the claimer where `merge-pr.py` looks for it — `scripts/claim-ids.py`, RELATIVE to
+    the checkout it is pointed at. A real tree has one; without it the readers below the
+    precondition cannot run at all, and an arm would pass for the wrong reason."""
+    (repo / "scripts").mkdir(parents=True, exist_ok=True)
+    shutil.copy(CLAIMER, repo / "scripts" / "claim-ids.py")
 
 # THE FIXTURE'S IDS ARE COMPOSED, NEVER WRITTEN, on this repo's standing rule for test data.
 # This file sits inside the auditor's own haystack, so a literal slug here IS a citation
@@ -347,6 +382,32 @@ def main() -> int:
            "while the CLAIM still refuses the same ref — allocating against nothing is the "
            "guess D140 exists to delete", out)
 
+        print("\n  -- mid-merge there is nothing to check yet --")
+        # THE DOCUMENTED PRE-MERGE STEP PRODUCES THIS: fetch, merge origin/main, resolve,
+        # push. The tree holds the other side's entries while the merge base has not moved,
+        # so every id that merge brought in reads as this branch's own.
+        eighth = tmp / "eighth"
+        eighth.mkdir()
+        mid = build(eighth)
+        git(mid, "checkout", "-q", "-b", "feature")
+        write(mid, "docs/DECISIONS.md", DECISIONS_MAIN + f"\n## {SD} — Third\n\nbody\n")
+        git(mid, "add", "-A")
+        git(mid, "commit", "-qm", "the branch writes a slug")
+        other2 = eighth / "other"
+        subprocess.run(["git", "clone", "-q", str(eighth / "origin.git"), str(other2)],
+                       stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, check=False)
+        write(other2, "docs/DECISIONS.md",
+              DECISIONS_MAIN + f"\n## {D(3)} — main's own third\n\nbody\n")
+        git(other2, "add", "-A")
+        git(other2, "commit", "-qm", "main takes three")
+        git(other2, "push", "-q", "origin", "main")
+        git(mid, "fetch", "-q", "origin", "main")
+        conflicted = git(mid, "merge", "origin/main")
+        out, code = claim_rc(mid, "--stale")
+        ok(code == 0 and "merge is in progress" in out,
+           "a tree mid-merge is ALLOWED rather than told to un-claim an id that belongs to "
+           "the work it is merging in", out + "\n" + conflicted)
+
         print("\n  -- with no shared commit there is no baseline, and it refuses --")
         git(hole, "checkout", "-q", "--orphan", "unrelated")
         write(hole, "docs/DECISIONS.md", DECISIONS_MAIN)
@@ -356,6 +417,101 @@ def main() -> int:
         ok(code == 2 and "share no commit" in out,
            "a branch sharing no commit with the ref is refused rather than measured against "
            "nothing, which would report every id main holds as a collision", out)
+
+
+        # ----------------------------------- D143: which tree is being read
+        # THE PRECONDITION WAS SEVEN LINES TOO LATE, and every test stood in the right place,
+        # so nothing saw it. On 2026-09-11 `make merge` was run from the primary checkout
+        # standing on `main`: the claim half read MAIN, found no slug in it, printed
+        # `nothing to claim`, and merged the pull request's slug onto main verbatim.
+        print("\n  -- the claim half is pointed at a tree that is not the PR's --")
+        sixth = tmp / "sixth"
+        sixth.mkdir()
+        tree = build(sixth)
+        with_claimer(tree)
+        git(tree, "add", "-A")
+        git(tree, "commit", "-qm", "the checkout carries the claimer, as a real one does")
+        git(tree, "checkout", "-q", "-b", "feature")
+        write(tree, "docs/DECISIONS.md", DECISIONS_MAIN + f"\n## {SD} — Third\n\nbody\n")
+        git(tree, "add", "-A")
+        git(tree, "commit", "-qm", "the branch writes a slug")
+
+        out, code = drive_claim_half(tree, "feature")
+        ok(code == 0 and "REFUSED" not in out,
+           "standing ON the PR's branch, the claim half proceeds — the precondition does not "
+           "over-refuse", out)
+
+        git(tree, "checkout", "-q", "main")
+        module = merge_pr_module()
+        ok(module.claims_pending(str(tree)) == [],
+           "`main` really does have nothing pending, which is the condition that made the old "
+           "ordering return 0 before it ever reached the precondition",
+           str(module.claims_pending(str(tree))))
+
+        out, code = drive_claim_half(tree, "feature")
+        ok(code != 0 and "REFUSED" in out,
+           "THE DEFECT: from `main`, with the slug on the PR's branch and nothing pending in "
+           "`main` itself, the claim half REFUSES instead of reporting `nothing to claim`",
+           out)
+        ok("main" in out and "feature" in out,
+           "and it names both trees — the one it stands in and the one it should be in", out)
+
+        out, code = drive_claim_half(tree, "")
+        ok(code != 0 and "did not report a head branch" in out,
+           "a pull request with no head branch is refused rather than compared against an "
+           "empty string, which would match no tree and refuse for the wrong reason", out)
+
+        print("\n  -- and the staleness reader is no longer blind from the wrong tree --")
+        # #272 closed "an allocated id can go stale". It reads the CHECKED-OUT TREE, so from
+        # `main` it computed "what does this tree add over its merge base" — nothing — and
+        # reported clean while the branch's stale number sat there. Fixing the claim alone
+        # would have left that green row asserting something nobody had checked.
+        seventh = tmp / "seventh"
+        seventh.mkdir()
+        blind = build(seventh)
+        with_claimer(blind)
+        git(blind, "add", "-A")
+        git(blind, "commit", "-qm", "the checkout carries the claimer")
+        git(blind, "checkout", "-q", "-b", "feature")
+        write(blind, "docs/DECISIONS.md",
+              DECISIONS_MAIN + f"\n## {D(3)} — claimed honestly at the time\n\nbody\n")
+        git(blind, "add", "-A")
+        git(blind, "commit", "-qm", "the branch claims a number")
+        rival2 = seventh / "rival"
+        subprocess.run(["git", "clone", "-q", str(seventh / "origin.git"), str(rival2)],
+                       stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, check=False)
+        write(rival2, "docs/DECISIONS.md",
+              DECISIONS_MAIN + f"\n## {D(3)} — main takes it afterwards\n\nbody\n")
+        git(rival2, "add", "-A")
+        git(rival2, "commit", "-qm", "main takes the same number")
+        git(rival2, "push", "-q", "origin", "main")
+        git(blind, "fetch", "-q", "origin", "main")
+
+        out, code = drive_claim_half(blind, "feature")
+        ok(code != 0 and "gone stale" in out,
+           "standing on the branch, the stale number is caught — #272's guard, unchanged", out)
+
+        git(blind, "checkout", "-q", "main")
+        bare, _ = claim_rc(blind, "--stale")
+        ok("nothing has gone stale" in bare,
+           "READ FROM `main` THE STALENESS CHECK STILL SAYS CLEAN — it asks about the tree it "
+           "is in, which is correct for `make claim-stale` and useless for a merge", bare)
+        out, code = drive_claim_half(blind, "feature")
+        ok(code != 0 and "REFUSED" in out and "gone stale" not in out,
+           "so the CLAIM HALF refuses on the tree instead, before that clean answer can be "
+           "used — one fix covering both holes, at the point where the pointing happens", out)
+
+        # AND THE PRECONDITION SITS ABOVE THE STALENESS READ, not merely above the pending
+        # check. Standing on a DIFFERENT branch that itself holds a stale number, a run that
+        # read staleness first would refuse with a true sentence about THIS tree while naming
+        # a pull request it is not merging — a refusal that sends the reader to the wrong
+        # branch. The tree is established first, so the message is about the tree.
+        git(blind, "checkout", "-q", "feature")
+        out, code = drive_claim_half(blind, "some-other-branch")
+        ok(code != 0 and "some-other-branch" in out and "gone stale" not in out,
+           "standing on a stale branch while merging a DIFFERENT pull request refuses about "
+           "the TREE, not about this tree's staleness — the precondition is above the "
+           "staleness read and not only above the pending check", out)
 
     print("\nclaim self-test: {0} passed{1}".format(
         PASS, ", {0} FAILED".format(FAIL) if FAIL else ""))

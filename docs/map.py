@@ -1290,7 +1290,8 @@ COMPONENTS = [
                 # amends. D18 governs its shape — the preview is the read-only mode, and the
                 # act is behind a flag rather than a default. D33 is the instrument the two-step
                 # is borrowed from, one register down from a route that can spend money.
-                "governed_by": ["D18", "D33", "D42", "D72", "D111", "D140"],
+                "governed_by": ["D18", "D33", "D42", "D72", "D111", "D140",
+                                "D143"],
                 "note": "IT NEVER SETS PKMNSCAN_MAIN AND NO REFUSAL IT PRINTS SUGGESTS IT. D42 "
                         "is explicit that a session reaching for that variable has left the "
                         "amendment behind; this needs no hatch because allow rule 3 already "
@@ -1690,7 +1691,7 @@ COMPONENTS = [
                                 "D70", "D72", "D75", "D76", "D80", "D81", "D83", "D84", "D87",
                                 "D88", "D90", "D92", "D94", "D96", "D101", "D102", "D104", "D111",
                                 "D119", "D122", "D127", "D132", "D135", "D136", "D140", "D141",
-                                "D142"],
+                                "D142", "D143"],
             },
             "claim-ids.py": {
                 "does": "allocate the numbers this branch's SLUG ids will take, and "
@@ -1733,7 +1734,7 @@ COMPONENTS = [
                         "MAIN MOVES underneath the branch — the only condition that can tell "
                         "an allocation against the ref from one against the branch's own "
                         "copy, and therefore the only one worth building a repository for. "
-                        "THIRTY-TWO arms, twelve of them mutation-tested — fourteen arms and "
+                        "FORTY-TWO arms, twenty of them mutation-tested — fourteen arms and "
                         "seven mutants cover the staleness half (D140, amended 2026-09-11), "
                         "where a branch claims honestly and main takes the number underneath "
                         "it. The count in this sentence said sixteen over a file that held "
@@ -1750,7 +1751,8 @@ COMPONENTS = [
                 # entries are composed from integers for exactly this reason, and the two that
                 # survive are in the prose that explains why. The superset rule reads a citation
                 # literally, which is the trade docs-audit.py's own entry records.
-                "governed_by": ["D1", "D2", "D16", "D18", "D80", "D140"],
+                "governed_by": ["D1", "D2", "D16", "D18", "D80", "D140",
+                                "D143"],
             },
             "docs-audit-allow.txt": {
                 "does": "paths and identifiers the docs name before they exist, one "
