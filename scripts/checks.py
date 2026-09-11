@@ -167,9 +167,16 @@ CHECKS = (
         "asserts": "scripts/claim-ids.py against a throwaway repository in which MAIN MOVES "
                    "underneath the branch, which is the only condition that can tell an "
                    "allocation against the ref from an allocation against the branch's own "
-                   "copy. Sixteen arms; mutation-tested on five, and the boundary arm found a "
-                   "real bug in the unmutated code — `\\b` fires between a letter and a "
-                   "hyphen, so one slug was substituted inside another that extended it.",
+                   "copy. THIRTY-TWO arms — the count in this sentence said sixteen over a "
+                   "file that held eighteen, which is what a prose count does. Fourteen of "
+                   "them cover the staleness half (D140, amended 2026-09-11): a branch claims "
+                   "honestly, main takes the number underneath it, and the check must go red "
+                   "and NAME it. Mutation-tested on twelve — five when the claimer landed, "
+                   "and seven over the staleness half, none of which survived. The boundary "
+                   "arm found a real bug in the unmutated code — `\\b` fires between a letter "
+                   "and a hyphen, so one slug was substituted inside another that extended "
+                   "it; the staleness arms found a second, that reading the baseline from the "
+                   "REF rather than the merge base makes every collision cancel itself out.",
         "needs": ("python3", "git"),
         "writes": "a temporary directory it makes and removes.",
         "commit_path": False,
@@ -178,6 +185,31 @@ CHECKS = (
                                "git repositories, which the hook has no business doing.",
         "gates": True,
         "governed_by": ("D16", "D18", "D140"),
+    },
+    {
+        "target": "claim-stale",
+        "runs": "python3 scripts/claim-ids.py --stale",
+        "asserts": "No id this branch ADDS since its merge base with `origin/main` — decision "
+                   "heading, code-card `C` entry, or build-order step — has been taken on "
+                   "that ref in the meantime. The claimer is a no-op once a branch has "
+                   "claimed: there is no slug left, so it says `nothing to do` while the "
+                   "number it allocated may have been taken by main since. That happened "
+                   "TWICE on 2026-09-11 — #262 and #265 on one id, #265 and #270 on the next "
+                   "— and a person reading PR titles was the only thing that caught either. "
+                   "It REPORTS and never repairs, because an un-claim has to happen before a "
+                   "merge and never after. It can only ever under-report against a stale "
+                   "`origin/main`, never over-report, and a clone with no `origin/main` at "
+                   "all is allowed and says so.",
+        "needs": ("python3", "git"),
+        "writes": "",
+        "commit_path": False,
+        "why_off_commit_path": "It asks about `origin/main`, which a commit never consults "
+                               "and a fresh clone may not have — `revert-guard`'s reason, "
+                               "and the same answer. `make merge` is where it is worth the "
+                               "most, because the fetch immediately above it makes the answer "
+                               "current; `make check` is the earlier, cheaper warning.",
+        "gates": True,
+        "governed_by": ("D16", "D42", "D80", "D140"),
     },
     {
         "target": "revert-guard",

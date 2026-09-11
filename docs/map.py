@@ -1682,7 +1682,18 @@ COMPONENTS = [
                         "correct, and reusing it would resurrect every `step 12` in the tree "
                         "onto a step that is not the one meant. IT WRITES, so it is not on "
                         "the commit path (D18) and not in `make check`; `make claim-selftest` "
-                        "is, against a throwaway repository.",
+                        "is, against a throwaway repository. "
+                        "AND IT ANSWERS A SECOND QUESTION SINCE D140 WAS AMENDED 2026-09-11: "
+                        "`--stale` reports allocated ids this branch ADDS since its merge "
+                        "base that the ref has taken in the meantime, and exits 3. The "
+                        "claimer is a no-op once a branch has claimed — no slug is left, so "
+                        "it said `nothing to do` while the number it allocated could have "
+                        "been taken by main since, which happened twice on 2026-09-11 and "
+                        "was caught both times by a person reading PR titles. It REPORTS and "
+                        "never repairs: an un-claim has to happen before a merge and never "
+                        "after, or the substitution reaches main's own copy. That half writes "
+                        "nothing, so it IS in `make check` and `make ci-check` as "
+                        "`make claim-stale`, and `make merge` asks for it before every merge.",
                 # D72 IS THE FAILURE THIS REPLACES and D16 the rule its audit rows answer to.
                 # D80 is cited for the allocator's direction — the culled step 12 is why this
                 # is max+1 rather than lowest-free — and D47/D135 for the symlink the walk
@@ -1696,7 +1707,11 @@ COMPONENTS = [
                         "MAIN MOVES underneath the branch — the only condition that can tell "
                         "an allocation against the ref from one against the branch's own "
                         "copy, and therefore the only one worth building a repository for. "
-                        "Sixteen arms, five of them mutation-tested. THE BOUNDARY ARM FOUND A "
+                        "THIRTY-TWO arms, twelve of them mutation-tested — fourteen arms and "
+                        "seven mutants cover the staleness half (D140, amended 2026-09-11), "
+                        "where a branch claims honestly and main takes the number underneath "
+                        "it. The count in this sentence said sixteen over a file that held "
+                        "eighteen, which is what an uncounted prose number does. THE BOUNDARY ARM FOUND A "
                         "REAL BUG IN THE UNMUTATED CODE: `\\b` fires between a letter and a "
                         "hyphen, so a slug was being substituted inside a longer slug that "
                         "extended it, leaving a number with a tail on it. In `make check`, "
