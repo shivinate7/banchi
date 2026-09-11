@@ -811,8 +811,12 @@
   .browse-status { min-height: var(--bn-control-h-sm); }
   /* AN INLINE LINK INSIDE A SENTENCE IS STILL A TARGET (D117). The queued notice ends with
      `Open the review queue`, which is the only way out of a card the pipeline could not place —
-     and it measured 143 x 16 at 390. It cannot become a block without breaking the sentence it
-     ends, so it takes the padding as a pseudo-element the way the ticks do. */
+     and it measured 143 x 16 at 390 on this rig, 148 x 16 on the CI runner's own font
+     rendering. It cannot become a block without breaking the sentence it ends, so it takes the
+     padding as a pseudo-element the way the ticks do. A -12px vertical inset clears the 40px
+     floor by exactly 1px at a 16px line box — real on this Mac, and gone on Ubuntu's Chromium,
+     which is the same class of font-metric drift `BoxBrowse.css` already reserves width against
+     elsewhere for the store key. -16px leaves several pixels of room instead of one. */
   .browse-queued .bn-notice a { position: relative; }
-  .browse-queued .bn-notice a::after { content: ''; position: absolute; inset: -12px -4px; }
+  .browse-queued .bn-notice a::after { content: ''; position: absolute; inset: -16px -4px; }
 }

@@ -45,10 +45,32 @@
 # different weight of check. It therefore gets no `scripts/checks.py` entry either — `check
 # registry` fails on an entry for a target `make check` does not run.
 #
+# THE "TWELVE TO FIFTEEN MINUTES" ABOVE IS WHAT IT COST FROM 2026-09-07 TO 2026-09-11, AND IT
+# IS LEFT AS WRITTEN (D136). Measured over 56 jobs: 940-1,020s wall-clock per run, 913 of 954s
+# in the `make design-check` step, `481 passed (15.2m)` on ONE worker — the runner has two
+# vCPUs and Playwright's default of half of them floors to one. Three things changed it, each
+# argued at the job below and in D136: the suite runs as three shards of one worker each; the
+# seven sleeps on a real clock (2.3 minutes of the serial run) became a fake clock advanced
+# by the same numbers; and the post-merge run below is skipped when the tree it would test
+# already passed on the PR. The new figures are in D136, from a dispatch of this file.
+#
 # ON `push: main` TOO, AT THAT PRICE, for the reason the `on:` block below already gives about
 # every other row: a merge can break what neither side broke alone, and two branches editing one
 # stylesheet is exactly the semantic conflict git merges cleanly. A browser floor is the kind of
 # claim that has no other reader.
+#
+# BUT NOT WHEN THE TREE ALREADY PASSED (D136). A PR run checks out GitHub's own merge of the
+# branch into main, so its TREE — `git rev-parse HEAD^{tree}` — is exactly the tree the merge
+# commit or the squash will carry, for as long as main has not moved. `design-check-passed`
+# below records a green PR run as an artifact named for that tree, `already-passed` looks the
+# name up on the push, and the browser matrix runs on main only when nothing is found — which
+# is precisely the case the paragraph above is about: main moved between the PR's test and
+# the merge, and the tree that landed is one no browser has seen. The `check` job and
+# demo.yml run on every push to main as before. What the old coverage was actually worth is
+# worth saying: the `concurrency` group below cancelled four main runs between 2026-09-07 and
+# 2026-09-11, every time two merges landed inside fifteen minutes, so the post-merge verdict
+# was already partial. No write to git, no commit status, nothing D42 forbids — an artifact
+# is the one thing a job here may leave behind.
 #
 # D122's MACHINE-WIDE LOCK IS NOT A HAZARD HERE AND IS NOT DISARMED FOR IT. A runner is one
 # checkout with one suite, so `browsers.lock` is uncontended and taken in the same breath it is
@@ -138,9 +160,57 @@ jobs:
       - name: revert guard
         run: python3 scripts/revert-audit.py branch --upstream "origin/${{ github.base_ref || 'main' }}"
 
-  # The browser half. Same tree, different question: what a person actually sees.
-  design-check:
+  # HAS THIS TREE ALREADY PASSED? Asked on every event and ACTED ON only for a push to main
+  # (D136). It runs the lookup on a PR and a dispatch too, and prints the answer, so the
+  # mechanism is exercised on every run rather than only at the moment it matters — a gate
+  # that fires once a day is a gate nobody has watched work. `actions: read` is what listing
+  # artifacts through the API needs; nothing here writes.
+  already-passed:
     runs-on: ubuntu-latest
+    permissions:
+      actions: read
+      contents: read
+    outputs:
+      skip: ${{ steps.lookup.outputs.skip }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Look the tree up
+        id: lookup
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          tree="$(git rev-parse 'HEAD^{tree}')"
+          name="design-check-pass-${tree}"
+          found="$(gh api "repos/${GITHUB_REPOSITORY}/actions/artifacts?name=${name}&per_page=10" \
+            --jq '[.artifacts[] | select(.expired == false)] | length')"
+          echo "tree ${tree}: ${found} unexpired pass record(s) named ${name}"
+          if [ "${GITHUB_EVENT_NAME}" = "push" ] && [ "${found}" != "0" ]; then
+            echo "push to main on a tree that already passed on a PR — skipping the browser matrix"
+            echo "skip=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "skip=false" >> "$GITHUB_OUTPUT"
+          fi
+
+  # The browser half. Same tree, different question: what a person actually sees.
+  #
+  # THREE SHARDS, ONE WORKER EACH, AND THE WORKER COUNT IS THE DELIBERATE HALF (D136). One
+  # runner ran every case on ONE worker — `ubuntu-latest` is 2 vCPU on a private repo and
+  # Playwright's default of half the cores floors to one — in 15.2 minutes, measured across
+  # 56 jobs since this job landed. `--shard=N/3` splits the CASES three ways and each shard
+  # still runs one worker: the one-in-thirteen red docs/DEBTS.md section 11 records has "the
+  # suite around it" as its only known mechanism, and more workers on one box is more suite
+  # around it. Three shards is the same ~15 runner-minutes plus a chromium install per extra
+  # shard; wall-clock is a third. `fail-fast: false` because a red shard is a claim about
+  # its own cases and the other two are still worth their verdict.
+  design-check:
+    needs: already-passed
+    if: needs.already-passed.outputs.skip != 'true'
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        shard: [1, 2, 3]
     steps:
       - uses: actions/checkout@v4
 
@@ -172,7 +242,7 @@ jobs:
       # from `app/devPort.ts`, which vite.config.ts and playwright.config.ts both import so they
       # cannot disagree — on a runner this is the main-tree 5173.
       - name: make design-check
-        run: make design-check
+        run: make design-check PW_ARGS="--shard=${{ matrix.shard }}/3 --workers=1"
 
       # WHAT A RED RUN LEAVES BEHIND, because until 2026-09-11 it left four lines. The config turns
       # `trace: retain-on-failure` on under CI, so a failing case has its DOM before and after every
@@ -184,7 +254,36 @@ jobs:
         if: failure()
         uses: actions/upload-artifact@v4
         with:
-          name: design-check-failures
+          # Per shard, or the second red shard's upload collides with the first's.
+          name: design-check-failures-${{ matrix.shard }}
           path: app/test-results
           if-no-files-found: ignore
+          retention-days: 30
+
+  # THE PASS RECORD. One job after the whole matrix — `needs` on a matrix waits for every
+  # shard, and the default `if: success()` means all three were green — uploading one tiny
+  # artifact named for the tree that passed. Not on a push to main: that run is the reader,
+  # never the writer, and a record it left would only ever answer itself. Thirty days is the
+  # window: a PR that passed longer ago than that and then merges gets the full matrix, which
+  # is the conservative side of the bargain.
+  design-check-passed:
+    needs: design-check
+    if: github.event_name != 'push'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Name the tree
+        id: tree
+        run: |
+          tree="$(git rev-parse 'HEAD^{tree}')"
+          echo "tree=${tree}" >> "$GITHUB_OUTPUT"
+          printf 'tree %s\nrun %s/%s/actions/runs/%s\nevent %s\n' \
+            "${tree}" "${GITHUB_SERVER_URL}" "${GITHUB_REPOSITORY}" "${GITHUB_RUN_ID}" "${GITHUB_EVENT_NAME}" \
+            > design-check-pass.txt
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: design-check-pass-${{ steps.tree.outputs.tree }}
+          path: design-check-pass.txt
           retention-days: 30

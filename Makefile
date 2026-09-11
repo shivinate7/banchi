@@ -70,6 +70,7 @@ help:
 	@echo "  make reap-selftest  the kill guard, proved by pointing it at what it must not kill."
 	@echo "  make suite-lock-selftest  one browser fleet at a time, proved by violating it."
 	@echo "  make verdict-selftest  the design-check verdict reporter, run for real. No browser."
+	@echo "  make serve-selftest  the supervisor's build job, against a throwaway tree. No node."
 	@echo "  make port-agreement  server/ports.py and app/devPort.ts answer the same numbers."
 	@echo "  make set-hint-agreement  the capture screen and the export fetch resolve a set hint alike."
 	@echo "  make screen-freshness  every server write in app/ has a way back. Needs node."
@@ -85,7 +86,7 @@ help:
 	@echo "                    write. Reaches the network, so it never gates a commit."
 	@echo "  make check        harness + docs-audit + audit-self-test + githooks-selftest +"
 	@echo "                    merge-selftest + revert-selftest + revert-guard + janitor-selftest +"
-	@echo "                    reap-selftest + suite-lock-selftest +"
+	@echo "                    reap-selftest + suite-lock-selftest + serve-selftest +"
 	@echo "                    verdict-selftest + port-agreement + set-hint-agreement +"
 	@echo "                    screen-freshness + sigil-check + ignore-check + lint +"
 	@echo "                    vale + typecheck"
@@ -94,14 +95,17 @@ help:
 	@echo "  ./pkmnscan join     <run-dir> --export <csv>      resolve against the export. Free."
 	@echo "  ./pkmnscan emit     <run-dir>                     write import CSVs. Free."
 	@echo "  ./pkmnscan reconcile <run-dir> <staged-export>    confirm what TCGplayer staged."
-	@echo "  make up           BOTH servers, detached, and the capture server reloads itself"
-	@echo "                    when you edit Python. Prints the link. Start here."
+	@echo "  make up           THE server, detached: the API and the app on one port, and it"
+	@echo "                    reloads itself when you edit Python and rebuilds the app when"
+	@echo "                    you edit a screen (D138). Prints the link. Start here."
 	@echo "  make merge        merge a PR and move main onto it (D42). ARGS=<n> previews;"
 	@echo "                    ARGS=\"<n> --confirm\" performs it. On the owner's word only."
-	@echo "  make down         stop them.  make restart  stop and start."
+	@echo "  make down         stop it.  make up ARGS=--restart  stop and start."
+	@echo "                    (make restart still works and says the new spelling.)"
 	@echo "  make launch-agent start at login, so the link is always live. Main tree only."
 	@echo "                    ARGS=--remove to undo it."
-	@echo "  make dev          Vite app on :5173. Blocks — background it in a session."
+	@echo "  make dev          Vite with hot reload on :5173, against the server make up is"
+	@echo "                    running. Blocks — background it in a session."
 	@echo "  make server       Python capture server. :8000 in the main tree, its own port in a"
 	@echo "                    worktree (D43) — it prints which. Blocks — background it."
 	@echo "  make screenshot   render the views in scripts/views.txt to captures/ui/"
@@ -110,6 +114,8 @@ help:
 	@echo "                    checkout (D122). ARGS=--wait queues instead of refusing."
 	@echo "                    Leaves the verdict in .serve/design-check.json — read that,"
 	@echo "                    never a \`tail\` pipe, which buffers the whole run."
+	@echo "                    PW_ARGS=<flags> reaches Playwright itself (--shard, one spec);"
+	@echo "                    ARGS never does. CI shards it three ways this way (D136)."
 	@echo "  make design-check-quiet  the same run without the per-test progress stream."
 	@echo
 	@echo "  make demo         seed a demo store and record the wire into a fixture bundle."
@@ -382,6 +388,7 @@ check:
 	@$(MAKE) --no-print-directory janitor-selftest
 	@$(MAKE) --no-print-directory reap-selftest
 	@$(MAKE) --no-print-directory suite-lock-selftest
+	@$(MAKE) --no-print-directory serve-selftest
 	@$(MAKE) --no-print-directory verdict-selftest
 	@$(MAKE) --no-print-directory port-agreement
 	@$(MAKE) --no-print-directory set-hint-agreement
@@ -422,6 +429,7 @@ ci-check:
 	@$(MAKE) --no-print-directory janitor-selftest
 	@$(MAKE) --no-print-directory reap-selftest
 	@$(MAKE) --no-print-directory suite-lock-selftest
+	@$(MAKE) --no-print-directory serve-selftest
 	@$(MAKE) --no-print-directory verdict-selftest
 	@$(MAKE) --no-print-directory port-agreement
 	@$(MAKE) --no-print-directory set-hint-agreement
@@ -587,6 +595,13 @@ janitor:
 janitor-selftest:
 	@bash scripts/janitor-selftest.sh
 
+# THE SUPERVISOR'S BUILD JOB (D138), against a throwaway tree with a stub `vite build`. Same
+# standing and the same reason as the three self-tests around it: it starts and stops real
+# supervisors and swaps real directories, so it is in `check` and never in the git hook.
+# No node — the stub is a shell script — so it runs anywhere the rest of `check` does.
+serve-selftest:
+	@$(PYTHON) scripts/serve-selftest.py
+
 # WHAT THIS SESSION STARTED, AND NOTHING ELSE. `pkill -f` and `lsof -ti tcp:PORT` are both
 # machine-wide, and both were used to clean up a session's own dev servers on 2026-09-10: the
 # first also matched the owner's live capture server over their real store, the second also
@@ -651,23 +666,26 @@ janitor-install:
 # answers from the tree alone, and a row that resolves DNS and expects a server to be up would
 # go red on a train and in every worktree. A check that fails for reasons unrelated to the
 # commit is one people learn to ignore.
-.PHONY: janitor janitor-selftest janitor-install ci-check
+.PHONY: janitor janitor-selftest janitor-install serve-selftest ci-check
 
 .PHONY: lan-check
 lan-check:
 	@python3 scripts/lan-check.py
 
-# BOTH SERVERS, DETACHED, AND THE CAPTURE SERVER RESTARTS ITSELF WHEN YOU EDIT PYTHON.
-# `make dev` and `make server` below are untouched and still work; this is additive.
+# THE SERVER, DETACHED. ONE PROCESS: the API and the built app on one port (D138), restarting
+# itself when you edit Python and rebuilding the app when you edit a screen.
+# `make dev` and `make server` below still work; `dev` is now the hot-reload loop that runs
+# BESIDE this rather than instead of it.
 #
 # The restart is the point rather than the convenience. docs/GATES.md records a run whose
 # whole-second timestamps came from a server started before the millisecond fix landed — "a
 # long-running `make server` outlives the fix that was written for it", filed there as a
 # discipline. A discipline nobody can keep is what this replaces.
 #
-# DO NOT RUN THESE ALONGSIDE `make dev` / `make server`. The second one loses: strictPort on
-# the Vite side and EADDRINUSE on the capture side, both loudly. That is deliberate — a second
-# server that quietly moved to another port would serve a DIFFERENT store (D43).
+# DO NOT RUN THESE ALONGSIDE `make server`. The second one loses, loudly (EADDRINUSE). That is
+# deliberate — a server that quietly moved to another port would serve a DIFFERENT store (D43).
+# `make dev` is FINE alongside, and is the point: the supervisor no longer holds :5173, so Vite
+# can run there with hot reload while this serves the same store on :8000.
 #
 # None of these four goes near `make check` or the git hook. D18: nothing that writes may run
 # on the path that decides whether a commit proceeds, and `launch-agent` writes to ~/Library,
@@ -686,6 +704,8 @@ up:
 down:
 	@$(PYTHON) scripts/serve.py down $(ARGS)
 
+# `make up ARGS=--restart` is the spelling. Kept for one release because it is in the owner's
+# fingers and in two of this repo's own refusal messages; it says the new name and then runs it.
 restart:
 	@$(PYTHON) scripts/serve.py restart $(ARGS)
 
@@ -700,9 +720,12 @@ launch-agent:
 #
 # strictPort in app/vite.config.ts, so a busy 5173 fails here instead of quietly serving on
 # 5174 — where CLAUDE.md, this target and scripts/views.txt would all three be wrong.
+# NO `guard-foreground` HERE SINCE D138, and its removal is the feature. The supervisor used
+# to hold :5173 and this would have collided with it; it holds only the capture port now, so
+# Vite runs here with hot reload against the live server — which is what alternating between
+# building and operating actually needs.
 dev:
 	$(NPM_GUARD)
-	@$(PYTHON) scripts/serve.py guard-foreground
 	@npm --prefix app run dev
 
 # Foreground and blocking, like any server. An agent that runs this in the foreground hangs
@@ -767,10 +790,21 @@ screenshot:
 # can be mistaken for a verdict. What the `rm` buys is that the PREVIOUS run's `pass` is
 # never left sitting there for a reader to believe, which is the only silent failure of the
 # three. app/design-check-reporter.ts carries the rest of the argument.
+#
+# `ARGS` REACHES THE LOCK AND `PW_ARGS` REACHES PLAYWRIGHT, and the two are kept apart by the
+# `--` on each side (D136). Until 2026-09-11 nothing here could hand Playwright a flag at all,
+# and the one that mattered was `--shard`: `.github/workflows/check.yml` runs this suite as
+# three shards on three 2-vCPU runners — `PW_ARGS="--shard=1/3 --workers=1"` — because one
+# runner ran all 481 cases on ONE worker in 15 minutes, against 89-175s for the rig's seven.
+# Sharding splits the CASES and leaves the worker count alone, which is the half that matters:
+# docs/DEBTS.md section 11 measured a one-in-thirteen red whose only known mechanism is "the
+# suite around it", and more workers on one box is more suite around it. On the rig `PW_ARGS`
+# is for a session that wants one spec — `PW_ARGS=tests/brand.spec.ts` — and nothing else.
+# Each shard leaves its own `.serve/design-check.json`; on a runner that is one file per job.
 design-check:
 	$(NPM_GUARD)
 	@rm -f .serve/design-check.json
-	@python3 scripts/suite-lock.py run $(ARGS) -- npm --prefix app run design-check
+	@python3 scripts/suite-lock.py run $(ARGS) -- npm --prefix app run design-check -- $(PW_ARGS)
 
 # The lock itself, exercised by violating it — a holder, a refusal, a wait, and a holder
 # killed with -9 to prove the OS releases what it took. In `check`, never in the git hook: it
@@ -786,7 +820,7 @@ suite-lock-selftest:
 design-check-quiet:
 	$(NPM_GUARD)
 	@rm -f .serve/design-check.json
-	@DESIGN_CHECK_QUIET=1 python3 scripts/suite-lock.py run $(ARGS) -- npm --prefix app run design-check
+	@DESIGN_CHECK_QUIET=1 python3 scripts/suite-lock.py run $(ARGS) -- npm --prefix app run design-check -- $(PW_ARGS)
 
 # eslint over app/, config and rules in app/eslint.config.js. It began 2026-08-13 as the two
 # guards docs/DECISIONS.md's v1 bug table promised — no `facingMode` (bug 3), no `split(",")`

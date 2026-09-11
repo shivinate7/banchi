@@ -89,7 +89,13 @@ inventory/
 
 runs/<YYYY-MM-DD>-<label>-<nn>/
   manifest.json         Inputs: capture dir, export path + mtime + sha256, prompt
-                        fingerprint, flags, batch ids, cost.
+                        fingerprint, flags, batch ids, cost. The last of those was
+                        a claim this line and cli/runs.py's header both made from
+                        the day they were written and neither kept: `usage` held
+                        the TOKEN counts and nothing priced them, so `#/runs` drew
+                        `290,470 tokens in` and no figure. Since 2026-09-11 the
+                        collect writes `usage.cost_usd` from identify/cost.py, at
+                        the rates in force the day it ran.
   identifications.json  What this run read, before caching.
   decisions.json.adopted  A pre-D86 answer file, folded by `prices adopt` and retired.
                         Nothing reads it; the live answers are `inventory/prices.json`.
@@ -253,6 +259,14 @@ production value is that it is *recorded*, making a targeted re-read possible.
 ### 5.1 Catalog and multi-set keying
 
 Catalog is built from the TCGplayer Filtered CSV export. Nothing else.
+
+**AND IT IS NARROWED TO THE CONDITIONS THIS PRODUCT LISTS (D137, 2026-09-11)** — the game's
+own `condition_by_finish` values plus `Unopened`, so sealed product survives and every play
+grade goes. `Catalog.from_export` had never cut on `Condition` at all, which was invisible
+while the export was downloaded by hand with the portal's Near Mint filter checked and cost
+D3 rung 2 outright once the fetch started sending all eleven: 0 of 1,246 numbers held a
+single row, against 629 once the grades are gone. A play grade is not a finish — no number
+loses one.
 
 **THE JOIN KEY IS PER GAME, AND THIS SECTION DESCRIBED ONLY POKEMON'S UNTIL 2026-08-29.**
 It read *"Join key stays `zfill(3)(number) + "/" + printedTotal`"* full stop, which was true

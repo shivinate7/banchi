@@ -240,6 +240,16 @@ SHIPPED = [
               "digest kept — on #/inventory's box operations, gated like the delete. WHAT THIS STEP DID "
               "NOT DO: the 2,000-card probe that decides whether the 100k run is worth making is work "
               "at the rig and has not been run; nothing here measures the pile."},
+    {"n": 22, "on": "2026-09-11", "title": "One process serves the product: the capture server serves app/dist, the supervisor builds it",
+     "note": "D138, three PRs the same day. The capture server serves `app/dist/` beside the API "
+              "(`app_claims`, `do_app_file`, T7's check_app_serve); the supervisor dropped its Vite "
+              "child and runs `vite build` into a sibling directory it renames in, on its own watch "
+              "set over app/src and app/public (`serve-selftest`, 25 assertions, five mutations). "
+              "`make dev` runs BESIDE it now and `restart` folded into `make up ARGS=--restart`. "
+              "TWO PRESSES ARE THE OWNER'S AND ARE NOT DONE: reinstalling the dock app at :8000 "
+              "(D108's amendment — a port is part of an origin, so the camera grant and the six "
+              "device-local keys reset once), and `make lan-check` from the phone. "
+              "docs/specs/one-process.md §10 is the list."},
 ]
 
 OPEN = [
@@ -342,7 +352,7 @@ COMPONENTS = [
                                     "store's own reading — `Listing.observe_live`, per game, "
                                     "against the file's mtime — and says what it kept, by SKU "
                                     "with both readings (D87 amended). Partitions at the corpus's stored `policy.threshold` (D99).",
-                            "governed_by": ["D3", "D7", "D8", "D9", "D11", "D16", "D25", "D34", "D36", "D49", "D54", "D58", "D59", "D86", "D87", "D99", "D115"], "tested_by": ["T4", "T7"]},
+                            "governed_by": ["D3", "D7", "D8", "D9", "D11", "D12", "D16", "D25", "D34", "D36", "D49", "D54", "D58", "D59", "D86", "D87", "D99", "D115", "D137"], "tested_by": ["T4", "T7"]},
             "cmd_prices.py": {"does": "`pkmnscan prices adopt` folds every run's legacy "
                                       "decisions.json into the corpus — previews unless given "
                                       "--write, newest-wins, and NAMES the holds a later price "
@@ -454,7 +464,12 @@ COMPONENTS = [
                           # CANONICAL_HEADER and read by nothing since the file was written,
                           # which makes the join product-line BLIND rather than agnostic.
                           # D22 is the registry that will read the pair.
-                          "governed_by": ["D11", "D22", "D25", "D49"], "tested_by": ["T2"],
+                          # And D137 added SEALED_CONDITION beside them, plus the correction
+                          # that the pair is no longer the whole of what from_export cuts on:
+                          # `Condition` is a third axis, and it is a SCOPE rather than a
+                          # partition — the pair says which game, the scope says which reading
+                          # of a card this product sells.
+                          "governed_by": ["D11", "D22", "D25", "D49", "D137"], "tested_by": ["T2"],
                           "note": "real CSV library only — v1 bug 2 was a naive split(\",\")"},
             # Pure literals, importing nothing from this repo, so scripts/docs-audit.py can
             # read it with ast.literal_eval the way it reads this file. D21/D23/D24 are
@@ -489,8 +504,14 @@ COMPONENTS = [
             # D10's label formula lives here, and as of 2026-08-29 it assumes NO divider size:
             # `Position.layout` falls back to `(1,)`, so an undeclared box is one section and
             # `CARDS_PER_SECTION` is deleted rather than defaulted.
-            "join.py": {"does": "catalog join by SKU, aggregation, bidirectional unmatched reporting",
-                        "governed_by": ["D2", "D4", "D7", "D9", "D10", "D11", "D16", "D20", "D21", "D23", "D24", "D25", "D29", "D30", "D35", "D36", "D41", "D49", "D54", "D55", "D56", "D58", "D59", "D67", "D68", "D71", "D87"], "tested_by": ["T3"]},
+            "join.py": {"does": "catalog join by SKU, aggregation, bidirectional unmatched reporting. "
+                                "`Catalog.from_export` scopes on THREE things, not D25's two: the "
+                                "partition pair, and then the conditions this product lists — the "
+                                "game's own Near Mint strings plus sealed (D137). It had never cut on "
+                                "condition at all, which was invisible while the operator downloaded "
+                                "Near-Mint-only exports by hand and cost D3 rung 2 outright once the "
+                                "fetch started sending every play grade",
+                        "governed_by": ["D2", "D3", "D4", "D7", "D9", "D10", "D11", "D12", "D16", "D20", "D21", "D23", "D24", "D25", "D29", "D30", "D35", "D36", "D41", "D49", "D54", "D55", "D56", "D58", "D59", "D64", "D65", "D67", "D68", "D71", "D76", "D87", "D137"], "tested_by": ["T3"]},
             # Rung 0 (a human's answer) sits above the ladder and is applied by join.py, so
             # T3 is what covers it — T4 owns the four rungs that infer.
             # D22 because FINISHES and CONDITION_BY_FINISH are no longer written here: they
@@ -823,6 +844,16 @@ COMPONENTS = [
             "sidecar.py": {"does": "reading a capture directory: photos, JSON sidecars, position", "governed_by": ["D2", "D3", "D10", "D21", "D22", "D23"]},
             "images.py": {"does": "downscale, encode, hash a photograph for the API, and refuse a crop that is not the card",
                           "governed_by": ["D2", "D23", "D75"], "tested_by": ["T6"]},
+            "cost.py": {"does": "the price sheet, and the ONE place it is applied — the preflight's "
+                                "estimate before a send, the collect's record of what the send used, "
+                                "and server/pipeline_routes.py:_usage filling the figure in for a run "
+                                "written before the field existed. Dependency-free (decimal alone) "
+                                "because the server imports it at module scope, where that file's own "
+                                "rule is stdlib-only. NOT lifted from the log the way the preflight's "
+                                "figure is: _console_tail is a 20,000-byte tail and the report prints "
+                                "its token counts BEFORE the per-card refusal lists, so a 544-card run "
+                                "with a few hundred refusals pushes the line out of the window.",
+                        "governed_by": ["D2", "D33"], "tested_by": ["T7"]},
         },
     },
     {
@@ -1332,7 +1363,7 @@ COMPONENTS = [
                 # hermetic: it answers from the tree alone. A row that resolves DNS and needs a
                 # server up would go red on a train and in every worktree, and a check that
                 # fails for reasons unrelated to the commit is one people learn to ignore.
-                "governed_by": ["D43", "D47", "D53"],
+                "governed_by": ["D43", "D47", "D53", "D138"],
             },
             "janitor.py": {
                 "does": "the sweep: what a finished session left behind, and — where it is "
@@ -1353,6 +1384,23 @@ COMPONENTS = [
                 # main checkout's supervisor is the product and is never touched. D42 is why a
                 # branch is judged by ancestry rather than by `git branch -d`.
                 "governed_by": ["D18", "D42", "D44", "D53"],
+            },
+            "serve-selftest.py": {
+                "does": "THE SUPERVISOR'S BUILD JOB, PROVED AGAINST A THROWAWAY TREE (D138). "
+                        "Starts real supervisors over two copied checkouts whose `vite build` "
+                        "is a shell stub, because what is under test is the supervisor and "
+                        "never the compiler: the cold start that builds BEFORE the port opens, "
+                        "the screen edit that rebuilds without restarting the capture child, "
+                        "the Python edit that does the reverse, the failed build that leaves "
+                        "the previous bundle byte-identical, the build in flight that answers "
+                        "200 throughout, and a PATH with no node on it — the API up, `GET /` "
+                        "503, the log naming `make launch-agent`. THE PORT IS PINNED with "
+                        "`PKMNSCAN_PORT` and that is not a shortcut: a copied tree is not a "
+                        "LINKED worktree, so the derivation calls it the main checkout and it "
+                        "claims :8000 — measured, against the owner's live server, the first "
+                        "time this ran. In `check`, never in the git hook (D18).",
+                "governed_by": ["D18", "D43", "D53", "D138"],
+                "tested_by": [],
             },
             "janitor-selftest.sh": {
                 "does": "proves janitor.py against a throwaway origin, clone and four linked "
@@ -1567,11 +1615,25 @@ COMPONENTS = [
                 # and `pkmnscan.*` both stand and a row demanding one of them would be
                 # demanding a rename that silently discards what a browser holds under the
                 # old spelling.
+                # D111 AND D127 JOIN AS CITED FAILURES, the same shape D70 and D101 already
+                # carry above: `check_codex_hooks`'s docstring names the two incidents its
+                # missing hooks would have reopened had the row not backfilled them —
+                # `reap.py --hook` on every `Bash` call (D127) and `session-teardown.sh` on
+                # `WorktreeRemove` (D111's sweep) — because a reader who does not know why
+                # those two hooks matter reads a bare roster diff as pedantry. D135 is the
+                # ruling the row enforces: Codex reads the same guards a Claude Code session
+                # does, through `.codex/hooks.json` reconciled against `.claude/settings.json`.
+                # D47 IS CITED IN `branch_files`, NOT IN THE CODEX ROW: a tracked directory
+                # symlink (D47's own subject) is a changed path with no text to scan, and that
+                # function's `is_dir()` guard is what keeps `check_renumbered_decisions` from
+                # crashing on one — found the moment `.agents/skills` became the first such
+                # link this repo's own history ever produced.
                 "governed_by": ["D2", "D3", "D6", "D7", "D8", "D9", "D10", "D12", "D16", "D17",
                                 "D18", "D22", "D23", "D24", "D26", "D27", "D31", "D39", "D43",
-                                "D49", "D50", "D51", "D53", "D60", "D64", "D65", "D67", "D69",
+                                "D47", "D49", "D50", "D51", "D53", "D60", "D64", "D65", "D67", "D69",
                                 "D70", "D72", "D75", "D76", "D80", "D81", "D83", "D84", "D87",
-                                "D88", "D90", "D92", "D94", "D96", "D101", "D102", "D104", "D122", "D119", "D132"],
+                                "D88", "D90", "D92", "D94", "D96", "D101", "D102", "D104", "D111",
+                                "D119", "D122", "D127", "D132", "D135"],
             },
             "docs-audit-allow.txt": {
                 "does": "paths and identifiers the docs name before they exist, one "
@@ -1745,7 +1807,7 @@ COMPONENTS = [
                 # targets may reach `make check` or the git hook, and launch-agent writes to
                 # ~/Library. D13 because the store stays on this Mac and the LAN reach is the
                 # tunnel case that entry already names.
-                "governed_by": ["D13", "D18", "D43", "D47", "D53", "D70", "D85"],
+                "governed_by": ["D13", "D18", "D43", "D47", "D53", "D70", "D85", "D138"],
                 "tested_by": ["T7"],
                 "status": "built",
             },
@@ -1870,7 +1932,7 @@ COMPONENTS = [
                 # for vale. Change one and the entry describing that check goes stale with it,
                 # which is exactly what `governed_by` is for — so they are listed rather than
                 # allowlisted away.
-                "governed_by": ["D16", "D17", "D18", "D43", "D44", "D47", "D53", "D58", "D60", "D65", "D68", "D74", "D76", "D80", "D82", "D92", "D111", "D122", "D127", "D129", "D133"],
+                "governed_by": ["D16", "D17", "D18", "D43", "D44", "D47", "D53", "D58", "D60", "D65", "D68", "D74", "D76", "D80", "D82", "D92", "D111", "D122", "D127", "D129", "D133", "D138"],
                 "note": "IT DECLARES THE SUITE AND DELIBERATELY DOES NOT DRIVE IT, which is "
                         "the whole shape. A registry that drove `make check` could not "
                         "disagree with the recipe — and could silently stop running a check, "
@@ -1934,7 +1996,7 @@ COMPONENTS = [
                 # kept now that the repo has left iCloud for that entry's amended reason: the
                 # hazard belongs to a synced directory, and a tree can be put inside one
                 # without telling this script.
-                "governed_by": ["D16", "D17", "D42", "D43", "D44", "D80", "D86", "D88", "D111", "D127"],
+                "governed_by": ["D16", "D17", "D42", "D43", "D44", "D80", "D86", "D88", "D111", "D127", "D138"],
                 "note": "IT READS `--json`, NOT THE RENDER, since 2026-08-13. This line "
                         "said the opposite until integration: the debt was closed and this "
                         "entry rewritten in the same run by different hands, and nothing "
@@ -2285,8 +2347,8 @@ COMPONENTS = [
                                 "D45", "D46", "D49", "D52", "D53", "D55", "D56", "D58", "D61",
                                 "D62", "D63", "D64", "D65", "D66", "D67", "D69", "D70", "D76",
                                 "D77", "D79", "D83", "D86", "D87", "D88", "D89", "D90", "D91",
-                                "D92", "D93", "D96", "D100", "D103", "D104", "D113", "D115",
-                                "D116", "D132", "D134"],
+                                "D92", "D93", "D96", "D100", "D103", "D104", "D108", "D113",
+                                "D115", "D116", "D132", "D134", "D137", "D138"],
                 "tested_by": ["T7"],
             },
             "tcg_import.py": {"does": "THE OUTBOUND WRITE to the seller admin, and the only "
@@ -2373,7 +2435,15 @@ COMPONENTS = [
                 "does": "the pipeline seam: POST /pipeline/preflight (free, creates no run), "
                         "POST /pipeline/identify (THE ONE THAT SPENDS — spawns a detached "
                         "child and returns the run name), GET /pipeline/runs and "
-                        "/pipeline/runs/<name> (read the run directory, hold nothing), "
+                        "/pipeline/runs/<name> (read the run directory, and hold no "
+                    "ANSWER about a run — a HANDLE on each child this process "
+                    "spawned is held and is not the same thing: `start_new_session` "
+                    "is a new session and not a new parent, so an unwaited child that "
+                    "exits is a zombie whose pid signal 0 accepts, and a finished run "
+                    "read `Running 8m` until something else happened to spawn and "
+                    "reap it by accident. An absent handle means ASK THE FILES, so a "
+                    "restarted server reads every run exactly as before and a run "
+                    "still outlives this one), "
                         "GET .../file (the import CSVs and the report, matched by shape and "
                         "then by membership) and POST .../<join|emit|reconcile> (free, run "
                         "inside the request, stdout returned verbatim). "
@@ -3829,7 +3899,15 @@ COMPONENTS = [
                                           "stage ahead of another; `runningFor` is a live run's "
                                           "age and is deliberately not used on a finished one, "
                                           "where the same arithmetic answers a different "
-                                          "question.",
+                                          "question. WHAT MAKES THAT SECOND HALF TRUE IS THE "
+                                          "SERVER'S `live`, AND IT WAS NOT UNTIL 2026-09-11: a "
+                                          "detached child nobody waited on left a ZOMBIE whose "
+                                          "pid signal 0 accepts, so a run that finished in 3m52s "
+                                          "drew `Running 8m` and went on counting. Nothing in "
+                                          "this file changed — `stageOf` reads `live || phase == "
+                                          "identifying` and both were wrong together — which is "
+                                          "the argument for one reader rather than a defence of "
+                                          "it: there was one place to fix, and it was not here.",
                                   "governed_by": ["D33", "D39", "D48", "D56", "D94"]},
             "src/RunsComposer.tsx": {"does": "THE IDENTIFY COMPOSER: the one press in this product "
                                              "that spends money, as a staged dialog — which "
@@ -4396,6 +4474,24 @@ COMPONENTS = [
                                 # D20 is the name and its optionality; D10 ruling 3 is the deleted
                                 # box whose number a run still remembers; D56 is the entry.
                                 "governed_by": ["D10", "D20", "D56"]},
+            "src/money.ts": {"does": "A DOLLAR AMOUNT, SAID THE SAME WAY EVERYWHERE — `money` and "
+                                     "`roundsToNothing`. Extracted from src/RunsComposer.tsx "
+                                     "unchanged on 2026-09-11, when the run panel began "
+                                     "reporting what a finished run COST rather than only how "
+                                     "many tokens it read; src/position.ts states the mechanical "
+                                     "half of why it could not stay there, which is that React "
+                                     "Refresh reloads the whole page for one exported function "
+                                     "beside a component. NOTHING HERE COMPUTES MONEY: "
+                                     "identify/cost.py holds the only rate sheet in the repo and "
+                                     "the server sends the figure, which is the rule "
+                                     "types.ts:RunPreflightTotal and pipeline_routes.py state "
+                                     "three times between them. `roundsToNothing` is the one "
+                                     "judgement it does make, and it is a fact about "
+                                     "`toFixed(2)`: a run that spent a third of a cent and a run "
+                                     "that spent nothing both render $0.00, and they are "
+                                     "different sentences.",
+                             # D33 is the money gate, whose receipt this now carries.
+                             "governed_by": ["D33"]},
             "src/pricingSource.ts": {"does": "WHERE `#/pricing`'s ROWS CAME FROM, AND WHAT MAY "
                                              "BE ASKED ABOUT THEM (D103). One type, two "
                                              "builders, the hash parsing, and the adapter that "
@@ -4448,7 +4544,21 @@ COMPONENTS = [
                                          "every figure is read from "
                                          "`GET /pipeline/runs/<name>`, so a run started in a "
                                          "terminal appears here and a run started here survives "
-                                         "the tab closing. Every command's stdout is shown "
+                                         "the tab closing. AND THE IDENTIFY STEP REPORTS WHAT THE "
+                                         "RUN COST (2026-09-11), a figure the SERVER sends: "
+                                         "identify/cost.py holds the only rate sheet in the repo "
+                                         "and src/money.ts only formats it. That pill read "
+                                         "`Costs money` in every state, including on a finished "
+                                         "run beside a six-figure token count and no dollar "
+                                         "figure at all — a warning about a decision this screen "
+                                         "does not offer, since a run directory exists only "
+                                         "because the spend route already spawned a child. It "
+                                         "settles now: `Spending now` while a batch is in flight, "
+                                         "`Cost $0.15` once it is done, and `Costs money` only "
+                                         "where nothing was ever submitted. The figure is drawn "
+                                         "in the step BODY as well, because the head's cost slot "
+                                         "is display:none below a 640px container. "
+                                         "Every command's stdout is shown "
                                          "verbatim in src/RunsLog.tsx's well and the import CSVs "
                                          "are downloads, which is the gap docs/GATES.md names as "
                                          "what Gate B did not close. THE EXPORT IS FETCHED "
@@ -4727,7 +4837,7 @@ COMPONENTS = [
                         "64px carrying no filter and no cap discs, the DISPLAY cut is what "
                         "`#/gallery` shows at 64 and above, all six locked palettes are drawn "
                         "and differ, and the mark does not invert with the theme.",
-                "governed_by": ["D94", "D102", "D134"],
+                "governed_by": ["D94", "D102", "D134", "D136"],
                 "note": "IT EXISTS BECAUSE NOTHING IN app/tests MENTIONED THE MARK AT ALL. No "
                         "snapshot, no brand assertion, no reference to `Logo` — the mark could "
                         "have stopped rendering in all six of its call sites with `make check` "
@@ -5072,7 +5182,7 @@ COMPONENTS = [
                 # constant case argues from D32's measured 39-81% card fill, and the reason the
                 # old fixed centre was wrong is that it magnified the Pokedex strip — D35's
                 # misread-as-collector-number string exactly.
-                "governed_by": ["D4", "D13", "D24", "D28", "D29", "D32", "D35", "D16", "D41", "D37", "D46", "D77"],
+                "governed_by": ["D4", "D13", "D24", "D28", "D29", "D32", "D35", "D16", "D41", "D37", "D46", "D77", "D136"],
                 "note": "NOT a harness test — it starts a browser, which docs/GATES.md keeps "
                         "off the seven-test contract deliberately. The photograph stub is "
                         "2160x3840 and that is load-bearing: the rig's stored frame is 9:16 "
@@ -5087,7 +5197,7 @@ COMPONENTS = [
                         "rendered view, with every contrast ratio computed from the colors "
                         "the page actually painted rather than from a number published in "
                         "docs/DESIGN.md. Run by `make design-check`.",
-                "governed_by": ["D5", "D10", "D13", "D24", "D31", "D41", "D115", "D125"],
+                "governed_by": ["D5", "D10", "D13", "D24", "D31", "D41", "D115", "D125", "D136"],
                 "note": "NOT a harness test, same as its sibling above. It failed 16 of the 30 "
                         "assertions `make design-check` runs for the few hours between the view "
                         "being built and being routed — all of them because every test asserts "

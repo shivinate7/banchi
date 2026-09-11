@@ -41,6 +41,7 @@ import os
 import re
 import subprocess
 import sys
+import time
 from datetime import datetime
 from pathlib import Path
 from typing import Dict, List, NamedTuple, Optional, Sequence, Tuple
@@ -717,30 +718,63 @@ def serving() -> List[str]:
     if sup:
         out.append(field("supervisor", f"up (pid {sup}) — `make up`"))
     else:
-        out.append(field("supervisor", "not running — `make up` starts both servers"))
+        out.append(field("supervisor", "not running — `make up` starts it"))
 
-    for label, pid_key, port_key, live_key in (
-        ("capture", "capture_pid", "capture_port", "capture_answering"),
-        ("app", "app_pid", "dev_port", "app_answering"),
-    ):
-        port = data.get(port_key)
-        answering = data.get(live_key)
-        pid = data.get(pid_key)
-        if answering and pid:
-            out.append(field(label, f":{port} answering (pid {pid})"))
-        elif answering:
-            # The D43 case. Named as the hazard it is rather than reported as "up".
-            out.append(field(label, f":{port} is answering, but no pidfile in THIS checkout"))
-            out.append(cont("claims it — another checkout, or a stray `make server`."))
-            out.append(cont("D43: it is serving a DIFFERENT store."))
-        else:
-            out.append(field(label, f":{port} not answering"))
+    port = data.get("capture_port")
+    answering = data.get("capture_answering")
+    pid = data.get("capture_pid")
+    if answering and pid:
+        out.append(field("banchi", f":{port} answering (pid {pid})"))
+    elif answering:
+        # The D43 case. Named as the hazard it is rather than reported as "up".
+        out.append(field("banchi", f":{port} is answering, but no pidfile in THIS checkout"))
+        out.append(cont("claims it — another checkout, or a stray `make server`."))
+        out.append(cont("D43: it is serving a DIFFERENT store."))
+    else:
+        out.append(field("banchi", f":{port} not answering"))
+
+    # THE APP IS A BUILD NOW, NOT A SECOND PORT (D138), so what there is to report is whether
+    # the bundle is current and what the last build said. This and the supervisor log are the
+    # only two places a failed build is ever reported: the app cannot say anything about the
+    # build that produced it, and CI typechecks every PR before main moves, so a failure here
+    # is a dependency that shifted rather than a half-written screen.
+    out.extend(app_build_lines(data))
 
     if data.get("agent_installed"):
         out.append(field("launch agent", f"plist installed — {data.get('agent_label')}"))
     for name in data.get("lan_names") or []:
-        out.append(field("on the network", f"http://{name}:{data.get('dev_port')}"))
+        out.append(field("on the network", f"http://{name}:{data.get('capture_port')}"))
     return out
+
+
+def app_build_lines(data: dict) -> List[str]:
+    """One line for the app, and a second only when there is something to do about it."""
+    verdict = data.get("app_build_verdict")
+    detail = (data.get("app_build_detail") or "").strip()
+    when = data.get("app_build_at")
+    stamp = ""
+    if isinstance(when, (int, float)) and when > 0:
+        stamp = time.strftime(" %H:%M", time.localtime(when))
+    if not data.get("app_built"):
+        out = [field("app", "NOT BUILT — `make up` builds it")]
+        if verdict in ("fail", "install-failed", "no-modules") and detail:
+            out.append(cont(f"last build{stamp}: {detail}"))
+        return out
+    if verdict in ("fail", "install-failed"):
+        # THE BUNDLE IS FINE AND BEHIND, which is the state worth a whole line: the screen
+        # looks right, answers right, and is not what is in the tree.
+        return [
+            field("app", f"STALE — the build failed{stamp}, serving the last one that worked"),
+            cont(detail or "see .serve/supervisor.log"),
+        ]
+    if data.get("app_stale"):
+        # WHO IS GOING TO REBUILD IT DECIDES THE WORDING. With the supervisor up this is a
+        # second of catching up and says so; with nothing running, "rebuilding" would be a
+        # claim about a process that does not exist.
+        if data.get("supervisor"):
+            return [field("app", "rebuilding — the previous bundle is served meanwhile")]
+        return [field("app", "stale — `make up` rebuilds it")]
+    return [field("app", f"built{stamp}")]
 
 
 def ports_and_store() -> List[str]:

@@ -792,7 +792,9 @@ it is written down because it is the only regularity in the set.
 
 So the case that fails one run in thirteen inside the suite passes 555 times outside it, on the
 box it fails on. **The suite around it is part of the mechanism** and nothing measured says which
-part. The candidates read and ruled out by evidence rather than by argument: a Vite dependency
+part. **Which is why D136 shards the job three ways and does not widen it**: the shape those 240
+and 315 passes were measured in — three shards, one worker — is the shape CI runs now, and the
+worker count stays at one because more workers on one box is more suite around the case. The candidates read and ruled out by evidence rather than by argument: a Vite dependency
 re-optimisation forcing a reload (the app's only runtime dependencies are React's, all bundled at
 scan, and a reload would EMPTY the track rather than hold it at 3); a second listener eating the
 press (the leader's capture-phase `stopPropagation` fires only while armed, and nothing arms it);
@@ -1794,3 +1796,70 @@ repository, ten arms, three of them mutation-tested. **What is not:** any of the
 on purpose. The `recorded deletions` audit row covers the one case a session registers by hand,
 and D133's whole-file detector covers the keep-ours merge, which restores whole blobs and so
 never depends on hunk boundaries.
+
+## 20. Two liveness oracles read a pid, and a recycled one lies to both
+
+**Recorded 2026-09-11 with D33's amendment**, which made the capture server hold the `Popen` of
+each identify child it spawns and reap it by polling. That closes the zombie — an unwaited child
+holding a pid `os.kill(pid, 0)` accepts — for every run *this* server started. Two gaps are left,
+and neither is closed:
+
+- **A run orphaned across a restart.** With no handle, `_live_pid` falls back to signal 0 over
+  `running.pid` with the run's own `identifications.json` as the floor. That narrows a reused pid
+  to one case — a run killed mid-batch, which never writes the record — but does not remove it.
+  The closer is in the tree already and is not wired here: `scripts/serve.py:live_pid` reads
+  `ps -p <pid> -o command=` and requires a distinguishing absolute path in the argv. It was
+  declined because it forks `ps` inside a path polled every four seconds, it fixes nothing about
+  the root cause, and it would break T7's own `os.getpid()` gestures, whose argv names
+  `harness/run.py` rather than a run directory.
+- **A recycled pid in `.serve/*.pid` widens what `reap` will not touch.** `scripts/reap.py`'s
+  `protected_pids` takes signal 0 at face value, so a stale record whose pid now belongs to
+  something else protects that process and its descendants. This is the SAFE direction and
+  matches that file's stated default — *"a pid with no readable evidence is UNKNOWN and
+  therefore refused"* — and a corpse already has a designed verdict there, `GONE`. It is recorded
+  because it is the same call with the same blind spot, not because it is the same defect.
+
+**What is measured:** the zombie, by hand, and the fix against it — seven mutation arms over
+T7's block, all red. **What is not:** either row above, and the two lines `_child_of`'s docstring
+argues against the CPython source rather than asserts — the eviction guard, which cannot be posed
+without sixty-four spawns, and the false-alive answer the lock prevents, which is a race that
+cannot be produced on demand.
+
+## 21. The double-click guard cannot see a run started in a terminal
+
+**Found 2026-09-11 while building D33's amendment, and older than it.**
+`server/pipeline_routes.py:_run_box` argues at length that the guard must read the box out of the
+capture path as well as the scope, *"or the screen could start a second batch over a box an agent
+is already identifying"* — and `check_pipeline_routes` asserts that flow. But **`_spawn` is the
+only writer of `running.pid` in the tree.** A run started by typing `pkmnscan identify` has no
+marker, `_live_pid` returns `None` for it, and `_busy_run` skips it at the loop head. The T7 case
+poses the pid by hand, so what it proves is `_run_box`'s path-reading, not the claim above it.
+
+Unaffected by D33's amendment either way — a terminal run has no handle *and* no marker. The fix
+is one line in `cli/cmd_identify.py`: write the marker there too, which would make the guard true
+and put every terminal run in the fallback case. Not taken here because it widens a change that
+is about a different defect, and because it wants its own T7 case.
+
+## 22. A control shrunk inside its own sticky bar is invisible to the thumb-floor sweep
+
+**Measured 2026-09-11, while answering the CI failure that PR #252 could not.**
+`app/tests/phone.spec.ts` decides whether a probe landed on the control with
+`owns = t.contains(n) || n.contains(t) || chrome(n)`. The middle clause — the probe landed on the
+control's own ANCESTOR — is what lets a 22px tick answer at 46px through a padded wrapper, and it
+is load-bearing for the whole hit-area method (D117): the alternative is the box-only assertion
+this file rejects, which needs a list of names to forgive every negative-inset pad.
+
+It also means a control cannot fail because of its own parent. Shrink `.browse-boxchip` from
+`--bn-control-h-lg` to 20px and its vertical probes land on `.browse-mobilebar`, the sticky bar it
+sits in, which contains it — so the sweep reports nothing and the suite stays green.
+
+**What was checked, because the obvious suspicion is wrong:** the arm is silent against the copy
+of the file that PREDATES 2026-09-11's `.browse-mobilebar` chrome entry as well as against the
+one that carries it. Naming that bar as chrome did not open this, and removing the name would not
+close it. The clause is older than both.
+
+**Why it is not repaired here.** Narrowing it — say, to ancestors that are not themselves
+scroll-independent furniture — is a change to the predicate every case in that file rests on, and
+it wants its own measurement across all twelve routes rather than a fix smuggled into a CI repair.
+The `mode === 'box'` sweep on `#/gallery` already asserts the box outright and would catch a
+shrunken kit component; what escapes is a screen-level control shrunk inside its own bar.

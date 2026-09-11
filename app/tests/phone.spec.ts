@@ -61,8 +61,32 @@ const auditSource = (mode: Mode) => `(() => {
      the ship bar, which is the case this file exists to catch; "anything fixed" would miss the
      kit sheet's own index strip, which is sticky. Three strips scroll content under themselves
      on purpose and each is written here: the phone's top bar, its tab bar, and #/gallery's
-     index. A fourth is a deliberate edit. */
-  const chrome = (n) => n !== null && n.closest('.bn-topbar, .bn-tabbar, .kit-index') !== null
+     index. A fourth is a deliberate edit.
+
+     THE FOURTH IS .browse-mobilebar, ADDED 2026-09-11, AND IT IS THE ANSWER THE [DEBUG ...]
+     SUFFIX BELOW WAS ADDED TO GET. PR #252 widened the review-queue link's pseudo-element inset
+     from -12px to -16px on a font-metric theory, confirmed from the trace that the wider inset
+     had applied on CI, and watched the job fail with the identical error — and said so: "the
+     vertical-margin theory is wrong and the real cause is unknown." The debug line answered it
+     on the first run that failed afterwards:
+
+       "Open the review queue" [DEBUG top=37 left=76 miss=bottom@(150,64)->button.browse-boxchip]
+
+     The link is 16px tall at top=37, so its centre is y=45 and the bottom probe is at y=64. The
+     phone's box bar is sticky at top: var(--bn-topbar-h) with z-index 20, and --bn-topbar-h is
+     52px over a --bn-control-h-lg of 46px at phone widths — so it occupies roughly y=52 to
+     y=106 and the probe lands inside it. NOTHING IS WRONG WITH THE LINK: its ::after spans
+     y=21 to y=69, a 48px hit area against a 40px floor. What it hits is chrome, at one of the
+     90%-viewport scroll steps this sweep takes, and one scroll-line either way clears it. That
+     is what the other three entries are for, and it is why CI saw it and this rig did not — the
+     two disagree about the page's height, so they stop at different offsets.
+
+     IT IS SITED WITH THE OTHER THREE AND NOT WITH THE SHIP BAR, which is the distinction worth
+     keeping: .browse-mobilebar is position: sticky — the top bar's own continuation on
+     #/inventory, and content passes under it by design. .browse-actionbar on the same screen is
+     position: fixed, never moves, and is exactly what this list must not excuse. */
+  const chrome = (n) =>
+    n !== null && n.closest('.bn-topbar, .bn-tabbar, .kit-index, .browse-mobilebar') !== null
   for (const el of over.querySelectorAll('button, a[href], input, select, textarea, summary, [role="button"]')) {
     // A checkbox's own box is 16px by design; the label that wraps it is the target.
     const t = el.closest('label') ?? el
@@ -95,12 +119,24 @@ const auditSource = (mode: Mode) => `(() => {
       if (cy < c.top || cy > c.bottom || cx < c.left || cx > c.right) continue
       clipBox = c
     }
+    /* THE n.contains(t) CLAUSE IS A BLIND SPOT, AND IT IS OLDER THAN THE CHROME LIST ABOVE. A
+       probe that lands on the control's own ANCESTOR counts as owned, which is right for a
+       padded wrapper and wrong for a bar: shrink .browse-boxchip to 20px and its vertical probes
+       land on .browse-mobilebar, its parent, so the sweep reports nothing. Measured 2026-09-11
+       against BOTH this file and the copy that predates the chrome entry above — the arm is
+       silent in each, so naming that bar as chrome did not cause it and removing the name would
+       not fix it. Recorded in docs/DEBTS.md rather than repaired here: this clause is what lets
+       a 22px tick answer at 46 through a wrapper, and narrowing it wants its own measurement. */
     const owns = (n) => n !== null && (t.contains(n) || n.contains(t) || chrome(n))
     const inClip = (x, y) => clipBox === null || (x >= clipBox.left && x <= clipBox.right && y >= clipBox.top && y <= clipBox.bottom)
-    const hits = [[-r, 0], [r, 0], [0, -r], [0, r]]
-      .filter(([dx, dy]) => inClip(cx + dx, cy + dy))
-      .map(([dx, dy]) => document.elementFromPoint(cx + dx, cy + dy))
-    const misses = hits.filter((n) => !owns(n)).length
+    const probeNames = [['left', -r, 0], ['right', r, 0], ['top', 0, -r], ['bottom', 0, r]]
+    const hitDetail = probeNames
+      .filter(([, dx, dy]) => inClip(cx + dx, cy + dy))
+      .map(([name, dx, dy]) => {
+        const n = document.elementFromPoint(cx + dx, cy + dy)
+        return { name, x: Math.round(cx + dx), y: Math.round(cy + dy), tag: n ? n.tagName.toLowerCase() + (n.className ? '.' + (n.className + '').split(' ')[0] : '') : null, owns: owns(n) }
+      })
+    const misses = hitDetail.filter((h) => !h.owns).length
     // rounded, because a 39.6px control reports 40 and a floor nobody can see is a floor nobody fixes
     const small = Math.round(box.width) < FLOOR || Math.round(box.height) < FLOOR
     const covered = !owns(document.elementFromPoint(cx, cy))
@@ -111,12 +147,13 @@ const auditSource = (mode: Mode) => `(() => {
     if (seen.has(key)) continue
     seen.add(key)
     const label = (el.getAttribute('aria-label') ?? t.textContent ?? '').trim().replace(/\\s+/g, ' ').slice(0, 40)
-    out.push({ key, w: Math.round(box.width), h: Math.round(box.height), misses, covered, label })
+    const missDetail = hitDetail.filter((h) => !h.owns).map((h) => \`\${h.name}@(\${h.x},\${h.y})->\${h.tag ?? 'null'}\`).join(', ')
+    out.push({ key, w: Math.round(box.width), h: Math.round(box.height), misses, covered, label, missDetail, top: Math.round(box.top), left: Math.round(box.left) })
   }
   return out
 })()`
 
-type Short = { key: string; w: number; h: number; misses: number; covered: boolean; label: string }
+type Short = { key: string; w: number; h: number; misses: number; covered: boolean; label: string; missDetail: string; top: number; left: number }
 
 /* TWO PROPERTIES, AND THE KIT SHEET CAN ONLY ANSWER ONE OF THEM.
  *
@@ -177,7 +214,7 @@ async function audit(page: Page, where: string, mode: Mode): Promise<string[]> {
         ? `${where}: ${s.key} draws ${s.w}x${s.h} and its centre is covered — it cannot be pressed at all${name}`
         : mode === 'box'
           ? `${where}: ${s.key} draws ${s.w}x${s.h}, under the ${FLOOR}px floor${name}`
-          : `${where}: ${s.key} draws ${s.w}x${s.h} and misses ${s.misses} of 4 probes at ${FLOOR / 2 - 1}px — its hit area does not reach the floor${name}`,
+          : `${where}: ${s.key} draws ${s.w}x${s.h} and misses ${s.misses} of 4 probes at ${FLOOR / 2 - 1}px — its hit area does not reach the floor${name} [DEBUG top=${s.top} left=${s.left} miss=${s.missDetail}]`,
     )
   }
   return lines
