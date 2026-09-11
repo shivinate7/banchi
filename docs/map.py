@@ -2599,8 +2599,12 @@ COMPONENTS = [
                                              "Playwright's 5s: fullyParallel puts every worker's "
                                              "first visibility wait against a cold Vite, and that "
                                              "wait — never an assertion — was the whole of the "
-                                             "flake DEBTS.md recorded on 2026-08-30",
-                                     "governed_by": ["D5", "D16"]},
+                                             "flake DEBTS.md recorded on 2026-08-30. Under CI a "
+                                             "failing case keeps its trace (`retain-on-failure`) "
+                                             "and check.yml uploads it: the one-test runner red "
+                                             "has never reproduced on the rig (D128), so the run "
+                                             "that fails is the only witness there is",
+                                     "governed_by": ["D5", "D16", "D128"]},
             "design-check-reporter.ts": {"does": "THE VERDICT, AS ONE SMALL FILE. A Playwright "
                                                  "reporter that writes `.serve/design-check.json` "
                                                  "— pass/fail, the counts, and every failing title "
