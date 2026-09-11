@@ -1968,7 +1968,16 @@ named helper beside `sellableStore()`, or an option on `open()` — and the rule
 without reading assertions: a post-click fixture mutation is a defect in any case that did not opt
 in, and the declared contract in one that did. A new sale case then either routes through
 `movesOnSale` or declares the stale-store contract, and a bare `cards[...] =` after a click has no
-home. Not built here: it is new surface area across seven cases plus a checker, and it wants its
+home.
+
+**THE DECLARATION HAS TO NAME A PROPERTY, NOT BE A FLAG.** `skipMutationCheck` is a spelling
+somebody copies onto a fifth case that does not mean it, and the opt-out list then stops being a
+list and becomes a habit. *This case requires the re-read to disagree with the overlay* is a claim
+a reader can check against `doSell` — and a case that cannot say that sentence truthfully is a
+case that should have been converted. Each of the four states what it is FOR, or the mechanism has
+bought nothing.
+
+Not built here: it is new surface area across seven cases plus a checker, and it wants its
 own argument rather than being smuggled into a CI repair.
 
 **What finds it meanwhile is a probe, not a guard.** Inserting `await page.waitForTimeout(300)`
