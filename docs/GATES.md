@@ -788,23 +788,28 @@ re-run at the rig's real resolution — opencv fell from a plausible 96% to 72.7
 of 8 on a card filling a quarter of the frame. A test at the wrong resolution would have
 locked that mistake in.
 
-### T9 — Motion trigger against eight recorded rig sessions
+### T9 — Motion trigger against ten recorded rig sessions
 
 New 2026-08-31 with D81, widened 2026-09-01 with D84. **Pass: on every saved trace an empty stand sits within 2 of its own baseline and every card sits
 17 or more away; the dimmest card on one rig is dimmer than the empty stand on another, so
 no brightness constant separates them; the adaptive thresholds reach at least as many
-verdicts as the hand-tuned constants did live on all eight; and on the three sessions D84
+verdicts as the hand-tuned constants did live on all ten; and on the three sessions D84
 was derived from, the presence floor refuses both settles that photographed the bare stand
-while a card that never settles is reported as a stall.**
+while a card that never settles is reported as a stall; and on the two 2026-09-11 sessions
+the settle rule fired five times each on a feeder with a 0.87 s beat and no rest, the receipt
+the cadence trigger (D130) was built on.**
 
-**The inputs are `harness/traces/` — eight armed sessions**, saved from the capture screen's
-HUD by the owner between 2026-08-23 and 2026-09-01: FIVE recorded under the brightness floor
-D81 replaced, and THREE recorded on 2026-09-01 under the distance gate that replaced it, which
-are the sessions D84 was derived from. Each carries every frame's `(t, d, luma)`, v2 adding
-`dBase`, and the exact watch-region pixels of every verdict, which is what makes a refusal
-re-scorable a year later. They are ground truth in `fixtures/`'s sense and are never modified.
+**The inputs are `harness/traces/` — ten armed sessions**, saved from the capture screen's
+HUD by the owner between 2026-08-23 and 2026-09-11: FIVE recorded under the brightness floor
+D81 replaced, THREE recorded on 2026-09-01 under the distance gate that replaced it (the
+sessions D84 was derived from), and TWO recorded on 2026-09-11 over a re-arranged feeder with a
+beat and no rest, on which the settle trigger fired five times each against 29 and ~34 cards —
+the receipt D130's cadence trigger was built on. Each carries every frame's `(t, d, luma)`, v2
+adding `dBase`, and the exact watch-region pixels of every verdict, which is what makes a
+refusal re-scorable a year later. They are ground truth in `fixtures/`'s sense and are never
+modified.
 
-**The two corpora are named in code and never summed.** "38 real cards were refused live" is a
+**The three corpora are named in code and never summed.** "38 real cards were refused live" is a
 receipt for what the brightness floor cost, and only the first five sessions were ever recorded
 under it; adding the later three would turn a fixed number into one that grows every time a
 trace is banked.
@@ -832,7 +837,7 @@ the stand. Every verdict frame was rendered and inspected before the labels in
 `t9_traces.py` were written; `scripts/score-trace.py contact` is how.
 
 **WHAT A GREEN T9 DOES NOT MEAN.** It does not mean the trigger works at the rig today —
-these are eight recordings of a handful of rig states, and the next can differ from all of
+these are ten recordings of a handful of rig states, and the next can differ from all of
 them. Same limit T6 and T8 carry. What it means is that the machine still tells a card from an empty
 stand on every session anybody has recorded.
 

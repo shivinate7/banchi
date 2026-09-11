@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
-import type { CSSProperties, ReactNode } from 'react'
+import type { CSSProperties, ReactNode, RefObject } from 'react'
 
 import { PositionLabel } from './PositionLabel'
 import { storeKeyText } from './storeKey'
@@ -22,6 +22,8 @@ import { resolveSetHint } from './setHint'
 import type { HintVerdict, SetOption } from './setHint'
 import { manualTrigger } from './trigger'
 import { motionTrigger } from './motion'
+import { DEFAULT_CADENCE, cadenceTrigger } from './cadence'
+import type { CadenceControls, CadenceDiagnostics } from './cadence'
 import type { MotionControls, MotionDiagnostics, MotionPhase } from './motion'
 import { MotionTrace } from './trace'
 import { DEFAULT_PARAMS } from './motion'
@@ -479,6 +481,19 @@ function isEditableTarget(target: EventTarget | null): boolean {
 
 /** A field at rest: keycap · label · current value · chevron. A button, because the whole
  *  line is the control that opens it. */
+/** Which implementation is behind the trigger seam. Three since D130: the key, the settle
+ *  machine, and the beat-locked cadence. Never persisted — arming is an act (D19). */
+type TriggerMode = 'manual' | 'motion' | 'cadence'
+
+/** What the HUD reads. The settle machine's readout, and the cadence's fields where that is
+ *  the trigger armed — optional, so one state serves both machines and the HUD renders the
+ *  beat's spans only when they exist. */
+type HudDiag = MotionDiagnostics & Partial<Omit<CadenceDiagnostics, keyof MotionDiagnostics>>
+
+function triggerIcon(mode: TriggerMode): IconName {
+  return mode === 'motion' ? 'eye' : mode === 'cadence' ? 'clock' : 'keyboard'
+}
+
 function Row({
   k,
   label,
@@ -851,11 +866,16 @@ export function CaptureScreen() {
    * shutter on page load, pointed at whatever happens to be in front of the lens, with
    * nobody having asked for it this session. Arming the trigger is starting the run, so it
    * is an act, not a setting. */
-  const [triggerMode, setTriggerMode] = useState<'manual' | 'motion'>('manual')
+  const [triggerMode, setTriggerMode] = useState<TriggerMode>('manual')
 
   // The machine's own counters and live signal, for the HUD. Null until the first frame
   // reaches the machine, which is also the "is it actually seeing anything" indicator.
-  const [motionDiag, setMotionDiag] = useState<MotionDiagnostics | null>(null)
+  const [motionDiag, setMotionDiag] = useState<HudDiag | null>(null)
+  /* The operator's pinned beat period, as typed. Empty is "measure it", which is the default
+   * and what the seed stands in for until the beat has been heard (D130). Device-local like
+   * the rest of this screen's session claims, and NOT persisted: a period is a fact about
+   * tonight's feeder, and arming is an act (D19). */
+  const [periodPin, setPeriodPin] = useState('')
 
   /* Fires the SCREEN declined, by reason. The trigger's own suppressions (same card, empty
    * stand) live in the machine's counters; these are the seam's other half — the trigger
@@ -876,8 +896,7 @@ export function CaptureScreen() {
    * owns — and the swallowed counts belong to the run that swallowed them, not to the
    * session. Both zero together or the two halves of the readout desynchronise. */
   const switchTrigger = useCallback(
-    (mode: 'manual' | 'motion') => {
-      
+    (mode: TriggerMode) => {
       if (mode === triggerMode) return
 
       setTriggerMode(mode)
@@ -885,8 +904,9 @@ export function CaptureScreen() {
       setSwallowed({ busy: 0, halted: 0, noBox: 0, notReady: 0, held: 0 })
       // The trace belongs to one armed session, exactly like the machine's own counters:
       // arming starts a fresh recording, disarming keeps the old one around so it can
-      // still be saved after the run stops.
-      if (mode === 'motion') traceRef.current = new MotionTrace(DEFAULT_PARAMS)
+      // still be saved after the run stops. The file says which machine recorded it.
+      if (mode === 'motion') traceRef.current = new MotionTrace(DEFAULT_PARAMS, 'motion')
+      if (mode === 'cadence') traceRef.current = new MotionTrace(DEFAULT_CADENCE, 'cadence')
     },
     [triggerMode],
   )
@@ -898,7 +918,7 @@ export function CaptureScreen() {
 
   /* The armed machine's own control surface — today only `rebaseline`. Null whenever motion
    * is not armed, which is exactly when the control below must not render. */
-  const motionControls = useRef<MotionControls | null>(null)
+  const motionControls = useRef<MotionControls | CadenceControls | null>(null)
 
   // Read synchronously inside the capture path. React state cannot serve here: two fires in
   // one tick — a key repeat, or a focused button activated by the same press — would both
@@ -1398,6 +1418,7 @@ export function CaptureScreen() {
       } else if (openField === 'trigger') {
         if (nth === 0) switchTrigger('manual')
         else if (nth === 1) switchTrigger('motion')
+        else if (nth === 2) switchTrigger('cadence')
         else return
         closeField()
       }
@@ -1821,7 +1842,23 @@ export function CaptureScreen() {
       ),
     [camera.videoRef],
   )
-  const captureTrigger = triggerMode === 'motion' ? machineTrigger : keyTrigger
+  /* Trigger 2 (D130): the same sampler, the same signal machine underneath, and a fire
+   * scheduled on the feeder's own beat instead of on a settle the feeder never allows. Same
+   * seam, same ref for its controls — `pinPeriod` is the one control the settle machine does
+   * not have, and the Rig panel offers it only while this trigger is the one armed. */
+  const beatTrigger = useMemo(
+    () =>
+      cadenceTrigger(
+        camera.videoRef,
+        setMotionDiag,
+        DEFAULT_CADENCE,
+        (t, d, dBase, luma, event, cells) => traceRef.current?.record(t, d, dBase, luma, event, cells),
+        motionControls as RefObject<CadenceControls | null>,
+      ),
+    [camera.videoRef],
+  )
+  const captureTrigger =
+    triggerMode === 'motion' ? machineTrigger : triggerMode === 'cadence' ? beatTrigger : keyTrigger
   const undoTrigger = useMemo(() => manualTrigger(UNDO_KEY), [])
   /* On the same primitive as the shutter and the undo, and never on the motion seam. A
    * divider is a physical act somebody performs with their hands; there is nothing for a
@@ -1846,8 +1883,7 @@ export function CaptureScreen() {
        * that keeps delivering, each of these is a card that may have passed the lens with
        * no record — spec 5.5's failure — and the halt banner below renders the `halted`
        * count as exactly that sentence. */
-      if (triggerMode === 'motion') {
-        
+      if (triggerMode !== 'manual') {
         const reason = busyRef.current
           ? ('busy' as const)
           : halt !== null
@@ -2052,7 +2088,10 @@ export function CaptureScreen() {
   const cameraFault = camera.missing || camera.error !== null
 
   const phase: MotionPhase | null =
-    triggerMode === 'motion' && motionDiag !== null ? motionDiag.phase : null
+    triggerMode !== 'manual' && motionDiag !== null ? motionDiag.phase : null
+
+  /* The beat, when the cadence trigger is the one armed; null under the other two. */
+  const beat = triggerMode === 'cadence' && motionDiag !== null ? (motionDiag.beat ?? null) : null
 
   /* The stage lamp: what the feed is doing, in one pill. */
   const lamp: { tone: PillTone; icon: IconName; text: string } = !camera.started
@@ -2075,6 +2114,14 @@ export function CaptureScreen() {
         ? { tone: 'warn', icon: 'eye', text: 'Armed · no signal' }
         : !motionDiag.hasBaseline
           ? { tone: 'warn', icon: 'eye', text: 'Baseline pending' }
+          : beat === 'waiting'
+            ? { tone: 'ok', icon: 'clock', text: 'Waiting for the first card' }
+            : beat === 'seeded'
+              ? { tone: 'accent', icon: 'clock', text: `On the seed · ${motionDiag.periodMs ?? 0} ms` }
+              : beat === 'locked'
+                ? { tone: 'live', icon: 'clock', text: `On the beat · ${motionDiag.periodMs ?? 0} ms` }
+                : beat === 'idle'
+                  ? { tone: 'warn', icon: 'clock', text: 'Feeder stopped' }
           : phase === 'moving'
             ? { tone: 'live', icon: 'zap', text: 'Moving' }
             : phase === 'settling'
@@ -2085,7 +2132,7 @@ export function CaptureScreen() {
    * it has to clear. Drawn as a bar with a tick at the floor, so "is there a card" is a
    * glance rather than two decimals. */
   const presence =
-    triggerMode === 'motion' && motionDiag !== null && motionDiag.hasBaseline
+    triggerMode !== 'manual' && motionDiag !== null && motionDiag.hasBaseline
       ? {
           value: motionDiag.dBase,
           floor: motionDiag.presenceFloor,
@@ -2148,14 +2195,14 @@ export function CaptureScreen() {
                   : 'Leave the card at the lens and capture it again after you resume — if it ' +
                     'was already recorded, the app will say so and give it no second position.'}
               </p>
-              {triggerMode === 'motion' && swallowed.halted > 0 ? (
+              {triggerMode !== 'manual' && swallowed.halted > 0 ? (
                 <p className="capture-halt-message capture-halt-count">
                   <span className="capture-inline-count">{swallowed.halted}</span>{' '}
                   {swallowed.halted === 1 ? 'card' : 'cards'} may have passed the lens unrecorded
                   while captures were paused. Set them aside and re-feed them after you resume.
                 </p>
               ) : null}
-              {triggerMode === 'motion' && halt.where === 'server' ? (
+              {triggerMode !== 'manual' && halt.where === 'server' ? (
                 <p className="capture-halt-message">
                   After you resume, capture the held card with the button yourself — the
                   machine will not re-present a card it has already fired on.
@@ -2350,7 +2397,7 @@ export function CaptureScreen() {
             </div>
 
             {/* A run of empty-stand verdicts has exactly one likely cause and one remedy. */}
-            {triggerMode === 'motion' && (motionDiag?.noCardRun ?? 0) >= 3 ? (
+            {triggerMode !== 'manual' && (motionDiag?.noCardRun ?? 0) >= 3 ? (
               <div className="capture-stage-warn" role="alert">
                 <Icon name="alert" size={16} />
                 <p className="capture-refused">
@@ -2380,19 +2427,21 @@ export function CaptureScreen() {
                 <Icon name="settings" size={14} />
                 <span className="capture-tuning-word">Tuning</span>
                 <span className="capture-tuning-sum">
-                  {triggerMode !== 'motion'
+                  {triggerMode === 'manual'
                     ? ''
                     : motionDiag === null
                       ? 'armed · no frames yet'
-                      : `${motionDiag.phase} · ${motionDiag.fires} fires`}
+                      : triggerMode === 'cadence'
+                        ? `${motionDiag.beat ?? 'waiting'} · ${motionDiag.periodMs ?? 0} ms · ${motionDiag.fires} fires`
+                        : `${motionDiag.phase} · ${motionDiag.fires} fires`}
                   {swallowedTotal > 0 ? ` · ${swallowedTotal} dropped` : ''}
                 </span>
                 <Icon name="chevronUp" size={13} className="capture-chev" />
               </summary>
               <div className="capture-tuning-body">
-                {triggerMode !== 'motion' ? (
+                {triggerMode === 'manual' ? (
                   <p className="capture-quiet">
-                    Arm the motion trigger under Rig (T) and the machine's readout appears here.
+                    Arm the motion or cadence trigger under Rig (T) and the machine's readout appears here.
                   </p>
                 ) : motionDiag === null ? (
                   <p className="capture-quiet">
@@ -2417,13 +2466,23 @@ export function CaptureScreen() {
                     <span>same {motionDiag.suppressedUnchanged}</span>
                     <span>empty {motionDiag.suppressedNoCard}</span>
                     <span>stall {motionDiag.stalled}</span>
+                    {triggerMode !== 'cadence' ? null : (
+                      /* The beat's own instruments (D130). `beat` is a word and the live spec's
+                         parser skips it by shape; the rest are `name value` like every span. */
+                      <>
+                        <span>beat {motionDiag.beat ?? 'waiting'}</span>
+                        <span>period {motionDiag.periodMs ?? 0}</span>
+                        <span>lock {(motionDiag.beatCoeff ?? 0).toFixed(2)}</span>
+                        <span>blind {motionDiag.blindFires ?? 0}</span>
+                      </>
+                    )}
                     {swallowedTotal === 0 ? null : (
                       <span className="capture-refused">dropped {swallowedTotal}</span>
                     )}
                   </p>
                 )}
                 <div className="capture-tuning-actions">
-                  {triggerMode === 'motion' && motionDiag !== null ? (
+                  {triggerMode !== 'manual' && motionDiag !== null ? (
                     <Button size="sm" icon="refresh" onClick={() => motionControls.current?.rebaseline()}>
                       Re-baseline · stand must be empty
                     </Button>
@@ -3266,10 +3325,14 @@ export function CaptureScreen() {
             <OpenField
               k="T"
               label="Trigger"
-              icon={triggerMode === 'motion' ? 'eye' : 'keyboard'}
+              icon={triggerIcon(triggerMode)}
               meta={
                 <>
-                  {triggerMode === 'motion' ? 'Motion · the machine fires it' : `Manual · ${CAPTURE_KEY_LABEL} fires it`}
+                  {triggerMode === 'motion'
+                    ? 'Motion · the machine fires it'
+                    : triggerMode === 'cadence'
+                      ? 'Cadence · the beat fires it'
+                      : `Manual · ${CAPTURE_KEY_LABEL} fires it`}
                   <span className="bn-sr capture-trigger">{captureTrigger.name}</span>
                 </>
               }
@@ -3294,22 +3357,68 @@ export function CaptureScreen() {
                       closeField()
                     },
                   },
+                  {
+                    text: 'cadence',
+                    on: triggerMode === 'cadence',
+                    onPick: () => {
+                      switchTrigger('cadence')
+                    },
+                  },
                 ]}
               />
+              {triggerMode !== 'cadence' ? null : (
+                /* THE ONE CONTROL THE SETTLE MACHINE DOES NOT HAVE (D130). Empty means the
+                   machine measures the beat itself, which is the default and what the trace
+                   says it does well; a number holds the period there while the phase is still
+                   measured. It stays inside the open field because a pin is a tuning act, not
+                   a session claim, and the field is where the trigger is chosen. */
+                <div className="capture-entrybox bn-input-wrap capture-period">
+                  <Icon name="clock" size={14} />
+                  <input
+                    className="capture-filter bn-input"
+                    type="number"
+                    inputMode="numeric"
+                    min={300}
+                    max={2500}
+                    step={10}
+                    placeholder={`${motionDiag?.measuredMs ?? DEFAULT_CADENCE.periodSeedMs}`}
+                    aria-label="Beat period in milliseconds"
+                    value={periodPin}
+                    onChange={(event) => {
+                      const raw = event.target.value
+                      setPeriodPin(raw)
+                      const controls = motionControls.current
+                      if (controls !== null && 'pinPeriod' in controls) {
+                        const ms = raw.trim() === '' ? null : Number(raw)
+                        controls.pinPeriod(ms !== null && Number.isFinite(ms) ? ms : null)
+                      }
+                    }}
+                  />
+                  <span className="capture-entrymeta">
+                    {periodPin.trim() === ''
+                      ? motionDiag?.measuredMs != null
+                        ? `measured ${motionDiag.measuredMs} ms`
+                        : `seed ${DEFAULT_CADENCE.periodSeedMs} ms until measured`
+                      : 'ms · pinned'}
+                  </span>
+                </div>
+              )}
               <p className="capture-opennote">
                 {triggerMode === 'motion'
                   ? 'The machine fires the shutter when a card settles at the lens. Arming starts the run; it never survives a reload.'
-                  : 'The shutter fires on C. Motion arms a machine that fires it when a card settles.'}
+                  : triggerMode === 'cadence'
+                    ? 'The first card fires the shutter; after that it fires once per beat of the feeder, measured from the motion itself. For a feeder that never lets a card sit still. Leave the period blank to let it measure.'
+                    : 'The shutter fires on C. Motion arms a machine that fires it when a card settles; Cadence arms one that fires on a feeder\'s beat.'}
               </p>
             </OpenField>
           ) : (
             <Row
               k="T"
               label="Trigger"
-              icon={triggerMode === 'motion' ? 'eye' : 'keyboard'}
+              icon={triggerIcon(triggerMode)}
               right={
                 <span className={triggerMode === 'manual' ? 'capture-val' : 'capture-val is-armed'}>
-                  {triggerMode === 'manual' ? 'Key' : 'Motion'}
+                  {triggerMode === 'manual' ? 'Key' : triggerMode === 'motion' ? 'Motion' : 'Cadence'}
                   <em className="bn-sr capture-trigger">
                     {captureTrigger.name}
                   </em>

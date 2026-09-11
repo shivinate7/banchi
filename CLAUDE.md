@@ -1398,6 +1398,7 @@ D126 The demo inflates its own history, and the present is left alone
 D127 A session may stop what it started, and the checkout is what decides which that is
 D128 The key listener is attached before the paint, because a press answers to what is on the screen and not to the render before it
 D129 The verdict's line is fixed by the first Playwright that counts it right, and the rig's Node is not the thing that moves
+D130 A feeder that never rests gets a second trigger, and the beat is measured not typed
 ```
 
 **THE GAP THIS LIST CARRIED BETWEEN D116 AND D118 IS CLOSED, AND IT CLOSED THE WAY IT SAID IT
@@ -1517,6 +1518,16 @@ was open** — the rule is renumber your own, never another's.
   first card (8–11 on this rig), and no session statistic measures how big a hand is in frame.
   D84 records that as a debt rather than a design, and names the three quantities that
   re-derive it on a new rig — the idle stand, the worst approach, the quietest card.
+
+  **A SECOND TRIGGER LANDED 2026-09-11 FOR A FEEDER THAT NEVER RESTS (D130).** The settle
+  trigger fired on 5 of 29 real cards on a re-arranged rig — the region is quiet a median of
+  one frame per card, and no stillness threshold recovers it. `app/src/cadence.ts` is trigger
+  2: it fires on the feeder's BEAT, measured from the motion by autocorrelation rather than
+  typed, waits for a first card on the presence gate, and fires once per period at the phase of
+  least motion. Armed from the same Rig panel Trigger track (a third `cadence` cell) with a
+  period pin. Replayed 27/29 and 20/~21 against 5/5 live, banked as T9's third corpus. **It is
+  NOT confirmed at the rig — no photograph has been taken by it** — and its §7 is the first
+  run's checklist. Trigger 1 (settle) is unchanged and keeps its 85/85.
 
   **`scripts/score-trace.py` is how a trace is scored, and it is not optional reading before
   changing a number here.** `summary`, `presence`, `sweep` and `contact` — the last one draws

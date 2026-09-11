@@ -7,10 +7,12 @@ own frames — synthetic arrays, a flat canvas fill — so they can only ever pr
 agrees with the test's own idea of a card. Until this file, nothing in the repo had ever put
 the motion machine in front of a photograph.
 
-The traces in `harness/traces/` are the only real-rig evidence this subsystem has: eight
+The traces in `harness/traces/` are the only real-rig evidence this subsystem has: ten
 armed sessions saved from the HUD by the owner — FIVE recorded under the brightness floor
-D81 replaced, and THREE recorded on 2026-09-01 under the distance gate that replaced it,
-which is what convicted the stillness rule and the presence floor in D84. Each carries every
+D81 replaced, THREE recorded on 2026-09-01 under the distance gate that replaced it,
+which is what convicted the stillness rule and the presence floor in D84, and TWO recorded
+on 2026-09-11 over a re-arranged feeder with a beat and no rest, which convicted the settle
+rule itself and are what the cadence trigger (D130) was built on. Each carries every
 frame's (t, d, luma), v2 adding dBase, and the exact watch-region pixels of every verdict,
 which is what makes a refusal re-scorable years later.
 
@@ -36,7 +38,7 @@ WHAT IS ASSERTED, AND THE TWO KINDS ARE NOT EQUALLY VALUABLE:
                      fired" would pass on a stall in the wrong place.
 
 WHAT A GREEN T9 DOES NOT MEAN. It does not mean the trigger works at the rig today. These
-are eight recordings of a handful of rig states, and the next rig can differ from all of
+are ten recordings of a handful of rig states, and the next rig can differ from all of
 them — the same honest limit T6 and T8 carry, in the same words. What it does mean is that the machine
 still tells a card from an empty stand on every session anybody has ever recorded.
 
@@ -57,14 +59,16 @@ from pathlib import Path
 from harness.tests import Checks, Result
 
 NAME = "T9"
-DESCRIPTION = "Motion trigger against eight recorded rig sessions"
+DESCRIPTION = "Motion trigger against ten recorded rig sessions"
 PASS_CRITERIA = (
     "on every saved trace an empty stand sits within 2 of its own baseline and every card "
     "sits 17 or more away; the dimmest card on one rig is dimmer than the empty stand on "
     "another, so no brightness constant separates them; the adaptive thresholds reach at "
-    "least as many verdicts as the hand-tuned constants did live on all eight; and on the "
+    "least as many verdicts as the hand-tuned constants did live on all ten; and on the "
     "three sessions D84 was derived from, the presence floor refuses both settles that "
-    "photographed the bare stand while a card that never settles is reported as a stall"
+    "photographed the bare stand while a card that never settles is reported as a stall; "
+    "and on the two 2026-09-11 sessions the settle rule fired five times each on a feeder "
+    "with a 0.87 s beat and no rest, the receipt the cadence trigger (D130) was built on"
 )
 
 # NAMED LITERALLY, resolved against the repo root, rather than composed out of `parent`
@@ -98,7 +102,7 @@ EMPTY_BEFORE_MS = 5200
 # property. "38 real cards were refused live" is a receipt for what the brightness floor
 # cost, and only these five sessions were ever recorded under that floor. The 2026-09-01
 # 21:xx sessions ran on the distance gate, where a `suppressed:no-card` is the gate working
-# correctly on the bare stand — summing all eight would turn a fixed receipt into a number
+# correctly on the bare stand — summing across corpora would turn a fixed receipt into a number
 # that grows every time a trace is banked, which is a claim about nothing.
 PRE_D81 = {
     "harness/traces/motion-trace-2026-08-23T02-49-55-745Z.json",
@@ -160,6 +164,24 @@ EXPECTED = {
 }
 
 
+# THE TWO SESSIONS THAT CONVICTED THE SETTLE RULE ITSELF (D130), 2026-09-11, and a THIRD
+# corpus rather than two more rows above, because the claim they carry is the opposite one.
+# The owner re-arranged the feeder; it now puts a card down every 0.867 s (29 luma cycles,
+# p10 0.85, p90 0.92) and never lets one sit still — the longest run of frames under tLo per
+# card has a median of ONE. Every fire the settle machine made reached disk and photographed
+# a card; it made FIVE on each session, against 29 and ~21 cards fed. That is the receipt this
+# corpus keeps: the settle rule, on a feeder with a beat and no rest, photographs about one
+# card in six, and no threshold recovers it (`score-trace.py sweep`: 9 of 29 at best). The
+# cadence machine built on them is replayed and pinned in `app/tests/cadence.spec.ts` — a
+# TypeScript machine with no Python mirror, which is why its counts are asserted there and not
+# here. `cycles` is the luma-crossing count read off each trace; `feeding` is when the first
+# card reached the lens, read off `dBase` crossing the floor.
+CADENCE = {
+    "harness/traces/motion-trace-2026-09-11T01-48-49-706Z.json": {"fires": 5, "cycles": 29, "feeding": 31500},
+    "harness/traces/motion-trace-2026-09-11T01-51-27-783Z.json": {"fires": 5, "cycles": 34, "feeding": 13500},
+}
+
+
 def _scorer():
     """The offline scorer, imported rather than reimplemented.
 
@@ -190,11 +212,52 @@ def run() -> Result:
         path.relative_to(ROOT).as_posix(): json.loads(path.read_text())
         for path in sorted(TRACES.glob("*.json"))
     }
-    checks.equal(sorted(traces), sorted(EXPECTED), "all eight recorded sessions are present")
-    checks.equal(sorted(PRE_D81 | set(D84)), sorted(EXPECTED),
-                 "and every one is in exactly one corpus — the brightness floor's, or D84's")
-    if sorted(traces) != sorted(EXPECTED):
+    checks.equal(sorted(traces), sorted(set(EXPECTED) | set(CADENCE)),
+                 "all ten recorded sessions are present")
+    checks.equal(sorted(PRE_D81 | set(D84) | set(CADENCE)), sorted(set(EXPECTED) | set(CADENCE)),
+                 "and every one is in exactly one corpus — the brightness floor's, D84's, or D130's")
+    if sorted(traces) != sorted(set(EXPECTED) | set(CADENCE)):
         return checks.result()
+
+    # ---- D130: what the settle rule scores on a feeder with a beat and no rest ------
+    #
+    # A RECEIPT, NOT A TARGET. These counts may never go UP under the settle rule without
+    # somebody explaining how a machine that fires on stillness found some on frames whose
+    # quiet runs are one frame long; and the separation below still has to hold on them,
+    # because presence is the one thing the cadence machine borrows from the settle machine.
+    for name in sorted(CADENCE):
+        trace = traces[name]
+        key = CADENCE[name]
+        fired = [e for e in trace["events"] if e["event"] == "fire"]
+        checks.equal(
+            len(fired), key["fires"],
+            f"{_label(name)}: the settle trigger fired {key['fires']} times live on ~{key['cycles']} cards",
+        )
+        rows = score._rows(trace)
+        feeding = [d for t, d, _b, _l in rows if t >= key["feeding"]]
+        # The beat, read the same way the cadence machine reads it: the cycles the luma makes.
+        crossings = sum(
+            1 for (_t0, _d0, _b0, l0), (_t1, _d1, _b1, l1) in zip(rows, rows[1:])
+            if _t1 >= key["feeding"] and l0 >= 170 > l1
+        )
+        checks.equal(
+            crossings, key["cycles"],
+            f"{_label(name)}: the region's luma cycles {crossings} times while feeding (a card every "
+            f"{(rows[-1][0] - key['feeding']) / max(crossings, 1) / 1000:.2f} s)",
+        )
+        quiet_share = sum(1 for d in feeding if d < 3.5) / max(len(feeding), 1)
+        checks.ok(
+            quiet_share < 0.25,
+            f"{_label(name)}: under a quarter of feeding frames are under tLo ({quiet_share:.0%}) — "
+            f"the feeder never lets a card sit, which is why a settle rule cannot fire on it",
+        )
+        base = _cells(trace["keyframes"][0]["frame"])
+        for event in fired:
+            distance = _distance(_cells(event["frame"]), base)
+            checks.ok(
+                distance >= 17.0,
+                f"{_label(name)} {event['t'] / 1000:.1f}s: the fired frame is a card ({distance:.1f} from baseline)",
+            )
 
     # ---- the separation, on the one trace that contains a real empty stand ----------
     reference = traces[REFERENCE]
@@ -271,7 +334,9 @@ def run() -> Result:
     checks.equal(still_refused, 18, "18 of them would still be refused by a floor of 90")
 
     # ---- every card clears the distance gate, on every rig --------------------------
-    for name in sorted(traces):
+    # The cadence corpus (D130) is graded in its own block above; these are the presence
+    # checks keyed by EXPECTED, which is the settle corpus.
+    for name in sorted(EXPECTED):
         trace = traces[name]
         rows = score._rows(trace)
         typical = max(1.0, statistics.median(d for _t, d, _b, _l in rows))
@@ -336,7 +401,7 @@ def run() -> Result:
     )
 
     # ---- the tripwire: the replay still reaches what the sweep said it would --------
-    for name in sorted(traces):
+    for name in sorted(EXPECTED):
         rows = score._rows(traces[name])
         verdicts, _band, _stalls = score._replay(rows)
         expected = EXPECTED[name]

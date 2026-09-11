@@ -174,6 +174,11 @@ def summary(paths: list[str]) -> None:
         trace = _load(path)
         rows = _rows(trace)
         params = trace["params"]
+        # A cadence trace (D130) nests the settle machine's parameters under `motion`; the
+        # replay below is the SETTLE rule's and says so, so a cadence trace's live verdicts
+        # and the replayed ones are two different machines' opinions of the same frames.
+        trigger = trace.get("trigger", "motion")
+        params = params.get("motion", params)
         d_values = [d for _t, d, _b, _l in rows]
         lumas = [luma for _t, _d, _b, luma in rows]
         duration = rows[-1][0] / 1000
@@ -184,12 +189,12 @@ def summary(paths: list[str]) -> None:
         t_hi_live = params.get("tHi") or (params["dSeed"] * params["moveK"])
         presented = _presentations(rows, t_hi_live)
         replayed, (lo, hi), stalls = _replay(rows)
-        print(f"{Path(path).name}   v{trace.get('version', 1)}")
+        print(f"{Path(path).name}   v{trace.get('version', 1)}   trigger {trigger}")
         print(f"  {duration:6.1f}s  {len(rows):5d} frames  {len(rows) / duration:5.1f} fps")
         print(f"  live params   {params}")
         print(f"  live verdicts {len(events):4d}   {kinds}")
         print(f"  presentations {len(presented):4d}   (motion bursts above the live tHi)")
-        print(f"  replayed      {len(replayed):4d}   under today's adaptive form, tLo {lo:.2f}-{hi:.2f}")
+        print(f"  replayed      {len(replayed):4d}   under today's adaptive SETTLE form, tLo {lo:.2f}-{hi:.2f}")
         print(f"  stalls        {len(stalls):4d}   at {[round(t / 1000, 1) for t in stalls]}")
         print(f"  d      median {statistics.median(d_values):5.2f}  p99 {_quantile(d_values, 0.99):6.2f}")
         print(f"  luma   min {min(lumas):5.1f}  median {statistics.median(lumas):6.1f}  max {max(lumas):6.1f}")

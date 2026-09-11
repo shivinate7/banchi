@@ -30,7 +30,6 @@
  * and everything here is what the SCREEN chooses to do with it.
  */
 
-import type { MotionEvent, MotionParams } from './motion'
 import { GRID_H, GRID_W, ROI_X0, ROI_X1, ROI_Y0, ROI_Y1 } from './motion'
 
 /* A forgotten armed session must not eat the tab. 200k frames is ~110 minutes at 30fps
@@ -57,11 +56,17 @@ function quantise(cells: Float32Array): Uint8Array {
   return out
 }
 
-type TraceEvent = { t: number; event: MotionEvent; frame: string }
+/** Which machine recorded this — the settle trigger or the cadence (D130). Two machines, one
+ *  file shape: `frames`, `events` and `keyframes` mean the same thing under both, and the
+ *  scorer reads this field to know whose verdicts it is looking at. */
+export type TraceTrigger = 'motion' | 'cadence'
+
+type TraceEvent = { t: number; event: string; frame: string }
 type TraceKeyframe = { t: number; frame: string }
 
 export class MotionTrace {
-  private readonly params: MotionParams
+  private readonly params: Record<string, unknown>
+  private readonly trigger: TraceTrigger
   private frames: Array<[number, number, number, number]> = []
   private events: TraceEvent[] = []
   private keyframes: TraceKeyframe[] = []
@@ -69,8 +74,9 @@ export class MotionTrace {
   private lastKeyframeAt = -Infinity
   private truncated = false
 
-  constructor(params: MotionParams) {
+  constructor(params: Record<string, unknown>, trigger: TraceTrigger = 'motion') {
     this.params = params
+    this.trigger = trigger
   }
 
   get frameCount(): number {
@@ -85,7 +91,7 @@ export class MotionTrace {
     d: number,
     dBase: number,
     luma: number,
-    event: MotionEvent | null,
+    event: string | null,
     cells: Float32Array,
   ): void {
     if (this.truncated) return
@@ -119,6 +125,9 @@ export class MotionTrace {
          `scripts/score-trace.py` branches on this field. */
       version: 2,
       kind: 'pkmnscan-motion-trace',
+      /* SINCE D130. Absent in every trace recorded before it, which the scorer reads as
+         `motion` — the only machine there was. */
+      trigger: this.trigger,
       recorded_at: new Date().toISOString(),
       params: this.params,
       grid: { w: GRID_W, h: GRID_H, roi: [ROI_X0, ROI_Y0, ROI_X1, ROI_Y1] },
