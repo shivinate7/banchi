@@ -250,13 +250,13 @@ SHIPPED = [
               "(D108's amendment — a port is part of an origin, so the camera grant and the six "
               "device-local keys reset once), and `make lan-check` from the phone. "
               "docs/specs/one-process.md §10 is the list."},
-    # `n` IS A SLUG UNTIL THE MERGE CLAIMS IT (D139). A branch cannot allocate a
+    # `n` IS A SLUG UNTIL THE MERGE CLAIMS IT (D-merge-time-ids). A branch cannot allocate a
     # step number any more than it can allocate a decision number — the input is what main has
     # taken — so this carries the slug and `scripts/claim-ids.py` substitutes it inside
     # `make merge`, here and in the `0.` marker docs/GATES.md wears for the same reason.
-    {"n": 23, "on": "2026-09-11",
+    {"n": "merge-time-ids", "on": "2026-09-11",
      "title": "The number is claimed at the merge, not guessed on the branch",
-     "note": "D139, amending D72 and D80. A branch writes its entry's heading as a slug "
+     "note": "D-merge-time-ids, amending D72 and D80. A branch writes its entry's heading as a slug "
               "and cites it; "
               "scripts/claim-ids.py allocates max+1 against main INSIDE make merge, commits the "
               "substitution to the PR branch, waits for that commit's checks, and only then "
@@ -1283,7 +1283,7 @@ COMPONENTS = [
                 # amends. D18 governs its shape — the preview is the read-only mode, and the
                 # act is behind a flag rather than a default. D33 is the instrument the two-step
                 # is borrowed from, one register down from a route that can spend money.
-                "governed_by": ["D18", "D33", "D42", "D72", "D111", "D139"],
+                "governed_by": ["D18", "D33", "D42", "D72", "D111", "D-merge-time-ids"],
                 "note": "IT NEVER SETS PKMNSCAN_MAIN AND NO REFUSAL IT PRINTS SUGGESTS IT. D42 "
                         "is explicit that a session reaching for that variable has left the "
                         "amendment behind; this needs no hatch because allow rule 3 already "
@@ -1650,11 +1650,11 @@ COMPONENTS = [
                                 "D47", "D49", "D50", "D51", "D53", "D60", "D64", "D65", "D67", "D69",
                                 "D70", "D72", "D75", "D76", "D80", "D81", "D83", "D84", "D87",
                                 "D88", "D90", "D92", "D94", "D96", "D101", "D102", "D104", "D111",
-                                "D119", "D122", "D127", "D132", "D135", "D139"],
+                                "D119", "D122", "D127", "D132", "D135", "D-merge-time-ids"],
             },
             "claim-ids.py": {
                 "does": "allocate the numbers this branch's SLUG ids will take, and "
-                        "substitute them (D139). A branch cannot allocate a "
+                        "substitute them (D-merge-time-ids). A branch cannot allocate a "
                         "decision number — the allocation's only input is what main has "
                         "taken, which is not knowable until the merge — so a branch writes "
                         "its heading as a two-segment slug, or a `0.` list marker carrying one, "
@@ -1675,7 +1675,7 @@ COMPONENTS = [
                 # skips, `AGENTS.md` being the same file as `CLAUDE.md` under another name.
                 # D18 is why it is not in `make check`: it writes.
                 "governed_by": ["D16", "D18", "D42", "D47", "D72", "D80", "D135",
-                                "D139"],
+                                "D-merge-time-ids"],
             },
             "claim-selftest.py": {
                 "does": "scripts/claim-ids.py proved against a throwaway repository in which "
@@ -1687,7 +1687,7 @@ COMPONENTS = [
                         "hyphen, so a slug was being substituted inside a longer slug that "
                         "extended it, leaving a number with a tail on it. In `make check`, "
                         "never in the git hook — it writes (D18).",
-                # D139 is the ruling; D18 is why it is off the commit path; D16
+                # D-merge-time-ids is the ruling; D18 is why it is off the commit path; D16
                 # is the severity rule its subject's rows answer to; D80 is the allocator's
                 # direction, max+1 rather than lowest-free, because a culled id's citations
                 # would come back onto a step that is not the one meant.
@@ -1695,7 +1695,7 @@ COMPONENTS = [
                 # entries are composed from integers for exactly this reason, and the two that
                 # survive are in the prose that explains why. The superset rule reads a citation
                 # literally, which is the trade docs-audit.py's own entry records.
-                "governed_by": ["D1", "D2", "D16", "D18", "D80", "D139"],
+                "governed_by": ["D1", "D2", "D16", "D18", "D80", "D-merge-time-ids"],
             },
             "docs-audit-allow.txt": {
                 "does": "paths and identifiers the docs name before they exist, one "
@@ -1792,7 +1792,7 @@ COMPONENTS = [
                 # pipeline/pricing.py by merging package lists into modules. Both are cited,
                 # and the superset rule takes a citation at face value — same trade as
                 # docs-audit.py above.
-                "governed_by": ["D2", "D3", "D17", "D72", "D80", "D139"],
+                "governed_by": ["D2", "D3", "D17", "D72", "D80", "D-merge-time-ids"],
             },
             "prose-guard.py": {
                 "does": "D60's two guards over the four docs CLAUDE.md names. `--structure` asserts "
@@ -1819,7 +1819,7 @@ COMPONENTS = [
                 # a whole-file diff. Cited, so listed — the superset rule takes a citation
                 # at face value, the same trade decision-context.py's entry records.
                 "governed_by": ["D10", "D16", "D17", "D18", "D57", "D58", "D60", "D72",
-                                "D139"],
+                                "D-merge-time-ids"],
             },
             "typecheck-hook.py": {
                 "does": "PostToolUse hook: runs app/'s own tsc --noEmit, and only after a "
@@ -1995,7 +1995,7 @@ COMPONENTS = [
                 # for vale. Change one and the entry describing that check goes stale with it,
                 # which is exactly what `governed_by` is for — so they are listed rather than
                 # allowlisted away.
-                "governed_by": ["D16", "D17", "D18", "D43", "D44", "D47", "D53", "D58", "D60", "D65", "D68", "D74", "D76", "D80", "D82", "D92", "D111", "D122", "D127", "D129", "D133", "D138", "D139"],
+                "governed_by": ["D16", "D17", "D18", "D43", "D44", "D47", "D53", "D58", "D60", "D65", "D68", "D74", "D76", "D80", "D82", "D92", "D111", "D122", "D127", "D129", "D133", "D138", "D-merge-time-ids"],
                 "note": "IT DECLARES THE SUITE AND DELIBERATELY DOES NOT DRIVE IT, which is "
                         "the whole shape. A registry that drove `make check` could not "
                         "disagree with the recipe — and could silently stop running a check, "

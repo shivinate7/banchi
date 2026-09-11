@@ -177,7 +177,7 @@ CHECKS = (
                                "that decides whether a commit proceeds. It also builds three "
                                "git repositories, which the hook has no business doing.",
         "gates": True,
-        "governed_by": ("D16", "D18", "D139"),
+        "governed_by": ("D16", "D18", "D-merge-time-ids"),
     },
     {
         "target": "revert-guard",

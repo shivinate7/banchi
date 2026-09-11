@@ -73,7 +73,7 @@ MAX_RULINGS = 3
 # dangling one wherever it is written, comment or not.
 # AND AN ID IS A SLUG UNTIL THE MERGE CLAIMS IT (D72, rewritten 2026-09-11). A branch cannot
 # allocate a number — what main will take is not knowable until the merge — so it writes
-# `## D139` and `scripts/claim-ids.py` substitutes at merge time. This file is
+# `## D-merge-time-ids` and `scripts/claim-ids.py` substitutes at merge time. This file is
 # scanned for citations by the audit, so the two shapes are spelled once here and the id
 # bound stays docs-audit's `_ID_ANY`; widening one of the two and not the other is how the
 # three-digit ceiling went silently vacuous once already.

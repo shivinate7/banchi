@@ -269,7 +269,7 @@ def local_half(root: str, commit: str, confirm: bool) -> int:
 
 # ------------------------------------------------------- the ids this branch has not claimed
 
-# THE NUMBER IS ALLOCATED HERE AND NOWHERE EARLIER (D139). A branch writes
+# THE NUMBER IS ALLOCATED HERE AND NOWHERE EARLIER (D-merge-time-ids). A branch writes
 # its entry's heading as a slug because the allocation's only input — what main has taken — is not knowable
 # until this moment. Thirteen renumber events are in D72 and every one of them is a branch
 # having guessed; `origin/main` took two decision numbers and two build steps DURING the
@@ -331,7 +331,7 @@ def claim_half(root: str, number: int, branch: str, confirm: bool) -> int:
         return refuse("`{0} --write` failed.".format(CLAIMER), wrote.err or wrote.out)
     say(wrote.out.rstrip())
 
-    message = "Claim the ids this branch left as slugs (D139)\n\n" + "\n".join(
+    message = "Claim the ids this branch left as slugs (D-merge-time-ids)\n\n" + "\n".join(
         "  " + line.replace("\t", " -> ") for line in pending)
     run(["git", "add", "-A"], cwd=root)
     made = run(["git", "commit", "-m", message], cwd=root)
@@ -345,7 +345,7 @@ def claim_half(root: str, number: int, branch: str, confirm: bool) -> int:
                       "then run this again — a second run finds no unclaimed id and skips.")
 
     rule("waiting for the claim commit's checks")
-    say("  this is the wait D139 buys: main never takes a substitution",
+    say("  this is the wait D-merge-time-ids buys: main never takes a substitution",
         "  no CI run has seen.", "")
     watched = run(["gh", "pr", "checks", str(number), "--watch", "--fail-fast"])
     say((watched.out or watched.err).rstrip())
