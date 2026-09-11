@@ -342,7 +342,7 @@ COMPONENTS = [
                                     "store's own reading — `Listing.observe_live`, per game, "
                                     "against the file's mtime — and says what it kept, by SKU "
                                     "with both readings (D87 amended). Partitions at the corpus's stored `policy.threshold` (D99).",
-                            "governed_by": ["D3", "D7", "D8", "D9", "D11", "D16", "D25", "D34", "D36", "D49", "D54", "D58", "D59", "D86", "D87", "D99", "D115"], "tested_by": ["T4", "T7"]},
+                            "governed_by": ["D3", "D7", "D8", "D9", "D11", "D12", "D16", "D25", "D34", "D36", "D49", "D54", "D58", "D59", "D86", "D87", "D99", "D115", "D137"], "tested_by": ["T4", "T7"]},
             "cmd_prices.py": {"does": "`pkmnscan prices adopt` folds every run's legacy "
                                       "decisions.json into the corpus — previews unless given "
                                       "--write, newest-wins, and NAMES the holds a later price "
@@ -454,7 +454,12 @@ COMPONENTS = [
                           # CANONICAL_HEADER and read by nothing since the file was written,
                           # which makes the join product-line BLIND rather than agnostic.
                           # D22 is the registry that will read the pair.
-                          "governed_by": ["D11", "D22", "D25", "D49"], "tested_by": ["T2"],
+                          # And D137 added SEALED_CONDITION beside them, plus the correction
+                          # that the pair is no longer the whole of what from_export cuts on:
+                          # `Condition` is a third axis, and it is a SCOPE rather than a
+                          # partition — the pair says which game, the scope says which reading
+                          # of a card this product sells.
+                          "governed_by": ["D11", "D22", "D25", "D49", "D137"], "tested_by": ["T2"],
                           "note": "real CSV library only — v1 bug 2 was a naive split(\",\")"},
             # Pure literals, importing nothing from this repo, so scripts/docs-audit.py can
             # read it with ast.literal_eval the way it reads this file. D21/D23/D24 are
@@ -489,8 +494,14 @@ COMPONENTS = [
             # D10's label formula lives here, and as of 2026-08-29 it assumes NO divider size:
             # `Position.layout` falls back to `(1,)`, so an undeclared box is one section and
             # `CARDS_PER_SECTION` is deleted rather than defaulted.
-            "join.py": {"does": "catalog join by SKU, aggregation, bidirectional unmatched reporting",
-                        "governed_by": ["D2", "D4", "D7", "D9", "D10", "D11", "D16", "D20", "D21", "D23", "D24", "D25", "D29", "D30", "D35", "D36", "D41", "D49", "D54", "D55", "D56", "D58", "D59", "D67", "D68", "D71", "D87"], "tested_by": ["T3"]},
+            "join.py": {"does": "catalog join by SKU, aggregation, bidirectional unmatched reporting. "
+                                "`Catalog.from_export` scopes on THREE things, not D25's two: the "
+                                "partition pair, and then the conditions this product lists — the "
+                                "game's own Near Mint strings plus sealed (D137). It had never cut on "
+                                "condition at all, which was invisible while the operator downloaded "
+                                "Near-Mint-only exports by hand and cost D3 rung 2 outright once the "
+                                "fetch started sending every play grade",
+                        "governed_by": ["D2", "D3", "D4", "D7", "D9", "D10", "D11", "D12", "D16", "D20", "D21", "D23", "D24", "D25", "D29", "D30", "D35", "D36", "D41", "D49", "D54", "D55", "D56", "D58", "D59", "D64", "D65", "D67", "D68", "D71", "D76", "D87", "D137"], "tested_by": ["T3"]},
             # Rung 0 (a human's answer) sits above the ladder and is applied by join.py, so
             # T3 is what covers it — T4 owns the four rungs that infer.
             # D22 because FINISHES and CONDITION_BY_FINISH are no longer written here: they
@@ -2300,7 +2311,7 @@ COMPONENTS = [
                                 "D62", "D63", "D64", "D65", "D66", "D67", "D69", "D70", "D76",
                                 "D77", "D79", "D83", "D86", "D87", "D88", "D89", "D90", "D91",
                                 "D92", "D93", "D96", "D100", "D103", "D104", "D113", "D115",
-                                "D116", "D132", "D134"],
+                                "D116", "D132", "D134", "D137"],
                 "tested_by": ["T7"],
             },
             "tcg_import.py": {"does": "THE OUTBOUND WRITE to the seller admin, and the only "

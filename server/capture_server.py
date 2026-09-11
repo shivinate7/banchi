@@ -5318,6 +5318,46 @@ def _answer_target(
             f"was drawn from an older queue file — reload it and choose again.",
         )
 
+    # D137 — AND THE GRADE ITSELF IS CHECKED, NOT ONLY THAT THE TWO AGREE.
+    #
+    # The three refusals above ask whether this answer matches the row that was OFFERED. None
+    # of them asks whether the row should have been offered at all, and for ten days it should
+    # not have been: the catalog carried every play grade, so `Damaged Foil` sat on screen as a
+    # tappable chip beside `Near Mint Foil` and answering it would have written that SKU onto a
+    # card this product sells at Near Mint (D12). Nothing downstream would have disagreed —
+    # `join_batch` rung 0 re-finds the answered row by its own condition string, so the wrong
+    # grade travels all the way into the import file.
+    #
+    # `Catalog.from_export` now makes this unreachable from the screen, which is exactly why it
+    # is worth having: the entries in the store TODAY were written before that filter existed
+    # and still carry their played rows until the next join rewrites them. This is the floor
+    # under those, and under any client that builds its own POST.
+    #
+    # THE SET IS THE CATALOG'S, NOT A SECOND OPINION ABOUT IT. Near Mint plus sealed, the same
+    # two clauses `from_export` keeps — a row that survives the catalog satisfies this by
+    # construction, so the two can never drift into disagreeing about one row.
+    #
+    # `or DEFAULT_GAME` IS D21'S READ-SIDE BACKFILL AND NOT A GUESS, and it is the same
+    # expression `cli/resolve.py` uses to decide which catalog a card is joined against. A
+    # record predating D21 carries no claim, is READ as the default game, and is therefore
+    # offered the default game's rows — so asking a different question here would refuse a card
+    # the join had just answered correctly. T7 found this on the first run with a `game`-less
+    # fixture card; `games.require` raises `UnknownGame` on `None` rather than defaulting,
+    # which is right for a registry lookup and wrong for a read of an old record.
+    listable = _near_mint_conditions(
+        str(getattr(card, "game", None) or games.DEFAULT_GAME)
+    ) | {tcgcsv.SEALED_CONDITION}
+    if offered_condition not in listable:
+        raise BadRequest(
+            HTTPStatus.CONFLICT,
+            "condition_not_listed",
+            f"{sku} is a {offered_condition!r} row, and this product lists "
+            f"{', '.join(sorted(listable))} (D12). It was offered by a queue entry written "
+            f"before the catalog stopped carrying play grades — re-join this run and the "
+            f"entry will be rewritten with the rows the ladder would actually pick. Nothing "
+            f"was written.",
+        )
+
     return card, holders, offering, governing, chosen, offered_condition
 
 
