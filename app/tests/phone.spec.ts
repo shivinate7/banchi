@@ -63,8 +63,12 @@ const auditSource = (mode: Mode) => `(() => {
      on purpose and each is written here: the phone's top bar, its tab bar, and #/gallery's
      index. A fourth is a deliberate edit.
 
-     THE FOURTH IS .browse-mobilebar, ADDED 2026-09-11, AND IT IS THE ANSWER THE [DEBUG ...]
-     SUFFIX BELOW WAS ADDED TO GET. PR #252 widened the review-queue link's pseudo-element inset
+     A FOURTH WAS ADDED ON 2026-09-11 AND REMOVED THE SAME DAY, AND THE ROUND TRIP IS THE POINT.
+     .browse-mobilebar was named here to unblock a red main, correctly — the diagnosis behind it
+     is kept below because it is right, and what replaced it is the clearance retry further down
+     rather than a different name.
+
+     WHAT THE DEBUG SUFFIX ANSWERED. PR #252 widened the review-queue link's pseudo-element inset
      from -12px to -16px on a font-metric theory, confirmed from the trace that the wider inset
      had applied on CI, and watched the job fail with the identical error — and said so: "the
      vertical-margin theory is wrong and the real cause is unknown." The debug line answered it
@@ -76,17 +80,25 @@ const auditSource = (mode: Mode) => `(() => {
      phone's box bar is sticky at top: var(--bn-topbar-h) with z-index 20, and --bn-topbar-h is
      52px over a --bn-control-h-lg of 46px at phone widths — so it occupies roughly y=52 to
      y=106 and the probe lands inside it. NOTHING IS WRONG WITH THE LINK: its ::after spans
-     y=21 to y=69, a 48px hit area against a 40px floor. What it hits is chrome, at one of the
-     90%-viewport scroll steps this sweep takes, and one scroll-line either way clears it. That
-     is what the other three entries are for, and it is why CI saw it and this rig did not — the
-     two disagree about the page's height, so they stop at different offsets.
+     y=21 to y=69, a 48px hit area against a 40px floor. The pad's SIZE is not the variable
+     either — measured at -16px and at -12px, the link gives byte-identical results, so #252
+     could not have fixed this and did not cause it.
 
-     IT IS SITED WITH THE OTHER THREE AND NOT WITH THE SHIP BAR, which is the distinction worth
-     keeping: .browse-mobilebar is position: sticky — the top bar's own continuation on
-     #/inventory, and content passes under it by design. .browse-actionbar on the same screen is
-     position: fixed, never moves, and is exactly what this list must not excuse. */
-  const chrome = (n) =>
-    n !== null && n.closest('.bn-topbar, .bn-tabbar, .kit-index, .browse-mobilebar') !== null
+     AND IT IS NOT ONE KNIFE-EDGE OFFSET, which is the one thing the entry above had wrong.
+     Measured at every whole-pixel scroll offset rather than at the ~40 this sweep samples: the
+     link is clean at 457 of 558 and intercepted at 101, one CONSECUTIVE band. It reads as a
+     knife edge only because this page is short enough to sample at two offsets. That makes it
+     MORE fragile than a knife edge, not less — any font-metric drift moves the sample into a
+     101-wide band, which is exactly what the 143x16 rig and the 148x16 runner did.
+
+     SO THE NAME CAME BACK OUT, BECAUSE A NAME CANNOT REACH THE NEXT ONE. .browse-actionbar on
+     this same screen is position: fixed — never movable into this list, by the rule above — and
+     it intercepts .browse-details-summary at 99 of its 197 offsets, pressable at the other 98:
+     the identical non-defect, silent only because the 40-step sweep has never sampled it. A
+     list of names is a list somebody adds to, and one of the two cases on one screen could not
+     be added. The clearance retry below answers both without naming either, and this file is
+     green with these three entries and no fourth. */
+  const chrome = (n) => n !== null && n.closest('.bn-topbar, .bn-tabbar, .kit-index') !== null
   for (const el of over.querySelectorAll('button, a[href], input, select, textarea, summary, [role="button"]')) {
     // A checkbox's own box is 16px by design; the label that wraps it is the target.
     const t = el.closest('label') ?? el
@@ -140,7 +152,40 @@ const auditSource = (mode: Mode) => `(() => {
     // rounded, because a 39.6px control reports 40 and a floor nobody can see is a floor nobody fixes
     const small = Math.round(box.width) < FLOOR || Math.round(box.height) < FLOOR
     const covered = !owns(document.elementFromPoint(cx, cy))
-    const fails = mode === 'box' ? small : misses > 0
+    let fails = mode === 'box' ? small : misses > 0
+    /* A BAR THE CONTENT SCROLLS UNDER IS NOT A NEIGHBOUR CROWDING THE CONTROL, and only one of
+       those two is a floor violation. D117 states the property this sweep is for in as many
+       words — the ship bar left Pick a run "visible, and impossible to press at any scroll
+       position" — and what the sweep actually asked until now was narrower: pressable at
+       whichever offset the scroll steps happened to sample. Those differ for every control that
+       passes UNDER a sticky or fixed bar on its way up the page, and the difference is what made
+       #/inventory red on the runner and green on this Mac.
+       SO A MISS IS RE-ASKED WITH THE CONTROL SCROLLED CLEAR, at the one offset that is maximally
+       far from both the top and the bottom chrome: its own centre at the middle of the viewport.
+       REAL CROWDING SURVIVES THIS AND BAR OCCLUSION DOES NOT, which is what makes it safe — a
+       sibling that paints over a pad moves WITH the control and crowds it at every offset, while
+       a bar the page scrolls under is behind it at some offsets and not at others. Measured on
+       #/inventory at 390, every whole-pixel offset: the queued notice's link is intercepted by
+       .browse-mobilebar at 101 of 558 and clean at 457, and .browse-details-summary by the
+       fixed .browse-actionbar at 99 of 197 — that second one the 40-step sweep has simply
+       never landed on, so naming the bars one at a time would have left it armed.
+       THE SIZE FLOOR IS NOT TOUCHED and neither is #/gallery's box sweep: scrolling cannot
+       make a 22px control 40px, so the retry is asked only of the probe. */
+    if (fails && mode === 'probe' && clipBox === null) {
+      const y0 = window.scrollY
+      window.scrollTo(0, y0 + cy - innerHeight / 2)
+      const b2 = t.getBoundingClientRect()
+      const cx2 = b2.left + b2.width / 2, cy2 = b2.top + b2.height / 2
+      if (cx2 >= r && cy2 >= r && cx2 <= innerWidth - r && cy2 <= innerHeight - r) {
+        const clean = [[-r, 0], [r, 0], [0, -r], [0, r]]
+          .every(([dx, dy]) => owns(document.elementFromPoint(cx2 + dx, cy2 + dy)))
+        if (clean) fails = false
+      }
+      // RESTORE IT EXACTLY. The caller's loop scrolls by a fraction of the viewport and reads
+      // window.scrollY back to decide whether the page moved at all; a retry that left the
+      // page somewhere else would end the sweep early and report the rest of the route clean.
+      window.scrollTo(0, y0)
+    }
     if (!fails) continue
     const cls = (t.className + '').split(' ').filter(Boolean)
     const key = t.tagName.toLowerCase() + (cls.length ? '.' + cls[0] : '')
@@ -204,6 +249,23 @@ async function sweep(page: Page, where: string, mode: Mode = 'probe'): Promise<s
   return found
 }
 
+/* THE `[DEBUG ...]` SUFFIX IS KEPT ON PURPOSE, AND #252 MEANT TO REVERT IT.
+ *
+ * It was added "diagnostic only, to be reverted once the CI log gives the answer", and the
+ * answer has been got — so the literal reading of that intent is that it goes now. It stays,
+ * and this comment is here so the next reader does not remove it citing the sentence above.
+ *
+ * IT IS WHAT MADE A THREE-SESSION DEFECT SOLVABLE. #252 changed a value on a font-metric
+ * hypothesis and could not tell whether it had worked, and said so in as many words: "the
+ * vertical-margin theory is wrong and the real cause is unknown." The next failing run named
+ * the intercepting element and the coordinates, and every session afterwards reasoned from
+ * that one string rather than from a fresh theory. Without it this line says a control failed
+ * and not what stood in its way, which on a geometric assertion is most of the answer.
+ *
+ * AND THE CLEARANCE RETRY ABOVE MAKES IT WORTH MORE, NOT LESS. A failure that survives the
+ * retry is rarer and therefore harder to reproduce — the runner's own metrics are part of the
+ * evidence and a rig cannot recreate them. The rarer the failure, the more the one log line
+ * has to carry. Intent stated before the value was known does not bind once it is measured. */
 async function audit(page: Page, where: string, mode: Mode): Promise<string[]> {
   const short = (await page.evaluate(auditSource(mode))) as Short[]
   const lines: string[] = []

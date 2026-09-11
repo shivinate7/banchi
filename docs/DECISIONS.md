@@ -7438,6 +7438,54 @@ the tab bar's height plus the safe area for exactly that. "Anything sticky" woul
 bar, which is the case this file exists to catch; "anything fixed" would miss `#/gallery`'s own
 sticky index strip. Three strips are written out in the spec and a fourth is a deliberate edit.
 
+**AND THE NAMED LIST WAS THE WRONG SHAPE (amended 2026-09-11).**
+It took five weeks and a red `main` to show. `#/inventory` failed this file's own case on the CI
+runner and passed on this Mac: the queued notice's `Open the review queue` missed its BOTTOM
+probe to `button.browse-boxchip`, a control 450px away from it in document flow. Nothing was
+crowding it. `.browse-mobilebar` is `position: sticky; top: var(--bn-topbar-h)`, so the link is
+overlapped only while it scrolls UNDER that bar, and which offsets the sweep samples is a
+function of font metrics — 143x16 on this rig, 148x16 on the runner.
+
+**THE PROPERTY THIS SWEEP IS FOR IS THE ONE STATED ABOVE, AND WHAT IT ASKED WAS NARROWER.**
+"Impossible to press at any scroll position" is the property; what the sweep asked was whether
+the control was pressable at whichever offset the 40 scroll steps happened to sample. Measured
+on `#/inventory` at 390 at every whole-pixel offset rather than at the sampled ones: the link is
+intercepted at 101 of 558 and clean at 457, including where it rests. The failing band is 101
+CONSECUTIVE offsets, not a knife edge — it reads as one only because this page has two sample
+points, which is what made a font-metric shift enough to move the suite from green to red.
+
+**SO THE MISS IS RE-ASKED WITH THE CONTROL SCROLLED CLEAR.**
+Its own centre is put at the middle of the viewport and the four probes are fired again; it is
+reported only if it still fails. Real crowding survives that and bar occlusion does not: a
+sibling painting over a pad moves WITH the control and crowds it at every offset, while a bar
+the page scrolls under is behind it at some offsets and not others. That distinction is derived
+rather than named, which is what the three-strip list could never be.
+
+**NAMING `.browse-mobilebar` AS A FOURTH STRIP WOULD HAVE GONE GREEN AND LEFT THE NEXT ONE ARMED.**
+`.browse-details-summary` is intercepted by `.browse-actionbar` at 99 of its 197 offsets and
+pressable at the other 98 — the same non-defect, on a bar that is `position: fixed`, which is
+exactly what that list must not excuse. The 40-step sweep has simply never sampled it. A list of
+names is a list somebody adds to, and this is the entry that found out what that costs.
+
+**THE `[DEBUG ...]` SUFFIX ON THE FAILURE LINE IS KEPT, AGAINST ITS AUTHOR'S STATED INTENT.**
+#252 added it "diagnostic only, to be reverted once the CI log gives the answer" and the answer
+has been got, so the literal reading is that it goes. It stays. It is what made a defect three
+sessions had theories about solvable at all: #252 changed a value on a font-metric hypothesis,
+could not tell whether it had worked, and wrote "the vertical-margin theory is wrong and the real
+cause is unknown"; the next failing run named the intercepting element and the coordinates, and
+every session since reasoned from that one string. The clearance retry makes failures that reach
+this line RARER, and a rare failure on a runner whose metrics no rig can recreate is one the log
+has to carry by itself. Intent stated before the value was known does not bind once it is
+measured. The argument is written beside the code, because a PR body is not what the next reader
+opens.
+
+**THE SIZE FLOOR IS UNTOUCHED AND SO IS `#/gallery`'s BOX SWEEP.**
+Scrolling cannot make a 22px control 40px, so the retry is asked only of the probe.
+Mutation-tested, four arms, all red: the notice link's own pad deleted (a real 143x16 hit area),
+`.bn-check`'s kit floor deleted, `.browse-rowtick`'s `z-index` removed — this entry's own
+crowding case, the one the probe was built for — and a fixed bottom bar grown to 60% of the
+viewport over content that cannot be scrolled clear of it.
+
 **What is NOT decided here.** D50's three interaction floors are still derived from a mouse:
 `base.css` has no coarse-pointer arm at all, its response floor argues entirely from a hover
 sweep of 315 controls, and its 1px press dip is a mouse-derived number applied to a finger. That
