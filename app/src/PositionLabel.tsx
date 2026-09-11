@@ -223,6 +223,8 @@ export function PositionLabel({
   const sectioned = sectionName !== null && sectionName.trim() !== '' ? sectionName.trim() : null
   const path = ranked.map((part, at) => {
     if (part.key.toLowerCase() === 'box' && named !== null) {
+      /* THE INDEX RIDES AS THE NOTE, ONCE: the row is the only address on the screen since D119
+         re-applied, so there is no corner for it to be said twice against. */
       return { ...part, value: named, note: `Box ${part.value}` as ReactNode }
     }
     if (part.key.toLowerCase() === 'section' && sectioned !== null) {

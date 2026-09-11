@@ -1196,11 +1196,15 @@ COMPONENTS = [
                         "the ref hook beside it cannot see because `git push origin HEAD:main` "
                         "never touches refs/heads/main locally. This is what stands in for "
                         "branch protection, which GitHub answers 403 on for a private repo on "
-                        "the free plan.",
+                        "the free plan. AND D133's guard on every BRANCH push since 2026-09-11: "
+                        "it runs `scripts/revert-audit.py branch` on the commit being pushed, "
+                        "so a stale copy of a file main has moved on is refused before it "
+                        "becomes a PR. Fail-open where the script is absent, as in the "
+                        "self-test's fixture repos.",
                 # Same escape hatch and the same fail-open discipline. Weaker than the thing it
                 # substitutes for in one way D42 names outright: it guards this clone, not the
                 # repository.
-                "governed_by": ["D42"],
+                "governed_by": ["D42", "D133"],
                 "note": "Extensionless, unscanned, listed by hand — see the sibling above.",
             },
             "merge-pr.py": {
@@ -1254,6 +1258,35 @@ COMPONENTS = [
                         "branch is now one behind its upstream, the same mutation turns it red, "
                         "and the fixture asserts its own arming. Same lesson githooks-selftest "
                         "records about git's own refusals scoring as the hook's.",
+            },
+            "revert-audit.py": {
+                "does": "one question of a change, asked of every commit on main's first-parent "
+                        "line (`history`) or of what a branch would land there (`branch`, which "
+                        "is `make revert-guard`, the pre-push hook and the PR check): does it "
+                        "put a file back the way main had it BEFORE a commit main already "
+                        "carries? Two detectors — the whole file restored to an earlier blob "
+                        "by object id, and a -U0 hunk that is line for line the reverse of a "
+                        "hunk an earlier commit introduced — over the last 60 first-parent "
+                        "commits. The guard refuses only a file whose WHOLE change is such a "
+                        "reversal and that no commit on the branch names; a partial reversal "
+                        "beside real edits is a note. `selftest` rebuilds PR #218's deletion "
+                        "and PR #221's keep-ours squash in a throwaway repository and proves "
+                        "both refusals and four allowances.",
+                # D133 is the ruling; D42 is the guard it stands beside, and D18 is why the
+                # self-test is in `check` and never in the git hook.
+                # D119 because the docstring tells its story; it is the case, not a governor.
+                "governed_by": ["D18", "D42", "D119", "D133"],
+                "note": "THE `branch` MODE READS THE MERGE, NOT THE BRANCH: `git merge-tree "
+                        "--write-tree origin/main HEAD` and the diff of origin/main against "
+                        "that tree, which is what the PR would land. The #221 shape has a "
+                        "merge-base AFTER the commit it reverses — the branch merged main and "
+                        "kept ours — so `origin/main..HEAD` sees nothing amiss and only the "
+                        "landing diff does. WHAT IT CANNOT SEE is named in D133 rather than "
+                        "here: a reversal older than the window, one re-worded on the way "
+                        "back, and one whose hunk a neighbouring edit widened. A containment "
+                        "test for the third was built and measured — 79 more hits on this "
+                        "history, every one a coincidence of moved code, and still not the "
+                        "map rows it was written for — and was not kept.",
             },
             "githooks-selftest.sh": {
                 "does": "builds an origin and a clone in a temp directory, points "
@@ -1527,7 +1560,7 @@ COMPONENTS = [
                                 "D18", "D22", "D23", "D24", "D26", "D27", "D31", "D39", "D43",
                                 "D49", "D50", "D51", "D53", "D60", "D64", "D65", "D67", "D69",
                                 "D70", "D72", "D75", "D76", "D80", "D81", "D83", "D84", "D87",
-                                "D90", "D92", "D94", "D96", "D101", "D102", "D104", "D122"],
+                                "D90", "D92", "D94", "D96", "D101", "D102", "D104", "D122", "D119", "D132"],
             },
             "docs-audit-allow.txt": {
                 "does": "paths and identifiers the docs name before they exist, one "
@@ -1826,7 +1859,7 @@ COMPONENTS = [
                 # for vale. Change one and the entry describing that check goes stale with it,
                 # which is exactly what `governed_by` is for — so they are listed rather than
                 # allowlisted away.
-                "governed_by": ["D16", "D17", "D18", "D43", "D44", "D47", "D53", "D58", "D60", "D65", "D68", "D74", "D76", "D80", "D82", "D92", "D111", "D122", "D127", "D129"],
+                "governed_by": ["D16", "D17", "D18", "D43", "D44", "D47", "D53", "D58", "D60", "D65", "D68", "D74", "D76", "D80", "D82", "D92", "D111", "D122", "D127", "D129", "D133"],
                 "note": "IT DECLARES THE SUITE AND DELIBERATELY DOES NOT DRIVE IT, which is "
                         "the whole shape. A registry that drove `make check` could not "
                         "disagree with the recipe — and could silently stop running a check, "
@@ -2612,8 +2645,12 @@ COMPONENTS = [
                                              "Playwright's 5s: fullyParallel puts every worker's "
                                              "first visibility wait against a cold Vite, and that "
                                              "wait — never an assertion — was the whole of the "
-                                             "flake DEBTS.md recorded on 2026-08-30",
-                                     "governed_by": ["D5", "D16"]},
+                                             "flake DEBTS.md recorded on 2026-08-30. Under CI a "
+                                             "failing case keeps its trace (`retain-on-failure`) "
+                                             "and check.yml uploads it: the one-test runner red "
+                                             "has never reproduced on the rig (D128), so the run "
+                                             "that fails is the only witness there is",
+                                     "governed_by": ["D5", "D16", "D128"]},
             "design-check-reporter.ts": {"does": "THE VERDICT, AS ONE SMALL FILE. A Playwright "
                                                  "reporter that writes `.serve/design-check.json` "
                                                  "— pass/fail, the counts, and every failing title "
@@ -3245,7 +3282,7 @@ COMPONENTS = [
                         "number column EMPTY, because what D58 refuses is the figure. Refusing "
                         "the whole treatment over it is what put the pre-D41 plain string back "
                         "on two screens for exactly the cards that had been sold.",
-                "governed_by": ["D10", "D20", "D24", "D30", "D31", "D41", "D58", "D68", "D71", "D92", "D132"]},
+                "governed_by": ["D10", "D20", "D24", "D30", "D31", "D41", "D58", "D68", "D71", "D92", "D132", "D119"]},
             "src/PositionLabel.css": {
                 "does": "the shape, and one knob per site. `--pos-slot` is the only number a site "
                         "chooses; the key is a single clamp and the gap is a token by rule "
@@ -3375,6 +3412,7 @@ COMPONENTS = [
                                   "(D90) and went with it (D96 amended 2026-09-04), along with the "
                                   "only stylesheet that ever filled it.",
                                   "governed_by": ["D5", "D6", "D13", "D30", "D31", "D32", "D33", "D38", "D39", "D40", "D41", "D90", "D118", "D119", "D117", "D132"]},
+
             # ---- 7b's screens. Built 2026-08-13, BEFORE Gate B; routed the same day ----
             #
             # Every entry in this block describes a file that exists, typechecks, lints clean
@@ -3429,7 +3467,12 @@ COMPONENTS = [
                         "system\", so the box walk is the spine and search narrows it. This file "
                         "is the route, the title, and the sale/retire flow; BoxBrowse owns the "
                         "walk and hands back the selected card, and CopiesPanel draws D7's "
-                        "SKU -> positions map for whichever card the walk points at. It also "
+                        "SKU -> positions map for whichever card the walk points at \u2014 "
+                        "including the card with no name and no SKU, which since D118 is a "
+                        "SYNTHESISED one-copy group rather than a card above a bare notice. The "
+                        "copy the walk stands on is a ROW of that list and not a panel above it; "
+                        "what the deleted location card left behind here is the receipt, which "
+                        "the row now draws. It also "
                         "carries the four writes that had no client half at all until the same "
                         "day: box-wide and per-card claim corrections, the mid-box delete, and "
                         "the whole-box delete. No cache: there is one place inventory lives and "
@@ -3485,7 +3528,7 @@ COMPONENTS = [
                 # was removed on purpose rather than lost.
                 "governed_by": ["D5", "D6", "D7", "D8", "D10", "D13", "D24", "D26", "D27", "D28",
                                 "D31", "D33", "D36", "D38", "D39", "D41", "D45", "D49", "D57",
-                                "D58", "D68", "D71", "D90", "D93", "D118", "D125", "D132"],
+                                "D58", "D68", "D71", "D90", "D93", "D118", "D119", "D125", "D132"],
             },
             "src/Inventory.css": {
                 "does": "its layout, at the dense owner-side end of the one system, two "
@@ -3495,12 +3538,21 @@ COMPONENTS = [
                         "once in the sale's photo-confirm, then none again once D57 deleted "
                         "that panel on 2026-08-30. The scrim and the confirm rules survive it "
                         "because the retirement inherited them, and a choice between four "
-                        "reasons has never been a screen with one thing to do. IT CARRIES TWO "
-                        "OF `PositionLabel`'s SEVEN SITE RULES (D71): `.inventory-lone-place` "
-                        "and `.inventory-confirm-place`, both at a 20px figure. Both drew the "
-                        "raw label until then, and the first is what 92% of the store renders "
-                        "through \u2014 a card with no name and no SKU has no group to draw.",
-                "governed_by": ["D5", "D6", "D7", "D13", "D26", "D31", "D41", "D57", "D71", "D118", "D125"],
+                        "reasons has never been a screen with one thing to do. IT CARRIES ONE "
+                        "OF `PositionLabel`'s SITE RULES (D71): `.inventory-confirm-place`, the "
+                        "retire dialog's 28px figure. It carried two until D119 deleted the "
+                        "location card, and the clause naming them was wrong in three ways "
+                        "before that \u2014 `.inventory-lone-place` had not existed since the "
+                        "Banchi rebuild, neither rule was at 20px, and the total said seven "
+                        "where D71 says five and the stylesheets say six. NO ROW READS THAT "
+                        "TOTAL: `check_map` reads paths, orphans, `governed_by` and "
+                        "`tested_by`, never a `does` string's prose. So it is not restated "
+                        "here \u2014 a count with no reader is how this one drifted. WHAT IS "
+                        "GONE WITH THE LOCATION CARD: the address, the neighbours band, the "
+                        "lens, the primary action pair and the `Wanted` line, all of which the "
+                        "copies list already drew per row. What STAYED is the receipt's "
+                        "sentence, which the copy row and the phone action bar both render.",
+                "governed_by": ["D5", "D6", "D7", "D13", "D26", "D31", "D41", "D57", "D71", "D118", "D125", "D119"],
             },
             "src/InventoryOverlay.tsx": {"does": "ONE OVERLAY PRIMITIVE FOR THE INVENTORY "
                                                  "SCREEN, in four kinds: a right-side sheet, "
@@ -3632,6 +3684,7 @@ COMPONENTS = [
                                 "note": "THE SHEET DREW FOUR REAL CARDS OUT OF THE OWNER'S STORE UNTIL 2026-09-06. Its `CardLocations` fixtures carry `has_photo: true` on keys 3/40, 7/12, 4/1 and 3/31, and the Fulfiller skin sourced each `<img>` from `photoUrl(box, index)` — so the one page whose entire purpose is being compared against a reference was the one page whose contents depended on which capture server was up and what was in boxes 3, 4 and 7 that day, and `GET /photo/<box>/<index>` serves stored bytes without knowing a code card from a Thievul (D24). The one-line fix — `has_photo: false` on all four — was NOT taken: it buys a closed sheet by deleting the photo-bearing shell from the page whose job is drawing every shell, which is the trade `app/tests/gallery.spec.ts` exists to refuse. The image names its own colors, which is the same exception `src/kit/markPalettes.ts` argues at D102: an illustration's colors, on stage ground that is dark in both themes."},
             "src/Gallery.css": {"does": "the kit page's own layout — the specimen grid and its labels. Not a product screen, and it may not introduce a look the kit does not have.",
                                 "governed_by": ["D5", "D94", "D118", "D119", "D117"]},
+
             # ---- the search-and-sell core: one set of components, two densities ----
             #
             # D5 puts two audiences on one system, and these four are where that stops being a
@@ -3679,13 +3732,30 @@ COMPONENTS = [
                                               "browse to that copy. A transparent button around "
                                               "PositionLabel, not a second treatment; the label "
                                               "and not the row, because the row already holds an "
-                                              "action.",
+                                              "action. EVERY ROW DRAWS ITS BAR NOW \u2014 the copy the walk stands on since "
+                                              "D119 and a departed one since D118 \u2014 and the "
+                                              "copy the walk stands on is marked by a `Viewing` pill "
+                                              "and a neutral rail and by nothing else. "
+                                              "A group with no SKU draws no live figure and no "
+                                              "counts line: `emit` has written no listing record, so "
+                                              "every one of those numbers would be a structural zero "
+                                              "under a headroom promise nothing can keep.",
                                       "governed_by": ["D4", "D5", "D6", "D7", "D10", "D20", "D24", "D26", "D30", "D31", "D38", "D41", "D45", "D58", "D67", "D68", "D71", "D92", "D115", "D118", "D132", "D119"]},
             "src/CardLocations.css": {"does": "the group at two densities. The Fulfiller's copy is a "
                                               "card with a photo; the owner's is a row. The walk-to "
                                               "wrapper takes the button chrome back off and shows "
-                                              "its affordance on hover and focus only (D45).",
-                                      "governed_by": ["D5", "D7", "D30", "D31", "D40", "D41", "D45", "D58", "D71", "D115", "D118", "D132"]},
+                                              "its affordance on hover and focus only (D45). THE "
+                                              "SALE'S UNDO LANDS IN THE ROW (D119) AND FITS "
+                                              "THE SLOT: the drain and the button, inside the "
+                                              "137x28 `.card-locations-action` already reserves "
+                                              "(D118), because a press may not resize the cell it "
+                                              "lands in. The kit's `.bn-receipt` panel does not fit "
+                                              "\u2014 measured, it grew this row 175px to 213px \u2014 "
+                                              "so the sentence stays the toast's and the phone "
+                                              "bar's, and the drain's track is a token here where "
+                                              "`kit.css` paints it as a white alpha for an inverted "
+                                              "panel.",
+                                      "governed_by": ["D5", "D7", "D30", "D31", "D40", "D41", "D45", "D58", "D71", "D115", "D118", "D132", "D119"]},
             # ---- the runs screen (D39, 2026-08-29) ----
             #
             # The pipeline moved off #/inventory onto a route of its own at the owner's
@@ -4653,15 +4723,23 @@ COMPONENTS = [
             "tests/gallery.spec.ts": {
                 "does": "the four row shapes `CardLocations` draws that no other spec reaches "
                         "— the departed shell (`is-gone is-nobar`), the pooled one, the "
-                        "current one, and the state cell's single pill — asserted against "
+                        "current one \u2014 which since D118 is an ORDINARY row carrying a "
+                        "bar, marked by a `Viewing` pill and a rail rather than by its shape \u2014 "
+                        "and the state cell's single pill — asserted against "
                         "`#/gallery`'s own fixtures rather than a server. One count per shape, "
                         "so a fixture that quietly stops producing one is caught. Since "
                         "2026-09-06 it also reads every specimen photograph's `src` back off "
                         "the DOM: four bundled data URIs and two missing-photo sentences, and "
                         "nothing addressing `/photo/`. That assertion is the one that survives "
                         "`shell.ts:stubStore`, which answers the photo route — so the seal "
-                        "alone could never have said the sheet had stopped asking.",
-                "governed_by": ["D6", "D24", "D58", "D68", "D71", "D93", "D118"],
+                        "alone could never have said the sheet had stopped asking. D71's RE-RANK IS ASSERTED "
+                        "HERE SINCE D119 and nowhere else, because after the location card was "
+                        "deleted no screen in the product renders a `lead='path'` label with a "
+                        "void in it — the sheet is that rule's only renderer. Looking at it "
+                        "found the specimens had never drawn the rule at all: `.kit-poslabel` set "
+                        "`--pos-slot` without the `font-size` every real site pairs with it, so "
+                        "the em-relative re-rank clamped to the same 11px a live path gets.",
+                "governed_by": ["D6", "D24", "D58", "D68", "D71", "D93", "D118", "D119"],
                 "note": "IT EXISTS BECAUSE THE SHEET WAS INCOMPLETE AND NOTHING SAID SO, "
                         "2026-09-05. `docs/DEBTS.md` section 5 recorded the departed row as "
                         "absent from the kit; the sold fixture inherited a numeric `slot` from "

@@ -758,7 +758,8 @@
 .browse-actionbar-slot { flex: 1 1 auto; min-width: 0; display: flex; justify-content: flex-end; }
 .browse-actionbar-slot .inventory-copy-actions { width: 100%; justify-content: flex-end; min-width: 0; }
 .browse-actionbar-slot .bn-btn-primary { flex: 1 1 auto; min-width: 0; }
-/* the bar carries the one press; Retire stays in the location card above */
+/* the bar carries the one press. Retire is in the copy ROW since D119 — it was in the location
+   card above until that was deleted — where it is the icon-only ghost beside `Mark sold`. */
 .browse-actionbar-slot .bn-btn-ghost { display: none; }
 
 @media (max-width: 767px) {
@@ -795,6 +796,9 @@
   .browse-cardops > .bn-btn { --btn-h: var(--bn-control-h-lg); }
   .card-locations-owner .inventory-copy-actions .bn-btn { --btn-h: var(--bn-control-h-lg); padding: 0 var(--bn-4); font-size: var(--bn-fs-md); }
   .card-locations-owner .inventory-copy-actions .bn-btn-icon { padding: 0; }
+  /* The receipt's Undo is the same press as the `Mark sold` it replaced, so it is the same
+     height — `sm` alone is 40px, which is the thumb FLOOR and not this row's size (D119). */
+  .card-locations-owner .bn-receipt .bn-btn { --btn-h: var(--bn-control-h-lg); padding: 0 var(--bn-4); }
   .browse-stepper-btn { width: 44px; height: 40px; }
   .browse-stepper-count { font-size: var(--bn-fs-base); }
   .browse-boxcell { min-height: 48px; }

@@ -120,6 +120,24 @@ jobs:
       - name: make ci-check
         run: make ci-check
 
+  # D133's guard as its own check on the PR, so a refusal reads as what it is rather than as one
+  # red line inside ninety seconds of `make ci-check` (which runs it too, as `revert-guard`).
+  # THIS IS THE PLATFORM THE GATE RUNS ON: a PR checkout here is GitHub's own merge of the
+  # branch into its base, so `HEAD` is exactly what would land and `origin/<base>` is what it
+  # lands on — the two things the script compares. No venv, no node, no browser: python3 and a
+  # full-depth clone, because the window is the base's last sixty first-parent commits.
+  revert-guard:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      # `github.base_ref` is set on pull_request only; on a push to main HEAD IS origin/main
+      # and the script says nothing would land.
+      - name: revert guard
+        run: python3 scripts/revert-audit.py branch --upstream "origin/${{ github.base_ref || 'main' }}"
+
   # The browser half. Same tree, different question: what a person actually sees.
   design-check:
     runs-on: ubuntu-latest
@@ -155,3 +173,18 @@ jobs:
       # cannot disagree — on a runner this is the main-tree 5173.
       - name: make design-check
         run: make design-check
+
+      # WHAT A RED RUN LEAVES BEHIND, because until 2026-09-11 it left four lines. The config turns
+      # `trace: retain-on-failure` on under CI, so a failing case has its DOM before and after every
+      # action, its console and its network in `test-results/`, beside the ARIA snapshot Playwright
+      # already wrote. Uploaded only when the job is red: a green run has nothing in the directory
+      # worth a download, and the one-test flake this exists for is diagnosable from nothing else —
+      # it has never reproduced on the rig. Open one with `npx playwright show-trace <zip>`.
+      - name: Keep the failing cases' traces
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: design-check-failures
+          path: app/test-results
+          if-no-files-found: ignore
+          retention-days: 30

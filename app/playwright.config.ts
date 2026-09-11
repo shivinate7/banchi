@@ -71,6 +71,19 @@ export default defineConfig({
        asserts is still what the owner reads over the boxes. */
     timezoneId: 'America/Chicago',
     locale: 'en-US',
+
+    /* A FAILURE ON THE RUNNER LEAVES A TRACE, BECAUSE UNTIL 2026-09-11 IT LEFT NOTHING. The one-test
+       red on `.github/workflows/check.yml`'s `design-check` job recurs about one run in ten, on a
+       Mac it has never once reproduced (40 of 40 under a 6x CPU throttle, the lever D128 used), and
+       every instance so far was diagnosed from the reporter's four lines — locator, expected,
+       received, line — because the job uploaded nothing. Playwright writes an ARIA snapshot beside
+       every failure already (`error-context.md`) and the runner threw it away with the container.
+       `retain-on-failure` records the DOM before and after every action, the console and the
+       network for a case that FAILED and deletes the recording for one that passed, so the cost
+       lands only on the run that has something to show. The workflow uploads `test-results/` on a
+       red job. CI-only: on the rig the reporter's verdict file is the reader, and a trace per
+       failing case is not something `make design-check` has ever asked a session to open. */
+    trace: process.env.CI ? 'retain-on-failure' : 'off',
   },
   projects: [{ name: 'chromium', use: { ...devices['Desktop Chrome'] } }],
   webServer: {

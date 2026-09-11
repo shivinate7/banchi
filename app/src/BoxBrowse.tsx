@@ -71,6 +71,29 @@ function landingOf(rows: readonly Row[]): Row | undefined {
   return rows.find((row) => !hasDeparted(row.card)) ?? rows[0]
 }
 
+/* Where a SEARCH lands (D132 amended, the owner's rule): the first live row of the section
+ * holding the most live rows — the place a hand can pull the most from. Ties go to the section
+ * met first in walk order; with nothing live, `landingOf`'s answer. */
+function landingInFullest(rows: readonly Row[]): Row | undefined {
+  const counts = new Map<string, number>()
+  const keyOf = (row: Row) => `${row.card.box}/${row.card.section ?? '?'}`
+  for (const row of rows) {
+    if (hasDeparted(row.card)) continue
+    counts.set(keyOf(row), (counts.get(keyOf(row)) ?? 0) + 1)
+  }
+  let best: Row | undefined
+  let most = 0
+  for (const row of rows) {
+    if (hasDeparted(row.card)) continue
+    const n = counts.get(keyOf(row)) ?? 0
+    if (n > most) {
+      most = n
+      best = row
+    }
+  }
+  return best ?? landingOf(rows)
+}
+
 // ------------------------------------------------------------------ the walk, in sections
 
 /* Which shelf a row is on: a box number, `pooled` for a card whose game says `located: false`
@@ -673,7 +696,29 @@ export function BoxBrowse({
         record.on_hand ?? record.cards - record.sold - record.retired - record.moved,
       ]),
     )
+    /* UNDER A SEARCH THE BOX WHOSE FULLEST SECTION HOLDS THE MOST LIVE COPIES OF THE ANSWER
+       LEADS (D132, amended on the owner's rule of 2026-09-11): "the largest quantity of
+       whatever I searched, BY SECTION, is the order". A box is ranked by its best section and
+       not by its total, so the rail agrees with the copies list and with where the walk lands:
+       three in one section outranks one-plus-two across two. Sold copies count for nothing —
+       a box full of departed matches is not where the hand goes. With no query this term is
+       zero everywhere and the rail is the hand's again. */
+    const liveMatches = new Map<number, number>()
+    if (filtered) {
+      const perSection = new Map<string, number>()
+      for (const row of inQuery) {
+        const shelf = shelfOf(row)
+        if (typeof shelf !== 'number' || hasDeparted(row.card)) continue
+        const key = `${shelf}/${row.card.section ?? '?'}`
+        const n = (perSection.get(key) ?? 0) + 1
+        perSection.set(key, n)
+        liveMatches.set(shelf, Math.max(liveMatches.get(shelf) ?? 0, n))
+      }
+    }
     return (a: number, b: number): number => {
+      const ma = liveMatches.get(a) ?? 0
+      const mb = liveMatches.get(b) ?? 0
+      if (ma !== mb) return mb - ma
       const ra = recency.get(a) ?? ''
       const rb = recency.get(b) ?? ''
       if (ra !== rb) return ra > rb ? -1 : 1
@@ -682,7 +727,7 @@ export function BoxBrowse({
       if (ha !== hb) return hb - ha
       return a - b
     }
-  }, [boxRecords, recency])
+  }, [boxRecords, recency, filtered, inQuery])
 
   const shelves = useMemo(
     () => shelvesOf(inQuery, filtered ? [] : boxRecords.map((record) => record.box), order),
@@ -857,25 +902,53 @@ export function BoxBrowse({
      cannot honour it. That bounds the window: while it is open a live request outranks `prev`,
      which is what lets the late-arriving box win the shelf it was asked for; once closed the
      rule is the old one and a stale hash can never yank a walk somebody has moved. */
+  const shelfAnswered = useRef<string | null>(null)
   useEffect(() => {
     if (shelves.length === 0) return
     const askedFor = wanted.current
     const honourable = askedFor !== null && shelves.includes(askedFor)
     if (honourable || boxesAnswered) wanted.current = null
+    /* A SEARCH LANDS ON A LIVE COPY, NEVER ON A SOLD ONE (D132, the owner's report of
+       2026-09-11: "it pulled up a sold listing as the front runner"). Under a query a shelf
+       counts as holding the answer only if one of its matches is still on hand — a box whose
+       only match has departed is a box the hand does not go to. The box the walk was on keeps
+       the walk only by that test, and the first box in rail order with a live match takes it
+       otherwise. With nothing live anywhere the old rule stands, so a sold-out card still
+       shows where its copies were. */
+    const holdsLive = (candidate: Shelf) =>
+      !filtered || inQuery.some((row) => shelfOf(row) === candidate && !hasDeparted(row.card))
+    const live = shelves.filter(holdsLive)
+    const pool = live.length > 0 ? live : shelves
+    /* A FRESH ANSWER GOES TO THE FULLEST BOX (D132 amended, the owner's rule): `shelves` is in
+       rail order, and under a query the rail leads with the box holding the most live copies
+       of the answer — so on the first render of each new answer the walk takes `pool[0]`
+       rather than staying where it was. A rail press afterwards still moves it anywhere. */
+    const query = filtered ? (results?.query ?? null) : null
+    const fresh = query !== null && query !== shelfAnswered.current
+    shelfAnswered.current = query
     setShelf((prev) => {
       if (honourable) return askedFor
-      if (prev !== null && shelves.includes(prev)) return prev
-      return shelves[0] ?? null
+      if (!fresh && prev !== null && pool.includes(prev)) return prev
+      return pool[0] ?? null
     })
-  }, [shelves, boxesAnswered])
+  }, [shelves, boxesAnswered, filtered, inQuery, results])
 
-  /* The selection follows the filter. When nothing matches it is left alone. */
+  /* The selection follows the filter. When nothing matches it is left alone.
+     A NEW ANSWER LANDS IN THE FULLEST SECTION (D132 amended): the query's answer is drawn by
+     where the most live copies are, so the walk goes to the first live row of the section
+     holding the most of them — the same row the copies list puts at its top — and it does so
+     on every fresh answer, not only when the old selection fell out of the filter. */
+  const answered = useRef<string | null>(null)
   useEffect(() => {
     if (visible.length === 0) return
-    setSelected((prev) =>
-      prev !== null && visible.some((row) => row.key === prev) ? prev : (landingOf(visible)?.key ?? null),
-    )
-  }, [visible])
+    const query = filtered ? (results?.query ?? null) : null
+    const fresh = query !== null && query !== answered.current
+    answered.current = query
+    setSelected((prev) => {
+      if (!fresh && prev !== null && visible.some((row) => row.key === prev)) return prev
+      return (filtered ? landingInFullest(visible) : landingOf(visible))?.key ?? null
+    })
+  }, [visible, filtered, results])
 
   /* The ticks are the box's, so they go when the box does. */
   useEffect(() => {
@@ -969,7 +1042,8 @@ export function BoxBrowse({
   const selectShelf = (next: Shelf) => {
     setShelf(next)
     if (typeof next === 'number') setRecency(touchBox(next))
-    const landing = landingOf(inQuery.filter((row) => shelfOf(row) === next))
+    const rowsThere = inQuery.filter((row) => shelfOf(row) === next)
+    const landing = filtered ? landingInFullest(rowsThere) : landingOf(rowsThere)
     if (landing !== undefined) {
       jumpRef.current = landing.key
       setSelected(landing.key)

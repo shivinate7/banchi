@@ -428,6 +428,12 @@ a copy row's own state pill says the word once the re-read lands, so only the lo
 an optimistic sale still in flight draw one here. The per-call-site fix this item asked for is
 what shipped, and the D57 ruling it was waiting on was answered by building it.
 
+**The location card was the other site that sentence named, and D119 deleted it** (2026-09-07).
+`primary` is now the phone action bar alone, which has no state pill beside it and so still
+always draws one; the copy row is unchanged and still draws its second `Sold` only for an
+optimistic sale in flight. The closure is unaffected — there is one call site fewer. What moved
+into the row with the deletion is the RECEIPT, on a line of its own beneath it.
+
 **The original entry is kept below** because its argument is still the reason the code is
 shaped this way, and because a reader who greps for the duplication should find out where it
 went rather than finding nothing.
@@ -740,6 +746,73 @@ which runs 7 workers here.**
 ~~**One sighting is unexplained**: at 15 workers, before either fix, `app/tests/cursor.spec.ts`
 failed once in nine runs. Its message was not captured.~~ **CLOSED 2026-09-08 — it was the
 select, and the rate at that width is 16%.** See the survey below, which reproduces it on demand.
+
+### The runner's one-test red is measured, instrumented, and still open, 2026-09-11
+
+**D128 did not close it.** That entry found one real defect — a `keydown` listener a render behind
+the screen — and fixed it, and its own last section declined to promise a green CI. The promise
+would have been wrong: on 2026-09-11, with D128 merged, PR #245's `design-check` job went red on
+`capture-claims.spec.ts:264` at the helper's own line 191, `toHaveCount(0)` polled nineteen times
+at 3 — the same locator, the same shape, the same fifteen seconds as the two instances D128
+attributed to the closure. The re-run was green. So the shape D128 named survives its fix, and the
+mechanism is not known.
+
+**What was measured, over every completed `design-check` job since it landed on 2026-09-08.**
+
+| | completed runs | red | rate |
+|---|---|---|---|
+| all | 113 | 6 | 1 in 19 |
+| since D128 merged (2026-09-10 18:27Z) | 13 | 1 | 1 in 13 |
+
+Never more than one test per run except the job's first, which had three — two of them the D118
+platform difference `check.yml` records, fixed the same day and not counted below. **The five
+that remain are one shape: the assertion right after a `keyboard.press('Escape')`** —
+`capture-claims.spec.ts` three times (lines 264, 314, 816), `live-reconcile.spec.ts:236`,
+`markdown.spec.ts:539`. The failing case never runs slow: today's began its fifteen-second wait
+1.4s into the test, and the two earlier capture instances 0.8s and 0.6s in — page load, the `f`
+press and the track drawing all landed inside a second, and then one Escape was not honoured for
+fifteen. **The three capture instances began between 111 and 121 seconds after the run's first
+test**, at three different cases; the other two at 470 and 531. Three points is not a clock, and
+it is written down because it is the only regularity in the set.
+
+**What does not reproduce it, on this Mac and on the runner.**
+
+- 40 of 40: the helper's exact sequence under a 6x `Emulation.setCPUThrottlingRate`, one worker,
+  the lever that reproduced D128's held-sheet shape 3 in 20.
+- 240 of 240: the same sequence on `ubuntu-latest`, three shards, one worker, traces armed.
+- 315 of 315: the whole of `capture-claims.spec.ts` on the runner, `--repeat-each=5`, three shards.
+
+- 0 of 5: the WHOLE suite on the runner with tracing armed — four shards on this branch and the
+  PR's own job — produced no Escape-shaped failure at all. What those five runs did produce, each
+  with a trace, was that afternoon's main: the location card PR #244's merge had brought back
+  (4 of 4 on `inventory.spec.ts`'s D118 case, gone once D119 was re-applied) and PR #246's
+  `Open the review queue` link under the thumb floor at 390 (`phone.spec.ts:206`, which main's
+  own untraced run fails identically). The instrument's first catch was somebody else's defect,
+  which is what an instrument is for.
+
+So the case that fails one run in thirteen inside the suite passes 555 times outside it, on the
+box it fails on. **The suite around it is part of the mechanism** and nothing measured says which
+part. The candidates read and ruled out by evidence rather than by argument: a Vite dependency
+re-optimisation forcing a reload (the app's only runtime dependencies are React's, all bundled at
+scan, and a reload would EMPTY the track rather than hold it at 3); a second listener eating the
+press (the leader's capture-phase `stopPropagation` fires only while armed, and nothing arms it);
+worker oversubscription (there is one worker); an exit animation keeping the cells in the DOM
+(there is none — `openField` has three setters and none animates).
+
+**What changed, and it is instrumentation rather than a fix.** `app/playwright.config.ts` turns
+`trace: 'retain-on-failure'` on under `CI`, and `check.yml` uploads `app/test-results` when the
+job is red — the DOM before and after every action, the console and the network of the case that
+failed, beside the `error-context.md` snapshot Playwright already wrote and the runner already
+threw away. Five instances have been diagnosed from four reporter lines each; the sixth will have
+its trace. Open it with `npx playwright show-trace <zip>` and read the DOM at the `Escape` and at
+the first `toHaveCount` poll — whether the track is open in both is the first fact nobody has.
+
+**What was refused, again, for D128's reasons and one more.** `retries: 1` would retire the count
+this section is built on. A longer timeout answers nothing that resolved to 3 nineteen times. A
+retry loop around the Escape in the helper would make every recorded instance green and would be
+the one change that could hide the mechanism from the trace that is now armed to catch it. **The
+workaround stands and is named**: `gh run rerun <id> --failed`, about seventeen minutes, until the
+trace says what the runner is doing.
 
 ### The suite was surveyed rather than argued about, 2026-09-08
 
@@ -1698,3 +1771,26 @@ the origin it came from, and `app/tests/` asserts that on every case.** The one 
 in `app/src` is an `href` in `Markdown.tsx` pointing at TCGplayer's pricing admin — a link the
 operator presses, not a resource the page fetches, and `sealOutside` would catch it the moment it
 became one.
+
+## 19 — The revert guard is exact, and three shapes of reversal walk past it
+
+**Recorded 2026-09-11 with D133, which built the guard and names these in its last section.**
+`make revert-guard` refuses a file whose whole change puts it back the way main had it before a
+commit in main's last sixty; it is exact by object id and by `-U0` hunk, and exact is the
+deliberate choice. What that leaves open:
+
+- **Age.** A branch stale by more than sixty first-parent commits — about twelve days here —
+  that merges main keeping `ours` reverses commits outside the window. `scripts/revert-audit.py
+  history --window 0` sees them after the fact; nothing sees them at the push.
+- **Re-wording.** A restored block with one line altered is a new edit to the guard. A
+  similarity threshold was declined: a dial on a gate is turned until the gate is quiet.
+- **A widened hunk.** A reversal on lines adjacent to a real edit shares that edit's hunk and
+  stops being the reverse of anything — how #221's `docs/map.py` and `docs/DEBTS.md` rows
+  escaped. A containment test was measured at seventy-nine coincidences over this history and
+  zero of the rows it was written for, and was not kept.
+
+**What is measured:** the guard fires on the #218/#221 sequence rebuilt in a throwaway
+repository, ten arms, three of them mutation-tested. **What is not:** any of the three above,
+on purpose. The `recorded deletions` audit row covers the one case a session registers by hand,
+and D133's whole-file detector covers the keep-ours merge, which restores whole blobs and so
+never depends on hunk boundaries.
