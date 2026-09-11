@@ -8916,6 +8916,29 @@ merge resolution. The owner's screenshot of 2026-09-10 shows it, and the ask is 
 says, not to remove it. It stays, as the owner is using it; D119's deletion is history and its
 other half — the copy the walk stands on drawn as a row like every other — is untouched.
 
+### Amended 2026-09-11: a search lands on the fullest section, and the index is said once
+
+**Three corrections on the owner's first day with it, each on their word.**
+
+**A search never lands on a sold copy.** Their screenshot: a search "pulled up a sold listing
+as the front runner" while copies were in stock. The walk kept the box it was on because that
+box had *a* match — the sold one — and landed on the only row it had; the live copies were in
+the next box. Under a query a box now counts only if one of its matches is still on hand.
+
+**The order is the largest quantity of the answer, by section.** Repeated back and confirmed:
+*"the largest quantity of whatever I searched by section is the order"*. The copies list groups
+by box and section and draws the section holding the most live copies first; within a section
+the server's card order holds. The rail under a query ranks a box by its **fullest section** and
+not by its total — three in one section outranks one-plus-two across two — so the rail, the
+list and the landing agree. A fresh answer moves the walk to the first live row of that section,
+in that box, and a rail press under the same query lands in *that* box's fullest section. A
+copy sold from this screen still counts for its section while its receipt stands, so the press
+moves no row (D118). With nothing live anywhere the older rules stand.
+
+**The index is said once on the location card.** `BOX WB1 R2  Box 4` beside a corner also
+saying `Box 4` was the same fact twice; `PositionLabel`'s `indexNote` is off there. The copies
+rows have no corner and keep the note.
+
 ### What is not built
 
 No server-side recency, no first-listed stamp, no name uniqueness for sections (a section is

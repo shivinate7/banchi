@@ -2229,7 +2229,7 @@ test('a sold card with no group is ranked too, and its lens keeps the box but lo
 
   const lone = page.locator('.inventory-location-label .position-parts')
   await expect(lone).toHaveAttribute('aria-label', 'Box 2 · departed · B2 #4')
-  await expect(page.locator('.inventory-location-label .position-path')).toHaveText('BOX ME01 commonsBox 2DEPARTED B2 #4')
+  await expect(page.locator('.inventory-location-label .position-path')).toHaveText('BOX ME01 commonsDEPARTED B2 #4')
   await expect(page.locator('.inventory-location-label .position-num')).toHaveCount(0)
   await expect(page.locator('.inventory-location-label .position-void')).toHaveCount(1)
   await expect(page.locator('.inventory-location-label .position-plain')).toHaveCount(0)
@@ -2333,8 +2333,9 @@ test('a departed card draws no number, and the cards behind it count past it', a
    * At the shipped 11px the whole answer sat in the metadata register and the panel read as one
    * that had failed to load, which is the second half of what selling a card did to this screen. */
   const path = page.locator('.inventory-location-label .position-path')
-  /* THE NAME LEADS AND THE INDEX IS THE NOTE (D132): `BOX ME01 commons` with `Box 2` beside it. */
-  await expect(path).toHaveText('BOX ME01 commonsBox 2DEPARTED B2 #4')
+  /* THE NAME LEADS (D132), and the index is the CORNER's, not a note here — the owner asked
+     for it once (2026-09-11). */
+  await expect(path).toHaveText('BOX ME01 commonsDEPARTED B2 #4')
   const departed = await path.evaluate((node) => Number.parseFloat(window.getComputedStyle(node).fontSize))
 
   /* MEASURED AGAINST A LIVE CARD'S OWN PATH RATHER THAN AGAINST A NUMBER. The literal 19.8px was
@@ -4992,14 +4993,18 @@ test('D132 — unticked, departed rows sink under the live ones in their own sec
       '2/6': card({ index: 6, at: 3, state: 'identified', name: 'Inteleon', sku: '8937373', section: 2, sectionStart: 3, sectionEnd: 4 }),
     }),
   }
-  await page.reload()
-  await open(page, BOXES, store, () => PRICING, SALE, { hideSold: null })
-  await expandAll(page)
+  /* A FRESH PAGE IN THE SAME CONTEXT, not a reload: a reload fires the first store's requests
+     before the second `open()` has registered its routes, and under the full suite's load
+     that answer sometimes landed last — 1 in 483 on 2026-09-11, then 2 in 5 alone. The
+     context is what holds `localStorage`, so the remembered choice still carries over. */
+  const again = await page.context().newPage()
+  await open(again, BOXES, store, () => PRICING, SALE, { hideSold: null })
+  await expandAll(again)
   /* REMEMBERED: the press above wrote `show`, and this open wrote nothing over it. */
-  await expect(page.locator('.browse-hidesold')).toHaveAttribute('aria-pressed', 'false')
-  await expect(page.locator('.browse-row .browse-row-position')).toHaveText(['#1', '#2', 'B2 #1', '#1'])
+  await expect(again.locator('.browse-hidesold')).toHaveAttribute('aria-pressed', 'false')
+  await expect(again.locator('.browse-row .browse-row-position')).toHaveText(['#1', '#2', 'B2 #1', '#1'])
   /* The section header the sold card led is still ONE section, folded open, not two. */
-  await expect(page.locator('.browse-sectfold')).toHaveCount(2)
+  await expect(again.locator('.browse-sectfold')).toHaveCount(2)
 })
 
 test('D132 — the row the walk stands on survives its own sale while sold is hidden, and goes when the walk moves', async ({ page }) => {
@@ -5073,7 +5078,8 @@ test('D132 — the address leads with the name, the corner says the index, and t
   await page.locator('.browse-row').nth(0).click()
 
   const label = page.locator('.inventory-location-label .position-parts')
-  await expect(label.locator('.position-path')).toHaveText('BOX ME01 commonsBox 2SECTION 1')
+  /* ONCE, IN THE CORNER: the address itself carries no `Box 2` note on this card. */
+  await expect(label.locator('.position-path')).toHaveText('BOX ME01 commonsSECTION 1')
   /* The server's string is untouched: this is a rendering, not an edit (D41's invariant). */
   await expect(label).toHaveAttribute('aria-label', 'Box 2 · Section 1 · Card 1')
   await expect(page.locator('.inventory-location-boxname')).toHaveText('Box 2')
@@ -5118,7 +5124,7 @@ test('D132 — a named section is said in the walk header, in the bar\'s sentenc
   await expect(page.locator('.browse-secttitle').first()).toHaveText('Section 1 · Rares · #1–#3')
   await page.locator('.browse-row').nth(0).click()
   await expect(page.locator('.inventory-location .position-bar-text').nth(1)).toHaveText('Section 1 · Rares · card 1 of 3 slots')
-  await expect(page.locator('.inventory-location-label .position-path')).toHaveText('BOX ME01 commonsBox 2SECTION 1Rares')
+  await expect(page.locator('.inventory-location-label .position-path')).toHaveText('BOX ME01 commonsSECTION 1Rares')
 
   /* AND THE NAME IS WRITTEN FROM THE MANAGE SHEET, keyed by the section's number. */
   await page.route(/\/boxes\/2$/, async (route) => {
@@ -5139,4 +5145,66 @@ test('D132 — a named section is said in the walk header, in the bar\'s sentenc
   await field.fill('Top rares')
   await page.getByRole('button', { name: 'Save names' }).click()
   await expect(page.locator('.boxops-editor')).toHaveCount(0)
+})
+
+test('D132 — a search lands on a box with a LIVE copy, never on the sold one the walk was standing beside', async ({ page }) => {
+  /* THE OWNER'S REPORT, 2026-09-11: a search "pulled up a sold listing as the front runner".
+     Box 2 is the box being walked and its only Eiscue is sold; box 7 holds a live one. The
+     walk used to keep box 2 because it had A match, and then landed on the only row it had. */
+  const cards: Cards = {
+    ...CARDS,
+    '7/40': card({ index: 40, state: 'identified', name: 'Eiscue', sku: '8937371', section: 1, sectionStart: 1, sectionEnd: 40, box: 7, boxName: 'ME01 spares', boxTotal: 40 }),
+  }
+  const store: Store = { cards, search: (query) => searchAnswer(query, cards) }
+  await open(page, TWO_BOXES, store, () => PRICING, SALE, { route: '/#/inventory?box=2', hideSold: null })
+  await expect(page.locator('.browse-boxcell[aria-current="true"]')).toHaveAttribute('aria-label', /^Box 2/)
+
+  await page.getByRole('searchbox').fill('Eiscue')
+  await expect(page.locator('.browse-boxcell[aria-current="true"]')).toHaveAttribute('aria-label', /^Box 7/)
+  await expect(page.locator('.inventory-location-label .position-parts')).toHaveAttribute('aria-label', 'Box 7 · Section 1 · Card 40')
+  /* And the copy the walk stands on is the live one, not the departed one. */
+  await expect(page.locator('.card-locations-row.is-current')).not.toHaveClass(/is-gone/)
+})
+
+test('D132 — the copies list, the rail and the landing lead with the section holding the most live copies', async ({ page }) => {
+  /* THE OWNER'S RULE, 2026-09-11, repeated back and confirmed: "the largest quantity of
+     whatever I searched, by section, is the order". One in box 2 section 1, two in box 2
+     section 2, three in box 7 — and a sold one in box 2 section 1 that counts for nothing. */
+  const thievul = (index: number, at: number, section: number, start: number, end: number, box = 2, state = 'identified') =>
+    card({ index, at, state, name: 'Thievul', sku: '8937370', section, sectionStart: start, sectionEnd: end, box, boxName: box === 7 ? 'ME01 spares' : undefined, boxTotal: box === 7 ? 40 : 5 })
+  const cards: Cards = {
+    '2/1': thievul(1, 1, 1, 1, 3),
+    '2/2': thievul(2, 2, 1, 1, 3, 2, 'sold'),
+    '2/3': card({ index: 3, at: 2, state: 'identified', name: 'Eiscue', sku: '8937371', section: 1, sectionStart: 1, sectionEnd: 3 }),
+    '2/6': thievul(6, 3, 2, 3, 5),
+    '2/7': thievul(7, 4, 2, 3, 5),
+    '7/38': thievul(38, 38, 1, 1, 40, 7),
+    '7/39': thievul(39, 39, 1, 1, 40, 7),
+    '7/40': thievul(40, 40, 1, 1, 40, 7),
+  }
+  const store: Store = { cards, search: (query) => searchAnswer(query, cards) }
+  /* BOX 2 IS THE BIGGER BOX, so nothing but the answer's own count can put box 7 first in the
+     rail — with the fixture's 5-against-40 the on-hand tie-breaker did that on its own, and the
+     rail assertion below passed with the rank term deleted. */
+  const boxes = { boxes: TWO_BOXES.boxes.map((box) => (box.box === 2 ? { ...box, cards: 60, on_hand: 60, fill: 60, next_index: 61 } : box)) }
+  await open(page, boxes, store, () => PRICING, SALE, { route: '/#/inventory?box=2', hideSold: null })
+  await expandAll(page)
+  await page.locator('.browse-row').nth(0).click()
+
+  /* The copies list: box 7's three, then box 2 section 2's two, then the lone one. */
+  const labels = page.locator('.card-locations-row .position-parts')
+  await expect(labels).toHaveCount(6)
+  await expect(labels.nth(0)).toHaveAttribute('aria-label', 'Box 7 · Section 1 · Card 38')
+  await expect(labels.nth(3)).toHaveAttribute('aria-label', 'Box 2 · Section 2 · Card 1')
+  await expect(labels.nth(5)).toHaveAttribute('aria-label', 'Box 2 · Section 1 · Card 1')
+
+  /* A search: the rail leads with box 7 and the walk lands on the first of its three. */
+  await page.getByRole('searchbox').fill('Thievul')
+  await expect(page.locator('.browse-boxcell').first()).toHaveAttribute('aria-label', /^Box 7/)
+  await expect(page.locator('.browse-boxcell[aria-current="true"]')).toHaveAttribute('aria-label', /^Box 7/)
+  await expect(page.locator('.inventory-location-label .position-parts')).toHaveAttribute('aria-label', 'Box 7 · Section 1 · Card 38')
+
+  /* And pressing box 2 under the same search lands in ITS fullest section, section 2. */
+  await page.locator('.browse-boxcell[aria-label^="Box 2"]').click()
+  await expect(page.locator('.inventory-location-label .position-parts')).toHaveAttribute('aria-label', 'Box 2 · Section 2 · Card 1')
 })

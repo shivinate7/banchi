@@ -696,7 +696,7 @@ function LocationCard({
       ) : (
         <>
           <div className="inventory-location-label">
-            <PositionLabel label={label} boxName={place?.box_name ?? null} sectionName={place?.section_name ?? null} />
+            <PositionLabel label={label} boxName={place?.box_name ?? null} sectionName={place?.section_name ?? null} indexNote={false} />
           </div>
           <PlaceNeighbors place={place} />
           {/* THE LENS IS DRAWN FOR A DEPARTED COPY TOO (D118), and `departed` no longer gates it.
