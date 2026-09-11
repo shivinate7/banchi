@@ -10342,11 +10342,11 @@ def check_suite_lock(report: Report) -> None:
 # ------------------------------------------------------------ the browser matrix's scope
 #
 # `.github/workflows/check.yml` runs its browser matrix on a pull request only when the change
-# touches a path `scripts/browser-scope.py:SCOPE` names (D-ci-browser-scope). A path filter is the one gate
+# touches a path `scripts/browser-scope.py:SCOPE` names (D141). A path filter is the one gate
 # whose failure is INVISIBLE: too narrow, and the matrix stops running for a class of change,
 # the run is green because it never happened, and the green is believed. That is the armed
 # hook's defect from `scripts/githooks/pre-commit`'s own header, one level up — and the reason
-# D-ci-browser-scope rules that the filter does not ship without this row.
+# D141 rules that the filter does not ship without this row.
 #
 # THE LIST IS RECONCILED AGAINST WHAT THE SUITE LOADS, NOT AGAINST A SECOND LIST. Each
 # dependency below is READ from the thing that creates it: Playwright's `testDir`, its reporter
@@ -10360,7 +10360,7 @@ def check_suite_lock(report: Report) -> None:
 # AND THE WIRING IS READ, because a list nothing consults is a list. The workflow must run the
 # classifier from some job, `design-check` must need that job and read its answer in the
 # FAIL-OPEN spelling — `!= 'false'` under `!cancelled()` — the `on:` block may carry no path
-# filter (that would gate `check`, `revert-guard` and `already-passed` too, which D-ci-browser-scope
+# filter (that would gate `check`, `revert-guard` and `already-passed` too, which D141
 # forbids), and `design-check-passed` may not run on a skipped matrix, or a tree no browser
 # saw would earn D136's pass record.
 #
@@ -10470,7 +10470,7 @@ def browser_gate_findings(text: str) -> List[Tuple[str, str]]:
     elif re.search(r"^\s*paths(?:-ignore)?:", on, re.M):
         out.append((where, (
             "the `on:` block carries a `paths` filter. That gates EVERY job — `check`,\n"
-            "  `revert-guard` and `already-passed` included — and D-ci-browser-scope scopes the browser\n"
+            "  `revert-guard` and `already-passed` included — and D141 scopes the browser\n"
             "  matrix alone. The filter is `browser-scope`'s output, read by one job's `if:`.")))
 
     design = _yaml_job_block(text, "design-check")
@@ -10487,7 +10487,7 @@ def browser_gate_findings(text: str) -> List[Tuple[str, str]]:
                 f"`design-check`'s `if:` does not read `{answer} != 'false'`.\n"
                 "  That spelling is the fail-open one: a classifier that errored, a job that\n"
                 "  never ran and an empty output all RUN the matrix. `== 'true'` would skip it\n"
-                "  on every one of those, silently (D-ci-browser-scope).")))
+                "  on every one of those, silently (D141).")))
         if cond is not None and "!cancelled()" not in cond.group(1):
             out.append((where, (
                 "`design-check`'s `if:` has no `!cancelled()`, so GitHub prepends `success()`\n"
@@ -10565,7 +10565,7 @@ def _browser_requirements(module, tracked: Set[str], makefile: str) -> List[Tupl
 
 
 def check_browser_scope(report: Report) -> None:
-    """`scripts/browser-scope.py:SCOPE` against what the browser suite loads, both ways (D-ci-browser-scope).
+    """`scripts/browser-scope.py:SCOPE` against what the browser suite loads, both ways (D141).
 
     MECHANICAL: a dependency the scope does not cover is a class of change the browser matrix
     has silently stopped running for, and an entry covering nothing tracked is a pattern that
@@ -13148,7 +13148,7 @@ def self_test() -> int:
         str(_ramps.get("chrome")),
     )
 
-    # THE BROWSER MATRIX'S GATE, READ BOTH WAYS (D-ci-browser-scope). The wiring reader is pure, so each
+    # THE BROWSER MATRIX'S GATE, READ BOTH WAYS (D141). The wiring reader is pure, so each
     # way the workflow could quietly stop gating is mutated into it here; the classifier is
     # imported the way `prose-guard.py` is and asked the two questions the gate exists for.
     print("\nthe browser scope's wiring is read, and each silent failure is mutated in")

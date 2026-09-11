@@ -219,7 +219,7 @@ make design-check   # DESIGN.md's Fulfillment floors, asserted in a browser. IT 
                     #   it right for an ESM spec and is the pin; this arm sees a bump bring it back.
                     #   It launches NO BROWSER and NO DEV SERVER, so it is in `check`
                     #   and `ci-check` and takes no lock.
-                    #   ON CI IT RUNS ONLY WHEN THE CHANGE REACHES WHAT A BROWSER DRAWS (D-ci-browser-scope).
+                    #   ON CI IT RUNS ONLY WHEN THE CHANGE REACHES WHAT A BROWSER DRAWS (D141).
                     #   `.github/workflows/check.yml` gates its three-shard matrix on a pull
                     #   request by `scripts/browser-scope.py`, whose list is DERIVED from what
                     #   this target loads — `app/**`, the traces `cadence.spec.ts` reads off
@@ -1531,7 +1531,7 @@ D137 The catalog is Near Mint by rule, because it was only ever Near Mint by acc
 D138 One process serves the product, Vite compiles and never serves, and the build is the server's job
 D139 Which branch the primary checkout stands on is a fact about the live rig, and a warning is the ceiling
 D140 The number is claimed at the merge, because what main has taken is not knowable before it
-D-ci-browser-scope The browser matrix runs when the change reaches what a browser draws, and the path list has a reader
+D141 The browser matrix runs when the change reaches what a browser draws, and the path list has a reader
 ```
 
 **THE GAP THIS LIST CARRIED BETWEEN D116 AND D118 IS CLOSED, AND IT CLOSED THE WAY IT SAID IT

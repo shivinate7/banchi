@@ -10004,7 +10004,7 @@ reader decides it.
 ### What it does not decide
 
 **Not whether an id may ever be typed as a number again.** A session amending an existing entry cites it by its number, as it always has; the slug is for an entry that does not have a number YET. **Not the commit messages** — a message written on the branch names the slug and cannot be rewritten after a push, so the claim commit's own message is where the pair is recorded. **And not D80's stable-id ruling**, which this strengthens rather than reopens: that entry forbids renumbering an EXISTING step because 218 references would silently follow the number instead of the step, and a number claimed at the merge cannot collide, so nothing is ever renumbered to resolve one.
-## D-ci-browser-scope — The browser matrix runs when the change reaches what a browser draws, and the path list has a reader
+## D141 — The browser matrix runs when the change reaches what a browser draws, and the path list has a reader
 
 **Settled 2026-09-11, on the owner's instruction, the night the account ran out of GitHub Actions minutes.** `.github/workflows/check.yml`'s `design-check` job runs on a pull request only when what the branch would land touches a file the browser suite reads. Nothing about the suite changed — not a case, not an assertion, not a shard — and nothing about a push to main changed. What changed is which pull requests pay for it, and the list that decides has a mechanical reader before it has a filter.
 

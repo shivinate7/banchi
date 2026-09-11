@@ -1064,7 +1064,7 @@ so a green row cannot be read as full coverage.
 
 ### The browser matrix's path scope reads literals, and a dependency built from pieces walks past it
 
-**D-ci-browser-scope gates `check.yml`'s browser matrix on a pull request by `scripts/browser-scope.py:SCOPE`, and
+**D141 gates `check.yml`'s browser matrix on a pull request by `scripts/browser-scope.py:SCOPE`, and
 `make docs-audit`'s `browser scope` row derives what the suite depends on from the two configs, the
 `design-check` recipe and every code string in `app/tests` and `app/src` that names a tracked file
 outside `app/`.** That last reader is what found `cadence.spec.ts`'s two traces under `harness/`. It
