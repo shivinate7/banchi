@@ -2184,7 +2184,7 @@ def check_remove_and_box_delete(checks: Checks) -> None:
             "deleting a box nothing has heard of refuses",
         )
 
-        # D133: box 3 holds 3/1 (never identified, on hand), 3/2 (N3), 3/3 (N4), 3/4 (N5).
+        # D134: box 3 holds 3/1 (never identified, on hand), 3/2 (N3), 3/3 (N4), 3/4 (N5).
         # One of each terminal door, plus an on-hand card carrying a listing hold, so the
         # refusal and the burial are both exercised in one setup.
         blob_3 = base64.b64decode(blob(3))
@@ -2221,7 +2221,7 @@ def check_remove_and_box_delete(checks: Checks) -> None:
                 and "is sold" not in str(caught) and "is retired" not in str(caught)
                 and "was moved" not in str(caught),
                 "and the refusal names only the listed copy — the sold, retired and "
-                "moved records no longer stand in the way (D133)",
+                "moved records no longer stand in the way (D134)",
                 f"message was: {caught}",
             )
         checks.equal(
@@ -2325,7 +2325,7 @@ def check_remove_and_box_delete(checks: Checks) -> None:
 
 
 def check_graveyard(checks: Checks) -> None:
-    """GET /graveyard — D133's merge of two sources into one screen.
+    """GET /graveyard — D134's merge of two sources into one screen.
 
     A DEPARTED CARD READS THE SAME WAY WHETHER ITS BOX STILL EXISTS OR NOT, which is the
     whole reason this route is a merge rather than a pass-through of `do_boxes` or
@@ -2334,7 +2334,7 @@ def check_graveyard(checks: Checks) -> None:
     count never doubles or drops it along the way.
     """
     checks.note("")
-    checks.note("GRAVEYARD — D133's two-source merge")
+    checks.note("GRAVEYARD — D134's two-source merge")
 
     def blob(i: int) -> str:
         return base64.b64encode(b"\xff\xd8\xff" + bytes([i]) * 64).decode("ascii")
@@ -2650,7 +2650,7 @@ def check_listing_release(checks: Checks) -> None:
             "200 — what keeps a stale screen distinguishable from a release that worked",
         )
 
-        # D133: every listing hold on box 4 is now clear, and the SOLD card at 4/6 no
+        # D134: every listing hold on box 4 is now clear, and the SOLD card at 4/6 no
         # longer stands on its own — it is buried rather than blocking. The delete D34
         # was built to unblock (`_listing_hold` is what remains of the gate) succeeds.
         body = capture_server.do_delete_box(4)

@@ -557,7 +557,7 @@ sentence**, and see "the census" below for what enforces that.
                               the live ones. The address leads with the box's NAME and the
                               rail orders boxes by when this browser last opened them; a
                               section can be named from the Manage box sheet.
-#/graveyard    Graveyard      every departed card, sold or retired or moved (D133) — merged
+#/graveyard    Graveyard      every departed card, sold or retired or moved (D134) — merged
                               from two sources, a record still standing in a box nobody has
                               deleted and a `buried` history line for one whose box was.
                               Read-only: nothing here can be undone, and nothing here prices
@@ -1412,7 +1412,7 @@ D129 The verdict's line is fixed by the first Playwright that counts it right, a
 D130 A feeder that never rests gets a second trigger, and the beat is measured not typed
 D131 The ratchet gets an escape, a settle is one quiet frame of three, and the beat is the backstop
 D132 Sold is folded away by default, the address leads with the name, the rail is ordered by the hand, and a section can be named
-D133 A departed record is buried, not kept; the box goes; and the graveyard is where the departed are read
+D134 A departed record is buried, not kept; the box goes; and the graveyard is where the departed are read
 ```
 
 **THE GAP THIS LIST CARRIED BETWEEN D116 AND D118 IS CLOSED, AND IT CLOSED THE WAY IT SAID IT

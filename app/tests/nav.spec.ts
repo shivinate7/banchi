@@ -115,6 +115,8 @@ async function stub(page: Page, cards: unknown[] = []) {
   await page.route(/\/queues$/, (route) => json(route, { review: [], parked: [] }))
   await page.route(/\/search\?/, (route) => json(route, { query: '', groups: [] }))
   await page.route(/\/games$/, (route) => json(route, { games: [] }))
+  /* D134's graveyard, the twelfth route this ring steps to. */
+  await page.route(/\/graveyard$/, (route) => json(route, { departed: [] }))
   /* The markdown sheet reads its own history when its host screen mounts, closed or not, and
      holds nothing else until an export is uploaded. Empty is the honest answer here: this
      checkout has its own store (D43) and no markdown has ever been written into it. The host

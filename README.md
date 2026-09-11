@@ -157,7 +157,7 @@ inventory      the box walk, and everything that hangs off it: search, a card's 
                driving that same walk stop by stop, writing nothing per card and
                recording the whole envelope on one press
 graveyard      every departed card, sold or retired or moved — still standing in a box, or
-               buried when its box was deleted (D133). Read-only, no undo
+               buried when its box was deleted (D134). Read-only, no undo
 codes          the code-card track: read a box's QRs into the ledger, the two lanes the
                pile is tiered into, and a lane handed to a buyer against a named order
 cards to pull  the Fulfiller's whole product: pull, photo-confirm, mark sold

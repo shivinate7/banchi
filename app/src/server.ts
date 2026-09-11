@@ -1682,7 +1682,7 @@ export async function moveCards(
 
 /**
  * Delete a whole box — records, photos, sidecars, queue entries, cache, registry entry
- * (D10 ruling 3, amended D133).
+ * (D10 ruling 3, amended D134).
  *
  * THE MOST DESTRUCTIVE ACTION IN THE PRODUCT, and the one place `docs/DESIGN.md`'s
  * "genuinely destructive actions may still gate" clause is meant to bite. There is no undo:
@@ -1690,7 +1690,7 @@ export async function moveCards(
  *
  * It refuses `box_not_empty_of_commitments` only while the box holds an on-hand card with an
  * active listing hold, naming up to eight. A sold, retired or moved record no longer blocks
- * this (D133) — it is buried instead, readable afterward from `graveyard()`, so a screen
+ * this (D134) — it is buried instead, readable afterward from `graveyard()`, so a screen
  * should show the refusal as naming only what still stands in the way.
  *
  * The result is a per-kind receipt and should be drawn as one. `buried` is the subset of
@@ -1702,7 +1702,7 @@ export async function deleteBox(box: number): Promise<BoxDeleteResult> {
 }
 
 /**
- * Every departed card the store still knows about, newest departure first (D133).
+ * Every departed card the store still knows about, newest departure first (D134).
  *
  * TWO SOURCES, ONE SHAPE. A sold, retired or moved record can be standing in a box nobody
  * has deleted — the same records `#/inventory` already draws as departed — or it can be the

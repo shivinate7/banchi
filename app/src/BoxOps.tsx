@@ -1710,7 +1710,7 @@ function megabytes(bytes: number): string {
  * gates. Two presses that both name the box; the server keeps the refusal
  * (`box_not_empty_of_commitments`) and it is shown whole.
  *
- * D133 (2026-09-11): a sold, retired or moved record no longer answers that refusal — it is
+ * D134 (2026-09-11): a sold, retired or moved record no longer answers that refusal — it is
  * buried instead, readable afterward on `#/graveyard`, and only a listed copy still blocks.
  * The Notice below draws that distinction before the press: what will be buried and lost is
  * separate from what will refuse outright. */

@@ -981,10 +981,10 @@ COMPONENTS = [
             # are what a kill still tears.
             "session.py": {"does": "lock-free read, or locked read-modify-write, over one SQLite "
                                    "transaction — `Snapshot` is the API and every field of it "
-                                   "loads only the rows a caller names. `buried()` (D133) is "
+                                   "loads only the rows a caller names. `buried()` (D134) is "
                                    "`history()`'s narrower sibling: the `buried` events alone, "
                                    "for `#/graveyard`'s read.",
-                           "governed_by": ["D13", "D53", "D63", "D88", "D133"], "tested_by": ["T7"]},
+                           "governed_by": ["D13", "D53", "D63", "D88", "D134"], "tested_by": ["T7"]},
             "rows.py": {"does": "`Rows`: a keyed mapping of records that is a dict to every "
                                 "caller and, bound to a `Source`, loads one row, one indexed "
                                 "column's matches, or column values with no object built at all. "
@@ -996,10 +996,10 @@ COMPONENTS = [
                               "`Rows`, the per-session flush, the events table that is the "
                               "history, and the one-time lossless import of a legacy JSON store "
                               "into it — under the lock, files moved to legacy-json/ with a receipt. "
-                              "`events_named` (D133) is an unindexed `WHERE event = ?` scan over "
+                              "`events_named` (D134) is an unindexed `WHERE event = ?` scan over "
                               "that same table — no new index, because this repo has no schema "
                               "migration to add one to a store already on disk.",
-                      "governed_by": ["D86", "D88", "D133"], "tested_by": ["T7"]},
+                      "governed_by": ["D86", "D88", "D134"], "tested_by": ["T7"]},
         },
     },
     {
@@ -2192,7 +2192,7 @@ COMPONENTS = [
                         "master.STATES, which is what keeps _state_before_sale from "
                         "restoring a reversed sale to one of them. "
                         "DELETE /boxes/<box> BURIES A DEPARTED RECORD RATHER THAN "
-                        "REFUSING ON IT (D133): a sold, retired or moved record no longer "
+                        "REFUSING ON IT (D134): a sold, retired or moved record no longer "
                         "blocks the delete — one `buried` event per record, carrying it "
                         "whole, before the record and its photograph go. `GET /graveyard` "
                         "reads those lines merged with every departed record still "
@@ -2242,7 +2242,7 @@ COMPONENTS = [
                                 "D62", "D63", "D64", "D65", "D66", "D67", "D69", "D70", "D76",
                                 "D77", "D79", "D83", "D86", "D87", "D88", "D89", "D90", "D91",
                                 "D92", "D93", "D96", "D100", "D103", "D104", "D113", "D115",
-                                "D116", "D132", "D133"],
+                                "D116", "D132", "D134"],
                 "tested_by": ["T7"],
             },
             "tcg_import.py": {"does": "THE OUTBOUND WRITE to the seller admin, and the only "
@@ -2475,7 +2475,7 @@ COMPONENTS = [
                 "(D69 gave each its own route rather than making one a mode of the other); the "
                 "one inventory view (D31 folded the box walk and the pull preview into it); "
                 "`#/graveyard`, where a departed card is read whether its box still stands or "
-                "was deleted out from under it (D133); the code-card screen D70 gave its own "
+                "was deleted out from under it (D134); the code-card screen D70 gave its own "
                 "route; and `#/gallery`, which is the KIT — step 6's component page grown into "
                 "every primitive the product is built from. One is the Fulfiller's, and the "
                 "shell deliberately draws no chrome over it. The count here is RECOUNTED off "
@@ -2814,7 +2814,7 @@ COMPONENTS = [
                                     "Fulfiller's: `#/` is Home, which took the root hash in the "
                                     "2026-09 rebuild and moved capture to `#/capture`; then "
                                     "capture, runs, review, pricing, orders, shipping, "
-                                    "inventory, `#/graveyard` (D133), codes, the Fulfiller's "
+                                    "inventory, `#/graveyard` (D134), codes, the Fulfiller's "
                                     "`#/fulfillment`, and "
                                     "`#/gallery`, which is the KIT now rather than step 6's "
                                     "component page. RECOUNT FROM THE TABLE, NEVER INCREMENT — "
@@ -2877,7 +2877,7 @@ COMPONENTS = [
                             "governed_by": ["D5", "D10", "D13", "D14", "D16", "D20", "D27",
                                             "D28", "D31", "D33", "D39", "D49", "D51", "D53",
                                             "D57", "D61", "D63", "D66", "D69", "D70", "D94",
-                                            "D95", "D100", "D105", "D120", "D133"]},
+                                            "D95", "D100", "D105", "D120", "D134"]},
             "src/Codes.tsx": {"does": "the code-card screen: read a box's QRs into the ledger, "
                                       "see the two lanes C11 tiers the pile into, and hand a "
                                       "lane's codes to a buyer against a named order. The "
@@ -2920,7 +2920,7 @@ COMPONENTS = [
                                     "deliberately does not wear that class, because it is never "
                                     "armed.",
                             "governed_by": ["D5", "D10", "D13", "D31", "D41", "D49", "D50", "D51", "D94",
-                                             "D95", "D110", "D117", "D118"]},
+                                             "D95", "D110", "D117", "D118", "D134"]},
             # THE TWO `ServerReloaded` FILES ARE GONE AND THE NOTICE IS NOT (Banchi, 2026-09-03).
             # D53's rule is that the boot header is SUBSCRIBED to and never polled, and that the
             # notice demands nothing; neither needed a component of its own once the shell had a
@@ -2976,7 +2976,7 @@ COMPONENTS = [
                                               "D61", "D62", "D63", "D64", "D65", "D68", "D69",
                                               "D70", "D73", "D76", "D79", "D83", "D86", "D87",
                                               "D89", "D90", "D91", "D92", "D100", "D103",
-                                              "D104", "D113", "D116", "D132", "D133"]},
+                                              "D104", "D113", "D116", "D132", "D134"]},
             "src/demoFlag.d.ts": {"does": "declares `__BN_DEMO__`, the build-time demo flag "
                                           "`vite.config.ts` substitutes with a boolean "
                                           "literal. It exists because three other forms of "
@@ -3035,7 +3035,7 @@ COMPONENTS = [
                                              "D63", "D64", "D65", "D67", "D69", "D73", "D76",
                                              "D79", "D83", "D86", "D87", "D89", "D91", "D92",
                                              "D93", "D100", "D103", "D104", "D113", "D115",
-                                             "D116", "D132", "D133"]},
+                                             "D116", "D132", "D134"]},
             "src/deviceMemory.ts": {"does": "every `localStorage` key the shell owns — the "
                                             "theme, the rail, which order statuses this "
                                             "device bothers fetching (D114), whether the "
@@ -3541,7 +3541,7 @@ COMPONENTS = [
                         "beneath them: D34's listing release, drawn over a free plan and "
                         "budgeted by this box's own copies, and D10 ruling 3's whole-box "
                         "delete behind a typed box number — which no longer refuses on a "
-                        "sold, retired or moved record (D133): those are buried, and only a "
+                        "sold, retired or moved record (D134): those are buried, and only a "
                         "listing hold still stands in the way.",
                 "note": "TWO CONTROLS SAY WHAT THEY WILL DO BEFORE THEY DO IT, and both "
                         "sentences are the decision rather than a nicety. Sealing reads 'Seal "
@@ -3564,7 +3564,7 @@ COMPONENTS = [
                         "pipeline/join.py:Position is the only label formula in the repo; the "
                         "spans, the rendered divider list and the denominator are all read back "
                         "off the wire.",
-                "governed_by": ["D5", "D10", "D13", "D20", "D21", "D22", "D26", "D27", "D31", "D33", "D34", "D36", "D38", "D41", "D58", "D70", "D83", "D89", "D115", "D132", "D133"],
+                "governed_by": ["D5", "D10", "D13", "D20", "D21", "D22", "D26", "D27", "D31", "D33", "D34", "D36", "D38", "D41", "D58", "D70", "D83", "D89", "D115", "D132", "D134"],
             },
             "src/BoxOps.css": {
                 "does": "the box header, the section track and the editors, at the dense "
@@ -3582,7 +3582,7 @@ COMPONENTS = [
                 "governed_by": ["D5", "D20", "D22", "D31", "D38", "D40", "D41", "D50", "D83", "D132"],
             },
             "src/Graveyard.tsx": {
-                "does": "`#/graveyard` (D133): every departed card the store still knows "
+                "does": "`#/graveyard` (D134): every departed card the store still knows "
                         "about, newest departure first. TWO SOURCES, ONE TABLE — a "
                         "sold/retired/moved record still standing in a box nobody has "
                         "deleted, the same records `#/inventory` already draws as departed, "
@@ -3596,14 +3596,14 @@ COMPONENTS = [
                         "a departed record has no slot to count to, so `positionOf` and the "
                         "Where column both go through `storeKey.ts:storeKeyText` — `B9 #3`, "
                         "D68's own spelling — rather than composing `#{index}` by hand.",
-                "governed_by": ["D26", "D58", "D68", "D83", "D92", "D133"],
+                "governed_by": ["D26", "D58", "D68", "D83", "D92", "D134"],
             },
             "src/Graveyard.css": {
                 "does": "a smaller sheet than a working screen's, because this one has no "
                         "form and no write: a toolbar, a `.bn-table` that becomes a stacked "
                         "card at 639px on the same idiom `Codes.css` established, and a "
                         "loading skeleton. Every color is a `--bn-*` token.",
-                "governed_by": ["D50", "D94", "D133"],
+                "governed_by": ["D50", "D94", "D134"],
             },
             "src/Fulfillment.tsx": {
                 "does": "D5's second persona's entire product: cards to pull in box-walk "
@@ -4638,7 +4638,7 @@ COMPONENTS = [
                         "64px carrying no filter and no cap discs, the DISPLAY cut is what "
                         "`#/gallery` shows at 64 and above, all six locked palettes are drawn "
                         "and differ, and the mark does not invert with the theme.",
-                "governed_by": ["D94", "D102"],
+                "governed_by": ["D94", "D102", "D134"],
                 "note": "IT EXISTS BECAUSE NOTHING IN app/tests MENTIONED THE MARK AT ALL. No "
                         "snapshot, no brand assertion, no reference to `Logo` — the mark could "
                         "have stopped rendering in all six of its call sites with `make check` "
@@ -4718,7 +4718,7 @@ COMPONENTS = [
                         "re-add the link and all 20 brand cases fail naming the URL. Not "
                         "a harness test; it has no test of its own and is "
                         "exercised by every spec that imports it.",
-                "governed_by": ["D16", "D37", "D43", "D46", "D56", "D58", "D63", "D70", "D86", "D124", "D125"]},
+                "governed_by": ["D16", "D37", "D43", "D46", "D56", "D58", "D63", "D70", "D86", "D124", "D125", "D134"]},
             "tests/fontsReady.ts": {
                 "does": "one helper, `settleFonts`, awaited after every `page.goto` in the seven "
                         "specs that measure type — it said FOUR until 2026-09-06, and the "
@@ -4740,7 +4740,7 @@ COMPONENTS = [
                         "arrow belongs to the screens, a held Cmd in a text field belongs to the "
                         "caret, and a screen outside the ring keeps the browser's key. Not a "
                         "harness test; `make design-check` runs it.",
-                "governed_by": ["D5", "D31", "D39", "D43", "D51", "D69", "D70", "D86", "D100", "D105"],
+                "governed_by": ["D5", "D31", "D39", "D43", "D51", "D69", "D70", "D86", "D100", "D105", "D134"],
                 "note": "ITS RING IS PINNED ON PURPOSE AND RECONCILED AT THE COMMIT. A ring "
                         "derived from App.tsx could not assert the ORDER against anything "
                         "independent, so the copy stays and carries a `ROUTE-ROSTER hotkey` "
@@ -4931,7 +4931,7 @@ COMPONENTS = [
                         "and `product_game` outright — `undefined.find` inside `ClaimEditor`, "
                         "the screen behind its error boundary, and six cases here spending "
                         "thirty seconds each on a switch that had been detached. AND THE HASH'S OWN BOX SINCE 2026-09-05: `#/inventory?box=<n>` was honoured only for a box that already had ROWS, because the shelf list is built from the rows first and the registry second and the ref was consumed on the first list — so every box of code cards, which D24 pools and which therefore has none, was unreachable by the one link that aims at one. Two cases, with `GET /boxes` held back so the ordering is the defect's rather than a race.",
-                "governed_by": ["D5", "D7", "D8", "D9", "D10", "D13", "D20", "D22", "D23", "D24", "D26", "D28", "D30", "D31", "D33", "D34", "D37", "D38", "D40", "D41", "D43", "D45", "D49", "D55", "D57", "D58", "D63", "D67", "D68", "D71", "D83", "D89", "D92", "D101", "D115", "D116", "D118", "D124", "D125", "D119", "D132", "D27"],
+                "governed_by": ["D5", "D7", "D8", "D9", "D10", "D13", "D20", "D22", "D23", "D24", "D26", "D28", "D30", "D31", "D33", "D34", "D37", "D38", "D40", "D41", "D43", "D45", "D49", "D55", "D57", "D58", "D63", "D67", "D68", "D71", "D83", "D89", "D92", "D101", "D115", "D116", "D118", "D124", "D125", "D119", "D132", "D27", "D134"],
                 "note": "THE CHECK `CLAUDE.md`'s ROUTE-IS-NOT-A-FEATURE RULE SAYS DOES NOT "
                         "EXIST. That rule was written on 2026-08-23 after three routes shipped "
                         "with full T7 coverage and no client function and no control — green "

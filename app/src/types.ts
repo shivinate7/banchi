@@ -682,7 +682,7 @@ export type MoveCardsResult = {
  *  when the files it enumerated were all it held; a stray left behind keeps the directory
  *  and says so, rather than deleting something nobody accounted for.
  *
- *  `buried` is D133's amendment to ruling 3 (2026-09-11): a sold, retired or moved record no
+ *  `buried` is D134's amendment to ruling 3 (2026-09-11): a sold, retired or moved record no
  *  longer blocks this delete — it is buried, and `cards` counts it same as before while
  *  `buried` says how many of those `cards` left through a departure door rather than as
  *  ordinary on-hand junk. `#/graveyard` is where a buried record is read afterward. */
@@ -699,12 +699,12 @@ export type BoxDeleteResult = {
   directory_removed: boolean
 }
 
-/** One row of `GET /graveyard` (D133): a card that has left inventory, whichever of the
+/** One row of `GET /graveyard` (D134): a card that has left inventory, whichever of the
  *  two doors it went through, drawn in one shape regardless of which.
  *
  *  `buried` is what tells the two sources apart. `false` means this record is a sold,
  *  retired or moved card still standing in a box nobody has deleted — the same records
- *  `#/inventory` already draws as departed. `true` means its box WAS deleted (D133): the
+ *  `#/inventory` already draws as departed. `true` means its box WAS deleted (D134): the
  *  record itself is gone, and this row is read out of the `buried` history line instead.
  *  `buried_at` is null in the first case and the burial's own timestamp in the second.
  *
@@ -734,7 +734,7 @@ export type DepartedCard = {
   buried_at: string | null
 }
 
-/** `GET /graveyard` (D133): every departed card the store still knows about, newest
+/** `GET /graveyard` (D134): every departed card the store still knows about, newest
  *  departure first — the merge of what is still standing and what was buried. */
 export type GraveyardPayload = {
   departed: DepartedCard[]
@@ -1451,7 +1451,7 @@ export type BoxRecord = {
 
   /** Cards moved OUT of this box to another one (D83) — `retired`'s sibling on the same
    *  panel. A box left holding only sold, retired or moved records after a merge no longer
-   *  blocks a delete (D133): those records are buried, and only `listed` below still
+   *  blocks a delete (D134): those records are buried, and only `listed` below still
    *  refuses. Drawn for the same reason it always was — so the delete panel can say what
    *  the box holds before the press, not just after a refusal. */
   moved: number

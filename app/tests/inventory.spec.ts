@@ -3166,12 +3166,13 @@ test('a listing hold is named on the delete panel rather than discovered by pres
   await openBoxOps(page)
   await page.getByRole('button', { name: /^Delete box 2/ }).click()
 
-  /* The three grounds of `box_not_empty_of_commitments` have three different remedies, and
-     before D34 added `listed` and `retired` to the box row a screen could say a box has
-     commitments and never which kind. */
-  await expect(page.locator('.boxops-confirm')).toContainText('1 card sold')
-  await expect(page.locator('.boxops-confirm')).toContainText('1 card retired')
+  /* D134: a listed copy is the only remaining ground for `box_not_empty_of_commitments` — a
+     sold or retired record no longer blocks and is named as something that will be BURIED
+     instead, never as a reason the box is refused. This fixture's sold (1) and retired (1)
+     read as "2 other departed records". */
   await expect(page.locator('.boxops-confirm')).toContainText('3 cards listed')
+  await expect(page.locator('.boxops-confirm')).toContainText('2 other departed records')
+  await expect(page.locator('.boxops-confirm')).toContainText('will be buried')
 })
 
 test('the control that releases does not exist until the free plan has answered', async ({

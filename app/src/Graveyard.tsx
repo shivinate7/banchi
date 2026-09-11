@@ -7,9 +7,9 @@ import { readingAgo, readingExact, stateLabel, stateTone } from './cardState'
 import { storeKeyText } from './storeKey'
 import './Graveyard.css'
 
-/* GRAVEYARD — D133's whole reason for existing.
+/* GRAVEYARD — D134's whole reason for existing.
  *
- * A box goes when its cards have left it, sold or retired or moved — and until D133 that box
+ * A box goes when its cards have left it, sold or retired or moved — and until D134 that box
  * could never be deleted at all, because a departed record was the one thing `do_delete_box`
  * refused to touch. It no longer refuses: a sold, retired or moved record is BURIED, one
  * `buried` line per record in the store's own event log, before the box and everything in it
@@ -20,7 +20,7 @@ import './Graveyard.css'
  * and it survives only as a `buried` line. `GET /graveyard` merges both and this screen never
  * has to ask which door a row came from beyond the one pill that says so.
  *
- * WHAT IS LOST AND WHAT IS NOT (D133). A buried record cannot be undone — there is no route
+ * WHAT IS LOST AND WHAT IS NOT (D134). A buried record cannot be undone — there is no route
  * back from a deleted box — and its photograph is gone with it. What survives is the record
  * itself: what the card was, how it left, when, and where. Nothing about pricing or an order
  * reads this screen; it is a ledger for looking, not a control.
@@ -133,7 +133,7 @@ export function Graveyard() {
         eyebrow="Library"
         title="Graveyard"
         icon="history"
-        lede="Every card that has left inventory — sold, retired or moved — whether its box still stands or was deleted out from under it (D133). Nothing here can be undone; it is a record, not a control."
+        lede="Every card that has left inventory — sold, retired or moved — whether its box still stands or was deleted out from under it (D134). Nothing here can be undone; it is a record, not a control."
         actions={
           <Button variant="ghost" iconOnly icon="refresh" onClick={() => void load()} disabled={retrying}>
             Reload

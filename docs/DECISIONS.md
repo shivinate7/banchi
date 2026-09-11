@@ -8923,7 +8923,7 @@ never addressed by its name the way a box is, D20 amended), and the Fulfiller's 
 untouched — his list is his order, his place labels are plain text, and none of the four asks
 was about him.
 
-## D133 — A departed record is buried, not kept; the box goes; and the graveyard is where the departed are read
+## D134 — A departed record is buried, not kept; the box goes; and the graveyard is where the departed are read
 
 **Settled 2026-09-11, on the owner's word.** Told that a whole-box merge (D83) carries only
 the on-hand cards, leaving sold and retired records behind in a box that ruling 3 would then

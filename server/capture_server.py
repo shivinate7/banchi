@@ -23,10 +23,10 @@
                                            card down one index (D10, owner ruling 1)
     DELETE /boxes/<box>                    delete a whole box — records, photos, sidecars,
                                            queue entries, cache, registry (D10, owner ruling
-                                           3, amended D133 — a departed record no longer
+                                           3, amended D134 — a departed record no longer
                                            blocks the delete; it is buried instead)
     GET    /graveyard                      every departed card: still sold/retired/moved in
-                                           a standing box, or buried by a deleted one (D133)
+                                           a standing box, or buried by a deleted one (D134)
     GET    /boxes/<box>/listings           what this box's SKUs are believed to be holding,
                                            and what a release would give up. FREE (D34)
     GET    /boxes/<box>/photos             what a reclaim would delete: sold cards whose
@@ -978,7 +978,7 @@ RESHOT = "reshot"
 #                looking for. Not a state: nothing about any one card changed but its
 #                address, and the card that changed STATE got its own `removed` line in the
 #                same commit.
-#   box_deleted  a whole box left the store (D10, ruling 3, amended D133): records, photos,
+#   box_deleted  a whole box left the store (D10, ruling 3, amended D134): records, photos,
 #                sidecars, queue entries, cache entries and the registry entry, in one
 #                write. Carries the box, the card count and the buried count. A box-level
 #                event like D20's five, so it is the first line `_history` writes with no
@@ -987,9 +987,9 @@ RESHOT = "reshot"
 RENUMBERED = "renumbered"
 BOX_DELETED = "box_deleted"
 
-# THE TENTH ROUTE-WRITTEN EVENT (D133, 2026-09-11). `box_deleted` used to be refused
+# THE TENTH ROUTE-WRITTEN EVENT (D134, 2026-09-11). `box_deleted` used to be refused
 # outright while any card in the box was sold, retired or moved — ruling 3's "history and
-# commitments, not clutter". D133 keeps that sentence and gives it a different answer: the
+# commitments, not clutter". D134 keeps that sentence and gives it a different answer: the
 # record IS the history, and it survives the box by being buried here rather than by the
 # box standing undeletable forever. ONE LINE PER DEPARTED RECORD, WITH A `position` KEY —
 # unlike `box_deleted`'s summary, this is the retained record itself and not a duplicate of
@@ -4561,19 +4561,19 @@ def do_reclaim_box_photos(box: int, payload: dict) -> dict:
 def do_delete_box(box: int) -> dict:
     """Delete a whole box: records, photos, sidecars, queue entries, cache, registry.
 
-    D10, OWNER RULING 3 (2026-08-23), AMENDED BY D133 (2026-09-11), and the third door out
+    D10, OWNER RULING 3 (2026-08-23), AMENDED BY D134 (2026-09-11), and the third door out
     of the store. Undo walks back the newest capture, the remove route above excises one
     record and closes its gap, and this deletes a box entire — the case both of those are
     too small for: a shakedown box of junk frames, a box captured under a mistyped number,
-    a test run that was never real, or — since D133 — a box every on-hand card has left,
+    a test run that was never real, or — since D134 — a box every on-hand card has left,
     by a sale, a retirement, or a merge into another box (D83) that carried the on-hand
     cards and left the departed ones behind. Gated as the genuinely destructive action
     `docs/DESIGN.md`'s clause means: the UI adds a typed confirmation on top, and this
     route is the refusal side it sits on.
 
-    `box_not_empty_of_commitments` NOW NAMES ONLY LISTING HOLDS (D133). Ruling 3 read "a
+    `box_not_empty_of_commitments` NOW NAMES ONLY LISTING HOLDS (D134). Ruling 3 read "a
     departure is history and a commitment, not clutter" as a reason to refuse the whole
-    box; D133 keeps the sentence and changes what answers it — a sold, retired or moved
+    box; D134 keeps the sentence and changes what answers it — a sold, retired or moved
     record IS the history, and it survives the box by being BURIED (below) rather than by
     the box standing forever with nothing left to do in it. What still blocks is a held
     SKU: copies in an import file, or on TCGplayer itself, where deleting the copy here
@@ -4585,7 +4585,7 @@ def do_delete_box(box: int) -> dict:
     OUTSIDE this box, and a whole-box delete that skipped it might strand it — or destroy
     it — either way silently. `BadPosition` escapes as `inventory_conflict`.
 
-    A DEPARTED RECORD IS BURIED BEFORE ITS FILES GO (D133). One `buried` history line per
+    A DEPARTED RECORD IS BURIED BEFORE ITS FILES GO (D134). One `buried` history line per
     sold, retired or moved record, carrying the record whole: name, number, game, set
     hint, SKU, condition, state and when it changed, when it was captured, the run, the
     box's own name as it stood, the order this copy was pulled against if `holder_of`
@@ -4627,7 +4627,7 @@ def do_delete_box(box: int) -> dict:
         for at, card_key, card in inventory.records_in(box):
             holds.append((at, card_key, card))
             if card.state not in master.TERMINAL_STATES:
-                # D133: a departed record (sold, retired, moved) no longer blocks — it is
+                # D134: a departed record (sold, retired, moved) no longer blocks — it is
                 # buried below. Only an ON-HAND card can still hold a listing.
                 held = _listing_hold(inventory, card)
                 if held:
@@ -4653,7 +4653,7 @@ def do_delete_box(box: int) -> dict:
                 f"Box {box} cannot be deleted: {named}{more}. Listed copies are "
                 f"commitments, not clutter (D10, ruling 3): wait for them to reconcile "
                 f"away, release them, or leave the box standing. Sold, retired and moved "
-                f"cards no longer stand in the way (D133) — they are buried in the "
+                f"cards no longer stand in the way (D134) — they are buried in the "
                 f"graveyard when the box goes.",
             )
 
@@ -4740,7 +4740,7 @@ def do_delete_box(box: int) -> dict:
         # What went, counted per kind the way `do_delete_card` reports booleans — these
         # are counts because a box holds many of each, and the numbers are the receipt
         # the confirmation screen shows. `buried` is the subset of `cards` that left
-        # through a departure door rather than as on-hand junk (D133).
+        # through a departure door rather than as on-hand junk (D134).
         "cards": len(holds),
         "buried": buried,
         "photos": photos,
@@ -4776,7 +4776,7 @@ def _departed_row(
     buried_at,
 ) -> dict:
     """One `#/graveyard` row, the same shape whether it came from a live box or a burial
-    line (D133) — the merge point `do_graveyard` exists to make, so the screen reads one
+    line (D134) — the merge point `do_graveyard` exists to make, so the screen reads one
     kind of record rather than two."""
     return {
         "left_at": left_at,
@@ -4802,7 +4802,7 @@ def _departed_row(
 
 
 def do_graveyard() -> dict:
-    """Every departed card the store still knows about, newest departure first (D133).
+    """Every departed card the store still knows about, newest departure first (D134).
 
     TWO SOURCES, ONE SHAPE. A SOLD, RETIRED or MOVED record can be standing in a box
     nobody has deleted — the same records `#/inventory` already renders as departed
@@ -10094,7 +10094,7 @@ class CaptureHandler(BaseHTTPRequestHandler):
                 return self._json(HTTPStatus.OK, do_queues())
             if path == "/boxes":
                 return self._json(HTTPStatus.OK, do_boxes())
-            # D133's graveyard: an exact string, matched by no other route's pattern, over
+            # D134's graveyard: an exact string, matched by no other route's pattern, over
             # a lock-free read on both its sources.
             if path == "/graveyard":
                 return self._json(HTTPStatus.OK, do_graveyard())
