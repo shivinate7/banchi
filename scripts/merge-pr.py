@@ -267,6 +267,97 @@ def local_half(root: str, commit: str, confirm: bool) -> int:
 # ------------------------------------------------------------------------ the GitHub half
 
 
+# ------------------------------------------------------- the ids this branch has not claimed
+
+# THE NUMBER IS ALLOCATED HERE AND NOWHERE EARLIER (D140). A branch writes
+# its entry's heading as a slug because the allocation's only input — what main has taken — is not knowable
+# until this moment. Thirteen renumber events are in D72 and every one of them is a branch
+# having guessed; `origin/main` took two decision numbers and two build steps DURING the
+# session that built this, which is the race happening while it was being written about.
+#
+# BEFORE THE MERGE, AND THE WAIT IS THE POINT. The substitution is committed to the PULL
+# REQUEST's branch and its checks are watched to completion, so nothing main has never run CI
+# over reaches main. The owner chose this against claiming by an explicit press earlier (which
+# leaves a race, narrow but real) and against claiming on main afterwards (which puts an
+# unverified substitution on the protected branch, recoverable only by another pull request).
+# It costs one CI run per merge, paid once per entry rather than once per collision.
+#
+# IT REFUSES RATHER THAN GUESSING WHICH TREE. The claim is a commit and a push, so this
+# checkout has to be standing on the PR's own head branch; a `make merge` run from main or
+# from another worktree would otherwise commit the substitution onto whatever is checked out.
+
+CLAIMER = "scripts/claim-ids.py"
+
+
+def claims_pending(root: str, ref: str = "origin/main") -> List[str]:
+    """`slug -> number` lines for every unclaimed id, or [] when there are none."""
+    got = run([sys.executable, CLAIMER, "--porcelain", "--ref", ref, "--root", root], cwd=root)
+    return [line for line in got.out.splitlines() if line.strip()] if got.ok else []
+
+
+def claim_half(root: str, number: int, branch: str, confirm: bool) -> int:
+    """Allocate, commit, push, and wait for the claim commit's checks. 0 when clear."""
+    run(["git", "fetch", "origin", "main"], cwd=root)
+    pending = claims_pending(root)
+    if not pending:
+        say("  no unclaimed id on this branch — nothing to claim.")
+        return 0
+
+    rule("the claim")
+    for line in pending:
+        say("  {0}".format(line.replace("\t", "  ->  ", 1)))
+
+    here = run(["git", "rev-parse", "--abbrev-ref", "HEAD"], cwd=root).out.strip()
+    if here != branch:
+        return refuse(
+            "this checkout is on `{0}`; PR #{1}'s branch is `{2}`.".format(here, number, branch),
+            "",
+            "The claim is a commit and a push onto that branch, so it has to be made from a",
+            "tree standing on it. Run this from the worktree that holds it.")
+    dirty = run(["git", "status", "--porcelain"], cwd=root).out.strip()
+    if dirty:
+        return refuse(
+            "the working tree is not clean, and the claim commits everything it rewrites.",
+            "", "  " + "\n  ".join(dirty.splitlines()[:8]))
+
+    if not confirm:
+        say("", "  would rewrite those ids, commit to `{0}`, push, and wait for its".format(branch),
+            "  checks before merging.",
+            "", "  PREVIEW — nothing was run.")
+        return 0
+
+    wrote = run([sys.executable, CLAIMER, "--write", "--root", root], cwd=root)
+    if not wrote.ok:
+        return refuse("`{0} --write` failed.".format(CLAIMER), wrote.err or wrote.out)
+    say(wrote.out.rstrip())
+
+    message = "Claim the ids this branch left as slugs (D140)\n\n" + "\n".join(
+        "  " + line.replace("\t", " -> ") for line in pending)
+    run(["git", "add", "-A"], cwd=root)
+    made = run(["git", "commit", "-m", message], cwd=root)
+    if not made.ok:
+        return refuse("the claim could not be committed.", made.err or made.out)
+    pushed = run(["git", "push", "origin", "HEAD"], cwd=root)
+    if not pushed.ok:
+        return refuse("the claim commit could not be pushed to `{0}`.".format(branch),
+                      pushed.err or pushed.out,
+                      "", "The claim is committed here and main has NOT moved. Push it yourself,",
+                      "then run this again — a second run finds no unclaimed id and skips.")
+
+    rule("waiting for the claim commit's checks")
+    say("  this is the wait D140 buys: main never takes a substitution",
+        "  no CI run has seen.", "")
+    watched = run(["gh", "pr", "checks", str(number), "--watch", "--fail-fast"])
+    say((watched.out or watched.err).rstrip())
+    if not watched.ok:
+        return refuse(
+            "PR #{0}'s checks are not green after the claim.".format(number),
+            "",
+            "The claim is pushed and main has NOT moved. Fix the branch and run this again;",
+            "a second run finds no unclaimed id and goes straight to the merge.")
+    return 0
+
+
 def pr_state(number: int) -> Tuple[Optional[dict], str]:
     got = run([
         "gh", "pr", "view", str(number), "--json",
@@ -355,6 +446,10 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--cut", metavar="BRANCH",
                         help="run the branch cleanup alone against BRANCH, skipping gh. What "
                              "scripts/merge-selftest.sh drives.")
+    parser.add_argument("--no-claim", action="store_true",
+                        help="skip the id claim. What scripts/claim-selftest.py drives, and "
+                             "the escape hatch for a merge whose claim was already pushed by "
+                             "hand.")
     parser.add_argument("--local", metavar="REV",
                         help="run the local half alone against REV, skipping gh. What "
                              "scripts/merge-selftest.sh drives.")
@@ -392,6 +487,14 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
 
     say("PKMNSCAN — merge PR #{0}{1}".format(args.pr, "" if args.confirm else "  (PREVIEW)"))
     rule()
+    if not args.no_claim:
+        data, why = pr_state(args.pr)
+        if data is None:
+            return refuse("could not read PR #{0}.".format(args.pr), why)
+        if data.get("state") != "MERGED":
+            code = claim_half(root, args.pr, str(data.get("headRefName") or ""), args.confirm)
+            if code:
+                return code
     commit, code = github_half(args.pr, args.confirm)
     if code:
         return code

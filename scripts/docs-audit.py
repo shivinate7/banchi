@@ -1371,7 +1371,7 @@ def check_evidence_freshness(report: Report, staged_only: bool) -> None:
 # `[1-9][0-9]?` read decision ids for a year and went vacuous at the hundredth entry: a
 # heading stops being a heading to this file and a citation stops being a citation, so
 # `decision ids`, `decision ids in code`, `decision index`, `decision structure` and
-# `renumbered ids` all report GREEN over a file they can no longer see. docs/DEBTS.md carried
+# `id claims` all report GREEN over a file they can no longer see. docs/DEBTS.md carried
 # that as a triggered debt from 2026-08-30 until this landed; the trigger fired at the
 # ninetieth entry and the file reached D92 before anyone discharged it. The entry is gone from
 # that file rather than rewritten as closed — its own preamble sends closure narrative to git,
@@ -1396,8 +1396,43 @@ def check_evidence_freshness(report: Report, staged_only: bool) -> None:
 # digits — and failed the audit the moment they could.
 _ID_DIGITS = r"[1-9][0-9]{0,2}"
 
-_DECISION_RE = re.compile(r"\bD(" + _ID_DIGITS + r")\b")
-_CODES_DECISION_RE = re.compile(r"\bC(" + _ID_DIGITS + r")\b")
+# AND AN ID IS A SLUG WHILE THE BRANCH THAT WRITES IT IS OPEN (D72, rewritten 2026-09-11).
+# A number cannot be allocated on a branch, because the allocation's whole input — what main
+# has taken — is not knowable until the merge. So a branch writes its heading as a slug and
+# cites it that way, `scripts/claim-ids.py` substitutes the number at merge time, and the
+# thirteen renumber events in this repo's history have no way to happen.
+#
+# NEVER NAME A LIVE SLUG IN A COMMENT OR A FIXTURE. The claim is exhaustive text replacement,
+# so an illustration that borrows a real slug is rewritten with it — this block named one and
+# came back reading "a branch writes `## D140`", and two self-test fixtures below became
+# assertions about the number. Compose a fixture's ids from pieces; describe a shape in prose
+# rather than spelling an id that exists.
+#
+# TWO SEGMENTS MINIMUM, AND THAT IS THE WHOLE OF WHAT KEEPS IT OUT OF PROSE. `D-pad` is one
+# segment and is not an id; anything with an interior hyphen is. Measured over every `.md`, `.py`,
+# `.ts`, `.tsx` and `.css` in this tree the day the vocabulary was chosen: ZERO tokens of
+# either shape existed, so nothing had to be renamed to make room for it.
+#
+# LOWERCASE, because the letter is what says which namespace it is and a mixed-case slug
+# would make two spellings of one slug into two ids for one entry with nothing to say so.
+_ID_SLUG = r"-[a-z][a-z0-9]*(?:-[a-z0-9]+)+"
+_ID_ANY = r"(?:" + _ID_DIGITS + r"|" + _ID_SLUG + r")"
+
+_DECISION_RE = re.compile(r"\bD(" + _ID_ANY + r")\b")
+_CODES_DECISION_RE = re.compile(r"\bC(" + _ID_ANY + r")\b")
+
+# The step namespace has no letter in front of it — `step 7`, or the slug form while the
+# branch is open — so the slug alone is the token and it carries no leading hyphen. Same floor.
+_STEP_SLUG = r"[a-z][a-z0-9]*(?:-[a-z0-9]+)+"
+
+
+def is_slug(identifier: str) -> bool:
+    """True when `identifier` is an unclaimed slug rather than an allocated number.
+
+    Takes the id WITHOUT its letter — `-merge-time-ids` or `137` — which is what every pattern
+    here captures, and what `docs/map.py`'s `governed_by` and the build order both store.
+    """
+    return not str(identifier).lstrip("-").isdigit()
 
 # A RUFF SUPPRESSION IS NOT A CITATION, AND AT THREE DIGITS IT LOOKS EXACTLY LIKE ONE.
 # Three real lines carry a pydocstyle code whose number is three digits long —
@@ -1455,7 +1490,7 @@ def decision_heading_lines(path: Path, letter: str) -> List[Tuple[str, int]]:
     """
     if not exists(path):
         return []
-    pattern = re.compile(r"^##\s+(" + letter + _ID_DIGITS + r")\b")
+    pattern = re.compile(r"^##\s+(" + letter + _ID_ANY + r")\b")
     out: List[Tuple[str, int]] = []
     for number, line in enumerate(read(path).splitlines(), start=1):
         match = pattern.match(line)
@@ -1548,317 +1583,166 @@ def check_decision_ids(report: Report, docs: List[Path]) -> None:
     report.add("decision ids in code", ADVISORY, in_code, "citations in .py, .ts, .tsx and .css all resolve")
 
 
-# ------------------------------------------------------- a renumbered entry takes its citations
+# ------------------------------------------------------------------ ids are claimed at merge
 
-# WHAT THIS CATCHES IS THE ONE THING AN EXISTENCE CHECK STRUCTURALLY CANNOT (D72). Every
-# other decision row above asks whether a cited id EXISTS. A renumber breaks none of them:
-# the branch's entry moves from D67 to D69, the citations stay on D67, and D67 still names
-# a real heading — a DIFFERENT one. `check_decision_ids` says the same about a duplicate id
-# in its own comment: "the citation is then not wrong in a way anything can see — it points
-# at a real heading, just not the intended one." This is that sentence's other half.
+# A BRANCH DOES NOT TAKE A NUMBER (D140). The allocation's only input is what main
+# has taken, and a branch cannot have that: every renumber in this repo's history is one
+# branch reading `origin/main`, taking the next free id, and being wrong the moment another
+# branch merged first. Thirteen of those are recorded in D72, and D16 carries three entries
+# numbered `## D50` at once. So a branch writes a SLUG and `scripts/claim-ids.py` substitutes
+# the number inside `make merge`, against main as it stands then.
 #
-# It happened. `docs/map.py` cited D67 in 24 places meaning D69 — "the order transport
-# (D67)", "(D67) gave each its own route" — while nine OTHER D67 citations in the same file
-# were the real entry, so no sweep could be run blind. Thirteen renumber events are in this
-# repo's history and the collisions are structural: several branches take "the next free
-# number" against one base and all of them merge.
+# THIS ROW REPLACED `renumbered ids` AND `vacated ids`, WHICH ARE DELETED. Both existed to
+# repair a renumber — the first named every site and blocked none of them, the second blocked
+# the half that was provably the branch's own line. A branch that never takes a number never
+# vacates one, so both guarded a path that no longer exists. D72 keeps its account of the
+# incidents, which is evidence and is not rewritten to match a later tree; what it stops being
+# is a live mechanism.
 #
-# BRANCH-SCOPED, WHICH IS WHAT MAKES IT QUIET. The renumber that matters is the one THIS
-# branch did, and the files that matter are the ones THIS branch touched — a citation of
-# D67 that main already had is not this branch's to move. On main, base == HEAD and this
-# row is empty for nothing.
+# WHAT THIS ROW CHECKS IS FOUR THINGS, AND THE LAST IS THE ONE THE DESIGN RESTS ON:
 #
-# NOT `--staged`, DELIBERATELY. The renumber is commonly done while resolving a merge, and
-# git runs no pre-commit hook for a merge commit — a staged-only check would have missed
-# every event in the history above. Reading the branch's own commits catches it however it
-# was committed, and the Stop hook runs this at turn end.
+#   1. a cited slug resolves to a slug heading   — the existence check numbers already get
+#   2. a slug heading's id is unique             — D16's duplicate rule, in the new namespace
+#   3. a slug is well-formed                     — two lowercase segments, never one
+#   4. MAIN CARRIES NO SLUG                      — the invariant
 #
-# TWO ROWS, SPLIT BY WHETHER THE SITE IS THIS BRANCH'S OWN LINE (D72 amended 2026-09-11).
-# The sentence above — "nothing mechanical can tell them apart" — is true of a site the branch
-# INHERITED and false of one the branch WROTE. `vacated ids` is the second half and it BLOCKS;
-# `renumbered ids` keeps the first half, its wording and its ADVISORY severity.
-#
-# WHAT MAKES A SITE PROVABLE. A line citing `old` is this branch's mistake when it is present
-# in the tree NOW, absent at the merge base, and already present at the commit just before the
-# one that vacated `old`. That last clause is the whole argument: two headings may not share an
-# id (`decision ids` blocks it), so at the moment that line was written `old` named exactly one
-# entry in this branch's tree — the entry that has since moved. The citation therefore means
-# the moved entry, and the move left it behind. No judgement remains, which is D16's own test
-# for MECHANICAL.
-#
-# AND IT IS WHY THE CLAUSE IS THERE RATHER THAN "every line this branch added". A branch that
-# vacates D132 and LATER writes prose about main's D132 has added a line citing the old id that
-# is perfectly correct. Blocking that one would be the false positive D16 says is worse than a
-# printed line. It goes to the advisory row with the inherited sites, where a human reads it.
-#
-# THE DEFECT IT WAS BUILT FOR, 2026-09-11. A branch holding `## D132` merged main twice; main
-# had taken 132, 133 and 134, so the branch moved to D135, and four commits later main had taken
-# 135 and 136 too, so it moved again. After the FIRST renumber three prose citations in
-# `CLAUDE.md` — the `make up` block, the `make dev` block, and the pointer to
-# `docs/specs/one-process.md` — still said D132, and all three silently named main's unrelated
-# inventory decision. A stale id RESOLVES, so `make check` was green, the commit hook passed, and
-# the branch was pushed. They were found afterwards by a separate audit, not by the tree.
-#
-# PER LINE, NEVER PER FILE. After a merge both ids legitimately live in one file — `docs/map.py`
-# carried 24 wrong and 9 right — so a file naming both is not evidence about any line in it.
-#
-# AND DEDUPED BY RESOLVED PATH, because `AGENTS.md` is a symlink to `CLAUDE.md` (D47, D135) and
-# `branch_files` lists it by name the moment the link itself is added or changed. Reading both
-# names reports one line twice under two paths, one of which a person cannot edit.
+# The fourth is the only one that catches a claim that HALF-LANDED, and it is checkable
+# exactly where it matters: `check.yml` runs this on main after every merge. On a branch it is
+# silent, because a slug on a branch is the ordinary state and the whole point.
 
 
-def branch_base() -> str:
-    """The commit this branch left main at, or "" when that cannot be answered.
+# A HEADING THE ID PATTERN REJECTS IS AN ENTRY NOTHING CAN SEE, which is the failure mode a
+# new namespace brings with it: `## D-pad — Title` is one segment, so it is not an id, so the
+# heading is not an entry, so no row reports on it and no citation of it resolves. Caught by
+# reading the heading line as TEXT and asking the pattern afterwards.
+_LOOSE_SLUG_HEADING = re.compile(r"^##\s+([DC]-\S+)")
+_STRICT_SLUG_HEADING = re.compile(r"^##\s+[DC]" + _ID_SLUG + r"\b")
+# NOT `\bstep `: a hyphen is a non-word character, so `\b` fires INSIDE `runs-step` and
+# a React className pairing two such words reads as a citation of the second one.
+# Measured on app/src/RunPanel.tsx:165, which is the only such pair in the tree and was
+# enough to make this row wrong on its first run.
+_STEP_CITATION = re.compile(r"(?<![-\w])step (" + _STEP_SLUG + r")\b")
 
-    `origin/main` rather than `main`: a worktree checkout commonly has no local `main` (it
-    is checked out elsewhere, and CLAUDE.md's merge discipline moves it by pull), while the
-    remote-tracking ref is present in every clone.
+
+def on_main() -> bool:
+    """Whether this checkout IS main, by any of the three things that can say so.
+
+    Three, because the answer has to be right in a CI runner as well as on the rig, and they
+    fail in different ways: a runner checks out a DETACHED head so the branch name is empty,
+    a worktree commonly has no local `main` at all (D42's merge discipline keeps it checked
+    out elsewhere), and `GITHUB_REF_NAME` exists only in Actions. Any one saying main is
+    enough; the check this gates is silent everywhere else, so a false NO costs a check that
+    was going to be vacuous on a branch anyway, and a false YES cannot happen — none of the
+    three says main about a branch.
     """
-    for ref in ("origin/main", "main"):
-        base = git("merge-base", "HEAD", ref).strip()
-        if base:
-            return base
-    return ""
+    if os.environ.get("GITHUB_REF_NAME") == "main":
+        return True
+    if git("rev-parse", "--abbrev-ref", "HEAD").strip() == "main":
+        return True
+    head = git("rev-parse", "HEAD").strip()
+    return bool(head) and head == git("rev-parse", "origin/main").strip()
 
 
-_TITLED_HEADING_RE = re.compile(r"^##\s+(D" + _ID_DIGITS + r")\s+—\s+(.+?)\s*$")
+def check_id_claims(report: Report) -> None:
+    findings: List[Finding] = []
+    decisions = ROOT / "docs" / "DECISIONS.md"
+    codes = ROOT / "docs" / "CODES-DECISIONS.md"
+    gates = ROOT / "docs" / "GATES.md"
 
-
-def titles_by_id(text: str) -> Dict[str, str]:
-    """title -> id, over the text of docs/DECISIONS.md at any revision.
-
-    ONE reader, because it was two identical regexes in two functions and a widen that
-    reached one of them would have left the other reporting a renumber against a state it
-    could not see. Pure, so `--self-test` can drive it without a repository — the same split
-    `moves_across` below already makes for the same reason.
-    """
-    out: Dict[str, str] = {}
-    for line in text.splitlines():
-        match = _TITLED_HEADING_RE.match(line)
-        if match:
-            out[match.group(2)] = match.group(1)
-    return out
-
-
-def headings_at(rev: str, path: str = "docs/DECISIONS.md") -> Dict[str, str]:
-    """title -> id, as of `rev`. Empty when the blob is unreadable at that commit."""
-    return titles_by_id(git("show", f"{rev}:{path}"))
-
-
-def headings_now() -> Dict[str, str]:
-    return titles_by_id(read(ROOT / "docs" / "DECISIONS.md"))
-
-
-def moves_across(states: Sequence[Dict[str, str]]) -> List[Tuple[str, str, str]]:
-    """(old, new, title) for every title whose id changes across a sequence of states.
-
-    Pure, and split out for exactly that: the git walk that produces `states` cannot be
-    exercised without a repository, and this is where the logic that could be wrong lives.
-    A title that moves twice (D50 -> D51 -> D53 is in this repo's history) reports its
-    FIRST id against its last, because the citations that need chasing were written when it
-    was still D50.
-    """
-    moves: Dict[str, Tuple[str, str]] = {}
-    for before, after in zip(states, states[1:]):
-        for title, new in after.items():
-            old = before.get(title)
-            if old and old != new:
-                first = moves[title][0] if title in moves else old
-                moves[title] = (first, new)
-    return sorted(
-        ((old, new, title) for title, (old, new) in moves.items() if old != new),
-        key=lambda move: (int(move[1][1:]), move[2]),
-    )
-
-
-def branch_states(base: str) -> Tuple[List[Optional[str]], List[Dict[str, str]]]:
-    """(revisions, states) for the branch's history of docs/DECISIONS.md, oldest first.
-
-    Walks only the commits that TOUCHED the file — usually one or two. The two lists are
-    parallel, and `None` is the last revision: the WORKING TREE, which is a state with no
-    commit to name it. Reading them together is what lets `vacated ids` ask a question about
-    the tree as it stood one step before a renumber.
-    """
-    revisions = [line for line in git(
-        "log", "--format=%H", f"{base}..HEAD", "--", "docs/DECISIONS.md"
-    ).split() if line]
-    revs: List[Optional[str]] = [base]
-    states = [headings_at(base)]
-    for revision in reversed(revisions):
-        revs.append(revision)
-        states.append(headings_at(revision))
-    revs.append(None)
-    states.append(headings_now())
-    return revs, states
-
-
-def renumbered_on_branch(base: str) -> List[Tuple[str, str, str]]:
-    """Every entry this branch moved to a different number, from the branch's own history.
-
-    The title is the identity: a renumber keeps it and changes the id, which is exactly the
-    pair no id-based check can see.
-    """
-    return moves_across(branch_states(base)[1])
-
-
-def vacating_index(states: Sequence[Dict[str, str]], title: str, old: str) -> int:
-    """The index at which `title` STOPPED being numbered `old`, or -1 if it never did.
-
-    Pure, and split out for `moves_across`'s reason: the git walk that produces `states`
-    cannot run without a repository, and this is the part that could be wrong. The state
-    BEFORE this index is the last one in which `old` named this entry, and a citation of
-    `old` that already existed then is a citation of this entry — no other reading is
-    available, because `decision ids` blocks two headings sharing one id.
-
-    The FIRST such index, to match `moves_across` reporting the FIRST id: an entry that moved
-    D50 -> D51 -> D53 vacated D50 at the first step, and that is when its citations were
-    written.
-    """
-    for index in range(1, len(states)):
-        if states[index - 1].get(title) == old and states[index].get(title) != old:
-            return index
-    return -1
-
-
-def text_at(rev: Optional[str], name: str) -> str:
-    """`name`'s content at `rev`, or from disk when `rev` is None (the working tree).
-
-    Empty when the path did not exist there, which is what `git show` already returns on a
-    bad object — a file this branch created reads as absent at the base, which is the right
-    answer rather than an error.
-    """
-    if rev is None:
-        return read(ROOT / name)
-    return git("show", f"{rev}:{name}")
-
-
-def scrubbed_lines(text: str) -> Set[str]:
-    """The distinct lines of `text`, compared the way the scan compares them.
-
-    `without_noqa` on both sides, so a suppression directive added or removed beside a
-    citation cannot make one line look like two.
-    """
-    return {without_noqa(line) for line in text.splitlines()}
-
-
-def branch_files(base: str) -> List[str]:
-    """Paths this branch changed, committed or not. The renumber's own file is not one.
-
-    A DIRECTORY SYMLINK IS A CHANGED PATH WITH NO TEXT TO SCAN, and `check_renumbered_decisions`
-    is the only caller — it reads every name here as a file's content. `Path.is_dir()` follows
-    symlinks, so a tracked directory link (D47 — `.agents/skills -> ../.claude/skills`) reads as
-    a directory here exactly as a real one would, and is excluded the same way: `exists()` alone
-    said yes and `read_text()` crashed with `IsADirectoryError`, which is the git-tracked shape
-    D47 legitimizes and this reader had never seen before one landed on a branch.
-    """
-    names = set(git("diff", "--name-only", base, "HEAD").split("\n"))
-    names.update(git("diff", "--name-only", "HEAD").split("\n"))
-    names.update(git("diff", "--cached", "--name-only").split("\n"))
-    kept = [
-        name for name in sorted(names)
-        if name and name != "docs/DECISIONS.md" and exists(ROOT / name)
-        and not (ROOT / name).is_dir()
-    ]
-    # AND A FILE SYMLINK IS THE SAME FILE, NOT A SECOND ONE (D47, D135). `AGENTS.md ->
-    # CLAUDE.md` is tracked, so git names it here the moment the LINK is added or changed, and
-    # `read()` follows it — which reported every one of CLAUDE.md's citations twice, once under
-    # a path nobody can edit. The real path wins where both are listed: a person opens the file
-    # git will diff, and `text_at` can only read a blob at that name.
-    by_real: Dict[str, str] = {}
-    for name in kept:
-        real = str((ROOT / name).resolve())
-        if real not in by_real or (ROOT / by_real[real]).is_symlink():
-            by_real[real] = name
-    return sorted(by_real.values())
-
-
-def check_renumbered_decisions(report: Report) -> None:
-    inherited: List[Finding] = []
-    own: List[Finding] = []
-    base = branch_base()
-    if not base or base == git("rev-parse", "HEAD").strip():
-        nothing = "not a branch off main — nothing to compare"
-        report.add("renumbered ids", ADVISORY, inherited, nothing)
-        report.add("vacated ids", MECHANICAL, own, nothing)
-        return
-
-    revs, states = branch_states(base)
-    moves = moves_across(states)
-    occupant = {number: title for title, number in headings_now().items()}
-    touched = branch_files(base)
-    for old, new, title in moves:
-        was = re.compile(r"\b" + old + r"\b")
-        now = re.compile(r"\b" + new + r"\b")
-        # The last state in which `old` still named this entry. Everything present in the
-        # tree THEN and written by this branch is a citation of the entry that moved.
-        vacated = vacating_index(states, title, old)
-        sites: List[str] = []
-        mine: List[str] = []
-        for name in touched:
-            text = "\n".join(without_noqa(line) for line in read(ROOT / name).splitlines())
-            cited = [
-                (number, line)
-                for number, line in enumerate(text.splitlines(), start=1)
-                if was.search(line)
-            ]
-            if not cited:
-                continue
-            # Read only where there is something to decide — usually no file at all, and the
-            # two blobs are a subprocess each.
-            before = scrubbed_lines(text_at(revs[vacated - 1], name)) if vacated > 0 else set()
-            at_base = scrubbed_lines(text_at(base, name)) if vacated > 0 else set()
-            lines = []
-            for number, line in cited:
-                if line in before and line not in at_base:
-                    mine.append(f"{name}:{number}   {line.strip()[:96]}")
-                else:
-                    lines.append(number)
-            if not lines:
-                continue
-            shown = ", ".join(str(number) for number in lines[:6])
-            if len(lines) > 6:
-                shown += f", +{len(lines) - 6} more"
-            both = "" if now.search(text) else f"   <- and never names {new}"
-            sites.append(f"{name}:{shown}{both}")
-        if mine:
-            listed = "\n  ".join(mine)
-            own.append(
-                Finding(
-                    f"docs/DECISIONS.md -> {new}",
-                    f"`{title}` moved {old} -> {new} on this branch, and {len(mine)} line(s) "
-                    f"THIS BRANCH WROTE still cite {old}.\n"
-                    f"  {old} now names: {occupant.get(old) or 'nothing — the number is free'}\n"
-                    f"  {listed}\n"
-                    f"  Each of those lines is absent at the merge base and was already in the "
-                    f"tree when {old} still named `{title}` — so it cites this entry, and the "
-                    f"renumber left it behind. Move it to {new}. This is the half of the "
-                    f"advisory row below that needs no judgement (D72).",
-                )
-            )
-        if not sites:
+    unclaimed: List[str] = []
+    for path in (decisions, codes):
+        if not exists(path):
             continue
-        listed = "\n  ".join(sites)
-        inherited.append(
-            Finding(
-                f"docs/DECISIONS.md -> {new}",
-                f"`{title}` moved {old} -> {new} on this branch, and {len(sites)} file(s) "
-                f"this branch touched still cite {old}.\n"
-                f"  {old} now names: {occupant.get(old) or 'nothing — the number is free'}\n"
-                f"  {listed}\n"
-                f"  Each site is either a citation that must follow the entry to {new}, or a "
-                f"real reference to {old}'s current occupant. Nothing mechanical can tell "
-                f"them apart — an id-based check sees a citation that resolves. A file that "
-                f"names BOTH ids is common and is not evidence either way: docs/map.py "
-                f"carried 24 wrong and 9 right in one file.",
-            )
-        )
-    detail = (
-        ", ".join(f"{old}->{new}" for old, new, _ in moves)
-        if moves else "no entry changed number on this branch"
-    )
-    report.add("renumbered ids", ADVISORY, inherited, detail)
-    report.add("vacated ids", MECHANICAL, own,
-               detail if moves else "no entry changed number on this branch")
+        for number, line in enumerate(read(path).splitlines(), start=1):
+            loose = _LOOSE_SLUG_HEADING.match(line)
+            if not loose:
+                continue
+            if not _STRICT_SLUG_HEADING.match(line):
+                findings.append(Finding(
+                    f"{rel(path)}:{number}",
+                    f"`{loose.group(1)}` is not a claimable id, so this heading is not an "
+                    f"entry: no row reports on it, no citation of it resolves, and "
+                    f"`scripts/claim-ids.py` will not allocate it a number. A slug is two or "
+                    f"more lowercase segments, never one — `D-pad` is prose.",
+                ))
+                continue
+            unclaimed.append(loose.group(1))
+
+    # A STEP IS CITED BY A SLUG THAT SOME `0.` MARKER DECLARES, or it is a dangling id — the
+    # same superset rule the letter namespaces get from `decision ids`, which cannot see this
+    # one because a step wears no letter.
+    declared_steps = set(_GATES_STEP_SLUG.findall(read(gates))) if exists(gates) else set()
+    for path in sorted(set(python_files()) | set(_walk(ROOT, (".md", ".ts", ".tsx")))):
+        for number, raw in enumerate(read(path).splitlines(), start=1):
+            for slug in _STEP_CITATION.findall(without_noqa(raw)):
+                if slug not in declared_steps:
+                    findings.append(Finding(
+                        f"{rel(path)}:{number}",
+                        f"cites `step {slug}`, which no `0.` marker in docs/GATES.md "
+                        f"declares. An unclaimed step is written "
+                        f"``0. `step {slug}` **Title** — ...`` there and in docs/map.py's "
+                        f"build order, or it is a citation of nothing.",
+                    ))
+    unclaimed.extend(f"step {slug}" for slug in sorted(declared_steps))
+
+    # AND MAIN CARRIES NONE. This is the invariant the whole design rests on: a slug that
+    # reaches main is a claim that half-landed, and every citation of it now resolves to
+    # nothing rather than to the wrong entry — loud, but only if something looks. `check.yml`
+    # runs this on main after every merge, which is the one place and moment it can look.
+    if on_main() and unclaimed:
+        findings.append(Finding(
+            "docs/DECISIONS.md",
+            "main carries {0} unclaimed id: {1}.\n"
+            "  A slug is a branch's placeholder and `make merge` is what turns it into a "
+            "number (D140). One on main means a claim half-landed — every "
+            "citation of it now resolves to nothing.\n"
+            "  Repair: `python3 scripts/claim-ids.py --ref origin/main --write` on a branch, "
+            "then a pull request.".format(
+                len(unclaimed), ", ".join(f"`{name}`" for name in unclaimed)),
+        ))
+
+    where = "main" if on_main() else "this branch"
+    report.add("id claims", MECHANICAL, findings,
+               "{0} unclaimed id(s) on {1}{2}".format(
+                   len(unclaimed), where,
+                   ", claimed at the merge" if unclaimed and not on_main() else ""))
+
+
+# --------------------------------------------------- the claimer speaks the same vocabulary
+
+# TWO DECLARATIONS AND A READER, this repo's standing answer to a shape it keeps meeting.
+# `scripts/claim-ids.py` cannot be imported here — this file parses rather than imports so it
+# never runs project code, and it is what gates every commit — so the slug grammar is written
+# once in each and reconciled. A widen that reaches one of them leaves the other refusing an
+# id the first just allocated, which is silent in both directions.
+
+CLAIMER = ROOT / "scripts" / "claim-ids.py"
+
+
+def check_claim_vocabulary(report: Report) -> None:
+    findings: List[Finding] = []
+    if not exists(CLAIMER):
+        report.add("claim vocabulary", MECHANICAL,
+                   [Finding(rel(CLAIMER), "does not exist, so no branch can claim an id.")])
+        return
+    theirs = literals_from_module(CLAIMER).get("SLUG")
+    # `_ID_SLUG` is the same grammar with the leading hyphen that separates it from the
+    # letter; `_STEP_SLUG` is it bare, because a step wears no letter.
+    if theirs != _STEP_SLUG:
+        findings.append(Finding(
+            rel(CLAIMER),
+            "declares SLUG as {0!r}; scripts/docs-audit.py's `_STEP_SLUG` is {1!r}.\n"
+            "  The auditor decides what is an id and the claimer decides what gets a number. "
+            "Disagreeing, one of them refuses an id the other just allocated.".format(
+                theirs, _STEP_SLUG)))
+    elif _ID_SLUG != "-" + _STEP_SLUG:
+        findings.append(Finding(
+            "scripts/docs-audit.py",
+            "`_ID_SLUG` is not `_STEP_SLUG` with the separating hyphen in front of it: "
+            "{0!r} against {1!r}.".format(_ID_SLUG, _STEP_SLUG)))
+    report.add("claim vocabulary", MECHANICAL, findings,
+               "one slug grammar, declared in the auditor and in the claimer")
+
 
 # ------------------------------------------------------------------------- env vars
 
@@ -1985,7 +1869,7 @@ def check_decision_index(report: Report) -> None:
 
     want = [
         (m.group(1), m.group(2).strip())
-        for m in (re.match(r"^##\s+(D" + _ID_DIGITS + r")\s*[—-]\s*(.+)$", line)
+        for m in (re.match(r"^##\s+(D" + _ID_ANY + r")\s*[—-]\s*(.+)$", line)
                   for line in read(decisions).split("\n"))
         if m
     ]
@@ -1995,7 +1879,7 @@ def check_decision_index(report: Report) -> None:
     fenced, block = False, []
     for line in read(claude).split("\n"):
         if line.lstrip().startswith("```"):
-            if fenced and block and all(re.match(r"^D" + _ID_DIGITS + r"\s", b) for b in block if b.strip()):
+            if fenced and block and all(re.match(r"^D" + _ID_ANY + r"\s", b) for b in block if b.strip()):
                 got = [(b.split(None, 1)[0], b.split(None, 1)[1].strip())
                        for b in block if b.strip()]
                 break
@@ -4485,7 +4369,18 @@ def check_map_sections(report: Report) -> None:
 # The numbered lists under `## What shipped` and `## What is open` in docs/GATES.md, which
 # docs/map.py's SHIPPED and OPEN say in their own header that they mirror. Each is bounded
 # at the next `## ` so a numbered list anywhere else in that file cannot join in.
+# A STEP IS ITS LIST MARKER, AND AN UNCLAIMED ONE CANNOT BE (D80 amended 2026-09-11).
+# Markdown has no ordered-list marker that can hold `merge-time-ids`, so a step whose number is
+# not allocated yet is written with a `0.` marker carrying its slug in backticks, and
+# `scripts/claim-ids.py` rewrites both the marker and the token at merge time:
+#
+#   a `0.` marker, then the slug in backticks after the word `step`, then the title.
+#
+# D80's ruling that `n` is STABLE and never renumbered is untouched by this and is the reason
+# for it: what that entry fears is D72's citation drift over 218 references to `step <n>`, and
+# a number claimed at the merge cannot collide, so nothing is ever renumbered to resolve one.
 _GATES_STEP = re.compile(r"^(\d+)\.\s", re.M)
+_GATES_STEP_SLUG = re.compile(r"^0\.\s+`step (" + _STEP_SLUG + r")`", re.M)
 
 
 def check_build_order_mirror(report: Report) -> None:
@@ -4530,15 +4425,18 @@ def check_build_order_mirror(report: Report) -> None:
             continue
         rest = text[start.end():]
         stop = re.search(r"^##\s", rest, re.M)
-        listed = {int(n) for n in _GATES_STEP.findall(rest[: stop.start() if stop else len(rest)])}
+        window = rest[: stop.start() if stop else len(rest)]
+        # `0.` is the unclaimed marker and never an id, so it is read as its slug and not as 0.
+        listed = {int(n) for n in _GATES_STEP.findall(window) if n != "0"}
+        listed |= set(_GATES_STEP_SLUG.findall(window))
         total += len(mine)
-        for number in sorted(listed - mine):
+        for number in sorted(listed - mine, key=str):
             findings.append(Finding(
                 "docs/map.py",
                 f"docs/GATES.md lists step {number} under `{heading}`; the map's `{name}` "
                 f"has no such id.",
             ))
-        for number in sorted(mine - listed):
+        for number in sorted(mine - listed, key=str):
             findings.append(Finding(
                 "docs/GATES.md",
                 f"the map's `{name}` has step {number}; `## {heading}` does not list it.",
@@ -11554,172 +11452,30 @@ def self_test() -> int:
     ok("SET_AMBIGUOUS" in emitted,
        "while a reason with a real producer still counts")
 
-    print("\na renumbered entry is found by its title, not its id")
-    # EVERY PAIR HERE IS REAL HISTORY, not invented ids. `D67 -> D69` is the order-screen
-    # entry and the incident this check exists for; `D50 -> D51 -> D53` is the "one link"
-    # entry, which moved twice. Using live ids keeps this data out of the illustration
-    # problem `governed_by` already carries for `D2` in docs/map.py.
-    ORDER = "The order screen and the shipping lane get a route each"
-    LINK = "One link, always live"
-    moved = moves_across([{ORDER: "D67"}, {ORDER: "D69"}])
-    ok(moved == [("D67", "D69", ORDER)], "an id that moves is reported old -> new", str(moved))
-
-    added = moves_across([{ORDER: "D69"}, {ORDER: "D69", LINK: "D53"}])
-    ok(not added, "a NEW entry beside an unchanged one is not a renumber", str(added))
-
-    # The citations that need chasing were written while it was D50, so the FIRST id is the
-    # one to hunt for. Reporting the middle id would miss every one of them.
-    twice = moves_across([{LINK: "D50"}, {LINK: "D51"}, {LINK: "D53"}])
-    ok(twice == [("D50", "D53", LINK)], "an entry renumbered twice reports its FIRST id", str(twice))
-
-    gone = moves_across([{ORDER: "D69"}, {}])
-    ok(not gone, "an entry that DISAPPEARS is not a renumber — nothing to chase", str(gone))
-
-    one = moves_across([{ORDER: "D67", LINK: "D53"}, {ORDER: "D69", LINK: "D53"}])
-    ok(one == [("D67", "D69", ORDER)], "only the entry that moved is reported, not its neighbors", str(one))
-
-    print("\nand the index it was vacated at is the FIRST one, which is where its citations are")
-    chain = [{LINK: "D50"}, {LINK: "D51"}, {LINK: "D53"}]
-    ok(vacating_index(chain, LINK, "D50") == 1,
-       "an entry that moved twice vacated its FIRST id at the first step",
-       str(vacating_index(chain, LINK, "D50")))
-    ok(vacating_index(chain, LINK, "D53") == -1,
-       "the id it landed on was never vacated, so there is nothing to hunt for",
-       str(vacating_index(chain, LINK, "D53")))
-    ok(vacating_index([{LINK: "D53"}, {LINK: "D53"}], LINK, "D53") == -1,
-       "and an entry that never moved reports no vacating point")
-
-    # ------------------------------------------------------------------ vacated ids, end to end
-    #
-    # THE GIT PLUMBING IS WHERE THIS ROW CAN BE WRONG, so it is exercised against a real
-    # repository rather than asserted about. `moves_across` and `vacating_index` above are pure
-    # and floored on their own; what is left is the part that reads blobs, follows a symlink and
-    # decides per LINE — all three of which this row got wrong in draft.
-    #
-    # ROOT IS SWAPPED, not parameterised: `git()` reads it at call time for its cwd and every
-    # path in the check is built from it, so pointing the module at a throwaway repo runs the
-    # real function over a real branch. Restored in a `finally`, the same save/restore the
-    # `check dispatch` cases already make for UNDISPATCHED.
-    #
-    # THE IDS ARE COMPOSED, for this file's standing reason: a literal id here is a citation,
-    # and `decision ids in code` reads this file. The NEW id is deliberately one this repo has
-    # not reached, which is exactly the shape a renumber lands on.
-    print("\na citation this branch wrote of a number it has since vacated is not a judgement")
-    OLD, NEW, NEIGHBOR = "D" + "133", "D" + "1" + "40", "D" + "131"
-    with tempfile.TemporaryDirectory() as tmp:
-        repo = Path(tmp) / "repo"
-        (repo / "docs").mkdir(parents=True)
-
-        def run(*args: str) -> None:
-            subprocess.run(["git"] + list(args), cwd=str(repo),
-                           stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, check=False)
-
-        def write(name: str, body: str) -> None:
-            (repo / name).write_text(body, encoding="utf-8")
-
-        def commit(message: str) -> None:
-            run("add", "-A")
-            run("-c", "user.email=t@t", "-c", "user.name=t", "commit", "-qm", message)
-
-        def rows() -> Dict[str, List[Finding]]:
-            saved, globals()["ROOT"] = ROOT, repo
-            try:
-                report = Report()
-                check_renumbered_decisions(report)
-                severity.update({check: sev for check, sev, _, _ in report.checks})
-                return {check: found for check, _, found, _ in report.checks}
-            finally:
-                globals()["ROOT"] = saved
-
-        severity: Dict[str, str] = {}
-
-        # main: one entry, and one sentence citing OLD that main itself wrote.
-        run("init", "-q", ".")
-        write("docs/DECISIONS.md", "## " + NEIGHBOR + " — Neighbor\n\nbody\n")
-        write("CLAUDE.md", "# Fixture\n"
-                           "inherited: the walk is ranked (" + OLD + ") and main wrote this\n")
-        commit("base")
-        run("branch", "-M", "main")
-        base_sha = subprocess.run(["git", "rev-parse", "HEAD"], cwd=str(repo),
-                                  stdout=subprocess.PIPE, check=False).stdout.decode().strip()
-
-        # the branch: its own entry at OLD, its own citation of it, and the symlink main's D135
-        # put in this tree — the one that reported CLAUDE.md's lines twice under two names.
-        run("checkout", "-q", "-b", "work")
-        write("docs/DECISIONS.md",
-              "## " + NEIGHBOR + " — Neighbor\n\nbody\n\n## " + OLD + " — One process\n\nbody\n")
-        write("CLAUDE.md", "# Fixture\n"
-                           "inherited: the walk is ranked (" + OLD + ") and main wrote this\n"
-                           "branch: the supervisor builds it (" + OLD + ")\n")
-        os.symlink("CLAUDE.md", repo / "AGENTS.md")
-        commit("the branch writes its entry and cites it")
-
-        # the merge: main took OLD, so the entry moves. The prose does not follow — and the
-        # branch adds a line naming the NEW id, so the file now carries both.
-        write("docs/DECISIONS.md",
-              "## " + NEIGHBOR + " — Neighbor\n\nbody\n\n## " + NEW + " — One process\n\nbody\n")
-        write("CLAUDE.md", "# Fixture\n"
-                           "inherited: the walk is ranked (" + OLD + ") and main wrote this\n"
-                           "branch: the supervisor builds it (" + OLD + ")\n"
-                           "branch: and the entry itself is " + NEW + " now\n")
-        commit("merge main: " + OLD + " was taken twice over")
-
-        found = rows()
-        blocking = found["vacated ids"]
-        ok(severity.get("vacated ids") == MECHANICAL and severity.get("renumbered ids") == ADVISORY,
-           "the provable half BLOCKS and the half needing context still only asks (D16)",
-           str(severity))
-        ok(len(blocking) == 1, "one blocking finding, for the one entry that moved", str(blocking))
-        message = blocking[0].message if blocking else ""
-        ok("CLAUDE.md:3" in message,
-           "and it names the line THIS BRANCH wrote, by file and line", message)
-        ok("CLAUDE.md:2" not in message,
-           "while the line main wrote is not this branch's to move", message)
-        advisory = found["renumbered ids"]
-        both_rows = message + "\n" + "\n".join(f.message for f in advisory)
-        ok("AGENTS.md" not in both_rows,
-           "a symlink to the same file is the same file, reported once under the real path",
-           both_rows)
-        # PER LINE, NOT PER FILE: CLAUDE.md names OLD and NEW both, which after a merge is the
-        # ordinary state. A reader that took that as evidence would have found nothing here.
-        ok(NEW in read(repo / "CLAUDE.md") and len(blocking) == 1,
-           "a file naming BOTH ids still fails on the line that is wrong", message)
-
-        ok(len(advisory) == 1 and "CLAUDE.md:2" in advisory[0].message,
-           "the inherited citation goes to the advisory row, which still asks", str(advisory))
-        ok("CLAUDE.md:3" not in (advisory[0].message if advisory else ""),
-           "and is not asked about twice", str(advisory))
-
-        # THE MUTATION: the branch never wrote a citation of its own. Nothing is provable, and
-        # the row must go green rather than inheriting the advisory's list.
-        write("CLAUDE.md", "# Fixture\n"
-                           "inherited: the walk is ranked (" + OLD + ") and main wrote this\n"
-                           "branch: and the entry itself is " + NEW + " now\n")
-        commit("drop the branch's own citation")
-        found = rows()
-        ok(not found["vacated ids"],
-           "an inherited stale citation alone does NOT block", str(found["vacated ids"]))
-        ok(len(found["renumbered ids"]) == 1,
-           "and it is still asked about", str(found["renumbered ids"]))
-
-        # A LINE THE BRANCH WROTE **AFTER** VACATING is a reference to the new occupant as often
-        # as it is a mistake, and blocking it would be D16's false positive.
-        write("CLAUDE.md", "# Fixture\n"
-                           "inherited: the walk is ranked (" + OLD + ") and main wrote this\n"
-                           "branch: and the entry itself is " + NEW + " now\n"
-                           "branch: main's own " + OLD + " folds sold rows away\n")
-        commit("cite main's entry at the freed number")
-        found = rows()
-        ok(not found["vacated ids"],
-           "a citation written after the move is a question, not a defect",
-           str(found["vacated ids"]))
-
-        # On main there is no branch, and both rows are empty for nothing.
-        run("checkout", "-q", "main")
-        found = rows()
-        ok(not found["vacated ids"] and not found["renumbered ids"],
-           "on main, base is HEAD and neither row has anything to compare", str(found))
-        ok(base_sha != "", "the fixture repository really was built", base_sha)
+    # THE FIXTURE'S SLUGS ARE COMPOSED, AND THIS BLOCK IS WHY THE RULE IS WRITTEN DOWN. They
+    # were spelled out, borrowed from a real entry so the citations would resolve — and the
+    # bootstrap claim substituted them, turning two of these into assertions about a NUMBER.
+    # A claim is exhaustive text replacement; it cannot tell a fixture from prose. Composed
+    # ids are out of its reach, and out of `decision ids in code`'s reach at the same time.
+    print("\nan id is a slug until the merge claims it, and a slug is two segments")
+    slug = "-" + "a-worked-example"
+    step = "a-worked-example"
+    ok(re.match(r"^" + _ID_SLUG + r"$", slug) is not None,
+       "a two-segment slug is an id")
+    ok(re.match(r"^" + _ID_SLUG + r"$", "-" + "pad") is None,
+       "and a one-segment one is ordinary prose, not an entry")
+    ok(_DECISION_RE.findall(f"see (D{slug}) and D" + "72") == [slug, "72"],
+       "the citation scanner reads both forms out of one line",
+       str(_DECISION_RE.findall(f"see (D{slug}) and D" + "72")))
+    ok(_DECISION_RE.findall("the D" + "-pad on the controller") == [],
+       "and reads neither out of a hyphenated English word")
+    ok(is_slug(slug) and not is_slug("137"),
+       "is_slug separates an unclaimed id from an allocated one")
+    ok(_GATES_STEP_SLUG.findall(f"0. `step {step}` **T** — x") == [step],
+       "a pending step is read out of its `0.` marker",
+       str(_GATES_STEP_SLUG.findall(f"0. `step {step}` **T** — x")))
+    ok(_GATES_STEP_SLUG.findall(f"7. `step {step}` **T** — x") == [],
+       "and a marker that is not `0.` is a claimed step, read as its number")
 
     # EVERY PATTERN THAT READS A DECISION ID, AT THE DIGIT THAT USED TO END THEM (D16).
     # docs/DEBTS.md recorded this as a TRIGGERED debt: seven patterns in this file and four
@@ -11760,22 +11516,26 @@ def self_test() -> int:
         ok(four_digits not in found and leading_zero not in found,
            "and stops at three digits, and at a leading zero", str(found))
 
-        titles = titles_by_id(text)
-        ok(titles.get("Three digits") == past_end,
-           "the renumber reader titles a three-digit entry", str(titles))
+        slugged = Path(tmp) / "SLUGGED.md"
+        unclaimed = "D" + "-an-unclaimed-entry"
+        slugged.write_text(f"## D9 — One digit\n\n## {unclaimed} — An unclaimed entry\n",
+                           encoding="utf-8")
+        both = [ident for ident, _ in decision_heading_lines(slugged, "D")]
+        ok(both == ["D9", unclaimed],
+           "the heading roster reads a number and a slug out of one file", str(both))
 
         # `check_decision_index` reconciles CLAUDE.md's fenced index against those headings,
         # and BOTH of its patterns are exercised here: the heading side, and the shape that
         # locates the index block by its `D<n> ` lines.
         indexed = [
             m.group(1)
-            for m in (re.match(r"^##\s+(D" + _ID_DIGITS + r")\s*[—-]\s*(.+)$", line)
+            for m in (re.match(r"^##\s+(D" + _ID_ANY + r")\s*[—-]\s*(.+)$", line)
                       for line in text.split("\n"))
             if m
         ]
         ok(indexed == ["D9", "D92", past_end],
            "the index check's heading side reads three digits", str(indexed))
-        ok(all(re.match(r"^D" + _ID_DIGITS + r"\s", line)
+        ok(all(re.match(r"^D" + _ID_ANY + r"\s", line)
                for line in ("D9  One digit", "D92  Two digits", f"{past_end}  Three digits")),
            "and its fenced-block shape accepts a three-digit index line")
 
@@ -13127,7 +12887,8 @@ def audit(staged_only: bool) -> Report:
     check_decision_ids(report, docs)
     check_decision_structure(report)
     check_decision_index(report)
-    check_renumbered_decisions(report)
+    check_id_claims(report)
+    check_claim_vocabulary(report)
     check_entry_budget(report)
     check_env_vars(report, docs, allowed)
     check_env_names(report)
