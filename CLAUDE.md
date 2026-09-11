@@ -295,7 +295,8 @@ make lint           # eslint over app/ (guards a bug earned, see app/eslint.conf
                     #   the Python packages, scoped to a slice measured against this tree (D82) —
                     #   never ruff's own defaults, never --fix. Config: ruff.toml.
 make check          # harness + docs-audit + audit-self-test + githooks-selftest +
-                    #   merge-selftest + revert-selftest + claim-selftest + revert-guard +
+                    #   merge-selftest + revert-selftest + claim-selftest + claim-stale +
+                    #   revert-guard +
                     #   janitor-selftest + reap-selftest + suite-lock-selftest +
                     #   serve-selftest +
                     #   verdict-selftest + port-agreement + set-hint-agreement +
@@ -431,9 +432,36 @@ make claim-ids      # WHAT THE MERGE WILL ALLOCATE FOR THIS BRANCH'S SLUG IDS. A
                     #   `governed_by` list sorted across the claim.
                     #   Previews; `ARGS=--write` performs it. Reach for it by hand only to LOOK;
                     #   the merge runs it for you.
+make claim-stale    # HAS A NUMBER THIS BRANCH ALREADY CLAIMED BEEN TAKEN BY MAIN SINCE?
+                    #   (D140, amended 2026-09-11.) The claimer above is a NO-OP once a branch
+                    #   has claimed — no slug is left, so it says `nothing to do`, which is a
+                    #   true statement about slugs and an incomplete one about safety. This
+                    #   takes every allocated id the branch ADDS since its merge base with
+                    #   `origin/main` — decision, code-card `C`, build-order step — and asserts
+                    #   each is still free on that ref.
+                    #   IT REPORTS AND NEVER REPAIRS. An un-claim has to happen BEFORE a merge
+                    #   and never after: once main is merged in, a substitution on that token
+                    #   reaches main's own copy of the entry too. It names the collision, says
+                    #   what the id would become, and exits 3.
+                    #   NO NETWORK AND NO `gh` — the local ref is enough, and D140 rejects
+                    #   reading open pull requests deliberately. It does not need them: the
+                    #   case that bites is the one where the other branch has already LANDED.
+                    #   Writes nothing, so it gates: in `check`, in `ci-check`, and `make merge`
+                    #   asks for it before every merge — that last is the authoritative run,
+                    #   because the fetch above it makes the answer current. It can only ever
+                    #   UNDER-report against a stale ref, never over-report, and a clone with no
+                    #   `origin/main` is allowed and says so.
+                    #   It happened TWICE on 2026-09-11 (#262/#265, then #265/#270), caught
+                    #   both times by a person reading PR titles. `decision index` is still the
+                    #   backstop; this is the earlier, cheaper warning.
 make claim-selftest # the claimer, proved where it can be wrong: a throwaway repository in which
-                    #   MAIN MOVES underneath the branch. In `check`, never in the git hook.
+                    #   MAIN MOVES underneath the branch — and, since D140's amendment, in which
+                    #   main takes a number the branch had already claimed. In `check`, never in
+                    #   the git hook.
 make merge          # merge a PR and move main onto it — BOTH HALVES, on your word (D42).
+                    #   IT CHECKS FOR A STALE CLAIM BEFORE ANYTHING ELSE (D140, amended):
+                    #   a number this branch claimed that main has taken since is REFUSED here,
+                    #   in preview as well as on the press, and nothing is rewritten for you.
                     #   IT CLAIMS THIS BRANCH'S IDS FIRST, AND WAITS (D140): it
                     #   substitutes, commits to the PULL REQUEST's branch, pushes, and watches
                     #   that commit's checks to completion before merging — so nothing main has

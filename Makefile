@@ -4,7 +4,7 @@
 # the project would be built on top of — `make check` green means every check ran.
 
 .DEFAULT_GOAL := help
-.PHONY: help status map explain harness check ignore-check docs-audit vale audit-self-test verdict-selftest githooks-selftest merge merge-selftest revert-guard revert-selftest claim-ids claim-selftest port-agreement set-hint-agreement screen-freshness sigil-check suite-lock-selftest icloud-sweep audit-history dev server screenshot design-check design-check-quiet lint typecheck venv launch-config worktree-setup hooks up down launch-agent demo demo-photos demo-seed demo-record demo-static demo-preview demo-freshness
+.PHONY: help status map explain harness check ignore-check docs-audit vale audit-self-test verdict-selftest githooks-selftest merge merge-selftest revert-guard revert-selftest claim-ids claim-stale claim-selftest port-agreement set-hint-agreement screen-freshness sigil-check suite-lock-selftest icloud-sweep audit-history dev server screenshot design-check design-check-quiet lint typecheck venv launch-config worktree-setup hooks up down launch-agent demo demo-photos demo-seed demo-record demo-static demo-preview demo-freshness
 
 # Prefer the venv if it exists, so `make harness` works without anyone remembering to
 # activate anything. Falls back to system python3, which still runs T2-T5 — T1 needs the
@@ -67,6 +67,8 @@ help:
 	@echo "                    commit main already carries? Refuses an unexplained reversal (D133)."
 	@echo "  make revert-selftest  the guard, proved by rebuilding PR #218/#221 in a throwaway repo."
 	@echo "  make claim-ids        what the merge will allocate for this branch's slug ids. ARGS=--write."
+	@echo "  make claim-stale      has an id this branch already claimed been taken by main"
+	@echo "                    since? Reports and never repairs (D140, amended). Writes nothing."
 	@echo "  make claim-selftest   the claimer, proved with main moving underneath the branch."
 	@echo "  make janitor-selftest  the sweep, proved against a throwaway clone. In \`check\`, never in the hook."
 	@echo "  make reap-selftest  the kill guard, proved by pointing it at what it must not kill."
@@ -87,7 +89,8 @@ help:
 	@echo "  make lan-check    is the LAN URL still good? DNS, both servers, and a real"
 	@echo "                    write. Reaches the network, so it never gates a commit."
 	@echo "  make check        harness + docs-audit + audit-self-test + githooks-selftest +"
-	@echo "                    merge-selftest + revert-selftest + claim-selftest + revert-guard +"
+	@echo "                    merge-selftest + revert-selftest + claim-selftest + claim-stale +"
+	@echo "                    revert-guard +"
 	@echo "                    janitor-selftest + reap-selftest + suite-lock-selftest +"
 	@echo "                    serve-selftest +"
 	@echo "                    verdict-selftest + port-agreement + set-hint-agreement +"
@@ -387,6 +390,7 @@ check:
 	@$(MAKE) --no-print-directory merge-selftest
 	@$(MAKE) --no-print-directory revert-selftest
 	@$(MAKE) --no-print-directory claim-selftest
+	@$(MAKE) --no-print-directory claim-stale
 	@$(MAKE) --no-print-directory revert-guard
 	@$(MAKE) --no-print-directory janitor-selftest
 	@$(MAKE) --no-print-directory reap-selftest
@@ -428,6 +432,8 @@ ci-check:
 	@$(MAKE) --no-print-directory githooks-selftest
 	@$(MAKE) --no-print-directory merge-selftest
 	@$(MAKE) --no-print-directory revert-selftest
+	@$(MAKE) --no-print-directory claim-selftest
+	@$(MAKE) --no-print-directory claim-stale
 	@$(MAKE) --no-print-directory revert-guard
 	@$(MAKE) --no-print-directory janitor-selftest
 	@$(MAKE) --no-print-directory reap-selftest
@@ -541,6 +547,25 @@ revert-selftest:
 # see what a merge would claim; the merge runs it for you.
 claim-ids:
 	@python3 scripts/claim-ids.py $(ARGS)
+
+# THE OTHER HALF OF THE CLAIM, AND IT IS NOT ABOUT SLUGS (D140, amended 2026-09-11). Once a
+# branch has claimed there is no slug left and `make claim-ids` says `nothing to do` — a true
+# statement about slugs and an incomplete one about safety, because main can take that number
+# afterwards and nothing looks again. It happened TWICE on 2026-09-11, both times caught by a
+# person reading PR titles.
+#
+# IT WRITES NOTHING, so unlike `claim-ids` it may gate: it is in `check` and in `ci-check`, and
+# `make merge` asks for it before every merge, where the fetch above it makes the answer
+# current. IT READS THE LOCAL `origin/main` AND NEVER THE NETWORK — D140 rejects reading open
+# pull requests deliberately, and this needs neither, because the case that bites is the one
+# where the other branch has already LANDED. A clone with no `origin/main` is ALLOWED and says
+# so, which is `revert-guard`'s call for `revert-guard`'s reason.
+#
+# IT CAN ONLY UNDER-REPORT AGAINST A STALE REF, never over-report, which is what makes it safe
+# on the commit-adjacent path: a `make check` whose `origin/main` is a day old misses a
+# collision it would have caught, and invents none. `decision index` is still the backstop.
+claim-stale:
+	@python3 scripts/claim-ids.py --stale
 
 # The claimer, proved where it can actually be wrong: a throwaway repository in which main
 # moves underneath the branch. In `check`, never in the git hook — it writes (D18).

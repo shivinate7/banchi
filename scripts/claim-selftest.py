@@ -18,6 +18,7 @@ import subprocess
 import sys
 import tempfile
 from pathlib import Path
+from typing import Tuple
 
 ROOT = Path(__file__).resolve().parent.parent
 CLAIMER = ROOT / "scripts" / "claim-ids.py"
@@ -65,11 +66,17 @@ def git(repo: Path, *args: str) -> str:
     return done.stdout.decode("utf-8", errors="replace")
 
 
-def claim(repo: Path, *args: str) -> str:
+def claim_rc(repo: Path, *args: str) -> Tuple[str, int]:
+    """Output and EXIT CODE. The staleness half gates on the code, so a test that reads only
+    the text cannot tell a refusal from a report — which is the arm, not a detail."""
     done = subprocess.run(
         [sys.executable, str(CLAIMER), "--root", str(repo)] + list(args),
         cwd=str(repo), stdout=subprocess.PIPE, stderr=subprocess.STDOUT, check=False)
-    return done.stdout.decode("utf-8", errors="replace")
+    return done.stdout.decode("utf-8", errors="replace"), done.returncode
+
+
+def claim(repo: Path, *args: str) -> str:
+    return claim_rc(repo, *args)[0]
 
 
 def write(repo: Path, name: str, body: str) -> None:
@@ -235,6 +242,120 @@ def main() -> int:
         ok(out.strip() == "",
            "a one-segment heading allocates nothing — one segment is prose, and docs-audit's `id claims` "
            "row is what reports the heading as unreachable", out)
+
+
+        # -------------------------------------------- D140, amended 2026-09-11: staleness
+        # THE CLAIMER IS A NO-OP ONCE A BRANCH HAS CLAIMED, so every arm above goes green on a
+        # branch whose number main has since taken. These build that branch. It happened twice
+        # on 2026-09-11 — #262/#265 on one number, #265/#270 on the next — and a person reading
+        # PR titles was the only thing that caught either.
+        print("\n  -- a branch claims honestly, and main takes the number afterwards --")
+        fourth = tmp / "fourth"
+        fourth.mkdir()
+        late = build(fourth)
+        git(late, "checkout", "-q", "-b", "feature")
+        # Honest at the time: main holds 1 and 2 in all three namespaces, so these are free.
+        write(late, "docs/DECISIONS.md",
+              DECISIONS_MAIN + f"\n## {D(3)} — The branch's third\n\nbody\n")
+        write(late, "docs/CODES-DECISIONS.md",
+              CODES_MAIN + f"\n## {C(2)} — The branch's code entry\n\nbody\n")
+        write(late, "docs/GATES.md", GATES_MAIN + "3. ~~The branch's third step~~ — done.\n")
+        git(late, "add", "-A")
+        git(late, "commit", "-qm", "the branch claims its numbers")
+
+        out, code = claim_rc(late, "--stale")
+        ok(code == 0 and "nothing has gone stale" in out,
+           "while main has not moved, an honestly claimed number reports clean", out)
+
+        rival = fourth / "rival"
+        subprocess.run(["git", "clone", "-q", str(fourth / "origin.git"), str(rival)],
+                       stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, check=False)
+        write(rival, "docs/DECISIONS.md",
+              DECISIONS_MAIN + f"\n## {D(3)} — Somebody else's third\n\nbody\n")
+        write(rival, "docs/CODES-DECISIONS.md",
+              CODES_MAIN + f"\n## {C(2)} — Somebody else's code entry\n\nbody\n")
+        write(rival, "docs/GATES.md", GATES_MAIN + "3. ~~Somebody else's third step~~ — done.\n")
+        git(rival, "add", "-A")
+        git(rival, "commit", "-qm", "main takes the same three")
+        git(rival, "push", "-q", "origin", "main")
+        git(late, "fetch", "-q", "origin", "main")
+
+        print("\n  -- and now the claimed number is stale, in all three namespaces --")
+        out, code = claim_rc(late, "--stale")
+        ok(code == 3, "it exits non-zero, so it can gate", f"exit={code}\n{out}")
+        ok("REFUSED" in out,
+           "THE BRANCH IS NO LONGER A NO-OP — a claimed number main has since taken is "
+           "reported, where the claimer alone says `nothing to do`", out)
+        ok(f"{D(3)}" in out and f"{D(4)}" in out,
+           "the decision is named, with what it would become", out)
+        ok(f"{C(2)}" in out and f"{C(3)}" in out, "the code-card namespace too", out)
+        ok("step 3" in out and "step 4" in out, "and the build step", out)
+        ok(out.count("is taken on") == 3,
+           "EXACTLY the three it added — the ids main already held are in the branch's copy "
+           "too, and reporting those would report most of the file", out)
+
+        print("\n  -- the refusal reaches the writing path, and writes nothing --")
+        before = (late / "docs/DECISIONS.md").read_text(encoding="utf-8")
+        out, code = claim_rc(late, "--write")
+        ok(code == 3 and "REFUSED" in out,
+           "`--write` refuses as well, not only `--stale`", out)
+        ok((late / "docs/DECISIONS.md").read_text(encoding="utf-8") == before,
+           "and nothing was rewritten — a half-performed claim would leave the branch "
+           "carrying a fresh number and a stale one in one commit")
+
+        print("\n  -- `--porcelain` keeps its contract, which is load-bearing --")
+        out, code = claim_rc(late, "--porcelain")
+        ok(code == 0,
+           "`--porcelain` still exits 0 on a stale tree. scripts/merge-pr.py reads a non-zero "
+           "exit there as `no claims are pending` and would SKIP the claim silently — the "
+           "opposite of a guard. It asks for `--stale` in its own right instead", out)
+
+        print("\n  -- a hole is not a collision --")
+        # D80 culls step 12 and keeps the gap, so `free` is set membership and never `above
+        # the ceiling`. A branch holding an id BELOW main's highest that main does not hold
+        # is correct, and rewriting this check as a `>` comparison would refuse it.
+        fifth = tmp / "fifth"
+        fifth.mkdir()
+        hole = build(fifth)
+        git(hole, "checkout", "-q", "-b", "feature")
+        write(hole, "docs/DECISIONS.md",
+              DECISIONS_MAIN + f"\n## {D(3)} — The branch's third\n\nbody\n")
+        git(hole, "add", "-A")
+        git(hole, "commit", "-qm", "the branch takes three")
+        skipper = fifth / "skipper"
+        subprocess.run(["git", "clone", "-q", str(fifth / "origin.git"), str(skipper)],
+                       stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, check=False)
+        write(skipper, "docs/DECISIONS.md",
+              DECISIONS_MAIN + f"\n## {D(4)} — Main's fourth, with three left as a hole\n\nbody\n")
+        git(skipper, "add", "-A")
+        git(skipper, "commit", "-qm", "main takes four and leaves three")
+        git(skipper, "push", "-q", "origin", "main")
+        git(hole, "fetch", "-q", "origin", "main")
+        out, code = claim_rc(hole, "--stale")
+        ok(code == 0 and "nothing has gone stale" in out,
+           "an id BELOW main's highest that main does not hold is free, and is not refused — "
+           "the question is membership, never a comparison against the ceiling", out)
+
+        print("\n  -- the two halves disagree about a missing ref, on purpose --")
+        out, code = claim_rc(late, "--stale", "--ref", "origin/does-not-exist")
+        ok(code == 0 and "ALLOWED" in out,
+           "`--stale` ALLOWS where the claim refuses: it is in `make check`, which runs in "
+           "clones that carry no remote-tracking branch, and a question it cannot be asked "
+           "is not a failure", out)
+        out, code = claim_rc(late, "--ref", "origin/does-not-exist")
+        ok(code == 2 and "REFUSED" in out,
+           "while the CLAIM still refuses the same ref — allocating against nothing is the "
+           "guess D140 exists to delete", out)
+
+        print("\n  -- with no shared commit there is no baseline, and it refuses --")
+        git(hole, "checkout", "-q", "--orphan", "unrelated")
+        write(hole, "docs/DECISIONS.md", DECISIONS_MAIN)
+        git(hole, "add", "-A")
+        git(hole, "commit", "-qm", "an unrelated history")
+        out, code = claim_rc(hole, "--stale")
+        ok(code == 2 and "share no commit" in out,
+           "a branch sharing no commit with the ref is refused rather than measured against "
+           "nothing, which would report every id main holds as a collision", out)
 
     print("\nclaim self-test: {0} passed{1}".format(
         PASS, ", {0} FAILED".format(FAIL) if FAIL else ""))
