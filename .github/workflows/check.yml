@@ -139,8 +139,22 @@ jobs:
         run: python3 scripts/revert-audit.py branch --upstream "origin/${{ github.base_ref || 'main' }}"
 
   # The browser half. Same tree, different question: what a person actually sees.
+  #
+  # THREE SHARDS, ONE WORKER EACH, AND THE WORKER COUNT IS THE DELIBERATE HALF (D135). One
+  # runner ran every case on ONE worker — `ubuntu-latest` is 2 vCPU on a private repo and
+  # Playwright's default of half the cores floors to one — in 15.2 minutes, measured across
+  # 56 jobs since this job landed. `--shard=N/3` splits the CASES three ways and each shard
+  # still runs one worker: the one-in-thirteen red docs/DEBTS.md section 11 records has "the
+  # suite around it" as its only known mechanism, and more workers on one box is more suite
+  # around it. Three shards is the same ~15 runner-minutes plus a chromium install per extra
+  # shard; wall-clock is a third. `fail-fast: false` because a red shard is a claim about
+  # its own cases and the other two are still worth their verdict.
   design-check:
     runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        shard: [1, 2, 3]
     steps:
       - uses: actions/checkout@v4
 
@@ -172,7 +186,7 @@ jobs:
       # from `app/devPort.ts`, which vite.config.ts and playwright.config.ts both import so they
       # cannot disagree — on a runner this is the main-tree 5173.
       - name: make design-check
-        run: make design-check
+        run: make design-check PW_ARGS="--shard=${{ matrix.shard }}/3 --workers=1"
 
       # WHAT A RED RUN LEAVES BEHIND, because until 2026-09-11 it left four lines. The config turns
       # `trace: retain-on-failure` on under CI, so a failing case has its DOM before and after every
@@ -184,7 +198,8 @@ jobs:
         if: failure()
         uses: actions/upload-artifact@v4
         with:
-          name: design-check-failures
+          # Per shard, or the second red shard's upload collides with the first's.
+          name: design-check-failures-${{ matrix.shard }}
           path: app/test-results
           if-no-files-found: ignore
           retention-days: 30
