@@ -1,0 +1,99 @@
+/* GRAVEYARD — a read-only ledger, so this sheet is smaller than a working screen's: one
+ * toolbar, one table, one loading skeleton. Every color is a `--bn-*` token; nothing here
+ * names one. */
+
+.graveyard-toolbar {
+  display: flex;
+  align-items: center;
+  gap: var(--bn-3);
+  flex-wrap: wrap;
+  padding: var(--bn-3) 0;
+}
+@media (max-width: 767px) {
+  .graveyard-toolbar { flex-direction: column; align-items: stretch; }
+  .graveyard-toolbar .bn-spacer { display: none; }
+}
+
+.graveyard-search { min-width: 220px; max-width: 320px; }
+@media (max-width: 767px) { .graveyard-search { max-width: none; } }
+
+.graveyard-failure {
+  display: flex;
+  align-items: center;
+  gap: var(--bn-3);
+  margin-bottom: var(--bn-3);
+}
+.graveyard-failure .bn-notice { flex: 1 1 auto; }
+
+/* ---- loading -------------------------------------------------------------------- */
+.graveyard-loading { display: flex; flex-direction: column; gap: var(--bn-3); padding: var(--bn-4); }
+.graveyard-skel-row {
+  display: flex;
+  align-items: center;
+  gap: var(--bn-4);
+  padding-bottom: var(--bn-3);
+  border-bottom: 1px solid var(--bn-line);
+}
+.graveyard-skel-row:last-child { border-bottom: 0; padding-bottom: 0; }
+
+.graveyard-unreadable { padding: var(--bn-6) var(--bn-4); }
+
+/* ---- the table -------------------------------------------------------------------- */
+.graveyard-table-wrap { overflow-x: auto; }
+.graveyard-table td[data-th='Card'] { min-width: 200px; }
+.graveyard-table td[data-th='Order'],
+.graveyard-table td[data-th='Run'],
+.graveyard-table td[data-th='Where'] { white-space: nowrap; }
+
+.graveyard-row { animation: graveyard-row-in var(--bn-t-slow) var(--bn-ease-out) backwards; }
+@keyframes graveyard-row-in {
+  from { opacity: 0; transform: translateY(4px); }
+  to { opacity: 1; transform: none; }
+}
+
+.graveyard-when { font-size: var(--bn-fs-sm); color: var(--bn-ink-2); white-space: nowrap; }
+
+.graveyard-card-cell { display: flex; flex-direction: column; gap: 2px; }
+.graveyard-name { font-weight: 500; }
+.graveyard-sub { display: flex; align-items: center; gap: var(--bn-2); font-size: var(--bn-fs-sm); color: var(--bn-ink-3); }
+
+.graveyard-mono { font-family: var(--bn-font-mono); font-size: var(--bn-fs-sm); color: var(--bn-ink-2); }
+.graveyard-condition { display: block; font-family: var(--bn-font-ui); font-size: var(--bn-fs-xs); color: var(--bn-ink-4); }
+
+.graveyard-where { display: inline-flex; align-items: center; gap: var(--bn-2); font-size: var(--bn-fs-sm); color: var(--bn-ink-2); }
+
+/* ---- phones: the ledger becomes cards -------------------------------------------- */
+@media (max-width: 639px) {
+  .graveyard-table thead { display: none; }
+  .graveyard-table, .graveyard-table tbody { display: block; }
+  .graveyard-table tr {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    grid-template-areas: 'card when' 'how where' 'sku sku' 'order run';
+    gap: var(--bn-2) var(--bn-3);
+    align-items: start;
+    padding: var(--bn-3) var(--bn-4);
+    border-bottom: 1px solid var(--bn-line);
+  }
+  .graveyard-table tr:last-child { border-bottom: 0; }
+  .graveyard-table td { display: block; padding: 0; border: 0; text-align: left; }
+  .graveyard-table td[data-th='Card'] { grid-area: card; min-width: 0; }
+  .graveyard-table td[data-th='Left'] { grid-area: when; justify-self: end; }
+  .graveyard-table td[data-th='How'] { grid-area: how; }
+  .graveyard-table td[data-th='Where'] { grid-area: where; justify-self: end; text-align: right; }
+  .graveyard-table td[data-th='SKU'] { grid-area: sku; }
+  .graveyard-table td[data-th='Order'] { grid-area: order; }
+  .graveyard-table td[data-th='Run'] { grid-area: run; justify-self: end; }
+  .graveyard-table td[data-th='Order']::before,
+  .graveyard-table td[data-th='Run']::before {
+    content: attr(data-th);
+    margin-right: 6px;
+    font-size: var(--bn-fs-2xs);
+    font-weight: 600;
+    letter-spacing: var(--bn-tracking-caps);
+    text-transform: uppercase;
+    color: var(--bn-ink-4);
+  }
+  /* a row with no order or no run draws nothing for it, rather than a labelled blank */
+  .graveyard-table td[data-empty] { display: none; }
+}

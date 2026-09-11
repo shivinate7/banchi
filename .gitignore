@@ -30,7 +30,7 @@ dist/
 # The same kind of file as the entry above, for the other tool: a machine-local shell
 # environment policy (Codex's PKMNSCAN_GATE=on and whatever else a checkout sets), never
 # committed for the same reason .claude/settings.local.json is not. .codex/hooks.json, the
-# hook roster beside it, IS tracked (D133) — this line is scoped to config.toml alone.
+# hook roster beside it, IS tracked (D135) — this line is scoped to config.toml alone.
 .codex/config.toml
 __pycache__/
 *.pyc

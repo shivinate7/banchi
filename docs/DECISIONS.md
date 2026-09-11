@@ -8993,7 +8993,240 @@ never addressed by its name the way a box is, D20 amended), and the Fulfiller's 
 untouched — his list is his order, his place labels are plain text, and none of the four asks
 was about him.
 
-## D133 — Codex reads the same rules a Claude Code session does, through three symlinks and one reconciled hook roster
+## D133 — A branch is judged by what it lands, and a file put back the way main had it is refused unless the branch says so
+
+**Settled 2026-09-11, on the owner's instruction, after D119's deletion was found undone.**
+The commit that undid it was about something else.
+
+### What happened, in commits
+
+`4bf5a44` (PR #218, D119, 2026-09-07) deleted `LocationCard` from `app/src/Inventory.tsx` and
+re-pointed the two specs that had asserted it. The next commit on main's first-parent line is
+the merge of PR #221, "The cap is a ceiling on copies live" (`121cfe5`, 2026-09-08), and what
+that merge brought onto main included the PRE-deletion copy of nine front-end files #218 had
+touched — the component, its stylesheet, `CardLocations.*`, `Gallery.*`, `BoxBrowse.css` and
+both specs. `9439765`, the commit inside it, is a single-parent commit on top of the #218
+merge whose diff on those files is, line for line, the reverse of `4bf5a44`. Its message names
+none of them. The mechanism, reconstructed: the #221 session merged main into its branch,
+resolved by keeping `ours`, and squashed onto main as one commit; the PR lists a merge commit
+(`e2b9b4f`) that is not an ancestor of what landed.
+
+**Every guard the deletion had lived in the files that came back**, so every guard came back
+with the thing it guarded against. `make check` was green on both sides, the Playwright suite
+was green on both sides, and three days later D132's session found the component, read the
+owner's screenshot of it as a wish, and wrote that down. PR #246 re-applied the deletion and
+added the `recorded deletions` audit row — a hand-written table of symbols a decision says are
+gone — which covers a deletion a session remembers to register and nothing else.
+
+### The ruling
+
+**A branch is judged by what it would land on main, not by its own commits.** The #221 shape
+has a merge-base AFTER the commit it reverses — the branch merged main and kept ours — so
+`origin/main..HEAD` shows a tidy cap-wording change and only the landing diff shows the revert.
+`scripts/revert-audit.py branch` reads `git merge-tree --write-tree origin/main HEAD` and diffs
+origin/main against that tree, which is exactly what the PR page shows and what the merge
+button would do; when the merge conflicts it falls back to the branch's diff off the merge-base
+and says so. On GitHub, a pull-request checkout IS that merge, so the CI job reads `HEAD`
+against `origin/<base>` and compares the same two things.
+
+**A file whose whole change is the exact reverse of a commit main already carries is refused**
+unless a commit on the branch names the file. Two detectors, both exact:
+
+- **whole-file** — the change takes the file from blob `a` to blob `b`, and a commit within
+  main's last sixty first-parent commits took it from `b` to `a`. By object id; no diff is
+  read. A file deleted that a recent commit created counts, because a keep-ours merge deletes
+  every file main added.
+- **hunk** — a `-U0` hunk of the change is, line for line, the reverse of a hunk an earlier
+  commit in that window introduced on the same file. Whitespace-only hunks are dropped. A
+  merge on the first-parent line is compared as what it brought onto main, and the branch
+  commits inside it that touched the file are named beside it, because the merge is never the
+  commit a person would cite.
+
+**Refused** means: every hunk the change makes to the file is such a reversal, or the whole
+file is restored. **A partial reversal beside real edits is a note and never a refusal** — a
+line changed and changed back inside a rewrite is ordinary work, and a guard that refused it
+would be switched off within the week. **Declared** means a commit message on the branch names
+the file — its path, its basename or its stem. `git revert` exists, D125's crop came off four
+screens on the owner's word (PR #233), and D119 itself was re-applied by reversing #221; each of
+those is a reversal somebody meant, and the cost of meaning it is one file name in one commit
+message. `PKMNSCAN_REVERT=off` runs nothing and is printed in every refusal, on the same terms
+as `PKMNSCAN_MAIN=off`.
+
+**It runs three times, for D42's reason: the local and the remote halves fail separately.**
+`make revert-guard` in `check` and `ci-check`; `scripts/githooks/pre-push` on
+every branch push, before the branch becomes a PR; and its own job in
+`.github/workflows/check.yml`, so a refusal is a named red check on the PR rather than one line
+inside `ci-check`'s output. It writes nothing, needs python3 and git, and with no `origin/main`
+in reach — a fixture clone — it allows and says so.
+
+**`make revert-selftest` proves it by rebuilding the sequence**: a throwaway origin, a deletion
+merged as #218 was, a branch cut from before it that merges main with `-s ours` and is squashed
+onto main with a message naming nothing. The fixture asserts its own arming — the squashed
+branch really does carry the pre-deletion blob — then asserts the refusal, the history walk
+naming both the merge and the deleting commit inside it and reading `D1` out of the reverted
+decision text, a clean branch allowed, a partial reversal noted and allowed, a declared
+restoration allowed, a silent restoration refused at hunk level after main has moved the file
+again, the escape hatch honoured and named, and main itself landing nothing. Mutation-tested, three arms:
+with the whole-file detector disabled the #221 case stays refused on the hunk detector and the
+history case fails; with the hunk detector disabled the silent restoration and the partial case
+both fail; with `entire` made to return true for a partial hit, the partial case fails.
+
+### The 2026-09-11 walk over main, and what it found
+
+`scripts/revert-audit.py history` is the same engine over every commit on main's first-parent
+line — 367 commits, window 60 — and it reports every reversal whose commit message does not
+name the file. **Fifty-two file-level reversals across eighteen commits**, every one read on
+both sides rather than trusted to the diff arithmetic. Fifty of them are reversals somebody
+meant, and the record already says so: #221 undoing #218 (the case above); #246 undoing #221
+(the re-application, D119 amended) and #244's `indexNote` (D132 amended the same day); #233
+undoing #231 on five files (D125 amended, `docs/DEBTS.md` §7 reopened); #222 removing the
+`cap_the_store` helper #216 had added to T7 (`policy.live_cap` was deleted, D7); #176 removing
+`RailMark`'s export while deleting `RailMark.tsx` itself; #164 removing four
+`docs-audit-allow.txt` lines that each said "delete when built"; #145 moving `review.spec.ts`'s
+`/status` stub into the shared seal; #114's overhaul removing the T6 order walk (D96) and
+retiring comments whose code fixes survive — `Pricing.tsx` still reads the hash in its
+`useState` initialiser; and six pre-PR commits where one author iterated on their own previous
+commit, all of whose reversals were later re-applied or were D31's own deletions.
+
+**One is real and unrecorded.** `5b79982` (PR #192, "t1-fingerprints", D112) put back the
+paragraph of D110 that PR #191 (`efc2444`, the same day) had replaced: eight paragraphs
+recording the owner's 2026-09-07 ruling on the 22 inert controls — the current page's nav link
+now responds, the selected tab stays inert by their choice from the images, the first fix
+snapped because `background-image` does not animate, and `cursor.spec.ts`'s guard gained a
+reader for gradients by name. The code survived in full: `App.css`'s
+`.bn-nav-link[aria-current='page']:hover`, the gradient test in `cursor.spec.ts`, and the
+ruling's comment in `kit.css`. **The decision does not.** D110 at HEAD says the current page's
+hover is "a design question for the owner rather than a defect" — a question the owner
+answered four days ago, whose answer is now recorded only in a stylesheet comment. What the
+screen does is right; what the record says about it is a day old. Not fixed here: the owner's
+call, one branch, restoring the text of `efc2444` into D110 as an amendment dated to both
+days.
+
+The seven files D119's own re-application (`521dbfd`) put back in `Inventory.tsx`,
+`inventory.spec.ts`, `Gallery.tsx` and `docs/map.py` are partial — 19 of 21, 43 of 58, 3 of 4,
+3 of 9 — because #246 also moved on from what #218 had; they are the same event read from the
+other side.
+
+### What it cannot see, named rather than papered over
+
+- **A reversal older than the window.** Sixty first-parent commits is about twelve days of
+  this repository's history; a branch a fortnight stale that merges main keeping ours reverses
+  commits the guard no longer looks at. `--window 0` is unbounded for a one-off audit and is
+  not the default, because the walk has to finish on every push.
+- **A reversal re-worded on the way back.** A line changed as well as restored is a new edit,
+  and the guard is exact on purpose: a similarity threshold is a dial, and every dial on a gate
+  gets turned until the gate is quiet.
+- **A reversal whose hunk a neighbouring edit widened.** #221 also put back D119's rows in
+  `docs/map.py` and `docs/DEBTS.md`, and the guard does not report them: the branch's own D7
+  edits sat on adjacent lines, so the reversed lines and the new ones share one hunk and the
+  hunk is no longer the reverse of anything. A containment test — the reversed hunk found as a
+  contiguous run inside a larger one — was built and measured against the same history:
+  seventy-nine additional hits, every one a coincidence of code moved within a rewrite, and the
+  map rows still not among them. It was not kept. The whole-file detector is the answer to the
+  common form of this: a keep-ours merge restores the whole blob, and a blob is compared by id.
+
+## D134 — A departed record is buried, not kept; the box goes; and the graveyard is where the departed are read
+
+**Settled 2026-09-11, on the owner's word.** Told that a whole-box merge (D83) carries only
+the on-hand cards, leaving sold and retired records behind in a box that ruling 3 would then
+refuse to delete forever, the owner's answer was direct: *"I just need a history log
+frankly"*, and asked for a screen to read it — *"having a graveyard accessible just for
+potential data giggles is worthwhile having"* — and confirmed the photographs should go with
+it: *"yes it should auto delete the photos."*
+
+This amends D10's owner ruling 3 (2026-08-23): "a box may not go while ANY card in it is
+sold, retired, or listing-held — those records are history and commitments, not clutter."
+The sentence was right and the remedy it named was too small. A departed record's history is
+not lost by letting its box go; it is lost only if nothing keeps the record when the box
+does. So ruling 3 keeps its shape and gets a second door: a sold, retired or moved record no
+longer blocks the delete — it is **buried** first.
+
+### What is built
+
+1. **`DELETE /boxes/<box>` no longer refuses on a departed record.** `do_delete_box`
+   (`server/capture_server.py`) still refuses `box_not_empty_of_commitments` for an on-hand
+   card an active listing holds — D34's ground, untouched — but a card in
+   `master.TERMINAL_STATES` (sold, retired, moved) is no longer a blocker at all.
+
+2. **A departed record is buried before its files go.** One `buried` event per record,
+   carrying it whole. A new route-written event, `BURIED = "buried"`, added beside
+   `BOX_DELETED` in `SERVER_EVENTS`. Written through the same `_history` call every other
+   route-level event uses, inside the same `Store.write()` as the record's own deletion, so
+   the line and the deletion commit together or neither does. The line carries: `box`,
+   `index`, the box's own name as it stood, `state`, `state_at`, `captured_at`,
+   `capture_id`, `run`, `game`, `name`, `number`, `printed_total`, `set_hint`, `sku`,
+   `condition`, `rarity_claim`, `product`, `note`, `retire_reason`, `moved_to`,
+   `photo_sha256`, `photo_reclaimed_at`, and `order` — the order this copy was pulled
+   against, if `Ledger.holder_of(capture_id)` finds one.
+   **The digest is computed from the photograph's bytes in the moment before they go**, the
+   same way D89's reclaim already does it, if the record does not already carry one; a
+   moved tombstone's file already relocated with the transplant at move time, so its digest
+   stays whatever the tombstone already had — usually none.
+
+3. **The photographs go, on the owner's word.** Every departed record's photo and sidecar
+   are unlinked in the same loop that unlinks an on-hand junk card's — D10's "files inside
+   the block, photo before sidecar" rule, unchanged. This is a real loss and it is
+   deliberate: `docs/DEBTS.md`-style, named here rather than discovered later. What is kept
+   is the digest, not the bytes — the same trade D89 already made for a sold card's
+   photograph, now made for every door a card can leave a deleted box through.
+
+4. **`GET /graveyard`, the merge of two sources into one shape.** A departed card is either
+   still standing in a box nobody has deleted (a `sold`/`retired`/`moved` record, read by
+   the indexed `state` column, three `where()` calls) or it survives only as a `buried`
+   line (`store/db.py:events_named`, `store/session.py:Store.buried()` — `history()`'s
+   narrower sibling, an unindexed scan over the `event = 'buried'` rows rather than the
+   whole log). `do_graveyard` merges both into `_departed_row`'s one shape, newest departure
+   first. The two sources never overlap by construction: a record moves from the first to
+   the second exactly once, at the moment its box is deleted, and there is no route back.
+
+5. **`#/graveyard`, the twelfth route.** `app/src/Graveyard.tsx` + `.css`, modelled on
+   `Codes.tsx`'s fetch-a-list shape: a Segmented filter (All/Sold/Retired/Moved/Buried), a
+   text search over name, number, SKU and box name, and a `.bn-table` that becomes a
+   stacked card at 639px. Read-only — no photograph (buried cards have none, and the
+   screen stays out of `scripts/views.txt`'s exposure rows), no price, no control that
+   writes. `library` group, hotkey `g`.
+
+6. **The Manage box sheet's delete panel draws the new boundary.** `BoxOps.tsx:DeleteBox`'s
+   pre-emptive `Notice` no longer says a sold or retired card refuses the box; it says how
+   many departed records will be buried and that their photographs will be deleted, and
+   names only a listing hold as a real refusal. The success toast's receipt gains a buried
+   count. `BoxDeleteResult.buried` is the wire field both read.
+
+### What is lost, stated rather than discovered later
+
+**Sale and retirement undo on a deleted box.** Reversing a sale or a retirement is a route
+over the still-existing record; once a record is buried there is no record to reverse, only
+a line describing what happened. This was already true the moment a card's box was deleted
+in the old world too — the box simply could never be deleted while such a record stood. The
+practical change is that the box no longer has to stand forever for the undo option to keep
+existing; the undo option and the box now go together.
+
+**The departed rows and copies-list entries for that box on `#/inventory`.** A buried record
+is not a row anywhere a box is rendered — only `#/graveyard` reads it. Searching by name
+still finds it there.
+
+**D36's realign by digest, for a run still un-joined over a deleted box.** A moved card's
+digest and its photograph both travel with the transplant, so realign still works for those.
+A sold or retired card's digest is kept in the burial line, but the photograph it would be
+checked against is gone — the same boundary D89's reclaim already draws for a sold card
+whose photograph was reclaimed while its box still stood.
+
+**`next_index` for a deleted box number restarts at 1.** Already true before this decision —
+"a deleted box is a box the store has never heard of" (D10) — and unchanged: this decision
+only widens which boxes may reach that state. D10's permanent-gap promise holds inside every
+box that still exists.
+
+### What is recorded rather than mitigated
+
+**Old per-position `sold`/`retired` history lines are not rewritten or removed.**
+`_state_before_sale` and `_state_before_retirement` scan backwards from the most
+recent line for a given position key; a box number reused after a delete writes its own
+newer lines for the same keys, which those readers find first. A stale line from a deleted
+box therefore sits inert beneath a live one rather than being cleaned up — the same shape
+D36's `refuse_reallocated` already treats as a hazard worth refusing a run over, not worth
+silently repairing.
+
+## D135 — Codex reads the same rules a Claude Code session does, through three symlinks and one reconciled hook roster
 
 **Settled 2026-09-11.** OpenAI Codex was installed in this repository on 2026-09-09 and left
 three untracked paths in the main checkout: a 117 KB `AGENTS.md` that is `sed

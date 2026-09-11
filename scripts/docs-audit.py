@@ -1658,13 +1658,22 @@ def renumbered_on_branch(base: str) -> List[Tuple[str, str, str]]:
 
 
 def branch_files(base: str) -> List[str]:
-    """Paths this branch changed, committed or not. The renumber's own file is not one."""
+    """Paths this branch changed, committed or not. The renumber's own file is not one.
+
+    A DIRECTORY SYMLINK IS A CHANGED PATH WITH NO TEXT TO SCAN, and `check_renumbered_decisions`
+    is the only caller — it reads every name here as a file's content. `Path.is_dir()` follows
+    symlinks, so a tracked directory link (D47 — `.agents/skills -> ../.claude/skills`) reads as
+    a directory here exactly as a real one would, and is excluded the same way: `exists()` alone
+    said yes and `read_text()` crashed with `IsADirectoryError`, which is the git-tracked shape
+    D47 legitimizes and this reader had never seen before one landed on a branch.
+    """
     names = set(git("diff", "--name-only", base, "HEAD").split("\n"))
     names.update(git("diff", "--name-only", "HEAD").split("\n"))
     names.update(git("diff", "--cached", "--name-only").split("\n"))
     return sorted(
         name for name in names
         if name and name != "docs/DECISIONS.md" and exists(ROOT / name)
+        and not (ROOT / name).is_dir()
     )
 
 
@@ -4091,7 +4100,7 @@ def check_hook_roster(report: Report) -> None:
     )
 
 
-# --------------------------------------------------------------------- codex hooks (D133)
+# --------------------------------------------------------------------- codex hooks (D135)
 
 CODEX_HOOKS = ROOT / ".codex" / "hooks.json"
 CLAUDE_SETTINGS = ROOT / ".claude" / "settings.json"
@@ -4102,7 +4111,7 @@ def _hook_triples(data: object) -> Set[Tuple[str, str, str]]:
 
     Both files share one shape — `hooks.<Event> = [{matcher?, hooks: [{type, command}]}]` —
     because `.codex/hooks.json` was written by copying `.claude/settings.json`'s own block
-    out of its wrapper (D133). `matcher` is absent on an event with no tool to match
+    out of its wrapper (D135). `matcher` is absent on an event with no tool to match
     (`SessionStart`, `Stop`, `SessionEnd`, `WorktreeRemove`), so it is read as `""` rather
     than skipped — an event that gains a matcher in one file and not the other is exactly
     the drift this reads for, and a triple can only report that by carrying the field.
@@ -4139,7 +4148,7 @@ def _hook_triples(data: object) -> Set[Tuple[str, str, str]]:
 def check_codex_hooks(report: Report) -> None:
     """`.codex/hooks.json` and `.claude/settings.json`'s `hooks` block name the same hooks.
 
-    BUILT SO A CODEX SESSION IS NOT A SECOND, UNGUARDED WAY INTO THIS REPO (D133). Codex
+    BUILT SO A CODEX SESSION IS NOT A SECOND, UNGUARDED WAY INTO THIS REPO (D135). Codex
     reads `.codex/hooks.json` the way Claude Code reads `.claude/settings.json`'s `hooks`
     key, and until this row nothing compared the two: a guard added to one tool's config and
     not the other's is a guard that only some sessions run, silently, and the file's own
@@ -4178,7 +4187,7 @@ def check_codex_hooks(report: Report) -> None:
                     ".codex/hooks.json",
                     "does not exist. Codex reads no hooks at all here, which is a silent "
                     "downgrade from what .claude/settings.json enforces for Claude Code — "
-                    "restore the file or delete this row with it (D133).",
+                    "restore the file or delete this row with it (D135).",
                 )
             ],
             "",
@@ -11849,7 +11858,7 @@ def self_test() -> int:
         str(by_label["storage keys"]),
     )
 
-    # ------------------------------------------------------------------ codex hooks (D133)
+    # ------------------------------------------------------------------ codex hooks (D135)
     #
     # `_hook_triples` is the extractor, pure and file-free, so the mutation this row exists
     # for can be driven on synthetic dicts rather than on the real tree — the same split
@@ -11883,7 +11892,7 @@ def self_test() -> int:
        "a non-command hook (a prompt, say) contributes nothing to the roster")
 
     # THE MUTATION: drop one hook from the Codex side, prove the row reports exactly the
-    # drop, restore it, prove the row is silent again. This is D133's own worked example —
+    # drop, restore it, prove the row is silent again. This is D135's own worked example —
     # `.codex/hooks.json` really did ship a day behind `WorktreeRemove` and `reap.py --hook`
     # — replayed here as data so it never depends on the two files staying out of sync.
     print("\nremoving one hook from one side is reported, and restoring it clears the report")
@@ -11919,7 +11928,7 @@ def self_test() -> int:
 
     # And the real tree: the two files this row actually reads should already agree, because
     # the change that added the row is the same change that brought .codex/hooks.json to
-    # parity (D133) — a self-test that could not pass against its own repository would be
+    # parity (D135) — a self-test that could not pass against its own repository would be
     # asserting a rule this tree does not follow.
     report = Report()
     check_codex_hooks(report)

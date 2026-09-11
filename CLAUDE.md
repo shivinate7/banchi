@@ -4,7 +4,7 @@ Bulk-list pre-sorted TCG singles on TCGplayer with zero attention per card, and 
 every card physically is. Two tracks share one rig: singles (this file) and code cards
 (`code-card-fork/CLAUDE.md`, auto-loaded in that directory).
 
-**Codex reads this same file, not a copy of it (D133).** `AGENTS.md` at the root and
+**Codex reads this same file, not a copy of it (D135).** `AGENTS.md` at the root and
 `code-card-fork/AGENTS.md` are relative symlinks to the `CLAUDE.md` beside each, and
 `.agents/skills` is a directory symlink to `.claude/skills` — one edit reaches both tools'
 readers, because a copy is a fork with a diff nobody watches and a symlink has no diff to
@@ -253,8 +253,8 @@ make lint           # eslint over app/ (guards a bug earned, see app/eslint.conf
                     #   the Python packages, scoped to a slice measured against this tree (D82) —
                     #   never ruff's own defaults, never --fix. Config: ruff.toml.
 make check          # harness + docs-audit + audit-self-test + githooks-selftest +
-                    #   merge-selftest + janitor-selftest + reap-selftest +
-                    #   suite-lock-selftest +
+                    #   merge-selftest + revert-selftest + revert-guard + janitor-selftest +
+                    #   reap-selftest + suite-lock-selftest +
                     #   verdict-selftest + port-agreement + set-hint-agreement +
                     #   screen-freshness + sigil-check + ignore-check + lint +
                     #   vale + typecheck.
@@ -353,6 +353,27 @@ make merge-selftest # the merge wrapper's local half, against a throwaway origin
                     #   worktree. Its FOOTGUN case is the one that matters: main checked out
                     #   nowhere while another tree sits on a branch BEHIND its upstream, where
                     #   the wrong command advances that branch and no hook says a word.
+make revert-guard   # DOES THIS BRANCH PUT A FILE BACK THE WAY MAIN HAD IT BEFORE A COMMIT
+                    #   MAIN ALREADY CARRIES? (D133). PR #221 landed from a tree still holding
+                    #   the pre-#218 copy of ten files and D119's deletion came back with every
+                    #   guard that asserted it, under a message about `--cap` wording. This
+                    #   reads what the branch would LAND on origin/main — the clean merge's
+                    #   tree, so a keep-ours merge squashed into one commit reads the same as
+                    #   the PR — and refuses a file whose whole change is the exact reverse of
+                    #   a commit in main's last 60, when no commit on the branch names that
+                    #   file. A reversal you MEAN is one sentence: name the file in a commit
+                    #   message. A partial reversal beside real edits is a `note`, never a
+                    #   refusal. Runs in `check`, in pre-push on every branch push, and as its
+                    #   own job on the PR. `PKMNSCAN_REVERT=off` runs nothing, printed in every
+                    #   refusal. WHAT IT CANNOT SEE is in D133 by name: a reversal older than
+                    #   the window, one re-worded on the way back, and one whose hunk a
+                    #   neighbouring edit widened — the last is how #221's map rows escaped it,
+                    #   and a containment test that would have caught them produced 79
+                    #   coincidences of moved code on this history, so it was not kept.
+                    #   `python3 scripts/revert-audit.py history` is the same engine over main's
+                    #   whole first-parent line; the 2026-09-11 walk is in D133.
+make revert-selftest # the guard, proved by rebuilding #218 and #221 in a throwaway repo.
+                    #   In `check`, never in the git hook.
 make merge          # merge a PR and move main onto it — BOTH HALVES, on your word (D42).
                     #   ARGS=<n> previews and presses nothing; ARGS="<n> --confirm" performs it.
                     #   A bare `make merge` refuses: there is no default PR and will not be one.
@@ -513,7 +534,7 @@ client call is written and `app/src/types.ts` the only place the wire's shapes a
 
 ### The screens
 
-**The app has eleven screens and eleven routes** — ten the owner's, one the Fulfiller's.
+**The app has twelve screens and twelve routes** — eleven the owner's, one the Fulfiller's.
 `app/src/App.tsx`'s `ROUTES` table is the count. **Recount from the table; never increment a
 sentence**, and see "the census" below for what enforces that.
 
@@ -567,6 +588,10 @@ sentence**, and see "the census" below for what enforces that.
                               the live ones. The address leads with the box's NAME and the
                               rail orders boxes by when this browser last opened them; a
                               section can be named from the Manage box sheet.
+#/graveyard    Graveyard      every departed card, sold or retired or moved (D134) — merged
+                              from two sources, a record still standing in a box nobody has
+                              deleted and a `buried` history line for one whose box was.
+                              Read-only: nothing here can be undone, and nothing here prices
 #/codes        Codes          the code-card track: read a box's QRs into the ledger, the lanes
                               the pile is tiered into, and a lane handed to a buyer
 #/fulfillment  Cards to pull  the second persona's whole product: pull, photo-confirm, mark
@@ -724,12 +749,12 @@ the only carrier of information.
 
 ### The shell
 
-`App.tsx` is a hand-written hash router and the whole chrome. Read it as the shell: eleven
+`App.tsx` is a hand-written hash router and the whole chrome. Read it as the shell: twelve
 hash routes, no routing library, no nested routes, one table. Every screen renders inside it
 except the Fulfiller's:
 
 - **A sidebar that collapses to a rail** on wide windows — 236px or 64px, ⌘. toggles it, the
-  choice is remembered in `banchi.rail`. Nine nav items in four groups; the brand, the
+  choice is remembered in `banchi.rail`. Ten nav items in four groups; the brand, the
   hand-off link, the palette, the theme toggle and the capture server's own state sit in the
   foot.
 - **A top bar and a bottom tab bar on phones**, with the rest of the screens in a left drawer
@@ -1418,7 +1443,9 @@ D129 The verdict's line is fixed by the first Playwright that counts it right, a
 D130 A feeder that never rests gets a second trigger, and the beat is measured not typed
 D131 The ratchet gets an escape, a settle is one quiet frame of three, and the beat is the backstop
 D132 Sold is folded away by default, the address leads with the name, the rail is ordered by the hand, and a section can be named
-D133 Codex reads the same rules a Claude Code session does, through three symlinks and one reconciled hook roster
+D133 A branch is judged by what it lands, and a file put back the way main had it is refused unless the branch says so
+D134 A departed record is buried, not kept; the box goes; and the graveyard is where the departed are read
+D135 Codex reads the same rules a Claude Code session does, through three symlinks and one reconciled hook roster
 ```
 
 **THE GAP THIS LIST CARRIED BETWEEN D116 AND D118 IS CLOSED, AND IT CLOSED THE WAY IT SAID IT
