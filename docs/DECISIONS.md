@@ -6317,14 +6317,16 @@ same three icons — rather than a value typed into a generator.
 
 ### Amended 2026-09-11 — the URL is `:8000`, and a port is part of an origin (D137)
 
-**The installed app is created from `http://localhost:8000` now**, because the capture server serves the page itself and `:5173` belongs to `make dev`. Everything above is unchanged: the same Chrome, the same profile, the same manifest — which is already relative and needed no edit — and the same argument that the dock app is a CLIENT and never a second supervisor.
+**The installed app would be created from `http://localhost:8000` now**, because the capture server serves the page itself and `:5173` belongs to `make dev`. Everything above is unchanged: the same Chrome, the same profile, the same manifest — which is already relative and needed no edit — and the same argument that the dock app is a CLIENT and never a second supervisor.
 
-**What the move costs is one reinstall and two resets, and D137 did not say so when it was settled.** A browser origin is scheme, host AND port, so the installed app at the new address is a different origin to the browser:
+**And no dock app has ever been installed, which this amendment first said the opposite of.** Checked on the owner's Mac 2026-09-11: `~/Applications/Chrome Apps.localized/` holds `My Hue.app` and nothing else — the very bundle this entry inspected to prove the mechanism. So this entry is an investigation that was never acted on, the owner's own words are *"I never had/used a dock app"*, and the install below is a FIRST one, optional, rather than a repair the port move forces. The entry is otherwise unaffected: what it measured about Chrome, the profile and the camera is all still true of whoever presses it first.
+
+**What the move costs is two resets, and it costs them WITH OR WITHOUT the dock app, which is the part that matters.** The owner opens this product in an ordinary Chrome tab at `http://localhost:5173`; a browser origin is scheme, host AND port, so `:8000` is a different origin to that tab just as it would be to an installed app:
 
 - **The camera grant prompts once more.** This entry measured that the grant lives in the profile's content settings, which is true and is keyed by origin — so the rig re-grants on first open. One press.
 - **Every `localStorage` key resets once** (D27): the capture screen's remembered camera and rotation, the theme, the rail, and the two order keys. The rig re-picks its camera and its rotation, which is the only one of the six that costs a moment. This is D27's rename cost repeated, and the same ruling applies for a better reason — a fallback ACROSS origins is not merely undesirable, it is impossible.
 
-**Do it between shifts rather than mid-capture**, for the reason D27 names by name: `banchi.session.captureId` is `sessionStorage` and a capture in flight when the tab closes can burn a position.
+**Move between shifts rather than mid-capture**, for the reason D27 names by name: `banchi.session.captureId` is `sessionStorage` and a capture in flight when the tab closes can burn a position.
 
 ### What would reopen this
 

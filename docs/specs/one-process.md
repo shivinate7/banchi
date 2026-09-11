@@ -246,9 +246,14 @@ design-check. Names that come apart silently are the failure that row exists for
 
 ## 5. The dock app, the LAN, and what a port change costs — PR 3
 
-**The dock app is reinstalled at `http://localhost:8000`, once.** D108's manifest is already
-relative and needs no edit. Chrome's `Install page as app` from the new address writes a new
-bundle; the old one at `:5173` is removed by hand.
+**There is no dock app to reinstall, and the port still costs an origin.** Checked on the
+owner's Mac 2026-09-11: `~/Applications/Chrome Apps.localized/` holds one bundle and it is not
+this product. D108 is an investigation nobody acted on, and the owner's own words are *"I never
+had/used a dock app"*. Installing one from `http://localhost:8000` is therefore optional and is
+a FIRST install; D108's manifest is already relative and needs no edit.
+
+**What is not optional is that the ordinary Chrome tab moves**, from `:5173` to `:8000`, and
+that is a different origin whether or not anything is in the dock.
 
 **A port is part of the origin, and D137 did not say so.** Two things are keyed by origin in
 Chrome and both reset once:
@@ -339,12 +344,13 @@ those times, and the asymmetry is deliberate: a spurious build costs 1.2 seconds
 
 Both are the owner's, on their own machine, and neither can be done from a session:
 
-1. **Reinstall the dock app at `http://localhost:8000`** and remove the old one at `:5173`.
-   Expect one camera prompt and one reset of the six device-local keys; §5 says why and D108's
-   amendment records it. Between shifts, not mid-capture.
+1. **Open the app at `http://localhost:8000`** and re-bookmark it. Expect one camera prompt
+   and one reset of the six device-local keys; §5 says why and D108's amendment records it.
+   Between shifts, not mid-capture. Installing it to the dock from that address is a separate,
+   optional press — no dock app has ever been installed (D108, amended).
 2. **Run `make lan-check` with the phone on the network.** The rows now press `:8000` for the
    app; nothing about the UniFi record changes, and the phone's bookmark moves to that port.
 
-Until the first of those, the main checkout serves the app on `:8000` and the dock icon still
-points at `:5173`, which after a `make up` on the new code is a Chrome error page. That is the
-one moment this change is visible as a chore, and it is one press.
+Until the first of those, a bookmark at `:5173` answers nothing once `make up` is running the
+new code — `make dev` is what serves that port now, and only while somebody is running it. That
+is the one moment this change is visible as a chore, and it is one new bookmark.
