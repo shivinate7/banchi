@@ -524,7 +524,7 @@ client call is written and `app/src/types.ts` the only place the wire's shapes a
 
 ### The screens
 
-**The app has eleven screens and eleven routes** — ten the owner's, one the Fulfiller's.
+**The app has twelve screens and twelve routes** — eleven the owner's, one the Fulfiller's.
 `app/src/App.tsx`'s `ROUTES` table is the count. **Recount from the table; never increment a
 sentence**, and see "the census" below for what enforces that.
 
@@ -578,6 +578,10 @@ sentence**, and see "the census" below for what enforces that.
                               the live ones. The address leads with the box's NAME and the
                               rail orders boxes by when this browser last opened them; a
                               section can be named from the Manage box sheet.
+#/graveyard    Graveyard      every departed card, sold or retired or moved (D134) — merged
+                              from two sources, a record still standing in a box nobody has
+                              deleted and a `buried` history line for one whose box was.
+                              Read-only: nothing here can be undone, and nothing here prices
 #/codes        Codes          the code-card track: read a box's QRs into the ledger, the lanes
                               the pile is tiered into, and a lane handed to a buyer
 #/fulfillment  Cards to pull  the second persona's whole product: pull, photo-confirm, mark
@@ -735,12 +739,12 @@ the only carrier of information.
 
 ### The shell
 
-`App.tsx` is a hand-written hash router and the whole chrome. Read it as the shell: eleven
+`App.tsx` is a hand-written hash router and the whole chrome. Read it as the shell: twelve
 hash routes, no routing library, no nested routes, one table. Every screen renders inside it
 except the Fulfiller's:
 
 - **A sidebar that collapses to a rail** on wide windows — 236px or 64px, ⌘. toggles it, the
-  choice is remembered in `banchi.rail`. Nine nav items in four groups; the brand, the
+  choice is remembered in `banchi.rail`. Ten nav items in four groups; the brand, the
   hand-off link, the palette, the theme toggle and the capture server's own state sit in the
   foot.
 - **A top bar and a bottom tab bar on phones**, with the rest of the screens in a left drawer
@@ -1430,6 +1434,7 @@ D130 A feeder that never rests gets a second trigger, and the beat is measured n
 D131 The ratchet gets an escape, a settle is one quiet frame of three, and the beat is the backstop
 D132 Sold is folded away by default, the address leads with the name, the rail is ordered by the hand, and a section can be named
 D133 A branch is judged by what it lands, and a file put back the way main had it is refused unless the branch says so
+D134 A departed record is buried, not kept; the box goes; and the graveyard is where the departed are read
 ```
 
 **THE GAP THIS LIST CARRIED BETWEEN D116 AND D118 IS CLOSED, AND IT CLOSED THE WAY IT SAID IT
