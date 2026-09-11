@@ -116,7 +116,7 @@ make up             # THE server, detached — ONE PROCESS AS OF 2026-09-11 (D13
                     #   `git pull`. The Makefile is not one of them: nothing reads it at run
                     #   time.
                     #   Prints ONE link. `make down` stops it; `make up ARGS=--restart`
-                    #   bounces it, and `make restart` still works and says the new spelling.
+                    #   bounces it.
                     #   Do NOT run it alongside `make server` — the second loses, loudly
                     #   (EADDRINUSE), which is deliberate: a server that quietly moved would
                     #   serve a DIFFERENT store (D43). `make dev` alongside is FINE and is the
@@ -365,7 +365,7 @@ make janitor-install # COPY THE SWEEP OUT OF THE TREE, SO EVERY REPO REACHES IT 
                     #   other repos run is otherwise not the copy this tree tests. One press
                     #   per machine, and again whenever either file changes here.
 make githooks-selftest # D42's guard over main, proved in a throwaway repo. Never in the git hook.
-make lan-check      # IS THE OWNER'S LAN URL STILL GOOD? `http://pkmnscan.lan:5173`, from
+make lan-check      # IS THE OWNER'S LAN URL STILL GOOD? `http://pkmnscan.lan:8000`, from
                     #   the phone. Two of the six things holding it up are on their UniFi and
                     #   this repo does not touch them (D43); the other four are here.
                     #   IT PRESSES A WRITE, because that is the only row that can tell:

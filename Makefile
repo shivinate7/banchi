@@ -4,7 +4,7 @@
 # the project would be built on top of — `make check` green means every check ran.
 
 .DEFAULT_GOAL := help
-.PHONY: help status map explain harness check ignore-check docs-audit vale audit-self-test verdict-selftest githooks-selftest merge merge-selftest revert-guard revert-selftest claim-ids claim-selftest port-agreement set-hint-agreement screen-freshness sigil-check suite-lock-selftest icloud-sweep audit-history dev server screenshot design-check design-check-quiet lint typecheck venv launch-config worktree-setup hooks up down restart launch-agent demo demo-photos demo-seed demo-record demo-static demo-preview demo-freshness
+.PHONY: help status map explain harness check ignore-check docs-audit vale audit-self-test verdict-selftest githooks-selftest merge merge-selftest revert-guard revert-selftest claim-ids claim-selftest port-agreement set-hint-agreement screen-freshness sigil-check suite-lock-selftest icloud-sweep audit-history dev server screenshot design-check design-check-quiet lint typecheck venv launch-config worktree-setup hooks up down launch-agent demo demo-photos demo-seed demo-record demo-static demo-preview demo-freshness
 
 # Prefer the venv if it exists, so `make harness` works without anyone remembering to
 # activate anything. Falls back to system python3, which still runs T2-T5 — T1 needs the
@@ -104,7 +104,6 @@ help:
 	@echo "  make merge        merge a PR and move main onto it (D42). ARGS=<n> previews;"
 	@echo "                    ARGS=\"<n> --confirm\" performs it. On the owner's word only."
 	@echo "  make down         stop it.  make up ARGS=--restart  stop and start."
-	@echo "                    (make restart still works and says the new spelling.)"
 	@echo "  make launch-agent start at login, so the link is always live. Main tree only."
 	@echo "                    ARGS=--remove to undo it."
 	@echo "  make dev          Vite with hot reload on :5173, against the server make up is"
@@ -667,7 +666,7 @@ janitor-install:
 	@echo '  stale; `make status` compares them and says so.'
 
 # IS THE LAN URL STILL GOOD? The owner reaches this product from a phone at
-# `http://pkmnscan.lan:5173`, and nothing in this repo knows that name — the DHCP reservation
+# `http://pkmnscan.lan:8000`, and nothing in this repo knows that name — the DHCP reservation
 # and the DNS record are theirs, on their UniFi (D43). What this checks is the four things on
 # THIS side that have to agree with it, ending with a real write, because the failure worth
 # catching is silent: reads are ungated and writes are origin-checked, so a missing
@@ -706,24 +705,19 @@ lan-check:
 # None of these four goes near `make check` or the git hook. D18: nothing that writes may run
 # on the path that decides whether a commit proceeds, and `launch-agent` writes to ~/Library,
 # which is the strongest form of that rule this repo has had to apply.
-# `$(ARGS)` ON ALL THREE, AND `down`'s REFUSAL IS WHY. In the main checkout, where a launch
-# agent keeps the server alive over the real store, `down` and `restart` refuse and print
+# `$(ARGS)` ON BOTH, AND `down`'s REFUSAL IS WHY. In the main checkout, where a launch agent
+# keeps the server alive over the real store, `down` and `up ARGS=--restart` refuse and print
 # `make down ARGS=--confirm     do it anyway`. That line did not work: neither target forwarded
 # ARGS, so the escape hatch the guard itself names was unrunnable, and the only ways past a
 # refusal that was designed to be answerable were to call `scripts/serve.py` directly or to
 # reach around the guard entirely. Found 2026-09-06 by following the printed instruction.
 #
-# `up` takes them too, for `--no-watch`, which `restart` already passes through.
+# `up` takes them too, for `--no-watch` and for `--restart`, which is the bounce now.
 up:
 	@$(PYTHON) scripts/serve.py up $(ARGS)
 
 down:
 	@$(PYTHON) scripts/serve.py down $(ARGS)
-
-# `make up ARGS=--restart` is the spelling. Kept for one release because it is in the owner's
-# fingers and in two of this repo's own refusal messages; it says the new name and then runs it.
-restart:
-	@$(PYTHON) scripts/serve.py restart $(ARGS)
 
 # Generated, never tracked, and written OUTSIDE the repo into ~/Library/LaunchAgents. A
 # tracked plist would carry an absolute path baked on one Mac, which is D47's failure verbatim

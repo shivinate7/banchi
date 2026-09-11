@@ -5078,13 +5078,28 @@ test('D132 — the row the walk stands on survives its own sale while sold is hi
     card({ index, at, state: 'identified', name: 'Bashful Bloom', sku: '8937370', section: 1, sectionStart: 1, sectionEnd: 6 })
   const cards: Cards = { '2/1': live(1, 1), '2/3': live(3, 2), '2/5': live(5, 3) }
   const store: Store = { cards, search: (query) => searchAnswer(query, cards) }
-  await open(page, BOXES, store, () => PRICING, SALE, { hideSold: true })
+  /* THE STORE MOVES INSIDE THE SALE, WHICH IS THE ONLY PLACE IT CAN MOVE SAFELY, and this case
+     is `design-check`'s second recurring red until it does. Written as two assignments on the
+     line AFTER the press, it is a race the browser wins under load: `click()` resolves when the
+     click is DISPATCHED, and the app's own post-sale re-read can reach this fixture before Node
+     runs the next statement — which serialises the PRE-sale store and draws three live rows,
+     `#1 #2 #3`, held for the full 15s because the app re-reads once. Reproduced on this Mac
+     every time with a 500ms wait wedged into that gap, with CI's exact message.
+     MOVING THEM ABOVE THE PRESS IS NOT THE FIX EITHER, and it fails the other way: selecting
+     the row has its own fetch in flight, which then answers from the already-sold store and
+     draws `Undo`, so `Mark sold` never appears and the press times out. Measured, both ways.
+     The sale handler is the one moment ordered against both — it runs when the POST arrives,
+     which is necessarily after the row's fetch and before the re-read. */
+  const sale: SaleStub = (box, index, undo) => {
+    cards['2/3'] = card({ index: 3, state: 'sold', name: 'Bashful Bloom', sku: '8937370', section: 1, sectionStart: 1, sectionEnd: 6 })
+    cards['2/5'] = live(5, 2)
+    return SALE(box, index, undo)
+  }
+  await open(page, BOXES, store, () => PRICING, sale, { hideSold: true })
   await expandAll(page)
   await expect(page.locator('.browse-row .browse-row-position')).toHaveText(['#1', '#2', '#3'])
   await page.locator('.browse-row').nth(1).click()
   await page.locator('.card-locations-row.is-current').getByRole('button', { name: 'Mark sold' }).click()
-  cards['2/3'] = card({ index: 3, state: 'sold', name: 'Bashful Bloom', sku: '8937370', section: 1, sectionStart: 1, sectionEnd: 6 })
-  cards['2/5'] = live(5, 2)
 
   /* The receipt lands where the sale was pressed (D119) — which needs the row to still exist,
      and to still be where it was (D118): the re-read draws it departed, in its place. */
