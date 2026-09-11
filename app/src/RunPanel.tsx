@@ -20,6 +20,7 @@ import { LogWell } from './RunsLog'
 import { COMMANDS, StageBar, StagePill, runningFor, stageOf, whenLabel, type Command } from './RunsStage'
 import type { CartBox } from './RunsComposer'
 import { boxOf, runBoxLabel } from './runScope'
+import { money, roundsToNothing } from './money'
 import './RunPanel.css'
 
 export { runningFor }
@@ -183,6 +184,81 @@ function StepCard({
       {open ? <div className="runs-step-body">{children}</div> : null}
     </section>
   )
+}
+
+/** A settled figure, said the same way in the head and in the body.
+ *
+ *  `under a cent` IS A SENTENCE AND NOT A FIGURE, so it does not take the money face.
+ *  `.bn-money` is mono, 600 and tabular — the treatment a column of dollar amounts needs, and
+ *  the wrong treatment for three English words. */
+function Spent({ usd }: { readonly usd: number }) {
+  return roundsToNothing(usd) ? <>under a cent</> : <span className="bn-money">{money(usd)}</span>
+}
+
+/** What the Identify step's heading says about money.
+ *
+ *  IT SAID `Costs money` IN EVERY STATE, AND THAT IS A WARNING ABOUT A DECISION THIS SCREEN
+ *  DOES NOT OFFER. A run directory exists only because `POST /pipeline/identify` already
+ *  spawned a child — D33: "The preflight is free, is a separate route, and creates no run
+ *  directory at all" — so by the time this card is drawn the money is spent, in flight, or (the
+ *  one case where the child died before submitting) still unspent. A warning that never goes
+ *  out is a warning nobody reads, and it sat beside a six-figure token count carrying no figure
+ *  at all: the owner read `290,470 tokens in` under a lit money warning, and the run had cost
+ *  fifteen cents. The console INSIDE THE SAME CARD said `estimated cost $0.14`.
+ *
+ *  THE FIGURE IS THE SERVER'S. `usage.cost_usd` comes off the wire and nothing here multiplies
+ *  a token count by anything — `RunPreflightTotal`'s rule for the number the confirm is gated
+ *  on, kept for the number the receipt reports. `identify/cost.py` is the only rate sheet.
+ *
+ *  MONEY IS NOT A COLOR — docs/DESIGN.md: "`--bn-money` = ink in both themes: money is not a
+ *  color, it is a weight" — so a settled figure is a DEFAULT pill, never `ok`. `live` is
+ *  vermilion and is reserved for a batch actually in flight, the one state on this card where
+ *  the money is still moving.
+ *
+ *  `.run-step-money` IS ON EVERY BRANCH. It carries no style — it is what
+ *  `app/tests/run-panel.spec.ts` finds the money pill by, and a class present in only three of
+ *  four states would make the fourth untestable at exactly the moment it mattered. */
+function identifyCost(detail: RunDetail, state: StepState): ReactNode {
+  const usd = detail.usage.cost_usd
+  if (usd != null) {
+    return (
+      <Pill icon="dollar" className="run-step-money">
+        {usd === 0 ? (
+          'Nothing spent'
+        ) : (
+          <>
+            Cost <Spent usd={usd} />
+          </>
+        )}
+      </Pill>
+    )
+  }
+  if (state === 'live') {
+    return (
+      <Pill tone="live" icon="dollar" className="run-step-money">
+        Spending now
+      </Pill>
+    )
+  }
+  if (state === 'done' || detail.batch_ids.length > 0) {
+    return (
+      <Pill icon="dollar" className="run-step-money">
+        Already paid
+      </Pill>
+    )
+  }
+  return (
+    <Pill tone="warn" icon="dollar" className="run-step-money">
+      Costs money
+    </Pill>
+  )
+}
+
+/** Whether the figure beside the tokens is the run's own record or today's rates over it. */
+function costSaid(detail: RunDetail): string {
+  return detail.usage.cost_backfilled === true
+    ? 'This run recorded the tokens it used but not what they cost, so this is what they cost at the rates in force now.'
+    : 'What this run recorded it cost, at the rates in force when it ran.'
 }
 
 type RunPanelProps = {
@@ -786,11 +862,7 @@ export function RunPanel({ cart, openRun, onOpenRun, reloadTick, onIdentify, pag
                 title={TITLES.identify}
                 state={stepState('identify')}
                 summary={summaryOf('identify')}
-                cost={
-                  <Pill tone="warn" icon="dollar" className="run-step-money">
-                    Costs money
-                  </Pill>
-                }
+                cost={identifyCost(detail, stepState('identify'))}
                 open={openStep === 'identify'}
                 onToggle={() => toggleStep('identify')}
               >
@@ -799,6 +871,22 @@ export function RunPanel({ cart, openRun, onOpenRun, reloadTick, onIdentify, pag
                     <span className="bn-muted">
                       {detail.usage.input_tokens.toLocaleString()} tokens in · {(detail.usage.output_tokens ?? 0).toLocaleString()}{' '}
                       out
+                    </span>
+                  ) : null}
+                  {/* THE FIGURE SURVIVES THE PHONE HERE AND NOWHERE ELSE. `.runs-step-cost` is
+                      `display: none` below a 640px container (RunPanel.css) — the head drops to
+                      three grid columns in the same rule — and this row always draws. It is also
+                      where the figure belongs at any width: beside the tokens it was computed
+                      from, with the one sentence the pill has no room for. */}
+                  {detail.usage.cost_usd != null ? (
+                    <span className="bn-muted" title={costSaid(detail)}>
+                      {detail.usage.cost_usd === 0 ? (
+                        'Nothing spent — every card was already cached'
+                      ) : (
+                        <>
+                          Cost <Spent usd={detail.usage.cost_usd} />
+                        </>
+                      )}
                     </span>
                   ) : null}
                   {detail.batch_ids.length > 0 ? (
