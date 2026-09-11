@@ -3699,6 +3699,34 @@ is why a $40 bulk order carries no subsidy and the seller absorbs the postage.
 
 **A file naming BOTH ids is annotated and is not evidence either way.** `docs/map.py` named both and was wrong in 24 places and right in 9; `app/src/types.ts` named both and is right in both. The finding says so rather than ranking on it, because a hint that reads as a verdict is worse than none.
 
+### Amended 2026-09-11: the half that is this branch's own line blocks
+
+**The sentence above — *"nothing mechanical separates those two groups"* — is true of a site the branch INHERITED and false of one the branch WROTE.** The row is two rows now. `renumbered ids` keeps the first half, its wording and its ADVISORY severity; `vacated ids` is the second half and it fails the commit.
+
+**What made the split necessary.** A branch holding `## D132` merged main twice. Main had taken 132, 133 and 134, so the branch moved to D135; four commits later main had taken 135 and 136 too, so it moved again. **After the first of those renumbers three prose citations in `CLAUDE.md` still said D132** — the `make up` comment block, the `make dev` comment block, and a pointer to that branch's own spec — and all three silently named main's unrelated inventory decision. A stale id RESOLVES, so nothing failed: `make check` was green, the commit hook passed, and the branch was pushed. They were found afterwards by a separate audit, not by the tree. The advisory row named them and nothing had to read it, which is D16's own account of what an advisory row costs.
+
+**What makes a site provable is three facts git already holds.** A line citing `old` is this branch's mistake when it is present in the tree NOW, absent at the MERGE BASE, and already present at the commit just BEFORE the one that vacated `old`. The last clause is the argument: **two headings may not share an id** — `decision ids` blocks that, and D16 records the incident — so at the moment that line was written `old` named exactly ONE entry in this branch's tree, the entry that has since moved. The citation therefore means the moved entry, and the move left it behind. Nothing is left to judge, which is this entry's own test for mechanical, and D16's.
+
+**The third clause is there rather than "every line this branch added", and that is not caution for its own sake.** A branch that vacates D132 and LATER writes prose about main's D132 has added a line citing the old id that is perfectly correct. Blocking it would be the false positive D16 says is worse than a printed line, on a row with no escape hatch. It goes to the advisory row instead, where a human reads it — and the self-test carries that case as an arm, because a rule with no counter-example in its tests is a rule nobody can see the edge of.
+
+**Per LINE, never per file.** After a merge both ids legitimately live in one file — `docs/map.py` carried 24 wrong and 9 right — so a file naming both is not evidence about any line in it. The advisory row already annotated this and never decided on it; the blocking row could not have been built on the file as the unit at all.
+
+**And deduped by RESOLVED path, which is new since D135.** `AGENTS.md` is a tracked symlink to `CLAUDE.md`, and `branch_files` lists it by name the moment the link itself is added or changed — `read()` then follows it and reports every one of `CLAUDE.md`'s citations a second time, under a path a person cannot edit. The real file wins where both are listed. `.agents/skills` was the directory half of this and `branch_files` already guarded it; this is the file half, and it arrived with the same decision.
+
+**Mutation-tested against a real repository, five arms.** `moves_across` and the new `vacating_index` are pure and floored on their own data; what is left is the part that reads blobs, follows a symlink and decides per line, and all three of those were wrong in draft. The self-test builds a throwaway repo with a base, a branch that writes its entry and cites it, and a merge that moves the id, then points the module's `ROOT` at it. Dropping the merge-base clause, the before-the-move clause, the symlink dedupe, or the MECHANICAL severity each turns an arm red.
+
+**This does not widen the advisory row and does not narrow it either.** Every site it named before, it still names, minus the ones now blocked and the duplicates a symlink was producing. What changed is that the provable ones stopped being a question.
+
+### Not decided here: whether a branch should be taking a number at all
+
+**Raised by the owner 2026-09-11, the same day, and RECORDED RATHER THAN BUILT.** Everything above repairs a renumber. The owner's question is why a renumber happens: *"rework the decision system so that branches claim decision numbers only at merge time"*. A branch today writes a heading at the next free number against a base that does not know what main will take, cites it through its prose, its map rows and its code comments, and then discovers the collision at merge — thirteen times in this repo's history, and the reason this whole entry exists.
+
+**The shape it would take, so the next session does not re-derive it**: a branch names its entry by a SLUG rather than a number, and `make merge` allocates the lowest free id at the moment it merges — reading main as it stands then, which is precisely when the answer is knowable. The substitution is textual, exhaustive and unique, which is what hand-renumbering is not. What it would retire is large: both rows above, the duplicate-heading collision class D16 records, and the *renumber your own, never another's* convention.
+
+**What it would cost, measured against nothing yet.** Every reader of `D<digits>` would have to accept the slug form — the seven patterns in `scripts/docs-audit.py`, `scripts/prose-guard.py`, `scripts/decision-context.py`, `governed_by` in `docs/map.py` and the index in `CLAUDE.md`. And the assignment lands after CI ran on the slug form, so either main carries text no run has seen, or `make merge` pushes a claim commit to the PR branch and waits for green — which is the safer half and the slower one.
+
+**It is not built, it is not a debt, and it is not this branch's to decide.** It reopens this entry and touches D16; the working agreement says an entry is settled until the owner says otherwise, and this paragraph is here so the argument is in the repo rather than in a conversation.
+
 ### The app was never scanned, which is the second half
 
 **`decision ids in code` walked `python_files()` and reported "citations in `.py` all resolve" — accurately, and over half the citations.** `app/` holds hundreds more in `.ts`, `.tsx` and `.css` comments, and a dangling id in one of them resolved to nothing and was reported by nothing. The scan now covers those three suffixes at the same advisory severity and for the same reason the Python row is advisory: `D2` could plausibly be a variable one day.
