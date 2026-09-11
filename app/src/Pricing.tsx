@@ -65,7 +65,7 @@ import {
 } from './pricingSource'
 import { forSale, soldSince } from './cardState'
 import { useCardCropWhenSeen } from './cardCrop'
-import { Button, cropStyle, EmptyState, Icon, Kbd, Notice, Segmented } from './kit'
+import { Button, Chip, cropStyle, EmptyState, Icon, Kbd, Notice, Segmented } from './kit'
 import { toast } from './kit/toast'
 import './Pricing.css'
 
@@ -856,6 +856,52 @@ export function Pricing() {
     return Number.isFinite(asked) && asked > 0 ? asked : null
   }, [sendCap])
 
+  /* A NUMBER ON EACH CARD'S ROW, THIS PRESS ONLY (D7, amended 2026-09-11 on the operator's
+     ruling). The owner's report: *"I can no longer select quantities to sell at all"*. The
+     ceiling above holds every card to N live; it cannot say "two of THIS card". This is that
+     answer — SKU -> the copies that go in this file, typed into the Qty column, as a SEND
+     QUANTITY and not a ceiling: `2` sends two whatever TCGplayer already holds, bounded by the
+     copies on hand that are not already listed. `0` sends none of the card without holding it.
+
+     HELD AS TYPED, LIKE THE CAP, so blank is blank and not a zero. Per press and remembered
+     nowhere: it is not a fact about the card (D49's hold is, and lives in the corpus), it is a
+     fact about this send, and it is SPENT by the write — the map clears on a successful press,
+     because a figure that survived it would send again on the next one. */
+  const [sendQty, setSendQty] = useState<Record<string, string>>({})
+  const askedFor = useCallback(
+    (sku: string): number | undefined => {
+      const text = sendQty[sku]
+      if (text === undefined || text === '') return undefined
+      const asked = Number.parseInt(text, 10)
+      return Number.isFinite(asked) ? asked : undefined
+    },
+    [sendQty],
+  )
+  const setAsked = useCallback((sku: string, text: string) => {
+    setSendQty((held) => {
+      const now = { ...held }
+      if (text === '') delete now[sku]
+      else now[sku] = text
+      return now
+    })
+  }, [])
+  const clearAsked = useCallback(() => setSendQty({}), [])
+  /* WHAT THE PRESS SENDS: every row with a figure typed on it, as SKU -> copies. Read off the
+     rows the screen is drawing and not off the map alone, so a figure typed for a card a
+     later load no longer shows is not sent for a card the operator cannot see. Through a ref
+     because `rows` is derived further down and the per-run send is an effect declared above
+     it; the effect runs after render, when the ref is current. Empty is the ordinary press. */
+  const latestRows = useRef<readonly PricingSku[]>([])
+  const quantitiesAsked = useCallback((): Record<string, number> => {
+    const out: Record<string, number> = {}
+    for (const row of latestRows.current) {
+      if (row.at_cap) continue
+      const asked = askedFor(row.sku)
+      if (asked !== undefined) out[row.sku] = asked
+    }
+    return out
+  }, [askedFor])
+
   const toggleRun = useCallback((name: string) => {
     setPicked((held) => {
       const now = new Set(held)
@@ -1161,17 +1207,21 @@ export function Pricing() {
     setShip('sending')
     void (async () => {
       try {
-        const result = await runStep(run, 'emit', { splitThreshold: splitFiles, cap: capAsked() })
+        const asked = quantitiesAsked()
+        const result = await runStep(run, 'emit', { splitThreshold: splitFiles, cap: capAsked(), quantities: asked })
         setReceipt({ ok: result.ok, console: result.console, files: result.files })
         setDetail((current) => (current === null ? current : { ...current, ...result.summary, files: result.files }))
         setShipTrouble(null)
         setArmed(false)
+        /* SPENT BY THE WRITE, as on the merged bar: the figures were this press's. */
+        if (result.ok) clearAsked()
         const imports = (result.files ?? []).filter((file) => file.is_import)
+        const byHand = Object.keys(asked).length
         if (result.ok) {
           toast({
             kind: 'ok',
             title: `Import files written · ${imports.length} file${imports.length === 1 ? '' : 's'}`,
-            body: 'Import them to Staged in TCGplayer, then reconcile on Runs.',
+            body: `${byHand === 0 ? '' : `${byHand} card${byHand === 1 ? '' : 's'} at the quantity you typed. `}Import them to Staged in TCGplayer, then reconcile on Runs.`,
             action: { label: 'Files', onPress: () => setFilesOpen(true) },
           })
         } else {
@@ -1188,7 +1238,7 @@ export function Pricing() {
         setShip('idle')
       }
     })()
-  }, [ship, dirty, doc, book, run, saving, splitFiles, capAsked])
+  }, [ship, dirty, doc, book, run, saving, splitFiles, capAsked, quantitiesAsked, clearAsked])
 
   /** Write one answer, pushing the previous value — including its ABSENCE — onto the undo stack. */
   const write = useCallback(
@@ -1410,6 +1460,7 @@ export function Pricing() {
     let closed = 0
     let outRows = 0
     let outCopies = 0
+    let byHand = 0
     for (const row of rows) {
       if (row.at_cap) {
         closed += 1
@@ -1423,8 +1474,15 @@ export function Pricing() {
       }
       if (typeof standing === 'string') typed += 1
       else if (row.bucket === 'sub_threshold') cheap += 1
+      /* THE FIGURE THE FILE WOULD CARRY IS THE ONE TYPED ON THE ROW, where one was — bounded
+         by what can go, which is the bound the server applies. A row asked at 0 goes out on
+         no row at all, so it counts among the rows by hand and not among the rows written. */
+      const asked = askedFor(row.sku)
+      if (asked !== undefined) byHand += 1
+      const going = asked === undefined ? row.add_to_quantity : Math.min(asked, row.add_to_quantity)
+      if (going === 0) continue
       outRows += 1
-      outCopies += row.add_to_quantity
+      outCopies += going
     }
     return {
       total,
@@ -1436,8 +1494,23 @@ export function Pricing() {
       closed,
       outRows,
       outCopies,
+      byHand,
     }
-  }, [rows, answerFor])
+  }, [rows, answerFor, askedFor])
+
+  useEffect(() => {
+    latestRows.current = rows
+  }, [rows])
+
+  /* THE WAY BACK FOR THE WHOLE SEND, beside the other send options: one press puts every card
+     back to all its copies. A per-row figure is cleared on its own row with Escape or by
+     emptying the field; this is for the operator who typed twelve and changed their mind. */
+  const byHandChip =
+    progress.byHand === 0 ? null : (
+      <Chip icon="x" className="pricing-ship-byhand" onClick={clearAsked} title="Clear every typed quantity — put every card back to all the copies that can go">
+        {progress.byHand} by hand
+      </Chip>
+    )
 
   const move = useCallback(
     (sku: string, by: number) => {
@@ -3006,10 +3079,48 @@ export function Pricing() {
                     </div>
 
                     <div className="pricing-facts">
-                      {!source.copies ? null : (
+                      {/* THE QTY CELL IS THE OPERATOR'S TO TYPE IN (D7, amended 2026-09-11). Blank
+                          sends every copy that can go — the placeholder is that figure, so the
+                          empty field reads as the answer it gives rather than as a gap. A row
+                          with nothing to add stays a plain figure: there is nothing to choose. */}
+                      {!source.copies ? null : sku.at_cap ? (
                         <span className="pricing-qty" title={`${sku.add_to_quantity} of the ${sku.copies} copies on hand go in the file`}>
                           <span className="bn-sr">Quantity </span>
                           {sku.add_to_quantity} <span className="pricing-qty-of">of {sku.copies}</span>
+                        </span>
+                      ) : (
+                        <span className="pricing-qty" data-asked={askedFor(sku.sku) === undefined ? undefined : 'true'}>
+                          <input
+                            className="bn-input pricing-qty-input"
+                            type="text"
+                            inputMode="numeric"
+                            placeholder={String(sku.add_to_quantity)}
+                            aria-label={`How many of the ${sku.copies} copies of ${sku.name} go in this file`}
+                            title={`Blank sends ${sku.add_to_quantity}, every copy that can go. Type fewer to send fewer this press, or 0 for none — it is not a hold, and it clears once the file is written.`}
+                            value={sendQty[sku.sku] ?? ''}
+                            onChange={(event) => {
+                              const text = event.currentTarget.value
+                              if (/^\d{0,3}$/.test(text)) setAsked(sku.sku, text)
+                            }}
+                            onBlur={(event) => {
+                              /* CLAMPED TO WHAT CAN GO, ON THE WAY OUT OF THE FIELD. The server
+                                 would name a figure past it ("asked 5, only 3 can go"); a screen
+                                 that let the figure stand would be drawing a send that cannot
+                                 happen. Leading zeros fold away for the same reason. */
+                              const asked = Number.parseInt(event.currentTarget.value, 10)
+                              if (!Number.isFinite(asked)) return
+                              const held = Math.min(asked, sku.add_to_quantity)
+                              if (String(held) !== event.currentTarget.value) setAsked(sku.sku, String(held))
+                            }}
+                            onKeyDown={(event) => {
+                              if (event.key === 'Enter') event.currentTarget.blur()
+                              if (event.key === 'Escape') {
+                                setAsked(sku.sku, '')
+                                event.currentTarget.blur()
+                              }
+                            }}
+                          />
+                          <span className="pricing-qty-of">of {sku.copies}</span>
                         </span>
                       )}
 
@@ -3328,6 +3439,7 @@ export function Pricing() {
               <span className="pricing-only-sm">split in two</span>
             </label>
             {capField}
+            {byHandChip}
             {receipt === null ? null : (
               <Button variant="ghost" icon={receipt.ok ? 'download' : 'alert'} onClick={() => setFilesOpen(true)}>
                 {receipt.ok ? `${receipt.files.filter((f) => f.is_import).length} files` : 'Refused'}
@@ -3345,19 +3457,25 @@ export function Pricing() {
                 setShipTrouble(null)
                 void (async () => {
                   try {
+                    const asked = quantitiesAsked()
                     const result = await emitMerged(loaded, {
                       listedOnly,
                       splitThreshold: splitFiles && !listedOnly,
                       cap: capAsked(),
+                      quantities: asked,
                     })
                     setReceipt({ ok: result.ok, console: result.console, files: result.files })
+                    /* SPENT BY THE WRITE. The figures were for this press; a re-press with them
+                       still standing would send the same copies again on top of what went. */
+                    if (result.ok) clearAsked()
                     const imports = (result.files ?? []).filter((file) => file.is_import)
+                    const byHand = Object.keys(asked).length
                     toast(
                       result.ok
                         ? {
                             kind: 'ok',
                             title: `${imports.length} import file${imports.length === 1 ? '' : 's'} written`,
-                            body: 'Import to Staged in TCGplayer, then reconcile on Runs.',
+                            body: `${byHand === 0 ? '' : `${byHand} card${byHand === 1 ? '' : 's'} at the quantity you typed. `}Import to Staged in TCGplayer, then reconcile on Runs.`,
                             action: { label: 'Files', onPress: () => setFilesOpen(true) },
                           }
                         : {
@@ -3461,6 +3579,7 @@ export function Pricing() {
               <span className="pricing-only-sm">split in two</span>
             </label>
             {capField}
+            {byHandChip}
             {receipt === null ? null : (
               <Button variant="ghost" icon={receipt.ok ? 'download' : 'alert'} onClick={() => setFilesOpen(true)}>
                 {receipt.ok ? `${receipt.files.filter((f) => f.is_import).length} files` : 'Refused'}
@@ -4046,6 +4165,7 @@ function ReadyPanel({
     closed: number
     outRows: number
     outCopies: number
+    byHand: number
   }
   cheapMoney: string
   queued: number
@@ -4174,6 +4294,12 @@ function ReadyPanel({
                 {progress.outRows} row{progress.outRows === 1 ? '' : 's'}
               </strong>{' '}
               and {progress.outCopies} cop{progress.outCopies === 1 ? 'y' : 'ies'} would go in the import file.
+              {progress.byHand === 0 ? null : (
+                <span className="pricing-verdict-byhand">
+                  {' '}
+                  {progress.byHand} card{progress.byHand === 1 ? '' : 's'} at a quantity you typed.
+                </span>
+              )}
             </>
           )}
         </span>

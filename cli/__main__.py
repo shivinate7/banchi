@@ -199,6 +199,19 @@ def build_parser() -> argparse.ArgumentParser:
         "out — a SKU at or over N adds nothing and the report says by how much. Omit for no "
         "cap, which is the default since the standing bound was retired",
     )
+    # A QUANTITY FOR ONE CARD, THIS PRESS ONLY (D7, amended 2026-09-11, on the operator's
+    # ruling). A send quantity and not a ceiling: `--quantity 8608859=2` puts two copies of
+    # that SKU in the file whatever TCGplayer already holds, bounded by the copies on hand
+    # that are not already listed. Repeatable, one SKU each; `0` sends none of that card
+    # without holding it. The Qty field on every `#/pricing` row is the same answer.
+    emit.add_argument(
+        "--quantity",
+        action="append",
+        metavar="SKU=N",
+        help="put exactly N copies of this SKU in the file this press, bounded by the copies "
+        "on hand that are not already listed; 0 sends none of it. Repeat per card. A card "
+        "not named sends every copy that can go",
+    )
     _pricing_arguments(emit)
 
     # ------------------------------------------------------------------------ reconcile

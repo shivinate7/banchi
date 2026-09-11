@@ -392,7 +392,15 @@ COMPONENTS = [
                                     "one voice since 2026-09-08 — the standing policy key is "
                                     "deleted and a store still holding it is refused by name; "
                                     "the flag applies to every leg of a merged send "
-                                    "because that send is ONE file. The cut-off that decides "
+                                    "because that send is ONE file. `--quantity SKU=N` (D7 "
+                                    "amended 2026-09-11, on the owner's report) is the per-card "
+                                    "SEND quantity — this press puts exactly N copies of that "
+                                    "card in the file, bounded by the copies on hand not already "
+                                    "listed and never by what TCGplayer holds; `0` sends none "
+                                    "without a hold. Parsed beside the cap before the store is "
+                                    "read, and `_say_quantities` names every card given a "
+                                    "figure, the shortfall (`asked 9, only 3 can go`) and any "
+                                    "SKU the send does not hold. The cut-off that decides "
                                     "the buckets is the corpus's stored `policy.threshold`. Prices "
                                     "from inventory/prices.json (D86) rather than from the run manifest (D49); "
                                     "refuses a run still carrying a legacy "
@@ -717,7 +725,10 @@ COMPONENTS = [
                                  "emitted each believe the whole cap is theirs. Measured at the "
                                  "old standing cap of 4: three separate emits over three real "
                                  "runs wrote two SKUs past it; one merged emit wrote "
-                                 "none. Writes nothing — cli/cmd_emit.py owns the file and the "
+                                 "none. A per-card quantity the send named (D7 amended "
+                                 "2026-09-11) is spent the same way, once over the union — "
+                                 "`_merged_asked` takes the tightest any leg carries, as "
+                                 "`_merged_cap` does. Writes nothing — cli/cmd_emit.py owns the file and the "
                                  "store. `_agree_policy` refuses a send whose runs override "
                                  "`threshold` differently, for the reason it already refused "
                                  "two `sub_threshold`s: one file needs one answer (D99).",
@@ -3945,7 +3956,15 @@ COMPONENTS = [
                                         "keeps every copy of a SKU out of this run's import file "
                                         "with a reason, a note and an optional watch price. "
                                         "NOTHING HERE SPENDS: the box, the cart and the money "
-                                        "gate stay on #/runs.",
+                                        "gate stay on #/runs. THE QTY CELL IS A FIELD (D7 amended "
+                                        "2026-09-11, on the owner's report): a per-card SEND "
+                                        "quantity for this press — blank sends every copy that "
+                                        "can go and the placeholder is that figure, a number "
+                                        "sends that many, 0 sends none without a hold — held in "
+                                        "the screen as typed, clamped on blur to what can go, "
+                                        "counted on the deck, cleared per row by Escape or for "
+                                        "the send by the ship bar's chip, and SPENT by a "
+                                        "successful write.",
                                 # D9 is the threshold, the floor and the rule that nothing is
                                 # defaulted on the operator's behalf; D7 is why this is SKU-scoped
                                 # and never card-scoped; D28 is the list-must-not-move rule its

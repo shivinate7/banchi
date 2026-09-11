@@ -402,6 +402,15 @@ make merge          # merge a PR and move main onto it — BOTH HALVES, on your 
                                    #                      — a SKU at or over N adds nothing
                                    #                      and the report says by how much.
                                    #                      Omit for no cap, the default
+                                   #   --quantity SKU=N   put exactly N copies of THIS card in
+                                   #                      the file this press (D7, amended
+                                   #                      2026-09-11): a SEND QUANTITY, not a
+                                   #                      ceiling — bounded by the copies on hand
+                                   #                      that are not already listed, never by
+                                   #                      what TCGplayer holds. Repeat per card;
+                                   #                      0 sends none of it without a hold. The
+                                   #                      Qty field on every `#/pricing` row is
+                                   #                      the same answer, spent by the write.
                                    #   --listed-only      above-threshold rows only (a filter,
                                    #                      not a split — the rest wait)
                                    #   --split-threshold  the old pair back: import-listed.csv
@@ -926,7 +935,12 @@ A screen is not finished because it compiles.
   to each was *"neither still applies"*.
 
   **A cap is now something a SEND asks for**: `emit --cap N`, and the field beside the other
-  emit options on `#/pricing`'s ship bar. **`policy.live_cap` IS DELETED as of 2026-09-08** —
+  emit options on `#/pricing`'s ship bar. **AND A QUANTITY IS SOMETHING A SEND ASKS FOR PER
+  CARD** (D7, amended 2026-09-11, on the owner's report that they could *"no longer select
+  quantities to sell at all"*): `emit --quantity SKU=N`, and the Qty field on every `#/pricing`
+  row. That one is a SEND QUANTITY and not a ceiling — 2 sends two whatever TCGplayer holds,
+  bounded by the copies on hand that are not already listed; 0 sends none without a hold — and
+  it is spent by the write, so nothing standing changes. The two compose to the tighter. **`policy.live_cap` IS DELETED as of 2026-09-08** —
   `--cap` is the only place a cap is named, and a store still holding the key is refused by
   name rather than silently uncapped. `policy.per_run` survives for its other four keys.
   It was a promise D7 made and nothing built until 2026-09-06: the parameter was threaded

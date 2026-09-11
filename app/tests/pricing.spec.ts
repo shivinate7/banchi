@@ -2726,10 +2726,14 @@ test('the cap is what can go, and the row says the runs disagree with it', async
 
      THE QTY CELL DRAWS WHAT CAN ACTUALLY GO. Drawing the sum would put a 4 in the column of a
      card three of which may be listed — D59's own named-rather-than-counted rule, which exists
-     because a count under a false sentence is worse than no count. */
-  await expect(page.locator('.pricing-row').nth(0).locator('.pricing-qty')).toHaveText(
-    'Quantity 3 of 3',
-  )
+     because a count under a false sentence is worse than no count.
+
+     THE CELL IS A FIELD SINCE 2026-09-11 (D7 amended), so the figure that goes is its
+     PLACEHOLDER — what a blank field sends — and "of 3" stands beside it. The number asserted
+     is the same one: what can go, never what the runs claim. */
+  const qty = page.locator('.pricing-row').nth(0).locator('.pricing-qty')
+  await expect(qty.locator('.pricing-qty-input')).toHaveAttribute('placeholder', '3')
+  await expect(qty).toContainText('of 3')
   await expect(page.locator('.pricing-row').nth(0).locator('.pricing-span-cap')).toHaveText(
     'Runs claim 4 · 3 can go',
   )
@@ -3153,4 +3157,110 @@ test('a listing frozen before the counter existed draws the reading, not NaN', a
      — the row must draw byte-identically to the one above it, which is the pre-D115 rendering
      and correct as of the join. */
   await expect(live).not.toContainText('when read')
+})
+
+/* ======================================= a number on the card's row (2026-09-11, D7 amended)
+ *
+ * THE OWNER'S REPORT: *"I can no longer select quantities to sell at all"*. The cap above holds
+ * every card to N live at TCGplayer and cannot say "two of THIS card"; asked which control they
+ * meant, the owner ruled for a number on each row, meaning COPIES TO SEND IN THIS FILE. The Qty
+ * cell is that field: blank sends every copy that can go (the placeholder is that figure), a
+ * number sends that many, 0 sends none without holding the card.
+ *
+ * AS WITH THE CAP, THESE CASES ARE ABOUT THE SHAPE OF THE BODY AND THE SCREEN'S ACCOUNT OF IT —
+ * `harness/tests/t7_store_and_seams.py:check_emit_send_quantity` owns the file and the store.
+ * What a screen can get wrong here is sending a figure nobody typed, dropping one somebody did,
+ * keying it by the wrong card, or letting it survive the press it was typed for. */
+
+const LEBLANC_QTY = 'How many of the 3 copies of LeBlanc, Everywhere At Once go in this file'
+const DUNSPARCE_QTY = 'How many of the 3 copies of Dunsparce go in this file'
+
+test('a figure typed on a row rides the send keyed by that SKU, the deck counts it, and the write spends it', async ({
+  page,
+}) => {
+  const wire = await open(page, { worklist: SPAN })
+  const field = page.getByLabel(LEBLANC_QTY)
+  await expect(field).toHaveAttribute('placeholder', '3')
+  const before = (await page.locator('.pricing-verdict-out').innerText()).match(/(\d+) cop/)
+  const copiesBefore = Number(before?.[1])
+  expect(Number.isFinite(copiesBefore)).toBe(true)
+
+  await field.fill('2')
+  /* THE DECK FOLLOWS THE FIELD, before anything is pressed: one fewer copy would go, and the
+     sentence says a card is at a figure typed by hand — which is the account the operator reads
+     before deciding to press. */
+  await expect(page.locator('.pricing-verdict-out')).toContainText(`${copiesBefore - 1} cop`)
+  await expect(page.locator('.pricing-verdict-byhand')).toContainText('1 card at a quantity you typed')
+  await expect(page.locator('.pricing-ship-byhand')).toContainText('1 by hand')
+
+  await page.getByRole('button', { name: 'Write one import file' }).click()
+  await expect.poll(() => wire.filter((r) => r.path === '/pipeline/emit').length).toBe(1)
+  const body = wire.find((r) => r.path === '/pipeline/emit')?.body as Record<string, unknown>
+  expect(body.quantities).toEqual({ '9191210': 2 })
+
+  /* SPENT BY THE WRITE. A figure that survived the press would send the same copies again on
+     the next one, on top of what went. */
+  await expect(field).toHaveValue('')
+  await expect(page.locator('.pricing-ship-byhand')).toHaveCount(0)
+})
+
+test('a blank Qty on every row sends no quantities key at all', async ({ page }) => {
+  const wire = await open(page, { worklist: SPAN })
+  await page.getByRole('button', { name: 'Write one import file' }).click()
+  await expect.poll(() => wire.filter((r) => r.path === '/pipeline/emit').length).toBe(1)
+  const body = wire.find((r) => r.path === '/pipeline/emit')?.body as Record<string, unknown>
+  /* `in`, for the reason the cap's own case gives: a dropped key and a sent-empty key read the
+     same to a value assertion, and only the first is the ordinary press. */
+  expect('quantities' in body).toBe(false)
+})
+
+test('a figure past what can go is clamped on the way out, 0 takes the row out of the count, Escape clears one row and the chip clears every row', async ({
+  page,
+}) => {
+  await open(page, { worklist: SPAN })
+  const leblanc = page.getByLabel(LEBLANC_QTY)
+  const dunsparce = page.getByLabel(DUNSPARCE_QTY)
+  const outBefore = (await page.locator('.pricing-verdict-out').innerText()).match(/(\d+) rows?/)
+  const rowsBefore = Number(outBefore?.[1])
+
+  /* CLAMPED, NOT REFUSED: the server would name "asked 9, only 3 can go"; the screen does not
+     draw a send that cannot happen. */
+  await leblanc.fill('9')
+  await leblanc.press('Tab')
+  await expect(leblanc).toHaveValue('3')
+
+  /* ZERO IS A REAL ANSWER and the row leaves the count of rows that would go, without a hold. */
+  await leblanc.fill('0')
+  await expect(page.locator('.pricing-verdict-out')).toContainText(`${rowsBefore - 1} row`)
+  await expect(page.locator('.pricing-verdict-byhand')).toContainText('1 card')
+
+  /* ESCAPE PUTS ONE ROW BACK, the way it puts a price field back. */
+  await leblanc.focus()
+  await leblanc.press('Escape')
+  await expect(leblanc).toHaveValue('')
+  await expect(page.locator('.pricing-ship-byhand')).toHaveCount(0)
+  await expect(page.locator('.pricing-verdict-out')).toContainText(`${rowsBefore} row`)
+
+  /* THE CHIP IS THE WAY BACK FOR THE WHOLE SEND. */
+  await leblanc.fill('1')
+  await dunsparce.fill('2')
+  await expect(page.locator('.pricing-ship-byhand')).toContainText('2 by hand')
+  await page.locator('.pricing-ship-byhand').click()
+  await expect(leblanc).toHaveValue('')
+  await expect(dunsparce).toHaveValue('')
+  await expect(page.locator('.pricing-ship-byhand')).toHaveCount(0)
+})
+
+test('typing in a Qty field does not reach the row keys either', async ({ page }) => {
+  const wire = await open(page, { worklist: SPAN })
+  const field = page.getByLabel(LEBLANC_QTY)
+  await field.focus()
+  /* `h` opens a hold on the focused row and `t` pulls a price history — from the price field.
+     A Qty field is a text field like the cap's and yields nothing to them: no hold panel
+     opens, and no history is fetched. The field's alphabet is digits, so the letters land
+     nowhere at all. */
+  await page.keyboard.type('h2t')
+  await expect(field).toHaveValue('2')
+  await expect(page.locator('.pricing-holdpanel')).toHaveCount(0)
+  expect(wire.filter((r) => r.path.includes('/history')).length).toBe(0)
 })
