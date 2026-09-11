@@ -220,9 +220,15 @@
   font-weight: 500;
   color: var(--bn-ink-3);
   white-space: nowrap;
-  justify-self: end;
-  overflow: hidden;
+  /* STRETCH, NOT END. An end-aligned grid item is sized to its own text, and with `nowrap`
+     a long meta grew LEFTWARD out of its track over the label — `overflow: hidden` clips
+     inside the element, never the element itself. Filling the track and ellipsizing is what
+     keeps `Cadence · settle first, beat as backstop` off the word `Trigger` (2026-09-11). */
+  justify-self: stretch;
+  min-width: 0;
+  text-align: right;
   text-overflow: ellipsis;
+  overflow: hidden;
 }
 .capture-meta-alert { color: var(--bn-warn); }
 
