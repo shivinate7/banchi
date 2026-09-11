@@ -862,12 +862,23 @@ export function BoxBrowse({
     const askedFor = wanted.current
     const honourable = askedFor !== null && shelves.includes(askedFor)
     if (honourable || boxesAnswered) wanted.current = null
+    /* A SEARCH LANDS ON A LIVE COPY, NEVER ON A SOLD ONE (D132, the owner's report of
+       2026-09-11: "it pulled up a sold listing as the front runner"). Under a query a shelf
+       counts as holding the answer only if one of its matches is still on hand — a box whose
+       only match has departed is a box the hand does not go to. The box the walk was on keeps
+       the walk only by that test, and the first box in rail order with a live match takes it
+       otherwise. With nothing live anywhere the old rule stands, so a sold-out card still
+       shows where its copies were. */
+    const holdsLive = (candidate: Shelf) =>
+      !filtered || inQuery.some((row) => shelfOf(row) === candidate && !hasDeparted(row.card))
+    const live = shelves.filter(holdsLive)
+    const pool = live.length > 0 ? live : shelves
     setShelf((prev) => {
       if (honourable) return askedFor
-      if (prev !== null && shelves.includes(prev)) return prev
-      return shelves[0] ?? null
+      if (prev !== null && pool.includes(prev)) return prev
+      return pool[0] ?? null
     })
-  }, [shelves, boxesAnswered])
+  }, [shelves, boxesAnswered, filtered, inQuery])
 
   /* The selection follows the filter. When nothing matches it is left alone. */
   useEffect(() => {

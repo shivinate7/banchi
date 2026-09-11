@@ -5140,3 +5140,22 @@ test('D132 — a named section is said in the walk header, in the bar\'s sentenc
   await page.getByRole('button', { name: 'Save names' }).click()
   await expect(page.locator('.boxops-editor')).toHaveCount(0)
 })
+
+test('D132 — a search lands on a box with a LIVE copy, never on the sold one the walk was standing beside', async ({ page }) => {
+  /* THE OWNER'S REPORT, 2026-09-11: a search "pulled up a sold listing as the front runner".
+     Box 2 is the box being walked and its only Eiscue is sold; box 7 holds a live one. The
+     walk used to keep box 2 because it had A match, and then landed on the only row it had. */
+  const cards: Cards = {
+    ...CARDS,
+    '7/40': card({ index: 40, state: 'identified', name: 'Eiscue', sku: '8937371', section: 1, sectionStart: 1, sectionEnd: 40, box: 7, boxName: 'ME01 spares', boxTotal: 40 }),
+  }
+  const store: Store = { cards, search: (query) => searchAnswer(query, cards) }
+  await open(page, TWO_BOXES, store, () => PRICING, SALE, { route: '/#/inventory?box=2', hideSold: null })
+  await expect(page.locator('.browse-boxcell[aria-current="true"]')).toHaveAttribute('aria-label', /^Box 2/)
+
+  await page.getByRole('searchbox').fill('Eiscue')
+  await expect(page.locator('.browse-boxcell[aria-current="true"]')).toHaveAttribute('aria-label', /^Box 7/)
+  await expect(page.locator('.inventory-location-label .position-parts')).toHaveAttribute('aria-label', 'Box 7 · Section 1 · Card 40')
+  /* And the copy the walk stands on is the live one, not the departed one. */
+  await expect(page.locator('.card-locations-row.is-current')).not.toHaveClass(/is-gone/)
+})
