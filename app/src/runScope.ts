@@ -90,7 +90,7 @@ export function runBoxLabel(row: RunSummary): string | null {
 }
 
 /** What the capture screen calls the drawer in front of the operator: its NAME, and its number
- *  only where the owner has not given it one (D-capture-setup-memory).
+ *  only where the owner has not given it one (D142).
  *
  *  THE OWNER'S INSTRUCTION, 2026-09-11: *"i dont need to see box number in capture screen"*.
  *  D20 is why that is answerable at all — a box is addressed by its name and names are unique,

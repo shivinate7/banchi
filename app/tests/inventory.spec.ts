@@ -5189,7 +5189,7 @@ test('D132 — the rail draws names and no numbers, ordered by this browser\'s r
        one file whose subject it is: `banchi.box-recency` lives in `app/src/deviceMemory.ts`
        (D132), and asserting the order it produces means writing it. It was
        `banchi.inventory.box-recency` until the capture screen started sorting on the same
-       fact (D-capture-setup-memory) — two screens read it now, so the name stopped saying
+       fact (D142) — two screens read it now, so the name stopped saying
        which one wrote it. */
     window.localStorage.setItem('banchi.box-recency', JSON.stringify({ '7': '2026-09-09T10:00:00.000Z' }))
   })

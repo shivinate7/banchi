@@ -10058,7 +10058,7 @@ reader decides it.
 
 ---
 
-## D-capture-setup-memory — The setup outlives the browser, the box list is ordered by the hand, and one value stays on the old clock
+## D142 — The setup outlives the browser, the box list is ordered by the hand, and one value stays on the old clock
 
 **Settled 2026-09-11, on the owner's own words about the screen they spend the most hours in.** Four instructions in one message, three of them about memory and one about what a box is called:
 

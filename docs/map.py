@@ -1690,7 +1690,7 @@ COMPONENTS = [
                                 "D70", "D72", "D75", "D76", "D80", "D81", "D83", "D84", "D87",
                                 "D88", "D90", "D92", "D94", "D96", "D101", "D102", "D104", "D111",
                                 "D119", "D122", "D127", "D132", "D135", "D136", "D140", "D141",
-                                "D-capture-setup-memory"],
+                                "D142"],
             },
             "claim-ids.py": {
                 "does": "allocate the numbers this branch's SLUG ids will take, and "
@@ -3284,7 +3284,7 @@ COMPONENTS = [
                                             "finish, rarity and product, ONE document because "
                                             "it is one habit (D141) — and nothing else",
                                     "governed_by": ["D13", "D27", "D91", "D94", "D95", "D114", "D132",
-                                                    "D-capture-setup-memory"],
+                                                    "D142"],
                                     "note": "IT EXISTS BECAUSE OF A LINT RULE, which is the "
                                             "rule working rather than being worked around. "
                                             "`app/eslint.config.js` bans the STORE and not the "
@@ -3482,7 +3482,7 @@ COMPONENTS = [
                     "no route, and the camera and rotation are `useCamera.ts`'s and stay.",
             "governed_by": ["D3", "D10", "D13", "D19", "D20", "D21", "D22", "D23", "D27", "D28",
                             "D34", "D41", "D56", "D58", "D65", "D81", "D92", "D118", "D128",
-                            "D130", "D131", "D132", "D-capture-setup-memory"]},
+                            "D130", "D131", "D132", "D142"]},
             # D3 earns its place on a stylesheet: the no-claim finish chip is drawn dashed
             # because rung 1 distinguishes "no metadata recorded" from a recorded claim, and
             # that distinction is carried here in a border style rather than in any logic.
@@ -3493,7 +3493,7 @@ COMPONENTS = [
                                       # draws — accent's "the system is unsure" job at text
                                       # weight, because nothing there refuses anything.
                                       "governed_by": ["D3", "D5", "D27", "D41", "D50", "D65", "D117",
-                                                      "D130", "D-capture-setup-memory"]},
+                                                      "D130", "D142"]},
             "src/PositionLabel.tsx": {
                 "does": "ONE rendering of `pipeline/join.py:Position.label` for every OWNER site "
                         "(D41, amended 2026-08-29). Recomposes `Box N \u00b7 Section N \u00b7 Card N` into a "
@@ -4621,7 +4621,7 @@ COMPONENTS = [
                                         "with a differently-anchored regex.",
                                 # D20 is the name and its optionality; D10 ruling 3 is the deleted
                                 # box whose number a run still remembers; D56 is the entry.
-                                "governed_by": ["D10", "D20", "D56", "D-capture-setup-memory"]},
+                                "governed_by": ["D10", "D20", "D56", "D142"]},
             "src/money.ts": {"does": "A DOLLAR AMOUNT, SAID THE SAME WAY EVERYWHERE — `money` and "
                                      "`roundsToNothing`. Extracted from src/RunsComposer.tsx "
                                      "unchanged on 2026-09-11, when the run panel began "
@@ -4779,7 +4779,7 @@ COMPONENTS = [
                         "it was written and never had: no facingMode (bug 3), no split(\",\") CSV "
                         "parsing (bug 2). No shared preset, no --fix — D18 keeps anything that "
                         "writes off the path `make check` runs.",
-                "governed_by": ["D13", "D16", "D18", "D27", "D114", "D132", "D-capture-setup-memory"],
+                "governed_by": ["D13", "D16", "D18", "D27", "D114", "D132", "D142"],
             },
             "tests/motion.spec.ts": {
                 "does": "the MotionMachine against synthetic frame sequences with an exact "
@@ -4852,7 +4852,7 @@ COMPONENTS = [
                         "matters, which is negative — `c` stays the shutter and `b` stays "
                         "the Box field, because a literal a-z would have put Rainbow Rare on "
                         "the capture key. Run by `make design-check`.",
-                "governed_by": ["D3", "D22", "D23", "D27", "D65", "D101", "D118", "D-capture-setup-memory"],
+                "governed_by": ["D3", "D22", "D23", "D27", "D65", "D101", "D118", "D142"],
                 "note": "The shutter is never pressed, so no capture is ever taken — "
                         "motion-live.spec.ts's rule, for its reason. The `S` cases DO select a "
                         "box and stub the section route, because the act writes to one; "
@@ -5286,7 +5286,7 @@ COMPONENTS = [
                         "and `product_game` outright — `undefined.find` inside `ClaimEditor`, "
                         "the screen behind its error boundary, and six cases here spending "
                         "thirty seconds each on a switch that had been detached. AND THE HASH'S OWN BOX SINCE 2026-09-05: `#/inventory?box=<n>` was honoured only for a box that already had ROWS, because the shelf list is built from the rows first and the registry second and the ref was consumed on the first list — so every box of code cards, which D24 pools and which therefore has none, was unreachable by the one link that aims at one. Two cases, with `GET /boxes` held back so the ordering is the defect's rather than a race.",
-                "governed_by": ["D5", "D7", "D8", "D9", "D10", "D13", "D20", "D22", "D23", "D24", "D26", "D28", "D30", "D31", "D33", "D34", "D37", "D38", "D40", "D41", "D43", "D45", "D49", "D55", "D57", "D58", "D63", "D67", "D68", "D71", "D83", "D89", "D92", "D101", "D115", "D116", "D118", "D124", "D125", "D119", "D132", "D27", "D134", "D-capture-setup-memory"],
+                "governed_by": ["D5", "D7", "D8", "D9", "D10", "D13", "D20", "D22", "D23", "D24", "D26", "D28", "D30", "D31", "D33", "D34", "D37", "D38", "D40", "D41", "D43", "D45", "D49", "D55", "D57", "D58", "D63", "D67", "D68", "D71", "D83", "D89", "D92", "D101", "D115", "D116", "D118", "D124", "D125", "D119", "D132", "D27", "D134", "D142"],
                 "note": "THE CHECK `CLAUDE.md`'s ROUTE-IS-NOT-A-FEATURE RULE SAYS DOES NOT "
                         "EXIST. That rule was written on 2026-08-23 after three routes shipped "
                         "with full T7 coverage and no client function and no control — green "

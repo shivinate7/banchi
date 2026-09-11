@@ -162,7 +162,7 @@ type BoxOption = {
   next: number | undefined
   sealed: boolean
   /** Cards the box HOLDS — `BoxRecord.on_hand`, or its arithmetic where the server sent the
-   *  parts and not the total. The hand order's second term (D-capture-setup-memory). `null`
+   *  parts and not the total. The hand order's second term (D142). `null`
    *  for a box this screen only knows about because `/status` named it: `GET /boxes` is what
    *  carries the count, and a box the registry did not return has none to read. Null sorts
    *  after every counted box rather than as zero, which is `BoxBrowse`'s rule for the same
@@ -303,7 +303,7 @@ function hintNoteText(verdict: HintVerdict, game: string): string {
 
 /* ONE KEY IS LEFT IN `sessionStorage`, AND IT IS THE ONE D27 WAS ACTUALLY ABOUT.
  *
- * THAT ENTRY PUT SEVEN HERE AND THE OWNER HAS SINCE OVERRULED SIX (D-capture-setup-memory):
+ * THAT ENTRY PUT SEVEN HERE AND THE OWNER HAS SINCE OVERRULED SIX (D142):
  * *"ideally let it save my last used on capture on all settings ... so the game i picked,
  * camera i picked, all stay saved in some sorta session history"*. D27's argument for session
  * scope was that *"a new tab is a new shift and closing the browser ends one"*, and the
@@ -695,7 +695,7 @@ export function CaptureScreen() {
   const [registryNote, setRegistryNote] = useState<Note | null>(null)
 
   /* THE SETUP THIS BROWSER HAD LAST TIME, read once and then owned by the six `useState`s
-     below (D-capture-setup-memory). One `localStorage` document rather than six keys, because
+     below (D142). One `localStorage` document rather than six keys, because
      it is one habit — `deviceMemory.ts` carries that argument beside `banchi.orders.
      fetch-filter`, which makes it for its own two fields.
 
@@ -801,7 +801,7 @@ export function CaptureScreen() {
   const [restoreNote, setRestoreNote] = useState<string | null>(null)
 
   /* WHICH BOXES THIS BROWSER HAS REACHED FOR, newest first, shared with `#/inventory`'s rail
-     (D-capture-setup-memory). Read once into state and advanced by `touchBox`'s return value
+     (D142). Read once into state and advanced by `touchBox`'s return value
      rather than re-read after every write — `BoxBrowse.tsx` does the same, and it is what keeps
      the order from depending on a second round trip through `localStorage`. */
   const [recency, setRecency] = useState<ReadonlyMap<number, string>>(storedBoxRecency)
@@ -969,7 +969,7 @@ export function CaptureScreen() {
   }, [])
 
   
-  /* THE SETUP, WRITTEN WHOLE ON EVERY CHANGE TO ANY OF IT (D-capture-setup-memory). One
+  /* THE SETUP, WRITTEN WHOLE ON EVERY CHANGE TO ANY OF IT (D142). One
      document, so the six can never be stored half-updated and the clear is one removal rather
      than six that can fail apart.
 
@@ -1137,7 +1137,7 @@ export function CaptureScreen() {
   )
 
   
-  /* THE BOX LIST, IN THE ORDER THE OPERATOR'S HAND WORKS (D-capture-setup-memory).
+  /* THE BOX LIST, IN THE ORDER THE OPERATOR'S HAND WORKS (D142).
    *
    * THE OWNER ASKED FOR THIS SORT BY NAME: *"same box style sorting in inventory (where most
    * recently selected/most filled go to the top, rather than box #, determines the order of
@@ -1303,7 +1303,7 @@ export function CaptureScreen() {
    * note can say how many did not draw.
    *
    * THE FIRST NINE, TYPED OR NOT, because `boxOptions` is already in the hand's order
-   * (D-capture-setup-memory). This took the LAST nine with nothing typed until then — the
+   * (D142). This took the LAST nine with nothing typed until then — the
    * highest-numbered, standing in for "most recent" on the reasoning that boxes are allocated
    * upward. The list is now sorted by what this browser actually reached for, so the front of
    * it is the answer in both cases and the two branches collapse into one. */
@@ -1331,7 +1331,7 @@ export function CaptureScreen() {
   /** One selection ends the opening: set the box, record the reach, drop the note, close, and
    *  hand focus back so C and U are live again the moment a drawer is chosen.
    *
-   *  THE REACH IS RECORDED HERE AND NOWHERE ELSE ON THIS SCREEN (D-capture-setup-memory).
+   *  THE REACH IS RECORDED HERE AND NOWHERE ELSE ON THIS SCREEN (D142).
    *  Picking a box is the act — it is a deliberate press, it happens once a sitting, and it is
    *  the moment the operator's attention moves to that drawer. Two things that might look like
    *  candidates are deliberately not:
@@ -1379,7 +1379,7 @@ export function CaptureScreen() {
   }, [openField])
 
   /* A RESTORED BOX IS CHECKED AGAINST THE STORE, ONCE, AND FAILS SOFTLY
-     (D-capture-setup-memory).
+     (D142).
 
      PHOTOGRAPHING INTO THE WRONG DRAWER IS THE EXPENSIVE FAILURE ON THIS SCREEN, and the
      setup now outlives the browser, so the gap between "the box I last picked" and "a box that
@@ -1454,7 +1454,7 @@ export function CaptureScreen() {
     }
   }, [boxBusy, boxOffer, chooseBox])
 
-  /** ONE PRESS PUTS THE SETUP BACK TO NOTHING CHOSEN (D-capture-setup-memory).
+  /** ONE PRESS PUTS THE SETUP BACK TO NOTHING CHOSEN (D142).
    *
    *  THE OWNER ASKED FOR IT IN FOUR WORDS: *"a quick clear all settings button"*. Quick is a
    *  requirement, so there is no confirmation dialog: the press clears, the screen visibly goes
@@ -2340,7 +2340,7 @@ export function CaptureScreen() {
   const swallowedTotal = swallowed.busy + swallowed.noBox + swallowed.notReady + swallowed.held
 
   /** WHETHER THERE IS ANYTHING TO CLEAR, which is what disables the control rather than hiding
-   *  it (D-capture-setup-memory). A control that appears and disappears with the state it acts
+   *  it (D142). A control that appears and disappears with the state it acts
    *  on makes the rail's height move under the operator's hand, and D118 forbids exactly that.
    *
    *  THE GAME IS COMPARED AGAINST THE REGISTRY'S DEFAULT, not against null, because that is
@@ -2356,7 +2356,7 @@ export function CaptureScreen() {
     (game !== null && registry !== null && game !== registry.default)
 
   /* The stage foot's word for the drawer: the name, or the number where there is no name
-     (D-capture-setup-memory). This read `Box 3 · RB Epics` and carried the number twice on one
+     (D142). This read `Box 3 · RB Epics` and carried the number twice on one
      screen, since the row above it opened with `Box 3` too. */
   const boxSentence = box === null ? 'No box' : captureBoxLabel(box, boxName)
 
@@ -2874,7 +2874,7 @@ export function CaptureScreen() {
                     key={option.box}
                     on={option.box === box}
                     /* THE NAME LEADS AND THE NUMBER FOLLOWS IT, which is the reverse of what
-                       this drew until 2026-09-11 (D-capture-setup-memory). The number STAYS
+                       this drew until 2026-09-11 (D142). The number STAYS
                        here, unlike everywhere else on the screen, because this is the one place
                        it is doing a job: the entry above searches number and name together, and
                        a row that hid the number would answer a search for `9` with nine rows
@@ -2931,7 +2931,7 @@ export function CaptureScreen() {
                     <span>Pick one, or type a new name</span>
                   </span>
                 ) : (
-                  /* THE NAME IS THE HEADLINE AND THE NUMBER IS GONE (D-capture-setup-memory).
+                  /* THE NAME IS THE HEADLINE AND THE NUMBER IS GONE (D142).
                      It read `Box 3` over `RB Epics · next index 41`, which made the operator
                      read past the number to reach the word they think in. `captureBoxLabel`
                      falls back to `Box 3` for a drawer nobody has named, so an unnamed box is
@@ -3038,7 +3038,7 @@ export function CaptureScreen() {
                 block
                 onClick={() => (window.location.hash = '#/runs')}
               >
-                {/* THE NAME HERE TOO (D-capture-setup-memory), even though the destination
+                {/* THE NAME HERE TOO (D142), even though the destination
                     draws `Box 4 · Mixed Singles`. This button is read on THIS screen, by
                     somebody who has just finished feeding a drawer, and it names the drawer
                     they fed — `#/runs` composing the pair when they get there is that screen's
@@ -3660,7 +3660,7 @@ export function CaptureScreen() {
             />
           )}
 
-          {/* THE CLEAR, AT THE FOOT OF THE LAST PANEL IN THE RAIL (D-capture-setup-memory).
+          {/* THE CLEAR, AT THE FOOT OF THE LAST PANEL IN THE RAIL (D142).
               It reaches all three panels — the box in Run, the four claims in Stack, the game
               here — so there is no panel it BELONGS to, and the foot of the column is where a
               control that ends a sitting reads as ending one. The head was the alternative and

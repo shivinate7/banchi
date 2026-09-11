@@ -627,7 +627,7 @@ sentence**, and see "the census" below for what enforces that.
                               the same source, so Home can never be a step ahead of it.
 #/capture      Capture        live camera; box / game / set hint / finish / rarity; undo;
                               the motion trigger and its tuning. THE SETUP IS REMEMBERED ON
-                              THE DEVICE (D-capture-setup-memory) — all six survive a closed browser, the box
+                              THE DEVICE (D142) — all six survive a closed browser, the box
                               list is ordered the way the inventory rail is (most recently
                               reached for, then fullest, then the number), one press clears
                               the lot with an undo on the receipt, and the box is named
@@ -978,7 +978,7 @@ A screen is not finished because it compiles.
   owner ruled it belongs there on 2026-09-03). None of them is a card, a position or an order.
 
   **TWO OF THE NINE ARRIVED ON 2026-09-11 AND ONE OF THOSE IS A RENAME**
-  (D-capture-setup-memory). `banchi.capture.setup` is the box, game, set hint, finish, rarity
+  (D142). `banchi.capture.setup` is the box, game, set hint, finish, rarity
   and product the operator last chose — six values that were `sessionStorage` under D27 until
   the owner overruled the session scope, in ONE document because they are one habit, the
   argument `banchi.orders.fetch-filter` already makes for its own two fields.
@@ -1005,7 +1005,7 @@ A screen is not finished because it compiles.
 
   **IT HELD EIGHT UNTIL 2026-09-11.** Six of the capture screen's seven — `banchi.session.box`,
   `.setHint`, `.finish`, `.game`, `.rarityClaim` and `.product` — moved to the device
-  (D-capture-setup-memory), on the owner's report that a shift ends when they stop feeding
+  (D142), on the owner's report that a shift ends when they stop feeding
   cards rather than when a tab closes. `captureId` did not, and it is the one the carve-out
   was always about: a stale SETTING is a claim on screen that is one press from being right,
   and a stale in-flight id is a request for a card nobody is holding.
@@ -1558,7 +1558,7 @@ D138 One process serves the product, Vite compiles and never serves, and the bui
 D139 Which branch the primary checkout stands on is a fact about the live rig, and a warning is the ceiling
 D140 The number is claimed at the merge, because what main has taken is not knowable before it
 D141 The browser matrix runs when the change reaches what a browser draws, and the path list has a reader
-D-capture-setup-memory The setup outlives the browser, the box list is ordered by the hand, and one value stays on the old clock
+D142 The setup outlives the browser, the box list is ordered by the hand, and one value stays on the old clock
 ```
 
 **THE GAP THIS LIST CARRIED BETWEEN D116 AND D118 IS CLOSED, AND IT CLOSED THE WAY IT SAID IT
