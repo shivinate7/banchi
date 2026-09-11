@@ -1575,12 +1575,20 @@ def check_decision_ids(report: Report, docs: List[Path]) -> None:
     # comments, and a dangling id in one of them resolved to nothing and was reported by
     # nothing. Same severity as the Python row and for the same reason: `D2` could plausibly
     # be a variable, and a false positive that blocks a commit is worse than a printed line.
-    scan(_walk(ROOT, (".ts", ".tsx", ".css")), in_code)
+    # `.js` JOINED THEM ON 2026-09-11, the same way `.ts` did on 2026-08-30 and for the same
+    # reason: it was the one real extension in this tree that cites decisions and nothing
+    # opened it. `app/eslint.config.js` alone carries six of them, every one valid — so this
+    # widen reports nothing today, which is the point. What it would have caught is what a
+    # branch found by hand the day `scripts/claim-ids.py` landed: that file was outside the
+    # CLAIMER's suffix set too, so a SLUG written there survived the merge and became a
+    # citation of an entry that had just been given a number. Both sets gained `.js` together.
+    scan(_walk(ROOT, (".ts", ".tsx", ".css", ".js")), in_code)
 
     report.add("decision ids", MECHANICAL, in_docs, f"{len(singles)} D + {len(codes)} C headings")
     # Code is advisory: `C1` or `D2` could plausibly be a variable one day, and a false
     # positive that blocks a commit is worse than one that prints a line.
-    report.add("decision ids in code", ADVISORY, in_code, "citations in .py, .ts, .tsx and .css all resolve")
+    report.add("decision ids in code", ADVISORY, in_code,
+               "citations in .py, .ts, .tsx, .css and .js all resolve")
 
 
 # ------------------------------------------------------------------ ids are claimed at merge
@@ -11645,9 +11653,6 @@ def self_test() -> int:
     # A RENUMBER IS A TITLE THAT KEPT ITS NAME AND CHANGED ITS ID, and this is the reader of
     # that. The git walk around it needs a repository; this does not, and it is where the
     # logic that could be wrong lives (D72).
-    # THE EQUALITY THAT REPLACED TWO SUBSTRING TESTS. Both legs of check_pass_criteria used
-    # to ask whether the criterion appeared SOMEWHERE in the section, which `0.9` satisfies
-    # inside `0.95`. These cases are the arithmetic of that, with no filesystem in the way.
     # WHICH TREE AM I, asked without a repository (D-claim-right-tree). The case that was
     # wrong is the third: a NAMED branch sitting at origin/main, which is every branch between
     # `git checkout -b` and its first commit.
@@ -11665,6 +11670,9 @@ def self_test() -> int:
         got = is_main(ref_name, named, head, origin_main)
         ok(got == want, label, f"wanted {want}, got {got}")
 
+    # THE EQUALITY THAT REPLACED TWO SUBSTRING TESTS. Both legs of check_pass_criteria used
+    # to ask whether the criterion appeared SOMEWHERE in the section, which `0.9` satisfies
+    # inside `0.95`. These cases are the arithmetic of that, with no filesystem in the way.
     print("\na published criterion is compared by equality, not by containment")
     bullet = "- **Pass**: `holdout_accuracy >= 0.95`\n- **The gate is the holdout**, not all."
     inline = "New 2026-08-30 with C9-C11. **Pass: every decode round-trips its own\ncode.**\n\nProse after."
@@ -12737,8 +12745,14 @@ def self_test() -> int:
         "no file in app/src touches both stores, so the file is a sound binding",
         str(site_findings),
     )
+    # `banchi.session.box` STOOD HERE UNTIL 2026-09-11 and is gone (D141): six of D27's seven
+    # session keys moved to the device, and `banchi.session.captureId` is the one left — which
+    # is the same shape (declared as a const in `SESSION_KEYS` and read through `readSession`'s
+    # parameter) and so still exercises both halves this case is named for. A live key has to
+    # be named because the point is that the READER resolves it, not that a string appears.
     ok(
-        "banchi.capture.deviceId" in sites["local"] and "banchi.session.box" in sites["session"],
+        "banchi.capture.deviceId" in sites["local"]
+        and "banchi.session.captureId" in sites["session"],
         "keys resolve to the right store through a const and through a helper's parameter",
         str(sorted(sites["local"]) + sorted(sites["session"])),
     )
