@@ -492,6 +492,9 @@ async function stubStore(page: Page): Promise<void> {
     }),
   )
   await page.route(/\/codes\/lots$/, (route) => json(route, { lots: [] }))
+  /* D134's graveyard: empty, because this fixture's departed cards belong to `#/inventory`
+     and its own copies list, not to a screen these five specs never navigate to. */
+  await page.route(/\/graveyard$/, (route) => json(route, { departed: [] }))
   await page.route(/\/orders$/, (route) =>
     json(route, {
       summary: '0 orders',
