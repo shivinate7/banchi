@@ -62,6 +62,32 @@ expect() {
   esac
 }
 
+# THE BRANCH WARNING IS ASSERTED ON OUTPUT, NOT ON EXIT STATUS, AND `expect` CANNOT SEE IT.
+# `scripts/githooks/post-checkout` runs AFTER the switch has happened — git has no
+# `pre-checkout` hook — so it has nothing left to refuse and exits 0 whichever way it decides
+# (D139). A case written with `expect allow` would pass on a hook that printed nothing at all,
+# which is the entire failure mode these two exist to catch. They assert the marker the warning
+# leads with, which is why it leads with one rather than opening on prose.
+MARK="PRIMARY CHECKOUT:"
+says() {
+  local what="$1"; shift
+  local out; out="$("$@" 2>&1)"
+  case "$out" in
+    *"$MARK"*) ok "$what — warned" ;;
+    *) bad "$what — no warning, and the live server is serving this branch"
+       printf '%s\n' "$out" | sed 's/^/         /' ;;
+  esac
+}
+silent() {
+  local what="$1"; shift
+  local out; out="$("$@" 2>&1)"
+  case "$out" in
+    *"$MARK"*) bad "$what — warned, and must not"
+       printf '%s\n' "$out" | sed 's/^/         /' ;;
+    *) ok "$what — silent" ;;
+  esac
+}
+
 echo "githooks self-test  (hooks: $HOOKS_DIR)"
 
 # ---------------------------------------------------------------- a repo and its origin
@@ -83,7 +109,13 @@ git config core.hooksPath "$HOOKS_DIR"
 
 # ---------------------------------------------------------------------------- the cases
 echo "  -- the ordinary path stays open --"
-git switch -q -c feature
+# THE SETUP SWITCHES BELOW DROP STDERR, AND ONLY BECAUSE THEY ARE SETUP. Every one of them moves
+# this fixture — a primary checkout — onto a branch, so post-checkout's D139 warning fires on each
+# and interleaves three blocks of it through sections about something else. The warning is ASSERTED
+# in its own section at the foot of this file; muting it here is muting a passing guard's noise, not
+# skipping a case, and it is done per-command rather than globally so a hook that starts printing
+# somewhere unexpected still shows up.
+git switch -q -c feature 2>/dev/null
 echo two > file.txt
 git add file.txt
 expect allow "commit on a branch" git commit -qm "work on a branch"
@@ -105,7 +137,7 @@ expect refuse "reset main onto a local commit"  git reset --hard feature
 # at ..." — so run from main they were testing git and not the hook. Run from `feature` they
 # reach the ref transaction, and `git branch -D main` is what found the deletion bug: it
 # reports zeros on BOTH sides, so the hook read a delete as a no-op and let it through.
-git switch -q feature
+git switch -q feature 2>/dev/null
 expect refuse "git branch -f main"  git branch -f main feature
 expect refuse "delete main"         git branch -D main
 # The plumbing form. `branch -f` and `update-ref` are separate probes into the same hole and
@@ -119,7 +151,7 @@ echo "  -- nothing pushes to main --"
 # locally there is usually nothing to push — but it makes a useless test, so each case below
 # is arranged to have something to send.
 expect refuse "push feature:main"  git push origin feature:main
-git switch -q feature
+git switch -q feature 2>/dev/null
 expect refuse "push HEAD:main"     git push origin HEAD:main
 git switch -q main
 
@@ -153,6 +185,99 @@ expect allow "create a branch"  git branch scratch
 expect allow "delete a branch"  git branch -D scratch
 expect allow "tag"              git tag v-selftest
 expect allow "fetch"            git fetch -q origin
+
+echo "  -- D139: which branch the primary checkout stands on --"
+# WHY THIS IS A GUARD AT ALL. D53 keeps a supervisor alive at login out of the PRIMARY checkout
+# over the owner's real store, so the branch that ONE directory stands on silently decides which
+# code serves their real inventory. A linked worktree has its own store and its own ports to be
+# wrong on its own (D43), so it must stay silent — and that is the arm most likely to be written
+# backwards, since `.git` is a FILE in the worktree and a DIRECTORY in the checkout and either
+# reads fine to someone skimming it.
+#
+# MUTATION-TESTED 2026-09-11, by copying the hooks to a scratch directory, inverting that one
+# test (`-d "$top/.git"` -> `-f "$top/.git"`) and re-running with PKMNSCAN_HOOKS_DIR pointed at
+# the copy: the primary case and both worktree cases fail, 3 FAILED. Deleting the `!= "main"`
+# arm fails the switch-back case. Deleting the block entirely fails all three `says` cases.
+says   "a branch switch in the PRIMARY checkout"  git switch -q feature
+# A FILE-LEVEL CHECKOUT IS NOT A BRANCH MOVE, and says nothing even standing off main: git passes
+# $3 = 0 and the hook exits on it before either block. Asserted because without that gate every
+# `git checkout -- path` would print the warning, which is the fastest way to teach a reader to
+# skip it.
+# IT IS GUARDED TWICE AND THIS CASE NEEDS BOTH GONE TO FAIL, which is a fact about the hook rather
+# than a weakness here: git passes the SAME sha as $1 and $2 for a file-level checkout, so the
+# `$old != $new` guard below covers exactly the same ground. Mutating either one alone leaves all
+# twenty-eight cases green; mutating the pair fails this one.
+silent "a file-level checkout while off main"     git checkout -q -- file.txt
+silent "switching the PRIMARY checkout back to main" git switch -q main
+# A DETACHED HEAD IS OFF MAIN AS SURELY AS A BRANCH IS, AND IT IS NAMED AS ONE. Two assertions
+# and not the same one twice: `git rev-parse --abbrev-ref HEAD` answers the literal string `HEAD`
+# when detached, so a warning that did not special-case it would read "now on HEAD, not main" and
+# name a branch that does not exist. `says` cannot see that — mutating the naming out left every
+# case in this section green. It also has to land on a DIFFERENT commit: `--detach` at the commit
+# you are already on leaves $1 = $2, which the hook's own first guard drops as a no-op.
+out="$(git switch -q --detach feature 2>&1)"
+case "$out" in
+  *"$MARK"*"detached HEAD"*) ok "a detached HEAD in the PRIMARY checkout — warned, and named as detached" ;;
+  *"$MARK"*) bad "a detached HEAD warned, but was named as a branch called HEAD"
+             printf '%s\n' "$out" | sed 's/^/         /' ;;
+  *) bad "a detached HEAD in the PRIMARY checkout — no warning"
+     printf '%s\n' "$out" | sed 's/^/         /' ;;
+esac
+silent "back to main from a detached HEAD"        git switch -q main
+
+# A LINKED WORKTREE IS NOT THE SUBJECT. `main` is a real local branch here and the hook checks for
+# one, so the silence below can only come from the primary/linked test — which is what makes these
+# two cases worth having rather than passing for a second reason.
+silent "creating a linked worktree"               git worktree add -q -b wt-one "$tmp/linked" feature
+# AT `main`'s COMMIT AND NOT AT HEAD's, because `switch -c` at the same commit leaves $1 = $2 and
+# the hook's own no-op guard drops it before the branch block is ever reached. Written that way
+# first, this case passed on a mutant that had the primary/linked test INVERTED — green for the
+# wrong reason, which is the defect this file's `expect` helper already has a paragraph about.
+silent "a branch switch INSIDE a linked worktree" git -C "$tmp/linked" switch -q -c wt-two main
+# Cleaned up so the fixture's own teardown is not left removing a registered worktree by rm -rf.
+git worktree remove --force "$tmp/linked" 2>/dev/null || true
+git branch -D wt-one wt-two 2>/dev/null >/dev/null || true
+
+# A REPOSITORY THAT DOES NOT USE `main` IS NOT IN VIOLATION, and this is the one case the fixture
+# above cannot make: `main` exists there by construction, so the hook's gate on `main` being a real
+# local branch is unfalsifiable in it — mutating that gate out left all twenty-five other cases
+# green. It matters because `make janitor-install` puts this repo's hooks in front of other
+# checkouts, and a warning that fired in every `master`-based repository is a warning somebody
+# switches off — which takes D42's refusals and the three opsec rules with it.
+#
+# Seeded BEFORE core.hooksPath is armed, for the same reason the fixture above is: the pre-commit
+# hook is this repo's real one and the seed commit is not the thing under test. And branched at
+# `master~1` rather than at HEAD, because a branch created at the commit you are standing on leaves
+# $1 = $2 and never reaches the block.
+git init -q -b master "$tmp/foreign"
+git -C "$tmp/foreign" config user.email selftest@example.com
+git -C "$tmp/foreign" config user.name  selftest
+git -C "$tmp/foreign" config commit.gpgsign false
+echo one > "$tmp/foreign/f.txt"; git -C "$tmp/foreign" add f.txt
+git -C "$tmp/foreign" commit -qm "seed"
+echo two > "$tmp/foreign/f.txt"; git -C "$tmp/foreign" add f.txt
+git -C "$tmp/foreign" commit -qm "second"
+git -C "$tmp/foreign" config core.hooksPath "$HOOKS_DIR"
+silent "a branch switch where there is no \`main\`" git -C "$tmp/foreign" switch -q -c topic master~1
+
+# AND THE BLOCK D139 DID NOT TOUCH, which was covered by nothing: deleting the `make hooks`
+# staleness reminder outright left every other case in this file green. Two blocks now share one
+# hook file, so "intact and untouched" was a claim about a diff rather than something asserted —
+# and a reminder that silently stopped firing is a clone running hooks nobody installed.
+# It fires when `scripts/githooks` differs across the two commits, so the fixture has to carry such
+# a path on one side only. Switching TO main, so the branch warning is silent and this reminder is
+# the only thing that can be in the output.
+mkdir -p "$tmp/work/scripts/githooks"
+echo "#!/bin/sh" > "$tmp/work/scripts/githooks/example"
+git switch -q -c hookful 2>/dev/null
+git add scripts/githooks/example
+PKMNSCAN_MAIN=off git commit -qm "a branch that carries its own hooks" >/dev/null 2>&1
+out="$(git switch -q main 2>&1)"
+case "$out" in
+  *"make hooks"*) ok "the \`make hooks\` staleness reminder still fires on a branch move" ;;
+  *) bad "scripts/githooks differed across the switch and nothing said \`make hooks\`"
+     printf '%s\n' "$out" | sed 's/^/         /' ;;
+esac
 
 echo
 if [ "$fail" -eq 0 ]; then
