@@ -319,7 +319,7 @@ def claim_half(root: str, number: int, branch: str, confirm: bool) -> int:
     """Allocate, commit, push, and wait for the claim commit's checks. 0 when clear.
 
     THE TREE IS ESTABLISHED BEFORE ANYTHING READS IT, and that ordering is the whole of
-    D-claim-right-tree. Both readers below — the staleness check and the pending check — ask
+    D143. Both readers below — the staleness check and the pending check — ask
     their question of the CHECKED-OUT TREE. Neither can tell whether that tree is the pull
     request's, so a run pointed at the wrong one answers truthfully about the tree in front of
     it and uselessly about the merge it is performing.

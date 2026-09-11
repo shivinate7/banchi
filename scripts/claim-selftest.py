@@ -34,7 +34,7 @@ def merge_pr_module():
 
     IT NEVER REACHES `gh` IN PREVIEW. `claim_half`'s `if not confirm: return 0` sits above its
     first `gh` call, so every precondition in it is exercisable with no network, no pull
-    request and no stub. Nothing drove this function before D-claim-right-tree, which is the
+    request and no stub. Nothing drove this function before D143, which is the
     whole reason its precondition could sit seven lines out of place and look tested.
     """
     spec = importlib.util.spec_from_file_location("merge_pr", MERGER)
@@ -419,7 +419,7 @@ def main() -> int:
            "nothing, which would report every id main holds as a collision", out)
 
 
-        # ----------------------------------- D-claim-right-tree: which tree is being read
+        # ----------------------------------- D143: which tree is being read
         # THE PRECONDITION WAS SEVEN LINES TOO LATE, and every test stood in the right place,
         # so nothing saw it. On 2026-09-11 `make merge` was run from the primary checkout
         # standing on `main`: the claim half read MAIN, found no slug in it, printed

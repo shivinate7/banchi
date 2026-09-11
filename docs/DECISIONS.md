@@ -10168,7 +10168,7 @@ reader decides it.
 
 **A box whose name is not the word the operator uses.** The rendering assumes the name is what they recognise. If drawers start being named by content and referred to by position, the number comes back.
 
-## D-claim-right-tree — The claim reads the checked-out tree, so which tree that is must be established before anything reads it
+## D143 — The claim reads the checked-out tree, so which tree that is must be established before anything reads it
 
 **Ruled 2026-09-11, the same evening D140 landed and a few hours after it.** `make merge ARGS="270 --confirm"` was run from the primary checkout while it was standing on `main`. The claim half read `main`, found no slug in it, printed `no unclaimed id on this branch — nothing to claim`, and merged pull request #270's slug onto main verbatim. Pull request #270's slug sat on `main` as a heading until #273 repaired it with the claimer itself — six files, no hand edits. The slug is deliberately not spelled here: it is a number now, and a spelled one would be a citation of an entry that no longer exists under that name.
 

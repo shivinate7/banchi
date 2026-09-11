@@ -1644,7 +1644,7 @@ def is_main(ref_name: str, named: str, head: str, origin_main: str) -> bool:
     a worktree commonly has no local `main` at all (D42's merge discipline keeps it checked
     out elsewhere), and `GITHUB_REF_NAME` exists only in Actions.
 
-    COMMIT EQUALITY IS THE DETACHED-HEAD RULE AND NOTHING ELSE (D-claim-right-tree). A NAMED
+    COMMIT EQUALITY IS THE DETACHED-HEAD RULE AND NOTHING ELSE (D143). A NAMED
     branch is not main however recently it was cut, and this is where a false YES came from: a
     branch cut from main and not yet committed to sits AT origin/main, so equality called it
     main. `id claims` then refused its FIRST commit — the one commit that introduces the slug —
@@ -11653,7 +11653,7 @@ def self_test() -> int:
     # A RENUMBER IS A TITLE THAT KEPT ITS NAME AND CHANGED ITS ID, and this is the reader of
     # that. The git walk around it needs a repository; this does not, and it is where the
     # logic that could be wrong lives (D72).
-    # WHICH TREE AM I, asked without a repository (D-claim-right-tree). The case that was
+    # WHICH TREE AM I, asked without a repository (D143). The case that was
     # wrong is the third: a NAMED branch sitting at origin/main, which is every branch between
     # `git checkout -b` and its first commit.
     print("\nwhich checkout is main, over the four readings that can say so")
