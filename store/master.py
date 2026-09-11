@@ -647,6 +647,39 @@ class Box:
     """
 
     box: int
+    # THE TRUE INDEX: an identity this box keeps for as long as the store remembers it, and
+    # that no later box is ever given (D-box-true-index). `box` above is a LABEL on a physical
+    # drawer and `next_box_number` hands out the lowest free one on purpose (D20) — so the
+    # moment a drawer is emptied and deleted, the next drawer is called `Box 1` too, and every
+    # record that outlives a box loses the ability to say which of them it meant.
+    #
+    # THE OWNER'S REPORT, 2026-09-11: *"i deleted an old box 1, started writing into a new box
+    # (now new box 1) and if i go on say my runs tab it shows that i'd run a 'Box 1' run a long
+    # time ago"*. Their ruling in the same breath: *"box # and index # should not be the same
+    # thing, a box needs an index # not visible anywhere in the app thats a true index rather
+    # than cheaply using boxes as an index"*.
+    #
+    # THIS IS D58 ONE REGISTER UP, and the vocabulary is deliberately D58's: `Place.index` is
+    # the stored key and `Place.slot` is the number a person counts to. Here `bid` is the key
+    # and `box` is the number a person reads off the shelf. Both pairs exist because a label a
+    # human maintains and a key a machine joins on are different jobs, and one value cannot do
+    # both.
+    #
+    # NEVER REUSED, WHICH IS THE ONE PROPERTY IT HAS AND `box` DOES NOT. `Inventory.next_box_id`
+    # allocates `max(issued, every live bid) + 1` against a high-water mark that is persisted
+    # beside the tables and is NOT lowered by a deletion — D10's rule for the card index inside
+    # a box, applied here for the first time. CLAUDE.md's sentence that `next_box_number` is
+    # "deliberately NOT D10's high-water mark" is still exactly right about the NUMBER; this is
+    # the field that is one.
+    #
+    # NEVER DRAWN. The owner said so twice, and nothing in `app/` renders it: it travels on the
+    # wire so the server can tell two drawers apart, and every screen still says `Box 1`.
+    #
+    # OPTIONAL FOREVER, for `Card.rarity_claim`'s reason rather than for want of a migration.
+    # The v2 migration fills every box in an existing store, but `Box(box=7)` is a shape a
+    # dozen tests and `Inventory.parse`'s v1 backfill construct directly, and a required field
+    # would make an id something every caller had to source. `ensure_box` is the one allocator.
+    bid: Optional[int] = None
     name: Optional[str] = None
     sections: List[int] = field(default_factory=list)
     # A divider's optional label, keyed by the STRINGIFIED divider index it starts at — string
@@ -1197,6 +1230,19 @@ class Inventory:
     boxes: "Rows" = field(default_factory=lambda: Rows(Inventory.BOXES))
     listings: "Rows" = field(default_factory=lambda: Rows(Inventory.LISTINGS))
     events: List[dict] = field(default_factory=list)
+    # THE HIGH-WATER MARK FOR `Box.bid`, AND THE ONLY PART OF IT A DELETION MUST NOT LOWER
+    # (D-box-true-index). It is a scalar rather than a row because it is a fact about the
+    # STORE and not about any box: the boxes table cannot hold it, since the whole point is
+    # that the row whose id it remembers has been deleted.
+    #
+    # `store/db.py` keeps it in the `meta` table that has existed since D88 and
+    # `store/session.py` reads it into the snapshot and writes it back inside the same
+    # transaction as every table — so a crash cannot commit a box holding an id the counter
+    # has forgotten, which is the one ordering that could hand the id out twice.
+    #
+    # ZERO IS "NOTHING ISSUED YET" and is the honest default for a memory-backed inventory
+    # with no database under it. `next_box_id` never trusts it alone for that reason.
+    box_ids_issued: int = 0
 
     def __post_init__(self) -> None:
         # A caller handing in a plain dict gets the same mapping the default gives.
@@ -1264,10 +1310,15 @@ class Inventory:
                     continue
                 boxes.setdefault(str(number), Box(box=number))
 
+        try:
+            issued = int(payload.get("box_ids_issued") or 0)
+        except (TypeError, ValueError):
+            issued = 0
         return cls(
             cards=Rows(cls.CARDS, objects=cards),
             boxes=Rows(cls.BOXES, objects=boxes),
             listings=Rows(cls.LISTINGS, objects=listings),
+            box_ids_issued=max(0, issued),
         )
 
     def to_payload(self) -> dict:
@@ -1276,6 +1327,11 @@ class Inventory:
         row, which is what a whole-store read costs."""
         return {
             "version": VERSION,
+            # The counter travels with the document, so the legacy JSON shape — which is also
+            # `GET /inventory`'s wire shape — round-trips a store without losing its place in
+            # the id sequence. A payload written before the field reads 0, and `next_box_id`
+            # recovers from that by taking the live maximum into account.
+            "box_ids_issued": int(self.box_ids_issued or 0),
             "cards": {key: asdict(card) for key, card in sorted(self.cards.items())},
             "boxes": {key: asdict(box) for key, box in sorted(self.boxes.items())},
             "listings": {
@@ -1697,8 +1753,15 @@ class Inventory:
         """The registry entry for this box, or None. Never invents one."""
         return self.boxes.get(str(_as_position_int(number, "box")))
 
-    def box_disowns_run(self, box, run: str, ran_at: Optional[str]) -> Optional[str]:
+    def box_disowns_run(
+        self, box, run: str, ran_at: Optional[str], bid: Optional[int] = None
+    ) -> Optional[str]:
         """The sentence refusing `run` over `box`, or None when the box is the run's own.
+
+        `bid` IS THE RUN'S OWN RECORD OF WHICH DRAWER IT WAS OVER, and where it is present and
+        the box has one too, it is the whole answer — the module-level rule is not consulted
+        at all. Absent (every run written before D-box-true-index, and every caller that has
+        not learned to pass one) this behaves exactly as it always did.
 
         `box_disowns_run` (module-level) is the rule; this reads its inputs off the store —
         the registry entry's `created_at` and the `run` column of every card in the box, one
@@ -1711,6 +1774,19 @@ class Inventory:
         if entry is None:
             return None
         number = int(entry.box)
+        # THE TRUE INDEX DECIDES OUTRIGHT WHERE THE CALLER HAS ONE (D-box-true-index). The
+        # rule below reasons from the shape of the evidence and has to abstain when it cannot
+        # tell; an id is a fact about which drawer this is, so there is nothing to weigh. The
+        # sentence names both drawers, because the operator has to be able to check it — and
+        # `Box 1` on its own is exactly the string that stopped being able to tell them apart.
+        if bid is not None and entry.bid is not None and int(bid) != int(entry.bid):
+            return (
+                f"box {number} was deleted and its number reused after this run (the run was "
+                f"over the drawer with index {int(bid)}; box {number} is now the drawer with "
+                f"index {int(entry.bid)})"
+            )
+        if bid is not None and entry.bid is not None:
+            return None
         present = [
             value
             for _, (value,) in self.cards.select(("run",), box=number)
@@ -1725,6 +1801,58 @@ class Inventory:
             f"{others})"
         )
 
+    def box_by_id(self, bid) -> Optional[Box]:
+        """The drawer wearing this true index, or None because it has been deleted.
+
+        None IS AN ANSWER HERE AND NOT AN ABSENCE, which is the whole difference between this
+        and `box(number)`. A number always resolves to whatever drawer wears it today; an id
+        resolves to the drawer that was given it and to nothing else ever again, so None means
+        "that drawer is gone" rather than "look again under another key".
+        """
+        try:
+            wanted = int(bid)
+        except (TypeError, ValueError):
+            return None
+        for key, (_,) in self.boxes.select(("bid",), bid=wanted):
+            return self.boxes[key]
+        return None
+
+    def next_box_id(self) -> int:
+        """The next true index. A HIGH-WATER MARK, WHICH `next_box_number` DELIBERATELY IS NOT.
+
+        `max(issued, every live bid) + 1`. The two terms answer different failures and neither
+        is redundant:
+
+          `issued`        survives a deletion, which is the property the whole field exists
+                          for. A box deleted today must not hand its id to a box created
+                          tomorrow, and the live rows can no longer say it was ever taken.
+          the live max    survives a counter that has fallen behind — a store migrated by an
+                          older build, a payload parsed from a JSON document with no counter
+                          in it, a hand-edited `meta` row. Without it a stale counter would
+                          issue an id a live box is already wearing, which is the one outcome
+                          worse than a gap.
+
+        GAPS ARE CORRECT AND ARE NEVER CLOSED. D10 argues the same thing about the card index
+        and `docs/map.py`'s culled step 12 is the same rule about a build-order id: a reused
+        identifier resurrects every reference to the thing that used to wear it, and nothing
+        can detect that, because a stale id still resolves.
+        """
+        highest = max(0, int(self.box_ids_issued or 0))
+        for _key, (value,) in self.boxes.select(("bid",)):
+            if value is not None:
+                try:
+                    highest = max(highest, int(value))
+                except (TypeError, ValueError):
+                    continue
+        return highest + 1
+
+    def _issue_box_id(self) -> int:
+        """Take the next id and move the mark past it, in one step so no caller can do one
+        without the other."""
+        issued = self.next_box_id()
+        self.box_ids_issued = issued
+        return issued
+
     def ensure_box(self, number, *, name: Optional[str] = None) -> Box:
         """The box, creating an undeclared one if the registry has never seen it.
 
@@ -1738,9 +1866,13 @@ class Inventory:
         if entry is None:
             if name is not None:
                 self._check_name_free(name, number)
-            entry = Box(box=number, name=name, created_at=now())
+            entry = Box(box=number, bid=self._issue_box_id(), name=name, created_at=now())
             self.boxes[str(number)] = entry
-            self._log("box_created", None, box=number, name=name)
+            # `bid` ON THE EVENT, NOT ONLY ON THE ROW. The row is deleted when the drawer is;
+            # the history is the only place that can still say which drawer `Box 1` meant on a
+            # given day, and `server/pipeline_routes.py` reads exactly this to recover a
+            # departed drawer's name for a run that outlived it.
+            self._log("box_created", None, box=number, bid=entry.bid, name=name)
         elif name is not None and entry.name != name:
             # Through `set_name` rather than by assignment, so a rename reached this way
             # gets the same uniqueness check and the same `box_renamed` line as one reached
@@ -1792,7 +1924,13 @@ class Inventory:
             # the record of what did.
             return entry
         entry.name = wanted
-        self._log("box_renamed", None, box=entry.box, name_from=before, name_to=wanted)
+        # `bid` travels on this line for `box_created`'s reason: once the drawer is deleted the
+        # history is the only record of what it was called, and a rename is where a name most
+        # often comes from.
+        self._log(
+            "box_renamed", None, box=entry.box, bid=entry.bid,
+            name_from=before, name_to=wanted,
+        )
         return entry
 
     def next_box_number(self) -> int:
@@ -2144,8 +2282,15 @@ class Inventory:
         "boxes",
         parse=lambda key, record: Box(**_known(Box, record)),
         dump=asdict,
-        columns=lambda box: {"box": int_or_none(box.box), "name": box.name, "state": box.state},
-        column_names=("box", "name", "state"),
+        columns=lambda box: {
+            "box": int_or_none(box.box),
+            # INDEXED, so `box_by_id` is a query and not a walk over every drawer — and so a
+            # person can ask the `sqlite3` CLI which drawer a run meant.
+            "bid": int_or_none(box.bid),
+            "name": box.name,
+            "state": box.state,
+        },
+        column_names=("box", "bid", "name", "state"),
     )
     LISTINGS = TableSpec(
         "listings",

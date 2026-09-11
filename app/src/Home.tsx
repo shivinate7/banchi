@@ -21,6 +21,7 @@ import { Button, cropStyle, Icon, type IconName } from './kit'
 import { standing, type Standing } from './standing'
 import { DEMO_HISTORY_SCALE, inflate, photographed, ribbon, sittings, type Ribbon } from './storeHistory'
 import { StagePill, stageOf, whenLabel } from './RunsStage'
+import { runBoxLabel } from './runScope'
 import { hubState } from './OrdersHubStore'
 import './Home.css'
 
@@ -688,7 +689,11 @@ export function Home() {
               <p className="home-empty">No runs yet. Identify a box from the Runs screen.</p>
             ) : (
               runs.value.slice(0, 6).map((run) => {
-                const boxLabel = `${run.box ? `Box ${run.box}` : 'Run'}${run.box_name ? ` · ${run.box_name}` : ''}`
+                // `runBoxLabel` AND NOT A SECOND SPELLING OF IT (D-box-true-index). This line
+                // composed the label itself, so `Box 1 (deleted)` reached `#/runs` and `#/pricing`
+                // and this panel went on drawing `Box 1` for a drawer that is not on the shelf —
+                // which is `runScope.ts`'s own founding defect (D56), repeated one screen over.
+                const boxLabel = runBoxLabel(run) ?? 'Run'
                 return (
                   <a key={run.run} className="home-run" href={`#/runs?run=${encodeURIComponent(run.run)}`}>
                     <span className="home-run-text">

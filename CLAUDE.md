@@ -1239,6 +1239,31 @@ A screen is not finished because it compiles.
   enters `Position.label`: `app/tests/fulfillment.spec.ts` floors that label and D31 keeps the
   spec unweakened, so the name travels as `box_name` beside it instead.
 
+  **AND A BOX NOW HAS AN INDEX THAT IS A HIGH-WATER MARK, WHICH IS NOT THIS ONE**
+  (D-box-true-index, 2026-09-11). The sentence above is still exactly right about the NUMBER
+  and it needed one more beside it rather than a correction: `Box.bid` is the drawer's TRUE
+  INDEX — allocated by `Inventory.next_box_id` against a counter a deletion cannot lower,
+  **never reused, and drawn on no screen** — while `next_box_number` goes on handing out the
+  lowest free integer for the reason D20 gives. **Two jobs that were one value**: the number
+  is a LABEL on a physical drawer and a relabelled drawer really is box 1; the id is an
+  IDENTITY, and it is what a record that outlives its box binds to. This is `Place.slot` and
+  `Place.index` one register up (D58), in that entry's own vocabulary.
+
+  **What it fixes is a screen that could not say what the store already knew.** D36 refuses
+  to JOIN a run over a reallocated box and D56 withholds that box's NAME from it — both on
+  `box_disowns_run`, both correct, and neither able to draw a sentence. So the owner's old
+  Pokemon run and their live Riftbound drawer both read `Box 1`: *"it's confusing."*
+  `#/runs`, `#/pricing` and `#/` now draw **`Box 1 (deleted) · Pokemon shakedown`** for the
+  departed drawer, out of `runScope.ts:runBoxLabel` and the wire's `box_former`. The
+  departed drawer's name comes off its own `box_deleted` history line, which does NOT
+  reopen D56: that rule forbids copying an EDITABLE name, and a deleted drawer's last name
+  cannot be edited.
+
+  **A run records the id and never the name**, for the same reason — `_resolve_scope` puts
+  `bid` in the manifest's scope block, and `box_disowns_run` answers off it outright where a
+  caller has one. **Every run on the owner's machine predates the field**, so the older
+  two-condition rule is what answers their actual complaint and is not going anywhere.
+
   **A run carries the name the same way, and it is joined at read time** (D56). Every run on
   the wire has `box` and `box_name`, put there by `server/pipeline_routes.py:_summary` — the
   box from the manifest's scope or from its capture directory, the name from the registry as
@@ -1587,6 +1612,7 @@ D139 Which branch the primary checkout stands on is a fact about the live rig, a
 D140 The number is claimed at the merge, because what main has taken is not knowable before it
 D141 The browser matrix runs when the change reaches what a browser draws, and the path list has a reader
 D142 The setup outlives the browser, the box list is ordered by the hand, and one value stays on the old clock
+D-box-true-index A box has an index nobody sees, because the number on the drawer is a label and a label may be reused
 ```
 
 **THE GAP THIS LIST CARRIED BETWEEN D116 AND D118 IS CLOSED, AND IT CLOSED THE WAY IT SAID IT

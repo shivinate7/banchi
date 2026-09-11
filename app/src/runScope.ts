@@ -82,11 +82,40 @@ export function boxLabel(
   return named === '' ? `Box ${box}` : `Box ${box} · ${named}`
 }
 
-/** The same, for a run, which carries both fields itself. `null` where the run names no box —
- *  which no run on this machine does, and which a manifest with neither a scope block nor a
- *  box-shaped capture directory would. */
+/** The same, for a run, which carries all three fields itself. `null` where the run names no
+ *  box — which no run on this machine does, and which a manifest with neither a scope block nor
+ *  a box-shaped capture directory would.
+ *
+ *  A RUN OVER A DRAWER THAT HAS SINCE BEEN DELETED SAYS SO, IN THAT WORD (D-box-true-index).
+ *  The owner's report: *"i deleted an old box 1, started writing into a new box (now new box 1)
+ *  and if i go on say my runs tab it shows that i'd run a 'Box 1' run a long time ago etc. it's
+ *  confusing."* Every run over both drawers drew `Box 1`, because the number is all a run had
+ *  and D20 hands the number back out the moment a drawer is deleted.
+ *
+ *  `(deleted)` AND NOT `(former)`, WHICH THE FIRST DRAFT SAID. Both are short and neither is
+ *  jargon, and that is exactly why the more specific one wins: "former" says this is not the
+ *  current box 1 and leaves the reader to wonder what became of it — renamed? renumbered? moved
+ *  to another shelf? — while "deleted" names the event the operator performed and remembers
+ *  performing. `docs/DESIGN.md`'s register rule is sentences a person reads, and the sentence
+ *  here is *the box 1 I deleted*.
+ *
+ *  THE NUMBER STAYS, AND THE ID NEVER APPEARS. `Box 1 (deleted)` rather than `Box #1` or a bare
+ *  id: the number is what the run's directory name says, what its photographs are filed under
+ *  and what every refusal in `server/pipeline_routes.py` names, so removing it would cost the
+ *  operator the thread back to all three (D56's argument for keeping both halves). What is
+ *  added is the one word saying that drawer is not on the shelf any more.
+ *
+ *  THE NAME IS THE DEPARTED DRAWER'S OWN, joined by the server off the `box_deleted` history
+ *  line rather than off the registry — there is no registry entry left. So `Box 1 (deleted) ·
+ *  Pokemon shakedown` is the full sentence where the drawer was named, and `Box 1 (deleted)`
+ *  where it was not, or where the run is old enough that the server could tell THAT the drawer
+ *  departed without being able to say WHICH it was. */
 export function runBoxLabel(row: RunSummary): string | null {
-  return boxLabel(boxOf(row), row.box_name)
+  const box = boxOf(row)
+  if (typeof box !== 'number') return null
+  if (row.box_former !== true) return boxLabel(box, row.box_name)
+  const named = typeof row.box_name === 'string' ? row.box_name.trim() : ''
+  return named === '' ? `Box ${box} (deleted)` : `Box ${box} (deleted) · ${named}`
 }
 
 /** What the capture screen calls the drawer in front of the operator: its NAME, and its number

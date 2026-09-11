@@ -1008,12 +1008,37 @@ def check_store_of_record(checks: Checks) -> None:
         expected = master.Inventory.parse(legacy_inventory).to_payload()
 
         imported = Store().read()
+        # THE IMPORT IS LOSSLESS AND IT IS NO LONGER IDENTICAL (D-box-true-index). It ADDS a
+        # `bid` to every box and records the mark it issued them against, which is a migration
+        # rather than a loss — so the assertion is stated as "everything the file said, plus
+        # exactly this", and the two added facts are asserted BY NAME below rather than
+        # swallowed by a looser comparison. Loosening it to ignore unknown keys is what would
+        # make this test stop being about losslessness.
+        added = imported.inventory.to_payload()
         checks.equal(
-            imported.inventory.to_payload(),
+            added["box_ids_issued"],
+            1,
+            "the legacy import issues a true index to the one box the file declared, and "
+            "records the high-water mark it issued it against (D-box-true-index)",
+        )
+        checks.equal(
+            added["boxes"]["2"]["bid"],
+            1,
+            "and the box wears it — assigned in ascending box number, the order "
+            "`store/db.py:_number_legacy_boxes` states, because a legacy box's `created_at` "
+            "is optional and would put every unstamped box in an arbitrary bucket",
+        )
+        restored = json.loads(json.dumps(added))
+        restored["box_ids_issued"] = expected["box_ids_issued"]
+        for key, box in restored["boxes"].items():
+            box["bid"] = expected["boxes"][key]["bid"]
+        checks.equal(
+            restored,
             expected,
-            "the legacy inventory.json reads back through the database EXACTLY as "
-            "`Inventory.parse` read the file — a lossless import, undeclared field dropped "
-            "by the same filter",
+            "and NOTHING ELSE MOVED: with those two facts put back the way the file had "
+            "them, the legacy inventory.json reads back through the database EXACTLY as "
+            "`Inventory.parse` read it — a lossless import, undeclared field dropped by the "
+            "same filter",
         )
         checks.equal(
             imported.inventory.cards["2/1"].metadata_finish,
@@ -9655,6 +9680,189 @@ def check_reused_box_refusal(checks: Checks) -> None:
         checks.equal(master.box_disowns_run(*args), expected, f"box_disowns_run: {label}")
 
 
+def check_box_true_index(checks: Checks) -> None:
+    """A box has a TRUE INDEX that is never reused, and a run over a deleted drawer says so.
+
+    THE OWNER'S REPORT, 2026-09-11, VERBATIM: *"im seeing that i deleted an old box 1, started
+    writing into a new box (now new box 1) and if i go on say my runs tab it shows that i'd run
+    a 'Box 1' run a long time ago etc. it's confusing."* Their ruling in the same breath: *"box
+    #s as indexes should be immutable so if i delete a box # that deleted box's index # is not
+    deleted, like box # and index # should not be the same thing, a box needs an index # not
+    visible anywhere in the app thats a true index rather than cheaply using boxes as an
+    index."*
+
+    THE FIXTURE IS THEIR OWN STORE'S SHAPE, which D36 records: box 1 held 53 Pokemon cards on
+    2026-08-22 and box 1 has held 133 Riftbound cards since 2026-08-29. It is built here rather
+    than described, because every claim below is about what happens when one number names two
+    drawers and no smaller fixture has two drawers in it.
+
+    IT IS NOT `check_reused_box_refusal` AGAIN. That block asserts the older rule — the stamp
+    and the card set — which reasons from the SHAPE of the evidence and must abstain when it
+    cannot tell. This asserts the identity that makes the same question a lookup, and the two
+    coexist on purpose: every run on the owner's machine predates the id, so the older rule is
+    what answers their actual complaint and both arms are exercised here against one store.
+
+    WHAT IT DELIBERATELY DOES NOT ASSERT: that the NUMBER stops being reused. D20 hands out the
+    lowest free integer and that stays correct — a physical drawer relabelled 1 really is box 1
+    — so the reuse is asserted as a REQUIREMENT below rather than guarded against.
+    """
+    checks.note("")
+    checks.note("BOX TRUE INDEX — the drawer's identity outlives its number (D-box-true-index)")
+
+    OLD_RUN, NEW_RUN = "2026-08-22-box1-03", "2026-08-29-box1-01"
+
+    def manifest(name: str, created: str, bid) -> None:
+        directory = files.runs_dir() / name
+        directory.mkdir(parents=True, exist_ok=True)
+        scope = {"box": 1, "whole_box": True, "cards": None}
+        if bid is not None:
+            scope["bid"] = bid
+        files.write_json(
+            directory / "manifest.json",
+            {
+                "created_at": created,
+                "capture_dir": str(files.home() / "captures/cards/box1"),
+                "scope": scope,
+                "collected": True,
+                "joined": True,
+            },
+        )
+
+    with isolated_home():
+        # --- the drawer that is about to depart ------------------------------------------
+        with Store().write() as snapshot:
+            inventory = snapshot.inventory
+            old = inventory.ensure_box(1, name="Pokemon shakedown")
+            old.created_at = "2026-08-22T09:00:00+00:00"
+            for _ in range(53):
+                card, _ = inventory.allocate_capture(1)
+                card.game, card.run = "pokemon", OLD_RUN
+            old_bid = old.bid
+        checks.equal(old_bid, 1, "the first drawer in an empty store is index 1")
+        manifest(OLD_RUN, "2026-08-22T10:12:00+00:00", old_bid)
+
+        # --- the deletion, exactly as `do_delete_box` performs it -------------------------
+        with Store().write() as snapshot:
+            inventory = snapshot.inventory
+            for key in [k for k, c in inventory.cards.items() if int(c.box) == 1]:
+                del inventory.cards[key]
+            entry = inventory.boxes.pop("1")
+            inventory._log(
+                "box_deleted", None, box=1, bid=entry.bid, name=entry.name, cards=53, buried=0,
+            )
+
+        # --- the replacement, allocated the lowest free NUMBER (D20) ----------------------
+        with Store().write() as snapshot:
+            inventory = snapshot.inventory
+            number = inventory.next_box_number()
+            checks.equal(
+                number,
+                1,
+                "THE NUMBER IS STILL REUSED, AND THAT IS THE REQUIREMENT RATHER THAN THE BUG "
+                "(D20): a physical drawer relabelled 1 really is box 1, and the owner did not "
+                "ask for monotonic numbers. Making this 2 would be 'fixing' the complaint by "
+                "changing what the operator reads off the shelf",
+            )
+            new = inventory.ensure_box(number, name="RB Epics")
+            new.created_at = "2026-08-29T14:00:00+00:00"
+            for _ in range(133):
+                card, _ = inventory.allocate_capture(number)
+                card.game, card.run = "riftbound", NEW_RUN
+            new_bid = new.bid
+        manifest(NEW_RUN, "2026-08-29T15:00:00+00:00", new_bid)
+
+        checks.equal(
+            new_bid,
+            2,
+            "AND THE INDEX IS NOT. The deleted drawer's 1 is spent forever — `next_box_id` is "
+            "a high-water mark over a counter a deletion cannot lower, which is D10's rule for "
+            "the card index inside a box and the one thing `next_box_number` above is "
+            "deliberately not",
+        )
+
+        snapshot = Store().read()
+        checks.equal(
+            snapshot.inventory.box_by_id(old_bid),
+            None,
+            "the departed drawer's index resolves to nothing — an id answers about ONE drawer "
+            "for the life of the store, so None is 'that drawer is gone' and never 'look again "
+            "under another key'",
+        )
+        checks.equal(
+            snapshot.inventory.box_by_id(new_bid).name,
+            "RB Epics",
+            "and the live one resolves to the drawer that was given it",
+        )
+        checks.equal(
+            snapshot.inventory.box(1).bid,
+            new_bid,
+            "while the NUMBER 1 resolves to whichever drawer is wearing it today — the two "
+            "questions are different and now have different keys (D58, one register up)",
+        )
+
+        # --- what the runs tab draws ------------------------------------------------------
+        names = pipeline_routes._box_names()
+        old_row = pipeline_routes._summary(files.runs_dir() / OLD_RUN, names)
+        new_row = pipeline_routes._summary(files.runs_dir() / NEW_RUN, names)
+
+        checks.equal(
+            [old_row["box"], old_row["box_bid"], old_row["box_former"], old_row["box_name"]],
+            [1, old_bid, True, "Pokemon shakedown"],
+            "THE COMPLAINT, ANSWERED: the old run still names box 1 — its directory, its "
+            "photographs and every refusal about it do — and the wire now says that drawer is "
+            "not the box 1 on the shelf, and what it was called. `runBoxLabel` draws `Box 1 "
+            "(deleted) · Pokemon shakedown`",
+        )
+        checks.equal(
+            old_row["box_name"],
+            "Pokemon shakedown",
+            "and the departed drawer's name comes off its own `box_deleted` history line, not "
+            "off the registry — there is no registry entry left. D56 forbids STORING a name on "
+            "a run because a live name is editable; a deleted drawer's last name cannot be "
+            "edited, so it is a fact rather than a stale copy",
+        )
+        checks.equal(
+            [new_row["box"], new_row["box_bid"], new_row["box_former"], new_row["box_name"]],
+            [1, new_bid, False, "RB Epics"],
+            "AND THE CURRENT RUN IS UNTOUCHED — same number, same screen, no marker, and its "
+            "name still joined live off the registry (D56). A fix that marked both would have "
+            "traded one confusing row for two",
+        )
+
+        # --- the arm the owner's own machine actually takes --------------------------------
+        manifest(OLD_RUN, "2026-08-22T10:12:00+00:00", None)
+        legacy = pipeline_routes._summary(files.runs_dir() / OLD_RUN, names)
+        checks.equal(
+            [legacy["box_bid"], legacy["box_former"], legacy["box_name"]],
+            [None, True, None],
+            "A RUN WRITTEN BEFORE THE ID EXISTS IS STILL CAUGHT, by the older rule "
+            "(`box_disowns_run`, D36/D56) — which is EVERY RUN ON THE OWNER'S MACHINE, "
+            "including the one that produced the report. It can say THAT the drawer departed "
+            "and not WHICH, so there is no name to recover and `Box 1 (deleted)` is the whole "
+            "of what it draws",
+        )
+
+        # --- the join refuses on the id, where there is one --------------------------------
+        inventory = Store().read().inventory
+        checks.ok(
+            inventory.box_disowns_run(1, OLD_RUN, "2026-08-22T10:12:00+00:00", bid=old_bid)
+            is not None,
+            "`Inventory.box_disowns_run` refuses on the ID OUTRIGHT where run and box both "
+            "carry one — a decision, not the inference the older rule has to make, so "
+            "`cli/resolve.py:refuse_reallocated` refuses this join (D36 amended)",
+        )
+        checks.ok(
+            inventory.box_disowns_run(1, NEW_RUN, "2026-08-29T15:00:00+00:00", bid=new_bid)
+            is None,
+            "and it passes the drawer's OWN run through on the same comparison — the id arm "
+            "has exactly two answers and neither is an abstention",
+        )
+        checks.ok(
+            inventory.box_disowns_run(1, OLD_RUN, "2026-08-22T10:12:00+00:00") is not None,
+            "with no id passed, the older rule decides, unchanged: the registry entry is "
+            "younger than the run and the box's 133 cards are all another run's",
+        )
+
 def check_printed_code_profiles(checks: Checks) -> None:
     """`riftbound_card_v1` and `one_piece_card_v1`: the wiring, and the one seam that lies.
 
@@ -15376,7 +15584,12 @@ def check_pipeline_routes(checks: Checks) -> None:
             answer = json.loads(body)
             checks.equal(
                 (status, answer["scopes"][0]["scope"]),
-                (200, {"box": 3, "whole_box": False, "cards": 1}),
+                # `bid` IS THE FOURTH FACT AND IT IS `None` HERE (D-box-true-index): this
+                # fixture's box 3 has no registry entry, and `_box_bid` answers None for a box
+                # the registry has never seen rather than inventing an identity for it. A
+                # preflight is a preview, so it reports the id the run WOULD record — which is
+                # the same value `_resolve_scope` writes into the manifest on the press.
+                (200, {"box": 3, "whole_box": False, "cards": 1, "bid": None}),
                 "a preflight over a TICKED SELECTION reports the box it is over, that it is "
                 "not the whole box, and how many cards were ticked — the three facts the run "
                 "panel draws per leg above the control that spends, and the three the "
@@ -22634,6 +22847,7 @@ def run() -> Result:
     check_review_catalog(checks)
     check_run_realignment(checks)
     check_reused_box_refusal(checks)
+    check_box_true_index(checks)
     check_printed_code_profiles(checks)
     check_cli_refusals(checks)
     check_listing_commands(checks)

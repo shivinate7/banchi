@@ -110,6 +110,11 @@ class Store:
                 cards=bound(Inventory.CARDS, "cards"),
                 boxes=bound(Inventory.BOXES, "boxes"),
                 listings=bound(Inventory.LISTINGS, "listings"),
+                # READ INSIDE THE SAME TRANSACTION AS THE TABLES (D-box-true-index), so the
+                # mark a session allocates against is the mark as of the moment its rows were
+                # read. Read outside it, a box could be created between the two and this
+                # session would hand its id out a second time.
+                box_ids_issued=db.box_ids_issued(conn),
             ),
             cache=Cache(entries=bound(Cache.ENTRIES, "identifications")),
             review=Queue(name=MAIN, entries=bound(Queue.ENTRIES, "queues", {"queue": MAIN})),
@@ -146,6 +151,9 @@ class Store:
                 for rows in snapshot.tables:
                     db.flush_rows(rows)
                 db.append_events(conn, snapshot.inventory.events)
+                # BEFORE THE COMMIT, so a box row and the mark that says its id is spent land
+                # together or not at all. `set_box_ids_issued` never lowers the stored figure.
+                db.set_box_ids_issued(conn, snapshot.inventory.box_ids_issued)
                 conn.execute("COMMIT")
                 snapshot.inventory.events = []
             except BaseException:
@@ -161,6 +169,20 @@ class Store:
         conn = db.connect(self.directory)
         try:
             return db.history(conn)
+        finally:
+            conn.close()
+
+    def named_events(self, event: str):
+        """Every event of one kind, newest first. `buried()`'s general form.
+
+        IT EXISTS BECAUSE A SECOND READER ARRIVED (D-box-true-index): `box_deleted` is the
+        only record of what a departed drawer was called, and `server/pipeline_routes.py`
+        joins it onto a run that outlived its box. Copying `buried()` for it would have been
+        two methods differing by a string literal.
+        """
+        conn = db.connect(self.directory)
+        try:
+            return db.events_named(conn, event)
         finally:
             conn.close()
 

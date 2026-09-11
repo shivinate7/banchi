@@ -1161,8 +1161,17 @@ def refuse_reallocated(payload: dict, inventory: master.Inventory, run: runs.Run
             if isinstance(record, dict) and record.get("box") is not None
         }
     )
+    # THE RUN'S OWN RECORD OF WHICH DRAWER IT WAS OVER, WHERE IT HAS ONE (D-box-true-index).
+    # A run started after that landed carries its box's true index in its scope block, which
+    # settles this case rather than inferring it. Every run on the owner's machine predates
+    # the field and takes the rule below unchanged — so this narrows nothing and can only
+    # turn an abstention into a refusal.
+    scope = run.manifest.get("scope")
+    scope_bid = scope.get("bid") if isinstance(scope, dict) else None
+    if not isinstance(scope_bid, int) or isinstance(scope_bid, bool):
+        scope_bid = None
     for box in boxes:
-        sentence = inventory.box_disowns_run(box, run.name, run.created_at)
+        sentence = inventory.box_disowns_run(box, run.name, run.created_at, bid=scope_bid)
         if sentence is None:
             continue
         raise runs.RunError(
