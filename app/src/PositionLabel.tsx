@@ -73,6 +73,11 @@ type PositionLabelProps = {
   /* THE SECTION'S NAME RIDES ITS OWN PART THE SAME WAY (D132): `SECTION 6 Rares`. The number
      stays the value — a section is counted to — and the name is the note beside it. */
   sectionName?: string | null
+
+  /* WHETHER THE INDEX IS WRITTEN BESIDE THE NAME AT ALL. The location card says `Box 4` in its
+     own corner and the owner asked for it once, not twice (2026-09-11); a copies row has no
+     corner and keeps the note. Only read when `boxName` takes the value. */
+  indexNote?: boolean
 }
 
 type Part = { key: string; value: string }
@@ -112,6 +117,7 @@ export function PositionLabel({
   boxNote = null,
   boxName = null,
   sectionName = null,
+  indexNote = true,
 }: PositionLabelProps): ReactNode {
   const all = label.split(' · ')
 
@@ -223,7 +229,7 @@ export function PositionLabel({
   const sectioned = sectionName !== null && sectionName.trim() !== '' ? sectionName.trim() : null
   const path = ranked.map((part, at) => {
     if (part.key.toLowerCase() === 'box' && named !== null) {
-      return { ...part, value: named, note: `Box ${part.value}` as ReactNode }
+      return { ...part, value: named, note: indexNote ? (`Box ${part.value}` as ReactNode) : null }
     }
     if (part.key.toLowerCase() === 'section' && sectioned !== null) {
       return { ...part, note: sectioned as ReactNode }
