@@ -101,7 +101,7 @@ def do_codes() -> dict:
             LANE_BULK: sum(1 for e in held if e.product and not products.is_premium(e.product)),
             "unclaimed": sum(1 for e in held if not e.product),
         },
-        "by_product": products.summarise(held),
+        "by_product": products.summarize(held),
         # A non-empty list here is a real finding, not bookkeeping: either one card was
         # photographed twice or two cards carry one code, and in the second case one of
         # them is worth nothing.

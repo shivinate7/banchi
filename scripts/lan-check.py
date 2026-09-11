@@ -351,14 +351,14 @@ def main() -> int:
     unknown = 0
     for r in results:
         if r.ok is True:
-            mark, colour = "PASS", GREEN
+            mark, color = "PASS", GREEN
         elif r.ok is False:
-            mark, colour = "FAIL", RED
+            mark, color = "FAIL", RED
             failed += 1
         else:
-            mark, colour = "????", YELLOW
+            mark, color = "????", YELLOW
             unknown += 1
-        print(f"  {colour}{mark}{OFF}  {r.name.ljust(width)}  {DIM}{r.detail}{OFF}")
+        print(f"  {color}{mark}{OFF}  {r.name.ljust(width)}  {DIM}{r.detail}{OFF}")
         if r.fix:
             for line in _wrap(r.fix, width + 8):
                 print(f"        {YELLOW}{line}{OFF}")

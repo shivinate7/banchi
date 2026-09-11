@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Seed a demo store — real catalogue rows, synthetic photographs, no real inventory.
+"""Seed a demo store — real catalog rows, synthetic photographs, no real inventory.
 
 WHAT THIS IS FOR. The product is shareable only if somebody who has never seen it can
 look at a full one. The owner's real store is not that: it is their cards, their buyers
@@ -8,7 +8,7 @@ builds a store that is *shaped* like a real one out of material that is safe to 
 
 WHAT IS REAL AND WHAT IS NOT, because the distinction is the whole design:
 
-  REAL      the catalogue. Every card here is drawn from `fixtures/`, which are untouched
+  REAL      the catalog. Every card here is drawn from `fixtures/`, which are untouched
             TCGplayer Filtered Exports — real SKUs, real names, real numbers, real market
             prices. So the joins are real joins, the pricing table is real arithmetic,
             and a viewer reading `8608039 · Alcremie ex · 075/159 · $0.67` is reading
@@ -65,7 +65,7 @@ def stamp(days_ago: float = 0.0) -> str:
     return (NOW - timedelta(days=days_ago)).isoformat(timespec="seconds")
 
 
-# --------------------------------------------------------------------------- catalogue
+# --------------------------------------------------------------------------- catalog
 
 ASSETS = REPO_ROOT / "demo-assets"
 MANIFEST = ASSETS / "cards.json"
@@ -138,7 +138,7 @@ def export_variants() -> Dict[str, List[dict]]:
     return grouped
 
 
-def catalogue() -> Tuple[List[Row], List[Row]]:
+def catalog() -> Tuple[List[Row], List[Row]]:
     """The curated set, split by whether a vendored export can price it.
 
     TWO POOLS BECAUSE A RUN NEEDS THE FIRST ONE. A run is joined against `fixtures/`, so a
@@ -337,7 +337,7 @@ def state_for(position: int, count: int, rng: random.Random) -> str:
 def build_store(force: bool) -> dict:
     """Write the whole demo store. Returns a summary for the caller to print."""
     rng = random.Random(SEED)
-    priceable, other = catalogue()
+    priceable, other = catalog()
     taken: set = set()
     store = Store()
     home = store_files.home()
@@ -731,7 +731,7 @@ def write_run(
     `cli/resolve.py:_rarity_claim` names "a hand-made or recovered identifications file" as a
     case it defends, and `join` and `emit` are both free and re-runnable by construction. So
     the expensive step is simulated and every step after it is REAL — the join runs against
-    the real fixture export, the catalogue lookup is a real lookup, the cap arithmetic is
+    the real fixture export, the catalog lookup is a real lookup, the cap arithmetic is
     real arithmetic, and `pricing.json` is what the pipeline itself computed.
 
     The identification is what the model WOULD have returned for a card we already know the

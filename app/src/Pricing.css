@@ -733,6 +733,28 @@
   white-space: nowrap;
 }
 .pricing-qty-of { font-weight: 400; color: var(--bn-ink-3); font-size: var(--bn-fs-sm); }
+/* THE QTY CELL IS A FIELD (D7, amended 2026-09-11): the figure that goes, typed by the
+   operator, over "of N" on hand. Stacked, so the 56px column the eight templates already
+   declare holds it without a ninth axis; the field is the column's whole width. The
+   placeholder is the figure a blank sends, drawn in the ink a figure would be so the empty
+   field reads as an answer — a typed one is marked by the accent border. */
+.pricing-qty:has(.pricing-qty-input) {
+  display: inline-flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 2px;
+}
+.pricing-qty .pricing-qty-input {
+  width: 56px;
+  min-height: var(--bn-control-h-sm);
+  padding: 0 var(--bn-2);
+  text-align: right;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+.pricing-qty .pricing-qty-input::placeholder { color: var(--bn-ink-2); opacity: 1; }
+.pricing-qty[data-asked='true'] .pricing-qty-input { border-color: var(--bn-accent); color: var(--bn-accent); }
+.pricing-verdict-byhand { color: var(--bn-accent); }
 
 /* THE HERO: the price. */
 .pricing-price { display: flex; flex-direction: column; align-items: stretch; gap: 3px; min-width: 0; margin-left: var(--bn-2); }
@@ -1038,8 +1060,10 @@
 }
 /* TWO CLASSES DELIBERATELY, so the width beats `.bn-input`'s `width: 100%` on specificity
    rather than on which stylesheet the bundler happened to emit second. */
+/* 72px, not 56: the placeholder is "no cap" and at 56 it clipped to "no ca" — a control whose
+   empty state cannot be read is a control whose empty state is a gap. Looked at 2026-09-11. */
 .pricing-ship-cap .pricing-ship-cap-input {
-  width: 56px;
+  width: 72px;
   min-height: var(--bn-control-h-sm);
   padding: 0 var(--bn-2);
   text-align: center;
@@ -1253,6 +1277,10 @@ body:has(.pricing-ship) .bn-toasts { bottom: calc(var(--pricing-ship-h, 0px) + v
     align-items: center;
   }
   .pricing-qty { grid-column: 1 / -1; text-align: left; font-size: var(--bn-fs-sm); }
+  /* On a card the field and "of N" sit in a row at the left, with the facts tiles under them —
+     the stacked, right-aligned form is for a 56px column, and here the cell is the card's width. */
+  .pricing-qty:has(.pricing-qty-input) { flex-direction: row; align-items: center; justify-content: flex-start; gap: var(--bn-2); }
+  .pricing-qty .pricing-qty-input { width: 64px; min-height: var(--bn-control-h); }
   .pricing-ref {
     display: flex;
     flex-direction: column;

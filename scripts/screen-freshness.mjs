@@ -110,7 +110,7 @@
  * when clean, 1 when a finding stands.
  *
  *     scripts/screen-freshness.mjs              audit app/src
- *     scripts/screen-freshness.mjs --self-test  prove the recognisers before trusting a report
+ *     scripts/screen-freshness.mjs --self-test  prove the recognizers before trusting a report
  */
 
 import fs from 'node:fs'
@@ -417,7 +417,7 @@ function allowlistNotEarned(text) {
 /**
  * Everything about one `.tsx` that more than one recogniser needs, worked out once.
  *
- * Building this per file rather than per call site is not only speed: several recognisers ask
+ * Building this per file rather than per call site is not only speed: several recognizers ask
  * questions ACROSS files — a callback prop is invoked in the child and bound in the parent, a
  * reload counter is bumped in `Inventory.tsx` and listed as a dependency in `BoxBrowse.tsx` —
  * and they can only be answered from the whole set at once.
@@ -864,7 +864,7 @@ function callbackBindingReReads(screens, component, prop, depth = 0, seen = new 
   return null
 }
 
-// -------------------------------------------------------------------- the twelve recognisers
+// -------------------------------------------------------------------- the twelve recognizers
 
 /**
  * Each recogniser answers one question about one write site and returns a sentence naming what
@@ -879,7 +879,7 @@ function callbackBindingReReads(screens, component, prop, depth = 0, seen = new 
  * read of an export — which folds the answer straight into `batch` — was reported as being kept
  * fresh by `onServerBoot`, which is true of the file and not of that line.
  */
-function recognisers(screens) {
+function recognizers(screens) {
   return [
     /* 10. OPTIMISTIC AUTOSAVE. `Pricing.tsx` never re-reads its document: the document on
      *     screen IS the intent, and staleness is `doc !== savedDoc.current` — a comparison,
@@ -1317,7 +1317,7 @@ function auditSite(screens, screen, site, checks, depth = 0) {
 
 function audit(files, classification) {
   const screens = files.map((file) => readScreen(file, fs.readFileSync(file, 'utf8'), classification))
-  const checks = recognisers(screens)
+  const checks = recognizers(screens)
   const findings = []
   const covered = []
 
@@ -1430,7 +1430,7 @@ const setsMatch = (a, b) =>
 // ------------------------------------------------------------------------------ self-test
 
 /**
- * Prove the recognisers before trusting a report, in BOTH directions.
+ * Prove the recognizers before trusting a report, in BOTH directions.
  *
  * One direction alone is worthless. A checker that only proves it accepts the tree degrades
  * into one that accepts everything — widen a recogniser far enough and every write looks

@@ -12064,6 +12064,222 @@ def check_cap_flag_refusals(checks: Checks) -> None:
         )
 
 
+def check_emit_send_quantity(checks: Checks) -> None:
+    """A number on the card's row is a SEND quantity, this press only (D7, amended 2026-09-11).
+
+    THE OWNER'S REPORT, ON 2026-09-11: *"I can no longer select quantities to sell at all"*. The
+    ceiling `--cap N` holds every SKU to N live at TCGplayer, counting what is already out — so
+    it cannot say "two of THIS card", and on a SKU with copies already out it says nothing at
+    all. Asked which control they meant, the owner ruled for a number on each row, meaning
+    COPIES TO SEND IN THIS FILE: type 2 and two go, whatever TCGplayer holds, bounded by the
+    copies on hand that are not already listed.
+
+    WHAT IS ASSERTED IS THE FILE AND THE STORE, `check_merged_emit_cap`'s rule. The figure
+    bounds the LISTING and never the RECORD (D7 amended, `check_emit_identity_stamp`): every
+    copy still carries the SKU. A second press asking past what remains gets the remainder
+    and SAYS SO; `0` sends none of the card and is named as the reason; the ceiling and the
+    quantity compose to the tighter; a merged send spends the figure once across the union;
+    and every unusable pair is a sentence before the store is read, on both doors — the flag
+    and the route's parser.
+    """
+    checks.note("")
+    checks.note("EMIT QUANTITY — a number on the card's row, this press only")
+
+    from cli import __main__ as entry
+
+    copies = 5
+    cards = [(3, i, "Articuno", "161", None) for i in range(1, copies + 1)]
+    # A second card, given no figure, so the file always has a row and the ordinary case is
+    # asserted beside the typed one rather than assumed.
+    cards.append((3, copies + 1, "Dunsparce", "120", "normal"))
+
+    def quantity_written(run_dir):
+        rows = tcgcsv.read_export(run_dir.path(runs.IMPORT_MERGED)).rows
+        return {row[tcgcsv.SKU_COLUMN]: row[tcgcsv.QUANTITY_COLUMN] for row in rows}
+
+    with isolated_home():
+        run_dir, _ = seam_run(checks, cards)
+        said = command(
+            checks, "emit", str(run_dir.directory),
+            "--quantity", f"{ARTICUNO_SKU}=2", "--quantity", "999999=1",
+        )
+        written = quantity_written(run_dir)
+        checks.equal(
+            written.get(ARTICUNO_SKU),
+            "2",
+            "THE ROW CARRIES THE FIGURE TYPED, not the five on hand: a send quantity is what "
+            "goes in the file this press, and the file is what D7 is about",
+        )
+        checks.equal(
+            written.get(DUNSPARCE_SKU),
+            "1",
+            "and a card given no figure sends every copy that can go — the ordinary press is "
+            "untouched by a figure on another row",
+        )
+        inventory = Store().read().inventory
+        checks.equal(
+            inventory.listings[ARTICUNO_SKU].pushed,
+            2,
+            "THE STORE AGREES WITH THE FILE: `pushed` is a commitment that a CSV row was "
+            "written, so it follows the figure and not the shelf",
+        )
+        checks.equal(
+            [c.index for c in inventory.positions_for_sku(ARTICUNO_SKU)],
+            list(range(1, copies + 1)),
+            "AND EVERY COPY STILL CARRIES THE SKU. The figure bounds the listing and never the "
+            "record — the same seam D7's identity-stamp amendment closed for the cap",
+        )
+        checks.ok(
+            "quantities" in said and "2 of 5 on hand" in said,
+            f"the report names the card and the figure in a `quantities` block rather than "
+            f"counting it. Got: {said[-400:]!r}",
+        )
+        checks.ok(
+            "does not hold: 999999" in said,
+            "and a SKU named that the send does not hold is named back — a typo that would "
+            "otherwise vanish behind an accepted flag and a written file",
+        )
+
+        # ------------------------------------------------ a second press asks past the shelf
+        said = command(checks, "emit", str(run_dir.directory), "--quantity", f"{ARTICUNO_SKU}=9")
+        checks.equal(
+            quantity_written(run_dir).get(ARTICUNO_SKU),
+            "3",
+            "ASKED 9 WITH THREE UNSENT, THREE GO. Bounded by the copies on hand that are not "
+            "already listed — never by what TCGplayer holds, which is the ceiling's job and "
+            "the reading the owner ruled against for this control",
+        )
+        checks.equal(
+            Store().read().inventory.listings[ARTICUNO_SKU].pushed,
+            5,
+            "and the second press ADDS on top of the first (D54): two then three, never two "
+            "sent twice — `uncommitted_positions` is still what stops a copy going twice",
+        )
+        checks.ok(
+            "asked 9, only 3 can go" in said,
+            f"and the shortfall is NAMED, not clamped in silence. Got: {said[-400:]!r}",
+        )
+
+    # ---------------------------------------------------------- zero, and the ceiling composing
+    with isolated_home():
+        run_dir, _ = seam_run(checks, cards)
+        said = command(checks, "emit", str(run_dir.directory), "--quantity", f"{ARTICUNO_SKU}=0")
+        written = quantity_written(run_dir)
+        checks.ok(
+            ARTICUNO_SKU not in written and written.get(DUNSPARCE_SKU) == "1",
+            "`0` SENDS NONE OF THAT CARD and the file still carries the rest — it is a "
+            "quantity, not a refusal, and not a hold",
+        )
+        inventory = Store().read().inventory
+        listing = inventory.listings.get(ARTICUNO_SKU)
+        checks.equal(
+            listing.pushed if listing else 0,
+            0,
+            "nothing is pushed for a card sent at zero",
+        )
+        checks.equal(
+            len(inventory.positions_for_sku(ARTICUNO_SKU)),
+            copies,
+            "and its five copies are still stamped — asked-for-none is not unknown",
+        )
+        checks.ok(
+            "asked 0, none sent" in said,
+            f"and the zero is named as the reason in the report. Got: {said[-400:]!r}",
+        )
+
+        said = command(
+            checks, "emit", str(run_dir.directory), "--cap", "2", "--quantity", f"{ARTICUNO_SKU}=4",
+        )
+        checks.equal(
+            quantity_written(run_dir).get(ARTICUNO_SKU),
+            "2",
+            "THE CEILING AND THE QUANTITY COMPOSE TO THE TIGHTER: a cap of 2 over a figure of 4 "
+            "sends 2 — the quantity can only ever take copies out of the file, never put in "
+            "copies the ceiling refuses",
+        )
+        checks.ok(
+            "asked 4, only 2 can go" in said,
+            "and that, too, is named",
+        )
+
+    # ---------------------------------------------------------- once across a merged send
+    with isolated_home():
+        first, _ = seam_run(checks, [(3, i, "Articuno", "161", None) for i in range(1, 4)])
+        second, _ = seam_run(checks, [(4, i, "Articuno", "161", None) for i in range(1, 3)])
+        book = corpus.Corpus.read()
+        book.sub_threshold = "floor"
+        book.write()
+        said = command(
+            checks, "emit", str(first.directory), str(second.directory),
+            "--quantity", f"{ARTICUNO_SKU}=4",
+        )
+        checks.equal(
+            quantity_written(second).get(ARTICUNO_SKU),
+            "4",
+            "A MERGED SEND SPENDS THE FIGURE ONCE OVER THE UNION: five copies across two runs, "
+            "asked at 4, is one row of 4 — not 4 per leg and not 3 + 2",
+        )
+        checks.equal(
+            Store().read().inventory.listings[ARTICUNO_SKU].pushed,
+            4,
+            "and the store pushed four, across both runs' copies",
+        )
+        checks.ok(
+            "4 of 5 on hand" in said,
+            f"and the merged report reads the figure off the merged match. Got: {said[-400:]!r}",
+        )
+
+    # ---------------------------------------------------------- an unusable pair is a sentence
+    with isolated_home():
+        run_dir, _ = seam_run(checks, [(3, 1, "Articuno", "161", None)])
+        before = run_dir.path(runs.IMPORT_MERGED).exists()
+        for bad in (
+            ["abc=1"], [f"{ARTICUNO_SKU}=x"], [f"{ARTICUNO_SKU}=-1"], [ARTICUNO_SKU],
+            [f"{ARTICUNO_SKU}=1000"], [f"{ARTICUNO_SKU}=1", f"{ARTICUNO_SKU}=2"],
+        ):
+            argv = ["emit", str(run_dir.directory)]
+            for pair in bad:
+                argv += ["--quantity", pair]
+            with quiet() as buf:
+                code = entry.main(argv)
+            said = buf.getvalue()
+            checks.equal(code, 1, f"`--quantity {' '.join(bad)}` exits 1")
+            checks.ok(
+                "Traceback" not in said and "--quantity" in said,
+                f"and answers in a sentence naming the flag. Got: {said.strip()[:160]!r}",
+            )
+        checks.equal(
+            run_dir.path(runs.IMPORT_MERGED).exists(),
+            before,
+            "AND NOTHING WAS WRITTEN: parsed beside `--cap`, before the store is read",
+        )
+
+    # ---------------------------------------------------------- the route's own door
+    checks.equal(
+        pipeline_routes._quantity_flags({}),
+        [],
+        "the route forwards nothing when no card was given a figure — absence is the ordinary press",
+    )
+    checks.equal(
+        pipeline_routes._quantity_flags({"quantities": {ARTICUNO_SKU: 2, DUNSPARCE_SKU: 0}}),
+        ["--quantity", f"{ARTICUNO_SKU}=2", "--quantity", f"{DUNSPARCE_SKU}=0"],
+        "and turns the screen's map into the flag, one pair per card, zero included",
+    )
+    for bad in (
+        [1], {"abc": 1}, {ARTICUNO_SKU: "2"}, {ARTICUNO_SKU: True},
+        {ARTICUNO_SKU: -1}, {ARTICUNO_SKU: 2.5}, {ARTICUNO_SKU: 1000},
+    ):
+        refused = None
+        try:
+            pipeline_routes._quantity_flags({"quantities": bad})
+        except pipeline_routes.PipelineRefusal as caught:
+            refused = caught
+        checks.ok(
+            refused is not None and getattr(refused, "code", None) == "quantities_invalid",
+            f"the route refuses {bad!r} by name rather than forwarding it into argv",
+        )
+
+
 def check_merged_cap_is_the_tightest(checks: Checks) -> None:
     """Legs carrying different caps merge to the SMALLEST, and a leg with none does not win.
 
@@ -19620,7 +19836,7 @@ def check_shipping_routes(checks: Checks) -> None:
 
       no PII on the list wire   the union of every row's keys is asserted as a set, and the
                                 fixture's own first buyer name and street are asserted absent
-                                from the whole serialised answer. A later field is then
+                                from the whole serialized answer. A later field is then
                                 argued for here rather than slipped in.
       the abstention is not in  none of the 39 unjudged order ids appears in the rendered
       the file                  import. Being swept into the parcel lane to be safe is a
@@ -19731,11 +19947,11 @@ def check_shipping_routes(checks: Checks) -> None:
             "is argued for HERE rather than slipped in behind a lookup that still passes",
         )
         cells = list(csv.reader(io.StringIO(fixture)))[1]
-        serialised = json.dumps(answer)
+        serialized = json.dumps(answer)
         checks.ok(
-            cells[1] not in serialised and cells[3] not in serialised,
+            cells[1] not in serialized and cells[3] not in serialized,
             "and the fixture's own first buyer name and first street address appear NOWHERE "
-            "in the serialised answer. Asserted against the file's real cells rather than "
+            "in the serialized answer. Asserted against the file's real cells rather than "
             "against a literal, so the case cannot go stale against a re-exported fixture",
             f"name {cells[1]!r} / street {cells[3]!r}",
         )
@@ -19775,10 +19991,10 @@ def check_shipping_routes(checks: Checks) -> None:
             "parcel weighs, so writing it buys postage for less than the package weighs and "
             "the bill arrives at the far end weeks later",
         )
-        signalled = next(row for row in rows if row["reason"] == "non_card_signal")
-        signalled_line = [row for row in parsed[1:] if row[8] == signalled["order"]]
+        signaled = next(row for row in rows if row["reason"] == "non_card_signal")
+        signaled_line = [row for row in parsed[1:] if row[8] == signaled["order"]]
         checks.equal(
-            [row[7] for row in signalled_line],
+            [row[7] for row in signaled_line],
             [""],
             "AND IT IS STILL EMPTY ON A `non_card_signal` ORDER, which is the case where "
             "carrying it across would look most reasonable: that order was routed BY its "
@@ -21227,6 +21443,7 @@ def run() -> Result:
     check_merged_emit_cap(checks)
     check_merged_emit_uncapped(checks)
     check_cap_flag_refusals(checks)
+    check_emit_send_quantity(checks)
     check_merged_cap_is_the_tightest(checks)
     check_threshold_and_file_shape(checks)
     check_live_reconcile(checks)

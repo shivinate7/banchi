@@ -327,9 +327,9 @@ def _box_at(mask, angle: float):
     return area, x0, y0, x1, y1, turned.shape[1], turned.shape[0], covered
 
 
-def _angles(centre: float, span: float, step: float) -> List[float]:
+def _angles(center: float, span: float, step: float) -> List[float]:
     count = int(round(span / step))
-    return [centre + step * i for i in range(-count, count + 1)]
+    return [center + step * i for i in range(-count, count + 1)]
 
 
 def _edge_valid_box(shape, angle: float):

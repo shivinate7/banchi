@@ -168,6 +168,10 @@ def _merged_match(sku: str, legs: Sequence[Leg]) -> join.SkuMatch:
         positions=_union(legs, lambda m: m.positions),
         stages=list(newest.match.stages),
         live_cap=_merged_cap(legs),
+        # THE SEND'S QUANTITY FOR THIS CARD, ONCE ACROSS THE UNION (D7, amended 2026-09-11).
+        # Every leg was resolved with the same `--quantity` map, so the legs agree; taken the
+        # way the cap is — the tightest any leg names — so a leg naming nothing never lifts it.
+        asked=_merged_asked(legs),
         rule=newest.match.rule,
         basis=newest.match.basis,
         # THE NEWEST LEG'S, LIKE THE ROW AND THE RULE. `_agree_policy` has already refused a
@@ -187,6 +191,12 @@ def _merged_match(sku: str, legs: Sequence[Leg]) -> join.SkuMatch:
             else max(leg.match.live_out or 0 for leg in legs)
         ),
     )
+
+
+def _merged_asked(legs) -> Optional[int]:
+    """The quantity this send asked for a card, across its legs — the smallest any names."""
+    asked = [leg.match.asked for leg in legs if leg.match.asked is not None]
+    return min(asked) if asked else None
 
 
 def _merged_cap(legs) -> Optional[int]:

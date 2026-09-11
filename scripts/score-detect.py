@@ -253,7 +253,7 @@ def scan_box(directory: Path, limit: Optional[int] = None) -> List[Photo]:
     return [_score(capture) for capture in captures]
 
 
-def _summarise(photos: Sequence[Photo]) -> Dict[str, object]:
+def _summarize(photos: Sequence[Photo]) -> Dict[str, object]:
     """Everything one population has to say, with no verdict about correctness in it."""
     found = [p for p in photos if p.outcome == FOUND]
     measured = [p for p in found if p.area is not None]
@@ -367,8 +367,8 @@ def _payload(root: Path, per_box: Dict[str, List[Photo]]) -> Dict[str, object]:
         },
         "detector_fingerprint": _fingerprint(),
         "detector_files": list(FINGERPRINTED),
-        "overall": _summarise(every),
-        "per_box": {name: _summarise(photos) for name, photos in sorted(per_box.items())},
+        "overall": _summarize(every),
+        "per_box": {name: _summarize(photos) for name, photos in sorted(per_box.items())},
         "not_measured": (
             "NO WRONGNESS RATE IS IN THIS FILE. Every count here is about what the detector "
             "returned and what images.crop_refusal did with it. Whether a returned box is "
@@ -444,7 +444,7 @@ def _walk(root: Path, only: Optional[str], limit: Optional[int]) -> Dict[str, Li
     for directory in directories:
         photos = scan_box(directory, limit)
         per_box[directory.name] = photos
-        stats = _summarise(photos)
+        stats = _summarize(photos)
         rate = stats["crop_refusal_rate"]
         print(
             f"  {directory.name:<8} {stats['photographs']:>5} photographs   "
@@ -469,10 +469,10 @@ def scan(root: Path, only: Optional[str], limit: Optional[int], write: bool) -> 
     per_box = _walk(root, only, limit)
     print()
     for name, photos in sorted(per_box.items()):
-        _print_block(name, _summarise(photos))
+        _print_block(name, _summarize(photos))
     every = [photo for photos in per_box.values() for photo in photos]
     if len(per_box) > 1:
-        _print_block("ALL", _summarise(every))
+        _print_block("ALL", _summarize(every))
 
     named = [p for p in every if p.refusal is not None]
     if named:

@@ -125,7 +125,7 @@ def run(args, say) -> int:
     held = [e for e in merged if e.sellable]
     say("")
     say("held by product:")
-    for row in products.summarise(held):
+    for row in products.summarize(held):
         mark = "PREMIUM" if row["premium"] else "bulk   "
         say(f"                {mark}  {row['count']:5d}  {row['display']}")
     unclaimed = sum(1 for e in held if not e.product)
