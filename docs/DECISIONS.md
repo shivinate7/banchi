@@ -10023,6 +10023,14 @@ reader decides it.
 
 **What it still cannot see is unchanged: two OPEN pull requests, before either has landed.** Neither is a fact about main yet, and nothing local can make them one.
 
+### Amended 2026-09-11: the claim and its guard must walk the same files, and `.js` was in neither
+
+**The substitution reaches a file or it does not, and `.js` did not.** `TEXT_SUFFIXES` carried `.mjs` and not `.js`, and `decision ids in code` walked `.py`, `.ts`, `.tsx` and `.css` — so a slug in a `.js` file survived the claim and no row afterwards could see that it had. Both sets gained it together, which is the only way to add one: a file the claimer rewrites and the guard cannot read is a file this invariant is not asserted over.
+
+**It was found by the first ORDINARY merge, not by the bootstrap, and it fired.** `app/eslint.config.js` cites decisions in its own comments — six of them, listed under its `governed_by` — and the branch that hit this had written its slug there twice. Unfixed, main would now hold two citations of an id that had just been given a number, in the one file neither reader opens. Fixed, that file cites `D142` and the claim covered ten files instead of nine. **The evidence is on main either way**, which is what separates this from the reasoning that preceded it.
+
+**The rule it generalises: the suffix set is every extension that can hold a citation.** A config file's comments are as real as a script's, and nobody had decided otherwise — nobody had considered `.js` at all. `SKIP` is the list that gets a judgement; this one gets completeness.
+
 ### What it does not decide
 
 **Not whether an id may ever be typed as a number again.** A session amending an existing entry cites it by its number, as it always has; the slug is for an entry that does not have a number YET. **Not the commit messages** — a message written on the branch names the slug and cannot be rewritten after a push, so the claim commit's own message is where the pair is recorded. **And not D80's stable-id ruling**, which this strengthens rather than reopens: that entry forbids renumbering an EXISTING step because 218 references would silently follow the number instead of the step, and a number claimed at the merge cannot collide, so nothing is ever renumbered to resolve one.
