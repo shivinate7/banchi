@@ -1272,9 +1272,71 @@ section exists to say that is not something a session does on its own.
 
 **What is proven besides the numbers is the mechanism**, by
 `harness/tests/t7_store_and_seams.py:check_request_slots`: with more callers than slots, exactly
-`REQUEST_SLOTS` execute, the queue is not counted as in flight, and every slot is given back. It was
-observed failing twice — with the semaphore removed, and with the slot taken after the in-flight count
-rather than before it.
+`REQUEST_SLOTS` execute, the queue is not counted as in flight, and every slot is given back.
+
+~~It was observed failing twice — with the semaphore removed, and with the slot taken after the
+in-flight count rather than before it.~~ **THAT SENTENCE WAS MEASURED FALSE ON 2026-09-08, ON BOTH
+COUNTS, AND THE CHECK IS REBUILT BELOW.** Whatever was observed when it was written, neither
+mutation failed the check in the tree: the semaphore replaced by an unconditional pass left all six
+assertions GREEN, and so did moving `_inflight_enter()` ahead of `_slots.acquire`. Two reasons, and
+they compound:
+
+1. **The instrument was part of the mechanism.** Every assertion read `capture_server.slots_in_use()`,
+   which is `REQUEST_SLOTS - _slots._value` — the semaphore's own counter. Delete the semaphore and
+   that counter is never acquired, so it reads **0**, and `0 <= REQUEST_SLOTS` passes while measuring
+   an absence. The check reported `held 0` and called it a pass.
+2. **The pool supplied the number the semaphore was supposed to.** `ThreadPoolExecutor(REQUEST_SLOTS)`
+   plus one request per worker already bounds execution at four, so even an honest counter reads four
+   with the semaphore gone — this section says as much two paragraphs down (*"`REQUEST_SLOTS` never
+   blocks today"*). The in-flight assertion was vacuous for the same reason: only four callers ever
+   reached `_dispatch`, so `inflight` was 4 whichever side of the acquire the count was taken.
+
+**The check is three legs now, and each names the mutation it is kept for.** Leg 1 is the shipped
+transport and asserts THREADS. Leg 2 hands the server a deliberately oversized pool, so the semaphore
+is the only thing left that can hold execution at the bound, and counts occupancy with a counter the
+route increments itself rather than with `slots_in_use()`. Leg 3 drives the `server_busy` refusal,
+which is unreachable over the shipped transport for leg 2's reason and had therefore never run.
+
+**LEG 2 READS ON A CONDITION AND NOT ON A CLOCK, AND ITS FIRST DRAFT DID THE OTHER THING.** That
+draft slept half a second after the occupancy reached the bound and then read it, reasoning that an
+unbounded build would have filled up by then. That is a wall-clock bet taken on a machine running the
+rest of this suite, and its failure direction is the bad one: it can only ever go SILENTLY GREEN — a
+loaded box where the excess callers are late reports a bound it never watched fill. It cannot flake
+red, which is precisely what would have kept it from ever being noticed. The leg shortens the slot
+wait for its own duration instead, so every excess caller RESOLVES rather than parking: in the
+shipped tree exactly `REQUEST_SLOTS` get inside and hold, and the rest are refused 503. The read
+happens once `inside + answered` covers every caller — a fact about the callers, with no interval to
+be unlucky in — and that count is asserted first, so the guard on the guard fails loudly rather than
+passing early. **The refusals are also the positive half**: six callers saying they reached the
+semaphore and were turned away is evidence, where six callers merely missing from an occupancy count
+is the absence of it.
+
+The determinism is the argument and the runs are the corroboration: 12 consecutive runs clean, and 6
+more clean with 30 busy-loops pinning a 15-core machine — the contention that would have exposed the
+timed draft. Every run reports the same reading, `4` inside and `6` refused, in 1.5s.
+
+Measured 2026-09-08 against the same four mutations:
+
+| mutation | before | after |
+|---|---|---|
+| `_slots.acquire` replaced by a pass | green | **leg 2 fails: peak 10 inside `_dispatch`, 0 refusals where 6 are owed, and leg 3 gets none either** |
+| `_inflight_enter()` moved ahead of the acquire | green | **leg 2 fails: 10 in flight against 10 callers** |
+| the pool replaced by a thread per connection | fails | fails (leg 1: more server threads than the bound, 6 observed for 10 callers — the figure is a race and the assertion is `<=` `REQUEST_SLOTS`, not that number) |
+| `Connection: close` deleted from `end_headers` | n/a | n/a — `check_connection_close`'s subject, and it fails there in 5s rather than hanging |
+
+**What is still not covered, and it is the same thing as before.** These legs prove the MECHANISM on
+an empty store. They do not prove the bound fixes the failure this section records — that took 80 real
+browsers against a real store, and the reproduction was attempted and failed on a scratch one, where
+every endpoint answers in under ten milliseconds and nothing contends the interpreter. **And nothing
+in the browser suite touches this server at all**: `app/tests/shell.ts:sealEveryTest` registers a
+catch-all `page.route` on this checkout's capture origin, ABORTS every request to it, and asserts in
+`afterEach` that none was attempted. Every spec that drives a page calls it; the one that does not is
+`app/tests/motion.spec.ts`, which has no page. Stated as a mechanism rather than as a count on
+purpose — a count here would be a claim with no reader, which is what this document is about.
+So `make design-check` — the load named at the top of this
+section as what found the collapse — is no longer a reader of any of this, by design and correctly.
+The Python harness is the only thing watching these bounds, which is why the legs above have to be
+falsifiable rather than merely present.
 
 **What the SEMAPHORE does not do is reduce thread count**, and the sweep says so in its own column:
 153 threads at every value. Threads park on it instead of thrashing the interpreter, which is the
@@ -1318,9 +1380,12 @@ than rediscovering why it was deleted.
 **The semaphore stays, and it is not a second mechanism for one job.** With one request per worker the
 pool size is also the bound on concurrent execution, so `REQUEST_SLOTS` never blocks today. It is the
 INVARIANT rather than the implementation: on the day keep-alive returns, the pool bounds threads and
-the semaphore is the only thing still bounding execution. T7 asserts both, and both were observed
-failing — the pool removed gives 10 threads for 10 callers, and the semaphore removed lets every
-caller execute at once.
+the semaphore is the only thing still bounding execution. T7 asserts both, and leg 2 of
+`check_request_slots` stages that day rather than waiting for it — the pool widened past the bound,
+so the semaphore is the only thing that can supply the number. The pool removed gives 6 threads for
+10 callers; the semaphore removed lets all 10 execute at once. Both were observed failing on
+2026-09-08, and the paragraph above records what the same sentence claimed before then and what
+actually happened when it was tried.
 
 **So the real bound on thread COUNT is still open, and a worker pool is still what it needs.**
 
