@@ -120,11 +120,50 @@ const THIRTEEN = {
   ],
 }
 
+/** The six settings the capture screen now remembers on the DEVICE (D141),
+ *  as `deviceMemory.ts` stores them. Partial, because a case seeds the one field it is about
+ *  and the reader fills the rest from `NO_CAPTURE_SETUP`. */
+type SeedSetup = {
+  box?: number | null
+  game?: string | null
+  setHint?: string
+  finish?: readonly string[]
+  rarityClaim?: readonly string[]
+  product?: string | null
+}
+
+/** What `banchi.capture.setup` holds right now, parsed. `null` where the key is absent —
+ *  which is what a clear leaves and what a browser that has never been here has. */
+async function storedSetup(page: Page): Promise<Record<string, unknown> | null> {
+  return page.evaluate(() => {
+    /* eslint-disable-next-line no-restricted-syntax -- READING THE VERY KEY UNDER TEST.
+       `banchi.capture.setup` lives in `app/src/deviceMemory.ts` where the argument for it is
+       (D141); a spec that asserts what the screen stored has to open the
+       store. `inventory.spec.ts` carries the same disable over `banchi.box-recency` for the
+       same reason, and the rule's own message asks for exactly this rather than a file
+       exemption — a waiver over everything this file will ever store. */
+    const raw = window.localStorage.getItem('banchi.capture.setup')
+    return raw === null ? null : (JSON.parse(raw) as Record<string, unknown>)
+  })
+}
+
 async function open(
   page: Page,
-  session?: Record<string, string>,
+  setup?: SeedSetup,
   games: unknown = GAMES,
   boxes: unknown = { boxes: [] },
+  /** THE KEY PROBE, WHICH ONE STATE OF THIS SCREEN CANNOT ANSWER. See the probe itself below
+   *  for why it exists. It presses `F`, and `F` reaches the key handler only while focus is
+   *  NOT in a text field — `isEditableTarget` swallows letters typed into one, correctly and
+   *  deliberately, or naming a set would photograph five cards.
+   *
+   *  D141's restored-box check opens the Box field with focus in its entry, which is exactly
+   *  that state, so the probe presses `F` into a search box forever and times out. The two
+   *  cases about that check press no keys at all, so the probe is buying them nothing: it is
+   *  insurance for a case whose first act is a letter. `probe: false` is for those, and for
+   *  nothing else — a case that presses a key and skips this is reintroducing the lost-press
+   *  flake the probe was measured against. */
+  opts: { probe?: boolean } = {},
 ): Promise<void> {
   await page.route(/\/games$/, async (route) => {
     await route.fulfill({
@@ -154,16 +193,32 @@ async function open(
     await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(boxes) })
   })
 
-  /* Seeded BEFORE the app script runs, because `readSessionFinish` is the `useState`
+  /* Seeded BEFORE the app script runs, because `storedCaptureSetup` is the `useState`
      initialiser — it reads once, on the first render, and a value written afterwards would
-     never be seen. This is how a tab that was already open when the claim shape changed is
-     reproduced (D27). */
-  if (session !== undefined) {
-    await page.addInitScript((entries: Record<string, string>) => {
-      for (const [key, value] of Object.entries(entries)) {
-        window.sessionStorage.setItem(key, value)
-      }
-    }, session)
+     never be seen.
+
+     `localStorage` SINCE 2026-09-11 (D141). These six were seven
+     `sessionStorage` keys under D27; the owner overruled the session scope for the SETTINGS,
+     and `banchi.session.captureId` is the one key left on the old clock. Seeding a whole
+     document rather than a key per field is what the app now writes, so a case that seeds one
+     field is seeding the same shape the screen reads. */
+  if (setup !== undefined) {
+    await page.addInitScript((seed: SeedSetup) => {
+      /* eslint-disable-next-line no-restricted-syntax -- SEEDING THE VERY KEY UNDER TEST; see
+         `storedSetup` above for the argument. */
+      window.localStorage.setItem(
+        'banchi.capture.setup',
+        JSON.stringify({
+          box: null,
+          game: null,
+          setHint: '',
+          finish: [],
+          rarityClaim: [],
+          product: null,
+          ...seed,
+        }),
+      )
+    }, setup)
   }
 
   await page.goto('/#/capture')
@@ -183,6 +238,7 @@ async function open(
      it was, and no case reaches its own first press without a listener behind it. It weakens
      nothing: `F` still has to open that field for this to return at all, and the case that is
      ABOUT the field letters presses once and asserts once, with no retry of its own. */
+  if (opts.probe === false) return
   await expect(async () => {
     await page.keyboard.press('f')
     await expect(finishCells(page).first()).toBeVisible({ timeout: 1_000 })
@@ -275,10 +331,7 @@ test('the claim is stored in the game’s enum order, never the order it was tap
   await finishCell(page, 'reverse_holo').click()
   await finishCell(page, 'normal').click()
 
-  const stored = await page.evaluate(() =>
-    window.sessionStorage.getItem('banchi.session.finish'),
-  )
-  expect(stored).toBe(JSON.stringify(['normal', 'reverse_holo']))
+  expect((await storedSetup(page))?.finish).toEqual(['normal', 'reverse_holo'])
 })
 
 test('re-tapping the last claimed cell clears the claim, and stores nothing', async ({
@@ -295,12 +348,13 @@ test('re-tapping the last claimed cell clears the claim, and stores nothing', as
     'false',
   )
   /* Toggling the last member off IS the clear — there is no "no claim" cell to return to
-     (owner's ruling, 2026-08-23) and no separate reset to learn. Empty is stored as ABSENT
-     rather than as `[]`: an empty claim is no claim (D3), and a stored `[]` would be a
-     record of nothing that still has to be read back. */
-  expect(
-    await page.evaluate(() => window.sessionStorage.getItem('banchi.session.finish')),
-  ).toBeNull()
+     (owner's ruling, 2026-08-23) and no separate reset to learn. Empty is now stored as `[]`
+     rather than as an absent key, and that is a consequence of the move to one document
+     (D141): the old per-key store had to spell "cleared" as "absent" so a
+     cleared field and an unwritten one read alike, and a document that is present or absent
+     as a whole has nothing left for that trick to buy. What the wire carries is unchanged —
+     an empty claim is still NO claim (D3), and the screen omits the key from the capture. */
+  expect((await storedSetup(page))?.finish).toEqual([])
 
   /* And the collapsed row says so IN WORDS, at full contrast. The removed "no claim" cell
      handed that job to this row; a bitfield would say it only in an aria-label.
@@ -322,7 +376,7 @@ test('a session written before the claim was a set reads back as ONE member, not
 
      The value is UNQUOTED, which is what the old writer wrote: `JSON.parse` throws on it,
      and the salvage has to be in the `catch` rather than only in the array branch. */
-  await open(page, { 'banchi.session.finish': 'reverse_holo' })
+  await open(page, { finish: ['reverse_holo'] })
 
   /* The ROW draws the label and the STORE held the member, which is the whole of the
      backfill: the seeded string is `reverse_holo` and the cell it presses below is the one
@@ -360,9 +414,7 @@ test('narrowing a two-member claim down to one CLEARS it rather than promoting i
   await page.keyboard.press('Escape')
 
   await expect(finishRow(page)).toContainText('No claim')
-  expect(
-    await page.evaluate(() => window.sessionStorage.getItem('banchi.session.finish')),
-  ).toBeNull()
+  expect((await storedSetup(page))?.finish).toEqual([])
 })
 
 /* ---- THE OPTION ALPHABET (owner's ruling, 2026-08-24) --------------------------------
@@ -418,9 +470,10 @@ test('the tenth rarity rides 0 and the eleventh rides A — past the digits, by 
 
   /* Stored in the game's stack order (D22), not the order the keys were pressed — the same
      canonicalisation the finish claim above asserts, over a different control. */
-  expect(
-    await page.evaluate(() => window.sessionStorage.getItem('banchi.session.rarityClaim')),
-  ).toBe(JSON.stringify(['Special Illustration Rare', 'Hyper Rare']))
+  expect((await storedSetup(page))?.rarityClaim).toEqual([
+    'Special Illustration Rare',
+    'Hyper Rare',
+  ])
 })
 
 test('the alphabet skips the keys this screen has spent: the last two ride D and E, not B and C', async ({
@@ -449,9 +502,7 @@ test('C stays the shutter and B stays the box: an option key never shadows one a
      what is asserted is that the press did not land on the list. */
   await page.keyboard.press('c')
   await expect(rarityOpt(page, 'Rainbow Rare')).toHaveAttribute('aria-pressed', 'false')
-  expect(
-    await page.evaluate(() => window.sessionStorage.getItem('banchi.session.rarityClaim')),
-  ).toBeNull()
+  expect((await storedSetup(page))?.rarityClaim).toEqual([])
 
   /* And `b` — position 12 under a literal alphabet — still opens the Box field, which is
      the other half of "every existing key keeps the meaning it had". The field letters are
@@ -550,7 +601,11 @@ async function openWithBox(page: Page): Promise<string[]> {
   await expect(page.locator('.capture-opt').filter({ hasText: /S key/ })).toBeVisible()
   await page.keyboard.type('3')
   await page.keyboard.press('Enter')
-  await expect(page.locator('.capture-row').filter({ hasText: /Box/ })).toContainText('3')
+  /* THE ROW NAMES THE BOX AND NO LONGER NUMBERS IT (D141), so this asserts
+     the NAME the fixture gives box 3. It read `toContainText('3')` against a row that opened
+     `Box 3`; the owner's instruction was that the number comes off this screen, and the name
+     is the stronger assertion anyway — `3` also matches a `next index 3`. */
+  await expect(page.locator('.capture-row').filter({ hasText: /Box/ })).toContainText('S key')
   return bodies
 }
 
@@ -910,7 +965,7 @@ test('an ambiguous hint names the sets it could be, and resolves to none of them
 
 test('a hint is never accused while there is no list to check it against', async ({ page }) => {
   await routeSets(page, { game: 'pokemon', sets: [], aliases: {}, reason: 'tcg_cookie_missing' })
-  await open(page, { 'banchi.session.setHint': 'Spiritfoged' })
+  await open(page, { setHint: 'Spiritfoged' })
 
   /* THE VERDICT IS `unchecked`, WHICH IS NOT `unmatched`. No cookie, no network, the portal
      down — this screen cannot tell, and D65's whole rule is that it degrades to the control
@@ -922,4 +977,221 @@ test('a hint is never accused while there is no list to check it against', async
   await page.keyboard.press('h')
   await expect(hintMeta(page)).toHaveText(/not checked/i)
   await expect(hintNote(page)).toContainText('stored exactly as typed')
+})
+
+/* ---- THE SETUP THIS BROWSER REMEMBERS (D141) ------------------------
+ *
+ * THREE THINGS THE OWNER ASKED FOR ON 2026-09-11, and each fails in a way nothing else here
+ * would catch. The setup outliving the browser is a STORE change, so it is asserted against
+ * the store rather than against the screen alone. The box order is a SORT, so it is asserted
+ * against a fixture whose fullness and recency disagree — a fixture where they agree would
+ * pass under either rule and prove nothing. And the clear is a WRITE, so what it leaves
+ * behind is read back.
+ *
+ * `banchi.session.captureId` IS THE ONE KEY THAT DID NOT MOVE, and the case for it is here
+ * rather than in a comment: a stale in-flight id restored into a new shift asks the operator
+ * to re-feed a card that was recorded hours ago, and D10's high-water mark then burns a
+ * position. That is the carve-out D27 exists for and it has never had a test.
+ */
+
+/** Four boxes whose FULLNESS and NUMBER disagree, which is what makes the order falsifiable:
+ *  sorted by number it is 1,2,3,4; by cards held it is 4,1,3,2. A fixture with the two in
+ *  step would pass under the rule this replaced. */
+const HAND_BOXES = {
+  boxes: [
+    { box: 1, name: 'Bulk', sections: [], state: 'open', capacity: null, fill: 10, next_index: 11,
+      cards: 10, sold: 0, retired: 0, moved: 0, listed: 0, on_hand: 10,
+      sections_detail: [{ section: 1, start: 1, end: 10, count: 10 }] },
+    { box: 2, name: 'Slabs', sections: [], state: 'open', capacity: null, fill: 3, next_index: 4,
+      cards: 3, sold: 0, retired: 0, moved: 0, listed: 0, on_hand: 3,
+      sections_detail: [{ section: 1, start: 1, end: 3, count: 3 }] },
+    { box: 3, name: 'Epics', sections: [], state: 'open', capacity: null, fill: 7, next_index: 8,
+      cards: 7, sold: 0, retired: 0, moved: 0, listed: 0, on_hand: 7,
+      sections_detail: [{ section: 1, start: 1, end: 7, count: 7 }] },
+    { box: 4, name: 'Commons', sections: [], state: 'open', capacity: null, fill: 40, next_index: 41,
+      cards: 40, sold: 0, retired: 0, moved: 0, listed: 0, on_hand: 40,
+      sections_detail: [{ section: 1, start: 1, end: 40, count: 40 }] },
+  ],
+}
+
+/** The same four with box 2 SEALED, for the restore that has to fail softly. */
+const HAND_BOXES_SEALED_2 = {
+  boxes: HAND_BOXES.boxes.map((row) => (row.box === 2 ? { ...row, state: 'closed' } : row)),
+}
+
+/** The box rows as drawn, in order, each collapsed to one line. */
+function boxOptionText(page: Page): Promise<string[]> {
+  return page.locator('.capture-opt').evaluateAll((nodes) =>
+    nodes.map((node) => (node as HTMLElement).innerText.replace(/\s+/g, ' ').trim()),
+  )
+}
+
+test('the box list leads with the fullest box, and the number is last', async ({ page }) => {
+  await open(page, undefined, GAMES, HAND_BOXES)
+  await page.keyboard.press('b')
+  await expect(page.locator('.capture-opt').first()).toBeVisible()
+
+  /* NOTHING HAS BEEN REACHED FOR YET, so recency is silent everywhere and the second term
+     decides: 40, 10, 7, 3. Sorted by NUMBER — which is what this field did until
+     2026-09-11 — `Commons` would be LAST rather than first, so this assertion is the one
+     the old rule fails. */
+  expect(await boxOptionText(page)).toEqual([
+    'Commons Box 4 next index 41',
+    'Bulk Box 1 next index 11',
+    'Epics Box 3 next index 8',
+    'Slabs Box 2 next index 4',
+  ])
+})
+
+test('the box picked last time leads, even when it is the emptiest', async ({ page }) => {
+  await open(page, undefined, GAMES, HAND_BOXES)
+  await page.keyboard.press('b')
+  await expect(page.locator('.capture-opt').first()).toBeVisible()
+
+  /* `Slabs` HOLDS THREE CARDS AND IS LAST ON FULLNESS. Picking it is what the owner means by
+     "most recently selected", and the whole point of the rule is that the hand outranks the
+     count — so this is the assertion that separates the two terms rather than testing them
+     together. */
+  await page.getByRole('button', { name: /^Slabs/ }).click()
+  await expect(page.locator('.capture-row').filter({ hasText: /Box/ })).toContainText('Slabs')
+
+  /* THE SAME STORE `#/inventory`'s RAIL SORTS ON, which is the shared-fact ruling: one
+     operator, one hand, one record of which drawer it is in. A capture-only recency store
+     would pass every assertion above and leave the two screens disagreeing. */
+  const recency = await page.evaluate(() =>
+    /* eslint-disable-next-line no-restricted-syntax -- READING `banchi.box-recency` to prove
+       the two screens share ONE store, which is the ruling this case exists for. The key is
+       `deviceMemory.ts`'s and `inventory.spec.ts` reads it back the same way. */
+    JSON.parse(window.localStorage.getItem('banchi.box-recency') ?? '{}'),
+  )
+  expect(Object.keys(recency)).toEqual(['2'])
+
+  await page.keyboard.press('b')
+  await expect(page.locator('.capture-opt').first()).toBeVisible()
+  expect((await boxOptionText(page))[0]).toBe('Slabs Box 2 next index 4')
+})
+
+test('the setup survives a reload, and the in-flight capture id is not on the device', async ({
+  page,
+}) => {
+  /* THE HINT FIELD FETCHES ITS VOCABULARY THE MOMENT IT OPENS (D65), and `open` deliberately
+     does not stub `/tcg/sets` — see its own comment, which keeps that fixture with the cases
+     that own it. Without this the press below reaches the capture port, which `sealEveryTest`
+     catches in `afterEach` and which in the main checkout is the owner's real store. */
+  await routeSets(page, { game: 'pokemon', sets: [], aliases: {}, reason: null })
+  await open(page, undefined, GAMES, HAND_BOXES)
+
+  /* A BOX AND A HINT, SET THE WAY THE OPERATOR SETS THEM — pressed, not seeded. A seeded value
+     that came back would only prove the reader reads; what is under test is that a LIVE edit
+     is written, so the write and the read are both exercised. */
+  await page.keyboard.press('b')
+  await page.getByRole('button', { name: /^Epics/ }).click()
+  await page.keyboard.press('h')
+  await page.getByLabel('Set hint').fill('MEG')
+  await page.getByLabel('Set hint').press('Enter')
+
+  /* A RELOAD IS WHAT THIS CAN TEST DIRECTLY, and it is a real one: the whole screen is torn
+     down and every value comes back through `storedCaptureSetup` on a fresh mount. It is
+     WEAKER than the owner's own test (close the tab, open a new one) only in that a tab is
+     what `sessionStorage` dies with — and that is exactly why the second half below is
+     asserted about the STORE rather than about survival. */
+  await page.reload()
+  await expect(finishRow(page)).toBeVisible()
+
+  await expect(page.locator('.capture-row').filter({ hasText: /Box/ })).toContainText('Epics')
+  await expect(page.locator('.capture-row').filter({ hasText: /Set hint/ })).toContainText('MEG')
+  expect(await storedSetup(page)).toMatchObject({ box: 3, setHint: 'MEG' })
+
+  /* AND `captureId` IS NOWHERE ON THE DEVICE, which is the half a reload cannot show by
+     survival — `sessionStorage` survives a reload too, so planting one and finding it again
+     would prove nothing at all. What IS falsifiable is the store it lives in: if a later
+     session folded it in with the other six "for consistency", it would appear either as a
+     field of this document or as a `localStorage` key of its own, and both are checked.
+     That is the whole of D27's surviving carve-out, stated as a property rather than as a
+     comment. */
+  expect(Object.keys((await storedSetup(page)) ?? {})).not.toContain('captureId')
+  /* eslint-disable-next-line no-restricted-syntax -- ENUMERATING the device store to prove a
+     key is absent from it; see `storedSetup` above for the argument. */
+  const deviceKeys = await page.evaluate(() => Object.keys(window.localStorage))
+  expect(deviceKeys.filter((key) => key.toLowerCase().includes('capture'))).toEqual([
+    'banchi.capture.setup',
+  ])
+})
+
+test('a restored box that has been sealed since is let go of, by name', async ({ page }) => {
+  /* SEEDED AS BOX 2, WHICH THE FIXTURE HAS SEALED. Between two sittings a box can be sealed,
+     deleted, or deleted and its number reused by `next_box_number`'s lowest-free allocation —
+     and the last of those is refused nowhere, because the box exists and takes cards. It is
+     simply not the drawer the operator thinks they are looking at, which is why the restore
+     falls back to NOTHING rather than to a guess. */
+  await open(page, { box: 2 }, GAMES, HAND_BOXES_SEALED_2, { probe: false })
+
+  /* THE STAGE FOOT AND NOT `.capture-box-val`, which is the RESTING row and does not exist
+     while a field is open — and this check opens the box field on purpose. The foot is drawn
+     in both states and is the screen's standing answer to "which drawer is this". */
+  await expect(page.locator('.capture-foot-box-name')).toHaveText('No box')
+
+  /* IT SAYS WHICH BOX AND WHY, and it says it by NAME — the screen's own vocabulary, not the
+     number the operator no longer sees anywhere else on it. */
+  const note = page.locator('.capture-refused').filter({ hasText: /sealed/ })
+  await expect(note).toContainText('Slabs')
+
+  /* AND THE REMEDY IS THE PRESS THEY WERE ABOUT TO MAKE: the field is open with focus in the
+     entry, which is where `Pick a box` would have put them. */
+  await expect(page.getByLabel(/Find a box by number or name/)).toBeFocused()
+})
+
+test('a restored box that is gone is let go of, and says so without naming a drawer', async ({
+  page,
+}) => {
+  await open(page, { box: 99 }, GAMES, HAND_BOXES, { probe: false })
+
+  await expect(page.locator('.capture-foot-box-name')).toHaveText('No box')
+  await expect(page.locator('.capture-refused').filter({ hasText: /not in the store/ })).toBeVisible()
+  await expect(page.getByLabel(/Find a box by number or name/)).toBeFocused()
+})
+
+test('clearing the setup empties every claim, forgets the key, and can be undone', async ({
+  page,
+}) => {
+  await open(page, { box: 3, setHint: 'MEG', finish: ['normal'] }, GAMES, HAND_BOXES)
+
+  const clear = page.getByRole('button', { name: 'Clear the setup' })
+  await expect(clear).toBeEnabled()
+  await clear.click()
+
+  await expect(page.locator('.capture-box-val')).toContainText('No box yet')
+  await expect(page.locator('.capture-row').filter({ hasText: /Set hint/ })).toContainText('None')
+  await expect(finishRow(page)).toContainText('No claim')
+
+  /* THE GAME GOES TO THE REGISTRY'S DEFAULT, not to null. A null game draws the blocked
+     reason for a registry that has not ARRIVED — "Waiting for the game list from the server"
+     — which after a successful load is a sentence that is simply untrue. */
+  await expect(page.locator('.capture-row').filter({ hasText: /Game/ })).toContainText('Pokémon')
+
+  /* AND NOTHING IN THE STORE WAS ASKED TO DO ANYTHING. `sealEveryTest` records every request
+     that reached the capture origin and this spec's header promises none writes; the clear
+     calling a route would be the one press here that could. */
+  const receipt = page.locator('.bn-toast').filter({ hasText: 'Setup cleared' })
+  await expect(receipt).toBeVisible()
+  await expect(receipt).toContainText('untouched')
+
+  await receipt.getByRole('button', { name: 'Undo' }).click()
+
+  await expect(page.locator('.capture-row').filter({ hasText: /Box/ })).toContainText('Epics')
+  await expect(page.locator('.capture-row').filter({ hasText: /Set hint/ })).toContainText('MEG')
+  expect(await storedSetup(page)).toMatchObject({ box: 3, setHint: 'MEG', finish: ['normal'] })
+})
+
+test('the clear is disabled while there is nothing to clear, rather than absent', async ({
+  page,
+}) => {
+  await open(page, undefined, GAMES, HAND_BOXES)
+
+  /* DISABLED, NOT HIDDEN (D118). A control that appears and disappears with the state it acts
+     on moves the rail's height under the operator's hand — and this one sits at the foot of
+     the column, so everything above it would move too. */
+  const clear = page.getByRole('button', { name: 'Clear the setup' })
+  await expect(clear).toBeVisible()
+  await expect(clear).toBeDisabled()
 })

@@ -222,15 +222,34 @@ export function rememberHideSold(hide: boolean): void {
 }
 
 /**
- * WHEN THIS BROWSER LAST OPENED EACH BOX, by box number, as an ISO stamp. The rail sorts on
- * it, newest first, and a box never opened here sorts after every box that was. Capped so a
- * store with hundreds of boxes cannot grow the value without bound: the fifty most recent are
- * kept, which is more boxes than a rail shows without scrolling.
+ * WHEN THIS BROWSER LAST PUT ITS HAND ON EACH BOX, by box number, as an ISO stamp. Two lists
+ * sort on it, newest first, and a box this browser has never reached for sorts after every box
+ * it has. Capped so a store with hundreds of boxes cannot grow the value without bound: the
+ * fifty most recent are kept, which is more boxes than either list shows without scrolling.
  *
  * A PAGE LOAD IS NOT AN OPENING. `BoxBrowse` touches a box from a press on the rail and from a
  * walk-to, never from the `?box=` landing — otherwise every visit would reorder the rail.
+ * `CaptureScreen` touches one when the operator PICKS it, and deliberately not when a capture
+ * lands: a capture fires once per card, and a `localStorage` write per photograph would put
+ * this file on the feeder's hot path to record a fact that has not changed since the pick.
+ *
+ * TWO SCREENS WRITE IT, AND THAT IS WHY THE KEY IS NOT CALLED `banchi.inventory.box-recency`
+ * ANY MORE. It was, from D132 until the capture screen started reading it, and by then the
+ * name said which SCREEN had written the fact instead of what the fact is — which is about the
+ * operator's hand and not about either list. Renaming it abandons what a browser holds, the
+ * rule D27's second amendment set and the reason a read-time fallback was declined there; the
+ * cost is one sitting of the fallback order (fullest, then number) until the first box is
+ * opened or captured into, and the two lists rebuild it from the same presses that built it
+ * before.
+ *
+ * ONE FACT, NOT TWO, AND THAT IS A RULING RATHER THAN AN ECONOMY (D141).
+ * Capture could have kept a recency store of its own, and the argument against is that there
+ * is one operator with one hand: photographing into box 7 and then walking to `#/inventory`
+ * is the same person still thinking about box 7, and a rail that opened on some other drawer
+ * would be answering a question nobody asked. The shared store is what makes the second screen
+ * agree with the first without either knowing about the other.
  */
-const BOX_RECENCY_KEY = 'banchi.inventory.box-recency'
+const BOX_RECENCY_KEY = 'banchi.box-recency'
 const BOX_RECENCY_KEEP = 50
 
 export function storedBoxRecency(): ReadonlyMap<number, string> {
@@ -264,4 +283,148 @@ export function touchBox(box: number, at: Date = new Date()): ReadonlyMap<number
     /* storage unavailable — the order still holds for this tab */
   }
   return next
+}
+
+/* ------------------------------------------------------- the capture screen's last setup */
+
+/**
+ * WHAT THE OPERATOR HAD SET UP AT THE LENS THE LAST TIME THEY WERE HERE (D141).
+ *
+ * THE OWNER ASKED FOR IT IN THESE WORDS: *"ideally let it save my last used on capture on all
+ * settings ... so the game i picked, camera i picked, all stay saved in some sorta session
+ * history"*. The camera already did — `useCamera.ts` has held `banchi.capture.deviceId` and
+ * `banchi.capture.rotation` in `localStorage` since before D27 generalised the carve-out — so
+ * what this adds is the rest of the setup, under the same prefix, on the same clock.
+ *
+ * THIS IS AN AMENDMENT TO D27 AND NOT AN EXCEPTION TO IT. That entry put these values in
+ * `sessionStorage` on the argument that *"a new tab is a new shift and closing the browser ends
+ * one"*, and the operator's own report is that the premise is wrong: a shift ends when they stop
+ * feeding cards, which is hours after the browser closed and has nothing to do with either. What
+ * D27 was actually protecting is one value and it is NOT in here — see `captureId` in
+ * `CaptureScreen.tsx`, which stays in `sessionStorage` with the reason on it.
+ *
+ * ONE KEY FOR SIX VALUES, BECAUSE IT IS ONE HABIT. `banchi.orders.fetch-filter` above makes this
+ * argument for its two fields and it holds harder here: "the setup I work at" is a single thing
+ * the operator sets up once and clears in one press, six rows in `CLAUDE.md`'s roster would be
+ * six rows for one fact, and the clear is one `removeItem` rather than six that can half-fail.
+ *
+ * NONE OF IT IS A FACT ABOUT A CARD, which is the test D13 and D27 actually set. A box NUMBER is
+ * the closest thing here to one and it is not one either: it says which drawer this operator is
+ * working out of, not where any card IS. The store stays the one truth about that, every value
+ * here is resent to the server on every capture, and a browser that has never seen this key
+ * renders the screen it always rendered.
+ *
+ * A STORED VALUE IS INPUT, NOT STATE, and this file validates only what it can: the SHAPE.
+ * Whether the game still exists, whether the rarity is still authored, whether the box is still
+ * open — those are questions for the registry and the store, and `CaptureScreen.tsx` asks all
+ * three on arrival. A reader here that guessed at them would be a second, weaker copy of a check
+ * the screen already has to make.
+ */
+const CAPTURE_SETUP_KEY = 'banchi.capture.setup'
+
+/** The six choices the capture screen remembers between sittings. `setHint` is `''` rather than
+ *  null because the control is a text field and empty is what it holds; the other five carry the
+ *  screen's own "nothing claimed" value. */
+export type CaptureSetup = {
+  readonly box: number | null
+  readonly game: string | null
+  readonly setHint: string
+  readonly finish: readonly string[]
+  readonly rarityClaim: readonly string[]
+  readonly product: string | null
+}
+
+/** Nothing chosen — what a browser that has never opened this screen holds, and what the
+ *  screen's own clear writes. `game: null` is read by the screen as "take the registry's
+ *  default", which is what a first load does. */
+export const NO_CAPTURE_SETUP: CaptureSetup = {
+  box: null,
+  game: null,
+  setHint: '',
+  finish: [],
+  rarityClaim: [],
+  product: null,
+}
+
+/** Digits, a safe integer, 1 or higher — the Box entry's own rule exactly, and it has to be: the
+ *  box decides which physical drawer a photograph is filed into. `'1e3'` and `'3.7'` are both
+ *  things `Number` would read as a different, entirely valid box that nobody typed, and JSON
+ *  will hand back `1e3` as the number 1000 without either spelling surviving to be noticed. */
+function readBox(value: unknown): number | null {
+  if (typeof value !== 'number') return null
+  return Number.isSafeInteger(value) && value >= 1 ? value : null
+}
+
+/** A non-empty trimmed string, or null. The two claims that are single-valued — `game` and
+ *  `product` — are stored as the registry's own keys and checked against it when they land. */
+function readWord(value: unknown): string | null {
+  if (typeof value !== 'string') return null
+  const trimmed = value.trim()
+  return trimmed === '' ? null : trimmed
+}
+
+/** A list of strings, members that are not strings dropped rather than the whole list — the
+ *  member-wise salvage `CaptureScreen.tsx` already applies to a claim whose game renamed a
+ *  rarity under it. A claim the operator really made about the stack survives an edit to one
+ *  member of it. */
+function readList(value: unknown): readonly string[] {
+  if (!Array.isArray(value)) return []
+  return value.filter((member): member is string => typeof member === 'string')
+}
+
+export function storedCaptureSetup(): CaptureSetup {
+  try {
+    const raw = localStorage.getItem(CAPTURE_SETUP_KEY)
+    if (raw === null) return NO_CAPTURE_SETUP
+    const parsed: unknown = JSON.parse(raw)
+    if (typeof parsed !== 'object' || parsed === null) return NO_CAPTURE_SETUP
+    const held = parsed as Record<string, unknown>
+    return {
+      box: readBox(held.box),
+      game: readWord(held.game),
+      /* Unvalidated beyond its being a string, and that is a decision rather than a gap: a
+         length cap or a set-code pattern here would make a RESTORED hint stricter than a typed
+         one, so a hint the operator legitimately entered could come back changed or missing. */
+      setHint: typeof held.setHint === 'string' ? held.setHint : '',
+      finish: readList(held.finish),
+      rarityClaim: readList(held.rarityClaim),
+      product: readWord(held.product),
+    }
+  } catch {
+    /* Private mode, blocked storage, or a half-written value. Nothing chosen, which is the
+       screen this operator saw before any of this existed — and every field is one press. */
+    return NO_CAPTURE_SETUP
+  }
+}
+
+export function rememberCaptureSetup(setup: CaptureSetup): void {
+  try {
+    localStorage.setItem(
+      CAPTURE_SETUP_KEY,
+      JSON.stringify({
+        box: setup.box,
+        game: setup.game,
+        setHint: setup.setHint,
+        finish: [...setup.finish],
+        rarityClaim: [...setup.rarityClaim],
+        product: setup.product,
+      }),
+    )
+  } catch {
+    /* Quota or a blocked origin. The setup still holds for this tab; only the next visit
+       starts from nothing, which is where every visit started until 2026-09-11. */
+  }
+}
+
+/** Forget it outright, rather than writing `NO_CAPTURE_SETUP` over it. The absent key and the
+ *  empty setup read identically on the way back in, and a key that is gone is the honest record
+ *  of a clear — nothing here should leave a browser holding a document that says the operator
+ *  chose nothing, which is not a thing anybody chose. */
+export function forgetCaptureSetup(): void {
+  try {
+    localStorage.removeItem(CAPTURE_SETUP_KEY)
+  } catch {
+    /* storage unavailable — the clear still happened on screen, which is the part that was
+       pressed for. */
+  }
 }

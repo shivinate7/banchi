@@ -588,7 +588,12 @@ sentence**, and see "the census" below for what enforces that.
                               Every figure is the one that stage's own screen draws, read from
                               the same source, so Home can never be a step ahead of it.
 #/capture      Capture        live camera; box / game / set hint / finish / rarity; undo;
-                              the motion trigger and its tuning
+                              the motion trigger and its tuning. THE SETUP IS REMEMBERED ON
+                              THE DEVICE (D141) — all six survive a closed browser, the box
+                              list is ordered the way the inventory rail is (most recently
+                              reached for, then fullest, then the number), one press clears
+                              the lot with an undo on the receipt, and the box is named
+                              rather than numbered
 #/runs         Runs           the pipeline: the free preflight, the two-step money gate, join /
                               emit / reconcile, the run log, and the import CSVs as downloads
 #/review       Review         one card at a time, photo first — the answer writes and advances
@@ -923,16 +928,28 @@ A screen is not finished because it compiles.
   about a card or the inventory in `localStorage`. Inventory state is server-side, in the
   store; the camera uses a device picker. Two devices share one truth.
 
-  **Eight keys are stored on the device, and each is a fact about THIS machine rather than
+  **Nine keys are stored on the device, and each is a fact about THIS machine rather than
   about a card**: `banchi.capture.deviceId` and `banchi.capture.rotation`
   (`app/src/useCamera.ts` — which camera and which way up, meaningless on another machine),
-  `banchi.theme`, `banchi.rail`, `banchi.orders.fetch-filter`, `banchi.inventory.hide-sold`
-  and `banchi.inventory.box-recency` (`app/src/deviceMemory.ts` — how this browser is
-  dressed, which order statuses this device bothers fetching (D114), whether the inventory
-  walk folds sold rows away, and when THIS browser last opened each box, which is what the
-  box rail sorts on, D132), and `banchi.orders.last-check` (`app/src/Orders.tsx` — when THIS
-  device last checked TCGplayer, so a fetch receipt can say what is new since; the owner ruled
-  it belongs there on 2026-09-03). None of them is a card, a position or an order.
+  `banchi.theme`, `banchi.rail`, `banchi.orders.fetch-filter`, `banchi.inventory.hide-sold`,
+  `banchi.box-recency` and `banchi.capture.setup` (`app/src/deviceMemory.ts` — how this
+  browser is dressed, which order statuses this device bothers fetching (D114), whether the
+  inventory walk folds sold rows away, when THIS browser last reached for each box, and the
+  setup the operator last worked at), and `banchi.orders.last-check` (`app/src/Orders.tsx` —
+  when THIS device last checked TCGplayer, so a fetch receipt can say what is new since; the
+  owner ruled it belongs there on 2026-09-03). None of them is a card, a position or an order.
+
+  **TWO OF THE NINE ARRIVED ON 2026-09-11 AND ONE OF THOSE IS A RENAME**
+  (D141). `banchi.capture.setup` is the box, game, set hint, finish, rarity
+  and product the operator last chose — six values that were `sessionStorage` under D27 until
+  the owner overruled the session scope, in ONE document because they are one habit, the
+  argument `banchi.orders.fetch-filter` already makes for its own two fields.
+  `banchi.box-recency` is `banchi.inventory.box-recency` renamed: the capture screen's box
+  list now sorts on it too, so the name had stopped saying what the fact is — which drawer
+  this operator's hand is in — and started saying which screen happened to write it. **No
+  migration, D27's own rule**: what a browser held under the old spelling is abandoned, which
+  costs one sitting of the fallback order (fullest, then number) until the first box is
+  opened or captured into.
 
   **This sentence said FOUR and listed five, from 2026-09-03 until 2026-09-06**, and it named
   the wrong two files for the theme and the rail — `kit/index.tsx` and `App.tsx` are where
@@ -941,14 +958,22 @@ A screen is not finished because it compiles.
   mechanical rather than hand-corrects: `make docs-audit`'s `storage keys` row reconciles the
   count, the roster and the files this paragraph names against `app/src`, in both directions.
 
-  **A SEPARATE STORE HOLDS EIGHT MORE, AND THEY ARE NOT THESE.** D27's carve-out is
-  `sessionStorage` — the capture screen's claims about the stack at the lens
-  (`banchi.session.box`, `.setHint`, `.finish`, `.game`, `.rarityClaim`, `.product`,
-  `.captureId`) and D39's handoff (`banchi.run-scope`). A new tab is a new shift and closing
-  the browser ends one, which is the whole reason they are in the other store.
+  **A SEPARATE STORE HOLDS TWO MORE, AND THEY ARE NOT THESE.** D27's carve-out is
+  `sessionStorage` — `banchi.session.captureId`, the in-flight id of a capture whose response
+  was lost, and D39's handoff `banchi.run-scope`. A new tab is a new shift and closing the
+  browser ends one, and for these two that is the POINT rather than an accident: a restored
+  `captureId` is a banner asking the operator to re-feed a card that was recorded yesterday,
+  and the honest answer to it burns a position under D10's high-water mark.
+
+  **IT HELD EIGHT UNTIL 2026-09-11.** Six of the capture screen's seven — `banchi.session.box`,
+  `.setHint`, `.finish`, `.game`, `.rarityClaim` and `.product` — moved to the device
+  (D141), on the owner's report that a shift ends when they stop feeding
+  cards rather than when a tab closes. `captureId` did not, and it is the one the carve-out
+  was always about: a stale SETTING is a claim on screen that is one press from being right,
+  and a stale in-flight id is a request for a card nobody is holding.
 
   **EVERY BROWSER-STORAGE KEY IS `banchi.*`, AS OF 2026-09-06** (D27, amended). Ten of the
-  thirteen were `pkmnscan.*` until that day — not by a rule, but because that is what a key
+  thirteen keys there were then were `pkmnscan.*` until that day — not by a rule, but because that is what a key
   written before the rebrand got — and the owner renamed them **with no migration**, having
   declined a read-time fallback on the ground that a fallback can never safely be deleted
   afterwards. The old values are abandoned in place. **This does not reopen D94**, which is
@@ -959,8 +984,9 @@ A screen is not finished because it compiles.
   can burn a position if a capture was in flight at the moment the new build loaded.
 
   **The rule has a reader now.** `app/eslint.config.js`'s `no-restricted-syntax` bans
-  `localStorage` in `app/src`, with `useCamera.ts` and `deviceMemory.ts` exempted by name and
-  `Orders.tsx`'s two call sites carrying an inline disable that states the argument. A guard
+  `localStorage` across `app/`, with `useCamera.ts` and `deviceMemory.ts` exempted by name and
+  a handful of argued call sites carrying an inline disable: `Orders.tsx`'s two, and the specs
+  that seed or read back the very key they are about. A guard
   that is routinely disabled inline is one the next person disables without reading, so the
   exemptions are few and each one says why beside the key. **The lint rule matches the STORE
   and not the key**, so it can say nothing about which keys exist or what they are called;
@@ -1492,6 +1518,7 @@ D136 The suite is sharded and never widened, a sleep is a wait and not an assert
 D137 The catalog is Near Mint by rule, because it was only ever Near Mint by accident of the file
 D138 One process serves the product, Vite compiles and never serves, and the build is the server's job
 D139 Which branch the primary checkout stands on is a fact about the live rig, and a warning is the ceiling
+D141 The setup outlives the browser, the box list is ordered by the hand, and one value stays on the old clock
 ```
 
 **THE GAP THIS LIST CARRIED BETWEEN D116 AND D118 IS CLOSED, AND IT CLOSED THE WAY IT SAID IT

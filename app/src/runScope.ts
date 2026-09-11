@@ -88,3 +88,32 @@ export function boxLabel(
 export function runBoxLabel(row: RunSummary): string | null {
   return boxLabel(boxOf(row), row.box_name)
 }
+
+/** What the capture screen calls the drawer in front of the operator: its NAME, and its number
+ *  only where the owner has not given it one (D141).
+ *
+ *  THE OWNER'S INSTRUCTION, 2026-09-11: *"i dont need to see box number in capture screen"*.
+ *  D20 is why that is answerable at all — a box is addressed by its name and names are unique,
+ *  so `RB Epics` identifies a drawer as completely as `Box 3` does and identifies it in the word
+ *  the operator actually thinks in. At the lens they are not walking a shelf or reading a path;
+ *  they are putting cards into the box that is open on the desk, and they named it.
+ *
+ *  AN UNNAMED BOX STILL DRAWS ITS NUMBER, AND THAT IS NOT AN EXCEPTION TO THE INSTRUCTION. D20
+ *  makes a name unique and deliberately NOT required, so a box with none is an ordinary box; its
+ *  number is then the only thing it HAS to be called, and `boxLabel`'s own rule applies — a
+ *  placeholder in the name's place would draw a fault where there is none (D56). The number is
+ *  removed as the thing the operator has to read PAST, never as the thing a box IS.
+ *
+ *  `boxLabel` IS UNCHANGED AND IS STILL WHAT EVERY OTHER SCREEN USES. `Box 3 · RB Epics` is
+ *  correct on `#/runs`, `#/pricing` and the run receipts for the reason written there: the
+ *  number is the shelf, the photograph directory and what every refusal in
+ *  `server/pipeline_routes.py` names, and those screens are read next to all three. The capture
+ *  screen is the one place the operator is holding the physical box, which is why it is the one
+ *  place that can drop the number — and why this is a second function rather than an argument to
+ *  the first. The position LABEL (`pipeline/join.py:Position`) is untouched everywhere, this
+ *  screen's own filmstrip and receipts included: the Fulfiller reads those, and he is walking a
+ *  shelf he did not pack. */
+export function captureBoxLabel(box: number, name: string | null | undefined): string {
+  const named = typeof name === 'string' ? name.trim() : ''
+  return named === '' ? `Box ${box}` : named
+}

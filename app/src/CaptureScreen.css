@@ -362,6 +362,13 @@
 .capture-onward { margin-top: var(--bn-2); padding-top: var(--bn-2); border-top: 1px solid var(--bn-line); }
 .capture-onward .bn-btn { justify-content: space-between; }
 
+/* The clear, at the foot of the rail's last panel. Ruled off like `.capture-onward` above,
+   which is the same grammar for the same reason: a control that is not one of the panel's rows
+   is separated from them rather than drawn as a fourth one. Quiet, never danger — it writes
+   nothing to the store (D141). */
+.capture-clear { margin-top: var(--bn-2); padding-top: var(--bn-2); border-top: 1px solid var(--bn-line); display: flex; flex-direction: column; gap: 4px; }
+.capture-clear-note { padding-inline: 4px; }
+
 /* ---- the stage: dark in both themes ----------------------------------------------------------------------- */
 .capture-stage {
   /* The stage is dark in both themes, so it carries its own palette and re-points the kit's
@@ -1081,6 +1088,7 @@
   .capture-block-fix { --btn-h: var(--bn-control-h-sm); padding-inline: var(--bn-4); font-size: var(--bn-fs-md); border-radius: var(--bn-r); }
   .capture-section .bn-btn,
   .capture-onward .bn-btn,
+  .capture-clear .bn-btn,
   .capture-frame-note .bn-btn,
   .capture-open-body .bn-btn,
   .capture-tuning-actions .bn-btn,

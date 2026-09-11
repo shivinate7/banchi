@@ -5124,9 +5124,12 @@ test('D132 — the rail draws names and no numbers, ordered by this browser\'s r
   /* Box 7 was opened here yesterday; nothing else ever was. */
   await page.addInitScript(() => {
     /* eslint-disable-next-line no-restricted-syntax -- SEEDING THE VERY KEY UNDER TEST, in the
-       one file whose subject it is: `banchi.inventory.box-recency` lives in
-       `app/src/deviceMemory.ts` (D132), and asserting the order it produces means writing it. */
-    window.localStorage.setItem('banchi.inventory.box-recency', JSON.stringify({ '7': '2026-09-09T10:00:00.000Z' }))
+       one file whose subject it is: `banchi.box-recency` lives in `app/src/deviceMemory.ts`
+       (D132), and asserting the order it produces means writing it. It was
+       `banchi.inventory.box-recency` until the capture screen started sorting on the same
+       fact (D141) — two screens read it now, so the name stopped saying
+       which one wrote it. */
+    window.localStorage.setItem('banchi.box-recency', JSON.stringify({ '7': '2026-09-09T10:00:00.000Z' }))
   })
   await open(page, boxes, STORE, () => PRICING, SALE, { settle: '.browse-boxcell' })
 
@@ -5145,7 +5148,7 @@ test('D132 — the rail draws names and no numbers, ordered by this browser\'s r
   const stored = await page.evaluate(
     /* eslint-disable-next-line no-restricted-syntax -- READING THE SAME KEY BACK, to see that a
        press wrote it and a page load did not. */
-    () => JSON.parse(window.localStorage.getItem('banchi.inventory.box-recency') ?? '{}') as Record<string, string>,
+    () => JSON.parse(window.localStorage.getItem('banchi.box-recency') ?? '{}') as Record<string, string>,
   )
   expect(Object.keys(stored).sort()).toEqual(['6', '7'])
   expect((stored['6'] ?? '') > (stored['7'] ?? '')).toBe(true)

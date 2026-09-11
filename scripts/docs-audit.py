@@ -12633,8 +12633,14 @@ def self_test() -> int:
         "no file in app/src touches both stores, so the file is a sound binding",
         str(site_findings),
     )
+    # `banchi.session.box` STOOD HERE UNTIL 2026-09-11 and is gone (D141): six of D27's seven
+    # session keys moved to the device, and `banchi.session.captureId` is the one left — which
+    # is the same shape (declared as a const in `SESSION_KEYS` and read through `readSession`'s
+    # parameter) and so still exercises both halves this case is named for. A live key has to
+    # be named because the point is that the READER resolves it, not that a string appears.
     ok(
-        "banchi.capture.deviceId" in sites["local"] and "banchi.session.box" in sites["session"],
+        "banchi.capture.deviceId" in sites["local"]
+        and "banchi.session.captureId" in sites["session"],
         "keys resolve to the right store through a const and through a helper's parameter",
         str(sorted(sites["local"]) + sorted(sites["session"])),
     )
