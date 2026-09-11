@@ -223,7 +223,11 @@
   /* STRETCH, NOT END. An end-aligned grid item is sized to its own text, and with `nowrap`
      a long meta grew LEFTWARD out of its track over the label — `overflow: hidden` clips
      inside the element, never the element itself. Filling the track and ellipsizing is what
-     keeps `Cadence · settle first, beat as backstop` off the word `Trigger` (2026-09-11). */
+     kept `Cadence · settle first, beat as backstop` off the word `Trigger` (2026-09-11).
+     THAT STRING IS GONE with the cadence trigger the same day, and the rule stays: it is a
+     property of the grid rather than of one label, and the next long meta would earn it
+     back. Named as history so nobody greps for a live example and concludes the fix is
+     unused. */
   justify-self: stretch;
   min-width: 0;
   text-align: right;
@@ -283,8 +287,6 @@
 /* ---- text entry inside a field ---------------------------------------------------------------------- */
 .capture-entry { display: flex; }
 .capture-entrybox { width: 100%; }
-/* The cadence trigger's period pin sits under the track it belongs to (D130). */
-.capture-period { margin-top: var(--bn-s2); }
 .capture-entrybox .capture-filter { padding-right: 104px; min-height: 36px; font-size: var(--bn-fs-md); }
 /* The state of what is typed, in sentence case beside the entry: `Next index 134`, `Sealed`,
    `New box`. Capped, and the placeholder is `Number or name`, so neither is cut mid-word in

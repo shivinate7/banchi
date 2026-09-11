@@ -89,13 +89,6 @@ SCOPE = (
                "side of running.",
     },
     {
-        "path": "harness/traces/**",
-        "why": "`app/tests/cadence.spec.ts` reads two recordings of the rig off disk with "
-               "`readFileSync` and replays the cadence trigger over them. A trace is a suite "
-               "input the browser never fetches, which is exactly what a hand-typed list of "
-               "`app/` paths misses.",
-    },
-    {
         "path": "Makefile",
         "within": "recipe:design-check",
         "why": "The job runs `make design-check`, and this is the recipe. Narrowed to the "
@@ -417,8 +410,9 @@ def selftest() -> int:
        "a docs-only change skips")
     ok(classify_paths(["docs/DECISIONS.md", "app/src/App.tsx"], read_side).run,
        "one screen file among docs runs")
-    ok(classify_paths(["harness/traces/motion-trace-x.json"], read_side).run,
-       "a trace the cadence spec reads runs")
+    ok(not classify_paths(["harness/traces/motion-trace-x.json"], read_side).run,
+       "a trace skips now that no spec reads one — the cadence spec that did is deleted, and "
+       "the entry went with it rather than staying as an unjustified widening")
     ok(not classify_paths(["server/capture_server.py", "scripts/serve.py"], read_side).run,
        "a server change skips: the suite seals the capture port")
     ok(classify_paths([], read_side).run, "an empty diff runs, because it is probably a wrong base")

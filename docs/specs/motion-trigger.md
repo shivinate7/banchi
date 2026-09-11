@@ -4,7 +4,7 @@ Written 2026-08-22, the day it was built. D19 is the decision; this file is the 
 the derivations, and the protocol for the part no computer can do — tuning at the rig.
 `docs/GATES.md`'s Gate C section carries the measurements every number here leans on.
 
-## STATUS — CONFIRMED LIVE AT 85/85, REBUILT ON MEASUREMENTS 2026-08-31, CORRECTED 2026-09-01, THE RATCHET GIVEN AN ESCAPE 2026-09-11
+## STATUS — CONFIRMED LIVE AT 85/85, REBUILT ON MEASUREMENTS 2026-08-31, CORRECTED 2026-09-01, THE RATCHET GIVEN AN ESCAPE AND THE CARD THAT WILL NOT SETTLE A RESCUE 2026-09-11
 
 The trigger exists: `app/src/motion.ts` behind `app/src/trigger.ts`'s seam, armed from a
 mode toggle on the capture screen, with a live HUD, a swallowed-fire counter and a
@@ -54,6 +54,21 @@ binds over `presenceK` × the session's measurement on this rig, so the presence
 decided by a constant again. It is a debt rather than a design: what the floor must clear is
 a HAND, and no session statistic measures how big a hand is in frame.
 
+**THE RESCUE IS THE EVENING OF 2026-09-11 AND §7 IS ALL OF IT.** A card that never settles is
+photographed off the quietest frame it manages rather than dropped, once the episode has run
+`rescueAfter` × `maxMoveMs`; six sessions go from 268 photographs and 20 stalls to 295 and 7,
+and the eight earlier sessions do not move. **It is SPECIFIED and BUILT and NOT VALIDATED**:
+the replay says the machine fires on more cards, and only the rig says whether those
+photographs are readable. §7's last block is that run's checklist.
+
+**AND THERE IS ONE TRIGGER AGAIN.** D130's beat-locked cadence machine and D131's dual are
+deleted, on the owner's word — *"motion is better. always."* — once the settle machine reached
+their cards without a beat. The cadence module under `app/src/` and its spec under
+`app/tests/` are gone — named in prose because the paths no longer resolve — and so are the
+third Trigger cell, the period pin and the beat's HUD spans. The sessions recorded under it
+stay banked in `harness/traces/`, because a recording is evidence about a rig rather than
+about a trigger.
+
 **§4's protocol changed shape because of D81.** The parameters are no longer what a rig
 session tunes; the rig session now reads whether the machine's own measurements are sane and
 whether the baseline was taken on an empty stand. Read §4 before treating any number here as
@@ -86,13 +101,15 @@ Phases: watching → moving → settling → (verdict) → watching, with a defe
 | `dSeed` | 2.25 | what the still-frame difference is taken to be until 25 still frames have been seen. Chosen so the seeded thresholds are **4.50 and 8.00 exactly** — Gate C's own pair, so the machine boots on the confirmed run's numbers |
 | `dFloor` | 1.0 | floor under the measurement, so a rock-steady mount cannot drive `tLo` toward zero. Sits under every session measured (1.75–3.22) without touching any |
 | `noiseWindowMs` | 8000 | ~200 frames at the observed 25 fps and a dozen feeder cycles. **Only frames already judged still go in** — see below |
-| `stillFrames` | 2 | frames under `tLo` that mean settled — counted over `stillWindow`, not consecutively (D84) |
-| `stillWindow` | 4 (133 ms) | how many recent frames those 2 are counted over, and the window must be FULL. **A consecutive run is defeated absolutely by a two-frame alternation**, measured on a card motionless for 500 ms whose `d` read 2.71 5.40 2.63 5.54 2.83 5.14 against a `tLo` of 4.18 — five runs of one, no verdict, card lost. Swept over the three 2026-09-01 21:xx sessions, 2-of-4 recovers two of the four cards lost that way and changes no other verdict; 2-of-3 and 3-of-5 recover fewer. Fire latency (stillWindow+1)·f = 167 ms = 36% of the 458 ms worst observed cycle |
+| `stillFrames` | 1 | frames under `tLo` that mean settled — counted over `stillWindow`, not consecutively (D84). **2 until D131**, and this table said so until 2026-09-11: a frame under `tLo` is still by definition, and on the bright-lamp feeder it is the only kind of rest there is |
+| `stillWindow` | 3 (100 ms) | how many recent frames that 1 is counted over, and the window must be FULL. **4 until D131**, and the rest of this row is the argument for the rule rather than for the number. **A consecutive run is defeated absolutely by a two-frame alternation**, measured on a card motionless for 500 ms whose `d` read 2.71 5.40 2.63 5.54 2.83 5.14 against a `tLo` of 4.18 — five runs of one, no verdict, card lost. Swept over the three 2026-09-01 21:xx sessions, 2-of-4 recovers two of the four cards lost that way and changes no other verdict; 2-of-3 and 3-of-5 recover fewer. Fire latency (stillWindow+1)·f = 167 ms = 36% of the 458 ms worst observed cycle |
 | `refractoryMs` | 250, deferring | sized to the <250 ms capture round trip, not the card cycle. A time, not a light level |
 | `tNovel` | 4.0 | **deliberately still absolute.** Across all five traces and 217 verdicts the `suppressed:unchanged` count is zero, so there is no measurement to take a multiple of; and scaling it to session noise would push it DOWN on a quiet rig, making suppression more likely — the wrong direction, since a false pass is a duplicate `U` fixes and a false suppression is a silent §5.5 loss |
 | `presenceK` | 3.0 | the presence floor is this × the session's still-frame difference. Against its own baseline an empty stand reads 1.10–1.38 and every card of every session reads 17.4–167.4; 3.0 puts the threshold at 5.5–9.7, four to seven times over the empty stand and three to ten times under the dimmest card |
 | `presenceMin` | 16.0 | absolute floor, **set by a HAND rather than by drift** (D84, correcting D81). An undisturbed stand does not creep: it holds 2.0–2.5 for as long as it is left alone. What crosses 8.0 is the operator's hand arriving with the first card, which holds still for two frames on the way in — and at 8.0 that fired, twice, photographing the bare stand. 16.0 is 1.4× over the worst approach measured (11.15) and 2× under the quietest card in the same sessions (32.5). **It now BINDS over `presenceK` × the measurement, which is a debt** — see D84 |
-| `maxMoveMs` | 1250 | ~2× the feeder period; a jam surfaces as `stalled` and does NOT fire. A time, like the refractory. **The clock is cleared by a COMPLETED settle** (D84): cleared by any quiet frame, as it was, the alternation above reset it every other frame and `stalled` could never expire — it did not fire once across three sessions and four cards left unphotographed |
+| `rescueK` | 4/3 | the RESCUE BAR, as a multiple of `tLo`: how far above it a frame may sit and still settle an episode that has gone on too long. Not a new number — `sqrt(moveK / stillK)`, the geometric centre of the Schmitt band, exactly 4/3 because `moveK/stillK` is 16/9 by `moveK`'s own definition. Across the nineteen stall episodes of the six 2026-09-11 evening sessions the quietest frame of every one sits 1.02–1.25× `tLo`; 4/3 covers them all and is the largest value the corpus tolerates — at 1.40 the 2026-09-01 21:16 session gains a fire it did not have |
+| `rescueAfter` | 0.60 | how long an episode must have run without a settle before `rescueK` applies, as a FRACTION of `maxMoveMs` (750 ms). **A STEP, NOT A RAMP, AND THE RAMP WAS MEASURED**: a bar rising smoothly from `tLo` to 4/3 over the stall clock is at `tLo` from the first frame, which retires `stillWindow` immediately — and `stillWindow` is what stops a dip mid-transit from firing. Scored over the whole corpus that takes the double count from 2 to between 20 and 55. **0.60 is where two plateaux meet**: swept 0.50–0.80 at 0.02, yield is flat at 295 fires and 7 stalls over the six evening sessions from 0.50 to 0.60 and falls away above it (280 and 21 by 0.80), while the eight earliest sessions are untouched from 0.60 up and gain a fire and a double at 0.58 and below |
+| `maxMoveMs` | 1250 | ~2× the feeder period; a jam surfaces as `stalled` and does NOT fire. A time, like the refractory. **The clock is cleared by a COMPLETED settle** (D84): cleared by any quiet frame, as it was, the alternation above reset it every other frame and `stalled` could never expire — it did not fire once across three sessions and four cards left unphotographed. **It is now the LAST resort rather than the first**: an episode reaching it has already had the rescue bar in force for 500 ms, so a stall means a scene that never came near still |
 
 ### The measurement only admits frames it already called still, and that is the whole safety argument
 
@@ -247,6 +264,18 @@ confirmation run.
    so a card that sits in the watch region without ever settling — the failure that lost four
    cards silently — now expires it. A stall during a feeder run is a card the machine did not
    photograph and is telling you about. Re-present it; it is not a number to raise.
+
+   **AND SINCE 2026-09-11 IT IS A SENTENCE ON THE STAGE, NOT A NUMBER IN THE READOUT.** It sat
+   between `empty` and `escape` inside a collapsed `Tuning` disclosure while the operator
+   watched the stage — the one event that costs a card was the one event nothing said out
+   loud, which is exactly what `noCardRun` was given a sentence for. It now renders as what it
+   means, with a `Set aside` press that spends the count, the halt banner's own idiom.
+
+   **READ `rescue` BESIDE IT.** The two are one accounting: an episode that outlasts
+   `rescueAfter` × `maxMoveMs` ends in a rescued photograph or in a stall, never in nothing. A
+   run reading high on `rescue` is landing its cards badly even though the photographs
+   arrived — the feeder, not a number here — and a run reading high on `stall` after that is
+   a scene that never came near still at all.
 6. **Save the trace before disarming — every step above, and this one, is in the file.**
    The `Save trace` button under the HUD downloads the whole armed session: every frame's
    `(t, d, dBase, luma)`, plus the exact watch-region pixels each fire/suppression/stall was
@@ -378,72 +407,120 @@ fault, and `dbase` reading tens with a card under the lens against under 1.5 wit
 empty is the separation the presence gate lives on. Either one going wrong is the cue to run
 one 60-second trace and score it — `scripts/score-trace.py`, §4 — *before* it costs cards.
 
-## 7. The cadence trigger — trigger 2, for a feeder that never rests (D130)
+## 7. The rescue — the card that will not settle (2026-09-11)
 
-Added 2026-09-11. The settle trigger the rest of this file describes fires on stillness; this
-one fires on a beat, and the two live behind one seam with the operator choosing per run. D130
-is the decision; this section is the mechanism and what the first rig run owes.
+Added the evening D130's cadence trigger was deleted, and it is what replaced it. The owner's
+complaint is the whole subject: *"it's really bad when the cards are coming a little slower or
+aren't landing perfectly, the engine is then bad at picking those up"*. Six saved sessions say
+what that looked like — 268 photographs against 20 stalls, about 93% — and what each miss was.
 
-**Why it exists, in one measurement.** The owner ran the settle trigger over a re-arranged
-feeder and it fired on **5 of 29 cards** one session and **5 of ~34** the next. Every fire
-reached disk and photographed a card — the plumbing was never in question. The feeder now lays
-a card down every **0.867 s** (29 luma cycles, p10-p90 0.85-0.92) and never lets one sit: the
-longest run of frames under `tLo` per card has a **median of one**, and 13 of 28 cards never
-had four consecutive frames under `tHi`. A settle is `stillFrames` of the last `stillWindow`
-(§2, D84) and a feeder that never stills produces none. `scripts/score-trace.py sweep` reaches
-9 of 29 at its best `stillK`. The two traces are banked in `harness/traces/` and are T9's third
-corpus.
+**A stall is a card, and until this the answer was to drop it.** The trigger fires on a settle;
+a card that never settles inside `maxMoveMs` was reported and left unphotographed. That refusal
+is defensible on its own terms — the point of a settle trigger is a still card, and firing on a
+moving one buys a blurred photograph — so the real question was never "can it fire anyway" but
+**which of a soft photograph and no photograph is worth more**. On a feeder the answer is the
+photograph: the card is about to be replaced, nothing comes back for it, and `U` undoes a bad
+one in one press while a lost card is found weeks later in a box that does not match its run.
 
-**What it does.** `app/src/cadence.ts`:
+**What the nineteen stall episodes actually are.** Scored with `scripts/score-trace.py` over
+the six sessions, every one of them has a quietest frame between **1.02× and 1.25× `tLo`** —
+and **nine of the first fourteen are UNDER `tLo`**, frames the machine had already judged
+still. Those nine were refused by `stillWindow` alone: the card landed one or two frames after
+its transit ended, the window needs three to fill, and the next card's motion threw it away
+first. The rest came to rest just above the line.
 
-1. Waits for the first card on the settle machine's own presence gate (§2, the
-   distance-from-baseline of D81).
-2. Fires on it — first quiet frame, or blind after `firstWait` of a period.
-3. Fires once per period thereafter. The period is **seeded at 870 ms** (`dSeed`'s sense — the
-   boot value until measured) and **measured** from the autocorrelation of the motion signal
-   over the last `windowMs` once `lockAfterMs` of feeding exist; a half/third-period peak is a
-   harmonic and the shorter lag is taken.
-4. Locked, it folds the window by the period to find the rest — the phase of least motion — and
-   fires there, on the first still frame in a window opening `restLead` early, a calm frame at
-   the rest, or blind at the deadline. Every non-still fire is counted `blind` on the HUD.
-5. Same presence and novelty gates as the settle machine. Two `same` verdicts in a row is a
-   stopped feeder; the beat goes idle and motion wakes it. A stand empty `lostAfter` periods
-   drops the beat.
+**So the rescue is a bar and an age, and neither is a new number.** `rescueK` (4/3) is
+`sqrt(moveK / stillK)` — the geometric centre of the Schmitt band the session already measures.
+`rescueAfter` (0.60) is a fraction of `maxMoveMs`, the machine's own statement of how long is
+too long. Past that age a frame under `rescueK` × `tLo` settles the episode, window requirement
+dropped with it, and the fire is a distinct verdict: `fire:rescued`, counted as `rescue` on the
+HUD beside `stall`.
 
-Replayed causally over the two traces: **27 fires over 29 cards, 20 over ~21**, against 5 and
-5 live. `app/tests/cadence.spec.ts` pins those counts and the synthetic contract.
+**Three things are deliberately NOT relaxed**, and the third is why the rescue is safe:
 
-**The operator's control.** The Rig panel's Trigger track has a third cell, `cadence`. Arming
-it shows a period field: blank measures the beat (the default, and what the traces say it does
-well), a number pins the period while the phase is still measured.
+- **Presence.** A rescue cannot photograph the bare stand — `presenceMin` decides it exactly as
+  it decides an ordinary fire, which is D84's two junk rows staying fixed.
+- **Novelty and the refractory.** A rescue cannot photograph the same card twice.
+- **The age.** `stillWindow` is what stops a dip DURING a transit from firing, and the age is
+  the only word the machine has for "the transit cannot still be happening". Retiring the window
+  from the first frame of an episode — the obvious ramp — takes the corpus's double count from
+  **2 to between 20 and 55**. That measurement is why this is a step and not a ramp.
 
-**What the first rig run must measure, and this section is that run's checklist.** No
-photograph has been taken by this machine at the rig. The replay says a fire lands on a frame
-with median `d` of 3-4 on the faster session and higher on the slower one — moving, a little —
-and only a photograph says whether that is a usable image or a blur. So the first armed run:
+**The corpus, before and after** (`scripts/score-trace.py summary`, pinned in T9):
 
-- Save the trace and score it: `scripts/score-trace.py summary` reports the trigger and the
-  fire cadence; the HUD's `blind` count is how many fires were taken off a still frame.
-- Downsample the run's own JPEGs to the 38x28 watch region and match frame against photograph,
-  the way D84's four lost cards were only provable that way — a trace says what the machine
-  decided, only the photograph says what was on the stand.
-- If the blind fires blur, the lever is the camera's exposure, not a constant here: a shorter
-  shutter freezes the motion the feeder never removes. That is a rig fact, and D130 says so.
+| session | live | with the rescue | of those rescued | stalls |
+|---|---|---|---|---|
+| 21:52 | 55 | 59 | 6 | 2 → 0 |
+| 21:54 | 53 | 60 | 7 | 5 → 3 |
+| 22:10 | 40 | 44 | 6 | 3 → 0 |
+| 22:12 | 51 | 56 | 6 | 4 → 1 |
+| 22:25 | 17 | 23 | 7 | 5 → 2 |
+| 22:29 | 52 | 53 | 2 | 1 → 1 |
+| **six** | **268** | **295** | **34** | **20 → 7** |
 
-**THE DUAL (D131, the same night).** The cadence trigger takes the settle machine's own fire
-whenever it comes — at least half a period after the last, re-anchoring the beat on it — and
-the scheduled fire runs only when a rest window has passed with no settle. Settle accuracy
-where a card rests, the beat where it never does. Its first full run, before the dual and
-before §2's escape, photographed 45 of ~47 cards with 6 on a moving frame and one double;
-the owner called it 80-90% and was right.
+**And the eight earliest sessions do not move**, which is the half with teeth: 86, 86, 20, 15,
+24, 49, 16, 12 before and after. A stillness rule that buys cards on one rig by spending them
+on another is this subsystem's entire history — D81's brightness floor rescued one session of
+three and broke the other two — so the sweep was constrained by those eight rather than scored
+against the new six. `rescueAfter` below 0.60 gains the 21:14 session a fire 290 ms before its
+own next one, and that is the value the corpus refused.
 
-**THE ESCAPE HAS ITS RIG RUN (2026-09-11, 04:07 and 04:09).** Two boxes under the bright lamp,
-the settle trigger alone: **70 fires over ~75 cards and 51 over ~54, two stalls each, no
-double**, every fire on a frame under d 10 (median 3.3-3.9), `tLo` reaching 9-11.5 where the
-ratchet had held it at 4.5. About 97%, from 17%. The two to three stalls per run are cards that
-slid past `maxMoveMs` — the beat backstop's case, and the reason to run the dual next. What is
-still unmeasured is the photographs themselves: whether a d 5-8 frame reads clean is a fact
-about the JPEGs, not the trace.
+**What still stalls is the finding, not the residue.** The seven survivors are episodes whose
+quietest frame never came near the bar. The clearest is 22:25 at 27.9 s: 1.25 s inside the
+Schmitt band with **not one crossing of `tHi`** — a card sliding the entire time, quietest
+frame at 3.4× `tLo`. Extending a deadline for that one would photograph a moving card; the
+machine is right to refuse it and say so.
 
-The 85/85 confirmation in this file's STATUS is **trigger 1's**; these two runs are its second.
-The dual has no rig run yet.
+### Glare, and why there is no `stalled:flare`
+
+The owner diagnosed the remaining misses as specular glare — a mirror flash off a tilted card —
+and dimmed the lamp between runs (scene p90 111 → 89) while the flares still hit 176 and 198.
+The obvious next step is a verdict that names it. **Three candidate discriminators were measured
+over the whole corpus and every one failed:**
+
+| discriminator | what the traces say |
+|---|---|
+| saturation | the share of watch-region cells at ≥250 is ~0 on every stall frame, worst 6 of 1,064 — **and that is not evidence of no glare**: each cell averages ~3,600 sensor pixels, so a fully clipped streak reaches the trace as a cell reading 214. The instrument destroys the evidence before the file is written |
+| spike shape | a flash should be brief, so peak ÷ own-median bright quantile ought to separate. It goes the **wrong way**: stall episodes read 1.19 median against 1.36 for episodes ending in a fire |
+| absolute level | "brighter than any card this session fired on" flags 6 of the 11 surviving stalls — and **14% to 55% of the ordinary episodes too** |
+
+So `scripts/score-trace.py stalls` prints the **reading** — each surviving episode's peak bright
+quantile against this session's own fired cards — and names nothing. That is the comparison the
+owner made by eye off a contact sheet, offered offline where a human is already looking. A
+verdict string asserting `flare` would be `cardLumaFloor`'s mistake in a third costume: a
+brightness compared against a line that does not separate the populations.
+
+**The fix for glare is optical and stays optical** — the lamp off-axis, a diffuser, a polariser.
+No code recovers detail that was gone before the detector saw it, and the session that tries to
+threshold its way out of this one should read D81 first.
+
+### What the first rig run under this rule must measure
+
+**NOTHING HERE IS VALIDATED AT THE RIG.** The replay proves the machine fires on more cards;
+that is arithmetic over recordings and it is exactly as far as a trace can go.
+
+**Five of the new fires were rendered, because five is how many the trace can show.** A trace
+stores pixels for verdict frames and once-a-second keyframes only, so of the 28 rescues that
+are a new card rather than an existing fire taken a frame sooner, five land within one frame of
+a stored one. Drawn at 38x28 beside the nearest ordinary fires of the same session: each holds a
+card-shaped object with structure, none is obviously worse than its neighbours, and the 03:20
+rescue at 101.29 s is visibly cleaner than the ordinary fire 0.13 s after it — which is a
+blown-out flare, and a reminder that glare lands on ordinary fires too. One (21:54 at 19.36 s)
+is dimmer than its neighbour, consistent with a card not yet fully down. **A 38x28 grid can say
+a card is there and cannot say it is in focus**, so this is a sanity check and the run below is
+still the measurement. **Whether the
+extra photographs are readable is a fact about the JPEGs**, and this repo has been burned there
+twice — two earlier motion fixes were derived from frames nobody rendered, which is why
+`score-trace.py contact` exists. So the first armed run:
+
+- **Read `rescue` against `fires` on the HUD.** On the saved corpus 34 of 295 photographs are
+  rescues, about one in nine. A run far above that is landing cards badly.
+- **Look at the rescued photographs, not the trace.** They are the ones taken on a frame between
+  `tLo` and 4/3 × `tLo`. Downsample the run's own JPEGs to the 38×28 watch region and match
+  frame against photograph, the way D84's four lost cards were only ever provable — a trace says
+  what the machine decided, only the photograph says what was on the stand.
+- **If the rescued frames blur, the lever is the camera's exposure**, not `rescueK`: a shorter
+  shutter freezes motion the feeder never removes. That is a rig fact, and the same one D130 got
+  right about its own blind fires.
+- **Save the trace and score it**: `summary` reports the rescued count beside the replayed one,
+  and `stalls` prints what the rescue could not save.

@@ -15,6 +15,8 @@ WHAT IT ANSWERS, in the order the questions actually get asked:
     summary    what the machine did live: verdicts, fires, refusals, cadence, noise
     presence   would the CURRENT presence gate have fired on each verdict's own pixels
     sweep      what the stillness thresholds would have scored across a parameter grid
+    stalls     every episode the rescue could not save, with its brightness against this
+               session's own fired cards — a reading, and `stalls` says why it is not a verdict
     contact    write the verdict frames out as a PNG contact sheet, so a human can see
                whether the frames the machine called empty have a card in them
 
@@ -25,6 +27,7 @@ settles it is looking.
     scripts/score-trace.py summary  <trace.json> [more.json ...]
     scripts/score-trace.py presence <trace.json>
     scripts/score-trace.py sweep    <trace.json> [more.json ...]
+    scripts/score-trace.py stalls   <trace.json> [more.json ...]
     scripts/score-trace.py contact  <trace.json> <out.png>
 
 TRACE VERSIONS. v1 rows are [t, d, luma]; v2 rows (D81) are [t, d, dBase, luma]. Read
@@ -59,6 +62,8 @@ STILL_WINDOW = 3
 REFRACTORY_MS = 250.0
 PRESENCE_K = 3.0
 PRESENCE_MIN = 16.0
+RESCUE_K = 4 / 3
+RESCUE_AFTER = 0.6
 MAX_MOVE_MS = 1250.0
 
 
@@ -110,7 +115,14 @@ def _replay(rows, still_k=STILL_K, move_k=MOVE_K, d_seed=D_SEED):
     grades a machine nobody is running — `make docs-audit`'s `motion params` row is what
     stops the two drifting.
 
-    Returns (verdicts, (tLo min, tLo max), stalls)."""
+    AND AN EPISODE PAST `RESCUE_AFTER` x `MAX_MOVE_MS` TAKES `RESCUE_K` x t_lo AS ITS BAR,
+    window requirement dropped with it — the rescue. `rescueK` in motion.ts carries the
+    derivation; the short form is that 4/3 is the geometric centre of the Schmitt band and
+    the window is what refused nine of fourteen measured misses on frames already called
+    quiet. The age gate is not decoration: retiring the window from the first frame of an
+    episode takes this corpus's double count from 2 to 21.
+
+    Returns (verdicts, (tLo min, tLo max), stalls, rescues)."""
     window: list[tuple[float, float]] = []
     everything: list[tuple[float, float]] = []
     d_typical = d_seed
@@ -121,6 +133,7 @@ def _replay(rows, still_k=STILL_K, move_k=MOVE_K, d_seed=D_SEED):
     stall_flagged = False
     verdicts: list[float] = []
     stalls: list[float] = []
+    rescues: list[float] = []
     lows: list[float] = []
 
     def stall(now: float) -> None:
@@ -169,8 +182,14 @@ def _replay(rows, still_k=STILL_K, move_k=MOVE_K, d_seed=D_SEED):
         quiet = d < t_lo
         marks.append(quiet)
         del marks[:-STILL_WINDOW]
-        settled = quiet and len(marks) >= STILL_WINDOW and sum(marks) >= STILL_FRAMES
-        if not settled:
+        ordinary = quiet and len(marks) >= STILL_WINDOW and sum(marks) >= STILL_FRAMES
+        rescued = (
+            not ordinary
+            and moving_since is not None
+            and now - moving_since >= RESCUE_AFTER * MAX_MOVE_MS
+            and d < t_lo * RESCUE_K
+        )
+        if not (ordinary or rescued):
             stall(now)
             continue
         moving_since, stall_flagged = None, False
@@ -179,7 +198,9 @@ def _replay(rows, still_k=STILL_K, move_k=MOVE_K, d_seed=D_SEED):
         judged = True
         refractory = now + REFRACTORY_MS
         verdicts.append(now)
-    return verdicts, ((min(lows), max(lows)) if lows else (0.0, 0.0)), stalls
+        if rescued:
+            rescues.append(now)
+    return verdicts, ((min(lows), max(lows)) if lows else (0.0, 0.0)), stalls, rescues
 
 
 def _presentations(rows, t_hi: float, merge_ms: float = 300.0) -> list[float]:
@@ -216,13 +237,14 @@ def summary(paths: list[str]) -> None:
             kinds[event["event"]] = kinds.get(event["event"], 0) + 1
         t_hi_live = params.get("tHi") or (params["dSeed"] * params["moveK"])
         presented = _presentations(rows, t_hi_live)
-        replayed, (lo, hi), stalls = _replay(rows)
+        replayed, (lo, hi), stalls, rescues = _replay(rows)
         print(f"{Path(path).name}   v{trace.get('version', 1)}   trigger {trigger}")
         print(f"  {duration:6.1f}s  {len(rows):5d} frames  {len(rows) / duration:5.1f} fps")
         print(f"  live params   {params}")
         print(f"  live verdicts {len(events):4d}   {kinds}")
         print(f"  presentations {len(presented):4d}   (motion bursts above the live tHi)")
         print(f"  replayed      {len(replayed):4d}   under today's adaptive SETTLE form, tLo {lo:.2f}-{hi:.2f}")
+        print(f"  of those      {len(rescues):4d}   RESCUED — taken under `rescueK` x tLo, not off a completed settle")
         print(f"  stalls        {len(stalls):4d}   at {[round(t / 1000, 1) for t in stalls]}")
         print(f"  d      median {statistics.median(d_values):5.2f}  p99 {_quantile(d_values, 0.99):6.2f}")
         print(f"  luma   min {min(lumas):5.1f}  median {statistics.median(lumas):6.1f}  max {max(lumas):6.1f}")
@@ -279,6 +301,53 @@ def sweep(paths: list[str]) -> None:
         print(f"  stillK={still_k:.1f}  {scored}  {'meets live everywhere' if meets else ''}")
 
 
+def stalls(paths: list[str]) -> None:
+    """Every episode the rescue could not save, with the brightness the operator asked about.
+
+    WHY THIS IS A READING AND NOT A CLASSIFIER, which is the finding rather than the excuse.
+    The owner's diagnosis of the 2026-09-11 misses was specular glare — a mirror flash off a
+    tilted card — and the obvious next step is a `stalled:flare` verdict. Three candidate
+    discriminators were measured over this whole corpus and every one of them failed:
+
+        SATURATION      the share of watch-region cells at 250 or above is ~0 on every stall
+                        frame here, worst 6 cells of 1064. That is not evidence of no glare:
+                        each cell averages ~3,600 sensor pixels, so a fully clipped streak
+                        on the sensor reaches the trace as a cell reading 214. The instrument
+                        destroys the evidence before the file is written.
+        SPIKE SHAPE     a flash should be brief, so peak / own-median bright quantile over
+                        the episode ought to separate. It goes the wrong way: stall episodes
+                        read 1.19 median where episodes ending in a FIRE read 1.36.
+        ABSOLUTE LEVEL  "brighter than any card this session fired on" flags 6 of the 11
+                        surviving stalls — and 14% to 55% of the ordinary episodes too.
+
+    So this prints the number and names nothing. The peak against the session's own fired
+    cards is exactly the comparison the owner made by eye off a contact sheet; a verdict
+    string asserting `flare` would be this repo's own `cardLumaFloor` mistake in a third
+    costume — a brightness compared against a line that does not separate the populations."""
+    for path in paths:
+        trace = _load(path)
+        rows = _rows(trace)
+        verdicts, _band, stalled, _rescues = _replay(rows)
+        fired = {round(t, 1) for t in verdicts}
+        lit = [luma for t, _d, _b, luma in rows if round(t, 1) in fired]
+        if not lit:
+            print(f"{Path(path).name}: no fires to compare against")
+            continue
+        median = statistics.median(lit)
+        print(f"{Path(path).name}   {len(stalled)} stalls, {len(verdicts)} fires")
+        print(f"  a fired card's bright quantile: median {median:.0f}, "
+              f"p90 {_quantile(lit, 0.9):.0f}, max {max(lit):.0f}")
+        for at in stalled:
+            window = [
+                (d, luma) for t, d, _b, luma in rows if at - MAX_MOVE_MS <= t <= at
+            ]
+            peak = max(luma for _d, luma in window)
+            quietest = min(d for d, _luma in window)
+            print(f"  {at / 1000:7.1f}s  quietest frame d {quietest:6.2f}   "
+                  f"peak bright quantile {peak:5.0f} = {peak / max(median, 1):.2f}x this "
+                  f"session's median card")
+
+
 def contact(path: str, out: str) -> None:
     """Every verdict's frame as one PNG, labelled with its live event and its statistics.
 
@@ -328,6 +397,8 @@ def main(argv: list[str]) -> int:
         presence(rest[0])
     elif command == "sweep":
         sweep(rest)
+    elif command == "stalls":
+        stalls(rest)
     elif command == "contact":
         if len(rest) != 2:
             raise SystemExit("contact takes <trace.json> <out.png>")

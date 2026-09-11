@@ -1093,16 +1093,18 @@ COMPONENTS = [
         "does": "fourteen armed motion sessions saved from the capture screen's HUD between "
                 "2026-08-23 and 2026-09-11 — FIVE recorded under the brightness floor D81 "
                 "replaced, THREE recorded 2026-09-01 under the distance gate that "
-                "replaced it (the sessions D84 was derived from), and SIX recorded 2026-09-11 "
-                "over a re-arranged feeder under a bright lamp, where the shipped settle trigger "
-                "fired 5 times each on the two the ratchet lost (D130's receipt), D131's "
-                "escape replays 31, 21, 45 and 85, and the last two — run LIVE under D131 — "
-                "fired 70 and 51 with two stalls each, its rig receipt. Each carries every "
+                "replaced it (the sessions D84 was derived from), SIX recorded overnight on "
+                "2026-09-11 over a re-arranged feeder under a bright lamp, where the shipped "
+                "settle trigger fired 5 times each on the two the ratchet lost (D130's "
+                "receipt) and D131's escape replays 31 and 21, and SIX MORE that evening — "
+                "the corpus the rescue was built on, 268 live photographs against 20 stalls, "
+                "295 and 7 under the rule in the tree. Each carries every "
                 "frame's (t, d, luma), v2 adding dBase, and the exact watch-region pixels of "
-                "every verdict, which is what makes a refusal re-scorable a year later; a "
-                "cadence trace also carries `trigger`. T9's "
+                "every verdict, which is what makes a refusal re-scorable a year later; one "
+                "session recorded under the retired cadence trigger still says so in "
+                "`trigger`, which is why that field outlived the machine. T9's "
                 "input, and the only real-rig evidence in this repo for the motion trigger. "
-                "Ground truth in `fixtures/`'s sense: never modified. THE THREE CORPORA ARE "
+                "Ground truth in `fixtures/`'s sense: never modified. THE FOUR CORPORA ARE "
                 "NAMED IN T9 AND NEVER SUMMED: `38 real cards were refused live` is a receipt "
                 "for what the brightness floor cost, and summing across corpora "
                 "would turn a fixed number into one that grows whenever a trace is banked.",
@@ -3325,11 +3327,15 @@ COMPONENTS = [
                                              "ImageBitmaps by useCamera's grabFrameJpeg",
                                      "governed_by": ["D13"]},
             "src/trigger.ts": {"does": "the trigger seam: whatever fires a capture, behind one "
-                                       "interface. THREE implementations since D130 — the key, "
-                                       "src/motion.ts's settle machine, and src/cadence.ts's "
-                                       "beat-locked cadence — and the screen still cannot tell "
-                                       "which is armed except by the name it renders.",
-                               "governed_by": ["D13", "D130"]},
+                                       "interface. TWO implementations again as of 2026-09-11 — "
+                                       "the key and src/motion.ts's settle machine. D130's "
+                                       "beat-locked cadence was the third and is deleted, on "
+                                       "the owner's word once the settle machine's rescue "
+                                       "reached the cards it was built for; the seam is what "
+                                       "made adding it and removing it both cheap, and the "
+                                       "screen still cannot tell which is armed except by the "
+                                       "name it renders.",
+                               "governed_by": ["D13"]},
             "src/trace.ts": {"does": "D19's Tier-1 tuning instrument: records every frame's "
                                      "(t, d, dBase, luma) plus the watch-region pixels at each "
                                      "gate verdict and once a second, and downloads the armed "
@@ -3380,32 +3386,6 @@ COMPONENTS = [
                                       "presenceK x dTypical on this rig, which D84 records as "
                                       "a debt rather than a design.",
                               "governed_by": ["D13", "D19", "D81", "D84", "D130", "D131"]},
-            "src/cadence.ts": {"does": "TRIGGER 2 (D130): fires on the feeder's BEAT, not on a "
-                                       "settle, for a rig that never lets a card sit still. "
-                                       "Built 2026-09-11 after the settle trigger fired on 5 of "
-                                       "29 and 5 of ~34 real cards on a re-arranged feeder — the "
-                                       "region is quiet for a median of ONE frame per card, and "
-                                       "no stillness threshold recovers it (sweep: 9 of 29). It "
-                                       "reuses motion.ts's sampler (startWatchSampler) and a "
-                                       "MotionMachine for the signal, the thresholds and the "
-                                       "presence/baseline gate (D81), and IGNORES that machine's "
-                                       "settle verdict. It waits for a first card on presence, "
-                                       "fires on it, then fires once per period at the phase of "
-                                       "least motion; the period is SEEDED at 870 ms and MEASURED "
-                                       "from the autocorrelation of the motion signal, a "
-                                       "half/third-period peak rejected as a harmonic. Non-still "
-                                       "fires are counted `blind`. Presence and novelty gate every "
-                                       "fire; two `same` in a row idles the beat (stopped feeder), "
-                                       "an empty stand for `lostAfter` periods drops it. Replayed "
-                                       "causally over the two traces it reaches 27/29 and 20/~21 "
-                                       "against 5/5 live. NOT clock-locked in D19's rejected sense "
-                                       "— the period is measured from the feeder every frame and "
-                                       "re-anchored on every fire, so drift is followed not lost. "
-                                       "NEITHER confirmed at the rig yet (D130): no photograph has "
-                                       "been taken by it, and whether a blind fire is an image or a "
-                                       "blur is a camera-exposure fact the first armed run "
-                                       "measures. The 85/85 run is trigger 1's.",
-                               "governed_by": ["D13", "D19", "D81", "D130", "D131"]},
             # ---- 7a's screens ----
             "src/CaptureScreen.tsx": {"does": "the capture screen, rebuilt 2026-08-23 to the owner-approved Pass D: "
                     "every control one hairline row at rest (key chip, label, value), one "
@@ -4786,28 +4766,6 @@ COMPONENTS = [
                 "note": "No box is ever selected in this spec, deliberately: with one, the "
                         "fire would POST /capture into a real store. The dropped counter IS "
                         "the assertion.",
-            },
-            "tests/cadence.spec.ts": {
-                "does": "TRIGGER 2 (D130), the cadence machine, two ways. The RECEIPT half "
-                        "replays the two 2026-09-11 traces through it causally — the period "
-                        "and phase re-estimated every refreshFrames from the frames already "
-                        "seen — and pins 27 fires over 29 cards and 20 over ~21, against the 5 "
-                        "and 5 the settle trigger scored live; those counts are a tripwire in "
-                        "T9's sense, movable only as a decision with the replay re-run. The "
-                        "CONTRACT half drives the live machine over synthetic feeder cycles: "
-                        "it arms on an empty stand, waits for a first card, fires blind on a "
-                        "card that never stills and counts it, idles when the same card sits "
-                        "two beats, loses the beat on an emptied stand, and clamps a pinned "
-                        "period. The replay hands the schedule a frame-counter for pixels, "
-                        "which disables the novelty gate on purpose; the synthetic half proves "
-                        "that gate where the pixels exist. Run by `make design-check`.",
-                "governed_by": ["D19", "D81", "D130", "D131"],
-                "note": "NO page, NO server on the replay path — CadenceMachine is pure, "
-                        "motion.spec.ts's reason. The synthetic half uses `step` (the live "
-                        "path with the settle machine underneath) so presence, baseline and "
-                        "novelty are exercised; the replay uses `stepSignal` because a trace "
-                        "carries the signal and not the picture. No box is ever selected, "
-                        "motion-live.spec.ts's rule.",
             },
             "tests/capture-claims.spec.ts": {
                 "does": "the capture screen's claim controls in a real browser: the Finish "

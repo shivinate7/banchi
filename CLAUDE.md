@@ -1532,6 +1532,7 @@ D138 One process serves the product, Vite compiles and never serves, and the bui
 D139 Which branch the primary checkout stands on is a fact about the live rig, and a warning is the ceiling
 D140 The number is claimed at the merge, because what main has taken is not knowable before it
 D141 The browser matrix runs when the change reaches what a browser draws, and the path list has a reader
+D-settle-rescue  A card that will not settle is photographed off the quietest frame it manages, and there is one trigger again
 ```
 
 **THE GAP THIS LIST CARRIED BETWEEN D116 AND D118 IS CLOSED, AND IT CLOSED THE WAY IT SAID IT
@@ -1629,8 +1630,9 @@ was open** — the rule is renumber your own, never another's.
   mixed-value lot — that run's queue was uniformly sub-threshold, $0.04 to $0.40.
 - `docs/specs/motion-trigger.md` — Gate C's auto-capture: built and self-tested 2026-08-22,
   tuned at the rig 2026-08-23, confirmed live at 85/85 on box 95, **rebuilt on
-  measurements 2026-08-31 (D81)** and **corrected on three more 2026-09-01 (D84)**. Its §4 is
-  the rig protocol; D19, D81 and D84 are the decisions.
+  measurements 2026-08-31 (D81)**, **corrected on three more 2026-09-01 (D84)**, and given
+  **the ratchet's escape and the rescue 2026-09-11 (D131 and the rescue's own entry)**. Its §4
+  is the rig protocol and its §7 is the rescue; D19, D81, D84 and D131 are the decisions.
   Read its STATUS before treating a green `make design-check` as evidence about the feeder —
   the TRIGGER half of Gate C is confirmed and the PIPELINE half is not: box 95's 85 records
   are all still `captured`, and no run directory exists for that box.
@@ -1657,30 +1659,53 @@ was open** — the rule is renumber your own, never another's.
   D84 records that as a debt rather than a design, and names the three quantities that
   re-derive it on a new rig — the idle stand, the worst approach, the quietest card.
 
-  **A SECOND TRIGGER LANDED 2026-09-11 FOR A FEEDER THAT NEVER RESTS (D130).** The settle
-  trigger fired on 5 of 29 real cards on a re-arranged rig — the region is quiet a median of
-  one frame per card, and no stillness threshold recovers it. `app/src/cadence.ts` is trigger
-  2: it fires on the feeder's BEAT, measured from the motion by autocorrelation rather than
-  typed, waits for a first card on the presence gate, and fires once per period at the phase of
-  least motion. Armed from the same Rig panel Trigger track (a third `cadence` cell) with a
-  period pin. Replayed 27/29 and 20/~21 against 5/5 live, banked as T9's third corpus. **It is
-  NOT confirmed at the rig — no photograph has been taken by it** — and its §7 is the first
-  run's checklist.
+  **A SECOND TRIGGER LANDED 2026-09-11 FOR A FEEDER THAT NEVER RESTS (D130), AND WAS DELETED
+  THE SAME DAY.** The settle trigger fired on 5 of 29 real cards on a re-arranged rig; a
+  beat-locked cadence machine replayed 27/29 against it. The owner retired it that evening —
+  *"motion is better. always."* — once the settle machine reached those cards on its own.
+  **THERE IS ONE TRIGGER AND ONE ONLY**, and a session proposing a second reads D130's
+  deletion note first. The sessions recorded under it stay banked in `harness/traces/`,
+  because a recording is evidence about a rig rather than about a trigger.
 
-  **AND THE SETTLE TRIGGER WAS FIXABLE AFTER ALL, WHICH D130 SAID IT WAS NOT (D131, the same
+  **THE SETTLE TRIGGER WAS FIXABLE AFTER ALL, WHICH D130 SAID IT WAS NOT (D131, the same
   night, on the owner's refusal).** The rest existed at d 5-8 under the bright lamp; the noise
   tracker's ratchet — still frames defined only by frames already under `tLo` — could lower
   its idea of still and never raise it, and sat under the rest. It has an ESCAPE now: still
   frames under 30% of the frames with a card in view hand the still level to the 25th
   percentile of all of them, and a settle is one quiet frame of the last three. Zero verdicts
-  change on the eight earlier sessions; the four bright-lamp sessions replay 31, 21, 45, 85.
-  The cadence trigger is a DUAL: the settle fire whenever it comes, the beat as the backstop.
+  change on the eight earlier sessions.
   The HUD's `escape` count says when the ratchet was overruled. **Confirmed at the rig the same
-  night**: two boxes, 70/~75 and 51/~54, two stalls each, no double — ~97% from 17%. The
-  photographs and the dual are what remain unmeasured.
+  night**: two boxes, 70/~75 and 51/~54, two stalls each, no double — ~97% from 17%.
+
+  **AND A CARD THAT WILL NOT SETTLE IS PHOTOGRAPHED RATHER THAN DROPPED, WHICH IS THE OWNER'S
+  OWN COMPLAINT ANSWERED**: *"it's really bad when the cards are coming a little slower or
+  aren't landing perfectly"*. Six more sessions that evening, 268 photographs against 20
+  stalls. Every stall episode's quietest frame sits 1.02–1.25x `tLo`, and NINE of the first
+  fourteen are UNDER it — frames the machine had already called still, refused by
+  `stillWindow` alone because the card landed one or two frames after its transit ended.
+  **The rescue**: past `rescueAfter` (0.60) x `maxMoveMs`, a frame under `rescueK` (4/3,
+  which is `sqrt(moveK/stillK)` — the Schmitt band's geometric centre) settles the episode,
+  window requirement dropped with it, and fires `fire:rescued`. **Presence, novelty and the
+  refractory are NOT relaxed**, so a rescue can photograph neither an empty stand nor the same
+  card twice. 268 -> 295 photographs, 20 -> 7 stalls, and **the eight earliest sessions do not
+  move** — the half the sweep was constrained by. A step and not a ramp: retiring the window
+  from the first frame of an episode takes the corpus's double count from 2 to 20-55.
+  **And a stall is a SENTENCE on the stage now**, with a `Set aside` press, rather than a
+  number inside a collapsed disclosure. **NOT VALIDATED AT THE RIG** — the replay says the
+  machine fires on more cards; only the JPEGs say whether they are readable, and §7 is that
+  run's checklist.
+
+  **THERE IS NO `stalled:flare`, AND THAT IS A FINDING.** The remaining misses are bright, and
+  three candidate glare discriminators were measured across the whole corpus: saturation reads
+  ~0 on every stall frame (a 38x28 cell averages ~3,600 sensor pixels, so a clipped streak
+  arrives as 214 — the instrument destroys the evidence), a spike-shape ratio goes the wrong
+  way (1.19 for stalls against 1.36 for fires), and "brighter than any card this session fired
+  on" flags 14-55% of ordinary episodes too. `scripts/score-trace.py stalls` prints the
+  reading and names nothing. **The fix for glare is optical** — lamp off-axis, diffuser,
+  polariser — and a session that tries to threshold its way out of it should read D81 first.
 
   **`scripts/score-trace.py` is how a trace is scored, and it is not optional reading before
-  changing a number here.** `summary`, `presence`, `sweep` and `contact` — the last one draws
+  changing a number here.** `summary`, `presence`, `sweep`, `stalls` and `contact` — the last one draws
   every verdict's frame, because the 2026-08-29 fix derived its "empty stand" brightnesses
   from twenty photographs of real cards nobody had looked at. **Arm on an empty stand**: what
   is in the watch region at arm time is what the session will call nothing. **And the trace is

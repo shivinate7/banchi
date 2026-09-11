@@ -5131,6 +5131,8 @@ MOTION_MIRROR = {
     "refractoryMs": "REFRACTORY_MS",
     "presenceK": "PRESENCE_K",
     "presenceMin": "PRESENCE_MIN",
+    "rescueK": "RESCUE_K",
+    "rescueAfter": "RESCUE_AFTER",
     "maxMoveMs": "MAX_MOVE_MS",
 }
 
