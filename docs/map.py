@@ -264,6 +264,15 @@ OPEN = [
               "being measured and were deliberately left alone: writing a tracking number back is the "
               "first thing this project would do that a buyer sees, and D69 ruled that the screen comes "
               "before the transport. Nothing blocks it but the doing of it."},
+    {"n": 22, "title": "One process serves the product: the capture server serves app/dist, the supervisor builds it",
+     "note": "D132, settled 2026-09-11 by interview and NOT built. Three PRs in order: the static "
+              "serve with the index.html fallback and T7 coverage; the supervisor dropping its app "
+              "child and running `vite build` when app/src is newer than dist/, serving the old bundle "
+              "until it lands; the dock app reinstalled at :8000 and the docs amended. Vite stays as "
+              "the compiler and `make dev` keeps hot reload on its own port, untouched. The code the "
+              "operating form runs is the checkout, live; a frozen copy is deferred until a second "
+              "person needs the app. D53's rejection of serving dist is reversed by this, on the one "
+              "ground it gave: the build is the server's job now, not a step to remember."},
 ]
 
 # --------------------------------------------------------------------------------- gates

@@ -1389,9 +1389,9 @@ named lives in `docs/DECISIONS.md` and is that file's to open or close.
 
 ## What is open
 
-**Two things, and they are not ranked.** There is no `next` here and no `blocked`: both are
-unblocked, and which one matters more is the owner's to say on the day. `docs/map.py`'s
-`OPEN` carries the same two ids.
+**Three things, and they are not ranked.** There is no `next` here and no `blocked`: all
+are unblocked, and which one matters more is the owner's to say on the day. `docs/map.py`'s
+`OPEN` carries the same three ids.
 
 9. **Vendor the pokemontcg.io catalog** — see D15. Three pieces, in order:
     - Snapshot `PokemonTCG/pokemon-tcg-data` into the repo (183 files, 27.4 MB) with a
@@ -1415,6 +1415,13 @@ unblocked, and which one matters more is the owner's to say on the day. `docs/ma
     were deliberately left alone: writing a tracking number back is the first thing this
     project would do that a **buyer** sees, and D69 ruled that the screen comes before the
     transport. Nothing blocks it but the doing of it.
+
+22. **One process serves the product** — D132, settled 2026-09-11 by interview and not built.
+    The capture server serves `app/dist/` beside the API with an `index.html` fallback; the
+    supervisor drops its Vite child and runs `vite build` when `app/src` is newer than `dist/`,
+    serving the old bundle until the new one lands; the dock app is reinstalled at `:8000`.
+    Vite stays as the compiler and `make dev` keeps hot reload on its own port. Three PRs, in
+    the order D132 lists them. Nothing blocks it but the doing of it.
 
 **Nothing in this list is blocked on a third-party benchmark.** A sub-floor T1 is worked
 directly — see the T1 section above. The TCGplayer Scan & Identify comparison was removed

@@ -1400,6 +1400,7 @@ D128 The key listener is attached before the paint, because a press answers to w
 D129 The verdict's line is fixed by the first Playwright that counts it right, and the rig's Node is not the thing that moves
 D130 A feeder that never rests gets a second trigger, and the beat is measured not typed
 D131 The ratchet gets an escape, a settle is one quiet frame of three, and the beat is the backstop
+D132 One process serves the product, Vite compiles and never serves, and the build is the server's job
 ```
 
 **THE GAP THIS LIST CARRIED BETWEEN D116 AND D118 IS CLOSED, AND IT CLOSED THE WAY IT SAID IT
