@@ -1330,15 +1330,15 @@ COMPONENTS = [
                         "`make design-check` loads, each with the reason it is there, and the "
                         "classifier `.github/workflows/check.yml`'s `browser-scope` job runs "
                         "on a pull request to decide whether the three-shard browser matrix "
-                        "runs at all (D-ci-browser-scope). `classify` diffs what the branch would LAND from "
+                        "runs at all (D141). `classify` diffs what the branch would LAND from "
                         "the merge-base; `history N` replays main's last N merges, which is "
-                        "how D-ci-browser-scope's measurement was taken; `selftest` proves the matcher and "
+                        "how D141's measurement was taken; `selftest` proves the matcher and "
                         "the Makefile narrowing. Never acts on a push to main — there it "
                         "prints its answer and the matrix runs unless D136's pass record says "
                         "the tree was tested.",
                 # D136 is the gate this composes with, D18 is why it writes nothing, D16 is
                 # why the list has a reader before it has a filter.
-                "governed_by": ["D16", "D18", "D136", "D-ci-browser-scope"],
+                "governed_by": ["D16", "D18", "D136", "D141"],
                 "note": "THE LIST IS DERIVED AND HAS A READER: `make docs-audit`'s `browser "
                         "scope` row reconciles SCOPE against Playwright's config, Vite's "
                         "config, every code string in app/tests and app/src naming a tracked "
@@ -1689,7 +1689,7 @@ COMPONENTS = [
                                 "D47", "D49", "D50", "D51", "D53", "D60", "D64", "D65", "D67", "D69",
                                 "D70", "D72", "D75", "D76", "D80", "D81", "D83", "D84", "D87",
                                 "D88", "D90", "D92", "D94", "D96", "D101", "D102", "D104", "D111",
-                                "D119", "D122", "D127", "D132", "D135", "D136", "D140", "D-ci-browser-scope"],
+                                "D119", "D122", "D127", "D132", "D135", "D136", "D140", "D141"],
             },
             "claim-ids.py": {
                 "does": "allocate the numbers this branch's SLUG ids will take, and "
