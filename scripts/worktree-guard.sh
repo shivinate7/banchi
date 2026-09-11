@@ -105,6 +105,17 @@ fi
 # whether it is safe: AHEAD is the number that matters, because 0 ahead means the branch
 # holds nothing main does not and switching can lose nothing.
 #
+# IT IS NOT ONLY THE MERGED CASE, AND THE CODE WAS ALWAYS WIDER THAN THIS COMMENT (D139).
+# What is reported is the main checkout standing on ANY branch that is not main, merged or not;
+# the ahead/behind/dirty counts are printed so the reader can tell which they have. The 2026-08-30
+# incident above is the merged instance of it, and the 2026-09-11 one is the other: this tree on
+# `claude/env-key-rotation`, three live sessions in it, unmerged work, nothing anywhere saying so.
+# D139 is why there are three readers of this one fact rather than this one — git has no
+# `pre-checkout` hook, so no single moment can refuse the move, and a warning at one missable
+# moment is a warning that gets missed. `scripts/githooks/post-checkout` says it at the moment
+# of the switch, `make status` says it under SERVING beside the server it qualifies, and this
+# says it to a session that arrives after the fact and would otherwise never ask.
+#
 # `.git` is a DIRECTORY here, which is exactly the test the block above uses inverted: a
 # linked worktree gets a FILE. A worktree ON a feature branch is correct and is not reported.
 if [ -d .git ] && git rev-parse --verify --quiet main >/dev/null 2>&1; then
@@ -116,6 +127,13 @@ if [ -d .git ] && git rev-parse --verify --quiet main >/dev/null 2>&1; then
     dirty=$(git status --porcelain 2>/dev/null | wc -l | tr -d ' ')
     echo "worktree-guard: this is the MAIN checkout and it is on '$branch', not main."
     echo "                ${ahead:-?} ahead / ${behind:-?} behind, ${dirty} uncommitted."
+    # THE WHY, ABOVE THE BRANCHING ARMS SO IT IS SAID IN BOTH (D139). Until this line the
+    # reason appeared only in the clean arm, as "This tree is the live rig" — and the arm a
+    # session actually lands in is the OTHER one, because a tree somebody is working in has
+    # uncommitted files by definition. So the case that needed the warning got the warning
+    # without the reason, which reads as a tidiness notice and is not one.
+    echo "                The live capture server is built out of THIS directory, so it is"
+    echo "                serving this branch's code over the owner's REAL store (D53)."
     if [ "$ahead" = "0" ] && [ "$dirty" = "0" ]; then
       echo "                Nothing here is unmerged and nothing is uncommitted, so"
       echo "                \`git switch main\` loses nothing. This tree is the live rig."
