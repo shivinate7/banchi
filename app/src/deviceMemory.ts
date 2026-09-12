@@ -327,6 +327,11 @@ const CAPTURE_SETUP_KEY = 'banchi.capture.setup'
  *  screen's own "nothing claimed" value. */
 export type CaptureSetup = {
   readonly box: number | null
+  /** WHICH DRAWER THAT NUMBER MEANT WHEN IT WAS PICKED (D145), so the restore can tell the box
+   *  the operator left from a different box wearing its number today. `null` where the pick
+   *  predates this field, or where the store had no id to give. Never rendered; the screen
+   *  compares it and draws the sentence that comparison produces. */
+  readonly bid: number | null
   readonly game: string | null
   readonly setHint: string
   readonly finish: readonly string[]
@@ -339,6 +344,7 @@ export type CaptureSetup = {
  *  default", which is what a first load does. */
 export const NO_CAPTURE_SETUP: CaptureSetup = {
   box: null,
+  bid: null,
   game: null,
   setHint: '',
   finish: [],
@@ -381,6 +387,12 @@ export function storedCaptureSetup(): CaptureSetup {
     const held = parsed as Record<string, unknown>
     return {
       box: readBox(held.box),
+      /* THE SAME SHAPE RULE AS THE BOX, and nothing more (D145). Whether this id still names
+         the drawer at that number is exactly the question `CaptureScreen.tsx` asks the store,
+         and this file's own rule is that a stored value is INPUT: a reader here that tried to
+         answer it would be a second, weaker copy of the check the screen has to make anyway.
+         A missing key reads `null`, which the screen has a named arm for. */
+      bid: readBox(held.bid),
       game: readWord(held.game),
       /* Unvalidated beyond its being a string, and that is a decision rather than a gap: a
          length cap or a set-code pattern here would make a RESTORED hint stricter than a typed
@@ -403,6 +415,7 @@ export function rememberCaptureSetup(setup: CaptureSetup): void {
       CAPTURE_SETUP_KEY,
       JSON.stringify({
         box: setup.box,
+        bid: setup.bid,
         game: setup.game,
         setHint: setup.setHint,
         finish: [...setup.finish],

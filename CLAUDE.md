@@ -1049,7 +1049,13 @@ A screen is not finished because it compiles.
   (D142). `banchi.capture.setup` is the box, game, set hint, finish, rarity
   and product the operator last chose — six values that were `sessionStorage` under D27 until
   the owner overruled the session scope, in ONE document because they are one habit, the
-  argument `banchi.orders.fetch-filter` already makes for its own two fields.
+  argument `banchi.orders.fetch-filter` already makes for its own two fields. **A SEVENTH
+  JOINED THEM ON 2026-09-12 AND IT IS THE ONLY ONE NO SCREEN DRAWS**
+  (D153): `bid`, the box's true index (D145), recorded at the pick so
+  the next sitting's restore can tell the drawer the operator left from a different drawer
+  wearing its number today — which `next_box_number`'s lowest-free allocation makes an ordinary
+  event. It is not a seventh KEY and the roster count is unchanged: this is a field inside the
+  one document, which is the whole point of storing them as a document.
   `banchi.box-recency` is `banchi.inventory.box-recency` renamed: the capture screen's box
   list now sorts on it too, so the name had stopped saying what the fact is — which drawer
   this operator's hand is in — and started saying which screen happened to write it. **No
@@ -1710,6 +1716,8 @@ D148 The wait is about the claim commit, and an answer it has not got is never a
 D149 A section number that resolves is not a citation that is right, and no check can read what a sentence is about
 D150 A reading taken after a sale is that sale's own result, and it ages the claim
 D151 The merge is run by a checkout, so the checkout is asked whether it is current, and main is read for a slug the moment it moves
+D152 Every row in the collapsed rail draws one glyph on one spine, and a rule that lists the children it knows about will miss one
+D153 The restore asks which drawer, not which number, and the picker stops drawing a number nobody reads
 D-a-camera-is-an-input The camera's automatic functions are inputs to the trigger's arithmetic, and the ones that step are locked
 
 ```
