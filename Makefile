@@ -677,7 +677,9 @@ reap:
 # there. Same standing as janitor-selftest. It cannot be run against this repo — the process the
 # guard exists to protect is the owner's live server, and "point it at that and see" is the
 # incident rather than the test — so every case runs against a throwaway checkout and a
-# throwaway sibling standing in for everywhere-else. Mutation-tested: thirteen arms, all caught.
+# throwaway sibling standing in for everywhere-else. Mutation-tested: twenty-two arms, all caught.
+# Its fixture spawned every subject by an ABSOLUTE path until 2026-09-12, which is why thirteen
+# arms could not see the bare sweep's blind spot — `spawn_relative` is the subject it lacked.
 reap-selftest:
 	@bash scripts/reap-selftest.sh
 

@@ -1690,13 +1690,24 @@ COMPONENTS = [
                         "capture_server.py` is allowed when the only match is yours and refused "
                         "when it is not. Fails OPEN on its own bugs and CLOSED on a target it "
                         "cannot place. Repo-agnostic and imports nothing from this tree, so "
-                        "`make janitor-install` can copy it out to cover every project.",
+                        "`make janitor-install` can copy it out to cover every project. THE "
+                        "BARE SWEEP ASKS THE SAME QUESTION THE VERDICT ANSWERS since "
+                        "2026-09-12: `pids_under` read argv alone while `verdict_for` reads "
+                        "argv AND the working directory, so a process started by a relative "
+                        "path — which is every `make server`, `$(PYTHON) "
+                        "server/capture_server.py` — was resolved as nothing at all. "
+                        "`_placed_under` is the one predicate now: an absolute argv path under "
+                        "the root, or a relative token that resolves against the process's own "
+                        "cwd to an existing FILE under it. It passes over this session's own "
+                        "chain and any LINKED WORKTREE nested inside this checkout, and PRINTS "
+                        "both with their reason.",
                 # D127 is the decision. D53 is the process it exists to protect — the main
                 # checkout's supervisor and its children are refused even from inside the main
                 # checkout, which is the one place this file overrules its own rule. D111 is
                 # the neighbouring notion it deliberately shares reasoning with rather than
                 # duplicating. D18 keeps its self-test off the commit path: it signals.
-                "governed_by": ["D18", "D53", "D88", "D111", "D127"],
+                "governed_by": ["D-the-sweep-asks-what-the-verdict-answers", "D18", "D43",
+                                "D53", "D88", "D111", "D127"],
             },
             "reap-selftest.sh": {
                 "does": "proves reap.py by pointing it at processes it must not kill. A "
@@ -1710,10 +1721,15 @@ COMPONENTS = [
                         "resolves a kill through a MACHINE-WIDE pgrep and a fixed fixture name "
                         "makes two concurrent runs resolve into each other — D122's shape one "
                         "register down. A rival fixture built by the same naming rule is the "
-                        "arm that reproduces it. Mutation-tested: thirteen guards removed one "
-                        "at a time, all thirteen caught, and the naming rule itself as a "
-                        "fourteenth.",
-                "governed_by": ["D18", "D53", "D122", "D127", "D157"],
+                        "arm that reproduces it. EVERY SUBJECT WAS SPAWNED BY AN ABSOLUTE "
+                        "PATH until 2026-09-12, which is why the bare sweep's blind spot "
+                        "survived it — `spawn_relative` starts one the way `make server` does, "
+                        "and eight cases over the sweep cover the relative subject, a "
+                        "directory-token subject that must NOT be placed, the caller it must "
+                        "pass over, and a real nested worktree. Mutation-tested: twenty-two "
+                        "guards removed one at a time, all caught, the naming rule among them.",
+                "governed_by": ["D-the-sweep-asks-what-the-verdict-answers", "D18", "D43",
+                                "D53", "D122", "D127", "D157"],
             },
             "session-teardown.sh": {
                 "does": "the SessionEnd / WorktreeRemove hook. Stops what a leaving session "
