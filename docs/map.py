@@ -5045,11 +5045,21 @@ COMPONENTS = [
                                              "draft and where a ticked selection came from "
                                              "(D39 — `#/inventory` keeps the only mass select); "
                                              "this owns how it is read and everything after the "
-                                             "press.",
+                                             "press. THE `needed` START READS A BOX OFF THE "
+                                             "ADDRESS TOO: `#/runs?state=captured` (src/standing.ts's "
+                                             "own link) opens straight onto it, and an `&box=` "
+                                             "narrows it without switching to the `drawers` "
+                                             "start — one bookmark, the state and the drawer "
+                                             "together. The ticked start reads `CarriedScope` as "
+                                             "a flat list of `box/index` keys rather than one "
+                                             "box and its indices (runHandoff.ts), which is what "
+                                             "lets a tick list from `#/inventory` span drawers; "
+                                             "`selectionOf` sends it straight through as the "
+                                             "wire's own `keys` term.",
                                      "governed_by": ["D13", "D27", "D32", "D33", "D39", "D48",
-                                                     "D52", "D56", "D58", "D65", "D76", "D94",
-                                                     "D114", "D118", "D145", "D172", "D174",
-                                                     "D180"]},
+                                                     "D52", "D56", "D58", "D65", "D76", "D78",
+                                                     "D94", "D114", "D118", "D145", "D172",
+                                                     "D174", "D180"]},
             "src/RunsLog.tsx": {"does": "a command's stdout, verbatim, in a well that follows its "
                                         "tail, counts its lines, folds and copies. NOTHING HERE "
                                         "SUMMARISES WHAT A COMMAND SAID — D33 puts every "
@@ -5711,10 +5721,18 @@ COMPONENTS = [
                                         "`boxOf` answers null there, which every reader here "
                                         "already handles — a number read off a folder is a guess "
                                         "that RESOLVES, and that is the one kind of wrong nothing "
-                                        "downstream can catch.",
+                                        "downstream can catch. AND `boxesLabel` IS THE PLURAL, "
+                                        "because a ticked handoff can now span drawers "
+                                        "(runHandoff.ts's `CarriedScope` is a flat list of "
+                                        "`box/index` keys) and the composer's ticked start has "
+                                        "to say which. One drawer keeps every word `boxLabel` "
+                                        "gives it; several are COUNTED and NUMBERED with the "
+                                        "names dropped, because `·` is both the name separator "
+                                        "and would be the list separator — `Box 1 · RB Epics, "
+                                        "Box 4` cannot be read as three drawers rather than five.",
                                 # D20 is the name and its optionality; D10 ruling 3 is the deleted
                                 # box whose number a run still remembers; D56 is the entry.
-                                "governed_by": ["D145", "D10", "D20", "D56", "D142",
+                                "governed_by": ["D145", "D10", "D20", "D48", "D56", "D142",
                                                 "D180"]},
             "src/money.ts": {"does": "A DOLLAR AMOUNT, SAID THE SAME WAY EVERYWHERE — `money` and "
                                      "`roundsToNothing`. Extracted from src/RunsComposer.tsx "
@@ -5764,13 +5782,29 @@ COMPONENTS = [
                                           "`banchi.run-scope`, D27's carve-out. NOT CLEARED BY "
                                           "BEING READ, because a reload during a live run is "
                                           "ordinary and a read-once handoff would silently widen "
-                                          "what the next press pays for; cleared by the operator, "
-                                          "by picking a box, and by arriving with nothing ticked. "
-                                          "Validates field by field and falls through to no "
-                                          "handoff at all rather than guessing.",
+                                          "what the next press pays for; cleared by the operator "
+                                          "and by picking any scope on #/runs, which is D39's "
+                                          "re-consent rule. Validates key by key and falls "
+                                          "through to no handoff at all rather than guessing. "
+                                          "IT CARRIES POSITION KEYS AND NOT A BOX AND ITS "
+                                          "INDICES: `{box, indices}` was the reason a selection "
+                                          "could not span drawers, and the mass-select it comes "
+                                          "from walks whatever the search narrowed it to, which "
+                                          "is not a drawer. `box/index` is what the cache, both "
+                                          "queues, the join and D174's claim table are already "
+                                          "keyed by, and it is the STORED index rather than "
+                                          "D58's countable slot — a handoff spelled in slots "
+                                          "would name a different card the moment anything sold. "
+                                          "A `{box, indices}` handoff written by the previous "
+                                          "build reads as NOTHING, which is D27's own ruling on "
+                                          "the storage renames applied to the cheapest of them "
+                                          "to abandon.",
                                   # D3 for the fall-through-rather-than-guess rule its validation
-                                  # copies; D13 for the browser-storage ban D27 carves out of.
-                                  "governed_by": ["D3", "D13", "D27", "D33", "D39"]},
+                                  # copies; D13 for the browser-storage ban D27 carves out of;
+                                  # D58 for stored index against countable slot; D174 for the key
+                                  # this spelling is shared with; D180 for the wire's own `keys`
+                                  # term, which this shape is a pass-through to.
+                                  "governed_by": ["D3", "D13", "D27", "D33", "D39", "D58", "D174", "D180"]},
             "src/RunPanel.tsx": {"does": "THE RUNS, AS MASTER AND DETAIL, on #/runs since D39 "
                                          "and in #/inventory's content column before it. The "
                                          "list is every run directory on disk, re-read while "
@@ -6330,7 +6364,9 @@ COMPONENTS = [
                 # D1 is the two-phase split the four steps make visible; D3 is the ladder the
                 # join walks; D9 is the pricing answer that gates emit;
                 # D31 is why this is a panel on #/inventory rather than a seventh route.
-                "governed_by": ["D145", "D36", "D1", "D3", "D9", "D13", "D20", "D31", "D32", "D33", "D39", "D48", "D54", "D56", "D64", "D65", "D49", "D76", "D166", "D174", "D57", "D118", "D136", "D180"],
+                # D78 is the sunk row the first stage draws; D117 is the thumb floor its phone
+                # case measures.
+                "governed_by": ["D145", "D36", "D1", "D3", "D9", "D13", "D20", "D31", "D32", "D33", "D39", "D48", "D54", "D56", "D64", "D65", "D49", "D76", "D78", "D117", "D166", "D174", "D57", "D118", "D136", "D180"],
                 "note": "THE PIPELINE WAS THE LARGEST INSTANCE OF THE ROUTE-IS-NOT-A-FEATURE "
                         "FAILURE AND NOBODY HAD COUNTED IT. The four commands have existed "
                         "since step 4 and have been through a 53-card run and a 544-card run; "

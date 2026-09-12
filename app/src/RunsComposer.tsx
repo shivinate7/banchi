@@ -25,11 +25,11 @@ import { Button, Chip, EmptyState, Icon, Kbd, Notice, Segmented } from './kit'
 import { toast } from './kit/toast'
 import { LogWell } from './RunsLog'
 import { useOverlayFocus } from './runsOverlay'
-import { boxLabel, runBoxLabel } from './runScope'
+import { boxesLabel, boxLabel, runBoxLabel } from './runScope'
 import { money } from './money'
 import { storeKeyText } from './storeKey'
 import { rememberSpendNotice, storedSpendNotice } from './deviceMemory'
-import type { CarriedScope } from './runHandoff'
+import { carriedByBox, type CarriedScope } from './runHandoff'
 import './Runs.css'
 
 /* THE IDENTIFY COMPOSER — the one press on this product that spends money, as a staged
@@ -214,13 +214,11 @@ export function selectionOf(draft: SelectionDraft, carried: CarriedScope | null)
   } else if (draft.start === 'drawers') {
     if (draft.boxes.length > 0) out.box = [...draft.boxes]
   } else if (draft.start === 'ticked') {
-    /* THE HANDOFF IS COMPOSED INTO POSITION KEYS HERE (D39). `runHandoff.ts` still carries
-       `{box, indices}` because that is what `#/inventory`'s mass-select produces, and `keys` is
-       the spelling the cache, the queues, the join and D174's claim table already use — so the
-       one translation lives at the seam rather than in three readers. */
-    if (carried !== null && carried.indices.length > 0) {
-      out.keys = carried.indices.map((index) => `${carried.box}/${index}`)
-    }
+    /* THE HANDOFF IS ALREADY POSITION KEYS. `runHandoff.ts:CarriedScope` moved from `{box,
+       indices}` to a flat list of `box/index` strings so a tick list from `#/inventory` can
+       span drawers — `keys` is the spelling the cache, the queues, the join and D174's claim
+       table already use, so this is a pass-through rather than a composition. */
+    if (carried !== null && carried.keys.length > 0) out.keys = [...carried.keys]
   } else if (draft.run !== null) {
     out.run = draft.run
   }
@@ -247,7 +245,7 @@ export function selectionOf(draft: SelectionDraft, carried: CarriedScope | null)
 export function startAnswered(draft: SelectionDraft, carried: CarriedScope | null): boolean {
   if (draft.start === 'needed') return true
   if (draft.start === 'drawers') return draft.boxes.length > 0
-  if (draft.start === 'ticked') return carried !== null && carried.indices.length > 0
+  if (draft.start === 'ticked') return carried !== null && carried.keys.length > 0
   return draft.run !== null
 }
 
@@ -279,8 +277,9 @@ export function selectionLine(
         : `${draft.boxes.length} drawers · ${draft.boxes.map((box) => `Box ${box}`).join(', ')}`,
     )
   } else if (draft.start === 'ticked') {
-    if (carried === null || carried.indices.length === 0) return 'No cards were handed over.'
-    parts.push(`${plural(carried.indices.length, 'ticked card')} in ${named(carried.box) ?? ''}`)
+    if (carried === null || carried.keys.length === 0) return 'No cards were handed over.'
+    const legs = carriedByBox(carried)
+    parts.push(`${plural(carried.keys.length, 'ticked card')} in ${boxesLabel(legs) ?? ''}`)
   } else {
     if (draft.run === null) return 'Pick a run to read again.'
     parts.push(`the cards of ${draft.run}`)
@@ -890,22 +889,34 @@ export function RunsComposer({
                       }
                     />
                   ) : (
-                    <div className="runs-pick-said">
-                      <p className="runs-pick-lede">
-                        {plural(carried.indices.length, 'card')} ticked in{' '}
-                        {boxLabel(carried.box, boxes?.find((row) => row.box === carried.box)?.name)}. Only those
-                        cards are sent.
-                      </p>
-                      <div className="runs-handoff">
-                        <Button size="sm" variant="quiet" onClick={onDropCarried}>
-                          Identify all of box {carried.box} instead
-                        </Button>
-                      </div>
-                      <p className="run-step-fine">
-                        Choosing another start above lets this selection go — it was made on the inventory screen
-                        and only that screen can make another.
-                      </p>
-                    </div>
+                    (() => {
+                      /* THE HANDOFF CAN SPAN DRAWERS NOW (runHandoff.ts's `CarriedScope` is a
+                         flat list of `box/index` keys), so the lede and the way-out button read
+                         off `carriedByBox` rather than a single `box`/`indices` pair. A tick
+                         list from one drawer — the only case `#/inventory`'s walk produces
+                         today — keeps the exact wording this button has always had. */
+                      const legs = carriedByBox(carried)
+                      const only = legs.length === 1 ? legs[0] : undefined
+                      return (
+                        <div className="runs-pick-said">
+                          <p className="runs-pick-lede">
+                            {plural(carried.keys.length, 'card')} ticked in {boxesLabel(legs) ?? ''}. Only those
+                            cards are sent.
+                          </p>
+                          <div className="runs-handoff">
+                            <Button size="sm" variant="quiet" onClick={onDropCarried}>
+                              {only === undefined
+                                ? 'Identify every drawer instead'
+                                : `Identify all of box ${only.box} instead`}
+                            </Button>
+                          </div>
+                          <p className="run-step-fine">
+                            Choosing another start above lets this selection go — it was made on the inventory screen
+                            and only that screen can make another.
+                          </p>
+                        </div>
+                      )
+                    })()
                   )
                 ) : null}
 

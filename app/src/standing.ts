@@ -260,7 +260,14 @@ export function standing(input: StandingInput): Standing | null {
 
   /* 6 — photographed and never sent to a run. `states` is store-wide, so this deliberately
          does NOT name a box: `BoxRecord` carries no per-state counts, and attributing a
-         store-wide figure to one drawer would be a sentence the data cannot support. */
+         store-wide figure to one drawer would be a sentence the data cannot support.
+
+         AND THE DOOR IT OPENS NOW ANSWERS THE SENTENCE. `#/runs?state=captured` puts the
+         identify composer up already open, on its default `needed` start — "every card
+         waiting to be identified", which is exactly this figure — where a bare `#/runs` leaves
+         the operator to open the dialog themselves. Read once on arrival (`Runs.tsx:
+         stateInHash`), the way `?run=` already opens a run's own detail; there is no write-back
+         of a narrowing into the address, because nothing here links to one yet. */
   const captured = status.states.captured ?? 0
   if (captured > 0) {
     return {
@@ -273,7 +280,7 @@ export function standing(input: StandingInput): Standing | null {
         n(captured),
         t(captured === 1 ? ' card is photographed and not identified.' : ' cards are photographed and not identified.'),
       ],
-      href: '#/runs',
+      href: '#/runs?state=captured',
       kbd: ',R',
       behind: [],
       problem,
