@@ -362,6 +362,26 @@ make reap           # STOP WHAT THIS SESSION STARTED, AND NOTHING ELSE (D127). P
                     #   IT SIGNALS ONLY WHAT IS RUNNING UNDER THIS CHECKOUT and PRINTS what it
                     #   refused, which is the half a `pkill` that quietly does the right thing on
                     #   a good day can never do.
+                    #   AND THE BARE FORM SEES A SERVER STARTED BY A RELATIVE PATH SINCE
+                    #   2026-09-12 (D169). It resolved argv
+                    #   ALONE while the verdict reads argv AND the working directory — so
+                    #   `make dev`, whose argv npm writes absolutely, was found, and
+                    #   `make server`, which the Makefile spells `$(PYTHON) server/capture_server.py`
+                    #   with a relative `$(PYTHON)`, was resolved as NOTHING AT ALL. Measured in a
+                    #   worktree with a live capture server: `0 process(es)`, `nothing to stop`,
+                    #   while `port:8235` found the same pid and judged it OURS. Three orphaned
+                    #   capture servers from three trees were running on the machine at the time.
+                    #   NOT D53's CARVE-OUT, which was checked first and is keyed exactly where
+                    #   that entry puts it: the main checkout's `.serve/*.pid`, refused from
+                    #   anywhere, and silent about a worktree's own server.
+                    #   IT PASSES OVER TWO THINGS AND NAMES BOTH, with the reason and the pids:
+                    #   THIS SESSION'S OWN CHAIN — the shell it was typed into carries an
+                    #   absolute `cd` into the checkout, so a bare `--confirm` from the main tree
+                    #   would have stopped the turn — and ANOTHER CHECKOUT OF THIS CLONE, because
+                    #   a linked worktree sits under `.claude/worktrees/` inside the main tree and
+                    #   is a different checkout by every rule here (D43). From the owner's main
+                    #   checkout a bare sweep had proposed four processes and all four were other
+                    #   trees'.
                     #   AND YOU DO NOT HAVE TO REMEMBER ANY OF THAT. `scripts/reap.py --hook` is
                     #   a PreToolUse hook on Bash: it RESOLVES a kill's real targets — running
                     #   pgrep and lsof itself, read-only — and refuses the command when one of
@@ -377,7 +397,12 @@ make reap-selftest  # the guard, proved by pointing it at what it must not kill:
                     #   `pgrep`, so a fixed fixture name makes two concurrent runs refuse each
                     #   other their own processes — D122's shape one register down, and it reddened
                     #   `make check` four times over a byte-identical tree. Mutation-tested —
-                    #   fourteen arms.
+                    #   twenty-two arms.
+                    #   ITS FIXTURE SPAWNED EVERY SUBJECT BY AN ABSOLUTE PATH UNTIL 2026-09-12,
+                    #   which is exactly why it could not see the bare form's blind spot: the
+                    #   suite had never shown the sweep a process its miss applied to. There is
+                    #   a `spawn_relative` beside `spawn` now, and eight cases over the sweep —
+                    #   five of them red against the pre-fix reaper.
 make janitor        # WHAT A FINISHED SESSION LEFT BEHIND, and what is safe to reap (D111).
                     #   Previews; `ARGS=--confirm` presses. TIER 1 goes without asking because
                     #   it cannot be live — a process whose own script has been deleted, a
@@ -1578,6 +1603,63 @@ apostrophes in names) live in the `tcgplayer-csv` skill. It loads on demand.
   argument rather than the patch. What is refused is a patch PRESENTED as the solution, which is
   the report format's own rule one register up: "solved" with no bucket named is the phrasing
   this repo does not accept.
+- **A SETTLED DECISION IS AN ARGUMENT, NOT AN AUTHORITY. THINK IN OUTCOMES, AND SAY SO WHEN A
+  RULE HAS STOPPED SERVING ONE.** The owner's instruction, 2026-09-12: *"i want it to feel
+  empowered that it think from the lens of outcomes not processes, ie if a decision made seems
+  stale or overly bearing, flag it and ask to solve it the right way, not defer to it
+  naturally. We've come into these problems because of the constraints of the original rules
+  from the original scope of the project."*
+
+  **Read this beside "Read docs/DECISIONS.md before proposing an architecture change" rather
+  than against it.** That rule still holds: every entry is settled, you cite the entry and you
+  wait for the owner's word. What this adds is that **an entry is a recorded argument, and an
+  argument can rot** — the tree moves under it, a later entry overtakes half of it, or the
+  scope it was written for is no longer the scope. **Deferring to a rotted argument is not
+  caution; it is a session declining to look.**
+
+  **This is measured, not a worry.** D48 ruled *"a run is still one box"* on three grounds — a
+  run carries a reading, a `--bypass` ruling and a `decisions.json`. By 2026-09-12 **two were
+  false**: D86 had moved the pricing answer store-wide, leaving eight `decisions.json.adopted`
+  tombstones and zero live files, and D3's amendment had retired `--bypass` on 2026-09-02. The
+  third was alive as text and never exercised — one cart was ever sent, all three legs at one
+  reading, and reading the whole 2,535-card store at 900 instead of 1200 saves about **$0.36**.
+  Nobody had looked for weeks, and a session that quoted D48 was quoting a conclusion whose
+  premises had gone.
+
+  **What to do, in order.** Name the entry and the specific sentence. Say which part of its
+  ARGUMENT no longer holds and how you know — measure it if it is measurable, and say
+  "unmeasured" if it is not. Say what the entry was protecting and what protects that outcome
+  instead. Then **propose the right fix and wait for the owner's word.** Do not quietly work
+  around it, and do not quietly repeal it.
+
+  **The test of a reason is an outcome for the person at the rig**: cards get listed sooner,
+  money is not spent twice, a card cannot be lost or photographed into the wrong drawer,
+  nothing is silently dropped, a hand walks the drawers once instead of five times. **A
+  constraint that serves none of those is machinery defending itself.** The owner's own
+  framing, on being handed D36's refusal and the money gate as if they were reasons:
+  *"you're telling me rules that are more or less arbitrary rather than anything that's
+  rational logic of why something should be, stop being systems first -- think outcomes."*
+
+- **BEFORE YOU HAND THE OWNER A TASK, CHECK WHETHER IT IS YOURS TO DO.** Their instruction,
+  2026-09-12: *"before you ever bring a task for me to do, see if you're able to do it
+  yourself (ie double check before sending a message that has a task for me that it's not in
+  your own purview)."*
+
+  **It was earned twice in one session.** A coordinator told them a store-wide reconcile
+  *"needs a fresh My Pricing export from TCGplayer, which is yours to fetch."* It did not:
+  `POST /pipeline/live-export` fetches exactly that, free, over the cookie session, and D104
+  settled it. Their reply — *"no ure able to fetch fresh pricing exports too"* — and one `curl`
+  returned 829 rows in seconds. Earlier the same night: *"frankly in those instances i'd prefer
+  you run the join again for me so i don't have to be lost navigating that minefield."*
+
+  **So before any sentence that ends with the owner doing something, search for the
+  capability**: grep the routes, read the command list above, check `docs/map.py`, try the
+  tool. **A route that exists but that no screen reaches still counts** — a session can call it
+  directly. Only after that check, and only when the step genuinely needs their hands (at the
+  rig, at the shelf, in a browser session nothing here can open) or their judgement (a decision
+  that is theirs, money, or anything a buyer can see), is asking correct. **When it does need
+  them, say precisely why** rather than leaving it implied.
+
 - **Opsec, repo-wide**: a live unredeemed code card is a bearer instrument. No code-card
   photo in a listing, README, screenshot, or commit. Enforced by pre-commit hook.
 - **A screen answers to the system.** New CSS reads `--bn-*` tokens and never names a color;
@@ -1925,6 +2007,7 @@ D165 A run is bound to the drawer's true index, and the run the number stranded 
 D166 The catalogue export is a property of the game, and the box never chose its scope
 D167 A queue entry is re-resolved where it stands, and the answer reaches the price without a second press
 D168 A typed price is cleared by a press, never by an expiry, and the set it may clear is the set the corpus dates
+D169 The blanket sweep asks the question the verdict answers, and a nested worktree is another checkout
 D-a-pokemon-run-names-its-sets-or-the-fetch-refuses A widening is safe only while the category fits, and Pokemon's does not
 ```
 
