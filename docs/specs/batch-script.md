@@ -142,6 +142,24 @@ count, estimated cost, prompt fingerprint, cache hits vs sends. `--dry-run` does
 except the API call — so sidecar problems, unreadable images, and a mistyped directory
 surface for free.
 
+### 4.1a The claim — the last free act before the money
+
+**Between the preflight and the first submitted byte, the press claims the cards it is about
+to buy** (D174). One row in the store's `submissions` table, holding the
+position keys of the send list — not the selection — so a second press over any of those
+cards is refused on intersection, naming the receipt and the overlapping cards.
+
+The claim is written inside the same `Store.write()` that **recomputes** the send list from
+the cache, because the list §4.1 printed was decided before the prepare pass and two presses
+can both finish deciding before either has claimed. `--dry-run` claims nothing: it returns
+before this point, as it does before `runs.create`.
+
+**The claim is released by the same commit that banks the answers it paid for** — §4.6's cache
+writes — or by neither. A run that dies in between keeps its claim, deliberately: the batch is
+paid for and its results keep for 29 days, so the cards stay held until somebody looks. The way
+out is the release control on `#/runs`, and `--run-dir` re-entering a run releases that run's
+own claim as it resumes.
+
 ### 4.2 Input
 
 Photos plus JSON sidecars (position, box, set hint, variant toggle).

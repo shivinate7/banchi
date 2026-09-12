@@ -198,6 +198,9 @@ const RECORDED = {
     'getMarkdownTable', 'markdownHistory', 'markdownTrends',
     // The band lens's whole input (D159): every card on hand, ranked, one row per copy.
     'getValueTable',
+    // The claims panel's free count (D174): what a live send is holding.
+    // It is the step that comes BEFORE the release below, which is why it is a read at all.
+    'getSubmissions',
   ],
   writes: [
     'capture', 'updateCard', 'undoCapture', 'reshootPhoto', 'answerReview', 'standDown',
@@ -227,6 +230,7 @@ const RECORDED = {
     'fillLine', 'undoFill', 'declareLineKind',                    // D113, a line closes three ways
     'closeOrders', 'closeLines', 'reopenLines', 'reopenOrders',   // D113, the stand-down and its inverse
     'fillShippingStamps',                                         // order-pipeline.md §3 T2b
+    'releaseSubmission',                                          // D174, the stuck claim's way out
   ],
   nonMutating: ['preflightRun', 'cropPreview', 'fetchOrders', 'previewOrders'],
   nonRequests: [
