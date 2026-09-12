@@ -556,6 +556,14 @@ async function stubStore(page: Page): Promise<void> {
           prompt: 'pokemon',
           crop_bands: ['title', 'number'],
           card_aspect: 0.716,
+          /* THE REGISTRY SAYS THIS AND SO MUST THE STUB. `pokemon` cannot be fetched
+             without a set hint — its whole category is 97% of the download's ceiling — and
+             a stub that omitted the flag would leave every guard over the capture screen's
+             hint note blind to the state it exists to draw. `pokemon_code` carries neither
+             field, exactly as the real entry does: same category, but it joins by name, so
+             a hint would narrow nothing. */
+          export_needs_hint: true,
+          export_category_bytes: 32629598,
           unverified: false,
           catalogued: true,
         },

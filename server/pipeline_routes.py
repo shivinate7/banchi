@@ -5827,6 +5827,45 @@ def _scope_for_run(directory: Path, payload: dict) -> Tuple[object, dict]:
             names = _names(set_ids)
             scope_used, chosen_by, reason = "sets", "cards", None
 
+    # THE CLIFF IS MADE UNREACHABLE HERE, AND ONLY FOR A WIDENING THE CARDS CAUSED.
+    #
+    # `games.export_needs_hint` marks a game whose whole category has been WEIGHED and found
+    # too close to the transport's own ceiling to widen into on a guess — Pokemon, measured
+    # 2026-09-12 at 97.24% of `MAX_BYTES` with 903 KB of headroom. D76 held that a widening
+    # is always safe; for this category it is 903 KB from a refusal, and one unhinted card
+    # reaches it, because the unanimity rule widens the moment the box stops agreeing.
+    #
+    # `chosen_by == "cards"` IS THE WHOLE PREDICATE, and it is exactly right rather than
+    # merely convenient. It is set by the four branches above that widen because the CARDS
+    # under-specified the scope — `no_hints`, `partial_hints`, `unresolved_hints`,
+    # `no_hints_resolved` — and by no other. So D76's other two voices survive untouched: an
+    # operator naming `set_ids` or asking for `scope=category` is `operator` and passes
+    # straight through, which is both the override and the reason nothing is ever stranded,
+    # and a game whose own `export_scope` is `category` is `policy` and never reaches here.
+    #
+    # AND IT REFUSES IN ONE PLACE FOR TWO BEHAVIOURS. `do_pipeline_export` lets this out as a
+    # 409 and spends nothing; `do_pipeline_scope` catches it and DRAWS it, because that route
+    # already reads a `PipelineRefusal` as data. So the operator meets this on the
+    # press-nothing preview, before the money gate, rather than on the press — which is the
+    # posture D76 built that route for.
+    if scope_used == "category" and chosen_by == "cards" and (
+        game_registry.export_needs_hint(game)
+    ):
+        # THE DISPLAY NAME AND NOT THE KEY. `pokemon` is a registry key; `Pokémon` is what a
+        # person calls the game, and CLAUDE.md's register rule is that an enum value is
+        # labelled rather than printed raw. This sentence is rendered verbatim on `#/runs`,
+        # so the raw key would be on screen.
+        display = str(entry.get("display") or game)
+        raise PipelineRefusal(
+            HTTPStatus.CONFLICT,
+            "export_needs_set_hint",
+            f"Every {display} card in a run has to name its set, and "
+            f"{_unhinted_said(total, hinted, unresolved, reason, display)}. "
+            f"{_widening_said(game, display)} "
+            f"Set the hint on the cards that lack one from #/inventory — open the box, "
+            f"Manage box, Set claims — or tick the sets on #/runs to ask for them anyway.",
+        )
+
     scope = tcg_export.Scope(category_id=category, set_ids=set_ids)
     asked = {
         "game": game,
@@ -6161,6 +6200,63 @@ def _reuse_note(asked: Optional[dict]) -> Optional[dict]:
         return None
     path, age = held
     return {"file": path.name, "age_s": int(age), "window_s": EXPORT_REUSE_S}
+
+
+def _unhinted_said(
+    total: int,
+    hinted: int,
+    unresolved: Sequence[str],
+    reason: Optional[str],
+    display: str,
+) -> str:
+    """Which cards under-specified the scope, in the shape the refusal above needs.
+
+    FOUR REASONS WIDEN AND THEY ARE NOT ONE SENTENCE. "No card carries a hint" and "3 of 200
+    do not" are different instructions — the first says start hinting, the second says find
+    the gap — and an unresolvable hint is a THIRD thing, where the operator did the work and
+    the string missed. Saying "some cards carry no set hint" over a box whose every card is
+    hinted and whose hint is a typo sends somebody to look for cards that are all there.
+    """
+    unhinted = total - hinted
+    if reason == "unresolved_hints":
+        named = ", ".join(f"`{h}`" for h in unresolved)
+        return (
+            f"{named} names no {display} set TCGplayer knows, so the {total} cards carrying "
+            f"it cannot be narrowed to one"
+        )
+    if reason == "no_hints_resolved":
+        return f"none of this run's hints resolved to a set, so all {total} cards widen it"
+    if reason == "no_hints":
+        return f"none of its {total} cards carries one"
+    return f"{unhinted} of its {total} do not"
+
+
+def _widening_said(game: str, display: str) -> str:
+    """What the widening this refusal prevented would have weighed, or silence.
+
+    THE FIGURE COMES OFF THE REGISTRY AND NOT OFF A HELD FILE, WHICH IS THE WHOLE REASON
+    `export_category_bytes` IS A FIELD. `_width_note` can only answer from an export this
+    checkout has already fetched at a covering scope — and this refusal exists to stop that
+    fetch, so on any machine that has obeyed it there is no such file and the figure would be
+    null exactly when it is needed. A refusal whose number is missing in the common case is a
+    refusal nobody can weigh.
+
+    AND IT SAYS NOTHING RATHER THAN GUESSING. A game marked `export_needs_hint` without a
+    measurement cannot exist — the audit row refuses it — but this is the sentence that would
+    have to be honest if it did.
+    """
+    measured = game_registry.export_category_bytes(game)
+    if measured is None:
+        return (
+            f"Without one the export asks TCGplayer for the whole {display} category, which "
+            f"this game is marked as unable to afford."
+        )
+    cap = int(tcg_export.MAX_BYTES)
+    return (
+        f"Without one the export asks for the whole {display} category — about "
+        f"{measured / 1_000_000:.1f} MB, {measured / float(cap) * 100:.0f}% of the "
+        f"{cap // (1024 * 1024)} MB this download is refused past."
+    )
 
 
 def _too_large_sentence(asked: Optional[dict]) -> str:

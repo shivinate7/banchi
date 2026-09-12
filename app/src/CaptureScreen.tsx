@@ -266,13 +266,17 @@ function hintReason(code: string | null, message?: string | null): string {
     : `Set list unavailable (${code})`
 }
 
-function hintMetaText(verdict: HintVerdict): string {
+function hintMetaText(verdict: HintVerdict, needsHint = false): string {
   // Short enough not to squeeze the entry — `.capture-entrymeta` never wraps, and the box
   // beside it is where the operator is typing.
   // `no hint` rather than `optional`, which the head row two lines up already says: the meta
   // reports the STATE of what is typed, and repeating the field's own modality there would
   // spend the one line beside the entry on a word already on screen.
-  if (verdict.state === 'blank') return 'no hint'
+  //
+  // `needed` ON A GAME WHOSE EXPORT CANNOT BE FETCHED WITHOUT ONE. Two words in the same
+  // slot, because on such a game blank is not a state the operator can leave and the meta
+  // is the only thing beside the cursor.
+  if (verdict.state === 'blank') return needsHint ? 'needed' : 'no hint'
   if (verdict.state === 'unchecked') return 'not checked'
   if (verdict.state === 'ambiguous') return `${verdict.among.length} sets`
   if (verdict.state === 'unmatched') return 'names no set'
@@ -282,7 +286,30 @@ function hintMetaText(verdict: HintVerdict): string {
 /** The same verdict as a sentence, in the operator's terms rather than the matcher's.
  *  `game` is the registry's display name — `Pokémon`, `Riftbound` — because "widens to the
  *  whole category" is TCGplayer's word for a thing the operator calls a game. */
-function hintNoteText(verdict: HintVerdict, game: string): string {
+function hintNoteText(verdict: HintVerdict, game: string, needsHint = false): string {
+  /* WHEN THE EXPORT CANNOT BE FETCHED WITHOUT ONE, THE NOTE SAYS THAT AND NOT "OPTIONAL".
+   *
+   * `GameEntry.export_needs_hint` marks a game whose whole category is too close to the
+   * download's own ceiling to widen into, so every state that fails to name a set —
+   * blank, ambiguous, unmatched — is a run `#/runs` will refuse rather than a run that
+   * merely fetches wide. Saying "optional" there is the sentence that costs an hour of
+   * captures, which is the defect `setHint.ts` was written for in the first place.
+   *
+   * IT STILL REFUSES NOTHING HERE. Same field, same free text, same shutter; what changes
+   * is the sentence under it. */
+  if (needsHint && verdict.state !== 'matched' && verdict.state !== 'unchecked') {
+    const why =
+      verdict.state === 'blank'
+        ? 'No hint yet'
+        : verdict.state === 'ambiguous'
+          ? `${verdict.among.length} sets answer to that, so it names none of them`
+          : `No set of ${game} answers to that`
+    return (
+      `${why}. ${game} needs one: without it the export asks for the whole category, ` +
+      `which is too wide to download, and the fetch on #/runs will refuse the run rather ` +
+      `than spend it. Set it here — or later, on #/inventory, under Manage box.`
+    )
+  }
   if (verdict.state === 'blank') {
     return (
       'Optional, and it has to name a set TCGplayer publishes. Left empty, a collector ' +
@@ -1293,10 +1320,24 @@ export function CaptureScreen() {
     [hintVocabulary],
   )
 
+  /** Does this game's export refuse to be fetched without a hint? The registry's own field,
+   *  served verbatim by `GET /games` — not a threshold re-decided here, which is what keeps
+   *  this screen and `_scope_for_run` from ever disagreeing about the same box. */
+  const needsHint = gameEntry?.export_needs_hint === true
+
   /** Flagging, in `--accent`'s "the system is unsure" job. A hint that names no set is not
    *  an error — nothing is refused and the capture is unaffected — so it is drawn at text
-   *  weight, never as a halt. `ambiguous` joins it: `match_sets` returns both as misses. */
-  const hintAlert = hintVerdict.state === 'unmatched' || hintVerdict.state === 'ambiguous'
+   *  weight, never as a halt. `ambiguous` joins it: `match_sets` returns both as misses.
+   *
+   *  BLANK JOINS THEM ON A GAME THAT NEEDS ONE, and only there. `blank` is the default
+   *  state of an optional field and flagging it everywhere would flag the field on every
+   *  fresh session of every game; on a game whose fetch will refuse the run, it is the same
+   *  "the system is unsure" that `unmatched` already earns. Still text weight, still no
+   *  halt — the shutter is untouched. */
+  const hintAlert =
+    hintVerdict.state === 'unmatched' ||
+    hintVerdict.state === 'ambiguous' ||
+    (needsHint && hintVerdict.state === 'blank')
 
   
   const boxQuery = boxEntry.trim()
@@ -3447,7 +3488,17 @@ export function CaptureScreen() {
           <p className="bn-label capture-card-label">Stack</p>
 
           {openField === 'set' ? (
-            <OpenField k="H" label="Set hint" icon="tag" meta="Optional" onClose={closeField}>
+            <OpenField
+              k="H"
+              label="Set hint"
+              icon="tag"
+              /* THE FIELD'S OWN MODALITY, AND IT IS NOT ALWAYS "OPTIONAL". On a game whose
+                 export cannot be fetched without one, this field is required in every sense
+                 but the shutter's, and the head is where that belongs — the meta beside the
+                 cursor reports what is TYPED, not what is asked for. */
+              meta={needsHint ? 'Needed for this game' : 'Optional'}
+              onClose={closeField}
+            >
               <form
                 className="capture-entry"
                 onSubmit={(event) => {
@@ -3481,7 +3532,7 @@ export function CaptureScreen() {
                       hintAlert ? 'capture-entrymeta capture-entrymeta-alert' : 'capture-entrymeta'
                     }
                   >
-                    {hintMetaText(hintVerdict)}
+                    {hintMetaText(hintVerdict, needsHint)}
                   </span>
                 </div>
               </form>
@@ -3492,7 +3543,7 @@ export function CaptureScreen() {
                 </p>
               ) : (
                 <p className={hintAlert ? 'capture-opennote capture-note-alert' : 'capture-opennote'}>
-                  {hintNoteText(hintVerdict, gameEntry?.display ?? 'this game')}
+                  {hintNoteText(hintVerdict, gameEntry?.display ?? 'this game', needsHint)}
                 </p>
               )}
             </OpenField>
@@ -3503,7 +3554,13 @@ export function CaptureScreen() {
               icon="tag"
               right={
                 setHint.trim() === '' ? (
-                  <span className="capture-val is-default">None</span>
+                  /* THE RESTING ROW CARRIES IT TOO, because this is the state the screen sits
+                     in for every card of a sitting nobody pressed H on: the field is shut and
+                     `None` on its own reads as a choice that was made. */
+                  <span className={needsHint ? 'capture-val capture-val-alert' : 'capture-val is-default'}>
+                    None
+                    {needsHint ? <em className="capture-sub">needed for this game</em> : null}
+                  </span>
                 ) : (
                   <span className={hintAlert ? 'capture-val capture-val-alert' : 'capture-val'}>
                     <span className="bn-mono capture-val-name">{setHint.trim()}</span>
