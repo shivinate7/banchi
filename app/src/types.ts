@@ -1859,7 +1859,7 @@ export type MergedSku = PricingSku & {
 export type RosterRun = RunSummary & {
   /** Why this run still has pricing in it, in `emit`'s own words. Empty means answered. */
   owes: string[]
-  /** Open while it OWES something OR HOLDS AN UNSENT COPY (D-unsent-copies-worklist). The
+  /** Open while it OWES something OR HOLDS AN UNSENT COPY (D156). The
    *  first is `owes`; the second is `unsent` below, and it is what keeps an answered, emitted
    *  run on the worklist for as long as one of its copies is not at TCGplayer. */
   open: boolean
@@ -1869,7 +1869,7 @@ export type RosterRun = RunSummary & {
   unsent?: number
 }
 
-/** What no worklist can offer, named rather than left out (D-unsent-copies-worklist,
+/** What no worklist can offer, named rather than left out (D156,
  *  `CLAUDE.md`: never silently drop a card). Each figure is a door to the screen that moves
  *  it: `captured` was never identified and `unjoined` was never joined (both `#/runs`),
  *  `in_review` is waiting on a person (`#/review`), and `reallocated` is a run over a drawer

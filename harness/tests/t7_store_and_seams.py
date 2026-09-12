@@ -12585,7 +12585,7 @@ def check_merged_emit_uncapped(checks: Checks) -> None:
 
 def check_unsent_copies_worklist(checks: Checks) -> None:
     """`GET /pipeline/pricing` counts every copy TCGplayer does not hold, against the live
-    store, and keeps a run open for as long as it holds one (D-unsent-copies-worklist).
+    store, and keeps a run open for as long as it holds one (D156).
 
     THE STRANDED SHAPE, REBUILT: seven copies of one card, emitted under a cap of four. The
     run's `pricing.json` was written by the join BEFORE the emit and says `add 4`; the emit

@@ -726,7 +726,7 @@ sentence**, and see "the census" below for what enforces that.
                               THE SHEET THAT MAKES ONE IS HERE TOO (D105), off the header —
                               read an export, write a worklist, price it without changing screen.
                               THE DEFAULT LANDING IS EVERY UNSENT COPY IN THE STORE
-                              (D-unsent-copies-worklist): a run is open while it owes an answer
+                              (D156): a run is open while it owes an answer
                               OR holds a copy TCGplayer does not, the chip says how many, and
                               every row's figure is re-derived against the live store rather
                               than read off the join's table — 381 copies across five runs
@@ -1268,7 +1268,7 @@ A screen is not finished because it compiles.
   that sit at `pushed: 6` in the store today. One merged emit wrote 1 file, 437 copies and
   **none**. **A merged file can never be a concatenation of the per-run CSVs.**
 
-  **AND THE SCREEN THAT DRIVES IT NOW AGREES WITH IT** (D-unsent-copies-worklist, 2026-09-11).
+  **AND THE SCREEN THAT DRIVES IT NOW AGREES WITH IT** (D156, 2026-09-11).
   `GET /pipeline/pricing` used to merge rows off each run's `pricing.json` — a table `join`
   writes BEFORE the emit and `emit` never touches — so a run re-opened after a capped send
   drew `4 of 7` for a card the press had already spent four of, and a run that owed nothing
@@ -1736,7 +1736,7 @@ D152 Every row in the collapsed rail draws one glyph on one spine, and a rule th
 D153 The restore asks which drawer, not which number, and the picker stops drawing a number nobody reads
 D154 The camera's automatic functions are inputs to the trigger's arithmetic, and the ones that step are locked
 D155 The section is the ruler and the box is the margin note, and the bracket between them is deleted
-D-unsent-copies-worklist Every copy TCGplayer does not hold is one worklist, and a run stays open until the last of them has gone
+D156 Every copy TCGplayer does not hold is one worklist, and a run stays open until the last of them has gone
 
 ```
 

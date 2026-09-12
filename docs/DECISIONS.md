@@ -11258,7 +11258,7 @@ what decides which mode that was, and it takes thirty seconds.
 **The caret and the box mark collide whenever the card sits near its section's midpoint, and that one IS fixed.** The caret is centred on the chip and the mark is at the card's own fraction of the box, so they land on one x far more often than the arithmetic suggests — on the very first fixture looked at. The mark's knockout ring was eating the caret's right half; the caret now takes `z-index: 2`. They overlap by at most 2px vertically, so the caret winning costs the ring and nothing else, and the caret is the object that says WHICH chip.
 
 **These two are the receipt for the design's own tenth caveat**, which said every figure in it was arithmetic off the stylesheets and that nothing had been rendered. Six images at three widths in two themes settled the other eight — the gradient aliasing is not visible, the minor graduations survive over the fill in dark, the 10px edge labels are legible at both themes, the 4px caret is visible, and a 26px ruler over an 8px strip reads as one inverted pair.
-## D-unsent-copies-worklist — Every copy TCGplayer does not hold is one worklist, and a run stays open until the last of them has gone
+## D156 — Every copy TCGplayer does not hold is one worklist, and a run stays open until the last of them has gone
 
 **`#/pricing`'s default landing is every copy in every joined run that TCGplayer does not hold — across every run and every box — priced where prices are decided and sent by the one press that already writes one file across runs.** Built 2026-09-11, on the operator's report and their choice of shape.
 

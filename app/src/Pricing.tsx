@@ -587,7 +587,7 @@ function PickRuns({
                   <span>{row.counts?.skus ?? '?'} SKUs</span>
                 </span>
               </span>
-              {/* THREE STATES, NOT TWO (D-unsent-copies-worklist). A run that owes nothing and
+              {/* THREE STATES, NOT TWO (D156). A run that owes nothing and
                   still holds copies TCGplayer does not is OPEN — the copies it held back under
                   a cap, or a per-card quantity, or the old standing four — and the chip says
                   how many, because "Answered" over 148 unsent copies was the sentence that
@@ -4159,7 +4159,7 @@ function MarkdownPanel({
   )
 }
 
-/** WHAT NO PRESS ON THIS SCREEN CAN SEND, NAMED WITH A DOOR EACH (D-unsent-copies-worklist).
+/** WHAT NO PRESS ON THIS SCREEN CAN SEND, NAMED WITH A DOOR EACH (D156).
  *
  *  The worklist is every copy in every joined run that TCGplayer does not hold. A copy that was
  *  never identified, one waiting in review, one in a run nobody has joined and one in a run

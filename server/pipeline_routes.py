@@ -2057,7 +2057,7 @@ def _unsent_ledger(
     inventory: master.Inventory, tables: Sequence[Tuple["run_files.Run", dict]]
 ) -> UnsentLedger:
     """THE ARITHMETIC `emit` DOES, DONE HERE SO THE SCREEN AGREES WITH THE PRESS
-    (D-unsent-copies-worklist).
+    (D156).
 
     `pricing.json` froze `add_to_quantity`, `committed` and `copies_out` at the moment of the
     JOIN, and every emit since has moved what they describe: a run emitted under the old
@@ -2190,7 +2190,7 @@ def _unreachable(inventory: master.Inventory, review_count: int, root: Path) -> 
 
 def do_pipeline_worklist(wanted: Sequence[str]) -> dict:
     """`GET /pipeline/pricing` — one pricing worklist over several runs (D86), and since
-    D-unsent-copies-worklist the standing list of EVERY COPY THE STORE HOLDS THAT TCGPLAYER
+    D156 the standing list of EVERY COPY THE STORE HOLDS THAT TCGPLAYER
     DOES NOT, across every joined run.
 
     THE WORKLIST SPANS RUNS, AND SO DOES THE ANSWER. D48's resolution — a send is a cart of
@@ -2440,7 +2440,7 @@ def do_pipeline_worklist(wanted: Sequence[str]) -> dict:
             # merge over positions is still the deduped union (D7, amended 2026-09-08).
             row["add_to_quantity"] = min(claimed, held)
         else:
-            # THE LIVE FIGURE (D-unsent-copies-worklist): the copies of this card, across
+            # THE LIVE FIGURE (D156): the copies of this card, across
             # every run on screen, that the store says TCGplayer does not hold and that have
             # not left a box — `_unsent_ledger`'s docstring is the argument. `copies` is the
             # union; `committed` is what is not free; `copies_out` and `listing` are the
@@ -2531,7 +2531,7 @@ def do_pipeline_worklist(wanted: Sequence[str]) -> dict:
         # above; the floor simply had not been given it.
         "threshold": _policy_threshold(book),
         "floor": _policy_threshold(book),
-        # WHAT NO WORKLIST CAN OFFER, NAMED (D-unsent-copies-worklist). A copy never
+        # WHAT NO WORKLIST CAN OFFER, NAMED (D156). A copy never
         # identified, one waiting in review, one in a run nobody has joined, and one in a run
         # over a reallocated drawer are each a door to another screen rather than a row here.
         "unreachable": unreachable,

@@ -429,7 +429,7 @@ export function Home() {
 
   /* Pricing: the runs the worklist says still owe an answer — `owes` is emit's own reason. */
   const runsToPrice = pricing.state === 'ready' ? pricing.value.roster.filter((r) => r.open && r.owes.length > 0).length : null
-  /* And the copies every joined run still holds that TCGplayer does not (D-unsent-copies-worklist)
+  /* And the copies every joined run still holds that TCGplayer does not (D156)
      — the same `unsent` the picker draws per run, summed, so this note and that chip agree. */
   const unsentCopies = pricing.state === 'ready' ? pricing.value.roster.reduce((n, r) => n + (r.unsent ?? 0), 0) : null
 

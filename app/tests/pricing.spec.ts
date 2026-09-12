@@ -159,7 +159,7 @@ async function open(
       })[]
     }
     /** Copies each run still holds that TCGplayer does not, by run name
-     *  (D-unsent-copies-worklist). A run with one is OPEN whatever it owes; the chip says how
+     *  (D156). A run with one is OPEN whatever it owes; the chip says how
      *  many. */
     unsent?: Record<string, number>
     /** What no worklist can send, as the server names it. */
@@ -765,7 +765,7 @@ test('the run picker leads with the box, and the directory is what tells two run
 test('an emitted run with copies still unsent stays open, and the chip counts them', async ({
   page,
 }) => {
-  /* THE STRANDED SHAPE (D-unsent-copies-worklist). Two runs, both emitted, both answered. Under
+  /* THE STRANDED SHAPE (D156). Two runs, both emitted, both answered. Under
      the old rule both chips read "Answered" and neither was on the default landing — and the
      148 copies the first had held back under a cap were reachable from no screen. The server
      counts `unsent` against the live store now; the picker draws it, and only a run with none
