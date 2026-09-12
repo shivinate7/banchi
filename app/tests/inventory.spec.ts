@@ -5924,18 +5924,42 @@ test('the control that re-ranks reserves its own room, so appearing moves no cop
   const rows = page.locator('.card-locations-row')
   await expect(rows).toHaveCount(6)
   await expect(page.locator('.card-locations-rerank')).toHaveCount(0)
+  /* BOXBROWSE'S OWN RAIL SEARCH IS A SEPARATE `useSearch()` FROM THE COPIES LIST'S, and the
+     count above proves only the second one has settled. Waiting on it alone races the first:
+     it can still be mid-debounce when the press below fires, and its FIRST real answer — which
+     lands after the press purely by bad luck — is read as a re-rank the freeze failed to hold.
+     It is not: D132's "a fresh answer goes to the fullest box" is correct for a landing that
+     has never happened yet, and the box here is genuinely landing for the first time. Waiting
+     for the rail to name box 7 is what the sibling cases already do, and this one had dropped
+     it. Reproduced without this wait: the press lands before `filtered` ever turns true, the
+     shelf's very first fresh landing coincides with the post-sale re-read, and the walk jumps
+     box 2 -> box 7 — a real DOM remount, not a probe artifact, traced with a MutationObserver
+     and confirmed line-by-line against the shelf effect's own state. */
+  await expect(page.locator('.browse-boxcell').first()).toHaveAttribute('aria-label', /^Box 7/)
 
   /* `offsetTop` AND NOT A BOUNDING BOX, which is D118's own recorded trap one register over:
      Playwright scrolls a control into view before it clicks it, and this list is the thing that
      scrolls inside `.browse-band`. Viewport coordinates would report the SCROLL as movement and
      say nothing about the header — measured at 535px before the press and 390px after, on a
      build where the list itself had not moved at all. The offset within the scrolled content
-     is the number the reservation is about. */
+     is the number the reservation is about.
+
+     THE PROBE THROWS RATHER THAN RETURNING A SENTINEL, because a sentinel invites exactly the
+     failure this case had: `-1` compared against a real measurement produces a message that
+     reads as a layout regression and sends the reader to the CSS, when what actually happened
+     is that neither node existed at the moment of the read — a fact about TIMING, not about
+     pixels. A check that cannot tell "nothing is wrong" from "nothing is known yet" is the
+     defect; this one now refuses to make that claim silently. */
   const listTop = () =>
     page.evaluate(() => {
       const list = document.querySelector('.card-locations-rows')
       const panel = document.querySelector('.card-locations-owner')
-      if (list === null || panel === null) return -1
+      if (list === null || panel === null) {
+        throw new Error(
+          `listTop: expected both nodes mounted, got .card-locations-rows=${list !== null} ` +
+            `.card-locations-owner=${panel !== null}`,
+        )
+      }
       /* The HEADER's height, read as the gap between the panel's own top and the first row —
          two rects taken in the same frame, so the scroll cancels and no offsetParent is
          assumed. `offsetTop` was the first build and moved 535 -> 637 on a press that changed
