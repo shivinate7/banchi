@@ -246,7 +246,13 @@ function sentence(entry: QueueEntryWire): Segment[] {
      * human's attention: the number found rows and the NAME read off the same photograph
      * matches none of them. `pipeline/routing.py:NAME_DISPUTED`. */
     case 'name_disputed': {
-      const rowName = text(entry.candidates[0]?.name)
+      /* THE NUMBER'S ROW IS FOUND BY PROVENANCE, NOT BY POSITION. It was `candidates[0]`
+       * until 2026-09-12, when the name's own match moved to the head of the list — reading
+       * the first row now would say *"reads as Deathgrip, but 162/221 is Deathgrip"*. An
+       * entry written before `found_by` existed answers null here and takes the shorter
+       * wording rather than naming a row on a guess. */
+      const rowName = text(numberMatch(entry.candidates)?.name ?? entry.candidates[0]?.name)
+      const offersBoth = entry.candidates.some((row) => row.found_by === 'name')
       const head: Segment[] =
         name === null
           ? [say('The name on this photograph could not be checked against the row below. ')]
@@ -263,6 +269,15 @@ function sentence(entry: QueueEntryWire): Segment[] {
       return [
         ...head,
         say('The number and the name came off the same card and they disagree, so one of them was misread. A confident wrong number lands on a real row for another card, and this is the only signal that catches it.'),
+        /* BOTH READINGS ARE ON THE LIST SINCE 2026-09-12, so the sentence says which is
+         * which. Only where the name actually found something: a card whose name matched no
+         * row still offers the number's row alone, and promising a second reading that is
+         * not there would be worse than the silence it replaced. */
+        ...(offersBoth
+          ? [
+              say(' Both readings are below — what the name found first, then what the number found. Neither is assumed right: the photograph settles it.'),
+            ]
+          : []),
       ]
     }
 
@@ -357,14 +372,63 @@ function finishMatches(finish: string, condition: string): boolean {
   return false
 }
 
-type Evidence = 'sorted' | 'photo'
+type Evidence = 'sorted' | 'photo' | 'name' | 'number'
 
+const TAG_WORDS: Readonly<Record<Evidence, string>> = {
+  sorted: 'sorted as',
+  photo: 'photo',
+  name: 'name',
+  number: 'number',
+}
+
+const TAG_TITLES: Readonly<Record<Evidence, string>> = {
+  sorted: 'The finish this stack was sorted as',
+  photo: 'The finish the photograph read as',
+  name: 'Found by the name read off this photograph',
+  number: 'Found by the collector number read off this photograph',
+}
+
+/* WHICH SIGNAL ARGUED FOR THIS ROW, drawn only where the list holds more than one answer.
+ *
+ * `found_by` is on the wire for `name_disputed` alone (`cli/resolve.py:_candidate_rows`), so
+ * this returns the provenance tag for exactly the entry whose rows come from two different
+ * readings of one photograph and nothing else. Reading the FIELD rather than the reason code
+ * is deliberate: the reason is the server's word for the question, and the provenance is a
+ * property of the row — a later rung that offers two readings gets the tags for free, and a
+ * queue entry written before the field existed draws none rather than drawing a wrong one.
+ *
+ * The two families cannot collide: `FINISH_REASONS` and `name_disputed` are disjoint, so a
+ * row never carries a finish tag and a provenance tag at once. */
 function tagsFor(entry: QueueEntryWire, claims: Claims, candidate: CandidateRow): Evidence[] {
+  if (candidate.found_by !== undefined) return [candidate.found_by]
   if (!FINISH_REASONS.has(entry.reason)) return []
   const tags: Evidence[] = []
   if (claims.sorted !== null && claims.sorted.some((member) => finishMatches(member, candidate.condition))) tags.push('sorted')
   if (claims.photo !== null && finishMatches(claims.photo, candidate.condition)) tags.push('photo')
   return tags
+}
+
+/** The row the NUMBER found, on an entry carrying both readings. Null when the wire does not
+ *  say — an entry written before `found_by` existed, which must read as "unknown" rather than
+ *  silently nominating `candidates[0]`, now that the first row is the NAME's. */
+function numberMatch(candidates: CandidateRow[]): CandidateRow | null {
+  return candidates.find((row) => row.found_by === 'number') ?? null
+}
+
+/** A condition's GRADE — the part of it the group offer may cluster on, with the finish
+ *  folded away. `Near Mint` and `Near Mint Foil` are one grade and two finishes, and D137
+ *  fixes the grade by rule, so splitting a group on the full string can only ever ask the
+ *  operator to confirm the same thing twice.
+ *
+ *  FAILS TOWARDS NOT GROUPING, which is what makes a string test acceptable on this side.
+ *  The authority is `server/capture_server.py:_condition_grade`, which reads the game's own
+ *  `condition_by_finish` off the registry; the wire carries no game, so this recognises the
+ *  spelling instead. A condition it does not recognise — a future game's, or `Unopened` —
+ *  becomes its own grade and is grouped only with itself, so the worst this can do is offer
+ *  one group fewer than the route would have accepted. It can never offer one the route
+ *  refuses, which is the direction that matters. */
+function gradeOf(condition: string): string {
+  return /^near\s+mint\b/i.test(condition.trim()) ? 'near mint' : condition
 }
 
 /** When every candidate is one card in several finishes, the card is named once and the
@@ -681,24 +745,38 @@ export function ReviewQueue() {
    * up. It is also why the anchor is checked first: an operator standing ON a disputed card
    * is offered no group at all.
    *
-   * THE SERVER'S CHECK IS UNTOUCHED AND STILL AUTHORITATIVE. A subset of a set that
-   * satisfied it satisfies it by construction — one reason, one condition, one row each —
-   * so this narrows what is OFFERED and can never widen what is accepted. */
-  const groupOffer = useMemo((): { rows: Row[]; reason: string; condition: string; left: number } | null => {
+   * THE SERVER'S CHECK IS AUTHORITATIVE AND THIS STAYS A SUBSET OF IT. Both sides cluster
+   * on one reason, one row each, and one condition GRADE; anything this offers, the route
+   * accepts.
+   *
+   * IT CLUSTERED ON THE CONDITION STRING UNTIL 2026-09-12, AND THAT SPLIT EVERY REAL QUEUE.
+   * `Near Mint` and `Near Mint Foil` are one grade and two finishes, so a queue whose grade
+   * D137 had already fixed by rule still arrived as two groups. Measured that day on the
+   * owner's store: of 52 entries, 40 offered exactly one row and every one was Near Mint —
+   * 21 plain, 19 foil — so the split was pure cost. Their words: *"i also somehow had to
+   * still claim items in bulk that they're near mint rather than it being default."*
+   *
+   * `gradeOf` IS A STRING TEST HERE AND A REGISTRY LOOKUP ON THE SERVER, and the asymmetry
+   * is deliberate because of which way it fails. The wire carries no game, so the client
+   * cannot read `condition_by_finish`; a spelling this test does not recognise becomes its
+   * own grade and simply is not grouped, which NARROWS the offer. The server, which can read
+   * the registry, is the one that decides — so the client being conservative costs a press
+   * and can never propose a group the route would refuse. */
+  const groupOffer = useMemo((): { rows: Row[]; reason: string; left: number } | null => {
     const anchor = worklist[0]
     if (anchor === undefined) return null
     if (anchor.entry.reason === 'name_disputed') return null
     const only = anchor.entry.candidates[0]
     if (only === undefined || anchor.entry.candidates.length !== 1) return null
     const reason = anchor.entry.reason
-    const condition = only.condition
+    const grade = gradeOf(only.condition)
     const cluster = worklist.filter((row) => {
       if (row.entry.reason !== reason) return false
       const row_only = row.entry.candidates[0]
-      return row_only !== undefined && row.entry.candidates.length === 1 && row_only.condition === condition
+      return row_only !== undefined && row.entry.candidates.length === 1 && gradeOf(row_only.condition) === grade
     })
     if (cluster.length < 2) return null
-    return { rows: cluster, reason, condition, left: worklist.length - cluster.length }
+    return { rows: cluster, reason, left: worklist.length - cluster.length }
   }, [worklist])
 
   useEffect(() => {
@@ -952,7 +1030,7 @@ export function ReviewQueue() {
             label: `${result.count} cards · ${result.reason}`,
             dropped,
             at,
-            said: `Answered all ${result.count} as ${result.condition}`,
+            said: `Answered all ${result.count} together`,
             counts: 'answered',
           })
         }
@@ -1543,7 +1621,7 @@ function GroupConfirm({
   onLeave,
   tray,
 }: {
-  offer: { rows: Row[]; reason: string; condition: string; left: number }
+  offer: { rows: Row[]; reason: string; left: number }
   activity: string | null
   onConfirm: () => void
   onLeave: () => void
@@ -1556,14 +1634,21 @@ function GroupConfirm({
     <section className="review-group bn-anim-in">
       <header className="review-group-head">
         <div className="review-question">
-          <h2 className="review-question-title">Answer all {offer.rows.length} as {offer.condition}?</h2>
+          {/* THE GRADE IS NOT WHAT IS BEING ASKED, AND THE HEADLINE SAID IT WAS UNTIL
+              2026-09-12. `Answer all 27 as Near Mint Foil?` put a word D137 fixes by rule
+              where the question should be, and the operator read it as a claim they were
+              being made to enter by hand: *"i also somehow had to still claim items in bulk
+              that they're near mint rather than it being default."* The question is whether
+              these cards are each their own single row; the grade is a property of the
+              catalogue, and it is stated below as context rather than asked here. */}
+          <h2 className="review-question-title">Answer all {offer.rows.length} together?</h2>
           <p className="review-question-sub">
             {reasonLabel(offer.reason)}
             <span className="review-code">{offer.reason}</span>
           </p>
         </div>
         <p className="review-sentence">
-          Every card below offers exactly one row — <span className="review-claim">{offer.condition}</span> — for the same reason. One press answers each card with its own row.
+          Every card below offers exactly one row, for the same reason. One press answers each card with its own row — the finish each was sorted and photographed as, and <span className="review-claim">Near Mint</span> throughout, which is the only grade this catalogue carries.
         </p>
         {/* WHAT THE PRESS IS NOT ANSWERING FOR. The group is a cluster rather than the whole
             worklist, so the operator has to be told the rest is still theirs — an unstated
@@ -1572,7 +1657,7 @@ function GroupConfirm({
         {offer.left === 0 ? null : (
           <p className="review-sentence review-group-left">
             {offer.left} more {offer.left === 1 ? 'card is' : 'cards are'} still in this list and will not be
-            answered — {offer.left === 1 ? 'it offers' : 'they offer'} a different row, condition or reason.
+            answered — {offer.left === 1 ? 'it offers' : 'they offer'} a different row, grade or reason.
           </p>
         )}
       </header>
@@ -1608,7 +1693,7 @@ function GroupConfirm({
       <div className="review-group-bar">
         <button className="bn-btn bn-btn-primary bn-btn-lg review-group-confirm" type="button" onClick={onConfirm} disabled={busy}>
           <Icon name="check" size={16} />
-          Answer all {offer.rows.length} as {offer.condition}
+          Answer all {offer.rows.length} together
           <Kbd>↵</Kbd>
         </button>
         <Button variant="ghost" size="lg" icon="arrowLeft" kbd="Esc" onClick={onLeave} disabled={busy}>
@@ -1940,8 +2025,8 @@ function CandidateButton({
       {tags.length === 0 ? null : (
         <span className="review-candidate-tags">
           {tags.map((tag) => (
-            <span key={tag} className={`review-tag review-tag-${tag}`} title={tag === 'sorted' ? 'The finish this stack was sorted as' : 'The finish the photograph read as'}>
-              {tag === 'sorted' ? 'sorted as' : 'photo'}
+            <span key={tag} className={`review-tag review-tag-${tag}`} title={TAG_TITLES[tag]}>
+              {TAG_WORDS[tag]}
             </span>
           ))}
         </span>

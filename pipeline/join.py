@@ -868,6 +868,138 @@ def name_disputes(read_name, rows: Sequence[tcgcsv.Row]) -> bool:
     return True
 
 
+# How many rows the NAME may contribute to a disputed card's candidate list.
+#
+# NINE IS THE SCREEN'S LIMIT, NOT A JUDGEMENT ABOUT NAMES. `app/src/ReviewQueue.tsx` keys
+# candidates on the digits and stops at `MAX_KEYED_CANDIDATES = 9`; a row past that draws a
+# blank chip and is mouse-only. The number's own row is added after these, so the name is
+# capped one below it. A name that reaches this bound is a name that resolves to five or more
+# distinct cards, which is not the case this rung is for and is left to `L`.
+#
+# Measured over the nine disputed cards the owner's store has ever recorded: the name answers
+# ONE row on one card, TWO on seven (a card's Near Mint and Near Mint Foil), and THREE on one
+# (`Aspirant's Climb`, printed in Origins and again as a promo). Nothing is near the bound.
+NAME_ALTERNATIVE_LIMIT = 8
+
+
+class NameSide(NamedTuple):
+    """The rows the name found, and whether the ladder could settle a finish among them.
+
+    TWO FACTS, BECAUSE ONE OF THEM CANNOT BE INFERRED FROM THE OTHER, and a version of this
+    that returned only the rows shipped a real hole for an hour. `rows` is a single row in
+    two different situations — the ladder narrowed a stack to one, or the name answered a
+    card the export stocks in exactly ONE finish and the ladder REFUSED it. A caller
+    counting `len(rows) == 1` reads those as the same thing and releases the second, which
+    is a card listed on a finish the ladder had just rejected.
+
+    It is reachable on the committed fixture: `Alcremie ex` is one row, `Near Mint
+    Holofoil`, and a `normal` claim resolves `metadata_not_stocked` with no row at all.
+    `settled` is that answer stated rather than guessed at.
+    """
+
+    rows: Tuple[tcgcsv.Row, ...]
+    settled: bool
+
+
+def name_alternatives(
+    named: Sequence[tcgcsv.Row],
+    card: "IdentifiedCard",
+    disputed_row: tcgcsv.Row,
+) -> NameSide:
+    """The rows the READ NAME finds, for a card whose NUMBER found something else.
+
+    THE PIPELINE HAD ALREADY REASONED THE NUMBER'S ROW WAS WRONG AND THEN OFFERED IT ALONE.
+    That is the defect this answers, and it is a defect of PRESENTATION rather than of
+    resolution: `name_disputes` has flagged the contradiction since D146, and the entry it
+    wrote narrowed the candidate list to `resolution.row` — the one card the screen had just
+    told the operator was not what the photograph says. Pressing `L` and typing the name the
+    model had ALREADY READ was the only way to the right row.
+
+    MEASURED OVER EVERY `name_disputed` ENTRY THE OWNER'S STORE HAS RECORDED — all nine. In
+    nine of nine the NAME was right and the NUMBER was wrong; in eight of nine the name
+    resolves to exactly one card, and in the ninth to one card printed twice. Seven have since
+    been answered by a human, and in SEVEN OF SEVEN the SKU they chose is one of the rows this
+    function returns. The two that remain open are the two the owner was looking at when they
+    reported this.
+
+    IT DECIDES NOTHING, AND THAT IS WHAT MAKES IT SAFE. The card is queued either way; what
+    changes is which rows the human is shown beside the photograph. Nothing here can list a
+    card, so D35's ruling that a name-found row `may never list a card on its own` is
+    untouched — this rung does not reach listing at all. `CLAUDE.md`'s rule against joining on
+    `Product Name` is likewise unweakened: the name is not a key here, it is a second opinion
+    offered to a person, and it is folded by `name_index_key` exactly as D35 requires.
+
+    NARROWED BY THE SAME LADDER THAT NARROWED THE NUMBER'S ROWS, so the two sides of the
+    disagreement are shown at the same grain. `name_corroborated=True` is correct by
+    construction rather than by assumption: these rows were found BY the name, so the name
+    agrees with them, and D146's release is exactly what should happen to a rarity claim that
+    contradicts a row the name itself picked out. Where the ladder cannot settle the finish,
+    every row is offered and the operator settles it — which is the ordinary multi-row entry
+    this screen has always drawn.
+
+    ONE LINE HERE IS AN INVARIANT RESTATEMENT RATHER THAN A GUARD, AND IT IS KEPT ON
+    PURPOSE. The SKU filter cannot fire: a row is in both sets only if one of the rows the
+    NUMBER found carries the read name, and `name_disputes` returns False exactly then, so
+    this function is never called at all. The sets are disjoint by construction and the
+    mutation arm that deletes the filter survives the suite because it is a no-op.
+
+    It stays for `name_corroborates`'s reason two hundred lines up: a later edit loosening
+    the dispute test would otherwise draw one row twice, silently, in the function whose
+    whole job is to be honest about which reading found what.
+
+    `not narrowed.needs_review` is NOT in that category and reads like it. It is redundant
+    against `row is not None` for every resolution `variant.resolve` builds today — but what
+    the caller does with the answer turns on `settled`, and that flag is exactly the
+    difference between a narrowed row and a fallen-back one. See `NameSide`.
+    """
+    rows = [
+        row
+        for row in named
+        if str(row[tcgcsv.SKU_COLUMN]) != str(disputed_row[tcgcsv.SKU_COLUMN])
+    ]
+    if not rows:
+        return NameSide((), False)
+
+    narrowed = variant.resolve(
+        rows,
+        metadata_finish=card.metadata_finish,
+        detected_finish=card.detected_finish,
+        rarity_claim=card.rarity_claim,
+        game=card.game,
+        name_corroborated=True,
+    )
+    if not narrowed.needs_review and narrowed.row is not None:
+        return NameSide((narrowed.row,), True)
+    return NameSide(tuple(rows[:NAME_ALTERNATIVE_LIMIT]), False)
+
+
+def distinct_cards(rows: Sequence[tcgcsv.Row]) -> int:
+    """How many different CARDS these rows are, as opposed to how many rows.
+
+    THE DIFFERENCE BETWEEN A CHOICE AND A FORMALITY, and it is the whole of the release rule
+    below. One card stocked in two finishes is two rows and one card: `Deathgrip` at
+    `Spiritforged 163/221` has a Near Mint row and a Near Mint Foil row, the ladder picks
+    between them from the operator's own claim, and nobody is being asked which card it is.
+    Two cards is a question no claim can settle — `Aspirant's Climb` is printed in Origins at
+    `276/298` and again as a promo at `276a/298`, and only a person looking at the photograph
+    can say which is in the box.
+
+    `(Set Name, folded Number)` IS THE IDENTITY, and neither half is optional. The number
+    alone collides across sets — that is what `Catalog.colliding_keys` is about — and the set
+    alone is obviously not a card. Condition and finish are deliberately not in the key: they
+    are what varies BENEATH one card, which is the distinction this function exists to draw.
+    """
+    return len(
+        {
+            (
+                str(row.get(tcgcsv.SET_COLUMN, "") or "").strip(),
+                number_index_key(row.get(tcgcsv.NUMBER_COLUMN, "")),
+            )
+            for row in rows
+        }
+    )
+
+
 # ------------------------------------------------------------------ per-game dispatch
 #
 # `pipeline/games.py` says HOW a game's cards find their catalog rows, by name — the
@@ -2010,6 +2142,18 @@ class QueuedCard:
     lookup: str
     resolution_reason: str
     candidates: Tuple[tcgcsv.Row, ...] = ()
+    # WHICH OF THOSE ROWS THE READ NAME FOUND, by SKU, for a `name_disputed` card whose
+    # candidate list holds both readings of one photograph (`name_alternatives`).
+    #
+    # A SEPARATE FIELD RATHER THAN A FLAG ON THE ROW, because a `tcgcsv.Row` is a line of the
+    # operator's export and this is a fact about how this card reached it. The same row is a
+    # name match for one card and a number match for another, so the provenance cannot live
+    # on the row without being wrong for somebody.
+    #
+    # EMPTY ON EVERY OTHER ENTRY, and that is the whole of its contract: a list with one
+    # provenance does not need it stated, so `cli/resolve.py:_candidate_rows` stamps nothing
+    # unless this is non-empty. Nothing about any other reason code moves.
+    name_matched_skus: Tuple[str, ...] = ()
 
     @property
     def queue(self) -> str:
@@ -2312,11 +2456,26 @@ def join_batch(
         # It is the failure D3 rung 0 was written for, one rung further down. Gate B's record
         # of it is the sentence to keep: an answer that does not outlive the question is not
         # an answer.
+        #
+        # RELEASED WHERE THE NAME RESOLVES TO EXACTLY ONE CARD, ON THE OWNER'S RULING OF
+        # 2026-09-12: *"Release them when the name resolves to exactly one card."*
+        #
+        # THIS REPEALS THE OPERATIVE HALF OF D35's *"may never list a card on its own"*, and
+        # the entry that does it carries the argument. What the ruling rests on is the
+        # store's own record: 212 entries reached this rung, every one of them was answered
+        # by a human, and in 212 OF 212 the human chose the SKU this block was already
+        # holding. Not one disagreed. A question whose answer is known before it is asked,
+        # asked 212 times, is the shape D29 and D146 were both written about.
+        #
+        # WHAT SURVIVES OF D35 IS ITS CAUTION ABOUT A WEAK NAME, and that caution is now the
+        # gate rather than a blanket. A name that answers TWO cards is exactly the evidence
+        # D35 distrusted, and it still queues — with its photograph, as it always did.
         if (
             found.name_inferred
             and resolution.stage != variant.HUMAN_ANSWERED
             and not resolution.needs_review
             and resolution.row is not None
+            and distinct_cards(found.rows) > 1
         ):
             found = replace(found, rows=(resolution.row,))
             resolution = variant.Resolution(
@@ -2349,23 +2508,90 @@ def join_batch(
         # at the photograph has already answered the question this would ask, and re-raising
         # it is the sixteen-cards failure D3 rung 0 exists to prevent. `store/queues.py`
         # would not even re-queue the card: it would be listed nowhere and asked nowhere.
+        name_matched_skus: Tuple[str, ...] = ()
         if (
             disputed
             and resolution.stage != variant.HUMAN_ANSWERED
             and not resolution.needs_review
             and resolution.row is not None
         ):
-            # Narrowed to the resolved row, as D35's block narrows: the entry offers the one
-            # row the ladder chose, which is what a human is being asked to look at, and what
-            # makes a queue of these one D29 group.
-            found = replace(found, rows=(resolution.row,))
-            resolution = variant.Resolution(
-                stage=variant.REVIEW,
-                reason=routing.NAME_DISPUTED,
-                row=resolution.row,
-                condition=resolution.condition,
-                market_price=resolution.market_price,
-            )
+            # BOTH ROWS, THE NAME'S FIRST — and it offered only the number's until 2026-09-12.
+            #
+            # D35's block above narrows to the resolved row because there is only one reading
+            # to show: the number could not be read at all, so the name's row IS the answer.
+            # Here there are two readings and they disagree, and narrowing to one of them
+            # meant narrowing to the one this very block has just decided is suspect. The
+            # operator's words on finding it: *"i had to click L to see this option -- the
+            # initial suggestion is just [the wrong card]"*, and then the shape of the fix:
+            # *"it could've suggested both, say hard bargain and factory recall both on the
+            # same page."*
+            #
+            # THE NAME GOES FIRST BECAUSE OF WHAT THE NINE MEASURED, not because a name
+            # outranks a number in general. In nine of nine the name was right; digit `1` is
+            # therefore the answer on every one of them, and the ordering is worth exactly
+            # the one press it saves. Where the name finds nothing the list is what it always
+            # was — the number's row alone — so a card this rung cannot help is unchanged.
+            #
+            # NOTHING HERE DECIDES. The card is queued either way and no row is listed on a
+            # name (D35's ruling, untouched); what moved is which rows a human is shown.
+            # ONE LOOKUP, READ TWICE. `name_alternatives` narrows these rows and the gate
+            # below counts the CARDS among them; fetching the name twice would let the two
+            # answers disagree if a later edit moved either one.
+            named = catalog.rows_for_name(card.name)
+            side = name_alternatives(named, card, resolution.row)
+            alternatives = side.rows
+
+            # THE NAME DECIDES WHERE IT RESOLVES TO EXACTLY ONE CARD — the owner's ruling of
+            # 2026-09-12, in their words: *"Release them when the name resolves to exactly
+            # one card."*
+            #
+            # MEASURED OVER EVERY `name_disputed` ENTRY THE STORE HAS EVER RECORDED, all
+            # nine: the name was right and the number wrong in NINE OF NINE. Eight of the
+            # nine names answer exactly one card; the ninth answers two (`Aspirant's Climb`,
+            # printed in Origins and again as a promo) and is precisely the card this gate
+            # keeps in front of a person. Seven have since been answered by hand and in
+            # SEVEN OF SEVEN the operator chose a row the name found.
+            #
+            # THIS IS NOT "TRUST THE NAME". It is: where two readings of one photograph
+            # disagree and one of them resolves to a single card while the other is
+            # contradicted by it, the resolving one is the stronger evidence. Where the name
+            # resolves to two cards, or the ladder cannot settle the finish beneath it,
+            # nothing is decided here and the card faces a human with its photograph and
+            # BOTH readings on the list — which is the branch below.
+            # `side.settled` AND NOT `len(alternatives) == 1`. The two agree on most
+            # cards and part company on the one that matters: a name answering a card the
+            # export stocks in ONE finish returns one row whether the ladder settled it or
+            # REFUSED it, and releasing the second is listing a card on a finish the ladder
+            # rejected. `Alcremie ex` is that card on the committed fixture.
+            settled = side.settled and distinct_cards(named) == 1
+            if settled:
+                chosen = alternatives[0]
+                resolution = variant.Resolution(
+                    stage=resolution.stage,
+                    reason=resolution.reason,
+                    row=chosen,
+                    condition=str(chosen[tcgcsv.CONDITION_COLUMN]),
+                    market_price=tcgcsv.parse_price(chosen[tcgcsv.MARKET_PRICE_COLUMN]),
+                )
+                found = replace(found, rows=(chosen,))
+                name_matched_skus = (str(chosen[tcgcsv.SKU_COLUMN]),)
+            else:
+                found = replace(found, rows=alternatives + (resolution.row,))
+                name_matched_skus = tuple(
+                    str(row[tcgcsv.SKU_COLUMN]) for row in alternatives
+                )
+                resolution = variant.Resolution(
+                    stage=variant.REVIEW,
+                    reason=routing.NAME_DISPUTED,
+                    # STILL THE NUMBER'S ROW ON THE QUEUED BRANCH, AND DELIBERATELY SO.
+                    # `resolution.row` is what routing prices the entry on; the name's rows
+                    # are an OFFER to a human, and promoting one of them here without the
+                    # gate above would be this module deciding a dispute it has just said it
+                    # cannot settle. The screen ranks; the ladder does not.
+                    row=resolution.row,
+                    condition=resolution.condition,
+                    market_price=resolution.market_price,
+                )
 
         if router is not None:
             destination = router(card, found, resolution)
@@ -2377,6 +2603,7 @@ def join_batch(
                         lookup=found.lookup,
                         resolution_reason=resolution.reason,
                         candidates=found.rows,
+                        name_matched_skus=name_matched_skus,
                     )
                 )
                 continue
