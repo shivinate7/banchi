@@ -459,6 +459,29 @@ make claim-selftest # the claimer, proved where it can be wrong: a throwaway rep
                     #   main takes a number the branch had already claimed. In `check`, never in
                     #   the git hook.
 make merge          # merge a PR and move main onto it — BOTH HALVES, on your word (D42).
+                    #   IT REFUSES A CHECKOUT WHOSE OWN COPY OF THE MERGE IS BEHIND main's,
+                    #   BEFORE ANYTHING ELSE (D151). This target
+                    #   runs the `scripts/merge-pr.py` OF THE CHECKOUT YOU TYPE IT IN, and on
+                    #   2026-09-12 24 of this clone's 30 working trees were behind main's copy
+                    #   of it — 16 of them missing the commit that added the id claim at all.
+                    #   Such a copy does not fail: it merges, moves main, reports success, and
+                    #   the claim simply does not happen, which stranded an unclaimed id on
+                    #   main twice. THE PREDICATE IS `BEHIND`, NEVER `DIFFERS` — a branch
+                    #   developing the merge itself is AHEAD and goes straight through; what is
+                    #   refused is a copy MISSING commits main has, on this file or on any
+                    #   `scripts/*.py` it shells out to. THERE IS NO ESCAPE HATCH, deliberately:
+                    #   the fix is `git merge origin/main`, which is seconds.
+                    #   `make merge ARGS=--surface` asks that question alone.
+                    #   AND IT READS WHAT main LANDED WITH, afterwards: an unclaimed
+                    #   `## D-<slug>` on the merge commit is reported by name and becomes the
+                    #   command's exit status. The merge itself COMPLETED when that happens —
+                    #   nothing there repairs main, because a substitution made after the merge
+                    #   reaches main's own copy of the entry.
+                    #   THE SAME READING IS IN THE REF HOOK, which is the half that reaches a
+                    #   stale checkout at all: `core.hooksPath` is one directory in the common
+                    #   `.git` dir, so every worktree of this clone runs that file, and it
+                    #   prints the moment refs/heads/main moves onto a slug. It REFUSES
+                    #   NOTHING — main already carries it on origin by then.
                     #   IT CHECKS FOR A STALE CLAIM BEFORE ANYTHING ELSE (D140, amended):
                     #   a number this branch claimed that main has taken since is REFUSED here,
                     #   in preview as well as on the press, and nothing is rewritten for you.
@@ -1692,6 +1715,8 @@ D147 The claim is spent on the oldest copies, because a card captured tonight wa
 D148 The wait is about the claim commit, and an answer it has not got is never a pass
 D149 A section number that resolves is not a citation that is right, and no check can read what a sentence is about
 D150 A reading taken after a sale is that sale's own result, and it ages the claim
+D151 The merge is run by a checkout, so the checkout is asked whether it is current, and main is read for a slug the moment it moves
+D152 Every row in the collapsed rail draws one glyph on one spine, and a rule that lists the children it knows about will miss one
 D-the-restore-compares-the-id The restore asks which drawer, not which number, and the picker stops drawing a number nobody reads
 
 ```

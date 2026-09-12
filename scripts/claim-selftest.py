@@ -53,6 +53,19 @@ def drive_claim_half(repo: Path, branch: str, number: int = 99) -> Tuple[str, in
     return buf.getvalue(), code
 
 
+def drive_landed_half(repo: Path, commit: str) -> Tuple[str, int]:
+    """`landed_half` against `repo`, with everything it prints captured.
+
+    IT PRESSES NOTHING AND NEEDS NO `gh`. The half runs after main has already moved, so its
+    whole body is one read of a commit — which is exactly why it can be driven here while the
+    merge around it cannot.
+    """
+    buf = io.StringIO()
+    with contextlib.redirect_stdout(buf):
+        code = merge_pr_module().landed_half(str(repo), commit)
+    return buf.getvalue(), code
+
+
 def with_claimer(repo: Path) -> None:
     """Put the claimer where `merge-pr.py` looks for it — `scripts/claim-ids.py`, RELATIVE to
     the checkout it is pointed at. A real tree has one; without it the readers below the
@@ -915,6 +928,78 @@ def main() -> int:
            "a `gh` that cannot answer refuses the merge and SAYS SO IN THOSE WORDS — an "
            "outage read as an empty roster would be the same defect one function along, "
            "and the message is the only place the two are distinguishable to a reader", out)
+
+        # ------------------------------------------ what a commit CARRIES, once it has landed
+        #
+        # THE INVARIANT IS `MAIN CARRIES NO SLUG` AND EVERY READER ABOVE ASKS ABOUT A CHECKOUT.
+        # It failed twice in silence: `make merge` runs the merge script of whatever checkout
+        # invoked it, and a checkout older than the claim has no claim in it to run. So the
+        # reading that matters afterwards is of the COMMIT, and these arms are mostly about
+        # keeping it from quietly becoming a reading of the working tree again.
+        print("\n  -- what a commit carries, read from the commit --")
+        twelfth = tmp / "landed"
+        twelfth.mkdir()
+        landed = build(twelfth)
+        with_claimer(landed)
+        git(landed, "add", "-A")
+        git(landed, "commit", "-qm", "the checkout carries the claimer")
+        clean_rev = git(landed, "rev-parse", "HEAD").strip()
+        git(landed, "checkout", "-q", "-b", "feature")
+        write(landed, "docs/DECISIONS.md", DECISIONS_MAIN + f"\n## {SD} — Third\n\nbody\n")
+        git(landed, "add", "-A")
+        git(landed, "commit", "-qm", "a slug lands")
+        slug_rev = git(landed, "rev-parse", "HEAD").strip()
+
+        out, code = claim_rc(landed, "--landed", slug_rev)
+        ok(code == 3 and SD in out,
+           "a commit carrying a slug is reported, by name, and exits 3", out)
+
+        out, code = claim_rc(landed, "--landed", clean_rev)
+        ok(code == 0 and SD not in out,
+           "a commit whose ids are all numbers reads clean", out)
+
+        # THE ARM THAT KEEPS IT A COMMIT READER. The working tree here IS the slugged one —
+        # HEAD is `feature` — so a reader that fell back to the checkout would report the slug
+        # for a clean commit. That regression is invisible in every other arm.
+        out, code = claim_rc(landed, "--landed", clean_rev)
+        ok(code == 0,
+           "AND THE WORKING TREE IS NOT THE SUBJECT: standing on the slugged branch, a clean "
+           "commit still reads clean", out)
+
+        git(landed, "checkout", "-q", clean_rev)
+        out, code = claim_rc(landed, "--landed", slug_rev)
+        ok(code == 3 and SD in out,
+           "and the same the other way — standing on a clean tree, the slugged commit still "
+           "reports", out)
+        git(landed, "checkout", "-q", "feature")
+
+        out, code = claim_rc(landed, "--landed", "no-such-rev")
+        ok(code == 2 and code != 0,
+           "a rev that names nothing REFUSES rather than reading clean — an answer it has "
+           "not got is not a pass", out)
+
+        # ------------------------------------------------- and the half of the merge that asks
+        print("\n  -- the merge reports what main landed with --")
+        out, code = drive_landed_half(landed, slug_rev)
+        ok(code == 1 and SD in out,
+           "landed_half reports a slug on the commit main moved to, and its status says so",
+           out)
+        ok("MERGE ITSELF COMPLETED" in out,
+           "AND SAYS THE MERGE COMPLETED, because it did — a status read as a failed merge "
+           "would send the next session to re-run one that already happened", out)
+
+        out, code = drive_landed_half(landed, clean_rev)
+        ok(code == 0, "and a clean commit passes it", out)
+
+        # A CLAIMER THAT CANNOT ANSWER IS NOT A CLEAN ANSWER. This is the same rule the claim
+        # commit's wait is built on, one function along, and it is the arm that stops the
+        # `code == 0` test from being written as `code != 3`.
+        write(landed, "scripts/claim-ids.py",
+              "import sys\nsys.stderr.write('the claimer is not what you think\\n')\n"
+              "sys.exit(2)\n")
+        out, code = drive_landed_half(landed, clean_rev)
+        ok(code == 1 and "could not be asked" in out,
+           "a claimer that cannot answer is REPORTED, never read as a clean main", out)
 
     print("\nclaim self-test: {0} passed{1}".format(
         PASS, ", {0} FAILED".format(FAIL) if FAIL else ""))

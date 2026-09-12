@@ -37,16 +37,24 @@ of it — including the footgun — in a throwaway origin, clone and worktree. N
 resolves paths relative to this file: the repository is the one `git rev-parse` answers for
 from the caller's directory, so the self-test can point it at a temporary one.
 
+AND IT IS BRACKETED BY TWO GUARDS OVER ITSELF, because `make merge` runs the merge script of
+whatever checkout invoked it and this machine carries around twenty-seven of them. Before
+anything is pressed, `surface_half` refuses a copy of this file that is BEHIND origin/main's;
+after main has moved, `landed_half` asks what main now carries. The first refuses a known
+cause, the second catches the symptom whatever caused it. Both sections carry the argument.
+
     scripts/merge-pr.py <n>                  preview. Presses nothing.
     scripts/merge-pr.py <n> --confirm        merge it, then move main.
     scripts/merge-pr.py --local <rev>        the local half alone, for the self-test.
     scripts/merge-pr.py --cut <branch>       the branch cleanup alone, for the self-test.
+    scripts/merge-pr.py --surface            is this copy of the merge current with main?
 """
 
 from __future__ import annotations
 
 import argparse
 import json
+import re
 import subprocess
 import sys
 import time
@@ -59,6 +67,10 @@ class Ran(NamedTuple):
     ok: bool
     out: str
     err: str
+    # THE CODE, AND NOT ONLY WHETHER IT WAS ZERO. One caller below needs to tell an answer of
+    # `there is an unclaimed id` from `I could not be asked` — 3 from 2 — and a boolean cannot.
+    # It carries -1 when the process never ran, which is neither.
+    code: int = -1
 
 
 def run(args: Sequence[str], cwd: Optional[str] = None) -> Ran:
@@ -72,7 +84,7 @@ def run(args: Sequence[str], cwd: Optional[str] = None) -> Ran:
         done = subprocess.run(list(args), cwd=cwd, capture_output=True, text=True, check=False)
     except OSError as exc:
         return Ran(False, "", str(exc))
-    return Ran(done.returncode == 0, done.stdout.strip(), done.stderr.strip())
+    return Ran(done.returncode == 0, done.stdout.strip(), done.stderr.strip(), done.returncode)
 
 
 def say(*lines: str) -> None:
@@ -141,6 +153,174 @@ def worktree_holding(root: str, branch: str) -> Optional[str]:
 
 def head_of(root: str, ref: str) -> str:
     return run(["git", "rev-parse", "--verify", "--quiet", ref], cwd=root).out
+
+
+# ----------------------------------------------- is THIS copy of the merge current with main?
+
+# `make merge` RUNS THE MERGE SCRIPT OF WHATEVER CHECKOUT INVOKED IT, and that is not a
+# detail — it is the delivery mechanism for every defect this file has ever fixed. There are
+# around twenty-seven working trees on this machine and many stand on branches cut before the
+# capability whose absence they will demonstrate. A copy that lacks one does not fail: it
+# performs the merge, moves main, reports complete success, and the capability simply does not
+# happen.
+#
+# IT HAS HAPPENED TWICE, WITH THE SAME CAPABILITY AND IN SILENCE BOTH TIMES. D140 made an id
+# claimed at the merge, by a function in THIS file. Run from a checkout older than that
+# function, the merge did both halves and main landed carrying a raw `## D-<slug>` heading
+# that no citation can resolve against and no later claim can ever find — once on 2026-09-11
+# and once in the days before it, each repaired afterwards by a pull request of its own.
+#
+# THE PREDICATE IS `BEHIND`, AND `DIFFERS` WOULD BE THE WRONG ONE. A branch developing this
+# file is SUPPOSED to differ from main — the pull request that wrote the paragraph above did
+# exactly that — so comparing content would refuse the one workflow that keeps this file
+# alive. What is refused is a copy MISSING commits main has: `git log HEAD..origin/main -- <f>`
+# non-empty, which is true of a stale checkout and false of one that is ahead. A branch that
+# has both changed the file and not yet taken main's change to it reads as behind, and that is
+# correct rather than harsh — it lacks the capability exactly as the stale checkout does, and
+# the repair is the same one sentence.
+#
+# WHAT IT CANNOT SEE, named rather than left to be discovered: a merge that took `ours` for
+# one of these files. That commit IS an ancestor, so the reachability question answers `not
+# behind` over content that lost the capability anyway. `make revert-guard` is the guard whose
+# subject that is, and `--landed` below is what catches the consequence regardless of cause.
+#
+# AND THERE IS NO ESCAPE HATCH, WHICH IS A DEPARTURE FROM EVERY OTHER REFUSAL IN THIS REPO
+# AND IS MEANT. `PKMNSCAN_SUITE_LOCK=off` and `PKMNSCAN_KILL=off` exist because the thing they
+# bypass can cost real minutes or stand between a session and the only way through. This one
+# costs `git merge origin/main`, which is seconds and is the right thing to have done anyway.
+# A hatch printed in the refusal is the button a session presses instead of reading, and the
+# defect it would re-create is one that reports success while doing nothing.
+
+# The file's own TRACKED path, not `__file__`. The self-test points a real script at a
+# throwaway repository, where `__file__` resolves outside the tree entirely.
+SELF = "scripts/merge-pr.py"
+# A module-level constant naming a script under `scripts/`. That is how this file already
+# declares the one thing it shells out to, so the surface is DERIVED from the source rather
+# than listed beside it and a capability moved into a new script joins it by being written the
+# way the existing one is.
+_SHELLED_OUT = re.compile(r"^[A-Z][A-Z0-9_]* = \"(scripts/[^\"]+\.py)\"", re.M)
+
+
+def merge_surface() -> List[str]:
+    """The files `make merge` EXECUTES, this one included, in a stable order."""
+    try:
+        with open(__file__, encoding="utf-8") as handle:
+            source = handle.read()
+    except OSError:
+        source = ""
+    return sorted({SELF} | set(_SHELLED_OUT.findall(source)))
+
+
+def behind_on(root: str, path: str, ref: str) -> List[str]:
+    """`<short> <subject>` for every commit on `ref` that touched `path` and HEAD has not."""
+    got = run(["git", "log", "--format=%h %s", "HEAD.." + ref, "--", path], cwd=root)
+    return [line for line in got.out.splitlines() if line.strip()] if got.ok else []
+
+
+def surface_half(root: str, ref: str = "refs/remotes/origin/main") -> int:
+    """Refuse before anything is pressed when this checkout's merge is behind main's."""
+    rule("the merge this checkout is running")
+
+    fetched = run(["git", "fetch", "origin"], cwd=root)
+    if not fetched.ok:
+        return refuse(
+            "`git fetch origin` failed, so nothing can be said about whether this",
+            "checkout's own copy of the merge is current.",
+            "",
+            fetched.err or "(git said nothing)",
+            "",
+            "Nothing was merged. An answer this command has not got is not a pass — the",
+            "same rule the claim commit's wait is built on.")
+
+    if not head_of(root, ref):
+        return refuse(
+            "`{0}` cannot be read after a successful fetch.".format(ref),
+            "",
+            "This checkout's copy of the merge is compared against main's. Without main",
+            "there is nothing to compare it to, and a merge performed by a copy nobody",
+            "could check is exactly the shape of the defect this refusal exists for.")
+
+    stale: List[Tuple[str, List[str]]] = []
+    for path in merge_surface():
+        missing = behind_on(root, path, ref)
+        if missing:
+            stale.append((path, missing))
+
+    if not stale:
+        say("  {0} file(s) make up `make merge`, and this checkout carries every".format(
+            len(merge_surface())),
+            "  commit origin/main has for each of them.")
+        return 0
+
+    lines = ["this checkout's copy of the merge is BEHIND origin/main."]
+    for path, missing in stale:
+        here = head_of(root, "HEAD:" + path)[:9] or "(absent)"
+        theirs = head_of(root, ref + ":" + path)[:9] or "(absent)"
+        lines += [
+            "",
+            "  {0}".format(path),
+            "    here         {0}".format(here),
+            "    origin/main  {0}".format(theirs),
+            "    missing {0} commit(s) main has:".format(len(missing)),
+        ]
+        lines += ["      " + line for line in missing[:6]]
+        if len(missing) > 6:
+            lines.append("      … and {0} more".format(len(missing) - 6))
+    lines += [
+        "",
+        "  `make merge` runs THIS checkout's copy of these files, so a capability main has",
+        "  added to them is one this merge would not perform. It would not fail either: it",
+        "  would do both halves, report success, and leave the work undone. An unclaimed id",
+        "  reached main that way twice.",
+        "",
+        "  BEING AHEAD IS NOT THIS. A branch developing the merge itself carries main's",
+        "  commits plus its own and goes straight through; what is refused is a copy that is",
+        "  MISSING commits main has.",
+        "",
+        "  Nothing was merged and main has NOT moved. Either one fixes it:",
+        "",
+        "    git -C {0} merge origin/main".format(root),
+        "    run `make merge` from a checkout cut from main as it stands now",
+    ]
+    return refuse(*lines)
+
+
+# ---------------------------------------------------- and what main carries once it has moved
+
+
+def landed_half(root: str, commit: str) -> int:
+    """After the move: does main carry an unclaimed id? 0 when clean, 1 when not or unknown.
+
+    THIS IS THE SYMPTOM, CAUGHT BY THE SYMPTOM, and it is deliberately not the same guard as
+    the one above. That one refuses a known cause before the damage; this one asks the only
+    question that matters afterwards, and answers it the same way whether the claim was
+    skipped by a stale checkout, by `--no-claim`, by a merge that took `ours` over the claimer,
+    or by a slug written somewhere the claimer does not walk.
+    """
+    rule("what main now carries")
+    asked = run([sys.executable, CLAIMER, "--landed", commit, "--root", root], cwd=root)
+    if asked.code == 0:
+        say("  no unclaimed id on {0} — every heading it carries is a number.".format(
+            commit[:9]))
+        return 0
+
+    say("")
+    if asked.code == 3:
+        say(asked.out.rstrip() or asked.err.rstrip())
+        say("",
+            "  THE MERGE ITSELF COMPLETED and main has moved: this status is the report,",
+            "  not a failure of the operation. Nothing here repairs it, because a",
+            "  substitution made now would land on main's own copy of the entry (D140).")
+        return 1
+
+    say("REFUSED: main moved and this checkout could not be asked what it carries.",
+        "",
+        "  " + (asked.err or asked.out or "(the claimer said nothing)").splitlines()[-1],
+        "",
+        "  The merge completed. An answer this command has not got is not a pass, so this",
+        "  is reported rather than assumed clean: read",
+        "  `python3 scripts/claim-ids.py --landed {0}` yourself.".format(commit[:9]))
+    return 1
 
 
 # ------------------------------------------------------------------------- the local half
@@ -729,6 +909,11 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--local", metavar="REV",
                         help="run the local half alone against REV, skipping gh. What "
                              "scripts/merge-selftest.sh drives.")
+    parser.add_argument("--surface", action="store_true",
+                        help="ask whether THIS checkout's copy of the merge is behind "
+                             "origin/main, and refuse if it is. Runs on its own before every "
+                             "merge; this flag runs it alone, which is what "
+                             "scripts/merge-selftest.sh drives.")
     return parser
 
 
@@ -738,6 +923,9 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
     root = repo_root()
     if root is None:
         return refuse("not a git repository.")
+
+    if args.surface:
+        return surface_half(root)
 
     if args.cut:
         cut_branch(root, args.cut, args.confirm)
@@ -763,6 +951,14 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
 
     say("PKMNSCAN — merge PR #{0}{1}".format(args.pr, "" if args.confirm else "  (PREVIEW)"))
     rule()
+
+    # FIRST, BEFORE EVEN THE PULL REQUEST IS READ, AND IN THE PREVIEW TOO. A preview whose
+    # whole job is to say what the merge would do has to say when this copy of the merge would
+    # not do all of it — and the answer costs one fetch, which every path here pays anyway.
+    code = surface_half(root)
+    if code:
+        return code
+
     if not args.no_claim:
         data, why = pr_state(args.pr)
         if data is None:
@@ -785,9 +981,13 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
         delete_head_branch(root, args.pr, args.confirm)
         return 0
     code = local_half(root, commit, args.confirm)
-    if code == 0:
-        delete_head_branch(root, args.pr, args.confirm)
-    return code
+    if code:
+        return code
+    delete_head_branch(root, args.pr, args.confirm)
+    # LAST, AND ITS STATUS IS THE COMMAND'S. The cleanup above runs first on purpose: a branch
+    # left lying around because main landed wrong helps nobody, and the report below is about
+    # main rather than about the branch.
+    return landed_half(root, commit)
 
 
 # ------------------------------------------------------------------- the branch afterwards

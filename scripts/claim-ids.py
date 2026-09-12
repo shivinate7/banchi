@@ -170,16 +170,18 @@ def ceiling_at(ref: str, cwd: Optional[str] = None) -> Dict[str, int]:
 # ------------------------------------------------------------------------- what is unclaimed
 
 
-def pending(root: Path) -> Dict[str, List[str]]:
-    """Every slug HEADING in the tree, by kind, in the order the files declare them.
+def pending_in(decisions: str, codes: str, gates: str) -> Dict[str, List[str]]:
+    """Every slug HEADING in these three texts, by kind, in the order they declare them.
 
     Headings rather than citations: a citation of a slug that has no heading is a dangling
     id, which is `id claims`' job to report and not this command's to invent an entry for.
+
+    TEXTS RATHER THAN A DIRECTORY, SO THE SAME READER CAN BE POINTED AT A COMMIT. `pending`
+    hands it a working tree and `pending_at` hands it `git show` output, and the grammar is
+    declared once for both. A second declaration of these three patterns is how a heading
+    shape that one reader accepts becomes one the other cannot see.
     """
     out: Dict[str, List[str]] = {"decision": [], "codes": [], "step": []}
-    decisions = read(root / DECISIONS) if (root / DECISIONS).exists() else ""
-    codes = read(root / CODES_DECISIONS) if (root / CODES_DECISIONS).exists() else ""
-    gates = read(root / GATES) if (root / GATES).exists() else ""
     out["decision"] = [f"D{i}" for i in DECISION_HEADING.findall(decisions) if i.startswith("-")]
     out["codes"] = [f"C{i}" for i in CODES_HEADING.findall(codes) if i.startswith("-")]
     out["step"] = re.findall(r"^0\.\s+`step (" + SLUG + r")`", gates, re.M)
@@ -190,6 +192,31 @@ def pending(root: Path) -> Dict[str, List[str]]:
                 seen.append(slug)
         out[kind] = seen
     return out
+
+
+def pending(root: Path) -> Dict[str, List[str]]:
+    """`pending_in` over a working tree."""
+    return pending_in(
+        read(root / DECISIONS) if (root / DECISIONS).exists() else "",
+        read(root / CODES_DECISIONS) if (root / CODES_DECISIONS).exists() else "",
+        read(root / GATES) if (root / GATES).exists() else "",
+    )
+
+
+def pending_at(rev: str, cwd: Optional[str] = None) -> Dict[str, List[str]]:
+    """`pending_in` over a COMMIT, which is a different question from the one above.
+
+    Every other reader in this file asks about a checkout. This one asks what a commit
+    CARRIES, and it exists because the invariant the whole design rests on — main carries no
+    slug — is a claim about main's own trees and not about anybody's working directory. A
+    file missing at that commit reads as empty, which is right: a repository with no
+    docs/CODES-DECISIONS.md has no unclaimed code-card id in it.
+    """
+    return pending_in(
+        git("show", f"{rev}:{DECISIONS}", cwd=cwd),
+        git("show", f"{rev}:{CODES_DECISIONS}", cwd=cwd),
+        git("show", f"{rev}:{GATES}", cwd=cwd),
+    )
 
 
 def plan(root: Path, ref: str, cwd: Optional[str] = None) -> List[Claim]:
@@ -328,6 +355,67 @@ def report_stale(stale: Sequence[Stale], ref: str) -> None:
         "  previews what it would take against main as it stands now.")
 
 
+# ------------------------------------------------- what a commit CARRIES, after it is landed
+
+# THE INVARIANT IS `MAIN CARRIES NO SLUG`, AND NOTHING ASKED THE COMMIT ITSELF.
+# Every reader above asks about a CHECKOUT: what this branch has pending, what it added, what
+# the ref has taken. None of them can be pointed at the commit a merge just produced, which is
+# the one subject the invariant is actually about — and the invariant failed twice in the
+# fortnight this was written, both times in silence, because `make merge` runs the merge
+# script of whatever checkout invoked it and a checkout older than the claim has no claim in
+# it to run.
+#
+# IT IS A REPORT AND NOT A REFUSAL, and the asymmetry with `--stale` is the point. A staleness
+# report is read BEFORE anything moves, so refusing costs nothing. This one is read AFTER: the
+# pull request is merged on GitHub and main carries the slug whatever anybody here decides.
+# Refusing the local fast-forward at that point would leave this clone behind a main that is
+# already wrong, which repairs nothing and breaks everything downstream of it. So it names
+# what landed, names the repair, and exits 3 so a caller cannot read it as a pass.
+#
+# ITS SUBJECT IS A REV AND NEVER `HEAD`. Pointing it at a working tree would make it a
+# duplicate of `id claims`, which already does that job on the commit path.
+
+
+def report_landed(root: Path, rev: str) -> int:
+    """Every unclaimed id in `rev`'s own trees. 0 when clean, 3 when not, 2 when unaskable."""
+    resolved = git("rev-parse", "--verify", "--quiet", f"{rev}^{{commit}}", cwd=str(root)).strip()
+    if not resolved:
+        say(f"REFUSED: `{rev}` does not name a commit in {root}.",
+            "",
+            "  This reads what a COMMIT carries. Without one there is nothing to read, and an",
+            "  unreadable subject is not evidence that anything is clean.")
+        return 2
+
+    found = pending_at(resolved, cwd=str(root))
+    names = [f"{slug}" for slug in found["decision"] + found["codes"]]
+    names += [f"step {slug}" for slug in found["step"]]
+
+    say(f"PKMNSCAN — unclaimed ids carried by {resolved[:9]}")
+    say("=" * 72, "")
+    if not names:
+        say(f"  {resolved[:9]} carries no unclaimed id — every heading in it is a number.")
+        return 0
+
+    say(f"REFUSED: {resolved[:9]} carries {len(names)} unclaimed id.", "")
+    for name in names:
+        say(f"  {name}")
+    say("",
+        "  A slug is a BRANCH's placeholder and the merge is what turns it into a number",
+        "  (D140). One on a commit main now carries means the claim half did not run: every",
+        "  citation of that id resolves to nothing, and no later claim can ever find it,",
+        "  because the branch that wrote it is merged and gone.",
+        "",
+        "  Repair, on a branch cut from main as it stands now:",
+        "",
+        "    python3 scripts/claim-ids.py --ref origin/main --write",
+        "    make check && gh pr create --base main",
+        "",
+        "  And ask why the claim did not run. `make merge` runs the merge script of the",
+        "  CHECKOUT it was invoked from, and a checkout cut before a capability landed does",
+        "  not have it — that is what `scripts/merge-pr.py --surface` refuses.")
+    return 3
+
+
 # ------------------------------------------------------------------------- the substitution
 
 
@@ -426,12 +514,22 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--stale", action="store_true",
                         help="report allocated ids this branch adds that the ref has taken "
                              "since, and exit 3 if there are any. Writes nothing, ever.")
+    parser.add_argument("--landed", metavar="REV",
+                        help="report every unclaimed id REV's own trees carry, and exit 3 if "
+                             "there are any. The subject is a COMMIT and never a checkout. "
+                             "Writes nothing, ever.")
     return parser
 
 
 def main(argv: Optional[Sequence[str]] = None) -> int:
     args = build_parser().parse_args(argv)
     root = Path(args.root).resolve()
+
+    # ANSWERED BEFORE `--ref` IS RESOLVED, because it does not use one. `--landed` reads a
+    # commit's own trees; there is no allocation in it and nothing to allocate against, so a
+    # checkout with no remote-tracking branch can still be asked what a commit carries.
+    if args.landed:
+        return report_landed(root, args.landed)
 
     # `--verify` AND `^{commit}`, because a bare `git rev-parse foo` prints `foo` on STDOUT
     # and puts the error on stderr — which this reader discards. The refusal below was
