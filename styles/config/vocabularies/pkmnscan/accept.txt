@@ -532,3 +532,8 @@ romanisation
 choreography
 deliverable
 deliverables
+Blitzcrank
+Faefolk
+Qiyana
+Sterak
+Volibear

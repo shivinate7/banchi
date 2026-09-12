@@ -1633,6 +1633,7 @@ D143 The claim reads the checked-out tree, so which tree that is must be establi
 D144  A card that will not settle is photographed off the quietest frame it manages, and there is one trigger again
 D145 A box has an index nobody sees, because the number on the drawer is a label and a label may be reused
 D146 Two agreeing signals release the rarity claim, and the same comparison run backwards is a review reason
+D147 The claim is spent on the oldest copies, because a card captured tonight was in no file sent last week
 D-wait-names-the-commit The wait is about the claim commit, and an answer it has not got is never a pass
 
 ```

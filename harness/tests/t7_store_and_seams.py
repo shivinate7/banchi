@@ -14042,6 +14042,164 @@ def check_crop_preview(checks: Checks) -> None:
         )
 
 
+def check_committed_copies_are_the_oldest(checks: Checks) -> None:
+    """The copies held back as already-at-TCGplayer are the OLDEST CAPTURES, not the first box.
+
+    THE OPERATOR'S OWN SHAPE, 2026-09-11, and the reason this case exists rather than a
+    tidier one: their backstock is box 3 and tonight's capture is box 1. `_committed_keys`
+    picked out of `copies_on_hand`, which answers in BOX-WALK order, so box 1 sorted first
+    and the copies photographed an hour ago were marked as the ones TCGplayer already holds.
+    The older backstock stayed uncommitted — and no run is joining box 3, so nobody could
+    list it either. **52 of run `2026-09-11-box1-01`'s 119 matched SKUs offered zero copies
+    and 59 real cards were stranded**, under the sentence *"every copy in this run is already
+    listed or has left the box"*. The operator's words were that this is *"just not
+    true/possible"*.
+
+    SO THE FIXTURE INVERTS THE TWO ORDERS DELIBERATELY: the LOWER-numbered box is the NEWER
+    capture. A case where box order and capture order agree passes under either rule and
+    proves nothing — which is how the old order survived every emit case in this file.
+
+    AND TONIGHT'S COPY IS STAMPED BY A REVIEW ANSWER, WHICH IS NOT DECORATION. `copies_on_hand`
+    selects on `card.sku`, so a copy the store has not stamped is invisible to it, can never be
+    committed, and is offerable whatever the order — a fixture that stamps the new copy by
+    EMITTING it is therefore blind to this defect, and the first draft of this case was, passing
+    under the old order. The operator's box 1 has never been emitted: its manifest carries no
+    `emitted` key, and **158 `answered` events** stamped those SKUs. D59 names the mechanism in
+    passing — *"a review answer stamps a SKU without sending anything"* — and that is precisely
+    the copy this defect strands.
+
+    THE STAMPS ARE WRITTEN, NOT WAITED FOR. `master.now()` is millisecond-resolution and
+    captures in a loop can share a millisecond, which would leave the tie broken by
+    `(box, index)` — the very order under test — and the case would go green for the wrong
+    reason on a fast machine and red on a slow one. Writing them states the premise instead.
+
+    Its own isolated home, this file's own lesson yet again: it emits, which writes `pushed`
+    counts that `check_listing_commands` and `check_cli_seams` assert over their own fixtures.
+    """
+    checks.note("")
+    checks.note("COMMITTED COPIES — the oldest captures back the claim, not the lowest box")
+
+    backstock = [(3, 1, "Dunsparce", "120", "normal"), (3, 2, "Dunsparce", "120", "normal")]
+    tonight = [(1, 1, "Dunsparce", "120", "normal")]
+
+    with isolated_home():
+        # Captured in real order too — box 3 first — so the fixture is not relying on the
+        # stamps alone to describe a history that could not have happened.
+        for box, index, *_ in backstock + tonight:
+            while Store().read().inventory.next_index(box) <= index:
+                capture_server.do_capture(capture_payload(box))
+
+        with Store().write() as writable:
+            for key, stamp in (
+                (master.position_key(3, 1), "2026-09-01T10:00:00.000+00:00"),
+                (master.position_key(3, 2), "2026-09-01T10:00:01.000+00:00"),
+                (master.position_key(1, 1), "2026-09-11T22:38:00.000+00:00"),
+            ):
+                writable.inventory.cards[key].captured_at = stamp
+
+        # --- the backstock run, which is what puts a claim on the SKU ---------------------
+        first = runs.create("t7-oldest-backstock")
+        first.write_identifications(identifications_for(backstock))
+        export = write_export(first.path("export.csv"))
+        command(checks, "join", str(first.directory), "--export", str(export))
+        command(checks, "emit", str(runs.open_run(first.directory).directory))
+
+        listing = Store().read().inventory.listing_for(DUNSPARCE_SKU)
+        checks.equal(
+            (listing.pushed, listing.staged, listing.live),
+            (2, 0, 0),
+            "the backstock run pushed its two copies and the export reports none live — "
+            "which is the ordinary state of this store, not a corner: `Total Quantity` is "
+            "blank for every SKU on the operator's own fetched exports",
+        )
+
+        # --- tonight's copy gets its SKU the way the operator's did: answered, not sent ----
+        with Store().write() as writable:
+            writable.inventory.set_state(master.position_key(1, 1), master.IDENTIFIED)
+            writable.review.upsert(
+                entry(
+                    1,
+                    1,
+                    reason="rarity_claim_mismatch",
+                    candidates=[
+                        {
+                            "sku": DUNSPARCE_SKU,
+                            "name": "Dunsparce",
+                            "set": "SV09",
+                            "number": "120/159",
+                            "condition": "Near Mint",
+                            "market": "2.06",
+                        }
+                    ],
+                )
+            )
+        capture_server.do_review_answer(1, 1, {"sku": DUNSPARCE_SKU, "condition": "Near Mint"})
+        checks.equal(
+            Store().read().inventory.get(master.position_key(1, 1)).sku,
+            DUNSPARCE_SKU,
+            "TONIGHT'S COPY CARRIES THE SKU AND WAS NEVER PUSHED. This is the premise the "
+            "whole case rests on — an unstamped copy is invisible to `copies_on_hand`, so it "
+            "could not be wrongly committed and the defect would be unreachable from here",
+        )
+
+        # --- the claim is spent on the OLDER copies --------------------------------------
+        inventory = Store().read().inventory
+        checks.equal(
+            [c.key for c in inventory.copies_on_hand(DUNSPARCE_SKU)],
+            ["1/1", "3/1", "3/2"],
+            "and all three copies are on hand in BOX-WALK order, tonight's first — which is "
+            "the list the claim used to be spent down",
+        )
+        copies_out, _ = resolve._copies_out(inventory, {})
+        committed = resolve._committed_keys(inventory, copies_out)
+        checks.equal(
+            sorted(committed),
+            ["3/1", "3/2"],
+            "THE TWO COPIES THAT BACK THE CLAIM ARE THE TWO OLDEST CAPTURES. Box-walk order "
+            "spent it on `1/1` and `3/1` — a copy photographed tonight standing in for one "
+            "sent last week, which is a thing causality forbids: an emit walks the run's "
+            "own positions, so a card captured after that emit was in no file it wrote",
+        )
+        checks.ok(
+            master.position_key(1, 1) not in committed,
+            "and TONIGHT'S copy is NOT among them, which is the whole defect: committed is "
+            "subtracted per-run by `SkuMatch.uncommitted_positions`, so marking the new "
+            "copy as held is what left the run in front of the operator with nothing to send",
+        )
+
+        # --- and the run in front of the operator can list it -----------------------------
+        second = runs.create("t7-oldest-tonight")
+        second.write_identifications(identifications_for(tonight))
+        export = write_export(second.path("export.csv"))
+        command(checks, "join", str(second.directory), "--export", str(export))
+        said = command(checks, "emit", str(runs.open_run(second.directory).directory))
+
+        written = second.path(runs.IMPORT_MERGED)
+        rows = tcgcsv.read_export(written).by_sku() if written.is_file() else {}
+        checks.ok(
+            written.is_file(),
+            "AN IMPORT FILE EXISTS AT ALL. The defect wrote none — the run's only matched "
+            "SKU added nothing — so this is what the regression looks like before any "
+            "quantity can be asserted about, and reading the file unguarded would hide it "
+            "behind a traceback",
+            said,
+        )
+        checks.equal(
+            rows.get(DUNSPARCE_SKU, {}).get(tcgcsv.QUANTITY_COLUMN),
+            "1",
+            "AND TONIGHT'S COPY IS IN IT, at one copy. This is the assertion the operator "
+            "would make: the card is in the box, it is not listed, and the file this press "
+            "writes has to carry it",
+        )
+        checks.equal(
+            Store().read().inventory.listing_for(DUNSPARCE_SKU).pushed,
+            3,
+            "and the claim GROWS to three — the two from backstock plus this one. A fix that "
+            "freed the copy by forgetting the earlier push would read as two here, and would "
+            "be D59's stuck-`pushed` correction undone rather than this defect fixed",
+        )
+
+
 def check_listing_commands(checks: Checks) -> None:
     """`emit`, `reconcile` and `join` moving SKU QUANTITIES rather than card states (D7).
 
@@ -22851,6 +23009,7 @@ def run() -> Result:
     check_printed_code_profiles(checks)
     check_cli_refusals(checks)
     check_listing_commands(checks)
+    check_committed_copies_are_the_oldest(checks)
     check_order_resolver(checks)
     check_order_ledger(checks)
     check_order_screen(checks)
