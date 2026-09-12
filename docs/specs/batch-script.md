@@ -227,6 +227,22 @@ An answer is reused when position and photo hash still match. Position is the id
 photo hash is the staleness check, and it is what makes a re-shot photo get re-read instead
 of silently returning the answer to a picture that no longer exists.
 
+**Which is why the press hashes before it decodes** (D-hash-before-decode, 2026-09-12). The
+reuse test above needs the sha256 of the bytes on disk and nothing else, so `identify` hashes
+every photograph, asks the store what it already owns, refuses what has no prompt, and only
+then crops and downscales what is actually being sent. Until that reorder it prepared the
+whole directory first and consulted the cache afterwards — measured on box 4's own 678 JPEGs
+at `--crop --max-edge 1200`: **0.687 ms to hash against 114.96 ms to crop and prepare**, so
+the decode was 167x the cost of the question it was not an input to. One dry-run leg of that
+directory went from 79 s to 24 s and submitted the same 214 cards.
+
+**`Item.stage` is what keeps §4.1's roster honest across it.** `prepared is None` used to
+mean both *unreadable* and *nothing to send*, which were the same set while everything was
+prepared; a cache hit is unprepared now too, so the four figures the preflight prints —
+cache hits, to send, unreadable, refused — read a named stage rather than the absence of
+bytes. The run payload's `photo_sha256` reads it too, because `cli/resolve.py` treats a
+record without a digest as one D36's realign cannot re-bind.
+
 **The prompt fingerprint is recorded, not enforced.** It is deliberately not part of the
 reuse test — see the `Prompt changed` row below and the rationale under the table. (This
 paragraph previously said an answer was reused "only if position, photo hash, and prompt
