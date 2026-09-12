@@ -340,6 +340,7 @@ export function ValueBands({ end, onEnd, onLeave }: {
   const [box, setBox] = useState<number | null>(null)
   const [shown, setShown] = useState(PAGE)
   const [openGaps, setOpenGaps] = useState(false)
+  const [gapsShown, setGapsShown] = useState(PAGE)
   const live = useRef(true)
 
   const read = useCallback(async () => {
@@ -363,6 +364,7 @@ export function ValueBands({ end, onEnd, onLeave }: {
   /* THE PAGE RESETS WHEN THE BAND MOVES. `shown` counts into a list that has just been replaced,
      so carrying it over draws 400 rows of a 12-row band's successor without anybody asking. */
   useEffect(() => setShown(PAGE), [end, cut, price, view, box])
+  useEffect(() => setGapsShown(PAGE), [box])
 
   const pool = useMemo(() => (table === null ? [] : ordered(table, end, box)), [table, end, box])
   const rows = useMemo(
@@ -372,6 +374,12 @@ export function ValueBands({ end, onEnd, onLeave }: {
   const stack = useMemo(() => stacks(pool), [pool])
   const reach = useMemo(() => pulls(rows), [rows])
   const worth = useMemo(() => rows.reduce((sum, row) => sum + (num(row.market) ?? 0), 0), [rows])
+  /* EVERY ON-HAND CARD THIS SCREEN CANNOT RANK, in the order the server sent them. Scoped with
+     the band, so a drawer's own unread cards are what its panel lists. */
+  const gapRows = useMemo(
+    () => (table === null ? [] : table.copies.filter((row) => row.market === null && (box === null || row.box === box))),
+    [table, box],
+  )
 
   /* EVERY BAND'S COUNT IS ON ITS OWN CHIP, so the default hides nothing — the operator can see
      that the cheap end holds 1,042 cards without pressing anything. */
@@ -651,9 +659,8 @@ export function ValueBands({ end, onEnd, onLeave }: {
               </ul>
               {!openGaps ? null : (
                 <div className="value-gap-rows">
-                  {table.copies
-                    .filter((row) => row.market === null && (box === null || row.box === box))
-                    .slice(0, PAGE)
+                  {gapRows
+                    .slice(0, gapsShown)
                     .map((row) => (
                       /* THE MONEY TRACK IS NOT DRAWN IN THIS SECTION. An empty money cell in a
                          column of dollar figures reads as zero, which is the confusion the whole
@@ -665,6 +672,19 @@ export function ValueBands({ end, onEnd, onLeave }: {
                         <span className="value-gap-name">{row.name ?? 'Nobody has named this one'}</span>
                       </a>
                     ))}
+                  {/* A PANEL WHOSE WHOLE SUBJECT IS NOT DROPPING ANYTHING MAY NOT DROP ANYTHING
+                      QUIETLY. It paged at 200 with no line saying so, which on the owner's 390
+                      is 190 cards silently missing from the one place they are accounted for. */}
+                  {gapRows.length > gapsShown ? (
+                    <div className="value-more">
+                      <Button onClick={() => setGapsShown((seen) => seen + PAGE)}>
+                        {`Show ${whole(Math.min(PAGE, gapRows.length - gapsShown))} more`}
+                      </Button>
+                      <span className="value-more-says">
+                        {`${whole(gapsShown)} of ${whole(gapRows.length)} shown`}
+                      </span>
+                    </div>
+                  ) : null}
                 </div>
               )}
             </section>

@@ -373,6 +373,29 @@ test('an empty band names the extreme it could not reach', async ({ page }) => {
   await expect(page.locator('.bn-empty-body')).toContainText('Last Rites at $47.57')
 })
 
+test('the unrankable list pages, and says how much of it is on screen', async ({ page }) => {
+  /* THE ONE PANEL ON THIS SCREEN THAT MAY NOT DROP ANYTHING QUIETLY. It paged at 200 with no
+     line saying so, which on the owner's 390 unrankable cards is 190 silently missing from the
+     one place they are accounted for — inside the feature built to stop exactly that. */
+  const gaps = Array.from({ length: 260 }, (_, at) =>
+    copy({ index: at + 2, sku: null, name: null, market: null, why: 'read_nothing', source: null, read_at: null }),
+  )
+  await open(
+    page,
+    table({
+      copies: [copy(), ...gaps],
+      boxes: [drawer({ cards: 261, valued: 1, unpriced: 260, at_or_over: 1 })],
+      unrankable: { total: 260, never_identified: 0, read_nothing: 260, no_reading: 0, by_box: { '4': 260 } },
+      totals: { cards: 261, valued: 1, value: '47.57' },
+    }),
+  )
+  await page.getByRole('button', { name: 'Show them' }).click()
+  await expect(page.locator('.value-gap-row')).toHaveCount(200)
+  await expect(page.locator('.value-gaps .value-more-says')).toHaveText('200 of 260 shown')
+  await page.locator('.value-gaps').getByRole('button', { name: 'Show 60 more' }).click()
+  await expect(page.locator('.value-gap-row')).toHaveCount(260)
+})
+
 test('a store with nothing in a box says so and offers the camera', async ({ page }) => {
   await open(page, table())
   await expect(page.locator('.bn-empty-title')).toContainText('Nothing is in a box yet')
