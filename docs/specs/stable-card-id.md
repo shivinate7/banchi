@@ -172,6 +172,15 @@ has always taken. **No precedence is changed and `FROM_SIDECAR` still means what
 OBJECT**: the readable address exists, on demand, as a rendering — and is thrown away, like
 every rendering, rather than stored where a write has to keep it true.
 
+**MEASURED AGAINST A FULLY RELOCATED COPY OF THE OWNER'S STORE, because if this is wrong the
+whole pipeline is wrong after the move and nothing else in the suite would say so.** Box 3, 887
+cards: the view builds in **0.75 s** as 1,774 entries — a symlinked photograph and a
+materialized sidecar each — and `identify.sidecar.scan` reads **887 captures in 0.16 s, all 887
+from `FROM_SIDECAR`, 0 problems**, in ascending index order, with every photograph resolving
+through its link. A ticked selection of 8 returns exactly the 8 indices asked for. The claims
+travel: the first capture reads back `box=3 index=1 game=riftbound`. **Nothing in `identify/`
+changed for any of it.**
+
 ### 0.5 · The relocation: resumable, and verified per card rather than trusted
 
 **4.45 GB of photographs that cannot be re-taken move exactly once, and every single file is
