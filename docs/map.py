@@ -2256,7 +2256,7 @@ COMPONENTS = [
                                 # Appended, in the pre-claim place claim-ids.py's own docstring
                                 # names — the merge resorts it into numeric order once the slug
                                 # below becomes a number.
-                                "D-a-slug-does-not-need-a-shared-line"],
+                                "D181"],
             },
             "claim-ids.py": {
                 "does": "allocate the numbers this branch's SLUG ids will take, and "

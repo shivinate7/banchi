@@ -2251,6 +2251,7 @@ D176 The primary checkout syncs itself, both parts, because the thing D42 was pr
 D177 The corpus answers for listings no camera here ever saw, so a prune is a list the operator presses and never a rule a join runs
 D178 A document may name what it would create, and the marking expires by itself
 D179 Five shell commands are refused by resolving what they would do, not by matching what they say, and each clause carries its own escape hatch
+D181 An unclaimed slug is not required in the shared index it will replace itself out of
 ```
 
 **THE GAP THIS LIST CARRIED BETWEEN D116 AND D118 IS CLOSED, AND IT CLOSED THE WAY IT SAID IT
