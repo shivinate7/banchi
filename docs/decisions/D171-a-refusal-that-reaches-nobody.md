@@ -1,4 +1,4 @@
-## D-a-refusal-that-reaches-nobody — A refusal that reaches nobody did not happen, and a status line the session wrote is not a reading
+## D171 — A refusal that reaches nobody did not happen, and a status line the session wrote is not a reading
 
 **The owner, after the second instance in one session:** *"I'd rather it be mechanical, not a
 rule lol."*

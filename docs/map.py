@@ -1753,7 +1753,7 @@ COMPONENTS = [
                 # `make merge` or `git fetch origin main:main` hides that hook's refusal.
                 # D18 keeps its self-test off the commit path.
                 "governed_by": ["D18", "D42", "D127", "D133",
-                                "D-a-refusal-that-reaches-nobody"],
+                                "D171"],
             },
             "silent-write-selftest.sh": {
                 "does": "proves silent-write-guard.py by violating it. IT REPRODUCES THE "
@@ -1769,7 +1769,7 @@ COMPONENTS = [
                         "the two survivors are the JSON try/except and the bottom-of-file "
                         "floor, which cover each other, and a twenty-first arm removing BOTH "
                         "goes red, which is what makes them depth rather than a gap.",
-                "governed_by": ["D18", "D127", "D-a-refusal-that-reaches-nobody"],
+                "governed_by": ["D18", "D127", "D171"],
             },
             "coordinator.py": {
                 "does": "`make coordinator` — the merge queue READ rather than remembered, so "
@@ -1790,7 +1790,7 @@ COMPONENTS = [
                 # all; D111 is where the liveness oracle and its argument come from; D141 is
                 # the path-gating that makes a count floor unusable.
                 "governed_by": ["D42", "D43", "D111", "D135", "D140", "D141",
-                                "D-a-refusal-that-reaches-nobody"],
+                                "D171"],
             },
             "session-teardown.sh": {
                 "does": "the SessionEnd / WorktreeRemove hook. Stops what a leaving session "
