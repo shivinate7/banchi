@@ -741,7 +741,14 @@ sentence**, and see "the census" below for what enforces that.
                               which can never be priced. The EXPORT still carries them, because
                               `reconcile --live` reads a zero quantity to see a SKU sell out.
                               THE SHEET THAT MAKES ONE IS HERE TOO (D105), off the header —
-                              read an export, write a worklist, price it without changing screen
+                              read an export, write a worklist, price it without changing screen.
+                              THE DEFAULT LANDING IS EVERY UNSENT COPY IN THE STORE
+                              (D156): a run is open while it owes an answer
+                              OR holds a copy TCGplayer does not, the chip says how many, and
+                              every row's figure is re-derived against the live store rather
+                              than read off the join's table — 381 copies across five runs
+                              were closed away under the old rule. What no press here can send
+                              is named on the deck with a door each.
 #/orders       Orders         which copies this buyer gets and where they are, ranked by how
                               many of them sit in one box, pulled one copy at a time
 #/shipping     Shipping       which envelope an order goes in, out of TCGplayer's own shipping
@@ -1278,6 +1285,15 @@ A screen is not finished because it compiles.
   that sit at `pushed: 6` in the store today. One merged emit wrote 1 file, 437 copies and
   **none**. **A merged file can never be a concatenation of the per-run CSVs.**
 
+  **AND THE SCREEN THAT DRIVES IT NOW AGREES WITH IT** (D156, 2026-09-11).
+  `GET /pipeline/pricing` used to merge rows off each run's `pricing.json` — a table `join`
+  writes BEFORE the emit and `emit` never touches — so a run re-opened after a capped send
+  drew `4 of 7` for a card the press had already spent four of, and a run that owed nothing
+  closed with its held-back copies unreachable from any screen. The route runs
+  `cli/resolve.py`'s own arithmetic over the live store now, keeps a run open while it holds
+  an unsent copy, and the default landing is every such copy anywhere: the operator's *"no
+  intuitive way currently to push more quantity"*, answered by one press over the whole lot.
+
 - **There is no automatic sectioning, and `CARDS_PER_SECTION` NO LONGER EXISTS** (D10,
   amended 2026-08-29 by the owner). A box's sections are the dividers somebody put in it and
   nothing else: an undeclared box renders as ONE section, `card` is the index, and
@@ -1737,6 +1753,7 @@ D152 Every row in the collapsed rail draws one glyph on one spine, and a rule th
 D153 The restore asks which drawer, not which number, and the picker stops drawing a number nobody reads
 D154 The camera's automatic functions are inputs to the trigger's arithmetic, and the ones that step are locked
 D155 The section is the ruler and the box is the margin note, and the bracket between them is deleted
+D156 Every copy TCGplayer does not hold is one worklist, and a run stays open until the last of them has gone
 D-the-rig-refuses-to-serve-a-branch The refusal goes where the damage is, so the primary checkout's server will not run a branch's code, and the checkout itself is left alone
 
 ```

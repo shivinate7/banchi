@@ -429,6 +429,9 @@ export function Home() {
 
   /* Pricing: the runs the worklist says still owe an answer — `owes` is emit's own reason. */
   const runsToPrice = pricing.state === 'ready' ? pricing.value.roster.filter((r) => r.open && r.owes.length > 0).length : null
+  /* And the copies every joined run still holds that TCGplayer does not (D156)
+     — the same `unsent` the picker draws per run, summed, so this note and that chip agree. */
+  const unsentCopies = pricing.state === 'ready' ? pricing.value.roster.reduce((n, r) => n + (r.unsent ?? 0), 0) : null
 
   /* THE STANDING LINE. The policy is `standing.ts`; this only hands it the readings and
      keeps the three non-values apart, which is the whole of what that module needs to obey
@@ -476,7 +479,16 @@ export function Home() {
       icon: 'tag',
       label: 'Pricing',
       figure: runsToPrice === null ? '—' : String(runsToPrice),
-      note: runsToPrice === null ? (pricing.state === 'failed' ? 'worklist not read' : 'reading the worklist…') : runsToPrice === 0 ? 'nothing to price' : `${runsToPrice === 1 ? 'run' : 'runs'} to price`,
+      note:
+        runsToPrice === null
+          ? pricing.state === 'failed'
+            ? 'worklist not read'
+            : 'reading the worklist…'
+          : runsToPrice === 0
+            ? unsentCopies !== null && unsentCopies > 0
+              ? `nothing to price · ${plural(unsentCopies, 'copy', 'copies')} unsent`
+              : 'nothing to price'
+            : `${runsToPrice === 1 ? 'run' : 'runs'} to price`,
       tone: runsToPrice ? 'warn' : runsToPrice === 0 ? 'ok' : undefined,
     },
     {

@@ -12583,6 +12583,131 @@ def check_merged_emit_uncapped(checks: Checks) -> None:
         )
 
 
+def check_unsent_copies_worklist(checks: Checks) -> None:
+    """`GET /pipeline/pricing` counts every copy TCGplayer does not hold, against the live
+    store, and keeps a run open for as long as it holds one (D156).
+
+    THE STRANDED SHAPE, REBUILT: seven copies of one card, emitted under a cap of four. The
+    run's `pricing.json` was written by the join BEFORE the emit and says `add 4`; the emit
+    then raised `pushed` to four, the run answered nothing more, and under the old rule it
+    CLOSED — off the default worklist, its chip reading "Answered", and the three copies it
+    held back reachable from no screen. On the owner's store on 2026-09-11 that was 381
+    copies across five closed runs.
+
+    WHAT IS ASSERTED IS THE FIGURE THE PRESS WILL WRITE, NOT THE TABLE'S. The route used to
+    serve `min(sum of the runs' stored add_to_quantity, positions)` — four here, off a table
+    the emit had already spent — and a second emit over the same run writes three. The two
+    now agree because the route runs `cli/resolve.py`'s own arithmetic over the store as it
+    stands; the mutation that reads the table's figure back is what this case is red under.
+    """
+    checks.note("")
+    checks.note("UNSENT COPIES — the worklist counts what the press would send, live")
+
+    with isolated_home():
+        httpd = capture_server.CaptureServer(("127.0.0.1", 0), QuietHandler)
+        port = httpd.server_address[1]
+        thread = threading.Thread(target=httpd.serve_forever, daemon=True)
+        thread.start()
+        try:
+            run_dir, _ = seam_run(checks, [(3, i, "Articuno", "161", None) for i in range(1, 8)])
+            book = corpus.Corpus.read()
+            book.sub_threshold = "floor"
+            book.write()
+
+            status, body, _ = request(port, "GET", "/pipeline/pricing")
+            before = json.loads(body)
+            row = next(r for r in before["skus"] if r["sku"] == ARTICUNO_SKU)
+            chip = next(r for r in before["roster"] if r["run"] == run_dir.directory.name)
+            checks.equal(
+                (status, row["add_to_quantity"], row["committed"], chip["unsent"], chip["open"], chip["owes"]),
+                (200, 7, 0, 7, True, ["never emitted"]),
+                "BEFORE ANY EMIT every copy is unsent: seven can go, none committed, the chip "
+                "says seven, and the run is open for the reason it always was",
+            )
+
+            command(checks, "emit", str(run_dir.directory), "--cap", "4")
+            table = json.loads(run_dir.path(runs.PRICING).read_text())
+            stored = next(r for r in table["skus"] if r["sku"] == ARTICUNO_SKU)
+            checks.equal(
+                stored["add_to_quantity"],
+                7,
+                "THE TABLE STILL SAYS SEVEN. `pricing.json` is the join's record, written before "
+                "the emit and untouched by it — which is exactly why a route reading it back "
+                "drew a figure the press had already spent",
+            )
+
+            status, body, _ = request(port, "GET", "/pipeline/pricing")
+            after = json.loads(body)
+            chip = next(r for r in after["roster"] if r["run"] == run_dir.directory.name)
+            checks.equal(
+                (chip["owes"], chip["unsent"], chip["open"]),
+                ([], 3, True),
+                "AFTER THE CAPPED EMIT the run owes nothing and is STILL OPEN, because three "
+                "copies are unsent — the third way to be open, and the one that did not exist. "
+                "`owes` is untouched so Home's 'runs to price' does not count it",
+            )
+            checks.ok(
+                run_dir.directory.name in [r["run"] for r in after["runs"]],
+                "and it is on the DEFAULT landing — no `?run=` asked for it — which is the whole "
+                "of the unsent worklist: every copy anywhere that can still go, in one list",
+            )
+            row = next(r for r in after["skus"] if r["sku"] == ARTICUNO_SKU)
+            checks.equal(
+                (row["add_to_quantity"], row["committed"], row["copies"], row["at_cap"], row["nothing_to_add"], row["claimed_add"]),
+                (3, 4, 7, False, None, 7),
+                "THE ROW IS LIVE: three can go, four are committed, seven on hand — and "
+                "`claimed_add` keeps what the table says, so `over_cap` still names a table the "
+                "press disagrees with",
+            )
+            checks.equal(
+                ((row.get("listing") or {}).get("pushed"), row["copies_out"]),
+                (4, 4),
+                "the listing block and `copies_out` are the STORE's now, not the join's — the "
+                "table's `listing` said pushed 0 for a card four copies of which had gone",
+            )
+
+            command(checks, "emit", str(run_dir.directory))
+            rows = tcgcsv.read_export(run_dir.path(runs.IMPORT_MERGED)).rows
+            written = int(
+                next(r for r in rows if r[tcgcsv.SKU_COLUMN] == ARTICUNO_SKU)[tcgcsv.QUANTITY_COLUMN]
+            )
+            checks.equal(
+                written,
+                3,
+                "AND THE PRESS WRITES THE FIGURE THE SCREEN DREW. The screen said three; an "
+                "uncapped emit over the same run sends three, which is the agreement this "
+                "route exists to keep",
+            )
+
+            status, body, _ = request(port, "GET", "/pipeline/pricing")
+            done = json.loads(body)
+            chip = next(r for r in done["roster"] if r["run"] == run_dir.directory.name)
+            checks.equal(
+                (chip["unsent"], chip["open"], [r["run"] for r in done["runs"]]),
+                (0, False, []),
+                "once every copy has gone the run closes, and the default landing is empty — "
+                "'Everything is sent' is a true sentence and not a stale one",
+            )
+
+            # WHAT NO WORKLIST CAN SEND IS NAMED, NOT LEFT OUT. A card captured and never
+            # identified, and a run identified and never joined, are both real cardboard
+            # that the list above cannot offer.
+            capture_server.do_capture(capture_payload(9))
+            bare, _ = seam_run(checks, [(9, 1, "Articuno", "161", None)], join=False)
+            status, body, _ = request(port, "GET", "/pipeline/pricing")
+            named = json.loads(body)["unreachable"]
+            checks.equal(
+                (named["captured"], [r["run"] for r in named["unjoined"]], named["reallocated"]),
+                (1, [bare.directory.name], []),
+                "the captured-and-never-identified card and the identified-and-never-joined run "
+                "are both named under `unreachable`, each a door to `#/runs` — `CLAUDE.md`: "
+                "never silently drop a card",
+            )
+        finally:
+            httpd.shutdown()
+            thread.join(timeout=5)
+
+
 def check_cap_flag_refusals(checks: Checks) -> None:
     """`--cap 0` is a sentence, not a traceback — and it is parsed before any work.
 
@@ -23013,6 +23138,7 @@ def run() -> Result:
     check_prices_adopt(checks)
     check_merged_emit_cap(checks)
     check_merged_emit_uncapped(checks)
+    check_unsent_copies_worklist(checks)
     check_cap_flag_refusals(checks)
     check_emit_send_quantity(checks)
     check_merged_cap_is_the_tightest(checks)

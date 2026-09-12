@@ -2766,14 +2766,22 @@ COMPONENTS = [
                         "rule) — measured at 142 of 146 stored labels wrong on the owner's "
                         "two joined runs. It goes through cli/resolve.py:box_views rather "
                         "than capture_server._Places because capture_server imports THIS "
-                        "module, and the file on disk is not touched.",
+                        "module, and the file on disk is not touched. GET /pipeline/pricing "
+                        "IS THE STANDING UNSENT-COPIES WORKLIST (D156): "
+                        "`_unsent_ledger` re-derives every merged row's add_to_quantity, "
+                        "committed and copies_out against the LIVE store through "
+                        "cli/resolve.py's own `_copies_out` and `_committed_keys` rather than "
+                        "off the join's table, a run is open while it owes an answer OR holds "
+                        "an unsent copy (`roster[].unsent`), a run over a reallocated drawer "
+                        "is skipped by name, and `unreachable` names what no worklist can "
+                        "send — never identified, in review, never joined, deleted box.",
                 # D1 is the two-phase split, which is why join/emit/reconcile can answer in
                 # the request and identify cannot. D9 is the decisions gate. D13 is one truth
                 # on one Mac, which is what a detached child outliving this process rests on.
                 # D32 is why --force-resubmit is deliberately not offered to a screen.
                 # D58 is the pricing route's label re-render — the stored rendering is
                 # never served, which that entry's own amendment records at this site.
-                "governed_by": ["D145", "D1", "D2", "D3", "D8", "D9", "D12", "D13", "D16", "D19",
+                "governed_by": ["D156", "D147", "D145", "D1", "D2", "D3", "D8", "D9", "D12", "D13", "D16", "D19",
                                 "D20", "D21", "D22", "D24", "D25", "D29", "D32", "D33", "D35",
                                 "D36", "D43", "D47", "D48", "D49", "D54", "D56", "D58", "D59",
                                 "D62", "D64", "D65", "D68", "D76", "D78", "D79", "D86", "D87",
@@ -3366,7 +3374,7 @@ COMPONENTS = [
                                      "correctly without one, and a reclaimed photograph (D89) "
                                      "leaves the frame rather than a broken image. Each panel "
                                      "loads on its own, so no figure waits on another.",
-                             "governed_by": ["D145", "D56", "D5", "D6", "D10", "D13", "D32", "D33", "D52", "D63", "D69", "D86", "D89", "D94", "D95", "D125"]},
+                             "governed_by": ["D156", "D145", "D56", "D5", "D6", "D10", "D13", "D32", "D33", "D52", "D63", "D69", "D86", "D89", "D94", "D95", "D125"]},
             "src/Home.css": {"does": "the home screen's look: the hero and its deck, the stage "
                                      "spine, the box and run cards. The one screen in the app "
                                      "that draws a display figure above 36px — "
@@ -3445,7 +3453,8 @@ COMPONENTS = [
             "src/types.ts": {"does": "the shapes the server speaks, in the server's own field "
                                      "names — captures, inventory, boxes, listings and the "
                                      "standing queues. Types only, it emits no JavaScript.",
-                             "governed_by": ["D142", "D145", "D3", "D4", "D6", "D7", "D8", "D9", "D10", "D11",
+                             "governed_by": ["D156", "D142", "D145",
+                                             "D3", "D4", "D6", "D7", "D8", "D9", "D10", "D11",
                                              "D16", "D20", "D21", "D22", "D23", "D24", "D26",
                                              "D28", "D29", "D30", "D32", "D33", "D34", "D36",
                                              "D37", "D39", "D45", "D46", "D48", "D49", "D52",
@@ -4392,13 +4401,18 @@ COMPONENTS = [
                                         "the screen as typed, clamped on blur to what can go, "
                                         "counted on the deck, cleared per row by Escape or for "
                                         "the send by the ship bar's chip, and SPENT by a "
-                                        "successful write.",
+                                        "successful write. THE DEFAULT LANDING IS EVERY UNSENT "
+                                        "COPY IN THE STORE (D156): the "
+                                        "picker chip counts a run's unsent copies and reads "
+                                        "`All sent` only when there are none, and the deck "
+                                        "names what no press here can send with a door each "
+                                        "(`UnreachableLine`).",
                                 # D9 is the threshold, the floor and the rule that nothing is
                                 # defaulted on the operator's behalf; D7 is why this is SKU-scoped
                                 # and never card-scoped; D28 is the list-must-not-move rule its
                                 # invariant row height exists to honour; D39 is the picker-not-a-
                                 # handoff argument; D49 is the screen.
-                                "governed_by": ["D4", "D5", "D7", "D9", "D22", "D26", "D28",
+                                "governed_by": ["D156", "D4", "D5", "D7", "D9", "D22", "D26", "D28", "D36",
                                                 "D33", "D35", "D37", "D39", "D41", "D48",
                                                 "D49", "D51", "D54", "D56", "D58", "D59",
                                                 "D62", "D78", "D79", "D85", "D86", "D89",
@@ -5375,7 +5389,7 @@ COMPONENTS = [
                                               "seventy-one cases measuring the uncropped "
                                               "fallback. Named by `app/tests/shell.ts`'s seal; "
                                               "all seventy-one pass against the cropped render.",
-                                      "governed_by": ["D8", "D9", "D20", "D28", "D33", "D48", "D49", "D51", "D54", "D56", "D57", "D58", "D59", "D62", "D68", "D78", "D79", "D85", "D86", "D98", "D99", "D115", "D117"]},
+                                      "governed_by": ["D156", "D8", "D9", "D20", "D28", "D33", "D48", "D49", "D51", "D54", "D56", "D57", "D58", "D59", "D62", "D68", "D78", "D79", "D85", "D86", "D98", "D99", "D115", "D117"]},
             "tests/live-reconcile.spec.ts": {
                 "does": "the store-wide reconcile in a browser (D87): that it is reachable from "
                         "#/runs at all, that the preview asks for no write, and that the settle "
