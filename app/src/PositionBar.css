@@ -1,17 +1,35 @@
-/* The position lens — how far into its box a card sits, at two densities.
-   `.position-bar-owner` and `.position-bar-fulfiller` change the sizes and nothing else. */
+/* The position bar — how far into its box a card sits, at two scales.
+   `.position-bar-owner` and `.position-bar-fulfiller` change the sizes and nothing else, and
+   `[data-depth]` is what says the section ruler is drawn. */
 
 .position-bar {
-  --pb-track: 12px;
-  --pb-section: 8px;
+  --pb-track: 12px;            /* the box strip */
+  --pb-rule: 26px;             /* the section ruler */
   --pb-marker: 2px;
   --pb-gap: 3px;
+  /* PINNED LINE BOXES, AND THE UNITS ARE LOAD-BEARING. The component's height is arithmetic
+     rather than a function of font metrics, which is what lets every state land on the same
+     number; a unitless value here silently kills both the `line-height` and any `calc` that
+     reads it. They are applied under `.position-bar-owner` and never on the base text rule,
+     which would drop the Fulfiller's 20px caption into a 14px line box. */
+  --pb-cap-box: 14px;
+  --pb-cap-sect: 16px;
+  /* WHAT THE TWO MARKS RING THEMSELVES IN. A local name because the answer depends on what the
+     mark is standing on: the copies list paints the row the walk is on in `--bn-surface-2`, so
+     a halo hard-coded to `--bn-surface` was the wrong colour on the one row the owner is
+     looking at. `CardLocations.css` overrides it there. */
+  --pb-knockout: var(--bn-surface);
   display: flex;
   flex-direction: column;
   gap: var(--pb-gap);
   min-width: 0;
   width: 100%;
 }
+
+/* THE BOX IS THE MARGIN NOTE WHERE THE RULER EXISTS. 12px is the standalone bar's strip; 8px is
+   what it is demoted to once the section ruler is above it, which is the whole of the priority
+   the owner asked to flip. The demotion is paid only where the ruler is there to justify it. */
+.position-bar-owner[data-depth] { --pb-track: 8px; }
 
 /* ---- the box track ---- */
 .position-bar-track {
@@ -29,8 +47,11 @@
   flex-shrink: 1;
   min-width: 3px;
   height: 100%;
-  border-radius: 4px;
+  border-radius: var(--bn-r-xs);
   background: var(--bn-surface-2);
+  /* THE RING STAYS, AND AT 8px IT IS THE ONLY THING HOLDING THE STRIP UP. `.is-current` in the
+     copies list grounds the row in `--bn-surface-2` too, so without this the strip vanishes
+     entirely on the one row the owner is looking at. */
   box-shadow: inset 0 0 0 1px var(--bn-line);
   transition: background-color var(--bn-t) var(--bn-ease), box-shadow var(--bn-t) var(--bn-ease);
 }
@@ -41,6 +62,9 @@
   box-shadow: inset 0 0 0 1px var(--bn-accent-tint-2);
 }
 
+/* A box the server could not size: one object rather than an empty row. */
+.position-bar-segment-blank { flex: 1; }
+
 /* The card. Accent, because it is the one thing on the drawing that is "you are here". `left`
    is set inline from the server's own fraction; translateX(-50%) centres the mark on it. */
 .position-bar-marker {
@@ -50,7 +74,7 @@
   width: var(--pb-marker);
   border-radius: 2px;
   background: var(--bn-accent);
-  box-shadow: 0 0 0 2px var(--bn-surface);
+  box-shadow: 0 0 0 2px var(--pb-knockout);
   transform: translateX(-50%);
   /* `translate` beside `transform`, never inside it — the individual property composes with the
      centring above instead of replacing it, which is the same seam `base.css`'s press floor
@@ -70,9 +94,11 @@
   height: 7px;
   border-radius: 50%;
   background: var(--bn-accent);
-  box-shadow: 0 0 0 2px var(--bn-surface);
+  box-shadow: 0 0 0 2px var(--pb-knockout);
   transform: translateX(-50%);
 }
+/* A 7px head on an 8px strip IS the strip, so the demoted box mark is a plain tick. */
+.position-bar-owner[data-depth] .position-bar-marker::after { display: none; }
 
 /* ---- captions ---- */
 .position-bar-text {
@@ -85,32 +111,139 @@
   text-overflow: ellipsis;
   min-width: 0;
 }
-/* The box caption sits above its track, right-aligned; the section caption below its own. */
+/* The box caption sits above its track, right-aligned; the section caption above its own. */
 .position-bar > .position-bar-text-box { order: -1; align-self: flex-end; max-width: 100%; }
 
-/* ---- the second scale: the section, zoomed ---- */
+/* ---- the second scale: the section, as a ruler --------------------------------------------
+   THE SECTION IS THE SUBJECT AND THE BOX IS THE CONTEXT. Four bands, and the visual order is
+   produced entirely by `order`: the section caption, the ruler, the box strip, the box caption.
+   DOM ORDER IS NOT TOUCHED, because `inventory.spec.ts` reads the box track with
+   `querySelector('.position-bar-track')` and the ruler carries that class too — document order
+   is the only thing that makes that selector return the strip. An inversion done by reordering
+   the JSX would silently measure the wrong element. */
 .position-bar-zoom {
   display: flex;
   flex-direction: column;
   gap: var(--pb-gap);
   min-width: 0;
 }
-.position-bar-lens {
-  display: block;
-  width: 100%;
-  height: 10px;
-  margin: 2px 0 0;
-  overflow: visible;
+.position-bar.position-bar-owner[data-depth] > .position-bar-zoom { order: 0; }
+.position-bar.position-bar-owner[data-depth] > .position-bar-track { order: 1; }
+.position-bar.position-bar-owner[data-depth] > .position-bar-text-box {
+  order: 2;
+  align-self: flex-end;
 }
-.position-bar-lens polygon { fill: var(--bn-accent-tint); }
-.position-bar-lens line { stroke: var(--bn-accent); stroke-opacity: 0.45; stroke-width: 1; vector-effect: non-scaling-stroke; }
+.position-bar-owner[data-depth] .position-bar-zoom > .position-bar-text-section { order: -1; }
+
+/* The ruler itself. No `overflow: hidden` — the pin overhangs it top and bottom on purpose, and
+   every child is absolutely positioned so none of them can reach the layout. */
 .position-bar-track.position-bar-sectiontrack {
-  height: var(--pb-section);
-  border-radius: 4px;
-  background: var(--bn-accent-tint);
-  box-shadow: inset 0 0 0 1px var(--bn-accent-tint-2);
+  height: var(--pb-rule);
+  border-radius: var(--bn-r-sm);
+  background: var(--bn-surface-2);
+  box-shadow: inset 0 0 0 1px var(--bn-line);
 }
 .position-bar-sectiontrack .position-bar-marker::after { display: none; }
+
+/* The cards counted past to reach this one. The pin is the boundary, so the left edge is hard
+   and the card's own cell is never filled. */
+.position-bar-fill {
+  position: absolute;
+  inset: 0 auto 0 0;
+  background: var(--bn-accent-tint-2);
+  border-radius: var(--bn-r-sm) 0 0 var(--bn-r-sm);
+  transition:
+    width var(--bn-t-slow) var(--bn-ease),
+    opacity var(--bn-t-slow) var(--bn-ease);
+}
+
+/* The graduations. MAJORS ARE LISTED FIRST: in `background-image: a, b` the first layer paints
+   on top, and every major sits at a multiple of the minor pitch, so a minors-first list
+   overpaints every one of them. `--pb-marks` is set inline as `of / graduationStep(of)`, and a
+   percentage in a 90deg gradient resolves against this box's width, so the pitch is exactly
+   `step` cards wide even where that division is fractional. */
+.position-bar-rule {
+  position: absolute;
+  inset: 0 2px;
+  pointer-events: none;
+  background-image:
+    repeating-linear-gradient(
+      90deg,
+      transparent 0,
+      transparent calc(500% / var(--pb-marks) - 1px),
+      var(--bn-line-strong) calc(500% / var(--pb-marks) - 1px),
+      var(--bn-line-strong) calc(500% / var(--pb-marks))
+    ),
+    repeating-linear-gradient(
+      90deg,
+      transparent 0,
+      transparent calc(100% / var(--pb-marks) - 1px),
+      var(--bn-line) calc(100% / var(--pb-marks) - 1px),
+      var(--bn-line) calc(100% / var(--pb-marks))
+    );
+}
+
+/* The section's own run, in BOX cards, written inside the ruler's two ends. This is the one
+   statement the deleted trapezoid was reaching for — how much of the box this slice is — said
+   as a number the reader checks against the box caption rather than as a shape they trust.
+
+   THE PIN EATS THE NEAR LABEL WHEN THE CARD IS AT THE FRONT OR BACK OF ITS SECTION, and that
+   is accepted rather than fixed. Measured at 390 in light, card 4 of an 80-card section on a
+   440px ruler: the pin's 2px knockout took most of the `1`. The pin is at a PERCENTAGE and the
+   label at a fixed 6px, so no CSS can compare them and any threshold in the component would be
+   a proxy for a pixel fact — over-eager at 580px, where it would blank the label for the first
+   19 cards of a 400-card section. The occlusion is self-limiting and lands where the number is
+   redundant: the caption directly above already says `card 4 of 80` and the fill is visibly
+   empty, so the reader knows they are at the near bound. Raising the labels over the pin was
+   refused — the pin is 3px and the digits are 6 to 18px, so the label would hide "you are
+   here" outright. */
+.position-bar-edge {
+  position: absolute;
+  top: 50%;
+  translate: 0 -50%;
+  font-size: var(--bn-fs-2xs);
+  font-variant-numeric: tabular-nums;
+  line-height: 1;
+  color: var(--bn-ink-2);
+  opacity: 0.75;
+  pointer-events: none;
+}
+.position-bar-edge-start { left: 6px; }
+.position-bar-edge-end { right: 6px; }
+
+/* The pin: a 30px capsule crossing a 26px ruler, so it reads as one object through the scale
+   rather than as a dot sitting on it. */
+.position-bar-sectiontrack .position-bar-marker {
+  width: 3px;
+  border-radius: var(--bn-r-full);
+}
+
+/* WHAT REPLACES THE BRACKET, AND IT IS PLACED BY THE LAYOUT RATHER THAN BY ARITHMETIC. A
+   pseudo-element on the chip itself, so the gaps, the `min-width` clamps and the sub-pixel
+   rounding are accounted for by construction — which is the deleted SVG's third defect fixed
+   for free instead of modelled a second time. 8x4px, a fixed 45° per side, identical at 390 and
+   at 1440. It is `--bn-accent` and not the tint: a 32px² triangle at 18% alpha over
+   `--bn-surface-2` is invisible. On a 3px chip it overhangs 2.5px each side, which is the
+   point — it is the finder for a chip too small to see. */
+.position-bar-owner[data-depth] .position-bar-segment { position: relative; }
+.position-bar-owner[data-depth] .position-bar-here::after {
+  content: '';
+  position: absolute;
+  left: 50%;
+  bottom: 100%;
+  translate: -50% 0;
+  border: 4px solid transparent;
+  border-bottom-color: var(--bn-accent);
+  border-top: 0;
+  /* ABOVE THE BOX MARK, WHICH IT COLLIDES WITH WHENEVER THE CARD SITS AT ITS SECTION'S
+     MIDPOINT — the caret is centred on the chip and the mark is at the card's own fraction of
+     the box, so the two land on one x more often than the arithmetic suggests. Measured at 390
+     in dark on the divided-box fixture: the mark's 2px knockout ring ate the caret's right
+     half. They overlap by 2px vertically at most, so the caret winning costs the ring and
+     nothing else, and the caret is the object that says WHICH chip. */
+  z-index: 2;
+  transition: border-color var(--bn-t) var(--bn-ease);
+}
 
 /* ---- the owner's density ---- */
 .position-bar-owner .position-bar-text {
@@ -118,13 +251,36 @@
   font-weight: 600;
   color: var(--bn-ink-3);
   letter-spacing: 0.01em;
+  line-height: var(--pb-cap-box);
 }
-.position-bar-owner .position-bar-text-box { color: var(--bn-ink-2); }
+/* Standalone, the box caption is the only sentence there is and keeps its weight. */
+.position-bar-owner:not([data-depth]) .position-bar-text-box { color: var(--bn-ink-2); }
+/* With the ruler above it, the two swap: the section caption is now the largest and darkest
+   text in the component, and the box caption right-caps the block quietly. */
+.position-bar-owner .position-bar-text-section {
+  display: flex;
+  align-items: center;
+  font-size: var(--bn-fs-sm);
+  color: var(--bn-ink-2);
+  line-height: var(--pb-cap-sect);
+}
+.position-bar-cap-head {
+  flex: 0 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+/* `pre`, so the tail's leading separator survives. A flex item strips leading white space under
+   `nowrap` — which would render `Section 6 · Rares· card 54` — and an `&nbsp;` would change the
+   text content the caption assertions read. */
+.position-bar-cap-tail {
+  flex: none;
+  white-space: pre;
+}
 
 /* ---- the Fulfiller's density: every floor in the constraints table ---- */
 .position-bar-fulfiller {
   --pb-track: 24px;
-  --pb-section: 12px;
   --pb-marker: 3px;
   --pb-gap: 6px;
 }
@@ -138,25 +294,27 @@
 
 
 /* ---- the copy has left the box (D118) -----------------------------------------------------
-   THE LENS STAYS AND THE MARK LEAVES IT. Until this, a departed copy drew no lens at all: the
-   whole block was skipped, taking 85px out of `#/inventory`'s location card on the press that
-   sold the card, collapsing the panel 98px and moving 131 elements — and taking ±98px through
-   every step of a box walk that crossed a sold copy. The row is worth keeping for a second
-   reason that has nothing to do with layout: the picture is of the BOX, and the box is still
-   there. What is no longer true is that this copy is at a number in it.
+   THE WHOLE DRAWING STAYS AND THE MARKS LEAVE IT. Until this, a departed copy drew no second
+   scale at all: the block was skipped, taking 85px out of `#/inventory`'s location card on the
+   press that sold the card, collapsing the panel 98px and moving 131 elements — and taking
+   ±98px through every step of a box walk that crossed a sold copy. The row is worth keeping for
+   a second reason that has nothing to do with layout: the picture is of the BOX, and the box is
+   still there. What is no longer true is that this copy is at a number in it.
 
-   THE MARK IS MOUNTED THROUGH THE WRITE, so this is a transition and not a keyframe: `left`
-   holds where it stood (`PositionBar.tsx`'s two refs), and opacity and `translate` carry it
-   down and out over --bn-t-slow. A deleted node cannot animate, which is what the old branch
-   did.
+   TWO THINGS ANIMATE OUT NOW, on the same mechanism: the pin drops and the fill drains. Both
+   nodes are mounted through the write — `PositionBar.tsx`'s two refs hold `left` and `width`
+   where they stood — so both are transitions and not keyframes. A deleted node cannot animate,
+   which is what the old branch did. The graduations are a `background-image` and cannot
+   transition; the ground's ring carries the change under them.
 
    REDUCED MOTION NEEDS NO ARM HERE. `base.css` crushes every transition-duration to 0.01ms, and
-   the resting state below is the truthful one — no mark, a muted section — so anyone who asked
+   the resting state below is the truthful one — no mark, a muted ruler — so anyone who asked
    for less gets the same picture without the travel. */
 .position-bar-marker[data-gone] {
   opacity: 0;
   translate: 0 8px;
 }
+.position-bar[data-gone] .position-bar-fill { opacity: 0; }
 
 /* The section it left, drawn as a place rather than as "you are here". Same geometry, so the
    row's height is identical in both states — which is the whole point. */
@@ -164,20 +322,16 @@
   background: var(--bn-surface-2);
   box-shadow: inset 0 0 0 1px var(--bn-line-strong);
 }
-.position-bar[data-gone] .position-bar-lens polygon { fill: var(--bn-surface-2); }
-.position-bar[data-gone] .position-bar-lens line { stroke: var(--bn-line-strong); stroke-opacity: 0.7; }
+.position-bar-owner[data-gone] .position-bar-here::after {
+  border-bottom-color: var(--bn-line-strong);
+}
 .position-bar[data-gone] .position-bar-sectiontrack {
-  background: var(--bn-surface-2);
   box-shadow: inset 0 0 0 1px var(--bn-line-strong);
 }
 .position-bar[data-gone] .position-bar-segment,
-.position-bar[data-gone] .position-bar-sectiontrack,
-.position-bar[data-gone] .position-bar-lens polygon,
-.position-bar[data-gone] .position-bar-lens line {
+.position-bar[data-gone] .position-bar-sectiontrack {
   transition:
     background-color var(--bn-t-slow) var(--bn-ease),
-    box-shadow var(--bn-t-slow) var(--bn-ease),
-    fill var(--bn-t-slow) var(--bn-ease),
-    stroke var(--bn-t-slow) var(--bn-ease);
+    box-shadow var(--bn-t-slow) var(--bn-ease);
 }
 .position-bar[data-gone] .position-bar-text { color: var(--bn-ink-3); }

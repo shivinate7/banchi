@@ -1269,7 +1269,18 @@ COMPONENTS = [
                         "reset, `branch -f`, `update-ref`, delete. Allows exactly one thing, "
                         "a move to a commit origin/main already carries, which is what "
                         "pulling a merged pull request looks like. PKMNSCAN_MAIN=off is the "
-                        "visible escape hatch, and every refusal prints it.",
+                        "visible escape hatch, and every refusal prints it. AND SINCE "
+                        "2026-09-12 IT ALSO REPORTS WHAT main IS CARRYING once it has moved "
+                        "(D151): at the `committed` phase it reads "
+                        "the commit refs/heads/main just landed on and prints, loudly, when "
+                        "that commit holds an unclaimed `## D-<slug>` heading. It refuses "
+                        "nothing and exits 0 whatever it finds — by then the pull request is "
+                        "merged and origin carries the slug regardless, so holding this clone "
+                        "back would repair nothing. It lives here rather than only in "
+                        "scripts/merge-pr.py for the one property no script in a checkout has: "
+                        "core.hooksPath is a single installed directory in the common .git "
+                        "dir, so every working tree of this clone runs THIS copy, and 24 of "
+                        "the 30 were behind main's merge script the day it was written.",
                 # A ref hook rather than a commit hook because the incident that produced it
                 # created no commit: a fast-forward moves a ref and runs no commit hook. D42
                 # carries that argument and the measured reason the payload's `old` column is
@@ -1277,7 +1288,8 @@ COMPONENTS = [
                 # value, so `old == new` is what a DELETION looks like. D18 governs the shape
                 # rather than the content: this file is on the path that decides whether a
                 # commit proceeds, so it reads and refuses and never writes.
-                "governed_by": ["D18", "D42"],
+                "governed_by": ["D18", "D42", "D140",
+                                "D151"],
                 "note": "THE ORPHAN RULE CANNOT SEE THIS FILE either — no suffix. It is the "
                         "case the comment above this modules block predicted by name.",
             },
@@ -1339,6 +1351,18 @@ COMPONENTS = [
                         "or a deadline. It asked `gh pr checks <n>` until then, which answers "
                         "about a pull request out of the PREVIOUS head's runs and exited 0 at "
                         "once — two live merges went out unwatched on 2026-09-11. "
+                        "IT IS BRACKETED BY TWO GUARDS OVER ITSELF since 2026-09-12 "
+                        "(D151), because `make merge` runs the "
+                        "copy of THIS FILE belonging to whatever checkout invoked it: 24 of "
+                        "this clone's 30 working trees were behind main's copy that day, 16 "
+                        "of them missing the claim entirely, and such a copy merges, moves "
+                        "main and reports success with the claim simply not performed. "
+                        "`surface_half` refuses before anything is pressed when this "
+                        "checkout is BEHIND — never when it merely DIFFERS, which is the "
+                        "branch that is developing the merge — over a surface derived from "
+                        "this file's own `scripts/*.py` constants. `landed_half` then reads "
+                        "what main landed with and makes it the exit status. No escape hatch, "
+                        "deliberately: the fix is one `git merge origin/main`. "
                         "THEN IT DELETES THE HEAD BRANCH, since 2026-09-05: on origin "
                         "unconditionally, and in this clone only when no worktree holds it and "
                         "it is an ancestor of main. Before that it deleted neither, and 125 "
@@ -1348,7 +1372,8 @@ COMPONENTS = [
                 # act is behind a flag rather than a default. D33 is the instrument the two-step
                 # is borrowed from, one register down from a route that can spend money.
                 "governed_by": ["D18", "D33", "D42", "D72", "D111", "D136", "D140",
-                                "D141", "D143", "D148"],
+                                "D141", "D143", "D148",
+                                "D151"],
                 "note": "IT NEVER SETS PKMNSCAN_MAIN AND NO REFUSAL IT PRINTS SUGGESTS IT. D42 "
                         "is explicit that a session reaching for that variable has left the "
                         "amendment behind; this needs no hatch because allow rule 3 already "
@@ -1368,12 +1393,20 @@ COMPONENTS = [
             },
             "merge-selftest.sh": {
                 "does": "merge-pr.py's local half, against an origin, a clone and a linked "
-                        "worktree built and destroyed for the run. Seventeen cases: both forms "
-                        "of the move, a dirty main worktree, a commit origin does not carry, an "
-                        "unknown rev, a bare invocation — and the footgun, main checked out "
-                        "nowhere while another tree sits on a branch that is BEHIND its "
-                        "upstream.",
-                "governed_by": ["D18", "D42"],
+                        "worktree built and destroyed for the run. Thirty-eight assertions: "
+                        "both forms of the move, a dirty main worktree, a commit origin does "
+                        "not carry, an unknown rev, a bare invocation — and the footgun, main "
+                        "checked out nowhere while another tree sits on a branch that is "
+                        "BEHIND its upstream. NINE OF THEM ARE THE STALE CHECKOUT, since "
+                        "2026-09-12 (D151), built as one "
+                        "progression rather than six repositories because the arms that "
+                        "matter are the ones that must NOT fire: main moves on something "
+                        "unrelated (allowed), main takes a capability in the merge (refused, "
+                        "naming the file, both blobs and the commit), the branch merges main "
+                        "(allowed), the branch EDITS the merge itself (allowed — the pull "
+                        "request that wrote this), and main moves under it again (refused, "
+                        "naming the derived second file).",
+                "governed_by": ["D18", "D42", "D151"],
                 "note": "THE FOOTGUN CASE WAS GREEN FOR THE WRONG REASON WHEN IT WAS FIRST "
                         "WRITTEN, and the fixture carries the repair in a comment. The other "
                         "tree sat on a branch already at the commit a wrong pull would have "
@@ -1449,13 +1482,23 @@ COMPONENTS = [
                         "exits 0 whichever way it decides, so an `expect allow` case would "
                         "pass on a hook that printed nothing at all. `main` is a real local "
                         "branch in the two worktree cases, so their silence can only come "
-                        "from the primary/linked test rather than from the gate beside it.",
+                        "from the primary/linked test rather than from the gate beside it. "
+                        "AND SIX MORE OVER THE UNCLAIMED-ID REPORT since 2026-09-12 "
+                        "(D151): a fixture main is moved onto a "
+                        "slugged commit and the report is asserted by its marker, by the id "
+                        "it names, by firing ONCE, and by main having moved anyway — it "
+                        "refuses nothing, so exit status says nothing about it. The case that "
+                        "proves it reads `refs/heads/main` and not every line of the payload "
+                        "uses `update-ref --stdin`, because a fetch with two refspecs issues "
+                        "ONE TRANSACTION PER REF on this machine — measured, rather than "
+                        "assumed, when the arm came back vacuous.",
                 # D18 is why it is in `make check` and never in the git hook: it writes. It has
                 # a second reason the audit's self-test does not — it exercises the guard by
                 # violating it, so wired into the commit path it would refuse its own commits.
                 # D43 and D53 join with D139: the cases turn on a linked worktree having its own
                 # store, and on the primary checkout being the one the live server is built from.
-                "governed_by": ["D18", "D42", "D43", "D53", "D139"],
+                "governed_by": ["D18", "D42", "D43", "D53", "D139",
+                                "D151"],
             },
             "lan-check.py": {
                 "does": "answers whether the owner's LAN URL still works, end to end and from "
@@ -1783,21 +1826,29 @@ COMPONENTS = [
                         "never repairs: an un-claim has to happen before a merge and never "
                         "after, or the substitution reaches main's own copy. That half writes "
                         "nothing, so it IS in `make check` and `make ci-check` as "
-                        "`make claim-stale`, and `make merge` asks for it before every merge.",
+                        "`make claim-stale`, and `make merge` asks for it before every merge. "
+                        "AND A THIRD, SINCE 2026-09-12: `--landed <rev>` reports every "
+                        "unclaimed id a COMMIT carries and exits 3. Every other reader here "
+                        "asks about a checkout; the invariant the whole design rests on — "
+                        "main carries no slug — is a claim about main's own trees, and it "
+                        "failed twice with nothing asking that question "
+                        "(D151). It reports and never repairs, "
+                        "for `--stale`'s reason turned around: a substitution made after the "
+                        "merge reaches main's own copy of the entry.",
                 # D72 IS THE FAILURE THIS REPLACES and D16 the rule its audit rows answer to.
                 # D80 is cited for the allocator's direction — the culled step 12 is why this
                 # is max+1 rather than lowest-free — and D47/D135 for the symlink the walk
                 # skips, `AGENTS.md` being the same file as `CLAUDE.md` under another name.
                 # D18 is why it is not in `make check`: it writes.
                 "governed_by": ["D16", "D18", "D42", "D47", "D72", "D80", "D135",
-                                "D140"],
+                                "D140", "D151"],
             },
             "claim-selftest.py": {
                 "does": "scripts/claim-ids.py proved against a throwaway repository in which "
                         "MAIN MOVES underneath the branch — the only condition that can tell "
                         "an allocation against the ref from one against the branch's own "
                         "copy, and therefore the only one worth building a repository for. "
-                        "SIXTY-SEVEN arms, twenty-six of them mutation-tested — fourteen "
+                        "SEVENTY-SIX arms, twenty-nine of them mutation-tested — fourteen "
                         "arms and seven mutants cover the staleness half (D140, amended "
                         "2026-09-11), where a branch claims honestly and main takes the "
                         "number underneath it, and twenty-five arms and six mutants cover the "
@@ -1822,7 +1873,8 @@ COMPONENTS = [
                 # survive are in the prose that explains why. The superset rule reads a citation
                 # literally, which is the trade docs-audit.py's own entry records.
                 "governed_by": ["D1", "D2", "D16", "D18", "D80", "D136", "D140", "D141",
-                                "D143", "D148"],
+                                "D143", "D148",
+                                "D151"],
             },
             "docs-audit-allow.txt": {
                 "does": "paths and identifiers the docs name before they exist, one "
@@ -2009,18 +2061,26 @@ COMPONENTS = [
                 "status": "built",
             },
             "score-trace.py": {
-                "does": "`scripts/score-trace.py summary|presence|sweep|contact` — re-scores a "
+                "does": "`scripts/score-trace.py summary|presence|sweep|stalls|camera|contact` "
+                        "— re-scores a "
                         "saved motion trace offline, which is docs/specs/motion-trigger.md §4 "
                         "step 5's standing promise written down. `summary` says what the "
                         "machine did live and what today's adaptive form would do; `presence` "
                         "re-runs the card-present gate over each verdict's own pixels; `sweep` "
                         "scores the stillness thresholds across a grid over every trace at "
-                        "once; `contact` writes the verdict frames out as a labelled PNG. "
+                        "once; `stalls` prints every episode the rescue could not save with "
+                        "its brightness against the session's own fired cards, and names "
+                        "nothing; `camera` reads what the CAMERA did rather than what the "
+                        "cards did — how the frames were paced, how bright the plate is and "
+                        "therefore what ONE exposure step would cost it, and whether the "
+                        "still-frame floor is independent noise or the whole picture moving; "
+                        "`contact` writes the verdict frames out as a labelled PNG. "
                         "ITS CONSTANTS MIRROR motion.ts's DEFAULT_PARAMS and are reconciled "
                         "against them by scripts/docs-audit.py's `motion params` row, which "
                         "D84 built after finding the row had been CLAIMED in this file's own "
                         "header since D81 and never written.",
-                "governed_by": ["D18", "D19", "D81", "D84", "D130", "D131"],
+                "governed_by": ["D154", "D18", "D19", "D81", "D84",
+                                 "D130", "D131"],
                 "note": "WRITTEN BECAUSE THE SAME PASS HAD BEEN DONE BY HAND THREE TIMES AND "
                         "THE SECOND ONE GOT IT WRONG, 2026-08-31. The 2026-08-29 presence fix "
                         "derived its 'empty stand' brightness from twenty frames that were "
@@ -2673,14 +2733,22 @@ COMPONENTS = [
                         "rule) — measured at 142 of 146 stored labels wrong on the owner's "
                         "two joined runs. It goes through cli/resolve.py:box_views rather "
                         "than capture_server._Places because capture_server imports THIS "
-                        "module, and the file on disk is not touched.",
+                        "module, and the file on disk is not touched. GET /pipeline/pricing "
+                        "IS THE STANDING UNSENT-COPIES WORKLIST (D156): "
+                        "`_unsent_ledger` re-derives every merged row's add_to_quantity, "
+                        "committed and copies_out against the LIVE store through "
+                        "cli/resolve.py's own `_copies_out` and `_committed_keys` rather than "
+                        "off the join's table, a run is open while it owes an answer OR holds "
+                        "an unsent copy (`roster[].unsent`), a run over a reallocated drawer "
+                        "is skipped by name, and `unreachable` names what no worklist can "
+                        "send — never identified, in review, never joined, deleted box.",
                 # D1 is the two-phase split, which is why join/emit/reconcile can answer in
                 # the request and identify cannot. D9 is the decisions gate. D13 is one truth
                 # on one Mac, which is what a detached child outliving this process rests on.
                 # D32 is why --force-resubmit is deliberately not offered to a screen.
                 # D58 is the pricing route's label re-render — the stored rendering is
                 # never served, which that entry's own amendment records at this site.
-                "governed_by": ["D145", "D1", "D2", "D3", "D8", "D9", "D12", "D13", "D16", "D19",
+                "governed_by": ["D156", "D147", "D145", "D1", "D2", "D3", "D8", "D9", "D12", "D13", "D16", "D19",
                                 "D20", "D21", "D22", "D24", "D25", "D29", "D32", "D33", "D35",
                                 "D36", "D43", "D47", "D48", "D49", "D54", "D56", "D58", "D59",
                                 "D62", "D64", "D65", "D68", "D76", "D78", "D79", "D86", "D87",
@@ -3244,7 +3312,8 @@ COMPONENTS = [
                                     "deliberately does not wear that class, because it is never "
                                     "armed.",
                             "governed_by": ["D5", "D10", "D13", "D31", "D41", "D49", "D50", "D51", "D94",
-                                             "D95", "D110", "D117", "D118", "D134"]},
+                                             "D95", "D110", "D117", "D118", "D134",
+                                             "D152"]},
             # THE TWO `ServerReloaded` FILES ARE GONE AND THE NOTICE IS NOT (Banchi, 2026-09-03).
             # D53's rule is that the boot header is SUBSCRIBED to and never polled, and that the
             # notice demands nothing; neither needed a component of its own once the shell had a
@@ -3272,7 +3341,7 @@ COMPONENTS = [
                                      "correctly without one, and a reclaimed photograph (D89) "
                                      "leaves the frame rather than a broken image. Each panel "
                                      "loads on its own, so no figure waits on another.",
-                             "governed_by": ["D145", "D56", "D5", "D6", "D10", "D13", "D32", "D33", "D52", "D63", "D69", "D86", "D89", "D94", "D95", "D125"]},
+                             "governed_by": ["D156", "D145", "D56", "D5", "D6", "D10", "D13", "D32", "D33", "D52", "D63", "D69", "D86", "D89", "D94", "D95", "D125"]},
             "src/Home.css": {"does": "the home screen's look: the hero and its deck, the stage "
                                      "spine, the box and run cards. The one screen in the app "
                                      "that draws a display figure above 36px — "
@@ -3351,7 +3420,8 @@ COMPONENTS = [
             "src/types.ts": {"does": "the shapes the server speaks, in the server's own field "
                                      "names — captures, inventory, boxes, listings and the "
                                      "standing queues. Types only, it emits no JavaScript.",
-                             "governed_by": ["D145", "D3", "D4", "D6", "D7", "D8", "D9", "D10", "D11",
+                             "governed_by": ["D156", "D142", "D145",
+                                             "D3", "D4", "D6", "D7", "D8", "D9", "D10", "D11",
                                              "D16", "D20", "D21", "D22", "D23", "D24", "D26",
                                              "D28", "D29", "D30", "D32", "D33", "D34", "D36",
                                              "D37", "D39", "D45", "D46", "D48", "D49", "D52",
@@ -3369,9 +3439,15 @@ COMPONENTS = [
                                             "started sorting on the same fact) and the setup "
                                             "the operator last worked at — box, game, set hint, "
                                             "finish, rarity and product, ONE document because "
-                                            "it is one habit (D141) — and nothing else",
+                                            "it is one habit (D141), plus the box's own true "
+                                            "index since 2026-09-12 "
+                                            "(D153), which is a field "
+                                            "in that document rather than a seventh key and is "
+                                            "the one value here no screen draws — and nothing "
+                                            "else",
                                     "governed_by": ["D13", "D27", "D91", "D94", "D95", "D114", "D132",
-                                                    "D142"],
+                                                    "D142", "D145",
+                                                    "D153"],
                                     "note": "IT EXISTS BECAUSE OF A LINT RULE, which is the "
                                             "rule working rather than being worked around. "
                                             "`app/eslint.config.js` bans the STORE and not the "
@@ -3533,21 +3609,33 @@ COMPONENTS = [
                     "left on the old clock, and it is what that carve-out was always for. "
                     "A RESTORED BOX IS CHECKED AGAINST `GET /boxes` and falls back to NOTHING "
                     "when it has been sealed or deleted, naming the box and opening the field "
-                    "with focus in it — a number can be deleted and reallocated to another "
-                    "drawer, which nothing else on this path refuses. "
+                    "with focus in it. AND SINCE 2026-09-12 IT COMPARES THE DRAWER'S ID AND NOT "
+                    "ITS NUMBER (D153): D142 enumerated three ways a "
+                    "restore goes stale and built two, so a number deleted and reallocated to "
+                    "another physical drawer kept the restore and every photograph of that "
+                    "sitting went to an address that does not match the shelf. `bid` (D145) is "
+                    "carried on `BoxRecord` and stored at the pick; where either side has no id "
+                    "the older rule decides for a STORE that cannot answer and the setup is let "
+                    "go of for a BROWSER that cannot, which is the whole migration. "
                     "THE BOX LIST IS ORDERED BY THE HAND, not the number: `#/inventory`'s own "
                     "rail rule over the same `banchi.box-recency` store, recency then "
                     "`on_hand` then the number. `chooseBox` is the only thing here that writes "
                     "it; a capture never does, at 623 ms a card. "
                     "AND THE BOX NUMBER IS OFF THE SCREEN — `runScope.ts:captureBoxLabel` "
                     "draws the NAME, falling back to `Box 3` only where D20 left one unnamed. "
-                    "The picker keeps the number as a de-emphasised suffix because its entry "
-                    "searches on it. `Clear the setup` at the foot of the Rig panel puts all "
+                    "THE PICKER DRAWS NO NUMBER EITHER, AS OF 2026-09-12 "
+                    "(D153, the owner: *\"i shouldn't even need to "
+                    "see box. numbers here\"*): the suffix survives only on a row that is in "
+                    "the list BECAUSE its number matched what was typed, which is the one job "
+                    "D142 kept it for, spent where it applies instead of on every row always. "
+                    "Searching by number still works and the placeholder says so. "
+                    "`Clear the setup` at the foot of the Rig panel puts all "
                     "six back to nothing chosen, with a receipt carrying an undo; it touches "
                     "no route, and the camera and rotation are `useCamera.ts`'s and stay.",
             "governed_by": ["D3", "D10", "D13", "D19", "D20", "D21", "D22", "D23", "D27", "D28",
                             "D34", "D41", "D56", "D58", "D65", "D81", "D92", "D118", "D128",
-                            "D130", "D131", "D132", "D142"]},
+                            "D130", "D131", "D132", "D142", "D145", "D36",
+                            "D153"]},
             # D3 earns its place on a stylesheet: the no-claim finish chip is drawn dashed
             # because rung 1 distinguishes "no metadata recorded" from a recorded claim, and
             # that distinction is carried here in a border style rather than in any logic.
@@ -3985,11 +4073,21 @@ COMPONENTS = [
             # sentence: each takes a `persona` and renders owner-dense or Fulfiller-large from
             # ONE implementation. The alternative — a second component per screen — is what
             # docs/DESIGN.md rejected when it declined two visual worlds.
-            "src/PositionBar.tsx": {"does": "D20's sentence drawn: the box as a track, a tick per "
-                                            "divider, a marker at this card. Says '#40 of 250 · 16% "
-                                            "in' for a sealed box and '#12 of 62 so far' for an open "
-                                            "one, because an open box's denominator still moves.",
-                                    "governed_by": ["D5", "D10", "D13", "D20", "D24", "D30", "D58", "D68", "D118"]},
+            "src/PositionBar.tsx": {"does": "D20's sentence drawn, at two scales — and the SECTION is "
+                                            "the instrument. A graduated 26px ruler with a fill, a pin "
+                                            "that crosses it and the section's own bounds written "
+                                            "inside its two ends; under it an 8px strip of chips for "
+                                            "the box, with a caret on the chip this card is in. Says "
+                                            "'#40 of 250 · 16% in' for a sealed box and '#12 of 62 so "
+                                            "far' for an open one, because an open box's denominator "
+                                            "still moves. THE SVG TRAPEZOID IS DELETED "
+                                            "(D155): its two legs' slope ratio "
+                                            "carried neither a width nor a height term and its "
+                                            "arithmetic pointed at the wrong chip by up to 42px. THE "
+                                            "ZOOM BLOCK MOUNTS ON THE `sectionDepth` PROP and never on "
+                                            "whether the depth resolved, so all four owner states are "
+                                            "one DOM at one height (D118).",
+                                    "governed_by": ["D5", "D10", "D13", "D20", "D24", "D30", "D41", "D58", "D68", "D118", "D132", "D155"]},
             "src/position.ts": {"does": "the position ARITHMETIC with no component in it — `spansOf`, "
                                         "`sentenceOf`, `sectionDepthOf`, their types and the shared "
                                         "`clamp`. Split out of PositionBar.tsx 2026-09-06 so the "
@@ -4000,10 +4098,25 @@ COMPONENTS = [
                                         "together as one module rather than un-exporting the two with "
                                         "no outside caller, because where a card sits said three ways "
                                         "is one concept. Nothing here decides where a divider is; every "
-                                        "bound is a card COUNT and not a stored index (D58).",
-                                "governed_by": ["D5", "D10", "D20", "D24", "D30", "D58", "D68", "D118", "D132"]},
-            "src/PositionBar.css": {"does": "the track at two densities, and the marker",
-                                    "governed_by": ["D5", "D20", "D118"]},
+                                        "bound is a card COUNT and not a stored index (D58). Also "
+                                        "`graduationStep`, the ruler's 1-2-5 pitch ladder capped at 24 "
+                                        "teeth, and `sectionBlankSentence`, the caption for the two "
+                                        "states `sectionDepthOf` cannot answer — a record with no "
+                                        "section, and a box the server could not size. `SectionDepth` "
+                                        "hands the caption over as `head`/`tail` FIELDS, never as a "
+                                        "string to split: a section name may itself contain ` · ` "
+                                        "(D132).",
+                                "governed_by": ["D5", "D10", "D20", "D24", "D30", "D58", "D68", "D118", "D132", "D155"]},
+            "src/PositionBar.css": {"does": "the two scales at two densities: the section ruler with "
+                                            "its fill, graduations, edge labels and crossing pin, the "
+                                            "demoted box strip with the caret that replaced the "
+                                            "bracket, and both marks' knockout ring as `--pb-knockout` "
+                                            "so the row the walk stands on can answer it. The "
+                                            "inversion is CSS `order` and never a JSX reorder — "
+                                            "`.position-bar-sectiontrack` carries `.position-bar-track` "
+                                            "too, so document order is the only thing that makes the "
+                                            "spec's `querySelector` return the box strip.",
+                                    "governed_by": ["D5", "D20", "D41", "D50", "D118", "D155"]},
             "src/cardState.ts": {"does": "the card-state vocabulary and the age of a reading, with no "
                                          "component in it — `readingAgo`, `readingExact`, `stateTone`, "
                                          "`stateLabel`, and the `SOLD` / `RETIRED` words those two are "
@@ -4255,13 +4368,18 @@ COMPONENTS = [
                                         "the screen as typed, clamped on blur to what can go, "
                                         "counted on the deck, cleared per row by Escape or for "
                                         "the send by the ship bar's chip, and SPENT by a "
-                                        "successful write.",
+                                        "successful write. THE DEFAULT LANDING IS EVERY UNSENT "
+                                        "COPY IN THE STORE (D156): the "
+                                        "picker chip counts a run's unsent copies and reads "
+                                        "`All sent` only when there are none, and the deck "
+                                        "names what no press here can send with a door each "
+                                        "(`UnreachableLine`).",
                                 # D9 is the threshold, the floor and the rule that nothing is
                                 # defaulted on the operator's behalf; D7 is why this is SKU-scoped
                                 # and never card-scoped; D28 is the list-must-not-move rule its
                                 # invariant row height exists to honour; D39 is the picker-not-a-
                                 # handoff argument; D49 is the screen.
-                                "governed_by": ["D4", "D5", "D7", "D9", "D22", "D26", "D28",
+                                "governed_by": ["D156", "D4", "D5", "D7", "D9", "D22", "D26", "D28", "D36",
                                                 "D33", "D35", "D37", "D39", "D41", "D48",
                                                 "D49", "D51", "D54", "D56", "D58", "D59",
                                                 "D62", "D78", "D79", "D85", "D86", "D89",
@@ -4895,7 +5013,8 @@ COMPONENTS = [
                         "matters, which is negative — `c` stays the shutter and `b` stays "
                         "the Box field, because a literal a-z would have put Rainbow Rare on "
                         "the capture key. Run by `make design-check`.",
-                "governed_by": ["D3", "D22", "D23", "D27", "D65", "D101", "D118", "D142"],
+                "governed_by": ["D3", "D20", "D22", "D23", "D27", "D56", "D65", "D101", "D118",
+                                "D142", "D145", "D153"],
                 "note": "The shutter is never pressed, so no capture is ever taken — "
                         "motion-live.spec.ts's rule, for its reason. The `S` cases DO select a "
                         "box and stub the section route, because the act writes to one; "
@@ -5028,7 +5147,8 @@ COMPONENTS = [
                         "64px carrying no filter and no cap discs, the DISPLAY cut is what "
                         "`#/gallery` shows at 64 and above, all six locked palettes are drawn "
                         "and differ, and the mark does not invert with the theme.",
-                "governed_by": ["D94", "D102", "D134", "D136"],
+                "governed_by": ["D94", "D102", "D134", "D136",
+                                "D152"],
                 "note": "IT EXISTS BECAUSE NOTHING IN app/tests MENTIONED THE MARK AT ALL. No "
                         "snapshot, no brand assertion, no reference to `Logo` — the mark could "
                         "have stopped rendering in all six of its call sites with `make check` "
@@ -5236,7 +5356,7 @@ COMPONENTS = [
                                               "seventy-one cases measuring the uncropped "
                                               "fallback. Named by `app/tests/shell.ts`'s seal; "
                                               "all seventy-one pass against the cropped render.",
-                                      "governed_by": ["D8", "D9", "D20", "D28", "D33", "D48", "D49", "D51", "D54", "D56", "D57", "D58", "D59", "D62", "D68", "D78", "D79", "D85", "D86", "D98", "D99", "D115", "D117"]},
+                                      "governed_by": ["D156", "D8", "D9", "D20", "D28", "D33", "D48", "D49", "D51", "D54", "D56", "D57", "D58", "D59", "D62", "D68", "D78", "D79", "D85", "D86", "D98", "D99", "D115", "D117"]},
             "tests/live-reconcile.spec.ts": {
                 "does": "the store-wide reconcile in a browser (D87): that it is reachable from "
                         "#/runs at all, that the preview asks for no write, and that the settle "
@@ -5329,7 +5449,7 @@ COMPONENTS = [
                         "and `product_game` outright — `undefined.find` inside `ClaimEditor`, "
                         "the screen behind its error boundary, and six cases here spending "
                         "thirty seconds each on a switch that had been detached. AND THE HASH'S OWN BOX SINCE 2026-09-05: `#/inventory?box=<n>` was honoured only for a box that already had ROWS, because the shelf list is built from the rows first and the registry second and the ref was consumed on the first list — so every box of code cards, which D24 pools and which therefore has none, was unreachable by the one link that aims at one. Two cases, with `GET /boxes` held back so the ordering is the defect's rather than a race.",
-                "governed_by": ["D5", "D7", "D8", "D9", "D10", "D13", "D20", "D22", "D23", "D24", "D26", "D28", "D30", "D31", "D33", "D34", "D37", "D38", "D40", "D41", "D43", "D45", "D49", "D55", "D57", "D58", "D63", "D67", "D68", "D71", "D83", "D89", "D92", "D101", "D115", "D116", "D118", "D124", "D125", "D119", "D132", "D27", "D134", "D142"],
+                "governed_by": ["D5", "D7", "D8", "D9", "D10", "D13", "D20", "D22", "D23", "D24", "D26", "D28", "D30", "D31", "D33", "D34", "D37", "D38", "D40", "D41", "D43", "D45", "D49", "D55", "D57", "D58", "D63", "D67", "D68", "D71", "D83", "D89", "D92", "D101", "D115", "D116", "D118", "D124", "D125", "D119", "D132", "D27", "D134", "D142", "D155"],
                 "note": "THE CHECK `CLAUDE.md`'s ROUTE-IS-NOT-A-FEATURE RULE SAYS DOES NOT "
                         "EXIST. That rule was written on 2026-08-23 after three routes shipped "
                         "with full T7 coverage and no client function and no control — green "

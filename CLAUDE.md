@@ -464,6 +464,29 @@ make claim-selftest # the claimer, proved where it can be wrong: a throwaway rep
                     #   main takes a number the branch had already claimed. In `check`, never in
                     #   the git hook.
 make merge          # merge a PR and move main onto it — BOTH HALVES, on your word (D42).
+                    #   IT REFUSES A CHECKOUT WHOSE OWN COPY OF THE MERGE IS BEHIND main's,
+                    #   BEFORE ANYTHING ELSE (D151). This target
+                    #   runs the `scripts/merge-pr.py` OF THE CHECKOUT YOU TYPE IT IN, and on
+                    #   2026-09-12 24 of this clone's 30 working trees were behind main's copy
+                    #   of it — 16 of them missing the commit that added the id claim at all.
+                    #   Such a copy does not fail: it merges, moves main, reports success, and
+                    #   the claim simply does not happen, which stranded an unclaimed id on
+                    #   main twice. THE PREDICATE IS `BEHIND`, NEVER `DIFFERS` — a branch
+                    #   developing the merge itself is AHEAD and goes straight through; what is
+                    #   refused is a copy MISSING commits main has, on this file or on any
+                    #   `scripts/*.py` it shells out to. THERE IS NO ESCAPE HATCH, deliberately:
+                    #   the fix is `git merge origin/main`, which is seconds.
+                    #   `make merge ARGS=--surface` asks that question alone.
+                    #   AND IT READS WHAT main LANDED WITH, afterwards: an unclaimed
+                    #   `## D-<slug>` on the merge commit is reported by name and becomes the
+                    #   command's exit status. The merge itself COMPLETED when that happens —
+                    #   nothing there repairs main, because a substitution made after the merge
+                    #   reaches main's own copy of the entry.
+                    #   THE SAME READING IS IN THE REF HOOK, which is the half that reaches a
+                    #   stale checkout at all: `core.hooksPath` is one directory in the common
+                    #   `.git` dir, so every worktree of this clone runs that file, and it
+                    #   prints the moment refs/heads/main moves onto a slug. It REFUSES
+                    #   NOTHING — main already carries it on origin by then.
                     #   IT CHECKS FOR A STALE CLAIM BEFORE ANYTHING ELSE (D140, amended):
                     #   a number this branch claimed that main has taken since is REFUSED here,
                     #   in preview as well as on the press, and nothing is rewritten for you.
@@ -706,7 +729,14 @@ sentence**, and see "the census" below for what enforces that.
                               which can never be priced. The EXPORT still carries them, because
                               `reconcile --live` reads a zero quantity to see a SKU sell out.
                               THE SHEET THAT MAKES ONE IS HERE TOO (D105), off the header —
-                              read an export, write a worklist, price it without changing screen
+                              read an export, write a worklist, price it without changing screen.
+                              THE DEFAULT LANDING IS EVERY UNSENT COPY IN THE STORE
+                              (D156): a run is open while it owes an answer
+                              OR holds a copy TCGplayer does not, the chip says how many, and
+                              every row's figure is re-derived against the live store rather
+                              than read off the join's table — 381 copies across five runs
+                              were closed away under the old rule. What no press here can send
+                              is named on the deck with a door each.
 #/orders       Orders         which copies this buyer gets and where they are, ranked by how
                               many of them sit in one box, pulled one copy at a time
 #/shipping     Shipping       which envelope an order goes in, out of TCGplayer's own shipping
@@ -1031,7 +1061,13 @@ A screen is not finished because it compiles.
   (D142). `banchi.capture.setup` is the box, game, set hint, finish, rarity
   and product the operator last chose — six values that were `sessionStorage` under D27 until
   the owner overruled the session scope, in ONE document because they are one habit, the
-  argument `banchi.orders.fetch-filter` already makes for its own two fields.
+  argument `banchi.orders.fetch-filter` already makes for its own two fields. **A SEVENTH
+  JOINED THEM ON 2026-09-12 AND IT IS THE ONLY ONE NO SCREEN DRAWS**
+  (D153): `bid`, the box's true index (D145), recorded at the pick so
+  the next sitting's restore can tell the drawer the operator left from a different drawer
+  wearing its number today — which `next_box_number`'s lowest-free allocation makes an ordinary
+  event. It is not a seventh KEY and the roster count is unchanged: this is a field inside the
+  one document, which is the whole point of storing them as a document.
   `banchi.box-recency` is `banchi.inventory.box-recency` renamed: the capture screen's box
   list now sorts on it too, so the name had stopped saying what the fact is — which drawer
   this operator's hand is in — and started saying which screen happened to write it. **No
@@ -1236,6 +1272,15 @@ A screen is not finished because it compiles.
   runs**: three separate emits wrote 6 files, 511 copies and **2 SKUs past it** — the same two
   that sit at `pushed: 6` in the store today. One merged emit wrote 1 file, 437 copies and
   **none**. **A merged file can never be a concatenation of the per-run CSVs.**
+
+  **AND THE SCREEN THAT DRIVES IT NOW AGREES WITH IT** (D156, 2026-09-11).
+  `GET /pipeline/pricing` used to merge rows off each run's `pricing.json` — a table `join`
+  writes BEFORE the emit and `emit` never touches — so a run re-opened after a capped send
+  drew `4 of 7` for a card the press had already spent four of, and a run that owed nothing
+  closed with its held-back copies unreachable from any screen. The route runs
+  `cli/resolve.py`'s own arithmetic over the live store now, keeps a run open while it holds
+  an unsent copy, and the default landing is every such copy anywhere: the operator's *"no
+  intuitive way currently to push more quantity"*, answered by one press over the whole lot.
 
 - **There is no automatic sectioning, and `CARDS_PER_SECTION` NO LONGER EXISTS** (D10,
   amended 2026-08-29 by the owner). A box's sections are the dividers somebody put in it and
@@ -1691,6 +1736,12 @@ D147 The claim is spent on the oldest copies, because a card captured tonight wa
 D148 The wait is about the claim commit, and an answer it has not got is never a pass
 D149 A section number that resolves is not a citation that is right, and no check can read what a sentence is about
 D150 A reading taken after a sale is that sale's own result, and it ages the claim
+D151 The merge is run by a checkout, so the checkout is asked whether it is current, and main is read for a slug the moment it moves
+D152 Every row in the collapsed rail draws one glyph on one spine, and a rule that lists the children it knows about will miss one
+D153 The restore asks which drawer, not which number, and the picker stops drawing a number nobody reads
+D154 The camera's automatic functions are inputs to the trigger's arithmetic, and the ones that step are locked
+D155 The section is the ruler and the box is the margin note, and the bracket between them is deleted
+D156 Every copy TCGplayer does not hold is one worklist, and a run stays open until the last of them has gone
 D-a-fixture-carries-its-own-name The fixture carries a per-run name, because the process table is the one thing a run cannot have its own of
 
 ```

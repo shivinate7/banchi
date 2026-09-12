@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState, type ReactNode } from 'react'
 
-import type { Place, SearchGroup } from './types'
+import type { Place, SearchGroup, SectionDetail } from './types'
 import { PullConfirm } from './PullConfirm'
 import { PositionBar } from './PositionBar'
 import { PositionLabel } from './PositionLabel'
@@ -83,6 +83,17 @@ const DEPARTED = place({ label: 'Box 3 · departed · B3 #31', box: 3, index: 31
    `pooled · <key>` under it. A different game from every other fixture here on purpose: the
    pooled shape only ever arrives on a game whose registry entry says it is unlocated. */
 const POOLED = place({ located: false, label: null, game: 'pokemon_code', game_display: 'Pokémon code cards', box: 12, index: 5, slot: null, section: null, card: null, box_name: null, section_start: 1, section_end: null, box_total: 0, box_closed: false, fraction: null })
+
+/* BOX 3'S REAL TILING, so the two depth specimens below draw a strip of four chips rather than
+   the three runs `spansOf` synthesises from a `Place` alone. `CLOSED_BOX` is card 40, the 15th
+   of section 2 (26..50); `DEPARTED` left that same section. Named apart from this file's own
+   `SECTIONS` nav table, which is a list of anchors and not of dividers. */
+const BOX_SECTIONS: SectionDetail[] = [
+  { section: 1, start: 1, end: 25, count: 25, name: null },
+  { section: 2, start: 26, end: 50, count: 25, name: 'Rares' },
+  { section: 3, start: 51, end: 120, count: 70, name: null },
+  { section: 4, start: 121, end: 250, count: 130, name: null },
+]
 
 const GROUP: SearchGroup = {
   sku: '8421991',
@@ -1041,6 +1052,18 @@ export function Gallery() {
               </Spec>
               <Spec name="bar-fulfiller" label="the Fulfiller's density">
                 <PositionBar place={CLOSED_BOX} persona="fulfiller" />
+              </Spec>
+              {/* THE COMPONENT'S PRIMARY DRAWING, WHICH THIS SHEET HAS NEVER SHOWN. Every
+                  specimen above passes no `sectionDepth`, so the shape `#/inventory` actually
+                  renders on every copy row — the section ruler over the demoted box strip —
+                  existed on the kit sheet only inside the `locations` specimen, three sections
+                  down and four rows deep. The five above are left exactly as they are: the
+                  no-depth shape is real too, and it is what the Fulfiller draws. */}
+              <Spec name="bar-depth" label="the section as the ruler · a divided box">
+                <PositionBar place={CLOSED_BOX} sections={BOX_SECTIONS} sectionDepth />
+              </Spec>
+              <Spec name="bar-depth-gone" label="departed · the ruler stays and both marks leave it">
+                <PositionBar place={DEPARTED} sections={BOX_SECTIONS} sectionDepth />
               </Spec>
             </div>
           </Section>

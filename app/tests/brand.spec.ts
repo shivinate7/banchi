@@ -562,6 +562,91 @@ test('collapsing the sidebar moves nothing sideways off its spine', async ({ pag
   }
 })
 
+/* THE FOOT AT REST, WHICH IS A DIFFERENT QUESTION FROM THE ONE ABOVE AND WAS ASKED BY NOBODY.
+ *
+ * The corridor test above is about TRAVEL: it samples through the 320ms collapse and requires
+ * nothing to leave the corridor between its two resting positions. It is blind, by construction,
+ * to a glyph whose RESTING position is wrong — a sample sitting between two identical wrong
+ * numbers is inside the corridor. Both of the defects this test exists for were exactly that, and
+ * both shipped under a green suite:
+ *
+ *   - THE HAND-OFF ROW WORE TWO GLYPHS. The rail's fold-away rule was an ENUMERATION of classes,
+ *     and the `external` mark on the Fulfiller's link was in none of them, so the row drew the
+ *     hand at x = 19 and the external glyph at x = 47 — a pair straddling a 64px rail while every
+ *     other row wore one glyph at 32.
+ *   - THE SERVER DOT WAS NEVER CENTRED AT ALL. `.bn-server` is not a `.bn-btn`, so the rail's
+ *     width rule skipped it and nothing else named it; it kept its open-sidebar padding into the
+ *     rail, shrink-wrapped to 32px, and put its dot at 8 + 12 + 4 = 24. Eight pixels left of the
+ *     spine, in the shipped product.
+ *
+ * SO THE ASSERTION IS THE SPINE ITSELF, AND IT IS READ OFF THE NAV RATHER THAN TYPED. Hard-coding
+ * 32 would restate `--bn-rail-w` in a second place and go stale the day the rail is resized; the
+ * nav icons ARE the column the foot is meant to continue, so they are what the foot is measured
+ * against.
+ *
+ * BOTH RAILS, BECAUSE THE DEFECT EXISTED TWICE. `App.css` rails the shell two ways — `data-rail`
+ * above 1023px and a media query at 768-1023px that has no `data-rail` at all — and the second
+ * block is a deliberate copy of the first, so it carried a deliberate copy of both bugs. A test
+ * that looked only at 1440 would have passed over half the fix.
+ *
+ * OBSERVED RED BEFORE IT WAS KEPT, once per arm and once per rail. Mutation 1: drop
+ * `.bn-nav-link > :not(:first-child)` — `one glyph per row` fails naming the link and the two
+ * centres it found. Mutation 2: drop the `.bn-server` width rule — `on the spine` fails with 24
+ * against 32. Each fails at 1440 and again at 820. */
+for (const rail of [
+  { name: 'the rail', width: 1440, collapse: true },
+  { name: 'the 768-1023 media rail', width: 820, collapse: false },
+] as const) {
+  test(`every foot row in ${rail.name} draws one glyph, on the nav's own spine`, async ({ page }) => {
+    await page.setViewportSize({ width: rail.width, height: 900 })
+    await page.goto('/')
+    // THE PRODUCT'S OWN AFFORDANCE, AND WAITED FOR RATHER THAN FIRED AT. Above 1023px the rail is
+    // `data-rail` and the brand IS the toggle; at 768-1023 the media query has already railed the
+    // shell and that control is an <a>, so there is nothing to press. Pressing ⌘. here instead
+    // raced the mount and measured the OPEN sidebar — caught by this test's own `one glyph per
+    // row` arm reporting `2 at 33, 204`, which is the expanded column, not the rail.
+    if (rail.collapse) {
+      await page.getByRole('button', { name: 'Collapse the sidebar' }).click()
+      // the collapse is the precondition, so it is asserted rather than slept through: a rail
+      // that never closed would otherwise be measured as though it had.
+      await expect(page.locator('.bn-shell[data-rail="true"]')).toHaveCount(1)
+    }
+    await page.waitForTimeout(500)
+
+    const read = await page.evaluate(() => {
+      const center = (el: Element) => {
+        const r = el.getBoundingClientRect()
+        return r.left + r.width / 2
+      }
+      const shown = (el: Element) => getComputedStyle(el).display !== 'none'
+      const nav = document.querySelector('.bn-side .bn-nav-link .bn-icon')!
+      return {
+        spine: center(nav),
+        rows: Array.from(document.querySelectorAll('.bn-side .bn-side-foot > *')).map((row) => ({
+          el: row.className,
+          centers: Array.from(row.querySelectorAll('.bn-icon, .bn-dot'))
+            .filter(shown)
+            .map((g) => Math.round(center(g) * 10) / 10),
+        })),
+      }
+    })
+
+    expect(read.rows.length, 'the foot is drawn').toBeGreaterThan(0)
+    for (const row of read.rows) {
+      expect(
+        row.centers.length,
+        `one glyph per row: \`${row.el}\` drew ${row.centers.length} at ${row.centers.join(', ')}`,
+      ).toBe(1)
+      // 1px of slack for subpixel layout, which is what the corridor test allows two of.
+      const at = row.centers[0]!
+      expect(
+        Math.abs(at - read.spine),
+        `on the spine: \`${row.el}\` rests at ${at}, the nav at ${read.spine}`,
+      ).toBeLessThanOrEqual(1)
+    }
+  })
+}
+
 /* ---- the phone chrome (logo.md section 19) -------------------------------------------------
  *
  * THE SHELL SPOKE TWO BRANDS UNTIL 2026-09-07, and nothing here could tell. Every case above

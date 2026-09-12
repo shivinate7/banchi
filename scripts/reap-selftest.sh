@@ -343,7 +343,7 @@ judge "$tmp/checkout" "pkill -f $mine_script"
 status=$?
 case "$status:$out" in
   2:*make\ down\ ARGS=--confirm*) ok "and the refusal names the drain, not a harder kill" ;;
-  2:*) bad "refused without naming `make down`, which is the sanctioned way to stop it" ;;
+  2:*) bad 'refused without naming `make down`, which is the sanctioned way to stop it' ;;
   *) bad "the pidfile'd process was cleared once reached through pkill" ;;
 esac
 rm -f "$tmp/checkout/.serve/capture.pid"

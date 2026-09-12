@@ -226,6 +226,11 @@
 .card-locations-owner .card-locations-row.is-current {
   background: var(--bn-surface-2);
   box-shadow: inset 3px 0 0 0 var(--bn-ink-4);
+  /* AND THE BAR'S TWO MARKS RING THEMSELVES IN THIS ROW'S GROUND, not the panel's. The halo is
+     a knockout — it exists so the mark reads clear of whatever is behind it — and it was
+     hard-coded to `--bn-surface`, which is the wrong colour on exactly the one row the owner is
+     looking at. `PositionBar.css` names the local variable; this is where it is answered. */
+  --pb-knockout: var(--bn-surface-2);
 }
 .card-locations-owner .card-locations-row.is-current:hover { background: var(--bn-surface-2); }
 .card-locations-owner .card-locations-viewing { color: var(--bn-ink-2); }

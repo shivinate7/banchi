@@ -1417,6 +1417,26 @@ export type BoxState = 'open' | 'closed'
  *  — see `BoxState`. This value comes off disk. */
 export type BoxRecord = {
   box: number
+
+  /** THE TRUE INDEX OF THIS DRAWER — allocated once at its creation, never reused, and never
+   *  rendered (D145). The owner said the last part twice: *"a box needs an index # not visible
+   *  anywhere in the app thats a true index rather than cheaply using boxes as an index"*.
+   *
+   *  NOTHING IN `app/` MAY DRAW THIS. It is in the same relationship to `box` that `Place.index`
+   *  is to `Place.slot` (D58): the key a machine joins on, beside the number a person reads off
+   *  the drawer. What a screen draws is the ANSWER a comparison of two of these produces — and
+   *  today there is exactly one such answer, the capture screen's restore.
+   *
+   *  WHY A CLIENT NEEDS IT AT ALL, which `box_bid` on a run row does not make obvious: the
+   *  capture screen remembers a box between sittings (D142), and `next_box_number` hands a
+   *  deleted box's number straight back out to the next drawer. The number cannot tell those
+   *  two drawers apart and this can.
+   *
+   *  `null` IS AN ORDINARY ANSWER. A box that holds cards but has no registry entry has no id,
+   *  and neither does a store an older build migrated — `store/master.py:Box.bid` is optional
+   *  forever, for `Card.rarity_claim`'s reason. Absent altogether from a server predating the
+   *  field, which is the same nothing. */
+  bid: number | null
   name: string | null
 
   /** THE BOX'S DIVIDER INDICES, not a count of sections. D10 as amended 2026-08-23: a box
@@ -1839,7 +1859,27 @@ export type MergedSku = PricingSku & {
 export type RosterRun = RunSummary & {
   /** Why this run still has pricing in it, in `emit`'s own words. Empty means answered. */
   owes: string[]
+  /** Open while it OWES something OR HOLDS AN UNSENT COPY (D156). The
+   *  first is `owes`; the second is `unsent` below, and it is what keeps an answered, emitted
+   *  run on the worklist for as long as one of its copies is not at TCGplayer. */
   open: boolean
+  /** Copies in this run's own positions that the store says TCGplayer does not hold — counted
+   *  NOW, against the live store, never off the join's table. Absent from a server older than
+   *  2026-09-12, which the picker reads as zero. */
+  unsent?: number
+}
+
+/** What no worklist can offer, named rather than left out (D156,
+ *  `CLAUDE.md`: never silently drop a card). Each figure is a door to the screen that moves
+ *  it: `captured` was never identified and `unjoined` was never joined (both `#/runs`),
+ *  `in_review` is waiting on a person (`#/review`), and `reallocated` is a run over a drawer
+ *  whose number was deleted and reused (D36) — unreachable by any join, and drawn in the
+ *  picker as `Box N (deleted)`. */
+export type Unreachable = {
+  captured: number
+  in_review: number
+  unjoined: { run: string; cards: number }[]
+  reallocated: { run: string; box: number | null }[]
 }
 
 /** One card's answer as the corpus stores it — D49's shapes, with provenance beside them. */
@@ -1896,6 +1936,8 @@ export type PricingWorklist = {
    *  where no table could be read, which the screen falls back on rather than blanks. */
   threshold: string | null
   floor: string | null
+  /** Optional, for a server that predates it; the deck draws nothing when it is absent. */
+  unreachable?: Unreachable
 }
 
 /** What a run was scoped to. `whole_box` is the common case and costs no temporary
