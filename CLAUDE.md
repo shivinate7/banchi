@@ -315,6 +315,7 @@ make check          # harness + docs-audit + audit-self-test + githooks-selftest
                     #   merge-selftest + revert-selftest + claim-selftest + claim-stale +
                     #   decisions-selftest + revert-guard +
                     #   janitor-selftest + reap-selftest + silent-write-selftest +
+                    #   guard-shell-selftest +
                     #   coordinator-selftest + suite-lock-selftest +
                     #   serve-selftest +
                     #   verdict-selftest + port-agreement + set-hint-agreement +
@@ -435,6 +436,60 @@ make silent-write-selftest  # that guard, proved by REPRODUCING the incident: a 
                     #   a temp repo). Mutation-tested — twenty-one arms, nineteen caught, and the
                     #   two survivors are one requirement covered twice, proved by a twenty-first
                     #   arm that removes both and goes red.
+                    # FIVE SHELL MISTAKES ARE REFUSED BEFORE THEY RUN, AND THERE IS NO
+                    #   TARGET FOR THAT EITHER — `scripts/guard-shell.py --hook` is a
+                    #   PreToolUse hook on Bash AND on Write|Edit, armed in both rosters
+                    #   (D135). Every clause has an incident behind it, and every one of those
+                    #   incidents broke a rule that was already written down, which is D171's
+                    #   ruling about what a rule is applied five more times:
+                    #   `git checkout <path>` / `git restore <path>` OVER A MODIFIED FILE is
+                    #   refused, and the refusal names the `.bak` copy — on 2026-09-06 one
+                    #   `git checkout cli/cmd_reprice.py` put a mutation back and destroyed
+                    #   ~240 lines of that session's uncommitted work. A BRANCH, A CLEAN PATH,
+                    #   `--staged`, `-b` and a named source all pass, because the
+                    #   discriminator is RESOLUTION and never spelling: `git status --porcelain`
+                    #   decides, read-only, and an operand that resolves to neither a path nor
+                    #   a commit is REPORTED and allowed. `PKMNSCAN_CHECKOUT=off`.
+                    #   A WRITE OUTSIDE THIS CHECKOUT is refused, and the Write|Edit half needs
+                    #   no command parsing at all, so no shell form skirts it — on 2026-09-06 an
+                    #   absolute-path `cd` prefix wrote ~1,500 lines into the owner's MAIN tree
+                    #   on `main`, and the supervisor hot-reloaded that branch code into their
+                    #   live capture server while they used the app (D43). The user's own
+                    #   `~/.claude` and a temp directory that is no checkout both pass; a temp
+                    #   directory that IS one does not. `PKMNSCAN_TREE=off`.
+                    #   `gh api -f k=v` WITH NO METHOD is refused, because a field implies a
+                    #   body and gh then sends POST — it hung past a 120s tool timeout on
+                    #   2026-09-12. `--method`, `-X`, and `graphql` pass, and the refusal prints
+                    #   the query-string form it wants. `PKMNSCAN_GH=off`.
+                    #   `ln -s` AT AN EXISTING PATH is refused — on 2026-08-29 that nested a
+                    #   second `images` link inside `harness/images` instead of failing, and
+                    #   iCloud renamed the real 133 MB directory away, empty. `-sfn`, `-sf` and
+                    #   a genuinely absent path pass.
+                    #   `PKMNSCAN_LINK=off`.
+                    #   A POLLING LOOP is refused twice over: a `while`/`until` whose condition
+                    #   polls a PATTERN (`pgrep`, `pkill`, `lsof`, `ps -ef`), and a BACKGROUNDED
+                    #   loop with no counter, no deadline and no pid — including one inside a
+                    #   shell script the command merely names, which is READ. On 2026-09-12 a
+                    #   `pgrep` waiter never fired and a backgrounded driver ran 119 rounds over
+                    #   3h58m across a compaction, racing that session's own merges. A `for`
+                    #   loop, a pid wait, a `curl -m` probe, a counter and any FOREGROUND loop
+                    #   pass; so does backgrounding `make design-check ARGS=--wait`, which this
+                    #   file tells you to do. `PKMNSCAN_WAIT=off`.
+                    #   FIVE HATCHES AND NOT ONE, so disarming the symlink clause cannot disarm
+                    #   the one that guards uncommitted work. Each is honoured in the
+                    #   environment and inline, and printed in its own refusal. Fails OPEN on
+                    #   its own bugs, including a missing `scripts/shell_parse.py` — the
+                    #   tokenizer it shares with `silent-write-guard.py`.
+make guard-shell-selftest  # that guard, proved by COMMITTING its five mistakes in a throwaway
+                    #   repository: 240 lines really destroyed by a real `git checkout`, a real
+                    #   worktree whose root differs from its main checkout's, a real nested
+                    #   symlink nested inside `harness/images`, and `pgrep -f` really
+                    #   matching a process that merely NAMES its pattern. Every false positive above is
+                    #   pinned as passing and the git ones are RUN in the fixture first. In
+                    #   `check`, never in the git hook (D18 — it writes a temp repo).
+                    #   Mutation-tested — twenty-six arms, twenty-five caught; the one survivor
+                    #   removes half of the `.bak` advice and the other half still satisfies
+                    #   the assertion, which an arm removing BOTH proves by going red.
 make coordinator    # THE MERGE QUEUE, READ RATHER THAN REMEMBERED. The other half of
                     #   2026-09-12: a session relayed `#300 GREEN — merging` for several turns
                     #   while nothing merged, because the line came from a driver's stdout and
@@ -2066,6 +2121,7 @@ D169 The blanket sweep asks the question the verdict answers, and a nested workt
 D170 A widening is safe only while the category fits, and Pokemon's does not
 D171 A refusal that reaches nobody did not happen, and a status line the session wrote is not a reading
 D172 A card's name is the first photograph of it, frozen at issue
+D-five-shell-mistakes Five shell commands are refused by resolving what they would do, not by matching what they say, and each clause carries its own escape hatch
 ```
 
 **THE GAP THIS LIST CARRIED BETWEEN D116 AND D118 IS CLOSED, AND IT CLOSED THE WAY IT SAID IT

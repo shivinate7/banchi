@@ -436,6 +436,35 @@ CHECKS = (
         "governed_by": ("D18", "D42", "D127"),
     },
     {
+        "target": "guard-shell-selftest",
+        "runs": "bash scripts/guard-shell-selftest.sh",
+        "asserts": "scripts/guard-shell.py, the PreToolUse hook that refuses five shell "
+                   "mistakes this repo has already paid for: `git checkout` over a modified "
+                   "file, a write outside this checkout, `gh api -f` with no method, `ln -s` "
+                   "at an existing path, and a polling loop. FOUR OF THE FIVE INCIDENTS ARE "
+                   "PERFORMED rather than asserted about — 240 lines really destroyed by a "
+                   "real `git checkout`, a real worktree whose root differs from its main "
+                   "checkout's, a real `harness/images/images` created by a real `ln -s`, and "
+                   "`pgrep -f` really matching a process that merely NAMES its pattern. The "
+                   "half that decides whether the guard survives is the false positives, and "
+                   "the git ones are RUN in the fixture before they are scored: a branch, a "
+                   "clean path, `--staged`, a named source, `-sfn`, `--method GET`, `graphql`, "
+                   "a pid wait, a bounded retry, and every `git`/`gh`/`ln` line swept out of "
+                   "this repo's own tooling. Each of the five hatches is scored in both of "
+                   "its forms, and the clause table is READ rather than retyped, so a sixth "
+                   "clause with no hatch fails here instead of shipping unescapable.",
+        "needs": ("python3", "bash", "git"),
+        "writes": "a git repository, a linked worktree, two commits, a symlink and one "
+                  "short-lived decoy process, all under `mktemp -d`. It signals only what it "
+                  "spawned there.",
+        "commit_path": False,
+        "why_off_commit_path": "D18 — it writes a temp repository, adds a worktree to it and "
+                               "makes real commits. Same standing as silent-write-selftest "
+                               "beside it, whose parser its guard shares.",
+        "gates": True,
+        "governed_by": ("D18", "D43", "D127", "D171"),
+    },
+    {
         "target": "coordinator-selftest",
         "runs": "python3 scripts/coordinator.py --selftest",
         "asserts": "scripts/coordinator.py's verdict rules, against synthetic check-run "
