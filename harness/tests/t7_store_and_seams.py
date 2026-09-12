@@ -18465,6 +18465,13 @@ def check_export_fetch(checks: Checks) -> None:
                 # THE RECORD IS THE ONLY LINK BACK once the file is not inside the run, and a
                 # shared directory is exactly where a path CAN change under a run that a
                 # run-local copy never could. So the digest is not decoration.
+                #
+                # AND THE JOIN ITSELF OPENS NO SOCKET, asserted rather than assumed. This is
+                # the second run over this game and it resolves against the file the FIRST
+                # one's press left in `inventory/.exports/pokemon/` — so the whole
+                # fetch-and-join pass for run two costs zero requests. Counted, because the
+                # join's own output says nothing about whether TCGplayer was asked.
+                before_posts = posts()
                 status, raw, _ = request(
                     port,
                     "POST",
@@ -18479,10 +18486,12 @@ def check_export_fetch(checks: Checks) -> None:
                         json.loads(raw)["ok"],
                         export_path.parent.name,
                         len(str(recorded.get("sha256") or "")),
+                        posts() - before_posts,
                     ),
-                    (True, "pokemon", 64),
-                    "the join records the file it resolved against — path AND digest — and "
-                    "the path is under the game's own directory, not the run's",
+                    (True, "pokemon", 64, 0),
+                    "the join records the file it resolved against — path AND digest, under "
+                    "the GAME's directory rather than the run's — and ISSUES ZERO NETWORK "
+                    "REQUESTS doing it, which is the half no join output can report",
                 )
                 checks.equal(
                     runs.sha256_of(export_path),
