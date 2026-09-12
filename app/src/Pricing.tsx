@@ -1,4 +1,5 @@
 import {
+  Fragment,
   useCallback,
   useEffect,
   useLayoutEffect,
@@ -7,6 +8,7 @@ import {
   useState,
   type CSSProperties,
   type KeyboardEvent as ReactKeyboardEvent,
+  type ReactNode,
   type RefObject,
 } from 'react'
 import { createPortal } from 'react-dom'
@@ -39,6 +41,7 @@ import type {
   MarkdownAnswer,
   MarkdownTable,
   PricingWorklist,
+  Unreachable,
   PricingSku,
   RunDetail,
   RunFile,
@@ -557,7 +560,7 @@ function PickRuns({
       <div className="pricing-runs-head">
         <span className="bn-label">Runs</span>
         <span className="pricing-runs-count">
-          {picked.size === 0 ? `${open} with pricing left · showing all of them` : `${picked.size} picked`}
+          {picked.size === 0 ? `${open} with work left · showing all of them` : `${picked.size} picked`}
         </span>
       </div>
       <div className="pricing-runs-list">
@@ -586,8 +589,19 @@ function PickRuns({
                   <span>{row.counts?.skus ?? '?'} SKUs</span>
                 </span>
               </span>
+              {/* THREE STATES, NOT TWO (D156). A run that owes nothing and
+                  still holds copies TCGplayer does not is OPEN — the copies it held back under
+                  a cap, or a per-card quantity, or the old standing four — and the chip says
+                  how many, because "Answered" over 148 unsent copies was the sentence that
+                  hid them. `unsent` is counted against the live store, never the join. */}
               <span className={`pricing-run-owes bn-pill ${row.open ? 'bn-pill-warn' : 'bn-pill-ok pricing-run-done'}`}>
-                {row.owes.length === 0 ? 'Answered' : sentence(row.owes.join(' · '))}
+                {row.owes.length > 0
+                  ? sentence(row.owes.join(' · '))
+                  : (row.unsent ?? 0) > 0
+                    ? `${row.unsent} unsent`
+                    : row.box_former === true
+                      ? 'Box deleted'
+                      : 'All sent'}
               </span>
             </button>
           )
@@ -596,7 +610,7 @@ function PickRuns({
       {picked.size === 0 ? null : (
         <div className="pricing-runs-foot">
           <Button size="sm" variant="ghost" icon="x" onClick={onClear}>
-            Show everything unpriced
+            Show everything unsent
           </Button>
         </div>
       )}
@@ -2419,7 +2433,7 @@ export function Pricing() {
         </span>
         <span>{loaded.length} runs</span>
         <span>{rows.length} SKUs</span>
-        {picked.size === 0 ? <span>everything unpriced</span> : null}
+        {picked.size === 0 ? <span>everything unsent</span> : null}
         {progressLine}
       </>
     )
@@ -2641,15 +2655,15 @@ export function Pricing() {
             body="Every card in the runs you picked already has an answer."
             actions={
               <Button variant="primary" icon="x" onClick={clearPicked}>
-                Show everything unpriced
+                Show everything unsent
               </Button>
             }
           />
         ) : (
           <EmptyState
             icon="check"
-            title="Everything is priced"
-            body="Every joined run has been priced and emitted. Pick a run to look at it again, or join a box on Runs."
+            title="Everything is sent"
+            body="Every copy in every joined run is at TCGplayer, held back on purpose, or has left its box. Pick a run to look at it again, or join a box on Runs."
             actions={
               <>
                 <Button variant="primary" icon="layers" onClick={() => setRunsOpen(true)}>
@@ -2741,6 +2755,7 @@ export function Pricing() {
               progress={progress}
               cheapMoney={cheapMoney}
               queued={queued}
+              unreachable={work?.unreachable ?? null}
               runCount={loaded.length}
               boxCount={boxesLoaded.length}
               readAge={readAge}
@@ -3106,7 +3121,7 @@ export function Pricing() {
                             {!sku.over_cap ? null : (
                               <span
                                 className="pricing-span-cap bn-pill bn-pill-warn"
-                                title={`The runs separately claim more copies than the cap has room for. The copies TCGplayer was holding were read ${ageWords(readAtOf(sku)) ?? 'at an unrecorded time'}.`}
+                                title={`The runs' own tables say ${sku.claimed_add} — written by each join, before any emit spent them. ${sku.add_to_quantity} is what the store says can still go, counted now, and is what the press will write. The tables were read ${ageWords(readAtOf(sku)) ?? 'at an unrecorded time'}.`}
                               >
                                 Runs claim {sku.claimed_add} · {sku.add_to_quantity} can go
                               </span>
@@ -3130,7 +3145,7 @@ export function Pricing() {
                           empty field reads as the answer it gives rather than as a gap. A row
                           with nothing to add stays a plain figure: there is nothing to choose. */}
                       {!source.copies ? null : sku.at_cap ? (
-                        <span className="pricing-qty" title={`${sku.add_to_quantity} of the ${sku.copies} copies on hand go in the file`}>
+                        <span className="pricing-qty" title={`${sku.add_to_quantity} of the ${sku.copies} copies can still go — ${sku.committed} ${sku.committed === 1 ? 'is' : 'are'} already at TCGplayer or have left the box`}>
                           <span className="bn-sr">Quantity </span>
                           {sku.add_to_quantity} <span className="pricing-qty-of">of {sku.copies}</span>
                         </span>
@@ -3142,7 +3157,7 @@ export function Pricing() {
                             inputMode="numeric"
                             placeholder={String(sku.add_to_quantity)}
                             aria-label={`How many of the ${sku.copies} copies of ${sku.name} go in this file`}
-                            title={`Blank sends ${sku.add_to_quantity}, every copy that can go. Type fewer to send fewer this press, or 0 for none — it is not a hold, and it clears once the file is written.`}
+                            title={`Blank sends ${sku.add_to_quantity}, every copy that can still go${sku.committed > 0 ? ` (${sku.committed} of the ${sku.copies} ${sku.committed === 1 ? 'is' : 'are'} already at TCGplayer or gone)` : ''}. Type fewer to send fewer this press, or 0 for none — it is not a hold, and it clears once the file is written.`}
                             value={sendQty[sku.sku] ?? ''}
                             onChange={(event) => {
                               const text = event.currentTarget.value
@@ -4190,11 +4205,70 @@ function MarkdownPanel({
   )
 }
 
+/** WHAT NO PRESS ON THIS SCREEN CAN SEND, NAMED WITH A DOOR EACH (D156).
+ *
+ *  The worklist is every copy in every joined run that TCGplayer does not hold. A copy that was
+ *  never identified, one waiting in review, one in a run nobody has joined and one in a run
+ *  over a deleted drawer are none of those, and a list that simply did not draw them would be
+ *  the silent drop `CLAUDE.md` forbids — the operator counting cards on a shelf against rows on
+ *  a screen and finding fewer. One sentence, each figure a link to the screen that moves it. */
+function UnreachableLine({ at }: { at: Unreachable | null }) {
+  if (at === null) return null
+  const parts: ReactNode[] = []
+  if (at.captured > 0)
+    parts.push(
+      <span key="captured">
+        <a href="#/runs">{at.captured} never identified</a>
+      </span>,
+    )
+  if (at.in_review > 0)
+    parts.push(
+      <span key="review">
+        <a href="#/review">
+          {at.in_review} in review
+        </a>
+      </span>,
+    )
+  const unjoined = at.unjoined.reduce((n, run) => n + run.cards, 0)
+  if (at.unjoined.length > 0)
+    parts.push(
+      <span key="unjoined">
+        <a href="#/runs">
+          {unjoined > 0 ? `${unjoined} in ` : ''}
+          {at.unjoined.length} run{at.unjoined.length === 1 ? '' : 's'} not joined
+        </a>
+      </span>,
+    )
+  if (at.reallocated.length > 0)
+    parts.push(
+      <span key="reallocated" title="A run over a drawer whose number was deleted and reused since (D36). Its cards are another drawer's now; re-identify the box as it is today.">
+        {at.reallocated.length} run{at.reallocated.length === 1 ? '' : 's'} over a deleted box
+      </span>,
+    )
+  if (parts.length === 0) return null
+  return (
+    <p className="pricing-verdict-warn pricing-unreachable" data-testid="pricing-unreachable">
+      <Icon name="alert" size={13} />
+      <span>
+        Not on this list, because nothing here can send them:{' '}
+        {parts.map((part, i) => (
+          <Fragment key={i}>
+            {i === 0 ? '' : ' · '}
+            {part}
+          </Fragment>
+        ))}
+        .
+      </span>
+    </p>
+  )
+}
+
 function ReadyPanel({
   owes,
   progress,
   cheapMoney,
   queued,
+  unreachable,
   runCount,
   boxCount,
   readAge,
@@ -4215,6 +4289,7 @@ function ReadyPanel({
   }
   cheapMoney: string
   queued: number
+  unreachable: Unreachable | null
   runCount: number
   boxCount: number
   readAge: string | null
@@ -4296,6 +4371,8 @@ function ReadyPanel({
           </span>
         </p>
       )}
+
+      <UnreachableLine at={unreachable} />
 
       {/* WHERE THE ANSWERS STAND, as one bar rather than three figures in a sentence. A held
           row writes nothing, so it is a third colour and not a shade of "done". */}

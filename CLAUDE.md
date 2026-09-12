@@ -348,7 +348,12 @@ make reap           # STOP WHAT THIS SESSION STARTED, AND NOTHING ELSE (D127). P
 make reap-selftest  # the guard, proved by pointing it at what it must not kill: a throwaway
                     #   checkout, a real socket with a real client on it, and both 2026-09-10
                     #   incidents reproduced rather than asserted about. In `check`, never in the
-                    #   git hook. Mutation-tested — thirteen arms.
+                    #   git hook. Every process it starts carries a PER-RUN TAG and its port is
+                    #   bound rather than probed: the guard resolves a kill through a machine-wide
+                    #   `pgrep`, so a fixed fixture name makes two concurrent runs refuse each
+                    #   other their own processes — D122's shape one register down, and it reddened
+                    #   `make check` four times over a byte-identical tree. Mutation-tested —
+                    #   fourteen arms.
 make janitor        # WHAT A FINISHED SESSION LEFT BEHIND, and what is safe to reap (D111).
                     #   Previews; `ARGS=--confirm` presses. TIER 1 goes without asking because
                     #   it cannot be live — a process whose own script has been deleted, a
@@ -725,6 +730,13 @@ sentence**, and see "the census" below for what enforces that.
                               `reconcile --live` reads a zero quantity to see a SKU sell out.
                               THE SHEET THAT MAKES ONE IS HERE TOO (D105), off the header —
                               read an export, write a worklist, price it without changing screen.
+                              THE DEFAULT LANDING IS EVERY UNSENT COPY IN THE STORE
+                              (D156): a run is open while it owes an answer
+                              OR holds a copy TCGplayer does not, the chip says how many, and
+                              every row's figure is re-derived against the live store rather
+                              than read off the join's table — 381 copies across five runs
+                              were closed away under the old rule. What no press here can send
+                              is named on the deck with a door each.
                               AND A THIRD LENS, `?band=top|bottom` (D-a-band-is-copies-in-drawers):
                               WHAT IS WORTH PULLING — every card ON HAND ranked by market, ONE ROW
                               PER PHYSICAL COPY, with the drawer each sits in. It reads the STORE
@@ -1060,7 +1072,13 @@ A screen is not finished because it compiles.
   (D142). `banchi.capture.setup` is the box, game, set hint, finish, rarity
   and product the operator last chose — six values that were `sessionStorage` under D27 until
   the owner overruled the session scope, in ONE document because they are one habit, the
-  argument `banchi.orders.fetch-filter` already makes for its own two fields.
+  argument `banchi.orders.fetch-filter` already makes for its own two fields. **A SEVENTH
+  JOINED THEM ON 2026-09-12 AND IT IS THE ONLY ONE NO SCREEN DRAWS**
+  (D153): `bid`, the box's true index (D145), recorded at the pick so
+  the next sitting's restore can tell the drawer the operator left from a different drawer
+  wearing its number today — which `next_box_number`'s lowest-free allocation makes an ordinary
+  event. It is not a seventh KEY and the roster count is unchanged: this is a field inside the
+  one document, which is the whole point of storing them as a document.
   `banchi.box-recency` is `banchi.inventory.box-recency` renamed: the capture screen's box
   list now sorts on it too, so the name had stopped saying what the fact is — which drawer
   this operator's hand is in — and started saying which screen happened to write it. **No
@@ -1265,6 +1283,15 @@ A screen is not finished because it compiles.
   runs**: three separate emits wrote 6 files, 511 copies and **2 SKUs past it** — the same two
   that sit at `pushed: 6` in the store today. One merged emit wrote 1 file, 437 copies and
   **none**. **A merged file can never be a concatenation of the per-run CSVs.**
+
+  **AND THE SCREEN THAT DRIVES IT NOW AGREES WITH IT** (D156, 2026-09-11).
+  `GET /pipeline/pricing` used to merge rows off each run's `pricing.json` — a table `join`
+  writes BEFORE the emit and `emit` never touches — so a run re-opened after a capped send
+  drew `4 of 7` for a card the press had already spent four of, and a run that owed nothing
+  closed with its held-back copies unreachable from any screen. The route runs
+  `cli/resolve.py`'s own arithmetic over the live store now, keeps a run open while it holds
+  an unsent copy, and the default landing is every such copy anywhere: the operator's *"no
+  intuitive way currently to push more quantity"*, answered by one press over the whole lot.
 
 - **There is no automatic sectioning, and `CARDS_PER_SECTION` NO LONGER EXISTS** (D10,
   amended 2026-08-29 by the owner). A box's sections are the dividers somebody put in it and
@@ -1722,6 +1749,11 @@ D149 A section number that resolves is not a citation that is right, and no chec
 D150 A reading taken after a sale is that sale's own result, and it ages the claim
 D151 The merge is run by a checkout, so the checkout is asked whether it is current, and main is read for a slug the moment it moves
 D152 Every row in the collapsed rail draws one glyph on one spine, and a rule that lists the children it knows about will miss one
+D153 The restore asks which drawer, not which number, and the picker stops drawing a number nobody reads
+D154 The camera's automatic functions are inputs to the trigger's arithmetic, and the ones that step are locked
+D155 The section is the ruler and the box is the margin note, and the bracket between them is deleted
+D156 Every copy TCGplayer does not hold is one worklist, and a run stays open until the last of them has gone
+D157 The fixture carries a per-run name, because the process table is the one thing a run cannot have its own of
 D-a-band-is-copies-in-drawers The band is copies rather than SKUs, the drawer is the first answer, and nothing on hand is dropped
 
 ```

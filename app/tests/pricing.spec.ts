@@ -158,6 +158,12 @@ async function open(
         over_cap?: boolean
       })[]
     }
+    /** Copies each run still holds that TCGplayer does not, by run name
+     *  (D156). A run with one is OPEN whatever it owes; the chip says how
+     *  many. */
+    unsent?: Record<string, number>
+    /** What no worklist can send, as the server names it. */
+    unreachable?: { captured: number; in_review: number; unjoined: { run: string; cards: number }[]; reallocated: { run: string; box: number | null }[] }
   } = {},
 ): Promise<Wire[]> {
   const wire: Wire[] = []
@@ -379,7 +385,8 @@ async function open(
         roster: listed.map((row) => ({
           ...summary(row),
           owes: options.emitted === true ? [] : ['never emitted'],
-          open: options.emitted !== true,
+          open: options.emitted !== true || (options.unsent?.[row.run] ?? 0) > 0,
+          unsent: options.unsent?.[row.run] ?? 0,
         })),
         skus: options.noRun === true && listed.length === 0 ? [] : rows,
         written_at: {},
@@ -387,6 +394,7 @@ async function open(
         asked: [],
         threshold: '0.40',
         floor: '0.40',
+        ...(options.unreachable === undefined ? {} : { unreachable: options.unreachable }),
       }),
     })
   })
@@ -752,6 +760,46 @@ test('the run picker leads with the box, and the directory is what tells two run
      and never the job: box 2's 108 SKUs are one `floor` press. This fixture's runs have not
      emitted, so every chip owes that. */
   await expect(chips.nth(0).locator('.pricing-run-owes')).toHaveText('Never emitted')
+})
+
+test('an emitted run with copies still unsent stays open, and the chip counts them', async ({
+  page,
+}) => {
+  /* THE STRANDED SHAPE (D156). Two runs, both emitted, both answered. Under
+     the old rule both chips read "Answered" and neither was on the default landing — and the
+     148 copies the first had held back under a cap were reachable from no screen. The server
+     counts `unsent` against the live store now; the picker draws it, and only a run with none
+     left reads as done. */
+  await open(page, {
+    noRun: true,
+    emitted: true,
+    runs: [
+      { run: '2026-08-24-box2-01', box: 2, box_name: 'Pokemon bulk', skus: 148, created_at: '2026-08-24T18:00:00+00:00' },
+      { run: '2026-09-02-box6-01', box: 6, box_name: 'Riftbound rares', skus: 40, created_at: '2026-09-02T18:00:00+00:00' },
+    ],
+    unsent: { '2026-08-24-box2-01': 148 },
+    unreachable: {
+      captured: 214,
+      in_review: 1,
+      unjoined: [{ run: '2026-09-11-box4-01', cards: 0 }],
+      reallocated: [{ run: '2026-08-22-box1-03', box: 1 }],
+    },
+  })
+
+  await page.getByRole('button', { name: /^Runs/ }).click()
+  const chips = page.locator('.pricing-run')
+  await expect(chips).toHaveCount(2)
+  await expect(chips.nth(1).locator('.pricing-run-owes')).toHaveText('148 unsent')
+  await expect(chips.nth(0).locator('.pricing-run-owes')).toHaveText('All sent')
+  await expect(page.locator('.pricing-runs-count')).toHaveText('1 with work left · showing all of them')
+
+  /* WHAT THE LIST CANNOT SEND IS NAMED ON THE DECK, each figure a door. */
+  const line = page.getByTestId('pricing-unreachable')
+  await expect(line).toContainText('214 never identified')
+  await expect(line).toContainText('1 in review')
+  await expect(line).toContainText('1 run not joined')
+  await expect(line).toContainText('1 run over a deleted box')
+  await expect(line.getByRole('link', { name: '1 in review' })).toHaveAttribute('href', '#/review')
 })
 
 test('every export column that carries data is on the row', async ({ page }) => {
