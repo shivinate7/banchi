@@ -65,6 +65,24 @@ CARD_NOT_DETECTED = "card_not_detected"
 # per card: every such entry offers exactly one candidate under one shared reason, which is
 # precisely D29's group-answer eligibility.
 NUMBER_UNREAD_NAME_MATCHED = "number_unread_name_matched"
+# THE CROSS-CHECK RUN THE OTHER WAY: the number found rows, and the NAME the model read off
+# the same photograph matches none of them. Emitted by `join_batch` over a resolution the
+# ladder completed, exactly as `NUMBER_UNREAD_NAME_MATCHED` directly above is, and for the
+# same reason — it is a fact about how well the catalog row FITS the card, which is the
+# catalog's question and not the finish ladder's.
+#
+# IT IS THE OTHER HALF OF THE RARITY RELEASE AND MUST NOT SHIP WITHOUT IT. The ladder now
+# lets a contradicting rarity claim go when the name agrees; on its own that only makes the
+# pipeline quieter, in both directions. The claim was never only refusing right cards — it
+# was also WAVING WRONG ONES THROUGH whenever the wrong card's rows happened to satisfy it.
+# Card `1/51` on the owner's store: read `Irelia, Blade Dancer`, number `190/221`, which in
+# that export is `Forgefire Cape` — `Epic`, which is precisely what the operator claimed, so
+# nothing was flagged and no queue entry was ever written. Nine box-1 cards are that shape.
+#
+# A number a confident model got wrong lands on a REAL row for another card, which is the
+# failure no confidence threshold fires on and the one D23 was written for. The name is the
+# only other thing read off that photograph, so it is the only thing that can contradict it.
+NAME_DISPUTED = "name_disputed"
 
 # ROUTING'S OWN REVIEW REASONS, PUBLISHED AS A SET. The ladder's six live in
 # `pipeline/variant.py:LADDER_REASONS`; together the two tuples are the whole vocabulary, and
@@ -82,6 +100,7 @@ ROUTING_REASONS = (
     SET_AMBIGUOUS,
     CARD_NOT_DETECTED,
     NUMBER_UNREAD_NAME_MATCHED,
+    NAME_DISPUTED,
     NO_MARKET_DATA,
 )
 

@@ -241,6 +241,7 @@ def resolve(
     detected_finish: Optional[str] = None,
     rarity_claim: Optional[Sequence[str]] = None,
     game: Optional[str] = None,
+    name_corroborated: bool = False,
 ) -> Resolution:
     """Walk the ladder for one card. `candidates` are the catalog rows for its number.
 
@@ -251,7 +252,12 @@ def resolve(
     `metadata_finish` is D3 rung 1's claim and is a SET: a string, a sequence, or None. See
     `_check_claim` for why a string still works and `game` for why the vocabulary is not
     Pokemon's any more. Omitting `game` reads as `games.DEFAULT_GAME`, which is what every
-    caller written before games existed meant."""
+    caller written before games existed meant.
+
+    `name_corroborated` says the model's own reading of the card's NAME agrees with one of
+    these rows. Computed by the CALLER — `pipeline/join.py:name_corroborates`, where the
+    name fold already lives — because a fold with two homes is a fold with two answers.
+    Default False, so every caller written before this walks the path it always did."""
     stocked, condition_by_finish = vocabulary(game)
     claimed = _check_claim(metadata_finish, stocked)
     detected_finish = _check(detected_finish, stocked)
@@ -287,8 +293,35 @@ def resolve(
             or (row.get(tcgcsv.RARITY_COLUMN) or "").strip() in rarity_claim
         ]
         if not kept:
-            return Resolution(stage=REVIEW, reason=RARITY_CLAIM_MISMATCH)
-        candidates = kept
+            # THE CONTRADICTION IS RELEASED WHEN THE NAME AGREES WITH THE ROWS, and this is
+            # the one exit this branch has that is not a refusal.
+            #
+            # The claim is one thing the operator typed over a whole stack. The name is the
+            # model reading THIS card, and the rows are the export's answer for the number
+            # it read. When those two independent signals agree, the claim is the odd one
+            # out — a stack labelled `Epic` whose cards the catalogue calls `Rare` — and
+            # refusing here asks a human to confirm a card two signals already name.
+            #
+            # WHAT IT COST TO RETURN HERE UNCONDITIONALLY, measured over the owner's whole
+            # store: 159 refusals, 145 of which the ladder below resolves cleanly, 145 of
+            # which a human then answered, and 142 of those answers byte-identical to the
+            # row the ladder was holding. One typed word, 142 taps to agree with the machine.
+            #
+            # IT FALLS THROUGH RATHER THAN RESOLVING. The claim is released, not believed:
+            # every rung below runs on the UNFILTERED rows, so two rows still reach rung 2
+            # as two and still go to review. `1/65` and `1/73` on the owner's store are
+            # exactly that shape, and both are genuinely the wrong card. A single-candidate
+            # auto-approve would have listed them — which is why the rule is two AGREEING
+            # SIGNALS and never one uncontradicted row.
+            #
+            # The mirror of this release lives in the caller, and it has to: a name that
+            # matches NONE of the rows is a review reason of its own
+            # (`routing.NAME_DISPUTED`), including on the cards this filter waved through
+            # because the claim happened to agree with a row for a different card.
+            if not name_corroborated:
+                return Resolution(stage=REVIEW, reason=RARITY_CLAIM_MISMATCH)
+        else:
+            candidates = kept
 
     by_condition: Dict[str, tcgcsv.Row] = {}
     for row in candidates:

@@ -786,13 +786,15 @@ rather than disabled until its preflight has answered. What changed is reading o
 zero inside the panel — which is the one form of it no future relocation can quietly falsify.
 
 **Reason codes: human label large, machine string small beneath it.** The pipeline defines
-fourteen strings and the screen labels THIRTEEN of them — six from the variant ladder in
+fifteen strings and the screen labels FOURTEEN of them — six from the variant ladder in
 `pipeline/variant.py`
 (`no_catalog_row`, `metadata_not_stocked`,
 `detected_finish_not_stocked`, `ambiguous_no_signal`, `duplicate_condition`, and D23's
-`rarity_claim_mismatch`, the stack claim contradicting every candidate row) and seven from
+`rarity_claim_mismatch`, the stack claim contradicting every candidate row) and EIGHT from
 routing in `pipeline/routing.py` (`low_confidence`, `no_position`, `identification_failed`,
-`set_ambiguous`, `card_not_detected`, `no_market_data`, and D35's
+`set_ambiguous`, `card_not_detected`, `no_market_data`, `name_disputed` — the name read off
+the photograph matching none of the rows its number found, which is D23's cross-check run
+backwards and the only signal that catches a confidently misread number — and D35's
 `number_unread_name_matched` — the only reason the JOIN writes over a successful ladder
 resolution, keeping that row so the entry offers exactly one candidate, which is what makes a
 queue of them one D29 group. It is *not* the only reason sitting on a card the ladder resolved:

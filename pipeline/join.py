@@ -66,9 +66,11 @@ from __future__ import annotations
 
 import bisect
 import re
+import unicodedata
 from collections import OrderedDict
 from dataclasses import dataclass, field, replace
 from decimal import Decimal
+from difflib import SequenceMatcher
 from typing import (
     Callable, Dict, Iterable, List, Mapping, NamedTuple, Optional, Sequence, Set, Tuple,
 )
@@ -737,6 +739,133 @@ def name_index_key(text) -> str:
     """
     text = _NAME_NUMBER_SUFFIX.sub("", str(text or "").strip())
     return " ".join(text.split()).upper()
+
+
+# ---------------------------------------------------------------- the name cross-check
+#
+# THE READ NAME COMPARED AGAINST THE CANDIDATE ROWS' NAMES, WHICH IS A DIFFERENT JOB FROM
+# FINDING THEM. `name_index_key` above is a KEY fold: it feeds an index, so it has to be
+# exact, and two strings either land in the same bucket or they do not. What follows is a
+# COMPARISON, run after the rows are already in hand, and it answers two questions the key
+# fold cannot be asked without breaking the index:
+#
+#   CORROBORATED — the read name and a row's name are the same identity, strongly enough to
+#     overrule a contradicting rarity claim. Strict on purpose.
+#   DISPUTED     — the read name resembles NO row's name at all, which is what a wrong card
+#     looks like when the number found real rows. Lenient on purpose.
+#
+# THE TWO THRESHOLDS ARE DIFFERENT AND THAT IS THE DESIGN, not an oversight. A partial read
+# (`Rell` against `Rell, Magnetic`) is weak evidence: not enough to release a rarity
+# contradiction, and far too much to call the card a different one. One predicate serving
+# both jobs has to be wrong at one of them, and on this store it would be wrong at the
+# expensive end — measured below.
+#
+# THE CATALOG SIDE CARRIES A TRAILING QUALIFIER THIS FOLD HAS TO DROP, and finding that out
+# is what stopped the dispute test shipping broken. Riftbound's export writes
+# `Rengar, Unseen (Alternate Art)` and `Chaos Rune (R05a)`. Measured over the owner's whole
+# store, 84 of 195 raw disagreements were that suffix and nothing else — a flood of review
+# entries for cards nobody had misread. The parenthetical is decoration on an identity, the
+# same argument `name_index_key` makes for the embedded number, so it is folded away on the
+# CATALOG side only: a model reading a bracket off a card is not a thing this has seen, and
+# a read name is not an index key.
+#
+# ACCENTS ARE FOLDED for the same reason and it is load-bearing on Pokemon, the game this
+# rule has the least evidence about: the model reads `Pokemon Center Lady` and the export
+# writes `Pokemon Center Lady`, spelled with different bytes.
+
+# A trailing `(...)` qualifier on a CATALOG name. Anchored, and inner parentheses excluded,
+# so only a whole trailing group goes.
+_NAME_QUALIFIER_SUFFIX = re.compile(r"\s*\([^()]*\)\s*$")
+
+# What a read name and a row name must share for the read to CORROBORATE the row: one
+# contains the other, and the shorter covers at least this much of the longer.
+#
+# MEASURED ON THE OWNER'S STORE, over all 159 `rarity_claim_mismatch` refusals the runs hold.
+# 145 of them a claim-released ladder resolves; a human later answered every one of the 145;
+# and THREE would have been the wrong row (`3/564`, `1/65`, `1/73`). At 0.6 the corroboration
+# releases 136 of the 145 and leaks NONE of the three. Plain containment with no ratio at all
+# releases 138 and also leaks none — the ratio is kept anyway, because what it guards against
+# is not on this store's record: a three-letter read (`Jax`) corroborating every card whose
+# name contains it. Two cards pay for that (`Anivia` against `Anivia, Primal`,
+# `Chem-Baroness` against `Renata Glasc, Chem-Baroness`) and stay queued.
+NAME_CORROBORATION_COVERAGE = 0.6
+
+# What a read name and a row name must share for the read NOT to be DISPUTED. Containment at
+# any length passes first; this catches the rest.
+#
+# MEASURED THE SAME WAY, over the 2,769 cards the store's runs list without asking anyone.
+# Containment alone disputes 61 of them; adding this threshold disputes 38. The 23 it absorbs
+# are the model's spelling, one or two characters out — `Corfish` for `Corphish`,
+# `Piltrovan Forge` for `Piltovan Forge`, `The Runiation` for `The Ruination`,
+# `Steraks Gage` for `Sterak's Gage` — every one of them the right card. None of the five
+# wrong cards box 1 holds (`1/51`, `1/223`, `1/262`, `1/310`, `1/311`) is absorbed at this
+# threshold, and `1/51` is the one this whole test exists for: read `Irelia, Blade Dancer`,
+# number `190/221`, which in that export is `Forgefire Cape`.
+NAME_DISPUTE_SIMILARITY = 0.8
+
+
+def _name_compare_key(text, catalog_side: bool = False) -> str:
+    """`name_index_key` plus the two folds a COMPARISON may make and an index may not."""
+    text = unicodedata.normalize("NFKD", str(text or ""))
+    text = "".join(c for c in text if not unicodedata.combining(c))
+    if catalog_side:
+        text = _NAME_QUALIFIER_SUFFIX.sub("", text.strip())
+    return name_index_key(text)
+
+
+def name_corroborates(read_name, rows: Sequence[tcgcsv.Row]) -> bool:
+    """Does the model's own reading of the NAME agree with one of the rows the NUMBER found?
+
+    Two independent signals agreeing — one off the photograph, one off the export — which is
+    what makes it strong enough to release a rarity claim that contradicts them both.
+
+    A blank read name corroborates NOTHING — the absence of evidence, stated rather than
+    left to fall out of the arithmetic. The coverage test below happens to reach the same
+    answer today (zero characters cover no fraction of anything), so this line is not the
+    only thing holding the behaviour up; it is here so that a later edit to the coverage
+    rule cannot quietly make the empty string — a substring of every name — agree with
+    every row.
+    """
+    read = _name_compare_key(read_name)
+    if not read:
+        return False
+    for row in rows:
+        row_name = _name_compare_key(row.get(tcgcsv.NAME_COLUMN), catalog_side=True)
+        if not row_name:
+            continue
+        if read == row_name:
+            return True
+        short, long = sorted((read, row_name), key=len)
+        if short in long and len(short) >= NAME_CORROBORATION_COVERAGE * len(long):
+            return True
+    return False
+
+
+def name_disputes(read_name, rows: Sequence[tcgcsv.Row]) -> bool:
+    """Does the model's reading of the NAME match no row the NUMBER found — at all?
+
+    The mirror of `name_corroborates` and NOT its negation. Between the two sits everything
+    the model spelled imperfectly or read in part, which is evidence of neither agreement nor
+    disagreement and must raise nothing.
+
+    A blank read name disputes nothing, for `name_corroborates`'s reason turned around: a
+    card whose name could not be read is not a card whose name says this is the wrong row.
+    """
+    read = _name_compare_key(read_name)
+    if not read or not rows:
+        return False
+    for row in rows:
+        row_name = _name_compare_key(row.get(tcgcsv.NAME_COLUMN), catalog_side=True)
+        if not row_name:
+            # A row with no name is evidence of nothing, exactly as a blank `Rarity` cell is
+            # to D23's filter. It cannot be disputed with.
+            return False
+        short, long = sorted((read, row_name), key=len)
+        if short in long:
+            return False
+        if SequenceMatcher(None, read, row_name).ratio() >= NAME_DISPUTE_SIMILARITY:
+            return False
+    return True
 
 
 # ------------------------------------------------------------------ per-game dispatch
@@ -2088,6 +2217,17 @@ def join_batch(
     for card in cards:
         found = catalog.candidates(card)
 
+        # THE NAME CROSS-CHECK, COMPUTED ONCE AND READ TWICE. Both directions of the same
+        # comparison, and both are decided HERE rather than in the ladder: `name_index_key`
+        # is this module's fold and `pipeline/variant.py` importing it back would put the
+        # rule in two places, where the whole argument for the fold is that there is one.
+        #
+        # Evaluated before rung 0 and used after it, deliberately. A human's answer outranks
+        # both halves — D23 says so in as many words — and the two flags below are read only
+        # on the branches rung 0 did not take.
+        corroborated = name_corroborates(card.name, found.rows)
+        disputed = name_disputes(card.name, found.rows)
+
         # Rung 0 — a human already answered this card on the review screen, and the answer
         # outranks everything below, including a set collision: the SKU names one row with
         # no key to collide. An answer whose row this export no longer carries (or carries
@@ -2127,6 +2267,9 @@ def join_batch(
                 detected_finish=card.detected_finish,
                 rarity_claim=card.rarity_claim,
                 game=card.game,
+                # D23's cross-check released by two agreeing signals. The ladder decides
+                # what to do with it; this module decides what it IS.
+                name_corroborated=corroborated,
             )
 
         # D35 — THE ROW WAS FOUND BY NAME, SO IT IS NOT LISTED ON THAT ALONE.
@@ -2179,6 +2322,46 @@ def join_batch(
             resolution = variant.Resolution(
                 stage=variant.REVIEW,
                 reason=routing.NUMBER_UNREAD_NAME_MATCHED,
+                row=resolution.row,
+                condition=resolution.condition,
+                market_price=resolution.market_price,
+            )
+
+        # THE SAME COMPARISON, RUN THE OTHER WAY — and the half that makes the rarity
+        # release safe rather than merely quieter (`routing.NAME_DISPUTED`).
+        #
+        # The block above queues a card whose NUMBER could not be read. This one queues a
+        # card whose number read fine, found real rows, and whose NAME says they belong to
+        # something else. Both write a review reason over a resolution the ladder completed;
+        # they are the two directions of one question and are deliberately adjacent.
+        #
+        # IT DOES NOT DEPEND ON THE RARITY CLAIM, AND THAT IS THE POINT. Nine box-1 cards
+        # were waved through by a claim that happened to fit the wrong card's rows, so a
+        # mirror gated on the claim would still miss every one of them. `1/51` is the case:
+        # read `Irelia, Blade Dancer`, number `190/221`, rows say `Forgefire Cape`, rarity
+        # `Epic` — claimed, agreed, listed, never asked about.
+        #
+        # ORDERED AFTER THE D35 BLOCK because that one is the more specific finding on the
+        # card it fires for: a row reached WITHOUT its number, which is the stronger reason
+        # to look, and whose name matched by construction so this can never fire on it.
+        #
+        # RUNG 0 IS EXEMPT, for the reason that block records at length. A human who looked
+        # at the photograph has already answered the question this would ask, and re-raising
+        # it is the sixteen-cards failure D3 rung 0 exists to prevent. `store/queues.py`
+        # would not even re-queue the card: it would be listed nowhere and asked nowhere.
+        if (
+            disputed
+            and resolution.stage != variant.HUMAN_ANSWERED
+            and not resolution.needs_review
+            and resolution.row is not None
+        ):
+            # Narrowed to the resolved row, as D35's block narrows: the entry offers the one
+            # row the ladder chose, which is what a human is being asked to look at, and what
+            # makes a queue of these one D29 group.
+            found = replace(found, rows=(resolution.row,))
+            resolution = variant.Resolution(
+                stage=variant.REVIEW,
+                reason=routing.NAME_DISPUTED,
                 row=resolution.row,
                 condition=resolution.condition,
                 market_price=resolution.market_price,

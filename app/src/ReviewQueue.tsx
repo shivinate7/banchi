@@ -79,6 +79,26 @@ function collectorNumber(read: QueueRead): string | null {
   return sharedCollectorNumber({ number: read.number, printed_total: read.printed_total })
 }
 
+/* The rarities the CANDIDATE ROWS carry, deduplicated in the order they are drawn. Half of
+ * what `rarity_claim_mismatch` means, and absent on every entry queued before 2026-09-11 —
+ * which is an ordinary case, not a migration: a queue file outlives the run that wrote it,
+ * and the sentence falls back to the wording it had. */
+function candidateRarities(candidates: CandidateRow[]): string[] | null {
+  const seen: string[] = []
+  for (const row of candidates) {
+    const rarity = text(row.rarity)
+    if (rarity !== null && !seen.includes(rarity)) seen.push(rarity)
+  }
+  return seen.length === 0 ? null : seen
+}
+
+/* English for a short list, so a sentence can say "Rare or Epic" rather than printing an
+ * array. Two is the common case and three is the ceiling this has ever drawn. */
+function orList(words: string[]): string {
+  if (words.length <= 1) return words[0] ?? ''
+  return `${words.slice(0, -1).join(', ')} or ${words[words.length - 1]}`
+}
+
 function soleCondition(candidates: CandidateRow[]): string | null {
   const conditions = new Set(candidates.map((row) => row.condition))
   if (conditions.size !== 1) return null
@@ -114,6 +134,7 @@ function sentence(entry: QueueEntryWire): Segment[] {
   const detected = text(entry.read.detected_finish)
   const hint = text(entry.read.set_hint)
   const name = text(entry.read.name)
+  const claimed = claimMembers(entry.read.rarity_claim)
   const only = soleCondition(entry.candidates)
 
   switch (entry.reason) {
@@ -192,15 +213,56 @@ function sentence(entry: QueueEntryWire): Segment[] {
     case 'no_market_data':
       return [say('The row this matched carries no market price, so nothing prices it automatically — a missing price is an unknown price, not a low one.')]
 
-    /* D23's job (a): the only reason that can mean the rows themselves are the wrong card. */
+    /* D23's job (a): the only reason that can mean the rows themselves are the wrong card.
+     *
+     * IT NAMES BOTH WORDS SINCE 2026-09-11, AND IT NAMED NEITHER BEFORE. The one reason in
+     * the vocabulary whose meaning is "A contradicts B" could not say what A or B were, so
+     * 141 entries on the owner's screen said the claim matched no row and left them to work
+     * out which word disagreed with which. The wire carries both now — `read.rarity_claim`
+     * and each candidate's `rarity` — and when it does not, the old wording stands: an
+     * entry queued before the fields existed is not an entry to guess about. */
     case 'rarity_claim_mismatch': {
+      const rowWords = candidateRarities(entry.candidates)
       const head: Segment[] =
-        number === null
-          ? [say('The rarities claimed at capture match none of the rows below. ')]
-          : [say('The rarities claimed at capture match none of the rows '), value(number), say(' found. ')]
+        claimed !== null && rowWords !== null
+          ? [
+              say('You claimed this stack holds '),
+              claim(claimed.join(' or '), orList(claimed.map(humanize))),
+              say(number === null ? ', and every row below is ' : ', and every row '),
+              ...(number === null ? [] : [value(number), say(' found is ')]),
+              claim(rowWords.join(' or '), orList(rowWords.map(humanize))),
+              say('. '),
+            ]
+          : number === null
+            ? [say('The rarities claimed at capture match none of the rows below. ')]
+            : [say('The rarities claimed at capture match none of the rows '), value(number), say(' found. ')]
       return [
         ...head,
         say('That is what a misread number looks like when the misreading is confident: the number found real rows, but they may belong to a different card entirely. Check them against the photograph before answering.'),
+      ]
+    }
+
+    /* The same cross-check run the other way, and the reason with the strongest claim on a
+     * human's attention: the number found rows and the NAME read off the same photograph
+     * matches none of them. `pipeline/routing.py:NAME_DISPUTED`. */
+    case 'name_disputed': {
+      const rowName = text(entry.candidates[0]?.name)
+      const head: Segment[] =
+        name === null
+          ? [say('The name on this photograph could not be checked against the row below. ')]
+          : rowName === null
+            ? [say('This photograph reads as '), value(name), say(', which is not what the row below is called. ')]
+            : [
+                say('This photograph reads as '),
+                value(name),
+                say(number === null ? ', but the row it matched is ' : ', but '),
+                ...(number === null ? [] : [value(number), say(' is ')]),
+                value(rowName),
+                say('. '),
+              ]
+      return [
+        ...head,
+        say('The number and the name came off the same card and they disagree, so one of them was misread. A confident wrong number lands on a real row for another card, and this is the only signal that catches it.'),
       ]
     }
 
@@ -228,6 +290,7 @@ const QUESTIONS: Readonly<Record<string, string>> = {
   set_ambiguous: 'Which set is it from?',
   card_not_detected: 'What is in this photograph?',
   number_unread_name_matched: 'Is this the row it matched?',
+  name_disputed: 'Is this the right card at all?',
   no_market_data: 'Is this the card?',
 }
 
@@ -597,23 +660,45 @@ export function ReviewQueue() {
 
   const current = worklist[0] ?? null
 
-  /* The group offer: every card in the (filtered) worklist shares one reason and offers
-   * exactly one row of one condition. Two cards minimum. Re-derived from live rows. */
-  const groupOffer = useMemo((): { rows: Row[]; reason: string; condition: string } | null => {
-    if (worklist.length < 2) return null
-    const first = worklist[0]
-    if (first === undefined) return null
-    const reason = first.entry.reason
-    const conditions = new Set<string>()
-    for (const row of worklist) {
-      if (row.entry.reason !== reason) return null
-      const only = row.entry.candidates[0]
-      if (only === undefined || row.entry.candidates.length !== 1) return null
-      conditions.add(only.condition)
-    }
-    const [condition] = [...conditions]
-    if (condition === undefined || conditions.size !== 1) return null
-    return { rows: worklist, reason, condition }
+  /* THE GROUP OFFER: THE LARGEST CLUSTER THE CARD IN FRONT OF YOU BELONGS TO, not the whole
+   * worklist (D29, amended 2026-09-11).
+   *
+   * IT WAS ALL-OR-NOTHING UNTIL THEN, AND THAT IS WHAT KILLED IT IN PRACTICE. One card in
+   * the list offering two rows returned null for every other card in it. Measured on the
+   * owner's store the day this changed: their parked queue held 101 `rarity_claim_mismatch`
+   * entries, 99 of them offering exactly one row of one condition (`Near Mint Foil`) — and
+   * TWO offering two. Those two suppressed the button for ninety-nine, and the ninety-nine
+   * were answered by hand, one press each.
+   *
+   * ANCHORED ON `worklist[0]`, WHICH IS THE CARD ON SCREEN. The alternative — the largest
+   * cluster anywhere in the list — would offer to answer a group the operator is not
+   * looking at, which is D29's own eligibility argument turned inside out: the press is
+   * safe because the photographs on the confirm panel are the ones being answered.
+   *
+   * A `name_disputed` ENTRY IS NEVER IN A GROUP, even a uniform one. That reason exists
+   * because the two things read off one photograph disagree, so the card is exactly the one
+   * D29's "a claim about a set of cards nobody is looking at individually" must not sweep
+   * up. It is also why the anchor is checked first: an operator standing ON a disputed card
+   * is offered no group at all.
+   *
+   * THE SERVER'S CHECK IS UNTOUCHED AND STILL AUTHORITATIVE. A subset of a set that
+   * satisfied it satisfies it by construction — one reason, one condition, one row each —
+   * so this narrows what is OFFERED and can never widen what is accepted. */
+  const groupOffer = useMemo((): { rows: Row[]; reason: string; condition: string; left: number } | null => {
+    const anchor = worklist[0]
+    if (anchor === undefined) return null
+    if (anchor.entry.reason === 'name_disputed') return null
+    const only = anchor.entry.candidates[0]
+    if (only === undefined || anchor.entry.candidates.length !== 1) return null
+    const reason = anchor.entry.reason
+    const condition = only.condition
+    const cluster = worklist.filter((row) => {
+      if (row.entry.reason !== reason) return false
+      const row_only = row.entry.candidates[0]
+      return row_only !== undefined && row.entry.candidates.length === 1 && row_only.condition === condition
+    })
+    if (cluster.length < 2) return null
+    return { rows: cluster, reason, condition, left: worklist.length - cluster.length }
   }, [worklist])
 
   useEffect(() => {
@@ -1458,7 +1543,7 @@ function GroupConfirm({
   onLeave,
   tray,
 }: {
-  offer: { rows: Row[]; reason: string; condition: string }
+  offer: { rows: Row[]; reason: string; condition: string; left: number }
   activity: string | null
   onConfirm: () => void
   onLeave: () => void
@@ -1480,6 +1565,16 @@ function GroupConfirm({
         <p className="review-sentence">
           Every card below offers exactly one row — <span className="review-claim">{offer.condition}</span> — for the same reason. One press answers each card with its own row.
         </p>
+        {/* WHAT THE PRESS IS NOT ANSWERING FOR. The group is a cluster rather than the whole
+            worklist, so the operator has to be told the rest is still theirs — an unstated
+            remainder reads as "the queue is done" and is the one way this control can
+            mislead. Silent when it answers everything. */}
+        {offer.left === 0 ? null : (
+          <p className="review-sentence review-group-left">
+            {offer.left} more {offer.left === 1 ? 'card is' : 'cards are'} still in this list and will not be
+            answered — {offer.left === 1 ? 'it offers' : 'they offer'} a different row, condition or reason.
+          </p>
+        )}
       </header>
 
       <ul className="review-group-grid">
@@ -1760,13 +1855,29 @@ function Claims({ entry, claims }: { entry: QueueEntryWire; claims: Claims }) {
       </span>,
     )
   }
-  if (entry.reason === 'rarity_claim_mismatch') {
+  if (entry.reason === 'rarity_claim_mismatch' || entry.reason === 'name_disputed') {
     chips.push(
       <span key="rarity" className="review-chip review-chip-warn">
         <Icon name="alert" size={12} />
         These rows may be another card
       </span>,
     )
+  }
+  {
+    /* THE CLAIM ITSELF, BESIDE THE FINISH TOGGLE IT HAS ALWAYS SAT NEXT TO IN THE STORE.
+     * Drawn for every reason and not only the contradiction: the claim narrowed the rows on
+     * every card it was made for (D23 job (a) filters before any rung reads them), so it is
+     * context for the whole queue rather than evidence for one entry. */
+    const claimed = claimMembers(entry.read.rarity_claim)
+    if (claimed !== null) {
+      chips.push(
+        <span key="claim" className="review-chip" title={`Rarity claimed at capture: ${claimed.join(', ')}`}>
+          <Icon name="tag" size={12} />
+          <span className="review-chip-key">Claimed</span>
+          <span className="review-chip-value">{claimed.map(humanize).join(' · ')}</span>
+        </span>,
+      )
+    }
   }
   if (chips.length === 0) return null
   return <div className="review-claims">{chips}</div>
