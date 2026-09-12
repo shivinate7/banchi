@@ -49,6 +49,15 @@ which is where a fact you should know but need not act on belongs.
     scripts/janitor.py --root PATH         another checkout. Repo-agnostic on purpose.
     scripts/janitor.py --teardown TREE     stop that tree's servers. What the hook runs.
     scripts/janitor.py --sessions DIR      read the liveness oracle elsewhere, for the self-test.
+    scripts/janitor.py --stale-hours N     when a process a session still owns is worth a line.
+
+AND OWNERSHIP IS READ THE SAME WAY LIVENESS IS. The records above answer a second question this
+file could not ask until 2026-09-12: not "is this tree busy" but "does anything still own this
+PROCESS". Everything else here is about a tree, a branch or a registration, and tier 1's test is
+"can this be live at all" — so a background loop whose session has ended read as live, leave it
+alone. One ran for 3 h 58 m merging pull requests out from under its own successor session, and
+nothing in this repo could see it. `loose_processes` is that question; it names only what it can
+PROVE a session started, and it can never name the main checkout's server.
 """
 
 from __future__ import annotations
@@ -81,6 +90,28 @@ _ABS_PATH_RE = re.compile(r"(/[^\s]+)")
 
 # A branch this sweep will not consider under any flag, whatever its merge state.
 _NEVER_CUT = ("main", "master", "HEAD")
+
+# THE BASH TOOL'S OWN WRAPPER IS WHAT MAKES SESSION ORIGIN PROVABLE, AND IT IS THE WHOLE REASON
+# `loose_processes` is allowed to name anything at all. Every command a Claude Code session runs
+# arrives as `zsh -c 'source ~/.claude/shell-snapshots/snapshot-zsh-<n>-<id>.sh ... && <command>'`,
+# so this fragment sits in that wrapper's argv — and stays there after the session that wrote it
+# is gone, because a reparented process keeps the argv it was exec'd with. Measured on this
+# machine 2026-09-12: it appears in the wrapper of every session-started process and in nothing
+# else, and notably NOT in `scripts/serve.py run`, which launchd starts from a plist.
+_SESSION_MARK = os.path.join(".claude", "shell-snapshots")
+
+# How long a process a live session still claims may run before it is worth a LINE — never a
+# reap; see `loose_processes` for why that half is reported and never offered.
+#
+# DERIVED, NOT PICKED. Measured 2026-09-12 on this machine: the ten live session records ran
+# 0.78 h to 23.89 h, median 13.05 h, and a `make dev` Vite server owned by a session is
+# legitimate for the whole of its session's life — so anything at or under a day is a number
+# that fires on healthy work. The foreground commands are nowhere near it: `make check` ~17 s,
+# `make harness` ~13 s, `make design-check` 89-175 s over five runs. 48 h is twice the longest
+# session measured, and it also sits ABOVE the 37.1 h the owner's rig supervisor had been up
+# when this was written — so even with every exclusion below broken, the clock alone could not
+# have named that process.
+STALE_HOURS = 48.0
 
 
 class Ran(NamedTuple):
@@ -337,6 +368,241 @@ def servers_under(tree: str, mine: int) -> List[Server]:
     return found
 
 
+# ------------------------------------------------- the process nothing owns any more (D175)
+
+class Loose(NamedTuple):
+    pid: int
+    command: str
+    tree: str         # the working tree of this clone it runs out of
+    hours: float      # how long it has been up, or -1.0 when `ps` could not be read
+    owner: str        # the live session that started it, or "" when none does
+
+
+class Scan(NamedTuple):
+    """What the hunt for loose processes found, AND WHAT IT LOOKED AT.
+
+    `examined` is here because a sweep that enumerated nothing must not print the same word as
+    one that read the whole process table and found everything owned. That confusion is this
+    repo's signature defect — `corpus_is_empty` exists in `docs-audit.py` for it — and it is
+    worse here than anywhere: "nothing loose" is the sentence a session would read as proof that
+    the four-hour loop of 2026-09-11 was not running, and a `ps` that failed prints it too.
+    """
+    offered: List[Loose]
+    reported: List[Loose]
+    examined: int     # session-started processes placed under this clone
+    owned: int        # of those, how many a live session still claims
+
+
+def _under(path: str, root: str) -> bool:
+    """Is `path` `root` itself or inside it? Both are expected to be resolved already."""
+    return bool(root) and (path == root or path.startswith(root + os.sep))
+
+
+def _process_tree() -> dict:
+    """{pid: (ppid, command)} in ONE `ps`, because the parent link is what ownership is.
+
+    `_process_table` answers the two older callers, which only ever ask what a command line
+    says. This one is separate rather than a widening of it: nothing above needs the parent,
+    and a tuple that grew a third field would have to be unpacked in four places to add a
+    column three of them ignore.
+    """
+    got = run(["ps", "-axww", "-o", "pid=,ppid=,command="])
+    if not got.ok:
+        return {}
+    rows = {}  # type: dict
+    for line in got.out.splitlines():
+        parts = line.split(None, 2)
+        if len(parts) < 3:
+            continue
+        try:
+            pid, ppid = int(parts[0]), int(parts[1])
+        except ValueError:
+            continue
+        command = parts[2].strip()
+        if command:
+            rows[pid] = (ppid, command)
+    return rows
+
+
+def _chain(tree: dict, start: int) -> List[int]:
+    """`start` and every ancestor of it, nearest first, stopping short of pid 1.
+
+    The loop is bounded and revisit-guarded because this walks a table that was sampled a
+    moment ago and is already out of date: a pid can be gone, and a re-used pid can in
+    principle point back into the chain. Neither may hang the sweep.
+    """
+    walk = []  # type: List[int]
+    seen = set()  # type: Set[int]
+    cur = start
+    for _ in range(64):
+        if cur <= 1 or cur in seen:
+            break
+        seen.add(cur)
+        walk.append(cur)
+        row = tree.get(cur)
+        if row is None:
+            break
+        cur = row[0]
+    return walk
+
+
+def _working_dirs(pids: Set[int]) -> dict:
+    """{pid: working directory} for these pids, from one BOUNDED `lsof`.
+
+    Bounded on purpose. `reap.py` asks `lsof` for the whole machine because a kill's targets
+    can be anywhere; here the candidates have already been narrowed by `_SESSION_MARK` to a
+    handful, and `make status` runs this sweep at the head of every session. Measured over six
+    pids on this machine: 97 ms.
+    """
+    if not pids:
+        return {}
+    got = run(["lsof", "-a", "-d", "cwd", "-p", ",".join(str(p) for p in sorted(pids)), "-Fpn"])
+    found = {}  # type: dict
+    if not got.out:
+        return found
+    who = 0
+    for line in got.out.splitlines():
+        if line.startswith("p"):
+            try:
+                who = int(line[1:])
+            except ValueError:
+                who = 0
+        elif line.startswith("n") and who:
+            found.setdefault(who, _real(line[1:]))
+    return found
+
+
+def _placed(command: str, cwd: str, root: str) -> bool:
+    """Does this process run out of `root`? An absolute path in its argv, or its own cwd.
+
+    THE SECOND ARM IS DELIBERATELY BROADER THAN `reap.py:_placed_under`, WHICH REJECTED IT.
+    That file needs to name a SERVER and found that a bare working directory also selected
+    `make`, the shell around it and the session itself — too broad for something that sends a
+    signal on the strength of the answer. Here "merely working in the tree" is the subject: the
+    incident this exists for was `bash scratchpad/autodrive.sh`, whose argv carries no path
+    under any checkout at all. The narrowing is done by `_SESSION_MARK` and by ownership, not by
+    placement, and the two files therefore ask the same question for different reasons.
+    """
+    for raw in _ABS_PATH_RE.findall(command):
+        if _under(_real(raw), root):
+            return True
+    return bool(cwd) and _under(cwd, root)
+
+
+def loose_processes(root: str, main_tree: str, trees: Sequence[Tree],
+                    sessions: Sequence[Session], mine: int, stale_hours: float) -> Scan:
+    """The processes a session started out of this clone that nothing is listening to.
+
+    THE HOLE THIS FILLS. Every other test in this file is about a TREE, a BRANCH or a
+    REGISTRATION, and tier 1's question is "can this be live at all". A running background loop
+    is none of those and answers that question with a yes, so a running pid read as "live, leave
+    it alone". The guard could tell a dead process from a live one and could not tell a live
+    process from an OWNED one. On 2026-09-11 that cost 119 rounds over 3 h 58 m: a coordinator
+    backgrounded a merge driver, was compacted, and the loop went on merging pull requests out
+    from under its own successor. Nothing in this repo could see it; the owner noticed a
+    four-hour `bash` in their UI and asked.
+
+    OWNERSHIP IS READ THE WAY LIVENESS IS, WHICH IS THE WHOLE POINT: the same
+    `~/.claude/sessions` records, pointed at a different question. Not "is this tree busy" but
+    "does anything still own this process". A process is owned when a LIVE session's pid is in
+    its parent chain, and that is measured rather than assumed — on this machine every process
+    of every live session traced back to its own session's pid, and the only two that traced to
+    nothing were the rig supervisor and its capture child.
+
+    IT NAMES ONLY WHAT IT CAN PROVE A SESSION STARTED, AND THAT ASYMMETRY IS THE SAFETY. Absence
+    of a session record is NOT evidence of absence of an owner: `~/.claude/sessions` is an oracle
+    about SESSIONS, and a process the OWNER started by hand in a terminal has no record either.
+    So the test is positive — `_SESSION_MARK` in the process's own argv or an ancestor's — and
+    anything that cannot be shown to have come from a session is passed over in silence. That is
+    `reap.py:hook`'s rule in this file's terms: a broken guard fails open, an unreadable target
+    fails closed.
+
+    AND IT CAN NEVER NAME THE MAIN CHECKOUT'S SERVER, BY CONSTRUCTION RATHER THAN BY SUBTRACTION.
+    Being inside a LINKED worktree is a requirement to be offered at all, not an exclusion
+    applied afterwards, so there is no ordering, no `continue` and no failed `main_checkout()`
+    lookup that can let the rig through. D53 means that process to outlive every session, it has
+    no session record by design, and a rule that offered it up would be wrong however carefully
+    the rest of it read — this repo has already killed it once with `pkill -f` (D127). The cost
+    of the requirement is a real and named gap: a loop backgrounded from a session standing in
+    the main checkout is not caught. That is the safe half of the trade and it is the entry's
+    reopening condition.
+
+    TWO FINDINGS, AND ONLY ONE OF THEM IS EVER OFFERED:
+
+      * NO LIVE OWNER — offered, and pressed only on `--confirm`. Tier 2, not tier 1, and the
+        entry argues it: `sweep` reaps tier 1 before it looks at `confirm` at all, so `make
+        status` — which runs the bare preview at the head of every session — would SIGTERM
+        these with no preview and no prompt.
+      * STILL OWNED BUT OLDER THAN `STALE_HOURS` — reported, and never reaped under any flag.
+        A live session claims it, and a sweep does not get to kill something whose owner is
+        sitting right there to be asked.
+    """
+    table = _process_tree()
+    if not table:
+        # A `ps` that failed is this guard being broken about itself, so it fails OPEN — nothing
+        # is named. `examined` of 0 is what keeps that from reading as an all-clear.
+        return Scan([], [], 0, 0)
+
+    live = {s.pid for s in sessions}
+    named = {s.pid: (s.name or str(s.pid)) for s in sessions}
+
+    # THE SWEEP'S OWN CHAIN IS NEVER A CANDIDATE, AND THIS IS NOT BELT AND BRACES. `make janitor`
+    # runs from a session's Bash wrapper, so this process carries `_SESSION_MARK` and runs out of
+    # a linked worktree — it is its own subject. It reads as owned only while its own session
+    # record is readable, and D111 records what happened the one time that oracle returned
+    # nought: the sweep offered up the tree it was running in.
+    family = set(_chain(table, mine))
+
+    linked = [t.path for t in trees if t.path != main_tree]
+    # A worktree git has already forgotten is still a worktree — `husks` exists because a
+    # directory can outlive its registration, and a process under one must not read as the
+    # main checkout's merely because `git worktree list` no longer mentions it.
+    husk_base = _real(str(Path(root) / ".claude" / "worktrees"))
+
+    started = {}  # type: dict
+    for pid in table:
+        if pid in family:
+            continue
+        walk = _chain(table, pid)
+        if any(_SESSION_MARK in table[step][1] for step in walk if step in table):
+            started[pid] = walk
+
+    dirs = _working_dirs(set(started))
+
+    offered, reported = [], []  # type: List[Loose], List[Loose]
+    examined = owned = 0
+    for pid in sorted(started):
+        command = table[pid][1]
+        cwd = dirs.get(pid, "")
+        if not _placed(command, cwd, root):
+            continue
+        examined += 1
+        tree = next((t for t in sorted(linked, key=len, reverse=True)
+                     if _placed(command, cwd, t)), "")
+        if not tree and _placed(command, cwd, husk_base):
+            tree = husk_base
+        owner = next((named[step] for step in started[pid] if step in live), "")
+        owned += bool(owner)
+        start = _proc_start(pid)
+        # A pid `ps` will not answer for is one this sweep cannot age, so it is never judged on
+        # time. -1.0 rather than 0.0: zero would read as "brand new" and be the one value that
+        # silently passes the staleness test.
+        hours = -1.0 if start is None else max(0.0, (time.time() - start) / 3600.0)
+        found = Loose(pid, command, tree or main_tree, hours, owner)
+        if not tree:
+            # The main checkout, and therefore never offered whatever else is true of it. It is
+            # still worth a line when nothing owns it: this is the one place the sweep says out
+            # loud what it refused to touch, which is `make reap`'s standard.
+            if not owner:
+                reported.append(found)
+            continue
+        if not owner:
+            offered.append(found)
+        elif hours > stale_hours:
+            reported.append(found)
+    return Scan(offered, reported, examined, owned)
+
+
 # -------------------------------------------------------------------------- the clone
 
 class Tree(NamedTuple):
@@ -461,8 +727,32 @@ def _relative(path: str, root: str) -> str:
         return path
 
 
+def _stop(pid: int) -> None:
+    """SIGTERM one process, and its group ONLY WHEN IT LEADS THAT GROUP.
+
+    A supervisor's children should go with it, and `serve.py` spawns every one
+    `start_new_session=True` so each IS its own leader — but a process that is merely a MEMBER
+    of somebody else's group would have that whole group signalled on its behalf, which is a
+    stranger's shell and everything in it. Leader, group. Not leader, the pid alone.
+
+    It is one function because two callers now send this signal for two different reasons — the
+    orphan whose own script is gone, and the loose process nothing owns — and a guard that
+    reasoned one way in one place and another way in the other is how `reap.py`'s own
+    `pids_under`/`verdict_for` split produced a defect nobody could see.
+    """
+    with contextlib.suppress(OSError):
+        if os.getpgid(pid) == pid:
+            os.killpg(pid, signal.SIGTERM)
+        else:
+            os.kill(pid, signal.SIGTERM)
+
+
+def _shorten(command: str, width: int = 64) -> str:
+    return command if len(command) <= width else command[:width - 1] + "…"
+
+
 def sweep(root: str, sessions_dir: Path, confirm: bool, tier1: bool,
-          confine: str = "") -> Tuple[int, int, int]:
+          confine: str = "", stale_hours: float = STALE_HOURS) -> Tuple[int, int, int]:
     """(reaped, reported, pending). Prints the whole account as it goes.
 
     THE THIRD NUMBER IS THE ONLY ONE THAT SETS AN EXIT CODE, and the distinction is the point:
@@ -486,16 +776,7 @@ def sweep(root: str, sessions_dir: Path, confirm: bool, tier1: bool,
         say("  reaped    pid {0} — its own {1} is gone".format(
             server.pid, Path(server.missing).name))
         say("            {0}".format(server.missing))
-        # THE GROUP ONLY WHEN THIS PROCESS LEADS IT. A supervisor's children should go with it,
-        # and `serve.py` spawns every one `start_new_session=True` so each IS its own leader —
-        # but a process that is merely a member of somebody else's group would have that whole
-        # group signalled on its behalf, which is a stranger's shell and everything in it.
-        # Leader, group. Not leader, the pid alone.
-        with contextlib.suppress(OSError):
-            if os.getpgid(server.pid) == server.pid:
-                os.killpg(server.pid, signal.SIGTERM)
-            else:
-                os.kill(server.pid, signal.SIGTERM)
+        _stop(server.pid)
         reaped += 1
 
     pruned = run(["git", "worktree", "prune", "-v"], cwd=root)
@@ -520,6 +801,45 @@ def sweep(root: str, sessions_dir: Path, confirm: bool, tier1: bool,
 
     # ------------------------------------------------------- tier 2: needs a human word
     verb = "reaped   " if confirm else "would reap"
+
+    # THE PROCESS NOTHING OWNS COMES FIRST, BECAUSE ITS TREE CANNOT BE REAPED WHILE IT RUNS. The
+    # loop below keeps a tree that has a server running out of it, so this offer and that refusal
+    # are two halves of one account: stop the process on this sweep, and the tree it was holding
+    # open becomes reapable on the next. That is D111's re-runnability doing the work a one-shot
+    # ordering could not.
+    scan = loose_processes(root, main_tree, trees, sessions, mine, stale_hours)
+    if scan.examined:
+        say("  looked at {0} process(es) a session started under this clone — "
+            "{1} still owned, {2} loose".format(
+                scan.examined, scan.owned, len(scan.offered)))
+    else:
+        # NOT the same sentence as "examined everything, found nothing loose". A `ps` that
+        # failed, a machine with no session-started process on it, and a healthy clone all land
+        # here, and none of them is evidence that nothing is running.
+        say("  looked at no process here carries a session's own shell wrapper — "
+            "nothing to judge")
+    for loose in scan.reported:
+        say("  KEPT      pid {0}".format(loose.pid))
+        say("            {0}".format(_shorten(loose.command)))
+        if not loose.owner:
+            say("            the MAIN CHECKOUT's — D53 means it to outlive every session")
+        else:
+            say("            up {0:.1f} h, and {1} still owns it — ask, do not reap".format(
+                loose.hours, loose.owner))
+        reported += 1
+    for loose in scan.offered:
+        say("  {0} pid {1}  (no live session owns it)".format(verb, loose.pid))
+        say("            {0}".format(_shorten(loose.command)))
+        say("            started out of {0}, up {1}".format(
+            _relative(loose.tree, root),
+            "an unreadable time" if loose.hours < 0 else "{0:.1f} h".format(loose.hours)))
+        if confirm:
+            _stop(loose.pid)
+            reaped += 1
+        else:
+            reported += 1
+            pending += 1
+
     for tree in trees:
         if tree.path == main_tree:
             continue
@@ -645,6 +965,11 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--teardown", metavar="TREE", default="",
                         help="stop what a leaving session started in TREE, and nothing else. "
                              "What the SessionEnd / WorktreeRemove hook runs.")
+    parser.add_argument("--stale-hours", type=float, default=STALE_HOURS,
+                        help="how long a process a live session still owns may run before it is "
+                             "worth a line. Never a reap, at any value. What "
+                             "scripts/janitor-selftest.sh drives, so the threshold can be "
+                             "proved to fire and to hold in one run.")
     parser.add_argument("--confine", default="",
                         help="only consider processes rooted under this path. What "
                              "scripts/janitor-selftest.sh drives, so a test signals its own "
@@ -674,14 +999,15 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
     confine = _real(args.confine) if args.confine else ""
 
     if args.tier1:
-        reaped, reported, _ = sweep(root, sessions_dir, False, True, confine)
+        reaped, reported, _ = sweep(root, sessions_dir, False, True, confine, args.stale_hours)
         if reaped or reported:
             say("janitor: {0} reaped, {1} reported".format(reaped, reported))
         return 0
 
     say("JANITOR — {0}{1}".format(root, "" if args.confirm else "  (PREVIEW)"))
     rule()
-    reaped, reported, pending = sweep(root, sessions_dir, args.confirm, False, confine)
+    reaped, reported, pending = sweep(
+        root, sessions_dir, args.confirm, False, confine, args.stale_hours)
     rule()
     say("janitor: {0} reaped, {1} reported{2}".format(
         reaped, reported,

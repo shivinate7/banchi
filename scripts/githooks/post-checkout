@@ -94,7 +94,24 @@ if [ -n "$top" ] && [ -d "$top/.git" ] && git rev-parse --verify --quiet main >/
       # that only ever prints: renaming the hatch makes this say "stop it" where it need not,
       # never the reverse. `scripts/githooks-selftest.sh` asserts both directions against this
       # repo's own serve.py, so the token going stale is a failed commit rather than a silence.
-      if grep -q 'PKMNSCAN_SERVE_MAIN' "$top/scripts/serve.py" 2>/dev/null; then
+      if grep -q 'primary_sync' "$top/scripts/serve.py" 2>/dev/null; then
+        # THE THIRD STATE, AND IT IS NOW THE ORDINARY ONE
+        # (D176). The sentence below this one — "it will REFUSE"
+        # — was true and complete under D158 and is WRONG for a branch carrying the self-sync:
+        # the supervisor does not refuse, it puts this tree back on main within a tick. A
+        # person who has just typed `git switch` is standing right here, and being told the
+        # opposite of what is about to happen to their tree is worse than being told nothing.
+        #
+        # FOUND BY THE MODULE'S NAME, the same trick and the same safe direction as the hatch
+        # grep below: `primary_sync` cannot be in `serve.py` for a second reason, and
+        # over-reporting only ever makes this say "it will sync" where it need not.
+        echo "  A supervisor is live here and it will PUT THIS TREE BACK ON MAIN, within a" >&2
+        echo "  tick, and then fast-forward main to origin/main. It refuses instead — naming" >&2
+        echo "  what stopped it — if you have uncommitted tracked work here, a rebase or" >&2
+        echo "  merge in progress, or a main that is not a fast-forward." >&2
+        echo "  Work on a branch in a worktree, not here. To keep this tree where it is:" >&2
+        echo "  PKMNSCAN_SYNC=off" >&2
+      elif grep -q 'PKMNSCAN_SERVE_MAIN' "$top/scripts/serve.py" 2>/dev/null; then
         echo "  A supervisor is live here. It will REFUSE to reload into this branch —" >&2
         echo "  what is serving goes on serving, and comes back on \`git switch main\`." >&2
       else
