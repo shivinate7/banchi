@@ -549,6 +549,41 @@ make merge          # merge a PR and move main onto it — BOTH HALVES, on your 
 ./pkmnscan scan     <capture-dir>   # CODE CARDS ONLY. Read the QR codes into the ledger.
                                    #   FREE — no model call, no network. The QR IS the code.
 ./pkmnscan identify <capture-dir>   # submit, wait, collect, cache. COSTS MONEY. --dry-run first.
+                                   #   IT RECORDS THE DRAWER'S `bid` NOW (D-run-binds-to-bid).
+                                   #   `_scope_for` writes the box and its true index into the
+                                   #   manifest's scope block, off the SIDECARS rather than off
+                                   #   the capture directory's name — this was the last
+                                   #   run-creation path that left a run nothing could bind, so
+                                   #   `refuse_reallocated` had to infer. Two boxes get NO scope
+                                   #   rather than a guessed one (D48).
+./pkmnscan rescue   <run-dir>       # A STRANDED RUN'S CARDS, RE-ADDRESSED TO WHERE THEY ARE NOW.
+                                   #   Free, previews, re-runnable. The repair for a run D36
+                                   #   refuses: box 1 was deleted and its number reused, so the
+                                   #   run describes a drawer that no longer exists and no join
+                                   #   can reach its cards however plainly they are on a shelf.
+                                   #   IT IS `realign`'s DIGEST MECHANISM WITH THE PER-BOX
+                                   #   RESTRICTION LIFTED, which is safe here and would not be
+                                   #   inside a join: it is an explicit act, it previews, and it
+                                   #   derives a SECOND run rather than changing what a join does.
+                                   #   THE PHOTOGRAPH IS THE TRUTH — D36's own sentence. Nothing
+                                   #   trusts a slot, a run name, a box number or the `run`
+                                   #   column; every binding is a sha256 of the file on disk
+                                   #   against the digest the run recorded.
+                                   #   `--write` creates `runs/<date>-box<N>-rescue-NN/` scoped
+                                   #   to the drawer the cards are in, with its `bid` on it, and
+                                   #   NEVER edits the run it is given — a run is an immutable
+                                   #   input. Then join and emit by the ordinary path.
+                                   #   REFUSES: a run that is not stranded (rescuing a healthy
+                                   #   one would put two runs over one shelf, D86's shape), a
+                                   #   digest carried by two records or two photographs, cards
+                                   #   spread across two drawers (D48), and a run whose cards
+                                   #   have all left. An identical rescue already on disk writes
+                                   #   nothing and says so.
+                                   #   Measured on the owner's store: 99 of
+                                   #   `2026-08-29-box1-01`'s 133 records rebind with 0
+                                   #   ambiguities. All 99 are ALREADY LIVE at TCGplayer, so the
+                                   #   emit correctly adds nothing — what this recovers is the
+                                   #   PRICING surface, not the stock.
 ./pkmnscan join     <run-dir>       # resolve against the export. Free, re-runnable.
                                    #   --dry-run  preview both queues, write nothing
 ./pkmnscan emit     <run-dir> [<run-dir> ...]
@@ -1782,6 +1817,7 @@ D158 The refusal goes where the damage is, so the primary checkout's server will
 D159 The band is copies rather than SKUs, the drawer is the first answer, and nothing on hand is dropped
 D160 An entry is a file, because two branches appending to one file collide every single time
 D161 `make check` proves the product first and its own guards last, because a failure stops the rest
+D-run-binds-to-bid A run is bound to the drawer's true index, and the run the number stranded is repaired once by hand
 ```
 
 **THE GAP THIS LIST CARRIED BETWEEN D116 AND D118 IS CLOSED, AND IT CLOSED THE WAY IT SAID IT

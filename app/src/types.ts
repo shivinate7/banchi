@@ -1879,7 +1879,11 @@ export type Unreachable = {
   captured: number
   in_review: number
   unjoined: { run: string; cards: number }[]
-  reallocated: { run: string; box: number | null }[]
+  /** `cards` is how many of the run's cards this store still HOLDS — not how many it read.
+   *  A run over a reallocated drawer withholding nothing and one withholding 99 sellable
+   *  cards were the same sentence until this field existed. `null` means the server could
+   *  not open the store, which is not the same claim as zero. */
+  reallocated: { run: string; box: number | null; cards: number | null }[]
 }
 
 /** One card's answer as the corpus stores it — D49's shapes, with provenance beside them. */

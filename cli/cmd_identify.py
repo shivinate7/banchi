@@ -93,6 +93,57 @@ UNFIT_CROPS_SHOWN = 5
 UNKNOWN_GAME = "unknown_game"
 
 
+def _scope_for(
+    items: List["Item"], capture_dir: Path, inventory: master.Inventory
+) -> Optional[dict]:
+    """What this run is over, in the shape the screen's own press records — WITH THE BID.
+
+    THE LAST RUN-CREATION PATH THAT PRODUCED AN UNBINDABLE RUN. `server/pipeline_routes.py`
+    has written a `scope` block since D33 and a `bid` in it since D145; a run started in a
+    TERMINAL had neither, so `_run_box` fell back to parsing the box number out of the
+    capture directory's name and `cli/resolve.py:refuse_reallocated` had nothing to compare.
+    Every run on the owner's machine written before D145 is in that position, and one of
+    them — `2026-08-29-box1-01` — is why this exists.
+
+    THE BOX COMES FROM THE SIDECARS AND NOT FROM THE PATH. `captures/cards/box3` is a
+    convention; `Capture.box` is what the capture itself recorded, and the two disagree the
+    moment a directory is renamed, mirrored, or handed over as a pile. A run whose captures
+    name two boxes gets NO scope rather than a guessed one — D48 keeps a run to one box, and
+    a scope block naming one of two would be a claim this command cannot support.
+
+    `bid` IS ABSENT RATHER THAN WRONG where the registry has no entry for the box, exactly as
+    `server/pipeline_routes.py:_box_bid` abstains: a run with no id is read by the older rule
+    (D36/D145), which is the arm that has always worked.
+
+    `whole_box` IS THE CAPTURE DIRECTORY BEING THE BOX'S OWN, which is the same thing it
+    means on the route — the box's directory IS the scope there and takes no temporary
+    anything. `cards` is null for a whole box for that reason: the count is whatever is on
+    disk when the run starts, not a number chosen in advance.
+    """
+    boxes = {
+        int(item.capture.box)
+        for item in items
+        if item.capture.box is not None
+    }
+    if len(boxes) != 1:
+        return None
+    box = boxes.pop()
+    # The same expression `cli/resolve.py:_photo_digests` builds, rather than an import of
+    # `server/pipeline_routes.py:box_capture_dir` — the CLI does not depend on the server.
+    own = store_files.home() / "captures" / "cards" / f"box{box}"
+    try:
+        whole_box = capture_dir.resolve() == own.resolve()
+    except OSError:
+        whole_box = False
+    entry = inventory.box(box)
+    return {
+        "box": box,
+        "whole_box": whole_box,
+        "cards": None if whole_box else len(items),
+        "bid": None if entry is None else master.int_or_none(entry.bid),
+    }
+
+
 @dataclass
 class Item:
     """One capture on its way through this command."""
@@ -692,6 +743,11 @@ def run(args, say) -> int:
         if getattr(args, "run_dir", None)
         else runs.create(args.label or capture_dir.name)
     )
+    # THE SCOPE, WITH THE BOX'S TRUE INDEX IN IT (D145). Written before anything is
+    # submitted, so a run that dies mid-batch still records which drawer it was over.
+    scope = _scope_for(items, capture_dir, snapshot.inventory)
+    if scope is not None:
+        run_dir.set(scope=scope)
     run_dir.set(
         capture_dir=str(capture_dir),
         prompt_fingerprint=fingerprint,
