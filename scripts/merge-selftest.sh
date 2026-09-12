@@ -71,6 +71,21 @@ moved() {
 
 echo "merge self-test  (hooks: $HOOKS_DIR)"
 
+# THE RIG HALF IS PINNED OFF FOR EVERY ARM BELOW, AND TURNED BACK ON FOR THE ONE SECTION THAT IS
+# ABOUT IT (D176). `make merge` now has a third half: after main
+# moves it puts the PRIMARY CHECKOUT back on main and fast-forwards it — and in this fixture the
+# primary checkout is `$tmp/work`, which nearly every arm below deliberately parks on `feature`.
+#
+# MEASURED, BECAUSE THE FIRST DRAFT DID NOT DO THIS: the sync SUCCEEDED in the first local-half
+# arm, switched `$tmp/work` onto main, and the footgun arm two sections later then found main
+# checked out in a worktree and correctly picked the pull form — failing an assertion about the
+# refspec form that had nothing wrong with it. Four arms went red for one state change three
+# sections earlier, which is the hardest kind of fixture failure to read.
+#
+# So the arms that assert THE LOCAL HALF keep asserting exactly that, and the rig half gets a
+# section of its own rather than being folded into every arm's expected state.
+export PKMNSCAN_SYNC=off
+
 # --------------------------------------------------- an origin, a clone and a second worktree
 git init -q --bare "$tmp/origin.git"
 git init -q -b main "$tmp/work"
@@ -163,6 +178,57 @@ expect refuse "a dirty tree" python3 "$MERGE_PR" --local "$MERGED" --confirm
 same "and nothing moved" "$dirty_before" "$(git -C "$tmp/mainwt" rev-parse HEAD)"
 git -C "$tmp/mainwt" checkout -q -- file.txt
 git worktree remove --force "$tmp/mainwt" 2>/dev/null
+
+# ------------------------------------------------------------------------------- THE RIG HALF
+#
+# D176. THE HOLE THIS CLOSES IS THE REFSPEC FORM'S: with main
+# checked out in no worktree — the ordinary state of a clone running ~30 worktrees on branches —
+# `git fetch origin main:main` moves `refs/heads/main` while standing in no tree at all. main is
+# then current and the primary checkout is still parked on whatever it was on, which is D158's
+# exact state reached by the command whose job is to leave everything tidy.
+#
+# THE HATCH COMES OFF FOR THIS SECTION ONLY, and goes back on after it.
+echo "  -- and the rig itself is put back on main --"
+PKMNSCAN_MAIN=off git update-ref refs/heads/main "$(git rev-list --max-parents=0 HEAD | tail -1)"
+git switch -q feature
+parked_main="$(git rev-parse refs/heads/main)"
+if [ "$(git rev-parse --abbrev-ref HEAD)" = "feature" ]; then
+  ok "the fixture arms it: the primary checkout is parked on feature, main nowhere"
+else
+  bad "the fixture is wrong — the primary checkout is not on feature"
+fi
+
+unset PKMNSCAN_SYNC
+expect allow "the merge runs, refspec form and all" python3 "$MERGE_PR" --local "$MERGED" --confirm
+moved "main advanced" "$parked_main" "$(git rev-parse refs/heads/main)"
+if [ "$(git rev-parse --abbrev-ref HEAD)" = "main" ]; then
+  ok "AND THE PRIMARY CHECKOUT IS BACK ON MAIN — the half that used to be left undone"
+else
+  bad "the primary checkout is still on $(git rev-parse --abbrev-ref HEAD), not main"
+fi
+if [ "$(git rev-parse HEAD)" = "$(git rev-parse refs/remotes/origin/main)" ]; then
+  ok "at origin/main, so the code in the rig is the code that was merged"
+else
+  bad "on main but not at origin/main — the second part did not run"
+fi
+
+# AND IT REFUSES RATHER THAN DISCARDING, which is the one thing it must never get wrong here.
+git switch -q feature
+PKMNSCAN_MAIN=off git update-ref refs/heads/main "$(git rev-list --max-parents=0 HEAD | tail -1)"
+echo "work in progress" >> file.txt
+rig_dirty_head="$(git rev-parse HEAD)"
+out="$(python3 "$MERGE_PR" --local "$MERGED" --confirm 2>&1)"
+case "$out" in
+  *"uncommitted tracked changes"*file.txt*)
+     ok "a dirty rig is REFUSED and the file is NAMED, and the merge still succeeded" ;;
+  *) bad "a dirty rig was not refused by name"
+     printf '%s\n' "$out" | sed 's/^/         /' ;;
+esac
+same "and the rig was not switched out from under the edit" "$rig_dirty_head" "$(git rev-parse HEAD)"
+moved "while main still advanced — the rig half never fails the merge" \
+  "$(git rev-list --max-parents=0 HEAD | tail -1)" "$(git rev-parse refs/heads/main)"
+git checkout -q -- file.txt
+export PKMNSCAN_SYNC=off
 
 # ------------------------------------------------------------ a commit origin does not carry
 echo "  -- the precondition the ref hook evaluates --"
