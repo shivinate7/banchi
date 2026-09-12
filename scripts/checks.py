@@ -500,6 +500,34 @@ CHECKS = (
         "governed_by": ("D18", "D43", "D53", "D138"),
     },
     {
+        "target": "sync-selftest",
+        "runs": "python3 scripts/sync-selftest.py",
+        "asserts": "the primary checkout's self-sync, proved by violating it in throwaway "
+                   "clones with their own worktrees and a real bare origin. Both parts, from "
+                   "one call: a tree parked on a feature branch goes back to main AND main "
+                   "fast-forwards to origin/main. And the six refusals, each a real repository "
+                   "state rather than a mock — uncommitted TRACKED work, named and never "
+                   "discarded; untracked exhaust, which must NOT block a sync; a half-finished "
+                   "merge and a stopped rebase, whose markers are a file and a directory; main "
+                   "held by another worktree; a local main that is ahead or diverged, which is "
+                   "no fast-forward; and a detached HEAD no ref contains. A LINKED WORKTREE IS "
+                   "LEFT COMPLETELY ALONE, asked from inside one. One arm arms D42's own "
+                   "`reference-transaction` hook and proves BOTH directions: the sync's "
+                   "fast-forward is permitted by allow rule 3, and a move to a commit origin "
+                   "does not carry is still refused. Its own bugs fail OPEN and silently; a "
+                   "fact it cannot read fails CLOSED and loud.",
+        "needs": ("python3", "git"),
+        "writes": "bare origins, clones and linked worktrees under `mktemp -d`, with real "
+                  "commits and real `refs/heads/main` moves in them. NEVER this checkout: the "
+                  "subject of a sync is the PRIMARY tree, which on this machine is the owner's "
+                  "live rig with a capture server kept alive at login over their real store.",
+        "commit_path": False,
+        "why_off_commit_path": "D18 — it writes, and what it writes are branch switches and "
+                               "ref moves. Same standing as merge-selftest beside it.",
+        "gates": True,
+        "governed_by": ("D18", "D42", "D43", "D53", "D139", "D158"),
+    },
+    {
         "target": "verdict-selftest",
         "runs": "python3 scripts/verdict-selftest.py",
         "asserts": "app/design-check-reporter.ts, run for real against one passing and one "

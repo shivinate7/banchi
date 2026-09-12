@@ -79,6 +79,7 @@ help:
 	@echo "  make suite-lock-selftest  one browser fleet at a time, proved by violating it."
 	@echo "  make verdict-selftest  the design-check verdict reporter, run for real. No browser."
 	@echo "  make serve-selftest  the supervisor's build job, against a throwaway tree. No node."
+	@echo "  make sync-selftest  the primary checkout's self-sync, proved by violating it."
 	@echo "  make port-agreement  server/ports.py and app/devPort.ts answer the same numbers."
 	@echo "  make set-hint-agreement  the capture screen and the export fetch resolve a set hint alike."
 	@echo "  make screen-freshness  every server write in app/ has a way back. Needs node."
@@ -101,7 +102,7 @@ help:
 	@echo "                    revert-guard +"
 	@echo "                    janitor-selftest + reap-selftest + silent-write-selftest +"
 	@echo "                    coordinator-selftest + suite-lock-selftest +"
-	@echo "                    serve-selftest +"
+	@echo "                    serve-selftest + sync-selftest +"
 	@echo "                    verdict-selftest + port-agreement + set-hint-agreement +"
 	@echo "                    screen-freshness + sigil-check + ignore-check + lint +"
 	@echo "                    vale + typecheck"
@@ -416,6 +417,7 @@ check:
 	@$(MAKE) --no-print-directory coordinator-selftest
 	@$(MAKE) --no-print-directory suite-lock-selftest
 	@$(MAKE) --no-print-directory serve-selftest
+	@$(MAKE) --no-print-directory sync-selftest
 	@$(MAKE) --no-print-directory verdict-selftest
 
 # WHAT A MACHINE CAN PROVE ON A FRESH CLONE, WHICH IS NOT EVERYTHING `make check` PROVES.
@@ -454,6 +456,7 @@ ci-check:
 	@$(MAKE) --no-print-directory coordinator-selftest
 	@$(MAKE) --no-print-directory suite-lock-selftest
 	@$(MAKE) --no-print-directory serve-selftest
+	@$(MAKE) --no-print-directory sync-selftest
 	@$(MAKE) --no-print-directory verdict-selftest
 	@$(MAKE) --no-print-directory port-agreement
 	@$(MAKE) --no-print-directory set-hint-agreement
@@ -668,6 +671,13 @@ janitor-selftest:
 serve-selftest:
 	@$(PYTHON) scripts/serve-selftest.py
 
+# THE PRIMARY CHECKOUT'S SELF-SYNC, proved by violating it in throwaway clones. It switches
+# branches and moves `refs/heads/main`, which is exactly why it may never be pointed at this
+# clone: the subject of a sync is the PRIMARY tree, and on this machine that is the owner's live
+# rig. In `check` and never in the git hook — D18, the same standing as merge-selftest.
+sync-selftest:
+	@$(PYTHON) scripts/sync-selftest.py
+
 # WHAT THIS SESSION STARTED, AND NOTHING ELSE. `pkill -f` and `lsof -ti tcp:PORT` are both
 # machine-wide, and both were used to clean up a session's own dev servers on 2026-09-10: the
 # first also matched the owner's live capture server over their real store, the second also
@@ -777,7 +787,7 @@ janitor-install:
 # answers from the tree alone, and a row that resolves DNS and expects a server to be up would
 # go red on a train and in every worktree. A check that fails for reasons unrelated to the
 # commit is one people learn to ignore.
-.PHONY: janitor janitor-selftest janitor-install serve-selftest ci-check
+.PHONY: janitor janitor-selftest janitor-install serve-selftest sync-selftest ci-check
 
 .PHONY: lan-check
 lan-check:

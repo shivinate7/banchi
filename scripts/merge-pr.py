@@ -58,7 +58,16 @@ import re
 import subprocess
 import sys
 import time
+from pathlib import Path
 from typing import List, NamedTuple, Optional, Sequence, Tuple
+
+# THE RIG'S OWN SYNC, IMPORTED FROM THIS CHECKOUT'S `scripts/`. `surface_half` above is the
+# reason to say where from: `make merge` runs the merge script of whatever tree invoked it, and
+# 24 of 30 trees were behind main's copy of this file on the day that guard was written. The
+# sync it calls is therefore this tree's too, and `--surface` already reports when that is
+# stale.
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+import primary_sync  # noqa: E402
 
 WIDTH = 76
 
@@ -352,6 +361,40 @@ def local_plan(root: str, commit: str) -> Tuple[Optional[List[str]], Optional[st
         "refuses against a branch somebody is standing on. That refusal would be git's and "
         "not a hook's.".format(holders[0]),
     )
+
+
+def primary_half(root: str, confirm: bool) -> int:
+    """AND THE RIG ITSELF, PUT BACK ON MAIN (D-the-primary-checkout-syncs-itself).
+
+    THE HOLE THIS FILLS IS `local_plan`'S FIRST BRANCH. When main is checked out in no worktree
+    — the ordinary state of this clone, with ~30 worktrees on feature branches — the refspec
+    form moves `refs/heads/main` and stands in no tree at all. So the merge completes, main is
+    current, and the PRIMARY checkout is still parked on whatever branch it was on: the exact
+    state D139 and D158 were both written about, arrived at by the command that is supposed to
+    leave everything tidy.
+
+    THE COORDINATOR HAD BEEN DOING THIS BY HAND ALL NIGHT, with a driver script that dies with
+    the session. That is the argument for it living here: `make merge` is the one moment this
+    repository already knows main has moved.
+
+    IT IS ITS OWN HALF AND NOT PART OF `local_half`, because it can fail without the merge
+    having failed. The GitHub half is done, main is on origin, and a rig that would not sync
+    because somebody has uncommitted work in it is not a broken merge — it is a message. So
+    this never changes the exit status of the merge.
+    """
+    rule("the rig")
+    verdict = primary_sync.sync(Path(root), confirm=confirm)
+    if verdict.action == primary_sync.NOT_SUBJECT:
+        # Silent by design in `primary_sync`; said once here, because `make merge` prints a
+        # section per half and an empty section reads as a step that was skipped by accident.
+        say("  nothing to do — see `python3 scripts/primary_sync.py --json` for which reason.")
+        return 0
+    for line in verdict.lines:
+        say("  " + line if not line.startswith("primary-sync:") else line)
+    # NEVER NON-ZERO. A refusal here is information about the rig and not a failed merge, and
+    # returning 1 would make `make merge` report an incomplete operation for something that
+    # completed.
+    return 0
 
 
 def local_half(root: str, commit: str, confirm: bool) -> int:
@@ -935,7 +978,10 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
         commit = head_of(root, args.local)
         if not commit:
             return refuse("`{0}` does not name a commit in this repository.".format(args.local))
-        return local_half(root, commit, args.confirm)
+        code = local_half(root, commit, args.confirm)
+        if code:
+            return code
+        return primary_half(root, args.confirm)
 
     if args.pr is None:
         return refuse(
@@ -978,11 +1024,20 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
             "  after the merge, main would move in: {0}".format(tree or "(undecidable)"),
             "",
             "  PREVIEW — nothing was run. Add --confirm to perform it.")
+        # THE RIG IS PREVIEWED TOO, because a preview that under-reports what `--confirm` will
+        # do is the one thing a preview must not be. `primary_sync` presses nothing without its
+        # own `confirm`, which is the same flag.
+        primary_half(root, args.confirm)
         delete_head_branch(root, args.pr, args.confirm)
         return 0
     code = local_half(root, commit, args.confirm)
     if code:
         return code
+    # AFTER main HAS MOVED AND BEFORE THE TIDYING. `local_plan`'s refspec form moves
+    # `refs/heads/main` while standing in no tree, so this is the moment the primary checkout is
+    # current on paper and still parked on a branch on disk. Its status is deliberately not the
+    # command's — see `primary_half`.
+    primary_half(root, args.confirm)
     delete_head_branch(root, args.pr, args.confirm)
     # LAST, AND ITS STATUS IS THE COMMAND'S. The cleanup above runs first on purpose: a branch
     # left lying around because main landed wrong helps nobody, and the report below is about

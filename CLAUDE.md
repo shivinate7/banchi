@@ -316,7 +316,7 @@ make check          # harness + docs-audit + audit-self-test + githooks-selftest
                     #   decisions-selftest + revert-guard +
                     #   janitor-selftest + reap-selftest + silent-write-selftest +
                     #   coordinator-selftest + suite-lock-selftest +
-                    #   serve-selftest +
+                    #   serve-selftest + sync-selftest +
                     #   verdict-selftest + port-agreement + set-hint-agreement +
                     #   screen-freshness + sigil-check + ignore-check + lint +
                     #   vale + typecheck.
@@ -567,6 +567,11 @@ make claim-selftest # the claimer, proved where it can be wrong: a throwaway rep
                     #   MAIN MOVES underneath the branch — and, since D140's amendment, in which
                     #   main takes a number the branch had already claimed. In `check`, never in
                     #   the git hook.
+make sync-selftest  # THE PRIMARY CHECKOUT'S SELF-SYNC, proved by violating it in throwaway
+                    #   clones with their own worktrees and a real bare origin. In `check` and
+                    #   in `ci-check`, never in the git hook (D18). Never pointed at this clone:
+                    #   the subject of a sync is the PRIMARY tree, and on this machine that is
+                    #   the owner's live rig.
 make merge          # merge a PR and move main onto it — BOTH HALVES, on your word (D42).
                     #   IT REFUSES A CHECKOUT WHOSE OWN COPY OF THE MERGE IS BEHIND main's,
                     #   BEFORE ANYTHING ELSE (D151). This target
@@ -1740,6 +1745,32 @@ apostrophes in names) live in the `tcgplayer-csv` skill. It loads on demand.
   then the local fast-forward. If the second half fails, report it as an incomplete operation
   rather than re-asking for permission.
 
+  **AND THE PRIMARY CHECKOUT PUTS ITSELF BACK, BOTH PARTS, AS OF 2026-09-12**
+  (D-the-primary-checkout-syncs-itself). Asked whether that one directory is mechanically kept
+  on `main` at `origin/main`, and offered a guard that only refused, the owner answered: *"why
+  can't both parts sync, remember this is a one man show, it's just me working."* So
+  `scripts/primary_sync.py` runs the two commands — `git switch main`, then
+  `git merge --ff-only origin/main` — at the three moments something already knows main may have
+  moved: `scripts/serve.py`'s four adoption moments (which D158 made refuse, and which are now
+  the only surface that sees main *move* rather than a branch *change* — `post-checkout` fires
+  on neither a pull nor a merge), the SessionStart guard, and `make merge`'s local half.
+
+  **THIS IS NOT A REPEAL OF ANYTHING ABOVE.** The move is a fast-forward to a commit `origin`
+  already carries, which `scripts/githooks/reference-transaction`'s allow rule 3 has permitted
+  since the day it was written — so it decides WHO RUNS AN ALREADY-PERMITTED MOVE, and not which
+  moves run. **The fast-forward-only test is the module's own and not the hook's**: rule 3 asks
+  whether the destination is on `origin/main`, and the destination *is* `origin/main`, so rule 3
+  would permit a move that discarded local commits. `refs/heads/main` must be an ancestor of
+  `refs/remotes/origin/main` or it refuses.
+
+  **IT TOUCHES ONLY THE PRIMARY CHECKOUT AND NEVER A LINKED WORKTREE** — `is_linked_worktree`,
+  called and not respelled (D43, D139) — **and it refuses rather than discarding**: uncommitted
+  tracked work is NAMED, untracked exhaust never blocks a sync, a half-finished rebase or merge
+  waits, and a detached HEAD no ref contains is left standing. **`PKMNSCAN_SYNC=off` turns the
+  whole mechanism off** and is printed on every sync and every refusal — the one hatch in this
+  repo that stops an act rather than permitting one, because this is the one guard that acts on
+  your behalf. `make sync-selftest` proves all of it.
+
   **`make merge ARGS="<n> --confirm"` is that whole operation**, and `ARGS=<n>` alone previews
   it and presses nothing (D42, amended 2026-09-01). It does the GitHub half, fetches origin,
   asserts the merged commit is on `origin/main` — allow rule 3, checked BEFORE anything moves
@@ -2065,6 +2096,7 @@ D168 A typed price is cleared by a press, never by an expiry, and the set it may
 D169 The blanket sweep asks the question the verdict answers, and a nested worktree is another checkout
 D170 A widening is safe only while the category fits, and Pokemon's does not
 D171 A refusal that reaches nobody did not happen, and a status line the session wrote is not a reading
+D-the-primary-checkout-syncs-itself The primary checkout syncs itself, both parts, because the thing D42 was protecting is not the thing this moves
 ```
 
 **THE GAP THIS LIST CARRIED BETWEEN D116 AND D118 IS CLOSED, AND IT CLOSED THE WAY IT SAID IT

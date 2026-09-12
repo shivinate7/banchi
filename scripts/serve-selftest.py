@@ -45,6 +45,9 @@ ROOT = Path(__file__).resolve().parent.parent
 # the one thing this script is deliberately not testing.
 CARRY = (
     "scripts/serve.py",
+    # THE SUPERVISOR IS MADE OF THIS FILE TOO SINCE THE SELF-SYNC — it is in `SELF_FILES` and
+    # imported at module scope, so a tree without it cannot start one at all.
+    "scripts/primary_sync.py",
     "envfile.py",
     "server",
     "store",
@@ -208,6 +211,49 @@ def make_primary_checkout(tree: Path) -> None:
     serve_py.write_text(gutted, "utf-8")
     run("commit", "-qam", "a branch that predates the guard")
     run("switch", "-q", "main")
+
+
+def give_origin(tree: Path) -> None:
+    """Give the fixture a real `origin` whose `main` is one commit AHEAD of the tree's.
+
+    THE EXISTING ARMS DELIBERATELY HAVE NO ORIGIN, and that is what keeps them meaning what
+    they meant. `scripts/primary_sync.py` answers `not-subject` for a clone with no
+    `refs/remotes/origin/main` — there is no authority to sync to — so every refusal arm above
+    still exercises the refusal rather than the sync that now precedes it. This one builds the
+    other half: a tree that CAN be synced, so the supervisor's new behaviour is visible.
+
+    The extra commit lands on `app/src/App.tsx`, which is tracked in this fixture, so the
+    fast-forward actually changes a watched file. A sync that moved only untracked history
+    would prove the ref moved and nothing about the tree the rig serves.
+    """
+    env = dict(os.environ, PKMNSCAN_MAIN="off")
+
+    def run(where: Path, *argv: str) -> subprocess.CompletedProcess:
+        return subprocess.run(["git", *argv], cwd=str(where), env=env,  # noqa: S603, S607
+                              capture_output=True, text=True, check=False)
+
+    origin = tree.parent / "origin.git"
+    run(tree.parent, "clone", "-q", "--bare", str(tree), str(origin))
+    run(tree, "remote", "add", "origin", str(origin))
+
+    # The commit that puts origin ahead, authored in a scratch clone so the fixture tree itself
+    # is never moved by the setup.
+    scratch = tree.parent / "scratch"
+    run(tree.parent, "clone", "-q", str(origin), str(scratch))
+    for argv in (("config", "user.email", "selftest@example.com"),
+                 ("config", "user.name", "selftest"),
+                 ("config", "commit.gpgsign", "false")):
+        run(scratch, *argv)
+    tsx = scratch / "app" / "src" / "App.tsx"
+    tsx.write_text(tsx.read_text("utf-8") + "\n// landed on origin/main\n", "utf-8")
+    run(scratch, "commit", "-qam", "a commit only origin has")
+    pushed = run(scratch, "push", "-q", "origin", "main")
+    assert pushed.returncode == 0, f"the fixture could not push to its own origin: {pushed.stderr}"
+    run(tree, "fetch", "-q", "origin")
+
+    gap = run(tree, "rev-list", "--count",
+              "refs/heads/main..refs/remotes/origin/main").stdout.strip()
+    assert gap == "1", f"the fixture did not put origin ahead: {gap!r}"
 
 
 def git_switch(tree: Path, branch: str) -> None:
@@ -633,6 +679,91 @@ def main() -> int:
         finally:
             serve(tree3, "down", "--confirm", env={"PKMNSCAN_SERVE_MAIN": "off"})
             wait_until(lambda: get(port3, "/status")[0] == 0, seconds=60)
+
+    # ------------------------------------- AND THE REFUSAL IS THE FALLBACK, NOT THE ANSWER
+    #
+    # D-the-primary-checkout-syncs-itself. Every arm above proves the supervisor REFUSES a tree
+    # it must not serve, and all of them are still right — because their fixture has no origin
+    # to sync to. This one gives it one, parks the tree on a branch, and starts a supervisor the
+    # way launchd does: the rig must come UP, on main, at origin/main, with nothing typed.
+    #
+    # IT IS THE END-TO-END SHAPE AND NOT A SECOND UNIT TEST. `scripts/sync-selftest.py` owns the
+    # states and the refusals; what only this fixture can show is that a real supervisor, in a
+    # real checkout, reaches the sync at an adoption moment and then goes on to serve.
+    print("\n  a parked tree with an origin SYNCS ITSELF and then serves")
+    with tempfile.TemporaryDirectory() as tmp5:
+        where5 = Path(tmp5)
+        tree5 = build_tree(where5)
+        port5 = PORTS[tree5]
+        make_primary_checkout(tree5)
+        give_origin(tree5)
+        git_switch(tree5, "feature")
+        behind = subprocess.run(  # noqa: S603, S607
+            ["git", "rev-parse", "refs/remotes/origin/main"], cwd=str(tree5),
+            capture_output=True, text=True, check=False).stdout.strip()
+
+        started5 = serve(tree5, "up")
+        try:
+            check(
+                wait_until(lambda: get(port5, "/status")[0] == 200, seconds=60),
+                "the rig COMES UP from a tree parked on a branch — the refusal was the "
+                "fallback, and the sync is the answer",
+            )
+            on = subprocess.run(  # noqa: S603, S607
+                ["git", "rev-parse", "--abbrev-ref", "HEAD"], cwd=str(tree5),
+                capture_output=True, text=True, check=False).stdout.strip()
+            check(on == "main", "PART 1: the tree it is serving is on main")
+            now = subprocess.run(  # noqa: S603, S607
+                ["git", "rev-parse", "refs/heads/main"], cwd=str(tree5),
+                capture_output=True, text=True, check=False).stdout.strip()
+            check(
+                now == behind and now != "",
+                "PART 2: and main is at origin/main, so the code being served is current",
+            )
+            # NOT SILENT, ASSERTED AGAINST THE STREAM THE READER IS ACTUALLY ON. `do_up` runs
+            # the sync in the foreground and PRINTS — a person typed `make up` and is watching
+            # that terminal — so this is `up`'s own stdout and not the supervisor log. The
+            # first draft of this arm ended in `or True`, which is the vacuous green
+            # docs/DEBTS.md opens by warning about: it would have passed against a sync that
+            # said nothing at all.
+            check(
+                "primary-sync:" in started5.stdout and "-> main" in started5.stdout,
+                "and it SAYS what it did, on the stream the person who typed `make up` is "
+                "reading, naming both parts",
+            )
+            check(
+                started5.returncode == 0,
+                "with a zero status, because the rig came up — the refusal's 1 is gone",
+            )
+            report5 = report(tree5)
+            check(
+                report5.get("off_main") is None,
+                "`make status` reports no stand-down, because there is nothing to stand down "
+                "from any more",
+            )
+        finally:
+            serve(tree5, "down", "--confirm")
+            wait_until(lambda: get(port5, "/status")[0] == 0, seconds=60)
+
+        # AND THE DIRTY CASE END TO END: a tracked edit in the parked tree must leave the rig
+        # refusing rather than syncing, which is the one refusal the ruling names by hand.
+        git_switch(tree5, "feature")
+        watched = tree5 / "server" / "capture_server.py"
+        watched.write_text(watched.read_text("utf-8") + "\n# uncommitted\n", "utf-8")
+        refused5 = serve(tree5, "up")
+        check(
+            refused5.returncode == 1 and "NOT SERVING" in refused5.stdout,
+            "a parked tree with UNCOMMITTED TRACKED WORK is still refused — the sync declines "
+            "and the stand-down stands",
+        )
+        check(
+            "capture_server.py" in refused5.stdout,
+            "and the file holding it back is NAMED, which is the whole use of the refusal",
+        )
+        check(
+            get(port5, "/status")[0] == 0,
+            "nothing was served, and nothing was switched out from under the edit",
+        )
 
     # A LINKED WORKTREE IS NOT THE SUBJECT AND MUST NOT BE CAUGHT (D43). Its `.git` is a FILE,
     # which is the one fact the whole test turns on and the one most likely to be written
