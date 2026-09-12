@@ -70,50 +70,27 @@ import argparse
 import json
 import os
 import re
-import shlex
 import sys
-from typing import Dict, List, NamedTuple, Optional, Sequence, Tuple
+from typing import List, NamedTuple, Optional, Sequence
+
+# THE PARSER MOVED TO `scripts/shell_parse.py` ON 2026-09-12, UNCHANGED, because a second
+# guard needed it. `scripts/guard-shell.py` refuses five shell mistakes and every one of them
+# has to read a command the same way this file does — and the four defects this tokenizer took
+# to get right (a newline is not whitespace, an operator is not a string, a heredoc body is a
+# document, `#` is not always a comment) are four defects that guard would have shipped again.
+# CLAUDE.md's rule is to ask whether the primitive exists before designing around its absence.
+# What stayed here is everything this file DECIDES: the verb roster, the stream arithmetic and
+# the refusal. The import is guarded because a guard that cannot load its parser must have no
+# opinion rather than raise.
+try:
+    sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+    from shell_parse import (CLOSED, FILE, INHERIT, NULL, PIPE, PIPE_OPS, Redirect, Stage,
+                             git_verb, short)
+    import shell_parse
+except Exception:                                             # noqa: BLE001 — fail open
+    shell_parse = None                                        # type: ignore[assignment]
 
 WIDTH = 76
-
-# ------------------------------------------------------------------ what a stream ends up as
-
-INHERIT = "inherit"   # the session sees it
-NULL = "null"         # /dev/null
-CLOSED = "closed"     # `2>&-`
-PIPE = "pipe"         # downstream in this pipeline; resolved against the pipeline's tail
-FILE = "file"         # a path; discarded only if nothing in the same command reads it back
-
-_DEV_NULL = ("/dev/null", "/dev/zero")
-
-# Shell words that precede the real command and say nothing about it. `reap.py:_strip_prefixes`
-# carries the same list for the same reason.
-_PREFIXES = {"sudo", "env", "time", "nohup", "command", "exec", "builtin", "then", "do", "else",
-             "!", "{", "}"}
-
-_PIPE_OPS = {"|", "|&"}
-
-# git's own global options, which sit BEFORE the subcommand. `git -C /x pull --ff-only` is the
-# local half of a merge (CLAUDE.md spells it out), so a guard that read `-C` as the subcommand
-# would miss the exact command the repo tells a session to type.
-_GIT_GLOBAL_VALUE = {"-C", "-c", "--git-dir", "--work-tree", "--namespace", "--exec-path",
-                     "--config-env", "--super-prefix"}
-_GIT_GLOBAL_BARE = {"--no-pager", "-P", "--paginate", "--no-replace-objects", "--bare",
-                    "--literal-pathspecs", "--no-optional-locks", "--glob-pathspecs",
-                    "--noglob-pathspecs", "--icase-pathspecs", "--no-lazy-fetch"}
-
-
-class Redirect(NamedTuple):
-    kind: str                 # one of the constants above
-    path: str = ""            # for FILE
-
-
-class Stage(NamedTuple):
-    """One simple command, with what became of its two output streams."""
-    argv: List[str]
-    fd1: Redirect
-    fd2: Redirect
-    text: str
 
 
 class Silenced(NamedTuple):
@@ -144,37 +121,6 @@ class Verdict(NamedTuple):
 # otherwise. A verb goes in when something has gone wrong through it.
 
 
-def _git_verb(argv: Sequence[str]) -> Tuple[str, List[str]]:
-    """`git`'s subcommand and its arguments, with git's own global options stepped over.
-
-    Returns `("", [])` when this is not a git call at all.
-    """
-    if not argv:
-        return "", []
-    head = argv[0]
-    if head != "git" and not head.endswith("/git"):
-        return "", []
-    rest = list(argv[1:])
-    while rest:
-        word = rest[0]
-        if word in _GIT_GLOBAL_VALUE:
-            rest = rest[2:]
-            continue
-        if word in _GIT_GLOBAL_BARE or any(
-                word.startswith(name + "=") for name in _GIT_GLOBAL_VALUE):
-            rest = rest[1:]
-            continue
-        if word.startswith("-"):
-            # An unknown global flag. Stepping over it is the fail-open reading: the worst
-            # outcome is that this file finds no verb and says nothing.
-            rest = rest[1:]
-            continue
-        break
-    if not rest:
-        return "", []
-    return rest[0], list(rest[1:])
-
-
 def _looks_like_refspec(token: str) -> bool:
     """`main:main` — a fetch that writes a LOCAL ref — as against a URL, which also has a colon.
 
@@ -203,7 +149,7 @@ def _write_verb(argv: Sequence[str]) -> str:
         return ""
     head = argv[0]
 
-    verb, rest = _git_verb(argv)
+    verb, rest = git_verb(argv)
     if verb:
         flags = set(rest)
         if verb == "commit" and "--dry-run" not in flags:
@@ -257,242 +203,26 @@ _CARRIES = {
 }
 
 
-# ------------------------------------------------------------------------------ the parsing
-
-_HEREDOC_RE = re.compile(r"<<-?\s*(['\"]?)([A-Za-z_][A-Za-z0-9_-]*)\1")
-
-
-def strip_heredocs(command: str) -> str:
-    """The command with every heredoc BODY removed, and every other byte kept.
-
-    `reap.py:_segments` truncates at the first `<<` instead, and that is right for its
-    question and wrong for this one. The incident command puts its redirections BEFORE the
-    heredoc operator, so truncating would still have caught it — but the body of a commit
-    heredoc is a COMMIT MESSAGE, and a message about this very guard contains the string
-    `>/dev/null`. Reading a document as a command is how a guard fires on the one thing that
-    cannot fail. Dropping only the body keeps both: the redirections on either side are still
-    judged, and the prose is never read.
-
-    An unterminated heredoc drops the remainder of the command. That is the fail-open
-    direction — a write this file never sees is a write it never refuses — and it is the only
-    honest reading of a string whose quoting does not close.
-    """
-    lines = command.split("\n")
-    kept: List[str] = []
-    pending: List[str] = []
-    for line in lines:
-        if pending:
-            if line.strip() == pending[0]:
-                pending.pop(0)
-            continue                      # a body line, or its terminator; dropped either way
-        kept.append(line)
-        for match in _HEREDOC_RE.finditer(line):
-            pending.append(match.group(2))
-    return "\n".join(kept)
-
-
-def _tokenize_line(line: str) -> Optional[List[str]]:
-    """One LINE's shell words and redirection operators, with quoted text kept literal.
-
-    `punctuation_chars=True` is the whole reason this file can be honest about `-m "a > b"`:
-    shlex returns an unquoted `>` as its own operator token and a quoted one as an ordinary
-    word, which is exactly the distinction the shell itself makes and exactly the one a
-    regular expression over the raw string cannot make.
-
-    `commenters` IS CLEARED. shlex treats `#` as a comment to end of input by default, and
-    this file feeds it one line at a time precisely so a `#` cannot swallow the rest of a
-    script — but a `#` inside an unquoted argument (`gh pr view '#300'` unquoted, a branch
-    named `fix#3`) would still eat the redirections after it. Nothing here needs comment
-    semantics: a comment can only remove a verb or a redirection, and both directions of
-    that are a MISS, which is the safe one.
-
-    Returns None when the line does not tokenize — an unbalanced quote, most often, which is
-    exactly what one line of a multi-line quoted argument looks like — and the caller reads
-    that as "no opinion about this line".
-    """
-    lexer = shlex.shlex(line, posix=True, punctuation_chars=True)
-    lexer.whitespace_split = True
-    lexer.commenters = ""
-    try:
-        return list(lexer)
-    except ValueError:
-        return None
-
-
-def tokenize(command: str) -> Tuple[List[str], int]:
-    """The whole command's tokens, with a `;` marking every line boundary.
-
-    LINES ARE TOKENIZED SEPARATELY AND SEPARATED EXPLICITLY, and that is not tidiness — it is
-    the difference between a guard and a nuisance. `shlex.whitespace_split` treats a newline
-    as ordinary whitespace, so
-
-        git status
-        git commit -m x
-        echo done >/dev/null
-
-    tokenizes as ONE simple command whose stdout goes to /dev/null and whose argv happens to
-    contain `git commit`. That is a false positive on a three-line script that silences
-    nothing, and a multi-line script is the ordinary shape of a session's Bash call. A `;`
-    between lines is what the shell means by a newline, so that is what is inserted.
-
-    Line continuations are joined first, because `git commit \\` + newline + `  -m x` is one
-    command and splitting it would drop the redirections on the second half.
-
-    Returns the tokens and the number of lines that could not be read at all.
-    """
-    text = strip_heredocs(command)
-    text = re.sub(r"\\\n", " ", text)
-    tokens: List[str] = []
-    unreadable = 0
-    for line in text.split("\n"):
-        if not line.strip():
-            continue
-        words = _tokenize_line(line)
-        if words is None:
-            unreadable += 1
-            words = []
-        if tokens and words:
-            tokens.append(";")
-        tokens.extend(words)
-    return tokens, unreadable
-
-
-def _is_operator(token: str) -> bool:
-    return bool(token) and all(char in "<>&|();" for char in token)
-
-
-def _op_kind(token: str) -> str:
-    """`pipe`, `list`, `redirect` — or `""` for an ordinary word.
-
-    DERIVED FROM THE CHARACTERS RATHER THAN LISTED, because a fixed roster of operators is a
-    roster somebody has to remember to extend: `;;`, `;&`, `;;&` and `|||` are all real shell
-    tokens, and every one of them missing from a set would silently merge two commands into
-    one stage — which is the false positive `tokenize` above exists to prevent.
-    """
-    if not _is_operator(token):
-        return ""
-    if token in _PIPE_OPS:
-        return "pipe"
-    if "<" in token or ">" in token:
-        return "redirect"
-    return "list"
-
-
-def _parse_stage(tokens: Sequence[str]) -> Stage:
-    """One simple command's argv, and where its stdout and stderr were pointed.
-
-    THE FILE DESCRIPTORS ARE WALKED IN ORDER, BECAUSE THE SHELL DOES. `cmd >/dev/null 2>&1`
-    discards both streams; `cmd 2>&1 >/dev/null` duplicates stderr onto the CURRENT stdout —
-    still the session's — and only then sends stdout away, so the refusal survives and the
-    proof does not. Both are refused here, so the ORDER does not change the verdict; it
-    changes what the refusal is able to tell you, and a refusal that names the wrong stream
-    is one a session argues with.
-    """
-    argv: List[str] = []
-    fds: Dict[int, Redirect] = {1: Redirect(INHERIT), 2: Redirect(INHERIT)}
-    index = 0
-    while index < len(tokens):
-        token = tokens[index]
-        index += 1
-        if not _is_operator(token):
-            argv.append(token)
-            continue
-
-        # A LEADING FD NUMBER IS THE PREVIOUS WORD. shlex cannot preserve adjacency, so
-        # `echo 2 > f` and `echo 2> f` tokenize alike; popping the digit reads the second.
-        # The cost of being wrong is that a refusal names stderr where it meant stdout, never
-        # that a write is or is not refused — both streams are refused either way.
-        lhs = 1
-        if argv and re.match(r"^\d$", argv[-1]) and token[0] in "<>":
-            lhs = int(argv.pop())
-
-        target = tokens[index] if index < len(tokens) else ""
-
-        if token.startswith("&>"):            # bash: both streams, one operator
-            index += 1
-            where = Redirect(NULL) if target in _DEV_NULL else Redirect(FILE, target)
-            fds[1] = where
-            fds[2] = where
-        elif ">&" in token or token == ">&":   # a dup: `2>&1`, `1>&2`, `2>&-`
-            index += 1
-            if target == "-":
-                fds[lhs] = Redirect(CLOSED)
-            elif re.match(r"^\d$", target):
-                fds[lhs] = fds.get(int(target), Redirect(INHERIT))
-            # `>&word` is bash's `&>word` spelling; treated as an ordinary write below.
-            elif target:
-                fds[1] = fds[2] = (
-                    Redirect(NULL) if target in _DEV_NULL else Redirect(FILE, target))
-        elif token.startswith(">"):            # `>`, `>>`, `>|`
-            index += 1
-            fds[lhs] = Redirect(NULL) if target in _DEV_NULL else Redirect(FILE, target)
-        elif token.startswith("<"):            # input of any kind; consumed and ignored
-            index += 1
-        # anything else is punctuation this file has no reading for, and is ignored
-
-    # THE COMMAND WITHOUT ITS REDIRECTIONS, which is what the refusal echoes. Re-joining the
-    # raw tokens would print `git commit -q -F - > /dev/null 2 >& 1` — the operators spaced
-    # out by the lexer and unrecognisable as the line that was typed. The redirections are
-    # reported on their own lines instead, one per stream, which is the fact that matters.
-    return Stage(argv, fds[1], fds[2], " ".join(argv))
-
-
-def _pipelines(tokens: Sequence[str]) -> List[List[Tuple[List[str], str]]]:
-    """The command as pipelines, each a list of (stage tokens, the op that FOLLOWS the stage).
-
-    A pipeline is the unit because a stream's fate is the pipeline's, not the stage's:
-    `git commit | cat` sends stdout somewhere the session still reads, and
-    `git commit 2>&1 | cat >/dev/null` does not.
-    """
-    pipelines: List[List[Tuple[List[str], str]]] = []
-    current: List[Tuple[List[str], str]] = []
-    stage: List[str] = []
-    for token in tokens:
-        kind = _op_kind(token)
-        if kind == "list":
-            current.append((stage, ""))
-            pipelines.append(current)
-            current, stage = [], []
-        elif kind == "pipe":
-            current.append((stage, token))
-            stage = []
-        else:
-            stage.append(token)
-    current.append((stage, ""))
-    pipelines.append(current)
-    return [p for p in pipelines if any(words for words, _ in p)]
-
-
-def _strip_prefixes(argv: Sequence[str]) -> List[str]:
-    out = list(argv)
-    while out and (out[0] in _PREFIXES
-                   or re.match(r"^[A-Za-z_][A-Za-z0-9_]*=", out[0])):
-        out.pop(0)
-    return out
-
-
 def read_command(command: str) -> Verdict:
     """Every write in this command whose own output the session will not see.
 
     THE DEFAULT IS "NO OPINION", and it returns as early as it can: this runs on every Bash
     call in the session, and the overwhelming majority of them mention none of these verbs.
     """
+    if shell_parse is None:
+        return Verdict([], "scripts/shell_parse.py could not be imported, so this guard has "
+                           "no opinion about anything")
     if not any(word in command for word in ("git", "make", "gh")):
         return Verdict([], "")
 
-    tokens, unreadable = tokenize(command)
-    if not tokens:
+    reading = shell_parse.read(command)
+    unreadable = reading.unreadable
+    if not reading.placed:
         return Verdict([], "nothing in this command tokenizes, so this guard has no opinion")
-
-    pipelines = _pipelines(tokens)
-    stages: List[Tuple[Stage, str, Stage]] = []   # (stage, pipe-op after it, pipeline tail)
-    every: List[Stage] = []
-    for pipeline in pipelines:
-        parsed = [(_parse_stage(words), op) for words, op in pipeline]
-        tail = parsed[-1][0]
-        for stage, op in parsed:
-            stages.append((stage, op, tail))
-            every.append(stage)
+    # (stage, the pipe op that follows it, its pipeline's tail) — the parser's `Placed`, kept
+    # in this shape because the stream arithmetic below reads all three.
+    stages = [(placed.stage, placed.pipe_op, placed.tail) for placed in reading.placed]
+    every = reading.every
 
     def resolve(where: Redirect, piped: bool, tail: Stage) -> Redirect:
         """A stream's real fate, with a pipe followed to the end of its pipeline."""
@@ -522,10 +252,10 @@ def read_command(command: str) -> Verdict:
 
     silenced: List[Silenced] = []
     for stage, op, tail in stages:
-        verb = _write_verb(_strip_prefixes(stage.argv))
+        verb = _write_verb(shell_parse.strip_prefixes(stage.argv))
         if not verb:
             continue
-        out = resolve(stage.fd1, op in _PIPE_OPS, tail)
+        out = resolve(stage.fd1, op in PIPE_OPS, tail)
         err = resolve(stage.fd2, op == "|&", tail)
         lost_out = out if discarded(out, stage) else None
         lost_err = err if discarded(err, stage) else None
@@ -550,20 +280,12 @@ def _where(where: Redirect) -> str:
     return where.kind
 
 
-def _short(text: str, width: int = 96) -> str:
-    """A long command, elided in the MIDDLE. `reap.py:_short`'s argument, unchanged."""
-    if len(text) <= width:
-        return text
-    head = (width - 3) // 3
-    return text[:head] + "…" + text[-(width - 3 - head):]
-
-
 def refusal(silenced: Sequence[Silenced]) -> str:
     lines = ["BLOCKED: this would perform a git write and throw away the only evidence of "
              "what it did."]
     for item in silenced:
         carries_out, carries_err = _CARRIES.get(item.verb, ("its output", "its errors"))
-        lines.append("  {0} — {1}".format(item.verb, _short(item.text)))
+        lines.append("  {0} — {1}".format(item.verb, short(item.text)))
         if item.stdout:
             lines.append("      stdout -> {0}".format(_where(item.stdout)))
             lines.append("        which carries {0}".format(carries_out))
@@ -624,7 +346,7 @@ def explain(command: str) -> int:
         print("no opinion: {0}".format(verdict.note))
         return 0
     if not verdict.silenced:
-        print("ALLOWED  {0}".format(_short(command.replace("\n", " "))))
+        print("ALLOWED  {0}".format(short(command.replace("\n", " "))))
         return 0
     print(refusal(verdict.silenced))
     return 2
