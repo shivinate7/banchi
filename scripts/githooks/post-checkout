@@ -33,11 +33,20 @@ fi
 # (D42) while guarding this not at all. Observed 2026-09-11: this tree sat on
 # `claude/env-key-rotation` with three live sessions in it and nothing anywhere said so.
 #
-# A WARNING IS THE CEILING AND NOT A CHOICE. There is no `pre-checkout` hook: git calls this
-# one AFTER the switch has happened, with the new HEAD already in place, so nothing here can
-# refuse. What it can do is be loud at the moment the move is made, which is the one moment
-# the person responsible is present. D139 names the other two moments — `make status` and the
-# SessionStart guard — because any one of the three alone is missable.
+# A WARNING IS THE CEILING *HERE*, AND IT IS NO LONGER THE CEILING ANYWHERE —
+# D-the-rig-refuses-to-serve-a-branch is why.
+# There is no `pre-checkout` hook: git calls this one AFTER the switch has happened, with the
+# new HEAD already in place, so nothing in this file can refuse. Measured on this machine's git
+# 2.39.3, `reference-transaction` cannot either — `git switch <branch>` moves HEAD as a SYMREF
+# and fires no ref transaction at all, so a guard built there would have been silent through
+# both observed incidents while firing on `checkout --detach`, which is neither of them.
+#
+# THE REFUSAL IS IN THE SERVER INSTEAD, because the harm is not the branch, it is D53's
+# supervisor adopting this tree's code over the owner's real store. `scripts/serve.py:off_main`
+# refuses the spawn, the reload, the re-exec and the build; this file, whose INSTALLED COPY a
+# branch switch cannot rewrite, says so at the moment of the move and says the opposite where
+# the branch just checked out has no such guard in it. D139's other two moments — `make status`
+# and the SessionStart guard — still stand, because any one reader alone is missable.
 #
 # THE PRIMARY/LINKED TEST IS `server/ports.py:is_linked_worktree`'s, SPELLED ITS WAY: a linked
 # worktree's `.git` is a FILE, a primary checkout's is a DIRECTORY. `app/devPort.ts`,
@@ -60,9 +69,44 @@ if [ -n "$top" ] && [ -d "$top/.git" ] && git rev-parse --verify --quiet main >/
   if [ -n "$branch" ] && [ "$branch" != "main" ]; then
     echo "" >&2
     echo "PRIMARY CHECKOUT: now on $branch, not main." >&2
-    echo "  This is the directory \`make launch-agent\` serves the owner's REAL store out of," >&2
-    echo "  so the live capture server now runs THIS branch's code (D53, D139)." >&2
+    echo "  This is the directory \`make launch-agent\` serves the owner's REAL store out of" >&2
+    echo "  (D53, D139)." >&2
     echo "  Undo: git switch -   ·   on main again: git switch main" >&2
+
+    # ------------------------- what the server will do about it
+    # D-the-rig-refuses-to-serve-a-branch
+    # D139 ASSERTED THE HARM AND CHECKED NOTHING: it said the live capture server "now runs
+    # THIS branch's code" whether or not one was running at all. Since that entry the
+    # supervisor
+    # REFUSES to adopt a primary checkout that is off main, so the true sentence is different
+    # and depends on two facts this hook can read cheaply.
+    #
+    # AND THIS IS THE HALF THAT SURVIVES THE SWITCH. `make hooks` COPIES this file into the
+    # common `.git` dir, which `core.hooksPath` points every worktree of the clone at — so the
+    # copy git runs is not rewritten by checking out a branch, while `scripts/serve.py` is.
+    # That is the whole reason the second half lives here: the guard in the tree is absent from
+    # exactly the checkout that just arrived, and this one cannot be.
+    if [ -f "$top/.serve/supervisor.pid" ]; then
+      # THE GUARD IS FOUND BY ITS ESCAPE HATCH'S NAME, which is the one token that cannot be in
+      # this file for a second reason. A branch predating that entry does not carry it,
+      # and neither
+      # does one that deleted the guard. OVER-REPORTING IS THE SAFE DIRECTION for something
+      # that only ever prints: renaming the hatch makes this say "stop it" where it need not,
+      # never the reverse. `scripts/githooks-selftest.sh` asserts both directions against this
+      # repo's own serve.py, so the token going stale is a failed commit rather than a silence.
+      if grep -q 'PKMNSCAN_SERVE_MAIN' "$top/scripts/serve.py" 2>/dev/null; then
+        echo "  A supervisor is live here. It will REFUSE to reload into this branch —" >&2
+        echo "  what is serving goes on serving, and comes back on \`git switch main\`." >&2
+      else
+        # KEPT ON ONE LINE ON PURPOSE. This is the sentence a person greps the scrollback for
+        # and the one `scripts/githooks-selftest.sh` asserts; reflowed across a break it
+        # matches neither, which is how the first draft of that case went red.
+        echo "  A supervisor is live here and it WILL SERVE THIS BRANCH:" >&2
+        echo "  this branch's scripts/serve.py predates the guard that refuses a checkout" >&2
+        echo "  off main, so it will reload into this code over the owner's REAL store." >&2
+        echo "  Stop it:  make down ARGS=--confirm" >&2
+      fi
+    fi
     # ON MAIN AND CURRENT ARE TWO QUESTIONS, and this hook can only answer the first. `main` here
     # is the LOCAL ref, which a clone that merges by pull request can leave well behind origin —
     # measured 2026-09-11 in this very checkout: local main at c34ccdc, origin/main at 2caa001,

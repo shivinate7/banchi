@@ -121,6 +121,23 @@ make up             # THE server, detached — ONE PROCESS AS OF 2026-09-11 (D13
                     #   (EADDRINUSE), which is deliberate: a server that quietly moved would
                     #   serve a DIFFERENT store (D43). `make dev` alongside is FINE and is the
                     #   point — the supervisor no longer holds :5173.
+                    #   AND IT WILL NOT SERVE A PRIMARY CHECKOUT THAT IS OFF MAIN
+                    #   (D-the-rig-refuses-to-serve-a-branch). D53 keeps this one directory's
+                    #   server alive over the owner's REAL store and D138 made it serve the
+                    #   built app too, so the branch that directory stands on decides which
+                    #   code photographs real cards. The supervisor REFUSES the spawn, the
+                    #   reload, the re-exec and the build — and STOPS NOTHING: a server already
+                    #   running goes on serving the code it started with, exactly as a file
+                    #   that will not parse leaves the last code that parsed running.
+                    #   `git switch main` brings it back with nothing else typed.
+                    #   A LINKED WORKTREE IS NOT THE SUBJECT and is silent on any branch (D43).
+                    #   `PKMNSCAN_SERVE_MAIN=off` serves it anyway and is printed in every
+                    #   refusal — unlike the merge's stale-half guard, which has no hatch,
+                    #   because serving a branch against the real rig is a thing you may
+                    #   actually want and no other command does it.
+                    #   D139's three readers — post-checkout, `make status`, the SessionStart
+                    #   guard — still stand: their subject is the BRANCH, this one's is the
+                    #   CODE, and a branch differing only under `docs/` is served correctly.
 make launch-agent   # start at login, so the link is always live. MAIN TREE ONLY — it refuses
                     #   in a worktree, whose plist would outlive the worktree. ARGS=--remove.
                     #   THE DOCK APP IS A CLIENT OF THIS AND NEVER A SECOND COPY OF IT (D108):
@@ -1658,6 +1675,7 @@ D147 The claim is spent on the oldest copies, because a card captured tonight wa
 D148 The wait is about the claim commit, and an answer it has not got is never a pass
 D149 A section number that resolves is not a citation that is right, and no check can read what a sentence is about
 D150 A reading taken after a sale is that sale's own result, and it ages the claim
+D-the-rig-refuses-to-serve-a-branch The refusal goes where the damage is, so the primary checkout's server will not run a branch's code, and the checkout itself is left alone
 
 ```
 
