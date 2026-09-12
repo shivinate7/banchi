@@ -1255,18 +1255,31 @@ A screen is not finished because it compiles.
   about a card or the inventory in `localStorage`. Inventory state is server-side, in the
   store; the camera uses a device picker. Two devices share one truth.
 
-  **Nine keys are stored on the device, and each is a fact about THIS machine rather than
+  **Ten keys are stored on the device, and each is a fact about THIS machine rather than
   about a card**: `banchi.capture.deviceId` and `banchi.capture.rotation`
   (`app/src/useCamera.ts` — which camera and which way up, meaningless on another machine),
   `banchi.theme`, `banchi.rail`, `banchi.orders.fetch-filter`, `banchi.inventory.hide-sold`,
-  `banchi.box-recency` and `banchi.capture.setup` (`app/src/deviceMemory.ts` — how this
+  `banchi.box-recency`, `banchi.capture.setup` and `banchi.runs.spend-notice`
+  (`app/src/deviceMemory.ts` — how this
   browser is dressed, which order statuses this device bothers fetching (D114), whether the
-  inventory walk folds sold rows away, when THIS browser last reached for each box, and the
-  setup the operator last worked at), and `banchi.orders.last-check` (`app/src/Orders.tsx` —
+  inventory walk folds sold rows away, when THIS browser last reached for each box, the
+  setup the operator last worked at, and the figure above which THIS browser draws a louder
+  confirm on the identify press), and `banchi.orders.last-check` (`app/src/Orders.tsx` —
   when THIS device last checked TCGplayer, so a fetch receipt can say what is new since; the
   owner ruled it belongs there on 2026-09-03). None of them is a card, a position or an order.
 
-  **TWO OF THE NINE ARRIVED ON 2026-09-11 AND ONE OF THOSE IS A RENAME**
+  **THE TENTH IS A NOTICE AND NEVER A CAP**, on the owner's ruling of 2026-09-12: *"Give me
+  settings if I can have them, but if I want to run everything, then I get to run everything."*
+  `banchi.runs.spend-notice` is a dollar figure with a default of $1.00 — about 757 cards at
+  the measured 2,641 input tokens a card and $0.50/MTok batch-discounted, so larger than every
+  drawer on this store but box 3 and roughly a quarter of a full store re-read. Above it the
+  confirm says so and offers to raise the notice; it never withholds the press, because a
+  ceiling that refuses "everything" is the wrong shape. **Device-local is argued, not
+  convenient**: D13 puts one truth on one Mac so two devices cannot disagree about where a card
+  IS, and this is how loud a button is on THIS browser — the same side of that line as D114's
+  fetch filter, which the owner ruled belongs there.
+
+  **TWO OF THE TEN ARRIVED ON 2026-09-11 AND ONE OF THOSE IS A RENAME**
   (D142). `banchi.capture.setup` is the box, game, set hint, finish, rarity
   and product the operator last chose — six values that were `sessionStorage` under D27 until
   the owner overruled the session scope, in ONE document because they are one habit, the
@@ -2191,6 +2204,7 @@ D173 A rule that can be enforced mechanically is enforced mechanically, and a ru
 D174 A press claims the cards it is about to buy, and the claim is written in the transaction that decides what they are
 D175 Ownership is read the way liveness is, and a process a session no longer owns is offered rather than reaped
 D176 The primary checkout syncs itself, both parts, because the thing D42 was protecting is not the thing this moves
+D-a-selection-of-cards A press names the cards it is over, and the drawer is one of the names
 ```
 
 **THE GAP THIS LIST CARRIED BETWEEN D116 AND D118 IS CLOSED, AND IT CLOSED THE WAY IT SAID IT

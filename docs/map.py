@@ -364,7 +364,18 @@ COMPONENTS = [
         "note": "NO INTERACTIVE PROMPTS, ever — the pipeline runs unattended, so a command "
                 "that cannot proceed refuses and says what to edit.",
         "modules": {
-            "__main__.py": {"does": "parser, COMMANDS dispatch, exit codes", "governed_by": ["D1", "D3", "D9", "D25", "D36", "D86", "D87", "D100"], "tested_by": ["T7"]},
+            "__main__.py": {"does": "parser, COMMANDS dispatch, exit codes. `identify`'s "
+                                    "capture_dir is `nargs=\"*\"` and the selection flags beside "
+                                    "it are the same object the wire parses; `--all` is a word "
+                                    "you TYPE, because an unset $DIR was an argparse error and "
+                                    "would otherwise have become a paid store-wide submission. "
+                                    "`--box` FILTERS on the sidecar's claim and the old "
+                                    "fill-gaps `--box` is `--assume-box` — two opposite jobs "
+                                    "that were wearing one name, and the fill has fired on 0 of "
+                                    "2,535 real captures.",
+                            "governed_by": ["D1", "D3", "D9", "D21", "D25", "D36", "D48", "D86",
+                                            "D87", "D100", "D145", "D-a-selection-of-cards"],
+                            "tested_by": ["T7"]},
             "cmd_scan.py": {"does": "read the QR codes off a directory of code-card photos into "
                                     "the ledger. FREE — no model call, no network, no money gate "
                                     "(C9). Presentation only; the core is `codes/scan.py`, shared "
@@ -385,9 +396,16 @@ COMPONENTS = [
                                         "rather than off the capture directory's name — the last "
                                         "run-creation path that produced a run nothing could "
                                         "bind (D145, D165). Two boxes get no "
-                                        "scope rather than a guessed one (D48).",
-                                "governed_by": ["D1", "D2", "D21", "D23", "D33", "D36", "D48",
-                                                "D145", "D163", "D165", "D174"]},
+                                        "scope rather than a guessed one — the one part of "
+                                        "D48 the selection keeps. The SELECTION is resolved "
+                                        "before the hash pass, so a drawer press hashes 887 "
+                                        "photographs rather than the store's 2,535; and "
+                                        "`_scope_for` is an adapter onto "
+                                        "`pipeline/selection.py:scope_block` rather than a "
+                                        "second copy of it.",
+                                "governed_by": ["D1", "D2", "D21", "D23", "D33", "D36", "D43",
+                                                "D48", "D145", "D163", "D165", "D174",
+                                                "D-a-selection-of-cards"]},
             "cmd_join.py": {"does": "resolve identifications against the export; --dry-run previews. "
                                     "SEEDS inventory/prices.json's rule and basis on the first "
                                     "join of an EMPTY corpus and never reassigns them (D49, D86) "
@@ -886,6 +904,31 @@ COMPONENTS = [
                                     "206 SKUs.",
                             "governed_by": ["D7", "D9", "D49", "D59", "D86", "D87", "D99", "D115", "D156"],
                             "tested_by": ["T7"]},
+            "selection.py": {"does": "WHICH CARDS A PRESS IS OVER — one object, read by the "
+                                     "wire and the CLI alike, and the drawer is a TERM in it "
+                                     "rather than the unit of work. Terms: paths, state, box[], "
+                                     "bid[], section, game, since, keys[], run. Every one "
+                                     "NARROWS and none widens, so the order they are applied in "
+                                     "cannot change the answer. Each is a name the store "
+                                     "already has for a group of cards — `master.STATES` "
+                                     "verbatim, D145's true index, D10's dividers, D21's game "
+                                     "claim, and `Capture.key`, the same `box/index` string the "
+                                     "cache, both queues, the join and D174's claim table are "
+                                     "keyed by — so a term needing a new vocabulary would be a "
+                                     "second answer to a question the store already answers. "
+                                     "`box` is list-valued because one press on this store "
+                                     "named three drawers (2026-09-01: boxes 3, 4 and 5, three "
+                                     "runs created in the same second); it is ONE run now. It "
+                                     "reads no store and no disk — `needs_store` says what a "
+                                     "caller must fetch and `narrow` takes it as an argument, "
+                                     "so a drawer press pays for no snapshot at all. Also holds "
+                                     "`scope_block`, the manifest's `scope`, which was TWO "
+                                     "implementations (the route's and the CLI's) held together "
+                                     "by a comment in each pointing at the other.",
+                             "governed_by": ["D10", "D21", "D22", "D33", "D36", "D39", "D43",
+                                             "D48", "D56", "D58", "D65", "D76", "D145", "D165",
+                                             "D174", "D-a-selection-of-cards"],
+                             "tested_by": ["T7"]},
             "merge.py": {"does": "one import file over several runs: the copies union, deduped "
                                  "on (box, index), and any cap the send asked for spent ONCE "
                                  "over that union. There is NO standing cap since D7 was "
@@ -3188,12 +3231,22 @@ COMPONENTS = [
                         "inside the request, stdout returned verbatim). "
                         "Its own module because it is the one part of this server that can "
                         "cost money: everything in capture_server.py still holds no key, "
-                        "opens no socket and starts no child. A SEND IS A CART OF BOXES "
-                        "(D48): both money routes take `scopes: [{box, indices?, crop?, "
-                        "max_edge?}]`, a bare `box` reads as a cart of one, the response is "
-                        "always a list, the total is summed here rather than on the screen, "
-                        "and identify spawns one detached child PER BOX — so a run is still "
-                        "one box and nothing downstream learns a new shape. AND POST "
+                        "opens no socket and starts no child. A SEND IS ONE SELECTION "
+                        "(D-a-selection-of-cards, overtaking D48): both money routes take "
+                        "`{state?, box?, bid?, section?, game?, since?, keys?, run?, paths?}` "
+                        "— `box` is a TERM and accepts one drawer or several — a bare "
+                        "`{box: N}` still resolves as box N with no migration, the response "
+                        "is ONE quote, the total is the server's and counts CARDS rather than "
+                        "boxes (D33's one noun), and identify spawns ONE child. "
+                        "`_resolve_scope`'s `box_required` refusal is gone with the thesis it "
+                        "stated; `.scopes/`, `_scope_dir` and `_sweep_scopes` are gone with it "
+                        "(264 directories on the operator's checkout, 264 of 264 named `-1-`, "
+                        "every one built by the crop PREVIEW and not one ever a submission); "
+                        "and `_run_box`'s path arm is gone for being confidently wrong on two "
+                        "of this store's runs. `_busy_run` is deleted — it compared BOX "
+                        "numbers and there is no box on this route to compare — leaving "
+                        "D174's claim as the guard, which is the condition that entry set. "
+                        "AND POST "
                         ".../export (D64) fetches this run's Filtered Export through "
                         "server/tcg_export.py instead of the operator downloading and "
                         "uploading it: free, reported separately from the join so a failure "
@@ -3241,8 +3294,8 @@ COMPONENTS = [
                                 "D35", "D36", "D43", "D47", "D48", "D49", "D54", "D56",
                                 "D58", "D59", "D62", "D64", "D65", "D68", "D76", "D78",
                                 "D79", "D86", "D87", "D88", "D89", "D100", "D103", "D105",
-                                "D134", "D137", "D145", "D147", "D156", "D159", "D165",
-                                "D166", "D168", "D170", "D174"],
+                                "D134", "D137", "D145", "D147", "D156", "D159", "D163", "D165",
+                                "D166", "D168", "D170", "D174", "D-a-selection-of-cards"],
                 "tested_by": ["T7"],
             },
             "shipping_routes.py": {
@@ -3859,7 +3912,7 @@ COMPONENTS = [
                                               "D61", "D62", "D63", "D64", "D65", "D68", "D69",
                                               "D70", "D73", "D76", "D79", "D83", "D86", "D87",
                                               "D89", "D90", "D91", "D92", "D100", "D103",
-                                              "D168",
+                                              "D168", "D174", "D-a-selection-of-cards",
                                               "D104", "D113", "D116", "D132", "D134"]},
             "src/demoFlag.d.ts": {"does": "declares `__BN_DEMO__`, the build-time demo flag "
                                           "`vite.config.ts` substitutes with a boolean "
@@ -3928,7 +3981,7 @@ COMPONENTS = [
                                              "D79", "D83", "D86", "D87", "D89", "D91", "D92",
                                              "D93", "D100", "D103", "D104", "D113", "D115",
                                              "D116", "D132", "D134", "D147",
-                                             "D159"]},
+                                             "D159", "D174", "D-a-selection-of-cards"]},
             "src/deviceMemory.ts": {"does": "every `localStorage` key the shell owns — the "
                                             "theme, the rail, which order statuses this "
                                             "device bothers fetching (D114), whether the "
@@ -4800,19 +4853,34 @@ COMPONENTS = [
                                              "TYPING (D33): the free preflight has to have run "
                                              "before the confirm exists, and the confirm carries "
                                              "the figure in its own label. THE ESTIMATE IS VOID "
-                                             "THE MOMENT THE SCOPE MOVES — a box added, a card "
-                                             "ticked, a reading changed — because a confirm whose "
+                                             "THE MOMENT THE SEND MOVES — a term added, a drawer "
+                                             "picked, a reading changed — because a confirm whose "
                                              "first step described a different send is not a "
-                                             "confirm. ONE PRESS, ONE REQUEST, N RUNS (D48): each "
-                                             "box in the cart is its own run with its own "
-                                             "reading, because which end of D32's "
-                                             "cost-against-sharpness trade is right depends on "
-                                             "what is in the drawer. `Runs.tsx` owns which boxes "
-                                             "are in the cart and where a ticked selection came "
-                                             "from (D39 — `#/inventory` keeps the only mass "
-                                             "select); this owns how each is read and everything "
-                                             "after the press.",
-                                     "governed_by": ["D32", "D33", "D39", "D48", "D52", "D58", "D65", "D76", "D94"]},
+                                             "confirm. ONE PRESS, ONE SELECTION, ONE RUN "
+                                             "(D-a-selection-of-cards, overtaking D48): stage 1 "
+                                             "is a selection builder — a start (everything that "
+                                             "needs it, drawers, the ticked cards, a previous "
+                                             "run's cards) and narrowings that cut across it "
+                                             "(game, section, since) — and `selectionOf` is the "
+                                             "one function that turns the screen's draft into "
+                                             "the wire's shape. `bid` is deliberately NOT here: "
+                                             "D145 rules the true index is never rendered in "
+                                             "the app, so it stays a CLI and wire term. THE "
+                                             "READING IS ONE PER PRESS where the cart gave each "
+                                             "box its own; two readings is two presses, which no "
+                                             "press on this store has ever needed (12 of 15 runs "
+                                             "share one max_edge). THE SPEND NOTICE IS A NOTICE "
+                                             "AND NEVER A CAP, on the owner's ruling: above it "
+                                             "the confirm says so and offers to raise it, and it "
+                                             "never withholds the press. `Runs.tsx` owns the "
+                                             "draft and where a ticked selection came from "
+                                             "(D39 — `#/inventory` keeps the only mass select); "
+                                             "this owns how it is read and everything after the "
+                                             "press.",
+                                     "governed_by": ["D13", "D27", "D32", "D33", "D39", "D48",
+                                                     "D52", "D56", "D58", "D65", "D76", "D94",
+                                                     "D114", "D118", "D145", "D174",
+                                                     "D-a-selection-of-cards"]},
             "src/RunsLog.tsx": {"does": "a command's stdout, verbatim, in a well that follows its "
                                         "tail, counts its lines, folds and copies. NOTHING HERE "
                                         "SUMMARISES WHAT A COMMAND SAID — D33 puts every "
