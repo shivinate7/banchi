@@ -1,4 +1,4 @@
-## D-the-sweep-asks-what-the-verdict-answers — The blanket sweep asks the question the verdict answers, and a nested worktree is another checkout
+## D169 — The blanket sweep asks the question the verdict answers, and a nested worktree is another checkout
 
 **`make reap` with no target could not see a process started by a relative path, so a live capture server under the checkout was resolved as nothing at all — and the fix is to make the sweep's notion of "under this checkout" the same one the verdict already uses, because two notions inside one guard is the failure this file was written to be incapable of.**
 

@@ -363,7 +363,7 @@ make reap           # STOP WHAT THIS SESSION STARTED, AND NOTHING ELSE (D127). P
                     #   refused, which is the half a `pkill` that quietly does the right thing on
                     #   a good day can never do.
                     #   AND THE BARE FORM SEES A SERVER STARTED BY A RELATIVE PATH SINCE
-                    #   2026-09-12 (D-the-sweep-asks-what-the-verdict-answers). It resolved argv
+                    #   2026-09-12 (D169). It resolved argv
                     #   ALONE while the verdict reads argv AND the working directory — so
                     #   `make dev`, whose argv npm writes absolutely, was found, and
                     #   `make server`, which the Makefile spells `$(PYTHON) server/capture_server.py`
@@ -1985,7 +1985,7 @@ D165 A run is bound to the drawer's true index, and the run the number stranded 
 D166 The catalogue export is a property of the game, and the box never chose its scope
 D167 A queue entry is re-resolved where it stands, and the answer reaches the price without a second press
 D168 A typed price is cleared by a press, never by an expiry, and the set it may clear is the set the corpus dates
-D-the-sweep-asks-what-the-verdict-answers The blanket sweep asks the question the verdict answers, and a nested worktree is another checkout
+D169 The blanket sweep asks the question the verdict answers, and a nested worktree is another checkout
 ```
 
 **THE GAP THIS LIST CARRIED BETWEEN D116 AND D118 IS CLOSED, AND IT CLOSED THE WAY IT SAID IT

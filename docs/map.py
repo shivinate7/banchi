@@ -1706,7 +1706,7 @@ COMPONENTS = [
                 # checkout, which is the one place this file overrules its own rule. D111 is
                 # the neighbouring notion it deliberately shares reasoning with rather than
                 # duplicating. D18 keeps its self-test off the commit path: it signals.
-                "governed_by": ["D-the-sweep-asks-what-the-verdict-answers", "D18", "D43",
+                "governed_by": ["D169", "D18", "D43",
                                 "D53", "D88", "D111", "D127"],
             },
             "reap-selftest.sh": {
@@ -1728,7 +1728,7 @@ COMPONENTS = [
                         "directory-token subject that must NOT be placed, the caller it must "
                         "pass over, and a real nested worktree. Mutation-tested: twenty-two "
                         "guards removed one at a time, all caught, the naming rule among them.",
-                "governed_by": ["D-the-sweep-asks-what-the-verdict-answers", "D18", "D43",
+                "governed_by": ["D169", "D18", "D43",
                                 "D53", "D122", "D127", "D157"],
             },
             "session-teardown.sh": {
