@@ -31,7 +31,7 @@ before building -- the coverage note at the end says what the audit did not reac
 ## A note on how this file spells things that do not exist yet
 
 **A `+` in front of a path, a `make` target or a `PKMNSCAN_` name means the thing does not
-exist yet** — `+scripts/guard-shell.py`, `+make opsec-selftest`, `+PKMNSCAN_PWARGS`. It is read
+exist yet** — `+make opsec-selftest`, `+PKMNSCAN_PWARGS`. It is read
 by the three mechanical docs-audit rows that verify a named thing is real, so a shelf document
 can name what it would create without failing a commit on every line.
 
@@ -105,7 +105,7 @@ companion clause that refuses launching a second live copy of a script (see reje
 resolver is the machine-wide pgrep that has already reddened reap-selftest four times against an
 unmodified reap.py.
 
-**Where.** +scripts/guard-shell.py --hook (PreToolUse on Bash), both rosters
+**Where.** `scripts/guard-shell.py --hook` (PreToolUse on Bash), both rosters — BUILT.
 
 **What it catches.** A waiter that matches itself. On 2026-09-12 a session that had already READ
 the rule wrote `until ! pgrep -f 'scratchpad/drive.sh'`; the loop never fired, its chained work
@@ -125,7 +125,7 @@ prohibition to trip over."
 it polls a pid rather than a pattern); a bounded readiness probe carrying `curl -m` or an
 iteration cap — pass.
 
-**Escape hatch.** +PKMNSCAN_WAIT=off, printed in the refusal.
+**Escape hatch.** `PKMNSCAN_WAIT=off`, printed in the refusal.
 
 ### Rank 21 — A row that examined an empty subject must not print the same word as one that examined everything.
 
@@ -340,7 +340,7 @@ that cannot determine the answer is not evidence the command is bad, which is pr
 stated rule. Print the sanctioned route: read `.env.example` for the shape, and let the process
 load the real file itself.
 
-**Where.** +scripts/guard-shell.py --hook (PreToolUse on Bash), both rosters
+**Where.** `scripts/guard-shell.py --hook` (PreToolUse on Bash), both rosters — BUILT.
 
 **What it catches.** The one credential in this project that spends money, protected today by a
 Read-tool deny rule in a session whose own system prompt says to prefer `cat`/`sed -n` over the
@@ -1029,7 +1029,7 @@ work, one that could not fail, or one that would have a gate write to the tree (
 - **Banning `api.pokemontcg.io` and TCGplayer Scan & Identify from the product packages** — Both measured clean with zero instances ever, by two readers independently; the only hits are the sanctioned benchmarks in harness/ that each entry explicitly permits. D15 and D2 are architecture statements, not rules under pressure. Two more rows nobody will ever see fire, in a file whose 79 rows a session already scrolls past.
 - **A pre-commit PII ratchet over added lines (emails, address headers, tracking numbers)** — Never measured — marked unknowable, and the strongest thing said for it is that the material exists. Against that, the downside IS measured: scripts/guard-opsec.sh was switched off on 2026-08-03 for two blocked writes in one session, and a pre-commit false alarm buys --no-verify, which disarms the image rule and the printed-code-layout rule in the same hook. A speculative pattern there risks the two rules in this repo that guard a bearer instrument.
 - **A +make icloud-selftest proving the sweep deletes only byte-identical conflict copies** — Zero incidents in the tool's whole life, and the hazard class can no longer occur: the checkout moved to ~/Developer/pkmnscan on 2026-08-29 and the iCloud originals were deleted — the owner's own memory says "hazards retired, guards kept". iCloud conflict copies are produced by iCloud Drive; a tree outside it produces none. The argument offered was symmetry with `make reap` and `make janitor`, and both of those earned their arms from measured incidents. Symmetry is not evidence. (If the tree ever returns to iCloud, this is the first thing to build.)
-- **Refusing `git add -A` / `git add --all`** — It is a correct everyday command, and the incident it is aimed at had a different cause — a bare `ln -s` into an existing path created harness/images/images and the staging command merely carried the result. The existence test on `ln -s` (build_now rank 12) catches it AT the cause, and pre-commit independently refuses a staged symlink by index mode 120000. A refusal on a command typed several times a day is the clause most likely to put the whole hook's hatch in a shell profile.
+- **Refusing `git add -A` / `git add --all`** — It is a correct everyday command, and the incident it is aimed at had a different cause — a bare `ln -s` into an existing path nested a second `images` link inside `harness/images`, and the staging command merely carried the result. The existence test on `ln -s` (build_now rank 12) catches it AT the cause, and pre-commit independently refuses a staged symlink by index mode 120000. A refusal on a command typed several times a day is the clause most likely to put the whole hook's hatch in a shell profile.
 - **A PreToolUse Bash hook refusing a bare `gh pr merge` unless an env marker from scripts/merge-pr.py is present** — The proposed door is not the door that failed, and the refusal fires hardest where it is least justified. All six measured incidents — two unclaimed ids, three merges over in-progress checks, one merge run from main — went through `make merge` from the wrong TREE; the hand-typed bypass is untested. Meanwhile D151 measured 24 of 30 worktrees behind the merge surface, so the tree that most needs to land work by hand is the tree whose wrapper is stale, and there the guard refuses the only available path — the highest-consequence refusal on the board. CLAUDE.md also keeps the raw commands written out "on purpose" so the wrapper never becomes the only thing anybody knows; a hook forbidding them repeals that decision as a side effect. Guard the SURFACE instead: build_now rank 28.
 - **A `governed_by` non-empty branch in check_map** — Presented as free (266 of 266 green) and the cost is not a blocked commit — it is a corrupted field. The requirement is satisfied by any D number that resolves, so during an ordinary file split the cheapest compliance is pasting the nearest plausible one; and `governed_by` is the field scripts/decision-context.py reads to tell the NEXT session what governs the file they are editing, plus the field `tested_by reach` and `decision ids in code` key on. Nothing downstream can tell a real citation from a plausible one. Second, the effective field INHERITS from the component, so the case the rule exists for — a new file under an existing package — arrives already governed and the row can never fire on it. If taken at all: accept `governed_by: []` WITH a `why` string and fail only an entry that has neither, so the visible act is an honest declaration rather than a misdirecting citation.
 - **A `sole writer` row counting import-CSV writers and refusing any count but one** — A count of one is preserved by substitution — delete pipeline/join.py:emit_import and add a writer that never raises OutputSuppressed and the row is still green with the rule gone. It also says nothing about the PROPERTY (both directions reported before a byte is written), and its key is a filename heuristic, so a writer whose destination is computed is outside the denominator. Rework: pin the ROSTER of modules that write an import file and require each to raise OutputSuppressed, folded into the existing `sole reader` row, which already holds a counted-sentence claim of this shape.
