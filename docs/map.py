@@ -5812,7 +5812,7 @@ COMPONENTS = [
                         "arrow belongs to the screens, a held Cmd in a text field belongs to the "
                         "caret, and a screen outside the ring keeps the browser's key. Not a "
                         "harness test; `make design-check` runs it.",
-                "governed_by": ["D5", "D31", "D39", "D43", "D51", "D69", "D70", "D86", "D100", "D105", "D134"],
+                "governed_by": ["D5", "D31", "D39", "D43", "D51", "D69", "D70", "D86", "D100", "D105", "D134", "D-a-claim-on-the-cards"],
                 "note": "ITS RING IS PINNED ON PURPOSE AND RECONCILED AT THE COMMIT. A ring "
                         "derived from App.tsx could not assert the ORDER against anything "
                         "independent, so the copy stays and carries a `ROUTE-ROSTER hotkey` "
@@ -5938,7 +5938,7 @@ COMPONENTS = [
                         "than disabled, D33's shape applied to the press that settles the "
                         "ledger. The route is intercepted and its body read; no real request is "
                         "made and no store is touched.",
-                "governed_by": ["D7", "D33", "D87"]},
+                "governed_by": ["D7", "D33", "D87", "D-a-claim-on-the-cards"]},
             "tests/markdown.spec.ts": {
                 "does": "the stale-listing markdown in a browser (D100): that a person can open "
                         "it from the Runs header at all, that it traps focus and Escape hands it "
@@ -5971,7 +5971,7 @@ COMPONENTS = [
                 # D1 is the two-phase split the four steps make visible; D3 is the ladder the
                 # join walks; D9 is the pricing answer that gates emit;
                 # D31 is why this is a panel on #/inventory rather than a seventh route.
-                "governed_by": ["D145", "D36", "D1", "D3", "D9", "D13", "D20", "D31", "D32", "D33", "D39", "D48", "D54", "D56", "D64", "D65", "D49", "D76", "D166"],
+                "governed_by": ["D145", "D36", "D1", "D3", "D9", "D13", "D20", "D31", "D32", "D33", "D39", "D48", "D54", "D56", "D64", "D65", "D49", "D76", "D166", "D-a-claim-on-the-cards", "D57", "D118"],
                 "note": "THE PIPELINE WAS THE LARGEST INSTANCE OF THE ROUTE-IS-NOT-A-FEATURE "
                         "FAILURE AND NOBODY HAD COUNTED IT. The four commands have existed "
                         "since step 4 and have been through a 53-card run and a 544-card run; "

@@ -224,6 +224,11 @@ async function open(
      *  with. A partial send is the one failure no validation can pre-empt (D48), so it is the
      *  one the screen has to draw rather than swallow. */
     failed?: { box: number; code: string; message: string }[]
+    /** Live submission claims, in the shape `GET /pipeline/submissions` answers with
+     *  (D-a-claim-on-the-cards). Empty by default: nothing in this file is about a claim, and
+     *  a healthy store holds none. It is an option rather than a constant so the one case
+     *  below that needs the panel drawn can have it. */
+    claims?: { receipt: string; run: string | null; cards: number; holder_alive: boolean }[]
   } = {},
 ): Promise<Wire[]> {
   const wire: Wire[] = []
@@ -364,6 +369,27 @@ async function open(
         runs:
           options.runs ??
           [runRow(options.live ? { live: true, pid: 999, phase: 'identifying' } : {})],
+      }),
+    })
+  })
+
+  /* THE CLAIMS PANEL'S OWN READ (D-a-claim-on-the-cards). `#/runs` draws
+     `SubmissionClaims`, which reads this on mount — and the spec seal means an unstubbed read
+     is a FAILURE rather than a missing panel, which is how every case in this file went red
+     the first time the panel landed. An EMPTY list is the right default here: nothing in this
+     file is about a live claim, and a panel that draws nothing is the state a healthy store is
+     in. `claims-panel.spec.ts` is where the panel itself is asserted. */
+  await page.route(/\/pipeline\/submissions$/, async (route) => {
+    await route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify({
+        claims: options.claims ?? [],
+        counts: {
+          claims: (options.claims ?? []).length,
+          keys: (options.claims ?? []).reduce((sum, claim) => sum + claim.cards, 0),
+          stale: (options.claims ?? []).filter((claim) => !claim.holder_alive).length,
+        },
       }),
     })
   })
@@ -2337,4 +2363,111 @@ test('and a scope with nothing on disk promises neither', async ({ page }) => {
   await expect(says).toContainText('Will ask TCGplayer for')
   await expect(says).not.toContainText('Already have this one')
   await expect(says).not.toContainText('refused past')
+})
+
+/* ------------------------------------------------------------------ the claims panel
+ *
+ * WHAT A LIVE SEND IS HOLDING, AND THE ONE WAY OUT OF A STUCK CLAIM
+ * (D-a-claim-on-the-cards). The guard itself is proved by `make submission-selftest`, which
+ * races two real processes over one card; what these cases are for is the half that suite
+ * cannot see — whether a human can reach any of it, which is the failure `docs/GATES.md`
+ * step 7 records at length and which nothing on the commit path can tell.
+ *
+ * THE FIXTURE IS `open`'s `claims` OPTION, so the panel is drawn from the wire rather than
+ * from a hand-built DOM: a spec that mounted the component directly would pass over a route
+ * the screen never calls, which is exactly the shape of the 7b defect.
+ */
+
+/** One live claim, in the shape `GET /pipeline/submissions` answers with. */
+function claimRow(over: Partial<{ receipt: string; run: string | null; cards: number; holder_alive: boolean }> = {}) {
+  return { receipt: 'sub-20260912T090000-aaaaaa', run: '2026-09-12-box3-01', cards: 14, holder_alive: true, ...over }
+}
+
+test('no claim draws no panel at all, which is what a healthy store looks like', async ({ page }) => {
+  await open(page)
+  /* NOT "hidden" — NOT RENDERED. A claim exists only between a press and the collection it
+     paid for, so this is the state the screen is in almost always, and a panel that took
+     height to say nothing would be on this screen forever. */
+  await expect(page.locator('.claims')).toHaveCount(0)
+})
+
+test('a live send says what it is holding, and is NOT offered a release', async ({ page }) => {
+  await open(page, { claims: [claimRow()] })
+  const panel = page.locator('.claims')
+  await expect(panel).toBeVisible()
+  /* THE FIGURE IS THE CARDS, NOT THE ROWS. One claim over fourteen cards and fourteen claims
+     over one card each are the same row count and completely different situations. */
+  await expect(panel).toContainText('14 cards held by 1 send')
+  await expect(panel).toContainText('2026-09-12-box3-01')
+  await expect(panel.getByText('Running')).toBeVisible()
+  /* THE SAFETY PROPERTY, AND THE REASON THIS CASE EXISTS. Releasing a claim whose run is
+     still submitting re-opens those cards to a second press — the double invoice the claim
+     was written to prevent — so the control is NOT DRAWN, rather than drawn and disabled. */
+  await expect(panel.getByRole('button', { name: /Release/ })).toHaveCount(0)
+  /* And no warning: nothing here is stuck. */
+  await expect(panel.locator('.bn-notice')).toHaveCount(0)
+})
+
+test('a send whose holder is gone keeps its cards, says so, and offers the way out', async ({ page }) => {
+  await open(page, { claims: [claimRow({ holder_alive: false, cards: 3, run: '2026-09-12-box7-01' })] })
+  const panel = page.locator('.claims')
+  await expect(panel).toContainText('3 cards held by 1 send')
+  await expect(panel.getByText('Holder gone')).toBeVisible()
+  /* THE SENTENCE HAS TO SAY WHY THE CARDS ARE STILL HELD, because a dead holder looks like a
+     bug until you know a killed send has already been billed. */
+  await expect(panel.locator('.bn-notice')).toContainText('already been billed')
+  await expect(panel.getByRole('button', { name: /^Release 3 cards/ })).toBeVisible()
+})
+
+test('the release names its receipt and confirms, and the page does not move under the press', async ({ page }) => {
+  const wire = await open(page, {
+    claims: [
+      claimRow({ receipt: 'sub-live-1', run: '2026-09-12-box3-01', cards: 14, holder_alive: true }),
+      claimRow({ receipt: 'sub-dead-1', run: '2026-09-12-box7-01', cards: 3, holder_alive: false }),
+    ],
+  })
+  await page.route(/\/pipeline\/submissions\/[^/]+\/release$/, async (route) => {
+    wire.push({
+      method: 'POST',
+      path: new URL(route.request().url()).pathname,
+      body: route.request().postDataJSON(),
+    })
+    await route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify({ receipt: 'sub-dead-1', run: '2026-09-12-box7-01', released: true, cards: 3, claims: [] }),
+    })
+  })
+
+  const panel = page.locator('.claims')
+  const below = page.locator('.runs-body')
+  const beforeBox = await below.boundingBox()
+  const beforeHeight = await page.evaluate(() => document.documentElement.scrollHeight)
+
+  await panel.getByRole('button', { name: /^Release 3 cards/ }).click()
+
+  /* THE CONTROL BECOMES ITS OWN RESULT, IN THE SLOT IT STOOD IN (D57). */
+  await expect(panel.getByText('Released 3 cards')).toBeVisible()
+
+  /* D118 — A PRESS CHANGES WHAT IS ON THE SCREEN AND NEVER WHERE THE REST OF IT IS, and this
+     is the assertion the panel was rebuilt for. Adopting the answer's list straight away
+     removed the row and moved everything below the panel 156px, with the page 60px shorter;
+     the row now stays and the poll drops it a beat later. Both halves are asserted, because
+     the height alone went right while the row was still leaving. */
+  const afterBox = await below.boundingBox()
+  expect(Math.round((afterBox?.y ?? 0) - (beforeBox?.y ?? 0))).toBe(0)
+  expect(await page.evaluate(() => document.documentElement.scrollHeight)).toBe(beforeHeight)
+
+  /* THE HEADLINE COUNTS WHAT IS STILL HELD, never the rows on screen — a row kept for its
+     receipt is holding nothing, and counting it would overstate the lock at the one moment
+     the operator is watching it fall. */
+  await expect(panel).toContainText('14 cards held by 1 send')
+
+  const release = wire.filter((call) => call.path.endsWith('/release'))
+  expect(release).toHaveLength(1)
+  /* THE RECEIPT IS IN THE PATH and the confirm is in the body: the route refuses without it,
+     because releasing a claim whose holder is still submitting is the second invoice. */
+  expect(release.map((call) => [call.path, call.body])).toEqual([
+    ['/pipeline/submissions/sub-dead-1/release', { confirm: true }],
+  ])
 })
