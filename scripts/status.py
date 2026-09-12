@@ -732,7 +732,7 @@ def serving_branch() -> List[str]:
         field("the code", f"{branch} — NOT main"),
         cont("this is the PRIMARY checkout, the one `make launch-agent` serves the"),
         cont("owner's REAL store out of (D53, D139)."),
-        # AND THE LINE THIS SECTION USED TO GET WRONG. Until D-the-rig-refuses-to-serve-a-branch it said the live capture
+        # AND THE LINE THIS SECTION USED TO GET WRONG. Until D158 it said the live capture
         # server "is running THIS branch's code", which was the hazard stated as a fact. The
         # supervisor now REFUSES to adopt it: what is serving is whatever was serving before
         # the switch, and a cold start here serves nothing at all. Both are worth saying,

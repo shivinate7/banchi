@@ -902,7 +902,7 @@ def report(root: Path = REPO_ROOT) -> dict:
         "dev_answering": port_answering(dev_port),
         "worktree": ports.is_linked_worktree(root),
         # The branch this PRIMARY checkout stands on when serving is refused, else None
-        # (D-the-rig-refuses-to-serve-a-branch). `scripts/status.py:serving_branch()` already names the branch from D139;
+        # (D158). `scripts/status.py:serving_branch()` already names the branch from D139;
         # this is the second half of that line — whether the refusal is in force — and it is
         # read from the same function the supervisor decides on rather than re-derived.
         "off_main": off_main(root),
@@ -947,7 +947,7 @@ def print_where(root: Path = REPO_ROOT) -> None:
 
 
 # ---------------------------------------- the primary checkout serves main
-# D-the-rig-refuses-to-serve-a-branch
+# D158
 
 SERVE_MAIN_ENV = "PKMNSCAN_SERVE_MAIN"
 
@@ -1096,7 +1096,7 @@ class Supervisor:
         replaced it is `_refuse_capture` below, which still stops rather than retrying a wall.
         """
         # BEFORE THE BUILD AND BEFORE THE PORT, because both are ways of adopting this tree's
-        # code and neither is worth doing for a tree that must not be served (D-the-rig-refuses-to-serve-a-branch). The
+        # code and neither is worth doing for a tree that must not be served (D158). The
         # supervisor stays ALIVE and watching rather than exiting: `git switch main` brings it
         # back by itself, and exiting would also hand launchd a process to think about — the
         # plist's `KeepAlive: {SuccessfulExit: false}` restarts anything that exits non-zero,
@@ -1150,7 +1150,7 @@ class Supervisor:
             self._tail(CAPTURE_LOG)
 
     def _stand_down(self, branch: str) -> None:
-        """Refuse to adopt this tree's code, and say so once per branch (D-the-rig-refuses-to-serve-a-branch).
+        """Refuse to adopt this tree's code, and say so once per branch (D158).
 
         IT STOPS NOTHING. Every other arm of this guard refuses an ADOPTION — a spawn, a
         restart, a re-exec, a build. Killing the capture server the owner may be mid-capture
@@ -1388,7 +1388,7 @@ class Supervisor:
             self.start()
 
     def _restart_for(self, changed: list[str]) -> None:
-        # FIRST IN THIS METHOD, AND THAT ORDER IS THE LOAD-BEARING PART (D-the-rig-refuses-to-serve-a-branch). The arm below
+        # FIRST IN THIS METHOD, AND THAT ORDER IS THE LOAD-BEARING PART (D158). The arm below
         # re-execs this process into the `scripts/serve.py` ON DISK, and a branch switch is
         # exactly how a DIFFERENT serve.py arrives — one cut before this guard existed and
         # carrying no guard at all. Asked here, the question is answered by the image already
@@ -1487,7 +1487,7 @@ def do_up(args: argparse.Namespace) -> int:
         print_where()
         return 0
     # AND BEFORE THE PORT, because a tree that must not be served is refused whoever holds the
-    # socket (D-the-rig-refuses-to-serve-a-branch). Non-zero here where the supervisor's own arm stays alive and silent: a
+    # socket (D158). Non-zero here where the supervisor's own arm stays alive and silent: a
     # person typed this and an exit status is what they are reading.
     branch = off_main()
     if branch is not None:

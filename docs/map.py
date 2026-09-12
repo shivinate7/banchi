@@ -1316,7 +1316,7 @@ COMPONENTS = [
                         "store and its own ports to be wrong on its own. It WARNS and never "
                         "refuses: git has no `pre-checkout` hook, so by the time this runs "
                         "the switch has already happened. AND SINCE 2026-09-12 IT SAYS WHAT "
-                        "THE SERVER WILL DO ABOUT IT (D-the-rig-refuses-to-serve-a-branch): whether a supervisor "
+                        "THE SERVER WILL DO ABOUT IT (D158): whether a supervisor "
                         "is actually live here — D139's warning asserted one was, checking "
                         "nothing — and whether the branch just checked out carries the "
                         "refusal in its own scripts/serve.py, naming `make down` when it does "
@@ -1324,7 +1324,7 @@ COMPONENTS = [
                         "the common `.git` dir, so the copy git runs is the one thing a "
                         "branch switch cannot rewrite — while scripts/serve.py, where the "
                         "refusal itself lives, is exactly what a switch replaces.",
-                "governed_by": ["D42", "D43", "D53", "D139", "D-the-rig-refuses-to-serve-a-branch"],
+                "governed_by": ["D42", "D43", "D53", "D139", "D158"],
                 "note": "Extensionless, unscanned, listed by hand.",
             },
             "githooks/pre-push": {
@@ -1501,7 +1501,7 @@ COMPONENTS = [
                         "ONE TRANSACTION PER REF on this machine — measured, rather than "
                         "assumed, when the arm came back vacuous. "
                         "AND THREE MORE THE SAME DAY for what a switch says the SERVER "
-                        "will do (D-the-rig-refuses-to-serve-a-branch): a live supervisor "
+                        "will do (D158): a live supervisor "
                         "whose serve.py carries the refusal, one whose serve.py predates it, "
                         "and no supervisor at all — which must claim nothing about one, "
                         "D139's warning having asserted a running server without checking. "
@@ -1515,7 +1515,7 @@ COMPONENTS = [
                 # D43 and D53 join with D139: the cases turn on a linked worktree having its own
                 # store, and on the primary checkout being the one the live server is built from.
                 "governed_by": ["D18", "D42", "D43", "D53", "D139", "D151",
-                                "D-the-rig-refuses-to-serve-a-branch"],
+                                "D158"],
             },
             "lan-check.py": {
                 "does": "answers whether the owner's LAN URL still works, end to end and from "
@@ -1573,14 +1573,14 @@ COMPONENTS = [
                         "LINKED worktree, so the derivation calls it the main checkout and it "
                         "claims :8000 — measured, against the owner's live server, the first "
                         "time this ran. In `check`, never in the git hook (D18). "
-                        "IT ALSO REPRODUCES BOTH OF D-the-rig-refuses-to-serve-a-branch\'s INCIDENTS in a third "
+                        "IT ALSO REPRODUCES BOTH OF D158\'s INCIDENTS in a third "
                         "tree that is a REAL git checkout with a real `main`: a tree moving "
                         "under a live supervisor, and a cold start through `serve.py run` — "
                         "the way launchd starts it, which is not `make up` and is the shape "
                         "the second incident was in. Only three files are tracked in that "
                         "fixture, because the switch has to CHANGE a watched file or no "
                         "reload is scheduled and the guard is never reached.",
-                "governed_by": ["D18", "D43", "D53", "D138", "D-the-rig-refuses-to-serve-a-branch"],
+                "governed_by": ["D18", "D43", "D53", "D138", "D158"],
                 "tested_by": [],
             },
             "janitor-selftest.sh": {
@@ -2073,7 +2073,7 @@ COMPONENTS = [
                         "one `_await_capture`, which takes the CHILD and not just the port "
                         "(D53\'s own correction). T7 `check_supervisor_recovery`. "
                         "AND IT WILL NOT SERVE A PRIMARY CHECKOUT THAT IS OFF MAIN since "
-                        "2026-09-12 (D-the-rig-refuses-to-serve-a-branch): `off_main` reads `.git/HEAD` — no "
+                        "2026-09-12 (D158): `off_main` reads `.git/HEAD` — no "
                         "subprocess, this file being stdlib-only by rule — and the spawn, the "
                         "reload, the re-exec and the build each refuse on it. IT STOPS "
                         "NOTHING ALREADY RUNNING, which is `_first_syntax_error`\'s bargain "
@@ -2091,7 +2091,7 @@ COMPONENTS = [
                 # targets may reach `make check` or the git hook, and launch-agent writes to
                 # ~/Library. D13 because the store stays on this Mac and the LAN reach is the
                 # tunnel case that entry already names.
-                "governed_by": ["D13", "D18", "D43", "D47", "D53", "D70", "D85", "D138", "D139", "D-the-rig-refuses-to-serve-a-branch"],
+                "governed_by": ["D13", "D18", "D43", "D47", "D53", "D70", "D85", "D138", "D139", "D158"],
                 "tested_by": ["T7"],
                 "status": "built",
             },
@@ -2285,7 +2285,7 @@ COMPONENTS = [
                         "new line needs `ports.is_linked_worktree`, and a third copy of that "
                         "dance would have been a third place for the primary/linked test to be "
                         "spelled differently. The line no longer says the live server IS "
-                        "running this branch\'s code (D-the-rig-refuses-to-serve-a-branch) — the supervisor "
+                        "running this branch\'s code (D158) — the supervisor "
                         "refuses it, so what is serving is whatever was serving before the "
                         "switch and a cold start here serves nothing at all; a rig that is "
                         "DOWN and a rig that is a branch BEHIND read very differently.",
@@ -2301,7 +2301,7 @@ COMPONENTS = [
                 # hazard belongs to a synced directory, and a tree can be put inside one
                 # without telling this script.
                 "governed_by": ["D16", "D17", "D42", "D43", "D44", "D53", "D80", "D86", "D88",
-                                "D111", "D127", "D138", "D139", "D-the-rig-refuses-to-serve-a-branch"],
+                                "D111", "D127", "D138", "D139", "D158"],
                 "note": "IT READS `--json`, NOT THE RENDER, since 2026-08-13. This line "
                         "said the opposite until integration: the debt was closed and this "
                         "entry rewritten in the same run by different hands, and nothing "

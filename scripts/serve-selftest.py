@@ -149,7 +149,7 @@ def build_tree(where: Path) -> Path:
 def make_primary_checkout(tree: Path) -> None:
     """Turn the throwaway tree into a PRIMARY checkout with a real `main`.
 
-    D-the-rig-refuses-to-serve-a-branch is the entry.
+    D158 is the entry.
 
     REPRODUCED RATHER THAN ASSERTED ABOUT. The situation this guard exists for is one
     directory — the one D53 serves the owner's real store out of — standing on a feature
@@ -486,14 +486,14 @@ def main() -> int:
             wait_until(lambda: get(port2, "/status")[0] == 0, seconds=60)
 
     # ---------------------------------------------------------------------------------
-    # THE PRIMARY CHECKOUT SERVES MAIN (D-the-rig-refuses-to-serve-a-branch). Its own tree, its own port, its own git.
+    # THE PRIMARY CHECKOUT SERVES MAIN (D158). Its own tree, its own port, its own git.
     with tempfile.TemporaryDirectory() as tmp3:
         where3 = Path(tmp3)
         tree3 = build_tree(where3)
         port3 = PORTS[tree3]
         make_primary_checkout(tree3)
         print()
-        print("  -- D-the-rig-refuses-to-serve-a-branch: the rig refuses to serve a primary checkout that is off main --")
+        print("  -- D158: the rig refuses to serve a primary checkout that is off main --")
 
         serve(tree3, "up")
         try:

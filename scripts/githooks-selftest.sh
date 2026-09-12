@@ -261,7 +261,7 @@ git -C "$tmp/foreign" commit -qm "second"
 git -C "$tmp/foreign" config core.hooksPath "$HOOKS_DIR"
 silent "a branch switch where there is no \`main\`" git -C "$tmp/foreign" switch -q -c topic master~1
 
-echo "  -- D-the-rig-refuses-to-serve-a-branch: the switch says what the SERVER will do about it --"
+echo "  -- D158: the switch says what the SERVER will do about it --"
 # WHY THE SECOND HALF IS IN THIS FILE AT ALL. The refusal itself lives in `scripts/serve.py`,
 # and `scripts/serve.py` is a tracked file — so the checkout that just happened is exactly the
 # event that can replace it with a copy carrying no guard. `make hooks` COPIES this hook into

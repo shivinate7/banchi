@@ -9866,7 +9866,7 @@ this not at all.
 > `claude/debts-citation-repair`, a
 > branch already merged as pull request #282, four live sessions in the tree. The three readers
 > in this entry stand and are untouched; what is superseded is "a warning is the ceiling".
-> `## D-the-rig-refuses-to-serve-a-branch` is the replacement: the refusal goes where the damage
+> `## D158` is the replacement: the refusal goes where the damage
 > is, which is the SERVER and not the checkout, so the supervisor will not adopt a primary
 > checkout's code while it is off main.
 > **The section below is right that nothing in git can refuse the switch, and it remains true**
@@ -11365,7 +11365,7 @@ BLOCKED: this would signal a process this session did not start.
 **`pgrep -fc` is not a count on BSD.** It returns 0 and reads as "no orphans", which is how a leftover measurement can come back clean on this machine. Count with `pgrep -f ... | wc -l`.
 ---
 
-## D-the-rig-refuses-to-serve-a-branch — The refusal goes where the damage is, so the primary checkout's server will not run a branch's code, and the checkout itself is left alone
+## D158 — The refusal goes where the damage is, so the primary checkout's server will not run a branch's code, and the checkout itself is left alone
 
 **Settled 2026-09-12, on the owner reopening D139 in as many words.** That entry was written the
 day before, after `/Users/shivinate/Developer/pkmnscan` — the primary checkout, the one D53 keeps

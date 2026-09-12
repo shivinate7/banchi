@@ -34,7 +34,7 @@ fi
 # `claude/env-key-rotation` with three live sessions in it and nothing anywhere said so.
 #
 # A WARNING IS THE CEILING *HERE*, AND IT IS NO LONGER THE CEILING ANYWHERE —
-# D-the-rig-refuses-to-serve-a-branch is why.
+# D158 is why.
 # There is no `pre-checkout` hook: git calls this one AFTER the switch has happened, with the
 # new HEAD already in place, so nothing in this file can refuse. Measured on this machine's git
 # 2.39.3, `reference-transaction` cannot either — `git switch <branch>` moves HEAD as a SYMREF
@@ -74,7 +74,7 @@ if [ -n "$top" ] && [ -d "$top/.git" ] && git rev-parse --verify --quiet main >/
     echo "  Undo: git switch -   ·   on main again: git switch main" >&2
 
     # ------------------------- what the server will do about it
-    # D-the-rig-refuses-to-serve-a-branch
+    # D158
     # D139 ASSERTED THE HARM AND CHECKED NOTHING: it said the live capture server "now runs
     # THIS branch's code" whether or not one was running at all. Since that entry the
     # supervisor

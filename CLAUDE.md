@@ -122,7 +122,7 @@ make up             # THE server, detached — ONE PROCESS AS OF 2026-09-11 (D13
                     #   serve a DIFFERENT store (D43). `make dev` alongside is FINE and is the
                     #   point — the supervisor no longer holds :5173.
                     #   AND IT WILL NOT SERVE A PRIMARY CHECKOUT THAT IS OFF MAIN
-                    #   (D-the-rig-refuses-to-serve-a-branch). D53 keeps this one directory's
+                    #   (D158). D53 keeps this one directory's
                     #   server alive over the owner's REAL store and D138 made it serve the
                     #   built app too, so the branch that directory stands on decides which
                     #   code photographs real cards. The supervisor REFUSES the spawn, the
@@ -1760,7 +1760,7 @@ D154 The camera's automatic functions are inputs to the trigger's arithmetic, an
 D155 The section is the ruler and the box is the margin note, and the bracket between them is deleted
 D156 Every copy TCGplayer does not hold is one worklist, and a run stays open until the last of them has gone
 D157 The fixture carries a per-run name, because the process table is the one thing a run cannot have its own of
-D-the-rig-refuses-to-serve-a-branch The refusal goes where the damage is, so the primary checkout's server will not run a branch's code, and the checkout itself is left alone
+D158 The refusal goes where the damage is, so the primary checkout's server will not run a branch's code, and the checkout itself is left alone
 
 ```
 
