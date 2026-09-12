@@ -464,8 +464,14 @@ COMPONENTS = [
                                    "`refuse_reallocated` refuses a run over a box whose number was "
                                    "deleted and reused since (D36 amended), on the rule "
                                    "`_box_name_for` withholds a name by (D56) — `realign` reads "
-                                   "photographs and not the store, and cannot see that case.",
-                           "governed_by": ["D145", "D4", "D8", "D10", "D11", "D20", "D21", "D22", "D23", "D24", "D25", "D26", "D33", "D34", "D36", "D49", "D56", "D58", "D59", "D64", "D87", "D115"], "tested_by": ["T7"]},
+                                   "photographs and not the store, and cannot see that case. "
+                                   "`_committed_keys` spends a per-SKU claim on positions in "
+                                   "OLDEST-CAPTURE order, not the box-walk order "
+                                   "`copies_on_hand` answers in: a copy captured after an "
+                                   "emit was in no file that emit wrote, and picking the "
+                                   "newest stranded 59 of one run's cards "
+                                   "(D147).",
+                           "governed_by": ["D147", "D145", "D4", "D8", "D10", "D11", "D20", "D21", "D22", "D23", "D24", "D25", "D26", "D33", "D34", "D36", "D49", "D56", "D58", "D59", "D64", "D87", "D115"], "tested_by": ["T7"]},
             "runs.py": {"does": "run directories and manifest.json", "governed_by": ["D1", "D25", "D49", "D54", "D86"], "tested_by": ["T7"]},
         },
     },
