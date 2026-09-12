@@ -1343,7 +1343,7 @@ COMPONENTS = [
                 # act is behind a flag rather than a default. D33 is the instrument the two-step
                 # is borrowed from, one register down from a route that can spend money.
                 "governed_by": ["D18", "D33", "D42", "D72", "D111", "D136", "D140",
-                                "D141", "D143", "D-wait-names-the-commit"],
+                                "D141", "D143", "D148"],
                 "note": "IT NEVER SETS PKMNSCAN_MAIN AND NO REFUSAL IT PRINTS SUGGESTS IT. D42 "
                         "is explicit that a session reaching for that variable has left the "
                         "amendment behind; this needs no hatch because allow rule 3 already "
@@ -1792,7 +1792,7 @@ COMPONENTS = [
                         "number underneath it, and twenty-five arms and six mutants cover the "
                         "claim commit's WAIT, which asked about the pull REQUEST rather than "
                         "about the commit and read an empty answer as a clean one "
-                        "(D-wait-names-the-commit). Those last run the real claim half against "
+                        "(D148). Those last run the real claim half against "
                         "a fake `gh` on PATH that answers `gh pr checks` green and instantly, "
                         "so the query that was wrong PASSES there rather than merely behaving "
                         "differently. The count in this sentence said sixteen over a file that "
@@ -1811,7 +1811,7 @@ COMPONENTS = [
                 # survive are in the prose that explains why. The superset rule reads a citation
                 # literally, which is the trade docs-audit.py's own entry records.
                 "governed_by": ["D1", "D2", "D16", "D18", "D80", "D136", "D140", "D141",
-                                "D143", "D-wait-names-the-commit"],
+                                "D143", "D148"],
             },
             "docs-audit-allow.txt": {
                 "does": "paths and identifiers the docs name before they exist, one "
