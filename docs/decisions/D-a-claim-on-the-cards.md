@@ -100,7 +100,10 @@ So the figures are published rather than inferred from the fact that nothing has
 
 ### What is NOT proved
 
-**The REFUSAL has been through the real command; the RELEASE has not.** `pkmnscan identify` over a two-card box with one card already claimed was refused by hand on 2026-09-12: the preflight printed, the refusal named the run, the receipt, the card and the remedy, the command exited **1**, **no run directory was created at all** — which is what writing the claim before `runs.create` buys — and the standing claim was left untouched. `--dry-run` over the same directory claimed nothing, as it must.
+**The REFUSAL has been through the real command, including the case the box form cannot see.** Both were driven by hand on 2026-09-12, and in both the preflight printed, the refusal named the run, the receipt, the card and the remedy, the command exited **1**, **no run directory was created at all** — which is what writing the claim before `runs.create` buys — and the standing claim was left untouched. `--dry-run` over the same directory claimed nothing, as it must.
+
+- **A box press over cards one of which was already claimed.** The ordinary double-click.
+- **A press over a PILE whose captures span boxes 3 and 8, against a live claim on 8/7.** `_run_box` answers `None` for that run — confirmed directly, not assumed — so `_busy_run(8)` can never match it and the old guard was blind in both directions. The claim table refused it on the card in the pile's *second* drawer.
 
 **What has NOT happened is a claim written by a press that went on to spend.** The self-test races `claim_or_refuse`, which is the mechanism and the same call the command makes; it is not `pkmnscan identify` through to collection, which needs the Batch API, and a test that mocked the API would be racing the mock. So **the release path — the claim given back by the commit that banks the answers — has never run**, and no invoice has been prevented in production. The first real press is what measures both.
 
