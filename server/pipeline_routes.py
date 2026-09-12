@@ -2071,7 +2071,7 @@ def _unsent_ledger(
     reads each run's recorded export the way `load` reads it and keeps the NEWEST reading of
     a SKU across every file, which is D87's rule; `_copies_out` answers what TCGplayer holds
     per SKU off that reading and the store's own; `_committed_keys` spends the figure on
-    positions — oldest capture first (D-committed-copies-are-the-oldest) — and the same set
+    positions — oldest capture first (D147) — and the same set
     subtraction `SkuMatch.uncommitted_positions` makes decides what is left. A copy in a
     TERMINAL state is committed by the same arm `load` uses for one. Nothing here is a third
     implementation of the claim, which is what would have let the two figures drift again.

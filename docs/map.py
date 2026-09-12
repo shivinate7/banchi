@@ -470,8 +470,8 @@ COMPONENTS = [
                                    "`copies_on_hand` answers in: a copy captured after an "
                                    "emit was in no file that emit wrote, and picking the "
                                    "newest stranded 59 of one run's cards "
-                                   "(D-committed-copies-are-the-oldest).",
-                           "governed_by": ["D-committed-copies-are-the-oldest", "D145", "D4", "D8", "D10", "D11", "D20", "D21", "D22", "D23", "D24", "D25", "D26", "D33", "D34", "D36", "D49", "D56", "D58", "D59", "D64", "D87", "D115"], "tested_by": ["T7"]},
+                                   "(D147).",
+                           "governed_by": ["D147", "D145", "D4", "D8", "D10", "D11", "D20", "D21", "D22", "D23", "D24", "D25", "D26", "D33", "D34", "D36", "D49", "D56", "D58", "D59", "D64", "D87", "D115"], "tested_by": ["T7"]},
             "runs.py": {"does": "run directories and manifest.json", "governed_by": ["D1", "D25", "D49", "D54", "D86"], "tested_by": ["T7"]},
         },
     },
@@ -2645,7 +2645,7 @@ COMPONENTS = [
                 # D32 is why --force-resubmit is deliberately not offered to a screen.
                 # D58 is the pricing route's label re-render — the stored rendering is
                 # never served, which that entry's own amendment records at this site.
-                "governed_by": ["D-unsent-copies-worklist", "D-committed-copies-are-the-oldest", "D145", "D1", "D2", "D3", "D8", "D9", "D12", "D13", "D16", "D19",
+                "governed_by": ["D-unsent-copies-worklist", "D147", "D145", "D1", "D2", "D3", "D8", "D9", "D12", "D13", "D16", "D19",
                                 "D20", "D21", "D22", "D24", "D25", "D29", "D32", "D33", "D35",
                                 "D36", "D43", "D47", "D48", "D49", "D54", "D56", "D58", "D59",
                                 "D62", "D64", "D65", "D68", "D76", "D78", "D79", "D86", "D87",

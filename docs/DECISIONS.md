@@ -10645,7 +10645,7 @@ The 0.80 floor was fitted to two games' worth of real reads. A
 third game arriving with a different naming convention is a reason to re-measure it, not to
 assume it travels.
 
-## D-committed-copies-are-the-oldest — The claim is spent on the oldest copies, because a card captured tonight was in no file sent last week
+## D147 — The claim is spent on the oldest copies, because a card captured tonight was in no file sent last week
 
 **When the store says TCGplayer holds N copies of a SKU, the N positions that stand for them are the N OLDEST CAPTURES.** Built 2026-09-11, from the operator's report that an emit was *"showing several items from my run already at quantity 0, as though they're already listed, that's just not true/possible"*.
 
@@ -10748,7 +10748,7 @@ The five runs the old rule had closed: `2026-08-24-box2-01` holding 148 unsent c
 
 ### How the figure is live, and why it is not a third implementation
 
-`server/pipeline_routes.py:_unsent_ledger` runs `cli/resolve.py`'s own functions over the store as it stands: `_live_by_sku` for each run's recorded export, newest reading per SKU (D87's rule); `_copies_out` for what TCGplayer holds; `_committed_keys` to spend that on positions, oldest capture first (D-committed-copies-are-the-oldest); and the same set subtraction `SkuMatch.uncommitted_positions` makes. A copy in a terminal state is committed by the arm `load` uses for one. **This entry is built on top of D-committed-copies-are-the-oldest and not beside it**: the ledger reads the same `_committed_keys`, so its numbers were wrong until that ordering landed and are right by the same fix.
+`server/pipeline_routes.py:_unsent_ledger` runs `cli/resolve.py`'s own functions over the store as it stands: `_live_by_sku` for each run's recorded export, newest reading per SKU (D87's rule); `_copies_out` for what TCGplayer holds; `_committed_keys` to spend that on positions, oldest capture first (D147); and the same set subtraction `SkuMatch.uncommitted_positions` makes. A copy in a terminal state is committed by the arm `load` uses for one. **This entry is built on top of D147 and not beside it**: the ledger reads the same `_committed_keys`, so its numbers were wrong until that ordering landed and are right by the same fix.
 
 **A copy stamped since the join is counted, because the send counts it.** A review answer writes `sku` onto a record after `pricing.json` was written, and `load` adopts that identity on the next resolve; the ledger unions each SKU's table positions with every copy on hand carrying the SKU whose `run` is on screen, and the merged row draws those positions labelled off the live store. Measured: **74 copies** across the ten joinable runs were in no table and in the press.
 
@@ -10764,4 +10764,4 @@ The five runs the old rule had closed: `2026-08-24-box2-01` holding 148 unsent c
 
 ### What would reopen this
 
-A marker that a copy reached an import file (D59, D-committed-copies-are-the-oldest) — the committed set would then be READ and the ledger would stop inferring it. A `sku` index on `store/rows.py:Rows` — the 2.8s. A seventeenth open run. And realigning on the route, if the one-copy residual ever becomes a sentence somebody reads.
+A marker that a copy reached an import file (D59, D147) — the committed set would then be READ and the ledger would stop inferring it. A `sku` index on `store/rows.py:Rows` — the 2.8s. A seventeenth open run. And realigning on the route, if the one-copy residual ever becomes a sentence somebody reads.
