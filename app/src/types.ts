@@ -510,6 +510,17 @@ export type CandidateRow = {
    *  entry in a `review.json` written before 2026-09-11, which a queue file outliving its
    *  run makes an ordinary case rather than a migration. */
   rarity?: string
+
+  /** WHICH READING OF THE PHOTOGRAPH FOUND THIS ROW, on the one entry where that question
+   *  has two answers. A `name_disputed` card offers both readings — the rows the NAME found
+   *  and the row the NUMBER found — so the list holds two different cards and the operator
+   *  needs to know which signal argued for which.
+   *
+   *  ABSENT EVERYWHERE ELSE, and that absence is the contract rather than a gap: a list with
+   *  one provenance does not need it stated, and `cli/resolve.py:_candidate_rows` omits the
+   *  key unless the entry carries the split. A row drawing no provenance tag is the normal
+   *  case, not a row whose provenance was lost. */
+  found_by?: 'name' | 'number'
 }
 
 /** What identification said, as `cli/resolve.py:queue_entry` recorded it. Every field is
@@ -1074,7 +1085,11 @@ export type GroupAnswerResult = {
   answered: string[]
   count: number
   reason: string
-  condition: string
+  /** The one condition GRADE the whole group shared — `near mint` for every real group on
+   *  this store. It was `condition`, the full string, until 2026-09-12: the group may now
+   *  mix finishes (`Near Mint` beside `Near Mint Foil`), so a single condition at the top
+   *  would misdescribe half the members. Each row's own condition is on its own result. */
+  grade: string
   results: GroupAnswerRow[]
 }
 
