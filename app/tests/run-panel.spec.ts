@@ -2061,6 +2061,133 @@ test('a widened scope carries its measured width against the cap, before the pre
   await expect(says).toContainText('Hint the cards')
 })
 
+/** The scope route's answer when `_scope_for_run` refused it: `asked` is null, the code and
+ *  the sentence are data, and the counts on the game row still draw. `do_pipeline_scope`
+ *  reads a `PipelineRefusal` this way on purpose (D76) — the preview is the one place an
+ *  operator can correct a scope before spending anything. */
+const REFUSED_SCOPE = {
+  run: '2026-08-30-box3-01',
+  games: [
+    {
+      game: 'pokemon',
+      display: 'Pokemon',
+      category_id: 3,
+      cards: 200,
+      hinted: 153,
+      unhinted: 47,
+      hints: ['ME01'],
+      policy: 'sets',
+    },
+  ],
+  scopes: ['category', 'sets'],
+  asked: null,
+  reason: 'export_needs_set_hint',
+  /* VERBATIM FROM THE SERVER, INCLUDING THE DISPLAY NAME. `Pokémon` and not `pokemon`: the
+     refusal is rendered as-is on this screen, and CLAUDE.md's register rule is that an enum
+     value is labelled rather than printed raw — so the sentence reads the game's own display
+     name off the registry. A stub carrying the key would be asserting the defect. */
+  message:
+    'Every Pokémon card in a run has to name its set, and 47 of its 200 do not. Without one '
+    + 'the export asks for the whole Pokémon category — about 32.6 MB, 97% of the 32 MB this '
+    + 'download is refused past. Set the hint on the cards that lack one from #/inventory — '
+    + 'open the box, Manage box, Set claims — or tick the sets on #/runs to ask for them '
+    + 'anyway.',
+  width: null,
+  reusable: null,
+}
+
+test('a scope that could not be decided is drawn beside the press, not inside the well', async ({
+  page,
+}) => {
+  /* THE REFUSAL THIS EXISTS FOR. A Pokemon run whose own cards widened the scope is refused
+     rather than fetched — its whole category is 97% of the download's ceiling — and the
+     operator meets that on this screen. It used to be drawn ONLY inside the Options well,
+     which is shut by default: a refusal nobody can see reads as a broken button.
+
+     THE OWNER'S RULING THAT DISCLOSURES STAY COLLAPSED IS NOT REVERSED BY THIS, and the
+     distinction is worth stating because the well's own docstring names it. What stays
+     collapsed is a complaint ABOUT the options that well holds — a tick the portal does not
+     know, a vocabulary that would not load, all of which arrive with `asked` still answered.
+     What moves out is the case where there is no scope AT ALL, which blocks the primary
+     press; `asked === null` is exactly that partition. */
+  const wire = await open(page)
+  await page.route(/\/pipeline\/runs\/[^/]+\/scope/, async (route) => {
+    await route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify(REFUSED_SCOPE),
+    })
+  })
+  await routeFetch(page, wire, { status: 200, body: fetchedBody() })
+  await openRun(page)
+
+  /* VISIBLE WITH NOTHING PRESSED. The well is shut, so a locator that only resolves after
+     `openJoinOptions` would pass over a refusal the operator cannot read. */
+  await expect(page.locator('.runs-options')).toHaveCount(0)
+  const notice = page.locator('.bn-notice').filter({ hasText: 'has to name its set' })
+  await expect(notice).toBeVisible()
+
+  /* THE COUNTS AND THE WIDTH, because "refused" on its own is not actionable — 47 of 200 is
+     what sends somebody looking, and 32.6 MB is why it matters. */
+  await expect(notice).toContainText('47 of its 200')
+  await expect(notice).toContainText('32.6 MB')
+
+  /* AND THE WAY FORWARD. The retroactive claim editor is where a hint is set after the fact,
+     and a refusal that named no screen would strand the cards it protects. */
+  await expect(notice).toContainText('Manage box')
+
+  /* THE SCOPE SENTENCE IS ABSENT RATHER THAN GUESSING. `asked` is null, so there is no width
+     to describe, and a "Will ask TCGplayer for…" line here would be describing a request
+     that is not going to be made. */
+  await expect(page.locator('.run-scope-says')).toHaveCount(0)
+
+  /* AND IT IS NOT DRAWN TWICE. Opening the well must not repeat the same sentence — the two
+     places partition on `asked`, they do not both render it. */
+  await openJoinOptions(page)
+  await expect(page.locator('.bn-notice').filter({ hasText: 'has to name its set' })).toHaveCount(1)
+})
+
+test('a scope that WAS decided keeps its complaint inside the well', async ({ page }) => {
+  /* THE OTHER SIDE OF THE PARTITION, and the arm that keeps the one above honest: a notice
+     hoisted for every message would have emptied the well and reversed the owner's ruling by
+     accident. Here `asked` is answered and a message rides beside it, so the sentence stays
+     where the control it is about lives. */
+  const wire = await open(page)
+  await page.route(/\/pipeline\/runs\/[^/]+\/scope/, async (route) => {
+    await route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify({
+        ...REFUSED_SCOPE,
+        asked: {
+          game: 'pokemon',
+          category_id: 3,
+          hints: ['ME01'],
+          set_ids: [4242],
+          unresolved_hints: [],
+          sets: ['SV09: Journey Together'],
+          widened: false,
+          scope: 'sets',
+          policy: 'sets',
+          chosen_by: 'cards',
+          reason: null,
+          cards: 200,
+          hinted: 200,
+          unhinted: 0,
+        },
+        reason: 'set_ids_unknown',
+        message: 'TCGplayer’s pokemon category has no set with id 9999.',
+      }),
+    })
+  })
+  await routeFetch(page, wire, { status: 200, body: fetchedBody() })
+  await openRun(page)
+
+  await expect(page.locator('.bn-notice').filter({ hasText: 'no set with id' })).toHaveCount(0)
+  await openJoinOptions(page)
+  await expect(page.locator('.bn-notice').filter({ hasText: 'no set with id' })).toBeVisible()
+})
+
 test('a narrow measurement is NOT drawn beside a widened scope', async ({ page }) => {
   /* IT WOULD DESCRIBE A DIFFERENT REQUEST. 238 KB is the truth about one set and a lie about
      the whole category, and drawing it under a `widened` scope reassures about the ask that
