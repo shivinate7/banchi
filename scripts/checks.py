@@ -206,7 +206,7 @@ CHECKS = (
                "them. That is the whole shape of a rule with no reader, and it is why this "
                "one is gated now rather than argued about: PR #307 filled the 17 exports its "
                "RECORDED table was missing, so the gate is safe and costs one node process.",
-        "governed_by": ("D18", "D172"),
+        "governed_by": ("D18", "D173"),
     },
     {
         "target": "sigil-check",
