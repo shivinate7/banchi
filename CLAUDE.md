@@ -1889,7 +1889,7 @@ D163 The cache is keyed by the digest, so the digest is what the press computes 
 D164 The undo stack is the sitting, not the drawer, and the counter counts the sitting
 D165 A run is bound to the drawer's true index, and the run the number stranded is repaired once by hand
 D166 The catalogue export is a property of the game, and the box never chose its scope
-D-the-queue-is-refreshed-where-it-stands A queue entry is re-resolved where it stands, and the answer reaches the price without a second press
+D167 A queue entry is re-resolved where it stands, and the answer reaches the price without a second press
 ```
 
 **THE GAP THIS LIST CARRIED BETWEEN D116 AND D118 IS CLOSED, AND IT CLOSED THE WAY IT SAID IT

@@ -1,4 +1,4 @@
-## D-the-queue-is-refreshed-where-it-stands — A queue entry is re-resolved where it stands, and the answer reaches the price without a second press
+## D167 — A queue entry is re-resolved where it stands, and the answer reaches the price without a second press
 
 **Every OPEN queue entry in the store can be re-resolved against a current export by one free, re-runnable command, and a card the operator answers by hand reaches `#/pricing` without anybody pressing Join again.** Built 2026-09-12, on two findings from the review-queue pass that landed the ladder and the screen.
 

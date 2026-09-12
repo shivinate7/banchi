@@ -435,7 +435,7 @@ class Card:
     printed_total: Optional[str] = None
     confidence: Optional[str] = None
     # THE MODEL'S DETECTED FINISH, THE READING'S MISSING FIFTH FIELD
-    # (D-the-queue-is-refreshed-where-it-stands).
+    # (D167).
     # `record_identification` writes `name`, `number`, `printed_total`
     # and `confidence` — one identification, four fields — and the model answers a fifth,
     # `finish`, which went only into the run's `identifications.json`. That asymmetry has no
