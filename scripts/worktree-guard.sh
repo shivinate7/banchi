@@ -100,10 +100,23 @@ fi
 # work, which is D43's own reason for printing the ports here rather than leaving them to a
 # target somebody has to remember.
 #
-# IT REPORTS AND NEVER SWITCHES. A hook that moved the branch under a running server would
-# be deciding for the operator, and `git switch` is theirs to type. What it can do is say
-# whether it is safe: AHEAD is the number that matters, because 0 ahead means the branch
-# holds nothing main does not and switching can lose nothing.
+# IT SYNCS NOW, AND IT USED TO REPORT AND NEVER SWITCH (D176).
+# The paragraph that stood here said a hook moving the branch would be "deciding for the
+# operator, and `git switch` is theirs to type" — which is the ceiling the owner reopened in as
+# many words. Offered a guard that only reported, they answered: *"why can't both parts sync,
+# remember this is a one man show, it's just me working."*
+#
+# TWO PARTS, AND `post-checkout` CAN SEE ONLY ONE OF THEM. That hook fires on a branch switch
+# and NOT on `git pull`, `git merge` or `git rebase` — measured — so it cannot see main going
+# stale, only the tree going off it. "On main" and "at origin/main" are therefore genuinely
+# separate questions, and this is one of the two readers that has ever printed the second.
+# Now it answers both instead of printing them.
+#
+# THE REPORT BELOW IS KEPT AND IS NOT REDUNDANT. `scripts/primary_sync.py` refuses rather than
+# discards — uncommitted tracked work, a half-finished rebase, a main that is not a
+# fast-forward — and in every one of those the tree is still off main and the ahead/behind/dirty
+# counts are still the thing a session needs. So the sync runs first and the report describes
+# whatever it could not fix.
 #
 # IT IS NOT ONLY THE MERGED CASE, AND THE CODE WAS ALWAYS WIDER THAN THIS COMMENT (D139).
 # What is reported is the main checkout standing on ANY branch that is not main, merged or not;
@@ -119,6 +132,14 @@ fi
 # `.git` is a DIRECTORY here, which is exactly the test the block above uses inverted: a
 # linked worktree gets a FILE. A worktree ON a feature branch is correct and is not reported.
 if [ -d .git ] && git rev-parse --verify --quiet main >/dev/null 2>&1; then
+  # THE SYNC, BEFORE THE READING, so what is reported is what is left rather than what was.
+  # `|| true` and `2>/dev/null` on the whole thing for this file's standing rule: a
+  # SessionStart hook that can exit non-zero is a hook that stops a session from starting, and
+  # `primary_sync.py` already exits 0 for a refusal for the same reason. Its own bugs are
+  # silent by design, so the worst case here is the bare report this block used to be.
+  if [ -f scripts/primary_sync.py ] && [ -f server/ports.py ]; then
+    python3 scripts/primary_sync.py --confirm --quiet 2>/dev/null || true
+  fi
   branch=$(git rev-parse --abbrev-ref HEAD 2>/dev/null || echo "")
   if [ -n "$branch" ] && [ "$branch" != "main" ]; then
     counts=$(git rev-list --left-right --count main...HEAD 2>/dev/null || echo "")
@@ -134,6 +155,11 @@ if [ -d .git ] && git rev-parse --verify --quiet main >/dev/null 2>&1; then
     # without the reason, which reads as a tidiness notice and is not one.
     echo "                The live capture server is built out of THIS directory, so it is"
     echo "                serving this branch's code over the owner's REAL store (D53)."
+    # REACHING EITHER ARM MEANS THE SYNC DID NOT PUT THIS TREE ON MAIN — it runs above, and the
+    # branch is read after it. So neither arm asserts what the sync SAID: it may have declined
+    # and printed a reason, or it may be switched off entirely with PKMNSCAN_SYNC=off, and a
+    # sentence pointing at an explanation that is not there is worse than no sentence. Same
+    # correction `scripts/serve.py:stand_down_lines` carries, for the same reason.
     if [ "$ahead" = "0" ] && [ "$dirty" = "0" ]; then
       echo "                Nothing here is unmerged and nothing is uncommitted, so"
       echo "                \`git switch main\` loses nothing. This tree is the live rig."
@@ -141,6 +167,8 @@ if [ -d .git ] && git rev-parse --verify --quiet main >/dev/null 2>&1; then
       echo "                It holds work main does not, or edits not committed. Do not"
       echo "                switch blind — see \`make status\`."
     fi
+    echo "                The self-sync runs ahead of this report and prints its own reason"
+    echo "                when it declines; PKMNSCAN_SYNC=off stops it running at all."
   fi
 fi
 
