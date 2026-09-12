@@ -270,6 +270,156 @@ case "$already_out" in
      printf '%s\n' "$already_out" | sed 's/^/         /' ;;
 esac
 
+# -------------------------------------- the copy of the merge THIS checkout would be running
+#
+# THE DEFECT IS THAT `make merge` RUNS THE MERGE SCRIPT OF WHATEVER CHECKOUT INVOKED IT, and
+# a checkout older than a capability performs the merge without it, reports success, and leaves
+# the work undone. It happened twice with the id claim. Measured the day this was written: 24
+# of the 30 working trees of this clone were behind main's copy of that script, 16 of them
+# missing the commit that introduced the claim at all.
+#
+# THE FIXTURE IS BUILT AS A PROGRESSION rather than as six repositories, because the arms that
+# matter are the ones that must NOT fire and they are only meaningful against the same tree
+# that does fire. main gains an unrelated commit (allowed), then a merge-surface commit
+# (refused), the branch merges main (allowed), the branch then EDITS the merge itself (allowed
+# — this is the pull request that wrote this block), and main moves again underneath it
+# (refused).
+echo "  -- the merge refuses a checkout whose own copy of it is behind --"
+git init -q --bare "$tmp/surface-origin.git"
+git init -q -b main "$tmp/surface"
+cd "$tmp/surface" || exit 1
+git config user.email selftest@example.com
+git config user.name  selftest
+git config commit.gpgsign false
+git remote add origin "$tmp/surface-origin.git"
+
+mkdir -p scripts
+echo "# the merge, as it was" > scripts/merge-pr.py
+echo "# the claimer, as it was" > scripts/claim-ids.py
+echo "one" > unrelated.txt
+git add -A
+git commit -qm "the merge machinery as it was"
+git push -q -u origin main 2>/dev/null
+SURFACE_BASE="$(git rev-parse HEAD)"
+
+# main moves, on something that is NOT the merge surface.
+echo "two" > unrelated.txt
+git add -A
+git commit -qm "a change to something else entirely"
+git push -q origin main 2>/dev/null
+
+git switch -q -c surface-branch "$SURFACE_BASE"
+git fetch -q origin 2>/dev/null
+
+# NARROWNESS FIRST, because a guard that refuses everything behind main would refuse almost
+# every branch in this clone and be turned off within a day. Being behind on `unrelated.txt`
+# is not being behind on the merge.
+expect allow "behind main, but not on the merge surface" python3 "$MERGE_PR" --surface
+
+# main takes a capability, in the file `make merge` actually runs. THIS is the incident.
+git switch -q main
+echo "def claim_half():  # the capability" >> scripts/merge-pr.py
+git add -A
+git commit -qm "The number is claimed at the merge"
+git push -q origin main 2>/dev/null
+git switch -q surface-branch
+git fetch -q origin 2>/dev/null
+
+surface_out="$(python3 "$MERGE_PR" --surface 2>&1)"
+if [ $? -eq 0 ]; then
+  bad "a checkout missing main's merge-pr.py was allowed to merge"
+  printf '%s\n' "$surface_out" | sed 's/^/         /'
+else
+  case "$surface_out" in
+    *REFUSED:*scripts/merge-pr.py*"The number is claimed at the merge"*)
+      ok "a checkout behind on scripts/merge-pr.py — refused, named the file AND the commit" ;;
+    *REFUSED:*)
+      bad "refused, but named neither the file nor the commit main has"
+      printf '%s\n' "$surface_out" | sed 's/^/         /' ;;
+    *) bad "refused, but not by the wrapper (no REFUSED: marker)"
+       printf '%s\n' "$surface_out" | sed 's/^/         /' ;;
+  esac
+fi
+
+# AND IT NAMES BOTH SHAS. The refusal is only actionable if it says which copy is which.
+here_blob="$(git rev-parse --short HEAD:scripts/merge-pr.py)"
+main_blob="$(git rev-parse --short origin/main:scripts/merge-pr.py)"
+case "$surface_out" in
+  *"$here_blob"*"$main_blob"*) ok "and both blobs, so the two copies can be told apart" ;;
+  *) bad "the refusal names neither blob ($here_blob / $main_blob)"
+     printf '%s\n' "$surface_out" | sed 's/^/         /' ;;
+esac
+
+# The fix the refusal prints has to be the fix.
+git -c user.email=selftest@example.com -c user.name=selftest merge -q --no-edit origin/main 2>/dev/null
+expect allow "and the merge it tells you to run clears it" python3 "$MERGE_PR" --surface
+
+# ------------------------------------------------------------------- AHEAD IS NOT BEHIND
+# The false positive that would make this guard unusable, and the case that decided the
+# predicate. A branch DEVELOPING the merge differs from main's copy in every byte that matters
+# — the pull request that added this section did exactly that — and `differs from origin/main`
+# would refuse it. What is refused is MISSING main's commits, which this branch is not.
+echo "  -- a branch that is developing the merge itself goes through --"
+echo "# and this branch is changing it further" >> scripts/merge-pr.py
+git add -A
+git commit -qm "work on the merge itself"
+if [ -n "$(git diff --stat origin/main -- scripts/merge-pr.py)" ]; then
+  ok "the fixture arms the case: this branch's copy DIFFERS from main's"
+else
+  bad "the fixture is wrong — the branch's copy is identical, so `differs` could not fire"
+fi
+expect allow "AHEAD of main on the merge, and carrying every commit main has" \
+  python3 "$MERGE_PR" --surface
+
+# ----------------------------------------------------- and the surface is DERIVED, not the self
+# scripts/claim-ids.py is in the surface because merge-pr.py declares it as the script it
+# shells out to. A guard that only ever checked itself would have been green through the whole
+# of the incident's second half.
+echo "  -- the second file of the surface is guarded too --"
+git switch -q main
+echo "# a capability in the claimer" >> scripts/claim-ids.py
+git add -A
+git commit -qm "The claimer learns to read a commit"
+git push -q origin main 2>/dev/null
+git switch -q surface-branch
+git fetch -q origin 2>/dev/null
+
+claimer_out="$(python3 "$MERGE_PR" --surface 2>&1)"
+case "$claimer_out" in
+  *REFUSED:*scripts/claim-ids.py*)
+    ok "behind on scripts/claim-ids.py — refused, and named it" ;;
+  *REFUSED:*)
+    bad "refused, but did not name scripts/claim-ids.py — the surface is not derived"
+    printf '%s\n' "$claimer_out" | sed 's/^/         /' ;;
+  *) bad "a checkout behind on the claimer was allowed to merge"
+     printf '%s\n' "$claimer_out" | sed 's/^/         /' ;;
+esac
+# The same run is the DIVERGED case: this branch has its own commit on merge-pr.py AND lacks
+# main's on claim-ids.py. It reads as behind, and that is right — it lacks the capability
+# exactly as the stale checkout does.
+case "$claimer_out" in
+  *"merge origin/main"*) ok "AND the diverged branch is told to merge main, not to start over" ;;
+  *) bad "the refusal does not print the one-command fix"
+     printf '%s\n' "$claimer_out" | sed 's/^/         /' ;;
+esac
+
+# --------------------------------------------------- an answer it has not got is not a pass
+echo "  -- an origin with no main --"
+git init -q --bare "$tmp/surface-empty.git"
+git init -q -b main "$tmp/surface-nomain"
+cd "$tmp/surface-nomain" || exit 1
+git config user.email selftest@example.com
+git config user.name  selftest
+git config commit.gpgsign false
+git remote add origin "$tmp/surface-empty.git"
+mkdir -p scripts
+echo "# alone" > scripts/merge-pr.py
+git add -A
+git commit -qm "a clone whose origin has no main"
+expect refuse "an origin carrying no main at all" python3 "$MERGE_PR" --surface
+
+cd "$tmp/work" || exit 1
+
 echo "  -- no pull request named --"
 expect refuse "a bare invocation" python3 "$MERGE_PR"
 
