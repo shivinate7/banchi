@@ -371,6 +371,7 @@ async function stubStore(page: Page): Promise<void> {
       boxes: [
         {
           box: 2,
+          bid: 12,
           name: 'SV commons',
           sections: [1, 3],
           state: 'open',
@@ -390,6 +391,7 @@ async function stubStore(page: Page): Promise<void> {
         },
         {
           box: 5,
+          bid: 15,
           name: null,
           sections: [],
           state: 'open',

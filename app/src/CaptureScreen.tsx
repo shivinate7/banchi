@@ -156,6 +156,11 @@ const BOX_DIGITS = /^[0-9]+$/
  *  refusal at the shutter. */
 type BoxOption = {
   box: number
+  /** WHICH DRAWER THIS ROW IS, as opposed to which number it wears (D145). Carried so a pick
+   *  can record it and never so a row can draw it. `null` where `GET /boxes` sent none, and
+   *  `null` for a box this screen knows about only because `/status` named it — that route
+   *  carries a next index and nothing else. */
+  bid: number | null
   name: string | null
   next: number | undefined
   sealed: boolean
@@ -708,6 +713,18 @@ export function CaptureScreen() {
   // server holds no notion of a current box, which is what lets two devices work without a
   // session.
   const [box, setBox] = useState<number | null>(restored.box)
+  /* WHICH DRAWER `box` IS, carried beside the number it wears so the next sitting's restore can
+     tell them apart (D145). Never rendered and never sent: `POST /capture` addresses a box by
+     its number, which is the address the store takes.
+
+     STATE RATHER THAN A LOOKUP THROUGH `boxRecords`, and the difference is not style. That list
+     starts empty and is repopulated on every open of the field, so a derived id would read null
+     on mount — and the persist effect below, which deliberately runs on mount, would write that
+     null straight over the id this browser is holding. The fact would be destroyed by the act of
+     remembering it, and only on a slow or failed fetch, which is the shape of bug that is found
+     months later at a rig. A pick is the one moment the id is known for certain, so the pick is
+     what records it. */
+  const [boxBid, setBoxBid] = useState<number | null>(restored.bid)
   const [boxNote, setBoxNote] = useState<string | null>(null)
   // Creating a box is now a REQUEST, where it used to be a local assignment: a name has to
   // reach the store before anything can be captured into it, and it can be refused
@@ -983,8 +1000,8 @@ export function CaptureScreen() {
      IT RUNS ON MOUNT TOO, writing the restored setup straight back. Harmless and deliberate —
      it is the same value, and the alternative is a ref that exists only to skip one write. */
   useEffect(() => {
-    rememberCaptureSetup({ box, game, setHint, finish, rarityClaim, product })
-  }, [box, setHint, finish, game, rarityClaim, product])
+    rememberCaptureSetup({ box, bid: boxBid, game, setHint, finish, rarityClaim, product })
+  }, [box, boxBid, setHint, finish, game, rarityClaim, product])
 
   const loadStatus = useCallback(async () => {
     try {
@@ -1165,6 +1182,7 @@ export function CaptureScreen() {
       if (!Number.isInteger(record.box)) continue
       byNumber.set(record.box, {
         box: record.box,
+        bid: record.bid ?? null,
         name: record.name,
         next: record.next_index,
         sealed: record.state === 'closed',
@@ -1182,6 +1200,10 @@ export function CaptureScreen() {
       if (known === undefined) {
         byNumber.set(value, {
           box: value,
+          // `/status` carries a next index per box and nothing else, so a box this screen
+          // knows about only from there has no id to offer. Null, exactly as an uncountable
+          // box has a null `onHand` one line down — not a guess, and not a zero.
+          bid: null,
           name: null,
           next: nextIndex[key],
           sealed: false,
@@ -1318,6 +1340,36 @@ export function CaptureScreen() {
   /** The row Enter takes, hoisted so the meta and the handler read the same one thing. */
   const boxTop = boxRows.length > 0 ? boxRows[0] : undefined
 
+  /** WHETHER THIS ROW STILL DRAWS ITS NUMBER: only when the operator typed one and this row is
+   *  an answer to it (D145).
+   *
+   *  THE OWNER'S INSTRUCTION, 2026-09-11: *"on the capture screen, i shouldn't even need to see
+   *  box. numbers here, it's waste of space"*. D142 took the number off every other part of this
+   *  screen the same day and kept it HERE, with a reason that is still correct: *"a row that hid
+   *  the number would answer a search for `9` with nine rows that do not visibly contain a 9."*
+   *  That reason is about a row's answer to a TYPED NUMBER, and it was spent as though it were
+   *  about every row all the time.
+   *
+   *  SO THE NUMBER IS DRAWN EXACTLY WHERE IT IS DOING THAT JOB AND NOWHERE ELSE. At rest — which
+   *  is the screen the owner was looking at — the list is names. Type `9` and every row that
+   *  matched because of a 9 shows the 9 it matched on, which is the whole of what D142 was
+   *  protecting. Type `com` and no number appears, because none of those rows matched on one.
+   *  D145 is why this can be given up at all: identity has moved to `bid`, so the number here is
+   *  a label and a search term, and never the thing that says which drawer this is.
+   *
+   *  AN UNNAMED BOX IS NOT AN EXCEPTION AND NEVER DOUBLES. `captureBoxLabel` has already put the
+   *  number in the name's place, so the suffix would draw `Box 4` twice; the first term stops
+   *  that. It reads the TRIMMED name, which is the same test `captureBoxLabel` itself applies —
+   *  `option.name === null` was the old test and a whitespace-only name slipped past it into
+   *  exactly that doubling. */
+  const boxNumberShown = useCallback(
+    (option: BoxOption) =>
+      (option.name ?? '').trim() !== '' &&
+      boxQuery !== '' &&
+      String(option.box).includes(boxQuery),
+    [boxQuery],
+  )
+
   
   const boxOffer = useMemo(() => {
     if (boxQuery === '' || boxExact !== undefined) return null
@@ -1346,9 +1398,16 @@ export function CaptureScreen() {
    *  an opening. The restore carries the box the operator last PICKED, and that pick already
    *  wrote its stamp; touching again on every mount would let a screen left open overnight
    *  outrank a box somebody actually reached for this morning. */
+  /*  THE ID IS TAKEN AT THE PICK, AND THE PICK IS THE ONLY PLACE IT CAN BE TAKEN (D145). The
+   *  caller passes the drawer's own id off the row it pressed — `BoxOption.bid` from the list,
+   *  or the created box's, straight out of the response that made it. `null` from a caller that
+   *  has no id to give is the honest answer and the restore has an arm for it; a lookup here
+   *  through `boxRecords` would answer null for a different reason — the list has not arrived —
+   *  and the two would be indistinguishable one sitting later. */
   const chooseBox = useCallback(
-    (value: number) => {
+    (value: number, bid: number | null) => {
       setBox(value)
+      setBoxBid(bid)
       setRecency(touchBox(value))
       setBoxNote(null)
       setRestoreNote(null)
@@ -1387,8 +1446,9 @@ export function CaptureScreen() {
      still exists and still takes cards" is a gap that can be days wide. Between two sittings a
      box can be sealed (D20), deleted (D34's panel), or deleted and its number handed to a
      different physical drawer by `next_box_number`'s lowest-free allocation. The first two are
-     refused at the shutter anyway; the THIRD is not refused anywhere, because box 7 exists and
-     takes cards — it is simply not the box the operator thinks they are looking at.
+     refused at the shutter anyway; the THIRD is refused HERE, and was refused nowhere at all
+     until 2026-09-12, because box 7 exists and takes cards — it is simply not the box the
+     operator thinks they are looking at.
 
      SO THE RESTORE FALLS BACK TO NO SELECTION, NEVER TO A GUESS, and it says which box it let
      go of and why. The field opens with focus in it, which is the same state `Pick a box` puts
@@ -1403,15 +1463,74 @@ export function CaptureScreen() {
      so the good path spends it too — because the operator may deliberately re-pick a box this
      effect just cleared, or pick a sealed one to see the refusal, and an ungated version would
      take it straight back off them. What is being judged is the RESTORE, which happens on mount
-     and never again. */
+     and never again.
+
+     THE THIRD CASE IS THE ID'S, AND IT WAS REFUSED NOWHERE UNTIL 2026-09-12
+     (D-the-restore-compares-the-id, on D145's id). D142
+     enumerated all three and built two: a reallocated number passes `found !== undefined` and
+     `state !== 'closed'` because box 7 really does exist and really does take cards. The
+     paragraph above it — *"the restore falls back to NO SELECTION, never to a guess"* — read as
+     though it covered every case, and a reader had no way to tell that the code covered two.
+     Photographs then go to an address that does not match the shelf, silently, and D36's realign
+     cannot re-bind them: it re-binds a run to the slots its photographs are at NOW, and these
+     photographs are in the drawer the operator never meant.
+
+     THE COMPARISON IS THE ID AND IT IS NOT A HEURISTIC. Two rejected signals, for the record,
+     because both look serviceable: the NAME turns a rename into a false positive and says
+     nothing at all about an unnamed box, and `next_index` drops on a reallocation but drops
+     equally on a capture-undo — `doUndo` writes `target.index` back — so a decrease proves
+     nothing. `bid` is allocated once at the drawer's creation and never reused, so a
+     disagreement is a fact rather than an inference. D36's `refuse_reallocated` already refuses
+     a RUN over such a box; this is the same hazard, one step earlier, at the only screen that
+     can still prevent it.
+
+     THE ARMS ARE ORDERED, AND THE TWO SILENCES ARE NOT THE SAME SILENCE. D145 keeps an id from
+     softening what it cannot see, and the same care applies here in both directions:
+
+       the BOX has no id     The store cannot tell its drawers apart at all — a box holding
+                             cards with no registry entry, or a store an older build migrated.
+                             The rule that predates the id decides, unchanged, and the restore
+                             stands. Clearing here would refuse a good box on EVERY load,
+                             forever, over a fault the operator cannot fix from this screen.
+       the SETUP has no id   This browser remembered a number before it recorded which drawer
+                             that was. One press wide and self-extinguishing — the next pick
+                             writes one — and the press is the remedy anyway, so it clears, and
+                             says it cannot tell rather than claiming the drawer changed.
+
+     That asymmetry is the whole migration decision and it is deliberate: a browser is one
+     re-pick from being certain, and a store is not. */
   const restoredBoxRef = useRef<number | null>(restored.box)
+  const restoredBidRef = useRef<number | null>(restored.bid)
   useEffect(() => {
     const wanted = restoredBoxRef.current
+    const wantedBid = restoredBidRef.current
     if (wanted === null || !boxesSeen) return
     restoredBoxRef.current = null
+    restoredBidRef.current = null
     const found = boxRecords.find((record) => record.box === wanted)
-    if (found !== undefined && found.state !== 'closed') return
+    if (found !== undefined && found.state !== 'closed') {
+      const bid = found.bid ?? null
+      // The store has no id for this drawer: nothing to compare, and the older rule stands.
+      if (bid === null) return
+      // Both present and equal — the drawer the operator left is the drawer at that number.
+      if (wantedBid === bid) return
+      setBox(null)
+      setBoxBid(null)
+      setRestoreNote(
+        wantedBid === null
+          ? `${captureBoxLabel(found.box, found.name)} may not be the drawer you left — this ` +
+              'browser remembered the number before it started recording which box that was, ' +
+              'and a deleted box hands its number to the next one. Nothing is selected; pick ' +
+              'the drawer in front of you.'
+          : `Box ${found.box} is a different drawer now — the one you last captured into was ` +
+              'deleted, and its number went to this one. Nothing is selected; pick the drawer ' +
+              'in front of you.',
+      )
+      setOpenField('box')
+      return
+    }
     setBox(null)
+    setBoxBid(null)
     setRestoreNote(
       found === undefined
         ? 'The box this browser was last set to is not in the store any more, so nothing is ' +
@@ -1443,7 +1562,7 @@ export function CaptureScreen() {
       // (`_box_row` renders all three routes), so a round trip would buy nothing and would
       // put a second await between the press and the box being current.
       setBoxRecords((prev) => [...prev.filter((known) => known.box !== row.box), row])
-      chooseBox(row.box)
+      chooseBox(row.box, row.bid ?? null)
     } catch (error) {
       setBoxNote(
         error instanceof ServerError
@@ -1485,8 +1604,11 @@ export function CaptureScreen() {
    *  blocked reason for a registry that has not arrived — which would be a sentence that is
    *  simply untrue, about a fetch that finished minutes ago. */
   const clearSetup = useCallback(() => {
-    const before: CaptureSetup = { box, game, setHint, finish, rarityClaim, product }
+    const before: CaptureSetup = { box, bid: boxBid, game, setHint, finish, rarityClaim, product }
     setBox(null)
+    // The id goes with the number it belongs to. A cleared box holding an id would be a claim
+    // about a drawer nobody has chosen, and the undo below puts both back together.
+    setBoxBid(null)
     setGame(registry?.default ?? null)
     setSetHint('')
     setFinish([])
@@ -1512,6 +1634,7 @@ export function CaptureScreen() {
         label: 'Undo',
         onPress: () => {
           setBox(before.box)
+          setBoxBid(before.bid)
           setGame(before.game)
           setSetHint(before.setHint)
           setFinish([...before.finish])
@@ -1520,7 +1643,7 @@ export function CaptureScreen() {
         },
       },
     })
-  }, [box, game, setHint, finish, rarityClaim, product, registry, closeField])
+  }, [box, boxBid, game, setHint, finish, rarityClaim, product, registry, closeField])
 
   /* WHAT ENTER DOES, which is a POLICY and not a control: take the top row if there is one,
      and otherwise make what the offer names. That ordering is what keeps typing `com` from
@@ -1537,7 +1660,7 @@ export function CaptureScreen() {
         )
         return
       }
-      chooseBox(top.box)
+      chooseBox(top.box, top.bid)
       return
     }
     await createOfferedBox()
@@ -2839,8 +2962,15 @@ export function CaptureScreen() {
                     ref={boxEntryRef}
                     className="capture-filter bn-input"
                     type="text"
-                    aria-label="Find a box by number or name, or type a new one"
-                    placeholder="Number or name"
+                    /* NAME FIRST, NUMBER SECOND, in both strings (D145). The rows below are
+                       names now, so a placeholder leading with `Number` would offer the one
+                       thing the list no longer shows and put the operator's own word second.
+                       THE NUMBER IS NOT DROPPED FROM EITHER: searching by number still works
+                       and must (D20 makes this one control over both), a drawer may have no
+                       name at all, and a placeholder that stopped saying so would make a
+                       working search undiscoverable. */
+                    aria-label="Find a box by name or number, or type a new one"
+                    placeholder="Name or number"
                     value={boxEntry}
                     disabled={boxBusy}
                     onChange={(event) => {
@@ -2871,15 +3001,15 @@ export function CaptureScreen() {
                   <Opt
                     key={option.box}
                     on={option.box === box}
-                    /* THE NAME LEADS AND THE NUMBER FOLLOWS IT, which is the reverse of what
-                       this drew until 2026-09-11 (D142). The number STAYS
-                       here, unlike everywhere else on the screen, because this is the one place
-                       it is doing a job: the entry above searches number and name together, and
-                       a row that hid the number would answer a search for `9` with nine rows
-                       that do not visibly contain a 9. An unnamed box has only the number, so
-                       `captureBoxLabel` puts it in the name's place and the suffix drops. */
+                    /* THE NAME IS THE ROW, AND THE NUMBER APPEARS ONLY AS THE ANSWER TO A TYPED
+                       ONE (D145) — see `boxNumberShown` for the whole argument. At rest this is
+                       a list of drawer names, which is the owner's instruction; the number comes
+                       back the moment it is what somebody searched on, which is D142's reason
+                       for keeping it, spent where it applies. An unnamed box has only its
+                       number, so `captureBoxLabel` puts it in the name's place and the suffix
+                       never doubles it. */
                     name={captureBoxLabel(option.box, option.name)}
-                    sfx={option.name === null ? null : ` Box ${option.box}`}
+                    sfx={boxNumberShown(option) ? ` Box ${option.box}` : null}
                     trail={option.sealed ? 'Sealed' : `next index ${option.next ?? '?'}`}
                     trailWord={option.sealed}
                     onPick={() => {
@@ -2890,7 +3020,7 @@ export function CaptureScreen() {
                         )
                         return
                       }
-                      chooseBox(option.box)
+                      chooseBox(option.box, option.bid)
                     }}
                   />
                 ))}

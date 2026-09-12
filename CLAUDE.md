@@ -1026,7 +1026,13 @@ A screen is not finished because it compiles.
   (D142). `banchi.capture.setup` is the box, game, set hint, finish, rarity
   and product the operator last chose — six values that were `sessionStorage` under D27 until
   the owner overruled the session scope, in ONE document because they are one habit, the
-  argument `banchi.orders.fetch-filter` already makes for its own two fields.
+  argument `banchi.orders.fetch-filter` already makes for its own two fields. **A SEVENTH
+  JOINED THEM ON 2026-09-12 AND IT IS THE ONLY ONE NO SCREEN DRAWS**
+  (D-the-restore-compares-the-id): `bid`, the box's true index (D145), recorded at the pick so
+  the next sitting's restore can tell the drawer the operator left from a different drawer
+  wearing its number today — which `next_box_number`'s lowest-free allocation makes an ordinary
+  event. It is not a seventh KEY and the roster count is unchanged: this is a field inside the
+  one document, which is the whole point of storing them as a document.
   `banchi.box-recency` is `banchi.inventory.box-recency` renamed: the capture screen's box
   list now sorts on it too, so the name had stopped saying what the fact is — which drawer
   this operator's hand is in — and started saying which screen happened to write it. **No
@@ -1657,6 +1663,7 @@ D146 Two agreeing signals release the rarity claim, and the same comparison run 
 D147 The claim is spent on the oldest copies, because a card captured tonight was in no file sent last week
 D148 The wait is about the claim commit, and an answer it has not got is never a pass
 D149 A section number that resolves is not a citation that is right, and no check can read what a sentence is about
+D-the-restore-compares-the-id The restore asks which drawer, not which number, and the picker stops drawing a number nobody reads
 
 ```
 
