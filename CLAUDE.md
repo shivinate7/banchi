@@ -1656,7 +1656,7 @@ D145 A box has an index nobody sees, because the number on the drawer is a label
 D146 Two agreeing signals release the rarity claim, and the same comparison run backwards is a review reason
 D147 The claim is spent on the oldest copies, because a card captured tonight was in no file sent last week
 D148 The wait is about the claim commit, and an answer it has not got is never a pass
-D-debts-citation-subject A section number that resolves is not a citation that is right, and no check can read what a sentence is about
+D149 A section number that resolves is not a citation that is right, and no check can read what a sentence is about
 
 ```
 

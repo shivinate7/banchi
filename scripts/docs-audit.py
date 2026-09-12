@@ -1971,7 +1971,7 @@ def check_debts_headings(report: Report) -> None:
 
     MEASURED 2026-09-11: sections 20 to 24 were written `## <n>. ` — five of the file's
     twenty-three live sections, invisible to the only reader the audit has for it, with
-    every row green throughout. Normalized the same day under `D-debts-citation-subject`;
+    every row green throughout. Normalized the same day under `D149`;
     this row is what stops the next one being written that way.
 
     MECHANICAL on D16's test: a heading either parses or it does not, which is the same

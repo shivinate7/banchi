@@ -285,7 +285,7 @@ OPEN = [
               "repo, build the SQLite index (cards join to sets by FILENAME \u2014 printedTotal lives only "
               "in sets/en.json and is half the join key), then fill the image mirror with the "
               "Content-Length dry run first. D15."},
-    {"n": "repo-state-heartbeat",
+    {"n": 24,
      "title": "A durable scheduled heartbeat that watches repo state across sessions",
      "note": "THE QUESTIONS NO SINGLE SESSION IS POSITIONED TO ASK, because each one sees only its own "
               "tree and its own branch: open pull requests green and unmerged; a pull request now "
@@ -1743,7 +1743,7 @@ COMPONENTS = [
                                 "D70", "D72", "D75", "D76", "D80", "D81", "D83", "D84", "D87",
                                 "D88", "D90", "D92", "D94", "D96", "D101", "D102", "D104", "D111",
                                 "D119", "D122", "D127", "D132", "D135", "D136", "D140", "D141",
-                                "D142", "D143", "D-debts-citation-subject"],
+                                "D142", "D143", "D149"],
             },
             "claim-ids.py": {
                 "does": "allocate the numbers this branch's SLUG ids will take, and "

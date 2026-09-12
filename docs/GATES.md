@@ -1466,7 +1466,7 @@ are unblocked, and which one matters more is the owner's to say on the day. `doc
     project would do that a **buyer** sees, and D69 ruled that the screen comes before the
     transport. Nothing blocks it but the doing of it.
 
-0. `step repo-state-heartbeat` **A durable scheduled heartbeat that watches repo state across
+24. **A durable scheduled heartbeat that watches repo state across
     sessions** — the questions no single session is positioned to ask, because each one sees
     only its own tree and its own branch. Mostly a caller of what already exists: `make status`,
     `make janitor`, and `python3 scripts/docs-audit.py --json`. What it would report:

@@ -2113,7 +2113,7 @@ renumber it rather than another branch's, the way this file's header already rul
 ## 25 — A cited section number still resolves when it is the wrong section, and no check can read what a sentence is about
 
 **No work proposed.** Seven citations in this tree named section 11 for a record that has only
-ever been in section 8. They were repaired by hand on 2026-09-11 under `D-debts-citation-subject`.
+ever been in section 8. They were repaired by hand on 2026-09-11 under `D149`.
 This section exists so the next session does not re-derive whether a guard was possible: it was
 looked for, measured, and declined.
 
