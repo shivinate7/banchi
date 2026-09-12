@@ -682,6 +682,185 @@ def run() -> Result:
         "holo row it named",
     )
 
+    # --- D23's rarity claim, RELEASED BY A CORROBORATING NAME -----------------------------
+    #
+    # THE FIRST HARNESS BLOCK THAT EVER PASSES `rarity_claim`. `variant.resolve` is called
+    # 47 times in `harness/` and, until this one, never once with the claim set;
+    # `RARITY_CLAIM_MISMATCH` appeared in no harness file at all. So the ordering that makes
+    # the rule work — the filter sitting AHEAD of rung 1 and rung 2, and now falling through
+    # rather than returning — was asserted by nothing, and moving it would have been green.
+    #
+    # WHAT IT GUARDS, measured on the owner's store the day it was written: 159 cards refused
+    # `rarity_claim_mismatch` because they were sorted as `Epic` and the catalogue calls them
+    # `Rare`. A claim-released ladder resolves 145 of those; a human answered every one of
+    # the 145; and 142 of the answers are byte-identical to the row the ladder was holding.
+    # The release turns those 142 taps into none. Three are genuinely the wrong card, and the
+    # third arm below is why they stay queued.
+    #
+    # SYNTHETIC, AND LABELLED LIKE THE BLOCK ABOVE IT: the committed SV09 fixture is one
+    # game's real rows, and this rule needs rows whose `Rarity` cell CONTRADICTS a claim.
+    # That is a property of the operator's typing, not of any export, so it cannot be read
+    # out of one.
+    rare = dict(
+        template["Near Mint"],
+        **{
+            tcgcsv.SKU_COLUMN: "9100001",
+            tcgcsv.NAME_COLUMN: "Ezreal, Dashing",
+            tcgcsv.RARITY_COLUMN: "Rare",
+            tcgcsv.MARKET_PRICE_COLUMN: "3.00",
+        },
+    )
+    rare_twin = dict(
+        rare,
+        **{
+            tcgcsv.SKU_COLUMN: "9100002",
+            tcgcsv.CONDITION_COLUMN: "Near Mint Reverse Holofoil",
+            tcgcsv.MARKET_PRICE_COLUMN: "4.00",
+        },
+    )
+    claim = ("Epic",)
+
+    # ARM 0 — the way it behaves today, which every arm below is a departure from.
+    c.equal(
+        (
+            variant.resolve([rare], rarity_claim=claim).stage,
+            variant.resolve([rare], rarity_claim=claim).reason,
+        ),
+        (variant.REVIEW, variant.RARITY_CLAIM_MISMATCH),
+        "a contradicted claim with NO corroborating name still refuses, unchanged",
+    )
+
+    # ARM 1 — contradicted, and the name agrees: the claim is released and rung 2 resolves.
+    _check_stage(
+        c,
+        variant.resolve([rare], rarity_claim=claim, name_corroborated=True),
+        variant.CATALOG_FORCED,
+        "9100001",
+        "Near Mint",
+        Decimal("3.00"),
+        "a contradicted claim is RELEASED by a corroborating name, and rung 2 resolves the "
+        "single row — the 142 taps this rule exists to remove",
+    )
+
+    # ARM 2 — contradicted, and the name does NOT agree: refused exactly as before.
+    c.equal(
+        (
+            variant.resolve([rare], rarity_claim=claim, name_corroborated=False).stage,
+            variant.resolve([rare], rarity_claim=claim, name_corroborated=False).reason,
+        ),
+        (variant.REVIEW, variant.RARITY_CLAIM_MISMATCH),
+        "and a name that does NOT agree leaves the refusal standing — the release is two "
+        "AGREEING signals, never one uncontradicted row",
+    )
+
+    # ARM 3 — THE ARM THAT REFUSES THE OBVIOUS SHORTCUT. Contradicted, name agrees, and TWO
+    # rows survive: the claim is released and the ladder still reviews, because releasing a
+    # claim is not the same as choosing a row. `1/65` and `1/73` on the owner's store are
+    # this shape and both are genuinely the wrong card; a "one candidate means approve" rule
+    # would have listed them.
+    two_rows = variant.resolve([rare, rare_twin], rarity_claim=claim, name_corroborated=True)
+    c.equal(
+        (two_rows.stage, two_rows.reason),
+        (variant.REVIEW, variant.AMBIGUOUS_NO_SIGNAL),
+        "released, TWO rows, and the ladder still reviews — a release is not a choice, and "
+        "the reason is the ladder's own rather than the claim's",
+    )
+
+    # ARM 4 — A CLAIM THAT AGREES IS UNTOUCHED, byte for byte. The compatibility guarantee
+    # D23 rests on: the release may only ever reach the branch that used to return.
+    for corroborated in (False, True):
+        agreed = variant.resolve([rare], rarity_claim=("Rare",), name_corroborated=corroborated)
+        _check_stage(
+            c,
+            agreed,
+            variant.CATALOG_FORCED,
+            "9100001",
+            "Near Mint",
+            Decimal("3.00"),
+            f"a claim that AGREES resolves identically with name_corroborated={corroborated} "
+            "— the release cannot reach a claim that never contradicted anything",
+        )
+
+    # ARM 5 — THE FILTER STILL NARROWS, which is the half a fall-through could have broken.
+    # A claim naming one of two rows leaves one row, and rung 2 fires on it. Corroboration
+    # must not change that: it is read only where the filter emptied.
+    _check_stage(
+        c,
+        variant.resolve(
+            [rare, dict(rare_twin, **{tcgcsv.RARITY_COLUMN: "Epic"})],
+            rarity_claim=claim,
+            name_corroborated=True,
+        ),
+        variant.CATALOG_FORCED,
+        "9100002",
+        "Near Mint Reverse Holofoil",
+        Decimal("4.00"),
+        "a claim that narrows to one row still narrows, and rung 2 still fires — the "
+        "fall-through did not swallow the filter",
+    )
+
+    # ARM 6 — POKEMON, because every measurement behind this rule was taken on riftbound and
+    # D23's own motivating misses (`051/197` for `031/197`) are Pokemon. Same shape, this
+    # game's real rows and its own finish vocabulary, so a game-shaped regression in the
+    # release cannot hide behind one game's data.
+    pokemon_rare = dict(template["Near Mint"], **{tcgcsv.RARITY_COLUMN: "Rare"})
+    c.equal(
+        variant.resolve(
+            [pokemon_rare], rarity_claim=("Double Rare",), game=games.DEFAULT_GAME
+        ).reason,
+        variant.RARITY_CLAIM_MISMATCH,
+        "Pokemon: a contradicted claim refuses, on this game's own rows",
+    )
+    released_pokemon = variant.resolve(
+        [pokemon_rare],
+        rarity_claim=("Double Rare",),
+        game=games.DEFAULT_GAME,
+        name_corroborated=True,
+    )
+    c.equal(
+        (released_pokemon.stage, released_pokemon.sku),
+        (variant.CATALOG_FORCED, pokemon_rare[tcgcsv.SKU_COLUMN]),
+        "Pokemon: and a corroborating name releases it to the same row riftbound's does",
+    )
+
+    # --- and the two predicates the caller computes it with --------------------------------
+    #
+    # `pipeline/join.py` owns the fold (D35's, one home), so these assert the rule rather
+    # than the ladder. Each case is one the owner's store actually holds.
+    corroboration = [
+        ("Ezreal, Dashing", "Ezreal, Dashing", True, False, "an exact read corroborates"),
+        ("Pokémon Center Lady", "Pokemon Center Lady", True, False,
+         "an accent the export does not write is folded, not disputed"),
+        ("Rengar, Unseen", "Rengar, Unseen (Alternate Art)", True, False,
+         "the catalog's trailing qualifier is decoration on an identity and is folded away — "
+         "without this the export's 84 `(Alternate Art)` rows corroborate nothing and the "
+         "mirror queues every one of them"),
+        ("Rengar", "Rengar, Unseen (Alternate Art)", False, False,
+         "a partial read against a qualified catalog name corroborates NOTHING and disputes "
+         "nothing — the band between the two predicates, and the reason they are separate"),
+        ("Corfish", "Corphish", False, False,
+         "a one-character misread is the model's spelling, not another card"),
+        ("Irelia, Blade Dancer", "Forgefire Cape", False, True,
+         "and a different card is DISPUTED — this is box 1's `1/51`, number 190/221, which "
+         "that export calls Forgefire Cape and the Epic claim waved straight through"),
+        ("", "Forgefire Cape", False, False,
+         "a read name that is blank is the absence of evidence in BOTH directions — the "
+         "empty string is a substring of every name"),
+    ]
+    for read, row_name, want_corroborate, want_dispute, label in corroboration:
+        rows = [dict(rare, **{tcgcsv.NAME_COLUMN: row_name})]
+        c.equal(
+            (join.name_corroborates(read, rows), join.name_disputes(read, rows)),
+            (want_corroborate, want_dispute),
+            label,
+        )
+    c.equal(
+        join.name_disputes("Anything At All", []),
+        False,
+        "and a card with NO rows is disputed by nothing — `no_catalog_row` is that card's "
+        "reason and this may not overwrite it",
+    )
+
     # --- the ladder as the join sees it ----------------------------------------------------
     batch = [
         join.IdentifiedCard(

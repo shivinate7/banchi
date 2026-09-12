@@ -1608,9 +1608,20 @@ def load(
 
 
 def _candidate_rows(rows) -> List[Dict[str, object]]:
-    """What the review screen shows beside the photo (D4): the rows this could be."""
-    return [
-        {
+    """What the review screen shows beside the photo (D4): the rows this could be.
+
+    `rarity` is HALF OF A CONTRADICTION AND WAS NOT ON THE WIRE UNTIL 2026-09-11. The one
+    reason in the whole vocabulary whose meaning is *"A contradicts B"* —
+    `rarity_claim_mismatch` — could name neither A nor B, so a screen drawing 141 of them
+    said the claim matched no row and left the operator to guess which word disagreed with
+    which. Both halves travel now; the card's own claim is on `read` below.
+
+    An ABSENT cell stays absent rather than becoming `""`: a row that carries no rarity is
+    evidence of nothing, which is exactly how D23's filter reads it, and a screen that drew
+    an empty string there would be asserting the row is unrated."""
+    out: List[Dict[str, object]] = []
+    for row in rows:
+        entry: Dict[str, object] = {
             "sku": row[tcgcsv.SKU_COLUMN],
             "name": row[tcgcsv.NAME_COLUMN],
             "set": row.get(tcgcsv.SET_COLUMN, ""),
@@ -1618,8 +1629,11 @@ def _candidate_rows(rows) -> List[Dict[str, object]]:
             "condition": row[tcgcsv.CONDITION_COLUMN],
             "market": row[tcgcsv.MARKET_PRICE_COLUMN],
         }
-        for row in rows
-    ]
+        rarity = (row.get(tcgcsv.RARITY_COLUMN) or "").strip()
+        if rarity:
+            entry["rarity"] = rarity
+        out.append(entry)
+    return out
 
 
 def queue_entry(queued: join.QueuedCard) -> queues.QueueEntry:
@@ -1649,6 +1663,18 @@ def queue_entry(queued: join.QueuedCard) -> queues.QueueEntry:
                 None if card.metadata_finish is None else list(card.metadata_finish)
             ),
             "detected_finish": card.detected_finish,
+            # THE OTHER HALF OF THE CONTRADICTION (D23 job (a)). A LIST on the wire for
+            # `metadata_finish`'s reason two keys up — the frozen carrier holds a tuple and
+            # this dict is written to `review.json` — and None when nobody claimed anything,
+            # which the screen says in those words rather than drawing an empty chip.
+            #
+            # `docs/DECISIONS.md` recorded naming these as needing a schema change, on the
+            # ground that `QueueEntry` carries the read and the candidates and not the
+            # claim. It is a schema change: this key, and `rarity` on each candidate row.
+            # Both are additive and neither moves a byte of what was already there.
+            "rarity_claim": (
+                None if card.rarity_claim is None else list(card.rarity_claim)
+            ),
         },
         confidence=card.confidence,
         reason=queued.destination.reason,

@@ -13,10 +13,11 @@
  * up as a machine string on screen rather than as a blank line.
  */
 
-/* The THIRTEEN, transcribed from the two modules that emit them: six from
+/* The FOURTEEN, transcribed from the two modules that emit them: six from
  * `pipeline/variant.py` (the D3 ladder's review reasons, including D23's
- * `rarity_claim_mismatch`) and seven from `pipeline/routing.py` (v2 §5.4's routing reasons,
- * including D35's `number_unread_name_matched`). It read "twelve, six and six" until
+ * `rarity_claim_mismatch`) and EIGHT from `pipeline/routing.py` (v2 §5.4's routing reasons,
+ * including D35's `number_unread_name_matched` and, since 2026-09-11, `name_disputed`). It
+ * read "thirteen, six and seven" until that day, and "twelve, six and six" until
  * 2026-08-25, having been written before either of those two landed, and "fourteen, seven and
  * seven" until 2026-09-02, when D3's amendment retired `metadata_detection_disagreement` —
  * see `RETIRED_REASON_LABELS` below for where that one went. docs/DESIGN.md requires each on
@@ -62,6 +63,12 @@ export const REASON_LABELS: Readonly<Record<string, string>> = {
   identification_failed: 'Identification failed',
   set_ambiguous: 'Two sets share this number',
   card_not_detected: 'No card found in the photograph',
+  /* The mirror of D23's cross-check: the number found rows and the name read off the same
+   * photograph matches none of them. Like D35's below, the JOIN writes it over a ladder
+   * resolution that succeeded — the row is found, the entry offers it, and a human is asked
+   * anyway because the two things read off one card disagree. */
+  name_disputed: 'The read name matches no row',
+
   /* D35. The one reason the JOIN writes over a successful ladder resolution — the row is
    * found and the entry offers it, and the card is queued anyway because the field that tells
    * one card from another is the field that could not be read. (Not the only reason sitting on

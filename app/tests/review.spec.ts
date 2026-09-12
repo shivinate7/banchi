@@ -61,6 +61,9 @@ type Candidate = {
   number: string
   condition: string
   market: string | null
+  /* Half of what `rarity_claim_mismatch` means, on the wire since 2026-09-11 and absent on
+     every entry queued before it — which is why the fixtures here carry both shapes. */
+  rarity?: string
 }
 
 const CONDITIONS = ['Near Mint', 'Near Mint Reverse Holofoil', 'Near Mint Holofoil'] as const
@@ -88,7 +91,7 @@ type Entry = {
   reason: string
   candidates: Candidate[]
   market: string | null
-  read: { name: string; number: string; set: string }
+  read: { name: string; number: string; set: string; rarity_claim?: string[] }
   confidence: string
   first_seen: string
   age_days: number
@@ -840,4 +843,156 @@ test('the reason the pipeline gave has a sentence, and it says the rows may be a
   await expect(sentence).not.toContainText('no sentence for')
   await expect(sentence).toContainText('rarities claimed at capture')
   await expect(sentence).toContainText('different card')
+})
+
+/* ---------------------- the two words on screen, and the cross-check run backwards */
+
+/* THE CONTRADICTION, WITH BOTH HALVES ON THE WIRE. `rarity_claim_mismatch` is the one reason
+   whose meaning is "A contradicts B" and it could name neither A nor B until 2026-09-11: the
+   owner read 141 of these and had to work out for themselves which word disagreed with which.
+   The fixture is box 1's real shape that day — a stack claimed `Epic`, rows the catalogue
+   calls `Rare`. */
+const NAMED_CONTRADICTION: Entry[] = [
+  {
+    ...entry(51, 'rarity_claim_mismatch', '3.00', [
+      {
+        sku: '9100001',
+        name: 'Ezreal, Dashing',
+        set: 'Origins',
+        number: '082/221',
+        condition: 'Near Mint Foil',
+        market: '3.00',
+        rarity: 'Rare',
+      },
+    ]),
+    read: {
+      name: 'Ezreal, Dashing',
+      number: '082/221',
+      set: '',
+      rarity_claim: ['Epic'],
+    },
+  },
+]
+
+test('the contradiction names both words, not just that there was one', async ({ page }) => {
+  await open(page, NAMED_CONTRADICTION)
+
+  const sentence = page.locator('.review-sentence')
+  await expect(sentence).toContainText('You claimed this stack holds')
+  await expect(sentence).toContainText('Epic')
+  await expect(sentence).toContainText('Rare')
+  /* The old wording is GONE for an entry that carries both, rather than sitting beside the
+     new one — two sentences saying the same thing differently is how a screen stops being
+     read. */
+  await expect(sentence).not.toContainText('rarities claimed at capture')
+})
+
+test('the claim is a chip, so it is on screen before the sentence is read', async ({ page }) => {
+  await open(page, NAMED_CONTRADICTION)
+  const chip = page.locator('.review-chip', { hasText: 'Claimed' })
+  await expect(chip).toContainText('Epic')
+})
+
+test('an entry queued before the fields existed keeps the wording it had', async ({ page }) => {
+  /* A queue file outlives the run that wrote it, so this is an ordinary case and not a
+     migration. The fallback is asserted because a screen that drew "You claimed this stack
+     holds " with nothing after it would be worse than the sentence it replaced. */
+  await open(page, WRONG_ROWS)
+  const sentence = page.locator('.review-sentence')
+  await expect(sentence).toContainText('rarities claimed at capture')
+  await expect(sentence).not.toContainText('You claimed this stack holds')
+  await expect(page.locator('.review-chip', { hasText: 'Claimed' })).toHaveCount(0)
+})
+
+/* THE MIRROR. `1/51` on the owner's store: read `Irelia, Blade Dancer`, number `190/221`,
+   which that export calls `Forgefire Cape` — `Epic`, which is exactly what was claimed, so
+   D23's cross-check AGREED and the card was listed with no question asked. This reason is
+   what asks it. */
+const NAME_DISPUTED: Entry[] = [
+  {
+    ...entry(51, 'name_disputed', '0.31', [
+      {
+        sku: '9038408',
+        name: 'Forgefire Cape',
+        set: 'Origins',
+        number: '190/221',
+        condition: 'Near Mint Foil',
+        market: '0.31',
+        rarity: 'Epic',
+      },
+    ]),
+    read: { name: 'Irelia, Blade Dancer', number: '190/221', set: '', rarity_claim: ['Epic'] },
+  },
+]
+
+test('a disputed name says which two readings disagree', async ({ page }) => {
+  await open(page, NAME_DISPUTED)
+
+  const sentence = page.locator('.review-sentence')
+  await expect(sentence).not.toContainText('no sentence for')
+  await expect(sentence).toContainText('Irelia, Blade Dancer')
+  await expect(sentence).toContainText('Forgefire Cape')
+  await expect(sentence).toContainText('came off the same card and they disagree')
+  await expect(page.locator('.review-chip', { hasText: 'another card' })).toBeVisible()
+})
+
+/* ------------------------------------------------- the group press, and what suppresses it */
+
+/* BOX 1'S PARKED QUEUE, IN MINIATURE: entries that share one reason, one row and one
+   condition, plus the two that do not. On the owner's store that was 99 and 2, and the two
+   returned null for the other ninety-nine. */
+function uniform(index: number): Entry {
+  return {
+    ...entry(index, 'rarity_claim_mismatch', '3.00', [
+      {
+        sku: `910000${index}`,
+        name: 'Ezreal, Dashing',
+        set: 'Origins',
+        number: '082/221',
+        condition: 'Near Mint Foil',
+        market: '3.00',
+        rarity: 'Rare',
+      },
+    ]),
+    read: { name: 'Ezreal, Dashing', number: '082/221', set: '', rarity_claim: ['Epic'] },
+  }
+}
+
+const TWO_ROW_ODD_ONE: Entry = {
+  ...entry(9, 'rarity_claim_mismatch', '3.00', [
+    { sku: '9200001', name: 'Poro Herder', set: 'Origins', number: '061/298',
+      condition: 'Near Mint', market: '1.00', rarity: 'Rare' },
+    { sku: '9200002', name: 'Poro Herder', set: 'Origins', number: '061/298',
+      condition: 'Near Mint Foil', market: '2.00', rarity: 'Rare' },
+  ]),
+  read: { name: 'Leona, Radiant Dawn', number: '61/298', set: '', rarity_claim: ['Epic'] },
+}
+
+test('one two-row entry no longer suppresses the group press for every other card', async ({
+  page,
+}) => {
+  /* THE REGRESSION THIS IS FOR, measured: `groupOffer` required the WHOLE worklist to be
+     uniform, so the last entry here used to return null for the three above it. The anchor
+     is the card on screen, which is the first. */
+  await open(page, [uniform(1), uniform(2), uniform(3), TWO_ROW_ODD_ONE])
+  await expect(page.getByRole('button', { name: /Answer all 3 together/i })).toBeVisible()
+})
+
+test('the group press says what it is leaving behind', async ({ page }) => {
+  await open(page, [uniform(1), uniform(2), uniform(3), TWO_ROW_ODD_ONE])
+  await page.getByRole('button', { name: /Answer all 3 together/i }).click()
+
+  /* An unstated remainder reads as "the queue is done", which is the one way this control
+     can mislead now that it answers a subset. */
+  await expect(page.locator('.review-group-left')).toContainText('1 more card is still in this list')
+})
+
+test('a disputed name is never swept into a group, even a uniform one', async ({ page }) => {
+  /* D29's eligibility is a claim about cards nobody is looking at individually, and this
+     reason exists because two readings of one photograph disagree — exactly the card that
+     must not be answered without being looked at. The anchor is disputed, so no group at
+     all is offered. */
+  const disputed = (index: number): Entry => ({ ...NAME_DISPUTED[0]!, position: `2/${index}`, index })
+  await open(page, [disputed(1), disputed(2), disputed(3)])
+  await expect(page.getByRole('button', { name: /Answer all/i })).toHaveCount(0)
 })

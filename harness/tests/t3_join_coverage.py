@@ -1799,14 +1799,29 @@ def run() -> Result:
         )
 
     # --- never join on Product Name -----------------------------------------------------
+    #
+    # THE KEY IS STILL THE NUMBER AND THE NAME IS STILL NOT A KEY. What changed on
+    # 2026-09-11 is what happens AFTER the number finds the row: a read name matching none
+    # of the rows the number found is `routing.NAME_DISPUTED`, so the card is queued rather
+    # than listed. This case is that rule's own subject — a name deliberately unlike any row
+    # — and it asserts both halves, because the second one is worthless if the first ever
+    # stops being true.
     wrong_name = join.join_batch(
         [_card(90, "NOT THE RIGHT NAME", "120", metadata="normal")], catalog
     )
     c.equal(
-        list(wrong_name.matches),
+        [row[tcgcsv.SKU_COLUMN] for row in wrong_name.unmatched_cards[0].candidates]
+        if wrong_name.unmatched_cards
+        else [],
         [SEVEN_COPY_SKU],
-        "a wrong Product Name still joins on the number",
+        "a wrong Product Name still FINDS its row on the number",
     )
+    c.equal(
+        [u.reason for u in wrong_name.unmatched_cards],
+        [routing.NAME_DISPUTED],
+        "and is queued rather than listed, because the name matches no row it found",
+    )
+    c.equal(list(wrong_name.matches), [], "so nothing is listed off a disputed name")
     name_only = join.join_batch([_card(91, BLANK_NUMBER_NAME, "999")], catalog)
     c.equal(
         len(name_only.unmatched_cards),

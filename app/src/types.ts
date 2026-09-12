@@ -503,6 +503,13 @@ export type CandidateRow = {
   number: string
   condition: string
   market: string
+  /** This row's `Rarity` cell, and HALF OF WHAT `rarity_claim_mismatch` MEANS. Optional
+   *  rather than nullable, and absent rather than empty, because `cli/resolve.py` omits the
+   *  key for a row whose cell is blank — D23 reads a missing rarity as evidence of nothing,
+   *  and an empty string on screen would assert the row is unrated. Absent too on every
+   *  entry in a `review.json` written before 2026-09-11, which a queue file outliving its
+   *  run makes an ordinary case rather than a migration. */
+  rarity?: string
 }
 
 /** What identification said, as `cli/resolve.py:queue_entry` recorded it. Every field is
@@ -523,6 +530,12 @@ export type QueueRead = {
    *  against a claim they never made. Naming the array here makes that a compile error. */
   metadata_finish?: string | string[] | null
   detected_finish?: string | null
+  /** D23's stack claim — the OTHER half of what `rarity_claim_mismatch` means, against the
+   *  `rarity` on each `CandidateRow` above. A list, for `metadata_finish`'s reason: the
+   *  claim has always been a set. Null means nobody claimed anything; absent means a queue
+   *  file written before 2026-09-11, and the screen draws the same sentence for both, which
+   *  is the honest one — it does not know what was claimed. */
+  rarity_claim?: string[] | null
 }
 
 /** One card waiting for a human. `store/queues.py:QueueEntry`, minus the two Python
