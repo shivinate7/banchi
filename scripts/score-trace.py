@@ -17,6 +17,9 @@ WHAT IT ANSWERS, in the order the questions actually get asked:
     sweep      what the stillness thresholds would have scored across a parameter grid
     stalls     every episode the rescue could not save, with its brightness against this
                session's own fired cards — a reading, and `stalls` says why it is not a verdict
+    camera     what the CAMERA did, as opposed to what the cards did: how the frames were
+               paced, how bright the plate is and therefore what one exposure step would
+               cost, whether the still-frame floor is noise or the whole picture moving
     contact    write the verdict frames out as a PNG contact sheet, so a human can see
                whether the frames the machine called empty have a card in them
 
@@ -28,6 +31,7 @@ settles it is looking.
     scripts/score-trace.py presence <trace.json>
     scripts/score-trace.py sweep    <trace.json> [more.json ...]
     scripts/score-trace.py stalls   <trace.json> [more.json ...]
+    scripts/score-trace.py camera   <trace.json> [more.json ...]
     scripts/score-trace.py contact  <trace.json> <out.png>
 
 TRACE VERSIONS. v1 rows are [t, d, luma]; v2 rows (D81) are [t, d, dBase, luma]. Read
@@ -43,6 +47,7 @@ from __future__ import annotations
 
 import base64
 import json
+import math
 import statistics
 import sys
 from pathlib import Path
@@ -65,6 +70,15 @@ PRESENCE_MIN = 16.0
 RESCUE_K = 4 / 3
 RESCUE_AFTER = 0.6
 MAX_MOVE_MS = 1250.0
+
+# NOT A MIRRORED PARAMETER, and it is read by `camera` alone. An exposure change of E stops
+# multiplies scene luminance by 2**E; the stream is display-referred, so the 8-bit code is
+# luminance ** (1 / GAMMA_DISPLAY) and the code therefore scales by 2 ** (E / GAMMA_DISPLAY).
+# 2.2 is the sRGB-ish assumption rather than a measurement — the bracket 1.9 to 2.4 moves a
+# 1/3 EV step on the corpus's median plate over 18.7 to 23.3, which crosses every gate this
+# tool compares it against at every value in the bracket, so the conclusion does not rest on
+# the number. NOTHING GATES ON IT: `camera` prints a reading.
+GAMMA_DISPLAY = 2.2
 
 
 def _load(path: str) -> dict:
@@ -348,6 +362,132 @@ def stalls(paths: list[str]) -> None:
                   f"session's median card")
 
 
+def camera(paths: list[str]) -> None:
+    """What the CAMERA did, as opposed to what the cards did.
+
+    D81 made every threshold a multiple of something the session measures, which buys
+    portability to a new rig and buys with it a new exposure: a camera setting that DRIFTS
+    mid-session moves the baseline the thresholds were derived from, and no constant in
+    `motion.ts` can defend against that. This reads the four things a trace can say about
+    the lens that took it.
+
+        DELIVERY     the modal frame interval and the share of gaps long enough to be a
+                     dropped frame. `stillWindow` is a FRAME COUNT, so the rate sets how
+                     much TIME a settle needs and how much of a card's rest is sampled.
+        PLATE        the watch region's median level with nothing on the stand, and what
+                     ONE exposure step would therefore move it by. The step is
+                     multiplicative in code space (2 ** (EV / GAMMA_DISPLAY)), so a bright
+                     plate pays more for the same step than a dark one.
+        STILL FLOOR  `typ`, and the LAG-1 SPATIAL CORRELATION of the still-frame delta
+                     field. Independent noise correlates at ~0 cell to cell; flicker, an AE
+                     micro-adjustment or a lamp ripple move neighbours together. Which of
+                     the two it is decides whether gain or the lamp is the lever.
+        PRESENCE     the idle stand against the quietest card the session fired on — D84's
+                     first and third quantities, re-derived per session. The SECOND, the
+                     worst approach, is deliberately absent: separating a hand from a card
+                     needs the pixels, and `contact` is where that is settled.
+    """
+    pooled_gap: list[float] = []
+    pooled_corr: list[float] = []
+    for path in paths:
+        trace = _load(path)
+        rows = _rows(trace)
+        gaps = [rows[i][0] - rows[i - 1][0] for i in range(1, len(rows))]
+        period = statistics.median(gaps)
+        dropped = sum(max(0, round(gap / period) - 1) for gap in gaps)
+        still = [d for _t, d, _b, _l in rows if d < D_SEED * STILL_K]
+        typical = max(D_FLOOR, statistics.median(still)) if still else float("nan")
+
+        keyframes = trace["keyframes"]
+        plate = statistics.median(_cells(keyframes[0]["frame"]))
+        print(f"{Path(path).name}   v{trace.get('version', 1)}")
+        print(f"  delivery   {1000 / period:5.1f} fps   modal gap {period:.1f} ms   "
+              f"{dropped} gap(s) long enough to be a dropped frame "
+              f"({dropped / len(rows) * 100:.2f}% of frames)")
+        print(f"  plate      level {plate:.0f}   one exposure step moves the watch region:")
+        for stop, label in ((1 / 3, "1/3 EV"), (1 / 2, "1/2 EV"), (1.0, "1 EV")):
+            lifted = [min(255.0, v * 2 ** (stop / GAMMA_DISPLAY)) for v in _cells(keyframes[0]["frame"])]
+            moved = _mad(_cells(keyframes[0]["frame"]), lifted)
+            floor = max(PRESENCE_MIN, PRESENCE_K * typical) if typical == typical else PRESENCE_MIN
+            reads = "A CARD" if moved >= floor else ("motion" if moved >= typical * STILL_K else "nothing")
+            print(f"               {label:6s}  ->  {moved:6.2f}   reads as {reads}"
+                  f"   (tLo {typical * STILL_K:.2f}, presence floor {floor:.2f})")
+
+        lag_x, lag_y = _still_correlation(trace, rows)
+        pooled_corr += [c for c in (lag_x, lag_y) if c == c]
+        pooled_gap.append(period)
+        shape = "independent cell to cell" if abs(lag_x) < 0.1 and abs(lag_y) < 0.1 else "CORRELATED — the whole picture is moving"
+        print(f"  stillfloor typ {typical:.2f}   tLo {typical * STILL_K:.2f}   "
+              f"lag-1 spatial correlation {lag_x:+.3f} x / {lag_y:+.3f} y   {shape}")
+
+        fires = [e for e in trace["events"] if e["event"].startswith("fire")]
+        baseline = _cells(keyframes[0]["frame"])
+        distances = [_mad(_cells(e["frame"]), baseline) for e in fires]
+        idle = [b for _t, _d, b, _l in rows[1:] if b is not None]
+        if distances and idle:
+            quiet = [b for b in idle if b < PRESENCE_MIN]
+            print(f"  presence   idle stand {statistics.median(quiet):.2f} "
+                  f"(p99 {_quantile(quiet, 0.99):.2f})   quietest fired card {min(distances):.2f}"
+                  f"   floor {PRESENCE_MIN:.2f}")
+        else:
+            print("  presence   not readable — this v1 trace predates the presence gate (D81), "
+                  "so no baseline travels with it")
+        print()
+    if len(paths) > 1 and pooled_corr:
+        print(f"POOLED  modal gap {statistics.median(pooled_gap):.1f} ms "
+              f"= {1000 / statistics.median(pooled_gap):.1f} fps   "
+              f"lag-1 correlation p50 {statistics.median(pooled_corr):+.3f}")
+
+
+def _still_correlation(trace: dict, rows) -> tuple[float, float]:
+    """Lag-1 spatial correlation of the delta field, over QUIET keyframe pairs only.
+
+    Quiet is: no verdict fell between the two keyframes and no frame between them reached
+    the seeded tLo. That selection is circular for a claim about how BIG the still floor
+    is — it picks the quiet stretches — and is not circular for a claim about its SHAPE,
+    which is all this is used for."""
+    x0, y0, x1, y1 = trace["grid"]["roi"]
+    width = x1 - x0
+    keyframes = trace["keyframes"]
+    events = [e["t"] for e in trace["events"]]
+    across: list[float] = []
+    down: list[float] = []
+    for index in range(1, len(keyframes)):
+        start, end = keyframes[index - 1]["t"], keyframes[index]["t"]
+        if any(start <= at <= end for at in events):
+            continue
+        between = [d for t, d, _b, _l in rows if start <= t <= end]
+        if not between or max(between) >= D_SEED * STILL_K:
+            continue
+        before = _cells(keyframes[index - 1]["frame"])
+        after = _cells(keyframes[index]["frame"])
+        delta = [b - a for a, b in zip(before, after)]
+        height = len(delta) // width
+        across.append(_pearson(
+            [delta[r * width + c] for r in range(height) for c in range(width - 1)],
+            [delta[r * width + c + 1] for r in range(height) for c in range(width - 1)],
+        ))
+        down.append(_pearson(
+            [delta[r * width + c] for r in range(height - 1) for c in range(width)],
+            [delta[(r + 1) * width + c] for r in range(height - 1) for c in range(width)],
+        ))
+    across = [v for v in across if v == v]
+    down = [v for v in down if v == v]
+    if not across:
+        return float("nan"), float("nan")
+    return statistics.median(across), statistics.median(down)
+
+
+def _pearson(left: list[int], right: list[int]) -> float:
+    n = len(left)
+    ml, mr = sum(left) / n, sum(right) / n
+    sl = math.sqrt(sum((v - ml) ** 2 for v in left))
+    sr = math.sqrt(sum((v - mr) ** 2 for v in right))
+    if sl == 0 or sr == 0:
+        return float("nan")
+    return sum((a - ml) * (b - mr) for a, b in zip(left, right)) / (sl * sr)
+
+
 def contact(path: str, out: str) -> None:
     """Every verdict's frame as one PNG, labelled with its live event and its statistics.
 
@@ -399,6 +539,8 @@ def main(argv: list[str]) -> int:
         sweep(rest)
     elif command == "stalls":
         stalls(rest)
+    elif command == "camera":
+        camera(rest)
     elif command == "contact":
         if len(rest) != 2:
             raise SystemExit("contact takes <trace.json> <out.png>")
