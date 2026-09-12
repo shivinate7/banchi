@@ -146,6 +146,76 @@ def build_tree(where: Path) -> Path:
     return tree
 
 
+def make_primary_checkout(tree: Path) -> None:
+    """Turn the throwaway tree into a PRIMARY checkout with a real `main`.
+
+    D158 is the entry.
+
+    REPRODUCED RATHER THAN ASSERTED ABOUT. The situation this guard exists for is one
+    directory — the one D53 serves the owner's real store out of — standing on a feature
+    branch, and the only way to know the supervisor refuses it is to put a real supervisor in
+    a real checkout in that real state. A mocked `off_main` would prove the arms call it.
+
+    ONLY THREE FILES ARE TRACKED, and that is the whole trick: the switch has to CHANGE a
+    watched file or no reload is scheduled and the guard is never reached.
+    `server/capture_server.py` stands for the ordinary reload, `app/src/App.tsx` for the
+    build, and `scripts/serve.py` for the re-exec, which is the arm that matters most.
+    Tracking the rest would add `fixtures/` to a git index for nothing.
+
+    `PKMNSCAN_MAIN=off` throughout: this repo's own pre-commit and ref hooks may be armed
+    through the ambient config, and the fixture's seed commits are not the thing under test.
+    """
+    env = dict(os.environ, PKMNSCAN_MAIN="off")
+
+    def run(*argv: str) -> None:
+        subprocess.run(["git", *argv], cwd=str(tree), env=env,  # noqa: S603, S607
+                       capture_output=True, text=True, check=False)
+
+    run("init", "-q", "-b", "main")
+    run("config", "user.email", "selftest@example.com")
+    run("config", "user.name", "selftest")
+    run("config", "commit.gpgsign", "false")
+    run("add", "--", "scripts/serve.py", "server/capture_server.py", "app/src/App.tsx")
+    run("commit", "-qm", "main")
+
+    # A branch that moves an ordinary watched file: the child-restart path.
+    run("switch", "-q", "-c", "feature")
+    watched = tree / "server" / "capture_server.py"
+    watched.write_text(watched.read_text("utf-8") + "\n# branch\n", "utf-8")
+    run("commit", "-qam", "a watched file moves on a branch")
+
+    # AND A BRANCH THAT DELETES THE GUARD FROM `scripts/serve.py` ITSELF. That file is in
+    # SELF_FILES, so adopting it is a `_reexec` — the supervisor replacing its own image with
+    # the code on disk. If the branch check ran after that, this branch's unguarded copy would
+    # be the one answering it, which is no guard at all. This is the arm that pins the order.
+    # A branch that moves ONLY `app/src`: the build path. The two watch sets are independent
+    # by design (D138), so this branch reaches `_check_app` and never `_restart_for` — which
+    # is why the app half needs a stand-down of its own and an arm of its own.
+    run("switch", "-q", "-c", "app-only", "main")
+    tsx = tree / "app" / "src" / "App.tsx"
+    tsx.write_text(tsx.read_text("utf-8") + "\n// branch\n", "utf-8")
+    run("commit", "-qam", "only the app moves on a branch")
+
+    run("switch", "-q", "-c", "no-guard", "main")
+    serve_py = tree / "scripts" / "serve.py"
+    text = serve_py.read_text("utf-8")
+    gutted = text.replace(
+        'if os.environ.get(SERVE_MAIN_ENV) == "off":\n        return None',
+        "return None  # guard deleted by this branch",
+        1,
+    )
+    assert gutted != text, "the fixture could not find the guard to delete"
+    serve_py.write_text(gutted, "utf-8")
+    run("commit", "-qam", "a branch that predates the guard")
+    run("switch", "-q", "main")
+
+
+def git_switch(tree: Path, branch: str) -> None:
+    subprocess.run(["git", "switch", "-q", branch], cwd=str(tree),  # noqa: S603, S607
+                   env=dict(os.environ, PKMNSCAN_MAIN="off"),
+                   capture_output=True, text=True, check=False)
+
+
 def free_port() -> int:
     """A port the OS says is free right now. Bound, read, released — the standard idiom, and
     the small race it carries is the right trade against a hard-coded number that would make
@@ -155,12 +225,17 @@ def free_port() -> int:
         return int(probe.getsockname()[1])
 
 
-def serve(tree: Path, *args: str, env: Optional[dict] = None, timeout: int = 120):
+def serve_env(tree: Path, env: Optional[dict] = None) -> dict:
     child_env = dict(os.environ)
     child_env["PKMNSCAN_HOME"] = str(tree / "home")
     child_env["PKMNSCAN_PORT"] = str(PORTS[tree])
     child_env["PATH"] = f"{tree.parent / 'bin'}{os.pathsep}{child_env.get('PATH', '')}"
     child_env.update(env or {})
+    return child_env
+
+
+def serve(tree: Path, *args: str, env: Optional[dict] = None, timeout: int = 120):
+    child_env = serve_env(tree, env)
     return subprocess.run(  # noqa: S603
         [sys.executable, str(tree / "scripts" / "serve.py"), *args],
         cwd=str(tree), env=child_env, capture_output=True, text=True, timeout=timeout,
@@ -409,6 +484,235 @@ def main() -> int:
         finally:
             serve(tree2, "down", "--confirm", env={"PATH": minimal})
             wait_until(lambda: get(port2, "/status")[0] == 0, seconds=60)
+
+    # ---------------------------------------------------------------------------------
+    # THE PRIMARY CHECKOUT SERVES MAIN (D158). Its own tree, its own port, its own git.
+    with tempfile.TemporaryDirectory() as tmp3:
+        where3 = Path(tmp3)
+        tree3 = build_tree(where3)
+        port3 = PORTS[tree3]
+        make_primary_checkout(tree3)
+        print()
+        print("  -- D158: the rig refuses to serve a primary checkout that is off main --")
+
+        serve(tree3, "up")
+        try:
+            up = wait_until(lambda: get(port3, "/status")[0] == 200, seconds=60)
+            check(up, "on main, a primary checkout serves exactly as it always did")
+
+            # THE OBSERVED INCIDENT, REPRODUCED. Both times this happened the supervisor was
+            # already alive and the tree moved under it.
+            git_switch(tree3, "feature")
+            stood = wait_until(
+                lambda: "NOT SERVING" in supervisor_log(tree3), seconds=30)
+            check(stood, "a branch switch under a live supervisor is REFUSED, not adopted")
+            check(
+                "feature" in supervisor_log(tree3),
+                "and the refusal names the branch, which is the fact nothing printed twice",
+            )
+            check(
+                get(port3, "/status")[0] == 200,
+                "the server that was already running is STILL ANSWERING — the guard refuses "
+                "an adoption and never stops a capture in flight",
+            )
+
+            # AND IT COMES BACK WITH NOTHING TYPED, which is what keeps this from being the
+            # guard somebody switches off.
+            before = supervisor_log(tree3)
+            git_switch(tree3, "main")
+            check(
+                wait_until(lambda: "back on main" in supervisor_log(tree3)[len(before):],
+                           seconds=30),
+                "switching back to main resumes serving by itself",
+            )
+
+            # THE RE-EXEC ARM. This branch's own scripts/serve.py has the guard deleted, so a
+            # supervisor that checked the branch AFTER exec'ing into it would sail through.
+            mark = len(supervisor_log(tree3))
+            git_switch(tree3, "no-guard")
+            check(
+                wait_until(lambda: "NOT SERVING" in supervisor_log(tree3)[mark:], seconds=30),
+                "a branch whose own serve.py deletes the guard is refused BEFORE the re-exec "
+                "— the running image decides, so a branch cannot ship the code that lets it in",
+            )
+            check(
+                "restarting MYSELF" not in supervisor_log(tree3)[mark:],
+                "and the supervisor did not re-exec at all",
+            )
+            git_switch(tree3, "main")
+            wait_until(lambda: get(port3, "/status")[0] == 200, seconds=60)
+
+            # THE APP HALF, WHICH IS A SECOND PATH AND NOT A SECOND SPELLING OF THE FIRST.
+            # This branch moves nothing the capture server imports, so `_restart_for` is never
+            # called at all — and since D138 the bundle is what a person actually looks at.
+            mark = len(supervisor_log(tree3))
+            git_switch(tree3, "app-only")
+            check(
+                wait_until(lambda: "NOT SERVING" in supervisor_log(tree3)[mark:], seconds=30),
+                "a branch that moves ONLY app/src is refused too — the bundle is code as much "
+                "as the server is",
+            )
+            check(
+                "rebuilding" not in supervisor_log(tree3)[mark:],
+                "and no build was run, so the bundle being served is still main's",
+            )
+            git_switch(tree3, "main")
+        finally:
+            serve(tree3, "down", "--confirm")
+            wait_until(lambda: get(port3, "/status")[0] == 0, seconds=60)
+
+        # A COLD START IS THE OTHER HALF, and it is the shape the second incident was in: the
+        # tree was left on a merged branch and a login would have served it.
+        git_switch(tree3, "feature")
+        done = serve(tree3, "up")
+        check(done.returncode == 1, "`make up` on a branch REFUSES, and says so in its status")
+        check("NOT SERVING" in done.stdout, "naming itself rather than failing on a timeout")
+        check(
+            get(port3, "/status")[0] == 0,
+            "and nothing is listening — a cold start on a branch serves nothing at all",
+        )
+        check(
+            "PKMNSCAN_SERVE_MAIN=off" in done.stdout,
+            "the refusal prints its escape hatch, as every refusal in this repo does",
+        )
+
+        # AND THE LOGIN PATH, WHICH IS NOT `make up`. `make launch-agent` writes a plist whose
+        # ProgramArguments are `[python, serve.py, run]` — it never goes through `do_up`, so
+        # `do_up`'s preflight above is not the arm that covers a Mac booting with this tree
+        # parked on a branch. That is `Supervisor.start()`, and this is its arm.
+        log_before = len(supervisor_log(tree3))
+        # STDOUT GOES TO THE LOG FILE, because that is what launchd does and because `log()` is
+        # a `print`. Written with DEVNULL first, this arm went red for the one reason a reader
+        # would never guess: the supervisor refused exactly as it should and every word of the
+        # refusal went to /dev/null. The plist's `StandardOutPath` is this line.
+        handle = open(  # noqa: SIM115 — the child's stdout, closed in the finally below
+            tree3 / ".serve" / "supervisor.log", "a", buffering=1, encoding="utf-8")
+        child = subprocess.Popen(  # noqa: S603
+            [sys.executable, str(tree3 / "scripts" / "serve.py"), "run"],
+            cwd=str(tree3), env=serve_env(tree3),
+            stdin=subprocess.DEVNULL, stdout=handle,
+            stderr=subprocess.STDOUT, start_new_session=True,
+        )
+        try:
+            check(
+                wait_until(lambda: "NOT SERVING" in supervisor_log(tree3)[log_before:],
+                           seconds=30),
+                "a supervisor started the way launchd starts it REFUSES a tree parked on a "
+                "branch — the second incident's shape, where the tree was left on a merged one",
+            )
+            check(
+                get(port3, "/status")[0] == 0,
+                "and no port was ever opened, so nothing can answer for the real store",
+            )
+            check(
+                child.poll() is None,
+                "the supervisor STAYS ALIVE rather than exiting — launchd's KeepAlive restarts "
+                "an unsuccessful exit, so exiting would be this refusal on a ten-second loop",
+            )
+            git_switch(tree3, "main")
+            check(
+                wait_until(lambda: get(port3, "/status")[0] == 200, seconds=60),
+                "and `git switch main` brings the rig up with nothing else typed",
+            )
+        finally:
+            serve(tree3, "down", "--confirm")
+            wait_until(lambda: get(port3, "/status")[0] == 0, seconds=60)
+            if child.poll() is None:
+                child.terminate()
+            handle.close()
+        git_switch(tree3, "feature")
+
+        # THE HATCH IS REAL, and it has to be: serving a branch against the real camera and the
+        # real store is a thing the owner may legitimately want, and no other command does it.
+        serve(tree3, "up", env={"PKMNSCAN_SERVE_MAIN": "off"})
+        try:
+            check(
+                wait_until(lambda: get(port3, "/status")[0] == 200, seconds=60),
+                "PKMNSCAN_SERVE_MAIN=off serves the branch anyway",
+            )
+        finally:
+            serve(tree3, "down", "--confirm", env={"PKMNSCAN_SERVE_MAIN": "off"})
+            wait_until(lambda: get(port3, "/status")[0] == 0, seconds=60)
+
+    # A LINKED WORKTREE IS NOT THE SUBJECT AND MUST NOT BE CAUGHT (D43). Its `.git` is a FILE,
+    # which is the one fact the whole test turns on and the one most likely to be written
+    # backwards — `main` is a real branch in the parent, so silence here can only come from the
+    # primary/linked test rather than from the gate beside it.
+    with tempfile.TemporaryDirectory() as tmp4:
+        where4 = Path(tmp4)
+        tree4 = build_tree(where4)
+        make_primary_checkout(tree4)
+        linked = where4 / "linked"
+        subprocess.run(  # noqa: S603, S607
+            ["git", "worktree", "add", "-q", "-b", "wt", str(linked), "feature"],
+            cwd=str(tree4), env=dict(os.environ, PKMNSCAN_MAIN="off"),
+            capture_output=True, text=True, check=False,
+        )
+        import importlib.util
+        spec = importlib.util.spec_from_file_location(
+            "_serve_under_test", tree4 / "scripts" / "serve.py")
+        under_test = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(under_test)
+        check(
+            under_test.off_main(linked) is None,
+            "a LINKED worktree standing on a branch is not the subject and is silent",
+        )
+        check(
+            under_test.off_main(tree4) is None,
+            "and the primary checkout beside it, on main, is silent too",
+        )
+
+        # THREE ANSWERS NO SERVER-LEVEL ARM CAN REACH, and every one of them survived the
+        # mutation sweep until it was written. They are asked of the function directly because
+        # each needs a repository in a state the end-to-end fixture cannot also be in.
+        git_switch(tree4, "feature")
+        check(
+            under_test.off_main(tree4) == "feature",
+            "the primary checkout on a branch names the branch",
+        )
+        subprocess.run(["git", "pack-refs", "--all"], cwd=str(tree4),  # noqa: S603, S607
+                       env=dict(os.environ, PKMNSCAN_MAIN="off"),
+                       capture_output=True, check=False)
+        check(
+            not (tree4 / ".git" / "refs" / "heads" / "main").exists(),
+            "`git pack-refs` really did move main out of refs/heads — the setup for the next "
+            "one, asserted because a case that silently failed to pack would prove nothing",
+        )
+        check(
+            under_test.off_main(tree4) == "feature",
+            "and main is still FOUND once git has packed it away — a loose-refs-only reader "
+            "would go quiet the first time `git gc` ran on the rig",
+        )
+        subprocess.run(["git", "switch", "-q", "--detach", "main"],  # noqa: S603, S607
+                       cwd=str(tree4), env=dict(os.environ, PKMNSCAN_MAIN="off"),
+                       capture_output=True, check=False)
+        detached = under_test.off_main(tree4)
+        check(
+            detached is not None and "detached HEAD" in detached,
+            "a detached HEAD is off main as surely as a branch is, and is NAMED as one rather "
+            "than reported as a branch called HEAD",
+        )
+
+        # AND A REPOSITORY THAT DOES NOT CALL ITS TRUNK `main` IS NOT IN VIOLATION. The fixture
+        # above cannot make this case — `main` exists there by construction — which is exactly
+        # why the gate went unnoticed by every other arm.
+        foreign = where4 / "foreign"
+        foreign.mkdir()
+        fenv = dict(os.environ, PKMNSCAN_MAIN="off")
+        for argv in (["init", "-q", "-b", "master"],
+                     ["config", "user.email", "selftest@example.com"],
+                     ["config", "user.name", "selftest"],
+                     ["config", "commit.gpgsign", "false"]):
+            subprocess.run(["git", *argv], cwd=str(foreign), env=fenv,  # noqa: S603, S607
+                           capture_output=True, check=False)
+        (foreign / "f.txt").write_text("one", "utf-8")
+        for argv in (["add", "-A"], ["commit", "-qm", "seed"], ["switch", "-q", "-c", "topic"]):
+            subprocess.run(["git", *argv], cwd=str(foreign), env=fenv,  # noqa: S603, S607
+                           capture_output=True, check=False)
+        check(
+            under_test.off_main(foreign) is None,
+            "a checkout whose trunk is called something else is not in violation for it",
+        )
 
     print()
     if failures:

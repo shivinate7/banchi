@@ -93,6 +93,14 @@ SKIP = {".git", "node_modules", "dist", "dist-demo", "captures", "inventory", "r
 TEXT_SUFFIXES = {".md", ".py", ".ts", ".tsx", ".css", ".html", ".json", ".txt", ".yml",
                  ".yaml", ".sh", ".js", ".mjs", ".toml"}
 
+# AND A GIT HOOK HAS NO SUFFIX AT ALL, which is the same hole one shape further along. The
+# five files `make hooks` installs are shell with no extension, so a suffix set can never
+# reach them — `scripts/githooks/post-checkout` cited a slug on 2026-09-12 and the claim
+# walked straight past it, leaving a citation `id claims` would have had to call unclaimed
+# on main. They are named rather than pattern-matched: the roster is five, `hook roster`
+# reconciles it against docs/map.py, and a sixth hook arriving is a commit that fails there.
+HOOK_DIR = "scripts/githooks"
+
 
 class Claim(NamedTuple):
     kind: str      # "decision" | "codes" | "step"
@@ -133,6 +141,11 @@ def text_files(root: Path) -> List[Path]:
             if path.is_symlink():
                 continue
             if path.suffix in TEXT_SUFFIXES:
+                out.append(path)
+                continue
+            # An extensionless file directly under scripts/githooks is a hook: shell that
+            # `make hooks` copies into the common git dir, and text like any other here.
+            if path.parent.as_posix().endswith(HOOK_DIR) and not path.suffix:
                 out.append(path)
     return out
 
