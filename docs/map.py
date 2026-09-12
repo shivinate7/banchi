@@ -5533,10 +5533,20 @@ COMPONENTS = [
                                         "a placeholder would draw a fault where there is none. "
                                         "It replaced a second implementation of "
                                         "server/pipeline_routes.py:_run_box written in TypeScript "
-                                        "with a differently-anchored regex.",
+                                        "with a differently-anchored regex — AND IT IS DELETED "
+                                        "on both sides now (D-a-selection-of-cards), because it "
+                                        "is confidently wrong on two of the operator's own runs: "
+                                        "2026-09-02-box6-01's 65 cards are all in box 3 today and "
+                                        "2026-08-29-box1-01's 99 are too, while the regex answers "
+                                        "6 and 1, and box 6 has never existed on that store. "
+                                        "`boxOf` answers null there, which every reader here "
+                                        "already handles — a number read off a folder is a guess "
+                                        "that RESOLVES, and that is the one kind of wrong nothing "
+                                        "downstream can catch.",
                                 # D20 is the name and its optionality; D10 ruling 3 is the deleted
                                 # box whose number a run still remembers; D56 is the entry.
-                                "governed_by": ["D145", "D10", "D20", "D56", "D142"]},
+                                "governed_by": ["D145", "D10", "D20", "D56", "D142",
+                                                "D-a-selection-of-cards"]},
             "src/money.ts": {"does": "A DOLLAR AMOUNT, SAID THE SAME WAY EVERYWHERE — `money` and "
                                      "`roundsToNothing`. Extracted from src/RunsComposer.tsx "
                                      "unchanged on 2026-09-11, when the run panel began "
@@ -6151,7 +6161,7 @@ COMPONENTS = [
                 # D1 is the two-phase split the four steps make visible; D3 is the ladder the
                 # join walks; D9 is the pricing answer that gates emit;
                 # D31 is why this is a panel on #/inventory rather than a seventh route.
-                "governed_by": ["D145", "D36", "D1", "D3", "D9", "D13", "D20", "D31", "D32", "D33", "D39", "D48", "D54", "D56", "D64", "D65", "D49", "D76", "D166", "D174", "D57", "D118", "D136"],
+                "governed_by": ["D145", "D36", "D1", "D3", "D9", "D13", "D20", "D31", "D32", "D33", "D39", "D48", "D54", "D56", "D64", "D65", "D49", "D76", "D166", "D174", "D57", "D118", "D136", "D-a-selection-of-cards"],
                 "note": "THE PIPELINE WAS THE LARGEST INSTANCE OF THE ROUTE-IS-NOT-A-FEATURE "
                         "FAILURE AND NOBODY HAD COUNTED IT. The four commands have existed "
                         "since step 4 and have been through a 53-card run and a 544-card run; "

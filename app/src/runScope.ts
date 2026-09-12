@@ -34,8 +34,18 @@ import type { RunSummary } from './types'
 export function boxOf(row: RunSummary): number | null {
   if (typeof row.box === 'number') return row.box
   if (row.scope != null) return row.scope.box
-  const found = /box(\d+)/.exec(row.capture_dir ?? '')
-  return found === null ? null : Number(found[1])
+  /* THE PATH ARM IS GONE FROM BOTH SIDES OF THE WIRE (D-a-selection-of-cards).
+     `/box(\d+)/` over the capture directory was this file's copy of
+     `server/pipeline_routes.py:_run_box`'s fallback, and deleting the server's while leaving
+     this one would have put the same wrong answer back one layer out. It is wrong on two of
+     the operator's own runs: `2026-09-02-box6-01`'s 65 cards are all in box 3 today and
+     `2026-08-29-box1-01`'s 99 are too, while the regex answers 6 and 1 — and box 6 has never
+     existed on that store. A directory name is a CONVENTION; the sidecar is the claim.
+
+     NULL IS THE HONEST ANSWER AND EVERY READER HERE ALREADY HANDLES IT. `runBoxLabel` returns
+     null and the row draws no drawer, which is better than a number that resolves: a run filed
+     under the wrong drawer is the one fault nothing downstream can detect. */
+  return null
 }
 
 /** `Box 3 · RB Epics`, or `Box 3` where the owner has not named it.

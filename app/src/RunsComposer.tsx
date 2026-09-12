@@ -1073,7 +1073,13 @@ export function RunsComposer({
                       </label>
                     </div>
                   ) : null}
-                  <p className="run-step-fine">
+                  {/* THE CLASS IS A TEST HOOK AND IS KEPT ON PURPOSE. `run-panel.spec.ts` reads
+                      this line to assert that the reading is EXPLAINED before Check cost is
+                      pressed rather than after it — D32's controls could not be read without
+                      it — and a generic class here would make that assertion ambiguous the
+                      moment a second fine line landed beside it, which is exactly what
+                      happened. */}
+                  <p className="run-step-fine runs-reading-says">
                     {reading.custom || readingMatch === null ? CUSTOM_SAYS : readingMatch.says}
                   </p>
                   {/* WHAT THE CART USED TO OFFER HERE, NAMED RATHER THAN MISSED: a reading per
