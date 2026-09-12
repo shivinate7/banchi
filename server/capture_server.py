@@ -2713,6 +2713,46 @@ def do_status() -> dict:
         if finding:
             problems.append(finding)
 
+    # D172'S TWO RESIDUES, REPORTED HERE BECAUSE NEITHER IS AN ERROR AND BOTH ARE FACTS
+    # SOMEBODY HAS TO BE ABLE TO SEE.
+    #
+    # `photos_relocated` says whether every photograph has reached the card's own name. Until
+    # it is set, `store/photos.find` still reads the legacy `(box, index)` address — which is
+    # what lets a resumable move of 4.45 GB be interrupted without a screen going dark, and
+    # is exactly the fallback that must not quietly become permanent. So the number of cards
+    # still filed at the old address is a COUNT on this route rather than an absence
+    # somewhere, and `./pkmnscan cards photos` is what finishes it.
+    #
+    # `nophoto:` is the shape a card gets when it has no photograph and no digest anywhere.
+    # It is a NAME and never a NULL, deliberately — but a population above zero is still
+    # something the operator should be told, because it is the one shape `cards audit` can
+    # only ever answer "not known" about.
+    body["photos_relocated"] = getattr(inventory, "photos_relocated", None)
+    unnamed = legacy = 0
+    try:
+        for card in inventory.cards.values():
+            if not photos.is_photo_cid(card.cid):
+                unnamed += 1
+            elif not photos.path(card.cid).is_file():
+                legacy += 1
+    except (TypeError, ValueError, OSError) as exc:  # noqa: BLE001 — never take down /status
+        unnamed = legacy = 0
+        problems.append(f"the photograph store could not be surveyed ({exc}).")
+    body["photos_at_legacy_address"] = legacy
+    body["cards_without_a_photograph_name"] = unnamed
+    if legacy:
+        problems.append(
+            f"{legacy} card(s) still have their photograph at the legacy (box, index) "
+            f"address. `./pkmnscan cards photos --write` moves them; it previews first, it "
+            f"is resumable, and every file is checked against a digest before its old copy "
+            f"is removed."
+        )
+    if unnamed:
+        problems.append(
+            f"{unnamed} card(s) carry a name that points at no photograph — a `moved:` "
+            f"tombstone or a `nophoto:` record. `./pkmnscan cards name` lists them by key."
+        )
+
     # A corrupt record must not take down the health endpoint — that is the one route you
     # reach for when something is wrong. Report it as a finding instead.
     try:

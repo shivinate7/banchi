@@ -356,6 +356,49 @@ def case_the_seeding_names_every_card_from_its_own_bytes() -> None:
     equal(stamp_of(home), 4, "and the stamp is last, inside the same transaction")
 
 
+def case_the_four_column_rosters_agree() -> None:
+    """The four hand-written rosters that had to learn the name, reconciled.
+
+    NOTHING RECONCILED THEM AND ONE OF THEM HAD NO READER AT ALL, which is how this case came
+    to exist: a mutation arm deleted `cid` from `Inventory.CARDS.column_names` and every
+    suite stayed green. `grep -rn "\.column_names"` across the whole repo returns nothing —
+    `SqliteSource` takes its columns from `db.TABLES[table]`, so that field is a DECLARATION
+    with no consumer, on every `TableSpec` in the store and not just this one. D80's rule is
+    that a claim with no reader has no way of ever being contradicted; this is the reader.
+
+    WHAT MISSING EACH ONE COSTS, because they fail differently:
+
+      `_card_columns`          every write stores the name in the PAYLOAD and leaves the
+                               COLUMN NULL. `cards_cid` never fires, a lookup by name returns
+                               nothing for every card, and `TableSpec`'s own promise — that
+                               the column and the payload cannot disagree — goes quietly
+                               false while an idempotence check reports clean forever.
+      `db.TABLES["cards"]`     a FRESH store gets no column at all, because
+                               `_ensure_schema`'s fresh path stamps the version directly and
+                               `_upgrade`'s `ALTER` never runs. Every worktree, the demo seed
+                               and all nine harness tests would then exercise a schema the
+                               owner's store does not have.
+      `Card.__annotations__`   `Inventory.parse` drops the field on reload, so the name
+                               survives one process and no more.
+      `CARDS.column_names`     nothing, today — and that is the finding rather than the
+                               reassurance.
+    """
+    from store import db, master
+
+    declared = set(db.TABLES["cards"])
+    spec = set(master.Inventory.CARDS.column_names)
+    built = set(master._card_columns(master.Card(box=1, index=1, cid="a" * 64)))
+    equal(sorted(declared ^ spec), [],
+          "`db.TABLES['cards']` and `Inventory.CARDS.column_names` name the same columns")
+    equal(sorted(spec ^ built), [],
+          "and `_card_columns` builds exactly those keys")
+    equal(sorted(built - set(master.Card.__annotations__)), ["idx"],
+          "and every one of them is a declared field on `Card`, with `idx` the one named "
+          "alias — for `index`, which is a Python builtin's name in every other context")
+    check("cid" in declared and "cid" in spec and "cid" in built,
+          "and the card's name is in all three")
+
+
 def case_a_rerun_names_nothing_and_changes_no_name() -> None:
     """A re-run after a crash is a no-op, which is `_add_box_ids`' own rule."""
     home = fresh_home()
@@ -847,15 +890,30 @@ def case_the_relocation_verifies_every_file_and_resumes() -> None:
           "and removes the leftover source, which is step 5 of an interrupted run finishing")
 
     # AND A SOURCE WHOSE BYTES ARE NOT THE CARD'S IS REFUSED AND LEFT ALONE.
+    #
+    # THE COUNT IS THE ASSERTION HERE, AND IT HAS TO BE. `adopt` has TWO guards — it hashes
+    # the source and refuses before linking, and it re-hashes the DESTINATION and unlinks it
+    # if that disagrees — and both end in the same observable outcome: refused, source
+    # untouched. So a mutation deleting either one on its own was CAUGHT BY THE OTHER and
+    # survived this case, which is exactly the shape a single-arm mutation cannot see. The
+    # link tally distinguishes them: with the source check, a bad file is never linked at
+    # all; without it, it is linked and then removed. Both are safe, and only one of them
+    # touches the destination.
     wrong = photos.legacy_path(3, 4, home)
     wrong.write_bytes(photo_bytes("not-this-card"))
     target = photos.path(digests["3/4"], home)
     target.unlink()
     lines = []
     args = type("A", (), {"cards_action": "photos", "write": True, "limit": None})()
-    code = cmd_cards.run(args, lines.append)
+    with Tally() as tally:
+        code = cmd_cards.run(args, lines.append)
     check(any("refused=1" in line for line in lines),
           "a file whose bytes do not hash to the card's name is REFUSED")
+    equal(tally.counts["link"], 0,
+          "and it was never linked in the first place — the source is hashed BEFORE the "
+          "destination is touched, so a file that is not the card's costs no write at all")
+    check(not target.exists(),
+          "and nothing was left at the name it does not have")
     check(wrong.is_file(), "and left exactly where it was, rather than filed under a name "
                            "it does not have")
     check(code != 0, "and the command says so in its exit status")
@@ -1038,6 +1096,7 @@ def case_killed_with_minus_nine_leaves_the_store_unchanged() -> None:
 
 CASES = [
     case_the_seeding_names_every_card_from_its_own_bytes,
+    case_the_four_column_rosters_agree,
     case_a_rerun_names_nothing_and_changes_no_name,
     case_a_stripped_name_heals_byte_identically,
     case_the_naming_writes_nothing_outside_the_database,
