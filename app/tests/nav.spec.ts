@@ -141,6 +141,12 @@ async function stub(page: Page, cards: unknown[] = []) {
     }),
   )
   await page.route(/\/pipeline\/runs$/, (route) => json(route, { runs: [] }))
+  /* `#/runs` draws the claims panel on mount (D174), and this file
+     opens every route — so the read is stubbed here with the rest of the screen's.
+     Empty: a healthy store holds no claim, and the panel then draws nothing at all. */
+  await page.route(/\/pipeline\/submissions$/, (route) =>
+    json(route, { claims: [], counts: { claims: 0, keys: 0, stale: 0 } }),
+  )
   /* THE CORPUS FIRST AND THE WORKLIST SECOND, AND THE ORDER IS THE MECHANISM. `/\/pricing$/`
      matches `…/pipeline/pricing` as happily as `…/pricing`, and Playwright takes the NEWEST
      handler — so registering the corpus second answers the WORKLIST with a corpus, `roster`
