@@ -633,7 +633,11 @@ function FulfillerCard({
                     className="card-locations-photo"
                     src={
                       photoSrc === undefined
-                        ? photoUrl(copy.place.box, copy.place.index)
+                        ? /* BY NAME (D172): `_copy_row` puts the card's own `cid` on every
+                             `SearchCopy`, already filtered to a name that really is a
+                             photograph's — so this thumbnail is THIS copy, not whatever
+                             occupies its slot by the time the picture loads. */
+                          photoUrl(copy.place.box, copy.place.index, copy.cid)
                         : photoSrc(copy)
                     }
                     alt={where === null ? 'The card' : `The card in ${where}`}

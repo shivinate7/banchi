@@ -43,6 +43,7 @@ from typing import Any, Callable, Dict, List, Optional, Sequence, Tuple
 
 from pipeline import games
 from store import master
+from store import photos
 
 # HOW MANY KEYS ONE SELECTION MAY NAME. The bound is `ARG_MAX` and not a judgement about how
 # many cards an operator may tick: `Selection.flags` puts the list in a child's argv, and Darwin
@@ -207,9 +208,31 @@ class Selection:
         was given. What it adds is that a card whose sidecar says box 3 is found by `--box 3`
         wherever the file happens to sit — which is the fault the two mis-filed runs above have
         and no narrower root can see.
+
+        AND THE CONTENT-ADDRESSED STORE IS A SECOND DEFAULT ROOT, SINCE D172 (written in
+        parallel with this module, neither seeing the other). `store/photos.write` is what
+        `do_capture` has filed every photograph under from the moment D172 landed — the card's
+        own name, under `<home>/photos/`, a sibling of `captures/cards/` and a directory this
+        method never named until now. Left alone, a card captured after both changes merge
+        scans as zero photographs FOREVER, on the one caller of this method that spends money
+        (`server/pipeline_routes.py:do_pipeline_identify`, through the CLI child it spawns).
+        `identify/sidecar.py`'s own header already carries the fourth filename convention for
+        this exact layout — no index in a content-addressed name, position read off the
+        SIDECAR instead, which `do_capture` writes with `box`/`index` on it — so the reader was
+        ready; only the root list here was not.
+
+        GUARDED BY AN EXISTENCE CHECK, so a store with nothing captured since D172 landed scans
+        exactly as it always did — this can never raise `FileNotFoundError` for a directory
+        that is not there, which matters because `cli/cmd_identify.py` treats that as a hard
+        refusal for ANY root it is handed. And an explicit `paths` selection (a caller naming
+        its own directories) is never widened behind its back.
         """
         if not self.paths:
-            return [home.joinpath(*CAPTURES)]
+            roots = [home.joinpath(*CAPTURES)]
+            content_root = photos.root(home)
+            if content_root.is_dir():
+                roots.append(content_root)
+            return roots
         return [Path(p) for p in self.paths]
 
     # -------------------------------------------------------------------------- the spellings

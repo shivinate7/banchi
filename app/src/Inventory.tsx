@@ -930,7 +930,11 @@ function RetirePanel({
           ) : (
             <img
               className="inventory-confirm-photo"
-              src={photoUrl(copy.place.box, copy.place.index)}
+              /* BY NAME (D172): `_copy_row` puts the card's own `cid` on a `SearchCopy`,
+                 already filtered to the two shapes that name a photograph — so the copy this
+                 dialog is about to retire is the copy on screen, whatever has slid through
+                 its slot since the search answered. */
+              src={photoUrl(copy.place.box, copy.place.index, copy.cid)}
               alt={`The card stored at ${copy.place.label ?? copy.key}`}
               onError={() => setBroken(true)}
             />
