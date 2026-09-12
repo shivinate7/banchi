@@ -813,10 +813,20 @@
      `Open the review queue`, which is the only way out of a card the pipeline could not place —
      and it measured 143 x 16 at 390 on this rig, 148 x 16 on the CI runner's own font
      rendering. It cannot become a block without breaking the sentence it ends, so it takes the
-     padding as a pseudo-element the way the ticks do. A -12px vertical inset clears the 40px
-     floor by exactly 1px at a 16px line box — real on this Mac, and gone on Ubuntu's Chromium,
-     which is the same class of font-metric drift `BoxBrowse.css` already reserves width against
-     elsewhere for the store key. -16px leaves several pixels of room instead of one. */
+     padding as a pseudo-element the way the ticks do. At -16px the hit area spans a 48px box
+     around a 16px line, comfortably over the floor, and that is the whole reason for the number.
+
+     THE FONT-METRIC REASON THIS COMMENT USED TO GIVE WAS FALSIFIED, AND THE VALUE OUTLIVED IT.
+     It said -12px cleared the floor by exactly 1px on this Mac and lost that pixel to Ubuntu's
+     Chromium, so -16px was buying drift margin. `app/tests/phone.spec.ts` measured it and says
+     otherwise, in the same tree: PR #252 widened the inset from -12px to -16px on exactly that
+     theory, the trace confirmed the wider inset HAD applied on CI, and the job failed with the
+     identical error. Measured at both values the link gives byte-identical results — the pad's
+     size was never the variable, so #252 neither fixed this nor caused it. The real interceptor
+     was the phone's sticky box bar sitting over the centre probe, which is written up there.
+     -16px stays because 48px over a 40px floor is the right size for the target, NOT because a
+     narrower inset is fragile. Read that spec before touching this number; two files in one tree
+     disagreeing about why a value exists is how the wrong one gets changed. */
   .browse-queued .bn-notice a { position: relative; }
   .browse-queued .bn-notice a::after { content: ''; position: absolute; inset: -16px -4px; }
 }
