@@ -773,6 +773,12 @@ function PricingThumb({ at, name, onOpen }: { at: PricingSku['positions'][number
       ) : (
         <img
           className="bn-crop"
+          /* THE SLOT ROUTE, AND THIS IS THE POPULATION IT IS KEPT FOR (D172). `at` is a
+             `PricingSku.positions` entry — `{box, index, label}`, exactly as
+             `cli/cmd_join.py` froze it into `runs/<n>/pricing.json`. There are 3,629 of those
+             records across 12 immutable run files and NOT ONE carries a `cid`: a run
+             directory is an immutable input, so they never will, and `#/pricing?run=<n>` is
+             the screen that draws them. Adding a name here would mean rewriting a run. */
           src={photoUrl(at.box, at.index)}
           alt=""
           loading="lazy"
@@ -3646,6 +3652,8 @@ export function Pricing() {
               <span className="pricing-machine">sku {photoSku.sku}</span>
             </div>
             <div className="bn-photo pricing-photo-frame">
+              {/* The slot route, for `PricingThumb`'s reason above: this is the same frozen
+                  `pricing.json` position, drawn bigger. */}
               <img src={photoUrl(photoAt?.box ?? 0, photoAt?.index ?? 0)} alt={photoSku.name} />
             </div>
             <p className="pricing-photo-caption">

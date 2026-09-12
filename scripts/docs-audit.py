@@ -585,7 +585,7 @@ def resolve_candidate(candidate: str, containing: Path, tops: Set[str]) -> Optio
     return ROOT / text
 
 
-def ignored_paths(candidates: Sequence[str]) -> Set[str]:
+def ignored_paths(candidates: Sequence[str], root: Optional[Path] = None) -> Set[str]:
     """Which of these git ignores. One batched call, not one per candidate.
 
     A gitignored path is local state, not repo content: `harness/images/` exists once you
@@ -614,7 +614,12 @@ def ignored_paths(candidates: Sequence[str]) -> Set[str]:
     up, and the answer is to ask again one candidate at a time so a refusal is contained to the
     candidate that caused it. That path is rare and short — it runs only over references that
     are already missing from the index.
+
+    `root` DEFAULTS TO THE REAL REPO AND EXISTS ONLY SO THE SELF-TEST CAN POINT THIS AT A
+    THROWAWAY ONE. Every caller in this file omits it; a test builds a real git repo with a
+    real symlink to reproduce the exact failure below without touching this checkout's own.
     """
+    base = root if root is not None else ROOT
     if not candidates:
         return set()
 
@@ -622,7 +627,7 @@ def ignored_paths(candidates: Sequence[str]) -> Set[str]:
         try:
             done = subprocess.run(
                 ["git", "check-ignore", "--stdin"],
-                cwd=str(ROOT),
+                cwd=str(base),
                 input="\n".join(batch).encode("utf-8"),
                 stdout=subprocess.PIPE,
                 stderr=subprocess.DEVNULL,
@@ -641,6 +646,34 @@ def ignored_paths(candidates: Sequence[str]) -> Set[str]:
         one_code, one = ask([candidate])
         if one_code in (0, 1):
             found |= one
+            continue
+        # A CANDIDATE CAN FAIL ALONE TOO, AND THE RETRY ABOVE CANNOT RESCUE IT — measured
+        # 2026-09-12: `harness/images` is a real symlink in a worktree (provisioned by
+        # `make worktree-setup`, pointing at the main checkout's own directory), and
+        # `git check-ignore` refuses ANY pathspec that walks past it — one candidate,
+        # asked alone, still exits 128 with "pathspec '...' is beyond a symbolic link".
+        # That is not the poisoned-batch failure this retry loop was built for; it is a
+        # single candidate git's pathspec matcher can never answer while the symlink
+        # exists on disk, in this worktree or any other.
+        #
+        # THE FIX READS AN ANCESTOR INSTEAD OF THE CANDIDATE. Gitignore's own directory
+        # semantics make this exact, not a guess: a pattern matching a directory ignores
+        # everything beneath it, so if `harness/images` (the symlink node itself, asked
+        # with no trailing slash — the one form `check-ignore` can still answer past a
+        # symlink boundary, confirmed by measurement) is ignored, so is every path under
+        # it, symlinked or not. Walking up from the candidate's own parent stops at the
+        # first ancestor `check-ignore` can actually answer.
+        parts = candidate.rstrip("/").split("/")
+        for depth in range(len(parts) - 1, 0, -1):
+            ancestor = "/".join(parts[:depth])
+            anc_code, anc_found = ask([ancestor])
+            if anc_code == 0 and ancestor in anc_found:
+                found.add(candidate)
+                break
+            if anc_code in (0, 1):
+                # A real answer that isn't a match: no ancestor closer to root can be
+                # narrower, so stop here rather than walk past what git already resolved.
+                break
     return found
 
 
@@ -2049,6 +2082,66 @@ def check_decision_structure(report: Report) -> None:
                f"{len(entries)} entries, every heading and bold reaches the hook")
 
 
+_ID_UNCLAIMED_RE = re.compile(r"^D" + _ID_SLUG + r"$")
+
+
+def _is_unclaimed(ident: str) -> bool:
+    """A branch's own not-yet-merged slug, never a real number.
+
+    `ident` ALREADY CARRIES ITS LEADING `D` — this function's callers both read it out of
+    `want`/`got`, whose own regexes capture the whole `D<id>` token as one group. Prepending
+    a second `D` here was the first version's bug: it made every slug fail this match and
+    silently disabled the exemption below, in the one place a self-test built against a
+    fabricated shape (ids with no leading letter) could not catch it.
+
+    D140: a branch does not take a decision number until `make merge` claims one against
+    main as it stands then, and `scripts/index-decisions.py:normalize` regenerates BOTH
+    `docs/decisions/ORDER.json` and this index from the headings that exist AFTER that
+    substitution, in the same commit. So a slug heading that has not yet been claimed is
+    never going to be the thing this row is checking against — the next read of `corpus`
+    after a claim sees the number, not the slug — and requiring a session to hand-type a
+    line for it into CLAUDE.md before that moment bought nothing but the conflict this
+    check exists to prevent: every open PR touching one shared block at once, on every
+    single commit that adds an entry.
+    """
+    return bool(_ID_UNCLAIMED_RE.match(ident))
+
+
+def _decision_index_findings(
+    want: List[Tuple[str, str]], got: List[Tuple[str, str]]
+) -> List[Finding]:
+    """The comparison itself, pure so `--self-test` can drive it without a filesystem.
+
+    `want` is every `## D<id> — <title>` heading in the corpus, in manifest order; `got` is
+    what CLAUDE.md's fenced index block currently lists. An id absent from `got` is only
+    ever tolerated when `_is_unclaimed` says so — everything else that used to fail here
+    still fails exactly the same way.
+    """
+    findings: List[Finding] = []
+    if not got:
+        findings.append(Finding("CLAUDE.md", "no decision index found. D60 requires one."))
+        return findings
+    want_ids = [i for i, _ in want]
+    got_ids = [i for i, _ in got]
+    for ident in [i for i in want_ids if i not in got_ids]:
+        if _is_unclaimed(ident):
+            continue
+        findings.append(Finding("CLAUDE.md", f"`{ident}` has a heading but is not in the index."))
+    for ident in [i for i in got_ids if i not in want_ids]:
+        findings.append(Finding("CLAUDE.md", f"the index lists `{ident}`, which has no heading."))
+    titles = dict(want)
+    for ident, title in got:
+        if ident in titles and titles[ident] != title:
+            findings.append(Finding(
+                "CLAUDE.md",
+                f"`{ident}`'s index line reads {title!r} and its heading reads "
+                f"{titles[ident]!r}. The heading is the source.",
+            ))
+    if got_ids != [i for i in want_ids if i in got_ids]:
+        findings.append(Finding("CLAUDE.md", "the index is not in heading order."))
+    return findings
+
+
 def check_decision_index(report: Report) -> None:
     """CLAUDE.md's index against docs/DECISIONS.md's headings.
 
@@ -2056,6 +2149,23 @@ def check_decision_index(report: Report) -> None:
     the only thing a session sees without opening it. An index that has drifted is worse
     than none, because it is believed — the argument D17 makes for auditing docs/map.py
     exactly as hard as it is trusted.
+
+    AN UNCLAIMED SLUG IS EXEMPT FROM "MUST APPEAR", AND THAT IS THE WHOLE FIX. A branch adds
+    its entry's heading in its OWN file and nothing else — `docs/decisions/ORDER.json` was
+    already tolerant of this (`decisions_corpus.order()`'s docstring: "an unregistered entry
+    is corpus content, not an error"), but this row was not, so every branch still had to
+    hand-type its slug into CLAUDE.md's shared index to stay green — the second collision the
+    directory split (D160) was supposed to remove, wearing a different file's name. Measured
+    the day this landed: 25 of the last 40 merges touched `docs/decisions/ORDER.json`, and
+    every open PR's own index edit went stale the instant any OTHER PR merged first, because
+    each was computed against an `origin/main` that had already moved. The entry recording
+    this fix has its own slug and cites itself by filename rather than in prose, for exactly
+    the reason its own next paragraph gives.
+
+    A CONCRETE EXAMPLE SLUG IN THIS DOCSTRING WOULD HAVE BECOME A CITATION, so there is none
+    here — the same trap D178's own entry records under "It caught its own author twice": an
+    example spelled in the shape this file's own extractor reads is read by it. Every id in
+    this function's self-test is a synthetic non-slug number instead, for that reason.
 
     MECHANICAL. Both sides are ids and titles: there is nothing here a later session could
     reasonably disagree with, which is D16's test for what may block.
@@ -2097,26 +2207,7 @@ def check_decision_index(report: Report) -> None:
         if fenced:
             block.append(line)
 
-    findings: List[Finding] = []
-    if not got:
-        findings.append(Finding("CLAUDE.md", "no decision index found. D60 requires one."))
-    else:
-        want_ids = [i for i, _ in want]
-        got_ids = [i for i, _ in got]
-        for ident in [i for i in want_ids if i not in got_ids]:
-            findings.append(Finding("CLAUDE.md", f"`{ident}` has a heading but is not in the index."))
-        for ident in [i for i in got_ids if i not in want_ids]:
-            findings.append(Finding("CLAUDE.md", f"the index lists `{ident}`, which has no heading."))
-        titles = dict(want)
-        for ident, title in got:
-            if ident in titles and titles[ident] != title:
-                findings.append(Finding(
-                    "CLAUDE.md",
-                    f"`{ident}`'s index line reads {title!r} and its heading reads "
-                    f"{titles[ident]!r}. The heading is the source.",
-                ))
-        if got_ids != [i for i in want_ids if i in got_ids]:
-            findings.append(Finding("CLAUDE.md", "the index is not in heading order."))
+    findings = _decision_index_findings(want, got)
     report.add("decision index", MECHANICAL, findings,
                f"{len(got)} indexed, matching {len(want)} headings")
 
@@ -12684,6 +12775,51 @@ def self_test() -> int:
         _, _, findings, _ = report.checks[0]
         ok(not findings, "no finding for a path that resolves", str(findings))
 
+    print("\nignored_paths answers a candidate git refuses to walk past a symlink")
+    with tempfile.TemporaryDirectory() as tmp:
+        # A REAL THROWAWAY REPO WITH A REAL SYMLINK, reproducing 2026-09-12's failure
+        # exactly rather than mocking subprocess — `git check-ignore` genuinely refuses a
+        # pathspec that walks past a symlink, and no fake can stand in for its exit code.
+        repo = Path(tmp) / "repo"
+        repo.mkdir()
+        subprocess.run(["git", "init", "-q"], cwd=str(repo), check=True)
+        # NO TRAILING SLASH, matching this repo's own .gitignore and for the same reason
+        # (see its header comment): a directory-only pattern does not match a SYMLINK at
+        # that name, which is exactly what a worktree puts there.
+        (repo / ".gitignore").write_text("harness/images\n", encoding="utf-8")
+        (repo / "harness").mkdir()
+        target = Path(tmp) / "elsewhere"
+        (target / "images" / "images").mkdir(parents=True)
+        (repo / "harness" / "images").symlink_to(target / "images")
+
+        direct_code = subprocess.run(
+            ["git", "check-ignore", "--stdin"],
+            cwd=str(repo),
+            input=b"harness/images/images",
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+        ).returncode
+        ok(direct_code not in (0, 1), "the fixture reproduces the symlink refusal", str(direct_code))
+
+        found = ignored_paths(["harness/images/images"], root=repo)
+        ok(
+            "harness/images/images" in found,
+            "a path beneath a symlinked, gitignored ancestor is recognised as ignored",
+            str(found),
+        )
+
+        # AND THE OTHER DIRECTION, so the ancestor walk cannot be mistaken for "anything
+        # under a symlink is forgiven" — it must still answer NO when the ancestor itself
+        # is real content, not an ignore pattern.
+        (repo / "harness" / "images" / ".gitignore").unlink(missing_ok=True)
+        (repo / ".gitignore").write_text("", encoding="utf-8")
+        found_real = ignored_paths(["harness/images/nope"], root=repo)
+        ok(
+            "harness/images/nope" not in found_real,
+            "a symlinked ancestor that is NOT ignored is not swept in with it",
+            str(found_real),
+        )
+
     print("\ncommand references need a fence or backticks")
     prose = "T5 and T6 make it **six**. Em-dashes make it a worse OCR target."
     ok(
@@ -13904,6 +14040,35 @@ def self_test() -> int:
     _code = "const T = {\n  'harness/traces/x.json': 1,\n} // docs/DEBTS.md\n"
     ok(_repo_literals(_code, {"harness/traces/x.json", "docs/DEBTS.md"}) == ["harness/traces/x.json"],
        "a code string naming a tracked file is a dependency and a comment naming one is not")
+
+    # THE FIX: a branch's own unclaimed slug is exempt from "must appear in the index";
+    # nothing else this row ever caught is weakened. Six cases, each pinning one arm.
+    # IDS CARRY THEIR LEADING `D` HERE, matching exactly what `want`/`got` produce in
+    # check_decision_index — the shape the first version of this test got wrong, which is
+    # exactly how the double-`D` bug in `_is_unclaimed` survived its own self-test.
+    # COMPOSED FROM PIECES, NEVER SPELLED WHOLE: a slug-shaped literal sitting in THIS file
+    # is exactly what `check_decision_ids`'s line-by-line scan below reads as a real
+    # citation to resolve — the trap this file's own `1476` comment already names.
+    print("\nthe decision index tolerates an unclaimed slug missing from the block")
+    _slug_1 = "D-" + "not" + "-yet" + "-claimed"
+    _slug_2 = "D-" + "a" + "-ghost"
+    _numbered = [("D42", "Answer"), ("D43", "Question")]
+    _with_slug = _numbered + [(_slug_1, "Something unclaimed")]
+    ok(_decision_index_findings(_with_slug, _numbered) == [],
+       "an unclaimed slug absent from the index is not a finding")
+    ok(_decision_index_findings(_numbered + [("D44", "Third")], _numbered) != [],
+       "a CLAIMED number absent from the index is still a finding — the exemption is slugs only")
+    ok(any("has no heading" in f.message
+           for f in _decision_index_findings(_numbered, _numbered + [(_slug_2, "Ghost")])),
+       "an index line for a slug with no matching heading is still a finding")
+    ok(any("index line reads" in f.message
+           for f in _decision_index_findings(_with_slug, [("D42", "Answer"), ("D43", "Wrong title")])),
+       "a claimed entry's title mismatch is still caught with a slug in the corpus too")
+    ok(bool(_decision_index_findings([], [])
+            and "no decision index found" in _decision_index_findings([], [])[0].message),
+       "an empty index is still refused outright, corpus present or not")
+    ok(not _is_unclaimed("D42") and _is_unclaimed(_slug_1),
+       "the exemption test itself: a number is claimed, a slug is not — ids carry their `D`")
 
     report = Report()
     check_dispatch(report)

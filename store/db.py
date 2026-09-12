@@ -72,9 +72,27 @@ LEGACY_DIRNAME = "legacy-json"
 RECEIPT_NAME = "MIGRATED.json"
 MIGRATIONS_DIRNAME = "migrations"
 BOX_ID_RECEIPT = "box-ids.json"
+CARD_ID_RECEIPT = "card-ids.json"
 # The `meta` key holding `Inventory.box_ids_issued` (D145).
 BOX_IDS_ISSUED = "box_ids_issued"
-SCHEMA_VERSION = 3
+# D172's three `meta` keys. `CARD_IDS_SEEDED` is how a reader tells "this store has been
+# through the naming" from "this store has no names yet", which is the distinction a bare
+# count of NULLs cannot make. `CARD_ID_SOURCES` is the census — which rung of the ladder
+# named how many cards — and it is the field that keeps `disk: 0` from ever reading as "no
+# photograph needed hashing". `PHOTOS_RELOCATED` is the gate on the legacy photograph
+# address: while it is unset `store/photos.find` still looks there, and once it is set the
+# old address is never consulted again.
+CARD_IDS_SEEDED = "card_ids_seeded"
+CARD_ID_SOURCES = "card_id_sources"
+PHOTOS_RELOCATED = "photos_relocated"
+# FOUR, AND THE JUMP FROM 3 IS THE MERGE THIS FUNCTION WAS WARNED ABOUT.
+# `docs/specs/stable-card-id.md` §5 predicted it in as many words: "Two concurrent 2→3 steps
+# in `_upgrade` is a conflict in the one function where taking either side silently loses a
+# migration. Whichever merges first is 2→3 and the second is 3→4." D174's `submissions`
+# table merged first (PR #312) and took 3, so the naming is 4. THE RESOLUTION WAS TO ADD A
+# STEP, NEVER TO TAKE A SIDE — both `if` arms below are live, and the owner's real store had
+# already been stamped 3 by the main checkout's own supervisor before this branch merged.
+SCHEMA_VERSION = 4
 
 # The six files a legacy store is made of, and the one that is a log rather than a document.
 LEGACY_INVENTORY = "inventory.json"
@@ -97,7 +115,7 @@ LEGACY_FILES = (
 TABLES: Dict[str, Tuple[str, ...]] = {
     "cards": (
         "box", "idx", "state", "sku", "condition", "capture_id", "name", "number", "game",
-        "set_hint", "run", "captured_at", "state_at",
+        "set_hint", "run", "captured_at", "state_at", "cid",
     ),
     "boxes": ("box", "bid", "name", "state"),
     "listings": ("condition", "pushed", "staged", "live"),
@@ -121,6 +139,23 @@ _INDEXES = (
     ("events", "position"),
     ("boxes", "bid"),
     ("submissions", "state"),
+)
+
+# D172'S TWO INDEXES, DELIBERATELY NOT IN `_INDEXES` BECAUSE NEITHER IS A PLAIN ONE.
+#
+# `cards_cid` is UNIQUE, and that uniqueness is what makes the photograph's path safe: the
+# path is a pure function of the name (`store/photos.py`), so two cards being unable to hold
+# one name is two cards being unable to compose one filename. It is also what makes a
+# `cid -> (box, idx)` lookup an index probe — measured at 4.0 us, `EXPLAIN` reporting
+# `SEARCH cards USING INDEX cards_cid (cid=?)`.
+#
+# `cards_cid_missing` is PARTIAL, and the `WHERE` clause is the whole point: it indexes only
+# the rows that have lost their name, so it holds NOTHING on a healthy store and "is anything
+# unnamed?" costs one empty probe rather than a scan of every card. That is what lets
+# `_repair` run on every open without the cost `_ensure_schema`'s docstring warns about.
+_CID_INDEXES = (
+    "CREATE UNIQUE INDEX IF NOT EXISTS cards_cid ON cards(cid)",
+    "CREATE INDEX IF NOT EXISTS cards_cid_missing ON cards(key) WHERE cid IS NULL",
 )
 
 
@@ -195,7 +230,33 @@ def _ensure_schema(
     at once must not both run it. `locked=True` says the caller already holds it.
     """
     stored = _stored_version(conn)
+    if stored is not None and stored > SCHEMA_VERSION:
+        # A NEWER BUILD WROTE THIS FILE, AND WITHOUT THIS THE OLDER BUILD WINS SILENTLY.
+        # Measured on a copy stamped 3 and opened with a build that knew 2: the read
+        # SUCCEEDED — 2,535 cards — and the stamp was rewritten DOWN to 2 on the way
+        # through, by the two statements below (`stored != SCHEMA_VERSION` reaches
+        # `_upgrade`, whose every `if stored < n` is false, and whose last statement is an
+        # unconditional `INSERT OR REPLACE` of the stamp). From that moment the file is a
+        # schema-2 store carrying schema-3 columns, and every ordinary write STRIPS the
+        # fields this build does not declare — one row at a time, with no error, because
+        # `Inventory.parse` filters on `__annotations__` and `upsert` names only this
+        # build's `column_names`. Measured: 2535 → 2534 cards carrying a `cid` after one
+        # `set_state`, and a UNIQUE index does not object because SQLite NULLs are never
+        # duplicates.
+        #
+        # THE REFUSAL IS AT THE OPEN AND NOT AT THE WRITE, which is a deliberate choice and
+        # `docs/specs/stable-card-id.md` §0.6 hazard 2 is the argument: once per process,
+        # loud, before any card exists — rather than once per capture, where a refusal is a
+        # 500 on `POST /capture` with the physical card already in the drawer.
+        raise files.StoreError(
+            f"{path(directory) if directory is not None else DB_NAME} is stamped schema "
+            f"{stored} and this build knows {SCHEMA_VERSION}. A newer build wrote it; an "
+            "older one opening it rewrites the stamp DOWN and then strips every field it "
+            "does not declare, one row per write, silently. Update the checkout — `git "
+            "pull` in the main tree, then `make hooks`."
+        )
     if stored == SCHEMA_VERSION:
+        _repair(conn, directory=directory, locked=locked)
         return
     if stored is not None:
         _upgrade(conn, stored, directory=directory, locked=locked)
@@ -209,6 +270,13 @@ def _ensure_schema(
     conn.execute("CREATE TABLE IF NOT EXISTS meta (key TEXT PRIMARY KEY, value TEXT)")
     for table, column in _INDEXES:
         conn.execute(f"CREATE INDEX IF NOT EXISTS {table}_{column} ON {table}({column})")
+    # THE FRESH PATH CREATES D172'S INDEXES TOO, AND MISSING THIS WOULD HAVE BEEN SILENT.
+    # `_upgrade`'s `ALTER` never runs here — this branch stamps `SCHEMA_VERSION` directly —
+    # so without these two statements every worktree, the demo seed and all nine harness
+    # tests would exercise a schema the owner's store does not have: no UNIQUE on the name,
+    # and no partial index for `_repair` to probe.
+    for statement in _CID_INDEXES:
+        conn.execute(statement)
     conn.execute(
         "INSERT OR IGNORE INTO meta (key, value) VALUES ('schema', ?)", (str(SCHEMA_VERSION),)
     )
@@ -234,6 +302,17 @@ def _upgrade(
     look at again.
     """
     directory = Path(directory) if directory is not None else None
+    # THE CORPUS IS HASHED BEFORE THE LOCK IS TAKEN, AND THAT IS THE DESIGN RATHER THAN AN
+    # OPTIMISATION. `docs/specs/stable-card-id.md` §0.6 hazard 1: this step runs on the first
+    # `Store.read()` after a `git pull`, `make launch-agent` keeps the capture server alive at
+    # login over the owner's real store, and 2.68-3.00 s of hashing 4.45 GB with the flock
+    # held is ~5 captures arriving against `REQUEST_SLOTS = 4` at the feeder's measured
+    # 623 ms cadence. A capture lost mid-feeder leaves a physical card in the drawer with no
+    # record, which renumbers every card behind it — silent, and physical. So the reading is
+    # taken out here, where it blocks nobody, and re-checked inside the lock.
+    prehashed = (
+        _prehash_photographs(conn, directory) if (stored or 0) < 4 else {}
+    )
     guard = (
         _already_locked()
         if (locked or directory is None)
@@ -248,10 +327,13 @@ def _upgrade(
         conn.execute("BEGIN IMMEDIATE")
         try:
             receipt: Optional[dict] = None
+            card_receipt: Optional[dict] = None
             if stored < 2:
                 receipt = _add_box_ids(conn)
             if stored < 3:
                 _add_submissions(conn)
+            if stored < 4:
+                card_receipt = _add_card_ids(conn, prehashed, directory)
             conn.execute(
                 "INSERT OR REPLACE INTO meta (key, value) VALUES ('schema', ?)",
                 (str(SCHEMA_VERSION),),
@@ -263,6 +345,454 @@ def _upgrade(
             raise
         if receipt is not None and directory is not None:
             _write_migration_receipt(directory, BOX_ID_RECEIPT, receipt)
+        if card_receipt is not None and directory is not None:
+            _write_migration_receipt(directory, CARD_ID_RECEIPT, card_receipt)
+
+
+def _home_for(directory: Optional[Path]) -> Optional[Path]:
+    """The store's home, from the directory holding the database.
+
+    `files.inventory_dir()` is `home()/inventory`, so the home is the parent — and taking it
+    from the ARGUMENT rather than from `files.home()` is what lets a throwaway store under a
+    scratchpad be migrated without reaching for the owner's real photographs. The self-test
+    depends on it; so does a `.backup()` copy.
+    """
+    return None if directory is None else Path(directory).parent
+
+
+def _card_rows_for_naming(conn: sqlite3.Connection) -> List[Tuple[str, dict]]:
+    """`(key, record)` for every card, in ascending `(box, index)`.
+
+    THE ORDER IS `_add_box_ids`' ORDER AND FOR ITS STATED REASON: `captured_at` is the more
+    meaningful sequence and it is OPTIONAL on these rows, so ordering on it would make the
+    result depend on SQLite's row order. Ascending position is present by construction and
+    sorts. It matters here only because the `-<n>` duplicate suffix is order-dependent.
+    """
+    rows = conn.execute("SELECT key, payload FROM cards").fetchall()
+    out = []
+    for key, text in rows:
+        try:
+            record = json.loads(text)
+        except (TypeError, ValueError):
+            record = {}
+        try:
+            box = int(record.get("box"))
+        except (TypeError, ValueError):
+            box = None
+        try:
+            index = int(record.get("index"))
+        except (TypeError, ValueError):
+            index = None
+        out.append(((box is None, box or 0, index is None, index or 0, str(key)), str(key), record))
+    out.sort(key=lambda item: item[0])
+    return [(key, record) for _sort, key, record in out]
+
+
+def _prehash_photographs(
+    conn: sqlite3.Connection, directory: Optional[Path]
+) -> Dict[str, Tuple[str, int, int]]:
+    """`{key: (digest, size, mtime_ns)}` for every card whose photograph is on disk.
+
+    OUTSIDE THE LOCK, WHICH IS WHY IT RETURNS THE STAT TRIPLE AND NOT JUST THE DIGEST. The
+    file can move between this reading and the transaction — `do_reshoot` is the one writer
+    that can do it — so `_add_card_ids` re-stats every entry inside the lock and re-hashes
+    any whose `(size, mtime_ns)` has changed, reporting the count as `rehashed`. That is a
+    positive counter on purpose: "0 re-hashed" and "this never looked" must not be the same
+    output.
+
+    IT READS THE LEGACY ADDRESS AND THE CARD'S OWN NAME, IN THAT ORDER OF EXISTENCE. At
+    schema 2 no card has a name yet, so in practice this is the legacy address; the other
+    branch is for a store part-way through the relocation whose stamp was reversed.
+    """
+    from store import photos  # local: `store.photos` imports `store.files`, not this module
+
+    home = _home_for(directory)
+    if home is None:
+        return {}
+    out: Dict[str, Tuple[str, int, int]] = {}
+    for key, record in _card_rows_for_naming(conn):
+        existing = record.get("cid")
+        candidate = None
+        if photos.is_photo_cid(existing):
+            candidate = photos.path(existing, home)
+            if not candidate.is_file():
+                candidate = None
+        if candidate is None:
+            try:
+                candidate = photos.legacy_path(record.get("box"), record.get("index"), home)
+            except (TypeError, ValueError):
+                continue
+        try:
+            stat = candidate.stat()
+            out[key] = (photos.sha256_of(candidate), stat.st_size, stat.st_mtime_ns)
+        except OSError:
+            continue
+    return out
+
+
+def _name_one_card(
+    key: str,
+    record: dict,
+    prehashed: Dict[str, Tuple[str, int, int]],
+    identifications: Dict[str, str],
+    home: Optional[Path],
+    taken: Dict[str, str],
+    counters: Dict[str, int],
+) -> str:
+    """One card's name, off the ladder, with the source counted. Never returns None.
+
+    THE LADDER ORDER IS THE LOAD-BEARING DECISION AND IT IS DELIBERATELY THE OPPOSITE OF THE
+    OBVIOUS ONE. `identifications.photo_sha256` answers every card on this store in 19 ms
+    with no I/O, and taking it first would make the whole naming free — and would bind all
+    2,535 permanent names THROUGH THE POSITION-KEYED LOOKUP THIS DESIGN EXISTS TO REPLACE,
+    without ever reading the bytes it is naming. It is also provably stale in a real window:
+    `do_reshoot` writes new bytes and touches neither `cards` nor `identifications`, and D26
+    forbids archiving the old photograph, so from a re-shoot until the next paid press that
+    row is the digest of bytes that exist nowhere on disk and in no backup. It stays in the
+    ladder as a WEAKER source for a card whose photograph has vanished without a reclaim,
+    and it is reported by name rather than folded into success.
+    """
+    from store import photos
+
+    existing = record.get("cid")
+    if isinstance(existing, str) and existing:
+        # RUNG 1 IS WHAT MAKES A RE-RUN AFTER A CRASH A NO-OP, which is `_add_box_ids`' own
+        # rule. Under a digest a re-issue would be harmless — it comes back byte-identical —
+        # but the read-first line goes in anyway, because the `-<n>` suffix is
+        # order-dependent and a re-run must not renumber one.
+        counters["kept"] += 1
+        return existing
+
+    digest = None
+    source = None
+    hashed = prehashed.get(key)
+    if hashed is not None:
+        digest, source = hashed[0], "disk"
+    elif isinstance(record.get("photo_sha256"), str) and record["photo_sha256"]:
+        # RUNG 3: D89's reclaim. The photograph is gone on purpose and the record kept its
+        # digest, which is exactly the fact this name wants.
+        digest, source = record["photo_sha256"], "record"
+    elif isinstance(identifications.get(key), str) and identifications[key]:
+        digest, source = identifications[key], "identification"
+
+    if digest is None:
+        counters["nophoto"] += 1
+        return f"{photos.NOPHOTO_PREFIX}{key}@{record.get('captured_at') or ''}"
+
+    counters[source] += 1
+    cid = digest
+    suffix = 1
+    while cid in taken:
+        # SHAPE 2: the nth card whose bytes are identical to an earlier card's. 0 of 2,535
+        # real photographs and 0 of 132 demo pool files collide, so this has never fired —
+        # which is why the self-test PROVOKES it rather than asserting over zero firings.
+        suffix += 1
+        cid = f"{digest}-{suffix}"
+    if suffix > 1:
+        counters["suffixed"] += 1
+    return cid
+
+
+def _add_card_ids(
+    conn: sqlite3.Connection,
+    prehashed: Dict[str, Tuple[str, int, int]],
+    directory: Optional[Path],
+) -> dict:
+    """Schema 2 -> 3: give every card in an existing store its stable name (D172).
+
+    `_add_box_ids`' shape exactly — additive, no-op on a re-run because it reads the existing
+    value first, stamp last inside the transaction, receipt carrying a plain-English
+    `reverse` sentence. One column, one payload key, no existing key touched.
+
+    IT CAN NEVER REFUSE, and that is a deliberate choice against an operator-pressed
+    migration on two grounds: a migration somebody has to remember to run is a migration
+    that does not happen, and `_ensure_schema` raising over one unnameable card would take
+    every route and every command down. Shape 4 (`nophoto:`) exists instead of a refusal.
+    """
+    from store import photos
+
+    home = _home_for(directory)
+    columns = {row[1] for row in conn.execute("PRAGMA table_info(cards)").fetchall()}
+    if "cid" not in columns:
+        conn.execute("ALTER TABLE cards ADD COLUMN cid TEXT")
+
+    identifications: Dict[str, str] = {}
+    for key, digest in conn.execute(
+        "SELECT key, photo_sha256 FROM identifications"
+    ).fetchall():
+        if isinstance(digest, str) and digest:
+            identifications[str(key)] = digest
+
+    # RE-STAT INSIDE THE LOCK. The file cannot change without its size or mtime changing, so
+    # a moved stat is the signal to re-read the bytes rather than to refuse.
+    rehashed = 0
+    for key, entry in list(prehashed.items()):
+        record_digest, size, mtime = entry
+        candidate = None
+        row = conn.execute("SELECT payload FROM cards WHERE key = ?", (key,)).fetchone()
+        if row is None or home is None:
+            continue
+        try:
+            record = json.loads(row[0])
+        except (TypeError, ValueError):
+            continue
+        existing = record.get("cid")
+        if photos.is_photo_cid(existing):
+            candidate = photos.path(existing, home)
+            if not candidate.is_file():
+                candidate = None
+        if candidate is None:
+            candidate = photos.legacy_path(record.get("box"), record.get("index"), home)
+        try:
+            stat = candidate.stat()
+        except OSError:
+            del prehashed[key]
+            continue
+        if (stat.st_size, stat.st_mtime_ns) != (size, mtime):
+            prehashed[key] = (photos.sha256_of(candidate), stat.st_size, stat.st_mtime_ns)
+            rehashed += 1
+
+    counters = {
+        "kept": 0, "disk": 0, "record": 0, "identification": 0, "nophoto": 0, "suffixed": 0,
+    }
+    taken: Dict[str, str] = {}
+    duplicates: List[dict] = []
+    unnamed: List[str] = []
+    rows = _card_rows_for_naming(conn)
+    for key, record in rows:
+        cid = _name_one_card(
+            key, record, prehashed, identifications, home, taken, counters
+        )
+        if cid in taken:
+            # Unreachable for a photograph cid — the suffix loop guarantees it — and
+            # reachable for `nophoto:`, where two cards in one box with the same
+            # `captured_at` compose one string. Suffix it the same way rather than letting
+            # `cards_cid` refuse the whole migration.
+            suffix = 1
+            base = cid
+            while cid in taken:
+                suffix += 1
+                cid = f"{base}-{suffix}"
+        if photos.digest_of(cid) is not None and photos.digest_of(cid) != cid:
+            duplicates.append({"key": key, "cid": cid, "first": taken.get(photos.digest_of(cid))})
+        taken[cid] = key
+        if not photos.is_photo_cid(cid):
+            unnamed.append(key)
+        record["cid"] = cid
+        conn.execute(
+            "UPDATE cards SET cid = ?, payload = ? WHERE key = ?",
+            (cid, payload_text(record), key),
+        )
+
+    for statement in _CID_INDEXES:
+        conn.execute(statement)
+    named_from_bytes = counters["disk"] + counters["record"]
+    conn.execute(
+        "INSERT OR REPLACE INTO meta (key, value) VALUES (?, ?)",
+        (CARD_IDS_SEEDED, str(len(rows))),
+    )
+    conn.execute(
+        "INSERT OR REPLACE INTO meta (key, value) VALUES (?, ?)",
+        (CARD_ID_SOURCES, json.dumps(counters, sort_keys=True)),
+    )
+    return {
+        "migrated_at": datetime.now(timezone.utc).isoformat(timespec="milliseconds"),
+        "schema": {"from": 2, "to": SCHEMA_VERSION},
+        "what": (
+            "every card gained a `cid`: the sha256 of the photograph the store held when the "
+            "id was issued, frozen from that moment and never recomputed, so a name survives "
+            "a re-shoot, a reclaim, a move, a renumber and a box deletion (D172)"
+        ),
+        "order": "ascending (box, index)",
+        "card_ids_seeded": len(rows),
+        "card_id_sources": counters,
+        # `verified_against_disk` counts the rungs that read BYTES, and it is named that way
+        # so `disk: 0` can never read as "no photograph needed hashing".
+        "verified_against_disk": named_from_bytes,
+        "rehashed": rehashed,
+        "unnamed": unnamed,
+        "duplicate_photographs": duplicates,
+        "reverse": (
+            "additive only — no column was dropped, no payload key was overwritten, no row "
+            "was removed. To undo: `DROP INDEX cards_cid`, `DROP INDEX cards_cid_missing`, "
+            "`UPDATE cards SET cid = NULL`, remove the `cid` key from each payload, delete "
+            "the `card_ids_seeded` and `card_id_sources` rows from `meta`, and set the "
+            "`schema` row back to 2. THE REVERSE IS FOR A STORE YOU ARE ABOUT TO OPEN WITH "
+            "AN OLDER CHECKOUT: on a build that still declares the field, the next read "
+            "names every card again — and produces the identical names, because the name is "
+            "read off the photograph rather than allocated."
+        ),
+    }
+
+
+def _repair(
+    conn: sqlite3.Connection,
+    *,
+    directory: Optional[Path] = None,
+    locked: bool = False,
+) -> None:
+    """Re-issue a name an older build stripped. Loud, never a refusal, never a stop (D172).
+
+    THE HAZARD IS MEASURED AND IT IS LIVE ON THIS MACHINE. A build that does not declare
+    `Card.cid` strips it on any ordinary write, silently: `Inventory.parse` filters on
+    `__annotations__` and `upsert` names only that build's `column_names`, so the row comes
+    back with the column NULL and the payload key gone. No error, and a UNIQUE index does not
+    object because SQLite NULLs are never duplicates. There are ~30 worktrees on this machine
+    and every one that has not pulled is such a build.
+
+    AND THE NAME IS A DIGEST, SO THE NEXT READ HEALS IT — BYTE-IDENTICALLY. That was measured
+    before this was written, and it is the entire argument against an allocator, which would
+    have handed the stripped row a fresh number and left every reference to its old one
+    pointing at nothing. `docs/specs/stable-card-id.md` §6.1 item 2 made this a named
+    REFUSAL instead; §0.6 hazard 3 overrules that, because refusing to use the one property
+    the design was chosen for, in the one situation it was bought for, is giving it away.
+
+    IT IS LOUD IN THREE PLACES so it can never be the silent re-issue that refusal was
+    guarding against: `cards_reissued` in a receipt, a `card_ids_reissued` history event
+    naming every key, and a line in `make status`.
+
+    THE PROBE IS AN INDEX PROBE AND NOT A SCAN, which is what lets it run on every open.
+    `cards_cid_missing` is PARTIAL — `WHERE cid IS NULL` — so it holds nothing on a healthy
+    store and this costs one empty lookup. `_ensure_schema`'s docstring warns against adding
+    work to the every-open path and that warning is about a WRITER waiting on `busy_timeout`;
+    this is a read, and an empty one.
+    """
+    if conn.in_transaction:
+        # NESTED, AND THIS IS THE DEADLOCK `_ensure_schema`'s DOCSTRING WARNS ABOUT.
+        # `Store(snapshot.directory).history()` opens a second connection inside a write
+        # session, so a repair reached from there would either wait on the flock the outer
+        # session already holds or open a transaction inside one. The repair is idempotent
+        # and the next clean open runs it, so the safe answer is to do nothing and say
+        # nothing — the NULL is still there and still reported by `cards audit`.
+        return
+    try:
+        missing = [
+            str(row[0])
+            for row in conn.execute(
+                "SELECT key FROM cards WHERE cid IS NULL ORDER BY key"
+            ).fetchall()
+        ]
+    except sqlite3.OperationalError:
+        # No `cid` column on a store stamped current: a hand-reversed file, or a stamp
+        # written by something other than `_upgrade`. The upgrade path owns that case.
+        return
+    if not missing:
+        return
+
+    directory = Path(directory) if directory is not None else None
+    prehashed = _prehash_photographs(conn, directory)
+    guard = (
+        _already_locked()
+        if (locked or directory is None)
+        else files.exclusive(directory)
+    )
+    with guard:
+        missing = [
+            str(row[0])
+            for row in conn.execute(
+                "SELECT key FROM cards WHERE cid IS NULL ORDER BY key"
+            ).fetchall()
+        ]
+        if not missing:
+            return
+        conn.execute("BEGIN IMMEDIATE")
+        try:
+            receipt = _reissue_card_ids(conn, missing, prehashed, directory)
+            conn.execute("COMMIT")
+        except BaseException:
+            with contextlib.suppress(Exception):
+                conn.execute("ROLLBACK")
+            raise
+    if directory is not None:
+        _write_migration_receipt(directory, CARD_ID_RECEIPT, receipt)
+
+
+def _reissue_card_ids(
+    conn: sqlite3.Connection,
+    missing: Sequence[str],
+    prehashed: Dict[str, Tuple[str, int, int]],
+    directory: Optional[Path],
+) -> dict:
+    """The heal itself: name the stripped rows off the same ladder, and say so in the history."""
+    home = _home_for(directory)
+    identifications: Dict[str, str] = {}
+    for key, digest in conn.execute(
+        "SELECT key, photo_sha256 FROM identifications"
+    ).fetchall():
+        if isinstance(digest, str) and digest:
+            identifications[str(key)] = digest
+
+    taken: Dict[str, str] = {}
+    for key, cid in conn.execute(
+        "SELECT key, cid FROM cards WHERE cid IS NOT NULL"
+    ).fetchall():
+        taken[str(cid)] = str(key)
+
+    counters = {
+        "kept": 0, "disk": 0, "record": 0, "identification": 0, "nophoto": 0, "suffixed": 0,
+    }
+    wanted = set(str(key) for key in missing)
+    reissued: Dict[str, str] = {}
+    for key, record in _card_rows_for_naming(conn):
+        if key not in wanted:
+            continue
+        cid = _name_one_card(
+            key, record, prehashed, identifications, home, taken, counters
+        )
+        suffix = 1
+        base = cid
+        while cid in taken:
+            suffix += 1
+            cid = f"{base}-{suffix}"
+        taken[cid] = key
+        record["cid"] = cid
+        reissued[key] = cid
+        conn.execute(
+            "UPDATE cards SET cid = ?, payload = ? WHERE key = ?",
+            (cid, payload_text(record), key),
+        )
+
+    at = datetime.now(timezone.utc).isoformat(timespec="milliseconds")
+    conn.execute(
+        "INSERT INTO events (at, event, position, payload) VALUES (?, ?, ?, ?)",
+        (
+            at,
+            "card_ids_reissued",
+            None,
+            payload_text({
+                "at": at,
+                "event": "card_ids_reissued",
+                "keys": sorted(reissued),
+                "sources": counters,
+                "why": (
+                    "these rows carried no name. A build that does not declare `Card.cid` "
+                    "strips it on any ordinary write; the name is a digest, so it was read "
+                    "again from the same source and came back the same value."
+                ),
+            }),
+        ),
+    )
+    conn.execute(
+        "INSERT OR REPLACE INTO meta (key, value) VALUES (?, ?)",
+        (CARD_IDS_SEEDED, str(conn.execute("SELECT count(*) FROM cards").fetchone()[0])),
+    )
+    return {
+        "migrated_at": at,
+        "schema": {"from": SCHEMA_VERSION, "to": SCHEMA_VERSION},
+        "what": (
+            "re-issued a stable name to every card row that had lost one — the signature of "
+            "an older build having written the row, which strips fields it does not declare"
+        ),
+        "cards_reissued": len(reissued),
+        "keys": sorted(reissued),
+        "card_id_sources": counters,
+        "verified_against_disk": counters["disk"] + counters["record"],
+        "reverse": (
+            "nothing to reverse — these rows held NULL and now hold the name they held "
+            "before the strip. The values are re-derived, not allocated, so this is "
+            "idempotent."
+        ),
+    }
 
 
 def _add_submissions(conn: sqlite3.Connection) -> None:
@@ -416,6 +946,22 @@ def box_ids_issued(conn: sqlite3.Connection) -> int:
         return 0
 
 
+def photos_relocated(conn: sqlite3.Connection) -> Optional[str]:
+    """When every photograph reached the card's own name, or None.
+
+    THE GATE ON THE LEGACY PHOTOGRAPH ADDRESS. `store/photos.find` reads
+    `captures/cards/box<N>/<idx>.jpg` only while this is None, which is what keeps every
+    screen drawing during a resumable move of 4.45 GB — and once it is set that address is
+    never consulted again, so the fallback cannot quietly become permanent.
+    """
+    row = conn.execute(
+        "SELECT value FROM meta WHERE key = ?", (PHOTOS_RELOCATED,)
+    ).fetchone()
+    if row is None or not row[0]:
+        return None
+    return str(row[0])
+
+
 def set_box_ids_issued(conn: sqlite3.Connection, value: int) -> None:
     """Record the mark. NEVER LOWERED: a caller handing back a smaller figure than the file
     holds is a snapshot that was read before somebody else issued an id, and honouring it
@@ -544,13 +1090,50 @@ class SqliteSource:
     # ----------------------------------------------------------------- the writes
 
     def upsert(self, key: str, columns: Dict[str, Any], payload: dict) -> None:
+        """Write one row, replacing the one at this key.
+
+        `ON CONFLICT (<primary key>) DO UPDATE`, AND IT WAS `INSERT OR REPLACE` UNTIL D172
+        GAVE THIS TABLE A SECOND UNIQUENESS CONSTRAINT. The two are identical while the
+        primary key is the only thing a row can collide on, and they stop being identical
+        the moment one is not — because `OR REPLACE` resolves a conflict in ANY constraint
+        by DELETING the conflicting row. `cards_cid` is UNIQUE, so under the old form a
+        second card carrying a name another card already held did not refuse: it silently
+        deleted that other card's row, and the store came back one card short with no error.
+
+        THAT MATTERED BECAUSE THE INDEX IS LOAD-BEARING IN AN ARGUMENT, not merely tidy. The
+        photograph's path is a pure function of the name (`store/photos.py`), and the claim
+        that two cards can never compose one path rests entirely on two cards never holding
+        one name. An index that cannot refuse cannot support that claim. Found by
+        `scripts/cid-selftest.py:case_two_captures_cannot_compose_one_photograph_path`,
+        which asserted the refusal and watched the insert succeed.
+
+        THE CONFLICT TARGET IS NAMED RATHER THAN LEFT OPEN, which is the whole fix: this
+        resolves a collision on the row's OWN identity and lets every other constraint
+        raise. `queues` is the one table with a composite key, and it is the reason the
+        target is built from `self.fixed` rather than hard-coded to `key`.
+
+        UNREACHED IN PRODUCTION TODAY and repaired anyway: a cid is the sha256 of a
+        photograph, so two cards holding one name means two records of one photograph, and
+        `allocate_capture`'s capture-id replay guard stands in front of that. A guard whose
+        correctness depends on another guard never failing is one this repo writes down; a
+        constraint that cannot fire is one it fixes.
+        """
         names = list(self.fixed) + ["key"] + list(self.columns) + ["payload"]
         values = list(self.fixed.values()) + [str(key)]
         values += [columns.get(name) for name in self.columns]
         values.append(payload_text(payload))
         marks = ", ".join("?" for _ in names)
+        # The primary key, which for every table but `queues` is `key` alone.
+        target = ", ".join(list(self.fixed) + ["key"])
+        # Everything that is not part of the key gets written on a collision. `excluded` is
+        # SQLite's name for the row the INSERT was carrying.
+        assignments = ", ".join(
+            f"{name} = excluded.{name}" for name in list(self.columns) + ["payload"]
+        )
         self.conn.execute(
-            f"INSERT OR REPLACE INTO {self.table} ({', '.join(names)}) VALUES ({marks})", values
+            f"INSERT INTO {self.table} ({', '.join(names)}) VALUES ({marks}) "
+            f"ON CONFLICT ({target}) DO UPDATE SET {assignments}",
+            values,
         )
 
     def delete(self, key: str) -> None:
@@ -567,12 +1150,38 @@ def source(conn: sqlite3.Connection, table: str, fixed: Optional[Dict[str, Any]]
 
 
 def flush_rows(rows: Rows) -> Tuple[int, int]:
-    """Write one mapping's diff through its own source. `(deleted, upserted)`."""
+    """Write one mapping's diff through its own source. `(deleted, upserted)`.
+
+    EVERY TOUCHED KEY IS CLEARED BEFORE ANY IS WRITTEN, AND THAT IS ABOUT A TRANSIENT STATE
+    RATHER THAN ABOUT THE RESULT. A re-key is a delete and an insert — `do_remove_card`'s
+    mid-box renumber moves card 4 to index 3, card 5 to index 4, and so on up the box — so
+    part-way through the second loop the row at `2/3` carries card 4's name while the row at
+    `2/4` still carries it too, because that row has not been rewritten yet. The end state is
+    fine and the intermediate one is not, and `cards_cid` is an IMMEDIATE constraint: SQLite
+    checks it per statement, not at COMMIT, and it has no deferred form for a unique index.
+
+    So the first pass clears every key the second pass will write. It costs one extra DELETE
+    per upserted row inside a transaction that is already paying an fsync, and it is what
+    lets the UNIQUE index stay strict — which matters, because that index is what makes two
+    cards unable to compose one photograph's path (`store/photos.py`).
+
+    IT DOES NOT WEAKEN THE CONSTRAINT, which is the property worth stating: clearing the
+    TOUCHED keys leaves every untouched row in place, so two rows genuinely ending up with
+    one name still collide and still raise. `scripts/cid-selftest.py`'s
+    `case_two_captures_cannot_compose_one_photograph_path` is the proof, and it fires from a
+    second session against a row the first one left behind.
+
+    FOUND BY THE RENUMBER AND NOT BY REASONING. `INSERT OR REPLACE` hid it completely — it
+    resolved the transient collision by DELETING the other row — which is the same masking
+    that let a duplicate name pass silently, and both were one defect.
+    """
     src = rows.source
     if src is None:
         raise files.StoreError(f"{rows.spec.name} is not bound to the database")
     deleted, upserts = rows.changes()
     for key in deleted:
+        src.delete(key)
+    for key, _columns, _payload in upserts:
         src.delete(key)
     for key, columns, payload in upserts:
         src.upsert(key, columns, payload)
