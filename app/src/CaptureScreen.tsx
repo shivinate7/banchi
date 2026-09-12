@@ -1466,7 +1466,7 @@ export function CaptureScreen() {
      and never again.
 
      THE THIRD CASE IS THE ID'S, AND IT WAS REFUSED NOWHERE UNTIL 2026-09-12
-     (D-the-restore-compares-the-id, on D145's id). D142
+     (D153, on D145's id). D142
      enumerated all three and built two: a reallocated number passes `found !== undefined` and
      `state !== 'closed'` because box 7 really does exist and really does take cards. The
      paragraph above it — *"the restore falls back to NO SELECTION, never to a guess"* — read as

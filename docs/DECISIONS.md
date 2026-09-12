@@ -10177,9 +10177,9 @@ reader decides it.
 
 ### A RESTORED BOX IS CHECKED AGAINST THE STORE, AND FAILS SOFTLY
 
-**Photographing into the wrong drawer is the expensive failure on this screen**, and the setup now outlives the browser, so the gap between "the box I last picked" and "a box that still exists and still takes cards" can be days wide. Between two sittings a box can be sealed (D20), deleted (D34's panel), or **deleted and its number handed to a different physical drawer** by `next_box_number`'s lowest-free allocation. The first two are refused at the shutter anyway. **The third was refused nowhere when this entry was written, and this entry BUILT two of the three it had just enumerated** — box 7 exists and takes cards, so a reallocated number passed every test the restore made; it is simply not the box the operator thinks they are looking at. **That gap is closed as of 2026-09-12 (D-the-restore-compares-the-id), and the closing needed a fact this entry did not have**: a drawer's identity, which D145 gave it. The sentence below described two cases in words that read as three, and is corrected rather than deleted because the overclaim is the defect worth remembering.
+**Photographing into the wrong drawer is the expensive failure on this screen**, and the setup now outlives the browser, so the gap between "the box I last picked" and "a box that still exists and still takes cards" can be days wide. Between two sittings a box can be sealed (D20), deleted (D34's panel), or **deleted and its number handed to a different physical drawer** by `next_box_number`'s lowest-free allocation. The first two are refused at the shutter anyway. **The third was refused nowhere when this entry was written, and this entry BUILT two of the three it had just enumerated** — box 7 exists and takes cards, so a reallocated number passed every test the restore made; it is simply not the box the operator thinks they are looking at. **That gap is closed as of 2026-09-12 (D153), and the closing needed a fact this entry did not have**: a drawer's identity, which D145 gave it. The sentence below described two cases in words that read as three, and is corrected rather than deleted because the overclaim is the defect worth remembering.
 
-**So the restore falls back to NO SELECTION, never to a guess** — for the box that is GONE and the box that is SEALED here, and for the reallocated one since D-the-restore-compares-the-id. It names the box it let go of, says why, and opens the field with focus in the entry — the state `Pick a box` would have put them in, so the remedy is the press they were about to make.
+**So the restore falls back to NO SELECTION, never to a guess** — for the box that is GONE and the box that is SEALED here, and for the reallocated one since D153. It names the box it let go of, says why, and opens the field with focus in the entry — the state `Pick a box` would have put them in, so the remedy is the press they were about to make.
 
 **It waits for the answer, not for a non-empty list.** `boxRecords` starts `[]` and `[]` is also what a store with no boxes returns; judging on emptiness would clear a good box on every slow fetch, which on a cold capture server is every fetch. A separate flag records that `GET /boxes` actually answered.
 
@@ -10207,7 +10207,7 @@ reader decides it.
 
 **The PICKER keeps the number, inverted.** The name leads and `Box 3` trails as a de-emphasised suffix, because the entry above it searches number and name together — a row that hid the number would answer a search for `9` with nine rows that do not visibly contain a 9. That is the one place on this screen where the number is still doing a job.
 
-**AMENDED 2026-09-12 (D-the-restore-compares-the-id), ON THE OWNER LOOKING AT THIS VERY LIST**: *"on the capture screen, i shouldn't even need to see box. numbers here, it's waste of space"*. The reason above is correct and was spent too widely — it is about a row's answer to a TYPED NUMBER, and it was applied to every row at all times. The suffix is now drawn only where the row matched BECAUSE of a number the operator typed, so the list is names at rest and the `9` case is untouched. The reason survives the amendment intact; what changed is its scope.
+**AMENDED 2026-09-12 (D153), ON THE OWNER LOOKING AT THIS VERY LIST**: *"on the capture screen, i shouldn't even need to see box. numbers here, it's waste of space"*. The reason above is correct and was spent too widely — it is about a row's answer to a TYPED NUMBER, and it was applied to every row at all times. The suffix is now drawn only where the row matched BECAUSE of a number the operator typed, so the list is names at rest and the `9` case is untouched. The reason survives the amendment intact; what changed is its scope.
 
 **Nothing else moved.** `pipeline/join.py:Position` is untouched, including on this screen's own filmstrip and receipts: the Fulfiller reads those, and he is walking a shelf he did not pack. Nothing on the wire changed and no route was added.
 
@@ -11009,7 +11009,7 @@ the same rule in the stylesheet but is not asserted, because no nav row draws on
 over an empty set is the failure this repo keeps finding.
 
 
-## D-the-restore-compares-the-id — The restore asks which drawer, not which number, and the picker stops drawing a number nobody reads
+## D153 — The restore asks which drawer, not which number, and the picker stops drawing a number nobody reads
 
 **Settled 2026-09-12, on a defect found in merged work and an instruction given the same evening.** Two changes to the capture screen, and they are one change: D145 gave a drawer an identity, so the screen can start asking the question the number was never able to answer — and, having asked it there, can stop putting the number in front of the operator everywhere else.
 

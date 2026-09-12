@@ -1051,7 +1051,7 @@ A screen is not finished because it compiles.
   the owner overruled the session scope, in ONE document because they are one habit, the
   argument `banchi.orders.fetch-filter` already makes for its own two fields. **A SEVENTH
   JOINED THEM ON 2026-09-12 AND IT IS THE ONLY ONE NO SCREEN DRAWS**
-  (D-the-restore-compares-the-id): `bid`, the box's true index (D145), recorded at the pick so
+  (D153): `bid`, the box's true index (D145), recorded at the pick so
   the next sitting's restore can tell the drawer the operator left from a different drawer
   wearing its number today — which `next_box_number`'s lowest-free allocation makes an ordinary
   event. It is not a seventh KEY and the roster count is unchanged: this is a field inside the
@@ -1717,7 +1717,7 @@ D149 A section number that resolves is not a citation that is right, and no chec
 D150 A reading taken after a sale is that sale's own result, and it ages the claim
 D151 The merge is run by a checkout, so the checkout is asked whether it is current, and main is read for a slug the moment it moves
 D152 Every row in the collapsed rail draws one glyph on one spine, and a rule that lists the children it knows about will miss one
-D-the-restore-compares-the-id The restore asks which drawer, not which number, and the picker stops drawing a number nobody reads
+D153 The restore asks which drawer, not which number, and the picker stops drawing a number nobody reads
 
 ```
 
