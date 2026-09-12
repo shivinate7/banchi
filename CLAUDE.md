@@ -467,7 +467,7 @@ make merge          # merge a PR and move main onto it — BOTH HALVES, on your 
                     #   that commit's checks to completion before merging — so nothing main has
                     #   never run CI over reaches main.
                     #   THE WAIT NAMES THE COMMIT, AND AN ANSWER IT HAS NOT GOT IS NEVER A PASS
-                    #   (D-wait-names-the-commit). It polls that SHA's own check runs —
+                    #   (D148). It polls that SHA's own check runs —
                     #   `repos/{owner}/{repo}/commits/<sha>/check-runs` — and concludes only on
                     #   a roster that is NON-EMPTY, complete, no smaller than the parent commit's,
                     #   and unchanged across two reads. An empty answer, an unreadable one and a
@@ -1634,7 +1634,7 @@ D144  A card that will not settle is photographed off the quietest frame it mana
 D145 A box has an index nobody sees, because the number on the drawer is a label and a label may be reused
 D146 Two agreeing signals release the rarity claim, and the same comparison run backwards is a review reason
 D147 The claim is spent on the oldest copies, because a card captured tonight was in no file sent last week
-D-wait-names-the-commit The wait is about the claim commit, and an answer it has not got is never a pass
+D148 The wait is about the claim commit, and an answer it has not got is never a pass
 
 ```
 
