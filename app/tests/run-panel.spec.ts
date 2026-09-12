@@ -228,7 +228,16 @@ async function open(
      *  (D-a-claim-on-the-cards). Empty by default: nothing in this file is about a claim, and
      *  a healthy store holds none. It is an option rather than a constant so the one case
      *  below that needs the panel drawn can have it. */
-    claims?: { receipt: string; run: string | null; cards: number; holder_alive: boolean }[]
+    claims?: {
+      receipt: string
+      run: string | null
+      pid: number
+      started_at: string
+      cards: number
+      sample: string[]
+      capture_dir: string | null
+      holder_alive: boolean
+    }[]
   } = {},
 ): Promise<Wire[]> {
   const wire: Wire[] = []
@@ -2378,9 +2387,37 @@ test('and a scope with nothing on disk promises neither', async ({ page }) => {
  * the screen never calls, which is exactly the shape of the 7b defect.
  */
 
-/** One live claim, in the shape `GET /pipeline/submissions` answers with. */
-function claimRow(over: Partial<{ receipt: string; run: string | null; cards: number; holder_alive: boolean }> = {}) {
-  return { receipt: 'sub-20260912T090000-aaaaaa', run: '2026-09-12-box3-01', cards: 14, holder_alive: true, ...over }
+/** One live claim, in the shape `GET /pipeline/submissions` answers with — EVERY FIELD.
+ *
+ *  A PARTIAL FIXTURE HERE DOES NOT FAIL PARTIALLY, IT CRASHES THE SCREEN, which is the rule
+ *  `card()` at the top of this file already states and which this function had to learn: it
+ *  omitted `sample`, the panel does `claim.sample.join(', ')`, and all three cases below died
+ *  in `open()` on `main.runs` never becoming visible — the route's error boundary doing its
+ *  job, and nothing at all about the panel. The failure named the wrong subject, which is the
+ *  whole cost of a fixture that is not the wire's real shape. */
+function claimRow(
+  over: Partial<{
+    receipt: string
+    run: string | null
+    pid: number
+    started_at: string
+    cards: number
+    sample: string[]
+    capture_dir: string | null
+    holder_alive: boolean
+  }> = {},
+) {
+  return {
+    receipt: 'sub-20260912T090000-aaaaaa',
+    run: '2026-09-12-box3-01',
+    pid: 4242,
+    started_at: '2026-09-12T09:00:00+00:00',
+    cards: 14,
+    sample: ['3/1', '3/2', '3/3'],
+    capture_dir: 'captures/cards/box3',
+    holder_alive: true,
+    ...over,
+  }
 }
 
 test('no claim draws no panel at all, which is what a healthy store looks like', async ({ page }) => {
