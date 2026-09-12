@@ -311,22 +311,24 @@ make demo-freshness # whether the bundle still matches the wire it recorded. ON 
 make lint           # eslint over app/ (guards a bug earned, see app/eslint.config.js) plus ruff over
                     #   the Python packages, scoped to a slice measured against this tree (D82) —
                     #   never ruff's own defaults, never --fix. Config: ruff.toml.
-make check          # harness + docs-audit + audit-self-test + githooks-selftest +
-                    #   merge-selftest + revert-selftest + claim-selftest + claim-stale +
-                    #   decisions-selftest + submission-selftest + cid-selftest +
-                    #   revert-guard +
-                    #   janitor-selftest + reap-selftest + silent-write-selftest +
+make check          # harness + docs-audit + claim-stale + revert-guard +
+                    #   port-agreement + set-hint-agreement + screen-freshness +
+                    #   screen-freshness-selftest + sigil-check + ignore-check +
+                    #   lint + vale + typecheck + audit-self-test +
+                    #   githooks-selftest + merge-selftest + revert-selftest +
+                    #   claim-selftest + decisions-selftest + submission-selftest +
+                    #   cid-selftest + janitor-selftest + reap-selftest + silent-write-selftest +
                     #   guard-shell-selftest +
                     #   coordinator-selftest + suite-lock-selftest +
-                    #   serve-selftest + sync-selftest +
-                    #   verdict-selftest + port-agreement + set-hint-agreement +
-                    #   screen-freshness + screen-freshness-selftest +
-                    #   sigil-check + ignore-check + lint +
-                    #   vale + typecheck.
-                    #   THIS LIST IS CHECKED NOW —
+                    #   serve-selftest + sync-selftest + verdict-selftest.
+                    #   THIS LIST IS CHECKED NOW, AND IN THIS ORDER —
                     #   `make docs-audit`'s `check census` row reconciles it and `make help`'s
                     #   against the recipe, and it earned the row: help said five of these
                     #   for months while this line said eleven, and nothing compared them.
+                    #   IT COMPARED THEM AS SETS UNTIL 2026-09-12, so D161's reorder — the
+                    #   product first, the guards' selftests last — left BOTH published lists
+                    #   in the old order while the row printed ok and that commit's own
+                    #   message cited it as verification. The sequence is compared now.
                     #   `make explain` is the same list with what each row is worth.
                     #   NEITHER THIS NOR `make harness` HAS design-check's WAITING PROBLEM,
                     #   measured 2026-09-07 in a worktree: 17s and 13s, both well inside one
@@ -2333,6 +2335,7 @@ D181 The order is taken once, and a sale may not retake it
 D182 An unclaimed slug is not required in the shared index it will replace itself out of
 D183 A number a person reads is never a key a machine uses, so the photograph is stored under the card's name and the address is derived
 D184 A gain step is the baseline times one number, a card is not, and the machine re-baselines only on that proof
+D-a-row-that-examined-nothing-says-so A row declares how many subjects it had, an empty one is pinned by name with a reason, and eleven published claims get the reader they were already cited as having
 ```
 
 **THE GAP THIS LIST CARRIED BETWEEN D116 AND D118 IS CLOSED, AND IT CLOSED THE WAY IT SAID IT
@@ -2383,9 +2386,16 @@ was open** — the rule is renumber your own, never another's.
   "Recorded, not built" and named three unreachable modules under `pipeline/` until D66's build
   order was discharged. **§3's T6 — an order DRIVING the inventory walk, with the envelope as the
   unit of the write — is SUPERSEDED** (D96 amended 2026-09-04), and its code is deleted:
-  `POST /orders/fill`, `do_order_fill`, `app/src/orderWalk.ts`,
+  `app/src/orderWalk.ts`,
   `app/src/OrderWalkBanner.tsx`/`.css` and harness T7's `check_order_fill` are all gone, 1,484
-  lines that were main's build and were reachable from no screen here. That section is kept as
+  lines that were main's build and were reachable from no screen here. **`POST /orders/fill`
+  and `do_order_fill` ARE BACK AND THIS SENTENCE SAID OTHERWISE UNTIL 2026-09-12** — D113
+  rebuilt a route and a handler under both names for a different job, closing copies of a
+  line with no card behind them, and nobody amended the sentence that called them gone. A
+  NAME IS NOT A CAPABILITY: what D96 deleted is the envelope walk, and the three files above
+  are what stay deleted. `make docs-audit`'s `recorded deletions` row watches those three in
+  six roots rather than one, and names the two reused spellings as deliberately unwatched so
+  the next widening does not put them back. That section is kept as
   the record of what main made, not as a description of this tree. **The want it served is still
   met, in the shape the owner ruled for** — *"I don't want the walk picking for me"*: the per-copy
   press, from an order's own panel or from the cross-order pass through the drawers (`#/orders`,

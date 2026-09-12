@@ -1,9 +1,16 @@
 #!/usr/bin/env python3
-"""Harness runner — T1-T8.
+"""Harness runner — T1-T9.
 
-`make harness` exits 0 only when all eight tests pass. Nothing in this project is "done"
+`make harness` exits 0 only when all nine tests pass. Nothing in this project is "done"
 until it does. See docs/GATES.md for the contract; every threshold there is a number, not
 an adjective, and the numbers live in the test modules next to the code that checks them.
+
+EVERY PRESENT-TENSE COUNT IN THIS DOCSTRING HAS A READER AS OF 2026-09-12, and it earned
+one: this file said EIGHT in three places — the title, the sentence above and the last
+paragraph — while `TESTS` below held nine, and `make docs-audit`'s `harness tests` row
+printed "9 registered and documented" throughout, because its other side was the markdown
+and never the file that decides the list. The range and historical claims below are
+deliberately outside the patterns; see `_HARNESS_CLAIMS` in scripts/docs-audit.py.
 
 T1-T4 are the original contract. T5 (pricing) and T6 (geometry) arrived with batch script
 v2: a wrong price is a distinct failure from a wrong match, and a card the pipeline cannot
@@ -13,7 +20,7 @@ T8 (code cards) arrived with C9-C11 on 2026-08-30, for the same reason: a code i
 bearer instrument, and reading one wrong, selling one twice, or letting a premium one
 leave in a bulk lot are three different failures that must not hide inside one another.
 
-All eight tests always run, even after one fails. A runner that stops at the first failure
+All nine tests always run, even after one fails. A runner that stops at the first failure
 hides the state of everything behind it, which is the opposite of what a status signal
 is for.
 """

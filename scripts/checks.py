@@ -265,6 +265,11 @@ CHECKS = (
         "why_off_commit_path": "vale is a third-party Go binary, and the pre-commit hook runs a "
                                "bare python3 (D18). A commit gate needing software PRESENT "
                                "would make the three opsec rules depend on it too.",
+        "why_off_ci": "the binary is not on the GitHub runner, and it never gated anyway — "
+                      "`--no-exit` swallows its status. `make ci-check` is what a fresh clone "
+                      "can PROVE, so a target that proves nothing there is left out rather "
+                      "than run for the shape of it. The one declared difference between the "
+                      "two recipes, and `check registry` refuses a second without a sentence.",
         "gates": False,
         "governed_by": ("D18", "D60", "D74"),
     },
@@ -741,6 +746,12 @@ def one(name: str) -> str:
         block("", entry["why_off_commit_path"])
     block("gates", "a finding fails `make check`." if entry["gates"]
           else "NO — it reports and `make check` carries on.")
+    # Rendered wherever it is declared, so the field is not a sentence only the audit reads.
+    # `check registry` pairs it against the `ci-check:` recipe in both directions: present
+    # exactly where the target is absent from that recipe.
+    if entry.get("why_off_ci"):
+        block("ci-check", "NOT run on CI.")
+        block("", entry["why_off_ci"])
     block("governed by", ", ".join(entry["governed_by"]) + "  — docs/DECISIONS.md")
     return "\n".join(lines)
 
