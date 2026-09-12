@@ -1,4 +1,4 @@
-## D-a-gain-step-is-the-stand-rescaled — A gain step is the baseline times one number, a card is not, and the machine re-baselines only on that proof
+## D181 — A gain step is the baseline times one number, a card is not, and the machine re-baselines only on that proof
 
 **Settled 2026-09-12, on the owner's question whether locking the camera's exposure was**
 **genuinely essential or "just coding bad".** The honest answer was that the lock is a correct
