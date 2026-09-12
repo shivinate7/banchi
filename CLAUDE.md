@@ -316,6 +316,7 @@ make check          # harness + docs-audit + audit-self-test + githooks-selftest
                     #   decisions-selftest + submission-selftest + cid-selftest +
                     #   revert-guard +
                     #   janitor-selftest + reap-selftest + silent-write-selftest +
+                    #   guard-shell-selftest +
                     #   coordinator-selftest + suite-lock-selftest +
                     #   serve-selftest + sync-selftest +
                     #   verdict-selftest + port-agreement + set-hint-agreement +
@@ -448,6 +449,62 @@ make silent-write-selftest  # that guard, proved by REPRODUCING the incident: a 
                     #   a temp repo). Mutation-tested — twenty-one arms, nineteen caught, and the
                     #   two survivors are one requirement covered twice, proved by a twenty-first
                     #   arm that removes both and goes red.
+                    # FIVE SHELL MISTAKES ARE REFUSED BEFORE THEY RUN, AND THERE IS NO
+                    #   TARGET FOR THAT EITHER — `scripts/guard-shell.py --hook` is a
+                    #   PreToolUse hook on Bash AND on Write|Edit, armed in both rosters
+                    #   (D135). Every clause has an incident behind it, and every one of those
+                    #   incidents broke a rule that was already written down, which is D171's
+                    #   ruling about what a rule is applied five more times:
+                    #   `git checkout <path>` / `git restore <path>` OVER A MODIFIED FILE is
+                    #   refused, and the refusal names the `.bak` copy — on 2026-09-06 one
+                    #   `git checkout cli/cmd_reprice.py` put a mutation back and destroyed
+                    #   ~240 lines of that session's uncommitted work. A BRANCH, A CLEAN PATH,
+                    #   `--staged`, `-b` and a named source all pass, because the
+                    #   discriminator is RESOLUTION and never spelling: `git status --porcelain`
+                    #   decides, read-only, and an operand that resolves to neither a path nor
+                    #   a commit is REPORTED and allowed. `PKMNSCAN_CHECKOUT=off`.
+                    #   A WRITE OUTSIDE THIS CHECKOUT is refused, and the Write|Edit half needs
+                    #   no command parsing at all, so no shell form skirts it — on 2026-09-06 an
+                    #   absolute-path `cd` prefix wrote ~1,500 lines into the owner's MAIN tree
+                    #   on `main`, and the supervisor hot-reloaded that branch code into their
+                    #   live capture server while they used the app (D43). The user's own
+                    #   `~/.claude` and a temp directory that is no checkout both pass; a temp
+                    #   directory that IS one does not. `PKMNSCAN_TREE=off`.
+                    #   `gh api -f k=v` WITH NO METHOD is refused, because a field implies a
+                    #   body and gh then sends POST — it hung past a 120s tool timeout on
+                    #   2026-09-12. `--method`, `-X`, and `graphql` pass, and the refusal prints
+                    #   the query-string form it wants. `PKMNSCAN_GH=off`.
+                    #   `ln -s` AT AN EXISTING PATH is refused — on 2026-08-29 that nested a
+                    #   second `images` link inside `harness/images` instead of failing, and
+                    #   iCloud renamed the real 133 MB directory away, empty. `-sfn`, `-sf` and
+                    #   a genuinely absent path pass.
+                    #   `PKMNSCAN_LINK=off`.
+                    #   A POLLING LOOP is refused twice over: a `while`/`until` whose condition
+                    #   polls a PATTERN (`pgrep`, `pkill`, `lsof`, `ps -ef`) — which matches
+                    #   every process whose command line NAMES it and so cannot know what it
+                    #   matched — and a BACKGROUNDED
+                    #   loop with no counter, no deadline and no pid — including one inside a
+                    #   shell script the command merely names, which is READ. On 2026-09-12 a
+                    #   `pgrep` waiter never fired and a backgrounded driver ran 119 rounds over
+                    #   3h58m across a compaction, racing that session's own merges. A `for`
+                    #   loop, a pid wait, a `curl -m` probe, a counter and any FOREGROUND loop
+                    #   pass; so does backgrounding `make design-check ARGS=--wait`, which this
+                    #   file tells you to do. `PKMNSCAN_WAIT=off`.
+                    #   FIVE HATCHES AND NOT ONE, so disarming the symlink clause cannot disarm
+                    #   the one that guards uncommitted work. Each is honoured in the
+                    #   environment and inline, and printed in its own refusal. Fails OPEN on
+                    #   its own bugs, including a missing `scripts/shell_parse.py` — the
+                    #   tokenizer it shares with `silent-write-guard.py`.
+make guard-shell-selftest  # that guard, proved by COMMITTING its five mistakes in a throwaway
+                    #   repository: 240 lines really destroyed by a real `git checkout`, a real
+                    #   worktree whose root differs from its main checkout's, a real nested
+                    #   symlink nested inside `harness/images`, and `pgrep -f` really
+                    #   matching a process that merely NAMES its pattern. Every false positive above is
+                    #   pinned as passing and the git ones are RUN in the fixture first. In
+                    #   `check`, never in the git hook (D18 — it writes a temp repo).
+                    #   Mutation-tested — twenty-six arms, twenty-five caught; the one survivor
+                    #   removes half of the `.bak` advice and the other half still satisfies
+                    #   the assertion, which an arm removing BOTH proves by going red.
 make coordinator    # THE MERGE QUEUE, READ RATHER THAN REMEMBERED. The other half of
                     #   2026-09-12: a session relayed `#300 GREEN — merging` for several turns
                     #   while nothing merged, because the line came from a driver's stdout and
@@ -2228,6 +2285,9 @@ D173 A rule that can be enforced mechanically is enforced mechanically, and a ru
 D174 A press claims the cards it is about to buy, and the claim is written in the transaction that decides what they are
 D175 Ownership is read the way liveness is, and a process a session no longer owns is offered rather than reaped
 D176 The primary checkout syncs itself, both parts, because the thing D42 was protecting is not the thing this moves
+D177 The corpus answers for listings no camera here ever saw, so a prune is a list the operator presses and never a rule a join runs
+D178 A document may name what it would create, and the marking expires by itself
+D179 Five shell commands are refused by resolving what they would do, not by matching what they say, and each clause carries its own escape hatch
 D-a-number-a-person-reads-is-never-a-key A number a person reads is never a key a machine uses, so the photograph is stored under the card's name and the address is derived
 ```
 
@@ -2306,6 +2366,16 @@ was open** — the rule is renumber your own, never another's.
   §5 is the one section the Banchi rebuild moved — the screen is a modal now and the pixel
   measurement that refused it a route is history — and §6 names the three things the first
   real upload would measure.
+- `docs/specs/corpus-pruning.md` — what pruning `inventory/prices.json` would delete, read off
+  the store on 2026-09-12 and against a digest. **RECORDED, NOT BUILT, and the answer is that
+  pruning may never be automatic** (D177). 430
+  answers examined, 11 unmatched, **0 safe** — and 7 of the 11 are prices on listings that are
+  live on TCGplayer right now, five of which are sealed product and accessories **no join can
+  ever match because no camera here can photograph them**. Read its §6 before trusting any
+  count: every empty category there is reported against its population, including the probe
+  that reached 1,430 catalog SKUs to come back with nothing. Read its §5 before quoting the
+  eleven — the figure is a FLOOR, and six of the seven ways this differs from a real
+  store-wide join make the real list longer.
 - `docs/specs/batch-script.md` — the four commands, storage, routing, pricing. Built.
 - `docs/specs/one-process.md` — D138's plan: the capture server serves `app/dist/` beside the
   API, the supervisor runs `vite build` when the source is newer than the bundle, and `restart`
