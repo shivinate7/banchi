@@ -1740,6 +1740,67 @@ COMPONENTS = [
                 "governed_by": ["D169", "D18", "D43",
                                 "D53", "D122", "D127", "D157"],
             },
+            "silent-write-guard.py": {
+                "does": "the PreToolUse hook on Bash that refuses a git WRITE whose own output "
+                        "is thrown away. ONE INVARIANT, NOT A LIST OF SHAPES: a write must "
+                        "leave a trace the session can read, because stdout carries the proof "
+                        "(`[branch sha]`) and stderr carries the refusal (every byte the "
+                        "pre-commit hook prints) — discard either and the reader cannot tell "
+                        "`nothing is wrong` from `nothing is known yet`. Decided from the "
+                        "string alone, which is where it differs from reap.py: the fd state is "
+                        "WALKED IN ORDER, so `2>&1 >/dev/null` is read as losing the proof and "
+                        "keeping the refusal, and the tokenizer is shlex with "
+                        "`punctuation_chars` so a quoted `>/dev/null` in a commit message is a "
+                        "STRING. Heredoc BODIES are cut, because the message announcing this "
+                        "guard quotes the command it refuses. The verb roster is deliberately "
+                        "short and every exemption is a measured false positive: reads, "
+                        "`--dry-run`, `--abort`/`--quit`, a bare `git fetch`, `git merge-tree` "
+                        "and `make merge-selftest` all pass. Fails OPEN on its own bugs; "
+                        "`PKMNSCAN_SILENT=off` is the hatch and every refusal prints it.",
+                # D127 is the guard beside it whose fail-open asymmetry this one honours
+                # unchanged. D42 is the operation it most often protects — a silenced
+                # `make merge` or `git fetch origin main:main` hides that hook's refusal.
+                # D18 keeps its self-test off the commit path.
+                "governed_by": ["D18", "D42", "D127", "D133",
+                                "D171"],
+            },
+            "silent-write-selftest.sh": {
+                "does": "proves silent-write-guard.py by violating it. IT REPRODUCES THE "
+                        "2026-09-12 INCIDENT FIRST, in a throwaway repository with a "
+                        "pre-commit hook that refuses: the commit is silenced, exits non-zero, "
+                        "prints nothing, and `git log --oneline -1` answers with the PREVIOUS "
+                        "commit — the stale read that was reported as `pushed`. Only then is "
+                        "the guard asked about that command. THE FALSE POSITIVES ARE THE OTHER "
+                        "HALF and each is RUN in the fixture before it is scored, because a "
+                        "case that is secretly a typo passes the guard for the wrong reason. "
+                        "The refusal's CONTENT is scored too — the escape hatch, and which "
+                        "stream went where. Mutation-tested: twenty-one arms, nineteen caught; "
+                        "the two survivors are the JSON try/except and the bottom-of-file "
+                        "floor, which cover each other, and a twenty-first arm removing BOTH "
+                        "goes red, which is what makes them depth rather than a gap.",
+                "governed_by": ["D18", "D127", "D171"],
+            },
+            "coordinator.py": {
+                "does": "`make coordinator` — the merge queue READ rather than remembered, so "
+                        "a status report is generated instead of composed out of a session's "
+                        "memory and a driver's stdout. main's tip against origin's, every open "
+                        "PR with a verdict PINNED TO ITS HEAD SHA, how many merged in 24h, "
+                        "`id claims` out of the audit, every worktree holding uncommitted work "
+                        "(D135's symlinks excluded), live sessions read from the console app's "
+                        "own records with the start time checked, and any waiter loop or twice-"
+                        "running driver. THE FLOOR IS THE REQUIRED-CHECK SET FROM BRANCH "
+                        "PROTECTION AND NOT A COUNT, which is a measurement: main's tip carries "
+                        "10 runs including `demo.yml`'s main-only pair, while PR #309's head "
+                        "carried 6 with `design-check` gated to one run, so no single number is "
+                        "right. A missing or `skipped` required check is `not ready` and never "
+                        "clean; a null conclusion is `running` and never failed. Any block it "
+                        "cannot read prints UNKNOWN and makes the exit non-zero.",
+                # D42 is the operation it reports on; D43 is why the worktree block exists at
+                # all; D111 is where the liveness oracle and its argument come from; D141 is
+                # the path-gating that makes a count floor unusable.
+                "governed_by": ["D42", "D43", "D111", "D135", "D140", "D141",
+                                "D171"],
+            },
             "session-teardown.sh": {
                 "does": "the SessionEnd / WorktreeRemove hook. Stops what a leaving session "
                         "started in a linked worktree and nothing else — the main checkout's "
@@ -2415,7 +2476,7 @@ COMPONENTS = [
                 # for vale. Change one and the entry describing that check goes stale with it,
                 # which is exactly what `governed_by` is for — so they are listed rather than
                 # allowlisted away.
-                "governed_by": ["D16", "D17", "D18", "D43", "D44", "D47", "D53", "D58", "D60", "D65", "D68", "D74", "D76", "D80", "D82", "D92", "D111", "D122", "D127", "D129", "D133", "D138", "D140", "D160"],
+                "governed_by": ["D16", "D17", "D18", "D42", "D43", "D44", "D47", "D53", "D58", "D60", "D65", "D68", "D74", "D76", "D80", "D82", "D92", "D111", "D122", "D127", "D129", "D133", "D138", "D140", "D141", "D160"],
                 "note": "IT DECLARES THE SUITE AND DELIBERATELY DOES NOT DRIVE IT, which is "
                         "the whole shape. A registry that drove `make check` could not "
                         "disagree with the recipe — and could silently stop running a check, "
