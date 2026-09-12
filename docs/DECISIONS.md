@@ -10493,7 +10493,7 @@ The second half is the design, and it is stated more precisely than a specificat
 **A run over more than one box.** `_run_box_id` reads one id out of a scope block that names one box, because D48 keeps a run to one box. A cart-shaped run would need a list, and `refuse_reallocated` already loops over boxes in a way that anticipates it.
 
 
-## D-two-agreeing-signals — Two agreeing signals release the rarity claim, and the same comparison run backwards is a review reason
+## D146 — Two agreeing signals release the rarity claim, and the same comparison run backwards is a review reason
 
 **Settled 2026-09-11, from a stack the owner sorted correctly asking them 141 questions.**
 They claimed `Epic` on a 143-card Riftbound stack in `2026-09-11-box1-01`. The

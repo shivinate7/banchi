@@ -529,7 +529,7 @@ COMPONENTS = [
                                 "Near-Mint-only exports by hand and cost D3 rung 2 outright once the "
                                 "fetch started sending every play grade",
                         "governed_by": ["D2", "D3", "D4", "D7", "D9", "D10", "D11", "D12", "D16", "D20", "D21", "D23", "D24", "D25", "D29", "D30", "D35", "D36", "D41", "D49", "D54", "D55", "D56", "D58", "D59", "D64", "D65", "D67", "D68", "D71", "D76", "D87", "D137",
-                                        "D-two-agreeing-signals"], "tested_by": ["T3"]},
+                                        "D146"], "tested_by": ["T3"]},
             # Rung 0 (a human's answer) sits above the ladder and is applied by join.py, so
             # T3 is what covers it — T4 owns the four rungs that infer.
             # D22 because FINISHES and CONDITION_BY_FINISH are no longer written here: they
@@ -538,7 +538,7 @@ COMPONENTS = [
             "variant.py": {"does": "the variant ladder: four rungs that infer, under a rung 0 that does not, "
                                    "over a per-game finish vocabulary and a set-valued rung 1 claim",
                            "governed_by": ["D3", "D12", "D21", "D22", "D23",
-                                           "D-two-agreeing-signals"], "tested_by": ["T3", "T4"]},
+                                           "D146"], "tested_by": ["T3", "T4"]},
             # ONE MATCHER, WHERE THERE WERE TWO. The fetch scoped the export by its rules and
             # the join narrowed a colliding key by different ones, so a hint could scope
             # correctly and then fail to disambiguate the very rows it fetched. Merging them
@@ -580,7 +580,7 @@ COMPONENTS = [
                                    "`1/51` read `Irelia, Blade Dancer` at `190/221`, which that "
                                    "export calls `Forgefire Cape`, and the rarity claim agreed.",
                            "governed_by": ["D3", "D4", "D9", "D23", "D29", "D35",
-                                           "D-two-agreeing-signals"],
+                                           "D146"],
                            "tested_by": ["T4"]},
             # THE ONLY MODULE IN THIS PACKAGE THAT IMPORTS `store`, and the edge is one-way:
             # store/ imports nothing from pipeline/, so there is no cycle. What it buys is
@@ -5331,7 +5331,7 @@ COMPONENTS = [
                 # suppress it for the other ninety-nine.
                 "governed_by": ["D4", "D13", "D23", "D24", "D28", "D29", "D32", "D35", "D16",
                                 "D41", "D37", "D46", "D77", "D136",
-                                "D-two-agreeing-signals"],
+                                "D146"],
                 "note": "NOT a harness test — it starts a browser, which docs/GATES.md keeps "
                         "off the seven-test contract deliberately. The photograph stub is "
                         "2160x3840 and that is load-bearing: the rig's stored frame is 9:16 "
