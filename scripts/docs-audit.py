@@ -136,6 +136,72 @@ class Finding(NamedTuple):
     message: str
 
 
+class Row(NamedTuple):
+    """One check's verdict, and HOW MANY SUBJECTS IT HAD.
+
+    `scanned` is the whole point of this type existing. Before it, `render` printed `ok`
+    for any row whose findings list was empty, so "examined 2,964 references, all
+    resolve" and "examined none" were the same word — the repo's signature defect, stated
+    exactly: a guard that cannot tell "nothing is wrong" from "nothing is known yet".
+    Measured on main: `paths 0 references resolve`, `make targets 0 references, 57
+    targets` and `env vars 0 documented, all real` all printed green inside a `make
+    check` that a session then quoted as verification.
+
+    `None` is not "zero" and not "fine": it is a row that declared no subject count at
+    all, which the `subject counts` row below reports as a mechanical failure. Every row
+    that can print clean passes one.
+    """
+
+    check: str
+    severity: str
+    findings: List[Finding]
+    summary: str
+    scanned: Optional[int] = None
+
+
+# Rows whose subject may legitimately be empty, and the reason beside each name. A
+# BLANKET exemption is how a rule stops being one, so this is per-row and per-mode:
+#
+#   "always"  the row's subject can be empty on a clean tree in any mode
+#   "staged"  the row reads the MARKDOWN SET, which `--staged` narrows to the staged
+#             files — so a code-only commit legitimately hands it nothing. In FULL mode
+#             the same row over zero documents is a broken walk and still fails.
+#
+# Every other row scanning zero is a mechanical failure: a walk root that moved, a
+# renamed directory, an edited suffix list, an emptied corpus. Those are the four ways
+# this file has gone quietly vacuous, and `corpus_is_empty` already exists because two
+# docs rows reported `0 entries` in green over an unreadable docs/decisions/.
+EXPECTED_EMPTY: Dict[str, Tuple[str, str]] = {
+    # --- NARROWED BY --staged, and a broken walk in full mode -------------------------
+    # Each of these counts something it read OUT OF THE MARKDOWN, so `--staged` over a
+    # code-only commit hands it nothing. Every other doc row counts a CODE-side roster
+    # instead and cannot reach zero without a real defect, so none of those is pinned:
+    # `harness tests` at zero means TESTS is empty, `pkmnscan commands` at zero means
+    # COMMANDS is, and `decision ids` at zero means the corpus is unreadable.
+    "paths": ("staged", "counts the references it resolved out of the staged documents"),
+    "make targets": ("staged", "counts the `make` references it found in the staged documents"),
+    "env vars": ("staged", "counts the variables the staged documents name"),
+    "doc hygiene": ("staged", "its subject IS the staged markdown list"),
+    "check numbering": ("staged", "its subject IS the staged markdown list"),
+    "coupling": ("staged", "runs in --staged only, over the source groups this commit touched"),
+    # --- LEGITIMATELY EMPTY ON A CLEAN TREE, in every mode ----------------------------
+    "allowlist": (
+        "always",
+        "an empty docs-audit-allow.txt is the ideal state, not a broken reader",
+    ),
+    "evidence freshness": (
+        "always",
+        "its subject is the STAGED score sources; in a full run there is no staged set "
+        "at all, which is the row's own declared scope",
+    ),
+    "id claims": (
+        "always",
+        "its subject is the unclaimed slugs this branch carries, and main carries none "
+        "BY THE INVARIANT the row asserts — so on main it examines nothing, every time",
+    ),
+}
+
+
 class Report:
     """Collects every finding, never stops at the first.
 
@@ -144,7 +210,7 @@ class Report:
     """
 
     def __init__(self) -> None:
-        self.checks: List[Tuple[str, str, List[Finding], str]] = []
+        self.checks: List[Row] = []
 
     def add(
         self,
@@ -152,29 +218,46 @@ class Report:
         severity: str,
         findings: List[Finding],
         summary: str = "",
+        scanned: Optional[int] = None,
     ) -> None:
-        self.checks.append((check, severity, findings, summary))
+        self.checks.append(Row(check, severity, findings, summary, scanned))
 
     def counts(self) -> Tuple[int, int]:
-        mech = sum(len(f) for _, sev, f, _ in self.checks if sev == MECHANICAL and f)
-        adv = sum(len(f) for _, sev, f, _ in self.checks if sev == ADVISORY and f)
+        mech = sum(len(r.findings) for r in self.checks if r.severity == MECHANICAL)
+        adv = sum(len(r.findings) for r in self.checks if r.severity == ADVISORY)
         return mech, adv
 
     def as_json(self, exit_code: int) -> str:
         # The machine surface: nothing downstream parses the human render (spec §7 — three
         # parser bugs in one planning session came from regexing it).
+        #
+        # `scanned` is here because `python3 scripts/docs-audit.py --json` is what a
+        # session greps instead of reading ~100 rows, so the distinction between "examined
+        # everything" and "examined nothing" has to be an integer on this surface and not
+        # a word in the render.
         rows = [
-            {"label": check, "severity": severity, "summary": summary,
-             "findings": [finding._asdict() for finding in findings]}
-            for check, severity, findings, summary in self.checks
+            {"label": row.check, "severity": row.severity, "summary": row.summary,
+             "scanned": row.scanned, "vacuous": row.scanned == 0,
+             "findings": [finding._asdict() for finding in row.findings]}
+            for row in self.checks
         ]
         return json.dumps({"rows": rows, "exit": exit_code}, indent=2)
 
     def render(self) -> str:
         lines = ["PKMNSCAN docs audit — docs/DECISIONS.md D16", "=" * 72, ""]
-        for check, severity, findings, summary in self.checks:
+        for row in self.checks:
+            check, severity, findings, summary = row.check, row.severity, row.findings, row.summary
             if not findings:
-                lines.append(f"  ok   {check:<22} {summary}")
+                if row.scanned is None:
+                    # Not a pass and not a failure — a verdict over a subject nobody
+                    # counted. `subject counts` fails the commit on it.
+                    lines.append(f"  bare {check:<22} {summary}  [no subject count declared]")
+                elif row.scanned == 0:
+                    pin = EXPECTED_EMPTY.get(check)
+                    why = pin[1] if pin else "NOT pinned as expected-empty — this row examined nothing"
+                    lines.append(f"  none {check:<22} examined nothing — {why}")
+                else:
+                    lines.append(f"  ok   {check:<22} {summary}")
                 continue
             tag = "FAIL" if severity == MECHANICAL else "ask "
             noun = "problem" if len(findings) == 1 else "problems"
@@ -667,7 +750,8 @@ def check_paths(report: Report, docs: List[Path], allowed: Dict[str, str]) -> No
                 f"with a reason if it is named before it is built.",
             )
         )
-    report.add("paths", MECHANICAL, findings, f"{checked} references resolve")
+    report.add("paths", MECHANICAL, findings, f"{checked} references resolve",
+               scanned=checked)
 
 
 # ---------------------------------------------------------------------- the allowlist
@@ -725,7 +809,8 @@ def check_allowlist(report: Report, allowed: Dict[str, str]) -> None:
                     f"It was allowed because: {reason or '(no reason recorded)'}",
                 )
             )
-    report.add("allowlist", MECHANICAL, findings, f"{len(allowed)} entries, none stale")
+    report.add("allowlist", MECHANICAL, findings, f"{len(allowed)} entries, none stale",
+               scanned=len(allowed))
 
 
 # ----------------------------------------------------------------------- make targets
@@ -850,7 +935,8 @@ def check_make_targets(report: Report, docs: List[Path]) -> None:
                 f"`.PHONY` names `{name}`, which is not a target in this Makefile.",
             )
         )
-    report.add("make targets", MECHANICAL, findings, f"{referenced} references, {len(targets)} targets")
+    report.add("make targets", MECHANICAL, findings,
+               f"{referenced} references, {len(targets)} targets", scanned=referenced)
 
 
 # ----------------------------------------------------------- ./pkmnscan subcommands
@@ -929,6 +1015,7 @@ def check_pkmnscan_commands(report: Report, docs: List[Path], all_docs: List[Pat
         MECHANICAL,
         findings,
         f"{len(registered)} registered, all documented",
+        scanned=len(registered),
     )
 
 
@@ -1055,7 +1142,8 @@ def check_harness_tests(report: Report, docs: List[Path], allowed: Dict[str, str
                             f"harness/run.py:TESTS ({', '.join(sorted(names))}).",
                         )
                     )
-    report.add("harness tests", MECHANICAL, findings, f"{len(names)} registered and documented")
+    report.add("harness tests", MECHANICAL, findings,
+               f"{len(names)} registered and documented", scanned=len(names))
 
 
 def normalize(text: str) -> str:
@@ -1179,6 +1267,13 @@ def check_pass_criteria(report: Report) -> None:
     sections = gates_sections()
     mechanical: List[Finding] = []
     wording: List[Finding] = []
+    # Two subject counts, because these are two rows. `read_criteria` is the tests whose
+    # PASS_CRITERIA string this row managed to read — the wording row's subject — and
+    # `compared` is the subset that also had a `### <name>` section in docs/GATES.md to
+    # compare against, which is the threshold row's. Either reaching zero means the row
+    # judged nothing, and before `scanned` existed both printed the same `ok` either way.
+    read_criteria = 0
+    compared = 0
     for name, path in registered_tests():
         if not exists(path):
             continue
@@ -1189,6 +1284,7 @@ def check_pass_criteria(report: Report) -> None:
                 Finding(rel(path), "no module-level PASS_CRITERIA string to read.")
             )
             continue
+        read_criteria += 1
         claim = docstring_pass_claim(source)
         if claim is not None and normalize(criteria) not in normalize(claim):
             wording.append(
@@ -1208,6 +1304,7 @@ def check_pass_criteria(report: Report) -> None:
         section = sections.get(name)
         if section is None:
             continue
+        compared += 1
         # THE COMPARISON IS AGAINST THE PUBLISHED LINE, BY EQUALITY, and the two legs it
         # replaces were both substring tests against the whole section. That is not a
         # tightening for its own sake — measured on 2026-09-05, lowering T1's
@@ -1260,8 +1357,10 @@ def check_pass_criteria(report: Report) -> None:
                     f"the doc.",
                 )
             )
-    report.add("pass criteria", MECHANICAL, mechanical, "every threshold matches GATES.md")
-    report.add("criteria wording", MECHANICAL, wording, "every criterion is published verbatim")
+    report.add("pass criteria", MECHANICAL, mechanical, "every threshold matches GATES.md",
+               scanned=compared)
+    report.add("criteria wording", MECHANICAL, wording,
+               "every criterion is published verbatim", scanned=read_criteria)
 
 
 # ------------------------------------------------------ the evidence behind a criterion
@@ -1342,7 +1441,8 @@ def check_criteria_evidence(report: Report) -> None:
                 )
             )
     report.add(
-        "criteria evidence", MECHANICAL, findings, f"{len(scores)} scored run, gate field published"
+        "criteria evidence", MECHANICAL, findings,
+        f"{len(scores)} scored run, gate field published", scanned=len(scores)
     )
 
 
@@ -1385,7 +1485,13 @@ def check_evidence_freshness(report: Report, staged_only: bool) -> None:
                 )
             )
     report.add(
-        "evidence freshness", ADVISORY, findings, "staged score sources bring their result"
+        "evidence freshness",
+        ADVISORY,
+        findings,
+        "staged score sources bring their result",
+        # Its subject is the STAGED set. In full mode there is no staged set, so the
+        # row prints `none` rather than a green it did not earn.
+        scanned=len(EVIDENCE_SOURCES) if staged_only else 0,
     )
 
 
@@ -1680,7 +1786,6 @@ def check_decision_ids(report: Report, docs: List[Path]) -> None:
 
     scan(docs, in_docs)
     in_code: List[Finding] = []
-    scan(python_files(), in_code)
     # THE APP WAS NOT SCANNED AT ALL UNTIL 2026-08-30 (D72). `python_files()` is every `.py`
     # in the tree, and the row below said "citations in .py all resolve" — accurately, and
     # over half the citations. `app/` holds hundreds more in `.ts`, `.tsx` and `.css`
@@ -1694,13 +1799,21 @@ def check_decision_ids(report: Report, docs: List[Path]) -> None:
     # branch found by hand the day `scripts/claim-ids.py` landed: that file was outside the
     # CLAIMER's suffix set too, so a SLUG written there survived the merge and became a
     # citation of an entry that had just been given a number. Both sets gained `.js` together.
-    scan(_walk(ROOT, (".ts", ".tsx", ".css", ".js")), in_code)
+    #
+    # ONE HAYSTACK, BUILT BEFORE THE SCAN, so the row can declare how many files it read.
+    # It was two `scan()` calls with the count nowhere, which is the shape that let this
+    # file print `ok` over a walk that had found nothing.
+    code_haystack = python_files() + _walk(ROOT, (".ts", ".tsx", ".css", ".js"))
+    scan(code_haystack, in_code)
 
-    report.add("decision ids", MECHANICAL, in_docs, f"{len(singles)} D + {len(codes)} C headings")
+    report.add("decision ids", MECHANICAL, in_docs,
+               f"{len(singles)} D + {len(codes)} C headings",
+               scanned=len(singles) + len(codes))
     # Code is advisory: `C1` or `D2` could plausibly be a variable one day, and a false
     # positive that blocks a commit is worse than one that prints a line.
     report.add("decision ids in code", ADVISORY, in_code,
-               "citations in .py, .ts, .tsx, .css and .js all resolve")
+               "citations in .py, .ts, .tsx, .css and .js all resolve",
+               scanned=len(code_haystack))
 
 
 # ------------------------------------------------------------------ ids are claimed at merge
@@ -1842,7 +1955,8 @@ def check_id_claims(report: Report) -> None:
 
     where = "main" if on_main() else "this branch"
     report.add("id claims", MECHANICAL, findings,
-               "{0} unclaimed id(s) on {1}{2}".format(
+               scanned=len(unclaimed),
+               summary="{0} unclaimed id(s) on {1}{2}".format(
                    len(unclaimed), where,
                    ", claimed at the merge" if unclaimed and not on_main() else ""))
 
@@ -1880,7 +1994,10 @@ def check_claim_vocabulary(report: Report) -> None:
             "`_ID_SLUG` is not `_STEP_SLUG` with the separating hyphen in front of it: "
             "{0!r} against {1!r}.".format(_ID_SLUG, _STEP_SLUG)))
     report.add("claim vocabulary", MECHANICAL, findings,
-               "one slug grammar, declared in the auditor and in the claimer")
+               "one slug grammar, declared in the auditor and in the claimer",
+               # Two declarations, and the row exists because they can disagree: the
+               # claimer's SLUG and this file's _STEP_SLUG / _ID_SLUG pair.
+               scanned=2)
 
 
 # ------------------------------------------------------------------------- env vars
@@ -1983,7 +2100,8 @@ def check_decision_structure(report: Report) -> None:
                 for target in decision_files() for f in guard.check_structure(target)]
     entries = [e for target in decision_files() for e in guard.entries(read(target))]
     report.add("decision structure", MECHANICAL, findings,
-               f"{len(entries)} entries, every heading and bold reaches the hook")
+               f"{len(entries)} entries, every heading and bold reaches the hook",
+               scanned=len(entries))
 
 
 def check_decision_index(report: Report) -> None:
@@ -2055,7 +2173,8 @@ def check_decision_index(report: Report) -> None:
         if got_ids != [i for i in want_ids if i in got_ids]:
             findings.append(Finding("CLAUDE.md", "the index is not in heading order."))
     report.add("decision index", MECHANICAL, findings,
-               f"{len(got)} indexed, matching {len(want)} headings")
+               f"{len(got)} indexed, matching {len(want)} headings",
+               scanned=len(want))
 
 
 def check_entry_budget(report: Report) -> None:
@@ -2079,9 +2198,11 @@ def check_entry_budget(report: Report) -> None:
     findings = [Finding(f.where, f.message)
                 for target in decision_files()
                 for f in guard.check_budget(target, ENTRY_BUDGET)]
-    total = sum(len(e.body) for target in decision_files() for e in guard.entries(read(target)))
+    sized = [e for target in decision_files() for e in guard.entries(read(target))]
+    total = sum(len(e.body) for e in sized)
     report.add("entry budget", ADVISORY, findings,
-               f"{total:,} bytes of entries, {len(findings)} over {ENTRY_BUDGET:,}")
+               f"{total:,} bytes of entries, {len(findings)} over {ENTRY_BUDGET:,}",
+               scanned=len(sized))
 
 
 def check_debts_headings(report: Report) -> None:
@@ -2136,7 +2257,8 @@ def check_debts_headings(report: Report) -> None:
         seen[number] = lineno
 
     report.add("debts headings", MECHANICAL, findings,
-               f"{total} headings, every one addressable by `_debts_section`")
+               f"{total} headings, every one addressable by `_debts_section`",
+               scanned=total)
 
 
 def _debts_section(number: int) -> Optional[str]:
@@ -2365,6 +2487,7 @@ def check_claim_decode(report: Report) -> None:
         findings,
         f"{len(_CLAIM_WRITERS)} claim writers, one vocabulary "
         f"({len(tables.get(_CLAIM_WRITERS[0], ())) } keys)",
+        scanned=len(_CLAIM_WRITERS),
     )
 
 
@@ -2465,6 +2588,7 @@ def check_claim_clients(report: Report) -> None:
         MECHANICAL,
         findings,
         f"{checked} client writers send exactly what their route decodes",
+        scanned=checked,
     )
 
 
@@ -2574,6 +2698,7 @@ def check_detector_standing(report: Report) -> None:
         MECHANICAL,
         findings,
         f"{checked} published figures against harness/results/detect.json",
+        scanned=checked,
     )
 
 
@@ -2627,6 +2752,7 @@ def check_sole_reader(report: Report) -> None:
         MECHANICAL,
         findings,
         f"{len(readers)} history readers, every claim about them counts right",
+        scanned=len(readers),
     )
 
 
@@ -2656,10 +2782,32 @@ def check_server_concurrency(report: Report) -> None:
 
     Nothing here judges whether the concurrency is right. It judges whether the document and the
     code agree about what it IS, which is the only half a checker can hold honestly (D16).
+
+    **TWO PUBLICATIONS, AS OF THIS ROW'S SECOND WIDENING. Only `docs/DEBTS.md` §11 had a
+    reader, and CLAUDE.md publishes the same four attributed literals** — `class
+    CaptureServer(ThreadingHTTPServer)`, `request_queue_size = 128`, `CaptureHandler.timeout
+    = 15`, `REQUEST_SLOTS = 4` — in the file every session loads before it touches the server
+    whose collapse at 150 connections is measured. A retune that fails this row via §11 while
+    CLAUDE.md goes on saying 4 is a document that is wrong in the more-read of the two places.
+    Both are compared now, and a finding names WHICH file it is about.
+
+    **The fifth fact stays scoped to §11 on purpose**, and this is a narrowing of the
+    proposal that asked for it: the fifth is the METHOD NAME that sends `Connection: close`,
+    and CLAUDE.md deliberately publishes the header without naming the method — §11 is where
+    the mechanism is argued. Demanding the name in both would have failed on an unchanged
+    tree, which is not a defect it found, only prose it wanted. Nothing is uncovered by the
+    narrowing: §11 is the only file that makes the claim, so it is the only file that can go
+    stale on it.
+
+    The bare integers are safe from both anchors for the reason the comment below records:
+    CLAUDE.md:1121's "sized this at 12" and "80 Playwright browsers, 969 threads" are
+    measurements, and an ATTRIBUTED anchor can neither be satisfied nor tripped by a loose
+    number.
     """
     source = read(ROOT / "server" / "capture_server.py")
     section = _debts_section(11)
     findings: List[Finding] = []
+    compared = 0
 
     if section is None:
         report.add(
@@ -2676,6 +2824,25 @@ def check_server_concurrency(report: Report) -> None:
             "",
         )
         return
+
+    # The two publications of these facts, in reading order. `where` is what a finding
+    # names and `called` is what the sentence calls itself, so a message reads the same
+    # whichever file is wrong.
+    publications: List[Tuple[str, str, str]] = [
+        ("docs/DEBTS.md", "section 11", section),
+    ]
+    claude_md = ROOT / "CLAUDE.md"
+    claude_text = read(claude_md) if exists(claude_md) else None
+    if claude_text is None:
+        findings.append(
+            Finding(
+                "CLAUDE.md",
+                "is not there, and it publishes this server's concurrency facts to every "
+                "session that loads it. Nothing else reconciles that copy.",
+            )
+        )
+    else:
+        publications.append(("CLAUDE.md", "the capture-server bullet", claude_text))
 
     for what, pattern, shape, anchor, published in _CONCURRENCY_FACTS:
         found = pattern.search(source)
@@ -2710,32 +2877,35 @@ def check_server_concurrency(report: Report) -> None:
         # So the section must publish the figure in a form that ATTRIBUTES it to this fact —
         # `REQUEST_SLOTS = 4`, not a 4 in a table of slot counts — and the value it attributes
         # is what gets compared. Coincidence cannot satisfy that; only agreement can.
-        said = anchor.search(section)
-        if said is None:
-            findings.append(
-                Finding(
-                    "docs/DEBTS.md",
-                    f"section 11 never attributes a value to {what}. It has to publish one as "
-                    f"`{published}` for this row to tell agreement from coincidence — a bare "
-                    f"`{value}` somewhere in the section is not a claim about {what}, and this "
-                    f"row used to accept one.",
+        for where, called, text in publications:
+            compared += 1
+            said = anchor.search(text)
+            if said is None:
+                findings.append(
+                    Finding(
+                        where,
+                        f"{called} never attributes a value to {what}. It has to publish one as "
+                        f"`{published}` for this row to tell agreement from coincidence — a bare "
+                        f"`{value}` somewhere in it is not a claim about {what}, and this "
+                        f"row used to accept one.",
+                    )
                 )
-            )
-        elif said.group(1) != value:
-            findings.append(
-                Finding(
-                    "docs/DEBTS.md",
-                    f"section 11 publishes {what} as `{published.replace('<n>', said.group(1)).replace('<seconds>', said.group(1)).replace('<base>', said.group(1))}` "
-                    f"and `server/capture_server.py` says `{value}`. The code is the authority; "
-                    f"the section is the published account of this server's concurrency, and it "
-                    f"is now describing one that is gone.",
+            elif said.group(1) != value:
+                findings.append(
+                    Finding(
+                        where,
+                        f"{called} publishes {what} as `{published.replace('<n>', said.group(1)).replace('<seconds>', said.group(1)).replace('<base>', said.group(1))}` "
+                        f"and `server/capture_server.py` says `{value}`. The code is the authority; "
+                        f"the document is the published account of this server's concurrency, and it "
+                        f"is now describing one that is gone.",
+                    )
                 )
-            )
 
     # The fifth fact, and the only one that is a NAME rather than a literal. Section 11 already
     # names `Connection: close`; what it did not name is where the header is sent from, and
     # that is the half the pool's safety actually rests on.
     owner = _close_header_owner()
+    compared += 1
     if owner is None:
         findings.append(
             Finding(
@@ -2761,7 +2931,8 @@ def check_server_concurrency(report: Report) -> None:
         "server concurrency",
         MECHANICAL,
         findings,
-        "5 published facts against server/capture_server.py",
+        f"{compared} published facts against server/capture_server.py",
+        scanned=compared,
     )
 
 
@@ -2890,6 +3061,7 @@ def check_shipping_columns(report: Report) -> None:
         MECHANICAL,
         findings,
         f"{len(_SHIPPING_COLUMN_CLAIMS)} published counts against pipeline/pirateship.py ({total})",
+        scanned=len(_SHIPPING_COLUMN_CLAIMS),
     )
 
 
@@ -3020,6 +3192,7 @@ def check_work_item_standing(report: Report) -> None:
         findings,
         f"{len(claims)} claims in {_WORK_ITEM_READER.name} against "
         f"{len(declared)} work items declared in §3",
+        scanned=len(claims),
     )
 
 # The spec's own sentence, and the two literals harness T7 asserts. The harness is the
@@ -3129,6 +3302,7 @@ def check_router_certainty(report: Report) -> None:
         findings,
         f"{len(_CERTAINTY_SPEC_CLAIMS)} published splits against harness T7 "
         f"({certain} of {total})",
+        scanned=len(_CERTAINTY_SPEC_CLAIMS),
     )
 
 
@@ -3236,6 +3410,7 @@ def check_not_built_endpoints(report: Report) -> None:
         findings,
         f"{len(declared)} declared in {_NOT_BUILT_MODULE.name}, {len(quoted)} quoted in "
         f"{_NOT_BUILT_SPEC.name}",
+        scanned=len(declared),
     )
 
 
@@ -3345,6 +3520,7 @@ def check_transport_standing(report: Report) -> None:
         findings,
         f"{len(proven)} proven and {len(unproven)} unexercised calls against "
         f"{len(_TRANSPORT_READERS)} readers",
+        scanned=len(proven) + len(unproven),
     )
 
 
@@ -3368,7 +3544,8 @@ def check_env_vars(report: Report, docs: List[Path], allowed: Dict[str, str]) ->
                             f"is named before it is built.",
                         )
                     )
-    report.add("env vars", MECHANICAL, findings, f"{len(seen)} documented, all real")
+    report.add("env vars", MECHANICAL, findings, f"{len(seen)} documented, all real",
+               scanned=len(seen))
 
 
 # Every file that is not markdown and can name an environment variable, WITH the extensionless
@@ -3448,6 +3625,7 @@ def check_env_names(report: Report) -> None:
         MECHANICAL,
         findings,
         f"{len(sites)} named in code, all documented",
+        scanned=len(sites),
     )
 
 
@@ -3831,7 +4009,8 @@ def check_map(report: Report, allowed: Dict[str, str]) -> None:
     # could not have told a shipped step from an open one, which is now half the claim. The
     # replacement reads the two headings and reconciles each separately, in both directions.
 
-    report.add("repo map", MECHANICAL, findings, f"{claimed} entries match the tree")
+    report.add("repo map", MECHANICAL, findings, f"{claimed} entries match the tree",
+               scanned=claimed)
 
 
 # ------------------------------------------------------------------- the game registry
@@ -4326,6 +4505,7 @@ def check_hook_roster(report: Report) -> None:
         MECHANICAL,
         findings,
         f"{len(on_disk)} hooks, all in docs/map.py",
+        scanned=len(on_disk),
     )
 
 
@@ -4496,6 +4676,7 @@ def check_codex_hooks(report: Report) -> None:
         findings,
         f"{len(claude_triples)} hooks in .claude/settings.json, all mirrored in "
         f".codex/hooks.json",
+        scanned=len(claude_triples),
     )
 
 
@@ -4574,7 +4755,8 @@ def check_map_sections(report: Report) -> None:
 
     covered = sum(1 for name in sections if readers[name])
     report.add("map sections", MECHANICAL, findings,
-               f"{covered} of {len(sections)} sections have a reader, consumer list agrees")
+               f"{covered} of {len(sections)} sections have a reader, consumer list agrees",
+               scanned=len(sections))
 
 
 # ------------------------------------------------- the build order against its own source
@@ -4656,7 +4838,8 @@ def check_build_order_mirror(report: Report) -> None:
             ))
 
     report.add("build order mirror", MECHANICAL, findings,
-               f"{total} steps, the same ids in both files, in the same two lists")
+               f"{total} steps, the same ids in both files, in the same two lists",
+               scanned=total)
 
 
 
@@ -5064,6 +5247,7 @@ def check_game_vocabulary(report: Report) -> None:
         MECHANICAL,
         findings,
         f"{len(entries)} games, {checked} export rarities accounted for",
+        scanned=len(entries),
     )
 
 
@@ -5162,6 +5346,7 @@ def check_game_coverage(report: Report) -> None:
         ADVISORY,
         findings,
         f"{committed} committed exports, {len(sources) - committed} opt-in",
+        scanned=len(sources),
     )
 
 
@@ -5229,6 +5414,7 @@ def check_matrix_superset(report: Report) -> None:
         MECHANICAL,
         findings,
         f"{checked} observed rarity/finish pairs, all allowed",
+        scanned=checked,
     )
 
 
@@ -5308,6 +5494,7 @@ def check_join_key_shape(report: Report) -> None:
         MECHANICAL,
         findings,
         f"{checked} composed-key games checked against export Number cells",
+        scanned=checked,
     )
 
 
@@ -5534,6 +5721,7 @@ def check_motion_params(report: Report) -> None:
         MECHANICAL,
         findings,
         f"{len(MOTION_MIRROR)} mirrored constants agree, {len(MOTION_UNMIRRORED)} accounted for",
+        scanned=len(MOTION_MIRROR),
     )
 
 
@@ -5603,6 +5791,7 @@ def check_supervisor_self_watch(report: Report) -> None:
         MECHANICAL,
         findings,
         f"{len(declared)} self-files, every module-scope import accounted for",
+        scanned=len(declared),
     )
 
 
@@ -5691,6 +5880,7 @@ def check_withhold_reasons(report: Report) -> None:
         MECHANICAL,
         findings,
         f"{len(authored)} authored, offered by the screen, none unreachable",
+        scanned=len(authored),
     )
 
 
@@ -5823,6 +6013,7 @@ def check_order_reasons(report: Report) -> None:
         MECHANICAL,
         findings,
         f"{len(authored)} authored, offered by the screen, none unreachable",
+        scanned=len(authored),
     )
 
 
@@ -5978,6 +6169,7 @@ def check_pricing_presets(report: Report) -> None:
         MECHANICAL,
         findings,
         f"{len(authored)} priced, written by the screen, key rule and basis agree",
+        scanned=len(authored),
     )
 
 
@@ -6230,6 +6422,7 @@ def check_hint_reasons(report: Report) -> None:
         findings,
         f"{len(reachable)} refusals reachable from {HINT_REASON_ROOT}(), "
         f"{len(named)} labeled by the screen",
+        scanned=len(reachable),
     )
 
 
@@ -6390,6 +6583,7 @@ def check_transport_promise(report: Report) -> None:
         findings,
         f"{len(hosts)} host, {len({m for m, _ in reachable})} methods, {len(reachable)} routes, "
         f"as promised and as called",
+        scanned=len(reachable),
     )
 
 
@@ -6506,6 +6700,7 @@ def check_export_request(report: Report) -> None:
         findings,
         f"{len(EXPORT_STANDING)} catalogue filters and {len(LIVE_QUERY_EXPECTED)} live query "
         f"parameters, each at its measured value",
+        scanned=len(EXPORT_STANDING) + len(LIVE_QUERY_EXPECTED),
     )
 
 
@@ -6762,6 +6957,7 @@ def check_reason_emissions(report: Report) -> None:
         findings,
         f"{len(published)} published reasons, {len(published) - len(UNEMITTED_REASONS)} with "
         f"a producer and {len(UNEMITTED_REASONS)} argued",
+        scanned=len(published),
     )
 
 
@@ -6874,6 +7070,7 @@ def check_reason_codes(report: Report) -> None:
         MECHANICAL,
         findings,
         f"{len(documented)} enumerated, {len(labels)} labeled, all defined",
+        scanned=len(documented),
     )
 
 
@@ -7121,6 +7318,7 @@ def check_tested_by_reach(report: Report) -> None:
         MECHANICAL,
         findings,
         f"{claims} claims, every cited test reaches what it names",
+        scanned=claims,
     )
 
 
@@ -7224,7 +7422,8 @@ def check_status_sources(report: Report) -> None:
                     if req not in payload:
                         findings.append(Finding(spot, f"`{name}` has no `{req}` key."))
 
-    report.add("status sources", MECHANICAL, findings, f"{checked} declared, all resolve")
+    report.add("status sources", MECHANICAL, findings, f"{checked} declared, all resolve",
+               scanned=checked)
 
 
 # ------------------------------------------------ the palette the app actually renders from
@@ -7702,6 +7901,7 @@ def check_design_tokens(report: Report) -> None:
         token_findings(claims, light, dark, every),
         f"{len(every)} declared tokens, every one named by the block; "
         f"{len(claims.hexes)} hexes compared across both themes",
+        scanned=len(every),
     )
 
 
@@ -7759,12 +7959,20 @@ def check_raw_color(report: Report) -> None:
     already records that nothing audits the values inside them.
     """
     if not exists(APP_STYLES):
+        # A ROW, NOT A RETURN. A silent return deletes the row from the render entirely,
+        # and nothing in this file notices a row that is absent rather than green — the
+        # same blind spot `check dispatch`'s own comment records about itself. With a
+        # subject count of 0 the render says `none` and `subject counts` fails the commit.
+        report.add("raw color", MECHANICAL, [],
+                   f"{rel(APP_STYLES)} is not there, so no stylesheet was read", scanned=0)
         return
 
     findings: List[Finding] = []
+    sheets = 0
     for path in sorted(APP_STYLES.glob("*.css")):
         if path == TOKENS_CSS:
             continue
+        sheets += 1
         for number, line in enumerate(strip_css_comments(read(path)).splitlines(), start=1):
             for literal in _RAW_COLOR_RE.findall(line):
                 findings.append(
@@ -7776,8 +7984,10 @@ def check_raw_color(report: Report) -> None:
                     )
                 )
 
-    report.add("raw color", MECHANICAL, findings, f"{len(findings)} literals outside tokens.css"
-               if findings else "every color comes from a token")
+    report.add("raw color", MECHANICAL, findings,
+               f"{len(findings)} literals outside tokens.css" if findings
+               else f"every color in {sheets} sheets comes from a token",
+               scanned=sheets)
 
 
 
@@ -8051,7 +8261,7 @@ def check_breakpoints(report: Report) -> None:
     report.add("breakpoints", MECHANICAL, findings, (
         f"{blocks} blocks over {len(widths)} media widths in "
         f"{sum(1 for f in sheets.values() if f.blocks)} sheets, all on the ladder; "
-        f"{len(declared)} named containers, each with a reader"))
+        f"{len(declared)} named containers, each with a reader"), scanned=blocks)
 
 
 def check_breakpoint_columns(report: Report) -> None:
@@ -8106,7 +8316,8 @@ def check_breakpoint_columns(report: Report) -> None:
                 f"longer opens a regime at or above {COLUMN_FLOOR}px. Drop the line: the reason "
                 f"it carries — {why} — is an argument nobody is making.")))
     report.add("breakpoint columns", ADVISORY, findings,
-               f"{len(sheets)} sheets, {len(ladder.blind)} named column-blind")
+               f"{len(sheets)} sheets, {len(ladder.blind)} named column-blind",
+               scanned=len(sheets))
 
 
 # ------------------------------------------------------------------ the mark (D102)
@@ -8165,6 +8376,10 @@ def check_logo_parity(report: Report) -> None:
     Provably wrong when it fires and no judgement to defer — both sides are literals.
     """
     if not exists(LOGO_SPEC) or not exists(MARK_PALETTES):
+        # A ROW, NOT A RETURN — see `raw color`. A silent return deletes the row from
+        # the render, and an absent row is the one state nothing in this file reads.
+        report.add("logo parity", MECHANICAL, [],
+                   "the spec or the generated palettes are not there", scanned=0)
         return
 
     spec = read(LOGO_SPEC)
@@ -8248,7 +8463,7 @@ def check_logo_parity(report: Report) -> None:
                     f"re-run `node scripts/build-mark.mjs`, or move section 9 first.",
                 ))
 
-    report.add("logo parity", MECHANICAL, findings,
+    report.add("logo parity", MECHANICAL, findings, scanned=len(published), summary=
                f"{len(published)} locked marks, every prism, ground, bracket and base "
                f"against section 9 ({sum(len(m['prism']) + len(m['ground']) + len(m['bracket']) + 1 for m in published.values())} hexes)"
                if not findings else f"{len(findings)} disagreements with section 9")
@@ -8373,7 +8588,7 @@ def check_mac_icon_grid(report: Report) -> None:
                 f"Re-run `node scripts/build-mark.mjs --icons`.",
             ))
 
-    report.add("mac icon grid", MECHANICAL, findings,
+    report.add("mac icon grid", MECHANICAL, findings, scanned=len(declared), summary=
                (f"{published.group(1)}/{published.group(2)} in section 17 and in build-mark.mjs, "
                 f"over {len(declared)} inset icons"
                 if published and const and not findings
@@ -8402,6 +8617,10 @@ def check_lockup_bracket(report: Report) -> None:
     an `.html`. Provably wrong when it fires — both sides are literals.
     """
     if not exists(SIDEBAR_MORPH) or not exists(MARK_PALETTES):
+        # A ROW, NOT A RETURN — see `raw color`. A silent return deletes the row from
+        # the render, and an absent row is the one state nothing in this file reads.
+        report.add("lockup bracket", MECHANICAL, [],
+                   "the lockup sheet or the generated palettes are not there", scanned=0)
         return
     sheet, gen = read(SIDEBAR_MORPH), read(MARK_PALETTES)
     # the component reads the palette rather than naming hexes; if it ever stops, say so here
@@ -8436,7 +8655,8 @@ def check_lockup_bracket(report: Report) -> None:
             f"are one object; a sheet that drifts from the palette makes them two.",
         ))
     report.add("lockup bracket", MECHANICAL, problems,
-               f"{len(want)} stops against `bluesteel`'s locked bracket")
+               f"{len(want)} stops against `bluesteel`'s locked bracket",
+               scanned=len(want))
 
 
 def check_rail_mark(report: Report) -> None:
@@ -8452,8 +8672,15 @@ def check_rail_mark(report: Report) -> None:
     wrong when it fires: both sides are literals.
     """
     if not exists(SIDEBAR_MORPH) or not exists(MARK_GEOMETRY):
+        # A ROW, NOT A RETURN — see `raw color`. A silent return deletes the row from
+        # the render, and an absent row is the one state nothing in this file reads.
+        report.add("rail mark", MECHANICAL, [],
+                   "the sidebar mockup or the generated mark is not there", scanned=0)
         return
     sheet, gen = read(SIDEBAR_MORPH), read(MARK_GEOMETRY)
+    # How many comparisons this row actually made. Two of them are the copied
+    # constants and the rest are the tab's, which only exist if the favicon does.
+    compared = 0
     want_path = re.search(r"SMALL_BRACKET = '([^']+)'", gen)
     want_stroke = re.search(r"SMALL_STROKE = ([\d.]+)", gen)
     got_path = re.search(r"MARK_SMALL_BRACKET = '([^']+)'", sheet)
@@ -8466,6 +8693,7 @@ def check_rail_mark(report: Report) -> None:
         )], "")
         return
     problems = []
+    compared += 2  # the bracket path and the stroke, both copied out of the generated mark
     if not got_path or got_path.group(1) != want_path.group(1):
         problems.append(Finding(
             rel(SIDEBAR_MORPH),
@@ -8521,6 +8749,7 @@ def check_rail_mark(report: Report) -> None:
     # the bracket pair contains none.
     if exists(FAVICON):
         fav = read(FAVICON)
+        compared += 3  # the rect, the settled paint, and the gradient
         if "<rect" in fav:
             problems.append(Finding(
                 rel(FAVICON),
@@ -8557,7 +8786,8 @@ def check_rail_mark(report: Report) -> None:
                 "noise. Every other surface keeps its metal; this one traded it for legibility.",
             ))
     report.add("rail mark", MECHANICAL, problems,
-               "the rail bracket is the shipped mark — in the sheet, at both ends of the morph, and on the tab")
+               "the rail bracket is the shipped mark — in the sheet, at both ends of the "
+               "morph, and on the tab", scanned=compared)
 
 
 def check_lockup_params(report: Report) -> None:
@@ -8576,6 +8806,10 @@ def check_lockup_params(report: Report) -> None:
     Provably wrong when it fires — both sides are literals.
     """
     if not exists(LOGO_SPEC) or not exists(LOCKUP_ROUND):
+        # A ROW, NOT A RETURN — see `raw color`. A silent return deletes the row from
+        # the render, and an absent row is the one state nothing in this file reads.
+        report.add("lockup params", MECHANICAL, [],
+                   "the spec or the round lockup sheet is not there", scanned=0)
         return
 
     spec_section = read(LOGO_SPEC)
@@ -8665,7 +8899,7 @@ def check_lockup_params(report: Report) -> None:
                     f"ignore.",
                 ))
 
-    report.add("lockup params", MECHANICAL, findings,
+    report.add("lockup params", MECHANICAL, findings, scanned=len(published), summary=
                f"{len(published)} settled values against the sheet's holds"
                + (" and the generated geometry" if exists(LOCKUP_GEOMETRY) else "")
                + (f", `{sweeping}` under test" if sweeping in published else "")
@@ -9078,6 +9312,7 @@ def check_storage_keys(report: Report) -> None:
         findings,
         f"{len(local)} device-local keys against CLAUDE.md's roster, "
         f"{len(session)} session keys all named in markdown",
+        scanned=len(local) + len(session),
     )
 
 
@@ -9232,6 +9467,7 @@ def check_views_opsec(report: Report) -> None:
         MECHANICAL,
         blocking,
         f"{checked} of {len(entries)} views resolve in ROUTES, none address the photo service",
+        scanned=len(entries),
     )
     report.add(
         "views exposure",
@@ -9240,6 +9476,7 @@ def check_views_opsec(report: Report) -> None:
         ("no pooled game in the registry — a stored photo is not a bearer instrument today"
          if not pooled
          else "no manifest view can draw a stored photo"),
+        scanned=len(entries),
     )
 
 
@@ -9365,6 +9602,7 @@ def check_doc_hygiene(report: Report, docs: List[Path]) -> None:
         ADVISORY,
         findings,
         f"{len(docs)} markdown files well-formed as documents",
+        scanned=len(docs),
     )
 
 
@@ -9644,6 +9882,7 @@ def check_route_rosters(report: Report) -> None:
         findings,
         f"{marked} declared roster{'' if marked == 1 else 's'} against "
         f"{len(expected.get('all', []))} registered routes",
+        scanned=marked,
     )
 
 # ------------------------------------------------------ deletions a decision records
@@ -9665,27 +9904,171 @@ def check_route_rosters(report: Report) -> None:
 # session says a deletion is meant to stay one. A symbol that is meant to come back is removed
 # from the table in the same commit that restores it, with the entry amended to say so.
 
+# THE SCAN ROOTS. `app/src` alone until 2026-09-12, which is why the row printed `ok` over
+# a resurrection in the OTHER language for a quarter: four of this quarter's five recorded
+# deletions took code out of `server/`, `cli/` and `harness/`, and the scan could not look
+# at any of them. A deletion is not an app-only kind of ruling.
+DELETION_ROOTS: Tuple[str, ...] = (
+    "app/src", "server", "store", "pipeline", "cli", "harness",
+)
+DELETION_SUFFIXES: Tuple[str, ...] = (".ts", ".tsx", ".css", ".py")
+
+# NAMES THAT CAME BACK ON PURPOSE, AND MAY NOT BE NEEDLES. Recorded here rather than left
+# out silently, because "not in the table" and "deliberately not in the table" are the same
+# absence to a reader, and the next session to widen this row would add them straight back.
+#
+#   `do_order_fill`, `POST /orders/fill`   D96 deleted D90's envelope fill; D113 REBUILT a
+#       route and a handler under both names for a different job — closing copies of a line
+#       with no card behind them. Both exist today (server/capture_server.py, app/src/
+#       server.ts, app/src/types.ts) and both are correct. A name is not a capability.
+#   D110's three dark-only hover overrides   `.bn-nav-link`, `.capture-row` and
+#       `.capture-opt` are LIVE classes; what D110 deleted is a declaration inside a
+#       `[data-theme='dark']` block. A substring needle for that is either the class name —
+#       red on every run — or a string that appears nowhere, which is a needle that can
+#       never fire, i.e. the vacuous green this row is about. It wants a CSS-structural
+#       reader, not this one.
+
 RECORDED_DELETIONS: Tuple[Tuple[str, str, Tuple[str, ...]], ...] = (
-    # (decision, what it deleted, the strings whose presence under app/src contradicts it)
+    # (decision, what it deleted, the strings whose presence in the scanned code contradicts it)
     ("D119", "the `#/inventory` location card", ("LocationCard", "inventory-location")),
+    ("D96", "D90's envelope fill — the walk, its banner and its harness case",
+     ("orderWalk", "OrderWalkBanner", "check_order_fill")),
+    ("D132", "`PositionLabel`'s `indexNote`", ("indexNote",)),
+    ("D155", "the segment reader that computed edges from card counts", ("lensOf",)),
+    # `cadence.ts` is the needle that keeps the prose classifier LIVE: it appears today in
+    # exactly one place, a block comment in `app/src/motion.ts` narrating the retirement, so
+    # every run exercises the comment/code split rather than leaving it to the self-test
+    # alone. A classifier nothing routes through is the vacuous green one register down.
+    ("D144", "the beat-locked cadence trigger, its module and its period pin",
+     ("cadenceTrigger", "CadenceMachine", "DEFAULT_CADENCE", "periodPin", "pinPeriod",
+      "cadence.ts")),
 )
 
 
+def _prose_blanked(path: Path, text: str) -> str:
+    """`text` with comments — and, in Python, docstrings — replaced by spaces.
+
+    OFFSETS AND LINE NUMBERS SURVIVE, so a hit found here reports the line it is really on.
+
+    WHY THIS EXISTS: `server/capture_server.py`'s docstring NARRATES one of these
+    deletions — "`/orders/fill`, which D96 deleted rather than wired up" — and reading that
+    as the symbol existing would make the row red for the prose that is doing its job.
+    Prose about a deletion is the record of it; executable code is the contradiction.
+
+    Python docstrings only, never every string literal. Blanking all of them would turn a
+    real code hit like `if name == "orderWalk"` into prose, which is the wrong direction to
+    be wrong in for a row whose whole subject is a resurrection.
+    """
+    out = list(text)
+
+    def blank(start: int, end: int) -> None:
+        for i in range(max(0, start), min(len(out), end)):
+            if out[i] != "\n":
+                out[i] = " "
+
+    if path.suffix == ".py":
+        try:
+            for token in tokenize.generate_tokens(io.StringIO(text).readline):
+                if token.type == tokenize.COMMENT:
+                    blank(_offset(text, token.start), _offset(text, token.end))
+        except (tokenize.TokenError, IndentationError, SyntaxError):
+            pass  # fails open: an unparseable file is scanned raw
+        try:
+            tree = ast.parse(text)
+        except SyntaxError:
+            tree = None
+        if tree is not None:
+            for node in ast.walk(tree):
+                for child in ast.iter_child_nodes(node):
+                    if (
+                        isinstance(child, ast.Expr)
+                        and isinstance(child.value, ast.Constant)
+                        and isinstance(child.value.value, str)
+                    ):
+                        blank(
+                            _offset(text, (child.lineno, child.col_offset)),
+                            _offset(text, (child.end_lineno or child.lineno,
+                                           child.end_col_offset or 0)),
+                        )
+    else:
+        for found in TS_COMMENT.finditer(text):
+            blank(found.start(), found.end())
+    return "".join(out)
+
+
+def _offset(text: str, position: Tuple[int, int]) -> int:
+    """(1-based line, 0-based column) -> character offset."""
+    line, column = position
+    offset = 0
+    for _ in range(line - 1):
+        found = text.find("\n", offset)
+        if found == -1:
+            return len(text)
+        offset = found + 1
+    return min(len(text), offset + column)
+
+
 def check_recorded_deletions(report: Report) -> None:
-    """A symbol a decision records as deleted does not exist under app/src.
+    """A symbol a decision records as deleted does not exist in the code.
 
     MECHANICAL: the entry says the thing is gone, and a grep says whether it is. See the banner
     above for the merge that made this row necessary — and for why the guard cannot live in
     the files the deletion touched.
+
+    **SIX ROOTS, NOT ONE.** The scan walked `app/src` and nothing else, so it could not see
+    four of the five deletions recorded this quarter — `do_order_fill` and its dispatcher in
+    `server/`, harness T7's `check_order_fill`, the cadence module's Python mirror. A row
+    whose subject is "does this symbol exist" has to look everywhere the symbol could be.
+
+    **PROSE IS NOT A RESURRECTION.** A hit inside a comment or a docstring is the deletion
+    being narrated and is counted in the summary rather than raised: `capture_server.py`
+    carries exactly such a sentence about D96. The count is printed so a needle that lives
+    only in prose can be told from one with no hits at all — and it is deliberately NOT an
+    advisory finding, because `exit 2` in this repo already stands permanently lit and one
+    more standing question would teach the next reader to skip the code entirely.
+
+    **ITS OWN DENOMINATORS ARE PUBLISHED.** The roster is hand-kept, so its size is the
+    thing most likely to be wrong about this row, and a scan that enumerated zero roots or
+    zero needles is a finding rather than an `ok` — the shape a bare `scanned` count cannot
+    see, since the row would still have walked hundreds of files to compare nothing.
     """
     findings: List[Finding] = []
-    for decision, what, needles in RECORDED_DELETIONS:
-        for path in sorted(_walk(APP_SRC, (".ts", ".tsx", ".css")), key=rel):
-            text = read(path)
+    needle_count = sum(len(needles) for _, _, needles in RECORDED_DELETIONS)
+
+    roots = [ROOT / root for root in DELETION_ROOTS if exists(ROOT / root)]
+    if not roots:
+        findings.append(
+            Finding(
+                "scripts/docs-audit.py -> DELETION_ROOTS",
+                f"names {len(DELETION_ROOTS)} roots and none of them is on disk, so this row "
+                f"compared nothing. Re-point the list: a scan with no root reports no "
+                f"resurrection however many there are.",
+            )
+        )
+    if not needle_count:
+        findings.append(
+            Finding(
+                "scripts/docs-audit.py -> RECORDED_DELETIONS",
+                "holds no needle, so the row is watching nothing. An emptied roster and a "
+                "tree with no resurrection in it print the same word otherwise.",
+            )
+        )
+
+    paths = sorted({path for root in roots for path in _walk(root, DELETION_SUFFIXES)}, key=rel)
+    narrated = 0
+    for path in paths:
+        text = read(path)
+        code = None
+        for decision, what, needles in RECORDED_DELETIONS:
             for needle in needles:
                 if needle not in text:
                     continue
-                line = text.count("\n", 0, text.index(needle)) + 1
+                if code is None:
+                    code = _prose_blanked(path, text)
+                if needle not in code:
+                    narrated += 1
+                    continue
+                line = code.count("\n", 0, code.index(needle)) + 1
                 findings.append(
                     Finding(
                         f"{rel(path)}:{line}",
@@ -9696,12 +10079,15 @@ def check_recorded_deletions(report: Report) -> None:
                         "happened the first time.",
                     )
                 )
+
     report.add(
         "recorded deletions",
         MECHANICAL,
         findings,
-        f"{len(RECORDED_DELETIONS)} recorded deletion{'' if len(RECORDED_DELETIONS) == 1 else 's'} "
-        "still absent from app/src",
+        f"{len(RECORDED_DELETIONS)} recorded deletion{'' if len(RECORDED_DELETIONS) == 1 else 's'}, "
+        f"{needle_count} needles over {len(roots)} roots and {len(paths)} files"
+        + (f"; {narrated} narrated in prose" if narrated else ""),
+        scanned=needle_count * len(roots),
     )
 
 
@@ -9913,6 +10299,7 @@ def check_design_check_verdict(report: Report) -> None:
         MECHANICAL,
         findings,
         f"{where} agreed by the reporter, the config, {len(_VERDICT_RECIPES)} recipes and the prose",
+        scanned=sum(1 for text in (reporter, config, makefile, published) if text),
     )
 
 
@@ -9961,6 +10348,7 @@ def check_spec_seal(report: Report) -> None:
         MECHANICAL,
         findings,
         f"{sealed} spec{'' if sealed == 1 else 's'} sealed against the capture port",
+        scanned=sealed,
     )
 
 # ------------------------------------------------------------------------ the route census
@@ -10189,7 +10577,7 @@ def check_route_census(report: Report) -> None:
     summary = f"{checked} published counts against {total} routes ({owner} owner)"
     if manifest_owner is not None:
         summary += f", {manifest_owner} owner renders in the manifest"
-    report.add("route census", MECHANICAL, findings, summary)
+    report.add("route census", MECHANICAL, findings, summary, scanned=checked)
 
 
 def check_positional_references(report: Report, docs: List[Path]) -> None:
@@ -10235,12 +10623,15 @@ def check_positional_references(report: Report, docs: List[Path]) -> None:
                     )
         return found
 
-    report.add("check numbering", MECHANICAL, positional(docs), "no check named by position")
+    report.add("check numbering", MECHANICAL, positional(docs),
+               "no check named by position", scanned=len(docs))
+    in_code = python_files() + [ALLOWLIST]
     report.add(
         "numbering in code",
         ADVISORY,
-        positional(python_files() + [ALLOWLIST]),
+        positional(in_code),
         "comments name checks by label",
+        scanned=len(in_code),
     )
 
 
@@ -10381,7 +10772,8 @@ def check_check_registry(report: Report) -> None:
         ).format(token)))
 
     report.add("check registry", MECHANICAL, findings,
-               "{0} checks, in recipe order".format(len(recipe)))
+               "{0} checks, in recipe order".format(len(recipe)),
+               scanned=len(recipe))
 
 
 def check_commit_path(report: Report) -> None:
@@ -10464,7 +10856,8 @@ def check_commit_path(report: Report) -> None:
                 "  the field that stops one being moved back on to the path by tidiness.")))
 
     report.add("commit path", MECHANICAL, findings,
-               "{0} of {1} on the commit path, none of them writing".format(on_path, len(entries)))
+               "{0} of {1} on the commit path, none of them writing".format(on_path, len(entries)),
+               scanned=len(entries))
 
 
 # The published claims about what `make check` runs, as the sentence reads. The anchor is
@@ -10631,7 +11024,8 @@ def check_suite_lock(report: Report) -> None:
 
     report.add("suite lock", MECHANICAL, findings,
                "{0} fleet script{1} behind the lock, {2} serial renderers still serial".format(
-                   len(fleets), "" if len(fleets) == 1 else "s", len(FLEET_RUNNER_SCRIPTS)))
+                   len(fleets), "" if len(fleets) == 1 else "s", len(FLEET_RUNNER_SCRIPTS)),
+               scanned=len(fleets) + len(FLEET_RUNNER_SCRIPTS))
 
 
 # ------------------------------------------------------------ the browser matrix's scope
@@ -10938,7 +11332,8 @@ def check_browser_scope(report: Report) -> None:
         findings.append(Finding(where, message))
 
     report.add("browser scope", MECHANICAL, findings,
-               f"{len(scope)} entries cover {len(seen)} derived dependencies, read fail-open")
+               f"{len(scope)} entries cover {len(seen)} derived dependencies, read fail-open",
+               scanned=len(scope))
 
 
 def check_check_census(report: Report) -> None:
@@ -11002,7 +11397,8 @@ def check_check_census(report: Report) -> None:
                 ).format(extra)))
 
     report.add("check census", MECHANICAL, findings,
-               "{0} published lists, {1} checks each".format(checked, len(expected)))
+               "{0} published lists, {1} checks each".format(checked, len(expected)),
+               scanned=checked)
 
 
 # -------------------------------------------------------------- how callers invoke this
@@ -11130,6 +11526,7 @@ def check_audit_invocation(report: Report) -> None:
         findings,
         f"{len(INVOKERS)} callers, flags all declared, usage {EXIT_USAGE} clear of advisory "
         f"{advisory_code}",
+        scanned=len(INVOKERS),
     )
 
 
@@ -11334,7 +11731,112 @@ def check_dispatch(report: Report, source: Path = SELF) -> None:
             )
 
     report.add(
-        "check dispatch", MECHANICAL, findings, "every check defined here is called by audit()"
+        "check dispatch", MECHANICAL, findings,
+        "every check defined here is called by audit()", scanned=len(checks)
+    )
+
+
+def check_subject_counts(report: Report, staged_only: bool = False) -> None:
+    """Every row above declared how many subjects it had, and an empty one is pinned.
+
+    THE ROW THAT MAKES THE OTHER ROWS HONEST. `Report.render` printed `ok` for any row
+    whose findings list was empty, so a row that examined 2,964 references and a row that
+    examined NONE were the same word. Measured on main inside a green `make check`:
+    `paths 0 references resolve`, `make targets 0 references, 57 targets`, `env vars 0
+    documented, all real`. The four ways a row goes quietly vacuous are all of them
+    invisible that way — a walk root that moved, a renamed directory, an edited suffix
+    list, and a corpus that cannot be read.
+
+    Three findings, three different defects, kept apart on purpose:
+
+      no count      the row printed a verdict over a subject nobody counted. Every row
+                    that can print clean passes `scanned=`; a new one that does not is
+                    stopped here rather than joining the vacuous set.
+      unpinned zero the row examined nothing and `EXPECTED_EMPTY` does not say that is
+                    legitimate. This is the failure the whole exercise is for.
+      stale pin     `EXPECTED_EMPTY` names a row this file no longer emits. A permission
+                    that outlives its row is how an exemption stops being read — the same
+                    discipline `UNDISPATCHED` and the allowlist are held to.
+
+    **A `staged` pin is a permission in ONE MODE.** The eight rows whose whole subject is
+    the markdown set are legitimately empty when `--staged` narrows that set to nothing;
+    the same zero in FULL mode is a broken walk and still fails. Pinning them
+    unconditionally would have blinded the exact three rows the defect was observed on.
+
+    **MECHANICAL, against the proposal that asked for informational.** A tag nothing can
+    fail on is the state this row exists to end: `exit 2` in this repo has 23 standing
+    findings and a measured session pushed past three stale citations because of it. The
+    pin is what keeps that honest — a row that should be empty says so in one line with a
+    reason, and everything else is a defect.
+
+    It cannot itself be vacuous while `audit()` exists: its subject is the other rows, and
+    `check dispatch` already refuses an `audit()` that names none of the checks.
+    """
+    findings: List[Finding] = []
+    emitted = {row.check for row in report.checks}
+
+    for row in report.checks:
+        if row.check == "subject counts":
+            continue
+        if row.scanned is None:
+            findings.append(
+                Finding(
+                    f"scripts/docs-audit.py -> {row.check}",
+                    "declared no subject count, so nothing can tell a row that examined "
+                    "everything from one that examined nothing. Pass `scanned=<n>` at that "
+                    "row's `report.add` — the count it already prints in prose is usually "
+                    "the number.",
+                )
+            )
+            continue
+        if row.scanned:
+            continue
+        pin = EXPECTED_EMPTY.get(row.check)
+        if pin is None:
+            findings.append(
+                Finding(
+                    f"scripts/docs-audit.py -> {row.check}",
+                    "examined NOTHING and printed no problem. Either its subject moved — a "
+                    "walk root, a renamed directory, an edited suffix list, an unreadable "
+                    "corpus — or an empty subject is legitimate here, in which case pin the "
+                    "row by name in `EXPECTED_EMPTY` with the reason beside it. A blanket "
+                    "exemption is how a rule stops being one.",
+                )
+            )
+            continue
+        when, why = pin
+        if when == "staged" and not staged_only:
+            findings.append(
+                Finding(
+                    f"scripts/docs-audit.py -> {row.check}",
+                    f"examined nothing in a FULL run. Its pin is `staged` only — {why} — so "
+                    f"a zero here is a broken walk rather than a narrowed one.",
+                )
+            )
+
+    for name, (when, why) in sorted(EXPECTED_EMPTY.items()):
+        if when == "staged" and not staged_only and name not in emitted:
+            # `coupling` is the case: a staged-only ROW is legitimately absent from a full
+            # run, so its pin cannot be judged stale here. In staged mode it can.
+            continue
+        if name not in emitted:
+            findings.append(
+                Finding(
+                    "scripts/docs-audit.py -> EXPECTED_EMPTY",
+                    f"pins `{name}` ({when}: {why}), and no row by that name was emitted. "
+                    f"Renamed or deleted; either way the pin now permits nothing, and the "
+                    f"row it was written for — if it still exists — is unpinned.",
+                )
+            )
+
+    empty = sum(1 for row in report.checks if row.scanned == 0)
+    report.add(
+        "subject counts",
+        MECHANICAL,
+        findings,
+        f"{len(report.checks)} rows, every one declaring its subject; "
+        f"{empty} examined nothing, all pinned",
+        scanned=len(report.checks),
     )
 
 
@@ -11388,12 +11890,18 @@ def staged_changes() -> Dict[str, int]:
 def check_coupling(report: Report) -> None:
     changes = staged_changes()
     findings: List[Finding] = []
+    # The subject is the source GROUPS this commit actually touched, not the size of
+    # COUPLING — a commit under none of them asks no question, and the row now says so
+    # rather than printing the same `ok` a fully-checked commit gets.
+    groups = 0
     for sources, coupled_docs in COUPLING:
         touched = {
             path: count
             for path, count in changes.items()
             if any(path == s or path.startswith(s) for s in sources)
         }
+        if touched:
+            groups += 1
         if not touched:
             continue
         total = sum(touched.values())
@@ -11412,7 +11920,8 @@ def check_coupling(report: Report) -> None:
                 f"  Still accurate? Not blocking — run /docs-audit to check the prose.",
             )
         )
-    report.add("coupling", ADVISORY, findings, "staged code and its docs move together")
+    report.add("coupling", ADVISORY, findings, "staged code and its docs move together",
+               scanned=groups)
 
 
 # ---------------------------------------------------------- identifier spelling (D60)
@@ -11885,6 +12394,7 @@ def check_shell_substitution(report: Report) -> None:
         findings,
         f"{len(findings)} unescaped backtick(s) in a double-quoted shell string" if findings
         else f"no double-quoted shell string in {scanned} files runs a command by accident",
+        scanned=scanned,
     )
 
 
@@ -11920,6 +12430,7 @@ def check_identifier_spelling(report: Report) -> None:
         findings,
         f"{len(findings)} British identifiers" if findings
         else f"every identifier in {scanned} files is spelled American",
+        scanned=scanned,
     )
 
 
@@ -12346,13 +12857,13 @@ def self_test() -> int:
         doc.write_text("see `harness/no_such_file.py` for details\n", encoding="utf-8")
         report = Report()
         check_paths(report, [doc], {})
-        _, _, findings, _ = report.checks[0]
+        findings = report.checks[0].findings
         ok(len(findings) == 1, "one finding for one dangling path", str(findings))
 
         doc.write_text("see `harness/run.py` for details\n", encoding="utf-8")
         report = Report()
         check_paths(report, [doc], {})
-        _, _, findings, _ = report.checks[0]
+        findings = report.checks[0].findings
         ok(not findings, "no finding for a path that resolves", str(findings))
 
     print("\ncommand references need a fence or backticks")
@@ -12375,23 +12886,23 @@ def self_test() -> int:
         doc.write_text("`pipeline/variant.resolve` is used unchanged.\n", encoding="utf-8")
         report = Report()
         check_paths(report, [doc], {})
-        _, _, findings, _ = report.checks[0]
+        findings = report.checks[0].findings
         ok(not findings, "a real module.function resolves", str(findings))
 
         doc.write_text("`pipeline/variant.no_such_function` does the work.\n", encoding="utf-8")
         report = Report()
         check_paths(report, [doc], {})
-        _, _, findings, _ = report.checks[0]
+        findings = report.checks[0].findings
         ok(len(findings) == 1, "a function that is not defined is reported", str(findings))
 
     print("\nallowlist is self-cleaning")
     report = Report()
     check_allowlist(report, {"harness/run.py": "pretend this is planned"})
-    _, _, findings, _ = report.checks[0]
+    findings = report.checks[0].findings
     ok(len(findings) == 1, "existing path in the allowlist is reported stale", str(findings))
     report = Report()
     check_allowlist(report, {"harness/not_yet.py": "genuinely planned"})
-    _, _, findings, _ = report.checks[0]
+    findings = report.checks[0].findings
     ok(not findings, "absent path in the allowlist is fine", str(findings))
 
     print("\nast readers handle the real files")
@@ -12433,7 +12944,7 @@ def self_test() -> int:
         doc.write_text(f"the orphan rule is check {10} here\n", encoding="utf-8")
         report = Report()
         check_positional_references(report, [doc])
-        rows = {check: (severity, findings) for check, severity, findings, _ in report.checks}
+        rows = {row.check: (row.severity, row.findings) for row in report.checks}
         ok(
             len(rows.get("check numbering", ("", []))[1]) == 1,
             "a positional reference in a doc is reported",
@@ -12442,7 +12953,7 @@ def self_test() -> int:
         ok(
             rows.get("numbering in code", ("", []))[0] == ADVISORY,
             "the code row is advisory, and the doc row is not",
-            str([(check, severity) for check, severity, _, _ in report.checks]),
+            str([(row.check, row.severity) for row in report.checks]),
         )
 
         doc.write_text("the repo-map check owns the orphan rule\n", encoding="utf-8")
@@ -12452,7 +12963,7 @@ def self_test() -> int:
         # a check identified by its position — the exact pattern D17 bans in the docs and
         # this row exists to enforce. It read `[1]` until the count row above it was
         # deleted, at which point it silently retargeted and still passed.
-        by_label = {check: findings for check, _, findings, _ in report.checks}
+        by_label = {row.check: row.findings for row in report.checks}
         findings = by_label["check numbering"]
         ok(not findings, "naming the check by its label is fine", str(findings))
 
@@ -12742,7 +13253,7 @@ def self_test() -> int:
 
     report = Report()
     check_tested_by_reach(report)
-    by_label = {check: findings for check, _, findings, _ in report.checks}
+    by_label = {row.check: row.findings for row in report.checks}
     ok(
         not by_label.get("tested_by reach"),
         "every tested_by claim in this repo's own map reaches what it names",
@@ -12906,7 +13417,7 @@ def self_test() -> int:
         )
     report = Report()
     check_design_tokens(report)
-    by_label = {check: findings for check, _, findings, _ in report.checks}
+    by_label = {row.check: row.findings for row in report.checks}
     ok(
         not by_label["design tokens"],
         "this repo's own tokens.css agrees with docs/DESIGN.md",
@@ -12966,7 +13477,7 @@ def self_test() -> int:
     )
     report = Report()
     check_breakpoints(report)
-    by_label = {check: findings for check, _, findings, _ in report.checks}
+    by_label = {row.check: row.findings for row in report.checks}
     ok(
         not by_label["breakpoints"],
         "this repo's own stylesheets agree with the register",
@@ -12991,7 +13502,7 @@ def self_test() -> int:
     )
     report = Report()
     check_raw_color(report)
-    by_label = {check: findings for check, _, findings, _ in report.checks}
+    by_label = {row.check: row.findings for row in report.checks}
     ok(
         not by_label["raw color"],
         "this repo's own stylesheets read every color from a token",
@@ -13073,7 +13584,7 @@ def self_test() -> int:
     report = Report()
     check_identifier_spelling(report)
     check_shell_substitution(report)
-    by_label = {check: findings for check, _, findings, _ in report.checks}
+    by_label = {row.check: row.findings for row in report.checks}
     ok(
         not by_label["identifier spelling"],
         "every identifier in this tree is spelled American",
@@ -13111,7 +13622,7 @@ def self_test() -> int:
     )
     report = Report()
     check_storage_keys(report)
-    by_label = {check: findings for check, _, findings, _ in report.checks}
+    by_label = {row.check: row.findings for row in report.checks}
     ok(
         not by_label["storage keys"],
         "every storage key the app writes is published where the docs promise it is",
@@ -13192,7 +13703,7 @@ def self_test() -> int:
     # asserting a rule this tree does not follow.
     report = Report()
     check_codex_hooks(report)
-    by_label = {check: findings for check, _, findings, _ in report.checks}
+    by_label = {row.check: row.findings for row in report.checks}
     ok(
         not by_label["codex hooks"],
         ".codex/hooks.json and .claude/settings.json name the same hooks in this tree",
@@ -13274,7 +13785,7 @@ def self_test() -> int:
     ok(code == EXIT_USAGE, f"an unknown flag exits {EXIT_USAGE}, never 2", f"exited {code}")
     report = Report()
     check_audit_invocation(report)
-    by_label = {check: findings for check, _, findings, _ in report.checks}
+    by_label = {row.check: row.findings for row in report.checks}
     ok(not by_label["audit invocation"], "every caller's flags are declared", str(by_label))
 
     # The reason this check asks argparse instead of reading a list out of it: argparse
@@ -13287,7 +13798,7 @@ def self_test() -> int:
         try:
             report = Report()
             check_audit_invocation(report)
-            rows = {check: findings for check, _, findings, _ in report.checks}
+            rows = {row.check: row.findings for row in report.checks}
             ok(
                 not rows["audit invocation"],
                 "an abbreviation argparse accepts is not a finding",
@@ -13296,7 +13807,7 @@ def self_test() -> int:
             caller.write_text("python3 scripts/docs-audit.py --stagx\n", encoding="utf-8")
             report = Report()
             check_audit_invocation(report)
-            rows = {check: findings for check, _, findings, _ in report.checks}
+            rows = {row.check: row.findings for row in report.checks}
             ok(
                 len(rows["audit invocation"]) == 1,
                 "a flag argparse rejects is",
@@ -13376,7 +13887,7 @@ def self_test() -> int:
             try:
                 report = Report()
                 check_dispatch(report, fixture)
-                return {check: found for check, _, found, _ in report.checks}["check dispatch"]
+                return {row.check: row.findings for row in report.checks}["check dispatch"]
             finally:
                 UNDISPATCHED.clear()
                 UNDISPATCHED.update(saved_exempt)
@@ -13577,7 +14088,7 @@ def self_test() -> int:
 
     report = Report()
     check_dispatch(report)
-    by_label = {check: findings for check, _, findings, _ in report.checks}
+    by_label = {row.check: row.findings for row in report.checks}
     ok(
         not by_label["check dispatch"],
         "this file's own checks are every one of them called by audit()",
@@ -13702,6 +14213,10 @@ def audit(staged_only: bool) -> Report:
     check_dispatch(report)
     if staged_only:
         check_coupling(report)
+    # AFTER EVERYTHING, because its subject is the other rows' subject counts — including
+    # `coupling`, which only exists in staged mode. It is the one row that must see the
+    # whole report, so it is the one row that cannot be anywhere but here.
+    check_subject_counts(report, staged_only)
     return report
 
 

@@ -2116,9 +2116,16 @@ was open** — the rule is renumber your own, never another's.
   "Recorded, not built" and named three unreachable modules under `pipeline/` until D66's build
   order was discharged. **§3's T6 — an order DRIVING the inventory walk, with the envelope as the
   unit of the write — is SUPERSEDED** (D96 amended 2026-09-04), and its code is deleted:
-  `POST /orders/fill`, `do_order_fill`, `app/src/orderWalk.ts`,
+  `app/src/orderWalk.ts`,
   `app/src/OrderWalkBanner.tsx`/`.css` and harness T7's `check_order_fill` are all gone, 1,484
-  lines that were main's build and were reachable from no screen here. That section is kept as
+  lines that were main's build and were reachable from no screen here. **`POST /orders/fill`
+  and `do_order_fill` ARE BACK AND THIS SENTENCE SAID OTHERWISE UNTIL 2026-09-12** — D113
+  rebuilt a route and a handler under both names for a different job, closing copies of a
+  line with no card behind them, and nobody amended the sentence that called them gone. A
+  NAME IS NOT A CAPABILITY: what D96 deleted is the envelope walk, and the three files above
+  are what stay deleted. `make docs-audit`'s `recorded deletions` row watches those three in
+  six roots rather than one, and names the two reused spellings as deliberately unwatched so
+  the next widening does not put them back. That section is kept as
   the record of what main made, not as a description of this tree. **The want it served is still
   met, in the shape the owner ruled for** — *"I don't want the walk picking for me"*: the per-copy
   press, from an order's own panel or from the cross-order pass through the drawers (`#/orders`,
