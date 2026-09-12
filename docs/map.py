@@ -1620,9 +1620,15 @@ COMPONENTS = [
                         "`.serve/` pidfile for the D53 case. Both 2026-09-10 incidents are "
                         "reproduced rather than asserted about, and the two edges are both "
                         "cases: the stranger is refused AND survives, and the session's own "
-                        "process is still killable. Mutation-tested: thirteen guards removed "
-                        "one at a time, all thirteen caught.",
-                "governed_by": ["D18", "D53", "D127"],
+                        "process is still killable. EVERY PROCESS IT STARTS CARRIES A PER-RUN "
+                        "TAG and every port is bound rather than probed, because the guard "
+                        "resolves a kill through a MACHINE-WIDE pgrep and a fixed fixture name "
+                        "makes two concurrent runs resolve into each other — D122's shape one "
+                        "register down. A rival fixture built by the same naming rule is the "
+                        "arm that reproduces it. Mutation-tested: thirteen guards removed one "
+                        "at a time, all thirteen caught, and the naming rule itself as a "
+                        "fourteenth.",
+                "governed_by": ["D18", "D53", "D122", "D127", "D157"],
             },
             "session-teardown.sh": {
                 "does": "the SessionEnd / WorktreeRemove hook. Stops what a leaving session "

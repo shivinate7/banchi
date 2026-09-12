@@ -365,7 +365,12 @@ make reap           # STOP WHAT THIS SESSION STARTED, AND NOTHING ELSE (D127). P
 make reap-selftest  # the guard, proved by pointing it at what it must not kill: a throwaway
                     #   checkout, a real socket with a real client on it, and both 2026-09-10
                     #   incidents reproduced rather than asserted about. In `check`, never in the
-                    #   git hook. Mutation-tested — thirteen arms.
+                    #   git hook. Every process it starts carries a PER-RUN TAG and its port is
+                    #   bound rather than probed: the guard resolves a kill through a machine-wide
+                    #   `pgrep`, so a fixed fixture name makes two concurrent runs refuse each
+                    #   other their own processes — D122's shape one register down, and it reddened
+                    #   `make check` four times over a byte-identical tree. Mutation-tested —
+                    #   fourteen arms.
 make janitor        # WHAT A FINISHED SESSION LEFT BEHIND, and what is safe to reap (D111).
                     #   Previews; `ARGS=--confirm` presses. TIER 1 goes without asking because
                     #   it cannot be live — a process whose own script has been deleted, a
@@ -1754,6 +1759,7 @@ D153 The restore asks which drawer, not which number, and the picker stops drawi
 D154 The camera's automatic functions are inputs to the trigger's arithmetic, and the ones that step are locked
 D155 The section is the ruler and the box is the margin note, and the bracket between them is deleted
 D156 Every copy TCGplayer does not hold is one worklist, and a run stays open until the last of them has gone
+D157 The fixture carries a per-run name, because the process table is the one thing a run cannot have its own of
 D-the-rig-refuses-to-serve-a-branch The refusal goes where the damage is, so the primary checkout's server will not run a branch's code, and the checkout itself is left alone
 
 ```
