@@ -511,6 +511,15 @@
 }
 .review-tag-sorted { background: var(--bn-accent-tint); color: var(--bn-accent); }
 .review-tag-photo { background: transparent; box-shadow: inset 0 0 0 1px var(--bn-accent-tint-2); color: var(--bn-accent); }
+/* WHICH READING FOUND THE ROW, on a `name_disputed` card offering both.
+   See D-name-beats-a-disputed-number.
+   Two tags that have to be told apart at a glance and must NOT read as
+   right-and-wrong: the screen is showing its work, not scoring it, so both are drawn in the
+   neutral ink rather than one in ok-green and one in danger-red. They differ by fill the way
+   `sorted` and `photo` above do — the same pairing, one step quieter, because this pair sits
+   on rows that already differ by name. */
+.review-tag-name { background: var(--bn-surface-3); color: var(--bn-ink-2); }
+.review-tag-number { background: transparent; box-shadow: inset 0 0 0 1px var(--bn-line); color: var(--bn-ink-3); }
 .review-candidate-price {
   font-family: var(--bn-font-display);
   font-size: var(--bn-fs-xl);

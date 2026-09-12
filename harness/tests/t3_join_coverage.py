@@ -1822,6 +1822,191 @@ def run() -> Result:
         "and is queued rather than listed, because the name matches no row it found",
     )
     c.equal(list(wrong_name.matches), [], "so nothing is listed off a disputed name")
+    c.equal(
+        [row[tcgcsv.SKU_COLUMN] for row in wrong_name.unmatched_cards[0].candidates]
+        if wrong_name.unmatched_cards
+        else [],
+        [SEVEN_COPY_SKU],
+        "AND A NAME THAT FINDS NOTHING CHANGES NOTHING — the number's row alone, exactly "
+        "as before 2026-09-12. `NOT THE RIGHT NAME` is in no row, so the rung below has "
+        "nothing to offer and must not invent a second candidate",
+    )
+
+    # --- BOTH READINGS, THE NAME'S FIRST -------------------------------------------------
+    #
+    # THE SCREEN LED WITH THE CARD IT HAD JUST REASONED WAS WRONG, and this is the case that
+    # fixes. A disputed entry offered only `resolution.row` — the row the NUMBER found —
+    # which is the one row the entry's own sentence tells the operator is not what the
+    # photograph says. The only way to the right row was `L` and typing the name the model
+    # had already read.
+    #
+    # MEASURED OVER EVERY `name_disputed` ENTRY THE OWNER'S STORE HAS RECORDED, all nine: in
+    # nine of nine the NAME was right and the NUMBER wrong, and seven have since been
+    # answered by a human who chose, in seven of seven, a row the name finds. Re-run through
+    # this rung, the answer is digit 1 on all nine.
+    #
+    # Dunsparce at 120/159 read under Butterfree's name is that shape exactly — the number
+    # lands on a real row for a real card, and the name says it is a different one.
+    released = join.join_batch(
+        [_card(92, AMPERSAND_NAME, "120", metadata="normal")],
+        catalog,
+        router=join.default_router(),
+    )
+    c.equal(
+        list(released.matches),
+        [AMPERSAND_NORMAL_SKU],
+        "THE NAME DECIDES, AND THE CARD IS LISTED — the owner's ruling of 2026-09-12: "
+        "*\"Release them when the name resolves to exactly one card.\"* The number found "
+        "Dunsparce's row and the name answers one card, so the name is the stronger "
+        "evidence and no human is asked",
+    )
+    c.equal(
+        released.queued,
+        [],
+        "and nothing is queued for it — which is the whole of the release, measured at 209 "
+        "cards on the owner's store against 209 human answers with ZERO disagreements",
+    )
+
+    # A NAME THAT ANSWERS TWO CARDS IS THE EVIDENCE D35 DISTRUSTED, AND IT STILL QUEUES.
+    # `Articuno` is printed at 32/159 and again as the secret rare 161/159, which is the
+    # same shape as `Aspirant's Climb` on the owner's store — the one of the nine the
+    # release deliberately does not reach. No claim about a stack can settle which print is
+    # in the box; only a person looking at the photograph can.
+    two_cards = join.join_batch(
+        [_card(93, "Articuno", "120", metadata="normal")],
+        catalog,
+        router=join.default_router(),
+    )
+    queued = two_cards.queued[0] if two_cards.queued else None
+    if c.ok(queued is not None, "a name answering TWO cards is queued, never listed"):
+        c.equal(list(two_cards.matches), [], "and nothing is listed off it")
+        c.equal(
+            queued.resolution_reason,
+            routing.NAME_DISPUTED,
+            "under the same reason code, which the release does not change",
+        )
+        names = [row[tcgcsv.NAME_COLUMN] for row in queued.candidates]
+        c.equal(
+            names[-1],
+            "Dunsparce",
+            "BOTH READINGS ARE OFFERED AND THE NUMBER'S GOES LAST. The operator's own "
+            "words for what was wanted: *\"it could've suggested both, say hard bargain "
+            "and factory recall both on the same page\"*",
+        )
+        c.equal(
+            {join.name_index_key(n) for n in names[:-1]},
+            {"ARTICUNO"},
+            "every row ahead of it is the name's, so the reading that resolves is what the "
+            "operator reaches first — THROUGH THE FOLD, because this export spells one of "
+            "the two prints `Articuno - 032/159` and the other `Articuno`. That is "
+            "`CLAUDE.md`'s `Delibird - 105/132` hazard in the fixture, and it landing in "
+            "one name bucket is D35's fold doing the job the rung depends on",
+        )
+        c.equal(
+            [row[tcgcsv.SKU_COLUMN] for row in queued.candidates][-1:],
+            [SEVEN_COPY_SKU],
+            "the number's row is still there and still itself — this adds candidates and "
+            "removes none, so a card whose number was right is never worse off",
+        )
+        stamped = resolve._candidate_rows(queued.candidates, queued.name_matched_skus)
+        c.equal(
+            [row.get("found_by") for row in stamped][-1],
+            "number",
+            "AND THE WIRE SAYS WHICH SIGNAL FOUND WHICH. Rows for two different cards with "
+            "no provenance is a worse question than the one it replaced: the operator can "
+            "see two cards and not which reading argued for either",
+        )
+        c.ok(
+            all(row.get("found_by") == "name" for row in stamped[:-1]),
+            "with every row the name found stamped as the name's",
+        )
+    plain = resolve._candidate_rows(wrong_name.unmatched_cards[0].candidates)
+    c.equal(
+        [("found_by" in row) for row in plain],
+        [False],
+        "and an entry with one provenance carries no stamp at all — a badge on every row "
+        "in the queue is what stamping `number` unconditionally would have produced",
+    )
+
+    # WHAT COUNTS AS ONE CARD, ASSERTED DIRECTLY — because the fixture cannot reach it.
+    #
+    # `distinct_cards` keys on `(Set Name, folded Number)`, and SV09 is a SINGLE SET, so a
+    # version of it that dropped the set entirely answers identically on every row in this
+    # file. The mutation arm that deletes the set from the key survives the whole suite for
+    # that reason alone, which is a gap in the fixture rather than in the rule. Hand-built
+    # rows are the only way to state it here, and the case is real and live: the owner's
+    # `Calm Rune (R02a)` is stocked at one number across Spiritforged, Unleashed and
+    # Vendetta, and reading those three as one card would auto-list a card nobody could say
+    # the set of.
+    one_card = [
+        {tcgcsv.SET_COLUMN: "Origins", tcgcsv.NUMBER_COLUMN: "276/298"},
+        {tcgcsv.SET_COLUMN: "Origins", tcgcsv.NUMBER_COLUMN: "276/298"},
+    ]
+    two_sets = [
+        {tcgcsv.SET_COLUMN: "Spiritforged", tcgcsv.NUMBER_COLUMN: "R02a"},
+        {tcgcsv.SET_COLUMN: "Unleashed", tcgcsv.NUMBER_COLUMN: "R02a"},
+    ]
+    two_numbers = [
+        {tcgcsv.SET_COLUMN: "Origins", tcgcsv.NUMBER_COLUMN: "276/298"},
+        {tcgcsv.SET_COLUMN: "Origins", tcgcsv.NUMBER_COLUMN: "276a/298"},
+    ]
+    c.equal(
+        join.distinct_cards(one_card),
+        1,
+        "two rows of one card in one set are ONE card — the finishes beneath a card are "
+        "not a question about which card it is",
+    )
+    c.equal(
+        join.distinct_cards(two_sets),
+        2,
+        "ONE NUMBER IN TWO SETS IS TWO CARDS, which the number alone cannot tell and is "
+        "why the set is half the key",
+    )
+    c.equal(
+        join.distinct_cards(two_numbers),
+        2,
+        "and two numbers in one set are two cards — `276a/298` is the promo print of "
+        "`276/298`, which is the ninth of the owner's nine and the one still queued",
+    )
+    c.equal(
+        join.distinct_cards(
+            [
+                {tcgcsv.SET_COLUMN: "Origins", tcgcsv.NUMBER_COLUMN: "276/298"},
+                {tcgcsv.SET_COLUMN: "Origins", tcgcsv.NUMBER_COLUMN: "0276/298"},
+            ]
+        ),
+        1,
+        "and the number goes through the same fold the index does, so a padded spelling "
+        "is not a second card",
+    )
+
+    # A NAME WHOSE FINISH THE LADDER CANNOT SETTLE IS NOT RELEASED EITHER, AND GUESSES
+    # NOTHING. Butterfree is ONE card — so the release's card test passes — but it is
+    # stocked Holofoil and Reverse Holofoil only, so a `normal` claim contradicts both and
+    # the ladder reviews. The release needs the finish settled as well as the card, and this
+    # is the case that separates the two conditions. `CLAUDE.md`: ambiguity goes to the
+    # queue with its photo, and nothing is silently dropped.
+    unsettled = join.join_batch(
+        [_card(94, "Butterfree", "120", metadata="normal")],
+        catalog,
+        router=join.default_router(),
+    )
+    spread = unsettled.queued[0] if unsettled.queued else None
+    if c.ok(spread is not None, "an unsettled finish on the name side still queues"):
+        c.equal(list(unsettled.matches), [], "and lists nothing")
+        c.equal(
+            [row[tcgcsv.NAME_COLUMN] for row in spread.candidates],
+            ["Butterfree", "Butterfree", "Dunsparce"],
+            "BOTH OF THE NAME'S FINISHES ARE OFFERED, still ahead of the number's row — a "
+            "rung that narrowed to one here would be guessing a finish the ladder just "
+            "refused to guess",
+        )
+        c.equal(
+            len(spread.name_matched_skus),
+            2,
+            "and both are claimed by the name, so the screen can say so on each",
+        )
+
     name_only = join.join_batch([_card(91, BLANK_NUMBER_NAME, "999")], catalog)
     c.equal(
         len(name_only.unmatched_cards),
@@ -2299,8 +2484,19 @@ def run() -> Result:
     missing = catalog.candidates(_card(804, "Not A Real Card At All", number=None))
     c.equal(len(missing.rows), 0, "D35: an unknown name finds nothing and stays unmatched")
 
-    # 5. It ROUTES TO REVIEW rather than listing, which is the owner's ruling and the half
-    #    that cannot be inferred from the lookup alone.
+    # 5. IT LISTS WHERE THE NAME ANSWERS EXACTLY ONE CARD, AND THIS ASSERTION IS REVERSED.
+    #
+    #    It read "a name-resolved card is QUEUED, never listed on the name alone" until
+    #    2026-09-12, which was D35's ruling and the owner's at the time. They repealed the
+    #    operative half of it on the store's own record: 212 entries reached this rung,
+    #    every one was answered by a human, and in 212 OF 212 the human chose the SKU the
+    #    entry was already holding. Their words: *"Release them when the name resolves to
+    #    exactly one card."*
+    #
+    #    D35's CAUTION IS NOT REPEALED, IT IS AIMED. That entry distrusted the name as a
+    #    weak signal, and a name answering SEVERAL cards is exactly that — still queued,
+    #    immediately below. What fell is the blanket prohibition over the case where the
+    #    name is not weak at all.
     named = join.join_batch(
         [_card(805, REAL_NAME, number=None, metadata=("normal",))],
         catalog,
@@ -2308,18 +2504,46 @@ def run() -> Result:
         live_cap=LIVE_QUANTITY_CAP,
     )
     queued = named.queue(routing.MAIN) + named.queue(routing.PARKED)
-    c.equal(len(queued), 1, "D35: a name-resolved card is QUEUED, never listed on the name alone")
     c.equal(
-        queued[0].resolution_reason,
-        routing.NUMBER_UNREAD_NAME_MATCHED,
-        "D35: under its own reason code",
+        len(queued),
+        0,
+        "a name answering exactly one card is LISTED — 212 of 212 such questions on the "
+        "owner's store were answered by a human who chose the row already on offer",
     )
     c.equal(
-        len(queued[0].candidates),
+        len(named.matches),
         1,
-        "D35: offering exactly ONE candidate — the row the ladder chose — which is what "
-        "makes a queue of these answerable as one D29 group",
+        "and it reaches the import file, which is the whole point of releasing it",
     )
+
+    #    THE WEAK NAME IS STILL QUEUED. `Articuno` is printed at 32/159 and again as the
+    #    secret rare 161/159, so its name answers TWO cards and no claim about a stack can
+    #    say which is in the box. This is the half of D35 that survives.
+    two = join.join_batch(
+        [_card(806, "Articuno", number=None, metadata=("normal",))],
+        catalog,
+        router=join.default_router(),
+        live_cap=LIVE_QUANTITY_CAP,
+    )
+    weak = two.queue(routing.MAIN) + two.queue(routing.PARKED)
+    c.equal(
+        len(weak),
+        1,
+        "D35 SURVIVES WHERE IT WAS AIMED: a name answering two cards is queued, never "
+        "listed — the release reaches the strong name and not this one",
+    )
+    if weak:
+        c.equal(
+            weak[0].resolution_reason,
+            routing.NUMBER_UNREAD_NAME_MATCHED,
+            "D35: under its own reason code",
+        )
+        c.equal(
+            len(weak[0].candidates),
+            1,
+            "D35: offering exactly ONE candidate — the row the ladder chose — which is what "
+            "makes a queue of these answerable as one D29 group",
+        )
 
     # 6. The name fold, on both sides. `Product Name` embeds the number inconsistently, and
     #    matching raw scored 35 of box 2's 46 against 45 through the fold.
