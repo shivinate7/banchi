@@ -1209,7 +1209,7 @@ COMPONENTS = [
                                        "HARNESS, which is why `tested_by` is empty: that field "
                                        "names harness tests, and this guard's subject is two "
                                        "OS processes racing a real flock over a throwaway store "
-                                       "— not something a harness test can pose. Fourteen "
+                                       "— not something a harness test can pose. Sixteen "
                                        "mutation arms, all caught. WHAT IS UNPROVEN: no claim "
                                        "has been "
                                        "written by a real identify press, so nothing here has "
@@ -1783,7 +1783,7 @@ COMPONENTS = [
                         "branch every other case goes through, and the ONE door that releases a "
                         "claim without its answers being banked — from both sides, because "
                         "the arm that ignores the batch ids must not pass. Mutation-tested: "
-                        "fourteen arms, all caught, and arm 13 found two assertions of this "
+                        "sixteen arms, all caught, and arm 13 found two assertions of this "
                         "suite's own passing for the wrong reason.",
                 "governed_by": ["D-a-claim-on-the-cards", "D7", "D18", "D48", "D88", "D136"],
             },
@@ -4554,7 +4554,7 @@ COMPONENTS = [
                                                  "a dropped poll holds the last list rather than "
                                                  "letting a live claim vanish off the screen",
                                          "governed_by": ["D-a-claim-on-the-cards", "D33", "D39",
-                                                         "D50", "D89", "D94", "D118"]},
+                                                         "D50", "D57", "D89", "D94", "D118"]},
             "src/SubmissionClaims.css": {"does": "that panel's own styles: the row's two columns "
                                                  "and nothing else — the kit supplies the panel, "
                                                  "the list, the pills and the buttons. The action "

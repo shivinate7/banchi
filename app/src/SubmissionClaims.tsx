@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 
 import { describeFailure, getSubmissions, releaseSubmission, type Failure } from './server'
 import type { SubmissionClaim } from './types'
@@ -48,10 +48,30 @@ export function SubmissionClaims() {
   const [claims, setClaims] = useState<readonly SubmissionClaim[] | null>(null)
   const [failure, setFailure] = useState<Failure | null>(null)
   const [releasing, setReleasing] = useState<string | null>(null)
+  /** Receipts this session has released, whose ROW IS STILL DRAWN (D118).
+   *
+   *  A PRESS CHANGES WHAT IS ON THE SCREEN AND NEVER WHERE THE REST OF IT IS. Adopting the
+   *  server's post-release list straight away removes the row, the panel shrinks, and
+   *  everything below it jumps — MEASURED at 156px over 25 elements, with the page 60px
+   *  shorter, which is precisely the harm that floor was written for. So the row stays where
+   *  it is and its action slot becomes its own receipt (D57's shape: the control becomes the
+   *  way back), and the poll below drops it a beat later, away from the finger. */
+  const [released, setReleased] = useState<ReadonlySet<string>>(() => new Set())
+
+  /** Whether a read has EVER landed, in a ref rather than derived from `claims`.
+   *
+   *  IT IS A REF SO THAT `read` BELOW CAN DECLARE `[]` AND MEAN IT. Asking `claims === null`
+   *  instead put `claims` in that callback's dependency list, which made `read` a new function
+   *  on every answer, which made the mount effect need an `exhaustive-deps` disable to avoid
+   *  refetching on every render. `app/eslint.config.js` argues that a guard disabled inline is
+   *  one the next person disables without reading, so the dependency is removed rather than
+   *  the warning. */
+  const everLoaded = useRef(false)
 
   const read = useCallback(async () => {
     try {
       const answer = await getSubmissions()
+      everLoaded.current = true
       setClaims(answer.claims)
       setFailure(null)
     } catch (err) {
@@ -59,10 +79,11 @@ export function SubmissionClaims() {
          says the server is unreachable once, and a second statement of it here would be the
          same fault reported twice — `Runs.tsx` records that rule for the page. What this does
          instead is hold the last list it had, so a dropped poll cannot make a live claim
-         vanish off the screen. */
-      if (claims === null) setFailure(describeFailure(err))
+         vanish off the screen. Watched for real: the panel held both claims through a server
+         restart while the run list reported unreachable. */
+      if (!everLoaded.current) setFailure(describeFailure(err))
     }
-  }, [claims])
+  }, [])
 
   useEffect(() => {
     let live = true
@@ -72,10 +93,7 @@ export function SubmissionClaims() {
     return () => {
       live = false
     }
-    // Once on mount. The poll below is what keeps it current, and re-running this on every
-    // `read` identity change would be a fetch per render.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [])
+  }, [read])
 
   useEffect(() => {
     /* THE POLL STOPS WHEN NOTHING IS HELD, which is the ordinary state. A timer running
@@ -86,12 +104,31 @@ export function SubmissionClaims() {
     return () => window.clearInterval(timer)
   }, [claims, read])
 
+  useEffect(() => {
+    /* A RECEIPT FOR A ROW THAT HAS GONE IS A LEAK. Once the poll's answer no longer carries a
+       receipt, its mark has nothing to describe — and keeping it would mean a later claim
+       reusing that receipt drew as released. Receipts are unique, so this is hygiene rather
+       than a correctness fix; the set is pruned because an ever-growing one in a panel that
+       lives as long as the screen does is how a leak starts. */
+    if (claims === null) return
+    setReleased((held) => {
+      if (held.size === 0) return held
+      const live = new Set(claims.map((claim) => claim.receipt))
+      const kept = new Set([...held].filter((receipt) => live.has(receipt)))
+      return kept.size === held.size ? held : kept
+    })
+  }, [claims])
+
   const release = useCallback(
     async (claim: SubmissionClaim) => {
       setReleasing(claim.receipt)
       try {
         const answer = await releaseSubmission(claim.receipt)
-        setClaims(answer.claims)
+        /* `answer.claims` IS DELIBERATELY NOT ADOPTED HERE. It is the correct list and it is
+           the list this row has left — adopting it is what moved the page 156px under the
+           operator's finger. The row is marked instead, and the next poll takes the server's
+           answer whole. */
+        setReleased((held) => new Set(held).add(claim.receipt))
         /* A RECEIPT, BECAUSE A RELEASE IS A WRITE WITH A FIGURE ON IT. `released: false` is
            the already-released answer and is a status rather than a receipt — nothing
            happened, so there is nothing to account for. */
@@ -123,8 +160,20 @@ export function SubmissionClaims() {
   if (failure !== null && claims === null) return null
   if (claims === null || claims.length === 0) return null
 
-  const stale = claims.filter((claim) => !claim.holder_alive)
-  const held = claims.reduce((sum, claim) => sum + claim.cards, 0)
+  /* THE FIGURES COUNT WHAT IS STILL HELD, never the rows on screen. A row kept for its
+     receipt is not holding anything any more, and a headline that counted it would overstate
+     what is locked at the one moment the operator is watching it fall. */
+  const standing = claims.filter((claim) => !released.has(claim.receipt))
+  const stale = standing.filter((claim) => !claim.holder_alive)
+  const held = standing.reduce((sum, claim) => sum + claim.cards, 0)
+  /* THE NOTICE IS DRAWN OFF THE ROWS ON SCREEN, NOT OFF THE FIGURES, and that is the same
+     rule as the row's own receipt one register up (D118). Basing it on `stale` unmounted it
+     the instant the press landed and moved everything below the panel 75px — the notice is
+     about 75px tall. Its sentence stays TRUE of a just-released row, because that row's
+     holder is still gone; what has changed is that its cards are no longer held, which is
+     what the headline figure says. So the block leaves on the same poll that removes the row,
+     away from the finger. */
+  const staleDrawn = claims.filter((claim) => !claim.holder_alive)
 
   return (
     <section className="claims bn-panel" aria-labelledby="claims-heading">
@@ -136,7 +185,7 @@ export function SubmissionClaims() {
             facts and both are worth seeing: one claim over four hundred cards and four claims
             over one card each are the same row count and completely different situations. */}
         <Pill tone={stale.length > 0 ? 'warn' : 'accent'} icon="lock">
-          {cardCount(held)} held by {claims.length} send{claims.length === 1 ? '' : 's'}
+          {cardCount(held)} held by {standing.length} send{standing.length === 1 ? '' : 's'}
         </Pill>
       </header>
 
@@ -146,9 +195,11 @@ export function SubmissionClaims() {
         when the run finishes.
       </p>
 
-      {stale.length > 0 ? (
+      {staleDrawn.length > 0 ? (
         <Notice tone="warn">
-          {stale.length === 1 ? 'One of these sends is' : `${stale.length} of these sends are`}{' '}
+          {staleDrawn.length === 1
+            ? 'One of these sends is'
+            : `${staleDrawn.length} of these sends are`}{' '}
           no longer running. Its cards stay held on purpose: a send that was killed after it
           submitted has already been billed, and the answers keep for 29 days. Watch that run
           first — releasing it lets another press buy those cards again.
@@ -171,7 +222,13 @@ export function SubmissionClaims() {
               </span>
             </div>
             <div className="claims-act">
-              {claim.holder_alive ? (
+              {released.has(claim.receipt) ? (
+                /* THE CONTROL BECAME ITS OWN RESULT, in the slot it stood in (D57). The row
+                   goes on the next poll, not under the finger. */
+                <Pill tone="ok" icon="check">
+                  Released {cardCount(claim.cards)}
+                </Pill>
+              ) : claim.holder_alive ? (
                 <Pill tone="live" icon="zap">
                   Running
                 </Pill>

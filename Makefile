@@ -701,7 +701,9 @@ reap-selftest:
 # the same card. Without that, the case beside it proves only that something happened.
 #
 # In `check`, never in the git hook: D18 — it writes a temp tree and it signals processes.
-# Same standing as janitor-selftest and reap-selftest. Mutation-tested: fourteen arms, all caught.
+# Same standing as janitor-selftest and reap-selftest. Mutation-tested: sixteen arms, all caught — two of them over its OWN floor against
+# examining nothing, which is the shape `Report.render` printing `ok` for an empty findings
+# list has on this side of the fence.
 submission-selftest:
 	@$(PYTHON) scripts/submission-selftest.py
 

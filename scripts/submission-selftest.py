@@ -788,17 +788,46 @@ CASES = (
 
 
 def main() -> int:
+    """Run every case, and REFUSE A RUN THAT EXAMINED NOTHING.
+
+    A SUITE THAT SCORED NOTHING IS NOT A PASS, and this floor is here because the shape is a
+    measured one: `scripts/docs-audit.py`'s reporter prints `ok` for an empty findings list, so
+    `paths 0 references resolve` and `env vars 0 documented` both read green over no subject at
+    all. The same hole is available to this file — empty `CASES`, a case whose body silently
+    stops asserting, a rename that drops one out of the tuple — and it is the same hole the
+    claim table itself guards in another register: a guard that holds nothing passes every
+    assertion about what it holds.
+
+    So three floors, each naming what it caught:
+      * every case in `CASES` is attempted, and the count is compared, not trusted;
+      * a case that recorded NO checks is a failure in its own right, not a quiet skip;
+      * a run whose total is zero exits non-zero whatever else it thinks.
+    """
     print("submission-selftest — the claim table, proved by violating it")
+    attempted = 0
+    silent = []
     try:
         for case in CASES:
             print(f"\n{case.__name__}")
+            attempted += 1
+            scored = PASS + FAIL
             try:
                 case()
             except Exception as exc:  # noqa: BLE001 — every case must run and be scored
                 bad(f"{case.__name__} raised {type(exc).__name__}: {exc}")
+            if PASS + FAIL == scored:
+                silent.append(case.__name__)
     finally:
         cleanup()
-    print(f"\n{PASS} passed, {FAIL} failed")
+
+    for name in silent:
+        bad(f"{name} asserted NOTHING — a case that scores nothing is not a case that passed")
+    if attempted != len(CASES):
+        bad(f"{attempted} of {len(CASES)} cases were attempted")
+    if PASS + FAIL == 0:
+        print("\nREFUSED: this run examined nothing. 0 checks is not a pass.")
+        return 1
+    print(f"\n{PASS} passed, {FAIL} failed, over {attempted} case(s)")
     return 1 if FAIL else 0
 
 
