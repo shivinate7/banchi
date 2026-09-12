@@ -1783,6 +1783,7 @@ D159 The band is copies rather than SKUs, the drawer is the first answer, and no
 D160 An entry is a file, because two branches appending to one file collide every single time
 D161 `make check` proves the product first and its own guards last, because a failure stops the rest
 D162 The name decides a disputed number, and both readings reach the screen
+D163 The cache is keyed by the digest, so the digest is what the press computes first
 ```
 
 **THE GAP THIS LIST CARRIED BETWEEN D116 AND D118 IS CLOSED, AND IT CLOSED THE WAY IT SAID IT

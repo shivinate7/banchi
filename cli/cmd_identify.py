@@ -18,8 +18,18 @@ not. If the card cannot be found in the frame there is no crop retry at all — 
 produces a miss indistinguishable from a bad read — and the failure is named in the report so
 a systematic rig problem reads as a pattern rather than as scattered bad luck.
 
+HASH, THEN CACHE, THEN PREPARE — in that order, since 2026-09-12. The cache is keyed by the
+photograph's sha256, which is a property of the bytes on disk, so consulting it needs no
+decode at all. Every photograph is hashed (0.687 ms), the store is asked what it already
+owns, and only what is left is cropped and downscaled (114.96 ms). Both figures measured on
+this machine over box 4's own 678 JPEGs at the operator's flags. One dry-run leg of that
+directory went from 79 s to 26 s and submitted the same 214 cards.
+
 NOTHING IS EVER SKIPPED. Every photograph in the directory comes out of this command as an
-identification, a cache hit, or a named failure. That is v1 bug #5 stated as a property.
+identification, a cache hit, or a named failure. That is v1 bug #5 stated as a property —
+and `Item.stage` is what keeps it true through the reorder above, because `prepared is None`
+used to mean "unreadable" and now also means "the store already answered this one". See the
+STAGE_* constants.
 """
 
 from __future__ import annotations
@@ -92,6 +102,40 @@ UNFIT_CROPS_SHOWN = 5
 # sees a game, only a strategy, and a card with no registry entry has not even that.
 UNKNOWN_GAME = "unknown_game"
 
+# ------------------------------------------------------------------- the preflight stage
+#
+# WHERE A PHOTOGRAPH STOPPED BEFORE ANY MONEY WAS SPENT, and the sentinel that made the
+# hash-first reorder safe. Read the reorder first, at the top of `run`.
+#
+# Until 2026-09-12 this command prepared EVERY photograph and then consulted the cache, so
+# `prepared is None` carried two meanings at once that could not come apart: "this
+# photograph could not be read" AND "there are no bytes to send for this card". Five loops
+# tested it — the cache consult, the prompt refusal, the `to_send` filter, the `unreadable`
+# roster, and the retry rounds — and a sixth site wrote `item.prepared.sha256` into the run
+# payload.
+#
+# Hashing before preparing breaks that equivalence: a CACHE HIT is never prepared, so
+# `prepared is None` would be true of it too, and every one of those six sites would then
+# answer for the cards it exists to process — the `unreadable` roster in particular would
+# name 464 healthy cards on the operator's own last press. That is the one failure mode
+# `CLAUDE.md` forbids outright ("Never silently drop a card"), so the reorder does not ship
+# with the old test reordered. It ships with this field.
+#
+# ONE FIELD, THREE CLAUSES RETIRED. The old send filter read
+# `not i.cached and i.prepared is not None and i.status == "pending"` — not cached, readable,
+# not refused. Those are the three ways out of the preflight and they are now three values
+# of one field, which is why this is a simplification rather than a new concept.
+#
+# WHY NOT `Item.status`: that field is the MODEL's answer, or the transport's refusal to ask
+# for one (`succeeded`, `errored`, `expired`, `malformed`, `unwritten_prompt`,
+# `unknown_game`). It is written into `identifications.json` and read downstream. This field
+# is this command's own account of how far a photograph got before a byte was submitted.
+# They answer different questions, and nothing on the wire moves because of this one.
+STAGE_PENDING = "pending"  # undecided; once the preflight is over, this IS the send list
+STAGE_CACHED = "cached"  # the store already owns this answer — never prepared, never sent
+STAGE_UNREADABLE = "unreadable"  # the bytes would not hash, or would not decode
+STAGE_REFUSED = "refused"  # no prompt to read it with — named, not sent, not dropped
+
 
 @dataclass
 class Item:
@@ -99,6 +143,21 @@ class Item:
 
     capture: sidecar.Capture
     prepared: Optional[images.Prepared] = None
+    # WHERE THIS PHOTOGRAPH STOPPED IN THE PREFLIGHT — see the STAGE_* constants above for
+    # why this exists and what `prepared is None` used to be asked to mean on its own.
+    stage: str = STAGE_PENDING
+    # THE DIGEST OF THE FILE ON DISK, CARRIED APART FROM `prepared`, and the reason is
+    # `cli/resolve.py:1108`. D36's realign builds its `verifiable` map out of the run
+    # payload's `photo_sha256` and drops every record without one into `blind` — a card it
+    # can no longer re-bind to a slot. `prepared.sha256` was the only source for that field,
+    # so hash-first would have written `None` for every cache hit and blinded 464 of the 678
+    # records on the operator's last press. Hashing is now its own step, so the digest
+    # belongs to the item and not to the bytes that were sent.
+    #
+    # It is `None` in exactly one case now, where it used to be `None` in two: a file whose
+    # bytes could not be READ at all. A photograph that hashed and then failed to DECODE
+    # keeps its digest, so `blind` is strictly smaller than it was.
+    photo_sha256: Optional[str] = None
     error: Optional[str] = None
     cached: bool = False
     stale_prompt: bool = False
@@ -190,6 +249,14 @@ def _requests(items: List[Item], with_crops: bool, say) -> List[batch.ImageReque
     An item with no strategy at all — an unregistered game — is never built into a
     request: the refusal loop in `run` has already named it `unknown_game`, and a request
     without a real strategy could only be submitted under some other game's prompt.
+
+    THE `prepared is None` TEST HERE IS NOT `Item.stage`'S BUSINESS and is deliberately
+    left alone. This function is handed the list it is to build requests for, so it is
+    asserting its CALLER's contract — every item in `to_send` was prepared by the pass that
+    produced it — rather than asking where a photograph got to. `_estimate` is the same
+    shape for the same reason. Both would be wrong to read `stage`: an item is not
+    excluded from a batch because of where it stopped, it is excluded because it was never
+    handed here.
     """
     out: List[batch.ImageRequest] = []
     for item in items:
@@ -460,41 +527,42 @@ def run(args, say) -> int:
         return 1
 
     items = [Item(capture=capture) for capture in captures]
-    cropped = 0
-    unfit: List[Item] = []
+
+    # ------------------------------------------------------- HASH, THEN CACHE, THEN PREPARE
+    #
+    # THE ORDER IS THE POINT, and it was the other way round until 2026-09-12. This loop used
+    # to run `geometry.detect_card` and `images.prepare` over every photograph in the
+    # directory, and the cache was consulted afterwards — so the decode was pure waste on
+    # every card the store already owned an answer for.
+    #
+    # `store.cache.reusable(key, photo_sha256)` needs the DIGEST and nothing else, and
+    # `images.prepare` computed that digest before opening the image anyway. So the decode
+    # was never an input to the question being asked.
+    #
+    # MEASURED ON THIS MACHINE, box 4's own 678 JPEGs at the operator's flags
+    # (`--crop --max-edge 1200`), page cache warm for both so neither gets the cold-read
+    # penalty: 114.96 ms per photograph to crop+prepare against 0.687 ms to hash. 167x.
+    # That press walked 678 photographs and submitted 214, and it walked them TWICE, because
+    # `server/pipeline_routes.py:_preflight_leg` shells `identify --dry-run` first. One leg
+    # of it took 79 s before this change and 26 s after; hashing all 2,535 photographs in
+    # the store — 4.4 GB — takes 2.89 s.
+    #
+    # A PHOTOGRAPH THAT HASHES IS NOT YET A PHOTOGRAPH THAT DECODES, which is why the send
+    # list is re-filtered after the prepare pass below: `sha256_of` proves the bytes can be
+    # read, never that they are an image.
     for item in items:
         _attach_registry(item)
         try:
-            # CROP TO THE DETECTED CARD BEFORE THE DOWNSCALE, when asked for. Local, free and
-            # deterministic — `geometry.detect_card` is the same border search T6 covers and
-            # Gate B's photographs proved, with no model call and no network.
-            #
-            # A REFUSAL FALLS BACK TO THE WHOLE FRAME rather than failing the card. Detection
-            # answers `None` when it cannot find a card (T6: "'Not found' must be a refusal,
-            # never a guess"), and the honest response to that is to send what we always sent
-            # — the run costs a little more and reads exactly as it would have.
-            box = None
-            if args.crop:
-                try:
-                    box = geometry.detect_card(item.capture.photo)
-                except Exception:
-                    box = None
-            item.prepared = images.prepare(
-                item.capture.photo, max_edge=args.max_edge, crop_box=box
-            )
-            # COUNTED OFF WHAT WAS ACTUALLY MADE, not off what was asked for. `prepare`
-            # applies `images.crop_refusal` and can decline a box detection did return —
-            # a rectangle inside the card, which crops the collector number away — so a
-            # counter incremented beside `detect_card` above would report a crop that
-            # never happened. Three outcomes, and the preflight names all three.
-            if box is not None:
-                if item.prepared.crop_refused is None:
-                    cropped += 1
-                else:
-                    unfit.append(item)
-        except images.ImageError as exc:
-            item.error = str(exc)
+            item.photo_sha256 = images.sha256_of(item.capture.photo)
+        except OSError as exc:
+            # THE BYTES COULD NOT BE READ AT ALL — a deleted file, a bad permission, a
+            # disconnected volume. This used to reach the operator as a bare OSError out of
+            # `images.prepare`, which calls `sha256_of` OUTSIDE its own try, so the command
+            # died on the first such file and said nothing about the other 677. Now it is a
+            # named failure bound for the main queue, like every other one here.
+            item.error = f"{item.capture.photo}: {exc}"
             item.status = "unreadable"
+            item.stage = STAGE_UNREADABLE
 
     # ------------------------------------------------------------------ consult the cache
     snapshot = store.read()
@@ -530,15 +598,19 @@ def run(args, say) -> int:
     )
 
     for item in items:
-        if item.prepared is None:
+        # THE DIGEST, NOT THE PREPARED BYTES. This read `item.prepared.sha256` and skipped on
+        # `prepared is None`; under hash-first that test would have skipped every card whose
+        # answer the store already owns, which is exactly the set this loop exists to find.
+        if item.photo_sha256 is None:
             continue
-        entry = snapshot.cache.reusable(item.key, item.prepared.sha256)
+        entry = snapshot.cache.reusable(item.key, item.photo_sha256)
         if entry is None:
             continue
         if item.key in stale_targets:
             item.retry_reasons.append("reidentify-stale")
             continue
         item.cached = True
+        item.stage = STAGE_CACHED
         item.identification = dict(entry.identification)
         item.status = batch.SUCCEEDED
         expected = fingerprints.get(item.strategy)
@@ -553,10 +625,14 @@ def run(args, say) -> int:
     # game's prompt (D21). A cached answer is left standing: already paid for, and refusing
     # it would answer a question about submission on a card that is not being submitted.
     for item in items:
-        if item.cached or item.prepared is None:
+        # STILL UNDECIDED ONLY — one clause where there were two. `cached or prepared is
+        # None` meant "not a cache hit, and readable"; a card refused here is now refused
+        # BEFORE it is prepared, so it costs no decode either.
+        if item.stage != STAGE_PENDING:
             continue
         if item.strategy is None:
             item.status = UNKNOWN_GAME
+            item.stage = STAGE_REFUSED
             item.error = (
                 f"game {item.game!r} is not in the registry — no prompt to read it with. "
                 f"Fix the sidecar's `game`."
@@ -565,14 +641,67 @@ def run(args, say) -> int:
         refusal = batch.prompt_refusal(_custom_id(item.key), item.strategy)
         if refusal is not None:
             item.status = refusal.status
+            item.stage = STAGE_REFUSED
             item.error = refusal.error
 
-    to_send = [
-        i
-        for i in items
-        if not i.cached and i.prepared is not None and i.status == "pending"
-    ]
-    unreadable = [i for i in items if i.prepared is None]
+    # ------------------------------------------------------------- prepare what is going
+    #
+    # THE ONLY PHOTOGRAPHS THAT ARE DECODED, and the whole saving. Everything above answered
+    # from the digest, so what is left is the cards this run is actually paying to read.
+    #
+    # THE CROP COUNTERS MOVED WITH IT, DELIBERATELY, AND THEIR DENOMINATOR IS ON THE LINE.
+    # They used to run over every photograph in the directory because every photograph was
+    # prepared; they now run over the send list, because a crop that is never made is not a
+    # crop. That is the same rule the counters were already written to — "COUNTED OFF WHAT
+    # WAS ACTUALLY MADE, not off what was asked for" — carried one step further. The
+    # preflight line below therefore says `of the N being sent` in so many words: a counter
+    # whose denominator changed without a sentence is how a published measurement rots.
+    cropped = 0
+    unfit: List[Item] = []
+    for item in items:
+        if item.stage != STAGE_PENDING:
+            continue
+        try:
+            # CROP TO THE DETECTED CARD BEFORE THE DOWNSCALE, when asked for. Local, free and
+            # deterministic — `geometry.detect_card` is the same border search T6 covers and
+            # Gate B's photographs proved, with no model call and no network.
+            #
+            # A REFUSAL FALLS BACK TO THE WHOLE FRAME rather than failing the card. Detection
+            # answers `None` when it cannot find a card (T6: "'Not found' must be a refusal,
+            # never a guess"), and the honest response to that is to send what we always sent
+            # — the run costs a little more and reads exactly as it would have.
+            box = None
+            if args.crop:
+                try:
+                    box = geometry.detect_card(item.capture.photo)
+                except Exception:
+                    box = None
+            item.prepared = images.prepare(
+                item.capture.photo, max_edge=args.max_edge, crop_box=box
+            )
+            # COUNTED OFF WHAT WAS ACTUALLY MADE, not off what was asked for. `prepare`
+            # applies `images.crop_refusal` and can decline a box detection did return —
+            # a rectangle inside the card, which crops the collector number away — so a
+            # counter incremented beside `detect_card` above would report a crop that
+            # never happened. Three outcomes, and the preflight names all three.
+            if box is not None:
+                if item.prepared.crop_refused is None:
+                    cropped += 1
+                else:
+                    unfit.append(item)
+        except images.ImageError as exc:
+            # HASHED AND STILL UNREADABLE. The bytes were there to digest and are not an
+            # image the decoder will take — a truncated write, a renamed non-image. The
+            # digest it already carries stays on the record, which is why this card is no
+            # longer `blind` to D36's realign the way it was before the reorder.
+            item.error = str(exc)
+            item.status = "unreadable"
+            item.stage = STAGE_UNREADABLE
+
+    # ONE FIELD, AFTER THE PREPARE PASS. A card that failed to decode has just left
+    # `STAGE_PENDING`, so this filter must be read here and not before it.
+    to_send = [i for i in items if i.stage == STAGE_PENDING]
+    unreadable = [i for i in items if i.stage == STAGE_UNREADABLE]
     no_position = [i for i in items if not i.capture.has_position]
 
     # ------------------------------------------------------------------------ preflight
@@ -581,7 +710,12 @@ def run(args, say) -> int:
     say("")
     say(f"capture dir     {capture_dir}")
     say(f"photographs     {len(items)}")
-    say(f"cache hits      {len(items) - len(to_send) - len(unreadable)}")
+    # COUNTED, NOT SUBTRACTED, and that is a repair the sentinel paid for. This read
+    # `len(items) - len(to_send) - len(unreadable)`, and a card refused for want of a prompt
+    # is neither of those — so every `unknown_game` and `unwritten_prompt` card in a
+    # directory was reported to the operator as a CACHE HIT, on the one line they read to
+    # decide whether the run is worth paying for. There is now a value that means cache hit.
+    say(f"cache hits      {len([i for i in items if i.stage == STAGE_CACHED])}")
     say(f"to send         {len(to_send)}")
     say(f"payload         {payload_bytes / 1_000_000:.1f} MB in {chunks} batch chunk(s)")
     say(f"estimated cost  ${_estimate(to_send)}")
@@ -596,9 +730,16 @@ def run(args, say) -> int:
         # guard refusing means a card WAS found and the box was not fit to cut to — a
         # rectangle inside the card, which is a detector finding rather than a rig one. A
         # single "sent whole" figure covering both would point at the wrong thing.
-        not_found = len(items) - cropped - len(unfit)
+        #
+        # THE DENOMINATOR IS THE SEND LIST AND THE LINE SAYS SO. It was every photograph in
+        # the directory until 2026-09-12, because every photograph was prepared; hash-first
+        # prepares only what is going, so these three figures now sum to `to send` and not to
+        # `photographs`. The phrase `of the N being sent` is on the line rather than in a
+        # comment on purpose — this is the figure an operator reads while deciding to spend,
+        # and a denominator that changed silently is a published measurement rotting.
+        not_found = len(to_send) - cropped - len(unfit)
         say(f"crop            to the detected card +{images.CROP_PAD*100:.0f}% "
-            f"— {cropped} cropped"
+            f"— {cropped} cropped of the {len(to_send)} being sent"
             + (f", {not_found} sent whole (no card found)" if not_found else "")
             + (f", {len(unfit)} sent whole (box unfit to crop to)" if unfit else ""))
         # THE REASON, PER CARD, BEFORE ANY MONEY. `crop_refusal` writes a sentence rather
@@ -756,7 +897,12 @@ def run(args, say) -> int:
         wanted = []
         crops = False
         for item in items:
-            if item.cached or item.prepared is None:
+            # ONLY WHAT THIS RUN SENT CAN BE RE-SENT. `cached or prepared is None` said the
+            # same thing by naming two of the three ways out; under hash-first a refused card
+            # and a cache hit are both unprepared, so the field says it directly. A card that
+            # came back errored is still `STAGE_PENDING` — the stage is where the PREFLIGHT
+            # left it, and the model's answer is `status`.
+            if item.stage != STAGE_PENDING:
                 continue
             retry, crop, reason = _needs_retry(item)
             if retry:
@@ -834,7 +980,13 @@ def run(args, say) -> int:
                 "retries": item.retries,
                 "retry_reasons": item.retry_reasons,
                 "identification": item.identification,
-                "photo_sha256": item.prepared.sha256 if item.prepared else None,
+                # THE ITEM'S OWN DIGEST, NOT THE PREPARED BYTES'. This read
+                # `item.prepared.sha256 if item.prepared else None`, and under hash-first a
+                # cache hit is never prepared — so that expression would have written `None`
+                # for 464 of this directory's 678 records, and `cli/resolve.py:1108` puts
+                # every record without a digest into `blind`, where D36's realign can no
+                # longer re-bind it to a slot. Same value, read off the step that computes it.
+                "photo_sha256": item.photo_sha256,
             }
             for item in items
         },
@@ -878,11 +1030,16 @@ def run(args, say) -> int:
                 )
             if item.identification is None or item.cached:
                 continue
-            if item.prepared is not None:
+            # THE DIGEST GATES THE CACHE WRITE, not the prepared bytes. An entry is keyed by
+            # the photograph it answers for, so a card with no digest has nothing to key on
+            # — and a card with a digest but no `prepared` cannot reach here anyway, because
+            # it was never sent and so has no `identification`. Reading the digest keeps the
+            # write's precondition and the write's payload the same fact.
+            if item.photo_sha256 is not None:
                 clash = writable.cache.put(
                     item.key,
                     item.identification,
-                    item.prepared.sha256,
+                    item.photo_sha256,
                     # The hash of the profile that read THIS card. The default covers the
                     # one answer that can arrive without a strategy of its own: a
                     # reattached result for a card whose sidecar no longer names one,
