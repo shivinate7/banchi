@@ -8,7 +8,8 @@ import { PositionBar } from './PositionBar'
 import type { Persona } from './position'
 import { PositionLabel } from './PositionLabel'
 import { collectorNumber } from './cardNumber'
-import { Button, Icon, Pill } from './kit'
+import { Button, Chip, Icon, Pill } from './kit'
+import { RANK_IS_CURRENT, ranksAsLive, ranksAsShown, stalenessSentence, type FrozenRank } from './frozenRank'
 import './CardLocations.css'
 import { forSale, readingAgo, readingExact, RETIRED, SOLD, stateLabel, stateTone } from './cardState'
 
@@ -142,6 +143,17 @@ export type CardLocationsProps = {
    *  order and this never reaches it. */
   hideSold?: boolean
 
+  /** THE COPIES THAT LEFT SINCE THIS ORDER WAS TAKEN (`frozenRank.ts`). Each one goes on
+   *  counting for its section and goes on being drawn where it is, `hideSold` included, so a
+   *  sale moves no row. Omitted is `RANK_IS_CURRENT` — rank by what the store says now, which
+   *  is what `#/gallery` and the lone-copy fallback want. Owner skin only. */
+  frozen?: FrozenRank
+
+  /** Take a new order. Drawn as a control only while `frozen` holds something, and it is the
+   *  only thing on this screen that reshuffles the list (D28's shape: the operator says when).
+   *  Omitted draws no control, which is the kit sheet's case. */
+  onRerank?: () => void
+
   /** Where a copy's photograph comes from. Omitted by every screen in the product, which is
    *  how they all get D6's `GET /photo/<box>/<index>` and stay the single caller shape.
    *
@@ -214,6 +226,8 @@ function OwnerRows({
   onGoTo,
   renderAction,
   hideSold = false,
+  frozen = RANK_IS_CURRENT,
+  onRerank,
 }: Omit<CardLocationsProps, 'persona'>) {
   const number = collectorNumber(group)
 
@@ -224,21 +238,35 @@ function OwnerRows({
      press that sold it is still on screen with its receipt (D119); and nothing is preselected.
      A stable partition, so within each half the server's `(box, index)` order is untouched. */
   const gone = group.copies.filter((copy) => isSold(copy, soldKeys))
-  /* Stays where it is: the copy the walk stands on, and a copy sold from this screen while its
-     receipt stands — the press may not move the rows beneath it (D118). */
-  const stays = (copy: SearchCopy) => copy.key === currentKey || soldKeys.has(copy.key)
+  /* Stays where it is: the copy the walk stands on, a copy sold from this screen while its
+     receipt stands, and — since the order is frozen — every copy that left after this order was
+     taken, whose receipt is long gone. The press may not move the rows beneath it (D118), and
+     neither may the twenty seconds afterwards. */
+  /* `ranksAsShown` is asked with `departed: true` because both callers below have already
+     established that — `gone.filter(stays)` and `sinks`, which tests `isSold` first. Spelled
+     through the shared predicate rather than as a bare `frozen.has`, so this list and the walk
+     cannot answer the fold question two different ways. */
+  const stays = (copy: SearchCopy) =>
+    copy.key === currentKey || soldKeys.has(copy.key) || ranksAsShown(copy.key, true, frozen)
   const kept = hideSold ? gone.filter(stays) : gone
+  /* A FROZEN DEPARTURE NEVER SINKS EITHER, which is the half that is easy to miss: D132 offers
+     a fold OR a sink, and a sink is a movement too — every row under the sinking one comes up
+     by its height. Frozen, the row keeps its place and is struck. */
   const sinks = (copy: SearchCopy) => isSold(copy, soldKeys) && !stays(copy)
   /* THE FULLEST SECTION LEADS (D132, amended on the owner's rule of 2026-09-11): the copies
      are grouped by box and section and the section holding the most of them is drawn first,
      because that is the place a hand can pull the most from. Within a section the server's
      card order holds. A copy sold from THIS screen still counts for its section while its
      receipt stands, so the press that sold it moves no row (D118); the store's own sold copies
-     count for nothing and, when shown, sink under everything. */
+     count for nothing and, when shown, sink under everything.
+
+     AND A COPY THAT LEFT SINCE THIS ORDER WAS TAKEN GOES ON COUNTING FOR ITS SECTION, which is
+     what makes the order survive the press outliving its receipt (`frozenRank.ts`). The
+     arithmetic is unchanged; what changed is the state it is computed against. */
   const counts = new Map<string, number>()
   const sectionOf = (copy: SearchCopy) => `${copy.place.box}/${copy.place.section ?? '?'}`
   for (const copy of group.copies) {
-    if (copy.state === SOLD || copy.state === RETIRED) continue
+    if (!ranksAsLive(copy.key, copy.state === SOLD || copy.state === RETIRED, frozen)) continue
     counts.set(sectionOf(copy), (counts.get(sectionOf(copy)) ?? 0) + 1)
   }
   const byFullest = (a: SearchCopy, b: SearchCopy) =>
@@ -246,6 +274,11 @@ function OwnerRows({
   const standing = group.copies.filter((copy) => !sinks(copy) && (!hideSold || !isSold(copy, soldKeys) || kept.includes(copy)))
   const drawn = [...[...standing].sort(byFullest), ...(hideSold ? [] : group.copies.filter(sinks))]
   const hidden = gone.length - kept.length
+  /* HOW STALE THE ORDER IS, counted over the copies THIS LIST draws. `frozen` is the screen's —
+     one press makes the box rail stale too — and a sentence saying `3 copies stale` over a list
+     that holds one of them would be counting somebody else's cards. */
+  const staleHere = group.copies.filter((copy) => frozen.has(copy.key)).length
+  const stale = stalenessSentence(staleHere)
 
   /* A GROUP WITH NO SKU HAS NO LISTING TO REPORT, AND THE HEADER MUST NOT INVENT ONE (D119).
      `capture_server.py:do_search` sends the SKU-less bag `listed: {0,0,0}`, `sold_here: 0` and
@@ -297,6 +330,31 @@ function OwnerRows({
     <section className="card-locations card-locations-owner">
       <header className="card-locations-head">
         <h3 className="bn-section-title card-locations-title">Every copy of this card</h3>
+        {/* THE ONE THING THAT RESHUFFLES THIS LIST, and it is a press rather than a consequence.
+            Drawn only once the order has actually gone stale — a control offering to recompute
+            an order that is already current is a button that does nothing, and a permanent one
+            would read as a setting to get right rather than as the state of this list. It sits
+            in the header because the press that made it stale is in the rows beneath it; a
+            re-rank on the walk's own status bar would be across the screen from the hand.
+
+            THE SLOT AROUND IT IS ALWAYS RENDERED AND IS D118's RULE, not tidiness. A control
+            that appears on a press is a row of the header's grid that did not exist a frame
+            ago, and this list sits inside `.browse-band`'s fixed height — so every copy row
+            would go down by the chip's height at the moment of the sale, which is the movement
+            this whole entry exists to stop. The slot holds `--bn-control-h-sm` whether or not
+            there is anything in it. */}
+        <div className="card-locations-rerank-slot">
+          {stale === null || onRerank === undefined ? null : (
+            <Chip
+              icon="refresh"
+              className="card-locations-rerank"
+              title="The order was taken before these copies left. Press to rank by the store as it stands now."
+              onClick={onRerank}
+            >
+              {stale} · re-rank
+            </Chip>
+          )}
+        </div>
         <div className="card-locations-stats">
           <div className="bn-stat card-locations-stat">
             <span className="bn-stat-value">{group.copies.length}</span>
@@ -575,7 +633,11 @@ function FulfillerCard({
                     className="card-locations-photo"
                     src={
                       photoSrc === undefined
-                        ? photoUrl(copy.place.box, copy.place.index)
+                        ? /* BY NAME (D172): `_copy_row` puts the card's own `cid` on every
+                             `SearchCopy`, already filtered to a name that really is a
+                             photograph's — so this thumbnail is THIS copy, not whatever
+                             occupies its slot by the time the picture loads. */
+                          photoUrl(copy.place.box, copy.place.index, copy.cid)
                         : photoSrc(copy)
                     }
                     alt={where === null ? 'The card' : `The card in ${where}`}

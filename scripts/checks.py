@@ -423,6 +423,34 @@ CHECKS = (
         "governed_by": ("D7", "D18", "D48", "D88"),
     },
     {
+        "target": "cid-selftest",
+        "runs": "python3 scripts/cid-selftest.py",
+        "asserts": "D172's stable card name and the photograph store filed under it, by "
+                   "violating both against a throwaway store. The naming's SOURCE CENSUS, "
+                   "because every row gets a value and a count of them cannot tell a correct "
+                   "seeding from one nothing checked; a name stripped by an older build "
+                   "re-issued BYTE-IDENTICALLY, which is the whole argument against an "
+                   "allocator; the three value shapes that have never fired in production, "
+                   "PROVOKED rather than asserted over; the forward-version guard; a `-9` "
+                   "mid-transaction leaving the store unchanged; the relocation's per-card "
+                   "link-verify-unlink, its resumption, and its refusal of a file whose bytes "
+                   "are not the card's; and a re-shoot excused by a RECORDED digest, with the "
+                   "audit going red when that digest is mutated. Two cases COUNT FILESYSTEM "
+                   "CALLS — a renumber renames nothing where it was N-k renames and N-k "
+                   "sidecar rewrites, and a move touches no file at all — because an outcome "
+                   "assertion cannot see work that no longer happens.",
+        "needs": ("python3",),
+        "writes": "one sqlite store and one photograph tree per case, all under `mktemp -d`, "
+                  "plus one short-lived process. `PKMNSCAN_HOME` is repointed for every case, "
+                  "so the operator's own store and their 4.45 GB of photographs are never "
+                  "opened.",
+        "commit_path": False,
+        "why_off_commit_path": "D18 — it writes a temp store, draws photographs and kills a "
+                               "process. Same standing as submission-selftest.",
+        "gates": True,
+        "governed_by": ("D18", "D26", "D83", "D88", "D89", "D172"),
+    },
+    {
         "target": "janitor-selftest",
         "runs": "bash scripts/janitor-selftest.sh",
         "asserts": "scripts/janitor.py, against a throwaway clone with real worktrees, a fake "

@@ -14,7 +14,7 @@ import {
   type SelectionDraft,
 } from './RunsComposer'
 import { SubmissionClaims } from './SubmissionClaims'
-import { carriedScope, clearCarriedScope, type CarriedScope } from './runHandoff'
+import { carriedScope, clearCarriedScope, parseKey, type CarriedScope } from './runHandoff'
 import './Runs.css'
 
 /* THE PIPELINE, ON A ROUTE OF ITS OWN (D39). Shoot a box, identify it, join it, answer what
@@ -28,7 +28,22 @@ import './Runs.css'
  * cards ticked in it, and both the composer and the panel read it. There is one selection per
  * press now — `box` is a term in it rather than the unit of work — so what this file holds is a
  * DRAFT (the screen's vocabulary: which start, which drawers, which narrowings) and the wire's
- * `RunSelection` is derived from it by one function in the composer. */
+ * `RunSelection` is derived from it by one function in the composer.
+ *
+ * THE HANDOFF IS VALIDATED PER KEY, NOT PER BOX. `runHandoff.ts:CarriedScope` carries a flat
+ * list of `box/index` keys rather than one box and its indices, which is what lets a tick list
+ * from `#/inventory` span drawers — so a key naming a drawer the registry no longer holds is
+ * dropped alone, and the rest of the handoff survives it.
+ *
+ * `#/runs?state=captured` OPENS THE COMPOSER ON ITS DEFAULT SCOPE. `standing.ts`'s one ranked
+ * sentence on `#/` — *"N cards are photographed and not identified"* — links here now rather
+ * than to a bare `#/runs`, so the answer to the sentence the operator just read is one click
+ * rather than a second question about drawers. The default draft (`NO_DRAFT`) is already
+ * `state === 'captured'` under its `needed` start, so the address has nothing to compose — it
+ * only has to open the dialog, the way a `run=` link opens a run's own detail. This is
+ * read-once, like `run=`: there is no write-back of a narrowing into the address and no
+ * `&box=` term, because nothing in this app links to one yet and building the two-way sync a
+ * bookmarked narrowing would need is not this fix. */
 
 function inOrder(records: readonly BoxRecord[]): BoxRecord[] {
   return [...records].sort((a, b) => a.box - b.box)
@@ -38,6 +53,14 @@ function inOrder(records: readonly BoxRecord[]): BoxRecord[] {
 function runInHash(): string | null {
   const query = window.location.hash.split('?')[1] ?? ''
   return new URLSearchParams(query).get('run')
+}
+
+/** `#/runs?state=captured` — `standing.ts`'s own link — asks for the composer to be open on
+ *  arrival. The value is not otherwise read: `captured` is the only state this composer can
+ *  act on and it is already the default draft's start. */
+function stateInHash(): boolean {
+  const query = window.location.hash.split('?')[1] ?? ''
+  return new URLSearchParams(query).get('state') === 'captured'
 }
 
 export function Runs() {
@@ -50,10 +73,10 @@ export function Runs() {
    *  START is the store-wide one, which is the state `#/`'s own standing line already named. */
   const [draft, setDraft] = useState<SelectionDraft>(NO_DRAFT)
 
-  /** The cards handed over from `#/inventory`'s mass-select, and the box they were ticked in. */
+  /** The cards handed over from `#/inventory`'s mass-select, as position keys. */
   const [carried, setCarried] = useState<CarriedScope | null>(null)
 
-  const [composerOpen, setComposerOpen] = useState(false)
+  const [composerOpen, setComposerOpen] = useState(() => stateInHash())
   const [syncOpen, setSyncOpen] = useState(false)
   const [openRun, setOpenRun] = useState<string | null>(() => runInHash())
 
@@ -61,6 +84,7 @@ export function Runs() {
     const fromHash = () => {
       const named = runInHash()
       if (named !== null) setOpenRun(named)
+      if (stateInHash()) setComposerOpen(true)
     }
     window.addEventListener('hashchange', fromHash)
     return () => window.removeEventListener('hashchange', fromHash)
@@ -68,8 +92,8 @@ export function Runs() {
 
   /** The handoff from `#/inventory` is applied ONCE, on the first successful read of the
    *  registry — never on a Reload and never when a run starts, both of which bump `reloads`.
-   *  It stays in storage until its box is unticked, so re-applying it here would reopen the
-   *  composer uninvited and silently drop every other box in the cart. */
+   *  It stays in storage until the operator picks a scope, so re-applying it here would reopen
+   *  the composer uninvited and silently put back a selection they had just replaced. */
   const handoffApplied = useRef(false)
 
   useEffect(() => {
@@ -83,16 +107,24 @@ export function Runs() {
         if (handoffApplied.current) return
         handoffApplied.current = true
 
-        /* The handoff is validated against the registry before it is drawn: a carried box that
-           has since been deleted is dropped whole rather than drawn as a number with nothing
-           behind it. A valid one opens the composer on the box it was ticked in. */
+        /* THE HANDOFF IS VALIDATED AGAINST THE REGISTRY BEFORE IT IS DRAWN, AND PER KEY RATHER
+           THAN WHOLE. `CarriedScope` is a flat list of `box/index` keys, which is what lets a
+           tick list from `#/inventory` span drawers — dropping the whole handoff because ONE of
+           several drawers was deleted underneath it would be a narrowing the operator never
+           asked for in the one direction that costs them work. Keys in a departed drawer go,
+           the rest stay, and a handoff with nothing left goes the way it always did. */
         const handoff = carriedScope()
         if (handoff === null) return
-        if (!answer.boxes.some((record) => record.box === handoff.box)) {
+        const known = new Set(answer.boxes.map((record) => record.box))
+        const kept = handoff.keys.filter((key) => {
+          const at = parseKey(key)
+          return at !== null && known.has(at.box)
+        })
+        if (kept.length === 0) {
           clearCarriedScope()
           return
         }
-        setCarried(handoff)
+        setCarried({ keys: kept })
         /* ARRIVING WITH A TICK LIST SELECTS IT, which is what the handoff is for — and it is
            the operator's own act one screen back, not a default this file invented. */
         setDraft((held) => ({ ...held, start: 'ticked' }))

@@ -989,6 +989,13 @@ export function Codes() {
                             ) : (
                               <a
                                 key={i}
+                                /* THE SLOT ROUTE: a code-card ledger line carries no `cid`
+                                   (D172). `codes/ledger.py:Entry` is its own record — the
+                                   code, its state, `box`, `index`, `photo` and
+                                   `photo_sha256` — and it has never held the card record's
+                                   name. NOR IS ITS `photo_sha256` ONE: that is the digest of
+                                   the file as it stands, which a re-shoot moves, where a
+                                   `cid` is frozen at issue and does not. */
                                 href={photoUrl(p.box, p.index)}
                                 target="_blank"
                                 rel="noreferrer"
@@ -1396,6 +1403,8 @@ export function Codes() {
                                 <td data-th="Photo" className="codes-td-photo">
                                   {e.box === null || e.index === null ? null : (
                                     <a
+                                      /* The slot route, for the duplicate list's reason
+                                         above: the ledger carries no `cid`. */
                                       href={photoUrl(e.box, e.index)}
                                       target="_blank"
                                       rel="noreferrer"

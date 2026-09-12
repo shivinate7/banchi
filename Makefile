@@ -4,7 +4,7 @@
 # the project would be built on top of — `make check` green means every check ran.
 
 .DEFAULT_GOAL := help
-.PHONY: help status map explain harness check ignore-check docs-audit vale audit-self-test verdict-selftest githooks-selftest merge merge-selftest revert-guard revert-selftest claim-ids claim-stale claim-selftest decisions-selftest port-agreement set-hint-agreement screen-freshness screen-freshness-selftest sigil-check suite-lock-selftest icloud-sweep audit-history dev server screenshot design-check design-check-quiet lint typecheck venv launch-config worktree-setup hooks up down launch-agent demo demo-photos demo-seed demo-record demo-static demo-preview demo-freshness
+.PHONY: help status map explain harness check cid-selftest cid-audit ignore-check docs-audit vale audit-self-test verdict-selftest githooks-selftest merge merge-selftest revert-guard revert-selftest claim-ids claim-stale claim-selftest decisions-selftest port-agreement set-hint-agreement screen-freshness screen-freshness-selftest sigil-check suite-lock-selftest icloud-sweep audit-history dev server screenshot design-check design-check-quiet lint typecheck venv launch-config worktree-setup hooks up down launch-agent demo demo-photos demo-seed demo-record demo-static demo-preview demo-freshness
 
 # Prefer the venv if it exists, so `make harness` works without anyone remembering to
 # activate anything. Falls back to system python3, which still runs T2-T5 — T1 needs the
@@ -73,6 +73,15 @@ help:
 	@echo "  make decisions-selftest  docs/decisions/ is complete and still round-trips."
 	@echo "  make submission-selftest  the identify claim table, proved by racing two presses"
 	@echo "                    over one card. In \`check\`, never in the hook."
+	@echo "  make cid-selftest  the card's stable name and the photograph store, proved by"
+	@echo "                    violating them: a stripped name that heals byte-identically, a"
+	@echo "                    renumber that renames nothing, a move that touches no file, a"
+	@echo "                    re-shoot excused by a RECORDED digest, and a -9 mid-transaction."
+	@echo "                    Counts syscalls, because an outcome assertion cannot see work"
+	@echo "                    that no longer happens. In \`check\`, never in the hook."
+	@echo "  make cid-audit    does every card's name still resolve to its photograph? Reads"
+	@echo "                    the whole corpus, so it is NOT in \`check\` — \`make lan-check\`'s"
+	@echo "                    reason. Three verdicts, and the third is \`not known\`."
 	@echo "  make janitor-selftest  the sweep, proved against a throwaway clone. In \`check\`, never in the hook."
 	@echo "  make reap-selftest  the kill guard, proved by pointing it at what it must not kill."
 	@echo "  make silent-write-selftest  the silenced-write guard, proved by reproducing the"
@@ -109,6 +118,7 @@ help:
 	@echo "                    lint + vale + typecheck + audit-self-test +"
 	@echo "                    githooks-selftest + merge-selftest + revert-selftest +"
 	@echo "                    claim-selftest + decisions-selftest + submission-selftest +"
+	@echo "                    cid-selftest +"
 	@echo "                    janitor-selftest + reap-selftest + silent-write-selftest +"
 	@echo "                    guard-shell-selftest +"
 	@echo "                    coordinator-selftest + suite-lock-selftest +"
@@ -420,6 +430,7 @@ check:
 	@$(MAKE) --no-print-directory claim-selftest
 	@$(MAKE) --no-print-directory decisions-selftest
 	@$(MAKE) --no-print-directory submission-selftest
+	@$(MAKE) --no-print-directory cid-selftest
 	@$(MAKE) --no-print-directory janitor-selftest
 	@$(MAKE) --no-print-directory reap-selftest
 	@$(MAKE) --no-print-directory silent-write-selftest
@@ -460,6 +471,7 @@ ci-check:
 	@$(MAKE) --no-print-directory claim-stale
 	@$(MAKE) --no-print-directory decisions-selftest
 	@$(MAKE) --no-print-directory submission-selftest
+	@$(MAKE) --no-print-directory cid-selftest
 	@$(MAKE) --no-print-directory revert-guard
 	@$(MAKE) --no-print-directory janitor-selftest
 	@$(MAKE) --no-print-directory reap-selftest
@@ -754,6 +766,22 @@ reap-selftest:
 # list has on this side of the fence.
 submission-selftest:
 	@$(PYTHON) scripts/submission-selftest.py
+
+# D172'S TWO TARGETS, AND ONLY ONE OF THEM IS IN `check`.
+#
+# `cid-selftest` answers from the tree alone: it builds its own store under a temp
+# `PKMNSCAN_HOME` and draws its own photographs, so it is `submission-selftest`'s
+# standing exactly — in `check`, never in the git hook, because it writes a temp tree
+# and kills a process (D18).
+#
+# `cid-audit` reads the operator's 4.45 GB of real photographs, and `make check` answers
+# from the tree alone — which is `make lan-check`'s reason, not a weaker one. It is its
+# own target and `make status` reports when it has never been run against this store.
+cid-selftest:
+	@$(PYTHON) scripts/cid-selftest.py
+
+cid-audit:
+	@./pkmnscan cards audit
 
 .PHONY: submission-selftest
 

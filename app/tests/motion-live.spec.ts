@@ -101,7 +101,7 @@ const GAP_LUMA = 20
 const LUMA_TOLERANCE = 15
 
 /** Inject a synthetic scene into the screen's video element. Page-side control is one handle:
- *  setScene(base) recolours the whole frame, flat.
+ *  setScene(base) recolours the whole frame — flat at the gap level, banded at any other.
  *
  *  FLAT, AND NO JITTER SQUARE. The old one drew at canvas x 40-98, which is grid x 4.0-9.8,
  *  against motion.ts's `ROI_X0` of 13 — entirely OUTSIDE the watch region. Its comment
@@ -124,6 +124,23 @@ async function injectScene(page: Page): Promise<void> {
     const draw = () => {
       context.fillStyle = `rgb(${scene.base},${scene.base},${scene.base})`
       context.fillRect(0, 0, 640, 360)
+      /* A CARD IS A PATTERN, NOT A LEVEL (2026-09-12). A flat fill at a new level is the
+         baseline times one number — exactly what the machine now refuses as an exposure step
+         (`suppressed:uniform`, motion.ts's `uniformMinShare`) — so a card stage carries
+         alternating 20 px bands at ±40 around its level. Fourteen bands span the watch
+         region, seven up and seven down, so every luma assertion below still reads the
+         stage's level to within a unit; and a band layout that is the same on every card
+         stage is what lets `d` between two cards read their full 60-level difference. */
+      if (scene.base !== first) {
+        for (let y = 0; y < 360; y += 40) {
+          const up = Math.min(255, scene.base + 40)
+          const down = Math.max(0, scene.base - 40)
+          context.fillStyle = `rgb(${up},${up},${up})`
+          context.fillRect(0, y, 640, 20)
+          context.fillStyle = `rgb(${down},${down},${down})`
+          context.fillRect(0, y + 20, 640, 20)
+        }
+      }
       window.requestAnimationFrame(draw)
     }
     draw()

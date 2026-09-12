@@ -20,6 +20,10 @@ WHAT IT ANSWERS, in the order the questions actually get asked:
     camera     what the CAMERA did, as opposed to what the cards did: how the frames were
                paced, how bright the plate is and therefore what one exposure step would
                cost, whether the still-frame floor is noise or the whole picture moving
+    gain       the uniformity test (2026-09-12) over each trace's own pixels: an exposure
+               step injected on the baseline against the presence floor and against the
+               test, every fired card against the test, and the scaled novelty between
+               consecutive fires — the offline half of `suppressed:uniform`
     contact    write the verdict frames out as a PNG contact sheet, so a human can see
                whether the frames the machine called empty have a card in them
 
@@ -32,6 +36,7 @@ settles it is looking.
     scripts/score-trace.py sweep    <trace.json> [more.json ...]
     scripts/score-trace.py stalls   <trace.json> [more.json ...]
     scripts/score-trace.py camera   <trace.json> [more.json ...]
+    scripts/score-trace.py gain     <trace.json> [more.json ...]
     scripts/score-trace.py contact  <trace.json> <out.png>
 
 TRACE VERSIONS. v1 rows are [t, d, luma]; v2 rows (D81) are [t, d, dBase, luma]. Read
@@ -65,11 +70,15 @@ REST_QUANTILE = 0.25
 STILL_FRAMES = 1
 STILL_WINDOW = 3
 REFRACTORY_MS = 250.0
+T_NOVEL = 4.0
 PRESENCE_K = 3.0
 PRESENCE_MIN = 16.0
 RESCUE_K = 4 / 3
 RESCUE_AFTER = 0.6
 MAX_MOVE_MS = 1250.0
+UNIFORM_MIN_SHARE = 0.25
+UNIFORM_TOE = 8
+UNIFORM_SHOULDER = 247
 
 # NOT A MIRRORED PARAMETER, and it is read by `camera` alone. An exposure change of E stops
 # multiplies scene luminance by 2**E; the stream is display-referred, so the 8-bit code is
@@ -111,6 +120,34 @@ def _quantile(values: list[float], q: float) -> float:
 
 def _mad(a: list[int], b: list[int]) -> float:
     return sum(abs(x - y) for x, y in zip(a, b)) / len(a)
+
+
+def _uniform_residual(now: list[float], ref: list[float]) -> float | None:
+    """MotionMachine.uniformResidual, mirrored: what is left of `now` against `ref` once the
+    best single scaling — the MEDIAN per-cell ratio — is divided out, over the cells both
+    frames hold between UNIFORM_TOE and UNIFORM_SHOULDER. None when fewer than
+    UNIFORM_MIN_SHARE of the region is comparable, which the machine reads as "judge it as a card".
+
+    A gain step is the baseline times one number and leaves noise; a card leaves its
+    pattern. The bound the machine compares this against is PRESENCE_K x the session's own
+    still-frame difference — the same multiple the presence floor rides."""
+    pairs = [
+        (n, r) for n, r in zip(now, ref)
+        if UNIFORM_TOE <= r <= UNIFORM_SHOULDER and UNIFORM_TOE <= n <= UNIFORM_SHOULDER
+    ]
+    if len(pairs) < UNIFORM_MIN_SHARE * len(now):
+        return None
+    k = statistics.median(n / r for n, r in pairs)
+    # In the units of the BRIGHTER frame. The frame's own units shrink a dark card on a bright
+    # plate (the 03:25 session's closest real card to 1.8x); the baseline's shrink a bright
+    # card on a dark one (the 85/85 run to 1.4x); the brighter of the two keeps every real
+    # card on every session at 3.6x or more. motion.ts's `uniformResidual` is the mirror.
+    return sum(abs(n - k * r) for n, r in pairs) / len(pairs) / min(k, 1.0)
+
+
+def _step(cells: list[int], stops: float) -> list[float]:
+    """`cells` after an exposure step of `stops`, in display code — `camera`'s model."""
+    return [min(255.0, v * 2 ** (stops / GAMMA_DISPLAY)) for v in cells]
 
 
 def _replay(rows, still_k=STILL_K, move_k=MOVE_K, d_seed=D_SEED):
@@ -283,12 +320,19 @@ def presence(path: str) -> None:
     for event in trace["events"]:
         cells = _cells(event["frame"])
         distance = _mad(cells, baseline)
-        verdict = "CARD " if distance >= floor else "empty"
-        if distance >= floor:
+        residual = _uniform_residual([float(v) for v in cells], [float(v) for v in baseline])
+        bound = PRESENCE_K * d_typical
+        if distance < floor:
+            verdict = "empty"
+        elif residual is not None and residual < bound:
+            verdict = "UNIFORM — the stand at a new gain, not a card"
+        else:
+            verdict = "CARD "
             passes += 1
         print(
             f"  {event['t'] / 1000:7.1f}s  live {event['event']:20s}"
             f"  dbase {distance:7.2f}  p90 {_quantile([float(v) for v in cells], 0.9):5.1f}"
+            f"  residual {'  n/a' if residual is None else f'{residual:5.2f}'}/{bound:.2f}"
             f"  -> {verdict}"
         )
     live_fires = sum(1 for e in trace["events"] if e["event"] == "fire")
@@ -488,6 +532,82 @@ def _pearson(left: list[int], right: list[int]) -> float:
     return sum((a - ml) * (b - mr) for a, b in zip(left, right)) / (sl * sr)
 
 
+def gain(paths: list[str]) -> None:
+    """The uniformity test over each trace's own pixels (2026-09-12).
+
+    THE QUESTION IT ANSWERS: would the machine in the tree photograph the bare stand after
+    the camera's auto-exposure took one step, and would it still photograph every card it
+    photographed before. Four readings per trace:
+
+        STEP         a 1/3, 1/2, 1 and 1.5 EV step injected on the arm-time baseline, the
+                     same model `camera` prices it with. `raw` is what the presence floor
+                     sees — a CARD on nine of fifteen sessions at 1/3 EV — and `residual`
+                     is what the test sees after dividing the scaling out. `declined` means
+                     the step clipped too many cells to judge, and the machine falls back
+                     to the floor alone.
+        CARDS        every fired frame that clears the floor: the smallest residual against
+                     the bound. A real card is never a scaled plate; on this corpus the
+                     margin is 3.6x or more on every session, and the one frame closer to
+                     the bound (03:25, 74.0 s, 1.02x) is the plate's own dark disc displaced
+                     — look, with `contact`, before believing a number here.
+        CARD + STEP  every fired frame with a 1/3 EV step on top: still not uniform.
+        NOVELTY      the scaled residual between consecutive fires, the number the novelty
+                     gate compares against tNovel now. Below it a real card would be
+                     called the previous one.
+
+    NOTHING HERE HAS SEEN A REAL EXPOSURE STEP. The corpus records the watch region and no
+    frame outside it, and a scan of every keyframe pair found no global gain change in
+    twenty sessions; the step is the multiplicative model and its noise is the plate's own.
+    The first trace recorded with the body in an auto mode is what validates this."""
+    for path in paths:
+        trace = _load(path)
+        rows = _rows(trace)
+        still = [d for _t, d, _b, _l in rows[1:] if d < D_SEED * STILL_K]
+        typical = max(D_FLOOR, statistics.median(still)) if still else D_SEED
+        floor = max(PRESENCE_MIN, PRESENCE_K * typical)
+        bound = PRESENCE_K * typical
+        baseline = [float(v) for v in _cells(trace["keyframes"][0]["frame"])]
+        print(f"{Path(path).name}   v{trace.get('version', 1)}   typ {typical:.2f}  floor {floor:.2f}  bound {bound:.2f}")
+        for stops, label in ((1 / 3, "1/3 EV"), (1 / 2, "1/2 EV"), (1.0, "1 EV"), (1.5, "1.5 EV")):
+            lifted = _step([int(v) for v in baseline], stops)
+            raw = sum(abs(a - b) for a, b in zip(lifted, baseline)) / len(baseline)
+            residual = _uniform_residual(lifted, baseline)
+            if raw < floor:
+                verdict = "under the floor — refused as empty either way"
+            elif residual is None:
+                verdict = "DECLINED (too few unclipped cells) — the floor alone decides: A CARD"
+            elif residual < bound:
+                verdict = "uniform — the stand at a new gain, refused, baseline re-taken"
+            else:
+                verdict = "A CARD — the test did not catch it"
+            print(f"  step {label:7s} raw {raw:6.2f}  residual {'  n/a' if residual is None else f'{residual:5.2f}'}  -> {verdict}")
+        fires = [e for e in trace["events"] if e["event"].startswith("fire")]
+        cards = []
+        for event in fires:
+            cells = [float(v) for v in _cells(event["frame"])]
+            if _mad([int(v) for v in cells], [int(v) for v in baseline]) < floor:
+                continue
+            residual = _uniform_residual(cells, baseline)
+            stepped = _uniform_residual(_step([int(v) for v in cells], 1 / 3), baseline)
+            cards.append((event["t"], residual, stepped))
+        if cards:
+            worst = min(cards, key=lambda c: float("inf") if c[1] is None else c[1])
+            lost = [round(t / 1000, 1) for t, r, _s in cards if r is not None and r < bound]
+            lost_stepped = [round(t / 1000, 1) for t, _r, s in cards if s is not None and s < bound]
+            print(f"  cards      {len(cards)} clear the floor; smallest residual {worst[1]:.2f} at {worst[0] / 1000:.1f}s "
+                  f"({worst[1] / bound:.1f}x the bound); called uniform: {lost or 'none'}")
+            print(f"  card+step  under a 1/3 EV step on top, called uniform: {lost_stepped or 'none'}")
+        novelty = []
+        for before, after in zip(fires, fires[1:]):
+            a = [float(v) for v in _cells(before["frame"])]
+            b = [float(v) for v in _cells(after["frame"])]
+            scaled = _uniform_residual(b, a)
+            novelty.append(_mad([int(v) for v in b], [int(v) for v in a]) if scaled is None else scaled)
+        if novelty:
+            print(f"  novelty    scaled residual between consecutive fires: min {min(novelty):.2f} against tNovel {T_NOVEL}")
+        print()
+
+
 def contact(path: str, out: str) -> None:
     """Every verdict's frame as one PNG, labelled with its live event and its statistics.
 
@@ -541,6 +661,8 @@ def main(argv: list[str]) -> int:
         stalls(rest)
     elif command == "camera":
         camera(rest)
+    elif command == "gain":
+        gain(rest)
     elif command == "contact":
         if len(rest) != 2:
             raise SystemExit("contact takes <trace.json> <out.png>")

@@ -132,6 +132,14 @@ type Sellable = {
   about: string | null
   /** The place block, for the bar and the "between" sentence. */
   where: Place | null
+  /** THE CARD'S OWN NAME FOR ITS PHOTOGRAPH (D172), or null where the row it was built from
+   *  has none. TWO OF THE THREE SOURCES CARRY ONE: `sellable` reads an `InventoryCard` and
+   *  `asSellable` a `SearchCopy`, both of which the server names; `pickSellable` reads a
+   *  `PickRow` off the order resolver, which carries `capture_id` and no `cid` at all — so an
+   *  order pick addresses the slot, exactly as it always did. Null and not absent, because
+   *  this is a view model built three ways and a missing key would read as an oversight in
+   *  whichever constructor forgot it. */
+  cid: string | null
   /** Set when an open order is waiting for this copy. The sale then goes through the order
    *  rather than around it, so the owner's ledger counts the pull. */
   order: OrderRef | null
@@ -169,6 +177,9 @@ function sellable(key: string, card: InventoryCard): Sellable | null {
     name: card.name ?? NO_NAME,
     about: about.length === 0 ? null : about.join(' · '),
     where: card.place ?? null,
+    // The inventory row's own name for its photograph (D172). Raw here — `photoUrl` is what
+    // refuses a `moved:` or `nophoto:` name, so this passes on whatever the store said.
+    cid: card.cid ?? null,
     order: null,
   }
 }
@@ -182,6 +193,8 @@ function asSellable(group: SearchGroup, copy: SearchCopy): Sellable {
     name: group.names.length === 0 ? NO_NAME : group.names.join(' / '),
     about: null,
     where: copy.place,
+    // `_copy_row` already filtered this one to a name that really is a photograph's.
+    cid: copy.cid ?? null,
     order: null,
   }
 }
@@ -205,6 +218,11 @@ function pickSellable(order: OrderRow, line: ResolvedLine, pick: PickRow): Sella
     name: pick.card_name ?? NO_NAME,
     about: about.length === 0 ? null : about.join(' · '),
     where: pick.place,
+    // THE SLOT ROUTE FOR AN ORDER PICK, BECAUSE `PickRow` CARRIES NO NAME. The order
+    // resolver's row is built for aiming a WRITE — `capture_id` is what `POST /orders/pull`
+    // checks against the card actually at the slot — and D93's carve-out kept it to that; a
+    // `cid` has never been on it. `GET /photo/<box>/<index>` is the correct address here.
+    cid: null,
     order: {
       orderKey: order.key,
       source: order.source,
@@ -866,7 +884,10 @@ export function Fulfillment() {
     const showBar = chosen.where !== null && chosen.where.located !== false
     const boxName = chosen.where?.box_name ?? null
     const missing = photoMissing === chosen.key
-    const src = photoUrl(chosen.box, chosen.index)
+    /* BY NAME WHERE THE ROW HAS ONE (D172) — the inventory and search paths do, an order
+       pick does not; see `Sellable.cid`. He is looking at a photograph to decide whether the
+       card in his hand is the card on the screen, so it had better be this card's. */
+    const src = photoUrl(chosen.box, chosen.index, chosen.cid)
     const forOrder = chosen.order
     const walkAt = walk.findIndex((card) => card.key === chosen.key)
     const next = walkAt < 0 ? null : (walk[walkAt + 1] ?? null)
@@ -1351,7 +1372,8 @@ export function Fulfillment() {
       >
         <img
           className="ff-zoom-img"
-          src={photoUrl(chosen.box, chosen.index)}
+          /* The same address the confirm frame drew, so the big view is a cache hit. */
+          src={photoUrl(chosen.box, chosen.index, chosen.cid)}
           alt={`The card in ${chosen.place}, bigger`}
         />
         <span className="fulfillment-say ff-zoom-hint">Tap anywhere to go back.</span>

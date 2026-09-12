@@ -135,7 +135,12 @@ type Halt = Note & { where: 'camera' | 'server' }
  *  loaded: `pipeline/join.py:Position.label` renders that string and the app never composes
  *  a second one, so with no capture response in hand there is nothing to show but the store
  *  key the server addressed it by — drawn with its sigil, never as a bare `#` (D92). */
-type UndoTarget = { box: number; index: number; label: string | null }
+/*  `cid` RIDES ALONG FOR THE SAME REASON `label` DOES, and is null in the same case (D172):
+ *  a target built from a shot carries the capture response's own name for the photograph, and
+ *  the one built from the server's high-water mark carries nothing, because there is no
+ *  response behind it to carry anything. `photoSrc` addresses the first by name and falls
+ *  back to the slot — with its nonce — for the second. */
+type UndoTarget = { box: number; index: number; label: string | null; cid: string | null }
 
 /** What to call a position on screen — the server's own rendered label, or the record's own
  *  store key when there is no capture response holding one.
@@ -436,9 +441,27 @@ function describe(err: unknown): Note {
   return { text: String(err), code: null }
 }
 
-function photoSrc(box: number, index: number, revision: number): string {
-  
-  const url = photoUrl(box, index)
+/* THE ADDRESS FIRST, AND THE NONCE ONLY WHERE THE ADDRESS CANNOT ANSWER (D172).
+ *
+ * `cid` NAMES THE PHOTOGRAPH, which is exactly what this screen could never say before. It is
+ * frozen at issue and UNIQUE in the store, so the frame just taken, the card `U` deletes and
+ * the card that takes the released index back (D10) are three different URLs with nothing
+ * appended — and the index a fresh capture lands on is one the box has never had, which is the
+ * case the slot route serves worst and the undo hazard `do_photo`'s own docstring opens with.
+ *
+ * `?v=` SURVIVES FOR THE ONE ROW THAT HAS NO NAME: the undo strip's fallback target, which is
+ * the server's high-water mark minus one and carries no record at all (see `undoStack`), so
+ * `photoUrl` has nothing to address it by and falls back to the slot. Spending the nonce on a
+ * by-card URL would be worse than useless — that response is `immutable` for a year, and a URL
+ * that changed on every undo would re-fetch the 1.9 MB per photograph D52 measured to show the
+ * same bytes back.
+ *
+ * THE TEST IS WHETHER THE NAME CHANGED THE ADDRESS, never whether a cid was passed. `photoUrl`
+ * ignores one in the demo build and refuses a `moved:`/`nophoto:` name, and both of those land
+ * back on the slot route, where the nonce is still owed. */
+function photoSrc(box: number, index: number, cid: string | null, revision: number): string {
+  const url = photoUrl(box, index, cid)
+  if (url !== photoUrl(box, index)) return url
   return `${url}${url.includes('?') ? '&' : '?'}v=${revision}`
 }
 
@@ -2034,13 +2057,22 @@ export function CaptureScreen() {
       // The server's own newest for this box: the high-water mark, minus one. Zero for a box
       // it has never heard of, which is the same thing as empty.
       const serverNewest = nextForBox === undefined ? 0 : nextForBox - 1
-      return serverNewest < 1 ? [] : [{ box, index: serverNewest, label: null }]
+      // NO NAME EITHER, FOR THE REASON THERE IS NO LABEL: this row is arithmetic over
+      // `GET /status`'s high-water mark, and no capture response stands behind it, so there
+      // is no `cid` to address its photograph by. `photoSrc` draws it off the slot.
+      return serverNewest < 1 ? [] : [{ box, index: serverNewest, label: null, cid: null }]
     }
 
     return sitting
       .slice(-UNDO_DEPTH)
       .reverse()
-      .map((shot) => ({ box: shot.card.box, index: shot.card.index, label: shot.card.label }))
+      .map((shot) => ({
+        box: shot.card.box,
+        index: shot.card.index,
+        label: shot.card.label,
+        // The capture response's own name for the photograph it just wrote (D172).
+        cid: shot.card.cid ?? null,
+      }))
   }, [box, nextForBox, sitting])
 
   /* WHETHER THE STRIP NAMES A DRAWER ON EVERY ROW — it does the moment what is IN VIEW spans
@@ -3010,6 +3042,11 @@ export function CaptureScreen() {
                         on a bright lamp is the machine working; non-zero on a dim one is worth a
                         trace. */}
                     <span>escape {motionDiag.escapes}</span>
+                    {/* Settles refused as the stand at a NEW GAIN and adopted as the baseline —
+                        the camera's exposure moved while armed. Zero on a body in Manual
+                        Exposure, which §4 of the spec asks for; non-zero is the receipt that
+                        it was not, and that the machine survived it. */}
+                    <span>uniform {motionDiag.uniform}</span>
                     {swallowedTotal === 0 ? null : (
                       <span className="capture-refused">dropped {swallowedTotal}</span>
                     )}
@@ -3062,7 +3099,7 @@ export function CaptureScreen() {
               <img
                 key={last.card.key}
                 className="capture-media"
-                src={photoSrc(last.card.box, last.card.index, revision)}
+                src={photoSrc(last.card.box, last.card.index, last.card.cid ?? null, revision)}
                 alt={`Capture at ${last.card.label}`}
               />
             )}
@@ -3428,7 +3465,7 @@ export function CaptureScreen() {
                   >
                     <img
                       className="capture-undo-thumb capture-undo-thumb-portrait"
-                      src={photoSrc(target.box, target.index, revision)}
+                      src={photoSrc(target.box, target.index, target.cid, revision)}
                       alt=""
                     />
                     {/* THE DRAWER GOES IN THE CAPTION, WHICH IS ALREADY ABSOLUTE — `left: 0;

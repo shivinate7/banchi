@@ -15,6 +15,7 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 from cli import (  # noqa: E402
+    cmd_cards,
     cmd_emit,
     cmd_identify,
     cmd_join,
@@ -241,6 +242,47 @@ def build_parser() -> argparse.ArgumentParser:
         "--write",
         action="store_true",
         help="create the rescue run. Previews without it, and writes nothing at all.",
+    )
+
+    # ---------------------------------------------------------------------------- cards
+    # THE CARD'S STABLE NAME (D172). Two of the three subcommands write nothing EVER, and
+    # `name` and `audit` open the store read-only without `db.connect` — that function is
+    # the single entry to the store and it always calls `_ensure_schema`, so a preview
+    # routed through it would PERFORM the migration it claims to be previewing.
+    cards = sub.add_parser(
+        "cards",
+        help="the card's stable name: preview it, audit it, move the photographs.",
+    )
+    cards_sub = cards.add_subparsers(dest="cards_action", metavar="<name|audit|photos>")
+    cards_sub.add_parser(
+        "name",
+        help="what the naming sees and what it would do. Read-only, writes nothing.",
+    )
+    cards_audit = cards_sub.add_parser(
+        "audit",
+        help="does every card's name still resolve to its photograph? Read-only. Three "
+        "verdicts: pass, fail, and `not known`.",
+    )
+    cards_audit.add_argument(
+        "--verbose",
+        action="store_true",
+        help="list the excused cards as well as counting them.",
+    )
+    cards_photos = cards_sub.add_parser(
+        "photos",
+        help="move the corpus off the legacy (box, index) address onto the card's own "
+        "name. Previews by default; resumable and verified per card.",
+    )
+    cards_photos.add_argument(
+        "--write",
+        action="store_true",
+        help="perform the move. Without it nothing is touched. Safe to interrupt: each "
+        "card is linked, re-hashed at its new name, and only then unlinked at the old one.",
+    )
+    cards_photos.add_argument(
+        "--limit",
+        type=int,
+        help="stop after this many cards. For a first pass over a large corpus.",
     )
 
     # ----------------------------------------------------------------------------- join
@@ -483,6 +525,7 @@ COMMANDS = {
     "queue": cmd_queue.run,
     "reprice": cmd_reprice.run,
     "rescue": cmd_rescue.run,
+    "cards": cmd_cards.run,
 }
 
 

@@ -37,6 +37,17 @@ WHAT IS ASSERTED, AND THE TWO KINDS ARE NOT EQUALLY VALUABLE:
                      load-bearing one — a stillness rule that buys cards on one rig by
                      spending them on another is this subsystem's whole history.
 
+    the GAIN STEP    2026-09-12: that a settled frame which is the baseline TIMES ONE
+                     NUMBER — the camera's auto-exposure taking a step on the bare stand —
+                     is refused as `suppressed:uniform` and adopted as the baseline, while
+                     no real card on any session is; that a card under a step still fires;
+                     and that the novelty gate, scaled the same way, still tells two
+                     consecutive cards apart. THE STEP IS SYNTHETIC and the docstring of
+                     `score-trace.py gain` says why: no banked trace contains one, and no
+                     banked trace contains a pixel outside the watch region. What this
+                     block proves is that the test costs nothing on the recordings that
+                     exist; the first trace recorded in an auto mode validates the rest.
+
     the D84 PAIR     over the three 2026-09-01 21:xx sessions only: that the presence floor
                      refuses the two settles that photographed the bare stand and passes
                      every card, and that a card which never completes a settle is
@@ -77,7 +88,9 @@ PASS_CRITERIA = (
     "rescue at the second the stall used to be reported; and on the six overnight "
     "2026-09-11 sessions the settle rule as shipped fired five times each on the two the "
     "ratchet lost while the rule in the tree replays 31 and 21; and on the six evening "
-    "sessions the rescue takes the run from 268 photographs and 20 stalls to 295 and 7, "
+    "sessions the rescue takes the run from 268 photographs and 20 stalls to 295 and 7; "
+    "and the uniformity test refuses a synthetic 1/3, 1/2 or 1 EV exposure step on every "
+    "session's baseline while refusing no real card on any of them, "
     "while every one of the eight earliest sessions keeps the verdict count it had"
 )
 
@@ -578,6 +591,177 @@ def run() -> Result:
         (live_total, adaptive_total, rescue_total, stall_total), (268, 295, 34, 7),
         f"over the six evening sessions: {live_total} photographs and 20 stalls become "
         f"{adaptive_total} and {stall_total}, {rescue_total} of them taken under the bar",
+    )
+
+    # ---- the gain step: the uniformity test over every frame the corpus holds ----------
+    #
+    # THE SHAPE OF THE CLAIM. The camera's auto-exposure moves the watch region by the same
+    # kind of signal a card makes — a 1/3 EV step reads as A CARD to the presence floor on
+    # nine of the fifteen v2 sessions (§4 of the spec). The machine asks one more question of
+    # a frame that clears the floor: is it the baseline times one number? `_uniform_residual`
+    # is the scorer's mirror of `MotionMachine.uniformResidual`; the bound is PRESENCE_K x the
+    # session's own still-frame difference, the same multiple the floor rides — no new
+    # constant, and `make docs-audit`'s `motion params` row holds the three that shape the
+    # comparable set to the machine's.
+    #
+    # TWO DIRECTIONS ON ONE FIXTURE WITH ONE VARIABLE BETWEEN THEM: the baseline with a step
+    # injected must be uniform; every fired card, and every fired card WITH the step on top,
+    # must not be. Frame-for-frame, on the pixels the trace stored.
+    step_cards = 0
+    uniform_cards: list[tuple[str, float, float, float]] = []
+    # TWO FIRED FRAMES THAT ARE NOT CARDS, pinned by time and kept out of the card margins.
+    # The 03:25 session's plate carries a dark disc; at 73.0 s and 74.0 s the trigger fired on
+    # that disc displaced to the right with nothing else in the region (contact sheet,
+    # 2026-09-12). They cleared the floor — 25.8 and 26.6 from the baseline — which is why the
+    # bright-lamp block above counts them as fires, and why "≥ 17 from baseline" is a test of
+    # distance rather than of what a frame contains.
+    NOT_CARDS = {("2026-09-11T03-25-00", 73.0), ("2026-09-11T03-25-00", 74.0)}
+    disc_margins: list[float] = []
+    step_verdicts: dict[str, int] = {"under": 0, "uniform": 0, "declined": 0, "card": 0}
+    declined_at: list[tuple[str, str]] = []
+    tight = 0.0
+    novelty_min = float("inf")
+    for name in sorted(traces):
+        trace = traces[name]
+        rows = score._rows(trace)
+        still = [d for _t, d, _b, _l in rows[1:] if d < score.D_SEED * score.STILL_K]
+        typical = max(score.D_FLOOR, statistics.median(still))
+        floor = max(score.PRESENCE_MIN, score.PRESENCE_K * typical)
+        bound = score.PRESENCE_K * typical
+        base = [float(v) for v in _cells(trace["keyframes"][0]["frame"])]
+        for stops, label in ((1 / 3, "1/3 EV"), (1 / 2, "1/2 EV"), (1.0, "1 EV"), (1.5, "1.5 EV")):
+            lifted = score._step([int(v) for v in base], stops)
+            raw = sum(abs(a - b) for a, b in zip(lifted, base)) / len(base)
+            residual = score._uniform_residual(lifted, base)
+            if raw < floor:
+                verdict = "under"
+            elif residual is None:
+                verdict = "declined"
+                declined_at.append((_label(name), label))
+            elif residual < bound:
+                verdict = "uniform"
+                tight = max(tight, residual / bound)
+            else:
+                verdict = "card"
+            step_verdicts[verdict] += 1
+            checks.ok(
+                verdict != "card",
+                f"{_label(name)}: a {label} step on the bare stand is {verdict} "
+                f"(raw {raw:.1f} against floor {floor:.1f}; residual "
+                f"{'n/a' if residual is None else f'{residual:.2f}'} against bound {bound:.2f})",
+                "a step the floor calls a card and the test does not catch is a junk "
+                "photograph of the bare stand",
+            )
+        fired = [e for e in trace["events"] if e["event"].startswith("fire")]
+        margins: list[float] = []
+        for event in fired:
+            cells = [float(v) for v in _cells(event["frame"])]
+            if _distance([int(v) for v in cells], [int(v) for v in base]) < floor:
+                continue
+            step_cards += 1
+            residual = score._uniform_residual(cells, base)
+            stepped = score._uniform_residual(score._step([int(v) for v in cells], 1 / 3), base)
+            if residual is not None and residual < bound:
+                uniform_cards.append((_label(name), round(event["t"] / 1000, 1), round(residual, 2), round(bound, 2)))
+            elif (_label(name), round(event["t"] / 1000, 1)) not in NOT_CARDS:
+                margins.append((float("inf") if residual is None else residual) / bound)
+            if (_label(name), round(event["t"] / 1000, 1)) in NOT_CARDS:
+                disc_margins.append((float("inf") if residual is None else residual) / bound)
+                continue
+            checks.ok(
+                stepped is None or stepped >= bound,
+                f"{_label(name)} {event['t'] / 1000:.1f}s: the card is still a card with a 1/3 EV "
+                f"step on top ({'declined' if stepped is None else f'{stepped:.1f}'} against {bound:.2f})",
+            )
+        if margins:
+            # 3.0x IS THE PINNED FLOOR AND 3.65x IS THE MEASUREMENT: the closest real card on any
+            # session (2026-09-01 03:06, 22.5 s); the reference rig's 85 sit at 5.3x.
+            checks.ok(
+                min(margins) >= 3.0,
+                f"{_label(name)}: every real card clears the uniformity bound by 3x or more "
+                f"(closest {min(margins):.1f}x over {len(margins)} fires)",
+                "a card near the bound is a card a noisier session would refuse as the stand",
+            )
+        for before, after in zip(fired, fired[1:]):
+            a = [float(v) for v in _cells(before["frame"])]
+            b = [float(v) for v in _cells(after["frame"])]
+            scaled = score._uniform_residual(b, a)
+            novelty_min = min(novelty_min, _distance([int(v) for v in b], [int(v) for v in a]) if scaled is None else scaled)
+    checks.equal(
+        uniform_cards, [],
+        f"of {step_cards} fired frames that clear the floor, none is refused as uniform",
+    )
+    # THE CLOSEST FRAME IS NOT A CARD, AND THIS IS PINNED BY TIME. The 03:25 fire at 74.0 s
+    # reads 1.02x its bound; the contact sheet shows the bright plate with its dark disc
+    # displaced to the right and nothing else in the region, and the 73.0 s frame is the same
+    # scene. Kept out of the margins above and pinned here so the finding cannot go quiet: a
+    # frame the floor calls a card at 26.6 from the baseline, which the uniformity test can
+    # nearly see through and D81's distance cannot.
+    checks.ok(
+        all(m < 3.0 for m in disc_margins) and len(disc_margins) == 2,
+        f"the two 03:25 fires on the displaced disc sit under the 3x every real card clears "
+        f"({[round(m, 2) for m in disc_margins]}) — the nearest thing to a uniform frame that fired, "
+        f"and not a card",
+    )
+    checks.equal(
+        step_verdicts["card"], 0,
+        f"no injected step is called a card: {step_verdicts['uniform']} uniform, "
+        f"{step_verdicts['under']} under the floor, {step_verdicts['declined']} declined",
+    )
+    # DECLINED IS THE MACHINE BEFORE THIS TEST EXISTED, and it happens exactly where a step has
+    # clipped three quarters of a bright plate. Six sessions at 1.5 EV and one at 1 EV; a change
+    # here means the comparable set moved, which is a decision and not a reflex.
+    checks.equal(
+        sorted(declined_at),
+        sorted([
+            ("2026-09-11T01-51-27", "1 EV"), ("2026-09-11T01-51-27", "1.5 EV"),
+            ("2026-09-11T03-20-03", "1.5 EV"), ("2026-09-11T03-25-00", "1.5 EV"),
+            ("2026-09-11T04-07-53", "1.5 EV"), ("2026-09-11T04-09-03", "1.5 EV"),
+            ("2026-09-11T21-52-11", "1.5 EV"),
+        ]),
+        "the judgement is declined only where the step clipped the plate past the comparable floor",
+    )
+    checks.ok(
+        tight < 0.25,
+        f"and where a step is judged, the residual sits well inside the bound (worst {tight:.2f} of it) — "
+        f"the room a real step's noise has to fit in",
+    )
+    checks.ok(
+        novelty_min >= 5.0,  # measured 5.28
+        f"the novelty gate, scaled the same way, still separates every consecutive pair of fires "
+        f"in the corpus (closest {novelty_min:.2f} against tNovel {score.T_NOVEL:.1f})",
+        "under 4.0 a real card would be suppressed as the previous one",
+    )
+    # THE HAND STAYS WHERE D84 PUT IT. The two settles that photographed the bare stand with a
+    # hand still in frame read 7.61 and 8.68 after scaling against bounds of 7.41 and 8.09: NOT
+    # uniform — a hand is not a gain — and refused by the floor as before, because raw 8.92 and
+    # 9.24 never clear 16. Pinned so that a bound loosened far enough to swallow a hand shows
+    # up here rather than at the rig.
+    for name in sorted(D84):
+        trace = traces[name]
+        base = [float(v) for v in _cells(trace["keyframes"][0]["frame"])]
+        rows = score._rows(trace)
+        still = [d for _t, d, _b, _l in rows[1:] if d < score.D_SEED * score.STILL_K]
+        bound = score.PRESENCE_K * max(score.D_FLOOR, statistics.median(still))
+        hands = [
+            round(score._uniform_residual([float(v) for v in _cells(e["frame"])], base) or 0.0, 2)
+            for e in trace["events"]
+            if e["event"] == "fire" and _distance(_cells(e["frame"]), [int(v) for v in base]) < 16.0
+        ]
+        checks.ok(
+            all(h >= bound for h in hands),
+            f"{_label(name)}: the hand that photographed the bare stand is not uniform "
+            f"({hands} against {bound:.2f}) — the floor refuses it, not this test",
+        )
+    # AND THE GENUINE EMPTY STAND IS ITSELF: k = 1, residual equals raw, both under 2.
+    base = [float(v) for v in _cells(reference["keyframes"][0]["frame"])]
+    same = [
+        score._uniform_residual([float(v) for v in _cells(k["frame"])], base)
+        for k in reference["keyframes"] if 300 < k["t"] <= EMPTY_BEFORE_MS
+    ]
+    checks.ok(
+        all(r is not None and r <= 2.0 for r in same),
+        f"the reference rig's empty stand reads as itself under the test ({[round(r or 0, 2) for r in same]})",
     )
 
     return checks.result(
