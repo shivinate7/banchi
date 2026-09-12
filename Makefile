@@ -4,7 +4,7 @@
 # the project would be built on top of — `make check` green means every check ran.
 
 .DEFAULT_GOAL := help
-.PHONY: help status map explain harness check ignore-check docs-audit vale audit-self-test verdict-selftest githooks-selftest merge merge-selftest revert-guard revert-selftest claim-ids claim-stale claim-selftest decisions-selftest port-agreement set-hint-agreement screen-freshness sigil-check suite-lock-selftest icloud-sweep audit-history dev server screenshot design-check design-check-quiet lint typecheck venv launch-config worktree-setup hooks up down launch-agent demo demo-photos demo-seed demo-record demo-static demo-preview demo-freshness
+.PHONY: help status map explain harness check ignore-check docs-audit vale audit-self-test verdict-selftest githooks-selftest merge merge-selftest revert-guard revert-selftest claim-ids claim-stale claim-selftest decisions-selftest port-agreement set-hint-agreement screen-freshness screen-freshness-selftest sigil-check suite-lock-selftest icloud-sweep audit-history dev server screenshot design-check design-check-quiet lint typecheck venv launch-config worktree-setup hooks up down launch-agent demo demo-photos demo-seed demo-record demo-static demo-preview demo-freshness
 
 # Prefer the venv if it exists, so `make harness` works without anyone remembering to
 # activate anything. Falls back to system python3, which still runs T2-T5 — T1 needs the
@@ -71,6 +71,8 @@ help:
 	@echo "                    since? Reports and never repairs (D140, amended). Writes nothing."
 	@echo "  make claim-selftest   the claimer, proved with main moving underneath the branch."
 	@echo "  make decisions-selftest  docs/decisions/ is complete and still round-trips."
+	@echo "  make submission-selftest  the identify claim table, proved by racing two presses"
+	@echo "                    over one card. In \`check\`, never in the hook."
 	@echo "  make janitor-selftest  the sweep, proved against a throwaway clone. In \`check\`, never in the hook."
 	@echo "  make reap-selftest  the kill guard, proved by pointing it at what it must not kill."
 	@echo "  make silent-write-selftest  the silenced-write guard, proved by reproducing the"
@@ -79,9 +81,12 @@ help:
 	@echo "  make suite-lock-selftest  one browser fleet at a time, proved by violating it."
 	@echo "  make verdict-selftest  the design-check verdict reporter, run for real. No browser."
 	@echo "  make serve-selftest  the supervisor's build job, against a throwaway tree. No node."
+	@echo "  make sync-selftest  the primary checkout's self-sync, proved by violating it."
 	@echo "  make port-agreement  server/ports.py and app/devPort.ts answer the same numbers."
 	@echo "  make set-hint-agreement  the capture screen and the export fetch resolve a set hint alike."
 	@echo "  make screen-freshness  every server write in app/ has a way back. Needs node."
+	@echo "  make screen-freshness-selftest  that guard's own cases, both directions. It sat"
+	@echo "                    on no target at all until 2026-09-12 and was red on main."
 	@echo "  make sigil-check   a bare \`#\` on a screen is a COUNT, never a store key (D92)."
 	@echo "  make ignore-check  every path a worktree provisions is gitignored, link or not (D47)."
 	@echo "  make icloud-sweep  list iCloud conflict copies. ARGS=--delete removes the identical ones."
@@ -97,12 +102,13 @@ help:
 	@echo "                    Reaches the network, so it never gates a commit."
 	@echo "  make check        harness + docs-audit + claim-stale + revert-guard +"
 	@echo "                    port-agreement + set-hint-agreement + screen-freshness +"
-	@echo "                    sigil-check + ignore-check + lint + vale + typecheck +"
-	@echo "                    audit-self-test + githooks-selftest + merge-selftest +"
-	@echo "                    revert-selftest + claim-selftest + decisions-selftest +"
+	@echo "                    screen-freshness-selftest + sigil-check + ignore-check +"
+	@echo "                    lint + vale + typecheck + audit-self-test +"
+	@echo "                    githooks-selftest + merge-selftest + revert-selftest +"
+	@echo "                    claim-selftest + decisions-selftest + submission-selftest +"
 	@echo "                    janitor-selftest + reap-selftest + silent-write-selftest +"
 	@echo "                    coordinator-selftest + suite-lock-selftest +"
-	@echo "                    serve-selftest + verdict-selftest"
+	@echo "                    serve-selftest + sync-selftest + verdict-selftest"
 	@echo
 	@echo "  ./pkmnscan identify <capture-dir>                 submit, wait, collect. COSTS MONEY."
 	@echo "  ./pkmnscan join     <run-dir> --export <csv>      resolve against the export. Free."
@@ -397,6 +403,7 @@ check:
 	@$(MAKE) --no-print-directory port-agreement
 	@$(MAKE) --no-print-directory set-hint-agreement
 	@$(MAKE) --no-print-directory screen-freshness
+	@$(MAKE) --no-print-directory screen-freshness-selftest
 	@$(MAKE) --no-print-directory sigil-check
 	@$(MAKE) --no-print-directory ignore-check
 	@$(MAKE) --no-print-directory lint
@@ -408,12 +415,14 @@ check:
 	@$(MAKE) --no-print-directory revert-selftest
 	@$(MAKE) --no-print-directory claim-selftest
 	@$(MAKE) --no-print-directory decisions-selftest
+	@$(MAKE) --no-print-directory submission-selftest
 	@$(MAKE) --no-print-directory janitor-selftest
 	@$(MAKE) --no-print-directory reap-selftest
 	@$(MAKE) --no-print-directory silent-write-selftest
 	@$(MAKE) --no-print-directory coordinator-selftest
 	@$(MAKE) --no-print-directory suite-lock-selftest
 	@$(MAKE) --no-print-directory serve-selftest
+	@$(MAKE) --no-print-directory sync-selftest
 	@$(MAKE) --no-print-directory verdict-selftest
 
 # WHAT A MACHINE CAN PROVE ON A FRESH CLONE, WHICH IS NOT EVERYTHING `make check` PROVES.
@@ -445,6 +454,7 @@ ci-check:
 	@$(MAKE) --no-print-directory claim-selftest
 	@$(MAKE) --no-print-directory claim-stale
 	@$(MAKE) --no-print-directory decisions-selftest
+	@$(MAKE) --no-print-directory submission-selftest
 	@$(MAKE) --no-print-directory revert-guard
 	@$(MAKE) --no-print-directory janitor-selftest
 	@$(MAKE) --no-print-directory reap-selftest
@@ -452,10 +462,12 @@ ci-check:
 	@$(MAKE) --no-print-directory coordinator-selftest
 	@$(MAKE) --no-print-directory suite-lock-selftest
 	@$(MAKE) --no-print-directory serve-selftest
+	@$(MAKE) --no-print-directory sync-selftest
 	@$(MAKE) --no-print-directory verdict-selftest
 	@$(MAKE) --no-print-directory port-agreement
 	@$(MAKE) --no-print-directory set-hint-agreement
 	@$(MAKE) --no-print-directory screen-freshness
+	@$(MAKE) --no-print-directory screen-freshness-selftest
 	@$(MAKE) --no-print-directory sigil-check
 	@$(MAKE) --no-print-directory ignore-check
 	@$(MAKE) --no-print-directory lint
@@ -627,6 +639,24 @@ screen-freshness:
 	$(NPM_GUARD)
 	@node scripts/screen-freshness.mjs
 
+# THE GUARD'S OWN SELFTEST, AND IT SAT ON NO TARGET UNTIL NOW. `screen-freshness.mjs`
+# carries a `--self-test` that exercises its classifier against pinned cases in both
+# directions, and NOTHING RAN IT: `make check` called the plain form, which passed and then
+# printed "classification has moved since it was recorded — run --self-test". So the check
+# told the operator to run the check that was red, and nothing made them — a rule with no
+# reader, which is the thing this repo has now made a hard rule about.
+#
+# IT WAS RED ON MAIN FOR AN UNKNOWN STRETCH — `2 FAILED`, from 17 exports missing from its
+# RECORDED table — and gating it while it was red would have broken `make check` for every
+# session, which is why it waited. PR #307 filled the table; it passes today, so the gate
+# is safe now and it is the cheapest one outstanding.
+#
+# Needs node, so it is in `check` and never in the git hook — `screen-freshness`' own
+# reason, one line up.
+screen-freshness-selftest:
+	$(NPM_GUARD)
+	@node scripts/screen-freshness.mjs --self-test
+
 # NOT IN `check`, AND NOT IN THE GIT HOOK. It is the one target here that can DELETE a file,
 # so D18's rule applies at its strongest: nothing that writes may run on the path that decides
 # whether a commit proceeds. It is also not a defect to have conflict copies lying around —
@@ -666,6 +696,13 @@ janitor-selftest:
 serve-selftest:
 	@$(PYTHON) scripts/serve-selftest.py
 
+# THE PRIMARY CHECKOUT'S SELF-SYNC, proved by violating it in throwaway clones. It switches
+# branches and moves `refs/heads/main`, which is exactly why it may never be pointed at this
+# clone: the subject of a sync is the PRIMARY tree, and on this machine that is the owner's live
+# rig. In `check` and never in the git hook — D18, the same standing as merge-selftest.
+sync-selftest:
+	@$(PYTHON) scripts/sync-selftest.py
+
 # WHAT THIS SESSION STARTED, AND NOTHING ELSE. `pkill -f` and `lsof -ti tcp:PORT` are both
 # machine-wide, and both were used to clean up a session's own dev servers on 2026-09-10: the
 # first also matched the owner's live capture server over their real store, the second also
@@ -693,6 +730,26 @@ reap-selftest:
 	@bash scripts/reap-selftest.sh
 
 .PHONY: reap reap-selftest
+
+# THE ONE BINDING THAT PROTECTS A DOLLAR, PROVED BY VIOLATING IT (D-a-claim-on-the-cards).
+# `store/submissions.py` refuses a second `identify` press over cards a live run has already
+# claimed, and that refusal cannot be exercised against the real thing: the press it stops
+# costs money at Anthropic, so "run two presses at the operator's store and read the invoice"
+# is the incident rather than the test. Every case runs against a throwaway store under
+# `mktemp -d` and the concurrent ones are real separate processes racing a real flock.
+#
+# IT REPRODUCES THE BUG BEFORE IT PROVES THE FIX, which is reap-selftest's rule: one case runs
+# the children in the check-then-claim order anybody writes first and watches BOTH presses buy
+# the same card. Without that, the case beside it proves only that something happened.
+#
+# In `check`, never in the git hook: D18 — it writes a temp tree and it signals processes.
+# Same standing as janitor-selftest and reap-selftest. Mutation-tested: sixteen arms, all caught — two of them over its OWN floor against
+# examining nothing, which is the shape `Report.render` printing `ok` for an empty findings
+# list has on this side of the fence.
+submission-selftest:
+	@$(PYTHON) scripts/submission-selftest.py
+
+.PHONY: submission-selftest
 
 # A GIT WRITE MUST LEAVE A TRACE THE SESSION CAN READ. On 2026-09-12 a coordinator session
 # reported work as landed that had not landed, twice, through `git commit -q -F - >/dev/null
@@ -775,7 +832,7 @@ janitor-install:
 # answers from the tree alone, and a row that resolves DNS and expects a server to be up would
 # go red on a train and in every worktree. A check that fails for reasons unrelated to the
 # commit is one people learn to ignore.
-.PHONY: janitor janitor-selftest janitor-install serve-selftest ci-check
+.PHONY: janitor janitor-selftest janitor-install serve-selftest sync-selftest ci-check
 
 .PHONY: lan-check
 lan-check:
