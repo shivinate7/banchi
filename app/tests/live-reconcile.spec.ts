@@ -79,6 +79,19 @@ async function open(page: Page): Promise<Wire[]> {
   await page.route(/\/pipeline\/submissions$/, async (route) =>
     route.fulfill({ status: 200, contentType: 'application/json', body: '{"claims":[],"counts":{"claims":0,"keys":0,"stale":0}}' }),
   )
+  /* THE IDENTIFY COMPOSER'S TWO READS, WHICH `#/runs` MAKES ON MOUNT whether or not the dialog
+     is ever opened. Its first stage asks which STATE — every card photographed and not
+     identified — and `GET /inventory`'s card map is the only place a per-drawer, per-game or
+     per-sitting count of that state exists on this wire; `GET /games` is what can NAME a game.
+     Empty for the claims stub's reason: this file is about one sheet. Without them the seal
+     fails every case here with "reads reached the capture server", which on the main checkout
+     is the owner's live store. */
+  await page.route(/\/inventory$/, async (route) =>
+    route.fulfill({ status: 200, contentType: 'application/json', body: '{"version":2,"cards":{}}' }),
+  )
+  await page.route(/\/games$/, async (route) =>
+    route.fulfill({ status: 200, contentType: 'application/json', body: '{"games":[]}' }),
+  )
   await page.goto(VIEW)
   await settleFonts(page)
   await opener(page).click()
@@ -122,6 +135,19 @@ test('the sheet is not open until it is asked for, and Escape puts it away', asy
      stub's stated reason — this file is about one sheet. */
   await page.route(/\/pipeline\/submissions$/, async (route) =>
     route.fulfill({ status: 200, contentType: 'application/json', body: '{"claims":[],"counts":{"claims":0,"keys":0,"stale":0}}' }),
+  )
+  /* THE IDENTIFY COMPOSER'S TWO READS, WHICH `#/runs` MAKES ON MOUNT whether or not the dialog
+     is ever opened. Its first stage asks which STATE — every card photographed and not
+     identified — and `GET /inventory`'s card map is the only place a per-drawer, per-game or
+     per-sitting count of that state exists on this wire; `GET /games` is what can NAME a game.
+     Empty for the claims stub's reason: this file is about one sheet. Without them the seal
+     fails every case here with "reads reached the capture server", which on the main checkout
+     is the owner's live store. */
+  await page.route(/\/inventory$/, async (route) =>
+    route.fulfill({ status: 200, contentType: 'application/json', body: '{"version":2,"cards":{}}' }),
+  )
+  await page.route(/\/games$/, async (route) =>
+    route.fulfill({ status: 200, contentType: 'application/json', body: '{"games":[]}' }),
   )
   await page.goto(VIEW)
   await settleFonts(page)

@@ -122,6 +122,10 @@ class Store:
                 # read. Read outside it, a box could be created between the two and this
                 # session would hand its id out a second time.
                 box_ids_issued=db.box_ids_issued(conn),
+                # READ IN THE SAME TRANSACTION, for `box_ids_issued`' reason one line up,
+                # and NEVER WRITTEN BACK: `pkmnscan cards photos` is the only writer, so a
+                # session that carried a stale None could not un-stamp the store.
+                photos_relocated=db.photos_relocated(conn),
             ),
             cache=Cache(entries=bound(Cache.ENTRIES, "identifications")),
             review=Queue(name=MAIN, entries=bound(Queue.ENTRIES, "queues", {"queue": MAIN})),

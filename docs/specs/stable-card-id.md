@@ -1,12 +1,36 @@
 # The first photograph is the card's name (`cards.cid`)
 
-**STATUS: SPECIFIED, NOT BUILT.** Nothing in this file is implemented. No store carries a
-`cid` column, no migration exists, and neither the `cid-audit` nor the `cid-selftest` target
-nor the `cards` subcommand this file describes is in the tree. What IS real is the evidence:
-every figure below was read from the owner's live store or from a `.backup()` copy of it, and
-every mechanism was proved on a copy — the migration, the reverse, the `-9` kill and the two
-probes all ran. This is the argument and its receipts, landed so the next session finds them
-instead of re-deriving them (`CLAUDE.md`'s working agreement: design work is repo work).
+**STATUS: RE-SCOPED 2026-09-12 ON THE OWNER'S APPROVAL, AND §0 IS THE CHANGE.** This file was
+landed the same day as SPECIFIED, NOT BUILT, describing a `cid` column that arrives beside
+`(box, index)` and then defends against that key's hazards. The owner read it and said
+*"I think this is a systems problem rather than worrying about the outcome we need to solve —
+can you think bigger?"*, and then, on the answer in §0, **"Yes rescope it, approved."** §0 is
+therefore the governing section: **the photograph moves out of the address and is stored under
+the card's name**, which is what turns most of §7's doubts into questions that cannot be asked.
+Everything §0 supersedes is annotated in place and nothing is deleted — §1's identity, §2's
+list of what stays, and §3's seeding are all still the design, and §3's measurements are still
+the evidence.
+
+**WHAT WAS SPECIFIED, NOT BUILT, IS NOW BUILT, AND §0.9 IS THE ROSTER.** The `cid` column, the
+migration, the relocation, the audit, the two targets and the `cards` subcommand are in the
+tree. What remains NEITHER is named there too, in the same words as before: the batch
+`custom_id`, the `identifications` re-key, the order-ledger repair, and the position key
+itself.
+
+What was already real when this file landed is unchanged: every figure below was read from the
+owner's live store or from a `.backup()` copy of it, and every mechanism was proved on a copy —
+the migration, the reverse, the `-9` kill and the two probes all ran. This is the argument and
+its receipts, landed so the next session finds them instead of re-deriving them (`CLAUDE.md`'s
+working agreement: design work is repo work).
+
+**THE DECIDING MEASUREMENT WAS RE-TAKEN ON 2026-09-12, AFTER THE RE-SCOPE, AND IT REPRODUCES.**
+Beside §1's reading, not instead of it (`docs/specs/order-pipeline.md` §1's discipline): 2,535
+cards, **2,535 of 2,535** digests equal the file on disk, 0 mismatches, 0 missing, 2,535
+distinct digests over **4,445,351,065 bytes**, 0 duplicate groups, in **3.00 s** against §1's
+2.68 s — the same corpus, a colder cache. `Card.photo` measures **1,993 absolute, 542 relative,
+0 tail-drift**, exactly as §2 reports, and `photo_reclaimed_at` is set on **0** of 2,535. Two
+figures did move and neither is load-bearing: **294** sold rather than 289, and **12,007**
+events rather than 12,002 — a live store between two readings.
 
 **THE MEASUREMENTS ARE EVIDENCE AND ARE NEVER REWRITTEN.** `docs/GATES.md`'s discipline
 applies to this file: if you re-verify a number and it disagrees, write the new reading BESIDE
@@ -20,20 +44,374 @@ the rest are a transcript. So §5 is readable as an ORDERING ARGUMENT — which 
 first, and why two 2→3 steps in one function is the one merge conflict that loses data — and
 is not readable as a roster anybody can look up. Do not treat a letter in it as an identifier.
 
-**NAMES OF THINGS THAT DO NOT EXIST ARE WRITTEN BARE, ON PURPOSE.** A target spelled
-`make <name>` or a subcommand spelled `pkmnscan <name>` in any markdown file is reconciled
-against the Makefile and `cli/__main__.py` by `make docs-audit`'s make targets and pkmnscan
-commands rows — both MECHANICAL, and both deliberately named here without backticks, because a
-backticked span is exactly what they read. Spelling an unbuilt one fails the commit. The
-two targets are therefore written `cid-audit` and `cid-selftest`, and the subcommand
-`cards name` / `cards audit`, with no prefix, until the implementation adds them and the
-prefixes can go back on. `scripts/cid-audit.py` is named as a path and carries a line in
-`scripts/docs-audit-allow.txt` for the same reason; that line is stale the day the file
-arrives, which is the allowlist's whole design.
+**THE NAMES HAVE THEIR PREFIXES BACK, BECAUSE THE THINGS EXIST.** This file carried a
+note explaining that a target spelled `make <name>` or a subcommand spelled
+`pkmnscan <name>` is reconciled against the Makefile and `cli/__main__.py` by
+`make docs-audit`'s make targets and pkmnscan commands rows — both MECHANICAL — so
+spelling an unbuilt one fails the commit, and the two targets and the subcommand were
+therefore written bare until the implementation landed. It has. They are `make cid-selftest`,
+`make cid-audit`, and `./pkmnscan cards name` / `audit` / `photos`.
+
+**AND THE AUDIT DID NOT LAND WHERE THIS FILE PUT IT.** §6.3 and §6.5 planned a script under
+`scripts/`, and it is a CLI SUBCOMMAND instead — `./pkmnscan cards audit`, with
+`make cid-audit` as the one-word way to reach it. That is a real change of shape and it has a
+reason: the audit needs the same read-only store opening, the same photograph resolution and
+the same four value shapes the preview needs, and a script beside a subcommand that shared all
+three would be a second reader of the layout. The allowlist line this file's own note pointed
+at is deleted rather than left to go stale.
 
 _Executable specification. Written 2026-09-12 against **main `df6ec79`** (`Merge pull request #309`), worktree clean at the same sha. Every figure below was read from the owner's live store opened `mode=ro&immutable=1` or from a `.backup()` copy under the session scratchpad. **The live store ends this session at `md5 b3373ed823a7b397054e9980f2ddcaa9`, 7,438,336 B, mtime `Sep 12 11:28`, schema 2, no `cid` column** — unchanged from before the survey. Every writable probe ran on a copy. Re-read before trusting any number here: three of the store survey's figures did not reproduce against this tree and two of mine will not reproduce against the next one._
 
 This is the ninth PR and the one the plan's own section 7 excluded by name: *"taking the box out of `store/master.py:243 position_key`."* **It does not take it out.** It gives the card a name that is not its box, which is the mechanism that makes taking it out possible; the removal itself is a later PR and §4 says which parts and why they wait. The plan's own arithmetic was *"about 90%"*; this is the seam, measured, migrated and proved, and it is honest about which of the remaining 10% it buys today.
+
+---
+
+## 0 · THE RE-SCOPE — the photograph is stored under the card's name
+
+### 0.1 · The systems problem: one string is doing three jobs
+
+**`(box, index)` is simultaneously the card's IDENTITY — the store's primary key — the FILENAME
+of its photograph, and the ADDRESS a human reads off a shelf.** Every hazard §7 names is
+downstream of that one conflation, and the original scope answered each of them separately:
+
+| the hazard | what it costs today | why |
+|---|---|---|
+| a D83 move | a tombstone plus five hand-moved derived copies, **164 times** | moving a card changes its identity |
+| one junk capture deleted mid-box | **537 photograph renames and 537 rewritten sidecars** | the filename IS the index |
+| remove-then-capture (§7 item 3) | **overwrites a photograph that cannot be re-taken** | `next_index` and a filename can compose the same path twice |
+| a D26 re-shoot (§7 item 1) | the frozen digest stops matching, so the audit needs an excused set | the photograph is identified by where it sits |
+| the excuse mechanism for it | rests on `events`, **the one table §4 spends a paragraph refusing to trust** | 6,771 of 11,919 position-carrying events sit at a key that opened more than one occupancy |
+| D36's `realign` | **exists entirely** to repair drift between a run's remembered positions and the store's | 701 of 3,728 run records bind by digest to a different key than the one they name |
+
+**Answering six symptoms separately is what the original scope did, and it is the wrong shape.**
+`cards.cid` alone gives the card a name and then leaves the photograph filed under the address,
+so the address is still load-bearing for the bytes — and every one of the six survives.
+
+### 0.2 · The rule, in its general form
+
+**A number a person reads is never a key a machine uses.**
+
+D145 is that insight applied to boxes: a drawer has a `bid` that is never reused, and the number
+printed on its front is a label. This is the same insight applied to **cards, photographs and
+runs**. `Box 3 · Section 2 · Card 17` is an instruction to a hand at a drawer and it stays
+exactly as it is — `pipeline/join.py:Position` already computes it, and it goes back to being
+**purely derived** rather than half-derived and half-stored-in-a-filename.
+
+### 0.3 · The layout: the photograph is named by the card
+
+```
+BEFORE   <home>/captures/cards/box3/0017.jpg        the address is the filename
+         <home>/captures/cards/box3/0017.json       the sidecar beside it
+
+AFTER    <home>/photos/6b/6b1cf2fd83713889….jpg     the card's own name is the filename
+         <home>/photos/6b/6b1cf2fd83713889….json    the sidecar beside it
+```
+
+`store/photos.py` is the one module that composes that path and the only one permitted to.
+Three properties follow, and the third is the one worth the PR:
+
+1. **A renumber is a no-op.** `do_remove_card`'s rename loop has nothing to rename: the
+   photographs of the cards behind the deleted one are not named after their indices.
+2. **A move is a field update.** The path contains no box, so a card crossing drawers moves no
+   bytes.
+3. **A capture cannot overwrite another capture's photograph, structurally rather than by a
+   guard.** Two cards cannot compose one path, because `cid` is UNIQUE on `cards` and the path
+   is a pure function of it. §7 item 3's overwrite is not defended against — it is **absent**,
+   and the three questions it says a future PR must answer in writing are answered here: the
+   birth address is not stored because there is no birth address, `photo_path` becomes
+   `photos.path(cid)`, and no index is allocated for a filename because no filename is an index.
+
+**IT IS A SHARD, TWO HEX WIDE, AND THAT IS THE ONE NUMBER HERE THAT IS A GUESS.** 256 buckets
+holds 2,535 photographs at ~10 per directory and 100,000 at ~390 — both comfortable on APFS.
+Nothing measures the alternative because nothing in this pipeline lists that directory: every
+read is a direct open by name.
+
+**IT IS OUTSIDE `captures/`, AND `_scopes_root`'s DOCSTRING IS WHY.** That function already
+argues this exact point for scope directories: *"`identify.sidecar.scan` walks its root
+recursively and turns every photo-suffixed file into a capture and therefore a paid Batch
+request."* A content-addressed store placed under `captures/cards/` would be swept by any run
+pointed at the directory above it, and **every card in it would be submitted twice, and billed
+twice.** So it is a sibling of `captures/`, `.scopes/`, `runs/` and `inventory/`, gitignored on
+`inventory/`'s reason rather than a weaker one — it holds the real photographs.
+
+**AND `position_from_path` IS TAUGHT TO REFUSE A NAME LIKE THAT, WHICH IS A REAL GUARD AND NOT
+A TIDY-UP.** That function takes the LAST run of digits in a stem as the index, and a 64-hex
+digest is full of digits: `6b1cf2fd83713889` ends in `83713889`, so a cid-named photograph whose
+sidecar was missing would have recovered **index 83713889** — a plausible, wrong position, which
+is this repo's signature defect in its purest form. A cid-shaped stem now yields `index = None`,
+which routes the card to the review queue flagged `no_position`: the named, safe outcome the
+module's own docstring promises. One mutation arm deletes that refusal.
+
+### 0.4 · The address is materialized on demand, so `./pkmnscan identify <capture-dir>` is untouched
+
+**The one thing a flat store breaks is that `identify` takes a DIRECTORY** — and the repo has
+already argued, built and shipped the answer to exactly that. `server/pipeline_routes.py`'s
+`_scope_dir` builds *"a directory of symlinks to the chosen cards, so `identify` can be pointed
+at a subset"*, because *"widening it to take a list of files would put a second input shape
+through `sidecar.scan`, which is the one function that decides what a capture is."*
+
+So the whole-box case becomes the case that mechanism was built for. A **view** is built on
+demand under `.scopes/`:
+
+- the **photograph** is a symlink named `<idx:04d>.jpg`, pointing at `photos/<aa>/<cid>.jpg`;
+- the **sidecar** is MATERIALIZED rather than linked, carrying the card's claims and its
+  **current** index.
+
+That second half is the part that pays. Today `do_remove_card` rewrites 537 sidecars to keep
+their `index` true after a renumber. A view's sidecar is derived from the store at the moment of
+the press, so it is **always** current and **nothing on disk has to be corrected**. The
+canonical sidecar in `photos/` keeps the index the capture claimed, which is a historical fact
+about a capture and never goes stale because nothing reads it as an address.
+
+`identify/sidecar.py:load` needs no change for this and that is not luck: its resolution is
+per-field — `resolved_index = sidecar_index if sidecar_index is not None else file_index` — so a
+view's sidecar naming the current index is read as the sidecar's own claim, through the path it
+has always taken. **No precedence is changed and `FROM_SIDECAR` still means what it meant.**
+
+**THE VIEW IS THE `Position` FORMULA MADE INTO DIRECTORY ENTRIES, WHICH IS THE WHOLE RULE IN ONE
+OBJECT**: the readable address exists, on demand, as a rendering — and is thrown away, like
+every rendering, rather than stored where a write has to keep it true.
+
+**MEASURED AGAINST A FULLY RELOCATED COPY OF THE OWNER'S STORE, because if this is wrong the
+whole pipeline is wrong after the move and nothing else in the suite would say so.** Box 3, 887
+cards: the view builds in **0.75 s** as 1,774 entries — a symlinked photograph and a
+materialized sidecar each — and `identify.sidecar.scan` reads **887 captures in 0.16 s, all 887
+from `FROM_SIDECAR`, 0 problems**, in ascending index order, with every photograph resolving
+through its link. A ticked selection of 8 returns exactly the 8 indices asked for. The claims
+travel: the first capture reads back `box=3 index=1 game=riftbound`. **Nothing in `identify/`
+changed for any of it.**
+
+### 0.5 · The relocation: resumable, and verified per card rather than trusted
+
+**4.45 GB of photographs that cannot be re-taken move exactly once, and every single file is
+checked against a digest that was already proven.** §1's measurement is what makes this
+possible: 2,535 of 2,535 stored digests equal the file on disk, so each move has an oracle.
+
+The relocation is **not** part of `_upgrade` and that is deliberate — see 0.6 hazard 1. It is
+its own step, previewing by default, and per card it is:
+
+```
+for each card, independently, in ascending (box, index):
+  1. destination already exists and hashes to `cid`   -> DONE, count `already`
+  2. hash the legacy file at box<B>/<idx:04d>.jpg
+       != cid            -> REFUSE THIS CARD BY NAME, move nothing, count `refused`
+  3. os.link(legacy, destination)                      hard link: no bytes copied
+  4. HASH THE DESTINATION AND REQUIRE IT EQUALS `cid`  -> else unlink dst, refuse, count
+  5. unlink the legacy file                            count `moved`
+  6. the sidecar, the same four steps, best effort      count `sidecars`
+```
+
+**A HARD LINK RATHER THAN A RENAME, AND THE REASON IS THE ONLY REASON THAT MATTERS HERE.** A
+rename is atomic and cheaper to argue about, and it is also the one form where **the verification
+happens after the only other copy is gone.** Steps 3 to 5 mean that from the moment the
+destination exists until the moment the source is removed there are **two names for one inode**,
+and the digest is re-read from the new name before the old one is dropped. Killed anywhere in
+that window, the bytes exist under at least one name, and the next run resolves it: step 1 sees
+a correct destination and step 5 removes the leftover source. **There is no state this can stop
+in that a re-run does not finish**, and none in which a photograph exists under no name.
+
+**It never opens the store for writing at all.** The relocation reads `cards` for `(cid, box,
+index)` and touches the filesystem; there is nothing to commit, which is why it can be
+interrupted freely and re-run as often as you like.
+
+**A CARD IT REFUSES IS LEFT EXACTLY ALONE AND NAMED IN THE REPORT.** A legacy file whose bytes
+do not hash to the card's `cid` is the one case where something is genuinely wrong — a re-shoot
+whose identification was never re-read, most plausibly — and moving it would file it under a
+name it does not have. It stays where it is, the read path still finds it, and the report says
+which card and both digests.
+
+**THE READ PATH PREFERS THE NEW ADDRESS AND FALLS BACK TO THE OLD ONE UNTIL THE STORE IS
+STAMPED.** `meta.photos_relocated` is written only when a pass finds every card's photograph at
+its name; until then `photos.find(card)` tries `photos/<aa>/<cid>.jpg` and then the legacy
+address. **Once stamped, the legacy address is never consulted again**, so the fallback cannot
+become the thing that hides an unfinished move — and `make status` reports the residue by count
+for as long as one exists. That is the gate, and it is why this is a migration window rather
+than a permanent second lookup.
+
+### 0.6 · The three hazards, decided rather than inherited
+
+**HAZARD 1 — the migration's store lock landing on the owner's live capture server mid-sitting.
+DECIDED: hash outside the flock, re-stat inside it, and take the relocation out of the upgrade
+entirely.** §3 priced the seeding at 3.0 s with the flock held for all of it, and §7 item 5
+offered hashing-outside as a contingency while conceding it is correctness-neutral. At the
+feeder's measured 623 ms cadence a 3.0 s lock is ~5 captures arriving against `REQUEST_SLOTS =
+4`, and **a capture lost mid-feeder leaves a physical card in the drawer with no record, which
+renumbers every card behind it** — the worst outcome in this pipeline, because it is silent and
+it is physical. So:
+
+- the corpus is hashed **before** `files.exclusive` is taken, recording `(size, mtime_ns)` per
+  file;
+- inside the lock every file is **re-stat'ed**, and any whose stat moved is **re-hashed** — the
+  count is reported as `rehashed`, a positive counter, never an absence;
+- the transaction is row writes only.
+
+**The flock therefore holds for the row writes and the re-stat, not for the hashing.** The
+window this opens is the one `do_reshoot` can write in, and re-stat closes it: the file cannot
+change without its `mtime_ns` changing, and re-hashing is the answer rather than a refusal.
+**The relocation is a separate step for the same reason** — it is filesystem work, it takes no
+store write lock at all, and welding 2,535 link-verify-unlink triples into `_upgrade` would put
+minutes of filesystem work where a read used to be.
+
+**HAZARD 2 — a write-time refusal in `_card_columns` takes down every writer, including the
+shutter. DECIDED: `_card_columns` DOES NOT REFUSE.** §3.3 put `MissingCardId` there because it
+is the one chokepoint every card row passes through, and that is exactly why it is the wrong
+place: **§3.2 rejects this shape one layer up** — *"`_ensure_schema` raising over one unnameable
+card would take every route and every command down, which is unacceptable"* — **and then accepts
+it one layer down without re-arguing it.** A refusal in `_card_columns` mid-feeder is a 500 on
+`POST /capture`. The operator is watching a stand, not a network panel; the card is already in
+the drawer; and the record is the thing that does not exist. That is the same physical loss
+hazard 1 is about, arriving through a guard meant to prevent a lesser one.
+
+What replaces it, and neither half is a refusal a capture can hit:
+
+- **the refusal moves to where a card is BORN** — `record_capture`'s `existing is None` branch,
+  which is the birth site all four writers reach (`allocate_capture` plus
+  `cli/cmd_identify.py`, and `cli/cmd_emit.py` twice, the three §3.3 names). A cid missing
+  *there* is a programming error in a caller, not a data condition, and it is raised before the
+  shutter's row is built rather than at flush;
+- **and the shutter cannot reach it**, because `do_capture` computes the digest from a blob
+  already in RAM, so there is no path by which a capture arrives without a name.
+- **a card row whose cid is NULL is HEALED, loudly, not refused** — see hazard 3.
+
+**HAZARD 3 — a build that does not declare the column strips it silently on any ordinary write,
+and ~30 worktrees on this machine are pre-guard builds. DECIDED: keep the self-heal, prove it,
+and make it impossible to be quiet.** §6.1 item 2 made a stripped cid a **named refusal**
+(`card_ids_stripped`) *"never a silent re-issue, even though under a digest the re-issue would be
+correct."* That trades a self-healing store for a store that stops. Under a digest the re-issue
+is not merely correct, it is **byte-identical** — §1's probe 2 measured it — which is the whole
+argument against an allocator, and refusing to use the property in the one situation it was
+bought for is giving it away.
+
+So a NULL cid on a stamped store is repaired on the next open, by the same ladder, and the
+repair is **loud in three places**: `cards_reissued` in the receipt, a `card_ids_reissued`
+history event naming every key, and a line in `make status`. Never silent, and never a stop.
+
+**The probe is cheap because the index is partial.** `CREATE INDEX cards_cid_missing ON
+cards(key) WHERE cid IS NULL` makes "is anything unnamed?" an index probe that is empty on a
+healthy store, so the check can run on every open without the scan `_ensure_schema`'s docstring
+warns about.
+
+**AND THE PREVENTION IS AT THE OPEN, NOT AT THE WRITE.** The forward-version guard (§3.1 commit
+1) refuses to open a store stamped newer than the build knows. That is once per process, loud,
+and before any card exists — the opposite end of the spectrum from a per-capture refusal. Within
+one PR the guard and the bump merge together, so **every worktree that has not pulled is still a
+stripping build until it does**, and the self-heal is what makes that survivable rather than a
+data-loss event. It is stated here rather than scheduled away.
+
+### 0.7 · What becomes unnecessary — and the one thing that is given up
+
+**`realign`, `_photo_digests` and `refuse_reallocated` become unnecessary for every run written
+after this, rather than demoted.** Their whole job is re-binding a run's remembered
+`(box, index)` to the slot its `photo_sha256` sits at now (D36). Under this layout a run record's
+`photo_sha256` **is the photograph's filename**: there is no binding to repair, because nothing
+bound the bytes to a position in the first place.
+
+**They are kept, live, and here is the thing that is given up if they are not.** §2 measured it
+and the measurement is the argument: **13 run directories, 3,728 records, 701 of them binding by
+digest to a different position key than the one they name**, plus 88 whose photograph is gone. A
+cid cannot reach backwards into an immutable file written before it existed. `#/pricing?run=<n>`
+and "Join again" both re-read an OLD receipt against TODAY's store, and for those 3,728 records
+the repair layer is the only thing that makes the answer right.
+
+**So they stay behind the replay branch, and the argument is that they are load-bearing for
+history and dead for the future.** `cli/resolve.py:realign` gains a sentence saying so and
+naming the condition under which it can go: when no run directory predating this change is still
+readable. That is not a date anybody can name, so it is not scheduled.
+
+**`GET /photo/<box>/<index>` also stays, on §4's measured reason** — `runs/<n>/pricing.json`
+holds 3,629 position records across 12 immutable files, 0 of which carry a cid, and deleting the
+slot route would leave those photographs unreachable from the screen that draws them.
+
+### 0.8 · §7's seven doubts: what the re-scope makes moot, and what it makes worse
+
+| § | the doubt | after the re-scope |
+|---|---|---|
+| **1** | the re-shoot breaks the frozen digest, so the audit needs an excused set drawn from a `reshot` event with **no digest at all**, and today's one case passes **by luck** | **MOOT, and by construction rather than by a better excuse.** The path is `photos/<aa>/<cid>.jpg` and `cid` is frozen, so a re-shoot writes the new bytes **at the card's own name**: the file the card points at is always the current photograph, and the audit asks a question that cannot go stale — *does the card's name resolve to a file, and does the `reshot` chain account for its digest?* The excused set survives, but it stops being the thing the design rests on, and §7 item 1's own preferred alternative — *"keeping the current photograph's digest on the record always"* — is what `reshot`'s new `photo_sha256` field is. |
+| **2** | `do_remove_card`'s docstring and the photos survey **disagree** about whether a killed-and-retried renumber destroys 2 photographs, and nobody ran it | **MOOT, and the contradiction is retired rather than resolved.** The renumber has no rename loop to kill: the photographs are not named after the indices being shifted. Neither party to the disagreement is right or wrong any more, because the loop they disagreed about is gone. The measurement §7 asked for is no longer worth taking. |
+| **3** | three commitments a filename-freezing PR cannot all keep, and the composition **overwrites a photograph that cannot be re-taken** | **MOOT, structurally.** The name is a sha256 that `cards_cid` holds UNIQUE, so two cards cannot compose one path. `next_index` is untouched and no longer reaches a filename. Its three questions are answered in 0.3. |
+| **4** | whether the owner wants a 64-character id on the wire | **UNCHANGED, and it is still a question only the owner can answer.** The re-scope makes it slightly louder rather than quieter: the digest is now a **path on disk** as well as a route segment, so it is visible in a Finder window too. The full 64 is what is built, `cid[:12]` is what prose and screens use, and nothing types either. |
+| **5** | the 3.0-second stall lands on the live capture server, unattended, measured on a warm cache | **BETTER, and it is now the design rather than a contingency.** Hashing is outside the flock and the lock holds for row writes and a re-stat. What the re-scope ADDS is the relocation's own filesystem work — which is why it is a separate, previewing, resumable step that takes no store write lock, instead of minutes of link-verify-unlink inside a read. |
+| **6** | *"100%"* is not what this delivers | **BETTER, and still not 100%.** Four of the six rows in 0.1 are retired. The box is out of the photograph's path and out of the run's re-binding; it is still in `cards.key`, the cache's key, the queues' key, `events.position` and the ten route regexes. The honest figure is that the box stops being a unit of **work** and stays half of a **readable address** — which is what the owner asked for. |
+| **7** | every number carries its read, and two will not reproduce | **UNCHANGED, and re-taken.** The re-read is in the header: the deciding measurement reproduces to the byte; 294 sold and 12,007 events are the two that moved. |
+
+**AND TWO THINGS THE RE-SCOPE MAKES WORSE, SAID HERE RATHER THAN DISCOVERED:**
+
+**A · 4.45 GB now moves, where the original scope moved nothing.** §3's single strongest
+property was *"this PR performs zero filesystem renames, zero unlinks, and zero writes outside
+the database"*, and that is gone. What replaces it is weaker in kind and stronger in degree: the
+move is per-card resumable, every file is verified against a digest proved before the move
+began, and no window exists in which a photograph has no name. **But it is 2,535 link-and-unlink
+pairs against the owner's irreplaceable corpus, and the original had none.** It previews by
+default for that reason.
+
+**B · a new top-level directory is a new thing a worktree can create, and D47 is what that costs
+when it is got wrong.** `photos` is gitignored bare, with no trailing slash, per `.gitignore`'s
+own opening rule — a pattern ending in `/` matches directories only, and a worktree can put a
+symlink at that name. `make ignore-check` is what reads it.
+
+### 0.9 · BUILT, RECORDED, NEITHER
+
+**BUILT** — reachable, exercised and asserted: `cards.cid` at **schema 4** (D174's
+`submissions` took 3 while this was open, which is the merge conflict §5 predicted by name),
+the seeding with its receipt, the forward-version guard, the four-roster reconciliation, the
+partial-index self-heal, `store/photos.py`, the relocation with its preview, the view-directory
+builder, the `GET /photo/by-card/<cid>` route and the client that addresses photographs through
+it, `./pkmnscan cards name` / `audit` / `photos`, and `make cid-selftest` / `make cid-audit`.
+
+**AND TWO DEFECTS THAT WERE FOUND RATHER THAN DESIGNED FOR, both in `store/db.py` and
+neither in this file's plan.** `SqliteSource.upsert` was `INSERT OR REPLACE`, which resolves a
+conflict in ANY constraint by DELETING the conflicting row — so a second card carrying a name
+another card already held did not refuse, it silently deleted that other card's row and the
+store came back one card short. It is `ON CONFLICT (<primary key>) DO UPDATE` now, which
+resolves a collision on the row's own identity and lets every other constraint raise. That
+mattered because `cards_cid` is load-bearing in an ARGUMENT rather than merely tidy: the claim
+that two cards cannot compose one photograph's path rests entirely on two cards never holding
+one name. **And fixing it exposed the second**: `flush_rows` wrote its row writes one statement at
+a time, and a mid-box renumber re-keys rows — card 4 to index 3, card 5 to index 4 — so
+part-way through that loop two rows transiently carry one name. The end state is fine and the
+intermediate one is not, and a UNIQUE index in SQLite is IMMEDIATE with no deferred form. Every
+touched key is cleared before any is written.
+
+**EVERY GUARD HERE IS MUTATION-TESTED: 16 arms, 16 caught, 0 survived.** Three survived the
+first pass and each was information rather than something to explain away. `column_names`
+survived because **nothing in this repo reads `TableSpec.column_names` at all** — `grep -rn
+"\.column_names"` returns nothing, `SqliteSource` takes its columns from `db.TABLES[table]`,
+and that field is a declaration with no consumer on every `TableSpec` in the store. It has a
+reader now. The relocation's two guards survived because they **mask each other**: the source
+check refuses before linking and the destination re-hash catches after, and both end in the
+same observable outcome, so no single-arm mutation could see either. The link tally
+distinguishes the first; the second is provoked by making `os.link` land different bytes, which
+is not a contrivance but the exact fault it is for.
+
+**AND THREE MORE ON THE CLIENT, WHERE THE SURVIVOR WAS THE POINT.** `app/tests/
+inventory.spec.ts` gets one case asserting the by-card address, and both halves of it are
+mutation-tested against the whole spec: deleting `photoUrl`'s by-card branch fails **exactly
+that one test** of 100, and deleting the `?card=` stamp `BoxBrowse` appends fails **three**,
+which is the right answer — that stamp is what survives a D26 re-shoot, because the name is
+frozen and the by-card response is `immutable` for a year with an ETag that is the name's own
+hex, so when the bytes change neither the URL, the lifetime nor the validator moves.
+
+**THE THIRD AROSE FROM A CLAIM THE CASE MADE IN A COMMENT AND NOBODY ASSERTED**, which is the
+shape this repo refuses: replacing `server.ts:PHOTO_CID.test(cid)` with `true` left **all 100
+green**. The asymmetry that makes it reachable is on the wire and is deliberate on both sides
+— `_copy_row` filters, sending `cid` only when `photos.is_photo_cid`, while `_card_row` is
+`asdict(card)` and `_card_summary` names the field outright, so an `InventoryCard` carries the
+RAW name including `moved:<hex>` on a D83 tombstone and `nophoto:<key>@<stamp>` on a record
+`emit` created for a position no camera ever saw. Two of the four shapes name no file at all
+and `photos.path` REFUSES to compose one from them, so a client that sent them would ask for a
+photograph that cannot exist and the operator would get a broken image on the walk. `PHOTO_CID`
+is therefore load-bearing rather than defensive — the client's half of a predicate the server
+spells `is_photo_cid` — and it has a reader now, over both shapes rather than one, because a
+guard tested on a single rejection might be testing the prefix rather than the shape.
+
+**RECORDED** — this file, §0 in particular, and the decision entry. The shard width, the
+`(size, mtime_ns)` re-stat and the refusal's new home are decisions with arguments here and
+nowhere else.
+
+**NEITHER** — unchanged from §4 and §7 item 6, and none of it is a follow-up to this: the batch
+`custom_id` (`identify/sidecar.py:164`'s false claim), the `identifications` re-key and its
+~$3.63 hazard, the `fulfilment` repair for 3 dangling references, and `position_key` itself.
+`events` gains nothing, for §4's measured reason.
 
 ---
 
@@ -263,7 +641,7 @@ Byte-exact rather than semantically equal, because the reversal reproduces `stor
 
 **What the audit does and does not prove, stated plainly.** Run immediately after the seeding it is close to tautological — the migration read those bytes and the audit reads them again. Its value is **temporal**: it proves the link still holds later, after renumbers, moves, deletions and reclaims. What proves it was right in the first place is a different thing: the source census, plus the fact that only rungs 2 and 3 are accepted without a named report.
 
-**`cid-audit` is not in `make check`.** It reads the owner's 4.4 GB, and `make check` answers from the tree alone — `make lan-check`'s reason exactly. It is its own target, and `do_status` reports when it has never been run against this store.
+**`make cid-audit` is not in `make check`.** It reads the owner's 4.4 GB, and `make check` answers from the tree alone — `make lan-check`'s reason exactly. It is its own target, and `do_status` reports when it has never been run against this store.
 
 ### 3.8 · Killed with `-9` halfway: the store comes back unchanged. Proven, not asserted
 
@@ -286,7 +664,7 @@ Why that is a property of the design and not of my harness: every write is a row
 
 The other three ways a run can stop: **killed after COMMIT, before the receipt** — fully migrated, receipt absent, harmless by construction (`_write_migration_receipt` is already `contextlib.suppress(OSError)`, *"a read-only or full disk must not make an already-committed upgrade look like a failure"*); `cards audit` reconstructs everything it would have said. **Killed and re-run** — rung E.1 makes it a no-op. **Killed while another process holds the store** — `_upgrade` re-reads the stamp inside `files.exclusive`, the loser returns early, and a dead holder's flock is released by the OS on process death, which is `make suite-lock-selftest`'s own argument for `flock` over a pidfile.
 
-**NEVER open the owner's live `inventory/store.sqlite` for writing.** Every figure above came from a `.backup()` through a `mode=ro&immutable=1` connection (0.014 s, 7,438,336 B) into the scratchpad, with `captures/` read through absolute paths and never written. `cid-selftest` builds its own throwaway store under `PKMNSCAN_HOME`; the real store is migrated by the owner's own `git pull`, on the supervisor's first read, once.
+**NEVER open the owner's live `inventory/store.sqlite` for writing.** Every figure above came from a `.backup()` through a `mode=ro&immutable=1` connection (0.014 s, 7,438,336 B) into the scratchpad, with `captures/` read through absolute paths and never written. `make cid-selftest` builds its own throwaway store under `PKMNSCAN_HOME`; the real store is migrated by the owner's own `git pull`, on the supervisor's first read, once.
 
 ---
 
@@ -355,7 +733,7 @@ A migration half-applied *inside* the transaction cannot exist — §3.8 proved 
 2. **Seeded, then STRIPPED by an older build, then re-opened.** `select count(*) from cards where cid is null` with `meta.card_ids_seeded` present is a named refusal, `card_ids_stripped`, naming the keys and the instruction — never a silent re-issue, even though under a digest the re-issue would be correct. Probe 2 is the harness case, verbatim: plant ids, stamp 3, run one `set_state` with `Card.cid` monkey-deleted, assert the refusal fires and names `3/17`.
 3. **Column and payload disagreeing.** `select count(*) from cards where cid is not json_extract(payload,'$.cid')` must be 0 — **after the migration AND after a subsequent ordinary write.** That single query is what catches commit 2's roster reconciliation having been missed anyway, and it is the assertion `2,535 ids in 3.0 s` cannot make.
 
-### 6.2 · `cid-selftest` — counts work, on a throwaway store under `PKMNSCAN_HOME`
+### 6.2 · `make cid-selftest` — counts work, on a throwaway store under `PKMNSCAN_HOME`
 
 - **the seeding hashes exactly `card_count` files** on a store with complete identifications — not "at least", not "zero is fine";
 - **a re-run hashes 0 files and issues 0 ids**, and every cid is byte-identical to the first run's (the self-heal, measured at `3/17`);
@@ -367,25 +745,25 @@ A migration half-applied *inside* the transaction cannot exist — §3.8 proved 
 - **the reverse restores all nine tables byte-identically**, reproducing `payload_text`'s exact serialization (measured: 0.033 s, nine of nine);
 - **the `-9` case**: fork, `BEGIN IMMEDIATE`, write half, `kill -9`, reopen, assert 2,535 cards, stamp 2, **no cid column**, and the `cards` table byte-identical to the baseline. Prove it by violating it, `make suite-lock-selftest`'s standard.
 
-### 6.3 · `cid-audit` — and it has a NOT-KNOWN verdict
+### 6.3 · `./pkmnscan cards audit` — and it has a NOT-KNOWN verdict
 
 Read-only, re-runnable by anybody on any copy, **2.68 s over 4,445,351,065 bytes measured**. Three verdicts, never two: `pass` (every card's cid equals its photograph's digest, or is excused by a recorded digest), `fail` (a named mismatch, listed), and **`not known`** — which it prints when the `cid` column is absent, when any cid is NULL, or when it was pointed at no photographs. A "for every card, `sha256(file) == cid`" check over zero rows prints `checked 0, mismatch 0` and reads as a pass; that is the shape this repo has now hit nine times in twenty-four hours and it does not get a tenth.
 
-`do_status` reports when `cid-audit` has never been run against this store, and reports a `nophoto:` population above zero by name.
+`do_status` reports when `make cid-audit` has never been run against this store, and reports a `nophoto:` population above zero by name.
 
 ### 6.4 · Harness placement, and the mechanical rosters that must move with it
 
 - **T7** takes the new arms — the store's own seams live there: the forward-version guard, the roster reconciliation, the strip refusal, the column/payload query, the move tombstone's `moved:` prefix, the CLI roster going nine → ten.
 - **T3** needs `cid=` at `t3_join_coverage.py:220` (it flushes).
-- `cid-selftest` joins **`make check`**, which means editing three things together or `make docs-audit`'s **`check census`** row fails the commit: the `check:` recipe in the `Makefile` (23 targets today), `scripts/checks.py`'s `CHECKS` tuple (a full entry with `runs`, `asserts`, `needs`, `writes`, `commit_path`, `why_off_commit_path`, `gates`, `governed_by`), and every published list — `CLAUDE.md`'s and `make help`'s. That row exists because `make help` under-reported by five targets for months with nothing comparing the two, and **it refuses to go quiet**: a claim reworded past its pattern is reported as an unwatched sentence.
-- `cid-audit` does **not** join `make check` — §3.7.
+- `make cid-selftest` joins **`make check`**, and that turned out to be FIVE places rather than the three this line predicted: the `check:` recipe in the `Makefile` (29 targets now), `ci-check:` beside it — which NOTHING reconciles and which therefore drifts silently — the `.PHONY` line, `scripts/checks.py`'s `CHECKS` tuple (a full entry with `runs`, `asserts`, `needs`, `writes`, `commit_path`, `why_off_commit_path`, `gates`, `governed_by`, in recipe order), and every published list — `CLAUDE.md`'s and `make help`'s, the latter twice because the target needs its own help line as well as a place in the `make check` claim. That row exists because `make help` under-reported by five targets for months with nothing comparing the two, and **it refuses to go quiet**: a claim reworded past its pattern is reported as an unwatched sentence.
+- `make cid-audit` does **not** join `make check` — §3.7.
 - **Mutation arms, one per guard, and report a survivor rather than explaining it away** (PR #305's survivor revealed two dead exclusions carrying a comment that claimed otherwise): delete the forward-version comparison; delete one name from each of the three column rosters; delete `_card_columns`' refusal; delete rung E.1's `record.get("cid")`; delete the suffix loop; delete the `moved:` prefix; make the preview call `db.connect`; make `_add_card_ids` stamp without the source-count check. Re-run each against the whole nine-test harness, not just the new check, and **report equivalent mutants as equivalent instead of counting them as caught.**
 
 ### 6.5 · A decision entry, in the same session
 
 `docs/decisions/D172-the-first-photograph-is-the-name.md`. **Never guess a D number** — write the heading as `## D-` followed by a lowercase hyphenated slug and let `make merge` claim it (D140); `make claim-stale` catches a claimed number that goes stale. One-line bold runs, `_add_box_ids`' receipt shape. It must carry: the 2,535/2,535 proof and the 2.68 s figure; the 701-of-3,728 run-record measurement as the production receipt that a content id beats a positional one; the two probes (the silent downgrade, the one-write strip) with their outputs; **the self-heal measurement, because it is the whole argument against an allocator**; the frozen-not-tracked distinction in one sentence; D89's narrowing with its population-of-zero measurement; the four shapes with their zero populations and the honest admission that three of them have never fired; and the reverse sentence. `python3 scripts/index-decisions.py --write` also appends to `docs/decisions/ORDER.json` — expected, and the manifest line is resolved by hand, main's numbers first and the slug last.
 
-`docs/map.py` needs an entry for `scripts/cid-audit.py`; adding a file under the mapped directories without one fails the commit.
+`docs/map.py` needs an entry for every new file under a mapped directory or the commit fails; the two that landed are `cli/cmd_cards.py` and `scripts/cid-selftest.py`, not the standalone audit script this line predicted.
 
 ---
 

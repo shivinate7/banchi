@@ -327,6 +327,51 @@ export type MotionParams = {
    *  those and nothing else: one stall per session, every one on a real card, zero false
    *  positives over 67 good captures. */
   maxMoveMs: number
+  /** THE UNIFORMITY TEST (2026-09-12), and it exists because the camera's auto-exposure
+   *  makes the same signal a card makes, larger. A settled frame that clears the presence
+   *  floor is asked one more question before it is a card: IS IT THE BASELINE TIMES ONE
+   *  NUMBER? A gain step multiplies every cell of the watch region by the same factor; a
+   *  card changes the PATTERN. The machine takes `k`, the median per-cell ratio of this
+   *  frame to the baseline, divides the frame by it, and reads what is left. A residual
+   *  under `presenceK` x the session's own still-frame difference — the same multiple the
+   *  presence floor already rides, no new constant — is the stand at a new gain: the frame
+   *  becomes the baseline and the verdict is `suppressed:uniform`.
+   *
+   *  MEASURED ON EVERY VERDICT FRAME IN `harness/traces/`, 2026-09-12. Over the 748 fired
+   *  frames that clear the floor across all twenty sessions, the smallest residual on every
+   *  session is 3.6x the bound or more — 42.5 against 8.04 on the 85/85 run — with ONE
+   *  frame closer: 03:25 t=74.0 reads 1.02x, and the contact sheet says it is the plate's own
+   *  dark disc displaced, not a card (`score-trace.py contact`). Nothing that fired is called
+   *  uniform, and no real card comes within 3x of it. A synthetic 1/3, 1/2 or 1 EV step on every one of
+   *  the twenty baselines is called uniform or is under the floor; 1.5 EV is declined on six
+   *  bright plates, where it clips three quarters of the region. The hand D84 photographed
+   *  the bare stand with (7.61 and 8.68 residual, bounds 7.41 and 8.09) is NOT uniform — and
+   *  is refused by the floor exactly as before, because it never clears it.
+   *
+   *  WHAT WAS REFUSED FIRST, WITH THE NUMBERS. Normalizing the frame ALWAYS — dividing by
+   *  `k` before the presence floor — drops 77 of 661 fired cards under the floor and takes
+   *  the 85/85 run's quietest card from 58.8 to 11.0: a bright card on a dark plate is
+   *  scaled to plate amplitude and its pattern goes with it. A reference region OUTSIDE the
+   *  watch region — the shape first proposed — cannot be derived from the corpus at all,
+   *  which records the watch region and nothing else, and measured on the owner's 2,535
+   *  4K photographs the surround drifts non-uniformly within a sitting (fewer than half its
+   *  cells agree with the session's first frame on 87-99% of frames). docs/specs/
+   *  motion-trigger.md §4 carries both measurements.
+   *
+   *  `uniformMinShare` is the share of the region that must be comparable for the judgement
+   *  to be made; below it the question is DECLINED and the frame is judged as a card, which
+   *  is the machine before this field existed. A quarter: a 1 EV step on the corpus's
+   *  brightest plates leaves 481-608 of 1,064 cells unclipped and is judged; 1.5 EV leaves
+   *  fewer than 266 on six of them and is declined. A share rather than a count, so the same
+   *  rule holds over a test's 128-cell region and the sampler's 1,064. */
+  uniformMinShare: number
+  /** A cell is comparable when both frames hold it between these two levels. Below the
+   *  toe the ratio is noise over noise; at the shoulder the step has clipped and the cell
+   *  cannot say what the gain did — on the 192-level plate a 1 EV step clips 583 of 1,064,
+   *  and the residual over ALL cells reads 14.6 against a bound of 4.3, which would call a
+   *  real step a card. Left out, the same step reads 0.0. */
+  uniformToe: number
+  uniformShoulder: number
 }
 
 /* Measured off the first feeder trace, 2026-08-23: period 623 ms burst-to-burst, each
@@ -349,6 +394,9 @@ export const DEFAULT_PARAMS: MotionParams = {
   rescueK: 4 / 3,
   rescueAfter: 0.6,
   maxMoveMs: 1250,
+  uniformMinShare: 0.25,
+  uniformToe: 8,
+  uniformShoulder: 247,
 }
 
 /* ------------------------------------------------------------------------ the machine */
@@ -367,6 +415,11 @@ export type MotionEvent =
   | 'fire:rescued'
   | 'suppressed:unchanged'
   | 'suppressed:no-card'
+  /** The frame cleared the presence floor and is the baseline times one number — a gain
+   *  step on the stand, not a card. The frame is adopted as the baseline on the spot, so
+   *  the next hand and the next card are judged at the new gain. `uniformMinShare` above
+   *  carries the argument and the measurements. */
+  | 'suppressed:uniform'
   | 'stalled'
 
 /** How often the typical-d estimate is recomputed, in frames. Every 10 frames is ~2.5
@@ -422,6 +475,10 @@ export type MotionDiagnostics = {
   rescued: number
   /** Refreshes on which the ratchet was overruled by the quantile path (D131). */
   escapes: number
+  /** Settles refused as the stand at a new gain — `suppressed:uniform` — each of which
+   *  re-took the baseline. Non-zero means the camera's exposure moved while the trigger was
+   *  armed, which §4 of the spec asks the operator to lock; the count is the receipt. */
+  uniform: number
 }
 
 /** What the screen can ask the machine to do. Deliberately NOT on the `Trigger` seam:
@@ -490,6 +547,9 @@ export class MotionMachine {
   /** How many refreshes took the quantile path — on the HUD as `escape`, so a session can
    *  see the ratchet was overruled. */
   private escapes = 0
+  /** Per-cell ratios for the uniformity test, sized to the first frame seen. Allocated once
+   *  for the same reason the rings are: nothing per frame, and nothing per verdict either. */
+  private ratioScratch: Float32Array | null = null
   private dTypical: number
   private tLo: number
   private tHi: number
@@ -521,6 +581,7 @@ export class MotionMachine {
     stalled: 0,
     rescued: 0,
     escapes: 0,
+    uniform: 0,
   }
 
   constructor(params: MotionParams = DEFAULT_PARAMS) {
@@ -820,12 +881,45 @@ export class MotionMachine {
     }
     this.diag.noCardRun = 0
 
+    /* UNIFORMITY, AND IT IS THE ONE PLACE THE MACHINE RE-BASELINES ON ITS OWN. The frame is
+     * far from the baseline; a card and an exposure step both read that way. If the frame
+     * is the baseline TIMES ONE NUMBER — every cell moved by the same ratio, and what is
+     * left after dividing it out is at the still-frame noise this session measures — then
+     * the stand did not change, the camera did, and this frame is what the stand looks like
+     * now. `MotionControls.rebaseline` says a machine may not re-baseline on its own
+     * judgement, and that stands: this is not a judgement about what is on the stand, it is
+     * a proof that nothing on it changed, and a card cannot pass it because a card is not a
+     * scaled plate — zero of 748 did (`uniformMinShare`). Taking the baseline here is what
+     * keeps the hand D84 measured at 8-11 UNDER the floor after a step: judged against the
+     * old baseline it would carry the step on top of itself. */
+    const uniform = this.uniformResidual(cells, this.baseline)
+    if (uniform !== null && uniform < this.p.presenceK * this.dTypical) {
+      this.baseline.set(cells)
+      this.baselineAt = nowMs
+      this.diag.baselineAgeMs = 0
+      this.diag.dBase = 0
+      this.diag.uniform += 1
+      return 'suppressed:uniform'
+    }
+
     if (this.lastFired !== null) {
-      let novelty = 0
-      for (let i = 0; i < cells.length; i += 1) {
-        novelty += Math.abs((cells[i] as number) - (this.lastFired[i] as number))
+      /* THE SAME QUESTION AGAINST THE LAST FIRED FRAME. A step taken while a fired card sits
+       * at the lens reopens an episode and re-settles the same card; raw novelty then reads
+       * the step (8-22 on the corpus's plates) and the card is photographed twice. Scaled,
+       * two different cards still differ: the smallest scaled novelty between consecutive
+       * fires anywhere in the corpus is 7.0 against `tNovel` 4.0, and the raw minimum is the
+       * same 7.0 — placement and tilt are not a gain. Declined (too few comparable cells),
+       * the raw distance decides, as it always did. */
+      const scaled = this.uniformResidual(cells, this.lastFired)
+      let novelty = scaled
+      if (novelty === null) {
+        let sum = 0
+        for (let i = 0; i < cells.length; i += 1) {
+          sum += Math.abs((cells[i] as number) - (this.lastFired[i] as number))
+        }
+        novelty = sum / cells.length
       }
-      if (novelty / cells.length < this.p.tNovel) {
+      if (novelty < this.p.tNovel) {
         this.diag.suppressedUnchanged += 1
         return 'suppressed:unchanged'
       }
@@ -838,6 +932,55 @@ export class MotionMachine {
     if (!rescued) return 'fire'
     this.diag.rescued += 1
     return 'fire:rescued'
+  }
+
+  /** What is left of `cells` against `ref` once one scaling `k` is fitted — the mean-abs
+   *  residual over the comparable cells, in the units of the BRIGHTER of the two frames — or
+   *  null when fewer than `uniformMinShare` of the region is comparable and the question is
+   *  declined.
+   *
+   *  THE UNITS WERE MEASURED THREE WAYS AND ONLY THE THIRD KEEPS BOTH KINDS OF CARD. In the
+   *  baseline's units (the frame divided by `k`) a bright card on a dark plate is scaled to
+   *  plate amplitude and its pattern goes with it: sixteen of the 85/85 run's cards landed at
+   *  11.0-12.0 against a bound of 8.04, 1.4x. In the frame's units (the baseline scaled up) a
+   *  DARK card on a bright plate shrinks the same way: the 03:25 session's closest real card
+   *  fell to 1.8x. In the brighter frame's units every real card on every session sits 3.6x
+   *  or more over its bound — 5.3x on the 85/85 run — and a step, whose residual is the plate's
+   *  noise, reads 1.8 x 1.6 at 1.5 EV at worst, under the tightest bound in the corpus (4.26).
+   *
+   *  `k` IS THE MEDIAN RATIO, NOT THE RATIO OF MEANS. A card arriving over half the region
+   *  drags a mean with it; the median of 1,064 per-cell ratios lands on the plate as long as
+   *  the plate is the majority — and when it is not, the residual is large and the frame is
+   *  a card, which is the right answer either way. The comparable set is the same on both
+   *  sides: a cell the step clipped to the shoulder cannot report the gain and is left out
+   *  (`uniformShoulder`). Uses `quantileOf`, which copies, over a scratch this method owns. */
+  private uniformResidual(cells: Uint8ClampedArray | Float32Array, ref: Float32Array): number | null {
+    if (this.ratioScratch === null || this.ratioScratch.length !== cells.length) {
+      this.ratioScratch = new Float32Array(cells.length)
+    }
+    const toe = this.p.uniformToe
+    const shoulder = this.p.uniformShoulder
+    let n = 0
+    for (let i = 0; i < cells.length; i += 1) {
+      const now = cells[i] as number
+      const was = ref[i] as number
+      if (was < toe || was > shoulder || now < toe || now > shoulder) continue
+      this.ratioScratch[n] = now / was
+      n += 1
+    }
+    if (n < this.p.uniformMinShare * cells.length) return null
+    const k = quantileOf(this.ratioScratch.subarray(0, n), 0.5)
+    let sum = 0
+    for (let i = 0; i < cells.length; i += 1) {
+      const now = cells[i] as number
+      const was = ref[i] as number
+      if (was < toe || was > shoulder || now < toe || now > shoulder) continue
+      sum += Math.abs(now - k * was)
+    }
+    /* In the units of the BRIGHTER frame: |now - k x ref| when the frame is the brighter, and
+     * the same divided by k — |now / k - ref| — when the baseline is. Dividing by min(k, 1)
+     * is both in one expression. */
+    return sum / n / Math.min(k, 1)
   }
 }
 

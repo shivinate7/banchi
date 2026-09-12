@@ -4,7 +4,7 @@ import { getRuns } from './server'
 import type { RunSummary } from './types'
 import { runningFor } from './RunPanel'
 import { boxOf } from './runScope'
-import { carryScope, clearCarriedScope } from './runHandoff'
+import { cardKey, carryScope, clearCarriedScope } from './runHandoff'
 import { Icon } from './kit'
 import './BoxRuns.css'
 
@@ -75,7 +75,11 @@ export function BoxRuns({ box, indices }: BoxRunsProps) {
         aria-disabled={box === null}
         onClick={() => {
           if (box === null) return
-          if (indices.length > 0) carryScope({ box, indices })
+          /* KEYS, NOT A BOX AND ITS INDICES. `CarriedScope` moved to `box/index` strings so a
+             selection can span drawers; this control only ever produces one drawer's worth —
+             it is drawn inside one box's walk — so it composes the keys rather than gaining a
+             second shape. `cardKey` is the one spelling. */
+          if (indices.length > 0) carryScope({ keys: indices.map((index) => cardKey(box, index)) })
           else clearCarriedScope()
         }}
       >

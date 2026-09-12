@@ -156,3 +156,45 @@ export function captureBoxLabel(box: number, name: string | null | undefined): s
   const named = typeof name === 'string' ? name.trim() : ''
   return named === '' ? `Box ${box}` : named
 }
+
+/** SEVERAL DRAWERS, AS ONE PHRASE — `boxLabel`'s plural, and the name is deliberately dropped
+ *  from it.
+ *
+ *  WHY THIS EXISTS. A run is one box (D48) and `boxLabel` answers for one, which was the whole
+ *  vocabulary while a scope was a drawer. A scope can now be a STATE narrowed by a game or a
+ *  sitting, and 1,091 of the owner's 2,535 stamped cards — 43% — were photographed in a sitting
+ *  that spanned more than one drawer, so "several drawers" is the ordinary case rather than the
+ *  exotic one and it needs a phrase of its own.
+ *
+ *  ONE DRAWER KEEPS EVERY WORD `boxLabel` GIVES IT: `Box 3 · RB Epics`, and `Box 3` alone where
+ *  the owner has not named it, because a name is optional and a placeholder would draw a fault
+ *  where there is none (D56).
+ *
+ *  SEVERAL DRAWERS DROP THE NAMES, AND THAT IS NOT A WEAKENING OF D56. That entry's rule is
+ *  that the name travels BESIDE the number rather than replacing it, and both halves are drawn
+ *  — on the drawer's own card, which is where the operator is choosing it. What this phrase has
+ *  to do is COUNT, in a line read beside a dollar figure, and `Box 1 · RB Epics, Box 4 and Box
+ *  5 · SV bulk` puts the list separator and the name separator on the same character: the
+ *  reader cannot tell three drawers from five. The number is what stays because it is the
+ *  shelf, the photograph directory and what every refusal in `server/pipeline_routes.py` names.
+ *
+ *  AND IT TRUNCATES, BECAUSE A CART CAN BE THE WHOLE STORE. Four numbers then a count: the
+ *  drawer total is stated first and is never the part that gets cut, so the phrase is still
+ *  complete about how much is in scope even where it stops naming which. */
+export function boxesLabel(
+  drawers: readonly { readonly box: number; readonly name?: string | null }[],
+  shown = 4,
+): string | null {
+  if (drawers.length === 0) return null
+  const only = drawers[0]
+  if (drawers.length === 1 && only !== undefined) return boxLabel(only.box, only.name)
+  const numbers = drawers.map((row) => row.box).sort((a, b) => a - b)
+  const head = numbers.slice(0, shown).map(String)
+  const rest = numbers.length - head.length
+  const list = rest > 0 ? [...head, `${rest} more`] : head
+  const joined =
+    list.length === 1
+      ? (list[0] as string)
+      : `${list.slice(0, -1).join(', ')} and ${list[list.length - 1] as string}`
+  return `${drawers.length} drawers · boxes ${joined}`
+}

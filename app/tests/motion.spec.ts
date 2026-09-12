@@ -47,11 +47,22 @@ const EMPTY = 30
 /** A still scene at `base` luma with deterministic noise well under tLo. `phase` varies
  *  the noise pattern so two calls with the same base are the same SCENE but not the same
  *  bytes — consecutive frames of a real still card differ a little, and a test that feeds
- *  byte-identical frames would let d = 0 hide a broken diff. */
+ *  byte-identical frames would let d = 0 hide a broken diff.
+ *
+ *  AND TEXTURED, SINCE 2026-09-12. Every cell carries a fixed `TEXTURE` around the level, the
+ *  same on every frame, because a FLAT scene at a new level is the old scene TIMES ONE NUMBER
+ *  — which is what an exposure step is, and what the machine now refuses as
+ *  `suppressed:uniform`. Until this, every "card" in this file was exactly that, and ten
+ *  cases went red the moment the machine could tell. A real stand has texture (a disc, a tray
+ *  edge) and a real card has art; a level change over texture is not a rescale of it, so
+ *  these stay cards, while a frame that IS the scene times one number — the gain-step cases
+ *  at the foot of this file — is still uniform. Under `presenceMin`, so the texture alone
+ *  never decides presence. */
+const TEXTURE = 12
 function still(base: number, phase: number): Float32Array {
   const cells = new Float32Array(CELLS)
   for (let i = 0; i < CELLS; i += 1) {
-    cells[i] = base + (((i * 31 + phase * 17) % 7) - 3) * 0.2
+    cells[i] = base + (i % 2 === 0 ? TEXTURE : -TEXTURE) + (((i * 31 + phase * 17) % 7) - 3) * 0.2
   }
   return cells
 }
@@ -461,4 +472,206 @@ test('the machine copies what it keeps — a reused, mutated buffer cannot zero 
   at += 1
   for (let i = 0; i < DEFAULT_PARAMS.stillWindow; i += 1, at += 1) feed(at * F, 170, at)
   expect(events).toEqual(['suppressed:no-card', 'fire'])
+})
+
+/* ---------------------------------------------------------------- the gain step (2026-09-12) */
+
+/** A brighter stand than `EMPTY`, because the presence floor is where the uniformity test
+ *  starts to matter: at 30 a 1/3 EV step is 3.3 luma and never clears 16, so the floor refuses
+ *  it as it always did. At 150 the same step is 17 — over the floor, and until 2026-09-12 a
+ *  junk photograph of the bare stand. The corpus's plates run 24-192. */
+const PLATE = 150
+const STEP = 2 ** (1 / 3 / 2.2) // one 1/3 EV step in display code, `score-trace.py camera`'s model
+
+test('an exposure step on the bare stand is refused as uniform and becomes the baseline', () => {
+  const machine = new MotionMachine()
+  const events = run(machine, [
+    ...Array<number>(ARM_FRAMES).fill(PLATE),
+    PLATE * STEP, PLATE * STEP, PLATE * STEP, PLATE * STEP, PLATE * STEP, // the camera re-levels
+    PLATE * STEP * STEP, 60, PLATE * STEP, PLATE * STEP, PLATE * STEP, PLATE * STEP, // wobble, same stand
+  ])
+  /* The step clears the floor (17 > 16) and is the plate times one number: refused, and the
+     next settle on the same stand is judged against the NEW baseline — at zero distance,
+     the ordinary empty verdict, not a second uniform one and never a fire. */
+  expect(events.map((e) => e.event)).toEqual([
+    'suppressed:no-card',
+    'suppressed:uniform',
+    'suppressed:no-card',
+  ])
+  expect(machine.diag.uniform).toBe(1)
+  expect(machine.diag.fires).toBe(0)
+  expect(machine.diag.dBase).toBeLessThan(1)
+})
+
+test('a card is not a scaled plate — it fires with the step present, and a hand is still refused after it', () => {
+  const machine = new MotionMachine()
+  /* A card is a PATTERN: half the region much brighter than the plate, the rest darker.
+     `still` adds the same deterministic noise as everywhere else. */
+  const card = (phase: number): Float32Array => {
+    const cells = still(PLATE, phase)
+    for (let i = 0; i < CELLS; i += 1) cells[i] = (i % 3 === 0 ? 40 : 230) + ((cells[i] as number) - PLATE)
+    return cells
+  }
+  const events: MotionEvent[] = []
+  const feed = (frames: Float32Array[]) => {
+    for (const frame of frames) {
+      const event = machine.step(events.length * F + frames.indexOf(frame) * F + machine.diag.frames * F, frame)
+      if (event !== null) events.push(event)
+    }
+  }
+  feed(Array.from({ length: ARM_FRAMES }, (_, i) => still(PLATE, i)))
+  // the step lands on the empty stand: refused, baseline re-taken at the new gain
+  feed(Array.from({ length: 5 }, (_, i) => still(PLATE * STEP, i + 10)))
+  // the card arrives at the new gain: a card
+  feed([still(90, 20), ...Array.from({ length: 8 }, (_, i) => card(i + 30))])
+  expect(events).toEqual(['suppressed:no-card', 'suppressed:uniform', 'fire'])
+  // the card leaves; the stand at the new gain settles at zero distance from the new baseline
+  feed([still(60, 40), ...Array.from({ length: 5 }, (_, i) => still(PLATE * STEP, i + 50))])
+  expect(events.at(-1)).toBe('suppressed:no-card')
+  expect(machine.diag.fires).toBe(1)
+})
+
+test('a step over a card already photographed is the same card, not a second one', () => {
+  const machine = new MotionMachine()
+  const card = (level: number, phase: number): Float32Array => {
+    const cells = still(level, phase)
+    /* 0.3x and 1.4x, not 1.5x: at 150 x 1.11 x 1.5 the bright cells sit at 250, over the
+       shoulder, and the COMPARABLE set is then only the dark third — which is a flat level
+       times one number, and the test would rightly call that uniform. A real card's dark
+       parts carry pattern; this fixture's do not, so it is kept under the shoulder. */
+    for (let i = 0; i < CELLS; i += 1) cells[i] = (i % 3 === 0 ? level * 0.3 : level * 1.4) + ((cells[i] as number) - level)
+    return cells
+  }
+  const events: MotionEvent[] = []
+  let t = 0
+  const feed = (frames: Float32Array[]) => {
+    for (const frame of frames) {
+      const event = machine.step(t, frame)
+      t += F
+      if (event !== null) events.push(event)
+    }
+  }
+  feed(Array.from({ length: ARM_FRAMES }, (_, i) => still(PLATE, i)))
+  feed([still(90, 20), ...Array.from({ length: 5 }, (_, i) => card(PLATE, i + 30))])
+  expect(events).toEqual(['suppressed:no-card', 'fire'])
+  /* The camera re-levels while the card sits there. Against the baseline the frame is a
+     card (not uniform); against the last fired frame it IS uniform — the same card at a new
+     gain — so the novelty gate, scaled, calls it unchanged. Raw novelty would have read the
+     step (a fifth of the card's level, well over tNovel) and photographed it twice. */
+  /* Twelve frames: the re-settle lands inside the 250 ms refractory of the fire before it and
+     is judged, deferred, on the first frame after it — the same deferral the refractory case
+     above pins. */
+  feed(Array.from({ length: 12 }, (_, i) => card(PLATE * STEP, i + 40)))
+  expect(events).toEqual(['suppressed:no-card', 'fire', 'suppressed:unchanged'])
+  expect(machine.diag.fires).toBe(1)
+  expect(machine.diag.uniform).toBe(0)
+})
+
+test('a weak pattern over the floor is a card — the bound is the session noise, not the floor', () => {
+  /* The bound the uniformity test compares against is `presenceK` x the session's still-frame
+     difference (6.75 seeded), NOT `presenceMin` (16). A frame at 1.2x the plate with a ±10
+     pattern on it is 30 from the baseline and leaves a residual of 10 once the scaling is
+     divided out: over the bound, so a card; a machine that compared the residual against the
+     floor instead would call it the stand at a new gain and photograph nothing. */
+  const machine = new MotionMachine()
+  const weak = (phase: number): Float32Array => {
+    const cells = still(PLATE * 1.2, phase)
+    for (let i = 0; i < CELLS; i += 1) cells[i] = (cells[i] as number) + (i % 2 === 0 ? 10 : -10)
+    return cells
+  }
+  const events: MotionEvent[] = []
+  let t = 0
+  const feed = (frames: Float32Array[]) => {
+    for (const frame of frames) {
+      const event = machine.step(t, frame)
+      t += F
+      if (event !== null) events.push(event)
+    }
+  }
+  feed(Array.from({ length: ARM_FRAMES }, (_, i) => still(PLATE, i)))
+  feed([still(90, 20), ...Array.from({ length: 6 }, (_, i) => weak(i + 30))])
+  expect(events).toEqual(['suppressed:no-card', 'fire'])
+  expect(machine.diag.uniform).toBe(0)
+})
+
+test('a dark card on a bright plate is judged in the plate\'s units, not its own', () => {
+  /* The 03:25 session's shape: a bright plate, a card at a fifth of its light with a faint
+     pattern of its own. In the card's units the residual is 3.3 — under the seeded bound of
+     6.75, and a machine reading it there calls the card the stand at a new gain. In the
+     brighter frame's units it is 3.3 / 0.18 = 18.5: a card. `uniformResidual` divides by
+     min(k, 1) for exactly this frame, and the reverse case — a bright card on a dark plate —
+     is the 85/85 run's, where the baseline's units would fail the same way. */
+  const machine = new MotionMachine()
+  const dark = (phase: number): Float32Array => {
+    const stand = still(PLATE, phase)
+    const cells = new Float32Array(CELLS)
+    for (let i = 0; i < CELLS; i += 1) cells[i] = 0.2 * (stand[i] as number) + (i % 2 === 0 ? 3 : -3)
+    return cells
+  }
+  const events: MotionEvent[] = []
+  let t = 0
+  const feed = (frames: Float32Array[]) => {
+    for (const frame of frames) {
+      const event = machine.step(t, frame)
+      t += F
+      if (event !== null) events.push(event)
+    }
+  }
+  feed(Array.from({ length: ARM_FRAMES }, (_, i) => still(PLATE, i)))
+  feed([still(90, 20), ...Array.from({ length: 6 }, (_, i) => dark(i + 30))])
+  expect(events).toEqual(['suppressed:no-card', 'fire'])
+  expect(machine.diag.uniform).toBe(0)
+})
+
+test('a step that clips half the plate is still uniform — the clipped cells are left out on BOTH sides', () => {
+  /* A bright stand: half its cells at 242, half at 218. A 1/3 EV step puts the bright half at
+     255 — over the shoulder — and the dark half at 242. Judged over the unclipped half alone
+     the frame is the stand times one number; judged over every cell the clipped half reads a
+     different ratio (255/242 against 242/218) and the residual, 7, crosses the seeded bound.
+     `uniformShoulder` applies to the CURRENT frame as well as the baseline for exactly this
+     frame: a cell that has clipped cannot report what the gain did. */
+  const machine = new MotionMachine()
+  const bright = (phase: number): Float32Array => still(230, phase) // 242 / 218 with TEXTURE
+  const events: MotionEvent[] = []
+  let t = 0
+  const feed = (frames: Float32Array[]) => {
+    for (const frame of frames) {
+      const event = machine.step(t, frame)
+      t += F
+      if (event !== null) events.push(event)
+    }
+  }
+  feed(Array.from({ length: ARM_FRAMES }, (_, i) => bright(i)))
+  feed(Array.from({ length: 6 }, (_, i) => bright(i + 10).map((v) => Math.min(255, v * STEP))))
+  expect(events).toEqual(['suppressed:no-card', 'suppressed:uniform'])
+  expect(machine.diag.uniform).toBe(1)
+})
+
+test('a step that clips more than three quarters of the plate is DECLINED, and the floor alone decides', () => {
+  /* Four cells in five at 225, which a 1/3 EV step lifts to 250 — past the shoulder — and one
+     in five at 60, lifted to 67. Comparable cells are a fifth of the region, under
+     `uniformMinShare`, so the question is declined: the frame is 20 from the baseline, over the
+     floor, and the machine before 2026-09-12 fired on it, so this one does too. A machine that
+     never declined would judge the fifth it can see, find it uniform, and refuse — which is
+     the right answer on this frame and an answer it has no standing to give: four cells in
+     five are unreadable, and a card can hide in cells the gain has saturated. */
+  const machine = new MotionMachine()
+  const plate = (phase: number): Float32Array => {
+    const cells = new Float32Array(CELLS)
+    for (let i = 0; i < CELLS; i += 1) cells[i] = (i % 5 === 0 ? 60 : 225) + (((i * 31 + phase * 17) % 7) - 3) * 0.2
+    return cells
+  }
+  const events: MotionEvent[] = []
+  let t = 0
+  const feed = (frames: Float32Array[]) => {
+    for (const frame of frames) {
+      const event = machine.step(t, frame)
+      t += F
+      if (event !== null) events.push(event)
+    }
+  }
+  feed(Array.from({ length: ARM_FRAMES }, (_, i) => plate(i)))
+  feed(Array.from({ length: 6 }, (_, i) => plate(i + 10).map((v) => Math.min(255, v * STEP))))
+  expect(events).toEqual(['suppressed:no-card', 'fire'])
+  expect(machine.diag.uniform).toBe(0)
 })

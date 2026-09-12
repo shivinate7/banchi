@@ -35,10 +35,21 @@ FILENAME CONVENTION, since it is load-bearing for the recovery path above:
     captures/box3/0017.jpg      box from the directory, index from the stem
     captures/box3-0017.jpg      both from the stem
     captures/anything/0017.jpg  index only; box has to come from the sidecar or --box
+    photos/6b/6b1cf2fd….jpg     NO INDEX AT ALL, deliberately. A content-addressed name is
+                                the card's own name and carries no position, so this reader
+                                refuses to recover one from it — see `position_from_path`
 
 The box marker is matched first and removed, and the index is the last run of digits in what
 is left — so `box3-0017` cannot read its own box number as an index, which is the one way
 this gets quietly wrong.
+
+THE FOURTH ROW IS A REFUSAL RATHER THAN AN ABSENCE, AND IT IS A REAL GUARD. Since
+`D183` a photograph is filed under the card's name — a
+64-hex digest — and a digest is full of digits: the stem `6b1cf2fd…83713889` would have
+recovered index **83713889** through the rule above, a plausible and wrong position, which is
+this repo's signature defect in its purest form. A cid-shaped stem therefore yields no index,
+which lands the card on the third row of the table at the top of this file: identified, then
+routed to the main review queue flagged `no_position`. A card is still never skipped.
 """
 
 from __future__ import annotations
@@ -62,6 +73,29 @@ FROM_NOWHERE = "none"
 
 _BOX_RE = re.compile(r"box[\s_-]*(\d+)", re.IGNORECASE)
 _DIGITS_RE = re.compile(r"(\d+)")
+
+# A FILENAME THAT IS A CONTENT ADDRESS RATHER THAN A POSITION — the fourth row of the
+# module docstring's table, and the shape `position_from_path` refuses an index for.
+#
+# IT IS DELIBERATELY WIDER THAN `store/photos.py`'s OWN GRAMMAR, AND WIDER IS THE SAFE
+# DIRECTION. That module defines a cid as `<64 hex>` with an optional `-<n>` suffix and owns
+# the definition; this is a second expression of it, so the two can drift — and the drift
+# that matters is only the one that makes THIS one narrower than that one, because a stem it
+# fails to recognise gets an index read out of a digest. So the floor is 32 hex characters
+# rather than 64 and the match is case-insensitive: a cid grammar that gains a shape stays
+# inside this, and the cost of the widening is bounded by what a false positive actually does
+# — `load` records `no_position` and the card goes to the review queue with its photograph,
+# which is the safe outcome this module promises rather than a loss.
+#
+# A REGEX RATHER THAN `store.photos.is_photo_cid`, WHICH IS THE PREDICATE EVERY OTHER CALLER
+# SHOULD USE. `identify/` imports `pipeline`, `codes`, `geometry` and `envfile` and has never
+# imported `store`; `store/photos.py` is inside the package, so reaching it executes
+# `store/__init__.py` and pulls the whole SQLite store layer — master, session, queues,
+# submissions, cache — into the identification path. `pipeline/corpus.py` already carries the
+# convention in as many words ("`pipeline/` must not import `store/` at module scope"), and
+# this reader sits one layer further out than that one. Fourteen characters of regex is the
+# cheaper half of that trade.
+_CID_STEM_RE = re.compile(r"^[0-9a-f]{32,}(?:-[1-9][0-9]*)?$", re.IGNORECASE)
 
 # Sidecar keys, with the aliases a hand-written or older file might use.
 _INDEX_KEYS = ("position", "index", "card")
@@ -413,6 +447,20 @@ def position_from_path(path: Path, root: Optional[Path] = None):
                 break
             if root is not None and parent == Path(root):
                 break
+
+    # A CONTENT-ADDRESSED NAME CARRIES NO POSITION, AND READING ONE OUT OF IT IS WHAT THIS
+    # GUARD REFUSES. `6b1cf2fd…83713889` would hand back index 83713889 through the rule
+    # below — a plausible, wrong position that nothing downstream could question. Only the
+    # index is suppressed: the box hunt above is a separate mechanism (the stem's own `box3`
+    # marker, then the directories, then `--box`) and no precedence there changes, which
+    # matters because `load` nulls BOTH the moment either is missing.
+    #
+    # TESTED AGAINST THE UNTOUCHED STEM, not the box-stripped one, so the two steps cannot
+    # interact. They could not anyway — `_BOX_RE` needs a literal `box`, and `o` and `x` are
+    # not hex digits, so no cid stem can lose a span to that strip — but a reader should not
+    # have to derive that to trust this line.
+    if _CID_STEM_RE.match(path.stem):
+        return box, None
 
     digits = _DIGITS_RE.findall(stem)
     index = _as_int(digits[-1]) if digits else None
