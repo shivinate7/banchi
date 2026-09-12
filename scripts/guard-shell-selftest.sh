@@ -102,12 +102,20 @@ allows() {    # allows <label> <cwd> <command>
 # with the predicate. Exit status is NOT the test — `git checkout <clean path>` exits 0 and
 # `git restore --staged` on an unstaged file exits 0 too — so what is checked is that git did
 # not reject the command line itself.
+#
+# THE PATTERN LIST IS WIDER THAN "GIT DID NOT UNDERSTAND YOU", because the narrow version let
+# the CI failure above through: `git switch -q main` in a fixture whose branch is `master` says
+# `fatal: invalid reference: main`, which matched none of the original four patterns — so a
+# case asking about a branch that did not exist scored as a PASS for a reason unrelated to the
+# predicate. A case that cannot be posed must say so, not quietly count.
 real_command() {   # real_command <cwd> <command>
   local said
   said="$( (cd "$1" && eval "$2" ) 2>&1 )"
   case "$said" in
-    *"is not a git command"*|*"unknown option"*|*"usage: git"*|*"error: unknown"*|*"unknown switch"*)
-      bad "the case \`$2\` is not a real command: $said"
+    *"is not a git command"*|*"unknown option"*|*"usage: git"*|*"error: unknown"*|\
+    *"unknown switch"*|*"invalid reference"*|*"did not match any file"*|\
+    *"pathspec"*"did not match"*|*"not a valid object name"*|*"unknown revision"*)
+      bad "the case \`$2\` is not a real command here: $said"
       return 1 ;;
   esac
   return 0
@@ -119,9 +127,17 @@ real_command() {   # real_command <cwd> <command>
 # between them: `checkout_root` answers with the worktree from inside it and with the main
 # tree from inside that, and a fixture with only one of them could not tell a working guard
 # from one that always says yes.
+#
+# THE FIXTURE NAMES ITS OWN DEFAULT BRANCH, and that is not tidiness — it is a CI failure this
+# file already had. `git init` takes the branch name from `init.defaultBranch`, which is
+# `master` on a fresh GitHub runner and `main` on the author's machine, so two cases here
+# (`git checkout main`, `git switch -q main`) asked about a branch that did not exist and this
+# selftest was red on Linux while green on macOS. `symbolic-ref` rather than `git init -b`,
+# because `-b` needs git 2.28 and this has to work wherever the runner's git is.
 git init -q "$tmp/main" 2>/dev/null
 (
   cd "$tmp/main" || exit 1
+  git symbolic-ref HEAD refs/heads/main
   git config user.email "selftest@example.invalid"
   git config user.name "guard-shell selftest"
   git config commit.gpgsign false
@@ -137,6 +153,18 @@ git init -q "$tmp/main" 2>/dev/null
 
 WT="$tmp/main/.wt"
 [ -d "$WT" ] || { echo "the fixture worktree was not created"; exit 1; }
+
+# AND THE BRANCH IS ASSERTED, not assumed. Several cases below ask about a branch by NAME, and
+# a fixture whose branch is `master` makes those cases resolve to nothing — which this guard
+# correctly reports as "no opinion" and which the arms then read as a failure. That is how this
+# file was red on a Linux runner and green here, and it is `verify-where-the-gate-runs` in one
+# line: a green check proves its own platform.
+fixture_branch="$(cd "$tmp/main" && git rev-parse --abbrev-ref HEAD)"
+if [ "$fixture_branch" = "main" ]; then
+  ok "the fixture's branch is \`main\`, whatever the runner's init.defaultBranch says"
+else
+  bad "the fixture is on \`$fixture_branch\` — every case naming a branch below is unposable"
+fi
 
 echo "guard-shell-selftest — fixture at $tmp"
 echo ""
@@ -450,18 +478,29 @@ else
   bad "pgrep -f did not match a live command line carrying the pattern — the class cannot be posed here"
 fi
 
-# THE ANCESTOR RULE, ASSERTED RATHER THAN DESCRIBED. Both halves are measured against a tag
-# that exists ONLY on the asking shell's own command line: `-af` reports it and a bare `-f`
-# does not. If a future pgrep changes either answer, this arm says so — which is the whole
-# reason the refusal above explains the self-match instead of asserting a platform's version
-# of it.
+# WHICH PROCESS A WAITER MATCHES IS PLATFORM-DEPENDENT, AND THAT IS MEASURED HERE RATHER THAN
+# ASSUMED — in either direction. This arm asserted BSD's answer (`-af` sees the asking shell,
+# a bare `-f` does not) and went RED on the Linux runner, where procps excludes only pgrep
+# itself and both spellings report 1. The repo has already paid for this family once:
+# `pgrep -fc` is not a count on BSD.
+#
+# So what is asserted is the part that must hold for this clause to have a subject at all —
+# `pgrep -f` matches against a COMMAND LINE, so a tag carried only by the asking shell is
+# findable — and the exclusion rule is REPORTED as the number it is. An arm that asserted
+# either platform's answer would be asserting the thing the refusal deliberately declines to
+# claim.
 own="guardshell-ancestor-$$-nosuchprocess"
-with_a="$(bash -c "true; pgrep -af $own | wc -l" | tr -d ' ')"
-without_a="$(bash -c "true; pgrep -f $own | wc -l" | tr -d ' ')"
-if [ "${with_a:-0}" -ge 1 ] && [ "${without_a:-1}" -eq 0 ]; then
-  ok "pgrep excludes its own ancestors unless -a: \`-af\` sees the asking shell, \`-f\` does not"
+with_a="$(bash -c "true; pgrep -af $own 2>/dev/null | wc -l" | tr -d ' ')"
+without_a="$(bash -c "true; pgrep -f $own 2>/dev/null | wc -l" | tr -d ' ')"
+if [ "${with_a:-0}" -ge 1 ]; then
+  ok "a tag carried ONLY by the asking shell is findable by command line (-af: $with_a, -f: $without_a)"
 else
-  bad "the ancestor rule did not hold here (-af: $with_a, -f: $without_a) — which process a waiter matches is platform-dependent"
+  bad "pgrep -af found nothing for a tag on its own caller's command line — this clause has no subject on this platform"
+fi
+if [ "${without_a:-0}" -eq "${with_a:-0}" ]; then
+  say "note" "this pgrep matches its own ancestors (GNU/procps): -af $with_a, -f $without_a"
+else
+  say "note" "this pgrep EXCLUDES its own ancestors unless -a (BSD/macOS): -af $with_a, -f $without_a"
 fi
 
 refuses "the 2026-09-12 waiter"  "$tmp/main" "until ! pgrep -f 'scratchpad/drive.sh'; do sleep 5; done"
