@@ -341,8 +341,7 @@ symlink at that name. `make ignore-check` is what reads it.
 receipt, the forward-version guard, the column-roster arm, the partial-index self-heal,
 `store/photos.py`, the relocation with its preview, the view-directory builder, the
 `/photo/by-card/<cid>` route and the client that addresses photographs through it, the
-pkmnscan cards subcommand, and the two targets — written bare here for the header
-note's reason, until the commit that registers them puts the prefixes back on.
+pkmnscan cards subcommand, and the two targets.
 
 **RECORDED** — this file, §0 in particular, and the decision entry. The shard width, the
 `(size, mtime_ns)` re-stat and the refusal's new home are decisions with arguments here and

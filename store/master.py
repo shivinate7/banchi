@@ -489,6 +489,36 @@ class Card:
     # together: `record_photo_reclaimed` sets both, and a screen that finds this set draws
     # "reclaimed" rather than "missing" — the two are different facts about the store.
     photo_reclaimed_at: Optional[str] = None
+    # THE CARD'S NAME: the sha256 of the photograph the store held when the id was issued,
+    # read off the disk, FROZEN from that moment and never recomputed (D172). It is a birth
+    # certificate and not a live content address, which is the single word that makes it
+    # survive a D26 re-shoot, a D89 reclaim, a D83 move, a mid-box renumber and a box
+    # deletion. It arrives BESIDE `key` and replaces nothing: `position_key` stays, and
+    # `Box 3 · Section 2 · Card 17` is an instruction to a hand at a drawer and never a cid.
+    #
+    # READ IT AS `bid` : box :: `cid` : card. IT IS NOT AN ABBREVIATION OF `capture_id`,
+    # which sits a few fields up and is a PHOTOGRAPH's id — `do_reshoot` overwrites that one
+    # and `move_card` clears it, which is exactly why it could not be the card's name.
+    #
+    # IT IS ALSO WHERE THE PHOTOGRAPH IS FILED (`store/photos.py`), and that is the half the
+    # owner re-scoped D172 for: filing the bytes under `(box, index)` is what made a
+    # renumber cost N−k renames, a move cost five hand-moved copies, and one
+    # remove-then-capture able to overwrite a photograph that cannot be re-taken. The path
+    # is a pure function of this field, and `cards_cid` holds it UNIQUE, so two cards cannot
+    # compose one path — see `D-a-number-a-person-reads-is-never-a-key`.
+    #
+    # FOUR SHAPES, ALL NAMED, AND A NULL IS NEVER ONE OF THEM: `<64 hex>`, `<64 hex>-<n>`
+    # for the nth card whose bytes match an earlier one's, `moved:<…>` on a D83 tombstone,
+    # and `nophoto:<box>/<index>@<captured_at>` for a card with no photograph and no digest
+    # anywhere. `photos.is_photo_cid` is the predicate that tells the first two from the
+    # last two. A NULL cannot distinguish "no photograph was found" from "this migration did
+    # not look", which is this repo's signature defect — so a NULL is a condition to be
+    # HEALED and reported, and `store/db.py:_repair` is what heals it.
+    #
+    # NOT A CAPTURE CLAIM, and deliberately absent from `CAPTURE_CLAIM_FIELDS`: a claim
+    # survives a re-record, and this must not be settable by one. It is issued once, at the
+    # birth of the record, by `record_capture`.
+    cid: Optional[str] = None
 
     @property
     def key(self) -> str:
@@ -1253,6 +1283,22 @@ def _card_columns(card: "Card") -> Dict[str, object]:
         "run": card.run,
         "captured_at": card.captured_at,
         "state_at": card.state_at,
+        # THE CARD'S NAME, INDEXED AND UNIQUE (D172). It is here so `cid -> (box, idx)` is
+        # an index probe rather than a walk — measured at 4.0 us, `EXPLAIN` says
+        # `SEARCH cards USING INDEX cards_cid (cid=?)` — and so a person can ask the
+        # `sqlite3` CLI which slot a photograph is at.
+        #
+        # IT DOES NOT REFUSE A NULL, AND THAT IS A DELIBERATE DECISION AGAINST THE OBVIOUS
+        # PLACE FOR ONE. This function is the single chokepoint every card row passes
+        # through on its way to SQLite, which is exactly why a refusal here is wrong: it
+        # would be a 500 on `POST /capture` in the middle of a feeder sitting, with the
+        # physical card already in the drawer and no record of it — and a lost capture
+        # renumbers every card behind it. `docs/specs/stable-card-id.md` §0.6 hazard 2 is
+        # the argument, and it is the one `_ensure_schema`'s own docstring makes one layer
+        # up. The refusal lives at the BIRTH of a record instead (`record_capture`), where a
+        # missing name is a programming error in a caller rather than a data condition; a
+        # NULL that reaches disk anyway is HEALED and reported by `store/db.py:_repair`.
+        "cid": card.cid,
     }
 
 
@@ -2355,7 +2401,7 @@ class Inventory:
         columns=_card_columns,
         column_names=(
             "box", "idx", "state", "sku", "condition", "capture_id", "name", "number",
-            "game", "set_hint", "run", "captured_at", "state_at",
+            "game", "set_hint", "run", "captured_at", "state_at", "cid",
         ),
     )
     BOXES = TableSpec(
