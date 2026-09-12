@@ -1,4 +1,4 @@
-/* app/src/ValueBands.css — the value lens on `#/pricing` (D-a-band-is-copies-in-drawers).
+/* app/src/ValueBands.css — the value lens on `#/pricing` (D159).
  *
  * NO COLOR IS NAMED HERE. `app/src/tokens.css` is the only file in `app/` that may name one,
  * and the single place this screen would reach for a hex — the drawer's verdict — is the kit's

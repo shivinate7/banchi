@@ -754,7 +754,7 @@ sentence**, and see "the census" below for what enforces that.
                               than read off the join's table — 381 copies across five runs
                               were closed away under the old rule. What no press here can send
                               is named on the deck with a door each.
-                              AND A THIRD LENS, `?band=top|bottom` (D-a-band-is-copies-in-drawers):
+                              AND A THIRD LENS, `?band=top|bottom` (D159):
                               WHAT IS WORTH PULLING — every card ON HAND ranked by market, ONE ROW
                               PER PHYSICAL COPY, with the drawer each sits in. It reads the STORE
                               and needs no joined run, so it is branched ahead of every worklist
@@ -1772,7 +1772,7 @@ D155 The section is the ruler and the box is the margin note, and the bracket be
 D156 Every copy TCGplayer does not hold is one worklist, and a run stays open until the last of them has gone
 D157 The fixture carries a per-run name, because the process table is the one thing a run cannot have its own of
 D158 The refusal goes where the damage is, so the primary checkout's server will not run a branch's code, and the checkout itself is left alone
-D-a-band-is-copies-in-drawers The band is copies rather than SKUs, the drawer is the first answer, and nothing on hand is dropped
+D159 The band is copies rather than SKUs, the drawer is the first answer, and nothing on hand is dropped
 
 ```
 

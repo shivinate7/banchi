@@ -2782,7 +2782,7 @@ COMPONENTS = [
                         "is skipped by name, and `unreachable` names what no worklist can "
                         "send — never identified, in review, never joined, deleted box. "
                         "GET /pipeline/value "
-                        "(D-a-band-is-copies-in-drawers) is the store-wide sibling of the "
+                        "(D159) is the store-wide sibling of the "
                         "worklist: every card ON HAND, ranked by market, ONE ROW PER PHYSICAL "
                         "COPY rather than per SKU — the owner's 122 cards at or above $5 are "
                         "38 SKUs, so a per-SKU list draws a third of the rows and sends a hand "
@@ -2807,7 +2807,7 @@ COMPONENTS = [
                                 "D36", "D43", "D47", "D48", "D49", "D54", "D56", "D58", "D59",
                                 "D62", "D64", "D65", "D68", "D76", "D78", "D79", "D86", "D87",
                                 "D88", "D100", "D103", "D147",
-                                "D-a-band-is-copies-in-drawers"],
+                                "D159"],
                 "tested_by": ["T7"],
             },
             "shipping_routes.py": {
@@ -3476,12 +3476,12 @@ COMPONENTS = [
                                      "names — captures, inventory, boxes, listings and the "
                                      "standing queues. Types only, it emits no JavaScript. "
                                      "`ValueTable` and `ValueCopy` are the value band's shapes "
-                                     "(D-a-band-is-copies-in-drawers): the UNIT IS THE COPY and "
+                                     "(D159): the UNIT IS THE COPY and "
                                      "never the SKU, and an unpriceable card is a row carrying "
                                      "`market: null` and a `why`, because 390 of the owner's "
                                      "2,245 cards on hand have no price and a ranking that "
                                      "dropped 17% of the store would be a silent drop.",
-                             "governed_by": ["D-a-band-is-copies-in-drawers", "D156", "D142", "D145",
+                             "governed_by": ["D159", "D156", "D142", "D145",
                                              "D3", "D4", "D6", "D7", "D8", "D9", "D10", "D11",
                                              "D16", "D20", "D21", "D22", "D23", "D24", "D26",
                                              "D28", "D29", "D30", "D32", "D33", "D34", "D36",
@@ -3491,7 +3491,7 @@ COMPONENTS = [
                                              "D79", "D83", "D86", "D87", "D89", "D91", "D92",
                                              "D93", "D100", "D103", "D104", "D113", "D115",
                                              "D116", "D132", "D134", "D147",
-                                             "D-a-band-is-copies-in-drawers"]},
+                                             "D159"]},
             "src/deviceMemory.ts": {"does": "every `localStorage` key the shell owns — the "
                                             "theme, the rail, which order statuses this "
                                             "device bothers fetching (D114), whether the "
@@ -4333,7 +4333,7 @@ COMPONENTS = [
                                          "as a click.",
                                  "governed_by": ["D5", "D33", "D94"]},
             "src/ValueBands.tsx": {"does": "WHAT IS WORTH PULLING "
-                                           "(D-a-band-is-copies-in-drawers) — every card ON HAND "
+                                           "(D159) — every card ON HAND "
                                            "ranked by market, with the drawer each one sits in, "
                                            "at #/pricing?band=top|bottom. A lens on the screen "
                                            "where prices are decided (D105) by D103's own "
@@ -4360,7 +4360,7 @@ COMPONENTS = [
                                    "governed_by": ["D9", "D10", "D27", "D31", "D41", "D49", "D56", "D58",
                                                    "D71", "D86", "D94", "D95", "D103", "D105",
                                                    "D109", "D110", "D118", "D132", "D147",
-                                                   "D-a-band-is-copies-in-drawers"],
+                                                   "D159"],
                                    # `app/tests/value-bands.spec.ts` is the check, and it runs
                                    # under `make design-check` rather than at turn end — named
                                    # here in prose for `Markdown.tsx`'s reason. Two arms were
@@ -4390,7 +4390,7 @@ COMPONENTS = [
                                            "makes it a kit component.",
                                    "governed_by": ["D41", "D50", "D58", "D71", "D86", "D94",
                                                    "D110", "D117", "D118", "D123",
-                                                   "D-a-band-is-copies-in-drawers"]},
+                                                   "D159"]},
             "src/Markdown.tsx": {"does": "THE STALE-LISTING MARKDOWN (D100), the second sheet off "
                                          "the Runs header and a structural clone of "
                                          "LiveReconcile.tsx — same bn-sheet/bn-scrim shell, same "
@@ -4505,7 +4505,7 @@ COMPONENTS = [
                                                 "D49", "D51", "D54", "D56", "D58", "D59",
                                                 "D62", "D78", "D79", "D85", "D86", "D89",
                                                 "D99", "D100", "D103", "D101", "D105", "D107", "D98", "D109", "D115", "D117", "D125", "D38",
-                                                "D-a-band-is-copies-in-drawers"]},
+                                                "D159"]},
             "src/Pricing.css": {"does": "the worklist at owner density. One grid template read by "
                                         "the caption AND every row, so the two cannot drift; a "
                                         "row height invariant across every state, because the "
@@ -4969,7 +4969,7 @@ COMPONENTS = [
                                      # D103 is the entry; D86 is the one answer file the write
                                      # path is keyed by; D62 is the press the trends scoping keeps.
                                      "governed_by": ["D28", "D62", "D86", "D100", "D103", "D101", "D99", "D115", "D59", "D87",
-                                                     "D-a-band-is-copies-in-drawers"]},
+                                                     "D159"]},
             "src/runHandoff.ts": {"does": "the one module that reads or writes the run scope "
                                           "carried from #/inventory to #/runs — key "
                                           "`banchi.run-scope`, D27's carve-out. NOT CLEARED BY "
@@ -5441,7 +5441,7 @@ COMPONENTS = [
                                                "`make design-check` runs it.",
                                        "governed_by": ["D16", "D61", "D63", "D66", "D69"]},
             "tests/value-bands.spec.ts": {"does": "the value lens "
-                                                  "(D-a-band-is-copies-in-drawers), in its own "
+                                                  "(D159), in its own "
                                                   "file so `pricing.spec.ts` stays the unedited "
                                                   "gate that proves a second lens cost the first "
                                                   "one nothing. Every fixture is a shape the "
@@ -5458,7 +5458,7 @@ COMPONENTS = [
                                                   "cards, and its own D118 case sampling a rect "
                                                   "mid page-enter animation.",
                                           "governed_by": ["D103", "D105", "D109", "D118",
-                                                          "D-a-band-is-copies-in-drawers"]},
+                                                          "D159"]},
             "tests/pricing-markdown.spec.ts": {"does": "`#/pricing` AS A LENS OVER LIVE "
                                                "TCGPLAYER LISTINGS (D103), in its own file so "
                                                "that `tests/pricing.spec.ts` could stay "

@@ -772,7 +772,7 @@ export function Pricing() {
    *  purpose: the two are different documents and nothing folds them together. */
   const [stamp, setStamp] = useState<string | null>(() => markdownInHash())
   /* WHICH END OF THE MONEY THE VALUE LENS IS OPEN ON, or null for the worklist
-     (D-a-band-is-copies-in-drawers). It follows the hash in both directions, exactly as the
+     (D159). It follows the hash in both directions, exactly as the
      stamp above does and for its reason: leaving `#/pricing?band=…` has to put the screen back
      on the worklist, or the lens would survive the operator navigating out of it. */
   const [valueEnd, setValueEnd] = useState<ValueEnd | null>(() => bandInHash())
@@ -2486,7 +2486,7 @@ export function Pricing() {
             Its own step-2 press writes `#/pricing?markdown=<stamp>`, which now lands on the
             screen the operator is standing on rather than navigating anywhere: `App.tsx` keys
             the view on the hash MINUS its query. */}
-        {/* THE THIRD DOOR ON THIS SCREEN (D-a-band-is-copies-in-drawers). Verb-first, like the
+        {/* THE THIRD DOOR ON THIS SCREEN (D159). Verb-first, like the
             one below it, and deliberately NOT "Pull by value" — that promises a write this
             lens does not do, and a button here says exactly what happens. It reads the whole
             STORE rather than the worklist, so it is live whether or not anything is joined. */}
@@ -2639,7 +2639,7 @@ export function Pricing() {
                 <Button icon="play" onClick={() => (window.location.hash = '#/runs')}>
                   Go to Runs
                 </Button>
-                {/* AND A THIRD, WHICH NEEDS NEITHER (D-a-band-is-copies-in-drawers). The value
+                {/* AND A THIRD, WHICH NEEDS NEITHER (D159). The value
                     lens reads the store, so it has something to say on exactly the machine this
                     empty state is drawn on: 2,245 cards on hand and not one joined run. */}
                 <Button icon="trendUp" onClick={() => openValue('top')}>

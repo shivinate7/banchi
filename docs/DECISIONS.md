@@ -11560,7 +11560,7 @@ Neither subsumes the other, which is why all four now exist.
 **And it does not decide that the tree should be put back.** `scripts/worktree-guard.sh` reports
 and never switches, in as many words, and nothing here changes that. The owner may stand that
 directory on anything they like; what they can no longer do by accident is serve it.
-## D-a-band-is-copies-in-drawers — The band is copies rather than SKUs, the drawer is the first answer, and nothing on hand is dropped
+## D159 — The band is copies rather than SKUs, the drawer is the first answer, and nothing on hand is dropped
 
 **Built 2026-09-12, on the owner's request and after the store was measured.** Their words:
 

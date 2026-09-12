@@ -10,7 +10,7 @@
  * valuable or least valuable cards so maybe i can easily start querying them for bulk
  * collection and taking them out of boxes"*.
  *
- * THE UNIT IS THE COPY AND NEVER THE SKU (D-a-band-is-copies-in-drawers). Their 122 cards at or
+ * THE UNIT IS THE COPY AND NEVER THE SKU (D159). Their 122 cards at or
  * above $5 are 38 SKUs — Rengar, Trophy Hunter sits in three slots of box 4 and Vilemaw in
  * seven — so a per-SKU list draws a third of the rows and sends a hand to a third of the
  * drawers it has to open. Seven identical rows is CORRECT here and reads as a defect without

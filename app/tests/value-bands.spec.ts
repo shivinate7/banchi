@@ -3,7 +3,7 @@ import { sealEveryTest } from './shell'
 
 import type { ValueBox, ValueCopy, ValueTable } from '../src/types'
 
-/* `#/pricing?band=…` — WHAT IS WORTH PULLING (D-a-band-is-copies-in-drawers).
+/* `#/pricing?band=…` — WHAT IS WORTH PULLING (D159).
  *
  * ITS OWN FILE, AND `pricing.spec.ts` IS NOT TOUCHED — `pricing-markdown.spec.ts`'s rule for
  * the other lens on this screen, and for its reason: the worklist suite is the gate that proves

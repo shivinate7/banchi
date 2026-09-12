@@ -304,7 +304,7 @@ export function markdownInHash(): string | null {
 }
 
 /** Which end of the money `#/pricing?band=…` is open on, or `null` for the worklist
- *  (D-a-band-is-copies-in-drawers).
+ *  (D159).
  *
  *  A SECOND QUERY ON THE SAME ROUTE, for `markdownInHash`'s reason directly above: `App.tsx`
  *  strips `?…` before matching, so a lens costs no `ROUTES` row — and a row there moves three
