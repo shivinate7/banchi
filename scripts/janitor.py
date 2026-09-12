@@ -560,7 +560,7 @@ def loose_processes(root: str, main_tree: str, trees: Sequence[Tree],
     husk_base = _real(str(Path(root) / ".claude" / "worktrees"))
 
     started = {}  # type: dict
-    for pid, (_, command) in table.items():
+    for pid in table:
         if pid in family:
             continue
         walk = _chain(table, pid)
