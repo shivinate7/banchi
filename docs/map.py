@@ -1971,7 +1971,10 @@ COMPONENTS = [
                         "keeping the refusal, and the tokenizer is shlex with "
                         "`punctuation_chars` so a quoted `>/dev/null` in a commit message is a "
                         "STRING. Heredoc BODIES are cut, because the message announcing this "
-                        "guard quotes the command it refuses. The verb roster is deliberately "
+                        "guard quotes the command it refuses. THE PARSER ITSELF MOVED TO "
+                        "`shell_parse.py` on 2026-09-12, unchanged, when `guard-shell.py` "
+                        "became its second reader; what stayed here is everything this file "
+                        "DECIDES. The verb roster is deliberately "
                         "short and every exemption is a measured false positive: reads, "
                         "`--dry-run`, `--abort`/`--quit`, a bare `git fetch`, `git merge-tree` "
                         "and `make merge-selftest` all pass. Fails OPEN on its own bugs; "
@@ -1998,6 +2001,82 @@ COMPONENTS = [
                         "floor, which cover each other, and a twenty-first arm removing BOTH "
                         "goes red, which is what makes them depth rather than a gap.",
                 "governed_by": ["D18", "D127", "D171"],
+            },
+            "shell_parse.py": {
+                "does": "ONE READER FOR A SHELL COMMAND, shared by the two guards that need "
+                        "one. `silent-write-guard.py`'s tokenizer took four real defects to "
+                        "get right and every one of them is a defect the next guard would "
+                        "have shipped again: `shlex.whitespace_split` treats a NEWLINE as "
+                        "whitespace, so a three-line script parses as one command and an "
+                        "`echo`'s `>/dev/null` lands on a `git commit`; a regular expression "
+                        "cannot tell an operator from a quoted STRING; a heredoc BODY is a "
+                        "document, and the message announcing a guard quotes the command it "
+                        "refuses; `#` eats to end of input, so lines are fed one at a time. "
+                        "It holds the tokenizer, the fd walk (in ORDER, because the shell "
+                        "does), the pipeline split, git's global-option step-over and "
+                        "`git -C`'s directory — and DECIDES NOTHING: no verb roster, no "
+                        "notion of a write, no opinion about any command, because the two "
+                        "readers' predicates genuinely differ. Every function fails soft: an "
+                        "untokenizable line is reported and dropped, an unterminated heredoc "
+                        "drops the remainder, and both directions lose a command rather than "
+                        "inventing one.",
+                # D171 is the failure class both guards serve. D127 is the fail-open asymmetry
+                # they both honour. D18: it is a library, on no path.
+                "governed_by": ["D18", "D127", "D171", "D173"],
+            },
+            "guard-shell.py": {
+                "does": "the PreToolUse hook on Bash AND Write|Edit that refuses five shell "
+                        "mistakes this repo has already paid for, each with a measured "
+                        "incident: `git checkout`/`git restore` over a MODIFIED path (240 "
+                        "lines destroyed 2026-09-06, and the same command typed again over "
+                        "CLAUDE.md on 2026-09-12); a write outside this checkout (~1,500 "
+                        "lines into the owner's main tree on `main`, hot-reloaded into their "
+                        "live capture server); `gh api -f` with no method (a field implies a "
+                        "body, so a GET was POSTed and hung past a tool timeout); `ln -s` at "
+                        "an existing path (`harness/images/images`, and 133 MB renamed away "
+                        "by iCloud); and a polling loop (a `pgrep` waiter whose pattern is "
+                        "not the process, and a backgrounded driver that ran 119 rounds over "
+                        "3h58m across a compaction). IT RESOLVES RATHER THAN MATCHES TEXT, "
+                        "which is reap.py's standard and the only way these have answers: "
+                        "`git status --porcelain` decides whether an operand is a modified "
+                        "path, `os.path.lexists` decides whether a link destination is there, "
+                        "and a backgrounded command's loop is READ out of the shell script it "
+                        "names. The Write|Edit half parses nothing at all, so no shell form "
+                        "skirts it. FIVE HATCHES AND NOT ONE, so the symlink clause cannot be "
+                        "disarmed by the switch that guards uncommitted work. Fails OPEN on "
+                        "its own bugs, including a missing `shell_parse.py`, and an operand it "
+                        "cannot resolve is REPORTED rather than passed silently.",
+                # D171 is the ruling that a rule read once competes with the work, which is
+                # why all five are mechanical. D127 is the guard whose resolution standard and
+                # fail-open asymmetry this one takes unchanged. D43 is the second clause's
+                # whole subject. D18 keeps its self-test off the commit path.
+                "governed_by": ["D179", "D18", "D43", "D127", "D157",
+                                "D171", "D173", "D175"],
+            },
+            "guard-shell-selftest.sh": {
+                "does": "proves guard-shell.py by COMMITTING its five mistakes in a throwaway "
+                        "repository with a linked worktree. Four of the five incidents are "
+                        "PERFORMED before the guard is asked about them: 240 uncommitted lines "
+                        "really destroyed by a real `git checkout`, a worktree whose root "
+                        "really differs from its main checkout's, a real "
+                        "`harness/images/images` created by a real `ln -s` at an existing "
+                        "directory, and `pgrep -f` really reporting a process that merely "
+                        "NAMES its pattern. The fifth is asserted about rather than "
+                        "reproduced, because posing it would spend somebody's rate limit — so "
+                        "`gh api --help` is read instead, and the arm fails if `-f` or "
+                        "`--method` stop being gh's flags. THE FALSE POSITIVES ARE THE OTHER "
+                        "HALF and the git ones are RUN in the fixture first: a branch, a clean "
+                        "path, `--staged`, a named source, `-sfn`, `--method GET`, `graphql`, "
+                        "a pid wait, a bounded retry, a foreground loop, a backgrounded "
+                        "`make design-check ARGS=--wait`, and every `git`/`gh`/`ln` line swept "
+                        "out of this repo's own tooling. It also asserts the platform fact the "
+                        "refusal declines to assume — BSD `pgrep` excludes its own ancestors "
+                        "unless `-a` — and scores every hatch in both forms off the guard's "
+                        "own clause table. Mutation-tested: twenty-six arms, twenty-five "
+                        "caught; the survivor removes half of the `.bak` advice, the other "
+                        "half still satisfies the assertion, and an arm removing BOTH goes "
+                        "red.",
+                "governed_by": ["D179", "D18", "D43", "D127", "D171", "D173"],
             },
             "coordinator.py": {
                 "does": "`make coordinator` — the merge queue READ rather than remembered, so "
@@ -2699,8 +2778,8 @@ COMPONENTS = [
                 # allowlisted away.
                 "governed_by": ["D7", "D16", "D17", "D18", "D42", "D43", "D44", "D47", "D48", "D53", "D58",
                                 "D60", "D65", "D68", "D74", "D76", "D80", "D82", "D88", "D92", "D111", "D122",
-                                "D127", "D129", "D133", "D138", "D139", "D140", "D141", "D158", "D160", "D173",
-                                "D176"],
+                                "D127", "D129", "D133", "D138", "D139", "D140", "D141", "D158", "D160", "D171",
+                                "D173", "D176"],
                 "note": "IT DECLARES THE SUITE AND DELIBERATELY DOES NOT DRIVE IT, which is "
                         "the whole shape. A registry that drove `make check` could not "
                         "disagree with the recipe — and could silently stop running a check, "
