@@ -2077,8 +2077,30 @@ def check_queue_refresh(checks: Checks) -> None:
             # STALE ENTRIES, which is the state the 513 are in: `entry()`'s three candidate
             # rows and a reason no current join would write for these readings, so a refresh
             # that reaches a position is visible and one that does not is visible too.
+            # AND ONE OFF-CONDITION CANDIDATE, which is the OTHER 2026-09-11 fix the frozen
+            # entries cannot see (D137 — this lists Near Mint). Seeded here rather than in
+            # the module's shared `CANDIDATES`, which several other checks pin: this row
+            # belongs to the BEFORE side of one fixture, and the refresh's own candidate rows
+            # come from the catalogue, so nothing else moves.
+            stale_off_condition = {
+                "sku": "8608861",
+                "name": "Articuno",
+                "set": "SV09",
+                "number": "161/159",
+                "condition": "Lightly Played Holofoil",
+                "market": "9.10",
+            }
             for index in READINGS:
-                snapshot.review.upsert(entry(1, index))
+                snapshot.review.upsert(
+                    entry(
+                        1,
+                        index,
+                        candidates=[
+                            *(dict(row) for row in CANDIDATES),
+                            dict(stale_off_condition),
+                        ],
+                    )
+                )
                 # AFTER the upsert, because `upsert` stamps today's date when it finds no
                 # existing entry — seeding `first_seen` through `entry()` would be overwritten
                 # by the very function the case below is about.
@@ -2158,6 +2180,54 @@ def check_queue_refresh(checks: Checks) -> None:
             0,
             "and no position is re-bound: every entry names the photograph the card at its "
             "key still holds, so this fixture is not quietly exercising D10's slide",
+        )
+
+        # ------------------------------------------------- the REPAIR COUNT, not the outcome
+        #
+        # WHAT THE COMMAND REPORTS, ASSERTED AS A NUMBER. Everything above is an OUTCOME —
+        # which entries end up queued, with which rows, released or left alone — and an
+        # outcome assertion cannot see a saving or a miscount. `Change.changed` decides how
+        # many entries this pass says it repaired, and `cli/cmd_queue.py` prints those
+        # figures and SKIPS THE WRITE ENTIRELY when they are zero. So a `changed` that always
+        # answered False would leave every assertion above green (they read `plan.main`,
+        # `plan.freed` and the written store, none of which consult it), report "nothing to
+        # write", and silently do nothing on the operator's real store.
+        #
+        # The decision entry publishes these as the repair — 340 resolve and 97 refresh over
+        # the owner's 513 frozen entries — so the classification is a claim in its own right
+        # and is checked as one here.
+        checks.equal(
+            (plan.touched, len(plan.refreshed), len(plan.resolved), plan.unchanged),
+            (2, 1, 1, 0),
+            "THE COUNTS THE COMMAND PRINTS: two entries change, one refreshed in place and "
+            "one resolved away, and nothing is left unchanged. A classification that said "
+            "zero would skip the write and report success",
+        )
+        checks.equal(
+            [c.position for c in plan.refreshed],
+            ["1/1"],
+            "and the refreshed one is named, so the count cannot be right for the wrong entry",
+        )
+        checks.equal(
+            [c.position for c in plan.resolved],
+            ["1/2"],
+            "as is the resolved one",
+        )
+        checks.equal(
+            sum(c.dropped_off_condition for c in plan.refreshed),
+            1,
+            "and the off-condition row this pass stopped offering is COUNTED: the stale "
+            "entry carried a Lightly Played candidate that D137's rule drops, which is one "
+            "of the two 2026-09-11 fixes the 513 frozen entries could never see. Summed "
+            "over the REFRESHED changes alone — a resolved entry has no `after`, so every "
+            "row it used to offer counts as dropped and would make this figure say two",
+        )
+        checks.equal(
+            sum(c.gained_rarity for c in plan.refreshed),
+            2,
+            "and the rarity cells the candidate rows GAIN are counted too — the other "
+            "2026-09-11 fix, and the one 513 of 565 stored entries are missing: both of "
+            "this catalogue's Dunsparce rows carry a `Rarity` the stale entry had none of",
         )
 
         # -------------------------------------------------------------------- the write
