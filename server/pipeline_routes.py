@@ -3791,10 +3791,49 @@ def do_pricing_corpus() -> dict:
     one answers what has been decided, and it is the same document whatever is on screen. Two
     facts, two routes, and the screen holds them apart the same way.
     """
+    book = corpus.Corpus.read()
     return {
-        "corpus": corpus.Corpus.read().to_payload(),
+        "corpus": book.to_payload(),
         "path": str(files.prices_path()),
         "revision": _corpus_revision(),
+        "clearable": _clearable_block(book),
+    }
+
+
+def _clearable_block(book: corpus.Corpus) -> dict:
+    """Which answers a mass-clear MAY remove, and how old each one is — in the ENVELOPE.
+
+    BESIDE `corpus` AND NEVER INSIDE IT, which is `revision`'s own rule and matters more here.
+    `PUT /pricing` replaces the document wholesale and `Corpus.parse` round-trips every
+    top-level key it does not recognise, so a derived block written into the document would be
+    carried straight back into `inventory/prices.json` and then read by the next screen as
+    though it were a fact somebody stored. It is a reading of the file, not part of it.
+
+    THE CLIENT GETS THE LIST AND NOT THE RULE. `#/pricing` has to say "clear 269 typed prices"
+    BEFORE the press, and per scope and per age window, which means counting. Shipping the
+    per-SKU ages lets it count by intersecting this list with the rows it drew — set
+    arithmetic — where re-deriving *which answers are clearable* in TypeScript would be a
+    second implementation of `corpus.clearable`, on the one file in this product that holds
+    money. That is the mistake D49 refused to make across two languages and D103 found
+    `preset_prices` making across two Python modules.
+
+    IT IS ADVISORY, AND THE PRESS RE-DERIVES. `do_pricing_clear` never trusts this list: it
+    reads the file again and runs the same predicate, taking the client's SKUs as a SCOPE only.
+    So an age here going stale between the read and the press costs an inaccurate label, never
+    a wrong deletion.
+    """
+    now = master.now()
+    plan = corpus.clearable(book, now=now)
+    return {
+        # sku -> whole days since this answer was written, or `null` for one carrying no
+        # readable `at`. `null` is the honest answer and not a zero: 20 of the owner's 407
+        # predate `stamp_answers` or were folded in by the migration, which D103 rules may
+        # never be given an invented date.
+        "days": {
+            sku: corpus.age_in_days(book.answers[sku].at, now) for sku in plan.skus
+        },
+        "holds": len(plan.holds),
+        "unknown": len(plan.unknown),
     }
 
 
@@ -3884,6 +3923,253 @@ def do_pricing_corpus_write(payload: dict) -> dict:
     return {
         "ok": True,
         "written": str(written),
+        "answers": len(book.answers),
+        "revision": _corpus_revision(),
+    }
+
+
+#: The most SKUs one clear or one restore may name. The corpus is hundreds of answers — the
+#: owner's largest ever is 430 — and a worklist scope is a subset of it, so a request naming
+#: ten thousand is not a press from this screen. `MAX_QUANTITIES` bounds the emit route for the
+#: same reason and this is deliberately the same order of magnitude.
+MAX_CLEAR_SKUS = 5000
+
+
+def _clear_revision_guard(payload: dict) -> None:
+    """Refuse a clear or a restore offered against a corpus that has since moved.
+
+    THE SAME GUARD `PUT /pricing` TAKES, AND TAKING IT IS THE WHOLE REASON A SECOND WRITER IS
+    ALLOWED HERE. D86's amendment of 2026-09-04 is blunt: *"ONE FILE MEANS TWO WRITERS, AND THE
+    SECOND ONE WAS SILENTLY REVERTING THE FIRST"*, and D105 states the rule as *"one file may
+    not have two unguarded writers"*. UNGUARDED is the operative word — `pkmnscan reprice apply`
+    is already a second writer and is admitted by carrying `--corpus-revision`. These two routes
+    are the third and fourth and they carry the identical digest.
+
+    ABSENT MEANS "DID NOT READ ONE" AND IS ALLOWED, verbatim as the PUT has it: that is the
+    terminal user with `curl`. The guard exists for a client that DID read a revision and is now
+    behind, which is the only case that can destroy a write nobody saw happen.
+    """
+    offered = payload.get("revision")
+    if isinstance(offered, str) and offered:
+        current = _corpus_revision()
+        if current and offered != current:
+            raise PipelineRefusal(
+                HTTPStatus.CONFLICT,
+                "corpus_moved",
+                "The pricing file changed since this screen read it — another tab, or an edit "
+                "on disk. Reload before clearing, or this would act on answers you have not "
+                "seen.",
+            )
+
+
+def _clear_scope(payload: dict) -> Optional[List[str]]:
+    """The SKUs a clear is narrowed to, or `None` for the whole store.
+
+    A SCOPE AND NEVER A PREDICATE, which `corpus.clearable` restates from the other side. What
+    arrives here says *which answers to consider*; whether each of those may be removed is
+    decided in Python against the file as it stands. A screen cannot name a hold into being
+    clearable, and a screen working from a list that went stale between the read and the press
+    removes fewer answers than it meant to rather than a different set.
+    """
+    raw = payload.get("skus")
+    if raw is None:
+        return None
+    if not isinstance(raw, list):
+        raise PipelineRefusal(
+            HTTPStatus.BAD_REQUEST,
+            "scope_invalid",
+            "`skus` must be a list of SKU ids, or absent to mean the whole store.",
+        )
+    if len(raw) > MAX_CLEAR_SKUS:
+        raise PipelineRefusal(
+            HTTPStatus.BAD_REQUEST,
+            "scope_invalid",
+            f"{len(raw)} SKUs is more than one press can name ({MAX_CLEAR_SKUS}).",
+        )
+    return [str(sku) for sku in raw]
+
+
+def _clear_window(payload: dict) -> Optional[int]:
+    """`older_than_days`, or `None` for every age.
+
+    THERE IS NO DEFAULT AND THERE MAY NOT BE ONE. The operator was offered an expiry rule — a
+    typed price going stale by itself after N days — and refused it: *"Just give me a mass-clear
+    button."* A default window here would be that rule wearing a different hat, chosen by this
+    file rather than by them. Absent means every age, which is what the control says.
+    """
+    raw = payload.get("older_than_days")
+    if raw is None:
+        return None
+    try:
+        days = int(raw)
+    except (TypeError, ValueError):
+        raise PipelineRefusal(
+            HTTPStatus.BAD_REQUEST,
+            "window_invalid",
+            "`older_than_days` must be a whole number of days, or absent for every age.",
+        ) from None
+    if days < 0:
+        raise PipelineRefusal(
+            HTTPStatus.BAD_REQUEST,
+            "window_invalid",
+            f"A window of {days} days is not a window. Leave it out to clear every age.",
+        )
+    return days
+
+
+def do_pricing_clear(payload: dict) -> dict:
+    """`POST /pricing/clear` — remove typed prices in bulk, and hand back what was removed.
+
+    THE OPERATOR ASKED FOR EXACTLY THIS AND FOR NOTHING AROUND IT: *"I also need a clear claims
+    on pricing (after several emits a lot of pricing is pre typed but stale and there's no way
+    to mass clear)"*. Offered an expiry rule instead they said *"Just give me a mass-clear
+    button."* So this is a press. Nothing here runs on a timer, no answer ages out on its own,
+    and `older_than_days` is a filter the operator points at one press rather than a policy the
+    store carries.
+
+    WHAT IT MAY REMOVE IS `corpus.clearable`'s, RE-DERIVED HERE FROM THE FILE. Holds are left
+    standing (D49 — a judgement with a reason, a watch and a note attached), `channel !=
+    "price"` answers are left standing (the ABSENCE of an answer, which `decisions.blocking`
+    reads to refuse an `emit`), and an undated answer is left standing by an age filter that
+    cannot place it. The response names all three, so the screen states the blast radius rather
+    than implying it.
+
+    THE WAY BACK IS `cleared`, AND IT IS THE ANSWERS AND NOT THE SKUS. Each carries its `value`,
+    its `at` and its `from_run` verbatim, which is what lets `do_pricing_restore` put a price
+    back with the date it was actually typed on. Handing back a list of SKUs would make the undo
+    a re-type: the values would be gone, and any restore built from the screen's own memory
+    would re-date every answer to now and read as `priced_recently` on tomorrow's survey — D103's
+    ratchet inverted by the undo of all things.
+
+    IT IS ITS OWN ROUTE RATHER THAN A `PUT /pricing` OF NULLS. `Corpus.parse` does read `null`
+    as "drop this answer" (D49's rule, kept), so a client could clear by nulling keys — and
+    then the client would be deciding WHICH keys, which is `corpus.clearable` written a second
+    time in TypeScript against money. The predicate stays in Python and the screen presses a
+    button.
+    """
+    _clear_revision_guard(payload)
+    scope = _clear_scope(payload)
+    window = _clear_window(payload)
+
+    try:
+        book = corpus.Corpus.read()
+    except (decisions.MalformedDecisions, ValueError) as exc:
+        # A CORPUS THIS PARSER CANNOT READ IS A REFUSAL HERE, WHERE `PUT /pricing` LETS THE
+        # WRITE THROUGH. That route REPLACES the document, so an unreadable one is what is
+        # being fixed; this one reads the document to decide what to destroy inside it, and
+        # deciding that against a file nothing could parse is the one thing it must not do.
+        raise PipelineRefusal(
+            HTTPStatus.CONFLICT, "corpus_unreadable", str(exc)
+        ) from None
+
+    plan = corpus.clearable(
+        book, now=master.now(), skus=scope, older_than_days=window
+    )
+    cleared = {
+        sku: {
+            "value": book.answers[sku].value,
+            **({"at": book.answers[sku].at} if book.answers[sku].at else {}),
+            **(
+                {"from_run": book.answers[sku].from_run}
+                if book.answers[sku].from_run
+                else {}
+            ),
+        }
+        for sku in plan.skus
+    }
+
+    if plan.skus:
+        # WRITTEN ONLY WHEN SOMETHING GOES. A press that selects nothing must not move the
+        # digest: the screen holds a revision, and re-writing a byte-identical document would
+        # still change nothing while a write that DID change the file would leave every other
+        # open tab stale for a press that did nothing.
+        for sku in plan.skus:
+            del book.answers[sku]
+        book.write()
+
+    return {
+        "ok": True,
+        "cleared": cleared,
+        "count": len(plan.skus),
+        "holds": len(plan.holds),
+        "unknown": len(plan.unknown),
+        "undated": len(plan.undated),
+        "answers": len(book.answers),
+        "revision": _corpus_revision(),
+    }
+
+
+def do_pricing_restore(payload: dict) -> dict:
+    """`POST /pricing/restore` — put back exactly what a clear removed. The way back.
+
+    THE INVERSE OF THE ROUTE ABOVE AND NOTHING WIDER, which is what keeps it from being a
+    second unguarded door onto `inventory/prices.json`. It writes an answer ONLY for a SKU the
+    corpus does not currently hold, so it can never overwrite a price typed since the clear —
+    the operator who cleared 269 answers, priced three cards, and then pressed Undo gets their
+    266 back and keeps the three. Those three are named in `skipped` rather than silently
+    dropped, because a way back that quietly does less than it says is worse than one that
+    refuses.
+
+    IT WRITES `at` AND `from_run` VERBATIM AND DOES NOT STAMP. `corpus.stamp_answers` is for an
+    answer somebody just gave; a restore is the assertion that an answer given five days ago
+    was never withdrawn. Stamping here would make the undo of a clear read as a store-wide
+    re-pricing on the next markdown survey, refusing every restored SKU `priced_recently` —
+    D103's ratchet, inverted by the one press whose entire job is to change nothing.
+
+    IT IS NOT A GENERAL WRITE PATH. A hold cannot arrive through it — `Corpus.parse` is not
+    reached and the shape is `{value, at?, from_run?}` — and a SKU the corpus already answers
+    is refused per row. The general write is `PUT /pricing` and it is unchanged.
+    """
+    _clear_revision_guard(payload)
+    answers = payload.get("answers")
+    if not isinstance(answers, dict):
+        raise PipelineRefusal(
+            HTTPStatus.BAD_REQUEST,
+            "restore_invalid",
+            "Send {\"answers\": {\"<sku>\": {\"value\": …}}} — the `cleared` map a clear "
+            "answered with.",
+        )
+    if len(answers) > MAX_CLEAR_SKUS:
+        raise PipelineRefusal(
+            HTTPStatus.BAD_REQUEST,
+            "restore_invalid",
+            f"{len(answers)} answers is more than one press can restore ({MAX_CLEAR_SKUS}).",
+        )
+
+    try:
+        book = corpus.Corpus.read()
+    except (decisions.MalformedDecisions, ValueError) as exc:
+        raise PipelineRefusal(
+            HTTPStatus.CONFLICT, "corpus_unreadable", str(exc)
+        ) from None
+
+    restored: List[str] = []
+    skipped: List[str] = []
+    for sku, row in sorted(answers.items()):
+        key = str(sku)
+        if not isinstance(row, dict) or "value" not in row:
+            raise PipelineRefusal(
+                HTTPStatus.BAD_REQUEST,
+                "restore_invalid",
+                f"{key}: each answer must be an object carrying a `value`.",
+            )
+        if key in book.answers:
+            skipped.append(key)
+            continue
+        book.answers[key] = corpus.Answer(
+            value=row["value"],
+            at=row.get("at"),
+            from_run=row.get("from_run"),
+        )
+        restored.append(key)
+
+    if restored:
+        book.write()
+
+    return {
+        "ok": True,
+        "restored": restored,
+        "skipped": skipped,
         "answers": len(book.answers),
         "revision": _corpus_revision(),
     }

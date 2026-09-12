@@ -50,6 +50,8 @@ import type {
   PriceHistoryPayload,
   PricingPayload,
   PricingCorpus,
+  PricingClearable,
+  PricingClearResult,
   PricingWorklist,
   RunLeg,
   RunPreflight,
@@ -2175,12 +2177,85 @@ export async function getPricingCorpus(): Promise<{
   corpus: PricingCorpus
   path: string
   revision: string
+  /* WHICH ANSWERS A MASS-CLEAR MAY REMOVE, AND HOW OLD EACH ONE IS — IN THE ENVELOPE, beside
+     `revision` and never inside `corpus`. `putPricingCorpus` sends the document back wholesale
+     and the server round-trips every key it does not recognise, so a derived block written into
+     the document would be carried into `inventory/prices.json` and read by the next screen as
+     a stored fact. It is a reading of the file, not part of it.
+
+     THE SERVER SAYS WHICH, THE SCREEN ONLY COUNTS. `#/pricing` has to put the figure in the
+     label before the press — per scope and per age window — which means counting; it does that
+     by intersecting this list with the rows it drew. Deciding *which answers are clearable*
+     here instead would be `pipeline/corpus.py:clearable` written a second time in TypeScript,
+     against the one file in this product that holds money. */
+  clearable?: PricingClearable
 }> {
   return (await request('/pricing', NO_CACHE)) as {
     corpus: PricingCorpus
     path: string
     revision: string
+    clearable?: PricingClearable
   }
+}
+
+/**
+ * Clear typed prices in bulk — the operator's own ask (D-a-typed-price-is-cleared-by-a-press):
+ * *"after several emits a lot of pricing is pre typed but stale and there's no way to mass
+ * clear"*.
+ *
+ * IT IS DESTRUCTIVE AND IT IS THE ONLY CALL IN THIS FILE THAT REMOVES A PRICING ANSWER. What
+ * comes back is `cleared` — the answers themselves, with the dates they were typed on — which
+ * is what `restorePricingAnswers` below puts back. A press that hands back a list of SKUs would
+ * make the undo a re-type.
+ *
+ * `skus` IS A SCOPE AND NEVER A PREDICATE. Omit it for the whole store; pass the worklist's own
+ * SKUs to hold the blast radius to what is on screen. Either way the server re-derives what may
+ * go from the file as it stands, so this list can narrow the act and can never widen it: name a
+ * hold here and it is reported as a hold, not cleared.
+ *
+ * `olderThanDays` IS A FILTER THE OPERATOR POINTS AND NOT A POLICY THE STORE CARRIES. Offered an
+ * expiry rule — a typed price ageing out by itself — the owner said *"Just give me a mass-clear
+ * button."* Omitted means every age.
+ */
+export async function clearPricingAnswers(options: {
+  revision?: string
+  skus?: readonly string[]
+  olderThanDays?: number
+}): Promise<PricingClearResult> {
+  return (await request('/pricing/clear', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      ...(options.revision === undefined ? {} : { revision: options.revision }),
+      ...(options.skus === undefined ? {} : { skus: [...options.skus] }),
+      ...(options.olderThanDays === undefined
+        ? {}
+        : { older_than_days: options.olderThanDays }),
+    }),
+  })) as PricingClearResult
+}
+
+/**
+ * Put back exactly what a clear removed — the way back, and the inverse of the call above.
+ *
+ * IT WRITES ONLY A SKU THE CORPUS NO LONGER ANSWERS, so an undo can never overwrite a price
+ * typed since the clear; those come back named in `skipped`. And it writes each answer's `at`
+ * verbatim rather than stamping it, because a restore is the assertion that an answer given
+ * five days ago was never withdrawn — stamping would make the undo of a clear read as a
+ * store-wide re-pricing on the next markdown survey (D103's ratchet).
+ *
+ * HAND IT A CLEAR'S OWN `cleared` MAP AND NOTHING ELSE. It is not a general write path — that
+ * is `putPricingCorpus`, unchanged.
+ */
+export async function restorePricingAnswers(
+  answers: PricingClearResult['cleared'],
+  revision?: string,
+): Promise<{ ok: boolean; restored: string[]; skipped: string[]; revision: string }> {
+  return (await request('/pricing/restore', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(revision === undefined ? { answers } : { answers, revision }),
+  })) as { ok: boolean; restored: string[]; skipped: string[]; revision: string }
 }
 
 /**

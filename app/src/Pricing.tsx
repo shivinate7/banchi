@@ -26,6 +26,7 @@ import {
   getPricingCorpus,
   getPricingWorklist,
   putPricingCorpus,
+  restorePricingAnswers,
   getRun,
   getRuns,
   photoUrl,
@@ -38,6 +39,8 @@ import type {
   MergedSku,
   RosterRun,
   PricingCorpus,
+  PricingClearable,
+  PricingClearResult,
   MarkdownAnswer,
   MarkdownTable,
   PricingWorklist,
@@ -56,6 +59,7 @@ import { PriceHistoryPanel, RANGE_LABEL, type HistoryRead } from './PriceHistory
 import { TrendCell, type TrendRead } from './PriceTrend'
 import { RunFiles } from './RunFiles'
 import { Markdown } from './Markdown'
+import { ClearPrices } from './ClearPrices'
 import { LogWell } from './RunsLog'
 import { runBoxLabel } from './runScope'
 import {
@@ -1070,6 +1074,9 @@ export function Pricing() {
       setWork(answer)
       setSheet(table)
       setBook(held.corpus)
+      /* A SERVER THAT PREDATES THIS ANSWERS NOTHING, and `null` is what the sheet reads as "do
+         not offer the control" rather than as "nothing is clearable". */
+      setClearable(held.clearable ?? null)
       setSunkHolds(
         heldOnArrival(
           answer?.skus ?? ((table?.skus ?? []) as unknown as MergedSku[]),
@@ -1102,6 +1109,7 @@ export function Pricing() {
       setWork(null)
       setSheet(null)
       setBook(null)
+      setClearable(null)
       setSunkHolds(new Set())
       setFailure(describeFailure(err))
     } finally {
@@ -2231,6 +2239,122 @@ export function Pricing() {
   const adoptRevision = useCallback((next: string) => {
     revision.current = next
   }, [])
+
+  /* THE MASS-CLEAR (D-a-typed-price-is-cleared-by-a-press). The operator's own ask: *"after
+     several emits a lot of pricing is pre typed but stale and there's no way to mass clear"*.
+     Measured on their store, 2026-09-12: 269 of 407 typed prices — 66% — were answered five
+     days earlier and were still pre-filling the field on every row they appear on. */
+  const [clearOpen, setClearOpen] = useState(false)
+
+  /** WHICH ANSWERS MAY BE CLEARED, AS THE SERVER SAYS. It rides the envelope of `GET /pricing`
+   *  beside the revision, never inside the document — `putPricingCorpus` sends that document back
+   *  wholesale and the server round-trips unknown keys, so a derived block written into it would
+   *  end up stored in `inventory/prices.json`.
+   *
+   *  ABSENT IS A REAL STATE AND IT DISABLES THE CONTROL. A capture server that predates this
+   *  route answers no block, and a sheet drawn over a guess about which answers are holds is the
+   *  one thing this feature may not do. */
+  const [clearable, setClearable] = useState<PricingClearable | null>(null)
+  const clearableTotal = Object.keys(clearable?.days ?? {}).length
+
+  /** THE SCOPE, AND IT IS THE WORKLIST RATHER THAN THE VISIBLE ROWS. `rows` is `table` after the
+   *  lens chip and the cut-off's re-partition, so it moves as the operator toggles a filter they
+   *  may have set ten minutes ago — a destructive press whose blast radius depends on a chip is
+   *  a press nobody can predict. `table` is what this screen LOADED: the runs that were picked,
+   *  or the survey. It has a name the sheet can say out loud, which is what makes the radius
+   *  legible rather than merely bounded. */
+  const worklistSkus = useMemo(() => (table ?? []).map((row) => row.sku), [table])
+
+  /** What to call that scope in the sheet. `scopeName` is the screen's own answer to *what am I
+   *  looking at* — `Box 3 · RB Epics`, or the lens and when it was read — and reusing it is what
+   *  stops the sheet naming the selection a second way. */
+  const worklistName =
+    scopeName ??
+    (loaded.length === 0
+      ? 'the cards on this screen'
+      : `${loaded.length} run${loaded.length === 1 ? '' : 's'}`)
+
+  /** A clear landed: drop those answers, clear the fields, and offer the way back.
+   *
+   *  NO RELOAD. The screen holds the document the server confirmed, so the new one is that minus
+   *  the cleared keys — and putting BOTH `book` and `savedBook` on the same object is what keeps
+   *  `dirty` false, so the autosave effect does not immediately PUT a document the server just
+   *  wrote. A reload would be correct too and would flash skeletons over the whole list, which
+   *  is D118's rule broken by the one press that has no business moving anything. */
+  const onCleared = useCallback((result: PricingClearResult) => {
+    const gone = Object.keys(result.cleared)
+    const current = savedBook.current
+    if (current !== null) {
+      const skus = { ...(current.skus ?? {}) }
+      for (const sku of gone) delete skus[sku]
+      const next = { ...current, skus }
+      savedBook.current = next
+      setBook(next)
+    }
+    revision.current = result.revision
+    /* THE FIELDS ARE UNCONTROLLED, so the value has to be taken out of the DOM as well as out of
+       the document — the same two-step `applyPreset`'s own undo makes. `flash` is what says
+       WHICH rows moved on a press that can move three hundred of them. */
+    for (const sku of gone) {
+      const input = inputs.current.get(sku)
+      if (input === undefined) continue
+      input.value = ''
+      flash(input)
+      touched.current.delete(sku)
+    }
+    toast({
+      kind: 'receipt',
+      title: `${result.count} typed price${result.count === 1 ? '' : 's'} cleared`,
+      body:
+        result.holds === 0
+          ? 'Those rows go back to the standing rule. Nothing at TCGplayer changed.'
+          : `Those rows go back to the standing rule. ${result.holds} held back on purpose ${
+              result.holds === 1 ? 'was' : 'were'
+            } left alone, and nothing at TCGplayer changed.`,
+      action: {
+        label: 'Undo',
+        onPress: () => {
+          void (async () => {
+            try {
+              const back = await restorePricingAnswers(result.cleared, revision.current)
+              revision.current = back.revision
+              const held = savedBook.current
+              if (held !== null) {
+                const skus = { ...(held.skus ?? {}) }
+                for (const sku of back.restored) {
+                  const was = result.cleared[sku]
+                  if (was !== undefined) skus[sku] = was
+                }
+                const next = { ...held, skus }
+                savedBook.current = next
+                setBook(next)
+              }
+              for (const sku of back.restored) {
+                const input = inputs.current.get(sku)
+                const was = result.cleared[sku]
+                if (input === undefined || was === undefined) continue
+                input.value = typeof was.value === 'string' ? was.value : String(was.value ?? '')
+                flash(input)
+              }
+              toast({
+                kind: 'ok',
+                title: `${back.restored.length} price${back.restored.length === 1 ? '' : 's'} restored`,
+                /* A SKIPPED ROW IS NAMED AND NEVER SILENT. An undo that quietly does less than
+                   it says is worse than one that refuses: these are SKUs answered again between
+                   the clear and the undo, and the newer answer is the one kept. */
+                body:
+                  back.skipped.length === 0
+                    ? 'Each one carries the date it was first typed on.'
+                    : `${back.skipped.length} had been answered again since, and those answers were kept.`,
+              })
+            } catch (err) {
+              toast({ kind: 'refusal', title: describeFailure(err).message })
+            }
+          })()
+        },
+      },
+    })
+  }, [])
   const closePicker = useCallback(() => setRunsOpen(false), [])
   useDismiss(pickerRef, runsOpen, closePicker)
 
@@ -2498,6 +2622,29 @@ export function Pricing() {
           <span className="pricing-hide-sm">Mark down stale</span>
           <span className="pricing-only-sm">Mark down</span>
         </Button>
+        {/* THE MASS-CLEAR, AND IT IS IN THE HEADER BECAUSE IT IS ABOUT THE SCREEN AND NOT ABOUT A
+            ROW (D-a-typed-price-is-cleared-by-a-press). Every other way of removing an answer
+            here is per-row — select the field, delete the digits — which is what the operator
+            was doing 407 times. This is the only control on this screen that acts on the
+            worklist as a whole, and the header is where the other two of those already are.
+
+            IT IS NOT A DANGER BUTTON HERE. What it opens is a sheet; the red belongs on the
+            press that actually removes something, with the figure on it. A red button in a row
+            of navigational ones would be shouting about a dialog. */}
+        <Button
+          icon="trash"
+          onClick={() => setClearOpen(true)}
+          disabled={clearableTotal === 0}
+          aria-label="Clear typed prices in bulk"
+          title={
+            clearableTotal === 0
+              ? 'No typed prices to clear'
+              : `${clearableTotal} typed price${clearableTotal === 1 ? '' : 's'} in the store`
+          }
+        >
+          <span className="pricing-hide-sm">Clear typed</span>
+          <span className="pricing-only-sm">Clear</span>
+        </Button>
         <div className="pricing-runs-anchor" ref={pickerRef}>
           <Button
             icon="layers"
@@ -2543,13 +2690,29 @@ export function Pricing() {
      it. It carries this screen's corpus digest and hands back the one its write produced: two
      writers of `inventory/prices.json` now share a tab, and only one of them had the guard. */
   const markdownSheet = (
-    <Markdown
-      open={mdOpen}
-      autoFetch={mdFetch}
-      onClose={closeMarkdown}
-      revision={revision.current || undefined}
-      onCorpusWritten={adoptRevision}
-    />
+    <>
+      <Markdown
+        open={mdOpen}
+        autoFetch={mdFetch}
+        onClose={closeMarkdown}
+        revision={revision.current || undefined}
+        onCorpusWritten={adoptRevision}
+      />
+      {/* MOUNTED BESIDE THE CHROME FOR THE MARKDOWN SHEET'S OWN REASON: it has to exist in every
+          state of this screen, including the early-return empty states — and this one especially,
+          because a store whose every run is answered is exactly the store with the most stale
+          typed prices in it. */}
+      <ClearPrices
+        open={clearOpen}
+        onClose={() => setClearOpen(false)}
+        clearable={clearable}
+        worklist={worklistSkus}
+        worklistName={worklistName}
+        revision={revision.current || undefined}
+        unsaved={dirty || saving}
+        onCleared={onCleared}
+      />
+    </>
   )
 
   /* THE EMPTY STATES: the fetch failed, nothing is joined, the narrowing matched nothing, or

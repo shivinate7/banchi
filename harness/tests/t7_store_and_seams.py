@@ -13471,6 +13471,187 @@ def check_corpus_revision(checks: Checks) -> None:
         )
 
 
+def check_pricing_clear(checks: Checks) -> None:
+    """The mass-clear: what it removes, what it refuses to touch, and the way back.
+
+    WHY THE FEATURE EXISTS, IN THE OPERATOR'S WORDS: *"I also need a clear claims on pricing
+    (after several emits a lot of pricing is pre typed but stale and there's no way to mass
+    clear)"*. Measured on their store, 2026-09-12: **269 of 407 typed prices — 66% — were
+    answered on 2026-09-07** and were still pre-filling the field on every row they appear on.
+
+    AND WHY IT IS A PRESS RATHER THAN A RULE. Offered an expiry — a typed price ageing out by
+    itself after N days — they refused it: *"Just give me a mass-clear button."* Nothing in this
+    case exercises a timer, because there is none to exercise: the window is an argument to one
+    call and the store carries no memory of it.
+
+    THE THREE REFUSALS ARE THE POINT AND THE CLEAR IS ALMOST INCIDENTAL. A mass-delete over the
+    one file in this product that holds money is only safe if the set it may reach is exactly
+    the set of TYPED PRICES, and each of the three things it must not reach fails differently:
+
+    - A HOLD IS A JUDGEMENT (D49) and removing one puts the card back into the next `emit`.
+      The owner's store carries 23, every one `bullish`.
+    - A `channel != "price"` ANSWER IS THE ABSENCE OF ONE. `pipeline/decisions.py:blocking`
+      reads that table to refuse an emit, so clearing one makes an unpriced card read as
+      though nothing were owed on it.
+    - AN UNDATED ANSWER CANNOT BE PLACED BY AN AGE FILTER. 20 of the owner's carry no `at`.
+
+    THE SCOPE IS NOT A PREDICATE, WHICH IS THE ASSERTION THAT SURVIVES A CLIENT REWRITE. The
+    route takes the SKUs a screen is looking at only to narrow what is considered; whether each
+    may go is re-derived here from the file. So the case names a hold in the scope explicitly:
+    a build that trusted the client's list would clear it, and every other assertion in this
+    function would still pass.
+
+    THE WAY BACK IS ASSERTED ON PROVENANCE AND NOT ONLY ON PRESENCE. A restore that re-dated
+    every answer to now would put the values back and read as a store-wide re-pricing on the
+    next markdown survey — D103's ratchet inverted by the one press whose entire job is to
+    change nothing. `at` coming back byte-identical is the only assertion that catches it.
+    """
+    checks.note("")
+    checks.note("PRICING CLEAR — the mass-clear, its three refusals, and the restore")
+
+    with isolated_home():
+        # A FIXTURE SHAPED LIKE THE OWNER'S FILE: old typed prices, fresh ones, a hold, an
+        # `unknown`-channel seed, and one price carrying no date at all.
+        old = "2026-09-07T06:50:31.891+00:00"
+        new = "2026-09-12T03:42:00.000+00:00"
+        book = corpus.Corpus()
+        book.answers = {
+            "1000": corpus.Answer(value="4.50", at=old),
+            "1001": corpus.Answer(value="0.29", at=old),
+            "1002": corpus.Answer(value="9.99", at=new),
+            "1003": corpus.Answer(value="1.25"),  # no `at` — predates the stamp
+            "1004": corpus.Answer(value={"withheld": "bullish"}, at=old),
+            "1005": corpus.Answer(value=None, channel="unknown", at=old),
+        }
+        book.write()
+
+        read = pipeline_routes.do_pricing_corpus()
+        block = read["clearable"]
+        checks.equal(
+            sorted(block["days"]),
+            ["1000", "1001", "1002", "1003"],
+            "`GET /pricing` names the four TYPED PRICES as clearable and neither the hold nor "
+            "the `unknown` seed — the set is exactly `stamp_answers`' own inclusion rule",
+        )
+        checks.equal(block["holds"], 1, "and it counts the hold it is leaving alone")
+        checks.equal(
+            block["unknown"], 1, "and the `unknown` seed, so the sheet can say both figures"
+        )
+        checks.ok(
+            block["days"]["1003"] is None,
+            "an answer with no `at` reports a null age and never a zero — a zero would read as "
+            "written today, which is the direction that makes a stale price look fresh",
+        )
+        checks.ok(
+            "clearable" not in read["corpus"],
+            "and the block is in the ENVELOPE, never in the document: `PUT /pricing` replaces "
+            "the file wholesale and round-trips keys it does not know, so a derived block "
+            "inside it would be written into inventory/prices.json",
+        )
+
+        # ---------------------------------------------------- the scope is not a predicate
+        named = pipeline_routes.do_pricing_clear(
+            {"skus": ["1004", "1005"], "revision": read["revision"]}
+        )
+        checks.equal(
+            named["count"],
+            0,
+            "a scope naming ONLY a hold and an `unknown` seed clears nothing. A build that "
+            "trusted the client's list instead of re-deriving would delete both here, and "
+            "every other assertion in this case would still pass",
+        )
+        checks.equal(named["holds"], 1, "the hold is reported rather than silently skipped")
+        checks.equal(
+            len(corpus.Corpus.read().answers), 6, "and nothing left the file"
+        )
+
+        # ------------------------------------------------------------ the age filter selects
+        preview = pipeline_routes.do_pricing_clear(
+            {"skus": [], "revision": pipeline_routes._corpus_revision()}
+        )
+        checks.equal(
+            preview["count"], 0, "an EMPTY scope is a real scope and clears nothing at all"
+        )
+
+        stale = pipeline_routes.do_pricing_clear({"older_than_days": 3})
+        checks.equal(
+            sorted(stale["cleared"]),
+            ["1000", "1001"],
+            "`older_than_days` takes the two answered five days ago and leaves the one "
+            "answered today",
+        )
+        checks.equal(
+            stale["undated"],
+            1,
+            "and it LEAVES the undated answer, counted rather than swept in on a guess that "
+            "it must be old (D103 refuses inventing a date for one of these)",
+        )
+        checks.equal(
+            stale["cleared"]["1000"]["at"],
+            old,
+            "every cleared answer comes back with the date it was typed on — the way back is "
+            "the ANSWERS and not a list of SKUs, or the undo would be a re-type",
+        )
+
+        left = corpus.Corpus.read()
+        checks.equal(sorted(left.answers), ["1002", "1003", "1004", "1005"], "the file agrees")
+        checks.ok(
+            left.answers["1004"].is_hold,
+            "THE HOLD IS STILL STANDING after a store-wide clear — D49's judgement with a "
+            "reason on it, which no window and no scope in this route can reach",
+        )
+        checks.equal(
+            left.answers["1005"].channel,
+            "unknown",
+            "and so is the `unknown` seed `pipeline/decisions.py:blocking` reads to refuse "
+            "an emit",
+        )
+
+        # --------------------------------------------------------------------- the way back
+        typed_again = corpus.Corpus.read()
+        typed_again.answers["1000"] = corpus.Answer(value="7.77", at=new)
+        typed_again.write()
+
+        back = pipeline_routes.do_pricing_restore({"answers": stale["cleared"]})
+        checks.equal(
+            back["restored"], ["1001"], "the restore puts back the answer nothing has re-typed"
+        )
+        checks.equal(
+            back["skipped"],
+            ["1000"],
+            "and REFUSES the one answered again since the clear, naming it — an undo that "
+            "quietly overwrote newer work would be worse than one that refuses",
+        )
+        after = corpus.Corpus.read()
+        checks.equal(
+            after.answers["1000"].value, "7.77", "the newer answer is the one kept"
+        )
+        checks.equal(
+            after.answers["1001"].at,
+            old,
+            "AND THE RESTORED ANSWER KEEPS ITS ORIGINAL DATE. Stamping it would make the undo "
+            "of a clear read as a store-wide re-pricing on the next markdown survey, refusing "
+            "every restored SKU `priced_recently` (D103's ratchet)",
+        )
+
+        # ------------------------------------------------------------- the stale-write guard
+        label = (
+            "a clear offered against a revision the file has moved past is refused, which is "
+            "the guard `PUT /pricing` has had since D86 and the reason a second writer of this "
+            "file is allowed at all"
+        )
+        try:
+            pipeline_routes.do_pricing_clear({"revision": read["revision"]})
+            checks.ok(False, label, "it accepted the stale clear")
+        except pipeline_routes.PipelineRefusal as refused:
+            checks.equal(refused.code, "corpus_moved", label)
+
+        checks.ok(
+            pipeline_routes.do_pricing_clear({})["ok"],
+            "and an ABSENT revision still lands — 'did not read one', which is the terminal "
+            "user, exactly as the PUT allows",
+        )
+
 def check_pricing_labels(checks: Checks) -> None:
     """`pricing.json`'s position labels are re-rendered on every read, and the file never moves.
 
@@ -23388,6 +23569,7 @@ def run() -> Result:
     check_withholding(checks)
     check_pricing_route(checks)
     check_corpus_revision(checks)
+    check_pricing_clear(checks)
     check_pricing_labels(checks)
     check_allocator(checks)
     check_boxes_and_listings(checks)

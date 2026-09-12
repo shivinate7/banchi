@@ -51,6 +51,7 @@ chosen neither must not partition at one price and sell at another.
 from __future__ import annotations
 
 import json
+from datetime import datetime, timezone
 from dataclasses import dataclass, field
 from pathlib import Path
 from decimal import Decimal, InvalidOperation
@@ -516,6 +517,146 @@ def stamp_answers(before: "Corpus", after: "Corpus", at: str) -> List[str]:
         answer.at = at
         stamped.append(sku)
     return stamped
+
+
+# ------------------------------------------------------------------- clearing typed prices
+
+
+def parse_stamp(stamp: Optional[str]) -> Optional[datetime]:
+    """An ISO stamp as an aware datetime; naive reads as UTC, garbage reads as `None`.
+
+    IT LIVES HERE BECAUSE `Answer.at` DOES. This module defines the stamp, `stamp_answers`
+    writes it, and `clearable` below reads it — a parser for it anywhere else is a second
+    answer to *how old is this answer*. `pipeline/reprice.py:_parse_stamp` delegates to this
+    one; its own docstring gave the reason it could not simply use `store/master.py`'s — *"this
+    module does not import `store`"* — and that reason is satisfied here, since `pipeline/
+    corpus.py` imports `store` only inside function bodies for the identical constraint.
+
+    `store/master.py` keeps its own, and that is not drift: it parses stamps the STORE wrote,
+    is reached from code that already has the database open, and `pipeline/` may not import it.
+    """
+    if not stamp:
+        return None
+    try:
+        when = datetime.fromisoformat(str(stamp))
+    except (TypeError, ValueError):
+        return None
+    if when.tzinfo is None:
+        when = when.replace(tzinfo=timezone.utc)
+    return when
+
+
+def age_in_days(stamp: Optional[str], now: str) -> Optional[int]:
+    """Whole days between `stamp` and `now`, or `None` when either does not parse.
+
+    WHOLE DAYS AND NOT A RATIO, because the figure is read by a person choosing a window. An
+    answer written five days and twenty hours ago is five days old, which is what
+    `datetime.timedelta.days` says and what the operator would say.
+
+    A STAMP IN THE FUTURE READS AS 0 rather than negative. Clocks move backwards — a restore, a
+    timezone change on the rig — and a negative age would make an answer sort ahead of every
+    other one in a control whose whole job is "older than".
+    """
+    when = parse_stamp(stamp)
+    reading = parse_stamp(now)
+    if when is None or reading is None:
+        return None
+    return max(0, (reading - when).days)
+
+
+@dataclass
+class Clear:
+    """What a mass-clear would remove from a corpus, and what it would leave standing.
+
+    EVERY LIST IS NAMED RATHER THAN COUNTED, because the screen that draws this has to be able
+    to say *which* answers it is about to destroy and the route has to hand back the ones it
+    did. A count cannot be undone.
+    """
+
+    #: The SKUs whose answer this clear removes.
+    skus: List[str] = field(default_factory=list)
+    #: In scope and left alone because a hold is a judgement, not a typed price (D49).
+    holds: List[str] = field(default_factory=list)
+    #: In scope and left alone because `channel != "price"` is the ABSENCE of an answer.
+    unknown: List[str] = field(default_factory=list)
+    #: In scope, a typed price, and left alone because an age filter cannot place an answer
+    #: that carries no readable `at`. Empty when no age filter was asked for, since then
+    #: there is nothing for an undated answer to fail.
+    undated: List[str] = field(default_factory=list)
+
+
+def clearable(
+    book: "Corpus",
+    *,
+    now: str,
+    skus: Optional[Iterable[str]] = None,
+    older_than_days: Optional[int] = None,
+) -> Clear:
+    """Which of this corpus's answers a mass-clear may remove, and which it may not.
+
+    WHY THE OPERATOR ASKED FOR THIS, IN THEIR WORDS: *"after several emits a lot of pricing is
+    pre typed but stale and there's no way to mass clear"*. A typed answer pre-fills the field
+    on every `#/pricing` row it appears on and there was no control anywhere that removed one
+    without retyping it. Measured on their store, 2026-09-12: **269 of 407 typed prices — 66% —
+    were answered on 2026-09-07**, five days before they were still being offered as the price
+    to send.
+
+    THIS IS A CONTROL AND NOT A POLICY, WHICH IS THE OWNER'S OWN RULING. Asked whether a typed
+    price should go stale by itself after N days they said: *"Just give me a mass-clear
+    button."* So there is no expiry here, no TTL and no auto-stale — `older_than_days` is a
+    filter the operator points, spent by one press, and an answer nobody clears stands forever.
+
+    THE SET IT MAY TOUCH IS EXACTLY THE SET `stamp_answers` DATES, and that symmetry is the
+    whole safety argument rather than a tidy coincidence. That function stamps an answer when
+    `channel == "price" and not is_hold`, and its three rules each say why the other two are
+    not answers at all:
+
+    - A HOLD IS NOT A PRICE (D49). `withheld` carries a reason, a watch and a note — a
+      judgement the operator wrote in words. Removing one does not return a row to a blank
+      field with a suggestion behind it; it puts the card back into the next `emit`, which is
+      a money consequence in the direction that costs. The owner's store carries **23**, every
+      one of them `bullish`. A clear never touches them, and the screen says the figure rather
+      than leaving it to be discovered.
+    - `channel != "price"` IS THE ABSENCE OF AN ANSWER. `cli/cmd_join.py` seeds
+      `Answer(value=None, channel="unknown")` for every card the catalogue could not price, and
+      `pipeline/decisions.py:blocking` reads that table to refuse an `emit`. Clearing one would
+      make an unpriced card read as though nothing were owed on it — again in the direction
+      that costs money.
+    - AN UNDATED ANSWER CANNOT BE PLACED BY AN AGE FILTER. 20 of the owner's carry no `at`:
+      they predate `stamp_answers`, or the migration folded them in with `from_run` and D103
+      states why inventing a date for those is refused. They are almost certainly the OLDEST
+      answers in the file, and "almost certainly" is not something this repo clears money on.
+      So an age filter leaves them alone and names them; `older_than_days=None` — the operator
+      saying *all of them* — takes them like any other typed price.
+
+    `skus` IS A SCOPE AND NEVER A PREDICATE. The route takes the client's list only to narrow
+    *which* answers are considered — the worklist the operator is looking at — and re-derives
+    membership here, from the file as it stands, on every call. A screen cannot name an answer
+    into being clearable: hand this a hold's SKU and it lands in `holds`.
+
+    `now` COMES FROM THE CALLER, for `stamp_answers`' reason: a module that reads a clock cannot
+    be driven by a test that wants to be at a particular moment.
+    """
+    scope = None if skus is None else {str(sku) for sku in skus}
+    out = Clear()
+    for sku, answer in sorted(book.answers.items()):
+        if scope is not None and sku not in scope:
+            continue
+        if answer.channel != "price":
+            out.unknown.append(sku)
+            continue
+        if answer.is_hold:
+            out.holds.append(sku)
+            continue
+        if older_than_days is None:
+            out.skus.append(sku)
+            continue
+        age = age_in_days(answer.at, now)
+        if age is None:
+            out.undated.append(sku)
+        elif age >= older_than_days:
+            out.skus.append(sku)
+    return out
 
 
 # ------------------------------------------------------------------ folding the run files in

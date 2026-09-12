@@ -164,6 +164,18 @@ async function open(
     unsent?: Record<string, number>
     /** What no worklist can send, as the server names it. */
     unreachable?: { captured: number; in_review: number; unjoined: { run: string; cards: number }[]; reallocated: { run: string; box: number | null }[] }
+    /** WHICH ANSWERS A MASS-CLEAR MAY REMOVE, as the server names them — SKU to age in whole
+     *  days, or `null` for one carrying no readable date
+     *  (D-a-typed-price-is-cleared-by-a-press). It rides the ENVELOPE of `GET /pricing`, so a
+     *  case that sets it is stating what the server says rather than what the screen worked
+     *  out: the screen decides nothing about membership, which is the property these cases
+     *  exist to hold. Absent means a server that predates the route, and the control is then
+     *  not offered at all. */
+    clearable?: { days: Record<string, number | null>; holds: number; unknown: number }
+    /** What `POST /pricing/clear` answers. A function of the request body, because the
+     *  interesting cases are about WHAT THE SCREEN SENT — the scope and the window — and a
+     *  fixed payload could not tell a store-wide press from a scoped one. */
+    clear?: (body: Record<string, unknown>) => unknown
   } = {},
 ): Promise<Wire[]> {
   const wire: Wire[] = []
@@ -276,6 +288,52 @@ async function open(
     })
   })
 
+  /* THE MASS-CLEAR AND ITS WAY BACK (D-a-typed-price-is-cleared-by-a-press). Registered
+     BEFORE the bare `/pricing$` pattern below, which Playwright would otherwise never reach
+     for these — it matches most-recent-first, so the specific patterns go LAST and the two
+     here are more specific than the one they sit above only by being registered later. They
+     are `/pricing/clear` and `/pricing/restore`, which `/\/pricing$/` does not match, so the
+     ordering is belt and braces rather than load-bearing.
+
+     EVERY ROUTE THE SCREEN CALLS MUST BE STUBBED OR THE SUITE FAILS BY NAME: `shell.ts`'s
+     `sealCapture` records every unstubbed request to this checkout's capture port and asserts
+     the roster is empty afterwards. */
+  await page.route(/\/pricing\/clear$/, async (route) => {
+    const body = route.request().postDataJSON() as Record<string, unknown>
+    wire.push({ method: 'POST', path: '/pricing/clear', body })
+    await route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify(
+        options.clear?.(body) ?? {
+          ok: true,
+          cleared: {},
+          count: 0,
+          holds: 0,
+          unknown: 0,
+          undated: 0,
+          answers: 0,
+          revision: 'rev-cleared',
+        },
+      ),
+    })
+  })
+  await page.route(/\/pricing\/restore$/, async (route) => {
+    const body = route.request().postDataJSON() as Record<string, unknown>
+    wire.push({ method: 'POST', path: '/pricing/restore', body })
+    const answers = (body.answers ?? {}) as Record<string, unknown>
+    await route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify({
+        ok: true,
+        restored: Object.keys(answers),
+        skipped: [],
+        revision: 'rev-restored',
+      }),
+    })
+  })
+
   /* THE PRICING CORPUS — one document for the store, and the answer (D86, amended).
      Cases still name `decisions` because that is what a run's answers were called, and the
      fixture projects it into the corpus the screen reads. That keeps every case written
@@ -332,6 +390,12 @@ async function open(
         },
         path: '/tmp/prices.json',
         revision: 'rev-1',
+        /* BESIDE THE DOCUMENT AND NEVER INSIDE IT. `PUT /pricing` sends `corpus` back
+           wholesale and the server round-trips keys it does not recognise, so a derived block
+           written into the document would be stored in `inventory/prices.json`. Absent unless
+           a case names it, which is the pre-route server and the state that hides the
+           control. */
+        ...(options.clearable === undefined ? {} : { clearable: options.clearable }),
       }),
     })
   })
@@ -3311,4 +3375,207 @@ test('typing in a Qty field does not reach the row keys either', async ({ page }
   await expect(field).toHaveValue('2')
   await expect(page.locator('.pricing-holdpanel')).toHaveCount(0)
   expect(wire.filter((r) => r.path.includes('/history')).length).toBe(0)
+})
+
+
+/* ============================================================================================
+   THE MASS-CLEAR (D-a-typed-price-is-cleared-by-a-press)
+
+   THE PRESS ITSELF IS THE LEAST INTERESTING THING HERE. `harness/tests/t7_store_and_seams.py:
+   check_pricing_clear` executes the route: what may go, what may not, the restore's
+   provenance and the stale-write refusal, all against real Python. These cases are about the
+   SCREEN, and specifically about the two properties a stub cannot fake — that the figure in
+   the label is the figure that will go, and that the scope the operator chose is the scope
+   that travels. A fulfilled 200 is green whether or not the button said the right number.
+   ============================================================================================ */
+
+/** Four typed answers the server calls clearable, aged the way the owner's store is: two five
+ *  days old, one today, one carrying no date at all. Plus a hold and an unpriced row it does
+ *  NOT call clearable — which is the half the screen must never invent for itself. */
+const CLEARABLE = {
+  days: { '8608859': 5, '8608459': 5, '9191210': 0, '9038187': null as number | null },
+  holds: 2,
+  unknown: 1,
+}
+
+/** FOUR DISTINCT CARDS, because the price field is labelled by NAME and four rows sharing one
+ *  would make `Price for Articuno` four elements. */
+const CLEAR_ROWS = [
+  sku({ sku: '8608859', name: 'Articuno' }),
+  sku({ sku: '8608459', name: 'Dunsparce' }),
+  sku({ sku: '9191210', name: 'LeBlanc' }),
+  sku({ sku: '9038187', name: 'Deathgrip' }),
+]
+
+test('the clear control is absent on a server that does not offer it', async ({ page }) => {
+  /* NOT DISABLED AND NOT OFFERED OVER A GUESS. A capture server that predates the route
+     answers no `clearable` block, and the screen has no way to know which of its answers are
+     holds — so the control is dead rather than drawn over an assumption about money. */
+  await open(page, { skus: CLEAR_ROWS })
+  await expect(page.getByRole('button', { name: 'Clear typed prices in bulk' })).toBeDisabled()
+})
+
+test('the sheet leads with the worklist, and the label carries the figure', async ({ page }) => {
+  await open(page, { skus: CLEAR_ROWS, clearable: CLEARABLE })
+  await page.getByRole('button', { name: 'Clear typed prices in bulk' }).click()
+
+  const sheet = page.locator('.clearprices')
+  await expect(sheet).toBeVisible()
+
+  /* THE NARROW SCOPE IS SELECTED. The corpus is one file for the whole store (D86), so
+     "everywhere" is the shape this act naturally has and is exactly why it may not be what a
+     press lands on by default. */
+  await expect(sheet.getByRole('button', { name: /On this worklist/ })).toHaveAttribute(
+    'aria-pressed',
+    'true',
+  )
+  /* AND THE FIGURE IS IN THE BUTTON, NOT IN A TOOLTIP. Four clearable answers, all four on
+     this worklist, no window — the button says four. */
+  await expect(sheet.locator('.clearprices-foot .bn-btn-danger-solid')).toContainText(
+    'Clear 4 typed prices',
+  )
+})
+
+test('what the clear leaves alone is on the screen, not in a tooltip', async ({ page }) => {
+  await open(page, { skus: CLEAR_ROWS, clearable: CLEARABLE })
+  await page.getByRole('button', { name: 'Clear typed prices in bulk' }).click()
+
+  /* THE HOLDS AND THE UNPRICED ROWS ARE NAMED BY COUNT. An operator asking "does this touch my
+     holds" has to be able to answer it without pressing anything — D49's holds carry a reason
+     and a watch, and removing one puts the card back into the next emit. */
+  const spares = page.locator('.clearprices-spares')
+  await expect(spares).toContainText('2')
+  await expect(spares).toContainText('held back on purpose')
+  await expect(spares).toContainText('no catalogue price')
+})
+
+test('an age window narrows the label, and never takes an undated answer', async ({ page }) => {
+  await open(page, { skus: CLEAR_ROWS, clearable: CLEARABLE })
+  await page.getByRole('button', { name: 'Clear typed prices in bulk' }).click()
+  const sheet = page.locator('.clearprices')
+  const press = sheet.locator('.clearprices-foot .bn-btn-danger-solid')
+
+  /* EVERY WINDOW DRAWS ITS OWN COUNT BEFORE THE PRESS, which is D103's finding: a window can
+     select nothing for a reason that is about the store's age rather than about the answers,
+     and the remedy is that the zero is visible rather than discovered by pressing. */
+  const anyAge = sheet.locator('.clearprices-age', { hasText: 'Any age' })
+  await expect(anyAge.locator('.clearprices-age-count')).toHaveText('4')
+
+  const threeDays = sheet.locator('.clearprices-age', { hasText: '3+ days' })
+  /* TWO, NOT THREE: the two aged five days. The one answered today is out of the window and
+     THE UNDATED ONE IS LEFT ALONE — an age filter cannot place an answer with no date, and
+     guessing that it must be old is the direction that deletes money. */
+  await expect(threeDays.locator('.clearprices-age-count')).toHaveText('2')
+  await threeDays.click()
+  await expect(press).toContainText('Clear 2 typed prices')
+
+  /* AND THE SHEET SAYS WHY THE FOURTH IS MISSING. */
+  await expect(page.locator('.clearprices-spares')).toContainText('carry no date')
+
+  /* A WINDOW THAT SELECTS NOTHING SAYS SO AND REFUSES THE PRESS, rather than offering a
+     button that does nothing. */
+  await sheet.locator('.clearprices-age', { hasText: '14+ days' }).click()
+  await expect(press).toContainText('Nothing to clear')
+  await expect(press).toBeDisabled()
+})
+
+test('the scope the operator chose is the scope that travels', async ({ page }) => {
+  const wire = await open(page, { skus: CLEAR_ROWS, clearable: CLEARABLE })
+  await page.getByRole('button', { name: 'Clear typed prices in bulk' }).click()
+  const sheet = page.locator('.clearprices')
+
+  /* THE WORKLIST SCOPE SENDS SKUS. This is the assertion the whole sheet exists for: the
+     press an operator makes while looking at one run's rows must not reach the rest of the
+     store, and the only thing that makes that true on the wire is this list. */
+  await sheet.locator('.clearprices-foot .bn-btn-danger-solid').click()
+  const scoped = wire.filter((r) => r.path === '/pricing/clear').at(-1)
+  expect(scoped?.body).toBeTruthy()
+  expect((scoped?.body as { skus?: string[] }).skus?.sort()).toEqual(
+    ['8608459', '8608859', '9038187', '9191210'],
+  )
+  /* AND NO WINDOW, because none was chosen — absent means every age, and a default here would
+     be the expiry rule the owner refused wearing a different hat. */
+  expect((scoped?.body as { older_than_days?: number }).older_than_days).toBeUndefined()
+  /* AND THE REVISION IT READ, so a file that moved underneath refuses instead of destroying a
+     write nobody saw happen (D86's guard). */
+  expect((scoped?.body as { revision?: string }).revision).toBe('rev-1')
+})
+
+test('the store-wide scope sends no SKUs, and says so in the label', async ({ page }) => {
+  const wire = await open(page, { skus: CLEAR_ROWS, clearable: CLEARABLE })
+  await page.getByRole('button', { name: 'Clear typed prices in bulk' }).click()
+  const sheet = page.locator('.clearprices')
+
+  await sheet.getByRole('button', { name: /Everywhere/ }).click()
+  /* THE BLAST RADIUS IS IN THE LABEL AND IN A SENTENCE BESIDE IT. "Clear" over four hundred
+     answers is the ambush this sheet exists to prevent. */
+  await expect(sheet.locator('.clearprices-foot .bn-btn-danger-solid')).toContainText(
+    'everywhere',
+  )
+  await expect(sheet.locator('.clearprices-scope-says')).toContainText('Every run at once')
+
+  await sheet.locator('.clearprices-foot .bn-btn-danger-solid').click()
+  const all = wire.filter((r) => r.path === '/pricing/clear').at(-1)
+  /* ABSENT AND NOT AN EMPTY LIST. An empty `skus` is a real scope that clears nothing; the
+     whole store is the absence of a narrowing. */
+  expect((all?.body as { skus?: string[] }).skus).toBeUndefined()
+})
+
+test('a clear empties the fields it cleared, and offers the way back', async ({ page }) => {
+  const wire = await open(page, {
+    skus: CLEAR_ROWS,
+    clearable: CLEARABLE,
+    decisions: { rule: 'match', basis: 'market', overrides: { '8608859': '4.50' } },
+    clear: () => ({
+      ok: true,
+      cleared: { '8608859': { value: '4.50', at: '2026-09-07T06:50:31.891+00:00' } },
+      count: 1,
+      holds: 2,
+      unknown: 1,
+      undated: 0,
+      answers: 3,
+      revision: 'rev-cleared',
+    }),
+  })
+  const field = page.getByLabel('Price for Articuno')
+  await expect(field).toHaveValue('4.50')
+
+  await page.getByRole('button', { name: 'Clear typed prices in bulk' }).click()
+  await page.locator('.clearprices-foot .bn-btn-danger-solid').click()
+
+  /* THE FIELD GOES BACK TO THE SUGGESTION. The row is not removed and nothing else moves —
+     a press changes what is on the screen, never where the rest of it is (D118). */
+  await expect(field).toHaveValue('')
+  await expect(page.locator('.clearprices')).toBeHidden()
+
+  /* THE RECEIPT CARRIES THE FIGURE AND NAMES WHAT SURVIVED. */
+  const toast = page.locator('.bn-toast').last()
+  await expect(toast).toContainText('1 typed price cleared')
+  await expect(toast).toContainText('2 held back on purpose')
+
+  /* AND THE WAY BACK PUTS THE ANSWER ITSELF BACK — value and date — rather than asking for it
+     to be re-typed. */
+  await toast.getByRole('button', { name: 'Undo' }).click()
+  await expect(field).toHaveValue('4.50')
+  const back = wire.filter((r) => r.path === '/pricing/restore').at(-1)
+  expect(back?.body).toEqual({
+    answers: { '8608859': { value: '4.50', at: '2026-09-07T06:50:31.891+00:00' } },
+    revision: 'rev-cleared',
+  })
+})
+
+test('the clear is refused while the screen has an unsaved answer', async ({ page }) => {
+  /* `#/pricing` autosaves the whole document, so a clear landing under an unsaved keystroke
+     would be undone by the next save — D86's two-writer defect reached from inside one tab.
+     The sheet says so rather than failing quietly. */
+  await open(page, { skus: CLEAR_ROWS, clearable: CLEARABLE })
+  await page.route(/\/pricing$/, async (route) => {
+    if (route.request().method() !== 'PUT') return route.fallback()
+    /* Never answers, so the screen stays `saving` for the length of this case. */
+    await new Promise(() => {})
+  })
+  await page.getByLabel('Price for Articuno').fill('3.21')
+  await page.getByRole('button', { name: 'Clear typed prices in bulk' }).click()
+  await expect(page.locator('.clearprices-foot .bn-btn-danger-solid')).toBeDisabled()
+  await expect(page.locator('.clearprices')).toContainText('Save first')
 })

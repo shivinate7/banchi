@@ -94,7 +94,7 @@ from datetime import datetime, timedelta, timezone
 from decimal import Decimal
 from typing import Dict, List, Mapping, Optional, Sequence, Tuple
 
-from pipeline import pricing, tcgcsv
+from pipeline import corpus, pricing, tcgcsv
 
 #: The price a markdown starts from. `pricing.BASES` is deliberately NOT widened to include
 #: it. `basis` reaches `join` and `emit` through `cli/__main__.py`'s `choices=`, and there the
@@ -170,19 +170,16 @@ def check_basis(basis: str) -> str:
 def _parse_stamp(stamp: Optional[str]) -> Optional[datetime]:
     """An ISO stamp as an aware datetime; naive reads as UTC, garbage reads as None.
 
-    Duplicated from `store/master.py` on purpose, the way `pipeline/livecheck.py` duplicates
-    its own `_int`: this module does not import `store`, so a caller may drive it with plain
-    strings and a harness may drive it with no database at all.
+    ONE IMPLEMENTATION, AND IT IS `pipeline/corpus.py:parse_stamp`. This body was duplicated
+    from `store/master.py` on purpose, for a reason that is still true and no longer forces a
+    copy: *"this module does not import `store`, so a caller may drive it with plain strings
+    and a harness may drive it with no database at all."* `pipeline/corpus.py` imports `store`
+    only inside function bodies, under the identical constraint, and it is where `Answer.at` —
+    the stamp this function is pointed at every time the ratchet runs — is defined. Two readers
+    of one field is how `priced_recently` and a mass-clear would come to disagree about which
+    answers are old.
     """
-    if not stamp:
-        return None
-    try:
-        when = datetime.fromisoformat(str(stamp))
-    except (TypeError, ValueError):
-        return None
-    if when.tzinfo is None:
-        when = when.replace(tzinfo=timezone.utc)
-    return when
+    return corpus.parse_stamp(stamp)
 
 
 def _before(stamp: Optional[str], cut: datetime) -> Optional[bool]:
