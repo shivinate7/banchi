@@ -2662,7 +2662,21 @@ COMPONENTS = [
                         "rule) — measured at 142 of 146 stored labels wrong on the owner's "
                         "two joined runs. It goes through cli/resolve.py:box_views rather "
                         "than capture_server._Places because capture_server imports THIS "
-                        "module, and the file on disk is not touched.",
+                        "module, and the file on disk is not touched. GET /pipeline/value "
+                        "(D-a-band-is-copies-in-drawers) is the store-wide sibling of the "
+                        "worklist: every card ON HAND, ranked by market, ONE ROW PER PHYSICAL "
+                        "COPY rather than per SKU — the owner's 122 cards at or above $5 are "
+                        "38 SKUs, so a per-SKU list draws a third of the rows and sends a hand "
+                        "to a third of the drawers. NOTHING ON HAND IS OMITTED: 390 of their "
+                        "2,245 cards carry no market price, and each arrives with a `why` "
+                        "naming which of three causes it is, because each has a different "
+                        "remedy. The reading is the NEWEST by clock across run tables and the "
+                        "newest live export — never a precedence between the two, which is "
+                        "wrong on this store today because the newest fetch is a day older "
+                        "than the newest join. It takes no band: a typed price, the cut-off, a "
+                        "percentile and the drawer ranking are all slices of the one order it "
+                        "answers with, and a percentile needs the whole list anyway. A read "
+                        "that presses nothing — 0.11s and ~739KB measured.",
                 # D1 is the two-phase split, which is why join/emit/reconcile can answer in
                 # the request and identify cannot. D9 is the decisions gate. D13 is one truth
                 # on one Mac, which is what a detached child outliving this process rests on.
@@ -2673,7 +2687,8 @@ COMPONENTS = [
                                 "D20", "D21", "D22", "D24", "D25", "D29", "D32", "D33", "D35",
                                 "D36", "D43", "D47", "D48", "D49", "D54", "D56", "D58", "D59",
                                 "D62", "D64", "D65", "D68", "D76", "D78", "D79", "D86", "D87",
-                                "D88", "D100", "D103"],
+                                "D88", "D100", "D103", "D147",
+                                "D-a-band-is-copies-in-drawers"],
                 "tested_by": ["T7"],
             },
             "shipping_routes.py": {
@@ -3339,7 +3354,13 @@ COMPONENTS = [
                                                   "D49", "D57", "D58", "D86", "D103"]},
             "src/types.ts": {"does": "the shapes the server speaks, in the server's own field "
                                      "names — captures, inventory, boxes, listings and the "
-                                     "standing queues. Types only, it emits no JavaScript.",
+                                     "standing queues. Types only, it emits no JavaScript. "
+                                     "`ValueTable` and `ValueCopy` are the value band's shapes "
+                                     "(D-a-band-is-copies-in-drawers): the UNIT IS THE COPY and "
+                                     "never the SKU, and an unpriceable card is a row carrying "
+                                     "`market: null` and a `why`, because 390 of the owner's "
+                                     "2,245 cards on hand have no price and a ranking that "
+                                     "dropped 17% of the store would be a silent drop.",
                              "governed_by": ["D145", "D3", "D4", "D6", "D7", "D8", "D9", "D10", "D11",
                                              "D16", "D20", "D21", "D22", "D23", "D24", "D26",
                                              "D28", "D29", "D30", "D32", "D33", "D34", "D36",
@@ -3348,7 +3369,8 @@ COMPONENTS = [
                                              "D63", "D64", "D65", "D67", "D69", "D73", "D76",
                                              "D79", "D83", "D86", "D87", "D89", "D91", "D92",
                                              "D93", "D100", "D103", "D104", "D113", "D115",
-                                             "D116", "D132", "D134"]},
+                                             "D116", "D132", "D134", "D147",
+                                             "D-a-band-is-copies-in-drawers"]},
             "src/deviceMemory.ts": {"does": "every `localStorage` key the shell owns — the "
                                             "theme, the rail, which order statuses this "
                                             "device bothers fetching (D114), whether the "

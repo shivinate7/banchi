@@ -22938,6 +22938,240 @@ def check_supervisor_recovery(checks: Checks) -> None:
     )
 
 
+
+def check_value_table(checks: Checks) -> None:
+    """Every card on hand, ranked by what it is worth, with nothing dropped.
+
+    THE OWNER ASKED FOR THIS AND THE MEASUREMENT SHAPED IT: *"a way to see at all times ...
+    either the most valuable or least valuable cards so maybe i can easily start querying them
+    for bulk collection and taking them out of boxes"*. What the store said when it was
+    measured before anything was built is why the cases below are the cases: 122 of their
+    cards sit at or above $5 and those are only 38 SKUs, 1,042 sit under the cut-off, and 390
+    of 2,245 cards on hand carry no market price at all.
+
+    THE FIXTURE IS THAT SHAPE IN MINIATURE — one SKU in three slots, one cheap SKU, a card
+    never identified, a card identified with nothing read off it, a SKU with no reading, a
+    malformed market cell, and a sold copy — because every claim here is about a case a
+    smaller store does not contain.
+
+    WHAT IT ASSERTS THAT NOTHING ELSE DOES: that the newest reading wins ON A CLOCK rather
+    than on a precedence between run tables and live exports. The obvious rule — "a live fetch
+    beats a run table" — is wrong on the owner's own store today, where the newest fetch is a
+    day older than the newest join, and a fixed precedence would serve the stale figure for
+    every SKU both files carry.
+    """
+    checks.note("")
+    checks.note("VALUE TABLE — every card on hand, ranked, nothing dropped")
+
+    RICH, CHEAP, UNREAD, BROKEN = "9027460", "8925667", "7000001", "7000002"
+
+    with isolated_home():
+        with Store().write() as snapshot:
+            inventory = snapshot.inventory
+            inventory.ensure_box(1, name="WB1 R2")
+            inventory.ensure_box(2, name="ME01 C/UC")
+
+            def put(box: int, sku, name, state=master.IDENTIFIED):
+                card, _ = inventory.allocate_capture(box)
+                card.sku = sku
+                card.name = name
+                card.game = "riftbound"
+                card.state = state
+                return card
+
+            # ONE SKU IN THREE SLOTS — the case that decides the unit of the row. On the
+            # owner's store this is Rengar, Trophy Hunter at $41.57 in three slots of box 4.
+            for _ in range(3):
+                put(1, RICH, "Last Rites")
+            put(1, CHEAP, "Towering Combatant")
+            put(1, UNREAD, "A card no export prices")
+            put(1, BROKEN, "A card whose market cell is junk")
+            # NEVER IDENTIFIED — captured and waiting on a run. 214 of the owner's.
+            put(1, None, None, state=master.CAPTURED)
+            # IDENTIFIED AND THE MODEL READ NOTHING — a photograph and no SKU. 172 of theirs.
+            put(1, None, "")
+            # DEPARTED — must not appear at all.
+            put(1, RICH, "Last Rites", state=master.SOLD)
+            # A second drawer, entirely cheap, which is the shape boxes 2 and 5 have.
+            for _ in range(4):
+                put(2, CHEAP, "Towering Combatant")
+            inventory.listing(RICH).live = 2
+
+        def table(run: str, at: float, rows) -> None:
+            directory = files.runs_dir() / run
+            directory.mkdir(parents=True, exist_ok=True)
+            files.write_json(directory / "manifest.json", {"joined": True})
+            path = directory / "pricing.json"
+            files.write_json(path, {"run": run, "skus": rows})
+            os.utime(path, (at, at))
+
+        def row(sku, market, name, set_name="Spiritforged"):
+            return {
+                "sku": sku,
+                "name": name,
+                "set_name": set_name,
+                "condition": "Near Mint Foil",
+                "snap": {"market": market},
+            }
+
+        OLD, NEW = 1789000000, 1789100000
+        table("2026-09-01-box1-01", OLD, [row(RICH, "9.00", "Last Rites"), row(BROKEN, "", "Junk")])
+        table(
+            "2026-09-11-box1-02",
+            NEW,
+            [row(RICH, "47.57", "Last Rites"), row(CHEAP, "0.03", "Towering Combatant")],
+        )
+        # A LIVE FETCH OLDER THAN THE NEWEST RUN TABLE, which is the owner's actual situation.
+        # Its figure for RICH must LOSE, and its figure for BROKEN must still win — the clock
+        # is per SKU and not per file.
+        live = files.inventory_dir() / pipeline_routes.LIVE_DIR
+        live.mkdir(parents=True, exist_ok=True)
+        stamp = datetime.fromtimestamp(OLD + 1, timezone.utc).strftime("%Y%m%d-%H%M%S")
+        header = (
+            "TCGplayer Id,Product Line,Set Name,Product Name,Title,Number,Rarity,Condition,"
+            "TCG Market Price,TCG Direct Low,TCG Low Price With Shipping,TCG Low Price,"
+            "Total Quantity,Add to Quantity,TCG Marketplace Price,Photo URL"
+        )
+        body = "\r\n".join(
+            [
+                header,
+                f'"{RICH}","Riftbound","Spiritforged","Last Rites","","","","Near Mint Foil","1.00","","","","2","0","1.00",""',
+                f'"{BROKEN}","Riftbound","Spiritforged","Junk","","","","Near Mint","not-a-price","","","","0","0","0.00",""',
+            ]
+        )
+        (live / f"{pipeline_routes.LIVE_PREFIX}{stamp}.csv").write_bytes(
+            (body + "\r\n").encode("utf-8")
+        )
+
+        book = corpus.Corpus.read()
+        book.threshold = "0.29"
+        book.answers[RICH] = corpus.Answer(value="44.00")
+        book.write()
+
+        payload = pipeline_routes.do_pipeline_value()
+        copies = payload["copies"]
+        at = {(row["box"], row["index"]): row for row in copies}
+
+        # --- the unit is the copy ---------------------------------------------------------
+        checks.equal(
+            sum(1 for row in copies if row["sku"] == RICH),
+            3,
+            "one SKU in three slots draws three rows, not one",
+        )
+        checks.equal(len(copies), 12, "every card on hand is a row and the sold one is not")
+        checks.ok(
+            all(row["state"] not in master.TERMINAL_STATES for row in copies),
+            "a departed copy is in no band",
+        )
+
+        # --- the newest reading wins on the clock, per SKU ---------------------------------
+        checks.equal(
+            at[(1, 1)]["market"],
+            "47.57",
+            "the newest run table beats an OLDER live fetch (never a file precedence)",
+        )
+        checks.equal(
+            at[(1, 1)]["source"],
+            "2026-09-11-box1-02",
+            "and the row says which file answered it",
+        )
+
+        # --- nothing on hand is omitted, and the three causes stay apart ------------------
+        checks.equal(
+            at[(1, 6)]["market"], None, "a market cell that will not parse is unpriced"
+        )
+        checks.equal(
+            at[(1, 6)]["why"],
+            "no_reading",
+            "and it is `no_reading`, NEVER $0.00 — a junk cell ranked as zero lands in a bulk pull",
+        )
+        checks.equal(at[(1, 5)]["why"], "no_reading", "a SKU no file prices is `no_reading`")
+        checks.equal(
+            at[(1, 7)]["why"],
+            "never_identified",
+            "a captured card with no SKU is `never_identified` — the remedy is a run",
+        )
+        checks.equal(
+            at[(1, 8)]["why"],
+            "read_nothing",
+            "an identified card the model read nothing off is `read_nothing` — a human looks at it",
+        )
+        checks.equal(
+            payload["unrankable"],
+            {
+                "total": 4,
+                "never_identified": 1,
+                "read_nothing": 1,
+                "no_reading": 2,
+                "by_box": {"1": 4},
+            },
+            "and the header counts all four with each cause named",
+        )
+
+        # --- the order is the band ---------------------------------------------------------
+        priced = [row for row in copies if row["market"] is not None]
+        checks.equal(
+            [row["market"] for row in priced[:3]],
+            ["47.57", "47.57", "47.57"],
+            "sorted by market descending",
+        )
+        checks.equal(
+            [(row["box"], row["index"]) for row in priced[:3]],
+            [(1, 1), (1, 2), (1, 3)],
+            "ties break on (box, index), so one price is one reach into the drawer",
+        )
+        checks.ok(
+            all(row["market"] is not None for row in copies[: len(priced)]),
+            "unpriced rows sort last and never interleave with the cheap band",
+        )
+
+        # --- the drawer is not a rollup of the priced rows ---------------------------------
+        drawer = {row["box"]: row for row in payload["boxes"]}
+        checks.equal(drawer[1]["cards"], 8, "a drawer counts every card in it")
+        checks.equal(drawer[1]["unpriced"], 4, "including the ones it cannot price")
+        checks.equal(
+            drawer[1]["per_card"],
+            "17.84",
+            "and the mean divides by ALL of them — dividing by the priced subset flatters the drawer",
+        )
+        checks.equal(drawer[2]["under_cutoff"], 4, "box 2 is entirely under the cut-off")
+        checks.equal(drawer[2]["at_or_over"], 0, "with nothing at or over it")
+        checks.equal(drawer[1]["top"], "47.57", "and a drawer says its best card")
+        checks.equal(drawer[2]["name"], "ME01 C/UC", "a drawer carries the name the owner gave it")
+
+        # --- the rest of the row ------------------------------------------------------------
+        checks.equal(
+            at[(1, 1)]["label"],
+            "Box 1 · Section 1 · Card 1",
+            "the label is composed against the box as it stands now (D58)",
+        )
+        checks.equal(at[(1, 1)]["live"], 2, "the row says how many copies TCGplayer holds")
+        checks.equal(
+            at[(1, 1)]["answer"],
+            "44.00",
+            "and what the operator decided to ask, which is not what it is worth (D86)",
+        )
+        checks.equal(payload["threshold"], "0.29", "the cut-off is the store's own (D9)")
+        checks.equal(
+            payload["totals"]["valued"], 8, "the totals count what could actually be ranked"
+        )
+        checks.equal(
+            {row["kind"] for row in payload["sources"]},
+            {"run", "live"},
+            "and both kinds of source are named",
+        )
+
+    # A STORE WITH NOTHING IN IT ANSWERS, RATHER THAN REFUSING. This is the fresh checkout, and
+    # it is the state every worktree in this repo is in.
+    with isolated_home():
+        empty = pipeline_routes.do_pipeline_value()
+        checks.equal(
+            (empty["copies"], empty["boxes"], empty["totals"]["cards"]),
+            ([], [], 0),
+            "an empty store answers an empty table and never a refusal",
+        )
+
+
 def run() -> Result:
     checks = Checks()
     check_pipeline_routes(checks)
@@ -23024,6 +23258,7 @@ def run() -> Result:
     check_shipping_lane(checks)
     check_shipping_routes(checks)
     check_shipping_stamps(checks)
+    check_value_table(checks)
     return checks.result(
         "store/, server/ and cli/ — the packages no harness test reached before this one."
     )

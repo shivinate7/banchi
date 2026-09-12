@@ -2243,6 +2243,422 @@ def do_pipeline_worklist(wanted: Sequence[str]) -> dict:
     }
 
 
+# ------------------------------------------------------- what every card on hand is worth
+
+
+#: Where a reading came from, and when. `at` is a UNIX SECOND so two sources of different
+#: kinds can be compared without parsing two date formats — a run table has an mtime and a
+#: fetched export has a stamp in its name, and neither is a superset of the other's freshness.
+class _Reading(NamedTuple):
+    market: str
+    at: int
+    source: str
+    name: Optional[str]
+    set_name: Optional[str]
+    condition: Optional[str]
+
+
+def _live_export_at(name: str) -> Optional[int]:
+    """The UNIX second a fetched live export was taken, out of its own filename.
+
+    THE NAME IS THE ONLY HONEST CLOCK HERE. `do_live_export` writes
+    `live-tcgplayer-<YYYYMMDD>-<HHMMSS>.csv` from `datetime.now(timezone.utc)` at the moment
+    of the fetch, and the file's mtime is the moment it was WRITTEN TO THIS DISK — the same
+    second today, and a different one entirely for a file restored from a backup or copied
+    between checkouts. The stamp travels with the bytes; the mtime does not.
+
+    `None` for a name this cannot read rather than a guess, which puts the file behind every
+    run table in `_readings` instead of in front of them. A reading whose age is unknown must
+    never win a comparison against one whose age is known.
+    """
+    stem = name[len(LIVE_PREFIX) :] if name.startswith(LIVE_PREFIX) else name
+    stem = stem[:-4] if stem.endswith(".csv") else stem
+    try:
+        moment = datetime.strptime(stem, "%Y%m%d-%H%M%S").replace(tzinfo=timezone.utc)
+    except ValueError:
+        return None
+    return int(moment.timestamp())
+
+
+def _readings() -> Tuple[Dict[str, _Reading], List[dict]]:
+    """`sku -> the NEWEST market price this machine has read for it`, and where each came from.
+
+    TWO SOURCES, COMPARED ON A CLOCK RATHER THAN ON A PRECEDENCE RULE, and the clock is what
+    makes this correct. The obvious shape — "a fetched live export beats a run table" — is
+    wrong on this store today: the newest live fetch is 2026-09-10 and the newest run table
+    was written 2026-09-11, so a fixed precedence would serve a day-old figure for every SKU
+    both files carry. Every reading therefore carries the second it was taken and the newest
+    wins, which is the same rule `reconcile --live` applies to a reading older than the
+    store's own `live_as_of` (D87, amended).
+
+      run tables    `runs/<n>/pricing.json`, at the table's own mtime — `do_pipeline_pricing`
+                    already establishes that this is the moment a join last read an export,
+                    and that every figure under `snap` came out of it.
+      live exports  the newest file under `inventory/.live`, at the stamp in its name. It is
+                    read through `tcgcsv.read_export` like every other export in this repo —
+                    never `split(",")`, which is a hard rule and not a style note.
+
+    MEASURED, ON THE OWNER'S STORE, WHICH IS WHY BOTH ARE HERE: run tables alone price 1,823
+    of 2,245 cards on hand (81.2%), the newest live export alone 1,584 (70.6%), and the two
+    together 1,855 (82.6%). The 32 cards the second source adds are cards whose run predates
+    a listing — and the freshness it brings reaches every SKU both files hold.
+
+    IT NEVER RAISES. A run directory half-written, a live export that will not parse, a
+    `snap` with no `market` cell — each costs its own rows and none of them costs the screen,
+    which is `_box_names`' rule and `do_status`' before it. What a caller gets instead is a
+    short `sources` list saying which files actually answered, so a thin reading is legible
+    as a thin reading rather than as a store with no valuable cards in it.
+    """
+    found: Dict[str, _Reading] = {}
+    sources: List[dict] = []
+
+    def offer(sku: str, reading: _Reading) -> None:
+        here = found.get(sku)
+        if here is None or reading.at >= here.at:
+            found[sku] = reading
+
+    root = files.runs_dir()
+    if root.is_dir():
+        for entry in sorted(root.iterdir()):
+            table = entry / run_files.PRICING
+            if not entry.is_dir() or not table.is_file():
+                continue
+            try:
+                parsed = json.loads(table.read_text("utf-8"))
+                at = int(table.stat().st_mtime)
+            except (OSError, ValueError):
+                continue
+            priced = 0
+            for row in parsed.get("skus") or ():
+                if not isinstance(row, dict):
+                    continue
+                sku = str(row.get("sku") or "")
+                market = (row.get("snap") or {}).get("market")
+                if not sku or not market:
+                    continue
+                priced += 1
+                offer(
+                    sku,
+                    _Reading(
+                        market=str(market),
+                        at=at,
+                        source=entry.name,
+                        name=row.get("name"),
+                        set_name=row.get("set_name"),
+                        condition=row.get("condition"),
+                    ),
+                )
+            if priced:
+                sources.append(
+                    {"kind": "run", "name": entry.name, "at": at, "skus": priced}
+                )
+
+    # THE NEWEST FETCH ONLY, AND NOT THE DIRECTORY. `do_live_export` never sweeps that
+    # directory — the file is the evidence for the reading the store wrote off it — so it
+    # holds every fetch this machine has ever made (nine, on the owner's store). Reading all
+    # of them would parse ~1.2MB to have the newest overwrite the rest by the clock above.
+    directory = files.inventory_dir() / LIVE_DIR
+    fetched = sorted(directory.glob(f"{LIVE_PREFIX}*.csv")) if directory.is_dir() else []
+    if fetched:
+        newest = fetched[-1]
+        at = _live_export_at(newest.name)
+        if at is not None:
+            try:
+                export = tcgcsv.read_export(newest)
+            except (tcgcsv.MalformedCsv, OSError):
+                export = None
+            if export is not None:
+                priced = 0
+                for row in export.rows:
+                    sku = str(row.get(tcgcsv.SKU_COLUMN) or "")
+                    market = row.get(tcgcsv.MARKET_PRICE_COLUMN) or ""
+                    if not sku or not market.strip():
+                        continue
+                    priced += 1
+                    offer(
+                        sku,
+                        _Reading(
+                            market=market.strip(),
+                            at=at,
+                            source=newest.name,
+                            name=row.get(tcgcsv.NAME_COLUMN),
+                            set_name=row.get(tcgcsv.SET_COLUMN),
+                            condition=row.get(tcgcsv.CONDITION_COLUMN),
+                        ),
+                    )
+                if priced:
+                    sources.append(
+                        {"kind": "live", "name": newest.name, "at": at, "skus": priced}
+                    )
+
+    sources.sort(key=lambda row: row["at"], reverse=True)
+    return found, sources
+
+
+#: Why a card on hand carries no market price. Three causes, three remedies, and a screen
+#: that collapsed them would be telling the operator to do one thing for three problems.
+_NEVER_IDENTIFIED = "never_identified"
+_READ_NOTHING = "read_nothing"
+_NO_READING = "no_reading"
+
+
+def _market_of(text) -> Optional[Decimal]:
+    """A market cell as money, or `None` for anything that is not money. It never raises.
+
+    `tcgcsv.parse_price` RAISES ON A CELL THAT IS NOT A NUMBER, and that is right where it is
+    used — every other caller is reading a file the operator is about to upload, where a
+    malformed price has to stop the write rather than be quietly dropped. Here the same cell
+    is one row of two thousand on a screen, and the reading this route can honestly give is
+    "no price", which `do_pipeline_value` then reports as `no_reading` with the rest.
+
+    NEVER A ZERO, WHICH IS THE WHOLE REASON THIS IS A FUNCTION. Coercing an unreadable cell to
+    `Decimal("0")` ranks the card at the very bottom of the cheap band and sweeps it into a
+    bulk pull — a wrong answer wearing the shape of a confident one, which is the failure this
+    repo refuses everywhere it prices.
+    """
+    try:
+        return tcgcsv.parse_price(str(text or ""))
+    except (ArithmeticError, ValueError, TypeError):
+        return None
+
+
+def do_pipeline_value() -> dict:
+    """`GET /pipeline/value` — every card on hand, with what it is worth and where it sits.
+
+    THE QUESTION IS PHYSICAL AND SO IS THE UNIT: one row per COPY, never per SKU. The owner
+    asked to *"immediately see either the most valuable or least valuable cards so maybe i
+    can easily start querying them for bulk collection and taking them out of boxes"*, and a
+    hand goes to a slot rather than to a SKU. Measured on their store: the 122 cards at or
+    above $5 are 38 SKUs — Rengar, Trophy Hunter at $40.73 sits in three slots of box 4 and
+    Vilemaw in seven — so a per-SKU list would draw 38 rows for 122 physical cards and send
+    the operator to a third of the drawer they actually have to open. `pipeline/join.py:
+    uncommitted_positions` counts the same way for the same reason.
+
+    IT IS A READ AND IT PRESSES NOTHING — `do_pipeline_worklist`'s posture, and the owner's
+    ruling for this screen: *"read-only now, writes once you've used it"*. No child, no
+    socket, no lock, no write. Taking a card out of a box is still `#/inventory`'s sale,
+    retirement or move, which is where the store already learns a card has left.
+
+    NOTHING ON HAND IS OMITTED, WHICH IS THE PART THAT COSTS FIELDS. 386 of the owner's 2,245
+    cards on hand carry no market price at all, and a ranked view that quietly dropped 17% of
+    the store would be the silent drop this repo forbids in as many words. So every on-hand
+    card is a row, a row with no price carries `market: null` and a `why` naming which of the
+    three causes it is, and `unrankable` counts them for the header:
+
+      `never_identified`  captured and never put through a run — 214 of theirs. The remedy is
+                          a run, and `#/runs` is where that is pressed.
+      `read_nothing`      identified, and the model returned no name and no number — 172 of
+                          theirs, every one with a photograph, none in the review or parked
+                          queue. The remedy is a human looking at the photograph.
+      `no_reading`        a SKU this machine has never seen a market price for — 4 of theirs.
+                          The remedy is a join or a live fetch.
+
+    THE BAND IS THE CLIENT'S AND THE FACTS ARE THIS ROUTE'S. Four ways of choosing a band
+    were asked for — a typed price, the store's own cut-off, a top-N percentile, and the
+    drawers ranked by value — and every one of them is a slice of the same ranked list.
+    Computing them here would be four server-side answers that a screen has to keep in step
+    with the sort it is already drawing, and a percentile in particular cannot be computed
+    without the whole list anyway. The rows arrive sorted by market DESCENDING, unpriced
+    last, so the head is the head and reversing it is the tail.
+
+    `boxes` IS NOT A ROLLUP OF `copies` AND MUST NOT BE COMPUTED FROM ONE. It counts every
+    card in the drawer including the unpriced ones, because the operator's question at the
+    drawer level is *is this whole box bulk* — and on their store the answer is yes twice:
+    box 2 is 540 of 542 cards under the cut-off and box 5 is 102 of 102, together 646 cards
+    worth $66.79. A rollup computed off priced rows alone would have said box 4 was 418 cards
+    when it holds 633, and called the 215 unpriced ones nothing.
+
+    THE LABEL IS COMPOSED FRESH AND THE STORED ONE IS NEVER SERVED — `_relabel_positions`'
+    rule (D58, on D56's), through the same `box_views` walk, so a copy that sold after a join
+    and a divider moved since both read against the box as it is today. `box` and `index` are
+    the store key beside it, exactly as `PricingSku.positions` splits them.
+    """
+    try:
+        inventory = Store().read().inventory
+    except (files.StoreError, OSError, ValueError, TypeError) as exc:
+        raise PipelineRefusal(
+            HTTPStatus.SERVICE_UNAVAILABLE,
+            "store_unreadable",
+            f"The store could not be read, so nothing can be valued: {exc}",
+        ) from None
+
+    found, sources = _readings()
+    views = run_resolve.box_views(inventory)
+    # THE CORPUS ANSWERS THE ASKING PRICE AND NEVER THE RANKING, and an unreadable one costs
+    # only that column — `do_pipeline_pricing`'s call, for its reason: a screen that will not
+    # draw because the answers file is malformed is a screen that cannot show you the file.
+    try:
+        book = corpus.Corpus.read()
+    except (decisions.MalformedDecisions, ValueError, OSError):
+        book = corpus.Corpus()
+    answers = book.to_payload().get("skus") or {}
+    threshold = _policy_threshold(book)
+    # THE CUT-OFF IS THE STORE'S OWN FIGURE AND `FLOOR` IS ONLY THE FALLBACK (D9, amended
+    # 2026-09-09). `policy.threshold` does all three jobs — the price at which a card earns a
+    # listing, the price the cheap half goes out at, and the price nothing may go below — so
+    # the drawer counts below partition on exactly the line `emit` partitions on.
+    cut = _market_of(threshold) or pricing_mod.FLOOR
+    listings = inventory.listings
+
+    copies: List[dict] = []
+    tally: Dict[int, dict] = {}
+    unrankable = {_NEVER_IDENTIFIED: 0, _READ_NOTHING: 0, _NO_READING: 0}
+    by_box: Dict[str, int] = {}
+    total = Decimal("0")
+    valued = 0
+
+    for card in inventory.cards.values():
+        if card.state in master.TERMINAL_STATES:
+            continue
+        try:
+            box, index = int(card.box), int(card.index)
+        except (TypeError, ValueError):
+            # A RECORD WHOSE POSITION WILL NOT COERCE IS SKIPPED, `do_inventory`'s rule: it
+            # sits in no drawer a hand can be sent to and belongs to no box a total can be
+            # counted against, so there is nothing this screen could truthfully say about it.
+            # `do_status` is where a record like that is reported, and it reports it already.
+            continue
+
+        sku = str(card.sku or "")
+        reading = found.get(sku) if sku else None
+        market: Optional[Decimal] = None
+        if reading is not None:
+            market = _market_of(reading.market)
+            if market is None:
+                # A CELL THAT WILL NOT PARSE IS UNPRICED AND NEVER A ZERO. Ranking a card at
+                # $0.00 because its market cell was malformed drops it to the very bottom of
+                # the cheap band and into a bulk pull — a wrong answer wearing the shape of a
+                # confident one, which is what this repo refuses everywhere it prices.
+                reading = None
+
+        why: Optional[str] = None
+        if market is None:
+            if not sku:
+                why = _NEVER_IDENTIFIED if card.state == master.CAPTURED else _READ_NOTHING
+            else:
+                why = _NO_READING
+            unrankable[why] += 1
+            by_box[str(box)] = by_box.get(str(box), 0) + 1
+
+        seat = tally.setdefault(
+            box,
+            {
+                "cards": 0,
+                "valued": 0,
+                "unpriced": 0,
+                "under": 0,
+                "over": 0,
+                "total": Decimal("0"),
+                "top": None,
+            },
+        )
+        seat["cards"] += 1
+        if market is None:
+            seat["unpriced"] += 1
+        else:
+            valued += 1
+            total += market
+            seat["valued"] += 1
+            seat["total"] += market
+            if market < cut:
+                seat["under"] += 1
+            else:
+                seat["over"] += 1
+            if seat["top"] is None or market > seat["top"]:
+                seat["top"] = market
+
+        record = listings.get(sku) if sku else None
+        answer = answers.get(sku) if sku else None
+        decided = answer.get("value") if isinstance(answer, dict) else None
+        copies.append(
+            {
+                "box": box,
+                "index": index,
+                "label": _position_label(views, inventory, box, index),
+                "sku": sku or None,
+                # THE READING'S OWN NAME FIRST AND THE CARD'S SECOND. The export row is what
+                # TCGplayer calls the product; `card.name` is what the model read off the
+                # photograph, and 172 of the owner's are the empty string. The one a person
+                # recognizes standing at the drawer is the catalogue's.
+                "name": (reading.name if reading else None) or card.name or None,
+                "set_name": (reading.set_name if reading else None) or card.set_hint or None,
+                "condition": (reading.condition if reading else None)
+                or card.condition
+                or None,
+                "game": card.game or None,
+                "state": card.state,
+                "market": tcgcsv.format_price(market) if market is not None else None,
+                # WHAT THE OPERATOR DECIDED TO ASK, WHICH IS NOT WHAT THE CARD IS WORTH (D86).
+                # Round-tripped as the corpus holds it — a string, a number, or a
+                # `WithheldRecord` — because flattening that last shape would turn a
+                # deliberate hold (D49) into a missing price.
+                "answer": decided,
+                # HOW MANY COPIES OF THIS SKU TCGPLAYER HOLDS, NEVER WHETHER THIS COPY IS ONE.
+                # `live` is per-SKU and the store does not record which physical copy a push
+                # spent — D147 decides that ordering at the write and not here — so a row
+                # claiming "this one is listed" would be inventing a fact. The operator ruled
+                # these appear with no distinction, which matters because 70% of the copies
+                # under their cut-off are live: this is context on the row, never a filter.
+                "live": int(getattr(record, "live", 0) or 0) if record is not None else 0,
+                "read_at": reading.at if reading is not None else None,
+                "source": reading.source if reading is not None else None,
+                "why": why,
+            }
+        )
+
+    # SORTED HERE RATHER THAN ON THE CLIENT, because the percentile band is a slice of this
+    # exact order and two sorts of one list is two places for a tie-break to differ. Ties
+    # break on `(box, index)`, so a band's rows arrive in walk order within each price — the
+    # measurement that shaped this screen is about contiguity, and a stable address order is
+    # what lets the cheap band read as 6.5 cards per reach rather than as 1,042 separate trips.
+    copies.sort(
+        key=lambda row: (
+            row["market"] is None,
+            -(_market_of(row["market"]) or Decimal("0")),
+            row["box"],
+            row["index"],
+        )
+    )
+
+    names = _box_names()
+    boxes = [
+        {
+            "box": box,
+            "name": getattr(names.get(box), "name", None),
+            "cards": seat["cards"],
+            "valued": seat["valued"],
+            "unpriced": seat["unpriced"],
+            "under_cutoff": seat["under"],
+            "at_or_over": seat["over"],
+            "total": tcgcsv.format_price(seat["total"]),
+            # THE MEAN IS OVER EVERY CARD IN THE DRAWER AND NOT OVER THE PRICED ONES. "What is
+            # a card out of this box worth" is the question that decides whether the whole
+            # drawer is bulk, and dividing by the priced subset would flatter box 4 — 633
+            # cards, 215 of them unpriced — against box 2, where every card has a price.
+            "per_card": tcgcsv.format_price(
+                (seat["total"] / seat["cards"]) if seat["cards"] else Decimal("0")
+            ),
+            "top": tcgcsv.format_price(seat["top"]) if seat["top"] is not None else None,
+        }
+        for box, seat in sorted(tally.items())
+    ]
+
+    return {
+        "at": master.now(),
+        "basis": "market",
+        "threshold": threshold,
+        "sources": sources,
+        "copies": copies,
+        "boxes": boxes,
+        "unrankable": {"total": sum(unrankable.values()), **unrankable, "by_box": by_box},
+        "totals": {
+            "cards": len(copies),
+            "valued": valued,
+            "value": tcgcsv.format_price(total),
+        },
+    }
+
+
 # ---------------------------------------------------------------- the store-wide reconcile
 
 

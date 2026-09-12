@@ -73,6 +73,7 @@ import type {
   OrderLineKindResult,
   OrderCloseReason,
   OrderCloseResult,
+  ValueTable,
 } from './types'
 
 /* The only module in this app that talks to the capture server.
@@ -2272,6 +2273,25 @@ export async function getPricingWorklist(runs: readonly string[] = []): Promise<
     `/pipeline/pricing${query === '' ? '' : `?${query}`}`,
     NO_CACHE,
   )) as PricingWorklist
+}
+
+/**
+ * Every card on hand, ranked by what TCGplayer says it is worth, with the drawer each one
+ * sits in — so the operator can take a band out of the boxes.
+ *
+ * IT TAKES NO BAND, AND THAT IS THE DESIGN RATHER THAN AN OMISSION. Four ways of choosing one
+ * were asked for — a typed price, the store's own cut-off, a top-N percentile and the drawers
+ * ranked by value — and every one is a slice of the single ranked list this answers with. A
+ * percentile cannot be taken without the whole list anyway, and a `?band=` would be a second
+ * place for the sort's tie-break to be decided.
+ *
+ * THE PAYLOAD IS THE WHOLE STORE, WHICH IS WHY IT IS FETCHED ONCE AND NOT POLLED. Measured on
+ * the owner's store: 2,245 rows, ~739KB, 0.11s server-side — the same order as
+ * `getPricingWorklist` above (~909KB across eight tables) and for the same reason. It reads
+ * and presses nothing: no child, no socket, no lock, no write.
+ */
+export async function getValueTable(): Promise<ValueTable> {
+  return (await request('/pipeline/value', NO_CACHE)) as ValueTable
 }
 
 /**
