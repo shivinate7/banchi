@@ -1069,9 +1069,10 @@ def main() -> int:
         ok(manifest["order"][-1] == landed_name,
            "and appends it LAST, so the three non-entry sections keep their place",
            str(manifest["order"][-3:]))
-        index_lines = [l for l in (split / "CLAUDE.md").read_text(encoding="utf-8").split("\n")
-                       if re.match(r"^D[0-9]+\s", l)]
-        ok(any(l.startswith(f"D{number} ") for l in index_lines),
+        index_lines = [row for row in
+                       (split / "CLAUDE.md").read_text(encoding="utf-8").split("\n")
+                       if re.match(r"^D[0-9]+\s", row)]
+        ok(any(row.startswith(f"D{number} ") for row in index_lines),
            "and the CLAUDE.md index is regenerated with the allocated number",
            str(index_lines))
         ok(f"{entry}-a-third-thing.md" not in manifest["order"],

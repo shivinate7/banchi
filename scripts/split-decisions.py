@@ -305,7 +305,7 @@ def verify_split(ref: str, before_ref: Optional[str] = None) -> int:
             line for line in extra.split("\n") if line.startswith("## ")))
         print(f"PRESERVED — docs/DECISIONS.md at {source_ref} ({len(before.encode('utf-8')):,} "
               f"bytes) is a byte-for-byte PREFIX of the {len(order)} files at {ref}.")
-        print(f"            Nothing the parent held was changed, reordered or dropped.")
+        print("            Nothing the parent held was changed, reordered or dropped.")
         print(f"            {len(extra.encode('utf-8')):,} bytes follow it — "
               f"{len(arrived)} new entr{'y' if len(arrived) == 1 else 'ies'}: "
               f"{', '.join(arrived) or '(none)'}")
