@@ -585,7 +585,7 @@ def resolve_candidate(candidate: str, containing: Path, tops: Set[str]) -> Optio
     return ROOT / text
 
 
-def ignored_paths(candidates: Sequence[str]) -> Set[str]:
+def ignored_paths(candidates: Sequence[str], root: Optional[Path] = None) -> Set[str]:
     """Which of these git ignores. One batched call, not one per candidate.
 
     A gitignored path is local state, not repo content: `harness/images/` exists once you
@@ -614,7 +614,12 @@ def ignored_paths(candidates: Sequence[str]) -> Set[str]:
     up, and the answer is to ask again one candidate at a time so a refusal is contained to the
     candidate that caused it. That path is rare and short — it runs only over references that
     are already missing from the index.
+
+    `root` DEFAULTS TO THE REAL REPO AND EXISTS ONLY SO THE SELF-TEST CAN POINT THIS AT A
+    THROWAWAY ONE. Every caller in this file omits it; a test builds a real git repo with a
+    real symlink to reproduce the exact failure below without touching this checkout's own.
     """
+    base = root if root is not None else ROOT
     if not candidates:
         return set()
 
@@ -622,7 +627,7 @@ def ignored_paths(candidates: Sequence[str]) -> Set[str]:
         try:
             done = subprocess.run(
                 ["git", "check-ignore", "--stdin"],
-                cwd=str(ROOT),
+                cwd=str(base),
                 input="\n".join(batch).encode("utf-8"),
                 stdout=subprocess.PIPE,
                 stderr=subprocess.DEVNULL,
@@ -641,6 +646,34 @@ def ignored_paths(candidates: Sequence[str]) -> Set[str]:
         one_code, one = ask([candidate])
         if one_code in (0, 1):
             found |= one
+            continue
+        # A CANDIDATE CAN FAIL ALONE TOO, AND THE RETRY ABOVE CANNOT RESCUE IT — measured
+        # 2026-09-12: `harness/images` is a real symlink in a worktree (provisioned by
+        # `make worktree-setup`, pointing at the main checkout's own directory), and
+        # `git check-ignore` refuses ANY pathspec that walks past it — one candidate,
+        # asked alone, still exits 128 with "pathspec '...' is beyond a symbolic link".
+        # That is not the poisoned-batch failure this retry loop was built for; it is a
+        # single candidate git's pathspec matcher can never answer while the symlink
+        # exists on disk, in this worktree or any other.
+        #
+        # THE FIX READS AN ANCESTOR INSTEAD OF THE CANDIDATE. Gitignore's own directory
+        # semantics make this exact, not a guess: a pattern matching a directory ignores
+        # everything beneath it, so if `harness/images` (the symlink node itself, asked
+        # with no trailing slash — the one form `check-ignore` can still answer past a
+        # symlink boundary, confirmed by measurement) is ignored, so is every path under
+        # it, symlinked or not. Walking up from the candidate's own parent stops at the
+        # first ancestor `check-ignore` can actually answer.
+        parts = candidate.rstrip("/").split("/")
+        for depth in range(len(parts) - 1, 0, -1):
+            ancestor = "/".join(parts[:depth])
+            anc_code, anc_found = ask([ancestor])
+            if anc_code == 0 and ancestor in anc_found:
+                found.add(candidate)
+                break
+            if anc_code in (0, 1):
+                # A real answer that isn't a match: no ancestor closer to root can be
+                # narrower, so stop here rather than walk past what git already resolved.
+                break
     return found
 
 
@@ -12683,6 +12716,51 @@ def self_test() -> int:
         check_paths(report, [doc], {})
         _, _, findings, _ = report.checks[0]
         ok(not findings, "no finding for a path that resolves", str(findings))
+
+    print("\nignored_paths answers a candidate git refuses to walk past a symlink")
+    with tempfile.TemporaryDirectory() as tmp:
+        # A REAL THROWAWAY REPO WITH A REAL SYMLINK, reproducing 2026-09-12's failure
+        # exactly rather than mocking subprocess — `git check-ignore` genuinely refuses a
+        # pathspec that walks past a symlink, and no fake can stand in for its exit code.
+        repo = Path(tmp) / "repo"
+        repo.mkdir()
+        subprocess.run(["git", "init", "-q"], cwd=str(repo), check=True)
+        # NO TRAILING SLASH, matching this repo's own .gitignore and for the same reason
+        # (see its header comment): a directory-only pattern does not match a SYMLINK at
+        # that name, which is exactly what a worktree puts there.
+        (repo / ".gitignore").write_text("harness/images\n", encoding="utf-8")
+        (repo / "harness").mkdir()
+        target = Path(tmp) / "elsewhere"
+        (target / "images" / "images").mkdir(parents=True)
+        (repo / "harness" / "images").symlink_to(target / "images")
+
+        direct_code = subprocess.run(
+            ["git", "check-ignore", "--stdin"],
+            cwd=str(repo),
+            input=b"harness/images/images",
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+        ).returncode
+        ok(direct_code not in (0, 1), "the fixture reproduces the symlink refusal", str(direct_code))
+
+        found = ignored_paths(["harness/images/images"], root=repo)
+        ok(
+            "harness/images/images" in found,
+            "a path beneath a symlinked, gitignored ancestor is recognised as ignored",
+            str(found),
+        )
+
+        # AND THE OTHER DIRECTION, so the ancestor walk cannot be mistaken for "anything
+        # under a symlink is forgiven" — it must still answer NO when the ancestor itself
+        # is real content, not an ignore pattern.
+        (repo / "harness" / "images" / ".gitignore").unlink(missing_ok=True)
+        (repo / ".gitignore").write_text("", encoding="utf-8")
+        found_real = ignored_paths(["harness/images/nope"], root=repo)
+        ok(
+            "harness/images/nope" not in found_real,
+            "a symlinked ancestor that is NOT ignored is not swept in with it",
+            str(found_real),
+        )
 
     print("\ncommand references need a fence or backticks")
     prose = "T5 and T6 make it **six**. Em-dashes make it a worse OCR target."
