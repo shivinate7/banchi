@@ -1,4 +1,4 @@
-## D-the-corpus-answers-for-listings-no-camera-saw — The corpus answers for listings no camera here ever saw, so a prune is a list the operator presses and never a rule a join runs
+## D177 — The corpus answers for listings no camera here ever saw, so a prune is a list the operator presses and never a rule a join runs
 
 **Pruning `inventory/prices.json` against the cards a join can match is refused. A prune is a preview the operator is shown and a button they press, with the live-book group separated by name and never selected by default.**
 

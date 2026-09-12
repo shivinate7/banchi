@@ -2191,7 +2191,7 @@ D173 A rule that can be enforced mechanically is enforced mechanically, and a ru
 D174 A press claims the cards it is about to buy, and the claim is written in the transaction that decides what they are
 D175 Ownership is read the way liveness is, and a process a session no longer owns is offered rather than reaped
 D176 The primary checkout syncs itself, both parts, because the thing D42 was protecting is not the thing this moves
-D-the-corpus-answers-for-listings-no-camera-saw The corpus answers for listings no camera here ever saw, so a prune is a list the operator presses and never a rule a join runs
+D177 The corpus answers for listings no camera here ever saw, so a prune is a list the operator presses and never a rule a join runs
 ```
 
 **THE GAP THIS LIST CARRIED BETWEEN D116 AND D118 IS CLOSED, AND IT CLOSED THE WAY IT SAID IT
@@ -2271,7 +2271,7 @@ was open** — the rule is renumber your own, never another's.
   real upload would measure.
 - `docs/specs/corpus-pruning.md` — what pruning `inventory/prices.json` would delete, read off
   the store on 2026-09-12 and against a digest. **RECORDED, NOT BUILT, and the answer is that
-  pruning may never be automatic** (D-the-corpus-answers-for-listings-no-camera-saw). 430
+  pruning may never be automatic** (D177). 430
   answers examined, 11 unmatched, **0 safe** — and 7 of the 11 are prices on listings that are
   live on TCGplayer right now, five of which are sealed product and accessories **no join can
   ever match because no camera here can photograph them**. Read its §6 before trusting any
