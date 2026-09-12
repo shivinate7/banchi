@@ -1425,10 +1425,19 @@ pool size is also the bound on concurrent execution, so `REQUEST_SLOTS` never bl
 INVARIANT rather than the implementation: on the day keep-alive returns, the pool bounds threads and
 the semaphore is the only thing still bounding execution. T7 asserts both, and leg 2 of
 `check_request_slots` stages that day rather than waiting for it — the pool widened past the bound,
-so the semaphore is the only thing that can supply the number. The pool removed gives 6 threads for
-10 callers; the semaphore removed lets all 10 execute at once. Both were observed failing on
+so the semaphore is the only thing that can supply the number. The pool removed gives 5 to 10 threads
+for 10 callers; the semaphore removed lets all 10 execute at once. Both were observed failing on
 2026-09-08, and the paragraph above records what the same sentence claimed before then and what
 actually happened when it was tried.
+
+**THE FIRST OF THOSE TWO FIGURES IS A RACE AND THIS SENTENCE SAID `6` UNTIL 2026-09-11**, which is
+the mistake this whole section exists to record, made while recording it. `6` was one draw. Measured
+eleven times on the rebuilt check: `5, 10, 5, 10, 6, 10, 10, 10, 10, 5` — **10 is the mode**, and 10
+is also what the figure said before the rewrite, so a correct published measurement was replaced by a
+less representative sample of the same race. The assertion was never on the number: leg 1 asserts
+`<= REQUEST_SLOTS`, which is why the table row beside it already named this as a race and why no
+check went red over it. **A published figure is evidence and is never rewritten to match a later
+draw** — a range is what an honest reading of a race looks like.
 
 **So the real bound on thread COUNT is still open, and a worker pool is still what it needs.**
 
