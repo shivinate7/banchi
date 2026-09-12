@@ -2294,7 +2294,7 @@ D179 Five shell commands are refused by resolving what they would do, not by mat
 D180 A press names the cards it is over, and the drawer is one of the names
 D181 The order is taken once, and a sale may not retake it
 D182 An unclaimed slug is not required in the shared index it will replace itself out of
-D183 A gain step is the baseline times one number, a card is not, and the machine re-baselines only on that proof
+D184 A gain step is the baseline times one number, a card is not, and the machine re-baselines only on that proof
 ```
 
 **THE GAP THIS LIST CARRIED BETWEEN D116 AND D118 IS CLOSED, AND IT CLOSED THE WAY IT SAID IT
