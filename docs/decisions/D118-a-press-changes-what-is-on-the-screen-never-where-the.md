@@ -82,7 +82,7 @@ The copies list is what absorbs the difference because it is the only part of th
 ### Amended 2026-09-12: the same sentence on a second axis, which none of these guards can see
 
 **"A press changes what is on the screen, never where the rest of it is" is a claim about ORDER as well as about pixels, and everything above measures only pixels.**
-`D-the-order-is-taken-once-and-a-sale-may-not-retake-it` is the entry; the report is the owner's,
+`D181` is the entry; the report is the owner's,
 about `#/inventory` under a search: *"if i mark sold while on that sorta view it can reorganize the
 rankings right in front of me, which feels unintuitive if im trying to mark multiple as sold."*
 

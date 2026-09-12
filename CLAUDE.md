@@ -1015,7 +1015,7 @@ sentence**, and see "the census" below for what enforces that.
                               rail orders boxes by when this browser last opened them; a
                               section can be named from the Manage box sheet.
                               THE ORDER UNDER A SEARCH IS TAKEN ONCE AND A SALE MAY NOT RETAKE
-                              IT (D-the-order-is-taken-once-and-a-sale-may-not-retake-it, an
+                              IT (D181, an
                               amendment to D118). D132's ranking — the copies list, the box
                               rail and the walk's landing all led by the section holding the
                               most LIVE copies — was recomputed on every press, so marking one
@@ -2292,7 +2292,7 @@ D177 The corpus answers for listings no camera here ever saw, so a prune is a li
 D178 A document may name what it would create, and the marking expires by itself
 D179 Five shell commands are refused by resolving what they would do, not by matching what they say, and each clause carries its own escape hatch
 D180 A press names the cards it is over, and the drawer is one of the names
-D-the-order-is-taken-once-and-a-sale-may-not-retake-it The order is taken once, and a sale may not retake it
+D181 The order is taken once, and a sale may not retake it
 ```
 
 **THE GAP THIS LIST CARRIED BETWEEN D116 AND D118 IS CLOSED, AND IT CLOSED THE WAY IT SAID IT

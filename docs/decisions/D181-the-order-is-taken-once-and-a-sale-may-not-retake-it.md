@@ -1,4 +1,4 @@
-## D-the-order-is-taken-once-and-a-sale-may-not-retake-it — The order is taken once, and a sale may not retake it
+## D181 — The order is taken once, and a sale may not retake it
 
 **`#/inventory`'s ranking under a search is computed from the copies that are still on hand, so marking one copy sold re-ranks the list the operator is working down — and the fix is to hold the order still and give the operator a press that retakes it, because the ranking is right and only its timing is wrong.**
 
