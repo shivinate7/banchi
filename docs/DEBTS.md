@@ -2049,7 +2049,7 @@ reports `Total Quantity` blank or `0` on every row this pipeline has ever sent.
 
 ### What it costs, measured
 
-Run `2026-09-11-box1-01`, after `D-committed-copies-are-the-oldest` fixed the ordering defect
+Run `2026-09-11-box1-01`, after `D147` fixed the ordering defect
 that was responsible for the other 52: **7 SKUs still add nothing, stranding 7 real cards.**
 
 | sku | card | pushed | live | copies on hand | sold |
@@ -2100,7 +2100,7 @@ fix below is taken. So the sentence waits for the fix rather than being separate
 on `Card` written by `cmd_emit`'s push loop beside the `sku` stamp. With it the committed set is
 read rather than inferred, a sold copy that carries the marker ages the claim without needing
 the export's word, and one that does not carry it cannot. That is the same field
-`D-committed-copies-are-the-oldest` names as its reopener, and this is the second defect to
+`D147` names as its reopener, and this is the second defect to
 turn on not having it.
 
 **Or a reconcile.** `pkmnscan reconcile --live` writes `live` and the gate opens on its own.

@@ -10645,7 +10645,7 @@ The 0.80 floor was fitted to two games' worth of real reads. A
 third game arriving with a different naming convention is a reason to re-measure it, not to
 assume it travels.
 
-## D-committed-copies-are-the-oldest — The claim is spent on the oldest copies, because a card captured tonight was in no file sent last week
+## D147 — The claim is spent on the oldest copies, because a card captured tonight was in no file sent last week
 
 **When the store says TCGplayer holds N copies of a SKU, the N positions that stand for them are the N OLDEST CAPTURES.** Built 2026-09-11, from the operator's report that an emit was *"showing several items from my run already at quantity 0, as though they're already listed, that's just not true/possible"*.
 
