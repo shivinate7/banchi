@@ -263,10 +263,11 @@ export function standing(input: StandingInput): Standing | null {
          store-wide figure to one drawer would be a sentence the data cannot support.
 
          AND THE DOOR IT OPENS NOW ANSWERS THE SENTENCE. `#/runs?state=captured` puts the
-         identify composer up with exactly this scope selected — every card photographed and
-         not identified — where `#/runs` alone landed on a stage headed `Which boxes`, which
-         is a second question about a different thing. The filter is a real part of the
-         address (`runSelection.ts`), so this link is the same one a bookmark would be. */
+         identify composer up already open, on its default `needed` start — "every card
+         waiting to be identified", which is exactly this figure — where a bare `#/runs` leaves
+         the operator to open the dialog themselves. Read once on arrival (`Runs.tsx:
+         stateInHash`), the way `?run=` already opens a run's own detail; there is no write-back
+         of a narrowing into the address, because nothing here links to one yet. */
   const captured = status.states.captured ?? 0
   if (captured > 0) {
     return {

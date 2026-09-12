@@ -39,16 +39,17 @@
 
 /** THE CARDS TICKED, AS POSITION KEYS, AND NOT A BOX AND ITS INDICES.
  *
- *  WHY IT MOVED. This was `{box, indices}` until the composer started speaking in states, and
- *  the shape was the reason a selection could not span drawers: `#/inventory`'s mass-select
- *  walks whatever the search narrowed it to, which is not a box, and the RECEIVING end was what
- *  made it one. A cross-drawer tick had nowhere to go and so was never offered.
+ *  WHY IT MOVED. This was `{box, indices}`, and the shape was the reason a selection could not
+ *  span drawers: `#/inventory`'s mass-select walks whatever the search narrowed it to, which is
+ *  not a box, and the RECEIVING end was what made it one. A cross-drawer tick had nowhere to go
+ *  and so was never offered.
  *
  *  `box/index` IS THE KEY THIS STORE ALREADY USES — `identify/sidecar.py:key`, and what the
  *  identification cache, both standing queues, the join and D174's claim table are all keyed
- *  by. So a handoff over three drawers is a flat list of strings every other layer already
- *  understands, and the grouping back into one leg per drawer happens where the legs are built
- *  (`runSelection.ts:legsFor` does the same for a filter) rather than in the storage shape.
+ *  by. It is also `pipeline/selection.py`'s own `keys` term (D180), so a handoff over three
+ *  drawers is a flat list of strings every other layer already understands and
+ *  `RunsComposer.tsx:selectionOf` sends it straight through — the grouping back into one leg
+ *  per drawer (`carriedByBox` below) is only ever for what the SCREEN draws.
  *
  *  IT IS THE STORED INDEX AND NEVER THE COUNTABLE SLOT (D58). `Place.index` is the key every
  *  write aims by and what the photograph is named after; `Place.slot` moves under it every time

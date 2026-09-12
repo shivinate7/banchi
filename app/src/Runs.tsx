@@ -1,52 +1,49 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 
-import { describeFailure, getBoxes, getGames, getInventory, type Failure } from './server'
-import { boxesLabel } from './runScope'
-import type { BoxRecord, GameRegistry, InventoryCard } from './types'
+import { describeFailure, getBoxes, type Failure } from './server'
+import type { BoxRecord, RunSelection } from './types'
 import { Button, PageHeader, Pill } from './kit'
 import { LiveReconcile } from './LiveReconcile'
 import { RunPanel } from './RunPanel'
-import { RunsComposer, type CartBox } from './RunsComposer'
-import { SubmissionClaims } from './SubmissionClaims'
-import { carriedByBox, carriedScope, clearCarriedScope, parseKey, type CarriedScope } from './runHandoff'
 import {
-  census,
-  EVERYTHING,
-  gameChips,
-  hashFor,
-  legsFor,
-  narrowed,
-  newestSitting,
-  pending,
-  queryFor,
-  selected,
-  selectionFromHash,
-  toggleBox,
-  toggleGame,
-  toggleSitting,
-  type RunSelection,
-} from './runSelection'
+  NO_DRAFT,
+  RunsComposer,
+  selectionLine,
+  selectionOf,
+  startAnswered,
+  type SelectionDraft,
+} from './RunsComposer'
+import { SubmissionClaims } from './SubmissionClaims'
+import { carriedScope, clearCarriedScope, parseKey, type CarriedScope } from './runHandoff'
 import './Runs.css'
 
 /* THE PIPELINE, ON A ROUTE OF ITS OWN (D39). Shoot a box, identify it, join it, answer what
  * the join could not — the loop of a session, between Capture and the review queue.
  *
- * THIS FILE OWNS THE SCOPE AND NOTHING ELSE: which cards the next send is over, and the ticked
- * selection handed over from `#/inventory`'s one mass-select (`runHandoff.ts`). The composer
- * owns how each box is read and the money gate; the panel owns the list and the run.
+ * THIS FILE OWNS THE SELECTION AND NOTHING ELSE: what the operator has pointed at, and the
+ * ticked cards handed over from `#/inventory`'s one mass-select (`runHandoff.ts`). The composer
+ * owns how they are read and the money gate; the panel owns the list and the run.
  *
- * THE SCOPE IS A STATE AND ITS NARROWINGS, NOT A LIST OF DRAWERS. `runSelection.ts` carries the
- * whole argument; what this file does with it is hold one `RunSelection`, keep it in the
- * address so it is bookmarkable, and turn it into the cart the composer draws.
+ * IT USED TO OWN A CART OF BOXES. `cart: CartBox[]` was one row per drawer, each carrying the
+ * cards ticked in it, and both the composer and the panel read it. There is one selection per
+ * press now — `box` is a term in it rather than the unit of work — so what this file holds is a
+ * DRAFT (the screen's vocabulary: which start, which drawers, which narrowings) and the wire's
+ * `RunSelection` is derived from it by one function in the composer.
  *
- * "NOTHING IS SCOPED ON ARRIVAL" IS RETIRED, AND THE SENTENCE IT REPLACED SAID THE OPPOSITE.
- * This file used to refuse to default the scope, on the ground that "a box chosen for the
- * operator is a box they did not read, and the next press after it spends money". The first
- * half of that is still true and is why no DRAWER is ever ticked for them; the default is the
- * STATE — every card photographed and not identified — which is the fact the front door already
- * put on screen and sent them here to act on. What actually protects the dollar is untouched:
- * the free preflight still has to answer before the confirm exists, and the confirm still
- * carries the figure in its own label (D33). */
+ * THE HANDOFF IS VALIDATED PER KEY, NOT PER BOX. `runHandoff.ts:CarriedScope` carries a flat
+ * list of `box/index` keys rather than one box and its indices, which is what lets a tick list
+ * from `#/inventory` span drawers — so a key naming a drawer the registry no longer holds is
+ * dropped alone, and the rest of the handoff survives it.
+ *
+ * `#/runs?state=captured` OPENS THE COMPOSER ON ITS DEFAULT SCOPE. `standing.ts`'s one ranked
+ * sentence on `#/` — *"N cards are photographed and not identified"* — links here now rather
+ * than to a bare `#/runs`, so the answer to the sentence the operator just read is one click
+ * rather than a second question about drawers. The default draft (`NO_DRAFT`) is already
+ * `state === 'captured'` under its `needed` start, so the address has nothing to compose — it
+ * only has to open the dialog, the way a `run=` link opens a run's own detail. This is
+ * read-once, like `run=`: there is no write-back of a narrowing into the address and no
+ * `&box=` term, because nothing in this app links to one yet and building the two-way sync a
+ * bookmarked narrowing would need is not this fix. */
 
 function inOrder(records: readonly BoxRecord[]): BoxRecord[] {
   return [...records].sort((a, b) => a.box - b.box)
@@ -58,25 +55,28 @@ function runInHash(): string | null {
   return new URLSearchParams(query).get('run')
 }
 
+/** `#/runs?state=captured` — `standing.ts`'s own link — asks for the composer to be open on
+ *  arrival. The value is not otherwise read: `captured` is the only state this composer can
+ *  act on and it is already the default draft's start. */
+function stateInHash(): boolean {
+  const query = window.location.hash.split('?')[1] ?? ''
+  return new URLSearchParams(query).get('state') === 'captured'
+}
+
 export function Runs() {
   const [boxes, setBoxes] = useState<readonly BoxRecord[] | null>(null)
   const [failure, setFailure] = useState<Failure | null>(null)
   const [reloads, setReloads] = useState(0)
 
-  /** The card map and the game registry, which together are where every figure on the first
-   *  stage comes from — `runSelection.ts` says why they have no narrower source on this wire.
-   *  Neither failure takes the screen down: the drawers still draw from the registry, and a
-   *  count nobody could read is drawn as absent rather than as zero. */
-  const [cards, setCards] = useState<Record<string, InventoryCard> | null>(null)
-  const [registry, setRegistry] = useState<GameRegistry | null>(null)
-
-  /** What the next send is over. The state by default, narrowed by nothing. */
-  const [selection, setSelection] = useState<RunSelection>(() => selectionFromHash(window.location.hash) ?? EVERYTHING)
+  /** WHAT THE OPERATOR HAS POINTED AT. No DRAWER is ever ticked for them — a drawer chosen on
+   *  their behalf is one they did not read, and the press after it spends money. The default
+   *  START is the store-wide one, which is the state `#/`'s own standing line already named. */
+  const [draft, setDraft] = useState<SelectionDraft>(NO_DRAFT)
 
   /** The cards handed over from `#/inventory`'s mass-select, as position keys. */
   const [carried, setCarried] = useState<CarriedScope | null>(null)
 
-  const [composerOpen, setComposerOpen] = useState(() => selectionFromHash(window.location.hash) !== null)
+  const [composerOpen, setComposerOpen] = useState(() => stateInHash())
   const [syncOpen, setSyncOpen] = useState(false)
   const [openRun, setOpenRun] = useState<string | null>(() => runInHash())
 
@@ -84,33 +84,11 @@ export function Runs() {
     const fromHash = () => {
       const named = runInHash()
       if (named !== null) setOpenRun(named)
-      /* THE FILTER IS READ BACK OUT OF THE ADDRESS, so a bookmark, a Home link and the back
-         button all land on the same scope. A hash that names no state leaves the selection
-         alone rather than resetting it — the dialog writes `#/runs` on close and that must not
-         read back as "clear what the operator ticked". */
-      const asked = selectionFromHash(window.location.hash)
-      if (asked !== null) {
-        /* ADOPTED ONLY WHEN IT DIFFERS, compared on the one spelling `queryFor` gives a
-           selection. This screen writes the hash itself, so every write comes back through
-           here; assigning the fresh object unconditionally would be a new identity on every
-           press and a render that changes nothing. */
-        setSelection((held) => (queryFor(held) === queryFor(asked) ? held : asked))
-        setComposerOpen(true)
-      }
+      if (stateInHash()) setComposerOpen(true)
     }
     window.addEventListener('hashchange', fromHash)
     return () => window.removeEventListener('hashchange', fromHash)
   }, [])
-
-  /* THE ADDRESS FOLLOWS THE SCOPE, IN ONE PLACE. Written from an effect rather than from each
-     control, because a React updater must be pure — `setSelection` runs twice under StrictMode
-     and a `window.location.hash =` inside one is a side effect run twice. The guard is what
-     stops the round trip: this writes, `hashchange` reads it back, and the comparison above
-     finds the same selection and stops. */
-  useEffect(() => {
-    const want = hashFor(window.location.hash, composerOpen ? selection : null)
-    if (want !== window.location.hash) window.location.hash = want
-  }, [selection, composerOpen])
 
   /** The handoff from `#/inventory` is applied ONCE, on the first successful read of the
    *  registry — never on a Reload and never when a run starts, both of which bump `reloads`.
@@ -129,10 +107,10 @@ export function Runs() {
         if (handoffApplied.current) return
         handoffApplied.current = true
 
-        /* THE HANDOFF IS VALIDATED AGAINST THE REGISTRY BEFORE IT IS DRAWN, AND PER DRAWER
-           RATHER THAN WHOLE. It used to be one box, so a box the registry no longer held
-           dropped the handoff entirely; keys can span drawers, and dropping forty cards in box
-           4 because box 1 was deleted underneath them would be a narrowing the operator never
+        /* THE HANDOFF IS VALIDATED AGAINST THE REGISTRY BEFORE IT IS DRAWN, AND PER KEY RATHER
+           THAN WHOLE. `CarriedScope` is a flat list of `box/index` keys, which is what lets a
+           tick list from `#/inventory` span drawers — dropping the whole handoff because ONE of
+           several drawers was deleted underneath it would be a narrowing the operator never
            asked for in the one direction that costs them work. Keys in a departed drawer go,
            the rest stay, and a handoff with nothing left goes the way it always did. */
         const handoff = carriedScope()
@@ -147,6 +125,9 @@ export function Runs() {
           return
         }
         setCarried({ keys: kept })
+        /* ARRIVING WITH A TICK LIST SELECTS IT, which is what the handoff is for — and it is
+           the operator's own act one screen back, not a default this file invented. */
+        setDraft((held) => ({ ...held, start: 'ticked' }))
         setComposerOpen(true)
       } catch (err) {
         if (!live) return
@@ -158,104 +139,57 @@ export function Runs() {
     }
   }, [reloads])
 
-  /* The card map and the registry, read once on arrival. Neither is polled: a sitting's cards
-     land through `#/capture`, and the Reload control is what re-reads them here. */
-  useEffect(() => {
-    let live = true
-    void (async () => {
-      try {
-        const answer = await getInventory()
-        if (live) setCards(answer.cards)
-      } catch {
-        /* A count this screen cannot read is drawn as absent. `RunPanel` draws the one failure
-           statement on the page and a second one for the chips would say the same thing twice. */
+  /* D39'S RE-CONSENT RULE, NARROWED AND NOT REPEALED. That entry drops the ticked selection
+     whenever a scope is picked on `#/runs`, because a tick list surviving a deliberate choice is
+     a filter the operator did not re-consent to, sitting over the control that spends. Under the
+     cart the rule scoped to the carried BOX: un-ticking it dropped the handoff and toggling any
+     other left it alone. A drawer is a term rather than the unit now, so the rule scopes to the
+     START: choosing any start other than the ticked cards is the deliberate choice, and it drops
+     them. Toggling a drawer while the drawers start is showing is not — it is the operator
+     building the selection they already chose. */
+  const toggleBox = useCallback((next: number) => {
+    setDraft((held) => {
+      const on = held.boxes.includes(next)
+      return {
+        ...held,
+        boxes: on ? held.boxes.filter((box) => box !== next) : [...held.boxes, next].sort((a, b) => a - b),
+        /* A SECTION BELONGS TO ONE DRAWER, so a pick that leaves the selection naming two drops
+           it rather than letting a stale value reach a refusal the operator did not cause. */
+        section: held.boxes.length === 1 && !on ? null : held.section,
       }
-    })()
-    void (async () => {
-      try {
-        const answer = await getGames()
-        if (live) setRegistry(answer)
-      } catch {
-        /* Without the registry no game can be NAMED, so no game chip is offered — see
-           `gameChips`. Nothing is dropped from the scope. */
-      }
-    })()
-    return () => {
-      live = false
-    }
-  }, [reloads])
-
-  /* ------------------------------------------------------------------- the scope, derived */
-  const rows = useMemo(() => (boxes === null ? [] : inOrder(boxes)), [boxes])
-  const nameOf = useCallback(
-    (box: number) => boxes?.find((record) => record.box === box)?.name ?? null,
-    [boxes],
-  )
-
-  const pendingRows = useMemo(() => pending(cards, registry), [cards, registry])
-  const sittingWindow = useMemo(() => newestSitting(cards), [cards])
-  const state = useMemo(() => census(pendingRows, sittingWindow), [pendingRows, sittingWindow])
-  const games = useMemo(() => gameChips(registry, state.byGame), [registry, state.byGame])
-
-  /** PICKING A SCOPE DROPS THE HANDOFF (D39). A filter that survived a deliberate choice is one
-   *  the operator did not re-consent to, so every one of the three chip presses goes through
-   *  this: the tick list is let go and the selection re-scopes to the chips. */
-  const pick = useCallback((next: (held: RunSelection) => RunSelection) => {
-    setCarried((held) => {
-      if (held !== null) clearCarriedScope()
-      return null
     })
-    setSelection(next)
   }, [])
 
-  const onToggleBox = useCallback((box: number) => pick((held) => toggleBox(held, box)), [pick])
-  const onToggleGame = useCallback((game: string) => pick((held) => toggleGame(held, game)), [pick])
-  const onToggleSitting = useCallback(() => pick((held) => toggleSitting(held)), [pick])
-  const onEverything = useCallback(() => pick(() => EVERYTHING), [pick])
+  const dropCarried = useCallback(() => {
+    setCarried(null)
+    clearCarriedScope()
+  }, [])
 
-  /** The cart, ascending, each drawer carrying the cards ticked in it. The name travels with
-   *  the box for the screen (D56) and is never sent.
-   *
-   *  A HANDOFF WINS OVER THE FILTER WHILE IT LASTS, which is the same precedence it always had
-   *  — it is the operator's own explicit tick list, and the chips are a default until they
-   *  press one. */
-  const cart = useMemo<CartBox[]>(() => {
-    const legs = carried !== null ? carriedByBox(carried) : legsFor(selection, pendingRows, sittingWindow)
-    return legs.map((leg) => ({ box: leg.box, name: nameOf(leg.box), indices: leg.indices }))
-  }, [carried, selection, pendingRows, sittingWindow, nameOf])
+  const onDraft = useCallback(
+    (patch: Partial<SelectionDraft>) => {
+      setDraft((held) => ({ ...held, ...patch }))
+      if (patch.start !== undefined && patch.start !== 'ticked') dropCarried()
+    },
+    [dropCarried],
+  )
 
-  /** How many cards the scope holds, or null where nothing could be counted. A handoff counts
-   *  its own keys; a filter counts what it matched. */
-  const scopeCards = useMemo(() => {
-    if (carried !== null) return carried.keys.length
-    if (cards === null) return null
-    return selected(selection, pendingRows, sittingWindow).length
-  }, [carried, cards, selection, pendingRows, sittingWindow])
+  const rows = useMemo(() => (boxes === null ? [] : inOrder(boxes)), [boxes])
 
-  const scopeLine = useMemo(() => {
-    const drawers = boxesLabel(cart)
-    if (drawers === null) return ''
-    const tail =
-      carried !== null
-        ? `${carried.keys.length} ticked card${carried.keys.length === 1 ? '' : 's'}`
-        : narrowed(selection) || scopeCards === null
-          ? scopeCards === null
-            ? null
-            : `${scopeCards} card${scopeCards === 1 ? '' : 's'}`
-          : 'everything not yet identified'
-    return tail === null ? drawers : `${drawers} · ${tail}`
-  }, [cart, carried, selection, scopeCards])
+  /** The draft as the wire reads it. ONE derivation, in the composer, so the pill on this page
+   *  and the payload the money press sends cannot describe different cards. The box NAMES travel
+   *  for the screen (D56) and are never sent. */
+  const selection = useMemo<RunSelection>(() => selectionOf(draft, carried), [draft, carried])
+  const answered = useMemo(() => startAnswered(draft, carried), [draft, carried])
+  const scopeLine = useMemo(
+    () => (answered ? selectionLine(draft, carried, boxes) : ''),
+    [answered, draft, carried, boxes],
+  )
 
   const onStarted = useCallback((run: string) => {
     setOpenRun(run)
     setReloads((n) => n + 1)
   }, [])
 
-  const openComposer = useCallback(() => setComposerOpen(true), [])
-
-  /* CLOSING CLEARS THE FILTER OUT OF THE ADDRESS rather than leaving one that reopens the
-     dialog on the next reload — the effect above does the clearing. The selection itself is
-     kept in state: closing is not unticking. */
   const closeComposer = useCallback(() => setComposerOpen(false), [])
   const closeSync = useCallback(() => setSyncOpen(false), [])
 
@@ -287,8 +221,12 @@ export function Runs() {
               <span className="runs-hide-sm">Reconcile the store</span>
               <span className="runs-only-sm">Reconcile</span>
             </Button>
-            <Button variant="primary" icon="zap" onClick={openComposer}>
-              {cart.length > 1 ? `Identify ${cart.length} boxes` : 'Identify a box'}
+            {/* ONE VERB, WHATEVER THE SELECTION IS OVER. It read `Identify a box` / `Identify N
+                boxes`, which named the unit of work in the label of the button that opens the
+                dialog where the unit is chosen — so the operator had to have decided before
+                pressing. `Identify cards` is true of every selection this now composes. */}
+            <Button variant="primary" icon="zap" onClick={() => setComposerOpen(true)}>
+              Identify cards
             </Button>
           </>
         }
@@ -305,31 +243,25 @@ export function Runs() {
       {/* The one failure statement on the page is drawn in the run list's column by the panel,
           so the server being unreachable is said once rather than by every column. */}
       <RunPanel
-        cart={cart}
+        drawers={selection.box ?? []}
         pageFailure={failure}
         openRun={openRun}
         onOpenRun={setOpenRun}
         reloadTick={reloads}
-        onIdentify={openComposer}
+        onIdentify={() => setComposerOpen(true)}
       />
 
       <RunsComposer
         open={composerOpen}
         onClose={closeComposer}
-        cart={cart}
+        selection={selection}
+        draft={draft}
+        onDraft={onDraft}
         boxes={rows}
         boxesFailure={failure}
-        selection={selection}
-        state={state}
-        games={games}
-        counted={cards !== null}
-        scopeCards={scopeCards}
-        onToggleBox={onToggleBox}
-        onToggleGame={onToggleGame}
-        onToggleSitting={onToggleSitting}
-        onEverything={onEverything}
+        onToggleBox={toggleBox}
         carried={carried}
-        onDropCarried={onEverything}
+        onDropCarried={dropCarried}
         onStarted={onStarted}
       />
 

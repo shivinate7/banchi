@@ -337,77 +337,7 @@ button.runs-stage:hover { background: var(--bn-hover); color: var(--bn-ink); }
   gap: var(--bn-2) var(--bn-3);
 }
 
-/* ---- 1 · what to identify ------------------------------------------------------ */
-
-/* THE PRIMARY ROW: the state itself, and the widest control on the stage because it is the
-   answer to the sentence that sent the operator here. Built out of `.runs-box`'s own parts —
-   the tick, the two-line text block — rather than a fourth hand-rolled tile, so a press feels
-   the same here as on a drawer. Its own `transition` REPLACES the floor's, so every property
-   this rule animates is named in it (base.css's rule, and the defect .bn-nav-link earned). */
-.runs-all {
-  display: flex;
-  align-items: center;
-  gap: var(--bn-3);
-  width: 100%;
-  min-height: 64px;
-  padding: var(--bn-3) var(--bn-4);
-  border-radius: var(--bn-r-lg);
-  background: var(--bn-surface);
-  box-shadow: var(--bn-shadow-1);
-  text-align: left;
-  transition:
-    background-color var(--bn-t-fast) var(--bn-ease),
-    box-shadow var(--bn-t-fast) var(--bn-ease),
-    color var(--bn-t-fast) var(--bn-ease);
-}
-.runs-all:hover { box-shadow: var(--bn-shadow-2); }
-.runs-all[aria-pressed='true'] {
-  background: var(--bn-accent-tint);
-  box-shadow: inset 0 0 0 1.5px var(--bn-accent);
-}
-/* A ROUND TICK, BECAUSE THIS IS ONE CHOICE AND NOT A MULTI-SELECT — the inverse of the square
-   mark on `.runs-box-check`, and the same convention BoxBrowse keeps. */
-.runs-all-check {
-  flex: none;
-  width: 22px;
-  height: 22px;
-  border-radius: 50%;
-  border: 1.5px solid var(--bn-line-strong);
-  display: grid;
-  place-items: center;
-  color: transparent;
-  transition:
-    background-color var(--bn-t-fast) var(--bn-ease),
-    border-color var(--bn-t-fast) var(--bn-ease),
-    color var(--bn-t-fast) var(--bn-ease);
-}
-.runs-all[aria-pressed='true'] .runs-all-check {
-  background: var(--bn-accent);
-  border-color: var(--bn-accent);
-  color: var(--bn-on-accent);
-}
-.runs-all-text { display: flex; flex-direction: column; gap: 1px; min-width: 0; }
-.runs-all-title {
-  font-family: var(--bn-font-display);
-  font-weight: 700;
-  font-size: var(--bn-fs-lg);
-}
-/* ONE LINE, RESERVED, WHATEVER IT SAYS. This is the only text on the stage that changes as the
-   store is read — `Counting what is waiting…` then a figure — and a line that grew from one to
-   two would push the chips and every drawer tile down under a press's own paint (D118). */
-.runs-all-said {
-  min-height: 1.35em;
-  font-size: var(--bn-fs-sm);
-  color: var(--bn-ink-3);
-  font-variant-numeric: tabular-nums;
-}
-
-/* THE NARROWINGS: a label and a chip row, above the drawers, because all three narrow the same
-   set and one heading says so once. */
-.runs-narrow { display: flex; flex-direction: column; gap: var(--bn-2); }
-.runs-chips { display: flex; flex-wrap: wrap; gap: var(--bn-2); }
-
-/* ---- 1 · the drawer tiles ------------------------------------------------------ */
+/* ---- 1 · the box tiles --------------------------------------------------------- */
 .runs-boxes {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(230px, 1fr));
@@ -808,4 +738,149 @@ button.runs-stage:hover { background: var(--bn-hover); color: var(--bn-ink); }
   .runs-box-check { position: relative; }
   .runs-box-check::after { content: ''; position: absolute; inset: -11px; }
   .run-preview-head { min-height: var(--bn-control-h-sm); }
+}
+
+/* ------------------------------------------------------- the selection builder (stage 1)
+ *
+ * THE MARKUP LANDED WITHOUT THESE AND IT SHOWED. Twenty classes were written into
+ * `RunsComposer.tsx` with no rule anywhere, so the narrowing row fell back to inline flow and
+ * rendered `NARROW ITGame` — a label welded to the control beside it, on the one screen in the
+ * product that spends money. Caught by looking at it; nothing in the toolchain reads a class
+ * name that resolves to nothing.
+ */
+
+/* WHERE THE SELECTION STARTS. Scrolls rather than wraps under 560px: four segments wrapping to
+   two rows reads as two controls, and the press that follows costs money. */
+.runs-starts {
+  width: 100%;
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+.runs-starts::-webkit-scrollbar { display: none; }
+.runs-starts .bn-seg-item { white-space: nowrap; }
+
+/* The panel under the start. ONE SLOT WHICHEVER START IS SHOWING, so pressing a segment changes
+   what is IN it and never where the rest of the sheet is (D118). The floor is the drawer grid's
+   own two rows, which is the tallest thing that lands here. */
+.runs-pick {
+  display: flex;
+  flex-direction: column;
+  gap: var(--bn-3);
+  min-height: 148px;
+}
+.runs-pick-lede {
+  margin: 0;
+  color: var(--bn-ink);
+}
+.runs-pick-said {
+  margin: 0;
+  color: var(--bn-ink-3);
+}
+.runs-pick-skel { height: 148px; border-radius: var(--bn-r-lg); }
+
+/* ---- the narrowing row, which applies on top of whichever start was chosen ---- */
+.runs-narrow {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--bn-2) var(--bn-4);
+  padding-top: var(--bn-3);
+  border-top: 1px solid var(--bn-line);
+}
+.runs-narrow-label {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--bn-1);
+  color: var(--bn-ink-3);
+}
+.runs-narrow-note {
+  flex-basis: 100%;
+  margin: 0;
+}
+/* THE LABEL AND ITS CONTROL ARE ONE THING AND THE GAP IS WHAT SAYS SO. Without it the row read
+   as one run-on string; `--bn-4` between GROUPS and `--bn-2` inside one is the same ratio the
+   reading row uses. */
+.runs-field-inline {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--bn-2);
+  min-width: 0;
+}
+.runs-field-inline > span { color: var(--bn-ink-3); white-space: nowrap; }
+.runs-since {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--bn-2);
+  flex-wrap: wrap;
+}
+.runs-since input[type='datetime-local'] {
+  min-height: var(--bn-control-h-sm);
+  min-width: 0;
+}
+
+/* ---- the reading stage ---- */
+.runs-reading {
+  display: flex;
+  flex-direction: column;
+  gap: var(--bn-3);
+}
+.run-read-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--bn-3);
+  flex-wrap: wrap;
+}
+.run-read-title { font-weight: 600; }
+.run-read-scope { color: var(--bn-ink-3); min-width: 0; }
+.runs-reading-says { margin: 0; }
+
+/* ---- the quote ---- */
+/* WHAT THE PRESS IS OVER, IN THE SERVER'S OWN WORDS, directly under the figure it costs. */
+.runs-quote-over {
+  display: flex;
+  flex-direction: column;
+  gap: var(--bn-1);
+  padding: var(--bn-3);
+  border-radius: var(--bn-r-lg);
+  background: var(--bn-surface-2);
+}
+.runs-quote-sentence {
+  margin: 0;
+  font-family: var(--bn-font-mono);
+  font-size: var(--bn-fs-sm);
+  color: var(--bn-ink);
+  overflow-wrap: anywhere;
+}
+
+/* ---- the spend notice, which is a notice and never a gate ---- */
+.runs-spend-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--bn-3);
+  flex-wrap: wrap;
+}
+/* THE SETTING IS ALWAYS ON SCREEN, under the button rather than inside the warning — a figure
+   that could only be raised from inside the block it silences could never be lowered again. */
+.runs-spend-set {
+  color: var(--bn-ink-3);
+  font-size: var(--bn-fs-sm);
+}
+.runs-spend-input {
+  width: 6.5ch;
+  text-align: right;
+}
+
+@media (max-width: 767px) {
+  /* The narrowing controls go full width rather than sharing a line: three of them side by side
+     at 390 leaves each too narrow to read the value in, and a select whose value is cut is a
+     filter the operator cannot check before they spend. */
+  .runs-narrow { gap: var(--bn-3); }
+  .runs-narrow-label { flex-basis: 100%; }
+  .runs-field-inline,
+  .runs-since { flex-basis: 100%; }
+  .runs-field-inline > .bn-select { flex: 1; min-width: 0; }
+  .runs-since input[type='datetime-local'] { flex: 1; }
+  .runs-pick { min-height: 0; }
 }
