@@ -1940,7 +1940,7 @@ COMPONENTS = [
                 # (D104) and the seven order-line closers (D113).
                 "governed_by": ["D13", "D14", "D18", "D58", "D62", "D76", "D79", "D83", "D86",
                                 "D87", "D89", "D96", "D100", "D103", "D104", "D106", "D113",
-                                "D134", "D159", "D167", "D168"],
+                                "D134", "D159", "D167", "D168", "D-a-claim-on-the-cards"],
             },
             "verdict-selftest.py": {"does": "PROVES `app/design-check-reporter.ts` STILL WRITES A "
                                             "VERDICT, BY RUNNING IT. `make docs-audit`'s "
