@@ -611,7 +611,7 @@ make merge          # merge a PR and move main onto it — BOTH HALVES, on your 
                                    #   `IdentifiedCard`, `join_batch`, `default_router` and
                                    #   `queue_entry` a join runs, so a ladder fix reaches this path
                                    #   the day it lands. Measured against a real join over one
-                                   #   run's own export: 172 of 172 verdicts and 132 of 132 reasons
+                                   #   run's own export: 172 of 172 verdicts and 81 of 81 reasons
                                    #   and candidate rows agree.
                                    #   AN ANSWERED ENTRY IS NEVER RE-QUEUED AND NEVER DROPPED, and
                                    #   that is `apply_run`'s two refusals rather than this

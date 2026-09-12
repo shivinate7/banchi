@@ -492,7 +492,9 @@ COMPONENTS = [
                                    "quantity arithmetic — routing reads no quantity, so "
                                    "`_copies_out`'s full pass is never paid. Measured: over one "
                                    "run's own export it agrees with a real join on 172 of 172 "
-                                   "verdicts and 132 of 132 reasons and candidate rows.",
+                                   "verdicts and 81 of 81 reasons and candidate rows — held "
+                                   "unchanged across D162 landing in main mid-branch, which is "
+                                   "the claim demonstrated rather than asserted.",
                            "governed_by": ["D3", "D4", "D9", "D25", "D26", "D28", "D35", "D36", "D37", "D83", "D87", "D137"],
                            "tested_by": ["T7"]},
             "resolve.py": {"does": "turning a run's identifications into a join; shared by join and emit. "
