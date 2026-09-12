@@ -2030,7 +2030,7 @@ COMPONENTS = [
                 # D140 is real here: the claimer renames the file a claim allocates, so both
                 # id shapes have to resolve. The rest are worked examples in the docstrings.
                 "governed_by": ["D16", "D18", "D58", "D60", "D79", "D80", "D140",
-                                "D-the-corpus-is-a-directory"],
+                                "D160"],
             },
             "split-decisions.py": {
                 "does": "Performed the split of docs/DECISIONS.md into docs/decisions/, and "
@@ -2054,7 +2054,7 @@ COMPONENTS = [
                 # non-decision sections sit between. D140 is the one that is real: a claim
                 # slug has to name a file, or the claimer cannot find what it must rename.
                 "governed_by": ["D16", "D18", "D58", "D60", "D79", "D80", "D140",
-                                "D-the-corpus-is-a-directory"],
+                                "D160"],
             },
             "index-decisions.py": {
                 "does": "Generates CLAUDE.md's decision index from the headings in "
@@ -2078,7 +2078,7 @@ COMPONENTS = [
                 # number, unknowable until then. D43 is why it takes a root — a generator
                 # hard-wired to one tree indexes the wrong checkout.
                 "governed_by": ["D16", "D18", "D43", "D60", "D79", "D80", "D140",
-                                "D-the-corpus-is-a-directory"],
+                                "D160"],
             },
             "prose-guard.py": {
                 "does": "D60's two guards over the four docs CLAUDE.md names. `--structure` asserts "
@@ -2300,7 +2300,7 @@ COMPONENTS = [
                 # for vale. Change one and the entry describing that check goes stale with it,
                 # which is exactly what `governed_by` is for — so they are listed rather than
                 # allowlisted away.
-                "governed_by": ["D16", "D17", "D18", "D43", "D44", "D47", "D53", "D58", "D60", "D65", "D68", "D74", "D76", "D80", "D82", "D92", "D111", "D122", "D127", "D129", "D133", "D138", "D140", "D-the-corpus-is-a-directory"],
+                "governed_by": ["D16", "D17", "D18", "D43", "D44", "D47", "D53", "D58", "D60", "D65", "D68", "D74", "D76", "D80", "D82", "D92", "D111", "D122", "D127", "D129", "D133", "D138", "D140", "D160"],
                 "note": "IT DECLARES THE SUITE AND DELIBERATELY DOES NOT DRIVE IT, which is "
                         "the whole shape. A registry that drove `make check` could not "
                         "disagree with the recipe — and could silently stop running a check, "

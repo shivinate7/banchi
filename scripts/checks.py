@@ -235,7 +235,7 @@ CHECKS = (
                                "refuses the damage this names. It is in `check` and "
                                "`ci-check` for the earlier, clearer message.",
         "gates": True,
-        "governed_by": ("D16", "D18", "D60", "D-the-corpus-is-a-directory"),
+        "governed_by": ("D16", "D18", "D60", "D160"),
     },
     {
         "target": "revert-guard",

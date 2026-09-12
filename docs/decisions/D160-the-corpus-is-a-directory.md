@@ -1,4 +1,4 @@
-## D-the-corpus-is-a-directory — An entry is a file, because two branches appending to one file collide every single time
+## D160 — An entry is a file, because two branches appending to one file collide every single time
 
 **One file held every settled decision, and on 2026-09-11 it conflicted five times.**
 #275, #278, #281, and then #279 and #280 against
