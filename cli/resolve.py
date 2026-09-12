@@ -588,20 +588,61 @@ def _copies_out(
         # listed. So the claim is aged by the sales rather than bounded by the shelf, and
         # `live` remains the floor D8 and D11 make it.
         # AND IT ONLY AGES A CLAIM THE EXPORT CORROBORATES. A sale reduces what TCGplayer
-        # holds only if the copy was LIVE there, and with `Total Quantity` at zero nothing
-        # of ours ever was — the copies are sitting in Staged, and a card marked sold
-        # against that state did not leave TCGplayer's hands. Ageing regardless would
-        # double-count every sale the export has already decremented for us, and it takes
-        # `check_listing_commands`' own re-emit idempotence case red: four pushed, one sold,
-        # export silent, and the claim would drop to three and offer a fifth row.
-        # AND SO DOES THE CORROBORATION GATE. "Did the export report our copies live" is a
-        # fact about the FILE, and an estimate is not a file. Driven by the estimate this gate
-        # would switch off the moment the counted sales met the reading, taking
-        # `check_listing_commands`' re-emit idempotence case with it.
+        # holds only if the copy was THERE, and the export's reading is the only witness this
+        # Mac has to that. What CHANGED is that the reading was being asked one question when
+        # it can answer two (`docs/DEBTS.md` §24, now the entry below):
+        #
+        #   - A reading that reports copies LIVE vouches for every sale of the SKU. Our copies
+        #     reach that shelf, so a copy that sold sold from it, whenever it sold. `sold` is
+        #     every sale ever, which is the arm that has always been here.
+        #   - A reading of NOTHING vouches for exactly the sales it was taken AFTER. A zero
+        #     read on 09-11 against a copy that sold on 09-07 is that sale's own result; it is
+        #     the reading the sale PRODUCED, not evidence the copy was never listed. This is
+        #     D115's rule pointed the other way — that entry clears the store's own counter
+        #     where it adopts a reading taken after the sales — and it is `sales_before`.
+        #
+        # A SALE AFTER A ZERO READING IS STILL NOT AGED, and that is not caution, it is the
+        # arithmetic: the reading said nothing of ours was live at its own time, so a copy
+        # that sold later cannot be shown to have been one of the copies this claim counts.
+        #
+        # NEITHER ARM DOUBLE-COUNTS, AND THE COMMENT THIS REPLACED SAID IT DID. `claim` is
+        # `pushed + staged`, and NOTHING anywhere decrements it on a sale — `cmd_reconcile`
+        # moves copies between its two halves and `cmd_join` draws `staged` down by the RISE
+        # in live quantity, both of which leave a sale untouched. So a sale the reading has
+        # already absorbed is one the claim has NOT, which is exactly why it has to be
+        # subtracted here. The two arms are a `max` over two independent estimates and never a
+        # sum, so a sale reaching both cannot be spent twice: four pushed and live-read four,
+        # two sold, gives `max(4 - 2, 4 - 2)` and not two.
+        #
+        # AND THE CASE THE OLD GATE WAS ACTUALLY PROTECTING KEEPS ITS ANSWER, which is the
+        # reason the fix is a second arm rather than the deletion of the first.
+        # `check_listing_commands`' re-emit idempotence case — four pushed, one sold, export
+        # SILENT — has no reading at all: `live_as_of` is null because an emit takes no
+        # reading (that case asserts it by name), so `read_at` is None, `sales_before` counts
+        # nothing, the claim stands at four and no fifth row is offered. The copies are
+        # sitting in Staged and a card marked sold against that state did not leave
+        # TCGplayer's hands, exactly as before.
+        #
+        # WHAT IS LEFT UNDER IT IS ONE AMBIGUITY AND IT IS NAMED RATHER THAN PAPERED OVER: a
+        # SKU whose import landed in Staged and never went live reads zero too, so a copy sold
+        # by hand against THAT state ages a claim it should not. Telling it from a sold-out
+        # listing needs D59's own reopener — a marker that a copy actually reached an import
+        # file — and `docs/DEBTS.md` §24 is now that residue rather than this whole defect.
+        #
+        # AND SO DOES THE CORROBORATION GATE. "What did the export report" is a fact about the
+        # FILE, and an estimate is not a file. Driven by the estimate the live arm would switch
+        # off the moment the counted sales met the reading, taking the case above with it.
+        #
+        # `read_at` IS THE STAMP OF THE READING THAT WON, not the file's. `live_reading` may
+        # have refused this export in favour of a newer settlement the store holds, and asking
+        # "was this sale before the reading" of a reading that was not used is how the two
+        # halves of one arbitration come apart. `Listing.reading_taken_at` is the same three
+        # branches, so they cannot.
+        read_at = entry.reading_taken_at(offered, as_of) if entry is not None else as_of
         sold = (
             len(inventory.positions_for_sku(sku)) - len(inventory.copies_not_sold(sku))
             if read > 0
-            else 0
+            else inventory.sales_before(sku, read_at)
         )
         out[sku] = max(live, claim - sold)
     return out, live_now
@@ -656,8 +697,9 @@ def _committed_keys(inventory: master.Inventory, copies_out: Mapping[str, int]) 
     matched SKUs offered zero copies and 59 real cards were stranded**, every one of them
     reported as *"every copy in this run is already listed or has left the box"*. The
     operator read that sentence and said it was *"just not true/possible"*. 52 of the 59 are
-    this defect; the other 7 are the stuck claim `_copies_out` cannot age, which is
-    `docs/DEBTS.md` §24 and is not fixed here.
+    this defect; the other 7 are the stuck claim `_copies_out` could not age, which is
+    `docs/DEBTS.md` §24 and is not fixed here — `_copies_out` aged them the next day
+    (`D-sold-before-the-reading`), and nothing about this ordering moved.
 
     PREFERRING COPIES OUTSIDE THE RUN BEING EMITTED WAS THE OTHER CANDIDATE AND IT OVER-SENDS.
     It makes the committed set a function of which run is emitting, so two runs holding one

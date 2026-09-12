@@ -1617,6 +1617,7 @@ D144  A card that will not settle is photographed off the quietest frame it mana
 D145 A box has an index nobody sees, because the number on the drawer is a label and a label may be reused
 D146 Two agreeing signals release the rarity claim, and the same comparison run backwards is a review reason
 D147 The claim is spent on the oldest copies, because a card captured tonight was in no file sent last week
+D-sold-before-the-reading A reading taken after a sale is that sale's own result, and it ages the claim
 
 ```
 
