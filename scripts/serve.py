@@ -48,7 +48,9 @@ REPO_ROOT = Path(__file__).resolve().parents[1]
 # the whole point: a second spelling of a port is the defect D43 exists to close, and a second
 # spelling of 30 seconds would silently turn a legitimate `store_busy` into a dead socket.
 sys.path.insert(0, str(REPO_ROOT))
+sys.path.insert(0, str(REPO_ROOT / "scripts"))
 import envfile  # noqa: E402
+import primary_sync  # noqa: E402
 from server import ports  # noqa: E402
 from store import files as store_files  # noqa: E402
 
@@ -206,8 +208,16 @@ BUILD_PREFIX = "[build]"
 # The Makefile is deliberately NOT here. Three comments in this file mention it and nothing
 # reads it — `make` re-reads it from disk on every invocation, so it cannot make a running
 # process stale. That was claimed once in conversation and is wrong.
+# THE FILES THIS SUPERVISOR IS MADE OF. A change to any one re-execs it (D53), so nothing
+# here goes stale on a `git pull`.
+#
+# `scripts/primary_sync.py` JOINED THEM WITH THE SELF-SYNC and had to: it is called at all four
+# adoption moments below, and a supervisor that had re-read `serve.py` but not the module it
+# decides with would be running half of one version. It is stdlib plus `server.ports`, which is
+# the import budget this file's header sets.
 SELF_FILES = (
     "scripts/serve.py",
+    "scripts/primary_sync.py",
     "envfile.py",
     "server/ports.py",
     "store/files.py",
@@ -1044,6 +1054,18 @@ def stand_down_lines(branch: str, running: bool) -> list[str]:
             "  code that parsed running.",
         ]
     out += [
+        # THIS REFUSAL IS THE FALLBACK NOW, AND SAYING SO IS THE POINT
+        # (D176). Without a line here it reads as though nobody
+        # attempted the obvious repair, which is no longer true.
+        #
+        # WORDED AS THE MECHANISM AND NOT AS A CLAIM ABOUT THIS INSTANCE, deliberately: the
+        # first draft said "a sync was attempted; its reason is printed above", which is FALSE
+        # under `PKMNSCAN_SYNC=off` — the sync returns silently and prints nothing, so the
+        # refusal would have pointed at an explanation that was not there. A stand-down is read
+        # by somebody already confused about why their rig is down; a sentence in it that can be
+        # wrong is worse than no sentence.
+        f"  The self-sync ({primary_sync.SYNC_ENV}=off disables it) runs ahead of this and",
+        "  prints its own reason whenever it declines.",
         "  Back on main:  git switch main      (serving resumes by itself)",
         f'  Anyway:        {SERVE_MAIN_ENV}=off make up ARGS="--restart --confirm"',
     ]
@@ -1073,6 +1095,11 @@ class Supervisor:
         # None. Held rather than recomputed so the refusal is said once per branch instead of
         # once per second — `last_syntax_error` beside it exists for exactly that reason.
         self.stood_down: Optional[str] = None
+        # The branch a SYNC was last attempted for, or None. Memoised for `stood_down`'s reason
+        # and a sharper one: this loop ticks once a second, and a sync retried every tick would
+        # run `git switch` against a tree somebody is standing in, sixty times a minute, for as
+        # long as it kept refusing. One attempt per distinct branch, re-armed by `_recover`.
+        self.sync_tried: Optional[str] = None
 
     # -- lifecycle ---------------------------------------------------------
 
@@ -1102,6 +1129,12 @@ class Supervisor:
         # plist's `KeepAlive: {SuccessfulExit: false}` restarts anything that exits non-zero,
         # which would be a refusal on a ten-second loop.
         branch = off_main(self.root)
+        if branch is not None:
+            # SYNC BEFORE REFUSING, at every one of the four adoption moments
+            # (D176). The refusal is the fallback now, not the
+            # answer: this is the login path, so a Mac booting with the tree parked on a merged
+            # branch comes up on main instead of coming up refusing.
+            branch = self._sync_attempt(branch)
         if branch is not None:
             self._stand_down(branch)
             return
@@ -1164,6 +1197,41 @@ class Supervisor:
         for line in stand_down_lines(branch, self.capture is not None):
             log(line)
 
+    def _sync_attempt(self, branch: str) -> Optional[str]:
+        """Try to put this tree back on main, and return what is STILL off main afterwards.
+
+        `None` means the tree is on main now and the caller may go on adopting its code, which
+        is the whole difference between this and the refusal it precedes. The owner's ruling is
+        the reason it exists at all: offered a guard that only refused, they answered *"why
+        can't both parts sync, remember this is a one man show, it's just me working."*
+
+        ONE ATTEMPT PER DISTINCT BRANCH. This is called from a loop that ticks once a second,
+        and a sync retried every tick would run `git switch` against a tree somebody is working
+        in sixty times a minute for as long as it kept refusing — noise, and a write attempt
+        per second at a directory the refusal has already established is not this process's.
+        `_recover` re-arms it, so `git switch main` followed by a re-park is tried again.
+
+        IT RE-READS `off_main` RATHER THAN TRUSTING THE VERDICT. `sync()` answers about the
+        PRIMARY checkout of the clone, which is this tree for every caller here — but saying so
+        is an inference, and `off_main(self.root)` is the measurement. They agree today; a
+        future arm where they do not is one where the measurement is right.
+        """
+        if self.sync_tried == branch:
+            return branch
+        self.sync_tried = branch
+        verdict = primary_sync.sync(self.root, confirm=True)
+        for line in verdict.lines:
+            log(line)
+        if not verdict.moved:
+            return branch
+        still = off_main(self.root)
+        if still is None:
+            # The stand-down that was about to happen is cancelled, so the memo behind it goes
+            # too — otherwise a later re-park onto the same branch would be silent.
+            self.stood_down = None
+            self.sync_tried = None
+        return still
+
     def _recover(self) -> None:
         """Standing down is not terminal: `git switch main` undoes it with nothing typed.
 
@@ -1172,6 +1240,9 @@ class Supervisor:
         if off_main(self.root) is not None:
             return
         self.stood_down = None
+        # RE-ARMED HERE, so a tree that goes back to main by hand and is parked again later gets
+        # a fresh sync attempt rather than one memo standing for the rest of the process's life.
+        self.sync_tried = None
         if self.capture is not None:
             # Never stopped, so it is still serving main's code. The switch back is a file
             # change like any other and `_check_files` reloads into it on the next window.
@@ -1342,6 +1413,11 @@ class Supervisor:
             # rebuild here is as much an adoption of branch code as a child restart is.
             branch = off_main(self.root)
             if branch is not None:
+                # ITS OWN ARM, because the two watch sets are independent by design (D138) and a
+                # branch differing only under `app/src` reaches this method and no other — while
+                # being exactly what a person LOOKS at.
+                branch = self._sync_attempt(branch)
+            if branch is not None:
                 self._stand_down(branch)
                 return
             if app_stale(self.root):
@@ -1395,6 +1471,13 @@ class Supervisor:
         # running, which is main's, so a branch cannot ship the code that disables it. Asked
         # after `_reexec`, it would be answered by the branch's own copy, which is no guard.
         branch = off_main(self.root)
+        if branch is not None:
+            # THE ORDER ABOVE IS STILL THE LOAD-BEARING PART AND THE SYNC DOES NOT DISTURB IT.
+            # `off_main` is asked by the image already running, which is main's, so a branch
+            # cannot ship code that disables the guard against it — and the sync that follows
+            # is main's sync, deciding about main's rules. Once it succeeds the tree IS main,
+            # so the re-exec below adopts main's `serve.py` rather than a branch's.
+            branch = self._sync_attempt(branch)
         if branch is not None:
             self._stand_down(branch)
             return
@@ -1490,6 +1573,16 @@ def do_up(args: argparse.Namespace) -> int:
     # socket (D158). Non-zero here where the supervisor's own arm stays alive and silent: a
     # person typed this and an exit status is what they are reading.
     branch = off_main()
+    if branch is not None:
+        # SYNCED FIRST, AND THEN SERVED IF THAT WORKED. A person typed this and is waiting on
+        # it, so the useful outcome is a rig that comes up rather than a status code about why
+        # it did not (D176). Printed rather than logged, for
+        # `do_up`'s standing reason: the reader is at the terminal.
+        verdict = primary_sync.sync(REPO_ROOT, confirm=True)
+        for line in verdict.lines:
+            print(line)
+        if verdict.moved:
+            branch = off_main()
     if branch is not None:
         for line in stand_down_lines(branch, running=False):
             print(line)
