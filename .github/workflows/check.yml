@@ -78,7 +78,7 @@
 # evening, most touching no screen code, at about 27 billed minutes each, until the account's
 # Actions minutes ran out. The repository went public the same night and minutes are free since;
 # what the gate still buys is the wait — a docs PR's verdict in ~100s rather than 8.5 minutes —
-# and one fewer draw per push against docs/DEBTS.md section 11's one-in-thirteen red for a change
+# and one fewer draw per push against docs/DEBTS.md section 8's one-in-thirteen red for a change
 # that cannot have caused it. Replayed over main's last 14 merges, 9 would have skipped. The
 # `browser-scope` job below asks the other question — does what this branch LANDS touch a file
 # the suite reads? — and `scripts/browser-scope.py` holds that list, DERIVED from what the run
@@ -243,7 +243,7 @@ jobs:
   # runner ran every case on ONE worker — `ubuntu-latest` is 2 vCPU on a private repo and
   # Playwright's default of half the cores floors to one — in 15.2 minutes, measured across
   # 56 jobs since this job landed. `--shard=N/3` splits the CASES three ways and each shard
-  # still runs one worker: the one-in-thirteen red docs/DEBTS.md section 11 records has "the
+  # still runs one worker: the one-in-thirteen red docs/DEBTS.md section 8 records has "the
   # suite around it" as its only known mechanism, and more workers on one box is more suite
   # around it. Three shards is the same ~15 runner-minutes plus a chromium install per extra
   # shard; wall-clock is a third. `fail-fast: false` because a red shard is a claim about

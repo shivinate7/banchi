@@ -285,6 +285,24 @@ OPEN = [
               "repo, build the SQLite index (cards join to sets by FILENAME \u2014 printedTotal lives only "
               "in sets/en.json and is half the join key), then fill the image mirror with the "
               "Content-Length dry run first. D15."},
+    {"n": 24,
+     "title": "A durable scheduled heartbeat that watches repo state across sessions",
+     "note": "THE QUESTIONS NO SINGLE SESSION IS POSITIONED TO ASK, because each one sees only its own "
+              "tree and its own branch: open pull requests green and unmerged; a pull request now "
+              "conflicting with a live session that has not been told; worktrees dirty with no session "
+              "in them, and merged branches `make janitor` would take; whether main's last push run is "
+              "green; whether `id claims` is clean (D140 amended — today a person reading PR titles is "
+              "what catches a stale claim). Mostly a CALLER of what exists: make status, make janitor, "
+              "scripts/docs-audit.py --json. TWO CONSTRAINTS, established with the owner and binding. It "
+              "runs only while the desktop app is open, so it is a heartbeat and never a daemon — "
+              "anything whose correctness depends on its having fired is the wrong thing to put here. And "
+              "each run is a FRESH SESSION WITH NO CONVERSATION CONTEXT: it knows nothing about who asked "
+              "for what. Both point one way — READ-AND-REPORT AUTHORITY, NOT MERGE AUTHORITY, because a "
+              "session that cannot remember the last run has no basis for pressing an irreversible button, "
+              "and `make merge` already wants the owner's word for that reason. Anything needing memory of "
+              "who is blocked on whom needs DURABLE STATE IN A FILE rather than in a session; that is the "
+              "part that is real work rather than a wrapper, and it is why this is a step and not a cron "
+              "line. Unranked, as OPEN requires."},
     {"n": 20, "title": "The shipped status and the tracking write-back",
      "note": "Steps 13 and 14 of docs/specs/order-pipeline.md, and the only part of that spec that is "
               "NEITHER built nor merely unproven. Both endpoints were seen on the wire while D69 was "
@@ -1725,7 +1743,7 @@ COMPONENTS = [
                                 "D70", "D72", "D75", "D76", "D80", "D81", "D83", "D84", "D87",
                                 "D88", "D90", "D92", "D94", "D96", "D101", "D102", "D104", "D111",
                                 "D119", "D122", "D127", "D132", "D135", "D136", "D140", "D141",
-                                "D142", "D143"],
+                                "D142", "D143", "D149"],
             },
             "claim-ids.py": {
                 "does": "allocate the numbers this branch's SLUG ids will take, and "
