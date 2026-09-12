@@ -38,6 +38,7 @@ import { Button, Chip, EmptyState, Icon, Kbd, Notice, PageHeader, Pill } from '.
 import { storedBoxRecency, touchBox } from './deviceMemory'
 import { toast } from './kit/toast'
 import { Overlay } from './InventoryOverlay'
+import { RANK_IS_CURRENT, ranksAsLive, ranksAsShown, type FrozenRank } from './frozenRank'
 import './BoxBrowse.css'
 
 /* THE BROWSE — box, then section, then card. The spine of `#/inventory`.
@@ -73,18 +74,25 @@ function landingOf(rows: readonly Row[]): Row | undefined {
 
 /* Where a SEARCH lands (D132 amended, the owner's rule): the first live row of the section
  * holding the most live rows — the place a hand can pull the most from. Ties go to the section
- * met first in walk order; with nothing live, `landingOf`'s answer. */
+ * met first in walk order; with nothing live, `landingOf`'s answer.
+ *
+ * IT TAKES NO FREEZE, AND THAT IS A DELETION RATHER THAN AN OMISSION (`frozenRank.ts`). The
+ * first build threaded one through here for symmetry with the rail and the copies list. It is
+ * unreachable: this runs only when the query is FRESH, and a fresh query is exactly what
+ * releases the freeze — so the argument could only ever be empty, and a mutation deleting it
+ * left the whole suite green. A parameter no call can populate is a claim nothing can check. */
 function landingInFullest(rows: readonly Row[]): Row | undefined {
   const counts = new Map<string, number>()
   const keyOf = (row: Row) => `${row.card.box}/${row.card.section ?? '?'}`
+  const live = (row: Row) => !hasDeparted(row.card)
   for (const row of rows) {
-    if (hasDeparted(row.card)) continue
+    if (!live(row)) continue
     counts.set(keyOf(row), (counts.get(keyOf(row)) ?? 0) + 1)
   }
   let best: Row | undefined
   let most = 0
   for (const row of rows) {
-    if (hasDeparted(row.card)) continue
+    if (!live(row)) continue
     const n = counts.get(keyOf(row)) ?? 0
     if (n > most) {
       most = n
@@ -308,6 +316,17 @@ type BoxBrowseProps = {
    *  keeps its receipt (D119). Shown, departed rows sink under the live ones in each section. */
   hideSold?: boolean
   onHideSold?: () => void
+
+  /** THE COPIES THAT LEFT SINCE THIS ORDER WAS TAKEN (`frozenRank.ts`). The rail's rank, the
+   *  landing and the fold all read it, so a sale moves no box tile and drops no walk row. The
+   *  state is the route's, exactly as `hideSold` is, because one press makes this walk AND the
+   *  copies list beside it stale. */
+  frozen?: FrozenRank
+
+  /** A NEW ANSWER IS A NEW ORDER. Called when the searchbox's text changes, so the route can
+   *  let the old order go: nothing has been worked down under a query that was just typed, and
+   *  a `2 copies stale` chip over a fresh answer would be counting the previous search's cards. */
+  onQuery?: (query: string) => void
 }
 
 /* Bring a row into view without moving the page: each scrollable ancestor from the row up to
@@ -607,6 +626,8 @@ export function BoxBrowse({
   reloadToken = 0,
   hideSold = false,
   onHideSold,
+  frozen = RANK_IS_CURRENT,
+  onQuery,
 }: BoxBrowseProps) {
   const [rows, setRows] = useState<Row[] | null>(null)
   const [failure, setFailure] = useState<Failure | null>(null)
@@ -669,6 +690,17 @@ export function BoxBrowse({
   const { query, setQuery, results, loading, failure: searchFailure } = useSearch()
   const searching = query.trim() !== ''
 
+  /* A NEW ANSWER IS A NEW ORDER (`frozenRank.ts`). Told on the TEXT and not on the answer: the
+     answer for `Thiev` and the answer for `Thievul` are two orders too, and waiting for the
+     response would leave the previous search's staleness chip on screen through the debounce.
+     A ref, so this fires on a CHANGE and never on a re-render that merely re-ran the effect. */
+  const askedFor = useRef(query)
+  useEffect(() => {
+    if (askedFor.current === query) return
+    askedFor.current = query
+    onQuery?.(query)
+  }, [query, onQuery])
+
   const matched = useMemo(() => {
     if (results === null) return null
     const keys = new Set<string>()
@@ -708,7 +740,9 @@ export function BoxBrowse({
       const perSection = new Map<string, number>()
       for (const row of inQuery) {
         const shelf = shelfOf(row)
-        if (typeof shelf !== 'number' || hasDeparted(row.card)) continue
+        /* A COPY THAT LEFT SINCE THIS ORDER WAS TAKEN STILL COUNTS (`frozenRank.ts`), so a sale
+           does not re-rank the rail under the hand that made it. */
+        if (typeof shelf !== 'number' || !ranksAsLive(row.key, hasDeparted(row.card), frozen)) continue
         const key = `${shelf}/${row.card.section ?? '?'}`
         const n = (perSection.get(key) ?? 0) + 1
         perSection.set(key, n)
@@ -727,7 +761,7 @@ export function BoxBrowse({
       if (ha !== hb) return hb - ha
       return a - b
     }
-  }, [boxRecords, recency, filtered, inQuery])
+  }, [boxRecords, recency, filtered, inQuery, frozen])
 
   const shelves = useMemo(
     () => shelvesOf(inQuery, filtered ? [] : boxRecords.map((record) => record.box), order),
@@ -744,10 +778,27 @@ export function BoxBrowse({
      and a walk-to from the copies list may land on a sold copy (D45). It goes the moment the
      walk steps off it. */
   const departedHere = useMemo(() => onShelf.filter((row) => hasDeparted(row.card)).length, [onShelf])
+  /* AND UNDER A SEARCH, A ROW THAT LEFT SINCE THIS ORDER WAS TAKEN IS KEPT TOO
+     (`frozenRank.ts`). Freezing the arithmetic and letting the fold delete the row puts the
+     jump straight back through the other door: the row goes and everything under it comes up by
+     its height, which is the movement the freeze exists to stop. It goes on the re-rank, with
+     everything else.
+
+     UNDER A SEARCH AND NOWHERE ELSE, which is the narrower half of this and is deliberate. The
+     unfiltered walk is in `(box, index)` order — nothing RANKS it, so nothing about it goes
+     stale, and D132's fold there is the behaviour the owner asked for and did not complain
+     about: "scrolling past them to find the live ones was the whole complaint". What they
+     reported is a RANKED list rearranging, and a ranked list is what a query makes. The row the
+     walk stands on is kept either way, as it always was (D119). */
   const visible = useMemo(() => {
     if (!hideSold) return onShelf
-    return onShelf.filter((row) => !hasDeparted(row.card) || row.key === selected)
-  }, [onShelf, hideSold, selected])
+    return onShelf.filter(
+      (row) =>
+        !hasDeparted(row.card) ||
+        row.key === selected ||
+        (filtered && ranksAsShown(row.key, true, frozen)),
+    )
+  }, [onShelf, hideSold, selected, filtered, frozen])
 
   const sections = useMemo(() => sectionsOf(visible, !hideSold, selected), [visible, hideSold, selected])
 
@@ -916,7 +967,11 @@ export function BoxBrowse({
        otherwise. With nothing live anywhere the old rule stands, so a sold-out card still
        shows where its copies were. */
     const holdsLive = (candidate: Shelf) =>
-      !filtered || inQuery.some((row) => shelfOf(row) === candidate && !hasDeparted(row.card))
+      !filtered ||
+      inQuery.some(
+        (row) =>
+          shelfOf(row) === candidate && ranksAsLive(row.key, hasDeparted(row.card), frozen),
+      )
     const live = shelves.filter(holdsLive)
     const pool = live.length > 0 ? live : shelves
     /* A FRESH ANSWER GOES TO THE FULLEST BOX (D132 amended, the owner's rule): `shelves` is in
@@ -931,7 +986,7 @@ export function BoxBrowse({
       if (!fresh && prev !== null && pool.includes(prev)) return prev
       return pool[0] ?? null
     })
-  }, [shelves, boxesAnswered, filtered, inQuery, results])
+  }, [shelves, boxesAnswered, filtered, inQuery, results, frozen])
 
   /* The selection follows the filter. When nothing matches it is left alone.
      A NEW ANSWER LANDS IN THE FULLEST SECTION (D132 amended): the query's answer is drawn by

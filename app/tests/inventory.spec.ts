@@ -5547,3 +5547,601 @@ test('D132 — the copies list, the rail and the landing lead with the section h
   await page.locator('.browse-boxcell[aria-label^="Box 2"]').click()
   await expect(page.locator('.card-locations-row.is-current .position-parts')).toHaveAttribute('aria-label', 'Box 2 · Section 2 · Card 1')
 })
+
+/* ------------------------------------------------------- the order stops moving under a sale
+ *
+ * THE OWNER'S REPORT: "i search a card it's ranked by the most of the card in a certain section,
+ * this is awesome and i love it but i realized if i mark sold while on that sorta view it can
+ * reorganize the rankings right in front of me, which feels unintuitive if im trying to mark
+ * multiple as sold."
+ *
+ * D132's ranking is correct and stays; what it could not do is hold still. `frozenRank.ts` is the
+ * mechanism and D28 is the precedent — "the review answer gets an undo window, and the list stops
+ * moving under it", the same ruling on the other screen.
+ *
+ * BOTH DIRECTIONS, IN ONE CASE EACH, BECAUSE ONE DIRECTION PASSES ON THE BUG. A case that only
+ * asserts "the order did not change" is green against a build that never ranks at all, and a case
+ * that only asserts "the re-rank changed it" is green against a build that re-ranks on every
+ * press. The pair is the claim.
+ *
+ * AND THE ROW KEYS, NEVER THE COUNT. The failure mode is a length-preserving reshuffle: five rows
+ * before and five rows after, in a different order. `toHaveCount` cannot see it and neither can a
+ * sweep of positions, because the rows are identical boxes with different contents. Every
+ * assertion below compares the ORDERED LIST OF POSITION LABELS, which is each row's identity.
+ */
+
+/** The copies list as an ordered list of row identities — the server's own position label per
+ *  row, which is the one string that names WHICH copy is drawn there. */
+async function copyOrder(page: Page): Promise<string[]> {
+  const labels = page.locator('.card-locations-row .position-parts')
+  const n = await labels.count()
+  const out: string[] = []
+  for (let i = 0; i < n; i += 1) out.push((await labels.nth(i).getAttribute('aria-label')) ?? '')
+  return out
+}
+
+/** The WALK as an ordered list of row identities — each row's slot cell, which is `#38` for a
+ *  card in its slot and the store key `B7 #38` for one that has left (D68). The third list one
+ *  press can move, and the one `Hide sold` empties a row out of. */
+async function walkOrder(page: Page): Promise<string[]> {
+  return await page.locator('.browse-row .browse-row-position').allTextContents()
+}
+
+/** The box rail as an ordered list of tiles, which is the other thing D132's rule ranks. */
+async function railOrder(page: Page): Promise<string[]> {
+  const cells = page.locator('.browse-boxcell')
+  const n = await cells.count()
+  const out: string[] = []
+  for (let i = 0; i < n; i += 1) out.push((await cells.nth(i).getAttribute('aria-label')) ?? '')
+  return out
+}
+
+/* THE FIXTURE THE OWNER'S COMPLAINT NEEDS, and it is D132's own with one copy moved.
+ *
+ * Six live Thievul: THREE in box 7 section 1, TWO in box 2 section 2, ONE in box 2 section 1. So
+ * the ranking is box 7 first, and box 7's three are the top three rows. Selling ONE of box 7's
+ * three drops it to two, which TIES box 2 section 2 — and a live re-rank moves box 2's pair up
+ * past the two that are left. That tie is the point of the shape: a fixture where the leader
+ * stays the leader after a sale cannot tell a frozen order from a recomputed one. */
+function stackedThievul(): Cards {
+  const thievul = (index: number, at: number, section: number, start: number, end: number, box = 2) =>
+    card({
+      index, at, state: 'identified', name: 'Thievul', sku: '8937370',
+      section, sectionStart: start, sectionEnd: end, box,
+      boxName: box === 7 ? 'ME01 spares' : undefined,
+      boxTotal: box === 7 ? 40 : 5,
+    })
+  return {
+    '2/1': thievul(1, 1, 1, 1, 3),
+    /* `at` IS D58's BOX-WIDE COUNT and section 2 starts at slot 3, so these two are the box's
+       third and fourth cards — `Section 2 · Card 1` and `Card 2`. Numbering them 2 and 3 draws
+       `Card 0`, which is what a fixture that forgot the section's own start produces. */
+    '2/6': thievul(6, 3, 2, 3, 5),
+    '2/7': thievul(7, 4, 2, 3, 5),
+    '7/38': thievul(38, 38, 1, 1, 40, 7),
+    '7/39': thievul(39, 39, 1, 1, 40, 7),
+    '7/40': thievul(40, 40, 1, 1, 40, 7),
+  }
+}
+
+/** The box registry that fixture needs, with box 2 made the BIGGER box so nothing but the
+ *  answer's own count can put box 7 first — the tie-breaker below the rank term is `on_hand`,
+ *  and D132's own case records that leaving box 2 small let the rail assertion pass with the
+ *  rank term deleted. */
+const STACKED_BOXES = {
+  boxes: TWO_BOXES.boxes.map((box) =>
+    box.box === 7
+      ? { ...box, cards: 3, on_hand: 3, fill: 40, next_index: 41, sections_detail: [{ section: 1, start: 1, end: 40, count: 3 }] }
+      : { ...box, cards: 60, on_hand: 60, fill: 60, next_index: 61 },
+  ),
+}
+
+/** The six-copy fixture, wired for a sale that really departs — `sell` alone moves `state` and
+ *  the server also empties the place (D118's note on this fixture), and the ranking reads the
+ *  place's section, so a half-move would be a store shape the server cannot produce. */
+function stackedStore(): { store: Store; depart: (key: string) => void } {
+  const cards = stackedThievul()
+  const inner = sellableStore()
+  return {
+    store: { cards, search: (query) => searchAnswer(query, cards) },
+    depart: (key) => {
+      const held = cards[key]
+      if (held === undefined) return
+      const place = held.place
+      cards[key] = {
+        ...held,
+        state: 'sold',
+        label: `Box ${place.box} · departed · B${place.box} #${place.index}`,
+        place: { ...place, label: `Box ${place.box} · departed · B${place.box} #${place.index}`, slot: null, card: null, fraction: null },
+      }
+      delete (cards[key] as { card?: number }).card
+      void inner
+    },
+  }
+}
+
+test('a sale leaves every other row where it was, and the sold row in its own place', async ({ page }) => {
+  const { store, depart } = stackedStore()
+  await open(page, STACKED_BOXES, store, () => PRICING, movesOnSale((undo) => { if (!undo) depart('7/38') }), {
+    route: '/#/inventory?box=2',
+    /* THE PRODUCT'S OWN DEFAULT (D132), not the fixture's, because the fold is half the claim:
+       a frozen row that vanishes is the same jump through the other door. */
+    hideSold: true,
+  })
+  await expandAll(page)
+  await page.getByRole('searchbox').fill('Thievul')
+
+  /* The order D132's rule produces: box 7's three, then box 2 section 2's two, then the lone
+     one. Waited for by its own first row, so nothing below measures a list mid-answer. */
+  /* THE RAIL FIRST, AND THE ORDER OF THESE TWO WAITS IS THE WHOLE OF IT. They are separate
+     components with separate `useSearch` hooks, and the rail settling MOVES THE WALK — which
+     re-selects a card, which puts the copies list back into its skeleton. Waited for the other
+     way round, the copies list was measured, the rail then landed, and the snapshot taken
+     afterwards came back EMPTY. Measured both ways: `railBefore` recording `Box 2, Box 7` in
+     one order, `before[0]` undefined in the other. */
+  await expect(page.locator('.browse-boxcell').first()).toHaveAttribute('aria-label', /^Box 7/)
+  const labels = page.locator('.card-locations-row .position-parts')
+  await expect(labels).toHaveCount(6)
+  await expect(labels.nth(0)).toHaveAttribute('aria-label', 'Box 7 · Section 1 · Card 38')
+  const before = await copyOrder(page)
+  const railBefore = await railOrder(page)
+  const walkBefore = await walkOrder(page)
+  expect(railBefore[0]).toMatch(/^Box 7/)
+  expect(before[0]).toBe('Box 7 · Section 1 · Card 38')
+  expect(before[3]).toBe('Box 2 · Section 2 · Card 1')
+
+  /* Sell the row the list leads with. Its section drops from three to two and TIES box 2's
+     pair, so a live re-rank would move box 2's two copies above the two box 7 has left. */
+  await copyRow(page, 'Box 7 · Section 1 · Card 38').getByRole('button', { name: 'Mark sold' }).click()
+  await expect(page.locator('.inventory-receipt')).toContainText('Undo')
+
+  /* WAIT FOR THE RE-READ AND NOT FOR THE OPTIMISM. `.is-gone` lands off `soldKeys` before any
+     request goes out, so an assertion gated on it measures the list the press has not yet
+     changed — the answer is right, a beat early, and the snapshot below reads stale labels.
+     The DEPARTED LABEL is the wire's own and cannot appear until the re-read has landed. */
+  await expect(
+    page.locator('.card-locations-row .position-parts[aria-label="Box 7 · departed · B7 #38"]'),
+  ).toHaveCount(1)
+
+  /* THE SOLD ROW IS STILL DRAWN AND STILL AT THE TOP. `Hide sold` is on, so without the freeze
+     this row is not in the list at all and every row below it has come up one. */
+  await expect(page.locator('.card-locations-row.is-gone')).toHaveCount(1)
+  const after = await copyOrder(page)
+  expect(after).toHaveLength(6)
+  /* The departed row carries `join.departed_label` in place of its address (D58, D68) — the
+     product's existing rendering for a copy in no slot, not a second one invented here. */
+  expect(after[0]).toBe('Box 7 · departed · B7 #38')
+  /* AND EVERY OTHER ROW IS THE ROW IT WAS, in the position it was in. */
+  expect(after.slice(1)).toEqual(before.slice(1))
+  expect(await railOrder(page)).toEqual(railBefore)
+
+  /* AND THE WALK, WHICH IS THE SECOND LIST THE SAME PRESS COULD HAVE MOVED. `Hide sold` is on,
+     so without the freeze the sold row leaves the box's own walk too and the two rows under it
+     come up — a jump in the left rail while the hand is in the right pane. The walk's row keys
+     are its slot cells, and the departed one reads as the store key (D68). */
+  expect(walkBefore).toEqual(['#38', '#39', '#40'])
+  expect(await walkOrder(page)).toEqual(['B7 #38', '#39', '#40'])
+
+  /* And the control says how stale the order is, rather than the list quietly reshuffling. */
+  await expect(page.locator('.card-locations-rerank')).toContainText('Order is 1 copy stale')
+})
+
+test('and the re-rank is what moves it — the same sale, with the order taken again', async ({ page }) => {
+  const { store, depart } = stackedStore()
+  await open(page, STACKED_BOXES, store, () => PRICING, movesOnSale((undo) => { if (!undo) depart('7/38') }), {
+    route: '/#/inventory?box=2',
+    hideSold: true,
+  })
+  await expandAll(page)
+  await page.getByRole('searchbox').fill('Thievul')
+  /* The rail first, for the reason the case above measures: it moves the walk when it lands. */
+  await expect(page.locator('.browse-boxcell').first()).toHaveAttribute('aria-label', /^Box 7/)
+  const labels = page.locator('.card-locations-row .position-parts')
+  await expect(labels).toHaveCount(6)
+  await expect(labels.nth(0)).toHaveAttribute('aria-label', 'Box 7 · Section 1 · Card 38')
+  const before = await copyOrder(page)
+
+  await copyRow(page, 'Box 7 · Section 1 · Card 38').getByRole('button', { name: 'Mark sold' }).click()
+  await expect(page.locator('.card-locations-rerank')).toBeVisible()
+  /* The re-read, waited for by the one string only it can produce — see the case above. */
+  await expect(
+    page.locator('.card-locations-row .position-parts[aria-label="Box 7 · departed · B7 #38"]'),
+  ).toHaveCount(1)
+  /* AND THE ORDER HAS NOT MOVED, which is what makes the press below the subject of this case
+     rather than a second reading of the one above. */
+  expect(await copyOrder(page)).toEqual(['Box 7 · departed · B7 #38', ...before.slice(1)])
+
+  /* THE PRESS THE OWNER CHOOSES, and the only thing in this screen that reshuffles the list. */
+  await page.locator('.card-locations-rerank').click()
+
+  /* The control goes with the staleness it was reporting — the order is current again. */
+  await expect(page.locator('.card-locations-rerank')).toHaveCount(0)
+
+  /* STILL SIX ROWS, AND THAT IS D132's RULE RATHER THAN THE FREEZE: a copy sold from THIS
+     screen is drawn while its receipt stands, so the press that sold it is still on screen with
+     its Undo (D119). What the re-rank changes is the ORDER, which is the whole claim — asserted
+     as the identity of every row and never as a count, because the failure mode here is a
+     list of the same length in a different order. */
+  await expect(labels).toHaveCount(6)
+  const after = await copyOrder(page)
+  expect(after).not.toEqual(before)
+
+  /* Box 2's pair has taken the lead. Box 7 is down to two live copies, which TIES box 2's
+     section 2, and a tie falls to the server's own order — so the two box 2 copies come first
+     and the sold one sits with the section it is no longer counted in. */
+  expect(after).toEqual([
+    'Box 2 · Section 2 · Card 1',
+    'Box 2 · Section 2 · Card 2',
+    'Box 7 · departed · B7 #38',
+    'Box 7 · Section 1 · Card 39',
+    'Box 7 · Section 1 · Card 40',
+    'Box 2 · Section 1 · Card 1',
+  ])
+})
+
+test('and the row is still there when its receipt has run out, which is the half the optimism was hiding', async ({ page }) => {
+  /* THE TWENTY SECONDS ARE NOT THE FREEZE, AND A CASE INSIDE THEM CANNOT TELL THE TWO APART.
+     `stays` keeps a row for three reasons — it is the copy the walk stands on, this screen just
+     sold it and is holding a receipt (D132/D119), or the order is frozen by it. Every assertion
+     in the cases above lands inside the receipt window, so the SECOND reason answers them and
+     the third is never exercised: measured, deleting the freeze from that predicate leaves the
+     whole file green. What the owner is doing takes minutes, and the receipt takes twenty
+     seconds — so this is the case that is actually about them.
+
+     THE CLOCK IS FAKED AND ONLY ADVANCED (D136), for the reason `brand.spec.ts` records at
+     length: a twenty-second sleep is the suite's longest case by a distance and buys nothing a
+     jump does not. Installed before the first navigation. */
+  await page.clock.install()
+  const { store, depart } = stackedStore()
+  await open(page, STACKED_BOXES, store, () => PRICING, movesOnSale((undo) => { if (!undo) depart('7/38') }), {
+    route: '/#/inventory?box=2',
+    hideSold: true,
+  })
+  await expandAll(page)
+  await page.getByRole('searchbox').fill('Thievul')
+  await expect(page.locator('.browse-boxcell').first()).toHaveAttribute('aria-label', /^Box 7/)
+  const labels = page.locator('.card-locations-row .position-parts')
+  await expect(labels).toHaveCount(6)
+  await expect(labels.nth(0)).toHaveAttribute('aria-label', 'Box 7 · Section 1 · Card 38')
+  const before = await copyOrder(page)
+
+  await copyRow(page, 'Box 7 · Section 1 · Card 38').getByRole('button', { name: 'Mark sold' }).click()
+  await expect(
+    page.locator('.card-locations-row .position-parts[aria-label="Box 7 · departed · B7 #38"]'),
+  ).toHaveCount(1)
+
+  /* PAST THE WINDOW. `UNDO_WINDOW_MS` is 20s and the receipt's own timer is armed for it, so
+     this is the frame after the optimism lets go: `soldKeys` drops the copy, its Undo goes, and
+     the only thing left holding the row is the freeze. */
+  await page.clock.runFor(25_000)
+  await expect(page.locator('.inventory-receipt')).toHaveCount(0)
+
+  /* STILL SIX ROWS, STILL IN THE SAME ORDER, AND THE SOLD ONE STILL AT THE TOP. Without the
+     freeze the row folds away here and the five beneath it come up one — the same jump the
+     owner reported, arriving twenty seconds late. */
+  await expect(labels).toHaveCount(6)
+  expect(await copyOrder(page)).toEqual(['Box 7 · departed · B7 #38', ...before.slice(1)])
+  /* And the control is still offering the re-rank, because nothing has taken a new order. */
+  await expect(page.locator('.card-locations-rerank')).toContainText('Order is 1 copy stale')
+})
+
+test('a retirement holds its row too, and it is the freeze alone that does it', async ({ page }) => {
+  /* THE DOOR THAT HAS NO OPTIMISM BEHIND IT (D26). `Inventory.tsx` hands the copies list
+     `soldKeys` and deliberately not `retiredKeys`, so a retired copy is drawn as departed off
+     the WIRE and nothing local is holding its row — which makes this the case where the freeze
+     is the only thing keeping the list still. Measured: with the freeze deleted from `stays`,
+     the sale cases stay green (a sale's own `soldKeys` answers them) and this one goes red. */
+  const cards = stackedThievul()
+  const store: Store = { cards, search: (query) => searchAnswer(query, cards) }
+  await open(page, STACKED_BOXES, store, () => PRICING, SALE, {
+    route: '/#/inventory?box=2',
+    hideSold: true,
+  })
+
+  /* `open` stubs the sale and not the retirement, so this case brings its own — registered
+     after it, which is the one Playwright consults first. The store moves when the POST
+     arrives, for the reason `movesOnSale` spends its docstring on. */
+  await page.route(/\/inventory\/\d+\/\d+\/retire$/, async (route) => {
+    const held = cards['7/39']
+    if (held !== undefined) {
+      const place = held.place
+      cards['7/39'] = {
+        ...held,
+        state: 'retired',
+        label: `Box 7 · departed · B7 #39`,
+        place: { ...place, label: `Box 7 · departed · B7 #39`, slot: null, card: null, fraction: null },
+      }
+      delete (cards['7/39'] as { card?: number }).card
+    }
+    await route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify({
+        position: '7/39', box: 7, index: 39, undone: false,
+        state: 'retired', previous_state: 'identified', restores_to: 'identified',
+        reason: 'damaged', listing: null, card: null,
+      }),
+    })
+  })
+
+  await expandAll(page)
+  await page.getByRole('searchbox').fill('Thievul')
+  await expect(page.locator('.browse-boxcell').first()).toHaveAttribute('aria-label', /^Box 7/)
+  const labels = page.locator('.card-locations-row .position-parts')
+  await expect(labels).toHaveCount(6)
+  await expect(labels.nth(0)).toHaveAttribute('aria-label', 'Box 7 · Section 1 · Card 38')
+  const before = await copyOrder(page)
+  const walkBefore = await walkOrder(page)
+
+  /* A MID-LIST ROW, AND NOT THE ONE THE WALK IS STANDING ON — which is the difference between
+     a case that exercises the freeze and one that does not. `stays` keeps a row for three
+     reasons and the walk's own row is answered by the FIRST of them, so retiring card 38 (where
+     the walk lands) is kept whatever the freeze does. Card 39 is neither current nor optimistic.
+     Measured: with the freeze deleted from `stays`, retiring 38 leaves the suite green and
+     retiring 39 turns it red. */
+  await copyRow(page, 'Box 7 · Section 1 · Card 39').getByRole('button', { name: 'Retire' }).click()
+  await page.getByRole('dialog').getByRole('button', { name: 'Damaged' }).click()
+
+  await expect(
+    page.locator('.card-locations-row .position-parts[aria-label="Box 7 · departed · B7 #39"]'),
+  ).toHaveCount(1)
+  await expect(labels).toHaveCount(6)
+  expect(await copyOrder(page)).toEqual([before[0], 'Box 7 · departed · B7 #39', ...before.slice(2)])
+  /* AND THE WALK, which folds departed rows away under `Hide sold` and is held by the same set. */
+  expect(walkBefore).toEqual(['#38', '#39', '#40'])
+  expect(await walkOrder(page)).toEqual(['#38', 'B7 #39', '#40'])
+  /* One sentence for both doors: a retirement is a copy leaving, and the order is stale by it. */
+  await expect(page.locator('.card-locations-rerank')).toContainText('Order is 1 copy stale')
+})
+
+test('a new search takes a new order, so the staleness never carries across answers', async ({ page }) => {
+  const cards: Cards = { ...stackedThievul(), '2/4': card({ index: 4, at: 4, state: 'identified', name: 'Eiscue', sku: '8937371', section: 1, sectionStart: 1, sectionEnd: 3 }) }
+  const store: Store = { cards, search: (query) => searchAnswer(query, cards) }
+  const depart = (key: string) => {
+    const held = cards[key]
+    if (held === undefined) return
+    const place = held.place
+    cards[key] = { ...held, state: 'sold', label: `Box ${place.box} · departed · B${place.box} #${place.index}`, place: { ...place, label: `Box ${place.box} · departed · B${place.box} #${place.index}`, slot: null, card: null, fraction: null } }
+    delete (cards[key] as { card?: number }).card
+  }
+  await open(page, STACKED_BOXES, store, () => PRICING, movesOnSale((undo) => { if (!undo) depart('7/38') }), {
+    route: '/#/inventory?box=2',
+    hideSold: true,
+  })
+  await expandAll(page)
+  await page.getByRole('searchbox').fill('Thievul')
+  await expect(page.locator('.card-locations-row .position-parts').nth(0)).toHaveAttribute('aria-label', 'Box 7 · Section 1 · Card 38')
+  await copyRow(page, 'Box 7 · Section 1 · Card 38').getByRole('button', { name: 'Mark sold' }).click()
+  await expect(page.locator('.card-locations-rerank')).toBeVisible()
+  /* The re-read, waited for by the one string only it can produce — the chip lands off the
+     sale's own response and says nothing about whether the store has answered yet. */
+  await expect(
+    page.locator('.card-locations-row .position-parts[aria-label="Box 7 · departed · B7 #38"]'),
+  ).toHaveCount(1)
+
+  /* A QUERY NOBODY HAS WORKED DOWN YET HAS NOTHING TO HOLD STILL.
+
+     THE NEW QUERY REACHES THE SAME SKU, WHICH IS WHAT MAKES THIS OBSERVABLE AT ALL. The chip
+     counts the copies THIS LIST draws, so searching a different card empties it whether or not
+     the freeze was released — the case passed against a build that never released it, because
+     an Eiscue list holds no Thievul. `8937370` is the same group under a different string, so
+     the frozen copy is still on screen and the only thing that can take the chip down is the
+     release. */
+  await page.getByRole('searchbox').fill('8937370')
+  /* Waited for the NEW order's own first row, not for a count: six rows is true before the
+     answer lands and after it, so a count gates nothing. */
+  await expect(page.locator('.card-locations-row .position-parts').nth(0)).toHaveAttribute(
+    'aria-label',
+    'Box 2 · Section 2 · Card 1',
+  )
+  await expect(page.locator('.card-locations-row .position-parts')).toHaveCount(6)
+  await expect(page.locator('.card-locations-rerank')).toHaveCount(0)
+  /* And the order is the one a fresh answer computes: box 7 is down to two live copies, which
+     ties box 2 section 2, so box 2's pair leads — the reshuffle that the freeze was holding off
+     and that a new search is entitled to make. */
+  expect(await copyOrder(page)).toEqual([
+    'Box 2 · Section 2 · Card 1',
+    'Box 2 · Section 2 · Card 2',
+    'Box 7 · departed · B7 #38',
+    'Box 7 · Section 1 · Card 39',
+    'Box 7 · Section 1 · Card 40',
+    'Box 2 · Section 1 · Card 1',
+  ])
+})
+
+test('a box whose last live match departs keeps the walk, rather than handing it to another box', async ({ page }) => {
+  /* THE SHELF POOL, which is the third thing D132's rule ranks and the one a sale can empty.
+     `holdsLive` drops a box from the pool the moment it holds no LIVE match of the answer, and
+     the walk then lands on the first box that does — so selling box 2's only Thievul used to
+     move the operator to box 7 mid-press. One live match in box 2 is what makes that reachable;
+     with three, the box never empties and the pool never changes. */
+  const thievul = (index: number, at: number, section: number, start: number, end: number, box = 2) =>
+    card({ index, at, state: 'identified', name: 'Thievul', sku: '8937370', section, sectionStart: start, sectionEnd: end, box, boxName: box === 7 ? 'ME01 spares' : undefined, boxTotal: box === 7 ? 40 : 5 })
+  const cards: Cards = {
+    '2/1': thievul(1, 1, 1, 1, 3),
+    '7/38': thievul(38, 38, 1, 1, 40, 7),
+    '7/39': thievul(39, 39, 1, 1, 40, 7),
+    '7/40': thievul(40, 40, 1, 1, 40, 7),
+  }
+  const store: Store = { cards, search: (query) => searchAnswer(query, cards) }
+  const depart = (key: string) => {
+    const held = cards[key]
+    if (held === undefined) return
+    const place = held.place
+    cards[key] = { ...held, state: 'sold', label: `Box ${place.box} · departed · B${place.box} #${place.index}`, place: { ...place, label: `Box ${place.box} · departed · B${place.box} #${place.index}`, slot: null, card: null, fraction: null } }
+    delete (cards[key] as { card?: number }).card
+  }
+  await open(page, STACKED_BOXES, store, () => PRICING, movesOnSale((undo) => { if (!undo) depart('2/1') }), {
+    route: '/#/inventory?box=2',
+    hideSold: true,
+  })
+  await page.getByRole('searchbox').fill('Thievul')
+  /* The fresh answer lands on box 7, which holds the most. Press box 2 to stand there. */
+  await expect(page.locator('.browse-boxcell[aria-current="true"]')).toHaveAttribute('aria-label', /^Box 7/)
+  await page.locator('.browse-boxcell[aria-label^="Box 2"]').click()
+  await expect(page.locator('.browse-boxcell[aria-current="true"]')).toHaveAttribute('aria-label', /^Box 2/)
+
+  await copyRow(page, 'Box 2 · Section 1 · Card 1').getByRole('button', { name: 'Mark sold' }).click()
+  await expect(
+    page.locator('.card-locations-row .position-parts[aria-label="Box 2 · departed · B2 #1"]'),
+  ).toHaveCount(1)
+
+  /* STILL STANDING IN BOX 2. Without the freeze the box holds no live match any more, drops out
+     of the pool, and the walk is handed to box 7 — a whole screen changing under the press. */
+  await expect(page.locator('.browse-boxcell[aria-current="true"]')).toHaveAttribute('aria-label', /^Box 2/)
+})
+
+test('undoing the sale takes the staleness back with it', async ({ page }) => {
+  const { store, depart } = stackedStore()
+  const back = (key: string) => {
+    const held = store.cards[key]
+    if (held !== undefined) held.state = 'identified'
+  }
+  await open(page, STACKED_BOXES, store, () => PRICING, movesOnSale((undo) => (undo ? back('7/38') : depart('7/38'))), {
+    route: '/#/inventory?box=2',
+    hideSold: true,
+  })
+  await expandAll(page)
+  await page.getByRole('searchbox').fill('Thievul')
+  await expect(page.locator('.card-locations-row .position-parts').nth(0)).toHaveAttribute('aria-label', 'Box 7 · Section 1 · Card 38')
+
+  await copyRow(page, 'Box 7 · Section 1 · Card 38').getByRole('button', { name: 'Mark sold' }).click()
+  await expect(page.locator('.card-locations-rerank')).toContainText('Order is 1 copy stale')
+
+  /* NOTHING LEFT THE BOX AFTER ALL, so there is nothing for a re-rank to recompute — a
+     staleness figure that survived an undo would be offering to re-rank a store that never
+     moved. */
+  await page.locator('.inventory-receipt').getByRole('button', { name: 'Undo' }).click()
+
+  /* THE RECEIPT GOES FIRST, which is what says the reversal was answered rather than merely
+     dispatched. */
+  await expect(page.locator('.inventory-receipt')).toHaveCount(0)
+
+  /* AND THE HEADER IS ASSERTED PRESENT BEFORE THE CHIP IS ASSERTED ABSENT. The undo triggers a
+     re-read and the copies list draws a skeleton with no header at all while that is in flight,
+     so a bare `toHaveCount(0)` on the chip is satisfied by a frame in which NOTHING is drawn —
+     it passes against a build that never releases the hold. The title renders only when the
+     group does, so the pair can only be satisfied by a settled panel with no chip in it. */
+  await expect(page.locator('.card-locations-title')).toBeVisible()
+  await expect(page.locator('.card-locations-row')).toHaveCount(6)
+
+  /* PROMPTLY, WHICH IS THE WHOLE OF WHAT THIS CASE ADDS. The chip has to be gone on the frame
+     the undo lands, not eventually: with the release deleted the panel still settles without it
+     inside the default fifteen seconds — measured by dumping the header, which showed the chip
+     present at this point and absent by the time a default assertion gave up waiting. So the
+     window is the assertion. */
+  await expect(page.locator('.card-locations-rerank')).toHaveCount(0, { timeout: 2000 })
+})
+
+test('the control that re-ranks reserves its own room, so appearing moves no copy row', async ({ page }) => {
+  /* D118 ON THE NEW CONTROL. It appears on the press that makes the order stale, inside a band
+     whose height is fixed — so an unreserved slot sends every copy row down by the chip's
+     height at the exact moment of the sale, which is the movement this whole change exists to
+     stop. Measured on the FIRST ROW's own top edge, inside the scroller. */
+  const { store, depart } = stackedStore()
+  await open(page, STACKED_BOXES, store, () => PRICING, movesOnSale((undo) => { if (!undo) depart('7/38') }), {
+    route: '/#/inventory?box=2',
+    hideSold: true,
+  })
+  await expandAll(page)
+  await page.getByRole('searchbox').fill('Thievul')
+  const rows = page.locator('.card-locations-row')
+  await expect(rows).toHaveCount(6)
+  await expect(page.locator('.card-locations-rerank')).toHaveCount(0)
+  /* BOXBROWSE'S OWN RAIL SEARCH IS A SEPARATE `useSearch()` FROM THE COPIES LIST'S, and the
+     count above proves only the second one has settled. Waiting on it alone races the first:
+     it can still be mid-debounce when the press below fires, and its FIRST real answer — which
+     lands after the press purely by bad luck — is read as a re-rank the freeze failed to hold.
+     It is not: D132's "a fresh answer goes to the fullest box" is correct for a landing that
+     has never happened yet, and the box here is genuinely landing for the first time. Waiting
+     for the rail to name box 7 is what the sibling cases already do, and this one had dropped
+     it. Reproduced without this wait: the press lands before `filtered` ever turns true, the
+     shelf's very first fresh landing coincides with the post-sale re-read, and the walk jumps
+     box 2 -> box 7 — a real DOM remount, not a probe artifact, traced with a MutationObserver
+     and confirmed line-by-line against the shelf effect's own state. */
+  await expect(page.locator('.browse-boxcell').first()).toHaveAttribute('aria-label', /^Box 7/)
+
+  /* `offsetTop` AND NOT A BOUNDING BOX, which is D118's own recorded trap one register over:
+     Playwright scrolls a control into view before it clicks it, and this list is the thing that
+     scrolls inside `.browse-band`. Viewport coordinates would report the SCROLL as movement and
+     say nothing about the header — measured at 535px before the press and 390px after, on a
+     build where the list itself had not moved at all. The offset within the scrolled content
+     is the number the reservation is about.
+
+     THE PROBE DISTINGUISHES "NOTHING IS KNOWN YET" FROM "NOTHING IS WRONG", and does so by
+     POLLING rather than by sampling once. A single read that returns a sentinel on a missing
+     node was this case's first defect: `-1` compared against a real measurement produced a
+     message that read as a layout regression and sent the reader to the CSS. The second
+     defect, found chasing the first: `.card-locations-owner` and `.card-locations-rows`
+     genuinely are ABSENT for a frame or two as an ordinary part of this screen settling —
+     traced with a mount/unmount log on `CardLocations` itself, and it happens on the INITIAL
+     load, before any press, as many times as it happens after one. Nothing here is specific to
+     a sale; this component's own lifecycle is not the claim this case exists to prove. So the
+     read retries — `expect.poll`, the same tool Playwright hands you for "eventually true" —
+     until both nodes are present, and only THEN takes the measurement this case is actually
+     about. A press that genuinely left the panel gone still fails, past the poll's window,
+     with the same detail a single throw would have given. */
+  const listTop = async (): Promise<number> => {
+    let last: number | null = null
+    await expect
+      .poll(
+        async () => {
+          last = await page.evaluate(() => {
+            const list = document.querySelector('.card-locations-rows')
+            const panel = document.querySelector('.card-locations-owner')
+            if (list === null || panel === null) return null
+            /* The HEADER's height, read as the gap between the panel's own top and the first
+               row — two rects taken in the same frame, so the scroll cancels and no
+               offsetParent is assumed. `offsetTop` was the first build and moved 535 -> 637 on
+               a press that changed nothing about the header, because the scroller it is
+               measured from is not the panel. */
+            return Math.round(list.getBoundingClientRect().top - panel.getBoundingClientRect().top)
+          })
+          return last
+        },
+        {
+          message: '.card-locations-rows and .card-locations-owner never settled together',
+          intervals: [50, 100, 100],
+          timeout: 3000,
+        },
+      )
+      .not.toBeNull()
+    // The poll above only resolves once `last` is non-null, so this cast is the assertion's
+    // own guarantee, not a hope.
+    return last as unknown as number
+  }
+  const before = await listTop()
+  expect(before).toBeGreaterThan(0)
+
+  await copyRow(page, 'Box 7 · Section 1 · Card 38').getByRole('button', { name: 'Mark sold' }).click()
+  await expect(page.locator('.card-locations-rerank')).toBeVisible()
+  const after = await listTop()
+  expect(after).toBe(before)
+})
+
+test('the re-rank control clears the thumb floor on a phone', async ({ page }) => {
+  /* D117's floor, on a control that did not exist when it was written: 40px under 767px, met by
+     `--bn-control-h-sm` in the token file rather than by a number in `CardLocations.css`. */
+  await page.setViewportSize({ width: 390, height: 844 })
+  const { store, depart } = stackedStore()
+  /* `settle` because a phone draws the walk inside a drawer and `open`'s default wait is a
+     section fold, which is not on screen here — waiting for it would fail on the arrangement
+     rather than on the claim.
+
+     AND NO SEARCH, WHICH IS NOT A SHORTCUT. Below 768 the searchbox lives in the rail DRAWER
+     and is not on screen until the drawer is opened, so typing into it here times out on the
+     shell rather than on this control. It is also not needed: the copies list runs its own
+     query off the selected card's SKU, so the sale makes the order stale exactly as it does at
+     1440 and the chip is drawn the same way. */
+  await open(page, STACKED_BOXES, store, () => PRICING, movesOnSale((undo) => { if (!undo) depart('7/38') }), {
+    route: '/#/inventory?box=2',
+    hideSold: true,
+    settle: '.card-locations-owner',
+  })
+  await copyRow(page, 'Box 7 · Section 1 · Card 38').getByRole('button', { name: 'Mark sold' }).click()
+  const chip = page.locator('.card-locations-rerank')
+  await expect(chip).toBeVisible()
+  const box = await chip.boundingBox()
+  expect(box?.height ?? 0).toBeGreaterThanOrEqual(40)
+})
+
