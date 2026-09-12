@@ -406,8 +406,12 @@ def _box_bid(box: int) -> Optional[int]:
     return None if entry is None else entry.bid
 
 
-def _selection(payload: dict) -> selection_mod.Selection:
+def _resolve_selection(payload: dict) -> selection_mod.Selection:
     """The wire's selection, refused as a `PipelineRefusal` rather than a `SelectionError`.
+
+    IT IS `_resolve_scope` RENAMED, AND THE NAME IS THE CHANGE. That function refused anything
+    that did not name a positive integer `box` — *"A run is always scoped to one box"* — which
+    is this entry's thesis stated as a 400.
 
     ONE SEAM, ONE TRANSLATION. `pipeline/selection.py` is the reader for both surfaces and
     raises its own exception so that it depends on neither the server nor argparse; this is the
@@ -524,7 +528,7 @@ def _resolve_send(payload: dict) -> Send:
     argued in `Selection.named`. The screen has the free preflight and a confirm in front of
     it; a terminal has a newline.
     """
-    selection = _selection(payload)
+    selection = _resolve_selection(payload)
     label = payload.get("label")
     if not isinstance(label, str) or not label.strip():
         label = _default_label(selection)
@@ -1386,7 +1390,7 @@ def do_pipeline_crop_preview(payload: dict) -> dict:
     what stepping the preview does. A free read that had to write to disk and then be swept was
     the clearest sign the directory was standing in for a vocabulary that did not exist.
     """
-    selection = _selection(payload)
+    selection = _resolve_selection(payload)
     crop = bool(payload.get("crop"))
     offset = payload.get("offset", 0)
     if not isinstance(offset, int) or isinstance(offset, bool) or offset < 0:
