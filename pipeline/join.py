@@ -883,7 +883,7 @@ NAME_ALTERNATIVE_LIMIT = 8
 
 
 def name_alternatives(
-    catalog: "Catalog",
+    named: Sequence[tcgcsv.Row],
     card: "IdentifiedCard",
     disputed_row: tcgcsv.Row,
 ) -> Tuple[tcgcsv.Row, ...]:
@@ -936,7 +936,7 @@ def name_alternatives(
     """
     rows = [
         row
-        for row in catalog.rows_for_name(card.name)
+        for row in named
         if str(row[tcgcsv.SKU_COLUMN]) != str(disputed_row[tcgcsv.SKU_COLUMN])
     ]
     if not rows:
@@ -2516,8 +2516,11 @@ def join_batch(
             #
             # NOTHING HERE DECIDES. The card is queued either way and no row is listed on a
             # name (D35's ruling, untouched); what moved is which rows a human is shown.
-            alternatives = name_alternatives(catalog, card, resolution.row)
+            # ONE LOOKUP, READ TWICE. `name_alternatives` narrows these rows and the gate
+            # below counts the CARDS among them; fetching the name twice would let the two
+            # answers disagree if a later edit moved either one.
             named = catalog.rows_for_name(card.name)
+            alternatives = name_alternatives(named, card, resolution.row)
 
             # THE NAME DECIDES WHERE IT RESOLVES TO EXACTLY ONE CARD — the owner's ruling of
             # 2026-09-12, in their words: *"Release them when the name resolves to exactly
