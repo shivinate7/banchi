@@ -276,7 +276,7 @@ echo 1 > "$tmp/work/.serve/supervisor.pid"
 # was renamed in serve.py, and the hook would quietly start telling every switch that the guard
 # is missing. Copying the shipped file makes the rename a FAILED COMMIT in one direction, and
 # the gutted copy below covers the other.
-# THREE STATES NOW, NOT TWO (D-the-primary-checkout-syncs-itself). A branch's serve.py either
+# THREE STATES NOW, NOT TWO (D176). A branch's serve.py either
 # SYNCS this tree back to main, or merely REFUSES to serve it (D158's shape), or does neither
 # and serves it. Each is a different sentence, and the ordinary state today is the first — so
 # the arm that used to expect "will REFUSE" over the SHIPPED file now expects the sync, and the

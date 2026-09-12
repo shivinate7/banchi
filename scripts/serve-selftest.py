@@ -682,7 +682,7 @@ def main() -> int:
 
     # ------------------------------------- AND THE REFUSAL IS THE FALLBACK, NOT THE ANSWER
     #
-    # D-the-primary-checkout-syncs-itself. Every arm above proves the supervisor REFUSES a tree
+    # D176. Every arm above proves the supervisor REFUSES a tree
     # it must not serve, and all of them are still right — because their fixture has no origin
     # to sync to. This one gives it one, parks the tree on a branch, and starts a supervisor the
     # way launchd does: the rig must come UP, on main, at origin/main, with nothing typed.

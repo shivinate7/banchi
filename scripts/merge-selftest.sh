@@ -72,7 +72,7 @@ moved() {
 echo "merge self-test  (hooks: $HOOKS_DIR)"
 
 # THE RIG HALF IS PINNED OFF FOR EVERY ARM BELOW, AND TURNED BACK ON FOR THE ONE SECTION THAT IS
-# ABOUT IT (D-the-primary-checkout-syncs-itself). `make merge` now has a third half: after main
+# ABOUT IT (D176). `make merge` now has a third half: after main
 # moves it puts the PRIMARY CHECKOUT back on main and fast-forwards it — and in this fixture the
 # primary checkout is `$tmp/work`, which nearly every arm below deliberately parks on `feature`.
 #
@@ -181,7 +181,7 @@ git worktree remove --force "$tmp/mainwt" 2>/dev/null
 
 # ------------------------------------------------------------------------------- THE RIG HALF
 #
-# D-the-primary-checkout-syncs-itself. THE HOLE THIS CLOSES IS THE REFSPEC FORM'S: with main
+# D176. THE HOLE THIS CLOSES IS THE REFSPEC FORM'S: with main
 # checked out in no worktree — the ordinary state of a clone running ~30 worktrees on branches —
 # `git fetch origin main:main` moves `refs/heads/main` while standing in no tree at all. main is
 # then current and the primary checkout is still parked on whatever it was on, which is D158's

@@ -1,4 +1,4 @@
-## D-the-primary-checkout-syncs-itself — The primary checkout syncs itself, both parts, because the thing D42 was protecting is not the thing this moves
+## D176 — The primary checkout syncs itself, both parts, because the thing D42 was protecting is not the thing this moves
 
 **Settled 2026-09-12, on the owner's answer to a refuse-only proposal.** Asked whether the
 primary checkout — `/Users/shivinate/Developer/pkmnscan`, the one directory D53 keeps a capture

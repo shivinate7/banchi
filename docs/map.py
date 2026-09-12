@@ -1470,7 +1470,7 @@ COMPONENTS = [
                         "the common `.git` dir, so the copy git runs is the one thing a "
                         "branch switch cannot rewrite — while scripts/serve.py, where the "
                         "refusal itself lives, is exactly what a switch replaces.",
-                "governed_by": ["D42", "D43", "D53", "D139", "D158", "D-the-primary-checkout-syncs-itself"],
+                "governed_by": ["D42", "D43", "D53", "D139", "D158", "D176"],
                 "note": "Extensionless, unscanned, listed by hand.",
             },
             "githooks/pre-push": {
@@ -1527,7 +1527,7 @@ COMPONENTS = [
                 # is borrowed from, one register down from a route that can spend money.
                 "governed_by": ["D18", "D33", "D42", "D72", "D111", "D136", "D139", "D140",
                                 "D141", "D143", "D148",
-                                "D151", "D158", "D-the-primary-checkout-syncs-itself"],
+                                "D151", "D158", "D176"],
                 "note": "IT NEVER SETS PKMNSCAN_MAIN AND NO REFUSAL IT PRINTS SUGGESTS IT. D42 "
                         "is explicit that a session reaching for that variable has left the "
                         "amendment behind; this needs no hatch because allow rule 3 already "
@@ -1560,7 +1560,7 @@ COMPONENTS = [
                         "(allowed), the branch EDITS the merge itself (allowed — the pull "
                         "request that wrote this), and main moves under it again (refused, "
                         "naming the derived second file).",
-                "governed_by": ["D18", "D42", "D151", "D-the-primary-checkout-syncs-itself", "D158"],
+                "governed_by": ["D18", "D42", "D151", "D176", "D158"],
                 "note": "THE FOOTGUN CASE WAS GREEN FOR THE WRONG REASON WHEN IT WAS FIRST "
                         "WRITTEN, and the fixture carries the repair in a comment. The other "
                         "tree sat on a branch already at the commit a wrong pull would have "
@@ -1661,7 +1661,7 @@ COMPONENTS = [
                 # D43 and D53 join with D139: the cases turn on a linked worktree having its own
                 # store, and on the primary checkout being the one the live server is built from.
                 "governed_by": ["D18", "D42", "D43", "D53", "D139", "D151",
-                                "D158", "D-the-primary-checkout-syncs-itself"],
+                                "D158", "D176"],
             },
             "lan-check.py": {
                 "does": "answers whether the owner's LAN URL still works, end to end and from "
@@ -1746,7 +1746,7 @@ COMPONENTS = [
                         "the second incident was in. Only three files are tracked in that "
                         "fixture, because the switch has to CHANGE a watched file or no "
                         "reload is scheduled and the guard is never reached.",
-                "governed_by": ["D18", "D43", "D53", "D138", "D158", "D-the-primary-checkout-syncs-itself"],
+                "governed_by": ["D18", "D43", "D53", "D138", "D158", "D176"],
                 "tested_by": [],
             },
             "primary_sync.py": {
@@ -1776,7 +1776,7 @@ COMPONENTS = [
                         "`PKMNSCAN_SYNC=off` is the hatch, printed on every sync and every "
                         "refusal — the one hatch here that stops an act rather than "
                         "permitting one.",
-                "governed_by": ["D18", "D42", "D43", "D53", "D139", "D158", "D-the-primary-checkout-syncs-itself"],
+                "governed_by": ["D18", "D42", "D43", "D53", "D139", "D158", "D176"],
                 "tested_by": [],
                 "note": "PROVED BY `make sync-selftest` (scripts/sync-selftest.py) AND NOT BY "
                         "THE HARNESS, which is why `tested_by` is empty: that field names "
@@ -1806,7 +1806,7 @@ COMPONENTS = [
                         "silently built none — the seed tree has no `origin` remote, so the "
                         "push failed quietly — and four arms were green over two refs that "
                         "were equal before the call.",
-                "governed_by": ["D18", "D42", "D43", "D158", "D-the-primary-checkout-syncs-itself"],
+                "governed_by": ["D18", "D42", "D43", "D158", "D176"],
                 "tested_by": [],
             },
             "janitor-selftest.sh": {
@@ -2308,7 +2308,7 @@ COMPONENTS = [
                 # a hook that can break a session gets disabled, and a disabled hook guards
                 # nothing, so every failure exits 0.
                 "governed_by": ["D16", "D18", "D43", "D47", "D42", "D53", "D139",
-                                "D-the-primary-checkout-syncs-itself"],
+                                "D176"],
             },
             "worktree-provision.sh": {
                 "does": "the cache-copy, image-mirror-symlink and node_modules report "
@@ -2521,7 +2521,7 @@ COMPONENTS = [
                 # ~/Library. D13 because the store stays on this Mac and the LAN reach is the
                 # tunnel case that entry already names.
                 "governed_by": ["D13", "D18", "D43", "D47", "D53", "D70", "D85", "D138", "D139",
-                                "D158", "D-the-primary-checkout-syncs-itself"],
+                                "D158", "D176"],
                 "tested_by": ["T7"],
                 "status": "built",
             },
@@ -2657,7 +2657,7 @@ COMPONENTS = [
                 "governed_by": ["D7", "D16", "D17", "D18", "D42", "D43", "D44", "D47", "D48", "D53", "D58",
                                 "D60", "D65", "D68", "D74", "D76", "D80", "D82", "D88", "D92", "D111", "D122",
                                 "D127", "D129", "D133", "D138", "D139", "D140", "D141", "D158", "D160", "D173",
-                                "D-the-primary-checkout-syncs-itself"],
+                                "D176"],
                 "note": "IT DECLARES THE SUITE AND DELIBERATELY DOES NOT DRIVE IT, which is "
                         "the whole shape. A registry that drove `make check` could not "
                         "disagree with the recipe — and could silently stop running a check, "

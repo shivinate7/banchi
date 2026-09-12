@@ -364,7 +364,7 @@ def local_plan(root: str, commit: str) -> Tuple[Optional[List[str]], Optional[st
 
 
 def primary_half(root: str, confirm: bool) -> int:
-    """AND THE RIG ITSELF, PUT BACK ON MAIN (D-the-primary-checkout-syncs-itself).
+    """AND THE RIG ITSELF, PUT BACK ON MAIN (D176).
 
     THE HOLE THIS FILLS IS `local_plan`'S FIRST BRANCH. When main is checked out in no worktree
     — the ordinary state of this clone, with ~30 worktrees on feature branches — the refspec

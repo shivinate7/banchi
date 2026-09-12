@@ -1836,7 +1836,7 @@ apostrophes in names) live in the `tcgplayer-csv` skill. It loads on demand.
   rather than re-asking for permission.
 
   **AND THE PRIMARY CHECKOUT PUTS ITSELF BACK, BOTH PARTS, AS OF 2026-09-12**
-  (D-the-primary-checkout-syncs-itself). Asked whether that one directory is mechanically kept
+  (D176). Asked whether that one directory is mechanically kept
   on `main` at `origin/main`, and offered a guard that only refused, the owner answered: *"why
   can't both parts sync, remember this is a one man show, it's just me working."* So
   `scripts/primary_sync.py` runs the two commands — `git switch main`, then
@@ -2190,7 +2190,7 @@ D172 A card's name is the first photograph of it, frozen at issue
 D173 A rule that can be enforced mechanically is enforced mechanically, and a rule with no reader is advice
 D174 A press claims the cards it is about to buy, and the claim is written in the transaction that decides what they are
 D175 Ownership is read the way liveness is, and a process a session no longer owns is offered rather than reaped
-D-the-primary-checkout-syncs-itself The primary checkout syncs itself, both parts, because the thing D42 was protecting is not the thing this moves
+D176 The primary checkout syncs itself, both parts, because the thing D42 was protecting is not the thing this moves
 ```
 
 **THE GAP THIS LIST CARRIED BETWEEN D116 AND D118 IS CLOSED, AND IT CLOSED THE WAY IT SAID IT

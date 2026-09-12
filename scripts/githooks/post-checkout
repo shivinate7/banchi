@@ -96,7 +96,7 @@ if [ -n "$top" ] && [ -d "$top/.git" ] && git rev-parse --verify --quiet main >/
       # repo's own serve.py, so the token going stale is a failed commit rather than a silence.
       if grep -q 'primary_sync' "$top/scripts/serve.py" 2>/dev/null; then
         # THE THIRD STATE, AND IT IS NOW THE ORDINARY ONE
-        # (D-the-primary-checkout-syncs-itself). The sentence below this one — "it will REFUSE"
+        # (D176). The sentence below this one — "it will REFUSE"
         # — was true and complete under D158 and is WRONG for a branch carrying the self-sync:
         # the supervisor does not refuse, it puts this tree back on main within a tick. A
         # person who has just typed `git switch` is standing right here, and being told the

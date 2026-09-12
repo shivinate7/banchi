@@ -100,7 +100,7 @@ fi
 # work, which is D43's own reason for printing the ports here rather than leaving them to a
 # target somebody has to remember.
 #
-# IT SYNCS NOW, AND IT USED TO REPORT AND NEVER SWITCH (D-the-primary-checkout-syncs-itself).
+# IT SYNCS NOW, AND IT USED TO REPORT AND NEVER SWITCH (D176).
 # The paragraph that stood here said a hook moving the branch would be "deciding for the
 # operator, and `git switch` is theirs to type" — which is the ceiling the owner reopened in as
 # many words. Offered a guard that only reported, they answered: *"why can't both parts sync,

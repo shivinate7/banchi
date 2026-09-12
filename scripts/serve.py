@@ -1055,7 +1055,7 @@ def stand_down_lines(branch: str, running: bool) -> list[str]:
         ]
     out += [
         # THIS REFUSAL IS THE FALLBACK NOW, AND SAYING SO IS THE POINT
-        # (D-the-primary-checkout-syncs-itself). Without a line here it reads as though nobody
+        # (D176). Without a line here it reads as though nobody
         # attempted the obvious repair, which is no longer true.
         #
         # WORDED AS THE MECHANISM AND NOT AS A CLAIM ABOUT THIS INSTANCE, deliberately: the
@@ -1131,7 +1131,7 @@ class Supervisor:
         branch = off_main(self.root)
         if branch is not None:
             # SYNC BEFORE REFUSING, at every one of the four adoption moments
-            # (D-the-primary-checkout-syncs-itself). The refusal is the fallback now, not the
+            # (D176). The refusal is the fallback now, not the
             # answer: this is the login path, so a Mac booting with the tree parked on a merged
             # branch comes up on main instead of coming up refusing.
             branch = self._sync_attempt(branch)
@@ -1576,7 +1576,7 @@ def do_up(args: argparse.Namespace) -> int:
     if branch is not None:
         # SYNCED FIRST, AND THEN SERVED IF THAT WORKED. A person typed this and is waiting on
         # it, so the useful outcome is a rig that comes up rather than a status code about why
-        # it did not (D-the-primary-checkout-syncs-itself). Printed rather than logged, for
+        # it did not (D176). Printed rather than logged, for
         # `do_up`'s standing reason: the reader is at the terminal.
         verdict = primary_sync.sync(REPO_ROOT, confirm=True)
         for line in verdict.lines:
