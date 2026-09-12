@@ -223,26 +223,35 @@ def selftest() -> int:
 def verify_split(ref: str) -> int:
     """Re-establish the historical claim: the split lost nothing.
 
-    Reads the pre-split `docs/DECISIONS.md` out of git at REF and diffs it against a
-    reassembly of the entry files AS THEY WERE AT THAT REF — both sides from the same
-    commit, so the answer does not drift as entries are edited afterwards. This is the
-    check a reviewer runs to satisfy themselves that 1.4 MB moved without loss.
+    Reads `docs/DECISIONS.md` from REF's PARENT and diffs it against a reassembly of the
+    entry files at REF. Both sides come out of git, so the answer does not drift as entries
+    are edited afterwards, and the original never has to be on disk. This is the check a
+    reviewer runs to satisfy themselves that 1.4 MB moved without loss.
     """
     import subprocess
 
-    def show(path: str) -> Optional[str]:
-        done = subprocess.run(["git", "show", f"{ref}:{path}"],
+    def show(path: str, at: Optional[str] = None) -> Optional[str]:
+        done = subprocess.run(["git", "show", f"{at or ref}:{path}"],
                               cwd=ROOT, capture_output=True, text=True)
         return done.stdout if done.returncode == 0 else None
 
-    before = show("docs/DECISIONS.md")
+    # THE FILE COMES FROM THE PARENT AND THE ENTRIES FROM THE COMMIT ITSELF. At the split
+    # commit `docs/DECISIONS.md` is ALREADY the stub — that is the same commit that emptied
+    # it — so reading both sides from one ref compares a 38-line pointer against 1.4 MB and
+    # reports a catastrophic difference that is entirely an artefact of asking wrongly. The
+    # question is "did REF's entries preserve what REF's PARENT held", and it has to be
+    # spelled that way.
+    before = show("docs/DECISIONS.md", f"{ref}^")
     if before is None:
-        print(f"no docs/DECISIONS.md at {ref} — nothing to compare")
+        print(f"no docs/DECISIONS.md at {ref}^ — nothing to compare")
         return 1
     manifest_text = show("docs/decisions/" + MANIFEST)
     if manifest_text is None:
-        print(f"{ref} predates the split — its docs/DECISIONS.md IS the corpus "
-              f"({len(before.encode('utf-8')):,} bytes). Name the commit that performed it.")
+        print(f"{ref} has no corpus manifest — it is not the commit that performed the split.")
+        return 1
+    if len(before.encode("utf-8")) < 100_000:
+        print(f"docs/DECISIONS.md at {ref}^ is only {len(before.encode('utf-8')):,} bytes — "
+              f"{ref} is not the split commit, or the split had already happened before it.")
         return 1
     order = json.loads(manifest_text)["order"]
     parts = [show("docs/decisions/" + name) for name in order]
@@ -251,8 +260,29 @@ def verify_split(ref: str) -> int:
         return 1
     after = "\n".join(part for part in parts if part is not None)
     if after == before:
-        print(f"IDENTICAL at {ref} — {len(before.encode('utf-8')):,} bytes, "
-              f"{len(order)} files. The split lost nothing.")
+        print(f"IDENTICAL — docs/DECISIONS.md at {ref}^ ({len(before.encode('utf-8')):,} "
+              f"bytes) equals the {len(order)} files at {ref}. The split lost nothing.")
+        return 0
+    # THE SPLIT COMMIT ALSO ADDS ITS OWN ENTRY, and that is not a loss. The claim being made
+    # is PRESERVATION, not equality: everything the parent held is still there, in order,
+    # byte for byte, and anything after it is new. A proof that demanded equality would fail
+    # on the one commit it exists to check — the split cannot land without an entry arguing
+    # for it — and a reviewer would be left unable to tell "nothing lost" from "something
+    # added".
+    if after.startswith(before):
+        extra = after[len(before):]
+        # THE NEW ENTRIES, BY HEADING. Listing new FILES says nothing useful at the split
+        # commit — the directory did not exist at the parent, so every file is new and the
+        # list is 164 names long. What a reviewer needs is which ENTRIES arrived, and that is
+        # a property of the text rather than of the filesystem.
+        arrived = ENTRY_RE.findall("\n".join(
+            line for line in extra.split("\n") if line.startswith("## ")))
+        print(f"PRESERVED — docs/DECISIONS.md at {ref}^ ({len(before.encode('utf-8')):,} "
+              f"bytes) is a byte-for-byte PREFIX of the {len(order)} files at {ref}.")
+        print(f"            Nothing the parent held was changed, reordered or dropped.")
+        print(f"            {len(extra.encode('utf-8')):,} bytes follow it — "
+              f"{len(arrived)} new entr{'y' if len(arrived) == 1 else 'ies'}: "
+              f"{', '.join(arrived) or '(none)'}")
         return 0
     print(f"DIFFERENT at {ref}: before {len(before):,} chars, reassembled {len(after):,}")
     import difflib
@@ -286,7 +316,7 @@ def main(argv: List[str]) -> int:
     ap.add_argument("--selftest", action="store_true",
                     help="assert the corpus is complete and round-trips")
     ap.add_argument("--verify-split", metavar="REF",
-                    help="diff the pre-split file at REF against the entry files at REF")
+                    help="diff docs/DECISIONS.md at REF^ against the entry files at REF")
     args = ap.parse_args(argv)
     if args.selftest:
         return selftest()

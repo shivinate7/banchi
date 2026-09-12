@@ -1540,6 +1540,29 @@ def decision_files() -> List[Path]:
         return []
 
 
+# AN EMPTY CORPUS IS A BROKEN CORPUS, NEVER A CLEAN ONE. This is the guard's own version of
+# the failure it exists to catch: `decision structure` and `entry budget` iterate the entry
+# files, so an unreadable directory gave them nothing to iterate and they reported `0 entries`
+# in green. Measured by deleting one entry file — `decision ids` and `decision index` both
+# went red, and those two passed over nothing while saying so in a sentence that reads like
+# success. A row that cannot tell "nothing is wrong" from "nothing is known" is worse than no
+# row, because it is believed.
+_EMPTY_CORPUS = ("the decision corpus read as EMPTY. docs/decisions/ holds one file per "
+                 "entry and its manifest is ORDER.json; a manifest naming a file that is "
+                 "gone, an unreadable directory or a missing scripts/decisions_corpus.py all "
+                 "arrive here. This row asserts nothing until that is fixed — which is why it "
+                 "fails rather than passing over an empty set. `make decisions-selftest` says "
+                 "which file.")
+
+
+def corpus_is_empty(report: Report, label: str, severity: str) -> bool:
+    """Report and return True when there are no entries to check."""
+    if decision_files():
+        return False
+    report.add(label, severity, [Finding("docs/decisions/", _EMPTY_CORPUS)])
+    return True
+
+
 def decisions_text() -> str:
     """The corpus as the one document it used to be. Empty string if unreadable."""
     corpus = _corpus()
@@ -1793,7 +1816,7 @@ def check_id_claims(report: Report) -> None:
     # runs this on main after every merge, which is the one place and moment it can look.
     if on_main() and unclaimed:
         findings.append(Finding(
-            "docs/DECISIONS.md",
+            "docs/decisions/",
             "main carries {0} unclaimed id: {1}.\n"
             "  A slug is a branch's placeholder and `make merge` is what turns it into a "
             "number (D140). One on main means a claim half-landed — every "
@@ -1940,6 +1963,8 @@ def check_decision_structure(report: Report) -> None:
         report.add("decision structure", ADVISORY,
                    [Finding("scripts/prose-guard.py", "not readable; structure unchecked.")])
         return
+    if corpus_is_empty(report, "decision structure", MECHANICAL):
+        return
     findings = [Finding(f.where, f.message)
                 for target in decision_files() for f in guard.check_structure(target)]
     entries = [e for target in decision_files() for e in guard.entries(read(target))]
@@ -2032,6 +2057,10 @@ def check_entry_budget(report: Report) -> None:
     if guard is None:
         report.add("entry budget", ADVISORY,
                    [Finding("scripts/prose-guard.py", "not readable; sizes unchecked.")])
+        return
+    # MECHANICAL here even though the row itself is ADVISORY: a long entry is a judgement
+    # call, but a corpus that cannot be read at all is not.
+    if corpus_is_empty(report, "entry budget", MECHANICAL):
         return
     findings = [Finding(f.where, f.message)
                 for target in decision_files()
@@ -9221,6 +9250,23 @@ def check_doc_hygiene(report: Report, docs: List[Path]) -> None:
                 target = ROOT / match.group(1)
                 if not target.is_file():
                     continue
+                # A LINE CITATION OF `docs/DECISIONS.md` MEANT THE CORPUS, and that file is a
+                # 38-line stub since the split. Measured against the stub, eight true
+                # citations written before the split read as pointing past the end — D149's
+                # four among them, landed an hour earlier. The author meant the entries, so
+                # the entries are what the number is checked against. Same ruling as the
+                # relative-path case in `resolve_candidate`, and for the same reason: the
+                # entries' bytes are unchanged by design, so the alternative is editing prose
+                # inside a change whose whole claim is that it edited none.
+                #
+                # WHAT THIS RESTORES IS EXACTLY WHAT EXISTED BEFORE — this row only ever
+                # proved the file was long enough, never that the line still says what the
+                # citation claims. A number drifting under an edit was invisible here before
+                # the split and is invisible now; docs/DEBTS.md carries that half.
+                if match.group(1) == "docs/DECISIONS.md":
+                    total = len(decisions_text().splitlines())
+                    if total and int(match.group(2)) <= total:
+                        continue
                 total = len(target.read_text(errors="replace").splitlines())
                 if int(match.group(2)) > total:
                     findings.append(
@@ -11019,7 +11065,17 @@ SELF = Path(__file__).resolve()
 # Self-cleaning in both directions, the property D16 wants of `scripts/docs-audit-allow.txt`:
 # an entry naming a check `audit()` does call is stale and reported, and an entry naming
 # nothing defined here is dangling and reported. A list that only grows stops being read.
-UNDISPATCHED: Dict[str, str] = {}
+UNDISPATCHED: Dict[str, str] = {
+    "corpus_is_empty":
+        "A HELPER THAT EMITS ON BEHALF OF TWO REAL CHECKS, not a check of its own. "
+        "`check_decision_structure` and `check_entry_budget` both iterate the entry files "
+        "in docs/decisions/, and both reported `0 entries` in GREEN when the corpus could "
+        "not be read — measured by deleting one entry file. This writes the row that says "
+        "so, under whichever of those two labels called it, which is why it calls "
+        "`report.add` and why `audit()` does not call it. Dispatching it directly would "
+        "print a third row nobody asked for; leaving it out of this list would report it "
+        "as a check that has never run.",
+}
 
 
 def _emits_row(func: ast.AST) -> bool:
