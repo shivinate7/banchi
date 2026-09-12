@@ -3728,10 +3728,10 @@ def check_group_answer(checks: Checks) -> None:
         return {"box": 4, "index": index, "sku": sku, "condition": condition}
 
     with isolated_home():
-        for _ in range(11):
+        for _ in range(13):
             capture_server.do_capture(capture_payload(4))
         with Store().write() as snapshot:
-            for i in range(1, 12):
+            for i in range(1, 14):
                 snapshot.inventory.set_state(f"4/{i}", master.IDENTIFIED)
             # The happy group: one shared reason, one row each, one condition.
             for i, sku in ((1, "9101"), (2, "9102"), (3, "9103")):
@@ -3756,6 +3756,34 @@ def check_group_answer(checks: Checks) -> None:
             snapshot.review.upsert(
                 entry(4, 9, candidates=[dict(STALE_CANDIDATE, sku="9109")])
             )
+            # SEALED, AND THE ONLY ENTRY HERE THAT IS NOT NEAR MINT. Since 2026-09-12 the
+            # group clusters on the condition's GRADE rather than its full string, so
+            # `Near Mint` and `Near Mint Holofoil` group together; this one must still
+            # refuse, because `Unopened` is a different grade rather than a different
+            # finish of one.
+            #
+            # `Unopened` AND NOT A PLAY GRADE, AND FINDING THAT OUT IS WHY THIS ENTRY EXISTS
+            # IN THIS SHAPE. The obvious case — a `Lightly Played Holofoil` row from one of
+            # the 513 entries on the owner's store written before D137 — CANNOT REACH the
+            # uniformity check at all: `_answer_target` refuses it first as
+            # `condition_not_listed`, per member, with a sentence naming the re-join that
+            # fixes it. That is the better guard and it is upstream, so the grade rule's
+            # whole remaining job is keeping sealed product out of a group of singles, and
+            # this is the row that proves it does.
+            snapshot.review.upsert(
+                entry(
+                    4,
+                    12,
+                    candidates=[
+                        dict(CANDIDATES[0], sku="9112", condition=tcgcsv.SEALED_CONDITION)
+                    ],
+                )
+            )
+            # The mixed-FINISH pair's second half — `Near Mint Holofoil` against 4/9's
+            # `Near Mint`. Its own entry rather than one of the happy group's, because the
+            # assertion below ANSWERS it and a consumed member would make the happy path
+            # refuse as `already_answered` for a reason that has nothing to do with it.
+            snapshot.review.upsert(entry(4, 13, candidates=[own_row("9113")]))
             # The listing-hold pair.
             snapshot.review.upsert(entry(4, 10, candidates=[own_row("9110")]))
             snapshot.review.upsert(entry(4, 11, candidates=[own_row("9111")]))
@@ -3925,18 +3953,67 @@ def check_group_answer(checks: Checks) -> None:
                 "and the entry is named with its row count",
                 f"message was: {caught}",
             )
+        # TWO CONDITIONS OF ONE GRADE NOW ANSWER, AND THIS ASSERTION IS REVERSED ON PURPOSE
+        # (D162). It read "two condition strings across the group
+        # refuse the same way" until 2026-09-12. `Near Mint Holofoil` and `Near Mint` are one
+        # grade and two finishes; D137 fixes the grade by rule, so refusing here split every
+        # real queue in two and asked the operator to confirm a word they never chose.
+        # Measured on the owner's store that day: of 52 entries, 40 offered exactly one row
+        # and every one was Near Mint — 21 plain, 19 foil — so the old rule's entire effect
+        # was to double the number of presses. Their words: *"i also somehow had to still
+        # claim items in bulk that they're near mint rather than it being default."*
+        #
+        # The finish is not what the group decides: each member is answered with its own row,
+        # whose finish the ladder chose from that card's own claim before this route was
+        # reached. Asserted as an ANSWER rather than as the absence of a refusal, because a
+        # route that stopped refusing and also stopped writing would satisfy the weaker form.
+        mixed = capture_server.do_review_group_answer(
+            {
+                "answers": [
+                    member(13, "9113"),
+                    member(9, "9109", STALE_CANDIDATE["condition"]),
+                ]
+            }
+        )
+        checks.equal(
+            mixed.get("count"),
+            2,
+            "TWO FINISHES OF ONE GRADE ANSWER AS ONE GROUP — `Near Mint Holofoil` beside "
+            "`Near Mint`, which is the split that doubled every press on the owner's queue",
+        )
+        checks.equal(
+            mixed.get("grade"),
+            "near mint",
+            "and the shared fact reported at the top is the GRADE, not a condition string "
+            "— the members no longer share one, so reporting `condition` would have been a "
+            "true statement about half of them",
+        )
+        settled = Store().read()
+        checks.equal(
+            [
+                (settled.inventory.get("4/13").sku, settled.inventory.get("4/13").condition),
+                (settled.inventory.get("4/9").sku, settled.inventory.get("4/9").condition),
+            ],
+            [("9113", cond), ("9109", STALE_CANDIDATE["condition"])],
+            "AND EACH CARD KEPT ITS OWN CONDITION. This is the assertion the feature turns "
+            "on: grouping folds the finish away for the QUESTION and never for the ANSWER, "
+            "so a shared grade must not write one shared condition onto both cards",
+        )
+
         refusal(
             checks,
             lambda: capture_server.do_review_group_answer(
                 {
                     "answers": [
                         member(1, "9101"),
-                        member(9, "9109", STALE_CANDIDATE["condition"]),
+                        member(12, "9112", tcgcsv.SEALED_CONDITION),
                     ]
                 }
             ),
             "group_not_uniform",
-            "and two condition strings across the group refuse the same way",
+            "but two GRADES across the group still refuse — sealed product swept into a "
+            "group of singles is what folding the finish away must not make reachable, and "
+            "it is the one non-Near-Mint condition this catalogue still carries",
         )
         checks.ok(
             Store().read().inventory.get("4/1").sku is None,
@@ -3961,8 +4038,8 @@ def check_group_answer(checks: Checks) -> None:
             )
             checks.equal(body["count"], 3, "and counted")
             checks.equal(
-                [body["reason"], body["condition"]],
-                ["metadata_detection_disagreement", cond],
+                [body["reason"], body["grade"]],
+                ["metadata_detection_disagreement", "near mint"],
                 "the shared facts are stated once at the top — the route just proved "
                 "they are shared",
             )

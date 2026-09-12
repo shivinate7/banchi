@@ -1782,6 +1782,7 @@ D158 The refusal goes where the damage is, so the primary checkout's server will
 D159 The band is copies rather than SKUs, the drawer is the first answer, and nothing on hand is dropped
 D160 An entry is a file, because two branches appending to one file collide every single time
 D161 `make check` proves the product first and its own guards last, because a failure stops the rest
+D162 The name decides a disputed number, and both readings reach the screen
 ```
 
 **THE GAP THIS LIST CARRIED BETWEEN D116 AND D118 IS CLOSED, AND IT CLOSED THE WAY IT SAID IT
