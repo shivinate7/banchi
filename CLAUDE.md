@@ -329,7 +329,7 @@ make check          # harness + docs-audit + audit-self-test + githooks-selftest
                     #   tool call, so run them in the foreground and read the output. What
                     #   `check` is is LONG — ~3,000 lines — and it stops at the first failing
                     #   target, which is why the ORDER is argued rather than historical
-                    #   (D-the-product-is-checked-before-the-tooling): the product first —
+                    #   (D161): the product first —
                     #   harness, docs-audit, then every check that reads the code and says
                     #   something about it — and the eleven selftests that prove a GUARD last,
                     #   because those build throwaway clones, bind ports and send signals, so
@@ -1781,7 +1781,7 @@ D157 The fixture carries a per-run name, because the process table is the one th
 D158 The refusal goes where the damage is, so the primary checkout's server will not run a branch's code, and the checkout itself is left alone
 D159 The band is copies rather than SKUs, the drawer is the first answer, and nothing on hand is dropped
 D160 An entry is a file, because two branches appending to one file collide every single time
-D-the-product-is-checked-before-the-tooling `make check` proves the product first and its own guards last, because a failure stops the rest
+D161 `make check` proves the product first and its own guards last, because a failure stops the rest
 ```
 
 **THE GAP THIS LIST CARRIED BETWEEN D116 AND D118 IS CLOSED, AND IT CLOSED THE WAY IT SAID IT

@@ -1,4 +1,4 @@
-## D-the-product-is-checked-before-the-tooling — `make check` proves the product first and its own guards last, because a failure stops the rest
+## D161 — `make check` proves the product first and its own guards last, because a failure stops the rest
 
 **`make check` runs 23 targets, stops at the first failing one, and eleven of the twenty-three were the guards' own selftests sitting ahead of every check on the product.** `reap-selftest` was twelfth. `lint`, `vale`, `typecheck`, `screen-freshness`, `sigil-check` and `ignore-check` were all behind it. A red in a guard's own selftest meant six checks on the actual code never ran — and the terminal reported a failure, not an absence.
 
