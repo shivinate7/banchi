@@ -33,7 +33,7 @@ from typing import (
 
 from cli import runs
 from pipeline import games, join, orders, pricing, routing, tcgcsv, variant
-from store import files, master, queues
+from store import files, master, photos, queues
 from store.session import Store
 
 
@@ -1158,44 +1158,200 @@ def exports_for_store(
 # is strictly better than trusting the store's identification cache, which is another derived
 # copy that a future defect could leave stale in the same way.
 #
+# AND THE READ IS GONE, BECAUSE THE STORE STOPPED HOLDING A DERIVED COPY AND STARTED HOLDING
+# THE NAME ITSELF (`D183`). `cards.cid` is the sha256 of
+# the photograph, indexed and UNIQUE, and `store/photos.py` makes the path a pure function of
+# it — so the map this section is built on is one indexed query per box instead of 997 MB of
+# reads. The paragraph above is still the argument for reading the PHOTOGRAPHS rather than the
+# identification cache, and it is not retired by this: what replaced the hashing is not
+# another derived copy of a position, it is the card's own name, and the photograph is still
+# what decides — every row is put to `photos.find`, so a card whose photograph is not on disk
+# is absent from the map exactly as it was when the map was a directory listing. That is what
+# keeps a D89 reclaim reading as `departed` and a box whose files have been deleted reading as
+# `unverified`.
+#
 # IT CORRECTS SILENTLY ONLY WHEN IT IS CERTAIN, AND REFUSES OTHERWISE. A digest that matches no
 # photograph on disk, or more than one, is not a slot that moved — it is a question, and
 # `CLAUDE.md` forbids guessing an identity. A run whose every record already sits at its own
 # photograph returns untouched, so a healthy run joins byte-for-byte as it always did.
 
 
-def _photo_digests(boxes) -> Tuple[Dict[str, str], set]:
-    """(sha256 -> position key, digests seen more than once) over the boxes this run touches.
+# Which mechanism answered for a box, reported rather than picked silently — see
+# `PhotoIndex.source`. Two sources for one question is the shape that goes wrong quietly, so
+# the answer says which one it came from and a caller with a `say` prints it.
+DIGESTS_FROM_STORE = "store"
+DIGESTS_FROM_PHOTOGRAPHS = "photographs"
+DIGESTS_FROM_NOTHING = "nothing"
 
-    Reads the photographs themselves rather than any record OF them. That is the point: every
-    derived copy of a position is a copy that a renumber has to remember to update, and this
-    function exists because one of them was not.
+
+class PhotoIndex(NamedTuple):
+    """Where each of this run's photographs is, and which mechanism said so.
+
+    `source` is `store`, `photographs`, `nothing`, or several of those joined with `+` when
+    the boxes disagreed. IT IS A FIELD RATHER THAN A LOG LINE because nothing in `realign`'s
+    call path has a `say` — the join's reporter is `cli/cmd_join.py`, three returns up — and a
+    function that silently chooses between two sources of truth is exactly the thing this
+    repo keeps paying for. A caller that CAN speak prints it (`cli/cmd_rescue.py`), and
+    `realign` puts it in every refusal it raises, which is the only sentence it gets to write.
     """
+
+    at: Dict[str, str]
+    twice: set
+    source: str
+
+
+def _photo_digests(
+    boxes, inventory: Optional[master.Inventory] = None
+) -> PhotoIndex:
+    """(sha256 -> position key, digests seen more than once, which source answered).
+
+    THE MAP IS A COLUMN NOW, NOT 997 MB OF READS. `cards.cid` IS the photograph's digest —
+    frozen at the birth of the record, indexed and UNIQUE
+    (`D183`) — so the question this function asks is one
+    indexed query per box. It used to glob `captures/cards/box<N>/*.jpg`, `int()` each stem
+    and hash every file: box 2's 543 photographs at 997 MB and 0.56 s, per box, per join. Two
+    separate things retire that: after the relocation the legacy directory is EMPTY, and
+    `int(photo.stem)` raises on every name in the store that replaced it.
+
+    IT IS KEYED ON `digest_of(cid)` AND NOT ON THE CID, AND THE DIFFERENCE IS A REFUSAL. A run
+    record's `photo_sha256` is the sha256 of the bytes; a card whose photograph is
+    byte-identical to an earlier card's is named `<digest>-2`, so both project to one digest
+    and BOTH have to be reported — which is the same `twice` refusal two photographs carrying
+    one digest always produced, arriving through the name instead of through the disk. That
+    population is 0 today (2,535 distinct digests, 0 duplicate groups), which is exactly why
+    it has to be written down rather than discovered. A `moved:` tombstone and a `nophoto:`
+    name project to None and are skipped: neither names a photograph, and a tombstone's digest
+    is already on the live row the card moved to.
+
+    EVERY ROW IS STILL PUT TO THE PHOTOGRAPH, WHICH IS WHAT KEEPS D36's VERDICTS THE ONES IT
+    MEASURED. `photos.find` is one or two `stat`s — the card's name, then the legacy address
+    while `photos_relocated` is unset — and a row whose file is at neither is left OUT of the
+    map, exactly as a directory listing left it out. That is not tidiness: it is what makes a
+    D89 reclaim read as `departed` (sold, photograph deliberately deleted, record and digest
+    kept) and a box whose files have gone read as `unverified` rather than as 53 departed
+    cards. Answering from the rows alone would invert both.
+
+    THE PHOTOGRAPHS ARE THE FALLBACK, PER BOX, AND ONLY WHILE THEY CAN BE. A box the store
+    names nothing for is read the old way — that is a memory-backed inventory, a home holding
+    photographs and no store, and T7's own fixtures, all of which are real callers — unless
+    `photos_relocated` says the legacy address is retired, in which case there is nothing
+    there to read and the answer is `nothing` rather than a silent empty.
+
+    WHAT THE STORE CANNOT SEE IS AN ORPHAN PHOTOGRAPH: a file at a slot no record claims. The
+    listing found it and a column cannot. It is a defect state rather than a normal one, and
+    the honest outcome changes from `moved` onto a slot holding no card to `departed`, which
+    is the better of the two answers — but it is a change, and it is written here rather than
+    discovered.
+    """
+    inventory = _digest_inventory() if inventory is None else inventory
+    relocated = bool(inventory is not None and inventory.photos_relocated)
+    home = files.home()
+
     found: Dict[str, str] = {}
     twice: set = set()
+
+    def remember(digest: str, key: str) -> None:
+        # THE FIRST SIGHTING STAYS IN `found` AND THE DIGEST GOES IN `twice`, which is the
+        # glob's own behaviour kept verbatim: `realign` checks `twice` before it checks
+        # `at`, so a contested digest refuses the run rather than resolving to whichever
+        # row was walked first.
+        if digest in found:
+            twice.add(digest)
+            return
+        found[digest] = key
+
+    sources: List[str] = []
     for box in sorted(boxes):
-        directory = files.home() / "captures" / "cards" / f"box{int(box)}"
+        named = _named_cards_in(inventory, box)
+        if named:
+            sources.append(DIGESTS_FROM_STORE)
+            for key, cid, index in named:
+                if photos.find(cid, box, index, relocated=relocated, home=home) is None:
+                    continue
+                remember(photos.digest_of(cid), key)
+            continue
+        if relocated:
+            sources.append(DIGESTS_FROM_NOTHING)
+            continue
+        sources.append(DIGESTS_FROM_PHOTOGRAPHS)
+        directory = photos.legacy_box_dir(box, home)
         if not directory.is_dir():
             continue
         for photo in sorted(directory.glob("*.jpg")):
             try:
                 index = int(photo.stem)
             except ValueError:
+                # Not a slot filename. A cid-named file is the reason this branch is now
+                # load-bearing rather than defensive, and `identify/sidecar.py`'s guard is
+                # the same refusal one layer out: a digest is full of digits, so anything
+                # that recovers a position from one of these names invents a plausible
+                # wrong answer.
                 continue
             digest = hashlib.sha256(photo.read_bytes()).hexdigest()
-            if digest in found:
-                twice.add(digest)
-                continue
-            found[digest] = f"{int(box)}/{index}"
-    return found, twice
+            remember(digest, master.position_key(int(box), index))
+
+    return PhotoIndex(found, twice, "+".join(sorted(set(sources))) or DIGESTS_FROM_NOTHING)
 
 
-def realign(payload: dict) -> Tuple[dict, Dict[str, str], List[str], List[int]]:
+def _digest_inventory() -> Optional[master.Inventory]:
+    """The store's own records, or None where there is no store to read.
+
+    NONE IS A REAL ANSWER AND NOT AN ERROR TO SWALLOW: `realign` runs against a home that is
+    a directory of photographs in T7's fixtures and in a hand-built payload, and it ran
+    against one long before the store had a `cid` column at all. So a store that will not
+    open leaves this function's caller on the photographs, which is the behaviour it had
+    before the column existed — the safe direction, because the alternative is a join that
+    refuses over a store the join itself never needed.
+    """
+    try:
+        return Store().read().inventory
+    except Exception:  # noqa: BLE001 — any unreadable store means "read the photographs"
+        return None
+
+
+def _named_cards_in(
+    inventory: Optional[master.Inventory], box
+) -> List[Tuple[str, str, Optional[int]]]:
+    """`(position key, cid, index)` for every card in one box whose cid names a photograph.
+
+    `select` rather than `where`: this wants two columns off each row in one box and builds no
+    `Card` for any of them, which is the cost `store/rows.py` says an indexed query should be.
+    The KEY is the store's own row key, so it is already the `box/index` string this map's
+    consumers compare against `held_cards`.
+    """
+    if inventory is None:
+        return []
+    out: List[Tuple[str, str, Optional[int]]] = []
+    for key, (cid, index) in inventory.cards.select(("cid", "idx"), box=int(box)):
+        if photos.digest_of(cid) is None:
+            continue
+        out.append((str(key), str(cid), index))
+    return out
+
+
+def realign(
+    payload: dict, inventory: Optional[master.Inventory] = None
+) -> Tuple[dict, Dict[str, str], List[str], List[int]]:
     """Re-bind a run's records to the slots their photographs occupy now (D36).
 
     Returns `(payload, moved, departed, unverified_boxes)`. The first three are empty and the
     payload is the identical object when nothing has shifted, which is what keeps a healthy
     run's join byte-for-byte unchanged.
+
+    IT IS LOAD-BEARING FOR EVERY RUN WRITTEN BEFORE THE PHOTOGRAPH MOVED OUT OF THE ADDRESS,
+    AND DEAD FOR EVERY RUN WRITTEN AFTER (`D183` §0.7).
+    Its whole job is re-binding a remembered `(box, index)` to the slot that record's
+    `photo_sha256` sits at now; under the layout that names a photograph by the card, a run
+    record's digest IS the photograph's filename and there is no binding to repair, because
+    nothing bound the bytes to a position in the first place. What keeps it here is measured
+    rather than assumed: **13 run directories, 3,728 records, 701 of them binding by digest to
+    a different position key than the one they name**, plus 88 whose photograph is gone.
+    `#/pricing?run=<n>` and "Join again" both re-read one of those old receipts against
+    today's store, and a cid cannot reach backwards into an immutable file written before it
+    existed — so for those 3,728 records this repair layer is the only thing that makes the
+    answer right. THE CONDITION UNDER WHICH IT CAN GO is that no run directory predating the
+    change is still readable. **That is not a date anybody can name, so it is not scheduled**,
+    and nothing here is deprecated on a guess.
 
     REASONED PER BOX, BECAUSE ABSENCE OF PHOTOGRAPHS IS NOT EVIDENCE OF ABSENT CARDS. The
     first draft of this reasoned over the whole run and declared all 53 of box 1's cards
@@ -1219,6 +1375,14 @@ def realign(payload: dict) -> Tuple[dict, Dict[str, str], List[str], List[int]]:
 
     A record with no digest cannot be checked. Harmless while nothing in its box has moved,
     unresolvable once something has, so it refuses only in the second case.
+
+    `inventory` IS AN OPTIONAL SNAPSHOT AND NOT A NEW DEPENDENCY. Since the photographs are
+    named by their cards this function's map comes off `cards.cid`, which means one store READ
+    where there used to be none — so a caller already holding a snapshot hands it in and pays
+    for one. `load` deliberately does not: it takes its snapshot AFTER the exports are read,
+    and moving that read earlier to save a connection would change the moment every figure in
+    the join is measured at. A snapshot read takes no lock (WAL), so the second one is a
+    connection rather than a wait.
     """
     cards = payload.get("cards") or {}
     by_box: Dict[int, Dict[str, dict]] = {}
@@ -1231,9 +1395,16 @@ def realign(payload: dict) -> Tuple[dict, Dict[str, str], List[str], List[int]]:
     ambiguous: List[str] = []
     blind: List[str] = []
     unverified: List[int] = []
+    # ONE STORE READ FOR THE WHOLE RUN, not one per box. `_photo_digests` opens its own when
+    # it is handed nothing, and this loop calls it once per box — which is how a 13-box run
+    # would have opened thirteen connections to answer one question.
+    if inventory is None and by_box:
+        inventory = _digest_inventory()
+    sources: List[str] = []
 
     for box, records in sorted(by_box.items()):
-        at, twice = _photo_digests([box])
+        at, twice, source = _photo_digests([box], inventory)
+        sources.append(source)
         verifiable = {
             key: rec["photo_sha256"] for key, rec in records.items() if rec.get("photo_sha256")
         }
@@ -1294,6 +1465,13 @@ def realign(payload: dict) -> Tuple[dict, Dict[str, str], List[str], List[int]]:
                 "",
             ]
         lines.append("Re-identify this box and join again.")
+        # WHICH SOURCE ANSWERED, ON THE ONE SENTENCE THIS FUNCTION GETS TO WRITE. A refusal
+        # that does not say where its evidence came from sends the operator to re-identify a
+        # box when the real answer might be that the store named nothing and the photographs
+        # were read instead — two different problems with one message.
+        lines.append(
+            f"(slots read from: {'+'.join(sorted(set(sources))) or DIGESTS_FROM_NOTHING})"
+        )
         raise runs.RunError("\n".join(lines))
 
     # Rebuilt rather than mutated: `read_identifications` hands back the run's own parsed
@@ -1330,12 +1508,22 @@ def realign(payload: dict) -> Tuple[dict, Dict[str, str], List[str], List[int]]:
         # Found by looking at the screen: the entry read `Mewtwo ex` and rendered `0096.jpg`,
         # a photograph of something else. Renaming only the FILENAME, so a mirror or an
         # overridden captures root moves with it and nothing here has to know where photos live.
+        #
+        # AND IT RENAMES A SLOT FILENAME ONLY, WHICH IS THE OTHER HALF OF THE SAME RULE.
+        # A photograph stored under the CARD's name has nothing to do with the slot: the path
+        # is a pure function of `cid` (`store/photos.py`), so rewriting `6b1cf2fd….jpg` to
+        # `0002.jpg` would replace a path that is correct with one that names no file at all —
+        # the same defect as the one above, arriving from the other direction. The guard is
+        # inert for every run this function is load-bearing for: all 3,728 records written
+        # before the layout moved carry a `NNNN.jpg` name, and `identify/sidecar.py`'s
+        # `_CID_STEM_RE` is the same shape refusing the same thing one layer out.
         photo = record.get("photo")
         if isinstance(photo, str) and photo:
             source = PurePosixPath(photo)
-            moved_record["photo"] = str(
-                source.with_name(f"{int(index):04d}{source.suffix}")
-            )
+            if not photos.is_photo_cid(source.stem):
+                moved_record["photo"] = str(
+                    source.with_name(f"{int(index):04d}{source.suffix}")
+                )
         rebuilt[now] = moved_record
     rebound["cards"] = rebuilt
     return rebound, moved, departed, unverified
@@ -1344,11 +1532,14 @@ def realign(payload: dict) -> Tuple[dict, Dict[str, str], List[str], List[int]]:
 def refuse_reallocated(payload: dict, inventory: master.Inventory, run: runs.Run) -> None:
     """Refuse a run over a box whose number was deleted and reused since (D36, amended).
 
-    THE CASE `realign` CANNOT SEE, BECAUSE IT NEVER OPENS THE STORE. Box 1 was deleted on
+    THE CASE `realign` CANNOT SEE, BECAUSE IT ASKS ONLY WHICH SLOT A PHOTOGRAPH IS AT AND
+    NEVER WHOSE DRAWER IT IS. Box 1 was deleted on
     2026-08-25 with 53 Pokemon cards and its number was reused on 2026-08-29 for 133
     Riftbound cards — `next_box_number` allocates the lowest free integer (D20 amended) —
-    and `2026-08-22-box1-03` still describes the old drawer. `realign` reads the run's
-    digests and the photographs on disk: none of the run's digests are among the new box's
+    and `2026-08-22-box1-03` still describes the old drawer. `realign` compares the run's
+    digests against the photographs the box holds now — read off `cards.cid` and put to
+    `photos.find`, since the photograph moved under the card's own name, and by hashing the
+    files themselves before that: none of the run's digests are among the new box's
     photographs, so it answers `unverified` and passes the run's keys through, and
     everything after it then reads the CURRENT box's records at those keys — `held.game`
     stands in for a record with no game, `answered` adopts a foreign card's SKU and

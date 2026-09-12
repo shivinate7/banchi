@@ -45,11 +45,32 @@
   display: grid;
   grid-template-columns: minmax(0, 1fr) auto;
   grid-template-areas:
-    'title title'
+    'title rerank'
     'stats stats'
     'meta counts';
   align-items: baseline;
   gap: var(--bn-3) var(--bn-4);
+}
+
+/* THE ONE CONTROL THAT RESHUFFLES THIS LIST, beside the heading that names it and drawn only
+   once the order has gone stale. A Chip and not a Button: it reports a STATE of this list and
+   offers to change it, which is the chip's job beside `Hide sold` on the walk — a solid button
+   here would read as the panel's primary action, above the sales that are the actual work.
+
+   NO HEIGHT OF ITS OWN. `.bn-chip` reads `--bn-control-h-sm`, which the token file raises to
+   40px under 767px and on any coarse pointer, so the thumb floor is met by the kit rather than
+   by a number typed here. `align-self: center` because the row's other cell is a heading on a
+   baseline and a chip has no baseline worth sharing. */
+.card-locations-owner .card-locations-rerank-slot {
+  grid-area: rerank;
+  align-self: center;
+  justify-self: end;
+  display: flex;
+  align-items: center;
+  /* RESERVED WHETHER OR NOT THE CHIP IS IN IT (D118). The chip appears on a press, and this
+     list scrolls inside a fixed band — an unreserved slot would send every copy row down by
+     the chip's height at the exact moment of the sale. */
+  min-height: var(--bn-control-h-sm);
 }
 /* Says what the list beneath is. It used to carry a second job — the copy the walk is standing
    on appeared BOTH in the card above and as a row here, and this heading was what kept that
@@ -117,11 +138,15 @@
     grid-template-columns: minmax(0, 1fr);
     grid-template-areas:
       'title'
+      'rerank'
       'stats'
       'meta'
       'counts';
     gap: var(--bn-2);
   }
+  /* Narrow, it takes its own row under the heading and starts at the left edge with everything
+     else — pinned right in a one-column grid it would sit alone against the far margin. */
+  .card-locations-owner .card-locations-rerank-slot { justify-self: start; }
   .card-locations-owner .card-locations-meta { white-space: normal; overflow: visible; text-overflow: clip; overflow-wrap: anywhere; }
   .card-locations-owner .card-locations-counts { white-space: normal; }
   .card-locations-stats { gap: var(--bn-3) var(--bn-5); }

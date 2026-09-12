@@ -313,7 +313,8 @@ make lint           # eslint over app/ (guards a bug earned, see app/eslint.conf
                     #   never ruff's own defaults, never --fix. Config: ruff.toml.
 make check          # harness + docs-audit + audit-self-test + githooks-selftest +
                     #   merge-selftest + revert-selftest + claim-selftest + claim-stale +
-                    #   decisions-selftest + submission-selftest + revert-guard +
+                    #   decisions-selftest + submission-selftest + cid-selftest +
+                    #   revert-guard +
                     #   janitor-selftest + reap-selftest + silent-write-selftest +
                     #   guard-shell-selftest +
                     #   coordinator-selftest + suite-lock-selftest +
@@ -778,6 +779,42 @@ make merge          # merge a PR and move main onto it — BOTH HALVES, on your 
                                    #   --split-threshold  the old pair back: import-listed.csv
                                    #                      and import-subthreshold.csv
                                    #   --split-games      one file per game
+./pkmnscan cards    name             # WHAT THE CARD'S STABLE NAME IS AND WHERE ITS PHOTOGRAPH
+                                   #   SITS (D172). Free, READ-ONLY, and it must never call
+                                   #   `db.connect` — that function is the single entry to the
+                                   #   store and always calls `_ensure_schema`, so a preview
+                                   #   routed through it would PERFORM the migration it claims
+                                   #   to be previewing. Prints the source census, every card
+                                   #   that would land a `nophoto:` name, every duplicate
+                                   #   photograph, and two digests a human can check by hand
+                                   #   with `sha256sum`.
+./pkmnscan cards    audit [--verbose]
+                                   # DOES EVERY CARD'S NAME STILL RESOLVE TO ITS PHOTOGRAPH?
+                                   #   Free, re-runnable by anybody on any copy, and it reads
+                                   #   the whole corpus — 4.45 GB in ~2 s. THREE VERDICTS,
+                                   #   NEVER TWO: `pass`, `fail`, and `not known` when the
+                                   #   column is absent, a name is NULL, or there were no
+                                   #   photographs to read. A check shaped "for every card,
+                                   #   sha256(file) == cid" over zero rows prints
+                                   #   `checked 0, mismatch 0` and reads as a pass.
+                                   #   A RE-SHOT CARD IS EXCUSED BY THE DIGEST ITS `reshot`
+                                   #   EVENT RECORDS, never by the bare fact of a re-shoot —
+                                   #   a `reshot` line with no digest is a NAMED UNPROVABLE.
+                                   #   `make cid-audit` is this, and it is deliberately NOT in
+                                   #   `make check`: that answers from the tree alone, which
+                                   #   is `make lan-check`'s reason.
+./pkmnscan cards    photos [--write] [--limit N]
+                                   # MOVE THE CORPUS OFF THE LEGACY `(box, index)` ADDRESS
+                                   #   onto the card's own name. Previews by default. Per
+                                   #   card: hash the source, REFUSE it by name if it does not
+                                   #   match, hard link, RE-HASH THE DESTINATION, and only
+                                   #   then unlink the source — so the bytes exist under at
+                                   #   least one name at every instant and a kill costs
+                                   #   nothing. It takes no store write lock and there is no
+                                   #   state it can stop in that a re-run does not finish.
+                                   #   Stamps `meta.photos_relocated` only on a clean pass;
+                                   #   until then `store/photos.find` still reads the old
+                                   #   address, and after it never does again.
 ./pkmnscan prices   adopt [--write] # fold every run's legacy decisions.json into the corpus.
                                    #   Previews by default; newest-wins, and it NAMES the holds
                                    #   a later price replaced rather than counting them.
@@ -1014,6 +1051,33 @@ sentence**, and see "the census" below for what enforces that.
                               the live ones. The address leads with the box's NAME and the
                               rail orders boxes by when this browser last opened them; a
                               section can be named from the Manage box sheet.
+                              THE ORDER UNDER A SEARCH IS TAKEN ONCE AND A SALE MAY NOT RETAKE
+                              IT (D181, an
+                              amendment to D118). D132's ranking — the copies list, the box
+                              rail and the walk's landing all led by the section holding the
+                              most LIVE copies — was recomputed on every press, so marking one
+                              copy sold rearranged the list the operator was working down:
+                              *"it can reorganize the rankings right in front of me, which
+                              feels unintuitive if im trying to mark multiple as sold"*.
+                              WHAT IS FROZEN IS THE INPUT AND NEVER THE RENDERED ORDER
+                              (`app/src/frozenRank.ts`): the copies that have LEFT since the
+                              order was taken go on counting for their section, so every
+                              ranking computes itself unchanged against the state it was
+                              ranked against. A snapshotted array of keys was refused — it
+                              would be a fourth copy of an ordering three call sites compute.
+                              THE SOLD ROW STAYS EXACTLY WHERE IT IS and is struck, carrying
+                              `join.departed_label`. It may not fold away and it may not SINK:
+                              D132 offers both and a sink is a movement too, so frozen mode
+                              takes neither. `Order is N copies stale · re-rank` is the one
+                              press that reshuffles anything, drawn in the copies list's header
+                              only once the order has gone stale, and its slot is reserved
+                              whether or not it is in it (D118 — this list scrolls inside a
+                              fixed band). A new search takes a new order on its own; an undo
+                              gives its copy's hold back. THE WALK'S OWN FOLD IS FROZEN ONLY
+                              UNDER A QUERY: nothing ranks the `(box, index)` walk, so nothing
+                              about it goes stale, and D132's fold there is what the owner
+                              asked for. D28 is the precedent — "the list stops moving under
+                              it", the same ruling on `#/review`.
 #/graveyard    Graveyard      every departed card, sold or retired or moved (D134) — merged
                               from two sources, a record still standing in a box nobody has
                               deleted and a `buried` history line for one whose box was.
@@ -2265,6 +2329,10 @@ D177 The corpus answers for listings no camera here ever saw, so a prune is a li
 D178 A document may name what it would create, and the marking expires by itself
 D179 Five shell commands are refused by resolving what they would do, not by matching what they say, and each clause carries its own escape hatch
 D180 A press names the cards it is over, and the drawer is one of the names
+D181 The order is taken once, and a sale may not retake it
+D182 An unclaimed slug is not required in the shared index it will replace itself out of
+D183 A number a person reads is never a key a machine uses, so the photograph is stored under the card's name and the address is derived
+D184 A gain step is the baseline times one number, a card is not, and the machine re-baselines only on that proof
 D-a-join-with-no-run-directory A join reads the store directly when there is no run directory to replay
 ```
 
@@ -2448,6 +2516,14 @@ was open** — the rule is renumber your own, never another's.
   number inside a collapsed disclosure. **NOT VALIDATED AT THE RIG** — the replay says the
   machine fires on more cards; only the JPEGs say whether they are readable, and §7 is that
   run's checklist.
+
+  **AN EXPOSURE STEP IS REFUSED AS THE STAND RESCALED SINCE 2026-09-12, AND IT IS NOT
+  VALIDATED AT THE RIG.** §4's camera lock stays the recommendation; what changed is that a
+  settled frame over the presence floor is asked whether it is the baseline TIMES ONE NUMBER,
+  and a gain step is while a card never is — zero of 748 fired frames in the corpus, every one
+  3.6× clear. **No banked trace holds a real exposure step or a pixel outside the watch region**,
+  so the step is a model over real plates; `scripts/score-trace.py gain` over the first trace
+  saved in an auto mode is what validates it, and the HUD's `uniform` count is the receipt.
 
   **THERE IS NO `stalled:flare`, AND THAT IS A FINDING.** The remaining misses are bright, and
   three candidate glare discriminators were measured across the whole corpus: saturation reads

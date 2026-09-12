@@ -79,6 +79,16 @@ the picture profile came back NULL and are recorded as findings. `scripts/score-
 re-derives all of it. **SPECIFIED and RECORDED, NOT BUILT and NOT VALIDATED** — no parameter
 moves, and §4's last block is the checklist that is owed.
 
+**AND SINCE THE SAME EVENING THE MACHINE SURVIVES THE STEP THE LOCK PREVENTS (2026-09-12,
+D184).** A settled frame over the presence floor is asked one
+more question — is it the baseline TIMES ONE NUMBER? — and a frame that is (a gain step on the
+bare stand) is refused as `suppressed:uniform` and becomes the baseline, while a card, which is
+a pattern and not a level, never is: zero of the 748 fired frames in the corpus, every one 3.6×
+or more clear of the bound, the 85/85 run 5.3×. No threshold moved and no new constant decides
+anything. **BUILT and RECORDED, NOT VALIDATED**: no banked trace holds a real exposure step or a
+pixel outside the watch region, so the step is a model over real plates, and §4's "the gain step"
+block is the measurement and the checklist. The lock stays the recommendation.
+
 **§4's protocol changed shape because of D81.** The parameters are no longer what a rig
 session tunes; the rig session now reads whether the machine's own measurements are sane and
 whether the baseline was taken on an empty stand. Read §4 before treating any number here as
@@ -380,7 +390,7 @@ answer** — sharpening and shutter speed — and they are recorded as findings 
 
 | setting | lock to | the measurement behind it |
 |---|---|---|
-| **Exposure mode** | `Movie` → **Manual Exposure** | **the single most consequential row.** One 1/3 EV step — the smallest a Sony AE can take — moves the watch region by **8.5 to 22.5 luma levels** across the fifteen traces that carry a baseline. That is over `tLo` on **15 of 15** and over `presenceMin` on **9 of 15**: on more than half this corpus, one AE step on an empty stand reads as **a card arriving** |
+| **Exposure mode** | `Movie` → **Manual Exposure** | **the single most consequential row.** One 1/3 EV step — the smallest a Sony AE can take — moves the watch region by **8.5 to 22.5 luma levels** across the fifteen traces that carry a baseline. That is over `tLo` on **15 of 15** and over `presenceMin` on **9 of 15**: on more than half this corpus, one AE step on an empty stand reads as **a card arriving**. **That figure is a DERIVATION on the baseline under a multiplicative model, not a recorded step — no banked trace contains one — and since 2026-09-12 the machine refuses the step it describes as `suppressed:uniform` ("the gain step" below). The lock is still what keeps the floor meaning one thing for a whole box** |
 | **ISO** | a **fixed** value. Never `ISO AUTO` | a gain step taken mid-session is **a cliff, not a gradient**. On the 2026-09-11 03:25 session, **+1/3 stop costs 48% of the fires after it** and **+1.5 stops stops the session firing at all** for its remaining 75 seconds. Mechanism in "the cliff" below |
 | **Shutter** | **1/60 or slower**, as slow as the feeder allows — spend it on keeping ISO down | **NULL RESULT.** At the instant the trigger fires the card is moving at **184 sensor px/s** (median) and 367 at p90, so 1/60 smears it **3.1 px of a 3840-px frame** (6.1 at p90, 4.6 at the rescue bar). Blur is not the binding constraint at the fire phase; noise is. Derivation below |
 | **Aperture** | **fixed**, wherever the lamp allows the ISO above | it is half the same exposure budget, and a body left in `A` re-levels when the scene changes |
@@ -534,6 +544,91 @@ scene changes** — which on this rig is exactly when a card is in flight and `d
 the card. So these traces bound the drift of whatever the body was set to; they cannot prove the
 body was in manual. **Step 2 of the checklist is what decides that**, and it takes thirty seconds.
 
+#### The gain step — refused as the stand rescaled, and what the recordings could and could not prove (2026-09-12)
+
+**Added the evening the owner asked whether the lock was essential or "just coding bad".** The
+lock is a correct fix and not the only one. This block is the version that does not need their
+hand, built over recordings alone; D184 is the decision.
+
+**What the corpus holds, and does not.** Every trace stores the watch region and nothing outside
+it — 1,064 cells at 38×28, keyframes and verdict frames alike — so a reference region outside the
+region, the shape first proposed, cannot be derived from it. A scan of all 20 sessions' consecutive
+keyframe pairs for a global gain change (median ratio ≥ 5% off unity with the pattern preserved)
+found none; the three candidates are quantisation on a 16-level plate. **The 8.5–22.5 figure in
+the exposure row is arithmetic on the baseline, and it is now labelled as such.**
+
+**The surround was measured from the owner's photographs instead**, read-only, 2,535 stored 4K
+frames over five boxes, the stored rotation undone and each downsampled to the machine's 64×36
+grid. The mapping is proven: the 22:12 session's 51 fires match box 1's photographs 93–143 in
+order (50 of 50 consecutive, median correlation 0.86) under one rotation and 0.22 under the
+other. Across a card swap the reference rig's corners hold to 0.6–1.3 luma (543 swaps); the
+feeder rig's left third moves 27–47 every cycle (the tray) and its right side holds at 1.3–3.3.
+A median per-cell ratio over the surround cancels an injected 1/3 EV step to 0.00 on every
+box. **Against the ARM-TIME surround it does not hold**: fewer than half the surround's cells
+agree with the session's first frame on 87–99% of frames, 95% of them within 3.5 minutes on
+box 5 — so a uniformity guard would decline nearly every verdict, and without one the factor is
+wrong by up to 2.5× (worst pairs: a hand, the tray) and invents a 170-luma change. **Refused.**
+
+**Normalizing the watch region by its own median ratio, always — refused in one run over the
+corpus**: 77 of 661 fired cards fall under the floor and the 85/85 run's quietest card goes from
+58.8 to 11.0. A bright card on a dark plate divided by its own ratio is scaled to plate
+amplitude, and with amplitude gone the hand (8.3–9.1) and the weakest cards overlap.
+
+**What survives is a test.** `k` = the median per-cell ratio of the frame to the baseline over
+cells both hold between a toe (8) and a shoulder (247); the residual = mean |frame − k × baseline|
+in the units of the brighter of the two frames; UNIFORM when the residual is under `presenceK` ×
+the session's still-frame difference — the multiple the presence floor already rides. The units
+were measured three ways: the baseline's put sixteen of the 85/85 run's cards at 1.4× the bound;
+the frame's put the 03:25 session's closest real card at 1.8×; the brighter frame's keeps every
+real card on every session at **3.6× or more** (2026-09-01 03:06 at 22.5 s is the closest).
+
+| reading, all twenty sessions | value |
+|---|---|
+| fired frames over the floor | 748 |
+| refused as uniform | **0** |
+| closest real card to the bound | **3.65×** (85/85 run: 5.3×) |
+| the closest frame of any kind | 03:25 at 74.0 s, **1.02×** — the plate's dark disc displaced, NOT a card (contact sheet); its twin at 73.0 s reads 2.29× |
+| injected 1/3, 1/2, 1 EV on every baseline | uniform, or under the floor — never a card |
+| injected 1.5 EV | declined on six bright plates (fewer than a quarter of the region unclipped), the floor alone deciding as before |
+| the hand D84 photographed the stand with | 7.61 and 8.68 against bounds 7.41 and 8.09 — not uniform; refused by the floor as before |
+| the reference rig's genuine empty stand | k = 1, residual = raw, 1.70–1.78 |
+| scaled novelty between consecutive fires | ≥ 5.28 against `tNovel` 4.0 (raw minimum 7.0) |
+
+**The novelty gate asks the same question of the last fired frame**, so a step over a card
+already photographed is `suppressed:unchanged` rather than a second photograph. **`d` is not
+touched**: a step is one spurious episode that resolves as uniform; a slow ramp under `tLo` per
+frame — 1/3 EV over half a second at level 150 is about 1.3 a frame — enters the noise window
+for its duration and is the limit §5 names.
+
+**The two 03:25 frames are a finding about T9 as much as about this test.** They cleared the
+floor at 25.8 and 26.6 from the baseline, so the bright-lamp block's "the fired frame is a card
+(≥ 17 from baseline)" passed on them; the contact sheet says they photographed the bright plate
+with its disc moved. Distance is not content. T9 pins them by time now.
+
+**The second candidate, priced.** `geometry.detect_card` is exposure-invariant by construction:
+timed on an eval image, 42 ms at full size and 18–21 ms downsampled, which is 45–100% of one core
+at 24 fps — and it runs in Python on the server, while the trigger runs in the browser. Not the
+cost but the process boundary rules it out as a per-frame gate; it stays the per-capture crop.
+
+**Mutation-tested, fifteen arms, one survivor.** Over the scorer, read by T9: frame units only
+(03:25 falls to 1.8×), baseline units (the 85/85 run to 1.4×), no shoulder on the current frame
+(26 injected steps become cards), never decline, `k` as a mean rather than a median (the disc
+frames move), the toe at 40 (cards refused), and the scorer's toe drifting from the machine's
+(`motion params` row) — all red. **The survivor is the step model without clipping**: the
+shoulder excludes any cell over 247 whether the model clipped it or not, so the clip in
+`_step` is invisible to every verdict; what it models is the camera, and nothing here can see
+the camera. Over the machine, read by `motion.spec.ts` in a browser: the branch removed, the
+bound replaced by the floor, novelty unscaled, the baseline not adopted, frame units only, no
+shoulder on the current frame, never decline — all red, the last two only after two clipping
+cases were added because the first pass showed them surviving. Ten of the file's older cases
+went red the moment the machine landed, because every card in them was a flat level at a new
+luma — the stand times one number — and the fixture now carries texture on every frame.
+
+**NOT VALIDATED, and this is the whole of what the recordings cannot do.** The step here is
+`2 ** (EV / 2.2)` applied to a real plate; its noise is the plate's own. The first trace saved
+with the body in `P` or with `ISO AUTO`, scored with `scripts/score-trace.py gain`, and the HUD's
+`uniform` count over one box are what validate it — one sitting, after the checklist below.
+
 #### The rig checklist — one sitting, before the next feeder run
 
 Cost: about fifteen minutes, one box of expendable commons, and it ends with a saved trace.
@@ -591,6 +686,14 @@ duplicate; the photo is of a card still at the lens — and the honest framing i
 override is for rescuing one card, not for running mixed-mode. If the rig session shows
 mixed-mode is a real workflow, the fix is a `Trigger.notice()` addition to the seam,
 argued in a decision entry, not a quiet coupling.
+
+**An exposure RAMP is not a step, and the noise tracker can see it.** The uniformity test
+(§4) answers a step: one frame over `tHi`, a settle, a verdict. A body that re-levels smoothly
+over half a second moves `d` by about 1.3 a frame at level 150 — under `tLo` — so those frames
+are called still, enter the noise window, and lift `typ` for eight seconds; no episode opens and
+no verdict is taken until the next card, which is judged correctly against a baseline the ramp
+has moved. The cost is a slightly raised `tLo` for one window, measured nowhere because no trace
+holds a ramp; the remedy is the lock, which is why it stays the recommendation.
 
 **The sampler runs on the main thread, once per decoded frame.** drawImage into a small
 CPU-backed canvas plus a 9KB getImageData — cheap on paper, but b4aca0c earned this repo

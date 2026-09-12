@@ -828,7 +828,9 @@ while the card that never settled is photographed by the rescue at the second th
 to be reported; and on the six overnight 2026-09-11 sessions the settle rule as shipped fired
 five times each on the two the ratchet lost while the rule in the tree replays 31 and 21; and
 on the six evening sessions the rescue takes the run from 268 photographs and 20 stalls to 295
-and 7, while every one of the eight earliest sessions keeps the verdict count it had.**
+and 7; and the uniformity test refuses a synthetic 1/3, 1/2 or 1 EV exposure step on every
+session's baseline while refusing no real card on any of them, while every one of the eight
+earliest sessions keeps the verdict count it had.**
 
 **The inputs are `harness/traces/` — twenty armed sessions**, saved from the capture screen's
 HUD by the owner between 2026-08-23 and 2026-09-11: FIVE recorded under the brightness floor

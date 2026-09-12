@@ -259,6 +259,10 @@ async function open(
       capture_dir: string | null
       holder_alive: boolean
     }[]
+    /** Where to open. `VIEW_ROUTE` (`#/runs`) by default; `#/runs?state=captured` is
+     *  `standing.ts`'s own link and is what a case bookmarking the composer's default scope
+     *  passes here. */
+    at?: string
   } = {},
 ): Promise<Wire[]> {
   const wire: Wire[] = []
@@ -541,7 +545,7 @@ async function open(
     })
   })
 
-  await page.goto(VIEW_ROUTE)
+  await page.goto(options.at ?? VIEW_ROUTE)
   await expect(page.locator(VIEW)).toBeVisible()
   await expect(page.locator('.runs-master')).toBeVisible()
   return wire
@@ -1636,6 +1640,112 @@ test('no DRAWER is picked for the operator, and the default start is a state rat
   await expect(page.locator('.runs-composer-note')).toContainText('Box 9')
   await expect(page.locator('.runs-scope')).toContainText('Box 9')
   await expect(next).toBeEnabled()
+})
+
+/* ----------------------------------------- the handoff from `#/inventory`, and the bookmark
+ * from `#/` (D180's screen; `standing.ts` is where the link lives)
+ *
+ * `CarriedScope` MOVED FROM `{box, indices}` TO A FLAT LIST OF `box/index` KEYS
+ * (`runHandoff.ts`), which is what lets a tick list from `#/inventory`'s mass-select span
+ * drawers — the receiving end here had never been asserted before this pair of cases.
+ *
+ * THE SECOND HALF IS `standing.ts`'s OWN LINK: `#/runs?state=captured` now opens the composer
+ * on arrival, on its default scope, rather than leaving the operator to press the header
+ * button themselves. It is read once, the way `?run=` already opens a run's own detail —
+ * there is no write-back of a narrowing into the address.
+ */
+
+/** Seeds the handoff the way `#/inventory` writes it. Before `open`, because `addInitScript`
+ *  applies to the navigation `open` performs. */
+async function carry(page: Page, keys: string[]) {
+  await page.addInitScript(
+    (payload) => window.sessionStorage.setItem('banchi.run-scope', payload),
+    JSON.stringify({ keys }),
+  )
+}
+
+test('a ticked handoff opens the dialog on exactly those cards, and sends keys rather than a box', async ({
+  page,
+}) => {
+  await carry(page, ['9/2', '9/1'])
+  const wire = await open(page)
+
+  /* The handoff opens the dialog by itself, on the ticked start, with nothing further to
+     press — unchanged from the box-and-indices shape this replaced. */
+  await expect(page.locator('.runs-composer')).toBeVisible()
+  await expect(page.locator('.runs-composer-note')).toContainText('2 ticked cards in Box 9')
+
+  await toReading(page)
+  await checkCost(page)
+  await page.locator('.run-button-money').click()
+
+  const spend = wire.find((row) => row.path === '/pipeline/identify')
+  const body = spend?.body as Record<string, unknown>
+  /* SORTED BY POSITION, AND NEVER `box`/`indices`/`scopes` — the last two are refused BY NAME
+     server-side (`pipeline/selection.py:parse`), so a screen that still sent either would earn
+     a 400 in front of the operator at the one moment that costs money. */
+  expect(body.keys).toEqual(['9/1', '9/2'])
+  expect(body.box).toBeUndefined()
+  expect(body.indices).toBeUndefined()
+  expect(body.scopes).toBeUndefined()
+})
+
+test('a handoff spans drawers, and every key it carries goes on one flat list', async ({ page }) => {
+  /* THE CASE `{box, indices}` COULD NOT HOLD: `#/inventory`'s mass-select walks whatever the
+     search narrowed it to, which is not a drawer, and the RECEIVING end was what made it one —
+     so a cross-drawer tick had nowhere to go and was never offered. */
+  await carry(page, ['9/2', '9/3', '12/1'])
+  const wire = await open(page)
+
+  await expect(page.locator('.runs-composer')).toBeVisible()
+  /* box 12 is named `codes` in this fixture and box 9 is not (D56) — `boxesLabel` drops both
+     names once there is more than one drawer, because `·` is the name separator and would
+     read as a second list separator. */
+  await expect(page.locator('.runs-composer-note')).toContainText(
+    '3 ticked cards in 2 drawers · boxes 9 and 12',
+  )
+
+  await toReading(page)
+  await checkCost(page)
+  await page.locator('.run-button-money').click()
+
+  const spend = wire.find((row) => row.path === '/pipeline/identify')
+  const body = spend?.body as Record<string, unknown>
+  expect(body.keys).toEqual(['9/2', '9/3', '12/1'])
+  expect(body.box).toBeUndefined()
+})
+
+test('a handoff loses only the keys whose drawer is gone, not the whole list', async ({ page }) => {
+  /* PER KEY RATHER THAN WHOLE. A carried box the registry no longer holds used to drop the
+     handoff entirely, which was right while a handoff WAS one box; dropping two cards in box 9
+     because box 4 was deleted underneath them is a narrowing in the one direction that costs
+     the operator work. Box 4 does not exist in this fixture's `/boxes` payload. */
+  await carry(page, ['9/2', '9/3', '4/1'])
+  await open(page)
+
+  await expect(page.locator('.runs-composer')).toBeVisible()
+  await expect(page.locator('.runs-composer-note')).toContainText('2 ticked cards in Box 9')
+})
+
+test('#/runs?state=captured opens the composer on its default scope, the way standing.ts links to it', async ({
+  page,
+}) => {
+  const wire = await open(page, { at: '/#/runs?state=captured' })
+
+  /* THE DIALOG IS ALREADY OPEN, on the default `needed` start — every card waiting to be
+     identified — with nothing pressed. This is a READ and not a bookmark of a narrowing: there
+     is no `&box=` term and no write-back of a chip press into the address. */
+  await expect(page.locator('.runs-composer')).toBeVisible()
+  await expect(page.locator('.runs-composer-note')).toContainText('Every card waiting to be identified')
+
+  await toReading(page)
+  await checkCost(page)
+  await page.locator('.run-button-money').click()
+
+  const spend = wire.find((row) => row.path === '/pipeline/identify')
+  const body = spend?.body as Record<string, unknown>
+  expect(body.state).toBe('captured')
+  expect(body.box).toBeUndefined()
 })
 
 // ----------------------------------------- the export, fetched rather than downloaded (D64)
