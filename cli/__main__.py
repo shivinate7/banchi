@@ -22,6 +22,7 @@ from cli import (  # noqa: E402
     cmd_queue,
     cmd_reconcile,
     cmd_reprice,
+    cmd_rescue,
     cmd_scan,
     runs,
 )
@@ -148,6 +149,22 @@ def build_parser() -> argparse.ArgumentParser:
         "--dry-run",
         action="store_true",
         help="everything except the API call",
+    )
+
+    # --------------------------------------------------------------------------- rescue
+    # THE REPAIR FOR A RUN D36 REFUSES. Free, re-runnable and preview-first: it reads
+    # photographs and the store, and with `--write` it creates a SECOND run directory. It
+    # never edits the run it is given — `cli/runs.py`'s first sentence is that a run is an
+    # immutable input — and it refuses a run that is not stranded.
+    rescue = sub.add_parser(
+        "rescue",
+        help="re-address a stranded run's cards to where they are now. Free, previews.",
+    )
+    rescue.add_argument("run_dir", help="the run a join refuses over a reallocated box")
+    rescue.add_argument(
+        "--write",
+        action="store_true",
+        help="create the rescue run. Previews without it, and writes nothing at all.",
     )
 
     # ----------------------------------------------------------------------------- join
@@ -389,6 +406,7 @@ COMMANDS = {
     "prices": cmd_prices.run,
     "queue": cmd_queue.run,
     "reprice": cmd_reprice.run,
+    "rescue": cmd_rescue.run,
 }
 
 

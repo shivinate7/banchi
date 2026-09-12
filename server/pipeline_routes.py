@@ -2242,6 +2242,30 @@ def _unsent_ledger(
     return UnsentLedger(unsent=unsent, by_run=by_run, held_out=held_out, live_out=live_out)
 
 
+def _on_hand_by_run(inventory: master.Inventory) -> Dict[str, int]:
+    """run name -> how many of its cards this store still HOLDS. One column read, once.
+
+    THE FIGURE A WARNING ABOUT A RUN HAS TO CARRY, and the reason it is counted off the
+    CARDS rather than off the run directory: a run's `identifications.json` records what was
+    read, and what a stranded run is withholding is what is still on a shelf — which is
+    smaller every time one of its cards sells and is zero once its drawer is deleted.
+    Measured on the owner's store: `2026-08-29-box1-01` read 133 cards and holds 99.
+
+    SOLD AND RETIRED ARE NOT ON HAND and are not counted; a buried record is not in this
+    table at all (D134). `cards.select` reads two indexed columns and builds no card
+    objects (D88), so this is one pass over the store rather than `_copies_out`'s per-run
+    full-table scan — which is ~1s a call on this machine and was never meant for a loop.
+    """
+    counts: Dict[str, int] = {}
+    for _key, (run, state) in inventory.cards.select(("run", "state")):
+        if not isinstance(run, str) or not run.strip():
+            continue
+        if state in (master.SOLD, master.RETIRED, master.MOVED):
+            continue
+        counts[run] = counts.get(run, 0) + 1
+    return counts
+
+
 def _unreachable(inventory: master.Inventory, review_count: int, root: Path) -> dict:
     """The copies NO worklist can offer, named rather than left out (`CLAUDE.md`: never
     silently drop a card). Each figure is a door to the screen that can move it.
@@ -2251,6 +2275,13 @@ def _unreachable(inventory: master.Inventory, review_count: int, root: Path) -> 
     `reallocated` is a run over a drawer whose number was deleted and reused (D36), which
     no join can reach and which is left out of the union above for exactly that reason —
     counted here, it would offer the NEW drawer's cards under the OLD run's identities.
+
+    EVERY ROW CARRIES A CARD COUNT, BECAUSE A RUN IS NOT A QUANTITY. Both lists were drawn
+    as a number of RUNS, so `2 runs over a deleted box` read identically whether the store
+    was withholding nothing or was withholding a hundred sellable cards — and on the
+    owner's machine it was saying both at once: `2026-08-22-box1-03` has 0 cards left on
+    hand and `2026-08-29-box1-01` has 99, all identified and all carrying a SKU. The
+    operator could not tell the false alarm from the real stranded stock.
     """
     unjoined: List[dict] = []
     for entry in sorted(root.iterdir()):
@@ -2359,6 +2390,10 @@ def do_pipeline_worklist(wanted: Sequence[str]) -> dict:
     except (files.StoreError, OSError, ValueError, TypeError):
         snapshot = None
 
+    # ONE PASS, BEFORE THE RUN LOOP, because the loop asks this question once per run and
+    # the answer is one read of two columns for the whole store.
+    on_hand = None if snapshot is None else _on_hand_by_run(snapshot.inventory)
+
     roster: List[dict] = []
     owed_by_run: Dict[str, List[str]] = {}
     reallocated: List[dict] = []
@@ -2399,7 +2434,16 @@ def do_pipeline_worklist(wanted: Sequence[str]) -> dict:
             # A RUN OVER A DRAWER THAT NO LONGER EXISTS (D36). Never open, never in the
             # union: its positions are another drawer's cards now, and `emit` refuses it by
             # name. Drawn in the picker as `Box N (deleted)` so the operator can see why.
-            reallocated.append({"run": entry.name, "box": summary.get("box")})
+            # THE COUNT IS WHAT MAKES THIS ROW READABLE (see `_unreachable`). None where
+            # the store would not open — unknown is not zero, and a warning that silently
+            # became "nothing to see" on an unreadable store would be the worst of the two.
+            reallocated.append(
+                {
+                    "run": entry.name,
+                    "box": summary.get("box"),
+                    "cards": None if on_hand is None else on_hand.get(entry.name, 0),
+                }
+            )
             roster.append({**summary, "owes": [], "open": False, "unsent": 0})
             continue
         owes = _run_owes(manifest, parsed, answers)
