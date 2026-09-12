@@ -1040,7 +1040,7 @@ def _leg_keys(leg: Leg) -> List[str]:
 def _claim_conflicts(legs: Sequence[Leg]) -> List[dict]:
     """Which legs of this cart hold cards a live submission has already claimed.
 
-    THE COURTESY HALF OF THE GUARD (D-a-claim-on-the-cards), AND IT IS NOT THE GUARD. The
+    THE COURTESY HALF OF THE GUARD (D174), AND IT IS NOT THE GUARD. The
     binding one is `store/submissions.py:claim_or_refuse`, called by the command inside the
     transaction it writes the claim in — that is the only place a refusal can be atomic with
     respect to another press. This runs before anything is spawned so that the ordinary
@@ -1272,7 +1272,7 @@ def _preflight_leg(leg: Leg) -> dict:
         # confirm before the operator reaches for it, rather than letting them press a
         # button that is going to refuse.
         "busy_run": _busy_run(leg.scope["box"]),
-        # THE SAME COURTESY, ONE VOCABULARY DOWN (D-a-claim-on-the-cards). `busy_run` answers
+        # THE SAME COURTESY, ONE VOCABULARY DOWN (D174). `busy_run` answers
         # "is a run reading this DRAWER"; this answers "has a live submission already claimed
         # any of these CARDS", which is the question that has an answer for a press over two
         # drawers and for two disjoint selections in one. Null where nothing is claimed, so a
@@ -1724,7 +1724,7 @@ def do_pipeline_identify(payload: dict) -> Tuple[HTTPStatus, dict]:
                 f"wait for it to finish. Nothing in this send was started.",
             )
     # THE CARD-LEVEL REFUSAL, OVER THE WHOLE CART, BEFORE THE FIRST CHILD STARTS
-    # (D-a-claim-on-the-cards). It sits beside the box check rather than replacing it, and it
+    # (D174). It sits beside the box check rather than replacing it, and it
     # sees the two things the box check structurally cannot: a live run whose captures span
     # more than one drawer (`_run_box` answers None for one, so `_busy_run` is blind to it in
     # both directions), and a claim whose holder died with a batch in flight.

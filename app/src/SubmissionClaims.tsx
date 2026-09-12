@@ -6,7 +6,7 @@ import { Button, Notice, Pill } from './kit'
 import { toast } from './kit/toast'
 import './SubmissionClaims.css'
 
-/* WHAT IS HELD RIGHT NOW, AND THE ONE WAY OUT OF A STUCK CLAIM (D-a-claim-on-the-cards).
+/* WHAT IS HELD RIGHT NOW, AND THE ONE WAY OUT OF A STUCK CLAIM (D174).
  *
  * WHY THIS IS A PANEL ON `#/runs` AND NOT A SCREEN. A claim exists only between a press and
  * the collection it paid for, so on a healthy store there is nothing here at all — this

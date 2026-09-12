@@ -387,7 +387,7 @@ COMPONENTS = [
                                         "bind (D145, D165). Two boxes get no "
                                         "scope rather than a guessed one (D48).",
                                 "governed_by": ["D1", "D2", "D21", "D23", "D33", "D36", "D48",
-                                                "D145", "D163", "D165", "D-a-claim-on-the-cards"]},
+                                                "D145", "D163", "D165", "D174"]},
             "cmd_join.py": {"does": "resolve identifications against the export; --dry-run previews. "
                                     "SEEDS inventory/prices.json's rule and basis on the first "
                                     "join of an EMPTY corpus and never reassigns them (D49, D86) "
@@ -1214,7 +1214,7 @@ COMPONENTS = [
                                        "named way out and leaves a tombstone rather than deleting "
                                        "the row. `counted` publishes the WORK: rows live, cards "
                                        "locked, dead holders",
-                               "governed_by": ["D-a-claim-on-the-cards", "D7", "D18", "D36", "D48", "D88"],
+                               "governed_by": ["D174", "D7", "D18", "D36", "D48", "D88"],
                                "note": "PROVED BY `make submission-selftest` AND NOT BY THE "
                                        "HARNESS, which is why `tested_by` is empty: that field "
                                        "names harness tests, and this guard's subject is two "
@@ -1237,7 +1237,7 @@ COMPONENTS = [
                                    "loads only the rows a caller names. `buried()` (D134) is "
                                    "`history()`'s narrower sibling: the `buried` events alone, "
                                    "for `#/graveyard`'s read.",
-                           "governed_by": ["D145", "D13", "D53", "D63", "D88", "D134", "D-a-claim-on-the-cards"], "tested_by": ["T7"]},
+                           "governed_by": ["D145", "D13", "D53", "D63", "D88", "D134", "D174"], "tested_by": ["T7"]},
             "rows.py": {"does": "`Rows`: a keyed mapping of records that is a dict to every "
                                 "caller and, bound to a `Source`, loads one row, one indexed "
                                 "column's matches, or column values with no object built at all. "
@@ -1252,7 +1252,7 @@ COMPONENTS = [
                               "`events_named` (D134) is an unindexed `WHERE event = ?` scan over "
                               "that same table — no new index, because this repo has no schema "
                               "migration to add one to a store already on disk.",
-                      "governed_by": ["D145", "D20", "D86", "D88", "D134", "D-a-claim-on-the-cards"], "tested_by": ["T7"]},
+                      "governed_by": ["D145", "D20", "D86", "D88", "D134", "D174"], "tested_by": ["T7"]},
         },
     },
     {
@@ -1795,7 +1795,7 @@ COMPONENTS = [
                         "the arm that ignores the batch ids must not pass. Mutation-tested: "
                         "sixteen arms, all caught, and arm 13 found two assertions of this "
                         "suite's own passing for the wrong reason.",
-                "governed_by": ["D-a-claim-on-the-cards", "D7", "D18", "D48", "D88", "D136"],
+                "governed_by": ["D174", "D7", "D18", "D48", "D88", "D136"],
             },
             "reap-selftest.sh": {
                 "does": "proves reap.py by pointing it at processes it must not kill. A "
@@ -1940,7 +1940,7 @@ COMPONENTS = [
                 # (D104) and the seven order-line closers (D113).
                 "governed_by": ["D13", "D14", "D18", "D58", "D62", "D76", "D79", "D83", "D86",
                                 "D87", "D89", "D96", "D100", "D103", "D104", "D106", "D113",
-                                "D134", "D159", "D167", "D168", "D-a-claim-on-the-cards"],
+                                "D134", "D159", "D167", "D168", "D174"],
             },
             "verdict-selftest.py": {"does": "PROVES `app/design-check-reporter.ts` STILL WRITES A "
                                             "VERDICT, BY RUNNING IT. `make docs-audit`'s "
@@ -2985,7 +2985,7 @@ COMPONENTS = [
                                 "D77", "D79", "D83", "D86", "D87", "D88", "D89", "D90", "D91",
                                 "D92", "D93", "D96", "D100", "D103", "D104", "D108", "D113",
                                 "D115", "D116", "D132", "D134", "D137", "D138",
-                                "D168", "D-a-claim-on-the-cards"],
+                                "D168", "D174"],
                 "tested_by": ["T7"],
             },
             "tcg_import.py": {"does": "THE OUTBOUND WRITE to the seller admin, and the only "
@@ -3140,7 +3140,7 @@ COMPONENTS = [
                                 "D58", "D59", "D62", "D64", "D65", "D68", "D76", "D78",
                                 "D79", "D86", "D87", "D88", "D89", "D100", "D103", "D105",
                                 "D134", "D137", "D145", "D147", "D156", "D159", "D165",
-                                "D166", "D168", "D170", "D-a-claim-on-the-cards"],
+                                "D166", "D168", "D170", "D174"],
                 "tested_by": ["T7"],
             },
             "shipping_routes.py": {
@@ -4604,7 +4604,7 @@ COMPONENTS = [
                                       },
             "src/SubmissionClaims.tsx": {"does": "the panel on #/runs saying what a live send "
                                                  "is holding, and the ONE way out of a stuck "
-                                                 "claim (D-a-claim-on-the-cards). It draws "
+                                                 "claim (D174). It draws "
                                                  "NOTHING when nothing is claimed, which on a "
                                                  "healthy store is always — that is why this is "
                                                  "a panel and not a thirteenth route, since a "
@@ -4624,7 +4624,7 @@ COMPONENTS = [
                                                  "now. The poll stops when nothing is held, and "
                                                  "a dropped poll holds the last list rather than "
                                                  "letting a live claim vanish off the screen",
-                                         "governed_by": ["D-a-claim-on-the-cards", "D33", "D39",
+                                         "governed_by": ["D174", "D33", "D39",
                                                          "D50", "D57", "D89", "D94", "D118"]},
             "src/SubmissionClaims.css": {"does": "that panel's own styles: the row's two columns "
                                                  "and nothing else — the kit supplies the panel, "
@@ -4638,7 +4638,7 @@ COMPONENTS = [
                                                  "mono because `3/12` is a store key, which is "
                                                  "the register rule and not a decoration. Names "
                                                  "no color",
-                                         "governed_by": ["D-a-claim-on-the-cards", "D94", "D117",
+                                         "governed_by": ["D174", "D94", "D117",
                                                          "D118"]},
             "src/LiveReconcile.css": {"does": "the store-wide reconcile panel's own styles — "
                                              "quieter than the run panel above it on purpose, "
@@ -4660,7 +4660,7 @@ COMPONENTS = [
                              # sessionStorage carve-out the handoff rides. D10 is cards-not-
                              # high-water on the chip, D32 the crop pair whose estimate the
                              # scope key voids, D38 the layout this left behind.
-                             "governed_by": ["D5", "D10", "D13", "D20", "D27", "D32", "D33", "D38", "D39", "D56", "D87", "D100", "D-a-claim-on-the-cards"]},
+                             "governed_by": ["D5", "D10", "D13", "D20", "D27", "D32", "D33", "D38", "D39", "D56", "D87", "D100", "D174"]},
             "src/Runs.css": {"does": "its page chrome, to docs/DESIGN.md's numbers literally: 16px "
                                      "on all four sides, a 20px display title sharing its line "
                                      "with the scope and the controls, a one-line lede, and the "
@@ -5800,7 +5800,7 @@ COMPONENTS = [
                         "re-add the link and all 20 brand cases fail naming the URL. Not "
                         "a harness test; it has no test of its own and is "
                         "exercised by every spec that imports it.",
-                "governed_by": ["D16", "D37", "D43", "D46", "D56", "D58", "D63", "D70", "D86", "D124", "D125", "D134", "D-a-claim-on-the-cards"]},
+                "governed_by": ["D16", "D37", "D43", "D46", "D56", "D58", "D63", "D70", "D86", "D124", "D125", "D134", "D174"]},
             "tests/fontsReady.ts": {
                 "does": "one helper, `settleFonts`, awaited after every `page.goto` in the seven "
                         "specs that measure type — it said FOUR until 2026-09-06, and the "
@@ -5822,7 +5822,7 @@ COMPONENTS = [
                         "arrow belongs to the screens, a held Cmd in a text field belongs to the "
                         "caret, and a screen outside the ring keeps the browser's key. Not a "
                         "harness test; `make design-check` runs it.",
-                "governed_by": ["D5", "D31", "D39", "D43", "D51", "D69", "D70", "D86", "D100", "D105", "D134", "D-a-claim-on-the-cards"],
+                "governed_by": ["D5", "D31", "D39", "D43", "D51", "D69", "D70", "D86", "D100", "D105", "D134", "D174"],
                 "note": "ITS RING IS PINNED ON PURPOSE AND RECONCILED AT THE COMMIT. A ring "
                         "derived from App.tsx could not assert the ORDER against anything "
                         "independent, so the copy stays and carries a `ROUTE-ROSTER hotkey` "
@@ -5948,7 +5948,7 @@ COMPONENTS = [
                         "than disabled, D33's shape applied to the press that settles the "
                         "ledger. The route is intercepted and its body read; no real request is "
                         "made and no store is touched.",
-                "governed_by": ["D7", "D33", "D87", "D-a-claim-on-the-cards"]},
+                "governed_by": ["D7", "D33", "D87", "D174"]},
             "tests/markdown.spec.ts": {
                 "does": "the stale-listing markdown in a browser (D100): that a person can open "
                         "it from the Runs header at all, that it traps focus and Escape hands it "
@@ -5981,7 +5981,7 @@ COMPONENTS = [
                 # D1 is the two-phase split the four steps make visible; D3 is the ladder the
                 # join walks; D9 is the pricing answer that gates emit;
                 # D31 is why this is a panel on #/inventory rather than a seventh route.
-                "governed_by": ["D145", "D36", "D1", "D3", "D9", "D13", "D20", "D31", "D32", "D33", "D39", "D48", "D54", "D56", "D64", "D65", "D49", "D76", "D166", "D-a-claim-on-the-cards", "D57", "D118", "D136"],
+                "governed_by": ["D145", "D36", "D1", "D3", "D9", "D13", "D20", "D31", "D32", "D33", "D39", "D48", "D54", "D56", "D64", "D65", "D49", "D76", "D166", "D174", "D57", "D118", "D136"],
                 "note": "THE PIPELINE WAS THE LARGEST INSTANCE OF THE ROUTE-IS-NOT-A-FEATURE "
                         "FAILURE AND NOBODY HAD COUNTED IT. The four commands have existed "
                         "since step 4 and have been through a 53-card run and a 544-card run; "

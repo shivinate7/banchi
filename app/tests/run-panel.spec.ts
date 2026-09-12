@@ -225,7 +225,7 @@ async function open(
      *  one the screen has to draw rather than swallow. */
     failed?: { box: number; code: string; message: string }[]
     /** Live submission claims, in the shape `GET /pipeline/submissions` answers with
-     *  (D-a-claim-on-the-cards). Empty by default: nothing in this file is about a claim, and
+     *  (D174). Empty by default: nothing in this file is about a claim, and
      *  a healthy store holds none. It is an option rather than a constant so the one case
      *  below that needs the panel drawn can have it. */
     claims?: {
@@ -382,7 +382,7 @@ async function open(
     })
   })
 
-  /* THE CLAIMS PANEL'S OWN READ (D-a-claim-on-the-cards). `#/runs` draws
+  /* THE CLAIMS PANEL'S OWN READ (D174). `#/runs` draws
      `SubmissionClaims`, which reads this on mount — and the spec seal means an unstubbed read
      is a FAILURE rather than a missing panel, which is how every case in this file went red
      the first time the panel landed. An EMPTY list is the right default here: nothing in this
@@ -2377,7 +2377,7 @@ test('and a scope with nothing on disk promises neither', async ({ page }) => {
 /* ------------------------------------------------------------------ the claims panel
  *
  * WHAT A LIVE SEND IS HOLDING, AND THE ONE WAY OUT OF A STUCK CLAIM
- * (D-a-claim-on-the-cards). The guard itself is proved by `make submission-selftest`, which
+ * (D174). The guard itself is proved by `make submission-selftest`, which
  * races two real processes over one card; what these cases are for is the half that suite
  * cannot see — whether a human can reach any of it, which is the failure `docs/GATES.md`
  * step 7 records at length and which nothing on the commit path can tell.

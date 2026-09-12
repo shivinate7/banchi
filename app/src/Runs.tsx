@@ -188,7 +188,7 @@ export function Runs() {
       />
 
       {/* WHAT A LIVE SEND IS HOLDING, AND THE WAY OUT OF A STUCK CLAIM
-          (D-a-claim-on-the-cards). Above the run list rather than inside it, because it is a
+          (D174). Above the run list rather than inside it, because it is a
           fact about the PRESS and not about any one run: a claim can outlive the run that made
           it, and the refusal an operator meets — "watch that run, or release its claim" —
           points at both halves of this screen. It draws NOTHING when nothing is claimed,

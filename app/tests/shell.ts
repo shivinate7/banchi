@@ -456,7 +456,7 @@ async function stubStore(page: Page): Promise<void> {
     }),
   )
   await page.route(/\/pipeline\/runs$/, (route) => json(route, { runs: [] }))
-  /* THE CLAIMS PANEL'S READ, IN THE SEAL RATHER THAN IN EACH SWEEP (D-a-claim-on-the-cards).
+  /* THE CLAIMS PANEL'S READ, IN THE SEAL RATHER THAN IN EACH SWEEP (D174).
      `#/runs` draws `SubmissionClaims`, which reads this on mount — so every spec that WALKS
      EVERY OWNER SCREEN makes it: `wide.spec.ts`, `cursor.spec.ts` and `phone.spec.ts` each
      failed on `reads reached the capture server` the day the panel landed, seven failures from

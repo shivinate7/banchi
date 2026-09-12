@@ -10498,7 +10498,7 @@ class CaptureHandler(BaseHTTPRequestHandler):
                 # answers with, and the screen takes the slice (see `do_pipeline_value`).
                 return self._json(HTTPStatus.OK, pipeline_routes.do_pipeline_value())
             if path == "/pipeline/submissions":
-                # WHAT IS CLAIMED RIGHT NOW (D-a-claim-on-the-cards). Free, reads the store and
+                # WHAT IS CLAIMED RIGHT NOW (D174). Free, reads the store and
                 # holds nothing — the count that has to be on screen before the control that
                 # releases one exists, which is `GET /boxes/<box>/photos`' shape (D89).
                 return self._json(HTTPStatus.OK, pipeline_routes.do_pipeline_submissions())
@@ -10938,7 +10938,7 @@ class CaptureHandler(BaseHTTPRequestHandler):
                 )
             match = _SUBMISSION_RELEASE_RE.match(path)
             if match:
-                # THE NAMED WAY OUT OF A STUCK CLAIM (D-a-claim-on-the-cards). It spends
+                # THE NAMED WAY OUT OF A STUCK CLAIM (D174). It spends
                 # nothing and it can COST something — releasing a claim whose holder is still
                 # submitting re-opens those cards to a second press — so it takes a `confirm`
                 # like the money route above it, and the free preview says which case it is.

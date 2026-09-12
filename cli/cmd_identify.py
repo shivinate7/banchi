@@ -571,7 +571,7 @@ def _adopt_cached(item: Item, entry, fingerprints: Dict[str, str]) -> None:
     that and hands the entry in.
 
     IT IS A FUNCTION BECAUSE IT HAS TWO CALLERS, and the second one is the reason the first was
-    extracted (D-a-claim-on-the-cards). The consult pass below reads the cache once, minutes
+    extracted (D174). The consult pass below reads the cache once, minutes
     and thousands of file reads before the claim is written; `claim_or_refuse` reads it AGAIN
     inside the transaction it writes the claim in, and a key that became a hit in between is
     dropped from the claim. A card dropped there would otherwise be submitted with nothing
@@ -940,7 +940,7 @@ def run(args, say) -> int:
     # ------------------------------------------------------- claim what is about to be bought
     #
     # THE LAST FREE ACT BEFORE THE MONEY, AND THE ONLY THING THAT STOPS A DOUBLE INVOICE
-    # (D-a-claim-on-the-cards). Everything above this line is reads and decodes; everything
+    # (D174). Everything above this line is reads and decodes; everything
     # below it can spend. `server/pipeline_routes.py:_busy_run` refuses a second press over one
     # BOX and cannot see this run at all when its captures span two drawers — `_scope_for`
     # writes no scope block for such a run — so the guard that counts is here, in the one
@@ -1313,7 +1313,7 @@ def run(args, say) -> int:
             )
 
         # THE CLAIM IS GIVEN BACK BY THE SAME COMMIT THAT BANKS WHAT IT BOUGHT
-        # (D-a-claim-on-the-cards). Both, or neither: the cards stop being held at the exact
+        # (D174). Both, or neither: the cards stop being held at the exact
         # moment the answers they paid for become the cache entries that make a second press
         # free. A `finally` here would be the defect — this command can die between submitting
         # a batch and collecting it, and the batch is paid for and keeps for 29 days, so a

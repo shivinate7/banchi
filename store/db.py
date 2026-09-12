@@ -105,7 +105,7 @@ TABLES: Dict[str, Tuple[str, ...]] = {
     "queues": ("box", "idx", "reason", "cleared_by_human", "first_seen"),
     "orders": ("source", "number", "status"),
     "fulfilment": (),
-    # D-a-claim-on-the-cards: the cards a live run has claimed and is about to pay to read.
+    # D174: the cards a live run has claimed and is about to pay to read.
     # `keys` is the claim itself and is NOT a column — it is a set, and a column holds one
     # value; the intersection is computed in Python over the handful of live rows, which is
     # what `Submissions.live` keeps small by filtering on the `state` column first.
@@ -266,7 +266,7 @@ def _upgrade(
 
 
 def _add_submissions(conn: sqlite3.Connection) -> None:
-    """Schema 3: the `submissions` claim table (D-a-claim-on-the-cards).
+    """Schema 3: the `submissions` claim table (D174).
 
     THE PUREST ADDITIVE STEP THERE IS — a table nothing older has, so there is nothing to
     backfill and nothing to read wrong. It writes no receipt file for that reason: `_add_box_ids`

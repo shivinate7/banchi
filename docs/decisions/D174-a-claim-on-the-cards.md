@@ -1,4 +1,4 @@
-## D-a-claim-on-the-cards — A press claims the cards it is about to buy, and the claim is written in the transaction that decides what they are
+## D174 — A press claims the cards it is about to buy, and the claim is written in the transaction that decides what they are
 
 **The only binding in this pipeline that protects a dollar was a BOX NUMBER, and a box number is wrong in both directions. It is now a set of position keys, written by the command that spends, inside the same `Store.write()` that recomputes what is being bought — because the send list is decided a minute before the claim, and two presses can both finish deciding before either has claimed.**
 

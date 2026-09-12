@@ -141,7 +141,7 @@ async function stub(page: Page, cards: unknown[] = []) {
     }),
   )
   await page.route(/\/pipeline\/runs$/, (route) => json(route, { runs: [] }))
-  /* `#/runs` draws the claims panel on mount (D-a-claim-on-the-cards), and this file
+  /* `#/runs` draws the claims panel on mount (D174), and this file
      opens every route — so the read is stubbed here with the rest of the screen's.
      Empty: a healthy store holds no claim, and the panel then draws nothing at all. */
   await page.route(/\/pipeline\/submissions$/, (route) =>

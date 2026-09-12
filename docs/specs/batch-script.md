@@ -145,7 +145,7 @@ surface for free.
 ### 4.1a The claim — the last free act before the money
 
 **Between the preflight and the first submitted byte, the press claims the cards it is about
-to buy** (D-a-claim-on-the-cards). One row in the store's `submissions` table, holding the
+to buy** (D174). One row in the store's `submissions` table, holding the
 position keys of the send list — not the selection — so a second press over any of those
 cards is refused on intersection, naming the receipt and the overlapping cards.
 
