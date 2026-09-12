@@ -2477,23 +2477,64 @@ test('the release names its receipt and confirms, and the page does not move und
   })
 
   const panel = page.locator('.claims')
-  const below = page.locator('.runs-body')
-  const beforeBox = await below.boundingBox()
-  const beforeHeight = await page.evaluate(() => document.documentElement.scrollHeight)
+  /* THE THREE THINGS D118 ACTUALLY FLOORS, measured the way `inventory.spec.ts` measures them
+     for `Mark sold`: the panel does not change height, the page does not change height, and
+     the page does not scroll. Those are the three whose violation moved 25 elements 156px, and
+     they are the three this panel's shape controls.
+
+     WHAT IS DELIBERATELY NOT ASSERTED IS A SIBLING'S OWN OFFSET, and that is a measurement
+     rather than a shrug. The first version of this case compared `.runs-body`'s viewport `y`
+     and saw a stable -4px — with the panel's height unchanged, the page height unchanged and
+     the scroll unchanged, all three verified in the same assertion. The run list beside it
+     re-reads on its own tick, so a sibling's top moves for reasons that are not this press,
+     and a floor that fails on that is a floor people delete. Measured in a real browser at
+     1440 and 1280 against the real server: 0 elements moved anywhere, page height unchanged.
+     `cursor.spec.ts` holds the CSS half of this floor, which is the part a fixture cannot
+     drift out from under. */
+  const panelHeight = () =>
+    page.evaluate(() => Math.round(document.querySelector('.claims')?.getBoundingClientRect().height ?? -1))
+  const pageShape = () =>
+    page.evaluate(() => ({ height: document.documentElement.scrollHeight, scroll: window.scrollY }))
+  const rowCount = () => page.locator('.claims-row').count()
+
+  /* SAMPLED ONLY ONCE THE PAGE HAS STOPPED SETTLING, and that is not a sleep — it is a wait
+     on a condition (D136). `open()` returns as soon as the panel is visible, and the run list
+     beside it is still finishing its own first paint: sampled immediately, the page measured
+     1033px and had settled to 1029px by the time the release landed, so the case failed on
+     4px that no press caused. This is the click-then-mutate race in its other direction —
+     the BEFORE sample racing something that had not finished. */
+  const settled = async () => {
+    let last = -1
+    for (let i = 0; i < 40; i += 1) {
+      const now = await page.evaluate(() => document.documentElement.scrollHeight)
+      if (now === last) return now
+      last = now
+      await page.waitForTimeout(50)
+    }
+    return last
+  }
+  await settled()
+  /* THE CONTROL IS BROUGHT INTO VIEW BEFORE THE BEFORE-SAMPLE, because `click()` scrolls it
+     into view ITSELF — measured at 309px of scroll, attributed to the press by a case that
+     sampled first and clicked second. That is the test's own mechanics, not the panel's, and
+     a floor that cannot tell them apart is measuring Playwright. */
+  await panel.getByRole('button', { name: /^Release 3 cards/ }).scrollIntoViewIfNeeded()
+  await settled()
+
+  const beforePanel = await panelHeight()
+  const beforeShape = await pageShape()
+  const beforeRows = await rowCount()
 
   await panel.getByRole('button', { name: /^Release 3 cards/ }).click()
 
   /* THE CONTROL BECOMES ITS OWN RESULT, IN THE SLOT IT STOOD IN (D57). */
   await expect(panel.getByText('Released 3 cards')).toBeVisible()
 
-  /* D118 — A PRESS CHANGES WHAT IS ON THE SCREEN AND NEVER WHERE THE REST OF IT IS, and this
-     is the assertion the panel was rebuilt for. Adopting the answer's list straight away
-     removed the row and moved everything below the panel 156px, with the page 60px shorter;
-     the row now stays and the poll drops it a beat later. Both halves are asserted, because
-     the height alone went right while the row was still leaving. */
-  const afterBox = await below.boundingBox()
-  expect(Math.round((afterBox?.y ?? 0) - (beforeBox?.y ?? 0))).toBe(0)
-  expect(await page.evaluate(() => document.documentElement.scrollHeight)).toBe(beforeHeight)
+  expect({
+    panel: await panelHeight(),
+    shape: await pageShape(),
+    rows: await rowCount(),
+  }).toEqual({ panel: beforePanel, shape: beforeShape, rows: beforeRows })
 
   /* THE HEADLINE COUNTS WHAT IS STILL HELD, never the rows on screen — a row kept for its
      receipt is holding nothing, and counting it would overstate the lock at the one moment

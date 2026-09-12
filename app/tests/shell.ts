@@ -456,6 +456,21 @@ async function stubStore(page: Page): Promise<void> {
     }),
   )
   await page.route(/\/pipeline\/runs$/, (route) => json(route, { runs: [] }))
+  /* THE CLAIMS PANEL'S READ, IN THE SEAL RATHER THAN IN EACH SWEEP (D-a-claim-on-the-cards).
+     `#/runs` draws `SubmissionClaims`, which reads this on mount — so every spec that WALKS
+     EVERY OWNER SCREEN makes it: `wide.spec.ts`, `cursor.spec.ts` and `phone.spec.ts` each
+     failed on `reads reached the capture server` the day the panel landed, seven failures from
+     one unstubbed route, none of them about anything those files assert. This is where
+     `/status` lives for the same reason, and the nav spec's own comment records that move.
+
+     EMPTY, AND THAT IS THE STATE WORTH SWEEPING. A claim exists only between a press and the
+     collection it paid for, so a healthy store holds none and the panel draws nothing — which
+     is what the floors above should be measuring on this screen. A sweep that met a drawn
+     panel here would be measuring a fixture nobody chose. The cases that need it drawn pass
+     `claims` to `run-panel.spec.ts`'s own `open`. */
+  await page.route(/\/pipeline\/submissions$/, (route) =>
+    json(route, { claims: [], counts: { claims: 0, keys: 0, stale: 0 } }),
+  )
   await page.route(/\/pipeline\/markdowns$/, (route) => json(route, { markdowns: [] }))
   /* THE ORDER OF THESE TWO IS THE MECHANISM, NOT A TIDY-UP. `/\/pricing$/` matches
      `…/pipeline/pricing` as happily as `…/pricing`, and Playwright takes the NEWEST handler
