@@ -1,4 +1,4 @@
-## D-name-beats-a-disputed-number — The name decides a disputed number, and both readings reach the screen
+## D162 — The name decides a disputed number, and both readings reach the screen
 
 **The owner was working a 48-card review queue and reached a card whose photograph plainly reads `Deathgrip`, `SFD · 163/221`.** The screen's headline was *"Is this the right card at
 all?"*, the reason `name_disputed`, and the only row it offered was **Blood Money 162/221** —

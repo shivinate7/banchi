@@ -3954,7 +3954,7 @@ def check_group_answer(checks: Checks) -> None:
                 f"message was: {caught}",
             )
         # TWO CONDITIONS OF ONE GRADE NOW ANSWER, AND THIS ASSERTION IS REVERSED ON PURPOSE
-        # (D-name-beats-a-disputed-number). It read "two condition strings across the group
+        # (D162). It read "two condition strings across the group
         # refuse the same way" until 2026-09-12. `Near Mint Holofoil` and `Near Mint` are one
         # grade and two finishes; D137 fixes the grade by rule, so refusing here split every
         # real queue in two and asked the operator to confirm a word they never chose.
