@@ -549,7 +549,7 @@ make merge          # merge a PR and move main onto it — BOTH HALVES, on your 
 ./pkmnscan scan     <capture-dir>   # CODE CARDS ONLY. Read the QR codes into the ledger.
                                    #   FREE — no model call, no network. The QR IS the code.
 ./pkmnscan identify <capture-dir>   # submit, wait, collect, cache. COSTS MONEY. --dry-run first.
-                                   #   IT RECORDS THE DRAWER'S `bid` NOW (D-run-binds-to-bid).
+                                   #   IT RECORDS THE DRAWER'S `bid` NOW (D165).
                                    #   `_scope_for` writes the box and its true index into the
                                    #   manifest's scope block, off the SIDECARS rather than off
                                    #   the capture directory's name — this was the last
@@ -1820,7 +1820,7 @@ D161 `make check` proves the product first and its own guards last, because a fa
 D162 The name decides a disputed number, and both readings reach the screen
 D163 The cache is keyed by the digest, so the digest is what the press computes first
 D164 The undo stack is the sitting, not the drawer, and the counter counts the sitting
-D-run-binds-to-bid A run is bound to the drawer's true index, and the run the number stranded is repaired once by hand
+D165 A run is bound to the drawer's true index, and the run the number stranded is repaired once by hand
 ```
 
 **THE GAP THIS LIST CARRIED BETWEEN D116 AND D118 IS CLOSED, AND IT CLOSED THE WAY IT SAID IT

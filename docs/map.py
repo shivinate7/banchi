@@ -384,10 +384,10 @@ COMPONENTS = [
                                         "`bid` in the manifest's scope block, off the SIDECARS "
                                         "rather than off the capture directory's name — the last "
                                         "run-creation path that produced a run nothing could "
-                                        "bind (D145, D-run-binds-to-bid). Two boxes get no "
+                                        "bind (D145, D165). Two boxes get no "
                                         "scope rather than a guessed one (D48).",
                                 "governed_by": ["D1", "D2", "D21", "D23", "D33", "D36", "D48",
-                                                "D145", "D163", "D-run-binds-to-bid"]},
+                                                "D145", "D163", "D165"]},
             "cmd_join.py": {"does": "resolve identifications against the export; --dry-run previews. "
                                     "SEEDS inventory/prices.json's rule and basis on the first "
                                     "join of an EMPTY corpus and never reassigns them (D49, D86) "
@@ -417,7 +417,7 @@ COMPONENTS = [
             "cmd_rescue.py": {"does": "`pkmnscan rescue <run>` re-addresses a STRANDED run's "
                                       "cards to the positions their photographs are at now and "
                                       "derives a SECOND run over the drawer they are actually "
-                                      "in, carrying that drawer's `bid` (D-run-binds-to-bid). "
+                                      "in, carrying that drawer's `bid` (D165). "
                                       "The repair for a run D36 refuses: it is "
                                       "`cli/resolve.py:realign`'s digest mechanism with the "
                                       "per-box restriction lifted, which is safe here and not "
@@ -436,7 +436,7 @@ COMPONENTS = [
                                       "the emit correctly adds nothing — what the repair "
                                       "recovers is the PRICING surface, not the stock.",
                               "governed_by": ["D7", "D10", "D25", "D36", "D48", "D83", "D86",
-                                              "D134", "D145", "D-run-binds-to-bid"],
+                                              "D134", "D145", "D165"],
                               "tested_by": ["T7"]},
             "cmd_reprice.py": {"does": "`pkmnscan reprice list` reports which live listings are "
                                         "not selling and writes a WORKLIST with a price already "
@@ -2920,7 +2920,7 @@ COMPONENTS = [
                                 "D36", "D43", "D47", "D48", "D49", "D54", "D56", "D58", "D59",
                                 "D62", "D64", "D65", "D68", "D76", "D78", "D79", "D86", "D87",
                                 "D88", "D100", "D103", "D134", "D147",
-                                "D159", "D-run-binds-to-bid"],
+                                "D159", "D165"],
                 "tested_by": ["T7"],
             },
             "shipping_routes.py": {

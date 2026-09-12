@@ -1,4 +1,4 @@
-## D-run-binds-to-bid — A run is bound to the drawer's true index, and the run the number stranded is repaired once by hand
+## D165 — A run is bound to the drawer's true index, and the run the number stranded is repaired once by hand
 
 **Settled 2026-09-12, on the owner's ruling, which rejected the two options put to them.** A run records the `bid` of the box it was over, from every path that starts one; `cli/resolve.py:refuse_reallocated` compares ids rather than inferring from timestamps; and the 99 cards one legacy run had stranded are recovered by `pkmnscan rescue`, a preview-first repair that derives a second run from the first and never edits it.
 
