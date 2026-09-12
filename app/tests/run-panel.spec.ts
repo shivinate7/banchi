@@ -1963,8 +1963,11 @@ test('a reuse seconds old reads as a sentence, not as a missing figure', async (
 test('and an hours-old reuse says hours, because minutes stop being readable', async ({
   page,
 }) => {
+  /* A WHOLE NUMBER OF HOURS, because the first version of this asserted `2 hours` against
+     9000s and the screen correctly said 3 — `Math.round(2.5)` is 3. The fixture was wrong
+     and the code was right, which is the only kind of red worth having. */
   const wire = await open(page)
-  await routeFetch(page, wire, { status: 200, body: fetchedBody({ reused: true, age_s: 9000 }) })
+  await routeFetch(page, wire, { status: 200, body: fetchedBody({ reused: true, age_s: 7200 }) })
   await openRun(page)
   await fetchButton(page).click()
 
