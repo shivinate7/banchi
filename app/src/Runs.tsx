@@ -18,6 +18,7 @@ import {
   narrowed,
   newestSitting,
   pending,
+  queryFor,
   selected,
   selectionFromHash,
   toggleBox,
@@ -89,13 +90,27 @@ export function Runs() {
          read back as "clear what the operator ticked". */
       const asked = selectionFromHash(window.location.hash)
       if (asked !== null) {
-        setSelection(asked)
+        /* ADOPTED ONLY WHEN IT DIFFERS, compared on the one spelling `queryFor` gives a
+           selection. This screen writes the hash itself, so every write comes back through
+           here; assigning the fresh object unconditionally would be a new identity on every
+           press and a render that changes nothing. */
+        setSelection((held) => (queryFor(held) === queryFor(asked) ? held : asked))
         setComposerOpen(true)
       }
     }
     window.addEventListener('hashchange', fromHash)
     return () => window.removeEventListener('hashchange', fromHash)
   }, [])
+
+  /* THE ADDRESS FOLLOWS THE SCOPE, IN ONE PLACE. Written from an effect rather than from each
+     control, because a React updater must be pure — `setSelection` runs twice under StrictMode
+     and a `window.location.hash =` inside one is a side effect run twice. The guard is what
+     stops the round trip: this writes, `hashchange` reads it back, and the comparison above
+     finds the same selection and stops. */
+  useEffect(() => {
+    const want = hashFor(window.location.hash, composerOpen ? selection : null)
+    if (want !== window.location.hash) window.location.hash = want
+  }, [selection, composerOpen])
 
   /** The handoff from `#/inventory` is applied ONCE, on the first successful read of the
    *  registry — never on a Reload and never when a run starts, both of which bump `reloads`.
@@ -190,11 +205,7 @@ export function Runs() {
       if (held !== null) clearCarriedScope()
       return null
     })
-    setSelection((held) => {
-      const now = next(held)
-      window.location.hash = hashFor(window.location.hash, now)
-      return now
-    })
+    setSelection(next)
   }, [])
 
   const onToggleBox = useCallback((box: number) => pick((held) => toggleBox(held, box)), [pick])
@@ -240,18 +251,12 @@ export function Runs() {
     setReloads((n) => n + 1)
   }, [])
 
-  const openComposer = useCallback(() => {
-    setComposerOpen(true)
-    window.location.hash = hashFor(window.location.hash, selection)
-  }, [selection])
+  const openComposer = useCallback(() => setComposerOpen(true), [])
 
   /* CLOSING CLEARS THE FILTER OUT OF THE ADDRESS rather than leaving one that reopens the
-     dialog on the next reload. The selection itself is kept in state: closing is not
-     unticking. */
-  const closeComposer = useCallback(() => {
-    setComposerOpen(false)
-    window.location.hash = hashFor(window.location.hash, null)
-  }, [])
+     dialog on the next reload — the effect above does the clearing. The selection itself is
+     kept in state: closing is not unticking. */
+  const closeComposer = useCallback(() => setComposerOpen(false), [])
   const closeSync = useCallback(() => setSyncOpen(false), [])
 
   return (

@@ -67,53 +67,104 @@ type Wire = { method: string; path: string; body: unknown }
  *  takes the whole route down and every assertion below fails with "element not found" —
  *  which reads exactly like an unregistered route and sent this file's first draft looking in
  *  the wrong place. `app/tests/inventory.spec.ts:card` is the reference shape. */
-function inventoryPayload() {
-  const box = 9
+function card(over: {
+  box: number
+  index: number
+  game?: string
+  state?: string
+  at?: string
+}) {
+  const box = over.box
+  const index = over.index
+  const at = over.at ?? '2026-08-24T01:00:00+00:00'
   return {
-    cards: {
-      '9/1': {
-        box,
-        index: 1,
-        label: `Box ${box} · Section 1 · Card 1`,
-        section: 1,
-        card: 1,
-        place: {
-          located: true,
-          label: `Box ${box} · Section 1 · Card 1`,
-          box,
-          index: 1,
-          section: 1,
-          card: 1,
-          box_name: null,
-          section_start: 1,
-          section_end: 1,
-          box_total: 1,
-          box_closed: false,
-          fraction: 0,
-          neighbors: null,
-          section_gaps: 0,
-        },
-        photo: `photos/${box}/1.jpg`,
-        set_hint: 'ME01',
-        metadata_finish: 'normal',
-        game: 'pokemon',
-        rarity_claim: null,
-        note: null,
-        captured_at: '2026-08-24T01:00:00+00:00',
-        capture_id: 'cap-1',
-        name: 'Thievul',
-        number: '090',
-        printed_total: '132',
-        confidence: null,
-        sku: null,
-        condition: null,
-        state: 'captured',
-        state_at: '2026-08-24T01:00:00+00:00',
-        retire_reason: null,
-        run: null,
-      },
+    box,
+    index,
+    label: `Box ${box} · Section 1 · Card ${index}`,
+    section: 1,
+    card: index,
+    place: {
+      located: true,
+      label: `Box ${box} · Section 1 · Card ${index}`,
+      box,
+      index,
+      section: 1,
+      card: index,
+      box_name: null,
+      section_start: 1,
+      section_end: 1,
+      box_total: 1,
+      box_closed: false,
+      fraction: 0,
+      neighbors: null,
+      section_gaps: 0,
     },
+    photo: `photos/${box}/${index}.jpg`,
+    set_hint: 'ME01',
+    metadata_finish: 'normal',
+    game: over.game ?? 'pokemon',
+    rarity_claim: null,
+    note: null,
+    captured_at: at,
+    capture_id: `cap-${box}-${index}`,
+    name: 'Thievul',
+    number: '090',
+    printed_total: '132',
+    confidence: null,
+    sku: null,
+    condition: null,
+    state: over.state ?? 'captured',
+    state_at: at,
+    retire_reason: null,
+    run: null,
   }
+}
+
+function inventoryPayload() {
+  return { cards: { '9/1': card({ box: 9, index: 1 }) } }
+}
+
+/** A STORE WITH SOMETHING TO NARROW, for the cases about the first stage.
+ *
+ *  EVERY AXIS IS EXERCISED AND NONE OF THEM LINES UP WITH ANOTHER, which is the whole point of
+ *  writing it out rather than reusing the one-card payload: a fixture where the game filter and
+ *  the drawer filter select the same cards cannot tell a screen that intersects them from one
+ *  that ignores one of them.
+ *
+ *  - box 9 holds four un-identified cards, three pokemon and one riftbound
+ *  - box 12 holds two un-identified riftbound cards and one that is already answered
+ *  - `riftbound` therefore SPANS BOTH DRAWERS — 1 in box 9, 2 in box 12 — which is the case a
+ *    `{box, indices}` scope could never express and is why the handoff went to keys
+ *  - the two drawers were shot in different SITTINGS: box 9 at 01:00 and box 12 at 03:00, two
+ *    hours apart, well past `storeHistory.ts`'s 30-minute gap
+ *  - box 12's ALREADY-ANSWERED card sits inside the newest sitting, so `This sitting` counting
+ *    2 rather than 3 is what says the chip counts the STATE inside the window and not the
+ *    window */
+const LATER = '2026-08-24T03:00:00+00:00'
+/** THE BARE CARD MAP, not the `{cards}` envelope — `open`'s `cards` option is the map and wraps
+ *  it itself. The first draft returned the envelope and the stub wrapped it again, so every case
+ *  below read an EMPTY store and failed saying nothing was waiting to be identified. */
+function narrowablePayload(): Record<string, unknown> {
+  return {
+    '9/1': card({ box: 9, index: 1 }),
+    '9/2': card({ box: 9, index: 2 }),
+    '9/3': card({ box: 9, index: 3 }),
+    '9/4': card({ box: 9, index: 4, game: 'riftbound' }),
+    '12/1': card({ box: 12, index: 1, game: 'riftbound', at: LATER }),
+    '12/2': card({ box: 12, index: 2, game: 'riftbound', at: LATER }),
+    '12/3': card({ box: 12, index: 3, state: 'identified', at: LATER }),
+  }
+}
+
+/** The registry, two games deep, in `GET /games`'s own shape. Only what `gameChips` reads is
+ *  load-bearing here — a game with no entry gets NO CHIP and is still in the scope — but the
+ *  rest is transcribed from `pipeline/games.py` for `app/tests/shell.ts`'s stated reason. */
+const GAMES = {
+  default: 'pokemon',
+  games: [
+    { key: 'pokemon', display: 'Pokémon', product_line: 'Pokemon', rarities: [], finishes: [], condition_by_finish: {}, finish_by_rarity: {}, located: true, join_key: 'number_over_printed_total', prompt: 'pokemon', crop_bands: ['number'], card_aspect: 0.716, unverified: false, catalogued: true },
+    { key: 'riftbound', display: 'Riftbound', product_line: 'Riftbound', rarities: [], finishes: [], condition_by_finish: {}, finish_by_rarity: {}, located: true, join_key: 'printed_identifier', prompt: 'riftbound', crop_bands: [], card_aspect: 0.716, unverified: false, catalogued: true },
+  ],
 }
 
 function runRow(overrides: Record<string, unknown> = {}) {
@@ -238,6 +289,15 @@ async function open(
       capture_dir: string | null
       holder_alive: boolean
     }[]
+    /** The card map, which is where every figure on the first stage comes from. Defaults to the
+     *  one-card payload; `narrowablePayload()` is the store with something to narrow. */
+    cards?: Record<string, unknown>
+    /** The game registry. EMPTY BY DEFAULT AND THAT IS A REAL STATE, not a shortcut: a game
+     *  the registry cannot name gets no chip and its cards are still in the scope, so the
+     *  cases that are not about games see no game chips at all. */
+    games?: unknown
+    /** Where to open. `#/runs?state=captured&box=12` is a bookmarked filter. */
+    at?: string
   } = {},
 ): Promise<Wire[]> {
   const wire: Wire[] = []
@@ -452,7 +512,11 @@ async function open(
   })
 
   await page.route(/\/games$/, async (route) => {
-    await route.fulfill({ status: 200, contentType: 'application/json', body: '{"games": []}' })
+    await route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify(options.games ?? { games: [] }),
+    })
   })
 
   /* D76's scope preview. Registered panel-wide because EVERY case that opens a run now draws
@@ -508,7 +572,7 @@ async function open(
     await route.fulfill({
       status: 200,
       contentType: 'application/json',
-      body: JSON.stringify(inventoryPayload()),
+      body: JSON.stringify(options.cards === undefined ? inventoryPayload() : { cards: options.cards }),
     })
   })
 
@@ -520,7 +584,7 @@ async function open(
     })
   })
 
-  await page.goto(VIEW_ROUTE)
+  await page.goto(options.at ?? VIEW_ROUTE)
   await expect(page.locator(VIEW)).toBeVisible()
   await expect(page.locator('.runs-master')).toBeVisible()
   return wire
@@ -641,7 +705,7 @@ test('the panel is open on arrival, with all four commands named and reachable',
   const identify = page.locator('.bn-head-actions').getByRole('button', { name: /^Identify/ })
   await expect(identify).toBeVisible()
   await identify.click()
-  await expect(page.getByRole('dialog', { name: /Which boxes/ })).toBeVisible()
+  await expect(page.getByRole('dialog', { name: /What to identify/ })).toBeVisible()
 })
 
 test('a live run is announced where the panel already is', async ({ page }) => {
@@ -1385,7 +1449,7 @@ test('several boxes are one cart, one estimate and one confirm', async ({ page }
   await expect(page.locator('.run-leg-box').nth(1)).toHaveText('Box 12 · codes')
   /* The header behind the dialog carries the same scope, which is what the operator is left
      looking at when the dialog closes. */
-  await expect(page.locator('.runs-scope')).toContainText('2 boxes')
+  await expect(page.locator('.runs-scope')).toContainText('2 drawers · boxes 9 and 12')
 
   await checkCost(page)
 
@@ -1405,7 +1469,14 @@ test('several boxes are one cart, one estimate and one confirm', async ({ page }
   const confirm = page.locator('.run-button-money')
   await expect(confirm).toContainText('72')
   await expect(confirm).toContainText('$0.84')
-  await expect(confirm).toContainText('2 boxes')
+  /* AND THE CONFIRM COUNTS CARDS, NOT BOXES. It read `... in 2 boxes` until this landed, which
+     is a second quantity on the one control whose whole job is to state the number the operator
+     is agreeing to spend — and the wrong one: three drawers holding nine cards read as a bigger
+     press than one drawer holding four hundred. BOTH DIRECTIONS, because "does not say boxes"
+     passes on a button that says nothing at all: the drawer count is asserted present on the
+     line under it, where it is a fact about WHERE rather than HOW MUCH. */
+  await expect(confirm).not.toContainText('boxes')
+  await expect(page.locator('.runs-quote-fine')).toContainText('2 runs, one per drawer')
 
   await confirm.click()
   const spend = wire.find((row) => row.path === '/pipeline/identify')
@@ -1450,7 +1521,7 @@ test('adding a box to the cart voids the estimate, exactly as changing a reading
      ASSERTED AS THE CART CASE'S OWN SHAPE: the boxes stage is walked back to, a second box is
      ticked, and the cost stage cannot be returned to — the operator has to buy a new estimate
      for the cards they have now got in the cart, and it is quoted for both boxes. */
-  await page.locator('.runs-stages').getByRole('button', { name: 'Boxes' }).click()
+  await page.locator('.runs-stages').getByRole('button', { name: 'Cards' }).click()
   await pickBox(page, 12)
   await expect(page.locator('.runs-stages').getByRole('button', { name: 'Cost' })).toHaveCount(0)
   await expect(page.locator('.run-button-money')).toHaveCount(0)
@@ -1463,28 +1534,30 @@ test('adding a box to the cart voids the estimate, exactly as changing a reading
   ])
 })
 
-test('a box is untickable, and the last one out leaves nothing to price', async ({ page }) => {
-  await open(page)
+test('a drawer is untickable, and the last one out goes back to the state itself', async ({ page }) => {
+  await open(page, { cards: narrowablePayload() })
   await openComposer(page)
   await pickBox(page, 9)
   await pickBox(page, 12)
   await toReading(page)
   await expect(page.locator('.run-leg')).toHaveCount(2)
 
-  await page.locator('.runs-stages').getByRole('button', { name: 'Boxes' }).click()
+  await page.locator('.runs-stages').getByRole('button', { name: 'Cards' }).click()
   await pickBox(page, 12)
   await toReading(page)
   await expect(page.locator('.run-leg')).toHaveCount(1)
   await expect(page.locator('.run-leg-box')).toHaveText('Box 9')
 
-  /* Back to the state the dialog opens in, and the way forward is disabled again rather than
-     absent — the one control here that gets to be disabled, because it is free, it is the next
-     thing to press, and a control that vanishes until an unrelated press brings it back is a
-     screen that looks broken. The COMMITTING control is the one that must be absent, and it is
-     two stages away and asserted above. */
-  await page.locator('.runs-stages').getByRole('button', { name: 'Boxes' }).click()
+  /* AND THE LAST ONE OUT IS NOT NOTHING — this is the arm that changed. It used to leave an
+     empty cart and a disabled `Next`, which was the only state in which this dialog could be
+     open with nothing to do. Unticking is now the inverse of ticking: the narrowing goes and
+     the STATE is what is left, which is what the primary row says out loud. There is no press
+     on this stage that can reach "nothing selected". */
+  await page.locator('.runs-stages').getByRole('button', { name: 'Cards' }).click()
   await pickBox(page, 9)
-  await expect(page.getByRole('button', { name: /^Next · how they are read$/ })).toBeDisabled()
+  await expect(page.locator('.runs-all')).toHaveAttribute('aria-pressed', 'true')
+  await expect(page.locator('.runs-composer-note')).toContainText('2 drawers · boxes 9 and 12')
+  await expect(page.getByRole('button', { name: /^Next · how they are read$/ })).toBeEnabled()
 })
 
 test('a box the send could not start is named, not swallowed', async ({ page }) => {
@@ -1510,42 +1583,432 @@ test('a box the send could not start is named, not swallowed', async ({ page }) 
 
 // ------------------------------------------------------ the state the old address never had
 
-test('nothing is scoped on arrival, and the free preflight refuses until a box is picked', async ({
+test('the store-wide state is the scope on arrival, and it is the one the front page names', async ({
   page,
 }) => {
-  await open(page)
+  /* WHAT THIS REPLACED, AND WHY IT IS NOT A WEAKENING. This case used to assert that NOTHING is
+     scoped on arrival — "a box chosen for the operator is a box they did not read, and the next
+     press after it spends money". The first half of that is still enforced and is asserted
+     below: no DRAWER is ever ticked for them. What is scoped is the STATE, which is the fact
+     `#/`'s one ranked sentence already put on screen and sent them here to act on — the old
+     stage asked `Which boxes` in answer to `N cards are photographed and not identified`, which
+     is a second question about a different thing.
 
-  /* A STATE THAT DID NOT EXIST BEFORE 2026-08-29 AND NOW DOES, which is the honest cost of the
-     move and the reason it is asserted rather than mentioned. On `#/inventory` the walk had
-     always picked a shelf by the time this panel drew, so `scope.box` was never null in
-     practice; on a route of its own the first thing an operator sees is a picker with nothing
-     picked.
-
-     `Runs.tsx` REFUSES TO DEFAULT IT, and that is the behaviour under test: a box chosen for
-     the operator is a box they did not read, and the next press after it is the one that
-     spends money. So the screen says `Pick a box.` and the preflight — free, and the first
-     step of the money gate — is not pressable.
-
-     DISABLED RATHER THAN ABSENT, DELIBERATELY, and it is the one control here that gets to be.
-     docs/DESIGN.md's absent-not-disabled rule is about the control that COMMITS — the spend
-     button, which still does not exist until the preflight has answered, asserted above. This
-     one is free, it is the next thing to press, and a control that vanishes until an unrelated
-     press elsewhere brings it back is a screen that looks broken.
-
-     THE SENTENCE MOVED INTO THE DIALOG WITH THE PICKER. The header pill says what the scope IS
-     and is drawn only once there is one; the dialog's own footer is where the screen asks for
-     one, which is the place a person is standing when they need to be asked. */
+     WHAT ACTUALLY PROTECTS THE DOLLAR IS UNTOUCHED and is asserted in its own cases above: the
+     free preflight has to answer before the confirm EXISTS, and the confirm carries the figure. */
+  await open(page, { cards: narrowablePayload() })
   await openComposer(page)
-  await expect(page.locator('.runs-composer-note')).toContainText('Pick a box.')
-  const next = page.getByRole('button', { name: /^Next · how they are read$/ })
-  await expect(next).toBeDisabled()
-  await expect(page.locator('.runs-scope')).toHaveCount(0)
 
-  // And it is one press away, with the scope said out loud before anything can be spent.
-  await pickBox(page)
-  await expect(page.locator('.runs-composer-note')).toContainText('Box 9 · the whole box')
-  await expect(page.locator('.runs-scope')).toContainText('Box 9 · the whole box')
-  await expect(next).toBeEnabled()
+  await expect(page.getByRole('dialog', { name: /What to identify/ })).toBeVisible()
+
+  const all = page.locator('.runs-all')
+  await expect(all).toHaveAttribute('aria-pressed', 'true')
+  await expect(all).toContainText('Everything not yet identified')
+  /* SIX CARDS ACROSS TWO DRAWERS — the store-wide figure, and NOT box 9's four. A screen that
+     read the first drawer and called it the store would say four here. */
+  await expect(all).toContainText('6 cards, across 2 drawers')
+
+  /* AND NO DRAWER IS TICKED. The negative half, asserted as an attribute on every tile rather
+     than as an absence of one, because an absence passes on a tile that was never drawn. */
+  const tiles = page.locator('.runs-boxes .runs-box')
+  await expect(tiles).toHaveCount(2)
+  for (const value of await tiles.evaluateAll((nodes) => nodes.map((n) => n.getAttribute('aria-pressed')))) {
+    expect(value).toBe('false')
+  }
+
+  await expect(page.locator('.runs-composer-note')).toContainText('2 drawers · boxes 9 and 12')
+  await expect(page.locator('.runs-composer-note')).toContainText('everything not yet identified')
+  await expect(page.getByRole('button', { name: /^Next · how they are read$/ })).toBeEnabled()
+})
+
+test('ticking one drawer is one press and sends exactly what it always sent', async ({ page }) => {
+  /* THE TEST OF WHETHER THIS CHANGE IS DONE. The drawer-scoped press is the one an operator
+     makes every day, and a state-first stage that cost it a second click would have traded a
+     rare journey for the common one. ONE press narrows to the drawer, and what goes on the wire
+     is `{box: 9}` with `indices` ABSENT — the whole-box scope, byte for byte the request this
+     press has always sent. `runSelection.ts:legsFor` is where that rule lives: a drawer tick
+     does not cut WITHIN a drawer, so nothing narrows the leg. */
+  const wire = await open(page, { cards: narrowablePayload() })
+  await openComposer(page)
+
+  await pickBox(page, 9)
+
+  await expect(page.locator('.runs-all')).toHaveAttribute('aria-pressed', 'false')
+  await expect(page.locator('.runs-composer-note')).toContainText('Box 9 · 4 cards')
+  await expect(page.locator('.runs-scope')).toContainText('Box 9 · 4 cards')
+
+  await toReading(page)
+  await checkCost(page)
+  await page.locator('.run-button-money').click()
+
+  const spend = wire.find((row) => row.path === '/pipeline/identify')
+  const body = spend?.body as { scopes?: Record<string, unknown>[] }
+  expect(body.scopes).toHaveLength(1)
+  expect(body.scopes?.[0]).toMatchObject({ box: 9 })
+  expect(body.scopes?.[0]?.indices).toBeUndefined()
+})
+
+/* ------------------------------------------------------ the narrowings that cross drawers
+ *
+ * THE CAPABILITY THAT DID NOT EXIST, and the reason the whole stage was rebuilt rather than
+ * relabelled. `{box, indices}` could say "these cards in this drawer" and nothing else, so
+ * "every riftbound card I have not identified" — which on the fixture below lives in two
+ * drawers — had no spelling at all. It is now one press.
+ *
+ * EVERY CASE HERE ASSERTS ROW IDENTITY AND NOT A COUNT. A length-preserving reshuffle — the
+ * right number of legs over the wrong cards — is invisible to a count, and on the press that
+ * spends money that is a bill for cards nobody asked to read.
+ */
+
+/** The chip row on the first stage. */
+function chip(page: Page, name: string | RegExp) {
+  return page.locator('.runs-chips').getByRole('button', { name })
+}
+
+/** What the last preflight was asked for, leg by leg, as `box -> indices`. The assertion
+ *  shape for every case below: it can tell one drawer's worth of the right cards from another
+ *  drawer's worth of the same number. */
+function askedFor(wire: Wire[]): Record<number, number[] | undefined> {
+  const asked = wire.filter((row) => row.path === '/pipeline/preflight').pop()
+  const scopes = (asked?.body as { scopes?: { box: number; indices?: number[] }[] }).scopes ?? []
+  return Object.fromEntries(scopes.map((leg) => [leg.box, leg.indices]))
+}
+
+test('a game narrows across drawers, and each leg carries the cards that matched', async ({
+  page,
+}) => {
+  const wire = await open(page, { cards: narrowablePayload(), games: GAMES })
+  await openComposer(page)
+
+  /* THE CHIP IS LABELLED, NEVER THE RAW ENUM — `Pokémon`, not `pokemon` — and it carries its
+     own count before it is pressed, which is what makes the choice readable rather than a
+     guess followed by a look at the footer. */
+  await expect(chip(page, /^Riftbound/)).toContainText('3')
+  await expect(chip(page, /^Pokémon/)).toContainText('3')
+
+  await chip(page, /^Riftbound/).click()
+
+  await expect(page.locator('.runs-all')).toHaveAttribute('aria-pressed', 'false')
+  await expect(page.locator('.runs-composer-note')).toContainText('2 drawers · boxes 9 and 12')
+  await expect(page.locator('.runs-composer-note')).toContainText('3 cards')
+
+  await toReading(page)
+  await checkCost(page)
+
+  /* ROW IDENTITY, BOTH DIRECTIONS. Box 9's riftbound card is index 4 and its three pokemon are
+     1, 2 and 3; box 12's are 1 and 2, with its already-answered pokemon at 3. A screen that
+     sent the whole of each drawer would send no indices at all; one that sent the first N of
+     each would send [1] and [1, 2]; one that intersected wrongly would send [4] and [1, 2, 3].
+     Only the right answer is this one. */
+  expect(askedFor(wire)).toEqual({ 9: [4], 12: [1, 2] })
+})
+
+test('the game NOT picked keeps its cards, which is the half a one-directional test misses', async ({
+  page,
+}) => {
+  const wire = await open(page, { cards: narrowablePayload(), games: GAMES })
+  await openComposer(page)
+  await chip(page, /^Pokémon/).click()
+  await toReading(page)
+  await checkCost(page)
+
+  /* THE COMPLEMENT OF THE CASE ABOVE, over the same fixture. A filter that dropped the wrong
+     side would pass that case and fail this one; a filter that dropped nothing would fail both.
+     Box 12's only pokemon card is already identified, so box 12 is not in the cart at all —
+     which is the second thing this asserts, and is why the fixture puts an answered card
+     there. */
+  expect(askedFor(wire)).toEqual({ 9: [1, 2, 3] })
+})
+
+test('this sitting is the newest one, and it counts the state inside the window', async ({
+  page,
+}) => {
+  /* ONE DEFINITION OF A SITTING IN THIS PRODUCT, AND IT IS `storeHistory.ts`'s. The window is
+     recovered by clustering EVERY stamped card at `GAP_MINUTES`, which is what `#/` draws its
+     library from — so the two screens cannot disagree about where one sitting ends. The
+     fixture's two drawers are two hours apart, well past the 30-minute gap.
+
+     AND THE CHIP COUNTS TWO, NOT THREE. Box 12 holds three cards in the newest sitting and one
+     of them is already answered: the chip counts the cards in the STATE inside the window, not
+     the cards in the window. A screen that counted the window would say 3 here and then quote
+     a preflight over 2, which is the estimate disagreeing with the control that produced it. */
+  const wire = await open(page, { cards: narrowablePayload(), games: GAMES })
+  await openComposer(page)
+  await expect(chip(page, /^This sitting/)).toContainText('2')
+
+  await chip(page, /^This sitting/).click()
+  await expect(page.locator('.runs-composer-note')).toContainText('Box 12 · codes · 2 cards')
+
+  await toReading(page)
+  await checkCost(page)
+  expect(askedFor(wire)).toEqual({ 12: [1, 2] })
+})
+
+test('a game the registry cannot name gets no chip, and its cards are still in the scope', async ({
+  page,
+}) => {
+  /* NAMED RATHER THAN LEFT OUT, which is `_unreachable`'s own rule and `CLAUDE.md`'s: never
+     silently drop a card. A chip has to be captioned, `docs/DESIGN.md` forbids printing a raw
+     enum value, and the registry is the only thing that can turn `riftbound` into `Riftbound`
+     — so a game the registry does not carry gets NO NARROWING. What it must not lose is its
+     place in the state: all six cards are still there and the whole cart still goes. */
+  const wire = await open(page, {
+    cards: narrowablePayload(),
+    games: { default: 'pokemon', games: [GAMES.games[0]] },
+  })
+  await openComposer(page)
+
+  /* THE WHOLE ROW, BY IDENTITY, WHICH IS WHAT THE FIRST DRAFT GOT WRONG. It asserted
+     `chip(/^Riftbound/)` is absent — and a mutation that drew a chip for every game SURVIVED
+     it, because an unnamed game falls back to its raw key and `riftbound` does not match a
+     capitalised regex. The chip was on the screen, captioned with an enum value, and the case
+     said nothing. Reading every chip's label out and comparing the list cannot be dodged that
+     way, and it fails loudly on a chip nobody expected whatever it is called. */
+  const chips = await page
+    .locator('.runs-chips button')
+    .evaluateAll((nodes) => nodes.map((n) => (n.textContent ?? '').replace(/\d+$/, '').trim()))
+  expect(chips).toEqual(['Pokémon', 'This sitting'])
+  await expect(page.locator('.runs-all')).toContainText('6 cards, across 2 drawers')
+
+  await toReading(page)
+  await checkCost(page)
+  expect(askedFor(wire)).toEqual({ 9: undefined, 12: undefined })
+})
+
+test('the filter is in the address, so a bookmark lands on the same scope', async ({ page }) => {
+  /* COMPONENT STATE IS NOT A PLACE. This is what `#/`'s standing line links to now — it says
+     how many cards are photographed and not identified and then opens the composer over
+     exactly those — and it is the same address a reload or a bookmark resolves. */
+  const wire = await open(page, {
+    cards: narrowablePayload(),
+    games: GAMES,
+    at: '/#/runs?state=captured&box=12',
+  })
+
+  /* THE DIALOG IS ALREADY OPEN, on the drawer the address named, with nothing pressed. */
+  await expect(page.locator('.runs-composer')).toBeVisible()
+  await expect(page.locator('.runs-composer-note')).toContainText('Box 12 · codes · 2 cards')
+  await expect(page.locator('.runs-all')).toHaveAttribute('aria-pressed', 'false')
+
+  /* AND PRESSING WRITES IT BACK, so the address is the scope rather than a one-time seed. */
+  await chip(page, /^Riftbound/).click()
+  await expect(page).toHaveURL(/state=captured&box=12&game=riftbound/)
+
+  await toReading(page)
+  await checkCost(page)
+  expect(askedFor(wire)).toEqual({ 12: [1, 2] })
+})
+
+test('closing clears the filter out of the address rather than leaving one that reopens it', async ({
+  page,
+}) => {
+  await open(page, { cards: narrowablePayload(), games: GAMES, at: '/#/runs?state=captured&box=12' })
+  await expect(page.locator('.runs-composer')).toBeVisible()
+  await page.keyboard.press('Escape')
+  await expect(page.locator('.runs-composer')).toHaveCount(0)
+  await expect(page).not.toHaveURL(/state=/)
+})
+
+test('pressing a narrowing moves nothing else on the screen', async ({ page }) => {
+  /* D118, MEASURED RATHER THAN ASSERTED ABOUT. Every figure on this stage is the UNNARROWED
+     one, precisely so that a press changes a pressed state and one sentence and nothing else —
+     counts that moved under each other would reflow the chip row, and a primary row whose
+     second line grew from one to two would push every drawer tile down under the finger.
+
+     THE RECTANGLES ARE KEYED BY POSITION IN THE TREE, not by id or class: the brief this was
+     written to names a reused id as the way a sweep like this quietly compares two different
+     elements and reports no movement. */
+  await open(page, { cards: narrowablePayload(), games: GAMES })
+  await openComposer(page)
+
+  /* SETTLED FIRST, WHICH IS THE TRAP THIS FILE PAID FOR ON ITS FIRST RUN. The dialog has an
+     enter animation; the first snapshot was taken part way through it and every one of the 66
+     elements in the sweep had "moved" — the dialog was 906px wide going on 940. A sweep that
+     samples before the motion finishes reports the animation and says nothing about the press.
+     Waited on the animations THEMSELVES rather than slept through: a sleep is a guess about
+     how long a token is, and `--bn-t-*` can move under it (D136's own rule, one register
+     down). */
+  const settle = () =>
+    page
+      .locator('.runs-composer')
+      .evaluate((root) => Promise.all(root.getAnimations({ subtree: true }).map((a) => a.finished)))
+
+  const rects = async () => {
+    await settle()
+    return page.locator('.runs-composer').evaluate((root) =>
+      [...root.querySelectorAll('*')].map((node, i) => {
+        const box = node.getBoundingClientRect()
+        return `${i}:${node.tagName}:${Math.round(box.x)},${Math.round(box.y)},${Math.round(box.width)},${Math.round(box.height)}`
+      }),
+    )
+  }
+
+  const before = await rects()
+  await chip(page, /^Riftbound/).click()
+  await expect(page.locator('.runs-composer-note')).toContainText('3 cards')
+  const after = await rects()
+
+  /* THE DIFF, NOT THE LIST. `toEqual` over two arrays of a hundred strings prints both and
+     leaves the reader to find the six that differ; this reports only what moved, with its own
+     before and after on the line. `docs/DEBTS.md`'s note about reading a Playwright array
+     failure as a diff is the same lesson one register up. */
+  const moved = before.flatMap((was, i) => (after[i] === was ? [] : [`${was}  ->  ${after[i]}`]))
+  expect(moved).toEqual([])
+})
+
+test('a drawer with nothing to identify says so, sinks, and can still be picked', async ({
+  page,
+}) => {
+  /* NEVER HIDDEN, WHICH IS D78's SHAPE. A drawer whose cards are all answered is not what the
+     operator is looking for, so it is not in the way — but the operator may still have a reason
+     to ask about it, and the PREFLIGHT is the thing entitled to answer "nothing to send", with
+     the figure on screen and its own free press behind it. A stage that dropped the tile would
+     make that answer unreachable and the drawer silently absent.
+
+     THE ORDER IS THE ASSERTION, in both directions: the drawer that has something comes first
+     and the empty one second, and the empty one's own line says which it is.
+
+     BOX 9 HOLDS AN ANSWERED CARD RATHER THAN NO CARD, and that is the whole fixture. The first
+     draft gave it nothing at all, and a mutation that counted every record rather than only the
+     un-identified ones SURVIVED — an empty drawer reads as "nothing to identify" under both
+     rules, so the case could not tell them apart. A drawer holding a card that has already been
+     answered is the only shape that can. */
+  await open(page, {
+    cards: {
+      '12/1': card({ box: 12, index: 1 }),
+      '9/1': card({ box: 9, index: 1, state: 'identified' }),
+    },
+    games: GAMES,
+  })
+  await openComposer(page)
+
+  const tiles = page.locator('.runs-boxes .runs-box')
+  await expect(tiles.nth(0)).toContainText('Box 12 · codes')
+  await expect(tiles.nth(0)).toContainText('1 not identified')
+  await expect(tiles.nth(1)).toContainText('Box 9')
+  await expect(tiles.nth(1)).toContainText('nothing to identify')
+
+  await pickBox(page, 9)
+  await expect(page.locator('.runs-composer-note')).toContainText('Box 9 · 0 cards')
+  await expect(page.getByRole('button', { name: /^Next · how they are read$/ })).toBeEnabled()
+})
+
+test('the stage fits a phone, and every control on it is a thumb target', async ({ page }) => {
+  /* 390 IS ONE OF THE THREE WIDTHS THIS BUILD IS VERIFIED AT, and this stage grew a chip row
+     and a wider primary row, which are exactly the two things that overflow. Asserted rather
+     than looked at, because a render nobody opens is not verification and a render somebody
+     opened once is not a guard.
+
+     THE FLOOR IS THE KIT'S AND THE MEASUREMENT IS THE HIT AREA (D117): the control-height
+     tokens raise themselves under 767px, so a chip that measures short here is a chip that
+     opted out of the kit rather than a token that is wrong. */
+  await open(page, { cards: narrowablePayload(), games: GAMES })
+  await page.setViewportSize({ width: 390, height: 844 })
+  await openComposer(page)
+
+  const over = await page.evaluate(
+    () => document.documentElement.scrollWidth - document.documentElement.clientWidth,
+  )
+  expect(over).toBeLessThanOrEqual(0)
+
+  /* NAMED, NOT COUNTED: a bare count says how many are short and not which, and the label is
+     what turns a red into a fix. */
+  const short = await page
+    .locator('.runs-composer-stage button, .runs-composer-foot button')
+    .evaluateAll((nodes) =>
+      nodes
+        .map((n) => ({ says: (n.textContent ?? '').slice(0, 30), h: Math.round(n.getBoundingClientRect().height) }))
+        .filter((row) => row.h > 0 && row.h < 40),
+    )
+  expect(short).toEqual([])
+})
+
+/* ----------------------------------------------------- the handoff from `#/inventory` (D39)
+ *
+ * THE RECEIVING END, WHICH NOTHING IN THIS SUITE HAD EVER ASSERTED. `inventory.spec.ts` covers
+ * the seam deliberately — "what `#/runs` does with a handoff is `run-panel.spec.ts`'s subject"
+ * — and this file did not hold it up. It does now, because the shape moved: `CarriedScope` is
+ * a list of `box/index` keys rather than a box and its indices, which is what lets a selection
+ * span drawers at all.
+ */
+
+/** Seeds the handoff the way `#/inventory` writes it. Before `open`, because `addInitScript`
+ *  applies to the navigations after it and `open` is the one that loads the page. */
+async function carry(page: Page, keys: string[]) {
+  await page.addInitScript(
+    (payload) => window.sessionStorage.setItem('banchi.run-scope', payload),
+    JSON.stringify({ keys }),
+  )
+}
+
+test('a handoff spans drawers, and every key it carries goes on its own leg', async ({ page }) => {
+  /* THE CASE `{box, indices}` COULD NOT HOLD. `#/inventory`'s mass-select walks whatever the
+     search narrowed it to, which is not a drawer, and the RECEIVING end was what made it one —
+     so a cross-drawer tick had nowhere to go and was never offered. */
+  await carry(page, ['9/2', '9/3', '12/1'])
+  const wire = await open(page, { cards: narrowablePayload(), games: GAMES })
+
+  /* The handoff opens the dialog by itself, which is unchanged. */
+  await expect(page.locator('.runs-composer')).toBeVisible()
+  await expect(page.locator('.bn-notice')).toContainText('3 cards ticked in 2 drawers · boxes 9 and 12')
+  await expect(page.locator('.runs-all')).toHaveAttribute('aria-pressed', 'false')
+
+  /* AND THE TILES SAY WHICH CARDS ARE THEIRS, per drawer, beside the drawer's own figure. */
+  await expect(page.locator('.runs-boxes .runs-box').filter({ hasText: 'Box 9' })).toContainText('2 ticked')
+
+  await toReading(page)
+  await checkCost(page)
+  expect(askedFor(wire)).toEqual({ 9: [2, 3], 12: [1] })
+})
+
+test('picking any scope drops the ticked list, because a filter that survives it was not re-consented to', async ({
+  page,
+}) => {
+  /* D39's RULE, AND IT REACHES ALL FOUR CONTROLS ON THIS STAGE. The handoff is the operator's
+     own explicit list; the moment they answer the stage's question a second time, the first
+     answer is spent. A tick list that survived a deliberate choice would be a narrowing nobody
+     re-consented to, silently applied to the press that spends money.
+
+     ASSERTED THROUGH THE WIRE AND NOT THE NOTICE. The notice going is what a person sees; what
+     matters is that the REQUEST stops carrying `[2, 3]`, and a screen could clear the first
+     without clearing the second. */
+  await carry(page, ['9/2', '9/3'])
+  const wire = await open(page, { cards: narrowablePayload(), games: GAMES })
+  await expect(page.locator('.bn-notice')).toContainText('2 cards ticked')
+
+  await chip(page, /^Pokémon/).click()
+  await expect(page.locator('.bn-notice')).toHaveCount(0)
+
+  await toReading(page)
+  await checkCost(page)
+  expect(askedFor(wire)).toEqual({ 9: [1, 2, 3] })
+})
+
+test('a handoff loses only the keys whose drawer is gone, not the whole list', async ({ page }) => {
+  /* PER DRAWER RATHER THAN WHOLE, WHICH IS WHAT CHANGED WITH THE SHAPE. A carried box the
+     registry no longer holds used to drop the handoff entirely, which was right while a
+     handoff WAS one box. Dropping forty cards in box 9 because box 3 was deleted underneath
+     them would be a narrowing in the one direction that costs the operator their work — so the
+     departed drawer's keys go and the rest stay, and only a handoff with nothing left goes the
+     way it always did. */
+  await carry(page, ['3/1', '9/2', '9/3'])
+  const wire = await open(page, { cards: narrowablePayload(), games: GAMES })
+
+  await expect(page.locator('.bn-notice')).toContainText('2 cards ticked in Box 9')
+  await toReading(page)
+  await checkCost(page)
+  expect(askedFor(wire)).toEqual({ 9: [2, 3] })
+})
+
+test('a handoff whose every drawer is gone falls through to the state, rather than to nothing', async ({
+  page,
+}) => {
+  await carry(page, ['3/1', '4/2'])
+  await open(page, { cards: narrowablePayload(), games: GAMES })
+  await openComposer(page)
+  await expect(page.locator('.bn-notice')).toHaveCount(0)
+  await expect(page.locator('.runs-all')).toHaveAttribute('aria-pressed', 'true')
+  await expect(page.locator('.runs-all')).toContainText('6 cards, across 2 drawers')
 })
 
 // ----------------------------------------- the export, fetched rather than downloaded (D64)

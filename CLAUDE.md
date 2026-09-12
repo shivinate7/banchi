@@ -2191,6 +2191,7 @@ D173 A rule that can be enforced mechanically is enforced mechanically, and a ru
 D174 A press claims the cards it is about to buy, and the claim is written in the transaction that decides what they are
 D175 Ownership is read the way liveness is, and a process a session no longer owns is offered rather than reaped
 D176 The primary checkout syncs itself, both parts, because the thing D42 was protecting is not the thing this moves
+D-the-composer-asks-which-state The composer asks which state, a drawer is one narrowing of it, and the filter lives in the address
 ```
 
 **THE GAP THIS LIST CARRIED BETWEEN D116 AND D118 IS CLOSED, AND IT CLOSED THE WAY IT SAID IT

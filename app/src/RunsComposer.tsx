@@ -472,14 +472,20 @@ export function RunsComposer({
   const scopeLine = useMemo(() => {
     const drawers = boxesLabel(cart)
     if (drawers === null) {
-      return counted ? 'Nothing is waiting to be identified.' : 'Counting what is waiting…'
+      /* THREE REASONS FOR AN EMPTY CART AND THEY ARE NOT THE SAME SENTENCE. Nothing counted
+         yet is a wait; nothing in the state is a finished store; nothing MATCHING is a filter
+         the operator can widen, and telling them the store is empty when they have narrowed it
+         to nothing would send them looking for a fault that is not there. */
+      if (!counted) return 'Counting what is waiting…'
+      if (state.total === 0) return 'Nothing is waiting to be identified.'
+      return 'Nothing matches. Widen it, or go back to everything not yet identified.'
     }
     if (carried !== null) return `${drawers} · ${plural(carried.keys.length, 'ticked card')}`
     if (!narrowed(selection)) {
       return scopeCards === null ? drawers : `${drawers} · everything not yet identified`
     }
     return scopeCards === null ? drawers : `${drawers} · ${plural(scopeCards, 'card')}`
-  }, [cart, carried, counted, selection, scopeCards])
+  }, [cart, carried, counted, selection, scopeCards, state.total])
 
   const stageState = (key: StageKey): 'done' | 'current' | 'todo' =>
     stage === 'started' ? 'done' : ORDER.indexOf(key) < ORDER.indexOf(stage) ? 'done' : key === stage ? 'current' : 'todo'
