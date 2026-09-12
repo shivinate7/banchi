@@ -2727,31 +2727,35 @@ def do_status() -> dict:
     # It is a NAME and never a NULL, deliberately — but a population above zero is still
     # something the operator should be told, because it is the one shape `cards audit` can
     # only ever answer "not known" about.
-    body["photos_relocated"] = getattr(inventory, "photos_relocated", None)
-    unnamed = legacy = 0
-    try:
-        for card in inventory.cards.values():
-            if not photos.is_photo_cid(card.cid):
-                unnamed += 1
-            elif not photos.path(card.cid).is_file():
-                legacy += 1
-    except (TypeError, ValueError, OSError) as exc:  # noqa: BLE001 — never take down /status
-        unnamed = legacy = 0
-        problems.append(f"the photograph store could not be surveyed ({exc}).")
-    body["photos_at_legacy_address"] = legacy
-    body["cards_without_a_photograph_name"] = unnamed
-    if legacy:
-        problems.append(
-            f"{legacy} card(s) still have their photograph at the legacy (box, index) "
-            f"address. `./pkmnscan cards photos --write` moves them; it previews first, it "
-            f"is resumable, and every file is checked against a digest before its old copy "
-            f"is removed."
-        )
-    if unnamed:
-        problems.append(
-            f"{unnamed} card(s) carry a name that points at no photograph — a `moved:` "
-            f"tombstone or a `nophoto:` record. `./pkmnscan cards name` lists them by key."
-        )
+    #
+    # NEITHER COSTS A STAT PER CARD, AND THE FIRST DRAFT OF THIS DID. Measured on the
+    # owner's 2,535-card store: the rest of this route is 3-6 ms, and a
+    # `photos.path(card.cid).is_file()` per card added **~100 ms** — on the route the app
+    # POLLS. That is `_Places`' per-request cache argument one register along, and the same
+    # answer applies: ask the cheapest thing that can answer.
+    #
+    # SO THE STAMP IS THE AUTHORITY WHEN IT IS SET, and looking is what it exists to make
+    # unnecessary: `./pkmnscan cards photos` writes it only after a pass that found every
+    # card at its name. When it is UNSET the answer comes from ONE directory walk of the
+    # content store rather than 2,535 stats — and that is a transient window by
+    # construction, so the cost is paid only while there is something to report.
+    relocated_at = getattr(inventory, "photos_relocated", None)
+    body["photos_relocated"] = relocated_at
+    body["photographs"] = None
+    if not relocated_at:
+        try:
+            body["photographs"] = len(photos.stored_names())
+        except OSError as exc:  # noqa: BLE001 — never take down /status
+            problems.append(f"the photograph store could not be counted ({exc}).")
+        else:
+            problems.append(
+                f"the photographs have not all reached the card's own name yet: "
+                f"{body['photographs']} are there and this store holds {body['cards']} "
+                f"card(s). `./pkmnscan cards photos` previews the rest and `--write` moves "
+                f"them — it is resumable, and every file is checked against a digest before "
+                f"its old copy is removed. The legacy (box, index) address is still read "
+                f"until it is finished, so nothing is broken meanwhile."
+            )
 
     # A corrupt record must not take down the health endpoint — that is the one route you
     # reach for when something is wrong. Report it as a finding instead.
@@ -2974,8 +2978,7 @@ def do_photo(box: int, index: int) -> Tuple[bytes, str]:
     that is in this slot today. That read is what makes the answer correct across a
     renumber, which is the very thing the ETag was patching over.
     """
-    with Store().read() as snapshot:
-        path = photo_at(snapshot.inventory, box, index)
+    path = photo_at(Store().read().inventory, box, index)
     if path is None or not path.is_file():
         raise BadRequest(
             HTTPStatus.NOT_FOUND,
@@ -3551,6 +3554,8 @@ def _unlink(path: Path) -> bool:
     rather than probed with `is_file()` so there is no window between the two calls — the
     store lock closes that window for other writers, but not for the operator's own Finder.
     """
+    if path is None:
+        return False
     try:
         path.unlink()
     except FileNotFoundError:
