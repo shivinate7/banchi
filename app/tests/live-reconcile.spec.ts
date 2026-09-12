@@ -73,6 +73,12 @@ async function open(page: Page): Promise<Wire[]> {
   await page.route(/\/pipeline\/runs$/, async (route) =>
     route.fulfill({ status: 200, contentType: 'application/json', body: '{"runs":[]}' }),
   )
+  /* The claims panel's own read (D174): `#/runs` draws it on mount, and the
+     seal makes an unstubbed read a FAILURE rather than a missing panel. Empty, for this
+     stub's stated reason — this file is about one sheet. */
+  await page.route(/\/pipeline\/submissions$/, async (route) =>
+    route.fulfill({ status: 200, contentType: 'application/json', body: '{"claims":[],"counts":{"claims":0,"keys":0,"stale":0}}' }),
+  )
   await page.goto(VIEW)
   await settleFonts(page)
   await opener(page).click()
@@ -110,6 +116,12 @@ test('the sheet is not open until it is asked for, and Escape puts it away', asy
   )
   await page.route(/\/pipeline\/runs$/, async (route) =>
     route.fulfill({ status: 200, contentType: 'application/json', body: '{"runs":[]}' }),
+  )
+  /* The claims panel's own read (D174): `#/runs` draws it on mount, and the
+     seal makes an unstubbed read a FAILURE rather than a missing panel. Empty, for this
+     stub's stated reason — this file is about one sheet. */
+  await page.route(/\/pipeline\/submissions$/, async (route) =>
+    route.fulfill({ status: 200, contentType: 'application/json', body: '{"claims":[],"counts":{"claims":0,"keys":0,"stale":0}}' }),
   )
   await page.goto(VIEW)
   await settleFonts(page)
