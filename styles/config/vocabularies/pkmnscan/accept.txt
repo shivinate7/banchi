@@ -537,3 +537,27 @@ Faefolk
 Qiyana
 Sterak
 Volibear
+
+# ---------------------------------------------------------------------------------
+# ADDED 2026-09-12 with docs/specs/stable-card-id.md and its decision entry, which
+# introduce one new identifier — `cid`, the card's frozen photograph digest — and the
+# vocabulary that file argues in. REVIEWED, NOT BLANKET-ACCEPTED: `cid` is the name the
+# store will carry and is written unbackticked in prose constantly, so accepting it is
+# what keeps every other finding in that file readable. `renumber` and `sha` were
+# already in this repo's prose and flagged there too, so these two lines lower the
+# standing noise rather than only the new file's.
+[Cc]id
+[Cc]ids
+sha
+[Rr]enumber
+[Rr]enumbers
+[Ss]eeding
+[Cc]hokepoint
+[Nn]ullable
+[Uu]nlinks
+[Pp]reviewable
+[Cc]uttable
+[Rr]ebasing
+[Pp]ragmas
+CI's
+PR's
