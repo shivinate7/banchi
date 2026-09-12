@@ -10887,6 +10887,125 @@ The seven are §24's own table, Falling Star and Fizz, Trickster among them. Sto
 ### What is left, and it is named rather than papered over
 
 **A SKU whose import landed in Staged and never went live reads zero too.** A copy sold by hand against that state ages a claim it should not, and the copies are still sitting in TCGplayer's staged channel. Telling that from a sold-out listing needs D59's own reopener — a marker that a copy actually reached an import file, one field on `Card` written by `cmd_emit`'s push loop beside the `sku` stamp. **`docs/DEBTS.md` §24 is now that residue** rather than this whole defect; it is the third entry to turn on not having that field, after D147 and §24 itself.
+## D151 — The merge is run by a checkout, so the checkout is asked whether it is current, and main is read for a slug the moment it moves
+
+**Built 2026-09-12, after an unclaimed id reached `main` for the second time.** D140 made a decision number something a branch writes as a slug and `make merge` turns into a number. The claim is a function in `scripts/merge-pr.py` — and `make merge` runs **the `scripts/merge-pr.py` of whatever checkout invoked it.** A checkout cut before that function does not fail: it performs the GitHub half, performs the local half, reports complete success, and main lands carrying a raw `## D-<slug>` heading that no citation can resolve against and no later merge can ever find, because the branch that wrote it is merged and gone. Pull request #270 stranded one, repaired by #273; pull request #280 stranded the next, repaired by #285.
+
+**This is not D143 again.** That entry fixed a precondition that was seven lines too late *inside* the claim — a guard that existed and was unreachable. This one is about a checkout in which **the guard is not present at all**, which no ordering inside the file can reach. D143's own refusal is among the capabilities a stale copy does not have.
+
+### The scale is measurable and it is not two checkouts
+
+**Measured 2026-09-12 across the working trees of this clone: 30 trees, and 24 of them behind `origin/main`'s copy of the merge surface. Sixteen were missing `84c57d7` — the commit that introduced the claim at all.** So on the day this was written, more than half the trees on this machine would have stranded an id had a merge been run from them, and the two that did were the two that happened to be asked.
+
+**The two pull requests' own head branches were current**, which is what took so long to see: neither stranding is visible in the pull request. `18dcf7c^2` carries a complete `claim_half`. The stale copy was a **third tree** — the one the session typed `make merge` in — and nothing in the merge's output, the pull request, or main's history records which that was.
+
+### The predicate is BEHIND, and DIFFERS would have been the wrong one
+
+**A branch developing the merge is supposed to differ from main's copy of it.** #280 was exactly that, and a guard comparing content would have refused the one workflow that keeps this file alive — which is how a guard gets switched off in a week. What is refused is a copy **missing commits main has**: `git log HEAD..origin/main -- <file>` non-empty. A checkout cut before a capability reads behind; a branch carrying main's commits plus its own reads clear.
+
+**A diverged branch reads behind, and that is right rather than harsh.** If this branch has changed the merge AND has not taken main's change to it, it lacks the capability exactly as the stale checkout does. The refusal prints the same one-command fix either way: `git merge origin/main`.
+
+**The surface is derived, not listed.** It is this file plus every `scripts/*.py` a module-level constant in it names — today `scripts/claim-ids.py`, through the `CLAIMER` constant that was already written that way. A guard that only ever checked itself would have been green through the half of the incident that lives in the claimer.
+
+**What it cannot see is named rather than left to be found**: a merge that took `ours` over one of these files. That commit IS an ancestor, so reachability answers *not behind* over content that lost the capability anyway. `make revert-guard` is the guard whose subject that is — and the second half below catches the consequence regardless of cause.
+
+### It has no escape hatch, which is a departure and is meant
+
+**Every other refusal in this repository prints one** — `PKMNSCAN_SUITE_LOCK=off`, `PKMNSCAN_KILL=off`, `PKMNSCAN_REVERT=off`. Those exist because the thing they bypass can cost real minutes or stand between a session and the only route through. **This one costs `git merge origin/main`**, which is seconds and is the right thing to have done anyway. A hatch printed in the refusal is the button a session presses instead of reading, and what it would restore is a command that reports success while doing nothing — the worst failure shape this repository has.
+
+### And the symptom is caught by the symptom, in the one file every checkout shares
+
+**A guard inside `scripts/merge-pr.py` is absent from exactly the checkouts that need it.** That is the whole defect, and it applies to the refusal above as much as to the claim: it protects every checkout cut from this commit onward and reaches none of the twenty-four standing today. So there is a second half, and it is in `scripts/githooks/reference-transaction`:
+
+**`core.hooksPath` is one installed directory in the common `.git` dir, so every working tree of this clone runs the same hook file**, and a local move of `refs/heads/main` is the one event all of them share. At the `committed` phase the hook reads the commit main just moved to and prints, loudly, when it carries a slug heading. It fires for the session that merged and for every session that pulls afterwards.
+
+**It reports and never refuses, and the asymmetry is the argument.** By the time main moves locally the pull request is merged and origin carries the slug whatever happens here; refusing the fast-forward would leave this clone behind a main that is already wrong, repairing nothing and breaking every read downstream. Refusing is right before the damage and wrong after it. It runs at `committed` rather than `prepared` for the same reason the rest of that file fails open: a bug in it must not be able to abort anybody's ref transaction.
+
+**Its pattern is deliberately looser than the claimer's.** `scripts/claim-ids.py` owns the grammar an id is ALLOCATED by; a report only has to notice a heading that is not a number, and a loose reader over-reports, which for a report is the safe direction. The strict answer is one command away and the message names it.
+
+**`make merge` asks the same question itself**, through `scripts/claim-ids.py --landed <rev>` — the first reader in that file whose subject is a commit rather than a checkout — and its exit status becomes the merge's. A claimer that cannot answer is reported rather than read as clean, which is the rule the claim commit's wait is built on, one function along.
+
+### Proved by reproducing the stale checkout, not by asserting about it
+
+`scripts/merge-selftest.sh` builds the progression in a throwaway origin and clone: main moves on something unrelated (allowed — a guard that refused every branch behind main would be off within a day), main takes a capability in the merge (**refused, naming the file, both blobs and the commit**), the branch merges main (allowed), the branch then edits the merge itself (allowed — #280's case), and main moves again underneath it (refused, naming the derived second file). `scripts/githooks-selftest.sh` moves a fixture main onto a slugged commit and asserts the report, its content, that it fires once, and that main moved anyway; `scripts/claim-selftest.py` proves `--landed` reads the commit and not the tree it is standing in, in both directions.
+
+**Ten mutations, none survived.** The one worth naming is the first: rewriting the predicate as *differs from origin/main* turns the AHEAD case red and nothing else — which is the case that chose the predicate, and the only arm that can tell the two apart.
+
+**One case could not be built out of a fetch and the fixture records the measurement.** Whether the hook reads `refs/heads/main` rather than every line of the payload needs a transaction carrying two refs; `git fetch` with two refspecs issues **one transaction per ref** on this machine's git, measured. `git update-ref --stdin` is the porcelain that batches, so that is what the case uses — a real gesture rather than the hook being fed by hand.
+
+### What it does not decide
+
+**Not that `make check` gains a row.** The question is about a checkout's relationship to `origin/main` at the moment of a merge; asked on the commit path it would refuse commits for being behind, which is not a defect. **Not that the surface grows to `scripts/`**: a merge refused because an unrelated script moved is noise, and narrowness is what the unrelated-file arm exists to hold. **Not that the hook learns the strict grammar** — that would be a third declaration of it, and `claim vocabulary` reconciles two. **And not that any of this repairs a stranded id.** Nothing here rewrites main: a substitution made after the merge reaches main's own copy of the entry, which D140 settled and this does not reopen.
+
+## D152 — Every row in the collapsed rail draws one glyph on one spine, and a rule that lists the children it knows about will miss one
+
+**Settled 2026-09-12, on the owner's report of two defects in the collapsed sidebar foot.** Both
+were visible in one screenshot of the 64px rail, both had shipped, and the browser suite was green
+through both. They are recorded as one entry because they are one cause.
+
+**WHAT THEY WERE, MEASURED.** The rail is 64px and every glyph in it rests on a spine at x = 32 —
+the sidebar's 8px gutter plus half of the 48px box each row draws in. Read off the running app at
+1440 with the sidebar collapsed:
+
+- **The hand-off row wore two glyphs.** `App.tsx` draws the Fulfiller's link as an 18px `hand`, the
+  label, and a 14px `external` mark saying the screen opens in its own tab. The rail folded the
+  label away and kept both icons, so that row drew glyphs at **x = 19 and x = 47** — a pair
+  straddling the whole rail, in a 48px box, beside three rows carrying one glyph at 32.
+- **The server dot was never centred at all.** `.bn-server` kept its OPEN-sidebar layout into the
+  rail: `padding: 0 var(--bn-3)` with the label `display: none`, shrink-wrapped to **32px** by the
+  foot's `align-items: flex-start`. The dot was therefore placed by the left padding and nothing
+  else — 8 (gutter) + 12 (that padding) + 4 (half an 8px dot) = **24**, eight pixels left of the
+  spine. Not off by half a border, and not centred against an asymmetric container; those are the
+  two other shapes this failure comes in and neither is this one. It is correct in the OPEN
+  sidebar, where that row is meant to be left-aligned and the dot lines up under the button icons
+  above it. **Collapse-only, and a missing rule rather than a wrong number.**
+
+**THE CAUSE IS THE SHAPE OF THE RULES, NOT EITHER ELEMENT.** `App.css`'s rail block describes the
+foot by LISTING what was in it when the block was written. The fold-away is an enumeration of class
+names — `.bn-nav-text`, the link's `.bn-kbd`, `.bn-nav-badge`, `.bn-side-foot-text`,
+`.bn-brand-chevron` — and the spine rule names `.bn-btn`. The external glyph is in none of those
+classes; `.bn-server` is not a `.bn-btn`.
+**Anything the list does not name keeps its open-sidebar layout** — silently, and looking like a
+rule that is simply doing its job.
+
+**`.bn-btn` NEXT TO BOTH OF THEM NEVER HAD THE DEFECT, AND THAT IS THE ARGUMENT.** Its rule is
+`> :not(.bn-icon)` — structural, so it folds away whatever it was not told about. The fix is that
+rule's shape applied to the other two: `.bn-nav-link > :not(:first-child)` keeps the leading glyph
+and nothing else, and `.bn-server` takes the identical `width: 48px; padding: 0;
+justify-content: center` its siblings already had. One declaration repeated, not a second
+arithmetic to keep in step.
+
+**THE WIDTH IS FIXED AND THE CENTRING RESOLVES AGAINST THAT**, which is the trap this block is
+written around: `justify-content: center` against the SIDEBAR's width resolves against a box that
+animates for 320ms, and this file already carries two measured excursions from exactly that. A
+48px box pinned at the gutter does not travel; the dot rests on 32 from frame 0.
+
+**IT EXISTED TWICE, BECAUSE THE BLOCK EXISTS TWICE.** The shell is railed two ways — `data-rail`
+above 1023px, and a media query at 768-1023px that has no `data-rail` at all and deliberately
+copies the block. The copy carried a copy of both defects. A fix or a test that looked only at
+1440 would have covered half of it.
+
+**WHY THE SUITE WAS GREEN.** `brand.spec.ts` already asserts the spine, and it asserts TRAVEL: it
+samples through the collapse and requires nothing to leave the corridor between its two resting
+positions. That is blind by construction to a glyph whose RESTING position is wrong — a sample
+sitting between two identical wrong numbers is inside the corridor. Both defects were exactly that.
+
+**THE GUARD IS THE RESTING POSITION, AND THE SPINE IS READ RATHER THAN TYPED.** `every foot row in
+the rail draws one glyph, on the nav's own spine` asserts one visible glyph per foot row and every
+glyph within 1px of the nav icons above it. Hard-coding 32 would restate `--bn-rail-w` in a second
+place and go stale the day the rail is resized; the nav IS the column the foot continues, so it is
+what the foot is measured against. It runs at 1440 and at 820, once per rail.
+
+**Observed red before it was kept, four arms**: drop the `:not(:first-child)` rule and the guard
+names the link and the two centers it found (`drew 2 at 19, 47`); drop the `.bn-server` rule and it
+reports `rests at 24, the nav at 32`. Each fails at both widths.
+
+**WHAT THIS DOES NOT REACH.** The phone drawer below 767px is full-width and draws both glyphs and
+every label on purpose; nothing here applies to it, and the guard does not look at it. And the
+guard is a floor over the FOOT — a second glyph appearing in the main nav's rows would be caught by
+the same rule in the stylesheet but is not asserted, because no nav row draws one today and a test
+over an empty set is the failure this repo keeps finding.
+
 
 ## D-a-band-is-copies-in-drawers — The band is copies rather than SKUs, the drawer is the first answer, and nothing on hand is dropped
 
