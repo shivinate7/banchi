@@ -21,7 +21,7 @@ import type {
   RunStartedRun,
   RunSummary,
 } from './types'
-import { Button, Chip, EmptyState, Icon, Kbd, Notice, Pill, Segmented } from './kit'
+import { Button, Chip, EmptyState, Icon, Kbd, Notice, Segmented } from './kit'
 import { toast } from './kit/toast'
 import { LogWell } from './RunsLog'
 import { useOverlayFocus } from './runsOverlay'

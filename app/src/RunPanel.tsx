@@ -18,13 +18,11 @@ import { RunFiles } from './RunFiles'
 import { FileButton } from './RunsDrop'
 import { LogWell } from './RunsLog'
 import { COMMANDS, StageBar, StagePill, runningFor, stageOf, whenLabel, type Command } from './RunsStage'
-import type { CartBox } from './RunsComposer'
 import { boxOf, runBoxLabel } from './runScope'
 import { money, roundsToNothing } from './money'
 import './RunPanel.css'
 
 export { runningFor }
-export type { CartBox }
 
 /* THE RUNS, AS MASTER AND DETAIL. The list on the left is every run directory on disk,
  * re-read while this panel is on screen; the detail on the right is the run the three free
@@ -296,7 +294,10 @@ function costSaid(detail: RunDetail): string {
 }
 
 type RunPanelProps = {
-  readonly cart: readonly CartBox[]
+  /** The drawers the selection names, ascending. Empty means it names none — a store-wide
+   *  press, a game, a sitting, a tick list — and the list is then drawn ungrouped, exactly as
+   *  an empty cart already drew it. */
+  readonly drawers: readonly number[]
   readonly openRun: string | null
   readonly onOpenRun: (run: string | null) => void
   /** Bumped by the page's Reload; the list re-reads when it moves. */
@@ -307,7 +308,7 @@ type RunPanelProps = {
   readonly pageFailure: Failure | null
 }
 
-export function RunPanel({ cart, openRun, onOpenRun, reloadTick, onIdentify, pageFailure }: RunPanelProps) {
+export function RunPanel({ drawers, openRun, onOpenRun, reloadTick, onIdentify, pageFailure }: RunPanelProps) {
   const [runs, setRuns] = useState<readonly RunSummary[]>([])
   const [loaded, setLoaded] = useState(false)
   const [detail, setDetail] = useState<RunDetail | null>(null)
@@ -570,9 +571,12 @@ export function RunPanel({ cart, openRun, onOpenRun, reloadTick, onIdentify, pag
 
   /* --------------------------------------------------------------------------- render */
 
-  /* Partitioned, never filtered: running first, then runs over the boxes in the cart, then the
-     rest — and only when there is a cart to group against. */
-  const inCart = new Set(cart.map((row) => row.box))
+  /* Partitioned, never filtered: running first, then runs over the drawers the selection names,
+     then the rest — and only when the selection names a drawer to group against. A selection
+     over a STATE, a game or a sitting names none, which is the same ungrouped list an empty cart
+     already drew: there is no drawer to be other than, which is the fault D48 found in this
+     very block and fixed. */
+  const inCart = new Set(drawers)
   const running: RunSummary[] = []
   const mine: RunSummary[] = []
   const other: RunSummary[] = []
@@ -581,12 +585,12 @@ export function RunPanel({ cart, openRun, onOpenRun, reloadTick, onIdentify, pag
     else if (inCart.has(boxOf(row) ?? -1)) mine.push(row)
     else other.push(row)
   }
-  const grouped = cart.length > 0
+  const grouped = drawers.length > 0
   const groups: { readonly key: string; readonly caption: string | null; readonly rows: RunSummary[] }[] = grouped
     ? [
         { key: 'running', caption: 'Running', rows: running },
-        { key: 'mine', caption: 'Picked boxes', rows: mine },
-        { key: 'other', caption: 'Other boxes', rows: other },
+        { key: 'mine', caption: 'Picked drawers', rows: mine },
+        { key: 'other', caption: 'Other drawers', rows: other },
       ].filter((group) => group.rows.length > 0)
     : [{ key: 'all', caption: null, rows: [...runs] }]
 

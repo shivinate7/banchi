@@ -11878,7 +11878,6 @@ def check_cli_refusals(checks: Checks) -> None:
     # them apart.
     for argv, label in (
         ([], "no subcommand"),
-        (["identify"], "identify with no capture directory"),
         (["join", "run", "--basis", "nonsense"], "an invalid --basis choice"),
     ):
         try:
@@ -11887,6 +11886,45 @@ def check_cli_refusals(checks: Checks) -> None:
             checks.ok(False, f"{label} is refused by the parser", "parsed without error")
         except SystemExit as caught:
             checks.equal(caught.code, 2, f"{label} exits 2 (usage), not 1")
+
+    # ---------------------------------- `identify` WITH NO PATH IS NO LONGER A USAGE ERROR
+    #
+    # AND THAT IS THE ONE THING THIS CHANGE COULD HAVE DONE QUIETLY. `capture_dir` was a
+    # required positional, so `./pkmnscan identify "$DIR"` with `$DIR` unset exited 2 from
+    # argparse; under `nargs="*"` it is an empty list, which is a selection naming nothing,
+    # which is EVERY PHOTOGRAPH IN THE STORE — a paid store-wide submission from a typo.
+    #
+    # THE GUARD MOVED RATHER THAN GOING, and it moved a layer down because that is where the
+    # question can be asked at all: argparse cannot see that `--box 3` also names cards. So the
+    # command refuses a selection that names NOTHING unless `--all` is typed, and exits 1 —
+    # a refusal to proceed, which is a different failure from a usage error and scripts need
+    # to tell them apart. The screen does not refuse it: it has the free preflight and a
+    # confirm in front of it, and a terminal has a newline.
+    with isolated_home():
+        parsed = entry.build_parser().parse_args(["identify"])
+        checks.equal(
+            (parsed.capture_dir, getattr(parsed, "all", None)),
+            ([], False),
+            "`identify` with no path PARSES now — the positional is a list, and the refusal "
+            "below is a layer down where the selection flags can be seen too",
+        )
+        with quiet() as said:
+            code = entry.main(["identify"])
+        checks.equal(code, 1, "and naming nothing exits 1 — a refusal, not a usage error")
+        checks.ok(
+            "--all" in said.getvalue(),
+            "NAMING THE FLAG, which is the whole of the guard: the operator is told the word "
+            "to type rather than left to discover that silence meant everything",
+            f"said: {said.getvalue().strip()!r}",
+        )
+        with quiet() as said:
+            code = entry.main(["identify", "--all", "--dry-run"])
+        checks.equal(
+            code,
+            1,
+            "and `--all` over an EMPTY store is refused as an empty selection rather than "
+            "submitting nothing and reporting success",
+        )
 
 
 # --------------------------------------------------- emit, reconcile and join as quantities
@@ -17500,7 +17538,7 @@ def check_pipeline_routes(checks: Checks) -> None:
             # PROVED BY THE REFUSAL IT EARNS INSTEAD, which is `selection_is_empty` over a home
             # whose capture root holds nothing. A route that had merely stopped validating would
             # answer 202 here and spawn a child over nothing.
-            with isolated_home() as bare:
+            with isolated_home():
                 bare_server = capture_server.CaptureServer(("127.0.0.1", 0), QuietHandler)
                 bare_port = bare_server.server_address[1]
                 bare_thread = threading.Thread(target=bare_server.serve_forever, daemon=True)
@@ -17519,7 +17557,7 @@ def check_pipeline_routes(checks: Checks) -> None:
                         "and a terminal has a newline",
                     )
                     checks.ok(
-                        "out of 0 scanned" in json.loads(body).get("message", ""),
+                        "out of 0 scanned" in error_message(body),
                         "and the refusal carries the count it started FROM, which is what "
                         "separates a mistyped term from a capture root that is not there — "
                         "`box_has_no_captures` could only ever say the second",
@@ -18340,25 +18378,57 @@ def check_pipeline_routes(checks: Checks) -> None:
                 "stored on the run could not have",
             )
 
-            # A RUN WITH NO SCOPE BLOCK, which is what `pkmnscan identify captures/cards/box3`
-            # leaves behind and what two of the four runs on the owner's own machine are.
-            # `_run_box` reads the capture directory's own name for exactly this case, and the
-            # name follows the number wherever the number came from.
+            # A RUN STARTED IN A TERMINAL IS PLACED AND NAMED BY ITS OWN SCOPE BLOCK, which
+            # `cli/cmd_identify.py:_scope_for` has written since D145 — off the SIDECARS, not
+            # off the capture directory's name.
             legacy = runs.create("box3")
-            legacy.set(capture_dir=str(box_dir))
+            legacy.set(
+                capture_dir=str(box_dir), scope={"box": 3, "whole_box": True, "cards": None}
+            )
             status, body, _ = request(port, "GET", "/pipeline/runs")
             listed = {row["run"]: row for row in json.loads(body)["runs"]}
             checks.equal(
                 (
-                    listed[legacy.directory.name]["scope"],
                     listed[legacy.directory.name]["box"],
                     listed[legacy.directory.name]["box_name"],
                 ),
-                (None, 3, "Riftbound epics"),
-                "a run started from a TERMINAL carries no scope block at all, and is still "
-                "placed and named — the box comes off the capture directory's own name, "
-                "which is the only thing that can see such a run",
+                (3, "Riftbound epics"),
+                "a run started from a TERMINAL is placed and named, off the scope block its "
+                "own command wrote — and the name still joins at read time",
             )
+
+            # AND A RUN WITH NEITHER NAMES NO DRAWER, WHICH IS THE DELETION
+            # (D-a-selection-of-cards). `_run_box` used to parse `^box(\d+)` off the capture
+            # directory's basename for exactly this run, and it was CONFIDENTLY WRONG twice on
+            # the operator's store: `2026-09-02-box6-01`'s 65 cards are all in box 3 today and
+            # `2026-08-29-box1-01`'s 99 are too, while the regex answers 6 and 1. Box 6 has
+            # never existed there.
+            #
+            # NULL IS WHAT EVERY READER OF THIS FIELD WANTED. `runScope.ts:runBoxLabel` draws no
+            # drawer for it, `refuse_reallocated` (D36) has nothing to compare and reports the
+            # run unverified rather than passing it onto another drawer's records, and a run
+            # filed under the wrong drawer is the one fault none of them can detect — because a
+            # wrong box number resolves.
+            #
+            # WHAT IT COSTS is the label on a pre-D145 terminal run that has never been
+            # re-joined: two on that store, and it was answering WRONGLY for both.
+            unsaid = runs.create("box3")
+            unsaid.set(capture_dir=str(box_dir))
+            status, body, _ = request(port, "GET", "/pipeline/runs")
+            listed = {row["run"]: row for row in json.loads(body)["runs"]}
+            checks.equal(
+                (
+                    listed[unsaid.directory.name]["scope"],
+                    listed[unsaid.directory.name]["box"],
+                    listed[unsaid.directory.name]["box_name"],
+                ),
+                (None, None, None),
+                "a run whose manifest names NO scope draws no drawer at all — the capture "
+                "directory's name is a convention and the sidecar is the claim, so a number "
+                "read off a folder is a guess that resolves, which is the one kind nothing "
+                "downstream can catch",
+            )
+            shutil.rmtree(unsaid.directory)
             checks.equal(
                 listed[made.directory.name]["box_name"],
                 "Riftbound epics",
@@ -18378,7 +18448,11 @@ def check_pipeline_routes(checks: Checks) -> None:
             # assertions up — a box named after its run is ordinary, and that case is
             # already covered, so what is left is to prove the card set is what carries it.
             stranger = runs.create("box3")
-            stranger.set(capture_dir=str(box_dir), created_at="2000-01-01T00:00:00+00:00")
+            stranger.set(
+                capture_dir=str(box_dir),
+                scope={"box": 3, "whole_box": True, "cards": None},
+                created_at="2000-01-01T00:00:00+00:00",
+            )
             status, body, _ = request(port, "GET", f"/pipeline/runs/{stranger.directory.name}")
             checks.equal(
                 json.loads(body)["box_name"],
