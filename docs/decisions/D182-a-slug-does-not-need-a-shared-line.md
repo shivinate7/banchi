@@ -1,4 +1,4 @@
-## D181 — An unclaimed slug is not required in the shared index it will replace itself out of
+## D182 — An unclaimed slug is not required in the shared index it will replace itself out of
 
 **Every branch that adds a decision entry was hand-editing two files it shares with every other open branch, and neither edit was ever necessary.** `docs/decisions/ORDER.json` and CLAUDE.md's decision-index block are both fully DERIVED — `scripts/index-decisions.py:normalize` rewrites both, in the same commit, from whatever headings exist right after `make merge`'s claim step substitutes a real number for a branch's slug (D140). A branch's own hand-typed line in either file is discarded the moment its PR merges. What it bought in the meantime was pure collision: measured the day this landed, **25 of the last 40 merges to main touched `docs/decisions/ORDER.json`**, and every open PR's own manual index line went stale the instant any OTHER PR's slug-carrying entry merged first, because each was computed by hand against an `origin/main` that had already moved underneath it.
 

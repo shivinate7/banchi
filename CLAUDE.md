@@ -2265,7 +2265,7 @@ D177 The corpus answers for listings no camera here ever saw, so a prune is a li
 D178 A document may name what it would create, and the marking expires by itself
 D179 Five shell commands are refused by resolving what they would do, not by matching what they say, and each clause carries its own escape hatch
 D180 A press names the cards it is over, and the drawer is one of the names
-D181 An unclaimed slug is not required in the shared index it will replace itself out of
+D182 An unclaimed slug is not required in the shared index it will replace itself out of
 ```
 
 **THE GAP THIS LIST CARRIED BETWEEN D116 AND D118 IS CLOSED, AND IT CLOSED THE WAY IT SAID IT
