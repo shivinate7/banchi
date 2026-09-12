@@ -53,7 +53,7 @@ import type {
   PricingClearable,
   PricingClearResult,
   PricingWorklist,
-  RunLeg,
+  RunSend,
   RunPreflight,
   RunStarted,
   RunStepResult,
@@ -1850,26 +1850,39 @@ export async function releaseBoxListings(box: number): Promise<ListingReleaseRes
  * command's own preflight stdout rather than recomputed anywhere, so the figure on the
  * screen and the figure in the run's log are the same string produced by the same code.
  */
-export async function preflightRun(cart: readonly RunLeg[]): Promise<RunPreflight> {
+export async function preflightRun(send: RunSend): Promise<RunPreflight> {
   return (await request('/pipeline/preflight', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ scopes: cart.map(onTheWire) }),
+    body: JSON.stringify(onTheWire(send)),
   })) as RunPreflight
 }
 
-/** One cart row in the shape the route reads. Named rather than inlined because BOTH
- *  functions below send it and the money one must not be able to send a different shape from
- *  the one that was quoted — a preflight and a confirm describing different sends is the
- *  exact failure the two-step gate exists to prevent. */
-function onTheWire(leg: RunLeg): Record<string, unknown> {
+/** ONE PRESS IN THE SHAPE THE ROUTE READS, and the selection is the payload rather than a field
+ *  inside one. Named rather than inlined because BOTH functions below send it and the money one
+ *  must not be able to send a different shape from the one that was quoted — a preflight and a
+ *  confirm describing different sends is the exact failure the two-step gate exists to prevent.
+ *
+ *  EVERY TERM IS OMITTED WHERE IT IS UNSET, never sent as null or empty. The route reads absence
+ *  as "this term does not narrow" and refuses an empty array outright rather than reading it as
+ *  everything — so a tick list that failed to load must not arrive as `keys: []`, which would be
+ *  a refusal, or as `keys` omitted, which would be a press over the whole drawer. */
+function onTheWire(send: RunSend): Record<string, unknown> {
+  const { selection } = send
+  const some = <T,>(list: readonly T[] | undefined): T[] | undefined =>
+    list !== undefined && list.length > 0 ? [...list] : undefined
   return {
-    box: leg.box,
-    // Absent rather than empty, because those mean different things to the route: absent is
-    // the whole box and `[]` is refused outright rather than read as one.
-    indices: leg.indices !== undefined && leg.indices.length > 0 ? leg.indices : undefined,
-    crop: leg.crop,
-    max_edge: leg.maxEdge,
+    paths: some(selection.paths),
+    state: selection.state,
+    box: some(selection.box),
+    bid: some(selection.bid),
+    section: selection.section,
+    game: selection.game,
+    since: selection.since,
+    keys: some(selection.keys),
+    run: selection.run,
+    crop: send.crop,
+    max_edge: send.maxEdge,
   }
 }
 
@@ -1885,23 +1898,14 @@ function onTheWire(leg: RunLeg): Record<string, unknown> {
  * `offset` steps the sample. Three cards, evenly spaced and deterministic, so that changing
  * the reading redraws the same three — see the route for why one card cannot stand for a box.
  */
-export async function cropPreview(input: {
-  box: number
-  indices?: number[]
-  crop?: boolean
-  maxEdge?: number
-  offset?: number
-}): Promise<CropPreview> {
+export async function cropPreview(
+  send: RunSend,
+  offset?: number,
+): Promise<CropPreview> {
   return (await request('/pipeline/crop-preview', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({
-      box: input.box,
-      indices: input.indices,
-      crop: input.crop,
-      max_edge: input.maxEdge,
-      offset: input.offset,
-    }),
+    body: JSON.stringify({ ...onTheWire(send), offset }),
   })) as CropPreview
 }
 
@@ -1917,9 +1921,11 @@ export async function cropPreview(input: {
  * result. Everything after that is `getRun` polling the run directory, which is what lets a
  * run outlive a restart of the server that started it — or of this browser tab.
  *
- * Refusals worth branching on: `run_already_live` (a live run is already reading these
- * cards — two batches over one box is two invoices), and every scope refusal the preflight
- * would have shown first.
+ * Refusals worth branching on: `cards_already_claimed` (a live submission is already paying to
+ * read cards in this press — two live batches over one card is two invoices for one answer,
+ * D174), and every selection refusal the preflight would have shown first. `run_already_live`
+ * is gone with the box guard that raised it: that check compared BOX numbers and this route no
+ * longer takes one.
  */
 /**
  * What cards a live run has already claimed and is paying to read. FREE, reads the store and
@@ -1965,11 +1971,11 @@ export async function releaseSubmission(receipt: string): Promise<ClaimRelease> 
   })) as ClaimRelease
 }
 
-export async function startRun(cart: readonly RunLeg[]): Promise<RunStarted> {
+export async function startRun(send: RunSend): Promise<RunStarted> {
   return (await request('/pipeline/identify', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ confirm: true, scopes: cart.map(onTheWire) }),
+    body: JSON.stringify({ confirm: true, ...onTheWire(send) }),
   })) as RunStarted
 }
 

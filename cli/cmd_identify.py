@@ -39,12 +39,13 @@ import json
 from dataclasses import dataclass, field
 from decimal import Decimal
 from pathlib import Path
-from typing import Dict, List, Optional
+from typing import Dict, List, Optional, Sequence
 
 import geometry
 from cli import runs
 from identify import batch, cost, images, prompt, sidecar
 from pipeline import games
+from pipeline import selection as selection_mod
 from store import files as store_files
 from store import master
 from store import submissions
@@ -138,55 +139,152 @@ STAGE_UNREADABLE = "unreadable"  # the bytes would not hash, or would not decode
 STAGE_REFUSED = "refused"  # no prompt to read it with — named, not sent, not dropped
 
 
-def _scope_for(
-    items: List["Item"], capture_dir: Path, inventory: master.Inventory
-) -> Optional[dict]:
+def _selection_from(args) -> selection_mod.Selection:
+    """The CLI's spelling of one selection. `pipeline/selection.py` does every check.
+
+    THE SAME OBJECT THE WIRE PARSES, AND THE SAME READER. `parse` validates a JSON payload and
+    this validates argparse's output, and both end at `selection.check` — so a cross-term rule
+    (a section needs a box; a box and an id are two answers to one question) holds on both
+    surfaces because it is written once. Two validators agreeing by accident is the shape D43's
+    port bug had.
+
+    `--keys` IS REPEATABLE AND COMMA-SPLIT, which is one flag for both habits: `--keys 3/1,3/2`
+    and `--keys 3/1 --keys 3/2` are the same selection. Splitting here rather than in the module
+    keeps the wire's `keys` a plain array — a comma inside a JSON string would be a second
+    encoding of a list that JSON can already express.
+    """
+    raw_keys = getattr(args, "keys", None)
+    keys = None
+    if raw_keys:
+        keys = [
+            part.strip()
+            for chunk in raw_keys
+            for part in str(chunk).split(",")
+            if part.strip()
+        ]
+    return selection_mod.check(
+        selection_mod.Selection(
+            paths=tuple(str(p) for p in (getattr(args, "capture_dir", None) or ())),
+            state=selection_mod._state_of(args.state) if getattr(args, "state", None) else None,
+            box=_numbers(getattr(args, "box", None), "box"),
+            bid=_numbers(getattr(args, "bid", None), "bid"),
+            section=(
+                selection_mod._positives(args.section, "section")[0]
+                if getattr(args, "section", None)
+                else None
+            ),
+            game=selection_mod._game_of(args.game) if getattr(args, "game", None) else None,
+            since=selection_mod._since_of(args.since) if getattr(args, "since", None) else None,
+            keys=selection_mod._keys_of(keys) if keys else None,
+            run=selection_mod._run_of(args.run) if getattr(args, "run", None) else None,
+        )
+    )
+
+
+def _numbers(raw, term: str):
+    """`--box 3 --box 5` and `--box 3,5` are the same selection. One flag, both habits.
+
+    SPLIT HERE AND NOT IN THE MODULE, for `--keys`' reason: the wire's `box` is a JSON array,
+    and a comma inside a JSON string would be a second encoding of a list JSON can already
+    express. The module takes the list; argparse's job is to produce one.
+    """
+    if not raw:
+        return None
+    values = [
+        int(part.strip())
+        for chunk in (raw if isinstance(raw, list) else [raw])
+        for part in str(chunk).split(",")
+        if part.strip()
+    ]
+    return selection_mod._positives(values, term) if values else None
+
+
+def _run_keys_of(name: str, say) -> List[str]:
+    """Every position key a run's own answers name. `--run <name>`'s reader.
+
+    A RUN WITH NO ANSWERS NAMES NO CARD, and it says so rather than selecting nothing in
+    silence: `identifications.json` goes through `write_atomic`, so it is absent or whole, and
+    absent means that run has not collected yet. Selecting zero cards from it would refuse one
+    step later with the selection's own sentence, which blames the terms for a missing file.
+    """
+    try:
+        payload = runs.open_run(name).read_identifications()
+    except Exception as exc:  # noqa: BLE001
+        say(f"--run {name}: {exc}")
+        return []
+    cards = payload.get("cards")
+    return sorted(cards) if isinstance(cards, dict) else []
+
+
+def _recorded_dir(roots: Sequence[Path]) -> Optional[str]:
+    """What goes in the manifest's `capture_dir`: the ONE root, or nothing.
+
+    NEVER A JOINED STRING AND NEVER THE FIRST OF SEVERAL. `Run.capture_dir` is typed
+    `Optional[Path]` and absence already means "this run does not say" to every reader of it;
+    the first of three roots would be a path that looks authoritative and describes a third of
+    the run. The full list is in the manifest's `selection` block, which is where a reader that
+    wants all of them should look.
+
+    IT HAS NO PYTHON READER LEFT. It was the input to `server/pipeline_routes.py:_run_box`'s
+    path arm, which this entry deletes for being confidently wrong on two of this store's runs,
+    and it is on the wire for a person to read.
+    """
+    return str(roots[0]) if len(roots) == 1 else None
+
+
+def _default_label(selection: selection_mod.Selection, roots: Sequence[Path]) -> str:
+    """What a run is CALLED when `--label` did not say. Still the directory name where there is one.
+
+    A PATH KEEPS ITS BASENAME, which is what `capture_dir.name` gave every run before this and
+    is what every run directory on this store is named after. A selection with no path is named
+    for its narrowest term instead, and a press over everything is `store`. Nothing reads this
+    back — `_run_box` reads the scope block and no longer parses a name — so it is a handle for
+    a person and is allowed to be short.
+    """
+    if len(roots) == 1 and selection.paths:
+        return roots[0].name
+    if selection.box:
+        return f"box{selection.box}"
+    if selection.bid:
+        return f"drawer{selection.bid}"
+    if selection.run:
+        return f"rerun-{selection.run}"
+    if selection.game:
+        return str(selection.game)
+    if selection.state:
+        return str(selection.state)
+    if selection.keys:
+        return f"cards{len(selection.keys)}"
+    return "store"
+
+
+def _scope_for(items: List["Item"], inventory: master.Inventory) -> Optional[dict]:
     """What this run is over, in the shape the screen's own press records — WITH THE BID.
 
-    THE LAST RUN-CREATION PATH THAT PRODUCED AN UNBINDABLE RUN. `server/pipeline_routes.py`
-    has written a `scope` block since D33 and a `bid` in it since D145; a run started in a
-    TERMINAL had neither, so `_run_box` fell back to parsing the box number out of the
-    capture directory's name and `cli/resolve.py:refuse_reallocated` had nothing to compare.
-    Every run on the owner's machine written before D145 is in that position, and one of
-    them — `2026-08-29-box1-01` — is why this exists.
+    THE DERIVATION MOVED TO `pipeline/selection.py:scope_block` AND THIS IS THE ADAPTER. It was
+    a second implementation of what `server/pipeline_routes.py` wrote for a pressed run, and the
+    only thing holding the two together was a comment in each pointing at the other — T7's own
+    assertion message says *"the shape `_resolve_scope` writes on the route"* about a call into
+    this function. One derivation, two callers, and the agreement is structural now.
 
-    THE BOX COMES FROM THE SIDECARS AND NOT FROM THE PATH. `captures/cards/box3` is a
-    convention; `Capture.box` is what the capture itself recorded, and the two disagree the
-    moment a directory is renamed, mirrored, or handed over as a pile. A run whose captures
-    name two boxes gets NO scope rather than a guessed one — D48 keeps a run to one box, and
-    a scope block naming one of two would be a claim this command cannot support.
+    THE CAPTURE DIRECTORY IS NO LONGER AN ARGUMENT, because `whole_box` no longer asks whether
+    the run was pointed AT the drawer. Under a selection the path is the scan ROOT and the
+    drawer is a filter, so `capture_dir == captures/cards/box3` stopped being answerable —
+    `scope_block` counts instead: did this run read every photograph the drawer holds? That is
+    the question the field has always meant, and it is right for a press over the store that
+    swept up all of box 3 as well as for one aimed at it.
 
-    `bid` IS ABSENT RATHER THAN WRONG where the registry has no entry for the box, exactly as
-    `server/pipeline_routes.py:_box_bid` abstains: a run with no id is read by the older rule
-    (D36/D145), which is the arm that has always worked.
-
-    `whole_box` IS THE CAPTURE DIRECTORY BEING THE BOX'S OWN, which is the same thing it
-    means on the route — the box's directory IS the scope there and takes no temporary
-    anything. `cards` is null for a whole box for that reason: the count is whatever is on
-    disk when the run starts, not a number chosen in advance.
+    THE BOX STILL COMES FROM THE SIDECARS AND NOT FROM THE PATH, and two boxes still get NO
+    scope rather than a guessed one. That was D48's rule and it is the one part of that entry
+    this change keeps: a scope block naming one of two drawers would be a claim about cards it
+    is wrong about, and the run that produced this function — `2026-08-29-box1-01`, whose 99
+    cards are all in box 3 — is what a guess costs.
     """
-    boxes = {
-        int(item.capture.box)
-        for item in items
-        if item.capture.box is not None
-    }
-    if len(boxes) != 1:
-        return None
-    box = boxes.pop()
-    # The same expression `cli/resolve.py:_photo_digests` builds, rather than an import of
-    # `server/pipeline_routes.py:box_capture_dir` — the CLI does not depend on the server.
-    own = store_files.home() / "captures" / "cards" / f"box{box}"
-    try:
-        whole_box = capture_dir.resolve() == own.resolve()
-    except OSError:
-        whole_box = False
-    entry = inventory.box(box)
-    return {
-        "box": box,
-        "whole_box": whole_box,
-        "cards": None if whole_box else len(items),
-        "bid": None if entry is None else master.int_or_none(entry.bid),
-    }
+    return selection_mod.scope_block(
+        [item.capture for item in items],
+        home=store_files.home(),
+        inventory=inventory,
+    )
 
 
 @dataclass
@@ -630,15 +728,69 @@ def _give_back_unspent(claim, run_dir, store, say) -> bool:
 
 
 def run(args, say) -> int:
-    capture_dir = Path(args.capture_dir)
     store = Store()
 
-    # ------------------------------------------------------------------ read the input
-    captures = sidecar.scan(
-        capture_dir, box=args.box, variant_default=getattr(args, "variant", None)
-    )
+    # ------------------------------------------------------ WHICH CARDS, BEFORE ANY OTHER WORK
+    #
+    # THE SELECTION IS RESOLVED FIRST AND EVERY LATER PASS WALKS WHAT IT LEFT, which is the
+    # whole point of doing it here rather than anywhere more convenient. `--box 3` over the
+    # store's own capture root scans 2,535 photographs and narrows to 678 — and the passes
+    # below are the expensive ones: hashing is 0.687 ms per photograph and crop-and-prepare is
+    # 114.96 ms (D163's measurements). A filter applied after the hash loop would scan the same
+    # files and hash 1,857 of them for nothing; a filter applied after the prepare pass would
+    # be three and a half minutes of nothing. D163 is the same lesson one step down.
+    try:
+        selection = _selection_from(args)
+    except selection_mod.SelectionError as exc:
+        say(f"refused: {exc}")
+        return 1
+    if not selection.named and not getattr(args, "all", False):
+        # THE TERMINAL DEFAULT IS REFUSE-AND-NAME-THE-FLAG, and the route's is not, which is
+        # argued in `Selection.named`. `./pkmnscan identify "$DIR"` with `$DIR` unset used to be
+        # an argparse error; under a list positional it is an empty selection, and the one thing
+        # this change must not do quietly is turn that typo into a paid store-wide submission.
+        say("refused: this names no cards. Give a path, a selection flag, or `--all`.")
+        say("         `--all` is every photograph in the store and is a word you type.")
+        return 1
+
+    roots = selection.roots(store_files.home())
+    captures = []
+    for root in roots:
+        try:
+            captures += sidecar.scan(
+                root,
+                box=getattr(args, "assume_box", None),
+                variant_default=getattr(args, "variant", None),
+            )
+        except FileNotFoundError:
+            say(f"no capture directory at {root}")
+            return 1
+    scanned = len(captures)
+
+    inventory = None
+    if selection.needs_store:
+        # ONE SNAPSHOT FOR THE FILTER, and a second one is taken after the hash pass for the
+        # cache — deliberately, rather than reusing this. The cache consult must see the store
+        # as it is when the send list is decided, and `Inventory.in_state` here is a full-table
+        # pass that a drawer press never pays at all (`needs_store` is four terms, and `box`,
+        # `game` and `keys` are none of them).
+        inventory = store.read().inventory
+    try:
+        captures = selection_mod.narrow(
+            selection,
+            captures,
+            inventory=inventory,
+            run_keys=lambda name: _run_keys_of(name, say),
+        )
+    except selection_mod.SelectionError as exc:
+        say(f"refused: {exc}")
+        return 1
+
     if not captures:
-        say(f"no photographs under {capture_dir}")
+        try:
+            selection_mod.refuse_empty(selection, scanned)
+        except selection_mod.SelectionError as exc:
+            say(f"{exc}")
         return 1
 
     items = [Item(capture=capture) for capture in captures]
@@ -818,7 +970,15 @@ def run(args, say) -> int:
     payload_bytes = sum(i.prepared.payload_bytes for i in to_send if i.prepared)
     chunks = max(1, -(-len(to_send) // batch.MAX_REQUESTS_PER_BATCH))
     say("")
-    say(f"capture dir     {capture_dir}")
+    # WHAT THIS PRESS IS OVER, IN THE SENTENCE EVERY OTHER SITE USES. It said `capture dir` and
+    # one path, which under a selection would be the scan root — `captures/cards` for a press
+    # over box 3 — and therefore the least informative true line available. The sentence is
+    # `Selection.sentence`, composed once so the report, the refusals and the screen cannot
+    # describe one press three ways. `scanned` beside it is what the terms narrowed FROM, which
+    # is the figure that says whether a selection did any narrowing at all.
+    say(f"selection       {selection.sentence()}")
+    if scanned != len(items):
+        say(f"scanned         {scanned} photograph(s), narrowed to {len(items)}")
     say(f"photographs     {len(items)}")
     # COUNTED, NOT SUBTRACTED, and that is a repair the sentinel paid for. This read
     # `len(items) - len(to_send) - len(unreadable)`, and a card refused for want of a prompt
@@ -940,11 +1100,12 @@ def run(args, say) -> int:
     # ------------------------------------------------------- claim what is about to be bought
     #
     # THE LAST FREE ACT BEFORE THE MONEY, AND THE ONLY THING THAT STOPS A DOUBLE INVOICE
-    # (D174). Everything above this line is reads and decodes; everything
-    # below it can spend. `server/pipeline_routes.py:_busy_run` refuses a second press over one
-    # BOX and cannot see this run at all when its captures span two drawers — `_scope_for`
-    # writes no scope block for such a run — so the guard that counts is here, in the one
-    # command every press goes through, keyed by the cards rather than by the drawer.
+    # (D174). Everything above this line is reads and decodes; everything below it can spend.
+    # It is now the ONLY guard of any kind: `server/pipeline_routes.py:_busy_run` compared BOX
+    # numbers, there is no longer a box on that route to compare, and a press over a pile
+    # spanning two drawers was invisible to it in both directions anyway. Keyed by the cards
+    # rather than by the drawer, in the one command every press goes through — the screen's, a
+    # terminal's and an agent's.
     #
     # THE CHECK AND THE WRITE ARE ONE TRANSACTION AND THE SEND LIST IS RECOMPUTED INSIDE IT.
     # `to_send` was decided by the consult pass above, against a snapshot read before the
@@ -965,7 +1126,7 @@ def run(args, say) -> int:
                 # claimed these cards, so its own stale claim is the first thing this would
                 # collide with; naming it releases that run's claims and nobody else's.
                 resuming=(Path(args.run_dir).name if getattr(args, "run_dir", None) else None),
-                capture_dir=str(capture_dir),
+                capture_dir=_recorded_dir(roots),
             )
             if conflicts:
                 # NOTHING WAS WRITTEN, so leaving the block commits nothing — `Rows.changes()`
@@ -1023,15 +1184,20 @@ def run(args, say) -> int:
     run_dir = (
         runs.open_run(args.run_dir)
         if getattr(args, "run_dir", None)
-        else runs.create(args.label or capture_dir.name)
+        else runs.create(args.label or _default_label(selection, roots))
     )
     # THE SCOPE, WITH THE BOX'S TRUE INDEX IN IT (D145). Written before anything is
     # submitted, so a run that dies mid-batch still records which drawer it was over.
-    scope = _scope_for(items, capture_dir, snapshot.inventory)
+    scope = _scope_for(items, snapshot.inventory)
     if scope is not None:
         run_dir.set(scope=scope)
+    # AND WHAT WAS ASKED FOR, BESIDE WHAT WAS FOUND. `scope` answers which drawer this run's
+    # cards are in and is derived from the cards; this answers what the press named, which no
+    # reader can reconstruct — a press over the store that swept up only box 3 and a press aimed
+    # at box 3 leave the same `scope` and different selections.
+    run_dir.set(selection=selection.describe())
     run_dir.set(
-        capture_dir=str(capture_dir),
+        capture_dir=_recorded_dir(roots),
         prompt_fingerprint=fingerprint,
         retry_fingerprint=prompt.retry_fingerprint(),
         rarity_fingerprint=prompt.rarity_fingerprint(),

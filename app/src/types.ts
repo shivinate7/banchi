@@ -2072,14 +2072,57 @@ export type PricingWorklist = {
   unreachable?: Unreachable
 }
 
-/** What a run was scoped to. `whole_box` is the common case and costs no temporary
- *  anything; a selection builds a directory of symlinks that is swept after 48 hours. */
+/** WHICH DRAWER THIS RUN'S CARDS TURNED OUT TO BE IN — derived from the cards, never from the
+ *  path, and `null` on the run where they are in more than one.
+ *
+ *  IT IS NOT THE SELECTION AND THE TWO ARE BOTH ON THE WIRE. This answers "which drawer", which
+ *  `runBoxLabel`, the claim panel and the server's own `refuse_reallocated` (D36) all read;
+ *  `RunSelection` below answers "what did the press name", which none of them can reconstruct.
+ *  A press over the whole store that swept up only box 3 leaves this identical to a press aimed
+ *  at box 3, and a different selection.
+ *
+ *  `whole_box` IS COUNTED AND NO LONGER INFERRED FROM A PATH. It means what it has always meant
+ *  — this run read every photograph the drawer holds — and it is answered by counting the
+ *  drawer's own directory, because under a selection the path is the scan ROOT and the drawer is
+ *  a filter over what each capture recorded. No temporary directory is built for either case any
+ *  more: a ticked selection is a list of position keys on the wire. */
 export type RunScope = {
   box: number
   whole_box: boolean
-  /** How many cards were selected, or null for a whole box — where the count is whatever
-   *  is on disk at the moment the run starts rather than a number chosen in advance. */
+  /** How many cards this run holds in that drawer, or null for a whole box — where the count is
+   *  whatever was on disk at the moment the run started rather than a number chosen ahead. */
   cards: number | null
+}
+
+/** WHAT A PRESS NAMED. One object, every term optional, and every term NARROWS — so the order
+ *  they were given in cannot change which cards were read.
+ *
+ *  THE BOX IS A TERM AND NOT THE UNIT OF WORK. `POST /pipeline/identify` used to refuse any
+ *  request without a positive integer `box` (*"A run is always scoped to one box"*), so
+ *  "identify everything that still needs it" was not a sentence this app could say. Each of
+ *  these is a name the store already has for a group of cards: the drawers on the shelf, D145's
+ *  true indices, the dividers somebody put in one (D10), D21's game claim, `master.STATES`
+ *  verbatim, a capture time, the `box/index` keys the cache and the join are keyed by, and a
+ *  run's own card list.
+ *
+ *  `box` AND `bid` ARE ALWAYS ARRAYS HERE, EVEN FOR ONE DRAWER, and the request may send either
+ *  shape. One press on this store has named three drawers, so the term is list-valued; a reader
+ *  asking which shape it got before it can ask anything else is what D48 argued against for its
+ *  own response, and that half of the argument is kept. */
+export type RunSelection = {
+  paths?: string[]
+  state?: string
+  box?: number[]
+  bid?: number[]
+  section?: number
+  game?: string
+  since?: string
+  keys?: string[]
+  run?: string
+  /** The selection names nothing, so it is every photograph in the store. The screen may send
+   *  this; a terminal refuses it without `--all` typed, because the screen has the free
+   *  preflight and a confirm in front of it and a terminal has a newline. */
+  all?: true
 }
 
 /** One downloadable artefact. `is_import` is what lets a screen offer the file the owner
@@ -2175,46 +2218,26 @@ export type RunDetail = RunSummary & {
  *  returns before `runs.create`. The two numbers a screen must show before it may ask to
  *  spend; null where the preflight did not print the line, so a changed preflight shows as
  *  a missing figure rather than as a confident zero. */
-/** One box as a SEND names it: which cards, and how they are read.
+/** ONE PRESS: which cards, and how they are read.
  *
- *  THE READING IS PART OF THE SCOPE AND NOT A SETTING BESIDE IT. `RunPanel`'s cost estimate
- *  has been voided by a change to the crop or the max edge since D32 was amended — the
- *  estimate is computed from the bytes each card is sent as, and those two decide them — so
- *  the reading was already inside the thing being quoted. Carrying it on the scope is that
- *  fact written down, and it is what lets one send give each box its own. */
-export type RunLeg = {
-  box: number
-  /** The ticked cards, or absent for the whole box. Never an empty array: the server refuses
-   *  one rather than reading it as every card, and the client must not invent that shape. */
-  indices?: number[]
+ *  THE READING IS PART OF THE SEND AND NOT A SETTING BESIDE IT. `RunPanel`'s cost estimate has
+ *  been voided by a change to the crop or the max edge since D32 was amended — the estimate is
+ *  computed from the bytes each card is sent as, and those two decide them — so the reading was
+ *  already inside the thing being quoted.
+ *
+ *  IT IS ONE READING FOR THE PRESS, WHERE IT USED TO BE ONE PER BOX. D48 gave each leg of a
+ *  cart its own crop and max edge and called that the deciding argument for a cart at all.
+ *  Measured on this store: 12 of 15 runs share one `max_edge`, the three that differ are three
+ *  separate presses on three days, and the one multi-drawer press there has ever been gave all
+ *  three of its drawers an identical reading. An operator who wants box 3 read at 1200 and box 5
+ *  at 900 presses twice. */
+export type RunSend = {
+  selection: RunSelection
   crop?: boolean
   maxEdge?: number
 }
 
-/** What one box in a send would cost. The figures are lifted out of that box's own preflight
- *  stdout rather than recomputed anywhere, so the screen and the run's log carry the same
- *  string produced by the same code. `null` where a line did not appear — a changed preflight
- *  shows as a missing figure rather than as a confident zero. */
-export type RunLegPreflight = {
-  ok: boolean
-  exit_code: number
-  scope: RunScope
-  capture_dir: string
-  console: string
-  photographs: number | null
-  cache_hits: number | null
-  to_send: number | null
-  estimate_usd: number | null
-  /** A live run already reading this box. The screen withholds its confirm on this rather
-   *  than letting the operator press a button that is going to refuse. */
-  busy_run: string | null
-  /** A live submission already holding CARDS in this leg, or null. The same courtesy as
-   *  `busy_run` beside it, one vocabulary down: that field answers "is a run reading this
-   *  DRAWER", and this answers "has a live submission already claimed any of these CARDS" —
-   *  the question that has an answer for a press over two drawers and for two disjoint
-   *  selections in one. `sentence` is the server's own refusal text and is rendered verbatim. */
-  claimed: ClaimConflict | null
-}
+
 
 /** Which cards in one leg a live submission is already holding, and whose it is.
  *
@@ -2223,9 +2246,11 @@ export type RunLegPreflight = {
  *  before it spawns — and a third spelling on this side would be a third message an operator
  *  has to learn to read as one thing. */
 export type ClaimConflict = {
-  box: number
-  /** How many of this leg's cards are held. The figure is the point: two is a double-click,
-   *  four hundred is a different mistake. */
+  /** How many of this press's cards are held. The figure is the point: two is a double-click,
+   *  four hundred is a different mistake.
+   *
+   *  `box` WENT WITH THE CART. A refusal over a cart had to say which leg it was about; there is
+   *  one selection now, so the row speaks the vocabulary the claim itself uses. */
   cards: number
   receipts: string[]
   runs: string[]
@@ -2329,51 +2354,72 @@ export type CropPreview = {
 }
 
 
-/** The whole send, summed SERVER-SIDE. Never computed here: this is the number the confirm
- *  is gated on, and a `reduce` in TypeScript would be a second cost model that can disagree
- *  with the per-box figures printed directly above it. A `null` in any box poisons its sum
- *  rather than being skipped, for the reason the per-box `null`s exist at all. */
+/** What this send costs and how many cards it is over. LIFTED SERVER-SIDE, never computed here:
+ *  this is the number the confirm is gated on, and arithmetic in TypeScript would be a second
+ *  cost model that can disagree with the console printed directly below it. A `null` is a line
+ *  the preflight did not print, and the screen draws a blank for it rather than `$0.00`.
+ *
+ *  `cards` REPLACES `boxes`, WHICH IS D33's ONE NOUN CHANGE. That entry's rule is that the total
+ *  is *"the number the operator agrees to spend"*, and boxes are not what is being bought — a
+ *  press over 2,535 cards in five drawers reported `5`. It counts the SELECTION; `to_send`
+ *  beside it is what will be paid for, and the two differing is the cache doing its job. */
 export type RunPreflightTotal = {
   photographs: number | null
   cache_hits: number | null
   to_send: number | null
   estimate_usd: number | null
-  boxes: number
-  /** Every live run standing between this cart and a send. Non-empty withholds the confirm. */
-  busy: { box: number; run: string }[]
+  cards: number
 }
 
-/** ALWAYS A LIST, EVEN FOR ONE BOX. A response shape that changed with the request would make
- *  every reader ask which one it got before it could ask anything else, so a single-box send
- *  answers as a cart of one — the same read-side widening D3's amendment gives a finish
- *  claim. */
+/** ONE QUOTE, where it used to be a list of one or more. D48's rule was that the response shape
+ *  must not change with the request, which is exactly why a cart's answer was always a list;
+ *  with one selection per press there is one thing being quoted and a one-element list would be
+ *  the cart's ghost. */
 export type RunPreflight = {
   ok: boolean
-  scopes: RunLegPreflight[]
+  exit_code: number
+  selection: RunSelection
+  /** What this press is over, in words, composed by the server so the report, the refusals and
+   *  this screen cannot describe one press three ways. */
+  sentence: string
+  /** Which drawer the run WOULD record. Null where the cards are in more than one. */
+  scope: RunScope | null
+  capture_dirs: string[]
+  console: string
+  /** A live submission already holding cards in this press, or null (D174). The courtesy half
+   *  of the money guard, and the whole of it since the box-level `busy_run` went: a box number
+   *  is not something this route takes any more. `sentence` is the server's own refusal text and
+   *  is rendered verbatim. */
+  claimed: ClaimConflict | null
   total: RunPreflightTotal
 }
 
-export type RunStartedLeg = {
+export type RunStartedRun = {
   run: string
   path: string
   pid: number
-  scope: RunScope
+  selection: RunSelection
+  scope: RunScope | null
+  cards: number
   argv: string[]
 }
 
-/** A box whose child could not be spawned. `Popen` can fail on the fourth leg after three
- *  have started and no validation sees that coming, so the response names both halves and the
- *  screen draws the failures: a partial send reported honestly is recoverable by pressing
- *  again for the boxes that did not go, and one reported as a success is an invoice nobody
- *  can account for. */
+/** A press whose child could not be spawned.
+ *
+ *  IT IS UNREACHABLE NOW AND THE KEY STAYS. A cart validated every leg before acting on any
+ *  precisely because `Popen` could fail on the fourth after three had started — an invoice for
+ *  three drawers reported as one failure — so the response named `started` and `failed` side by
+ *  side. One child cannot half-start: it spawns or the request refuses, so `failed` is `[]` on
+ *  every success. The shape is kept because the screen's partial-send notice is one `length`
+ *  check, and a response shape that changed under it would be a reader asking which one it got. */
 export type RunStartFailure = {
-  box: number
   code: string
   message: string
+  sentence?: string
 }
 
 export type RunStarted = {
-  started: RunStartedLeg[]
+  started: RunStartedRun[]
   failed: RunStartFailure[]
 }
 

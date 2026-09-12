@@ -110,13 +110,11 @@ import hashlib
 import json
 import os
 import re
-import shutil
 import subprocess
 import sys
 import threading
 import time
 from collections import OrderedDict
-from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass
 from decimal import Decimal
 from http import HTTPStatus
@@ -131,6 +129,7 @@ from cli import cmd_reprice  # noqa: E402
 from cli import resolve as run_resolve  # noqa: E402
 from cli import runs as run_files  # noqa: E402
 from pipeline import corpus, decisions, games as game_registry, join, reprice, tcgcsv  # noqa: E402
+from pipeline import selection as selection_mod  # noqa: E402
 from pipeline import worklist  # noqa: E402
 # ALIASED, BECAUSE `pricing` IS A LOCAL IN THIS MODULE. Two handlers bind the name to a
 # run's parsed `pricing.json`; importing the module under it would make which one you
@@ -151,7 +150,7 @@ from pipeline import pricehistory  # noqa: E402
 # it reaches geometry, PIL and sqlite.
 from identify import cost  # noqa: E402
 from identify import sidecar  # noqa: E402
-from store import Store, files, master, photos  # noqa: E402
+from store import Store, files, master  # noqa: E402
 from store import submissions as claims  # noqa: E402
 from store.session import Snapshot  # noqa: E402
 
@@ -173,19 +172,14 @@ STEP_TIMEOUT_S = 600
 # thing in this file: measured at roughly a minute for a 544-card box with `--crop`.
 PREFLIGHT_TIMEOUT_S = 900
 
-# HOW MANY BOXES ONE SEND MAY CARRY. A cart of boxes spawns one detached child per box, so an
-# unbounded list is an unbounded number of processes started by one request — the bound is
-# what stops a malformed or looping client doing that, and it is not a judgement about how
-# many boxes an operator may reasonably send. Sixteen is comfortably more than the thirteen
-# this store has ever held.
-MAX_LEGS = 16
-
-# How many preflights run at once. They are separate read-only processes doing CPU-bound
-# image decodes, so they parallelise cleanly and oversubscribing does not: four legs on four
-# threads finish in about the time one takes, and sixteen on sixteen finish in about the time
-# four take while making the machine unusable. Bounded rather than unbounded for the same
-# reason `MAX_LEGS` exists one constant up.
-PREFLIGHT_WORKERS = 4
+# HOW MANY RUNS ONE MERGED EMIT MAY NAME. This was `MAX_LEGS` and was shared with the cart of
+# boxes, which is gone: a send is one selection now and spawns one child, so there is nothing
+# left for a leg bound to bound. The emit's bound is NOT the same bound wearing the same name
+# and is kept with its own (D156 records it as a decision: *"the bound is against a request
+# nobody meant"*). What it guards is different too — `emit` spawns nothing, and every run name
+# lands in one child's argv, so this is `ARG_MAX` and a malformed client rather than a process
+# count. The operator has ten joinable runs and the steady state is the last sitting or two.
+MAX_MERGED_RUNS = 16
 
 # How many of a claim's cards the wire carries. Enough to recognise which selection it is —
 # two or three positions is what tells a double-click from a drawer you had forgotten — and
@@ -206,7 +200,7 @@ CLAIM_KEYS_SHOWN = 8
 # corrected itself only when something else in this process happened to construct a `Popen` —
 # CPython calls `subprocess._cleanup()` in `Popen.__init__`, which reaps whatever `__del__`
 # filed in `subprocess._active` — or when the server restarted. A run nobody else touched said
-# Running indefinitely, and `_busy_run` refused its box for just as long.
+# Running indefinitely, and the box guard of the day refused that box for just as long.
 #
 # HOLDING THE HANDLE AND POLLING IT IS THE FIX, AND THE POLL IS THE REAP: `Popen.poll()` is
 # `waitpid(pid, WNOHANG)`, so the zombie goes at the first read that looks at it.
@@ -338,12 +332,6 @@ EXPORT_REUSE_S = 900
 # hard refusal, so it may not be silent.
 EXPORT_NEAR_CAP = 0.80
 
-# The box a capture directory names, anchored at the start so `box3` and `box3-12-1724936400`
-# both read as 3 and nothing further down a name can be mistaken for one. Used only by
-# `_run_box`, and only for runs whose manifest carries no scope — which is every run started
-# from a terminal.
-_BOX_IN_PATH = re.compile(r"^box(\d+)", re.IGNORECASE)
-
 # The two numbers a screen must show before it may ask to spend. Parsed out of the
 # preflight's own stdout rather than recomputed here, so the figure on the screen and the
 # figure in the log are the same string produced by the same code.
@@ -374,180 +362,11 @@ def box_capture_dir(box: int) -> Path:
     """The LEGACY capture directory for a box — where photographs were filed before D172.
 
     Kept because 4.45 GB moves once and resumably: while `meta.photos_relocated` is unset
-    the photographs are still here, and `_view_dir` below prefers this directory outright
-    when it is populated, so a half-moved store identifies exactly as it always did.
+    the photographs are still here, and `pipeline/selection.py:Selection.roots()` names this
+    directory alongside the content-addressed store, so a half-moved store identifies exactly
+    as it always did.
     """
     return files.home() / "captures" / "cards" / f"box{int(box)}"
-
-
-def _scopes_root() -> Path:
-    """Scope directories live OUTSIDE `captures/cards/`, and that is load-bearing.
-
-    `identify.sidecar.scan` walks its root recursively and turns every photo-suffixed file
-    into a capture and therefore a paid Batch request. A scope directory of symlinks placed
-    under `captures/cards/` would be walked by any run pointed at the box above it, and
-    every card in it would be submitted twice.
-    """
-    return files.home() / ".scopes"
-
-
-def _view_dir(box: int, indices: Optional[Sequence[int]]) -> Path:
-    """The box's readable address, MATERIALIZED — a view over the content store (D172).
-
-    THIS IS THE RULE MADE INTO DIRECTORY ENTRIES. The photograph is filed under the card's
-    own name, so `box3/0017.jpg` is not a place on disk any more; it is a RENDERING of
-    `Box 3 · Card 17`, computed from the store the way `pipeline/join.py:Position` computes
-    the label a Fulfiller reads. So it is built on demand and thrown away, which is what a
-    rendering should be — and the reason a renumber no longer rewrites 537 sidecars is that
-    there is nothing on disk left to correct.
-
-    `indices is None` MEANS THE WHOLE BOX, which is the case the function this replaces
-    never had to serve: a whole box used to BE a directory. `_scope_dir` stood here and
-    built exactly this for a ticked SELECTION, and its argument for symlinks is the
-    argument for this whole approach, so it is kept verbatim — `identify` takes a
-    DIRECTORY, and widening it to take a list of files would put a second input shape
-    through `sidecar.scan`, which is the one function that decides what a capture is.
-    Symlinks keep the photograph under the name `scan` reads and cost nothing on disk;
-    the view is rebuilt from scratch each time rather than reused, because a stale link
-    to a card since deleted would submit a photograph the store no longer knows about.
-
-    THE PHOTOGRAPH IS LINKED AND THE SIDECAR IS WRITTEN, WHICH IS THE ONE DIFFERENCE THAT
-    PAYS. A symlinked sidecar would carry the index the CAPTURE claimed, which goes stale
-    the first time a card in front of it is deleted — and that staleness is precisely what
-    `do_remove_card` used to spend N-k file rewrites preventing. A sidecar composed here
-    from the record is current by construction, because it is made at the moment of the
-    press out of the store's own answer.
-
-    `sidecar.load` NEEDS NO CHANGE FOR THIS, and that is not luck: its resolution is
-    per-field — `resolved_index = sidecar_index if sidecar_index is not None else
-    file_index` — so a view's sidecar naming the current index is read as the sidecar's own
-    claim, through the path it has always taken, and `FROM_SIDECAR` still means what it
-    meant.
-
-    A HALF-MOVED STORE IDENTIFIES EXACTLY AS IT ALWAYS DID. When the legacy directory still
-    holds the photographs and the whole box was asked for, that directory IS returned — no
-    view, no links, nothing temporary. `store/photos.find` is what decides, per card.
-
-    AND A PHOTOGRAPH WITH NO RECORD BEHIND IT IS STILL IN SCOPE, which is not a leftover:
-    the SELECTION is resolved per requested index and not from the store's rows, so a box
-    holding photographs the store has never seen identifies exactly as it did before this
-    function existed. That case is real — `cli/cmd_emit.py`'s own comment names it, "a
-    position the store has never seen, a run joined from a recovered identifications file"
-    — and it is what a directory of photographs from before there was a store looks like.
-    Such an index gets its LEGACY sidecar symlinked rather than a composed one, because the
-    claims in it are the only claims there are.
-    """
-    from_legacy = box_capture_dir(box)
-    inventory = Store().read().inventory
-    relocated = bool(getattr(inventory, "photos_relocated", None))
-    by_index = {at: card for at, _key, card in inventory.records_in(box)}
-
-    # THE WHOLE-BOX SHORTCUT, AND IT IS A REAL SHORTCUT RATHER THAN A FALLBACK: before the
-    # relocation the legacy directory IS the box, exactly as it always was, and building a
-    # view of symlinks pointing back into it would be work for no difference.
-    if indices is None and not relocated and from_legacy.is_dir():
-        return from_legacy
-    wanted = (
-        sorted(by_index) if indices is None
-        else sorted(set(int(value) for value in indices))
-    )
-    if not wanted:
-        raise PipelineRefusal(
-            HTTPStatus.NOT_FOUND,
-            "box_has_no_captures",
-            f"Box {box} holds no card this run could read. Nothing has been photographed "
-            f"into it, or the selection names indices the box does not have.",
-        )
-
-    root = _scopes_root()
-    token = f"box{int(box)}-{len(wanted)}-{int(time.time())}"
-    view = root / token
-    if view.exists():
-        shutil.rmtree(view)
-    view.mkdir(parents=True)
-    linked = 0
-    for at in wanted:
-        card = by_index.get(at)
-        found = photos.find(
-            None if card is None else card.cid, box, at, relocated=relocated
-        )
-        if found is None:
-            continue
-        # THE READABLE ADDRESS IS THE FILENAME, padded to four for `sidecar.scan`'s reason:
-        # it sorts by path string, so `10` before `9` would reorder a whole run.
-        name = f"{int(at):0{photos.INDEX_PAD}d}{photos.PHOTO_SUFFIX}"
-        os.symlink(found, view / name)
-        sidecar = (view / name).with_suffix(photos.SIDECAR_SUFFIX)
-        if card is None:
-            # NO RECORD, SO NOTHING TO COMPOSE FROM. Its own sidecar beside its own
-            # photograph is the whole of what is known about it, and it is linked rather
-            # than copied for the reason the photograph is.
-            beside = found.with_suffix(photos.SIDECAR_SUFFIX)
-            if beside.is_file():
-                os.symlink(beside, sidecar)
-        else:
-            files.write_json(sidecar, _view_sidecar(box, at, card))
-        linked += 1
-    if not linked:
-        shutil.rmtree(view, ignore_errors=True)
-        raise PipelineRefusal(
-            HTTPStatus.NOT_FOUND,
-            "no_photos_in_scope",
-            f"None of the {len(wanted)} card(s) in scope for box {box} has a photograph "
-            f"on disk. Nothing to identify.",
-        )
-    return view
-
-
-def _view_sidecar(box: int, index: int, card: "master.Card") -> dict:
-    """The claims a view's sidecar carries, composed from the record.
-
-    `capture_server.sidecar_payload` IS THE WRITER FOR EVERY OTHER SIDECAR IN THIS REPO and
-    this is deliberately NOT a call to it: that function lives in the module which imports
-    THIS one, so calling it would invert the dependency the `PipelineRefusal` docstring
-    already spends a paragraph keeping one-way. What it costs is a second place that knows
-    the wire spelling of a claim, and `make docs-audit`'s `claim vocabulary` row is what
-    keeps the two in step — it reconciles every claim writer against one vocabulary.
-
-    A FALSY CLAIM IS OMITTED RATHER THAN WRITTEN NULL, which is `sidecar_payload`'s own rule
-    and matters for one field: an empty finish set is no claim at all (D3 amended), and a
-    written `null` would read the same as an absent key to `sidecar.load` but differently to
-    a person reading the file.
-    """
-    payload = {"box": int(box), "index": int(index)}
-    for field, wire in _VIEW_CLAIM_NAMES.items():
-        value = getattr(card, field, None)
-        if value:
-            payload[wire] = value
-    return payload
-
-
-# The record field -> sidecar key mapping, which is `capture_server.CLAIM_WIRE_NAMES` seen
-# from the other side of the import. Reconciled by `make docs-audit`'s `claim vocabulary`
-# row rather than trusted: `metadata_finish` writes `variant`, which is the one spelling a
-# reader would get wrong by guessing.
-_VIEW_CLAIM_NAMES = {
-    "set_hint": "set_hint",
-    "metadata_finish": "variant",
-    "game": "game",
-    "rarity_claim": "rarity_claim",
-    "product": "product",
-    "note": "note",
-}
-
-
-def _sweep_scopes(keep_hours: int = 48) -> None:
-    """Old scope directories are symlinks and are safe to drop. Best effort, never fatal."""
-    root = _scopes_root()
-    if not root.is_dir():
-        return
-    cutoff = time.time() - keep_hours * 3600
-    for entry in root.iterdir():
-        try:
-            if entry.is_dir() and entry.stat().st_mtime < cutoff:
-                shutil.rmtree(entry, ignore_errors=True)
-        except OSError:
-            continue
 
 
 def _run_box_id(manifest: dict) -> Optional[int]:
@@ -592,163 +411,164 @@ def _box_bid(box: int) -> Optional[int]:
     return None if entry is None else entry.bid
 
 
-def _resolve_scope(payload: dict) -> Tuple[Path, dict]:
-    """`{box}` or `{box, indices}` -> the directory to identify, and what it describes.
+def _resolve_selection(payload: dict) -> selection_mod.Selection:
+    """The wire's selection, refused as a `PipelineRefusal` rather than a `SelectionError`.
 
-    WHOLE-BOX USED TO TAKE NO TEMPORARY ANYTHING, AND NOW IT TAKES A VIEW (D172). The box's
-    own capture directory WAS the scope, because the photographs were filed under
-    `box<N>/<index>.jpg` and that directory therefore listed the box. They are filed under
-    the card's own name now, so the readable address has to be MATERIALIZED — which is
-    exactly the mechanism a ticked selection was already served by, one case wider. See
-    `_view_dir`, which replaced `_scope_dir` by growing it a whole-box case.
+    IT IS `_resolve_scope` RENAMED, AND THE NAME IS THE CHANGE. That function refused anything
+    that did not name a positive integer `box` — *"A run is always scoped to one box"* — which
+    is this entry's thesis stated as a 400.
+
+    ONE SEAM, ONE TRANSLATION. `pipeline/selection.py` is the reader for both surfaces and
+    raises its own exception so that it depends on neither the server nor argparse; this is the
+    two-line adapter, and the `empty` flag is what picks the status — a term this cannot read is
+    the request's fault (400) and a well-formed selection that matched nothing is a 404, which
+    is exactly the split `box_required` and `box_has_no_captures` used to make.
     """
-    box = payload.get("box")
-    if not isinstance(box, int) or isinstance(box, bool) or box <= 0:
+    try:
+        return selection_mod.parse(payload)
+    except selection_mod.SelectionError as exc:
         raise PipelineRefusal(
-            HTTPStatus.BAD_REQUEST,
-            "box_required",
-            "Send a positive integer `box`. A run is always scoped to one box.",
-        )
+            HTTPStatus.NOT_FOUND if exc.empty else HTTPStatus.BAD_REQUEST,
+            exc.code,
+            str(exc),
+        ) from None
 
-    raw = payload.get("indices")
-    if raw is None:
-        _sweep_scopes()
-        return _view_dir(box, None), {
-            "box": box, "whole_box": True, "cards": None, "bid": _box_bid(box),
-        }
-    if not isinstance(raw, list) or not raw:
-        # The same refusal `PUT /inventory/<box>` makes about an empty selection, for the
-        # same reason: an empty array quietly meaning "the whole box" is how a selection
-        # that failed to send becomes a run over 544 cards.
-        raise PipelineRefusal(
-            HTTPStatus.BAD_REQUEST,
-            "indices_invalid",
-            "`indices` must be a non-empty array of card indices, or absent for the whole "
-            "box. An empty array is refused rather than read as the whole box.",
-        )
-    indices: List[int] = []
-    for value in raw:
-        if not isinstance(value, int) or isinstance(value, bool) or value <= 0:
+
+def _selection_captures(selection: selection_mod.Selection) -> List["sidecar.Capture"]:
+    """The photographs this selection is over. Reads the disk, and the store only if asked to.
+
+    THE ROUTE SCANS AND NO LONGER SYMLINKS, which is this entry's deletion in one line.
+    `_scope_dir` existed because `identify` took a directory and a subset is not one, so a
+    ticked selection was expressed by building `.scopes/box3-<n>-<stamp>` out of symlinks and
+    pointing the command at it. The command takes the selection itself now, and the only thing
+    this function is for is answering the questions the ROUTE has to answer before it spends:
+    how many cards, whose claim they collide with, and which drawer the run will record.
+
+    THE STORE IS READ ONLY WHERE A TERM NEEDS IT. `Selection.needs_store` is four terms — an
+    id, a section, a state and a capture time — and the ordinary drawer press is none of them,
+    so `{box: 3}` resolves off the sidecars alone. `Inventory.in_state` is a full-table pass
+    (about a second on the operator's store), and paying it on every preflight of a press that
+    cannot use it would be D163's decode-before-you-hash in another register.
+
+    IT NEVER RAISES ON A MISSING CAPTURE ROOT AND ANSWERS EMPTY INSTEAD, because the one
+    refusal a well-formed selection can earn belongs to the caller: the preflight wants to say
+    "this names no photograph, out of N scanned" with the terms on it, and a `FileNotFoundError`
+    from three frames down cannot.
+
+    THE CONTENT-ADDRESSED STORE (D172) IS ONE OF `selection.roots()`'S OWN ROOTS NOW, not a
+    second scan bolted on here — this function has exactly one caller that spends
+    (`do_pipeline_identify`, through the child it spawns) and `cli/cmd_identify.py` walks the
+    same roots for the same reason, so the fix belongs where both read it. See
+    `Selection.roots()`.
+    """
+    captures: List["sidecar.Capture"] = []
+    for root in selection.roots(files.home()):
+        try:
+            captures += sidecar.scan(root)
+        except (FileNotFoundError, OSError):
+            continue
+    inventory = None
+    if selection.needs_store:
+        try:
+            inventory = Store().read().inventory
+        except Exception:  # noqa: BLE001 — a store that will not open is not an empty store
             raise PipelineRefusal(
-                HTTPStatus.BAD_REQUEST,
-                "indices_invalid",
-                f"`indices` holds {value!r}, which is not a positive card index.",
-            )
-        indices.append(value)
-    indices = sorted(set(indices))
-    _sweep_scopes()
-    return _view_dir(box, indices), {
-        "box": box,
-        "whole_box": False,
-        "cards": len(indices),
-        "bid": _box_bid(box),
-    }
+                HTTPStatus.SERVICE_UNAVAILABLE,
+                "store_unavailable",
+                "This selection names a state, a section, a drawer id or a capture time, and "
+                "all four are answered by the store — which will not open right now.",
+            ) from None
+    try:
+        return selection_mod.narrow(
+            selection, captures, inventory=inventory, run_keys=_run_keys
+        )
+    except selection_mod.SelectionError as exc:
+        raise PipelineRefusal(
+            HTTPStatus.NOT_FOUND if exc.empty else HTTPStatus.BAD_REQUEST, exc.code, str(exc)
+        ) from None
+
+
+def _run_keys(name: str) -> List[str]:
+    """Every position key a run's own answers name. `--run <name>`'s reader.
+
+    THROUGH `_open_run`, so the name is validated as a name and never joined onto a path blind
+    — the same posture every other run route here takes. A run with no answers on disk yet
+    names no card, which is the honest reading: `identifications.json` is written whole or not
+    at all (`write_atomic`), so there is no half-answered run to mis-read.
+    """
+    try:
+        payload = run_files.Run(_open_run(name)).read_identifications()
+    except Exception:  # noqa: BLE001
+        return []
+    cards = payload.get("cards")
+    return sorted(cards) if isinstance(cards, dict) else []
 
 
 @dataclass(frozen=True)
-class Leg:
-    """One box in a send: where its photographs are, what it describes, and how it is read.
+class Send:
+    """ONE PRESS: the cards it is over, how they are read, and what its run will be called.
 
-    THE READING IS PER LEG, AND THAT IS THE WHOLE REASON A CART EXISTS RATHER THAN A
-    MULTI-BOX RUN. D32's frontier is a cost-against-sharpness trade measured on real frames,
-    and which end of it is right depends on what is IN the drawer: a box of bulk commons
-    wants `Cheapest / 900`, and a box worth reading a collector number off wants
-    `Measured best / 1200`. One reading stretched across a whole send would make the cart a
-    convenience bought with accuracy, which is the trade this repo does not make.
+    IT REPLACES `Leg`, AND THE DIFFERENCE IS THAT THERE IS EXACTLY ONE OF THEM. A `Leg` was an
+    element of a list — `_resolve_legs` built one per box, `do_pipeline_identify` spawned a
+    detached child per element, and every function between them took a `Sequence`. What that
+    bought was the ability to give each drawer its own reading, which D48 called the deciding
+    argument and which this entry measures as never used: 13 of 13 scope blocks on this store
+    record `whole_box: True`, and 12 of 15 runs share one `max_edge`.
 
-    EVERY LEG IS STILL ONE RUN OVER ONE BOX. Nothing downstream learns a new shape: a run
-    directory, its manifest scope, `join`, `emit`, `reconcile` and the queue it writes are
-    all exactly what they were. What is new is that one press can start several, which is a
-    fact about the REQUEST and not about a run.
+    THE READING IS STILL PER PRESS, which is the half of D48 that survives. One selection gets
+    one crop and one max edge, and an operator who wants box 3 read at 1200 and box 5 at 900
+    presses twice — two presses, two runs, two readings, and no list shape on the wire to carry
+    a combination nobody has ever sent.
     """
 
-    directory: Path
-    scope: dict
+    selection: selection_mod.Selection
     flags: List[str]
     label: str
 
 
-def _one_leg(entry: dict) -> Leg:
-    """One entry of a cart, or a whole payload read as a cart of one."""
-    directory, scope = _resolve_scope(entry)
-    label = entry.get("label")
-    if not isinstance(label, str) or not label.strip():
-        label = f"box{scope['box']}"
-    return Leg(directory, scope, _identify_flags(entry), label.strip())
+def _resolve_send(payload: dict) -> Send:
+    """`{state?, box?, bid?, section?, game?, since?, keys?, run?, paths?}` -> one press.
 
+    THE `box_required` REFUSAL IS GONE, AND IT WAS THE THESIS STATED AS A 400. It read *"Send a
+    positive integer `box`. A run is always scoped to one box"* — so "identify everything that
+    still needs it" was not a sentence this route could be asked, and a pile spanning two
+    drawers was two presses however few cards it held. Every request that used to satisfy it
+    still does: `{box: 3}` is a selection naming one term.
 
-def _resolve_legs(payload: dict) -> List[Leg]:
-    """`{box, ...}` or `{scopes: [{box, ...}, ...]}` -> the boxes this request is about.
-
-    A BARE `box` READS AS A ONE-ELEMENT CART, AND NOTHING EVER WRITES ONE. The same read-side
-    widening D3's amendment gives the finish claim and D21 gives `game`, chosen here for the
-    same reason: every request written before the cart existed — the harness's, a terminal's,
-    and this screen's own single-box send — resolves down the identical path, with no
-    migration and no second spelling on the wire for one idea.
-
-    EVERY LEG IS RESOLVED BEFORE ANY IS ACTED ON. `do_pipeline_identify` spawns a detached
-    child per leg, and a loop that validated as it went would leave two boxes identifying and
-    a third refused — a partial send nobody asked for, with an invoice attached. This is
-    D29's validate-everything-then-write-everything, one register up from a queue answer.
-
-    A REFUSAL TEARS DOWN THE SCOPE DIRECTORIES IT BUILT ON THE WAY. `_resolve_scope` creates
-    one per ticked selection, so a cart refused on its fourth leg would otherwise leave three
-    behind — and T7 asserts, in as many words, that no scope directory survives a refusal.
+    AN UNBOUNDED SELECTION IS ALLOWED HERE AND REFUSED IN A TERMINAL, and the asymmetry is
+    argued in `Selection.named`. The screen has the free preflight and a confirm in front of
+    it; a terminal has a newline.
     """
-    made: List[Path] = []
-    scopes_root = _scopes_root()
+    selection = _resolve_selection(payload)
+    label = payload.get("label")
+    if not isinstance(label, str) or not label.strip():
+        label = _default_label(selection)
+    return Send(selection, _identify_flags(payload), label.strip())
 
-    def _built(leg: Leg) -> Leg:
-        if scopes_root in leg.directory.parents:
-            made.append(leg.directory)
-        return leg
 
-    try:
-        raw = payload.get("scopes")
-        if raw is None:
-            return [_built(_one_leg(payload))]
-        if not isinstance(raw, list) or not raw:
-            raise PipelineRefusal(
-                HTTPStatus.BAD_REQUEST,
-                "scopes_invalid",
-                "`scopes` must be a non-empty array of {box, indices?, crop?, max_edge?}, "
-                "or absent to send the one box named at the top level. An empty array is "
-                "refused rather than read as every box.",
-            )
-        if len(raw) > MAX_LEGS:
-            raise PipelineRefusal(
-                HTTPStatus.BAD_REQUEST,
-                "too_many_scopes",
-                f"{len(raw)} boxes in one send, and the limit is {MAX_LEGS}. Each box "
-                f"spawns its own detached child, so an unbounded list is an unbounded "
-                f"number of processes started by one request.",
-            )
-        legs: List[Leg] = []
-        seen: Dict[int, int] = {}
-        for position, entry in enumerate(raw, start=1):
-            if not isinstance(entry, dict):
-                raise PipelineRefusal(
-                    HTTPStatus.BAD_REQUEST,
-                    "scopes_invalid",
-                    f"Scope {position} is not an object.",
-                )
-            leg = _built(_one_leg(entry))
-            first = seen.get(leg.scope["box"])
-            if first is not None:
-                raise PipelineRefusal(
-                    HTTPStatus.BAD_REQUEST,
-                    "box_repeated",
-                    f"Box {leg.scope['box']} is in this send twice, as scopes {first} and "
-                    f"{position}. Two legs over one box is two invoices for one answer — "
-                    f"the same refusal a live run earns, made before anything is spawned.",
-                )
-            seen[leg.scope["box"]] = position
-            legs.append(leg)
-        return legs
-    except PipelineRefusal:
-        for path in made:
-            shutil.rmtree(path, ignore_errors=True)
-        raise
+def _default_label(selection: selection_mod.Selection) -> str:
+    """What a run is CALLED when the press did not say — and it is still `boxN` where it can be.
+
+    `runs.create` slugs this into `<date>-<slug>-<nn>`, so it is the operator's own handle on
+    the run for the rest of its life and it is worth being the same string it has always been.
+    A press over one drawer is `box3`, exactly as `_one_leg` named it; a press over a state is
+    named for the state; a press over everything is `store`. Nothing reads the name back —
+    `_run_box` reads the manifest's scope block and no longer parses this — so it is a label
+    for a person and is allowed to be short.
+    """
+    if selection.box:
+        return f"box{selection.box}"
+    if selection.bid:
+        return f"drawer{selection.bid}"
+    if selection.run:
+        return f"rerun-{selection.run}"
+    if selection.game:
+        return str(selection.game)
+    if selection.state:
+        return str(selection.state)
+    if selection.keys:
+        return f"cards{len(selection.keys)}"
+    return "store"
 
 
 # ------------------------------------------------------------------------- running things
@@ -859,28 +679,35 @@ def _live_pid(run_dir: Path) -> Optional[int]:
 
 
 def _run_box(manifest: dict) -> Optional[int]:
-    """Which box a run is reading, from its own manifest.
+    """Which box a run is reading, from its own manifest's scope block. `None` where it says.
 
-    THE SCOPE FIRST AND THE PATH SECOND, AND THE SECOND HALF IS NOT A FALLBACK FOR OLD
-    FILES — it is the only thing that can see a run started in a TERMINAL. `scope` is
-    written by this module and by nothing else, so `pkmnscan identify captures/cards/box3`
-    leaves a manifest carrying a capture directory and no scope at all. A guard reading only
-    the scope would let this screen start a second batch over a box an agent was already
-    identifying, which is precisely the invoice the guard exists to prevent.
+    THE PATH ARM IS GONE AND IT WAS CONFIDENTLY WRONG TWICE ON THIS STORE. It parsed
+    `^box(\\d+)` off the capture directory's basename for a run whose manifest carried no
+    scope — written for the run an agent starts in a terminal, which `_scope_for` has given a
+    scope block of its own since D145. Measured on the operator's runs: `2026-09-02-box6-01`'s
+    65 cards are all in box 3 today and `2026-08-29-box1-01`'s 99 are too, while the regex
+    answers 6 and 1 without hesitating. A directory name is a CONVENTION — the sidecar is the
+    claim (`identify/sidecar.py`) — and `--box` is a filter over what each capture recorded
+    precisely because of those two runs.
 
-    The path form covers both directory shapes because both name their box in the same
-    place: `captures/cards/box3` and `.scopes/box3-12-1724936400` are `box3...` either way.
+    `None` IS THE HONEST ANSWER AND IS WHAT THE READERS WANTED ALL ALONG. `_summary` draws no
+    drawer label for it (`runScope.ts:runBoxLabel` returns null), `refuse_reallocated` has
+    nothing to compare and reports the run unverified rather than passing it through, and
+    `_run_drawer` has a rule for it. Every one of those is better than a number off a folder:
+    a run filed under the wrong drawer is the one fault none of them can detect, because a
+    wrong box number resolves.
+
+    WHAT IT COSTS is the drawer label on runs written before D145 and never re-joined — two
+    on this store, both of which it was answering WRONGLY. The two mis-filed runs above also
+    carry a wrong `scope.box`, so this does not make them right; it stops a second voice
+    agreeing with the first for a different bad reason.
     """
     scope = manifest.get("scope")
     if isinstance(scope, dict):
         box = scope.get("box")
         if isinstance(box, int) and not isinstance(box, bool):
             return box
-    recorded = manifest.get("capture_dir")
-    if not isinstance(recorded, str) or not recorded:
-        return None
-    found = _BOX_IN_PATH.match(Path(recorded).name)
-    return int(found.group(1)) if found else None
+    return None
 
 
 @dataclass(frozen=True)
@@ -1075,45 +902,8 @@ def _deleted_box_names() -> Dict[int, str]:
     return out
 
 
-def _busy_run(box: int) -> Optional[str]:
-    """The name of a live run already reading this BOX, if there is one.
-
-    THE GUARD IS AGAINST A DOUBLE-CLICK, not against an attacker: two live batches over one
-    box is the shape that turns one invoice into two. Two runs over DIFFERENT boxes are fine
-    and are not blocked — the Batch API takes them in parallel and the cache keys them apart,
-    which is what makes a cart of boxes one send rather than a queue.
-
-    IT COMPARES BOXES AND NOT PATHS, AND THAT CLOSED A REAL HOLE. It used to resolve the
-    incoming capture directory against each live run's recorded one, which works for a whole
-    box — `captures/cards/box3` both times — and cannot work for a ticked selection, because
-    `_view_dir` builds a FRESH `.scopes/box3-<n>-<timestamp>` on every press. Two presses
-    over one selection were two different paths, neither saw the other, and the subset path
-    therefore had no double-click guard at all.
-
-    It narrows what is allowed, deliberately: two live runs over DISJOINT selections in one
-    box are now refused as well. That is the case an operator cannot tell apart from the
-    double-click at the moment of the press, and the refusal names the run so the answer is
-    one click away rather than one invoice away.
-    """
-    root = files.runs_dir()
-    if not root.is_dir():
-        return None
-    for entry in sorted(root.iterdir(), reverse=True):
-        if not entry.is_dir() or not (entry / run_files.MANIFEST).is_file():
-            continue
-        if _live_pid(entry) is None:
-            continue
-        try:
-            manifest = json.loads((entry / run_files.MANIFEST).read_text())
-        except (OSError, ValueError):
-            continue
-        if _run_box(manifest) == box:
-            return entry.name
-    return None
-
-
-def _leg_keys(leg: Leg) -> List[str]:
-    """Every position key the photographs in this leg's directory carry.
+def _send_keys(captures: Sequence["sidecar.Capture"]) -> List[str]:
+    """Every position key the photographs in this selection carry.
 
     THE SELECTION, NOT THE SEND LIST, and the difference is what makes this check cheap enough
     to run at a press. The send list needs a digest per photograph and a cache consult; the
@@ -1135,54 +925,58 @@ def _leg_keys(leg: Leg) -> List[str]:
     measured on. That is the whole reason this check can run at a press at all — the digests
     the real claim needs cost 0.687 ms EACH, and the crop-and-prepare pass 114.96 ms each.
 
-    IT NEVER RAISES. A directory this cannot read costs the press its courtesy check and not
-    the press: the authoritative claim is written by the command itself, under the store lock,
-    and an empty answer here degrades to exactly the guard that was there before.
+    IT NEVER RAISES, AND IT NO LONGER SCANS. `_selection_captures` has already walked the
+    disk for the preflight's own count, so this is a list comprehension over what is in hand —
+    which is what lets the courtesy check cost nothing on top of the answer the screen was
+    getting anyway. It used to re-scan the leg's directory per leg.
     """
-    try:
-        captures = sidecar.scan(leg.directory, box=leg.scope["box"])
-    except Exception:  # noqa: BLE001 — a courtesy check is never worth an unstarted run
-        return []
     return [capture.key for capture in captures if capture.has_position]
 
 
-def _claim_conflicts(legs: Sequence[Leg]) -> List[dict]:
-    """Which legs of this cart hold cards a live submission has already claimed.
+def _claim_conflict(captures: Sequence["sidecar.Capture"]) -> Optional[dict]:
+    """Which of these cards a live submission is already holding, or None. ONE press, ONE answer.
 
-    THE COURTESY HALF OF THE GUARD (D174), AND IT IS NOT THE GUARD. The
-    binding one is `store/submissions.py:claim_or_refuse`, called by the command inside the
-    transaction it writes the claim in — that is the only place a refusal can be atomic with
-    respect to another press. This runs before anything is spawned so that the ordinary
-    double-click is answered AT THE PRESS, with a sentence, instead of by a child that starts,
-    refuses and dies as a red row on the screen.
+    THE COURTESY HALF OF THE GUARD (D174), AND IT IS NOT THE GUARD. The binding one is
+    `store/submissions.py:claim_or_refuse`, called by the command inside the transaction it
+    writes the claim in — that is the only place a refusal can be atomic with respect to another
+    press. This runs before anything is spawned so that the ordinary double-click is answered AT
+    THE PRESS, with a sentence, instead of by a child that starts, refuses and dies as a red row
+    on the screen.
 
     BOTH EXIST BECAUSE THEY FAIL DIFFERENTLY. This one can be beaten by a press that lands
-    between the read and the spawn; the command's cannot. This one is the only one that can
-    refuse the whole cart before a single child is started, which is `_resolve_legs`'
-    validate-everything-then-write-everything applied to money.
+    between the read and the spawn; the command's cannot.
+
+    IT IS THE WHOLE OF THE COURTESY NOW THAT `_busy_run` IS GONE, AND THAT IS A NARROWING WORTH
+    STATING. `_busy_run` refused a second press over a DRAWER a live run was reading, whatever
+    the cards; this refuses a second press over CARDS a live run is paying for. What stops
+    being refused is a press whose overlap with a live run is entirely cache hits — and that
+    press is spending nothing on those cards, which is D174's own rule for why an empty send
+    list writes no row: *"It is spending nothing, so there is nothing to protect."* What starts
+    being refused is everything `_busy_run` could not see: a live run over a pile spanning two
+    drawers, which `_run_box` answers `None` for, and two disjoint selections in one drawer,
+    which it refused for no reason.
+
+    THE BOX IS OFF THE ROW AND THE CARDS ARE ON IT. `_claim_conflicts` returned one row per leg
+    carrying `box`, because a cart's refusal had to say WHICH leg. There is one selection now,
+    so the row says what it is about in the vocabulary the claim itself uses — the receipts, the
+    runs, the card count and the server's own sentence.
     """
     try:
         held = Store().read().submissions
         live = held.live()
     except Exception:  # noqa: BLE001
-        return []
+        return None
     if not live:
-        return []
-    found: List[dict] = []
-    for leg in legs:
-        overlap = held.overlap(_leg_keys(leg))
-        if not overlap:
-            continue
-        found.append(
-            {
-                "box": leg.scope["box"],
-                "cards": sum(len(shared) for _, shared in overlap),
-                "receipts": [sub.receipt for sub, _ in overlap],
-                "runs": [sub.run for sub, _ in overlap if sub.run],
-                "sentence": claims.conflict_sentence(overlap),
-            }
-        )
-    return found
+        return None
+    overlap = held.overlap(_send_keys(captures))
+    if not overlap:
+        return None
+    return {
+        "cards": sum(len(shared) for _, shared in overlap),
+        "receipts": [sub.receipt for sub, _ in overlap],
+        "runs": [sub.run for sub, _ in overlap if sub.run],
+        "sentence": claims.conflict_sentence(overlap),
+    }
 
 
 def _claim_rows() -> List[dict]:
@@ -1366,100 +1160,138 @@ def _parse_preflight(text: str) -> dict:
     }
 
 
-def _preflight_leg(leg: Leg) -> dict:
-    """One box's dry run. Free by construction — `--dry-run` returns before `runs.create`."""
-    argv = [str(PKMNSCAN), "identify", str(leg.directory), "--dry-run"] + leg.flags
+def _preflight(send: Send) -> dict:
+    """The dry run. Free by construction — `--dry-run` returns before `runs.create`.
+
+    ONE CHILD, AND IT USED TO BE ONE PER BOX ON A FOUR-WORKER POOL. `_preflight_leg` shelled
+    `identify --dry-run` per leg, and `PREFLIGHT_WORKERS` existed because five drawers in
+    series held the request open for five minutes with nothing on screen. A selection is one
+    command however many drawers its cards are in, so the pool, the bound and the latency
+    argument all go together — a press over the whole store is ONE `identify --dry-run` over
+    2,535 photographs where a cart of five would have been five, each re-walking a drawer.
+
+    THE CAPTURES ARE SCANNED HERE AND HANDED DOWN. The count, the claim check and the drawer
+    the run would record all need the same list, and the child re-derives it for itself because
+    it is a separate process — but nothing on THIS side walks the disk twice for one press.
+    """
+    captures = _selection_captures(send.selection)
+    if not captures:
+        try:
+            selection_mod.refuse_empty(send.selection, _scanned(send.selection))
+        except selection_mod.SelectionError as exc:
+            raise PipelineRefusal(HTTPStatus.NOT_FOUND, exc.code, str(exc)) from None
+    argv = [str(PKMNSCAN), "identify", *send.selection.flags(), "--dry-run"] + send.flags
     code, text = _run_sync(argv, PREFLIGHT_TIMEOUT_S)
     return {
         "ok": code == 0,
         "exit_code": code,
-        "scope": leg.scope,
-        "capture_dir": str(leg.directory),
+        "selection": send.selection.describe(),
+        "sentence": send.selection.sentence(),
+        "scope": _scope_for_send(captures),
+        "capture_dirs": [str(root) for root in send.selection.roots(files.home())],
         "console": text,
-        **_parse_preflight(text),
-        # The busy check is reported by the preflight so the screen can withhold its own
-        # confirm before the operator reaches for it, rather than letting them press a
-        # button that is going to refuse.
-        "busy_run": _busy_run(leg.scope["box"]),
-        # THE SAME COURTESY, ONE VOCABULARY DOWN (D174). `busy_run` answers
-        # "is a run reading this DRAWER"; this answers "has a live submission already claimed
-        # any of these CARDS", which is the question that has an answer for a press over two
-        # drawers and for two disjoint selections in one. Null where nothing is claimed, so a
-        # screen branching on it reads exactly like `busy_run` beside it.
-        "claimed": (_claim_conflicts([leg]) or [None])[0],
+        # THE SAME COURTESY THE BOX CHECK USED TO BE, IN THE ONE VOCABULARY THAT HAS AN ANSWER
+        # FOR EVERY PRESS (D174). Null where nothing is claimed, so a screen branching on it
+        # reads exactly as it did when `busy_run` sat beside it.
+        "claimed": _claim_conflict(captures),
+        "total": _total(text, captures),
     }
 
 
-def _total(answers: Sequence[dict]) -> dict:
-    """What the whole send costs, summed HERE and never on the screen.
+def _scanned(selection: selection_mod.Selection) -> int:
+    """How many photographs were in view before the terms narrowed them. For the refusal only.
+
+    IT IS THE HALF THAT MAKES AN EMPTY ANSWER READABLE. `box_has_no_captures` could say one
+    thing — this drawer has no directory — and an empty selection has three causes: a mistyped
+    term, a drawer whose cards are all in a state the selection excluded, and a capture root
+    that is not there. The count separates the last from the first two at no cost, because the
+    scan has already happened.
+    """
+    total = 0
+    for root in selection.roots(files.home()):
+        try:
+            total += len(sidecar.scan(root))
+        except (FileNotFoundError, OSError):
+            continue
+    return total
+
+
+def _scope_for_send(captures: Sequence["sidecar.Capture"]) -> Optional[dict]:
+    """Which drawer this press would record, by `pipeline/selection.py`'s one derivation.
+
+    THROUGH THE SHARED FUNCTION AND NOT A COPY OF IT. This block is what `_run_box`,
+    `_run_box_id`, `refuse_reallocated` (D36) and `_summary`'s drawer label (D56) all read, and
+    it was derived twice — here and in `cli/cmd_identify.py:_scope_for` — with a comment in each
+    pointing at the other. The preflight reports the id the run WOULD record for the same reason
+    it always did: a preview that showed a different scope from the press would be a preview of
+    a different run.
+    """
+    try:
+        inventory = Store().read().inventory
+    except Exception:  # noqa: BLE001 — an identity is never worth an unquoted press
+        inventory = None
+    return selection_mod.scope_block(captures, home=files.home(), inventory=inventory)
+
+
+def _total(console: str, captures: Sequence["sidecar.Capture"]) -> dict:
+    """What this press costs, and how many cards it is over. LIFTED HERE, NEVER ON THE SCREEN.
 
     THE NUMBER THE CONFIRM IS GATED ON IS THE SERVER'S. `app/src/server.ts` records that the
     app is forbidden from computing rules the pipeline owns, and this is the sharpest case of
-    it: the total on screen is the total the operator is agreeing to spend, and a `reduce` in
+    it: the total on screen is the total the operator is agreeing to spend, and arithmetic in
     TypeScript would be a second implementation of the cost model that can disagree with the
-    per-box figures printed directly above it.
+    console printed directly below it.
 
-    A MISSING FIGURE POISONS ITS SUM RATHER THAN COUNTING AS ZERO. `_parse_preflight` answers
-    `None` where a line did not appear, precisely so a changed preflight shows up as a
-    missing figure rather than as a confident zero — and a sum that quietly skipped one would
-    undo that at the exact moment it mattered, by understating what a press is about to buy.
+    A MISSING FIGURE ANSWERS `None` RATHER THAN ZERO, which is the half of this function that
+    survived the cart intact. `_parse_preflight` answers `None` where a line did not appear,
+    precisely so a changed preflight shows up as a missing figure rather than as a confident
+    zero — and the screen draws a blank for it rather than `$0.00`.
+
+    `cards` REPLACES `boxes`, AND THAT IS THE ONE NOUN D33 CHANGES. That entry's rule is that
+    the total is *"the number the operator agrees to spend"*, and boxes are not what is being
+    bought — a press over 2,535 cards in five drawers reported `5`, which is the least useful
+    true number available about it. It is the count of the SELECTION and not of the send list:
+    `to_send` beside it is what will be paid for, and the two differing is the cache doing its
+    job. Measured on the operator's store 2026-09-12: a press over everything is 2,535 cards and
+    0 to send, because all 2,535 are cache hits.
     """
-
-    def _sum(key: str):
-        values = [answer[key] for answer in answers]
-        return None if any(value is None for value in values) else sum(values)
-
-    money = _sum("estimate_usd")
+    figures = _parse_preflight(console)
     return {
-        "photographs": _sum("photographs"),
-        "cache_hits": _sum("cache_hits"),
-        "to_send": _sum("to_send"),
-        # Rounded to cents at the sum rather than per leg: the legs are what the commands
-        # printed and are left exactly as printed.
-        "estimate_usd": None if money is None else round(money, 2),
-        "boxes": len(answers),
-        # Every live run standing between this cart and a send, named. The screen withholds
-        # its confirm on a non-empty list, which is cheaper than letting the operator press a
-        # button that is going to refuse on the third of five boxes.
-        "busy": [
-            {"box": answer["scope"]["box"], "run": answer["busy_run"]}
-            for answer in answers
-            if answer["busy_run"] is not None
-        ],
+        **figures,
+        # Rounded to cents where the console printed a figure at all, and left exactly as
+        # printed otherwise.
+        "estimate_usd": (
+            None if figures["estimate_usd"] is None else round(figures["estimate_usd"], 2)
+        ),
+        "cards": len(captures),
     }
 
 
 def do_pipeline_preflight(payload: dict) -> dict:
     """`POST /pipeline/preflight` — what a send would cost. FREE, and creates no run.
 
-    `identify --dry-run` returns before `runs.create`, so this leaves nothing on disk at all.
-    Each box's raw stdout is returned alongside its parsed figures and the screen shows it
-    verbatim: `docs/DESIGN.md`'s copy rule makes the owner's screens the place the pipeline's
-    own words are shown rather than paraphrased, and the preflight is the densest thing it
-    says.
+    `identify --dry-run` returns before `runs.create`, so this leaves nothing on disk at all —
+    and as of this entry that is true of the ROUTE as well as of the command. `_resolve_scope`
+    built a directory of symlinks per ticked selection before the command was even started, so
+    a preflight that spent nothing still wrote to disk and still needed sweeping: 264 such
+    directories on the operator's checkout, every one named `-1-` because every one was the crop
+    preview stepping a single card.
 
-    THE ANSWER IS ALWAYS A LIST, EVEN FOR ONE BOX. A response shape that changed with the
-    request would make every reader ask which one it got before it could ask anything else —
-    so a single-box send answers as a cart of one, exactly as `_resolve_legs` reads it.
+    THE ANSWER IS ONE QUOTE, WHERE IT USED TO BE A LIST OF ONE OR MORE. D48's rule was that the
+    shape must not change with the request, and that is exactly why a cart's response was always
+    a list; with one selection per press there is one thing being quoted, and a one-element list
+    would be the cart's ghost. The raw stdout is returned beside the figures and the screen shows
+    it verbatim: `docs/DESIGN.md`'s copy rule makes the owner's screens the place the pipeline's
+    own words are shown rather than paraphrased, and the preflight is the densest thing it says.
 
-    THE LEGS RUN AT ONCE, WHICH IS A LATENCY FIX AND NOT AN OPTIMISATION. A preflight decodes
-    and crops every photograph in its box, measured at about a minute for 544 cards, so five
-    boxes in series is a request held open for five minutes with nothing on screen. They are
-    separate read-only processes over a lock-free snapshot, so there is nothing for them to
-    contend over — `--dry-run` writes nothing at all, which is the property that makes this
-    safe rather than merely fast.
+    THERE IS NO SPEND CEILING HERE AND THERE IS NOT GOING TO BE ONE. The owner's ruling,
+    2026-09-12: *"Give me settings if I can have them, but if I want to run everything, then I
+    get to run everything."* So what this route owes the screen is the FIGURE and the COUNT,
+    honestly, and the screen owes the operator a confirm that is loud in proportion — a refusal
+    at some number would be this route deciding how much of their own store the operator may
+    read.
     """
-    legs = _resolve_legs(payload)
-    if len(legs) == 1:
-        answers = [_preflight_leg(legs[0])]
-    else:
-        with ThreadPoolExecutor(max_workers=min(PREFLIGHT_WORKERS, len(legs))) as pool:
-            answers = list(pool.map(_preflight_leg, legs))
-    return {
-        "ok": all(answer["ok"] for answer in answers),
-        "scopes": answers,
-        "total": _total(answers),
-    }
+    return _preflight(_resolve_send(payload))
 
 
 # ------------------------------------------------------------------- the crop preview
@@ -1559,12 +1391,17 @@ def do_pipeline_crop_preview(payload: dict) -> dict:
     whose `crop_bands` does not claim the band gets NO band and a sentence saying why —
     the same refusal `crop_regions` makes, reached through the same registry field.
 
-    IT CREATES NOTHING AND SPENDS NOTHING. No run directory, no scope directory, no store
-    write, no model call. It is a read, and it sits in this module rather than beside
-    `GET /photo` because everything it knows — the crop, the max edge, the scope — is this
-    module's vocabulary.
+    IT CREATES NOTHING AND SPENDS NOTHING. No run directory, no store write, no model call. It
+    is a read, and it sits in this module rather than beside `GET /photo` because everything it
+    knows — the crop, the max edge, the selection — is this module's vocabulary.
+
+    AND IT NO LONGER WRITES A SYMLINK DIRECTORY TO DO IT, which is where that sentence was
+    quietly false. Every one of the 264 scope directories on the operator's checkout was built
+    by THIS route: each is named `box<n>-1-<stamp>`, a selection of exactly one card, which is
+    what stepping the preview does. A free read that had to write to disk and then be swept was
+    the clearest sign the directory was standing in for a vocabulary that did not exist.
     """
-    scope_dir, scope = _resolve_scope(payload)
+    selection = _resolve_selection(payload)
     crop = bool(payload.get("crop"))
     offset = payload.get("offset", 0)
     if not isinstance(offset, int) or isinstance(offset, bool) or offset < 0:
@@ -1577,7 +1414,7 @@ def do_pipeline_crop_preview(payload: dict) -> dict:
     try:
         import geometry
         from geometry.crop import BAND_PROFILES
-        from identify import images as identify_images, sidecar
+        from identify import images as identify_images
         from pipeline import games
         from PIL import Image  # noqa: F401 — probes Pillow's presence, same as the four imports above it
     except ImportError as exc:
@@ -1592,13 +1429,14 @@ def do_pipeline_crop_preview(payload: dict) -> dict:
             f"interpreter — run `make venv` and restart `make server`. ({exc})",
         ) from exc
 
-    captures = [c for c in sidecar.scan(scope_dir) if c.has_position]
+    captures = [c for c in _selection_captures(selection) if c.has_position]
     total = len(captures)
     if total == 0:
         raise PipelineRefusal(
             HTTPStatus.NOT_FOUND,
-            "scope_is_empty",
-            "Nothing in this scope carries a position, so there is no card to preview.",
+            "selection_is_empty",
+            f"Nothing to preview: {selection.sentence()} names no photograph carrying a "
+            f"position.",
         )
 
     # WRAPS RATHER THAN CLAMPS. The stepper is held down as often as it is tapped, and a
@@ -1625,8 +1463,8 @@ def do_pipeline_crop_preview(payload: dict) -> dict:
         )
     except identify_images.ImageError as exc:
         return {
-            "scope": scope,
-            "capture_dir": str(scope_dir),
+            "selection": selection.describe(),
+            "capture_dirs": [str(root) for root in selection.roots(files.home())],
             "crop": crop,
             "max_edge": max_edge,
             "total": total,
@@ -1677,8 +1515,8 @@ def do_pipeline_crop_preview(payload: dict) -> dict:
         )
 
     return {
-        "scope": scope,
-        "capture_dir": str(scope_dir),
+        "selection": selection.describe(),
+        "capture_dirs": [str(root) for root in selection.roots(files.home())],
         "crop": crop,
         "max_edge": max_edge,
         "total": total,
@@ -1721,23 +1559,35 @@ def do_pipeline_crop_preview(payload: dict) -> dict:
 # --------------------------------------------------------------------- the one that spends
 
 
-def _spawn(leg: Leg) -> dict:
-    """Create this leg's run directory and start its detached child. Costs money."""
-    run = run_files.create(leg.label)
-    # Written HERE and not left to the child, because `_run_box` reads it: a run whose
-    # manifest names neither a scope nor a capture directory until the child's first flush
-    # is a run the double-click guard cannot see during exactly the window a double-click
-    # happens in.
+def _spawn(send: Send, captures) -> dict:
+    """Create the run directory and start the detached child. Costs money. ONE child.
+
+    IT USED TO BE CALLED ONCE PER BOX IN A LOOP, and the loop is what `D48`'s cart was: one
+    detached child per drawer, each its own run, each its own reading. What replaces it is one
+    child over one selection — so a pile spanning three drawers is one run and one invoice
+    instead of three presses, and a press over the store is one process instead of five.
+    """
+    run = run_files.create(send.label)
+    roots = send.selection.roots(files.home())
+    # Written HERE and not left to the child, because `_run_box` reads it: a run whose manifest
+    # names no scope until the child's first flush is a run the claim panel and the drawer label
+    # cannot see during exactly the window a double-click happens in. The child re-derives it
+    # from what it actually read, through the same `selection.scope_block`, and overwrites this.
     run.set(
-        capture_dir=str(leg.directory),
-        scope=leg.scope,
+        # ONE ROOT OR NONE, NEVER A JOINED STRING. `Run.capture_dir` is typed `Optional[Path]`
+        # and every reader of it treats absence as "this run does not say" — which is the honest
+        # answer for a selection naming several roots, where the full list is in `selection`
+        # below. It was the input to `_run_box`'s deleted path arm and has no Python reader now.
+        capture_dir=str(roots[0]) if len(roots) == 1 else None,
+        scope=_scope_for_send(captures),
+        selection=send.selection.describe(),
         started_by="app",
-        flags_from_app=leg.flags,
+        flags_from_app=send.flags,
     )
 
     argv = (
-        [str(PKMNSCAN), "identify", str(leg.directory), "--run-dir", str(run.directory)]
-        + leg.flags
+        [str(PKMNSCAN), "identify", *send.selection.flags(), "--run-dir", str(run.directory)]
+        + send.flags
     )
     console = run.directory / CONSOLE
     try:
@@ -1759,7 +1609,7 @@ def _spawn(leg: Leg) -> dict:
         raise PipelineRefusal(
             HTTPStatus.INTERNAL_SERVER_ERROR,
             "spawn_failed",
-            f"Could not start `pkmnscan identify` for box {leg.scope['box']}: {exc}",
+            f"Could not start `pkmnscan identify` for {send.selection.sentence()}: {exc}",
         ) from None
     # THE HANDLE FIRST, THE MARKER SECOND. `_live_pid` reads the handle for a run this server
     # owns, so a poll landing between the two still reads the run as live; the reverse order
@@ -1777,7 +1627,9 @@ def _spawn(leg: Leg) -> dict:
         "run": run.directory.name,
         "path": str(run.directory),
         "pid": child.pid,
-        "scope": leg.scope,
+        "selection": send.selection.describe(),
+        "scope": _scope_for_send(captures),
+        "cards": len(captures),
         "argv": argv,
     }
 
@@ -1785,34 +1637,34 @@ def _spawn(leg: Leg) -> dict:
 def do_pipeline_identify(payload: dict) -> Tuple[HTTPStatus, dict]:
     """`POST /pipeline/identify` — THE ROUTE THAT SPENDS MONEY. Spawns, does not wait.
 
-    Answers as soon as the children are running, with one run name per box. Everything after
-    that is READ FROM THE RUN DIRECTORIES by `do_pipeline_run`, which is what lets a run
-    outlive the server that started it: this process keeps no answer about a run.
+    Answers as soon as the child is running, with the run's name. Everything after that is READ
+    FROM THE RUN DIRECTORY by `do_pipeline_run`, which is what lets a run outlive the server
+    that started it: this process keeps no answer about a run.
 
-    It does keep a HANDLE on each child it spawned (`_CHILDREN`), and that is not the same
-    thing — it is a fact about this process, not about the run, and its absence means "ask the
-    files" rather than "not running". Without one, nothing ever reaped a detached child and a
-    finished run read as still identifying.
+    It does keep a HANDLE on the child it spawned (`_CHILDREN`), and that is not the same thing
+    — it is a fact about this process, not about the run, and its absence means "ask the files"
+    rather than "not running". Without one, nothing ever reaped a detached child and a finished
+    run read as still identifying.
 
-    IT IS STILL EXACTLY ONE ROUTE THAT SPENDS, AND THAT IS WHY THE CART LANDED HERE RATHER
-    THAN BESIDE IT. A send of several boxes could have been a second route, or N calls from
-    the screen; both were declined for the same reason. This file's whole claim is that the
-    money is behind one door with one `confirm` and one refusal path, and a screen pressing a
-    money route five times on one operator decision is five confirms none of which the
-    operator gave separately. One press, one request, one `confirm`, one total on the screen
-    above it.
+    IT IS STILL EXACTLY ONE ROUTE THAT SPENDS (D33), AND IT IS NOW ONE CHILD PER PRESS. The
+    cart's argument for landing here rather than beside it still holds and is now easier to
+    keep: this file's whole claim is that the money is behind one door with one `confirm` and
+    one refusal path, and there is one selection, one total and one run behind that door.
 
-    NOTHING IS SPAWNED UNTIL EVERY LEG HAS PASSED. `_resolve_legs` validates the whole cart,
-    and the live-run guard runs over all of it before the first child starts — so a cart with
-    a busy box in the middle refuses whole, rather than leaving two boxes identifying and an
-    error message about the third. D29's shape, with an invoice instead of a queue answer.
+    WHAT WENT WITH THE CART IS THE PARTIAL SEND. `_resolve_legs` validated every leg before any
+    was acted on precisely because `Popen` could fail on the fourth after three had started —
+    an invoice for three drawers reported as one failure — so the response carried `started` and
+    `failed` side by side and the screen drew both. One child cannot half-start: it spawns or it
+    refuses, and `failed` is `[]` on every success and unreachable on every refusal. Both keys
+    stay on the wire because the screen's partial-send notice is one `length` check and a shape
+    that changed under it would be a reader asking which response it got.
 
-    THE ONE THING THAT CANNOT BE PRE-CHECKED IS REPORTED RATHER THAN HIDDEN. `Popen` can fail
-    on the fourth leg after three have started, and no amount of validation sees that coming.
-    The response carries what STARTED and what did not, both named; the screen draws the
-    failures. A partial send reported honestly is recoverable — press again for the boxes
-    that did not go — and a partial send reported as a success is an invoice nobody can
-    account for.
+    THE BOX GUARD IS GONE AND THE CARD GUARD IS WHAT IS LEFT. `_busy_run` refused a second
+    press over a drawer a live run was reading; it took a box number, and there is no longer a
+    box number on this route to give it. Its replacement is D174's claim, which was built for
+    exactly this and which that entry says must be exercised before the guard it replaces comes
+    out — `_claim_conflict` here at the press, `claim_or_refuse` in the transaction that decides
+    what is being bought.
     """
     if payload.get("confirm") is not True:
         raise PipelineRefusal(
@@ -1821,59 +1673,30 @@ def do_pipeline_identify(payload: dict) -> Tuple[HTTPStatus, dict]:
             "This is the step that spends money. Send `confirm: true` — and show the "
             "operator /pipeline/preflight's card count and estimate before you do.",
         )
-    legs = _resolve_legs(payload)
-    for leg in legs:
-        busy = _busy_run(leg.scope["box"])
-        if busy is not None:
-            raise PipelineRefusal(
-                HTTPStatus.CONFLICT,
-                "run_already_live",
-                f"Run {busy} is already identifying box {leg.scope['box']}. Two live "
-                f"batches over one box is two invoices for one answer — watch that run, or "
-                f"wait for it to finish. Nothing in this send was started.",
-            )
-    # THE CARD-LEVEL REFUSAL, OVER THE WHOLE CART, BEFORE THE FIRST CHILD STARTS
-    # (D174). It sits beside the box check rather than replacing it, and it
-    # sees the two things the box check structurally cannot: a live run whose captures span
-    # more than one drawer (`_run_box` answers None for one, so `_busy_run` is blind to it in
-    # both directions), and a claim whose holder died with a batch in flight.
-    #
-    # IT IS NOT THE BINDING GUARD AND MUST NOT BE READ AS ONE. `store/submissions.py`'s claim,
-    # written by the command inside the transaction that recomputes what is being bought, is
-    # the only refusal that is atomic against another press; this one can be beaten by a press
-    # landing between the read and the spawn, and its job is to answer the ordinary
-    # double-click AT THE PRESS with a sentence instead of with a dead run on the screen.
-    conflicts = _claim_conflicts(legs)
-    if conflicts:
+    send = _resolve_send(payload)
+    captures = _selection_captures(send.selection)
+    if not captures:
+        try:
+            selection_mod.refuse_empty(send.selection, _scanned(send.selection))
+        except selection_mod.SelectionError as exc:
+            raise PipelineRefusal(HTTPStatus.NOT_FOUND, exc.code, str(exc)) from None
+    # THE CARD-LEVEL REFUSAL, BEFORE THE CHILD STARTS (D174). IT IS NOT THE BINDING GUARD AND
+    # MUST NOT BE READ AS ONE. `store/submissions.py`'s claim, written by the command inside the
+    # transaction that recomputes what is being bought, is the only refusal that is atomic
+    # against another press; this one can be beaten by a press landing between the read and the
+    # spawn, and its job is to answer the ordinary double-click AT THE PRESS with a sentence
+    # instead of with a dead run on the screen.
+    conflict = _claim_conflict(captures)
+    if conflict is not None:
         raise PipelineRefusal(
             HTTPStatus.CONFLICT,
             "cards_already_claimed",
-            "; ".join(row["sentence"] for row in conflicts)
+            conflict["sentence"]
             + ". Two live batches over one card is two invoices for one answer. Watch that "
             "run, or release its claim on this screen if its holder is gone. Nothing in this "
             "send was started.",
         )
-
-    started: List[dict] = []
-    failed: List[dict] = []
-    for leg in legs:
-        try:
-            started.append(_spawn(leg))
-        except PipelineRefusal as refusal:
-            failed.append(
-                {
-                    "box": leg.scope["box"],
-                    "code": refusal.code,
-                    "message": str(refusal),
-                }
-            )
-    if not started:
-        raise PipelineRefusal(
-            HTTPStatus.INTERNAL_SERVER_ERROR,
-            failed[0]["code"],
-            failed[0]["message"],
-        )
-    return HTTPStatus.ACCEPTED, {"started": started, "failed": failed}
+    return HTTPStatus.ACCEPTED, {"started": [_spawn(send, captures)], "failed": []}
 
 
 # --------------------------------------------------------------------------- reading runs
@@ -4906,11 +4729,11 @@ def do_pipeline_merged_emit(payload: dict) -> dict:
             "runs_required",
             "Send a non-empty `runs` list. A merged emit over no run is not a send.",
         )
-    if len(wanted) > MAX_LEGS:
+    if len(wanted) > MAX_MERGED_RUNS:
         raise PipelineRefusal(
             HTTPStatus.BAD_REQUEST,
             "too_many_runs",
-            f"At most {MAX_LEGS} runs in one send.",
+            f"At most {MAX_MERGED_RUNS} runs in one send.",
         )
     # RESOLVED THROUGH `_open_run`, WHICH VALIDATES THE NAME AND NEVER JOINS A PATH BLIND —
     # the same guard every other run route uses, applied before anything is read.
