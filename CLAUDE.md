@@ -1657,6 +1657,7 @@ D146 Two agreeing signals release the rarity claim, and the same comparison run 
 D147 The claim is spent on the oldest copies, because a card captured tonight was in no file sent last week
 D148 The wait is about the claim commit, and an answer it has not got is never a pass
 D149 A section number that resolves is not a citation that is right, and no check can read what a sentence is about
+D150 A reading taken after a sale is that sale's own result, and it ages the claim
 D-section-is-the-ruler The section is the ruler and the box is the margin note, and the bracket between them is deleted
 
 ```
