@@ -374,7 +374,7 @@ COMPONENTS = [
                                     "what is covered is the reading and the write, while the "
                                     "argument parsing and the printed report here are not.",
                             "governed_by": ["D14", "D21", "D24"]},
-            "cmd_identify.py": {"does": "submit, wait, collect, cache. The one that costs money. HASHES BEFORE IT DECODES: the cache is keyed by the photograph's sha256, so only what is being sent is cropped and downscaled, and `Item.stage` is the sentinel that keeps `prepared is None` from meaning both `unreadable` and `cache hit` (D-hash-before-decode).", "governed_by": ["D1", "D2", "D21", "D23", "D36", "D-hash-before-decode"]},
+            "cmd_identify.py": {"does": "submit, wait, collect, cache. The one that costs money. HASHES BEFORE IT DECODES: the cache is keyed by the photograph's sha256, so only what is being sent is cropped and downscaled, and `Item.stage` is the sentinel that keeps `prepared is None` from meaning both `unreadable` and `cache hit` (D163).", "governed_by": ["D1", "D2", "D21", "D23", "D36", "D163"]},
             "cmd_join.py": {"does": "resolve identifications against the export; --dry-run previews. "
                                     "SEEDS inventory/prices.json's rule and basis on the first "
                                     "join of an EMPTY corpus and never reassigns them (D49, D86) "

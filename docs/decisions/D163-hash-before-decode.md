@@ -1,4 +1,4 @@
-## D-hash-before-decode — The cache is keyed by the digest, so the digest is what the press computes first
+## D163 — The cache is keyed by the digest, so the digest is what the press computes first
 
 **`identify` decoded every photograph in the directory before it asked the store whether it already owned the answer.** `cli/cmd_identify.py` ran `geometry.detect_card` and
 `images.prepare` over the whole capture directory, and consulted the cache afterwards. The

@@ -227,7 +227,7 @@ An answer is reused when position and photo hash still match. Position is the id
 photo hash is the staleness check, and it is what makes a re-shot photo get re-read instead
 of silently returning the answer to a picture that no longer exists.
 
-**Which is why the press hashes before it decodes** (D-hash-before-decode, 2026-09-12). The
+**Which is why the press hashes before it decodes** (D163, 2026-09-12). The
 reuse test above needs the sha256 of the bytes on disk and nothing else, so `identify` hashes
 every photograph, asks the store what it already owns, refuses what has no prompt, and only
 then crops and downscales what is actually being sent. Until that reorder it prepared the
