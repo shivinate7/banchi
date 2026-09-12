@@ -1692,18 +1692,38 @@ COMPONENTS = [
                         "deleted, a registration `git worktree prune` disowns, a husk "
                         "directory holding nothing but `.serve/` caches with nothing running "
                         "under it. TIER 2 previews and waits for `--confirm`: a merged branch "
-                        "no tree holds, a worktree with no session in it. Liveness is READ "
+                        "no tree holds, a worktree with no session in it, and — since "
+                        "2026-09-12 — a PROCESS nothing owns. Liveness is READ "
                         "from `~/.claude/sessions/<pid>.json`, never inferred from mtimes — "
                         "see `_same_process` for the timezone bug that made every session "
                         "read as dead, and for why every unreadable case resolves to LIVE. "
                         "`--teardown` is the half a session-end hook runs. Repo-agnostic: no "
-                        "import from this tree, and `--root` points it at any clone.",
+                        "import from this tree, and `--root` points it at any clone. "
+                        "OWNERSHIP IS THAT SAME READ, POINTED AT A DIFFERENT QUESTION: not "
+                        "\"is this tree busy\" but \"does anything still own this process\". "
+                        "Every other test here is about a tree, a branch or a registration and "
+                        "tier 1 asks whether a thing can be live at all, so a background loop "
+                        "whose session had ended read as live, leave it alone — one merged "
+                        "pull requests for 3 h 58 m out from under its own successor and "
+                        "nothing in this repo could see it. `loose_processes` names only what "
+                        "it can PROVE a session started, by `_SESSION_MARK` in the argv of the "
+                        "process or an ancestor, so the owner's own hand-started server is "
+                        "passed over in silence rather than guessed at. IT CAN NEVER NAME THE "
+                        "MAIN CHECKOUT'S SERVER, BY CONSTRUCTION: being in a LINKED worktree "
+                        "is a requirement to be offered, not an exclusion applied afterwards, "
+                        "so no ordering and no failed `main_checkout()` lookup can let D53's "
+                        "process through — proved with the session oracle EMPTY. Tier 2 and "
+                        "not tier 1, because `sweep` reaps tier 1 before it reads `confirm` "
+                        "and `make status` runs the bare preview. A process a live session "
+                        "still owns, older than `STALE_HOURS`, is reported and never reaped at "
+                        "any flag.",
                 # D44 is the asymmetry it inherits — provably dead is reaped, doubtful is only
                 # ever reported. D18 keeps it off the gate: with icloud-sweep it is one of the
                 # two targets here that can delete a file. D53 is what it must not undo — the
                 # main checkout's supervisor is the product and is never touched. D42 is why a
                 # branch is judged by ancestry rather than by `git branch -d`.
-                "governed_by": ["D18", "D42", "D44", "D53"],
+                "governed_by": ["D18", "D42", "D44", "D53", "D111", "D127",
+                                "D-a-loop-nobody-is-listening-to"],
             },
             "serve-selftest.py": {
                 "does": "THE SUPERVISOR'S BUILD JOB, PROVED AGAINST A THROWAWAY TREE (D138). "
@@ -1730,14 +1750,31 @@ COMPONENTS = [
                 "tested_by": [],
             },
             "janitor-selftest.sh": {
-                "does": "proves janitor.py against a throwaway origin, clone and four linked "
-                        "worktrees, with a fake liveness oracle and four short-lived processes "
+                "does": "proves janitor.py against a throwaway origin, clone and seven linked "
+                        "worktrees, with a fake liveness oracle and real processes "
                         "confined to the fixture by `--confine`. The cases that matter are the "
                         "refusals, and each asserts the janitor's own sentence rather than the "
                         "outcome alone — git would refuse some of them by itself, and survival "
-                        "by somebody else's refusal is not coverage. Mutation-tested: five "
-                        "guards removed one at a time, all five caught.",
-                "governed_by": ["D18", "D44"],
+                        "by somebody else's refusal is not coverage. 76 arms. SOME OF ITS "
+                        "PROCESSES CARRY A FAKE SHELL SNAPSHOT, because that is how "
+                        "`loose_processes` proves a session started something, and the most "
+                        "important case in the file is the one that must NOT fire: a "
+                        "long-lived marked process in the fixture's MAIN checkout owned by no "
+                        "session, which is what `make launch-agent` leaves running over the "
+                        "owner's real store. It is given the mark deliberately, so that being "
+                        "in the main checkout is the ONLY thing between it and a reap. A "
+                        "BYSTANDER LEADING THE GROUP an offered process sits in is what makes "
+                        "`_stop`'s leader-only rule load-bearing, and the child's path travels "
+                        "in the ENVIRONMENT rather than argv so the parent is not placed "
+                        "beside it. Mutation-tested: five guards removed one at a time, all "
+                        "five caught; then twelve arms over the ownership finding, eleven "
+                        "caught — the survivor under-signals and is recorded in the entry "
+                        "rather than explained away. That run also exposed two arms of its own "
+                        "that proved nothing: a needle looking for `janitor.py` in a line "
+                        "`_shorten` truncates first, and `ps -axww -o command= -p <pid>`, "
+                        "where BSD's `-a` overrides `-p` and prints the whole machine.",
+                "governed_by": ["D18", "D44", "D53", "D111", "D127",
+                                "D-a-loop-nobody-is-listening-to"],
             },
             "reap.py": {
                 "does": "the kill guard, and the tool it names. ONE FILE, TWO FACES, ONE "
