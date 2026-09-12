@@ -285,6 +285,24 @@ OPEN = [
               "repo, build the SQLite index (cards join to sets by FILENAME \u2014 printedTotal lives only "
               "in sets/en.json and is half the join key), then fill the image mirror with the "
               "Content-Length dry run first. D15."},
+    {"n": 24,
+     "title": "A durable scheduled heartbeat that watches repo state across sessions",
+     "note": "THE QUESTIONS NO SINGLE SESSION IS POSITIONED TO ASK, because each one sees only its own "
+              "tree and its own branch: open pull requests green and unmerged; a pull request now "
+              "conflicting with a live session that has not been told; worktrees dirty with no session "
+              "in them, and merged branches `make janitor` would take; whether main's last push run is "
+              "green; whether `id claims` is clean (D140 amended — today a person reading PR titles is "
+              "what catches a stale claim). Mostly a CALLER of what exists: make status, make janitor, "
+              "scripts/docs-audit.py --json. TWO CONSTRAINTS, established with the owner and binding. It "
+              "runs only while the desktop app is open, so it is a heartbeat and never a daemon — "
+              "anything whose correctness depends on its having fired is the wrong thing to put here. And "
+              "each run is a FRESH SESSION WITH NO CONVERSATION CONTEXT: it knows nothing about who asked "
+              "for what. Both point one way — READ-AND-REPORT AUTHORITY, NOT MERGE AUTHORITY, because a "
+              "session that cannot remember the last run has no basis for pressing an irreversible button, "
+              "and `make merge` already wants the owner's word for that reason. Anything needing memory of "
+              "who is blocked on whom needs DURABLE STATE IN A FILE rather than in a session; that is the "
+              "part that is real work rather than a wrapper, and it is why this is a step and not a cron "
+              "line. Unranked, as OPEN requires."},
     {"n": 20, "title": "The shipped status and the tracking write-back",
      "note": "Steps 13 and 14 of docs/specs/order-pipeline.md, and the only part of that spec that is "
               "NEITHER built nor merely unproven. Both endpoints were seen on the wire while D69 was "
@@ -1314,7 +1332,14 @@ COMPONENTS = [
                         "the same predicate reference-transaction evaluates at `prepared` — so "
                         "the hook is never asked to refuse. Idempotent on a PR already merged, "
                         "which is what makes a failed local half re-runnable rather than a "
-                        "handoff. THEN IT DELETES THE HEAD BRANCH, since 2026-09-05: on origin "
+                        "handoff. THE CLAIM COMMIT'S WAIT NAMES THE COMMIT, since "
+                        "2026-09-11: it polls that SHA's own check runs until they are "
+                        "non-empty, complete, no fewer than the parent carried and unchanged "
+                        "across two reads, and REFUSES on an empty answer, an unreadable one "
+                        "or a deadline. It asked `gh pr checks <n>` until then, which answers "
+                        "about a pull request out of the PREVIOUS head's runs and exited 0 at "
+                        "once — two live merges went out unwatched on 2026-09-11. "
+                        "THEN IT DELETES THE HEAD BRANCH, since 2026-09-05: on origin "
                         "unconditionally, and in this clone only when no worktree holds it and "
                         "it is an ancestor of main. Before that it deleted neither, and 125 "
                         "merged pull requests had left 85 branches on origin and 106 here.",
@@ -1322,8 +1347,8 @@ COMPONENTS = [
                 # amends. D18 governs its shape — the preview is the read-only mode, and the
                 # act is behind a flag rather than a default. D33 is the instrument the two-step
                 # is borrowed from, one register down from a route that can spend money.
-                "governed_by": ["D18", "D33", "D42", "D72", "D111", "D140",
-                                "D143"],
+                "governed_by": ["D18", "D33", "D42", "D72", "D111", "D136", "D140",
+                                "D141", "D143", "D148"],
                 "note": "IT NEVER SETS PKMNSCAN_MAIN AND NO REFUSAL IT PRINTS SUGGESTS IT. D42 "
                         "is explicit that a session reaching for that variable has left the "
                         "amendment behind; this needs no hatch because allow rule 3 already "
@@ -1723,7 +1748,7 @@ COMPONENTS = [
                                 "D70", "D72", "D75", "D76", "D80", "D81", "D83", "D84", "D87",
                                 "D88", "D90", "D92", "D94", "D96", "D101", "D102", "D104", "D111",
                                 "D119", "D122", "D127", "D132", "D135", "D136", "D140", "D141",
-                                "D142", "D143"],
+                                "D142", "D143", "D149"],
             },
             "claim-ids.py": {
                 "does": "allocate the numbers this branch's SLUG ids will take, and "
@@ -1766,11 +1791,18 @@ COMPONENTS = [
                         "MAIN MOVES underneath the branch — the only condition that can tell "
                         "an allocation against the ref from one against the branch's own "
                         "copy, and therefore the only one worth building a repository for. "
-                        "FORTY-TWO arms, twenty of them mutation-tested — fourteen arms and "
-                        "seven mutants cover the staleness half (D140, amended 2026-09-11), "
-                        "where a branch claims honestly and main takes the number underneath "
-                        "it. The count in this sentence said sixteen over a file that held "
-                        "eighteen, which is what an uncounted prose number does. THE BOUNDARY ARM FOUND A "
+                        "SIXTY-SEVEN arms, twenty-six of them mutation-tested — fourteen "
+                        "arms and seven mutants cover the staleness half (D140, amended "
+                        "2026-09-11), where a branch claims honestly and main takes the "
+                        "number underneath it, and twenty-five arms and six mutants cover the "
+                        "claim commit's WAIT, which asked about the pull REQUEST rather than "
+                        "about the commit and read an empty answer as a clean one "
+                        "(D148). Those last run the real claim half against "
+                        "a fake `gh` on PATH that answers `gh pr checks` green and instantly, "
+                        "so the query that was wrong PASSES there rather than merely behaving "
+                        "differently. The count in this sentence said sixteen over a file that "
+                        "held eighteen, which is what an uncounted prose number does. "
+                        "THE BOUNDARY ARM FOUND A "
                         "REAL BUG IN THE UNMUTATED CODE: `\\b` fires between a letter and a "
                         "hyphen, so a slug was being substituted inside a longer slug that "
                         "extended it, leaving a number with a tail on it. In `make check`, "
@@ -1783,8 +1815,8 @@ COMPONENTS = [
                 # entries are composed from integers for exactly this reason, and the two that
                 # survive are in the prose that explains why. The superset rule reads a citation
                 # literally, which is the trade docs-audit.py's own entry records.
-                "governed_by": ["D1", "D2", "D16", "D18", "D80", "D140",
-                                "D143"],
+                "governed_by": ["D1", "D2", "D16", "D18", "D80", "D136", "D140", "D141",
+                                "D143", "D148"],
             },
             "docs-audit-allow.txt": {
                 "does": "paths and identifiers the docs name before they exist, one "
