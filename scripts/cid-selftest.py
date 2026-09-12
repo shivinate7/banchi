@@ -922,6 +922,56 @@ def case_the_relocation_verifies_every_file_and_resumes() -> None:
           "legacy address goes on being read")
 
 
+def case_a_link_that_did_not_land_the_right_bytes_is_caught() -> None:
+    """`adopt`'s SECOND guard, provoked by faking the thing it exists to distrust.
+
+    IT SURVIVED EVERY OTHER MUTATION AND THAT WAS HONEST INFORMATION. `adopt` hashes the
+    source and refuses before linking, and it re-hashes the DESTINATION afterwards — so with
+    the first guard in place the second can only fire if the link itself did not land the
+    bytes that were at the source, which no ordinary test can produce. Deleting it left the
+    whole suite green.
+
+    SO THE FILESYSTEM IS FAKED, WHICH IS NOT A CONTRIVANCE — it is the exact fault the guard
+    is for. The photographs cannot be re-taken, the move is 2,535 link-and-unlink pairs
+    against them, and "the link succeeded so the bytes are right" is an assumption about
+    hardware rather than about this program. The guard says: read it back before you drop
+    the only other copy. This case makes the link lie and checks that it does.
+    """
+    home = fresh_home()
+    from store import files, photos
+
+    blob = photo_bytes("honest")
+    digest = hashlib.sha256(blob).hexdigest()
+    source = photos.legacy_path(1, 1, home)
+    source.parent.mkdir(parents=True, exist_ok=True)
+    source.write_bytes(blob)
+
+    real_link = os.link
+
+    def lying_link(src, dst, *args, **kw):
+        """Land DIFFERENT bytes at the destination, which is the fault under test."""
+        Path(dst).write_bytes(photo_bytes("corrupted-in-flight"))
+
+    os.link = lying_link
+    try:
+        photos.adopt(source, digest, home)
+        bad("a link that did not land the right bytes is refused")
+    except files.StoreError as exc:
+        ok("a link that did not land the right bytes is refused")
+        check("did not hash to" in str(exc),
+              "and the refusal says the destination disagreed, not that the source did")
+    finally:
+        os.link = real_link
+
+    check(not photos.path(digest, home).exists(),
+          "and the bad destination is REMOVED rather than left under a name it does not "
+          "have — a file at the card's name that is not the card's photograph would pass "
+          "every existence check in this repo forever")
+    check(source.is_file() and source.read_bytes() == blob,
+          "and the source is untouched, which is the property the whole link-verify-unlink "
+          "order exists for: the only good copy is never dropped on an unverified move")
+
+
 def case_a_reshoot_is_excused_by_a_recorded_digest_and_never_by_the_fact() -> None:
     """D172 §7 item 1, settled. The excuse must come from a RECORDED digest.
 
@@ -1111,6 +1161,7 @@ CASES = [
     case_a_move_moves_no_file,
     case_two_captures_cannot_compose_one_photograph_path,
     case_the_relocation_verifies_every_file_and_resumes,
+    case_a_link_that_did_not_land_the_right_bytes_is_caught,
     case_a_reshoot_is_excused_by_a_recorded_digest_and_never_by_the_fact,
     case_the_audit_says_not_known_rather_than_passing_over_nothing,
     case_killed_with_minus_nine_leaves_the_store_unchanged,
