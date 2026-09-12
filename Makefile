@@ -77,6 +77,9 @@ help:
 	@echo "  make reap-selftest  the kill guard, proved by pointing it at what it must not kill."
 	@echo "  make silent-write-selftest  the silenced-write guard, proved by reproducing the"
 	@echo "                    refused commit whose refusal went to /dev/null."
+	@echo "  make guard-shell-selftest  the five-clause shell guard, proved by committing its"
+	@echo "                    mistakes in a throwaway repo: a destroyed file, a write into"
+	@echo "                    another checkout, a nested symlink, a pattern that is not a process."
 	@echo "  make coordinator-selftest  the merge-queue verdict rules. No network."
 	@echo "  make suite-lock-selftest  one browser fleet at a time, proved by violating it."
 	@echo "  make verdict-selftest  the design-check verdict reporter, run for real. No browser."
@@ -107,6 +110,7 @@ help:
 	@echo "                    githooks-selftest + merge-selftest + revert-selftest +"
 	@echo "                    claim-selftest + decisions-selftest + submission-selftest +"
 	@echo "                    janitor-selftest + reap-selftest + silent-write-selftest +"
+	@echo "                    guard-shell-selftest +"
 	@echo "                    coordinator-selftest + suite-lock-selftest +"
 	@echo "                    serve-selftest + sync-selftest + verdict-selftest"
 	@echo
@@ -419,6 +423,7 @@ check:
 	@$(MAKE) --no-print-directory janitor-selftest
 	@$(MAKE) --no-print-directory reap-selftest
 	@$(MAKE) --no-print-directory silent-write-selftest
+	@$(MAKE) --no-print-directory guard-shell-selftest
 	@$(MAKE) --no-print-directory coordinator-selftest
 	@$(MAKE) --no-print-directory suite-lock-selftest
 	@$(MAKE) --no-print-directory serve-selftest
@@ -459,6 +464,7 @@ ci-check:
 	@$(MAKE) --no-print-directory janitor-selftest
 	@$(MAKE) --no-print-directory reap-selftest
 	@$(MAKE) --no-print-directory silent-write-selftest
+	@$(MAKE) --no-print-directory guard-shell-selftest
 	@$(MAKE) --no-print-directory coordinator-selftest
 	@$(MAKE) --no-print-directory suite-lock-selftest
 	@$(MAKE) --no-print-directory serve-selftest
@@ -768,6 +774,30 @@ silent-write-selftest:
 	@bash scripts/silent-write-selftest.sh
 
 .PHONY: silent-write-selftest
+
+# FIVE SHELL MISTAKES THIS REPO HAS ALREADY PAID FOR, refused before they run. Every one was a
+# rule somebody had written down and a later session broke anyway — which is D171's ruling
+# about what a rule IS, applied to five more commands:
+#
+#   `git checkout <modified path>`     2026-09-06, ~240 lines of uncommitted work destroyed
+#   a write outside this checkout      2026-09-06, ~1,500 lines into the owner's MAIN tree, on
+#                                      main, hot-reloaded into their live capture server
+#   `gh api -f k=v` with no method     2026-09-12, a GET silently POSTed and hung past a timeout
+#   `ln -s` at an existing path        2026-08-29, harness/images/images and a 133 MB directory
+#                                      renamed away by iCloud
+#   a polling loop                     2026-09-12 twice: a `pgrep` waiter whose pattern is not
+#                                      the process, and a backgrounded driver that ran 119
+#                                      rounds over 3h58m across a compaction
+#
+# `scripts/guard-shell.py --hook` is a PreToolUse hook on Bash and on Write|Edit — not a target
+# you run — and this self-test is what proves it. FOUR OF THE FIVE INCIDENTS ARE PERFORMED in a
+# throwaway repository before the guard is asked about them, which is reap-selftest's standard;
+# the false positives are RUN there too, because a case that is secretly a typo passes for the
+# wrong reason. IN `check`, NEVER IN THE GIT HOOK: it writes a temp repository (D18).
+guard-shell-selftest:
+	@bash scripts/guard-shell-selftest.sh
+
+.PHONY: guard-shell-selftest
 
 # THE MERGE QUEUE, READ RATHER THAN REMEMBERED. The other half of 2026-09-12: a session relayed
 # `#300 GREEN — merging` for several turns while nothing merged, because the line came from a
