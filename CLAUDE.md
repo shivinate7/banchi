@@ -348,7 +348,12 @@ make reap           # STOP WHAT THIS SESSION STARTED, AND NOTHING ELSE (D127). P
 make reap-selftest  # the guard, proved by pointing it at what it must not kill: a throwaway
                     #   checkout, a real socket with a real client on it, and both 2026-09-10
                     #   incidents reproduced rather than asserted about. In `check`, never in the
-                    #   git hook. Mutation-tested — thirteen arms.
+                    #   git hook. Every process it starts carries a PER-RUN TAG and its port is
+                    #   bound rather than probed: the guard resolves a kill through a machine-wide
+                    #   `pgrep`, so a fixed fixture name makes two concurrent runs refuse each
+                    #   other their own processes — D122's shape one register down, and it reddened
+                    #   `make check` four times over a byte-identical tree. Mutation-tested —
+                    #   fourteen arms.
 make janitor        # WHAT A FINISHED SESSION LEFT BEHIND, and what is safe to reap (D111).
                     #   Previews; `ARGS=--confirm` presses. TIER 1 goes without asking because
                     #   it cannot be live — a process whose own script has been deleted, a
@@ -1686,6 +1691,7 @@ D147 The claim is spent on the oldest copies, because a card captured tonight wa
 D148 The wait is about the claim commit, and an answer it has not got is never a pass
 D149 A section number that resolves is not a citation that is right, and no check can read what a sentence is about
 D150 A reading taken after a sale is that sale's own result, and it ages the claim
+D-a-fixture-carries-its-own-name The fixture carries a per-run name, because the process table is the one thing a run cannot have its own of
 
 ```
 

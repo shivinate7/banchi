@@ -31,9 +31,24 @@ fail=0
 
 tmp="$(mktemp -d "${TMPDIR:-/tmp}/pkmnscan-reap.XXXXXX")" || { echo "cannot make a temp dir"; exit 1; }
 kids=""
+strays=""                 # temp trees made after `tmp`, so cleanup reaches them too
+
+# IT WAITS FOR THEM TO BE GONE, NOT MERELY SIGNALLED, and the `rm -rf` is half of how they go:
+# every sleeper below watches its own script file and ends with it. A `kill` that returns is a
+# signal DELIVERED, and the run that starts a second later inherits whatever has not finished
+# dying — which is one of the two ways this suite's own processes reach a later run.
 cleanup() {
   for k in $kids; do kill "$k" 2>/dev/null; done
-  rm -rf "$tmp"
+  rm -rf "$tmp" $strays
+  alive=""
+  for _ in 1 2 3 4 5 6 7 8 9 10 11 12 13 14 15; do
+    alive=""
+    for k in $kids; do kill -0 "$k" 2>/dev/null && alive="$alive $k"; done
+    [ -z "$alive" ] && break
+    sleep 0.2
+  done
+  for k in $alive; do kill -9 "$k" 2>/dev/null; done
+  return 0
 }
 trap cleanup EXIT
 
@@ -56,6 +71,26 @@ print(p.pid)
 " "$1" "$2"
 }
 
+# A FIXTURE PROCESS THAT ENDS WHEN ITS OWN SCRIPT FILE IS DELETED, so `cleanup`'s `rm -rf`
+# ENDS this run's processes rather than only asking them to. The leak it closes is structural
+# rather than careless: `spawn` starts every child in its own session precisely so a `killpg`
+# in here can never reach this script — which also means the SIGINT that stops a `make check`
+# never reaches THEM either, and a run killed with -9 runs no trap at all. Under a shared name
+# that survivor is the next run's stranger, which is the flake the tag above answers; this
+# answers the other half, which is that it should not survive.
+#
+# The deadline behind it is the backstop for the -9 case, where nothing is deleted. It stays
+# generous because an arm whose own subject died early fails for the wrong reason — the TAG,
+# not the deadline, is what makes a survivor harmless.
+sleeper() {   # sleeper <script-path>
+  cat > "$1" <<'PY'
+import os, sys, time
+end = time.time() + 300
+while time.time() < end and os.path.exists(sys.argv[0]):
+    time.sleep(0.2)
+PY
+}
+
 # The hook, asked about one command. Prints its stderr so a failing case can be read.
 judge() {   # judge <cwd> <command> -> exit code, output in $out
   out="$(cd "$1" && printf '%s' "$2" \
@@ -65,13 +100,48 @@ judge() {   # judge <cwd> <command> -> exit code, output in $out
 }
 
 # ------------------------------------------------------------------------------- the fixture
+# EVERY SCRIPT THIS FIXTURE STARTS CARRIES A PER-RUN TAG, BECAUSE `pgrep -f` IS MACHINE-WIDE.
+# The guard resolves `pkill -f mine.py` by running that pgrep ITSELF, across the whole machine —
+# which is the whole point of it, and is correct. So a second copy of this fixture running
+# anywhere else puts a live `mine.py` in a DIFFERENT checkout: a concurrent `make check` from
+# another of this clone's worktrees, or a `time.sleep(300)` left behind by a run interrupted
+# before its EXIT trap fired. The guard judges that one "outside this checkout" and refuses the
+# command — the guard being right and the fixture being wrong — and the arm that fails is
+# `KILLING ITS OWN PROCESS IS ALLOWED`, the one constraint this file must never break. Four
+# such failures on 2026-09-11/12, against a byte-identical reap.py.
+#
+# THIS IS D122'S SHAPE ONE REGISTER DOWN (D-a-fixture-carries-its-own-name): a per-run fixture over a
+# machine-wide resource. The
+# suite lock answers it there by refusing to run twice at once; here the resource is the
+# process table, which cannot be locked, so the fixture is made unable to collide instead.
+#
+# The tag is the temp directory's own mktemp suffix — unique by construction at the moment the
+# directory was made — and this shell's pid. Either alone can in principle be reused by a
+# leftover whose directory was swept; both together cannot.
+#
+# IT IS A FUNCTION AND NOT SIX STRING LITERALS, so `-- a second copy of this fixture --` below
+# can build a rival's name BY THE SAME RULE rather than by hand. That is what makes the arm
+# mutation-sensitive: spell a fixed name here and the rival gets the same fixed name, the guard
+# correctly calls it a stranger, and the arm goes red. An arm whose decoy is hand-named would
+# keep passing over exactly the bug this file is fixing.
+fixture_script() {   # fixture_script <base> <temp-dir> -> a name no other run can produce
+  printf '%s-%s-%s.py' "$1" "${2##*.}" "$$"
+}
+
+mine_script="$(fixture_script mine "$tmp")"
+stranger_script="$(fixture_script stranger "$tmp")"
+listen_script="$(fixture_script listen "$tmp")"
+client_script="$(fixture_script client "$tmp")"
+inner_script="$(fixture_script inner "$tmp")"
+probe_script="$(fixture_script probe "$tmp")"
+
 mkdir -p "$tmp/checkout" "$tmp/elsewhere"
 git -C "$tmp/checkout" init -q .
-printf 'import time; time.sleep(300)\n' > "$tmp/checkout/mine.py"
-printf 'import time; time.sleep(300)\n' > "$tmp/elsewhere/stranger.py"
+sleeper "$tmp/checkout/$mine_script"
+sleeper "$tmp/elsewhere/$stranger_script"
 
-mine="$(spawn "$tmp/checkout/mine.py" "$tmp/checkout")"
-stranger="$(spawn "$tmp/elsewhere/stranger.py" "$tmp/elsewhere")"
+mine="$(spawn "$tmp/checkout/$mine_script" "$tmp/checkout")"
+stranger="$(spawn "$tmp/elsewhere/$stranger_script" "$tmp/elsewhere")"
 kids="$mine $stranger"
 sleep 1
 
@@ -86,7 +156,7 @@ judge "$tmp/checkout" "echo 'remember: pkill -f is machine-wide'"
 [ $? -eq 0 ] && ok "the word in a string is not a kill" || bad "prose mentioning pkill was blocked"
 
 judge "$tmp/checkout" "cat > note.sh <<'EOF'
-pkill -f stranger.py
+pkill -f $stranger_script
 EOF"
 [ $? -eq 0 ] && ok "a heredoc BODY is a document, not a command" || bad "writing a script that mentions pkill was blocked"
 
@@ -96,7 +166,7 @@ judge "$tmp/checkout" "kill -0 $stranger"
 judge "$tmp/checkout" "sleep 5 & kill %1"
 [ $? -eq 0 ] && ok "a job spec names this shell's own job" || bad "kill %1 was blocked"
 
-judge "$tmp/checkout" "pkill -f mine.py"
+judge "$tmp/checkout" "pkill -f $mine_script"
 [ $? -eq 0 ] && ok "KILLING ITS OWN PROCESS IS ALLOWED" || {
   bad "a session was refused its own process — the constraint this must not break"
   printf '%s\n' "$out" | sed 's/^/         /'
@@ -106,7 +176,7 @@ judge "$tmp/checkout" "pkill -f mine.py"
 echo
 echo "  -- incident 1: pkill -f also matched a stranger --"
 
-judge "$tmp/checkout" "pkill -f stranger.py"
+judge "$tmp/checkout" "pkill -f $stranger_script"
 status=$?
 case "$status:$out" in
   2:*outside\ this\ checkout*) ok "REFUSED, naming the pid and where it lives" ;;
@@ -127,6 +197,55 @@ case "$out" in
   *) bad "the refusal does not say what to do instead" ;;
 esac
 
+# ------------------------------------------------- the flake: a second copy of this fixture
+echo
+echo "  -- a second copy of this fixture, running at the same time --"
+
+# THE REGRESSION ARM FOR THE PER-RUN TAG, AND IT REPRODUCES THE FLAKE RATHER THAN ASSERTING
+# ABOUT IT. A rival fixture is built the way a concurrent `make check` in another worktree
+# builds one — its own `mktemp -d`, its own tag, its own `mine` — and left running while this
+# run asks the guard to kill ITS OWN `mine`. With the tag, the two names cannot collide and the
+# kill is allowed. Without it, both runs call their process `mine.py`, `pgrep -f mine.py`
+# returns the rival as well, and the guard refuses — correctly, which is the whole problem.
+# This failed four times on 2026-09-11/12 against a byte-identical reap.py, and nothing in this
+# file could see it: the failing arm blamed the guard.
+#
+# The rival's pid is NOT added to `kids` in the usual way and then forgotten — it is, but its
+# TREE goes on `strays`, because it lives outside `$tmp` and the trap would otherwise leave a
+# `time.sleep(300)` behind. A leftover of exactly that kind is one of the two ways this flake
+# reached a session in the first place.
+rival_tmp="$(mktemp -d "${TMPDIR:-/tmp}/pkmnscan-reap.XXXXXX")" || rival_tmp=""
+if [ -z "$rival_tmp" ]; then
+  bad "cannot make a second temp dir — the concurrency arm cannot be posed"
+else
+strays="$strays $rival_tmp"
+rival_script="$(fixture_script mine "$rival_tmp")"
+mkdir -p "$rival_tmp/checkout"
+git -C "$rival_tmp/checkout" init -q .
+sleeper "$rival_tmp/checkout/$rival_script"
+rival="$(spawn "$rival_tmp/checkout/$rival_script" "$rival_tmp/checkout")"
+kids="$kids $rival"
+sleep 1
+
+judge "$tmp/checkout" "pkill -f $mine_script"
+[ $? -eq 0 ] && ok "A CONCURRENT COPY OF THIS FIXTURE CANNOT REFUSE THIS RUN ITS OWN PROCESS" || {
+  bad "a second run of this fixture made the guard refuse this run's own process — THE FLAKE"
+  printf '%s\n' "$out" | sed 's/^/         /'
+}
+
+# And the rival is a real, live, resolvable stranger — so the case above did not pass because
+# `pgrep` found nothing. Together the two say the NAMES are unique, not that the guard stopped
+# looking, which is the difference between a fixture that collides and a guard that is broken.
+judge "$tmp/checkout" "pkill -f $rival_script"
+status=$?
+case "$status:$out" in
+  2:*outside\ this\ checkout*) ok "and the rival's own process is still refused, by name" ;;
+  2:*) bad "the rival was refused, but not for living in another checkout"
+       printf '%s\n' "$out" | sed 's/^/         /' ;;
+  *) bad "the rival is not resolvable, so the case above proved nothing" ;;
+esac
+fi
+
 # ------------------------------------------------------------------- the hook: incident two
 echo
 echo "  -- incident 2: lsof -ti returns clients as well as listeners --"
@@ -141,29 +260,39 @@ if ! command -v lsof >/dev/null 2>&1; then
   say "SKIP" "lsof is absent — the port cases cannot be posed on this machine at all"
   port=""
 else
-port=0
-for candidate in $(python3 -c 'print(" ".join(str(p) for p in range(53900, 53960)))'); do
-  if ! (exec 3<>/dev/tcp/127.0.0.1/"$candidate") 2>/dev/null; then port="$candidate"; break; fi
-done
-
-cat > "$tmp/checkout/listen.py" <<PY
-import socket, time
-s = socket.socket(); s.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
-s.bind(("127.0.0.1", $port)); s.listen(5); s.settimeout(1.0)
+# AND THE PORT IS A RESERVATION, NOT A READING, FOR THE TAG'S REASON ONE CLAUSE OVER. Probing
+# whether anything is listening on a candidate and then binding it is a TOCTOU: two concurrent
+# runs read the same port free, one bind wins, and the LOSER's client connects to the WINNER's
+# listener. That puts three pids on one port, fails the reproduction case, and makes every case
+# under it vacuous by this file's own admission. Port 0 cannot be handed to two processes, so
+# the listener is asked what it was given rather than told what to take.
+cat > "$tmp/checkout/$listen_script" <<PY
+import os, socket, time
+s = socket.socket(); s.bind(("127.0.0.1", 0)); s.listen(5); s.settimeout(1.0)
+with open("$tmp/port.part", "w") as fh: fh.write(str(s.getsockname()[1]))
+os.rename("$tmp/port.part", "$tmp/port")   # atomic: a reader never sees half a number
 held = []
 end = time.time() + 90
 while time.time() < end:
     try: held.append(s.accept()[0])
     except Exception: pass
 PY
-cat > "$tmp/elsewhere/client.py" <<PY
+listener="$(spawn "$tmp/checkout/$listen_script" "$tmp/checkout")"
+kids="$kids $listener"
+port=""
+tries=0
+while [ ! -s "$tmp/port" ] && [ "$tries" -lt 50 ]; do sleep 0.2; tries=$((tries + 1)); done
+[ -s "$tmp/port" ] && port="$(cat "$tmp/port")"
+
+if [ -z "$port" ]; then
+  bad "the listener never reported a port — every port case below is now vacuous"
+else
+cat > "$tmp/elsewhere/$client_script" <<PY
 import socket, time
 c = socket.socket(); c.connect(("127.0.0.1", $port)); time.sleep(90)
 PY
-
-listener="$(spawn "$tmp/checkout/listen.py" "$tmp/checkout")"; sleep 1
-client="$(spawn "$tmp/elsewhere/client.py" "$tmp/elsewhere")"; sleep 1
-kids="$kids $listener $client"
+client="$(spawn "$tmp/elsewhere/$client_script" "$tmp/elsewhere")"; sleep 1
+kids="$kids $client"
 
 holders="$(lsof -ti tcp:$port 2>/dev/null | tr '\n' ' ')"
 # `wc -w` pads its answer with leading spaces on macOS, so this is arithmetic and not a
@@ -183,6 +312,7 @@ case "$status:$out" in
        printf '%s\n' "$out" | sed 's/^/         /' ;;
   *) bad "the loop form walked straight past the guard" ;;
 esac
+fi
 fi
 
 # ------------------------------------------------------------- the hook: nothing to read
@@ -209,7 +339,7 @@ case "$out" in
      printf '%s\n' "$out" | sed 's/^/         /' ;;
 esac
 
-judge "$tmp/checkout" "pkill -f mine.py"
+judge "$tmp/checkout" "pkill -f $mine_script"
 status=$?
 case "$status:$out" in
   2:*make\ down\ ARGS=--confirm*) ok "and the refusal names the drain, not a harder kill" ;;
@@ -240,8 +370,8 @@ echo "  -- a root that would contain everything --"
 # one without starting a process under the owner's real home directory.
 
 mkdir -p "$tmp/home/deep"
-printf 'import time; time.sleep(300)\n' > "$tmp/home/deep/inner.py"
-inner="$(spawn "$tmp/home/deep/inner.py" "$tmp/home/deep")"
+sleeper "$tmp/home/deep/$inner_script"
+inner="$(spawn "$tmp/home/deep/$inner_script" "$tmp/home/deep")"
 kids="$kids $inner"
 sleep 1
 
@@ -261,8 +391,8 @@ esac
 # reaches it whatever `$TMPDIR` is set to, which is why this probe is made under `/tmp` by name
 # rather than beside the rest of the fixture.
 probe="$(mktemp -d /tmp/pkmnscan-reap-probe.XXXXXX)"
-printf 'import time; time.sleep(300)\n' > "$probe/probe.py"
-probe_pid="$(spawn "$probe/probe.py" "$probe")"
+sleeper "$probe/$probe_script"
+probe_pid="$(spawn "$probe/$probe_script" "$probe")"
 kids="$kids $probe_pid"
 sleep 1
 out="$(cd /tmp && python3 "$REAP" --explain "pid:$probe_pid" 2>&1)"
@@ -282,7 +412,7 @@ esac
 # The hook itself over the same ground. `judge` cannot be used here: it does not fake `$HOME`,
 # and a home directory that is not the process's own home is an ORDINARY directory — which is
 # the correct answer to a different question and would have passed this case for free.
-out="$(cd "$tmp/home/deep" && printf '{"tool_input":{"command":"pkill -f inner.py"}}' \
+out="$(cd "$tmp/home/deep" && printf '{"tool_input":{"command":"pkill -f %s"}}' "$inner_script" \
        | HOME="$tmp/home/deep" python3 "$REAP" --hook 2>&1)"
 status=$?
 [ $status -eq 2 ] && ok "a kill run from a home directory is refused, not guessed at" \
@@ -306,9 +436,9 @@ esac
 echo
 echo "  -- the escape hatch --"
 
-judge "$tmp/checkout" "PKMNSCAN_KILL=off pkill -f stranger.py"
+judge "$tmp/checkout" "PKMNSCAN_KILL=off pkill -f $stranger_script"
 [ $? -eq 0 ] && ok "the hatch is honoured in the command itself" || bad "the printed hatch does not work"
-out="$(cd "$tmp/checkout" && printf '{"tool_input":{"command":"pkill -f stranger.py"}}' \
+out="$(cd "$tmp/checkout" && printf '{"tool_input":{"command":"pkill -f %s"}}' "$stranger_script" \
        | PKMNSCAN_KILL=off python3 "$REAP" --hook 2>&1)"
 [ $? -eq 0 ] && ok "and in the environment" || bad "PKMNSCAN_KILL=off in the environment did nothing"
 
