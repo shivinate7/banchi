@@ -1742,7 +1742,7 @@ D153 The restore asks which drawer, not which number, and the picker stops drawi
 D154 The camera's automatic functions are inputs to the trigger's arithmetic, and the ones that step are locked
 D155 The section is the ruler and the box is the margin note, and the bracket between them is deleted
 D156 Every copy TCGplayer does not hold is one worklist, and a run stays open until the last of them has gone
-D-a-fixture-carries-its-own-name The fixture carries a per-run name, because the process table is the one thing a run cannot have its own of
+D157 The fixture carries a per-run name, because the process table is the one thing a run cannot have its own of
 
 ```
 

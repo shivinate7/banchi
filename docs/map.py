@@ -1604,7 +1604,7 @@ COMPONENTS = [
                         "arm that reproduces it. Mutation-tested: thirteen guards removed one "
                         "at a time, all thirteen caught, and the naming rule itself as a "
                         "fourteenth.",
-                "governed_by": ["D18", "D53", "D122", "D127", "D-a-fixture-carries-its-own-name"],
+                "governed_by": ["D18", "D53", "D122", "D127", "D157"],
             },
             "session-teardown.sh": {
                 "does": "the SessionEnd / WorktreeRemove hook. Stops what a leaving session "

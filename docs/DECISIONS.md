@@ -11315,7 +11315,7 @@ The five runs the old rule had closed: `2026-08-24-box2-01` holding 148 unsent c
 
 A marker that a copy reached an import file (D59, D147) — the committed set would then be READ and the ledger would stop inferring it. A `sku` index on `store/rows.py:Rows` — the 2.8s. A seventeenth open run. And realigning on the route, if the one-copy residual ever becomes a sentence somebody reads.
 
-## D-a-fixture-carries-its-own-name — The fixture carries a per-run name, because the process table is the one thing a run cannot have its own of
+## D157 — The fixture carries a per-run name, because the process table is the one thing a run cannot have its own of
 
 **Built 2026-09-12, after `make reap-selftest` went red four times over a `scripts/reap.py` and a `scripts/reap-selftest.sh` byte-identical to `origin/main`.** The failing arm was the one this file may never fail — `KILLING ITS OWN PROCESS IS ALLOWED`:
 

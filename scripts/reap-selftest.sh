@@ -110,7 +110,7 @@ judge() {   # judge <cwd> <command> -> exit code, output in $out
 # `KILLING ITS OWN PROCESS IS ALLOWED`, the one constraint this file must never break. Four
 # such failures on 2026-09-11/12, against a byte-identical reap.py.
 #
-# THIS IS D122'S SHAPE ONE REGISTER DOWN (D-a-fixture-carries-its-own-name): a per-run fixture over a
+# THIS IS D122'S SHAPE ONE REGISTER DOWN (D157): a per-run fixture over a
 # machine-wide resource. The
 # suite lock answers it there by refusing to run twice at once; here the resource is the
 # process table, which cannot be locked, so the fixture is made unable to collide instead.
