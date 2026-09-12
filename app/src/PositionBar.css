@@ -185,7 +185,18 @@
 
 /* The section's own run, in BOX cards, written inside the ruler's two ends. This is the one
    statement the deleted trapezoid was reaching for — how much of the box this slice is — said
-   as a number the reader checks against the box caption rather than as a shape they trust. */
+   as a number the reader checks against the box caption rather than as a shape they trust.
+
+   THE PIN EATS THE NEAR LABEL WHEN THE CARD IS AT THE FRONT OR BACK OF ITS SECTION, and that
+   is accepted rather than fixed. Measured at 390 in light, card 4 of an 80-card section on a
+   440px ruler: the pin's 2px knockout took most of the `1`. The pin is at a PERCENTAGE and the
+   label at a fixed 6px, so no CSS can compare them and any threshold in the component would be
+   a proxy for a pixel fact — over-eager at 580px, where it would blank the label for the first
+   19 cards of a 400-card section. The occlusion is self-limiting and lands where the number is
+   redundant: the caption directly above already says `card 4 of 80` and the fill is visibly
+   empty, so the reader knows they are at the near bound. Raising the labels over the pin was
+   refused — the pin is 3px and the digits are 6 to 18px, so the label would hide "you are
+   here" outright. */
 .position-bar-edge {
   position: absolute;
   top: 50%;
@@ -224,6 +235,13 @@
   border: 4px solid transparent;
   border-bottom-color: var(--bn-accent);
   border-top: 0;
+  /* ABOVE THE BOX MARK, WHICH IT COLLIDES WITH WHENEVER THE CARD SITS AT ITS SECTION'S
+     MIDPOINT — the caret is centred on the chip and the mark is at the card's own fraction of
+     the box, so the two land on one x more often than the arithmetic suggests. Measured at 390
+     in dark on the divided-box fixture: the mark's 2px knockout ring ate the caret's right
+     half. They overlap by 2px vertically at most, so the caret winning costs the ring and
+     nothing else, and the caret is the object that says WHICH chip. */
+  z-index: 2;
   transition: border-color var(--bn-t) var(--bn-ease);
 }
 
