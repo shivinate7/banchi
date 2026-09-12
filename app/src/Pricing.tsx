@@ -2262,7 +2262,7 @@ export function Pricing() {
     revision.current = next
   }, [])
 
-  /* THE MASS-CLEAR (D-a-typed-price-is-cleared-by-a-press). The operator's own ask: *"after
+  /* THE MASS-CLEAR (D168). The operator's own ask: *"after
      several emits a lot of pricing is pre typed but stale and there's no way to mass clear"*.
      Measured on their store, 2026-09-12: 269 of 407 typed prices — 66% — were answered five
      days earlier and were still pre-filling the field on every row they appear on. */
@@ -2679,7 +2679,7 @@ export function Pricing() {
           <span className="pricing-only-sm">Mark down</span>
         </Button>
         {/* THE MASS-CLEAR, AND IT IS IN THE HEADER BECAUSE IT IS ABOUT THE SCREEN AND NOT ABOUT A
-            ROW (D-a-typed-price-is-cleared-by-a-press). Every other way of removing an answer
+            ROW (D168). Every other way of removing an answer
             here is per-row — select the field, delete the digits — which is what the operator
             was doing 407 times. This is the only control on this screen that acts on the
             worklist as a whole, and the header is where the other two of those already are.

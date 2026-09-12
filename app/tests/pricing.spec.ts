@@ -166,7 +166,7 @@ async function open(
     unreachable?: { captured: number; in_review: number; unjoined: { run: string; cards: number }[]; reallocated: { run: string; box: number | null; cards: number | null }[] }
     /** WHICH ANSWERS A MASS-CLEAR MAY REMOVE, as the server names them — SKU to age in whole
      *  days, or `null` for one carrying no readable date
-     *  (D-a-typed-price-is-cleared-by-a-press). It rides the ENVELOPE of `GET /pricing`, so a
+     *  (D168). It rides the ENVELOPE of `GET /pricing`, so a
      *  case that sets it is stating what the server says rather than what the screen worked
      *  out: the screen decides nothing about membership, which is the property these cases
      *  exist to hold. Absent means a server that predates the route, and the control is then
@@ -288,7 +288,7 @@ async function open(
     })
   })
 
-  /* THE MASS-CLEAR AND ITS WAY BACK (D-a-typed-price-is-cleared-by-a-press). Registered
+  /* THE MASS-CLEAR AND ITS WAY BACK (D168). Registered
      BEFORE the bare `/pricing$` pattern below, which Playwright would otherwise never reach
      for these — it matches most-recent-first, so the specific patterns go LAST and the two
      here are more specific than the one they sit above only by being registered later. They
@@ -3432,7 +3432,7 @@ test('typing in a Qty field does not reach the row keys either', async ({ page }
 
 
 /* ============================================================================================
-   THE MASS-CLEAR (D-a-typed-price-is-cleared-by-a-press)
+   THE MASS-CLEAR (D168)
 
    THE PRESS ITSELF IS THE LEAST INTERESTING THING HERE. `harness/tests/t7_store_and_seams.py:
    check_pricing_clear` executes the route: what may go, what may not, the restore's

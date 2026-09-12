@@ -1,4 +1,4 @@
-## D-a-typed-price-is-cleared-by-a-press — A typed price is cleared by a press, never by an expiry, and the set it may clear is the set the corpus dates
+## D168 — A typed price is cleared by a press, never by an expiry, and the set it may clear is the set the corpus dates
 
 **A typed pricing answer stands until the operator clears it, and `#/pricing` gains one control that clears many at once — scoped, counted in its own label, and reversible — because the alternative the operator was offered was an expiry rule and they turned it down.**
 

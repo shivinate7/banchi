@@ -10903,7 +10903,7 @@ class CaptureHandler(BaseHTTPRequestHandler):
                     HTTPStatus.OK, pipeline_routes.do_pipeline_merged_emit(self._body())
                 )
             if path == "/pricing/clear":
-                # THE MASS-CLEAR (D-a-typed-price-is-cleared-by-a-press). FREE, and it is the
+                # THE MASS-CLEAR (D168). FREE, and it is the
                 # only route in this server that DELETES a pricing answer. Beside `PUT
                 # /pricing` rather than under `/pipeline/` because it acts on the store's one
                 # corpus and not on any run — the same reason `GET /pricing` is not

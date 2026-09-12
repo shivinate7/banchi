@@ -2225,7 +2225,7 @@ export async function getPricingCorpus(): Promise<{
 }
 
 /**
- * Clear typed prices in bulk — the operator's own ask (D-a-typed-price-is-cleared-by-a-press):
+ * Clear typed prices in bulk — the operator's own ask (D168):
  * *"after several emits a lot of pricing is pre typed but stale and there's no way to mass
  * clear"*.
  *

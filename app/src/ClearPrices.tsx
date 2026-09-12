@@ -1,6 +1,6 @@
 /**
  * CLEAR TYPED PRICES — the mass-clear, off `#/pricing`'s header
- * (D-a-typed-price-is-cleared-by-a-press).
+ * (D168).
  *
  * THE OPERATOR ASKED FOR THIS AND FOR NOTHING AROUND IT: *"I also need a clear claims on
  * pricing (after several emits a lot of pricing is pre typed but stale and there's no way to

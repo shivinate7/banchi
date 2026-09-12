@@ -1940,7 +1940,7 @@ export type PricingCorpus = {
 }
 
 /** Which answers a mass-clear MAY remove, and how old each one is — the ENVELOPE of
- *  `GET /pricing`, never part of the document (D-a-typed-price-is-cleared-by-a-press).
+ *  `GET /pricing`, never part of the document (D168).
  *
  *  THE SERVER SAYS WHICH; THE SCREEN ONLY COUNTS. `#/pricing` puts the figure in the label
  *  before the press — per scope and per age window — by intersecting `days` with the rows it

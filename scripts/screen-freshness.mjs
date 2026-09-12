@@ -197,7 +197,7 @@ const RECORDED = {
     'ingestOrders', 'pullCopy', 'undoPull', 'readShippingExport', 'forgetShippingExport',
     'moveCard', 'moveCards', 'putPricingCorpus', 'emitMerged', 'reconcileLive', 'reclaimBoxPhotos',
     'markdownListings', 'applyMarkdown',
-    // The mass-clear and its inverse (D-a-typed-price-is-cleared-by-a-press), recorded by the
+    // The mass-clear and its inverse (D168), recorded by the
     // deliberate act this table's header asks for rather than left to widen the drift it
     // already names. On their own line so a branch adding its own writes does not conflict
     // with this one over the same line — the failure mode the header records happening twice.
