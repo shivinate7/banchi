@@ -10937,7 +10937,7 @@ The seven are §24's own table, Falling Star and Fizz, Trickster among them. Sto
 
 **Not that `make check` gains a row.** The question is about a checkout's relationship to `origin/main` at the moment of a merge; asked on the commit path it would refuse commits for being behind, which is not a defect. **Not that the surface grows to `scripts/`**: a merge refused because an unrelated script moved is noise, and narrowness is what the unrelated-file arm exists to hold. **Not that the hook learns the strict grammar** — that would be a third declaration of it, and `claim vocabulary` reconciles two. **And not that any of this repairs a stranded id.** Nothing here rewrites main: a substitution made after the merge reaches main's own copy of the entry, which D140 settled and this does not reopen.
 
-## D-the-rail-is-a-spine-not-a-roster — Every row in the collapsed rail draws one glyph on one spine, and a rule that lists the children it knows about will miss one
+## D152 — Every row in the collapsed rail draws one glyph on one spine, and a rule that lists the children it knows about will miss one
 
 **Settled 2026-09-12, on the owner's report of two defects in the collapsed sidebar foot.** Both
 were visible in one screenshot of the 64px rail, both had shipped, and the browser suite was green

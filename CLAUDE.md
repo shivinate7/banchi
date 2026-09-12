@@ -1710,7 +1710,7 @@ D148 The wait is about the claim commit, and an answer it has not got is never a
 D149 A section number that resolves is not a citation that is right, and no check can read what a sentence is about
 D150 A reading taken after a sale is that sale's own result, and it ages the claim
 D151 The merge is run by a checkout, so the checkout is asked whether it is current, and main is read for a slug the moment it moves
-D-the-rail-is-a-spine-not-a-roster Every row in the collapsed rail draws one glyph on one spine, and a rule that lists the children it knows about will miss one
+D152 Every row in the collapsed rail draws one glyph on one spine, and a rule that lists the children it knows about will miss one
 
 ```
 
