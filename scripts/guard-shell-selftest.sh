@@ -502,6 +502,10 @@ case "$out" in *"119 rounds"*) ok "the refusal carries the measured runaway" ;;
 case "$out" in *"autodrive.sh"*) ok "the refusal names the script it READ, not just the command" ;;
   *) bad "the refusal does not name the script file" ;; esac
 
+judge_bg "$tmp/main" "cd $tmp && bash $tmp/autodrive.sh"
+if [ $? -eq 2 ]; then ok "…and behind a \`cd\`, which is how a session usually spells it"
+else bad "the driver was allowed when it was not the first stage"; fi
+
 refuses "a backgrounded inline poll, \`&\` in the command" \
   "$tmp/main" "while true; do gh pr list; sleep 120; done &"
 judge_bg "$tmp/main" "while :; do gh pr checks; sleep 60; done"

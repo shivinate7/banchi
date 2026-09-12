@@ -927,8 +927,14 @@ def clause_wait(reading: "shell_parse.Reading", command: str, cwd: str,
                 "BLOCKED: a backgrounded polling loop with nothing to end it."))
 
     if outliving:
-        for name, loop in _script_loops(shell_parse.strip_prefixes(
-                reading.placed[0].stage.argv if reading.placed else []), cwd):
+        # EVERY STAGE, NOT THE FIRST. `cd /x && bash driver.sh &` puts the `cd` in stage one
+        # and the driver in stage two, and a session backgrounding a script very often spells
+        # it that way. Reading only the head would have been blind to the incident's command
+        # wearing one extra word.
+        scripts: List[Tuple[str, Loop]] = []
+        for placed in reading.placed:
+            scripts.extend(_script_loops(shell_parse.strip_prefixes(placed.stage.argv), cwd))
+        for name, loop in scripts:
             if not _sleeps(loop.body) or _bounded(loop):
                 continue
             refusals.append(Refusal("wait", [
