@@ -9244,6 +9244,265 @@ def check_review_catalog(checks: Checks) -> None:
         )
 
 
+def check_identify_preflight_stage(checks: Checks) -> None:
+    """`identify` hashes before it decodes, and `Item.stage` is what makes that safe.
+
+    THE REORDER. The cache is keyed by the photograph's sha256, and `images.prepare`
+    computed that digest before opening the image — so decoding every photograph in order
+    to ask a question the digest already answers was pure waste on every cache hit.
+    `cli/cmd_identify.py` hashes, consults the cache, refuses what has no prompt, and only
+    then crops and downscales what is actually being sent.
+
+    THE HAZARD IT SHIPS WITH, WHICH IS WHY THIS CHECK EXISTS. `prepared is None` used to
+    mean "this photograph could not be read" AND "there are nothing to send for this card"
+    at the same time, because the two were the same set. Five loops tested it and a sixth
+    site wrote `prepared.sha256` into the run payload. Hash-first makes a CACHE HIT
+    unprepared too, so a reorder that left that test alone would have reported every
+    healthy cached card as unreadable, counted it as neither hit nor miss, and written
+    `photo_sha256: null` onto its record — where `cli/resolve.py:1108` reads a missing
+    digest as `blind` and D36's realign can no longer re-bind the card to a slot. That is
+    `CLAUDE.md`'s "Never silently drop a card", four different ways.
+
+    So the assertions below are one per consumer of the sentinel, over a directory holding
+    one of each outcome at once: two readable Pokemon cards, one file that is not an image,
+    and one card naming a game no registry entry answers.
+    """
+    from cli import __main__ as cli_entry
+    from cli import cmd_identify
+    from identify import images as identify_images
+
+    checks.note("")
+    checks.note("IDENTIFY PREFLIGHT — hash, then cache, then prepare (Item.stage)")
+
+    def spoken(lines, prefix):
+        """The first preflight line starting with `prefix`. The operator's own view: these
+        are the figures they read while deciding whether to spend, so they are what is
+        asserted rather than an internal count nobody sees."""
+        for line in lines:
+            if line.startswith(prefix):
+                return line
+        return ""
+
+    with isolated_home() as home:
+        caps = Path(home) / "stage-caps"
+        caps.mkdir()
+        # Two readable cards, in a registered game.
+        for index in (1, 2):
+            identify_images.Image.new("RGB", (64, 89), (30, 90 + index, 200)).save(
+                caps / f"4-00{index}.jpg", "JPEG"
+            )
+            (caps / f"4-00{index}.json").write_text(
+                json.dumps({"box": 4, "position": index, "game": "pokemon"}), "utf-8"
+            )
+        # A file with a .jpg name that no decoder will take. Its BYTES hash perfectly well,
+        # which is the whole point: hashing proves the file can be read, never that it is an
+        # image, so this card leaves the send list at the prepare pass and not before it.
+        (caps / "4-003.jpg").write_bytes(b"this is not a JPEG, it is a sentence\n")
+        (caps / "4-003.json").write_text(
+            json.dumps({"box": 4, "position": 3, "game": "pokemon"}), "utf-8"
+        )
+        # A game no registry entry answers: refused by name, before it costs a decode.
+        identify_images.Image.new("RGB", (64, 89), (200, 40, 40)).save(
+            caps / "4-004.jpg", "JPEG"
+        )
+        (caps / "4-004.json").write_text(
+            json.dumps({"box": 4, "position": 4, "game": "tarot"}), "utf-8"
+        )
+
+        sent: list = []
+        # HOW MANY PHOTOGRAPHS WERE ACTUALLY DECODED. The reorder's whole subject, and the
+        # only thing about it a test can see: hash-first and prepare-everything produce
+        # IDENTICAL outcomes — same submissions, same records, same report — and differ
+        # only in how much work was done to reach them. Every other assertion here stayed
+        # green when the prepare pass's own gate was deleted, so without this counter the
+        # guard watches the sentinel and not the change the sentinel exists to make safe.
+        decoded: list = []
+        real_prepare = cmd_identify.images.prepare
+
+        def counting_prepare(path, **kwargs):
+            decoded.append(str(path))
+            return real_prepare(path, **kwargs)
+
+        def fake_run_batch(requests, log=None, on_submit=None):
+            outcomes = {}
+            for request in requests:
+                sent.append(request.custom_id)
+                outcomes[request.custom_id] = batch.Outcome(
+                    request.custom_id,
+                    batch.SUCCEEDED,
+                    identification=prompt.parse(
+                        {
+                            "name": "Pikachu",
+                            "number": "025",
+                            "printed_total": "102",
+                            "finish": "normal",
+                            "confidence": "high",
+                        },
+                        request.strategy,
+                    ),
+                )
+            return batch.BatchRun(outcomes=outcomes)
+
+        real_run_batch = cmd_identify.batch.run_batch
+        cmd_identify.batch.run_batch = fake_run_batch
+        cmd_identify.images.prepare = counting_prepare
+        try:
+            first: list = []
+            with quiet():
+                code = cmd_identify.run(
+                    cli_entry.build_parser().parse_args(
+                        ["identify", str(caps), "--crop"]
+                    ),
+                    first.append,
+                )
+            checks.equal(code, 0, "a first `identify --crop` over the four exits 0")
+            checks.equal(
+                sorted(sent),
+                ["4-2f-1", "4-2f-2"],
+                "and submits exactly the two readable, registered cards — the non-image "
+                "and the unregistered game are named, not sent. The ids are `_custom_id`'s "
+                "hex escape of `4/1` and `4/2`, which is the seam the Batch API's "
+                "`^[a-zA-Z0-9_-]+$` forced and not anything this check arranged",
+            )
+            checks.equal(
+                spoken(first, "cache hits"),
+                "cache hits      0",
+                "on a cold store nothing is a cache hit. THIS LINE IS COUNTED, NOT "
+                "SUBTRACTED: it read `len(items) - to_send - unreadable`, and a card "
+                "refused for want of a prompt is neither — so every unregistered card in "
+                "a directory was reported as a CACHE HIT on the one line an operator "
+                "reads to decide whether the run is worth paying for",
+            )
+            checks.equal(
+                spoken(first, "to send"), "to send         2", "two cards are going"
+            )
+            checks.equal(
+                spoken(first, "unreadable"),
+                "unreadable      1 — these are NOT sent and NOT dropped:",
+                "and exactly ONE photograph is unreadable — the file that is not an image",
+            )
+            checks.equal(
+                len(decoded),
+                3,
+                "THE FIRST PRESS DECODES THREE OF THE FOUR. The two it is sending, plus "
+                "the non-image — whose bytes hashed and then would not open, which is the "
+                "one thing hashing cannot answer for. The card naming an unregistered "
+                "game is refused BEFORE the prepare pass and costs a hash and nothing "
+                "else, where it used to be cropped and downscaled and then refused",
+            )
+            checks.ok(
+                spoken(first, "crop").startswith(
+                    "crop            to the detected card +8% — "
+                )
+                and "of the 2 being sent" in spoken(first, "crop"),
+                "THE CROP COUNTERS' DENOMINATOR IS THE SEND LIST AND THE LINE SAYS SO. "
+                "They ran over every photograph in the directory while every photograph "
+                "was prepared; hash-first prepares only what is going, so they now sum to "
+                "`to send`. The phrase is on the line and not in a comment because a "
+                "denominator that changes silently is a published measurement rotting",
+                f"crop line: {spoken(first, 'crop')!r}",
+            )
+
+            # ------------------------------------------------ the second press pays nothing
+            sent_after_first = len(sent)
+            second: list = []
+            with quiet():
+                code = cmd_identify.run(
+                    cli_entry.build_parser().parse_args(
+                        ["identify", str(caps), "--crop"]
+                    ),
+                    second.append,
+                )
+            checks.equal(code, 0, "a second press over the same directory exits 0")
+            checks.equal(
+                len(sent),
+                sent_after_first,
+                "and pays for NOTHING — both answers are already in the store",
+            )
+            checks.equal(
+                spoken(second, "cache hits"),
+                "cache hits      2",
+                "THE CACHE CONSULT READS THE DIGEST, NOT THE PREPARED BYTES. It skipped "
+                "on `prepared is None`, which under hash-first is true of every card the "
+                "store already owns — so that test would have skipped exactly the set "
+                "this loop exists to find, and both cards would have been re-submitted "
+                "and re-paid for",
+            )
+            checks.equal(
+                spoken(second, "unreadable"),
+                "unreadable      1 — these are NOT sent and NOT dropped:",
+                "AND THE UNREADABLE ROSTER STILL NAMES ONE. This is the reorder's whole "
+                "hazard in a single figure: `unreadable = [i for i in items if i.prepared "
+                "is None]` would name THREE here — the one real failure plus both healthy "
+                "cache hits — and on the operator's own last press it would have named "
+                "464 cards that were never anything but fine",
+            )
+            checks.equal(
+                spoken(second, "to send"),
+                "to send         0",
+                "nothing is left to send",
+            )
+            checks.equal(
+                len(decoded) - 3,
+                1,
+                "AND THE SECOND PRESS DECODES EXACTLY ONE PHOTOGRAPH — the non-image it "
+                "must try before it can call it unreadable. THIS IS THE WHOLE CHANGE. "
+                "Before the reorder this press decoded all four, because the cache was "
+                "consulted after the decode rather than before it, and the digest the "
+                "consult needs was computed by `images.prepare` on its way past. On the "
+                "operator's own last press that was 678 decodes to answer 214 questions, "
+                "at 114.96 ms against 0.687 ms to hash: one dry-run leg of it took 79 s "
+                "and now takes 24 s. No other assertion in this check can see it — "
+                "hash-first and prepare-everything agree on every outcome and differ only "
+                "in the work done to reach them",
+            )
+
+            # --------------------------------------------- what the run payload records
+            run_dirs = sorted(d for d in files.runs_dir().iterdir() if d.is_dir())
+            payload = json.loads(
+                (run_dirs[-1] / "identifications.json").read_text("utf-8")
+            )["cards"]
+            checks.equal(
+                sorted(payload),
+                ["4/1", "4/2", "4/3", "4/4"],
+                "every photograph in the directory is on the record — an identification, "
+                "a cache hit or a named failure, never an absence",
+            )
+            checks.ok(
+                all(payload[key]["cached"] for key in ("4/1", "4/2")),
+                "the two answered cards are recorded as cache hits",
+            )
+            checks.ok(
+                all(payload[key]["photo_sha256"] for key in ("4/1", "4/2")),
+                "AND THEY CARRY THEIR DIGEST. `photo_sha256` read `item.prepared.sha256 "
+                "if item.prepared else None`, and a cache hit is never prepared — so a "
+                "naive reorder writes null here, and `cli/resolve.py:1108` puts every "
+                "record without a digest into `blind`, where D36's realign can no longer "
+                "re-bind the card to the slot it is in today",
+                f"recorded: {[payload[k]['photo_sha256'] for k in ('4/1', '4/2')]!r}",
+            )
+            checks.ok(
+                payload["4/3"]["photo_sha256"],
+                "and so does the card that HASHED AND THEN FAILED TO DECODE — its bytes "
+                "were readable, only not an image, so `blind` is strictly smaller than it "
+                "was before the reorder rather than larger",
+            )
+            checks.equal(
+                payload["4/3"]["status"],
+                "unreadable",
+                "which is still recorded `unreadable`: nothing on the wire moved for this",
+            )
+            checks.equal(
+                payload["4/4"]["status"],
+                cmd_identify.UNKNOWN_GAME,
+                "and the unregistered game is still refused by name, never sent, never "
+                "dropped — refused BEFORE the decode now, so it costs one hash",
+            )
+        finally:
+            cmd_identify.batch.run_batch = real_run_batch
+            cmd_identify.images.prepare = real_prepare
+
+
 def check_review_stand_down(checks: Checks) -> None:
     """POST /review/<box>/<index>/stand-down — D37, closing a question without answering it.
 
@@ -23504,6 +23763,7 @@ def run() -> Result:
     check_app_serve(checks)
     check_cli_seams(checks)
     check_code_ledger(checks)
+    check_identify_preflight_stage(checks)
     check_review_stand_down(checks)
     check_review_catalog(checks)
     check_run_realignment(checks)
