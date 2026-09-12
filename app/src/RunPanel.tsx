@@ -855,6 +855,30 @@ export function RunPanel({ cart, openRun, onOpenRun, reloadTick, onIdentify, pag
               </div>
             )}
 
+            {/* THE ONE-PRESS CORRECTION, AND THE STEP THAT MAKES IT REAL.
+              *
+              * A whole stack sorted under the wrong rarity is one press to fix on
+              * `#/inventory`, and that press ON ITS OWN CHANGES NOTHING HERE:
+              * `cli/resolve.py` reads the claim off the RUN record with no store fallback
+              * (D86's posture, deliberately — the run is the record of what the sidecars
+              * said when identify ran), so a join over the old run reads the old claim.
+              * The re-identify is what rewrites it, and it is free: the identification
+              * cache is keyed on the photograph and the claim is never sent to the model.
+              *
+              * Drawn on every joined run rather than on a reason count, because the
+              * operator who needs it is the one looking at a queue they think is wrong,
+              * and a hint that appears only when the machine already agrees is no hint. */}
+            {!detail.joined ? null : (
+              <p className="runs-note runs-correction">
+                Queued a whole stack you sorted the same way? The rarity claim is rewritten for a
+                whole box from <a href="#/inventory">Inventory</a> → Manage box → Rarity, which
+                fixes the capture sidecars too. Then re-run <strong>Identify</strong> and{' '}
+                <strong>Join</strong> here — the claim is read off this run, not off the box, so
+                correcting the box alone changes nothing. The re-identify is a full cache hit and
+                costs nothing: the claim never goes to the model.
+              </p>
+            )}
+
             <div className="runs-steps">
               {/* -------------------------------------------------------------- identify */}
               <StepCard

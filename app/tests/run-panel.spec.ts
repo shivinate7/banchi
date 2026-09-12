@@ -1878,3 +1878,37 @@ test('the routing lever reaches join', async ({ page }) => {
   expect(join?.body).toMatchObject({ review_below_confidence: 'medium' })
   expect((join?.body as { rule?: unknown }).rule).toBeUndefined()
 })
+
+/* ---------------------------------------- the rarity correction, and why it needs two steps */
+
+test('a joined run says how to correct a whole stack, and that the box alone is not enough', async ({
+  page,
+}) => {
+  /* THE STEP THAT MAKES THE PRESS REAL, and the one an operator cannot guess. `#/inventory`'s
+     Manage box → Rarity rewrites a whole box's claim and its capture sidecars, and on its own
+     it changes NOTHING here: `cli/resolve.py` reads the claim off the RUN record with no store
+     fallback, so a join over the old run reads the old claim. The re-identify is what rewrites
+     it, and it is free — the cache is keyed on the photograph and the claim never reaches the
+     model. Without this sentence the operator corrects the box, re-joins, sees the same 141
+     questions, and concludes the correction did not work. */
+  await open(page, { detail: { joined: true, counts: { cards_in: 40, skus: 30, queued_main: 12, queued_parked: 3 } } })
+  await openRun(page)
+
+  const note = page.locator('.runs-correction')
+  await expect(note).toBeVisible()
+  await expect(note).toContainText('Manage box')
+  await expect(note).toContainText('correcting the box alone changes nothing')
+  await expect(note).toContainText('costs nothing')
+  await expect(note.getByRole('link', { name: /Inventory/i })).toHaveAttribute('href', '#/inventory')
+})
+
+test('and it is not drawn on a run that has never been joined', async ({ page }) => {
+  /* The note is about a queue this run produced. A run with no join has no queue, so the
+     sentence would be advice about nothing — which is how standing advice becomes furniture. */
+  await open(page)
+  await openRun(page)
+  /* The figures block is the sibling under the same `joined` test, so asserting it is absent
+     too keeps this from passing merely because the fold never opened. */
+  await expect(page.locator('.runs-figures')).toHaveCount(0)
+  await expect(page.locator('.runs-correction')).toHaveCount(0)
+})
