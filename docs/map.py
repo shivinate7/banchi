@@ -2007,7 +2007,7 @@ COMPONENTS = [
                 # why all five are mechanical. D127 is the guard whose resolution standard and
                 # fail-open asymmetry this one takes unchanged. D43 is the second clause's
                 # whole subject. D18 keeps its self-test off the commit path.
-                "governed_by": ["D-five-shell-mistakes", "D18", "D43", "D127", "D157",
+                "governed_by": ["D179", "D18", "D43", "D127", "D157",
                                 "D171", "D173", "D175"],
             },
             "guard-shell-selftest.sh": {
@@ -2033,7 +2033,7 @@ COMPONENTS = [
                         "caught; the survivor removes half of the `.bak` advice, the other "
                         "half still satisfies the assertion, and an arm removing BOTH goes "
                         "red.",
-                "governed_by": ["D-five-shell-mistakes", "D18", "D43", "D127", "D171", "D173"],
+                "governed_by": ["D179", "D18", "D43", "D127", "D171", "D173"],
             },
             "coordinator.py": {
                 "does": "`make coordinator` — the merge queue READ rather than remembered, so "

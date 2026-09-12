@@ -1,4 +1,4 @@
-## D-five-shell-mistakes — Five shell commands are refused by resolving what they would do, not by matching what they say, and each clause carries its own escape hatch
+## D179 — Five shell commands are refused by resolving what they would do, not by matching what they say, and each clause carries its own escape hatch
 
 **A fourteen-agent read-only audit, 2026-09-12, asked one question of every rule this repository has written down: has it been broken anyway, and can a machine see it?** Forty rules came back
 as mechanizable. Five of them are one command away from a session's fingers and every one of
