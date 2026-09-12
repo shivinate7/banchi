@@ -10834,6 +10834,15 @@ class CaptureHandler(BaseHTTPRequestHandler):
                 return self._json(
                     HTTPStatus.OK, pipeline_routes.do_reconcile_live(self._body())
                 )
+            if path == "/queues/refresh":
+                # THE STANDING QUEUES, RE-RESOLVED STORE-WIDE. `reconcile-live`'s shape one
+                # file over: free, the preview is the default, and it writes only when asked.
+                # DISPATCHED HERE BESIDE `GET /queues` because that is the pair an operator
+                # thinks in, and IMPLEMENTED in `pipeline_routes` because it runs the CLI —
+                # the same split `do_pipeline_worklist` already has.
+                return self._json(
+                    HTTPStatus.OK, pipeline_routes.do_queue_refresh(self._body())
+                )
             if path == "/pipeline/markdowns":
                 # THE STALE-LISTING MARKDOWN (D100). Free and store-wide, `reconcile-live`'s
                 # shape: the preview is the default and `write` produces a WORKLIST, which
