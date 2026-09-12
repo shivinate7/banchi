@@ -387,19 +387,8 @@ audit-history:
 check:
 	@$(MAKE) --no-print-directory harness
 	@$(MAKE) --no-print-directory docs-audit
-	@$(MAKE) --no-print-directory audit-self-test
-	@$(MAKE) --no-print-directory githooks-selftest
-	@$(MAKE) --no-print-directory merge-selftest
-	@$(MAKE) --no-print-directory revert-selftest
-	@$(MAKE) --no-print-directory claim-selftest
 	@$(MAKE) --no-print-directory claim-stale
-	@$(MAKE) --no-print-directory decisions-selftest
 	@$(MAKE) --no-print-directory revert-guard
-	@$(MAKE) --no-print-directory janitor-selftest
-	@$(MAKE) --no-print-directory reap-selftest
-	@$(MAKE) --no-print-directory suite-lock-selftest
-	@$(MAKE) --no-print-directory serve-selftest
-	@$(MAKE) --no-print-directory verdict-selftest
 	@$(MAKE) --no-print-directory port-agreement
 	@$(MAKE) --no-print-directory set-hint-agreement
 	@$(MAKE) --no-print-directory screen-freshness
@@ -408,6 +397,17 @@ check:
 	@$(MAKE) --no-print-directory lint
 	@$(MAKE) --no-print-directory vale
 	@$(MAKE) --no-print-directory typecheck
+	@$(MAKE) --no-print-directory audit-self-test
+	@$(MAKE) --no-print-directory githooks-selftest
+	@$(MAKE) --no-print-directory merge-selftest
+	@$(MAKE) --no-print-directory revert-selftest
+	@$(MAKE) --no-print-directory claim-selftest
+	@$(MAKE) --no-print-directory decisions-selftest
+	@$(MAKE) --no-print-directory janitor-selftest
+	@$(MAKE) --no-print-directory reap-selftest
+	@$(MAKE) --no-print-directory suite-lock-selftest
+	@$(MAKE) --no-print-directory serve-selftest
+	@$(MAKE) --no-print-directory verdict-selftest
 
 # WHAT A MACHINE CAN PROVE ON A FRESH CLONE, WHICH IS NOT EVERYTHING `make check` PROVES.
 # This exists because nothing ever re-ran the gate: `make check` failed in every fresh checkout

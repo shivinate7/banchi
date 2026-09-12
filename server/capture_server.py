@@ -6598,6 +6598,43 @@ def _require_group_answers(payload: dict) -> List[Tuple[int, int, str, str, str]
     return parsed
 
 
+def _condition_grade(target: dict) -> str:
+    """The GRADE a group member's answer writes — its condition with the finish folded away.
+
+    THE GROUP USED TO CLUSTER ON THE CONDITION STRING, AND THAT SPLIT EVERY REAL QUEUE IN
+    TWO. `Near Mint` and `Near Mint Foil` are one grade and two finishes, so a queue whose
+    grade was never in question still arrived as two groups differing only by whether the
+    card is foil. Measured on the owner's store the day this changed: of the 52 entries their
+    runs generated, 40 offered exactly one row, every one of those rows Near Mint — 21
+    `Near Mint` and 19 `Near Mint Foil`. Times three reason codes, that is up to six presses
+    to confirm a grade D137 had already fixed by rule. The operator's words for it: *"i also
+    somehow had to still claim items in bulk that they're near mint rather than it being
+    default."*
+
+    THE FINISH IS NOT A THING THE GROUP DECIDES, which is why folding it away is safe rather
+    than merely convenient. Each member is answered with ITS OWN lone candidate row, and that
+    row's finish was chosen by the ladder from that card's own metadata claim and detection —
+    per card, before this route was reached. Answering thirteen normals and fourteen foils
+    together writes each of the twenty-seven exactly the row it would have got alone. What
+    the uniformity rule protects is that the question is the same and the reply is forced;
+    neither depends on every card being the same finish.
+
+    THE GRADE IS READ OFF THE REGISTRY AND NEVER PARSED OUT OF THE STRING. `Near Mint Foil`
+    starting with `Near Mint` is a fact about Pokemon's and Riftbound's vocabulary rather
+    than a rule, and a game whose Near Mint row is spelled some other way would silently
+    become its own grade under a prefix test. A condition the game does not call Near Mint —
+    `Unopened` is the live one — is its own grade and still groups only with itself, so a
+    sealed product can never be swept into a group of singles.
+    """
+    game = str(getattr(target["card"], "game", "") or games.DEFAULT_GAME)
+    condition = str(target["offered"])
+    try:
+        near_mint = _near_mint_conditions(game)
+    except Exception:  # noqa: BLE001 - an unvocabularied game grades as itself, never as NM
+        return condition
+    return "near mint" if condition in near_mint else condition
+
+
 def do_review_group_answer(payload: dict) -> dict:
     """Answer a homogeneous group of queued cards in one write.
 
@@ -6719,21 +6756,21 @@ def do_review_group_answer(payload: dict) -> dict:
             for target in targets
             if len(target["governing"].candidates) != 1
         ]
-        conditions = sorted({target["offered"] for target in targets})
-        if len(reasons) > 1 or many_rows or len(conditions) > 1:
+        grades = sorted({_condition_grade(target) for target in targets})
+        if len(reasons) > 1 or many_rows or len(grades) > 1:
             findings = []
             if len(reasons) > 1:
                 findings.append(f"reasons {', '.join(reasons)} are mixed")
             findings.extend(many_rows)
-            if len(conditions) > 1:
-                findings.append(f"conditions {', '.join(conditions)} are mixed")
+            if len(grades) > 1:
+                findings.append(f"grades {', '.join(grades)} are mixed")
             raise BadRequest(
                 HTTPStatus.CONFLICT,
                 "group_not_uniform",
                 f"This group may not be answered as one: {'; '.join(findings)}. A group "
                 f"write needs one shared reason code, exactly one candidate row per card, "
-                f"and one condition across the group — anything looser is answered one "
-                f"card at a time, each beside its own photograph (D4). Nothing was "
+                f"and one condition GRADE across the group — anything looser is answered "
+                f"one card at a time, each beside its own photograph (D4). Nothing was "
                 f"written.",
             )
 
@@ -6790,8 +6827,15 @@ def do_review_group_answer(payload: dict) -> dict:
             "count": len(results),
             # The shared facts, stated once at the top because the whole route just
             # proved they are shared — the screen's receipt line is built from them.
+            #
+            # `grade` REPLACED `condition` ON 2026-09-12, because the group stopped being
+            # one condition string. A member is answered with its own row's condition and
+            # those may now differ by finish, so a single `condition` at the top would be a
+            # lie about the other half of the group. What IS shared, and what the route just
+            # checked, is the grade. Each member's own condition is on its own result row
+            # below, where it has always been.
             "reason": reasons[0],
-            "condition": conditions[0],
+            "grade": grades[0],
             "results": results,
         }
 
