@@ -2741,20 +2741,35 @@ def do_status() -> dict:
     # construction, so the cost is paid only while there is something to report.
     relocated_at = getattr(inventory, "photos_relocated", None)
     body["photos_relocated"] = relocated_at
-    body["photographs"] = None
+    body["photographs_at_legacy_address"] = None
     if not relocated_at:
+        # THE RESIDUE IS WHAT IS AT THE OLD ADDRESS, NOT THE ABSENCE OF A STAMP, and the
+        # first draft of this got that wrong in the direction that cries wolf. `cards photos`
+        # writes the stamp, so a store that NEVER NEEDED A MOVE never carries one — every
+        # store created after D172 has its photographs at the card's own name from the
+        # shutter onward, because `do_capture` writes through `photos.write(card.cid, blob)`.
+        # Inferring a residue from the missing stamp made a healthy fresh store report a
+        # problem on every poll, forever, and a health route that is always complaining is
+        # one nobody reads.
+        #
+        # `next(..., None)` RATHER THAN A COUNT, and that is what makes it cheap in both
+        # directions: it stops at the first file it finds when there IS a residue, and a
+        # relocated store's legacy directories are empty so there is nothing to walk. The
+        # COUNT is `./pkmnscan cards photos`' job, which is a command somebody runs rather
+        # than a route something polls.
         try:
-            body["photographs"] = len(photos.stored_names())
+            leftover = next(captures_root().rglob(f"*{PHOTO_SUFFIX}"), None)
         except OSError as exc:  # noqa: BLE001 — never take down /status
-            problems.append(f"the photograph store could not be counted ({exc}).")
-        else:
+            leftover = None
+            problems.append(f"the legacy photograph directory could not be read ({exc}).")
+        body["photographs_at_legacy_address"] = leftover is not None
+        if leftover is not None:
             problems.append(
-                f"the photographs have not all reached the card's own name yet: "
-                f"{body['photographs']} are there and this store holds {body['cards']} "
-                f"card(s). `./pkmnscan cards photos` previews the rest and `--write` moves "
-                f"them — it is resumable, and every file is checked against a digest before "
-                f"its old copy is removed. The legacy (box, index) address is still read "
-                f"until it is finished, so nothing is broken meanwhile."
+                "some photographs are still at the legacy (box, index) address rather than "
+                "at the card's own name. `./pkmnscan cards photos` counts them and `--write` "
+                "moves them — it is resumable, and every file is checked against a digest "
+                "before its old copy is removed. That address is still read until it is "
+                "finished, so nothing is broken meanwhile."
             )
 
     # A corrupt record must not take down the health endpoint — that is the one route you

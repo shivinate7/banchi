@@ -1069,6 +1069,74 @@ def case_the_audit_says_not_known_rather_than_passing_over_nothing() -> None:
     equal(code, 0, "and once named, the same store passes")
 
 
+def case_only_a_store_with_photographs_left_behind_reports_a_residue() -> None:
+    """`/status` reports the residue it can SEE, never one inferred from a missing stamp.
+
+    THE FIRST DRAFT CRIED WOLF ON EVERY HEALTHY STORE AND NOTHING COULD SEE IT. `cards
+    photos` is what writes `photos_relocated`, so a store that NEVER NEEDED A MOVE never
+    carries one — every store created after D172 has its photographs at the card's own name
+    from the shutter onward. Treating the missing stamp as evidence made a fresh store
+    report a problem on every poll, forever, and a health route that is always complaining
+    is one nobody reads.
+
+    THREE SHAPES, AND ONLY THE MIDDLE ONE HAS ANYTHING TO SAY. A test that built only the
+    half-moved store would pass against the broken version too, which is why all three are
+    here rather than the one the bug was about.
+    """
+    import base64
+    import shutil
+    import sqlite3
+
+    from server import capture_server
+    from store import photos
+    from store.session import Store
+
+    def store_with(tag: str):
+        fresh_home()
+        for n in range(3):
+            capture_server.do_capture({
+                "box": 1,
+                "image": base64.b64encode(photo_bytes(f"{tag}-{n}")).decode(),
+                "capture_id": f"{tag}-{n}",
+                "game": "pokemon",
+            })
+
+    def says_residue() -> bool:
+        return "photographs are still at the legacy" in (
+            capture_server.do_status().get("problem") or ""
+        )
+
+    store_with("fresh")
+    check(not says_residue(),
+          "a store born after the naming reports NO residue — it never needed a move, so "
+          "the stamp it does not carry is not evidence of one")
+
+    store_with("half")
+    card = sorted(Store().read().inventory.cards.values(), key=lambda c: c.index)[0]
+    legacy = photos.legacy_path(card.box, card.index)
+    legacy.parent.mkdir(parents=True, exist_ok=True)
+    shutil.copy2(photos.path(card.cid), legacy)
+    check(says_residue(),
+          "a store with a photograph still at the legacy address DOES report one, and names "
+          "the command that finishes the move")
+
+    store_with("done")
+    conn = sqlite3.connect(
+        str(Path(os.environ["PKMNSCAN_HOME"]) / "inventory" / "store.sqlite"),
+        isolation_level=None,
+    )
+    conn.execute(
+        "INSERT OR REPLACE INTO meta (key, value) VALUES ('photos_relocated', ?)",
+        ("2026-09-12T00:00:00.000+00:00",),
+    )
+    conn.close()
+    check(not says_residue(),
+          "and a stamped store reports none without looking — the stamp is written only "
+          "after a pass that found every card at its name, so it is the authority")
+    equal(capture_server.do_status()["photographs_at_legacy_address"], None,
+          "which is why the field answers null there rather than false: nothing was asked")
+
+
 def case_killed_with_minus_nine_leaves_the_store_unchanged() -> None:
     """Proven by doing it, which is `make suite-lock-selftest`'s standard.
 
@@ -1164,6 +1232,7 @@ CASES = [
     case_a_link_that_did_not_land_the_right_bytes_is_caught,
     case_a_reshoot_is_excused_by_a_recorded_digest_and_never_by_the_fact,
     case_the_audit_says_not_known_rather_than_passing_over_nothing,
+    case_only_a_store_with_photographs_left_behind_reports_a_residue,
     case_killed_with_minus_nine_leaves_the_store_unchanged,
 ]
 

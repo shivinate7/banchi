@@ -336,7 +336,11 @@ def entry(box: int, index: int, **extra) -> queues.QueueEntry:
         # `run_photo`'s string, not a composed one, for the reason it gives: this field is
         # carried onto the entry from the run's `identifications.json` verbatim
         # (`cli/resolve.py:queue_entry`), and the review screen renders exactly that file.
-        "photo": run_photo(box, index),
+        #
+        # SHORT-CIRCUITED WHEN THE CALLER NAMES ONE, because `run_photo` READS THE STORE and
+        # one caller is seeding a legacy JSON store on disk — whose first read would migrate
+        # it, out from under the case that exists to watch the migration happen.
+        "photo": extra.get("photo") or run_photo(box, index),
         # RETIRED as a reason the pipeline emits (D3, amended 2026-09-02), and kept here on
         # purpose: the owner's store holds 16 history events carrying this string, the
         # routes validate only `STAND_DOWN_REASONS`, and a fixture wearing the code a real
@@ -598,14 +602,15 @@ def run_photo(box: int, index: int) -> str:
     `cli/resolve.py:realign` now watches for exactly that string, refusing to rewrite a
     cid-named path into a slot-named one.
 
-    A POSITION THE STORE HAS NEVER SEEN FALLS BACK TO THE LEGACY ADDRESS, and that is the
-    third question rather than a default. `check_listing_commands` joins a run over a position
-    nothing here ever photographed — a recovered or hand-made file, which `cli/resolve.py`
-    names as a supported case — and the only address such a file can honestly carry is the one
-    that predates the naming.
+    A CARD WITH NO NAME TO FILE A PHOTOGRAPH UNDER FALLS BACK TO THE LEGACY ADDRESS, and that
+    is the third question rather than a default. Two shapes reach it: a position the store has
+    never seen — `check_listing_commands` joins a run over one, a recovered or hand-made file,
+    which `cli/resolve.py` names as a supported case — and a record whose `cid` names no
+    photograph at all, a `moved:` tombstone or a `nophoto:` card out of a migrated store. The
+    only address either can honestly carry is the one that predates the naming.
     """
     card = Store().read().inventory.get(master.position_key(box, index))
-    if card is None:
+    if card is None or not photos.is_photo_cid(card.cid):
         return str(capture_server.legacy_photo_path(box, index))
     return str(capture_server.photo_target(card))
 
@@ -1168,7 +1173,17 @@ def check_store_of_record(checks: Checks) -> None:
             {"2/1": {"identification": {"name": "Moonfall", "confidence": "high"},
                      "photo_sha256": "abc", "prompt_fingerprint": "p1", "at": "2026-08-01"}},
         )
-        files.write_json(directory / db.LEGACY_REVIEW, {"2/1": asdict_entry(entry(2, 1))})
+        files.write_json(
+            directory / db.LEGACY_REVIEW,
+            # THE LEGACY ADDRESS, NAMED RATHER THAN DERIVED. This file is a review queue
+            # written before cards had names, beside an `inventory.json` written the same
+            # day, and the whole case is what the first open makes of them — so the entry
+            # has to carry the path such a file actually carried, and asking the store for
+            # one would migrate the store this line is still seeding.
+            {"2/1": asdict_entry(
+                entry(2, 1, photo=str(capture_server.legacy_photo_path(2, 1)))
+            )},
+        )
         files.write_json(directory / db.LEGACY_PARKED, {})
         files.write_json(
             directory / db.LEGACY_ORDERS,
@@ -1202,14 +1217,27 @@ def check_store_of_record(checks: Checks) -> None:
             "`store/db.py:_number_legacy_boxes` states, because a legacy box's `created_at` "
             "is optional and would put every unstamped box in an arbitrary bucket",
         )
+        checks.equal(
+            [added["cards"]["2/1"]["cid"], added["cards"]["2/2"]["cid"]],
+            ["abc", "nophoto:2/2@"],
+            "AND IT NAMES EVERY CARD (D172), by the ladder `store/db.py:_name_one_card` "
+            "walks rather than by one rule. 2/1 takes rung 3 — the digest the paid ANSWER "
+            "recorded, which is the fact D89's reclaim leaves behind — and 2/2 reaches no "
+            "rung at all and gets shape 4, `nophoto:<key>@<captured_at>`, a NAME and never "
+            "a null so that `cards_cid` can be UNIQUE over every row. The trailing `@` is "
+            "the empty `captured_at` this legacy record carries, which is the shape a file "
+            "written before that field existed actually has",
+        )
         restored = json.loads(json.dumps(added))
         restored["box_ids_issued"] = expected["box_ids_issued"]
         for key, box in restored["boxes"].items():
             box["bid"] = expected["boxes"][key]["bid"]
+        for key, card in restored["cards"].items():
+            card["cid"] = expected["cards"][key]["cid"]
         checks.equal(
             restored,
             expected,
-            "and NOTHING ELSE MOVED: with those two facts put back the way the file had "
+            "and NOTHING ELSE MOVED: with those THREE facts put back the way the file had "
             "them, the legacy inventory.json reads back through the database EXACTLY as "
             "`Inventory.parse` read it — a lossless import, undeclared field dropped by the "
             "same filter",
@@ -1234,8 +1262,11 @@ def check_store_of_record(checks: Checks) -> None:
         )
         checks.equal(
             [e["event"] for e in Store().history()],
-            [master.CAPTURED, master.SOLD],
-            "and history.jsonl became the events table, in order",
+            [master.CAPTURED, master.SOLD, "card_ids_reissued"],
+            "and history.jsonl became the events table, in order — with the naming pass's "
+            "own line appended after it. A migration that gave every card a name and wrote "
+            "nothing down would be the one class of change this store cannot answer a "
+            "question about afterwards, so it leaves a line like every other write",
         )
         checks.equal(
             sorted(p.name for p in db.legacy_dir(directory).iterdir()),
@@ -3414,9 +3445,6 @@ def check_listing_release(checks: Checks) -> None:
     checks.note("")
     checks.note("LISTING RELEASE — D34, the missing door out of `staged`")
 
-    def blob(i: int) -> str:
-        return base64.b64encode(b"\xff\xd8\xff" + bytes([i]) * 64).decode("ascii")
-
     with isolated_home():
         # SHARED: box 4 holds 2 of 5 staged; box 6 holds 3. OWNED: box 4 holds both.
         # SOLDCOPY: box 4 holds 1 unsold and 1 sold against 2 staged.
@@ -3425,10 +3453,13 @@ def check_listing_release(checks: Checks) -> None:
             (6, 3, "SHARED"), (4, 3, "OWNED"), (4, 4, "OWNED"),
             (4, 5, "SOLDCOPY"), (4, 6, "SOLDCOPY"),
         )
+        # THROUGH `capture_payload`, WHICH MINTS A PHOTOGRAPH PER CALL. A local helper here
+        # keyed its bytes on the INDEX, so box 4's card 1 and box 6's card 1 sent the same
+        # blob — two cards with one name, which `cards_cid` refuses outright since D172.
+        # Nothing in this section reads a card out of its bytes; what it needs is that no
+        # two of the nine are the same, which is exactly what the shared fixture promises.
         for box, index, _ in layout:
-            capture_server.do_capture(
-                {"box": box, "capture_id": f"L{box}{index}", "image": blob(index)}
-            )
+            capture_server.do_capture(capture_payload(box, capture_id=f"L{box}{index}"))
         with Store().write() as snapshot:
             inventory = snapshot.inventory
             for box, index, sku in layout:
@@ -6680,14 +6711,19 @@ def check_sidecar_seam(checks: Checks) -> None:
             "with no problem recorded on any of them",
         )
 
-        keys = [c.key for c in captures]
+        keys = sorted(c.key for c in captures)
         checks.equal(
             keys,
             ["3/1", "3/2", "4/1"],
-            "scan order is position order, and keys equal store.master.position_key",
+            "every capture's key equals store.master.position_key. SORTED, BECAUSE SCAN "
+            "ORDER IS NO LONGER POSITION ORDER (D172): `scan` walks its root in filename "
+            "order and a filename is now a digest, so the sequence is whichever card hashed "
+            "low. Nothing downstream depends on it — `cmd_identify` keys every request by "
+            "`Capture.key` — and a case that reached for `[0]` now names the position it "
+            "meant, through `capture_named`",
         )
 
-        first = captures[0]
+        first = capture_named("3/1")
         checks.equal(first.set_hint, "sv9", "the set hint reaches the sidecar")
         # A ONE-MEMBER TUPLE, not the bare string this asserted before D3's amendment of
         # 2026-08-23. The capture that produced it still sends a bare `variant="holo"` on
@@ -6701,7 +6737,7 @@ def check_sidecar_seam(checks: Checks) -> None:
             "and so does the capture-time variant",
         )
         checks.ok(
-            captures[1].metadata_finish is None,
+            capture_named("3/2").metadata_finish is None,
             "a card captured with no toggle records no claim — absent, not null (D3 rung 1)",
         )
 
@@ -8844,9 +8880,12 @@ def check_origin_gate(checks: Checks) -> None:
                 "photograph with no backup (D10)",
             )
             checks.equal(error_code(body), "origin_not_allowed", "in the same code again")
+            # READ WHILE THE RECORD IS STILL THERE, because the delete below takes it and
+            # the photograph's name lives ON the record now (D172) — after the successful
+            # DELETE there is nothing left to derive a path from.
+            doomed = photo_of(3, 3)
             checks.ok(
-                Store().read().inventory.get("3/3") is not None
-                and photo_of(3, 3).is_file(),
+                Store().read().inventory.get("3/3") is not None and doomed.is_file(),
                 "and the card, its position and its photograph are all still there",
             )
 
@@ -8856,8 +8895,7 @@ def check_origin_gate(checks: Checks) -> None:
                 status, 200, "the SAME DELETE from an allowed origin is served"
             )
             checks.ok(
-                Store().read().inventory.get("3/3") is None
-                and not photo_of(3, 3).is_file(),
+                Store().read().inventory.get("3/3") is None and not doomed.is_file(),
                 "and it really did the work — so the case above is the gate refusing, not "
                 "the route failing for some other reason",
             )
@@ -9755,8 +9793,11 @@ def check_code_ledger(checks: Checks) -> None:
     with isolated_home() as home:
         caps = Path(home) / "code-caps"
         caps.mkdir()
-        for name in ("6-001.jpg", "6-002.jpg"):
-            identify_images.Image.new("RGB", (64, 89), (200, 40, 40)).save(
+        # A DIFFERENT COLOUR EACH, because a card is named by the sha256 of its photograph
+        # (D172) and `cards_cid` holds that name UNIQUE. Both were the same flat red, which
+        # is two records carrying one name the moment `identify` writes them.
+        for name, red in (("6-001.jpg", 200), ("6-002.jpg", 120)):
+            identify_images.Image.new("RGB", (64, 89), (red, 40, 40)).save(
                 caps / name, "JPEG"
             )
         (caps / "6-001.json").write_text(
@@ -11284,9 +11325,16 @@ def check_rescue_stranded_run(checks: Checks) -> None:
 
         with Store().write() as snapshot:
             snapshot.inventory.ensure_box(3, name="RB Epics")
-            for n in (1, 2, 3):
+            # THE TWO RESCUED CARDS ARE NAMED BY THE PHOTOGRAPHS THE RUN READ (D172), which
+            # is what makes this block exercise the store-backed digest map rather than the
+            # glob the refusal cases below still fall back to. `cards.cid` IS the digest —
+            # `cli/resolve.py:_photo_digests` reads the column and puts each row to its file
+            # — so a destination card wearing an invented name would match nothing, and the
+            # rescue would refuse a run it is supposed to repair. 3/1 keeps an invented name
+            # and no photograph: it is the card that is simply not in this run.
+            for n, cid in ((1, fake_cid("dest-1")), (2, moved[1]), (3, moved[2])):
                 snapshot.inventory.allocate_capture(
-                    3, capture_id=f"dest-{n}", game="pokemon", cid=fake_cid(f"dest-{n}")
+                    3, capture_id=f"dest-{n}", game="pokemon", cid=cid
                 )
             reuse_box_one(snapshot)
 
@@ -12040,7 +12088,7 @@ def check_cli_refusals(checks: Checks) -> None:
 
     from cli import __main__ as entry
 
-    # NINE SINCE 2026-09-12, and `scan` is still the only one that is free AND writes to a
+    # TEN SINCE 2026-09-12, and `scan` is still the only one that is free AND writes to a
     # CARD. `prices` writes the CORPUS — `prices adopt` previews unless given `--write`, and
     # `prices show` reads. `reprice` writes the corpus too, on `apply --write` and nowhere else
     # (D100); both of its subcommands preview by default, and neither touches a card. `rescue`
@@ -12054,11 +12102,17 @@ def check_cli_refusals(checks: Checks) -> None:
     # — which matters most for a command that touches the store, as `scan` does. It EARNED that
     # twice in one day: `rescue` and `queue` landed hours apart and each side of the merge
     # counted eight.
+    #
+    # `cards` IS THE TENTH AND IT ARRIVED WITH D172. Two of its three subcommands write
+    # nothing ever — `cards name` is a census and `cards audit` asks whether every card's
+    # name still resolves to its photograph — and the third, `cards photos`, is the one
+    # thing in this dispatch that moves 4.45 GB that cannot be re-taken, previewing by
+    # default and verifying every file against a digest before its old copy is removed.
     checks.equal(
         sorted(entry.COMMANDS),
-        ["emit", "identify", "join", "prices", "queue", "reconcile", "reprice", "rescue",
-         "scan"],
-        "nine commands are registered, and only nine",
+        ["cards", "emit", "identify", "join", "prices", "queue", "reconcile", "reprice",
+         "rescue", "scan"],
+        "ten commands are registered, and only ten",
     )
 
     # No command may read stdin. Asserted against the source of every module the dispatch
@@ -22264,16 +22318,11 @@ def check_order_screen(checks: Checks) -> None:
 
     def stock(box: int, count: int, sku: str, prefix: str = "o") -> None:
         """`count` identified copies of one SKU in `box`, each with its own capture id."""
+        # THROUGH `capture_payload`, WHICH MINTS A PHOTOGRAPH PER CALL. The bytes were keyed
+        # on the index within the box, so box 3's card 1 and box 4's card 1 sent the same
+        # blob — and two cards cannot share one name since D172 (`cards_cid` is UNIQUE).
         for at in range(1, count + 1):
-            capture_server.do_capture(
-                {
-                    "box": box,
-                    "capture_id": f"{prefix}{at}",
-                    "image": base64.b64encode(
-                        b"\xff\xd8\xff" + bytes([at]) * 64
-                    ).decode("ascii"),
-                }
-            )
+            capture_server.do_capture(capture_payload(box, capture_id=f"{prefix}{at}"))
         with Store().write() as snapshot:
             for at in range(1, count + 1):
                 snapshot.inventory.record_identification(
@@ -25196,16 +25245,11 @@ def check_shipping_stamps(checks: Checks) -> None:
 
     def stock(box: int, count: int, sku: str, prefix: str) -> None:
         """`count` identified copies of one SKU in `box`, each with its own capture id."""
+        # THROUGH `capture_payload`, WHICH MINTS A PHOTOGRAPH PER CALL. The bytes were keyed
+        # on the index within the box, so box 3's card 1 and box 4's card 1 sent the same
+        # blob — and two cards cannot share one name since D172 (`cards_cid` is UNIQUE).
         for at in range(1, count + 1):
-            capture_server.do_capture(
-                {
-                    "box": box,
-                    "capture_id": f"{prefix}{at}",
-                    "image": base64.b64encode(
-                        b"\xff\xd8\xff" + bytes([at]) * 64
-                    ).decode("ascii"),
-                }
-            )
+            capture_server.do_capture(capture_payload(box, capture_id=f"{prefix}{at}"))
         with Store().write() as snapshot:
             for at in range(1, count + 1):
                 snapshot.inventory.record_identification(
