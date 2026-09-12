@@ -1439,9 +1439,9 @@ named lives in `docs/DECISIONS.md` and is that file's to open or close.
 
 ## What is open
 
-**Two things, and they are not ranked.** There is no `next` here and no `blocked`: both are
-unblocked, and which one matters more is the owner's to say on the day. `docs/map.py`'s
-`OPEN` carries the same two ids.
+**Three things, and they are not ranked.** There is no `next` here and no `blocked`: all three
+are unblocked, and which one matters more is the owner's to say on the day. `docs/map.py`'s
+`OPEN` carries the same three ids.
 
 9. **Vendor the pokemontcg.io catalog** — see D15. Three pieces, in order:
     - Snapshot `PokemonTCG/pokemon-tcg-data` into the repo (183 files, 27.4 MB) with a
@@ -1465,6 +1465,32 @@ unblocked, and which one matters more is the owner's to say on the day. `docs/ma
     were deliberately left alone: writing a tracking number back is the first thing this
     project would do that a **buyer** sees, and D69 ruled that the screen comes before the
     transport. Nothing blocks it but the doing of it.
+
+0. `step repo-state-heartbeat` **A durable scheduled heartbeat that watches repo state across
+    sessions** — the questions no single session is positioned to ask, because each one sees
+    only its own tree and its own branch. Mostly a caller of what already exists: `make status`,
+    `make janitor`, and `python3 scripts/docs-audit.py --json`. What it would report:
+
+    - open pull requests that are green and unmerged, waiting on nobody
+    - a pull request now conflicting with a live session that has not been told
+    - worktrees dirty with no session standing in them, and merged branches `make janitor`
+      would take
+    - whether main's last push run is green
+    - whether `id claims` is clean — a number a branch claimed that main has since taken
+      (D140 amended), which today is caught by a person reading PR titles
+
+    **Two design constraints, established with the owner and binding on whoever builds it.**
+    It runs only while the desktop app is open, so it is a heartbeat and never a daemon — it
+    cannot be relied on to fire, and anything whose correctness depends on having fired is the
+    wrong thing to put here. And **each run is a fresh session with no conversation context**:
+    it knows nothing about who asked for what or who is blocked on whom. Both point the same
+    way — it gets **read-and-report authority, not merge authority.** A session that cannot
+    remember the last run has no basis for pressing an irreversible button, and `make merge`
+    already requires the owner's word for exactly that reason.
+
+    **Anything needing memory of who is blocked on whom needs durable state in a file**, not in
+    a session. That is the part that is real work rather than a wrapper, and it is why this is a
+    step and not a cron line: the report is easy and the state is not.
 
 **Nothing in this list is blocked on a third-party benchmark.** A sub-floor T1 is worked
 directly — see the T1 section above. The TCGplayer Scan & Identify comparison was removed
