@@ -1470,7 +1470,7 @@ COMPONENTS = [
                         "the common `.git` dir, so the copy git runs is the one thing a "
                         "branch switch cannot rewrite — while scripts/serve.py, where the "
                         "refusal itself lives, is exactly what a switch replaces.",
-                "governed_by": ["D42", "D43", "D53", "D139", "D158"],
+                "governed_by": ["D42", "D43", "D53", "D139", "D158", "D176"],
                 "note": "Extensionless, unscanned, listed by hand.",
             },
             "githooks/pre-push": {
@@ -1525,9 +1525,9 @@ COMPONENTS = [
                 # amends. D18 governs its shape — the preview is the read-only mode, and the
                 # act is behind a flag rather than a default. D33 is the instrument the two-step
                 # is borrowed from, one register down from a route that can spend money.
-                "governed_by": ["D18", "D33", "D42", "D72", "D111", "D136", "D140",
+                "governed_by": ["D18", "D33", "D42", "D72", "D111", "D136", "D139", "D140",
                                 "D141", "D143", "D148",
-                                "D151"],
+                                "D151", "D158", "D176"],
                 "note": "IT NEVER SETS PKMNSCAN_MAIN AND NO REFUSAL IT PRINTS SUGGESTS IT. D42 "
                         "is explicit that a session reaching for that variable has left the "
                         "amendment behind; this needs no hatch because allow rule 3 already "
@@ -1560,7 +1560,7 @@ COMPONENTS = [
                         "(allowed), the branch EDITS the merge itself (allowed — the pull "
                         "request that wrote this), and main moves under it again (refused, "
                         "naming the derived second file).",
-                "governed_by": ["D18", "D42", "D151"],
+                "governed_by": ["D18", "D42", "D151", "D176", "D158"],
                 "note": "THE FOOTGUN CASE WAS GREEN FOR THE WRONG REASON WHEN IT WAS FIRST "
                         "WRITTEN, and the fixture carries the repair in a comment. The other "
                         "tree sat on a branch already at the commit a wrong pull would have "
@@ -1661,7 +1661,7 @@ COMPONENTS = [
                 # D43 and D53 join with D139: the cases turn on a linked worktree having its own
                 # store, and on the primary checkout being the one the live server is built from.
                 "governed_by": ["D18", "D42", "D43", "D53", "D139", "D151",
-                                "D158"],
+                                "D158", "D176"],
             },
             "lan-check.py": {
                 "does": "answers whether the owner's LAN URL still works, end to end and from "
@@ -1746,7 +1746,67 @@ COMPONENTS = [
                         "the second incident was in. Only three files are tracked in that "
                         "fixture, because the switch has to CHANGE a watched file or no "
                         "reload is scheduled and the guard is never reached.",
-                "governed_by": ["D18", "D43", "D53", "D138", "D158"],
+                "governed_by": ["D18", "D43", "D53", "D138", "D158", "D176"],
+                "tested_by": [],
+            },
+            "primary_sync.py": {
+                "does": "THE PRIMARY CHECKOUT PUTS ITSELF BACK ON main AND FAST-FORWARDS IT. "
+                        "`git switch main`, then `git merge --ff-only origin/main` — two "
+                        "parts, because each has been observed wrong alone: the tree parked on "
+                        "a merged branch with four live sessions in it (D158), and `0 ahead of "
+                        "main, 70 behind it` for a day. Called at `serve.py`'s four adoption "
+                        "moments, which D158 made REFUSE and which now sync FIRST and refuse "
+                        "only if the sync declines; at the SessionStart guard; and at `make "
+                        "merge`'s local half, whose refspec form moves refs/heads/main while "
+                        "standing in no tree, leaving the rig parked by the command meant to "
+                        "tidy up. NOT A REPEAL OF D42: the move is one "
+                        "`scripts/githooks/reference-transaction`'s own allow rule 3 has "
+                        "always permitted, so this decides WHO RUNS an already-permitted move "
+                        "— and it deliberately does NOT pass `PKMNSCAN_MAIN=off`, so the hook "
+                        "still judges it. THE FAST-FORWARD TEST IS ITS OWN AND NOT THE HOOK'S: "
+                        "rule 3 asks whether the destination is on origin/main and the "
+                        "destination IS origin/main, so refs/heads/main must separately be an "
+                        "ANCESTOR of it — a main that is ahead or has diverged refuses rather "
+                        "than being rewound. Never a linked worktree — `is_linked_worktree`, "
+                        "called and not respelled. It refuses rather than discarding: tracked "
+                        "dirt is NAMED, untracked exhaust never blocks a sync, a half-finished "
+                        "rebase or merge waits, main held by another worktree names that tree, "
+                        "and a detached HEAD no ref contains is left standing. Fails OPEN and "
+                        "silent on its own bugs, CLOSED and loud on a fact it cannot read. "
+                        "`PKMNSCAN_SYNC=off` is the hatch, printed on every sync and every "
+                        "refusal — the one hatch here that stops an act rather than "
+                        "permitting one.",
+                "governed_by": ["D18", "D42", "D43", "D53", "D139", "D158", "D176"],
+                "tested_by": [],
+                "note": "PROVED BY `make sync-selftest` (scripts/sync-selftest.py) AND NOT BY "
+                        "THE HARNESS, which is why `tested_by` is empty: that field names "
+                        "harness/run.py:TESTS and nothing else. The self-test is a `make "
+                        "check` and `ci-check` target, off the commit path per D18 because it "
+                        "writes branch switches and ref moves. scripts/serve-selftest.py "
+                        "carries the end-to-end half — a real supervisor in a real parked "
+                        "checkout coming UP on main with nothing typed.",
+            },
+            "sync-selftest.py": {
+                "does": "the self-sync, PROVED BY VIOLATING IT in throwaway clones with real "
+                        "bare origins and real linked worktrees. Both parts from one call, "
+                        "then the refusals, each a real repository state and never a mock: "
+                        "tracked dirt named, untracked exhaust that must NOT block, a "
+                        "conflicted merge and a stopped rebase (one marker a file, one a "
+                        "directory, and a guard reading only MERGE_HEAD misses half), main "
+                        "held by another worktree, a local main AHEAD and a DIVERGED one, and "
+                        "a detached HEAD no ref contains. ONE ARM ARMS D42'S OWN "
+                        "`reference-transaction` through core.hooksPath and proves BOTH "
+                        "directions — the sync's fast-forward permitted, a move to a commit "
+                        "origin lacks still refused — because an arm proving only the first "
+                        "passes against a hook that permits everything. NEVER POINTED AT THIS "
+                        "CLONE: the subject of a sync is the PRIMARY tree, which on this "
+                        "machine is the owner's live rig. In `check` and `ci-check`, never in "
+                        "the git hook (D18) — it writes branch switches and ref moves. "
+                        "`build_clone` ASSERTS THE GAP IT BUILT, because the first draft "
+                        "silently built none — the seed tree has no `origin` remote, so the "
+                        "push failed quietly — and four arms were green over two refs that "
+                        "were equal before the call.",
+                "governed_by": ["D18", "D42", "D43", "D158", "D176"],
                 "tested_by": [],
             },
             "janitor-selftest.sh": {
@@ -2247,7 +2307,8 @@ COMPONENTS = [
                 # cited for the sibling rule it sets over guard-opsec.sh and inherits here:
                 # a hook that can break a session gets disabled, and a disabled hook guards
                 # nothing, so every failure exits 0.
-                "governed_by": ["D16", "D18", "D43", "D47", "D42", "D53", "D139"],
+                "governed_by": ["D16", "D18", "D43", "D47", "D42", "D53", "D139",
+                                "D176"],
             },
             "worktree-provision.sh": {
                 "does": "the cache-copy, image-mirror-symlink and node_modules report "
@@ -2459,7 +2520,8 @@ COMPONENTS = [
                 # targets may reach `make check` or the git hook, and launch-agent writes to
                 # ~/Library. D13 because the store stays on this Mac and the LAN reach is the
                 # tunnel case that entry already names.
-                "governed_by": ["D13", "D18", "D43", "D47", "D53", "D70", "D85", "D138", "D139", "D158"],
+                "governed_by": ["D13", "D18", "D43", "D47", "D53", "D70", "D85", "D138", "D139",
+                                "D158", "D176"],
                 "tested_by": ["T7"],
                 "status": "built",
             },
@@ -2592,7 +2654,10 @@ COMPONENTS = [
                 # for vale. Change one and the entry describing that check goes stale with it,
                 # which is exactly what `governed_by` is for — so they are listed rather than
                 # allowlisted away.
-                "governed_by": ["D7", "D16", "D17", "D18", "D42", "D43", "D44", "D47", "D48", "D53", "D58", "D60", "D65", "D68", "D74", "D76", "D80", "D82", "D88", "D92", "D111", "D122", "D127", "D129", "D133", "D138", "D140", "D141", "D160", "D173"],
+                "governed_by": ["D7", "D16", "D17", "D18", "D42", "D43", "D44", "D47", "D48", "D53", "D58",
+                                "D60", "D65", "D68", "D74", "D76", "D80", "D82", "D88", "D92", "D111", "D122",
+                                "D127", "D129", "D133", "D138", "D139", "D140", "D141", "D158", "D160", "D173",
+                                "D176"],
                 "note": "IT DECLARES THE SUITE AND DELIBERATELY DOES NOT DRIVE IT, which is "
                         "the whole shape. A registry that drove `make check` could not "
                         "disagree with the recipe — and could silently stop running a check, "
