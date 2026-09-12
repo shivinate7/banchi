@@ -1657,6 +1657,7 @@ D146 Two agreeing signals release the rarity claim, and the same comparison run 
 D147 The claim is spent on the oldest copies, because a card captured tonight was in no file sent last week
 D148 The wait is about the claim commit, and an answer it has not got is never a pass
 D149 A section number that resolves is not a citation that is right, and no check can read what a sentence is about
+D-the-rail-is-a-spine-not-a-roster Every row in the collapsed rail draws one glyph on one spine, and a rule that lists the children it knows about will miss one
 
 ```
 

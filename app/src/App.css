@@ -301,6 +301,20 @@
 .bn-shell[data-rail='true'] .bn-side .bn-nav-group-label { opacity: 0; height: 8px; padding: 0; overflow: hidden; }
 .bn-shell[data-rail='true'] .bn-side .bn-nav-link { justify-content: center; padding: 0; width: 48px; margin: 0; }
 .bn-shell[data-rail='true'] .bn-side .bn-nav-link[aria-current='page']::before { left: -8px; }
+/* ONE GLYPH PER ROW, AND STRUCTURALLY RATHER THAN BY NAME. The list above is an ENUMERATION —
+   `.bn-nav-text`, the link's `.bn-kbd`, `.bn-nav-badge` — and the hand-off link's SECOND glyph is
+   in none of those classes. `App.tsx` draws the Fulfiller's row as an 18px `hand`, the label, and
+   a 14px `external` mark saying the screen opens in its own tab; the rail folded the label away
+   and kept both icons, so that row wore two glyphs at x = 19 and x = 47 inside a 48px box while
+   every other row in the shell wore one at 32. Measured, and it is what the owner saw: two icons
+   side by side straddling a 64px rail.
+   `.bn-btn` beside it never had the defect, and the reason is the shape of its rule rather than
+   luck — `> :not(.bn-icon)` below is STRUCTURAL, so it folds away whatever it is not told about.
+   This is that rule for the link, one notch stronger: `:first-child` keeps the leading glyph and
+   nothing else, so a second icon added here later cannot come back the way this one did. Both
+   `NavLink` and the foot's link draw the icon first, which is what makes the position safe to
+   read as identity. */
+.bn-shell[data-rail='true'] .bn-side .bn-nav-link > :not(:first-child) { display: none; }
 /* THE SPINE REACHES THE FOOTER TOO, and it did not until now. `align-items: center` here
    resolves against the sidebar's ANIMATING width exactly as the nav's `margin: 0 auto` did:
    measured across the collapse, the footer icons went 37 -> 103.8 -> 20.5, a hundred-pixel
@@ -311,6 +325,23 @@
 .bn-shell[data-rail='true'] .bn-side .bn-side-foot { align-items: flex-start; }
 .bn-shell[data-rail='true'] .bn-side .bn-side-foot .bn-btn { width: 48px; padding: 0; justify-content: center; }
 .bn-shell[data-rail='true'] .bn-side .bn-side-foot .bn-btn > :not(.bn-icon) { display: none; }
+/* THE SERVER DOT IS THE ONE FOOT CHILD THE RAIL NEVER NAMED, AND IT IS NOT A NUDGE.
+   `.bn-server` is not a `.bn-btn`, so the width rule above skips it, and nothing else here
+   mentions it — it kept its OPEN-sidebar layout into the rail: `padding: 0 var(--bn-3)` with the
+   label `display: none`, shrink-wrapped to 32px by the `align-items: flex-start` above. So the
+   dot was never centred against anything. It was LEFT-ALIGNED in a shrunk box and its position
+   was whatever the left padding happened to be: 8 (the sidebar's gutter) + 12 (that padding) + 4
+   (half an 8px dot) = 24, against the 32 every other glyph in the column sits on. Eight pixels
+   left of the spine, measured, and the owner could see it.
+   It is therefore NOT off by half a border and NOT centred against an asymmetric container — the
+   two other shapes this failure comes in — and it is correct in the OPEN sidebar, where the row
+   is meant to be left-aligned and the dot lines up under the button icons. Collapse-only, and a
+   missing rule rather than a wrong number.
+   The fix is the rule its siblings already have, so the spine is one declaration repeated and not
+   a second arithmetic to keep in step. `width` is FIXED at 48px and the centring resolves against
+   THAT, never against the sidebar's animating width — the trap this whole block is written
+   around. The dot rests on 32 and does not travel to get there. */
+.bn-shell[data-rail='true'] .bn-side .bn-side-foot .bn-server { width: 48px; padding: 0; justify-content: center; }
 
 /* Tooltip for rail links */
 .bn-nav-link[data-tip]::after {
@@ -376,10 +407,14 @@
   .bn-side .bn-nav-group-label { opacity: 0; height: 8px; padding: 0; overflow: hidden; }
   .bn-side .bn-nav-link { justify-content: center; padding: 0; width: 48px; height: 44px; margin: 0; }
   .bn-side .bn-nav-link[aria-current='page']::before { left: -8px; }
+  /* one glyph per row, again — see the rail block above. This breakpoint is railed by media
+     query and carries the same two defects, because it carries the same enumeration. */
+  .bn-side .bn-nav-link > :not(:first-child) { display: none; }
   /* the spine, again — see the rail block above */
   .bn-side .bn-side-foot { align-items: flex-start; }
   .bn-side .bn-side-foot .bn-btn { width: 48px; height: 44px; padding: 0; justify-content: center; }
   .bn-side .bn-side-foot .bn-btn > :not(.bn-icon) { display: none; }
+  .bn-side .bn-side-foot .bn-server { width: 48px; padding: 0; justify-content: center; }
   .bn-side .bn-nav-link[data-tip]:hover::after { opacity: 1; transform: translateY(-50%); }
 }
 @media (max-width: 767px) {
