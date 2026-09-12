@@ -607,15 +607,64 @@ def _copies_out(
     return out, live_now
 
 
+def _oldest_first(copies: Sequence[master.Card]) -> List[master.Card]:
+    """This SKU's copies in the order they were CAPTURED, oldest first.
+
+    `Inventory.copies_on_hand` answers in box-walk order and keeps it: `pipeline/orders.py`
+    hands that list to the fulfiller and the box walk is the order a hand moves through a
+    drawer. This is the one caller that needs a different question answered — WHICH of these
+    copies are the ones already at TCGplayer — so the re-ordering is local rather than a
+    change to the store method every other reader shares.
+
+    A COPY CAPTURED AFTER THE LAST EMIT CANNOT BE AMONG THE COPIES THAT EMIT SENT, which is
+    what makes capture time the right key rather than a tidier arbitrary one. An emit walks
+    the run's `uncommitted_positions`, a run covers cards photographed at a particular
+    sitting, and cards photographed tonight were in no file written last week. The store
+    cannot name the copy that backs a listing — D7 rules copies fungible and nothing records
+    it — so this is an inference; it is the only one causality permits.
+
+    A COPY WITH NO STAMP SORTS OLDEST, which is the conservative direction: committing it
+    withholds it from this press rather than sending it, and D7's estimate errs low. It also
+    makes this function identical to the box-walk slice on a store where NO record carries a
+    stamp — the empty string ties every key and `(box, index)` decides — so a store written
+    before the field existed behaves exactly as it did.
+    """
+    return sorted(copies, key=lambda c: (c.captured_at or "", c.box, c.index))
+
+
 def _committed_keys(inventory: master.Inventory, copies_out: Mapping[str, int]) -> set:
     """Positions the join must treat as copies TCGplayer already holds or has pending.
 
     `SkuMatch.committed_positions` is per-position and the store's counts are per-SKU, so
     something has to turn one into the other. It is a COUNTING device and not an address:
-    the store records how many copies of a SKU are pushed and staged, this picks that many
-    of the SKU's unsold copies in box-walk order, and the only thing the join does with them
-    is `len()` and a set subtraction. Any N of them would do — that is the fungibility
-    ruling — so the choice is made deterministically and nothing is written back.
+    the store records how many copies of a SKU are pushed and staged, and this picks that
+    many of the SKU's unsold copies, OLDEST CAPTURE FIRST.
+
+    IT PICKED IN BOX-WALK ORDER UNTIL 2026-09-11, JUSTIFIED BY A SENTENCE THAT WAS FALSE.
+    This docstring said *"the only thing the join does with them is `len()` and a set
+    subtraction. Any N of them would do — that is the fungibility ruling"*. The `len()` is
+    true and the set subtraction is not: `SkuMatch.uncommitted_positions` subtracts these
+    keys from ONE RUN's positions, so which copies are chosen decides which run may list.
+    D7's fungibility ruling is about the physical cards and is untouched — any three of
+    fifteen identical copies really are the three that are live — but it says nothing about
+    which run gets to send one, and this function was reading it as though it did.
+
+    WHAT THE WRONG ORDER COST, on the operator's store, run `2026-09-11-box1-01`: box 1 is
+    tonight's capture and box 3 is the backstock, box 1 sorts first, so the NEWLY captured
+    copies were marked as the ones TCGplayer already holds and the older backstock — which
+    no run is joining — was left uncommitted and therefore unreachable. **52 of the run's 119
+    matched SKUs offered zero copies and 59 real cards were stranded**, every one of them
+    reported as *"every copy in this run is already listed or has left the box"*. The
+    operator read that sentence and said it was *"just not true/possible"*. 52 of the 59 are
+    this defect; the other 7 are the stuck claim `_copies_out` cannot age, which is
+    `docs/DEBTS.md` §24 and is not fixed here.
+
+    PREFERRING COPIES OUTSIDE THE RUN BEING EMITTED WAS THE OTHER CANDIDATE AND IT OVER-SENDS.
+    It makes the committed set a function of which run is emitting, so two runs holding one
+    SKU each exclude themselves and the same claimed copies are subtracted from neither —
+    a global quantity answered by a run-scoped view, which is D59's defect exactly. Measured
+    on the same store: **83 copies across 61 SKUs offered past what exists to offer**, the
+    same register as the 78-rows-across-61-SKUs projection D59 itself published.
 
     Which is why "any non-zero count commits every copy" is not the rule. Seven copies with
     two staged would commit all seven, `add_to_quantity` would clamp to zero, and the SKU
@@ -636,7 +685,7 @@ def _committed_keys(inventory: master.Inventory, copies_out: Mapping[str, int]) 
     """
     keys = set()
     for sku, out in copies_out.items():
-        for card in inventory.copies_on_hand(sku)[:out]:
+        for card in _oldest_first(inventory.copies_on_hand(sku))[:out]:
             keys.add(card.key)
     return keys
 
