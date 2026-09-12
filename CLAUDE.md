@@ -1796,6 +1796,7 @@ D160 An entry is a file, because two branches appending to one file collide ever
 D161 `make check` proves the product first and its own guards last, because a failure stops the rest
 D162 The name decides a disputed number, and both readings reach the screen
 D163 The cache is keyed by the digest, so the digest is what the press computes first
+D164 The undo stack is the sitting, not the drawer, and the counter counts the sitting
 D-a-typed-price-is-cleared-by-a-press A typed price is cleared by a press, never by an expiry, and the set it may clear is the set the corpus dates
 ```
 
