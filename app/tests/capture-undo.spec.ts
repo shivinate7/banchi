@@ -85,6 +85,26 @@ const BOX = {
   sections_detail: [],
 }
 
+/** A SECOND DRAWER, and the whole reason the cases below this file's original five exist.
+ *  Undeclared and empty like box 3, so the labels are D10's amendment's again. Its name
+ *  shares no digit with either box number, so typing `4` into the Box field can only mean
+ *  this one. */
+const BOX4 = {
+  box: 4,
+  bid: 14,
+  name: 'Next drawer',
+  sections: [],
+  state: 'open',
+  capacity: null,
+  fill: 0,
+  next_index: 1,
+  cards: 0,
+  sold: 0,
+  retired: 0,
+  listed: 0,
+  sections_detail: [],
+}
+
 /** Every DELETE the screen sent, in order. The ORDER is the assertion — newest first — so
  *  this is a list and never a set. */
 type Wire = { deletes: string[]; captures: number }
@@ -133,7 +153,7 @@ async function open(
     route.fulfill({
       status: 200,
       contentType: 'application/json',
-      body: JSON.stringify({ boxes: [BOX] }),
+      body: JSON.stringify({ boxes: [BOX, BOX4] }),
     }),
   )
 
@@ -141,22 +161,31 @@ async function open(
      the label `pipeline/join.py:Position` would render for an undeclared box — one section,
      card = index (D10, amended 2026-08-29). Composed here rather than imported because the
      app must never compose one; a fixture that got it wrong would be testing itself. */
+  /* THE ALLOCATOR IS PER BOX, as `store/master.py:next_index` is: a drawer's indices are its
+     own, and a second drawer starts at 1 while the first is at 394. Modelling this as one
+     global counter would make every cross-drawer case below assert against an index space the
+     store does not have — and the `serverNewest` comparison the blind arm turns on reads one
+     drawer's high-water mark, so a shared counter would quietly change which arm fires. */
+  const allocated: Record<string, number> = { ...(options.nextIndex ?? {}) }
   await page.route(/\/capture$/, (route) => {
     wire.captures += 1
-    const index = wire.captures
+    const asked = route.request().postDataJSON() as { box?: number }
+    const box = asked.box ?? 3
+    const index = allocated[String(box)] ?? 1
+    allocated[String(box)] = index + 1
     route.fulfill({
       status: 201,
       contentType: 'application/json',
       body: JSON.stringify({
-        box: 3,
+        box,
         index,
-        key: `3/${index}`,
-        label: `Box 3 · Section 1 · Card ${index}`,
+        key: `${box}/${index}`,
+        label: `Box ${box} · Section 1 · Card ${index}`,
         section: 1,
         card: index,
         new_box: index === 1,
         created: true,
-        photo: `/tmp/3-${index}.jpg`,
+        photo: `/tmp/${box}-${index}.jpg`,
         capture_id: null,
       }),
     })
@@ -259,10 +288,37 @@ function shutter(page: Page) {
  *  swallowed it — correctly — and the twelfth capture never happened. A test that presses
  *  faster than the screen commits measures the test. */
 async function shoot(page: Page, count: number): Promise<void> {
-  for (let at = 1; at <= count; at += 1) {
+  await shootInto(page, 3, 1, count)
+}
+
+/** The same, into whatever drawer the Box field is on. `first` is the index the next capture
+ *  lands at in THAT drawer, because the stub allocates per box as the store does — so after a
+ *  switch to a fresh drawer this is 1 again while box 3 sits at 3.
+ *
+ *  IT WAITS ON THE DRAWER AS WELL AS THE CARD. `Card 1$` alone matches box 3's first card and
+ *  box 4's, so a wait written that way is satisfied by a stack that never moved — which is the
+ *  precise defect these cases are for, and it would make them pass against it. */
+async function shootInto(page: Page, box: number, first: number, count: number): Promise<void> {
+  for (let at = 0; at < count; at += 1) {
     await page.keyboard.press('c')
-    await expect(rows(page).first()).toHaveAttribute('aria-label', new RegExp(`Card ${at}$`))
+    await expect(rows(page).first()).toHaveAttribute(
+      'aria-label',
+      new RegExp(`Box ${box} · Section 1 · Card ${first + at}$`),
+    )
   }
+}
+
+/** Change the Box field — one keystroke, `B`, a digit and Enter, which is the whole of what
+ *  it used to take to refill the undo stack from another drawer. */
+async function switchBox(page: Page, box: number): Promise<void> {
+  await expect(async () => {
+    await page.keyboard.press('b')
+    await expect(page.locator('.capture-opts')).toBeVisible({ timeout: 1_000 })
+  }).toPass({ timeout: 10_000 })
+  await page.keyboard.type(String(box))
+  await page.keyboard.press('Enter')
+  // The field is closed and shows the new drawer, so nothing below races the change.
+  await expect(page.locator('.capture-opts')).toBeHidden()
 }
 
 function rows(page: Page) {
@@ -399,3 +455,199 @@ test('an undo target the session never captured draws the store key, not a card 
     'Undo the newest capture, B3 #7',
   )
 })
+
+/* ════════════════════════════════════════════════════════════════════════════════════════
+ * THE SITTING, NOT THE DRAWER (2026-09-12)
+ *
+ * Everything above this line was written against one box, which is why none of it could see
+ * the defect these five are for: `undoStack` and `runCount` both filtered `shots` on
+ * `shot.card.box === box` — the CURRENT value of a field the operator changes with one
+ * keystroke. Switch drawers mid-sitting and the stack refilled from the new drawer, and
+ * capture-undo deletes the record AND the photograph (D10 ruling 1).
+ *
+ * NOT HYPOTHETICAL. Clustering the owner's `captured_at` at `storeHistory.ts`'s own
+ * `GAP_MINUTES` gives ten sittings, two of them across drawers: 2026-09-01 ran 555 cards in
+ * 23.9 minutes across boxes 3 → 4 → 5, and 2026-09-11 ran 536 in 46.2 minutes across boxes 4
+ * and 1. 1,091 of 2,535 cards — 43% of the store — were photographed in a sitting where this
+ * was live end to end.
+ *
+ * EVERY ONE OF THESE WAS RUN AGAINST THE OLD CODE AND OBSERVED TO FAIL before it was kept.
+ * The arms are in the decision entry; a sweep that goes green because the fixture never drew
+ * the control is this repo's standing trap, which is why each case asserts a DRAWER and not
+ * only a card number — `Card 1` alone is true of both drawers' first card.
+ * ════════════════════════════════════════════════════════════════════════════════════════ */
+
+test('the stack keeps this sitting’s cards when the drawer changes', async ({ page }) => {
+  await open(page)
+  await shoot(page, 3)
+  await switchBox(page, 4)
+  await shootInto(page, 4, 1, 2)
+
+  /* FIVE ROWS, NOT TWO. Under the box filter this read two — the new drawer's own — and the
+     three cards the hand had taken a minute earlier were not reachable by any control on the
+     screen. */
+  await expect(rows(page)).toHaveCount(5)
+
+  // The order the hand took them, newest first, straight across the seam.
+  await expect(rows(page).nth(0)).toHaveAttribute('aria-label', /Box 4 · Section 1 · Card 2$/)
+  await expect(rows(page).nth(1)).toHaveAttribute('aria-label', /Box 4 · Section 1 · Card 1$/)
+  await expect(rows(page).nth(2)).toHaveAttribute('aria-label', /Box 3 · Section 1 · Card 3$/)
+  await expect(rows(page).nth(4)).toHaveAttribute('aria-label', /Box 3 · Section 1 · Card 1$/)
+
+  /* AND EVERY ROW NAMES ITS DRAWER, including the ones in the drawer the Box field is on. A
+     label on only the rows that differ would make the unlabelled ones read as "the current
+     drawer" — the exact inference the filter used to invite. */
+  await expect(page.locator('.capture-undo-drawer')).toHaveCount(5)
+  await expect(rows(page).nth(0).locator('.capture-undo-drawer')).toHaveText('Box 4')
+  await expect(rows(page).nth(2).locator('.capture-undo-drawer')).toHaveText('Box 3')
+})
+
+test('a drawer already fed is not offered for undo when this sitting has shots', async ({
+  page,
+}) => {
+  /* THE SHARP ARM, and the one that costs a card. Box 4 already holds 543 cards from an
+     earlier sitting, so its high-water mark is #543. Under the old code, switching to it with
+     no shots of this sitting in it fell through to `serverNewest` and offered THAT card —
+     labelless, days old, one `U` press from a hard delete. On the owner's store box 2 has
+     stood at #543 through nine consecutive sittings with exactly this exposure. */
+  await open(page, { nextIndex: { '4': 544 } })
+  await shoot(page, 2)
+  await switchBox(page, 4)
+
+  // Still this sitting's two cards, and the top of the stack is still box 3's newest.
+  await expect(rows(page)).toHaveCount(2)
+  await expect(rows(page).first()).toHaveAttribute('aria-label', /Box 3 · Section 1 · Card 2$/)
+
+  /* NOTHING IN THE STRIP ADDRESSES BOX 4. Asserted as an absence over the whole list rather
+     than as a property of the top row: an implementation that offered #543 second, or third,
+     would still put it under a press. */
+  await expect(page.locator('.capture-undo-pos')).toHaveCount(2)
+  await expect(page.locator('.capture-undo-list')).not.toContainText('543')
+})
+
+test('the walk crosses the seam in order, and every delete is legal where it lands', async ({
+  page,
+}) => {
+  /* THE HIGHER DRAWER FIRST, WHICH IS THE OWNER'S OWN 2026-09-11 SITTING — box 4 for 214
+     cards, then box 1 for 322 — and it is deliberate rather than incidental. Ascending (their
+     2026-09-01 sitting, boxes 3 → 4 → 5, which the case above uses) is the one shape where the
+     hand's order and a sort by box NUMBER happen to agree, so a stack that had quietly sorted
+     itself would pass every assertion written over it. Mutation-tested: sorting the stack by
+     `(box, index)` survived this case until it was turned around. */
+  const wire = await open(page)
+  await switchBox(page, 4)
+  await shootInto(page, 4, 1, 2)
+  await switchBox(page, 3)
+  await shootInto(page, 3, 1, 2)
+
+  /* THE ORDER THE HAND TOOK THEM, WHICH HERE RUNS DOWNWARD THROUGH THE DRAWER NUMBERS. A sort
+     by box would put B4 #2 on top; the hand put B3 #2 there. */
+  await expect(rows(page).nth(0)).toHaveAttribute('aria-label', /Box 3 · Section 1 · Card 2$/)
+  await expect(rows(page).nth(1)).toHaveAttribute('aria-label', /Box 3 · Section 1 · Card 1$/)
+  await expect(rows(page).nth(2)).toHaveAttribute('aria-label', /Box 4 · Section 1 · Card 2$/)
+  await expect(rows(page).nth(3)).toHaveAttribute('aria-label', /Box 4 · Section 1 · Card 1$/)
+
+  // Row 3 is box 4's card 2: pressing it undoes B3 #2, B3 #1 and B4 #2, in that order.
+  await rows(page).nth(2).click()
+
+  /* THE DOM FIRST, THE WIRE SECOND, and the order of these two lines is not a style choice.
+     `click()` resolves when the press is DISPATCHED, and the walk is three awaited requests
+     after that — so reading `wire.deletes` first reads it one round-trip in, and this
+     assertion failed on `['/inventory/4/2']` alone when it was written the other way round.
+     The row count is the walk's own completion signal, which is why every case above waits on
+     it before touching the wire. */
+  await expect(rows(page)).toHaveCount(1)
+
+  /* THE ORDER IS THE WHOLE ASSERTION, and it is what makes a cross-drawer stack safe at all.
+     The route removes only the newest card in a box and refuses anything else (D10), so each
+     of these is legal only because the one before it succeeded — reverse-chronological over
+     the sitting preserves reverse-chronological WITHIN each drawer. A stack that sorted by
+     box, or by index, would put `/inventory/3/2` before `/inventory/4/1` and earn a refusal
+     from a store that was perfectly consistent. */
+  expect(wire.deletes).toEqual(['/inventory/3/2', '/inventory/3/1', '/inventory/4/2'])
+
+  await expect(rows(page).first()).toHaveAttribute('aria-label', /Box 4 · Section 1 · Card 1$/)
+})
+
+test('the odometer counts the sitting and says which drawers it went to', async ({ page }) => {
+  await open(page)
+  await shoot(page, 3)
+
+  const captured = page.locator('.capture-odo .bn-stat').first().locator('.bn-stat-value')
+  await expect(captured).toHaveText('3')
+  await expect(page.locator('.capture-odo-split')).toHaveText('Box 3 3')
+
+  await switchBox(page, 4)
+
+  /* THE FIGURE SURVIVES THE SWITCH. This is the moment it used to read 0 — on the owner's
+     555-card sitting the stat went 394 → 0 → 56 → 0 → 105, three times claiming the work of
+     the last twenty minutes had not happened. */
+  await expect(captured).toHaveText('3')
+
+  await shootInto(page, 4, 1, 2)
+  await expect(captured).toHaveText('5')
+  await expect(page.locator('.capture-odo-split')).toHaveText('Box 3 3 · Box 4 2')
+
+  /* THE SPAN STAYS IN ONE DRAWER'S INDEX SPACE, because two drawers do not share one. `1–2`
+     is box 4's; a sitting-wide span would read `1–3` and mean nothing. */
+  const span = page.locator('.capture-odo .bn-stat').nth(2).locator('.bn-stat-value')
+  await expect(span).toHaveText('1–2')
+})
+
+test('the strip does not change height when the drawer label appears (D118)', async ({
+  page,
+}) => {
+  await open(page)
+
+  /* DOCUMENT-RELATIVE, NEVER `boundingBox()`. That returns VIEWPORT coordinates, and opening
+     the Box field scrolls the page — so the naive version of this test compared a `y` of -151
+     against one of 56 and reported a 207px move that was entirely the scrollbar. What D118
+     forbids is a change in the DOCUMENT's layout, so that is what is measured: `rect.top +
+     scrollY`, which no scroll can move. */
+
+  /* THE SPLIT LINE BEFORE ANY CAPTURE AT ALL, which is the state its `min-height` exists for
+     and the one the first version of this test never visited — it measured at three captures,
+     where the line already has a drawer in it and holds its own height for free. Deleting the
+     floor SURVIVED that. The transition that binds is empty → occupied, on the very first
+     card, and the height is asserted rather than the top: the odometer's verdict pill appears
+     in the same instant (`runCount` stops being null) and that is a pre-existing part of the
+     header, not this line's business. */
+  const splitEmpty = await place(page, '.capture-odo-split')
+  await shoot(page, 3)
+  const splitFilled = await place(page, '.capture-odo-split')
+  expect(splitFilled.height).toBe(splitEmpty.height)
+
+  // One drawer, so no row carries a label yet.
+  await expect(page.locator('.capture-undo-drawer')).toHaveCount(0)
+  const before = await place(page, '.capture-undo-list')
+  const splitBefore = await place(page, '.capture-odo-split')
+
+  await switchBox(page, 4)
+  await shootInto(page, 4, 1, 1)
+
+  // Now every row carries one, and the caption it lives in is absolute over the thumbnail.
+  await expect(page.locator('.capture-undo-drawer')).toHaveCount(4)
+  const after = await place(page, '.capture-undo-list')
+  const splitAfter = await place(page, '.capture-odo-split')
+
+  /* THE STRIP IS THE SAME HEIGHT AND IN THE SAME PLACE. The row's height is the thumbnail's
+     `aspect-ratio` and the drawer label lives in a caption that is absolute against it, so the
+     label grows UPWARD over the photograph and reaches no layout at all. A label added as a
+     normal-flow line would add ~15px per row here and push the whole page down. */
+  expect(after).toEqual(before)
+
+  /* AND THE SPLIT LINE HELD ITS HEIGHT AND ITS PLACE while going from one drawer to two — it
+     is floored by `min-height` for exactly this, so the header does not grow under the
+     operator's hands at the moment they change drawers. */
+  expect(splitAfter).toEqual(splitBefore)
+})
+
+/** Where an element sits in the DOCUMENT and how big it is — scroll-independent, which
+ *  `boundingBox()` is not. Rounded, because a fractional layout that differs in the sixth
+ *  decimal is not a thing a person can see and not what D118 is about. */
+async function place(page: Page, selector: string): Promise<{ top: number; height: number }> {
+  return page.locator(selector).evaluate((el) => {
+    const rect = el.getBoundingClientRect()
+    return { top: Math.round(rect.top + window.scrollY), height: Math.round(rect.height) }
+  })
+}

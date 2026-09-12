@@ -374,7 +374,7 @@ COMPONENTS = [
                                     "what is covered is the reading and the write, while the "
                                     "argument parsing and the printed report here are not.",
                             "governed_by": ["D14", "D21", "D24"]},
-            "cmd_identify.py": {"does": "submit, wait, collect, cache. The one that costs money.", "governed_by": ["D1", "D2", "D21", "D23"]},
+            "cmd_identify.py": {"does": "submit, wait, collect, cache. The one that costs money. HASHES BEFORE IT DECODES: the cache is keyed by the photograph's sha256, so only what is being sent is cropped and downscaled, and `Item.stage` is the sentinel that keeps `prepared is None` from meaning both `unreadable` and `cache hit` (D163).", "governed_by": ["D1", "D2", "D21", "D23", "D36", "D163"]},
             "cmd_join.py": {"does": "resolve identifications against the export; --dry-run previews. "
                                     "SEEDS inventory/prices.json's rule and basis on the first "
                                     "join of an EMPTY corpus and never reassigns them (D49, D86) "
@@ -3770,10 +3770,13 @@ COMPONENTS = [
                     "`Clear the setup` at the foot of the Rig panel puts all "
                     "six back to nothing chosen, with a receipt carrying an undo; it touches "
                     "no route, and the camera and rotation are `useCamera.ts`'s and stay.",
+            # D121 for one constant and one word: `sitting` imports `storeHistory.ts`'s
+            # GAP_MINUTES rather than restating it, so the undo strip and the library drawing
+            # on `#/` mean the same stretch of work by the same measurement.
             "governed_by": ["D3", "D10", "D13", "D19", "D20", "D21", "D22", "D23", "D27", "D28",
-                            "D34", "D41", "D56", "D58", "D65", "D81", "D92", "D118", "D128",
-                            "D130", "D131", "D132", "D142", "D145", "D36",
-                            "D153"]},
+                            "D34", "D41", "D56", "D58", "D65", "D81", "D92", "D118", "D121",
+                            "D128", "D130", "D131", "D132", "D142", "D145", "D36",
+                            "D153", "D164"]},
             # D3 earns its place on a stylesheet: the no-claim finish chip is drawn dashed
             # because rung 1 distinguishes "no metadata recorded" from a recorded claim, and
             # that distinction is carried here in a border style rather than in any logic.
@@ -3783,8 +3786,13 @@ COMPONENTS = [
                                       # D65 for the two accent modifiers the set hint's verdict
                                       # draws — accent's "the system is unsure" job at text
                                       # weight, because nothing there refuses anything.
+                                      # D118 for the undo caption and the odometer's split
+                                      # line: the drawer label rides an absolute caption and
+                                      # the split is floored by `min-height`, so neither can
+                                      # move what is around it when a drawer changes.
                                       "governed_by": ["D3", "D5", "D27", "D41", "D50", "D65", "D117",
-                                                      "D130", "D142"]},
+                                                      "D118", "D130", "D142",
+                                                      "D164"]},
             "src/PositionLabel.tsx": {
                 "does": "ONE rendering of `pipeline/join.py:Position.label` for every OWNER site "
                         "(D41, amended 2026-08-29). Recomposes `Box N \u00b7 Section N \u00b7 Card N` into a "
@@ -3963,7 +3971,7 @@ COMPONENTS = [
                         "offered on the same panel). The panel owns the keyboard while it is "
                         "up, because its choices ride digits that mean candidates everywhere "
                         "else on this screen; the mid-box delete is deliberately not on it.",
-                "governed_by": ["D3", "D4", "D5", "D6", "D9", "D10", "D13", "D22", "D23", "D26", "D28", "D29", "D32", "D35", "D37", "D46", "D55", "D67", "D77"],
+                "governed_by": ["D3", "D4", "D5", "D6", "D9", "D10", "D13", "D22", "D23", "D26", "D28", "D29", "D32", "D35", "D37", "D46", "D55", "D67", "D77", "D137", "D162"],
             },
             # D9 governs a stylesheet here, and it is the sharpest instance of what building
             # 7b early costs: the price bands that drive the type scale are the one set of
@@ -3979,7 +3987,7 @@ COMPONENTS = [
                         "answers. The bands are still a guess: Gate B priced $0.04-$0.40 end "
                         "to end, so every queue row landed in one band and no mixed-value lot "
                         "has tested an edge.",
-                "governed_by": ["D5", "D9", "D13", "D24", "D28", "D29", "D32", "D35", "D37", "D41", "D46", "D50", "D117"],
+                "governed_by": ["D5", "D9", "D13", "D24", "D28", "D29", "D32", "D35", "D37", "D41", "D46", "D50", "D117", "D162"],
             },
             "src/Inventory.tsx": {
                 "does": "THE ONE OWNER VIEW OF STORED CARDS (D31). Not two modes — the owner's "
@@ -5230,7 +5238,8 @@ COMPONENTS = [
                         "undoing exactly one, a row undoing that card AND everything after "
                         "it, and a walk refused partway reporting how far it got in the "
                         "server's own words. Run by `make design-check`.",
-                "governed_by": ["D10", "D41", "D58", "D101"],
+                "governed_by": ["D10", "D41", "D58", "D101", "D118",
+                                "D164"],
                 "note": "THE ONLY SPEC THAT CAPTURES, and it is the opposite of "
                         "capture-claims.spec.ts's rule rather than an exception to it: "
                         "`POST /capture` and `DELETE /inventory/...` are both intercepted, so "

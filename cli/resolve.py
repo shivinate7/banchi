@@ -1697,8 +1697,19 @@ def load(
 # ------------------------------------------------------------------------ queue entries
 
 
-def _candidate_rows(rows) -> List[Dict[str, object]]:
+def _candidate_rows(rows, name_matched: Sequence[str] = ()) -> List[Dict[str, object]]:
     """What the review screen shows beside the photo (D4): the rows this could be.
+
+    `found_by` SAYS WHICH READING FOUND THE ROW, and only where that question has two
+    answers. A `name_disputed` card's list holds both readings of one photograph — the rows
+    the NAME found and the row the NUMBER found (`pipeline/join.py:name_alternatives`) — and
+    a list of four rows with no provenance on them is a worse question than the one it
+    replaced: the operator can see two cards but not which signal argued for which.
+
+    ABSENT ON EVERY OTHER ENTRY, because a list with one provenance does not need it stated
+    and stamping `number` on all of them would invite a screen to draw a badge on every row
+    in the queue. `name_matched` is empty for every reason code but this one, and the key is
+    omitted entirely when it is — the same rule `rarity` above follows for a blank cell.
 
     `rarity` is HALF OF A CONTRADICTION AND WAS NOT ON THE WIRE UNTIL 2026-09-11. The one
     reason in the whole vocabulary whose meaning is *"A contradicts B"* —
@@ -1709,6 +1720,7 @@ def _candidate_rows(rows) -> List[Dict[str, object]]:
     An ABSENT cell stays absent rather than becoming `""`: a row that carries no rarity is
     evidence of nothing, which is exactly how D23's filter reads it, and a screen that drew
     an empty string there would be asserting the row is unrated."""
+    matched = {str(sku) for sku in name_matched}
     out: List[Dict[str, object]] = []
     for row in rows:
         entry: Dict[str, object] = {
@@ -1722,6 +1734,10 @@ def _candidate_rows(rows) -> List[Dict[str, object]]:
         rarity = (row.get(tcgcsv.RARITY_COLUMN) or "").strip()
         if rarity:
             entry["rarity"] = rarity
+        if matched:
+            entry["found_by"] = (
+                "name" if str(row[tcgcsv.SKU_COLUMN]) in matched else "number"
+            )
         out.append(entry)
     return out
 
@@ -1768,7 +1784,7 @@ def queue_entry(queued: join.QueuedCard) -> queues.QueueEntry:
         },
         confidence=card.confidence,
         reason=queued.destination.reason,
-        candidates=_candidate_rows(queued.candidates),
+        candidates=_candidate_rows(queued.candidates, queued.name_matched_skus),
         market=None if price is None else str(price),
     )
 
