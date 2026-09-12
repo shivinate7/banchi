@@ -1956,6 +1956,32 @@ export async function reconcileLive(
   })) as { ok: boolean; exit_code: number; wrote: boolean; console: string }
 }
 
+/* --------------------------------------------- the standing queues, refreshed store-wide */
+
+/**
+ * Re-resolve every OPEN queue entry against a current export, across every box.
+ *
+ * FREE, RE-RUNNABLE, AND THE PREVIEW IS THE DEFAULT — `reconcileLive`'s shape, because it
+ * rewrites every open entry at once. Pass `{ write: true }` only after a preview has been
+ * read.
+ *
+ * NO FILE IS UPLOADED, which is where this differs from `reconcileLive`: the exports are the
+ * ones the joined runs already recorded. What a frozen entry needs is the LADDER as it stands
+ * now, and that repairs it against the very file it was joined against.
+ *
+ * AN ANSWERED ENTRY IS NEVER RE-QUEUED. `store/queues.py:upsert` refuses a cleared position
+ * and `release` refuses to drop one, so D28's undo stays the only door back out of an answer.
+ */
+export async function refreshQueues(
+  options: { write?: boolean } = {},
+): Promise<{ ok: boolean; exit_code: number; wrote: boolean; console: string }> {
+  return (await request('/queues/refresh', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ write: Boolean(options.write) }),
+  })) as { ok: boolean; exit_code: number; wrote: boolean; console: string }
+}
+
 /* ------------------------------------------------- the stale-listing markdown (D100) */
 
 /**

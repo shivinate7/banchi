@@ -505,6 +505,35 @@ COMPONENTS = [
                                     "iterating those would resurrect a sold card (D10, D26).",
                             "governed_by": ["D7", "D9", "D10", "D25", "D26", "D49", "D54", "D58", "D59", "D86", "D99"], "tested_by": ["T7"]},
             "cmd_reconcile.py": {"does": "diff intent against TCGplayer's Export From Staged", "governed_by": ["D7", "D8", "D11", "D49", "D54", "D87", "D106", "D115", "D59"], "tested_by": ["T7"]},
+            "cmd_queue.py": {"does": "`pkmnscan queue refresh` — re-resolve every OPEN queue "
+                                     "entry against a current export, store-wide. Free, "
+                                     "re-runnable, previews by default, `--write` applies. "
+                                     "`--export` is repeatable and defaults to the exports the "
+                                     "joined runs recorded, newest per game — the frozen entries "
+                                     "need the current LADDER, not a newer catalogue, so "
+                                     "re-running it over the very file a run used repairs them.",
+                             "governed_by": ["D4", "D9", "D25", "D28", "D35", "D36", "D37", "D87", "D137"],
+                             "tested_by": ["T7"]},
+            "requeue.py": {"does": "the store-wide queue refresh's engine. Rebuilds each open "
+                                   "entry's card into the `join.IdentifiedCard` `resolve.load` "
+                                   "would have built — off the STORE, which carries the whole "
+                                   "reading now that `Card.detected_finish` exists — runs "
+                                   "`join.join_batch` with `join.default_router`, and composes the "
+                                   "refreshed entry with `resolve.queue_entry`. The same three "
+                                   "functions a join runs, so a ladder improvement reaches this "
+                                   "path the day it lands. Writes through `queues.apply_run`, "
+                                   "whose two refusals are the non-negotiables: a "
+                                   "`cleared_by_human` entry is never re-queued and never dropped "
+                                   "(D28 is the only door back out of an answer). A card in a "
+                                   "terminal state is SKIPPED, never re-asked about (D26, D83). No "
+                                   "quantity arithmetic — routing reads no quantity, so "
+                                   "`_copies_out`'s full pass is never paid. Measured: over one "
+                                   "run's own export it agrees with a real join on 172 of 172 "
+                                   "verdicts and 81 of 81 reasons and candidate rows — held "
+                                   "unchanged across D162 landing in main mid-branch, which is "
+                                   "the claim demonstrated rather than asserted.",
+                           "governed_by": ["D3", "D4", "D9", "D25", "D26", "D28", "D35", "D36", "D37", "D83", "D87", "D137"],
+                           "tested_by": ["T7"]},
             "resolve.py": {"does": "turning a run's identifications into a join; shared by join and emit. "
                                    "`paperwork_for` is the other direction and lives here for the "
                                    "reason `pipeline/orders.py` may not hold it: it reads a run "
@@ -531,7 +560,7 @@ COMPONENTS = [
                                    "for every sale of the SKU, and a reading of nothing "
                                    "vouches for exactly the sales it was taken AFTER "
                                    "(D150).",
-                           "governed_by": ["D147", "D145", "D4", "D8", "D10", "D11", "D20", "D21", "D22", "D23", "D24", "D25", "D26", "D33", "D34", "D36", "D49", "D56", "D58", "D59", "D64", "D87", "D115", "D150"], "tested_by": ["T7"]},
+                           "governed_by": ["D147", "D145", "D4", "D8", "D10", "D11", "D20", "D21", "D22", "D23", "D24", "D25", "D26", "D33", "D34", "D36", "D49", "D56", "D58", "D59", "D64", "D87", "D115", "D150", "D166"], "tested_by": ["T7"]},
             "runs.py": {"does": "run directories and manifest.json", "governed_by": ["D1", "D25", "D49", "D54", "D86"], "tested_by": ["T7"]},
         },
     },
@@ -829,6 +858,25 @@ COMPONENTS = [
                            "governed_by": ["D7", "D8", "D9", "D11", "D49", "D86", "D87",
                                            "D100", "D103", "D107", "D109"],
                            "tested_by": ["T7"]},
+            "worklist.py": {"does": "ONE SKU as `#/pricing` draws it — the twenty-field row "
+                                    "`pricing.json` carries, declared in one place. Left "
+                                    "`cli/cmd_join.py:_pricing_table` when a join stopped being "
+                                    "its only writer: `server/pipeline_routes.py` composes the "
+                                    "same row for a SKU a review answer stamped onto a card that "
+                                    "no table names, and a second copy of the dict there would "
+                                    "drift the first time either side gained a field — which is "
+                                    "what `claimed_add` and `over_cap` exist to catch one "
+                                    "function away. A PROJECTION, never a decision: every figure "
+                                    "is read off the `SkuMatch` it is handed or off that match's "
+                                    "export row, and `pipeline/pricing.py` owns the arithmetic. "
+                                    "The key ORDER is load-bearing — `make demo-seed` is "
+                                    "byte-deterministic and a reordered dict would churn the repo "
+                                    "on every CI run. Proved inert on extraction: same run, store, "
+                                    "export and corpus through the old code and the new gave "
+                                    "`pricing.json` byte for byte identical, 397,291 bytes over "
+                                    "206 SKUs.",
+                            "governed_by": ["D7", "D9", "D49", "D59", "D86", "D87", "D99", "D115", "D156"],
+                            "tested_by": ["T7"]},
             "merge.py": {"does": "one import file over several runs: the copies union, deduped "
                                  "on (box, index), and any cap the send asked for spent ONCE "
                                  "over that union. There is NO standing cap since D7 was "
@@ -1068,7 +1116,7 @@ COMPONENTS = [
                                   "still hands out the lowest free integer (D20) — the number is a "
                                   "label on a drawer and the id is an identity, which is `Place."
                                   "slot` and `Place.index` one register up (D58)",
-                          "governed_by": ["D145", "D3", "D7", "D8", "D10", "D11", "D20", "D21", "D23", "D26", "D34", "D36", "D56", "D58", "D59", "D83", "D87", "D88", "D89", "D100", "D115", "D132"], "tested_by": ["T7"]},
+                          "governed_by": ["D145", "D3", "D7", "D8", "D10", "D11", "D20", "D21", "D23", "D26", "D34", "D36", "D56", "D58", "D59", "D83", "D87", "D88", "D89", "D100", "D115", "D132", "D167"], "tested_by": ["T7"]},
             "queues.py": {"does": "the standing queues — the `queues` table, one mapping per queue "
                                   "name — and the cross-queue release a re-routed position needs",
                           "governed_by": ["D4", "D9", "D22", "D26", "D28", "D37", "D88"], "tested_by": ["T7"]},
@@ -1117,7 +1165,7 @@ COMPONENTS = [
             "cache.py": {"does": "the `identifications` table — answers already paid for", "governed_by": ["D2", "D21", "D88"]},
             "files.py": {"does": "where the store lives, the lock, and the atomic replace the "
                                  "files still beside the database use (prices.json, codes.jsonl)",
-                         "governed_by": ["D13", "D15", "D43", "D86"], "tested_by": ["T7"]},
+                         "governed_by": ["D13", "D15", "D43", "D86", "D166"], "tested_by": ["T7"]},
             # D53 still, and D63, because the header now says what the transaction DOES
             # promise where it used to say what five files did not: one commit over every
             # table, history rows included. D53's drain is still a prerequisite for the
@@ -2922,7 +2970,7 @@ COMPONENTS = [
                                 "D35", "D36", "D43", "D47", "D48", "D49", "D54", "D56",
                                 "D58", "D59", "D62", "D64", "D65", "D68", "D76", "D78",
                                 "D79", "D86", "D87", "D88", "D100", "D103", "D105", "D134",
-                                "D145", "D147", "D156", "D159", "D165",
+                                "D137", "D145", "D147", "D156", "D159", "D165", "D166",
                                 "D-a-typed-price-is-cleared-by-a-press"],
                 "tested_by": ["T7"],
             },
@@ -3598,7 +3646,7 @@ COMPONENTS = [
                                      "`market: null` and a `why`, because 390 of the owner's "
                                      "2,245 cards on hand have no price and a ranking that "
                                      "dropped 17% of the store would be a silent drop.",
-                             "governed_by": ["D159", "D156", "D142", "D145",
+                             "governed_by": ["D159", "D156", "D142", "D145", "D166",
                                              "D3", "D4", "D6", "D7", "D8", "D9", "D10", "D11",
                                              "D16", "D20", "D21", "D22", "D23", "D24", "D26",
                                              "D28", "D29", "D30", "D32", "D33", "D34", "D36",
@@ -4005,15 +4053,25 @@ COMPONENTS = [
                         "BESIDE the photograph above 900px and stacked below it, the "
                         "reason as a human label over its machine string, candidate rows "
                         "priced from the export, and an answer that writes and advances with "
-                        "no dialog. Reads GET /queues and writes THREE KINDS OF THING back "
+                        "no dialog. Reads GET /queues and writes FOUR KINDS OF THING back "
                         "through src/server.ts: an identification (D4's answer, single and "
                         "D29's group, both reversible per D28), a CLOSED QUESTION that writes "
                         "nothing to the card at all (D37's stand-down, on the `X` panel with "
-                        "its three reasons), and a TERMINAL CARD STATE (D26's retirement, "
-                        "offered on the same panel). The panel owns the keyboard while it is "
+                        "its three reasons), a TERMINAL CARD STATE (D26's retirement, "
+                        "offered on the same panel), and — off the header, in `QueueRefresh` — "
+                        "a STORE-WIDE RE-RESOLVE of every open entry (POST /queues/refresh), "
+                        "which is the one write here that is not about the card on screen: "
+                        "two presses with the preview first and the apply control ABSENT until "
+                        "it has answered, LiveReconcile's shape for the same reason (D87), the "
+                        "command's stdout verbatim in a `LogWell`, and a non-zero exit drawn as "
+                        "an answer rather than a crash. It re-reads the queues after a write "
+                        "instead of patching them, because a re-check can clear a card "
+                        "outright; an answered card is never re-queued and the sheet says so. "
+                        "The panel owns the keyboard while it is "
                         "up, because its choices ride digits that mean candidates everywhere "
-                        "else on this screen; the mid-box delete is deliberately not on it.",
-                "governed_by": ["D3", "D4", "D5", "D6", "D9", "D10", "D13", "D22", "D23", "D26", "D28", "D29", "D32", "D35", "D37", "D46", "D55", "D67", "D77", "D137", "D162"],
+                        "else on this screen; the mid-box delete is deliberately not on it. "
+                        "The re-check sheet owns it the same way, and for the same reason.",
+                "governed_by": ["D3", "D4", "D5", "D6", "D9", "D10", "D13", "D22", "D23", "D26", "D28", "D29", "D32", "D35", "D37", "D46", "D55", "D67", "D77", "D87", "D137", "D162", "D167"],
             },
             # D9 governs a stylesheet here, and it is the sharpest instance of what building
             # 7b early costs: the price bands that drive the type scale are the one set of
@@ -4028,7 +4086,10 @@ COMPONENTS = [
                         "rows dimmed. Accent outlined, never filled, wherever there are two "
                         "answers. The bands are still a guess: Gate B priced $0.04-$0.40 end "
                         "to end, so every queue row landed in one band and no mixed-value lot "
-                        "has tested an edge.",
+                        "has tested an edge. It also carries the re-check sheet's frame "
+                        "(`.review-recheck-*`), which is the reconcile sheet's — a scrolling "
+                        "body between a fixed heading and a fixed press, sized 640px wide "
+                        "because that is what the command's own longest line measures.",
                 "governed_by": ["D5", "D9", "D13", "D24", "D28", "D29", "D32", "D35", "D37", "D41", "D46", "D50", "D117", "D162"],
             },
             "src/Inventory.tsx": {
@@ -5713,7 +5774,7 @@ COMPONENTS = [
                 # D1 is the two-phase split the four steps make visible; D3 is the ladder the
                 # join walks; D9 is the pricing answer that gates emit;
                 # D31 is why this is a panel on #/inventory rather than a seventh route.
-                "governed_by": ["D145", "D36", "D1", "D3", "D9", "D13", "D20", "D31", "D32", "D33", "D39", "D48", "D54", "D56", "D64", "D65", "D49", "D76"],
+                "governed_by": ["D145", "D36", "D1", "D3", "D9", "D13", "D20", "D31", "D32", "D33", "D39", "D48", "D54", "D56", "D64", "D65", "D49", "D76", "D166"],
                 "note": "THE PIPELINE WAS THE LARGEST INSTANCE OF THE ROUTE-IS-NOT-A-FEATURE "
                         "FAILURE AND NOBODY HAD COUNTED IT. The four commands have existed "
                         "since step 4 and have been through a 53-card run and a 544-card run; "

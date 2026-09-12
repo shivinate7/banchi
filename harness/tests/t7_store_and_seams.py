@@ -211,7 +211,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 import envfile  # noqa: E402
 from harness.tests import Checks, Result  # noqa: E402
 
-from cli import cmd_reprice, resolve, runs  # noqa: E402
+from cli import cmd_reprice, requeue, resolve, runs  # noqa: E402
 from identify import batch, cost, prompt, sidecar  # noqa: E402
 from pipeline import (  # noqa: E402
     corpus,
@@ -1980,6 +1980,728 @@ def check_queue_supersede(checks: Checks) -> None:
             "and the human-cleared entry survives its own re-route: Queue.release protects "
             "cleared_by_human, so the answer outlives the question across queues too",
         )
+
+
+# A DATE OUT OF THE COHORT THIS MODULE WAS BUILT FOR, not an invented one. `cli/requeue.py`'s
+# own measurement groups the owner's store by `first_seen` and the 230 entries in the
+# 2026-08-24…09-02 band are the frozen ones — none carries `rarity`, none was filtered to Near
+# Mint, and no live run covers their boxes. An entry seeded with today's date could not fail
+# the case below, because `Queue.upsert` writes today's date when it finds none.
+FROZEN_SEEN = "2026-08-24"
+
+
+def check_queue_refresh(checks: Checks) -> None:
+    """`cli/requeue.py` — every OPEN entry re-resolved against a current export, store-wide.
+
+    WHY THE MODULE EXISTS IS A MEASUREMENT AND NOT AN ARGUMENT. `queues.upsert` is the only
+    thing that ever refreshes an entry and it is reachable from one place — a join, which is
+    scoped to a run, which is scoped to a box. 513 of the owner's 565 stored entries sit over
+    boxes no live run covers, so the two fixes of 2026-09-11 (`rarity` on every candidate row,
+    D137's Near Mint rule) are correct in the code and will never reach them.
+
+    SO WHAT THIS SECTION WORKS HARDEST IS WHAT THE PASS LEAVES ALONE, not what it rewrites. A
+    refresh pointed at a whole store is one command away from every answer the operator has
+    ever given, and three of the four cases here are about something that must NOT move: a
+    cleared entry, a departed card's question, and how long an entry has been waiting.
+
+    THE CLEARED ENTRY IS THE NON-NEGOTIABLE (D28), AND ITS GUARD IS NOT IN THIS MODULE. The
+    two refusals live in `Queue.upsert` and `Queue.release`, which is why `RefreshPlan.apply`
+    is one line — so the assertion below is over the SEAM rather than over a branch, and it
+    compares the STORED PAYLOAD before against after rather than reading the flag back. A pass
+    that re-queued an answer and a pass that merely refreshed one are the same shape from
+    everywhere except the bytes.
+
+    IDEMPOTENCE IS THE OTHER HALF, and it is the property D87 names as the one that separates
+    the two designs: if a second pass over the written store reports work to do, then either
+    the pass is not writing what it planned or it is planning off something that moves. Both
+    are silent, and both are fatal to a command that is meant to be re-runnable and free.
+    """
+    checks.note("")
+    checks.note("QUEUE REFRESH — cli/requeue.py, store-wide")
+
+    # Six positions, one per shape the pass has to tell apart. Dunsparce 120/159 carries two
+    # condition rows so the catalog cannot settle it alone (ambiguous — stays queued);
+    # Articuno 161/159 is holofoil-only, so the catalog settles it on its own (D3 rung 2) and
+    # the entry LEAVES. The last three are the three terminal states.
+    READINGS = {
+        1: ("Dunsparce", "120"),  # refreshes in place
+        2: ("Articuno", "161"),   # resolves — leaves the queue
+        3: ("Dunsparce", "120"),  # answered by a human
+        4: ("Dunsparce", "120"),  # sold
+        5: ("Dunsparce", "120"),  # retired
+        6: ("Dunsparce", "120"),  # moved
+    }
+
+    with isolated_home() as home:
+        for _ in READINGS:
+            capture_server.do_capture(capture_payload(1))
+
+        export = write_export(home / "refresh-export.csv")
+        catalogs, _, unreadable = requeue.catalogs_from([export])
+        checks.equal(
+            sorted(catalogs),
+            ["pokemon"],
+            "the export answers for the game its CELLS carry and never for its filename "
+            "(D25). It claims `pokemon_code` out of the same `Product Line` column and "
+            "holds no Code Card row, so that game gets no catalogue and its cards would "
+            "be skipped as `no_export` rather than resolved against somebody else's rows",
+        )
+        checks.equal(
+            [why.split(":")[0] for _, why in unreadable],
+            ["pokemon_code"],
+            "and the game it could not cut a catalogue for is NAMED, not dropped",
+        )
+        # The STORE's cut-off and rule, which is what `cli/cmd_queue.py` hands in: a refresh
+        # routing against `pricing.THRESHOLD` while the operator's store said something else
+        # would re-queue by one figure the cards a join queued by another (D9).
+        threshold, rule, basis = requeue.policy_of(corpus.Corpus.read())
+
+        with Store().write() as snapshot:
+            for index, (name, number) in READINGS.items():
+                snapshot.inventory.record_identification(
+                    master.position_key(1, index),
+                    name=name,
+                    number=number,
+                    printed_total="159",
+                    confidence="high",
+                )
+            # EACH TERMINAL STATE THROUGH THE DOOR THAT SETS IT, never by assigning `state`:
+            # `move_card` writes `moved_to` and leaves a live record in box 2, and `retire`
+            # writes `retire_reason`. A hand-set state would be a card no route could produce.
+            snapshot.inventory.set_state(
+                "1/4", master.SOLD, sku=DUNSPARCE_SKU, condition="Near Mint"
+            )
+            snapshot.inventory.retire("1/5", "damaged")
+            snapshot.inventory.move_card("1/6", 2)
+
+            # STALE ENTRIES, which is the state the 513 are in: `entry()`'s three candidate
+            # rows and a reason no current join would write for these readings, so a refresh
+            # that reaches a position is visible and one that does not is visible too.
+            # AND ONE OFF-CONDITION CANDIDATE, which is the OTHER 2026-09-11 fix the frozen
+            # entries cannot see (D137 — this lists Near Mint). Seeded here rather than in
+            # the module's shared `CANDIDATES`, which several other checks pin: this row
+            # belongs to the BEFORE side of one fixture, and the refresh's own candidate rows
+            # come from the catalogue, so nothing else moves.
+            stale_off_condition = {
+                "sku": "8608861",
+                "name": "Articuno",
+                "set": "SV09",
+                "number": "161/159",
+                "condition": "Lightly Played Holofoil",
+                "market": "9.10",
+            }
+            for index in READINGS:
+                snapshot.review.upsert(
+                    entry(
+                        1,
+                        index,
+                        candidates=[
+                            *(dict(row) for row in CANDIDATES),
+                            dict(stale_off_condition),
+                        ],
+                    )
+                )
+                # AFTER the upsert, because `upsert` stamps today's date when it finds no
+                # existing entry — seeding `first_seen` through `entry()` would be overwritten
+                # by the very function the case below is about.
+                snapshot.review.entries[master.position_key(1, index)].first_seen = FROZEN_SEEN
+            snapshot.review.entries["1/3"].cleared_by_human = True
+
+        stored_before = stored_payloads("queues", {"queue": queues.MAIN})
+        untouchable = {
+            key: json.dumps(stored_before[key], sort_keys=True)
+            for key in ("1/3", "1/4", "1/5", "1/6")
+        }
+
+        snapshot = Store().read()
+        plan = requeue.plan(
+            snapshot.inventory,
+            snapshot.review,
+            snapshot.parked,
+            catalogs,
+            threshold=threshold,
+            rule=rule,
+            basis=basis,
+        )
+
+        # ------------------------------------------------------------------- the preview
+        checks.equal(
+            plan.cleared,
+            1,
+            "the pass COUNTS the answered entry and never opens it — `_open_by_position` "
+            "walks `open_entries`, which hides a cleared one, so it is reported as left "
+            "alone rather than examined and passed over",
+        )
+        checks.equal(
+            plan.examined,
+            5,
+            "five open entries examined: the answered one is not among them",
+        )
+        checks.equal(
+            sorted((skip.position, skip.reason) for skip in plan.skipped),
+            [
+                ("1/4", requeue.DEPARTED),
+                ("1/5", requeue.DEPARTED),
+                ("1/6", requeue.DEPARTED),
+            ],
+            "A DEPARTED CARD IS SKIPPED BY NAME, one reason per state (D26, D83). Sold, "
+            "retired and moved are all `TERMINAL_STATES`: the physical copy is gone, so a "
+            "refreshed question about it would spend a person's attention on a card they "
+            "cannot look at",
+        )
+        queued_now = {e.position for e in (*plan.main, *plan.parked)}
+        checks.ok(
+            not queued_now & {"1/4", "1/5", "1/6"},
+            "and it is NOT RE-QUEUED: a skipped position is in neither bucket, so `apply` "
+            "has nothing to write over it. Measured on a reconstruction of the owner's "
+            "store: six of box 4's entries sit over sold cards, and without the state test "
+            "the refresh re-queued every one",
+        )
+        checks.ok(
+            not plan.freed & {"1/4", "1/5", "1/6"},
+            "and NOT RELEASED either, which is the conservative half: a refresh has no "
+            "opinion about a card it will not resolve, and releasing on a state change "
+            "would make it a queue-cleaner rather than the command that was argued for",
+        )
+        checks.equal(
+            [e.position for e in plan.main],
+            ["1/1"],
+            "the ambiguous card is re-queued to main against the current catalogue",
+        )
+        checks.equal(plan.parked, [], "and nothing parks: both seam rows are above the cut-off")
+        checks.equal(
+            plan.freed,
+            {"1/2"},
+            "the card the catalog settles is FREED — `processed - queued_now`, scoped to "
+            "what this pass actually re-resolved (cli/cmd_join.py's own scoping)",
+        )
+        checks.equal(
+            plan.photo_moved,
+            0,
+            "and no position is re-bound: every entry names the photograph the card at its "
+            "key still holds, so this fixture is not quietly exercising D10's slide",
+        )
+
+        # ------------------------------------------------- the REPAIR COUNT, not the outcome
+        #
+        # WHAT THE COMMAND REPORTS, ASSERTED AS A NUMBER. Everything above is an OUTCOME —
+        # which entries end up queued, with which rows, released or left alone — and an
+        # outcome assertion cannot see a saving or a miscount. `Change.changed` decides how
+        # many entries this pass says it repaired, and `cli/cmd_queue.py` prints those
+        # figures and SKIPS THE WRITE ENTIRELY when they are zero. So a `changed` that always
+        # answered False would leave every assertion above green (they read `plan.main`,
+        # `plan.freed` and the written store, none of which consult it), report "nothing to
+        # write", and silently do nothing on the operator's real store.
+        #
+        # The decision entry publishes these as the repair — 340 resolve and 97 refresh over
+        # the owner's 513 frozen entries — so the classification is a claim in its own right
+        # and is checked as one here.
+        checks.equal(
+            (plan.touched, len(plan.refreshed), len(plan.resolved), plan.unchanged),
+            (2, 1, 1, 0),
+            "THE COUNTS THE COMMAND PRINTS: two entries change, one refreshed in place and "
+            "one resolved away, and nothing is left unchanged. A classification that said "
+            "zero would skip the write and report success",
+        )
+        checks.equal(
+            [c.position for c in plan.refreshed],
+            ["1/1"],
+            "and the refreshed one is named, so the count cannot be right for the wrong entry",
+        )
+        checks.equal(
+            [c.position for c in plan.resolved],
+            ["1/2"],
+            "as is the resolved one",
+        )
+        checks.equal(
+            sum(c.dropped_off_condition for c in plan.refreshed),
+            1,
+            "and the off-condition row this pass stopped offering is COUNTED: the stale "
+            "entry carried a Lightly Played candidate that D137's rule drops, which is one "
+            "of the two 2026-09-11 fixes the 513 frozen entries could never see. Summed "
+            "over the REFRESHED changes alone — a resolved entry has no `after`, so every "
+            "row it used to offer counts as dropped and would make this figure say two",
+        )
+        checks.equal(
+            sum(c.gained_rarity for c in plan.refreshed),
+            2,
+            "and the rarity cells the candidate rows GAIN are counted too — the other "
+            "2026-09-11 fix, and the one 513 of 565 stored entries are missing: both of "
+            "this catalogue's Dunsparce rows carry a `Rarity` the stale entry had none of",
+        )
+
+        # -------------------------------------------------------------------- the write
+        with Store().write() as writable:
+            added_main, added_parked, released = plan.apply(writable.review, writable.parked)
+        checks.equal(
+            (added_main, added_parked, released),
+            (0, 0, ["1/2"]),
+            "the write adds NO new position — every position it walked was already queued — "
+            "and releases exactly the one that resolved",
+        )
+
+        after = Store().read()
+        refreshed = after.review.entries.get("1/1")
+        checks.equal(
+            refreshed.reason,
+            "ambiguous_no_signal",
+            "the refreshed entry carries the reason the CURRENT ladder wrote, not the one "
+            "the stale fixture held",
+        )
+        checks.equal(
+            [row["sku"] for row in refreshed.candidates],
+            [DUNSPARCE_SKU, DUNSPARCE_REVERSE_SKU],
+            "and the candidate rows are this catalogue's, through `_candidate_rows` — the "
+            "function whose 2026-09-11 fix the 513 frozen entries could never see",
+        )
+        checks.equal(refreshed.market, "2.06", "with the price the export carries now")
+        checks.equal(
+            refreshed.first_seen,
+            FROZEN_SEEN,
+            "FIRST_SEEN SURVIVES THE REFRESH. `upsert` preserves it, and it has to: the "
+            "entry is the standing record of how long this card has been waiting, and "
+            "`QueueEntry.sort_key`'s starvation tier is the only thing that ever surfaces "
+            "an unpriced one. A refresh that restamped it would reset every frozen entry's "
+            "age to today and empty that tier",
+        )
+        checks.ok("1/2" not in after.review.entries, "the resolved card's question is gone")
+
+        # ---------------------------------------------------- what may never have moved
+        stored_after = stored_payloads("queues", {"queue": queues.MAIN})
+        checks.ok(
+            "1/3" in stored_after and after.review.entries["1/3"].cleared_by_human,
+            "THE ANSWERED ENTRY IS STILL THERE AND STILL CLEARED — neither re-queued by "
+            "`upsert` nor dropped by `release`, which is D28's rule and the reason `apply` "
+            "reuses `queues.apply_run` rather than writing the pair of loops itself",
+        )
+        checks.equal(
+            {key: json.dumps(stored_after.get(key), sort_keys=True) for key in untouchable},
+            untouchable,
+            "AND ITS STORED PAYLOAD IS BYTE-IDENTICAL, as are the three departed cards' — "
+            "the assertion the flag alone cannot make. A pass that re-queued an answer with "
+            "the same verdict would leave `cleared_by_human` true and rewrite the "
+            "candidates under it, which is the answer being taken back in everything but "
+            "name",
+        )
+
+        # ------------------------------------------------------------------ idempotence
+        again = requeue.plan(
+            after.inventory,
+            after.review,
+            after.parked,
+            catalogs,
+            threshold=threshold,
+            rule=rule,
+            basis=basis,
+        )
+        checks.equal(
+            (again.touched, again.changes),
+            (0, []),
+            "IDEMPOTENCE — the test D87 calls the one that separates the two designs. A "
+            "second pass over the written store reports nothing to do, so `--write` wrote "
+            "what the preview planned and the preview is not computed off something that "
+            "moves",
+        )
+        checks.equal(
+            (again.unchanged, len(again.skipped), again.cleared),
+            (1, 3, 1),
+            "and it accounts for every entry the same way twice: one unchanged, three "
+            "skipped, one answered and left alone",
+        )
+        checks.equal(
+            again.freed,
+            set(),
+            "with nothing released a second time — `freed` is what this pass re-resolved "
+            "and did not re-queue, and the resolved entry is no longer there to re-resolve",
+        )
+
+    # ------------------------------------- the read-then-write window, and it is a real one
+    #
+    # THE TWO REFUSALS THIS MODULE LEANS ON ARE UNREACHABLE FROM THE CASE ABOVE, and that was
+    # found by breaking them: delete `Queue.upsert`'s cleared refusal, delete `Queue.release`'s
+    # cleared protection, and every assertion above stays green. `_open_by_position` walks
+    # `open_entries`, so a cleared position never becomes an entry this pass would WRITE, and
+    # `apply_run`'s `keep` set starts from everything already in the queue, so it never becomes
+    # one this pass would DROP. The answer above is protected by the filter alone. That is fine
+    # until the filter moves, and a guard no test reaches is a guard that has already gone.
+    #
+    # SO THE CASE IS THE COMMAND'S OWN WINDOW, not a contrivance to reach a branch.
+    # `queue refresh` previews by default and is MEANT to be read before `--write` — that is
+    # the whole posture `cli/cmd_queue.py` argues for — which leaves the operator free to
+    # answer a card on `#/review` in between. The plan then names a position the store has
+    # since settled, once as an entry to rewrite and once as a position to release. Both have
+    # to lose to the answer, and this is where the two refusals are the only thing that says so.
+    with isolated_home() as home:
+        for _ in range(2):
+            capture_server.do_capture(capture_payload(1))
+        export = write_export(home / "race-export.csv")
+        catalogs, _, _ = requeue.catalogs_from([export])
+
+        with Store().write() as snapshot:
+            snapshot.inventory.record_identification(
+                "1/1", name="Dunsparce", number="120", printed_total="159", confidence="high"
+            )
+            snapshot.inventory.record_identification(
+                "1/2", name="Articuno", number="161", printed_total="159", confidence="high"
+            )
+            snapshot.review.upsert(entry(1, 1))
+            snapshot.review.upsert(entry(1, 2))
+
+        staged = Store().read()
+        plan = requeue.plan(staged.inventory, staged.review, staged.parked, catalogs)
+        checks.equal(
+            ([e.position for e in plan.main], plan.freed),
+            (["1/1"], {"1/2"}),
+            "the preview names one position to REWRITE and one to RELEASE, so both refusals "
+            "have something aimed at them",
+        )
+
+        # The operator answers both cards while the preview is still on screen.
+        with Store().write() as snapshot:
+            snapshot.review.entries["1/1"].cleared_by_human = True
+            snapshot.review.entries["1/2"].cleared_by_human = True
+        answered = stored_payloads("queues", {"queue": queues.MAIN})
+
+        with Store().write() as writable:
+            plan.apply(writable.review, writable.parked)
+
+        settled = Store().read()
+        written = stored_payloads("queues", {"queue": queues.MAIN})
+        checks.ok(
+            settled.review.entries.get("1/1") is not None
+            and settled.review.entries["1/1"].cleared_by_human,
+            "AN ANSWER GIVEN AFTER THE PREVIEW IS NOT RE-QUEUED BY THE WRITE. `Queue.upsert` "
+            "refuses a position a human has cleared, and this is the case that reaches that "
+            "refusal — which is the whole reason `RefreshPlan.apply` reuses `queues.apply_run` "
+            "instead of writing the pair of loops itself",
+        )
+        checks.equal(
+            json.dumps(written.get("1/1"), sort_keys=True),
+            json.dumps(answered["1/1"], sort_keys=True),
+            "payload for payload, so a refresh landing UNDERNEATH the flag is caught too: "
+            "rewriting the candidates while leaving `cleared_by_human` true is the answer "
+            "being taken back in everything except the field that records it",
+        )
+        checks.ok(
+            settled.review.entries.get("1/2") is not None
+            and settled.review.entries["1/2"].cleared_by_human,
+            "AND IT IS NOT RELEASED. The plan holds this position in `freed` — the catalogue "
+            "settles the card, so the pass wants the question gone — and `Queue.release` "
+            "protects a cleared entry anyway. D28's undo window is the only door back out of "
+            "an answer, and a store-wide pass does not get to be a second one",
+        )
+        checks.equal(
+            json.dumps(written.get("1/2"), sort_keys=True),
+            json.dumps(answered["1/2"], sort_keys=True),
+            "byte for byte there too",
+        )
+
+
+def check_queue_refresh_agreement(checks: Checks) -> None:
+    """The refresh and the JOIN must produce the same entry for the same card.
+
+    THIS IS THE LOAD-BEARING CASE, because it is the whole premise of the module: the refresh
+    IS the ladder rather than a second reading of it. Every entry is rebuilt into the
+    `join.IdentifiedCard` `cli/resolve.py:load` would have built, handed to `join.join_batch`
+    with `join.default_router`, and turned back into a `queues.QueueEntry` by
+    `cli/resolve.py:queue_entry` — the same three functions in the same order. If that holds,
+    every later improvement to the ladder, to the candidate rows or to the router reaches the
+    frozen entries the day it lands, with nothing here to keep in step. If it does not, the
+    command quietly rewrites 565 entries into answers no join would give.
+
+    THE JOIN'S SIDE COMES FROM THE REAL `pkmnscan join`, NOT FROM A SECOND CALL TO
+    `join_batch` HERE. `seam_run` runs the command through `cli/__main__.py`, so `load`,
+    `entries_for` and `queues.apply_run` all run for real and the store's two queues ARE the
+    join's verdict — which is the first of the two shapes available and the stronger one: a
+    re-call of `join_batch` from this file would share the arguments this file chose, and the
+    defect to catch is precisely a refresh choosing different ones. What the store holds
+    afterwards was written by the command a human runs.
+
+    `first_seen` IS THE ONE FIELD EXCLUDED, and it is excluded rather than asserted equal
+    because the plan's entries have not been through `upsert` yet — that is where the stamp is
+    applied, and `check_queue_refresh` above is where it is checked.
+
+    ONE CARD PARKS AND ONE GOES TO MAIN, which is what makes "same queue" a real assertion
+    rather than a vacuous one: a comparison over a review-only fixture would pass for a pass
+    that put everything in main.
+    """
+    checks.note("")
+    checks.note("QUEUE REFRESH AGREES WITH THE JOIN — one fixture, two readers")
+
+    cards = [
+        (1, 1, "Dunsparce", "120", None),    # ambiguous, and cheap -> parked
+        (1, 2, "Nosuchcard", "999", None),   # no catalog row, unpriced -> main
+        (1, 3, "Articuno", "161", None),     # holofoil-only -> listed, never queued
+    ]
+
+    with isolated_home():
+        # Both Dunsparce rows marked down below the cut-off, by rewriting the EXPORT rather
+        # than by writing the number the test expects to read back — `write_export`'s rule,
+        # for its reason: the price is read from the file both readers are handed.
+        run_dir, _ = seam_run(
+            checks, cards, market={DUNSPARCE_SKU: "0.05", DUNSPARCE_REVERSE_SKU: "0.06"}
+        )
+        joined = Store().read()
+        checks.equal(
+            (sorted(joined.review.entries), sorted(joined.parked.entries)),
+            (["1/2"], ["1/1"]),
+            "the join put one card in each queue and listed the third — the fixture can "
+            "tell a wrong queue from a right one",
+        )
+
+        # THE READING MIRRORED ONTO THE CARDS, which is what `cli/cmd_identify.py` does at
+        # identify time and what `seam_run` deliberately does not: it writes the run's
+        # `identifications.json` and joins, leaving the store's cards unread. The refresh
+        # takes its reading off the card, so the store has to hold the same one.
+        with Store().write() as snapshot:
+            for box, index, name, number, finish in cards:
+                snapshot.inventory.record_identification(
+                    master.position_key(box, index),
+                    name=name,
+                    number=number,
+                    printed_total="159",
+                    confidence="high",
+                    detected_finish=finish,
+                )
+
+        catalogs, _, _ = requeue.catalogs_from([run_dir.path("export.csv")])
+        threshold, rule, basis = requeue.policy_of(corpus.Corpus.read())
+        snapshot = Store().read()
+        plan = requeue.plan(
+            snapshot.inventory,
+            snapshot.review,
+            snapshot.parked,
+            catalogs,
+            threshold=threshold,
+            rule=rule,
+            basis=basis,
+        )
+
+        def shape(queue_entry: queues.QueueEntry) -> dict:
+            """Everything a person or a screen reads off an entry, `first_seen` aside."""
+            return {
+                "position": queue_entry.position,
+                "box": queue_entry.box,
+                "index": queue_entry.index,
+                "label": queue_entry.label,
+                "photo": queue_entry.photo,
+                "read": queue_entry.read,
+                "confidence": queue_entry.confidence,
+                "reason": queue_entry.reason,
+                "candidates": queue_entry.candidates,
+                "market": queue_entry.market,
+                "cleared_by_human": queue_entry.cleared_by_human,
+            }
+
+        checks.equal(
+            [e.position for e in plan.main],
+            sorted(joined.review.entries),
+            "SAME QUEUE — the refresh routes to main exactly what the join queued to main",
+        )
+        checks.equal(
+            [e.position for e in plan.parked],
+            sorted(joined.parked.entries),
+            "and to parked exactly what the join parked: the router is the same object, "
+            "built by `join.default_router` off the same cut-off",
+        )
+        checks.equal(
+            {
+                queues.MAIN: {e.position: shape(e) for e in plan.main},
+                queues.PARKED: {e.position: shape(e) for e in plan.parked},
+            },
+            {
+                queues.MAIN: {k: shape(v) for k, v in joined.review.entries.items()},
+                queues.PARKED: {k: shape(v) for k, v in joined.parked.entries.items()},
+            },
+            "SAME ENTRY, FIELD FOR FIELD — reason, candidates, market, label and the read. "
+            "The two paths share `join_batch` and `queue_entry`, so a disagreement here is "
+            "the refresh handing the ladder a different card than `load` would have built",
+        )
+        checks.equal(
+            plan.touched,
+            0,
+            "so a refresh run immediately after a join reports NOTHING to change, which is "
+            "the same statement from the other end: the frozen entries are frozen because "
+            "no run covers them, never because a join and a refresh disagree",
+        )
+
+
+def check_queue_refresh_reading(checks: Checks) -> None:
+    """`requeue.identified` — the reading is the CARD's, and it is the whole reading.
+
+    TWO DEFECTS WERE FOUND HERE AND BOTH WERE SILENT IN THE SAME WAY: the refresh took four
+    fields off the card and a fifth from somewhere else, and the result was a card resolved
+    against a reading no single identification ever produced. Neither is visible in a report
+    — the pass says "refreshed", and what it refreshed it to is wrong.
+
+    THE EMPTY STRING IS THE FIRST. `cli/resolve.py:load` normalises a run record with
+    `(x or "").strip() or None` and then `printed_total=total if number else None`, and the
+    store keeps `""` exactly where a run record keeps it. An empty string is not a number and
+    the two route DIFFERENTLY: `None` sends the card down the blank-`Number` name branch, while
+    `""` walks the number key, misses, and lands on D35's last-resort rung as
+    `number_unread_name_matched`. Measured before the normalisation was copied to this side: 6
+    of 183 positions where the join listed a card and the refresh queued it, every one a record
+    carrying `""`.
+
+    `detected_finish` IS THE SECOND, and it is the reason `store/master.py:Card` grew the
+    field. The queue entry's `read` carries a complete reading, so taking one field off it
+    looked free; an entry may have been written by an OLDER identification of the same
+    photograph, and six of box 4's cards read `finish: null` on 2026-09-12 while their
+    2026-09-11 entries still said `foil`.
+
+    THE CONFIDENCE WAS THE THIRD AND IT WAS FOUND BY THIS SECTION. `identified` read
+    `card.confidence or entry.confidence` — the same mixing, and a `NameError` besides, since
+    `entry` is not a parameter of that function. Every card whose stored confidence was falsy
+    took the whole pass down with it rather than resolving.
+    """
+    checks.note("")
+    checks.note("QUEUE REFRESH READS THE CARD — requeue.identified")
+
+    with isolated_home() as home:
+        for _ in range(4):
+            capture_server.do_capture(capture_payload(1))
+
+        def reading(index: int, **fields) -> Optional[join.IdentifiedCard]:
+            """Write one reading onto a card and build the `IdentifiedCard` from it."""
+            with Store().write() as snapshot:
+                snapshot.inventory.record_identification(
+                    master.position_key(1, index),
+                    **{
+                        "name": "Dunsparce",
+                        "number": "120",
+                        "printed_total": "159",
+                        "confidence": "high",
+                        **fields,
+                    },
+                )
+            snapshot = Store().read()
+            return requeue.identified(
+                snapshot.inventory.cards[master.position_key(1, index)],
+                resolve.box_views(snapshot.inventory),
+            )
+
+        # ----------------------------------------------- an empty string is not a number
+        blank = reading(1, number="", printed_total="")
+        checks.equal(
+            (blank.number, blank.printed_total),
+            (None, None),
+            "A STORED `\"\"` BECOMES `None`, NEVER `\"\"` — `load`'s own normalisation, "
+            "character for character. The store keeps an empty string where a run record "
+            "keeps one, so the normalisation has to happen on this side too",
+        )
+        half = reading(2, number="", printed_total="159")
+        checks.equal(
+            (half.number, half.printed_total),
+            (None, None),
+            "and a printed total with no number in front of it is dropped with it — "
+            "`printed_total=total if number else None`, which is the composition key's "
+            "denominator being meaningless without its numerator",
+        )
+        absent = reading(3, number=None, printed_total=None)
+        checks.equal(
+            (blank.name, blank.number, blank.printed_total),
+            (absent.name, absent.number, absent.printed_total),
+            "so the `\"\"` card and the `None` card are ONE reading: the whole point of the "
+            "normalisation is that the ladder cannot tell them apart, and a card whose "
+            "number is unread walks the blank-`Number` name branch rather than D35's "
+            "last-resort rung",
+        )
+
+        # ------------------------------------ the finish is the card's, not the entry's
+        with Store().write() as snapshot:
+            snapshot.review.upsert(
+                entry(1, 4, read={"name": "Dunsparce", "detected_finish": "reverse_holo"})
+            )
+        finish = reading(4, detected_finish="holo")
+        checks.equal(
+            finish.detected_finish,
+            "holo",
+            "THE FINISH COMES OFF THE CARD while the open queue entry at the same position "
+            "says `reverse_holo` — the entry decides WHICH positions the pass examines and "
+            "nothing about what they are. An entry may be an OLDER identification of the "
+            "same photograph, and reading four fields off the card and one off the entry "
+            "hands the ladder two readings of one card",
+        )
+        checks.equal(
+            Store().read().review.entries["1/4"].read.get("detected_finish"),
+            "reverse_holo",
+            "and the stale entry is still on record saying otherwise, so this case can fail: "
+            "a fixture whose entry agreed with its card would pass either way",
+        )
+
+        # ------------------------------------------- a card the store has no reading for
+        unread = reading(1, name=None, number=None, printed_total=None)
+        checks.ok(
+            unread is None,
+            "a card with no name and no number is REFUSED rather than guessed at — the "
+            "caller files it as `no_reading` and names it, and falling back to the entry's "
+            "`read` would be the same mixing one layer down",
+        )
+        checks.ok(
+            requeue.NO_READING in requeue.SKIP_REASONS
+            and requeue.NO_READING in requeue.SKIP_SENTENCES,
+            "and the reason it is filed under has a sentence to print: a refresh that "
+            "silently left cards alone would be the same shape as the defect it fixes",
+        )
+
+        # ------------------------------------------------- a card with no confidence at all
+        # THROUGH `answers` RATHER THAN READ DIRECTLY, because the defect this case was
+        # written for is a RAISE: `card.confidence or entry.confidence` is a `NameError`, and
+        # letting it propagate takes the whole of T7 down as one crash instead of leaving a
+        # red line that says which rule broke.
+        quiet_card = answers(
+            checks,
+            lambda: reading(2, confidence=None),
+            "A CARD THE STORE HAS NO CONFIDENCE FOR DOES NOT RAISE. This read "
+            "`card.confidence or entry.confidence` — the same mixing the docstring forbids, "
+            "and a `NameError` besides, since `entry` is no parameter of that function — so "
+            "one falsy field took the whole store-wide pass down with it",
+        )
+        checks.ok(
+            quiet_card is not None and quiet_card.confidence is None,
+            "and it carries `None`, which is the honest reading of a confidence the store "
+            "does not have. `pipeline/routing.py` already has a branch for it; a value "
+            "borrowed from the entry would be another reading's answer wearing this one's name",
+        )
+
+        # The pass survives such a card end to end, not just the one function: a raise here
+        # is a command that cannot run at all on a store holding one.
+        export = write_export(home / "reading-export.csv")
+        catalogs, _, _ = requeue.catalogs_from([export])
+        with Store().write() as snapshot:
+            snapshot.review.upsert(entry(1, 2))
+        snapshot = Store().read()
+        survived = answers(
+            checks,
+            lambda: requeue.plan(
+                snapshot.inventory, snapshot.review, snapshot.parked, catalogs
+            ),
+            "and `plan` walks a store holding one of those cards without raising",
+        )
+        if survived is not None:
+            checks.ok(
+                not [s for s in survived.skipped if s.reason == requeue.NO_READING],
+                "resolving it rather than filing it as unreadable — a name is a reading "
+                "even when nothing else on the card is",
+            )
+            # AND THE SAME FINISH RULE THROUGH THE WHOLE PASS, not just through the one
+            # function: the ENTRY the refresh would write has to carry the card's reading,
+            # because that is the entry a person reads off the review screen.
+            fresh = {e.position: e for e in (*survived.main, *survived.parked)}
+            checks.ok(
+                "1/4" in fresh,
+                "the card whose finish no row stocks is still a question after the refresh",
+                f"fresh entries: {sorted(fresh)}",
+            )
+            if "1/4" in fresh:
+                checks.equal(
+                    (fresh["1/4"].reason, fresh["1/4"].read.get("detected_finish")),
+                    ("detected_finish_not_stocked", "holo"),
+                    "and the entry it would WRITE names the card's `holo` as the finish no "
+                    "Dunsparce row stocks — the contradiction the reason exists to state. "
+                    "Read off the stale entry instead it would say `reverse_holo`, which "
+                    "IS stocked, and the card would resolve to the wrong SKU",
+                )
 
 
 def check_remove_and_box_delete(checks: Checks) -> None:
@@ -11055,19 +11777,25 @@ def check_cli_refusals(checks: Checks) -> None:
 
     from cli import __main__ as entry
 
-    # EIGHT SINCE 2026-09-12, and `scan` is still the only one that is free AND writes to the
-    # store. `prices` writes the CORPUS — `prices adopt` previews unless given `--write`, and
+    # NINE SINCE 2026-09-12, and `scan` is still the only one that is free AND writes to a
+    # CARD. `prices` writes the CORPUS — `prices adopt` previews unless given `--write`, and
     # `prices show` reads. `reprice` writes the corpus too, on `apply --write` and nowhere else
     # (D100); both of its subcommands preview by default, and neither touches a card. `rescue`
     # writes a RUN DIRECTORY on `--write` and nothing else — never the store, and never the run
-    # it is given. Still an exact match rather than a superset check: the point of this line is
-    # that a command cannot appear in the dispatch without somebody editing this list, and a
-    # membership test would let one arrive unnoticed — which matters most for a command that
-    # touches the store, as `scan` does.
+    # it is given. `queue` is the newest and is the other free writer: `queue refresh`
+    # re-resolves every open entry store-wide and rewrites the QUEUES on `--write`, which is a
+    # question rather than a price or a copy — it spends no money, moves no quantity, and
+    # cannot reach a `cleared_by_human` entry at all. Still an exact match rather than a
+    # superset check: the point of this line is that a command cannot appear in the dispatch
+    # without somebody editing this list, and a membership test would let one arrive unnoticed
+    # — which matters most for a command that touches the store, as `scan` does. It EARNED that
+    # twice in one day: `rescue` and `queue` landed hours apart and each side of the merge
+    # counted eight.
     checks.equal(
         sorted(entry.COMMANDS),
-        ["emit", "identify", "join", "prices", "reconcile", "reprice", "rescue", "scan"],
-        "eight commands are registered, and only eight",
+        ["emit", "identify", "join", "prices", "queue", "reconcile", "reprice", "rescue",
+         "scan"],
+        "nine commands are registered, and only nine",
     )
 
     # No command may read stdin. Asserted against the source of every module the dispatch
@@ -18071,7 +18799,31 @@ def check_export_fetch(checks: Checks) -> None:
                 whole = write_export(home / "whole.csv")
                 stub["body"] = whole.read_bytes()
 
-                def fetched_files():
+                # WHERE A FETCHED EXPORT LIVES SINCE D166: the GAME's own
+                # directory under `inventory/.exports/`, store-wide, not the run's. Every
+                # assertion below that used to read the run directory reads this instead,
+                # which is the move — and `run_local()` is kept beside it so the two
+                # locations can be told apart rather than conflated.
+                exports_root = home / "inventory" / files.EXPORTS_DIRNAME
+
+                def kept(game="pokemon"):
+                    holder = exports_root / game
+                    if not holder.is_dir():
+                        return []
+                    # THE SUFFIX IS PART OF THE FILTER, because the export's own scope note
+                    # sits beside it carrying the same prefix. Matching on the prefix alone
+                    # counts a file per export twice and reads as a dedupe that did not fire.
+                    return sorted(
+                        entry.name
+                        for entry in holder.iterdir()
+                        if entry.name.startswith(pipeline_routes.FETCHED_PREFIX)
+                        and entry.name.endswith(".csv")
+                    )
+
+                def fetched_files(game="pokemon"):
+                    return kept(game)
+
+                def run_local():
                     return sorted(
                         entry.name
                         for entry in directory.iterdir()
@@ -18120,11 +18872,12 @@ def check_export_fetch(checks: Checks) -> None:
                     status, raw, _ = fetch()
                     checks.equal((status, error_code(raw)), (502, expected), label)
                 checks.equal(
-                    fetched_files(),
-                    [],
-                    "and NOT ONE of those refusals left a file in the run directory — a run "
-                    "accumulating a dead export per failed press stops explaining itself, "
-                    "which is the whole reason a run directory is worth keeping",
+                    (fetched_files(), run_local()),
+                    ([], []),
+                    "and NOT ONE of those refusals left a file — in the game's directory or "
+                    "in the run's. A directory accumulating a dead export per failed press "
+                    "stops explaining itself, and the shared one has more readers to "
+                    "confuse than the run directory ever had",
                 )
 
                 # ------------------------------------------------------- the good download
@@ -18145,12 +18898,12 @@ def check_export_fetch(checks: Checks) -> None:
                     "many SKUs came back, and which game the file answers for off its own "
                     "Product Line cells rather than off its name",
                 )
-                kept = fetched_files()
+                kept_now = fetched_files()
                 checks.equal(
-                    len(kept), 1, "exactly one file is kept, and it is the one just fetched"
+                    len(kept_now), 1, "exactly one file is kept, it is the one just fetched"
                 )
                 checks.equal(
-                    kept[0] if kept else None,
+                    kept_now[0] if kept_now else None,
                     body.get("file"),
                     "the response NAMES the file it wrote, which is what the join is then "
                     "handed — a fetch that kept a file the client could not name would be a "
@@ -18181,7 +18934,7 @@ def check_export_fetch(checks: Checks) -> None:
                     port,
                     "POST",
                     f"/pipeline/runs/{directory.name}/join",
-                    payload={"fetched": [kept[0]]},
+                    payload={"fetched": [kept_now[0]]},
                 )
                 checks.equal(
                     (status, json.loads(raw or b"{}").get("ok")),
@@ -18193,7 +18946,7 @@ def check_export_fetch(checks: Checks) -> None:
                 recorded = runs.open_run(directory).exports_by_game.get("pokemon")
                 checks.equal(
                     recorded.name if recorded else None,
-                    kept[0],
+                    kept_now[0],
                     "and the manifest now records THAT file as what pokemon was joined "
                     "against, which is the seam: a route that fetched a file the join never "
                     "used would report success and change nothing",
@@ -18206,18 +18959,24 @@ def check_export_fetch(checks: Checks) -> None:
                 # always added a copy — run `2026-08-31-box3-01` holds two byte-identical
                 # 366 KB exports 29 seconds apart, while the comment above the name claimed
                 # the opposite. The digest is looked up first now, and a hit IS the file.
-                status, raw, _ = fetch()
+                #
+                # FORCED, AND THAT IS WHAT MAKES IT A DEDUPE TEST. Without `refresh` this
+                # press would answer out of the file already on disk without opening a
+                # socket — which is a different saving and would leave the dedupe itself
+                # unexercised. Forcing the fetch is what puts identical bytes back through
+                # the digest lookup, which is the thing being asserted.
+                status, raw, _ = fetch({"refresh": True})
                 body = json.loads(raw or b"{}")
                 checks.equal(
                     (status, body.get("ok"), fetched_files(), body.get("file")),
-                    (200, True, kept, kept[0]),
+                    (200, True, kept_now, kept_now[0]),
                     "a re-fetch of identical bytes lands on the file the run already holds "
                     "— still one file, and the receipt names it — rather than adding a "
                     "second copy under a later stamp",
                 )
                 checks.equal(
                     (body.get("previous") or {}).get("pokemon", {}).get("file"),
-                    kept[0],
+                    kept_now[0],
                     "and `previous` names that same file, because it is what the last join "
                     "used: the receipt says so rather than refusing over a comparison of a "
                     "file with itself",
@@ -18282,7 +19041,7 @@ def check_export_fetch(checks: Checks) -> None:
                     thinner, source.header, [by_sku[DUNSPARCE_SKU], by_sku[ARTICUNO_SKU]]
                 )
                 stub["body"] = thinner.read_bytes()
-                status, raw, _ = fetch()
+                status, raw, _ = fetch({"refresh": True})
                 body = json.loads(raw or b"{}")
                 checks.equal(
                     (status, body.get("ok")),
@@ -18394,7 +19153,7 @@ def check_export_fetch(checks: Checks) -> None:
                 stub["body"] = (
                     Path(FIXTURE_EXPORT).parent / "riftbound_export_untouched.csv"
                 ).read_bytes()
-                status, raw, _ = fetch()
+                status, raw, _ = fetch({"refresh": True})
                 checks.equal(
                     (status, error_code(raw)),
                     (409, "export_wrong_game"),
@@ -18518,7 +19277,7 @@ def check_export_fetch(checks: Checks) -> None:
                 stub["mode"] = "csv"
                 stub["body"] = whole.read_bytes()
                 stub["posted"] = []
-                fetch()
+                fetch({"refresh": True})
                 sent = json.loads(
                     urllib.parse.parse_qs(stub["posted"][-1])["model"][0]
                 ) if stub["posted"] else {}
@@ -18579,10 +19338,22 @@ def check_export_fetch(checks: Checks) -> None:
                     identifications.write_text(json.dumps(payload))
 
                 def sent(payload=None):
+                    """What went out on the wire for this scope. ALWAYS FORCES THE FETCH.
+
+                    EVERY CHECK BELOW IS ABOUT THE REQUEST, so it must make one. A press whose
+                    game already holds a covering export answers without opening a socket
+                    (D166), and a wide file covers every narrower scope — so
+                    without `refresh` these would read the LAST request's body, or no body at
+                    all, and report it as the scope this run implies. Which is the same class
+                    of error as an outcome assertion that cannot see a saving, pointed the
+                    other way: here the saving would hide the assertion.
+                    """
                     stub["mode"] = "csv"
                     stub["body"] = whole.read_bytes()
                     stub["posted"] = []
-                    fetch(payload or {})
+                    asking = dict(payload or {})
+                    asking["refresh"] = True
+                    fetch(asking)
                     return json.loads(
                         urllib.parse.parse_qs(stub["posted"][-1])["model"][0]
                     ) if stub["posted"] else {}
@@ -18759,6 +19530,428 @@ def check_export_fetch(checks: Checks) -> None:
                 )
                 hint_cards(0)
 
+                # ================= THE EXPORT IS A PROPERTY OF THE GAME (D166)
+                #
+                # EVERY ASSERTION IN THIS SECTION THAT MATTERS COUNTS REQUESTS, AND THAT IS
+                # DELIBERATE. PR A's arm 9 is the lesson: deleting its work-saving gate left
+                # every other assertion green, because the old path and the new one agree on
+                # every OUTCOME and differ only in the work done to reach them. A reuse and a
+                # fetch here produce the same file, the same rows, the same SKUs, the same
+                # receipt figures and the same join — so an outcome assertion can say nothing
+                # at all about whether the socket was opened. `stub["posted"]` is the counter.
+                # BYTES OF ITS OWN, so every count below is a DELTA this block caused rather
+                # than a total the sections above happen to have reached. An absolute count
+                # here reads as a dedupe failure the moment another case adds a file.
+                stub["mode"] = "csv"
+                mine = home / "one-sku.csv"
+                tcgcsv.write_csv(mine, source.header, [by_sku[DUNSPARCE_SKU]])
+                stub["body"] = mine.read_bytes()
+
+                def posts():
+                    return len(stub["posted"])
+
+                # --------------------------------------- the file leaves the run directory
+                before_posts, before_kept = posts(), len(kept())
+                status, raw, _ = fetch({"refresh": True})
+                first = json.loads(raw)
+                checks.equal(
+                    (status, first["ok"], posts() - before_posts),
+                    (200, True, 1),
+                    "a fetch of bytes nothing on disk carries opens exactly one socket",
+                )
+                checks.equal(
+                    (len(kept()) - before_kept, first["file"] in kept()),
+                    (1, True),
+                    "and the file lands in `inventory/.exports/<game>/` — the export is a "
+                    "property of the GAME, and a per-run copy is what made the dedupe below "
+                    "blind to its own siblings",
+                )
+                checks.equal(
+                    run_local(),
+                    [],
+                    "and NOT in the run directory, which is the whole move: five "
+                    "byte-identical 1,733,052 B copies landed in five run directories in "
+                    "eighteen seconds on the owner's store because each run deduped against "
+                    "itself alone",
+                )
+                checks.equal(
+                    Path(first["store"]).name,
+                    "pokemon",
+                    "and the receipt says where it went, because a client that built a "
+                    "download path out of the run's name would otherwise break in silence",
+                )
+
+                # ------------------------------ A SECOND RUN OF THE SAME GAME OPENS NOTHING
+                #
+                # THE MEASUREMENT THIS IS BUILT FOR. Re-joining the owner's store meant
+                # pressing Fetch once per run: seven presses over nine minutes, five of them
+                # eighteen seconds apart, every one asking TCGplayer for bytes the machine
+                # already held. Store-wide the real rules produce TWO requests for that whole
+                # store — one per game — and this is the arm that makes that true.
+                second, _ = seam_run(checks, cards)
+                before_posts = posts()
+                status, raw, _ = request(
+                    port,
+                    "POST",
+                    f"/pipeline/runs/{second.directory.name}/export",
+                    payload={},
+                )
+                reuse = json.loads(raw)
+                checks.equal(
+                    (status, reuse["ok"], reuse["reused"], posts() - before_posts),
+                    (200, True, True, 0),
+                    "A SECOND RUN OVER THE SAME GAME ISSUES ZERO NETWORK REQUESTS and "
+                    "answers out of the file already on disk. This is the assertion no "
+                    "outcome can make: every other figure on this receipt is identical to "
+                    "the fetched one, so only the request count can see the saving",
+                )
+                checks.equal(
+                    len(kept()) - before_kept,
+                    1,
+                    "and nothing new is written either — one game, one file, however many "
+                    "runs join against it",
+                )
+                checks.equal(
+                    (reuse["rows"], reuse["skus"]),
+                    (first["rows"], first["skus"]),
+                    "and the receipt it answers with is the fetched one's, figure for "
+                    "figure — which is exactly why the count above had to be asserted",
+                )
+
+                # ---------------------- A WIDER FILE COVERS A NARROWER NEED, NEVER THE OTHER
+                #
+                # ASSERTED ON THE RULE ITSELF, because the reuse path cannot be steered to it
+                # from here: a category-scoped export is already on disk and legitimately
+                # covers every narrower scope, so a route-level case would reuse THAT file and
+                # prove nothing about the asymmetry. The direction is what is load-bearing —
+                # a file fetched for {A} serving a run needing {A, B} leaves every card of B
+                # queueing `no_catalog_row` behind a press that reported success, which is
+                # D76's defect arriving through a different door.
+                checks.equal(
+                    (
+                        pipeline_routes._covers(
+                            {"category_id": 3, "set_ids": []},
+                            tcg_export.Scope(category_id=3, set_ids=(4242,)),
+                        ),
+                        pipeline_routes._covers(
+                            {"category_id": 3, "set_ids": [4242]},
+                            tcg_export.Scope(category_id=3, set_ids=()),
+                        ),
+                        pipeline_routes._covers(
+                            {"category_id": 3, "set_ids": [4242]},
+                            tcg_export.Scope(category_id=3, set_ids=(4242, 99)),
+                        ),
+                        pipeline_routes._covers(
+                            {"category_id": 89, "set_ids": []},
+                            tcg_export.Scope(category_id=3, set_ids=()),
+                        ),
+                    ),
+                    (True, False, False, False),
+                    "the whole category covers one set; one set does NOT cover the category "
+                    "or a superset of itself; and another game's file covers nothing here",
+                )
+
+                # ------------------- A REUSE OBSERVED NOTHING, SO IT MAY NOT DATE THE READING
+                #
+                # `describe_source` READS AN EXPORT'S OBSERVATION TIME OFF ITS MTIME, and
+                # `Listing.live_reading` weighs that against the store's own stamps. Touching
+                # it on a reuse would date a reading nobody took and let a stale export
+                # outrank a newer sale — silently, and only in the arithmetic.
+                held = exports_root / "pokemon" / first["file"]
+                was_mtime = held.stat().st_mtime
+                request(
+                    port,
+                    "POST",
+                    f"/pipeline/runs/{second.directory.name}/export",
+                    payload={},
+                )
+                checks.equal(
+                    held.stat().st_mtime,
+                    was_mtime,
+                    "a reuse leaves the mtime alone, because it took no reading",
+                )
+
+                # ------------------------- AND A READING OLDER THAN THE WINDOW IS RE-TAKEN
+                #
+                # EVERY FILE THE GAME HOLDS IS AGED, not just the one this block fetched.
+                # `_reusable` walks the whole directory newest first and answers with the
+                # first covering file — which is right, and means ageing one of several
+                # proves nothing: the press would reuse a sibling and the check would read
+                # as a reuse that ignored the window.
+                stale = was_mtime - pipeline_routes.EXPORT_REUSE_S - 60
+                for entry in (exports_root / "pokemon").glob("*.csv"):
+                    os.utime(entry, (stale, stale))
+                was_mtime = held.stat().st_mtime
+                before_posts = posts()
+                status, raw, _ = request(
+                    port,
+                    "POST",
+                    f"/pipeline/runs/{second.directory.name}/export",
+                    payload={},
+                )
+                checks.equal(
+                    (json.loads(raw)["reused"], posts() - before_posts),
+                    (False, 1),
+                    "an export older than EXPORT_REUSE_S is re-fetched rather than reused — "
+                    "the window is sized to a SITTING, and a reuse long enough that the "
+                    "operator thinks they refreshed and did not is worse than the request",
+                )
+                checks.equal(
+                    held.stat().st_mtime > was_mtime,
+                    True,
+                    "and THAT one touches the mtime, because identical bytes arriving from "
+                    "the portal really are a fresh observation of the same reading",
+                )
+
+                # ------------------------------------------ `refresh` FORCES THE SOCKET OPEN
+                before_posts = posts()
+                status, raw, _ = request(
+                    port,
+                    "POST",
+                    f"/pipeline/runs/{second.directory.name}/export",
+                    payload={"refresh": True},
+                )
+                forced = json.loads(raw)
+                checks.equal(
+                    (status, forced["reused"], posts() - before_posts),
+                    (200, False, 1),
+                    "`refresh: true` opens the socket whatever the age — an operator who "
+                    "means to take a new reading must be able to, or the reuse window is a "
+                    "trap rather than a saving",
+                )
+                checks.equal(
+                    len(kept()) - before_kept,
+                    1,
+                    "AND THE IDENTICAL BYTES DEDUPE STORE-WIDE: a real fetch that produces "
+                    "bytes already on disk lands on the file that holds them, ACROSS RUNS. "
+                    "5 of the 6 redundant copies on the owner's store are cross-run and so "
+                    "are outside anything a per-run glob could ever have reached",
+                )
+
+                # A FILE COUNT CANNOT PROVE THE DEDUPE, AND MEASURING THAT IS WHY THIS EXISTS.
+                #
+                # THE NAME IS `stamp-digest`, SO IDENTICAL BYTES INSIDE ONE SECOND COMPOSE THE
+                # IDENTICAL PATH. `write_bytes` then OVERWRITES rather than adds, and every
+                # count above reads the same whether the digest was looked up or not — this
+                # whole block runs inside one second on this machine (measured: three files
+                # all stamped at the same second), so deleting the lookup outright left all 88
+                # checks green. That is T7's own same-second collision showing up as a hole in
+                # the test rather than in the product.
+                #
+                # SO THE ASSERTION IS THE RECEIPT'S OWN FILE NAME, against a held file whose
+                # stamp CANNOT collide: rename it into the past, re-fetch the same bytes, and
+                # the press must answer with the renamed file. That is the digest lookup and
+                # nothing else, and no clock can make it pass by accident.
+                held_now = exports_root / "pokemon" / forced["file"]
+                earlier = held_now.with_name(
+                    f"{pipeline_routes.FETCHED_PREFIX}19700101-000000-"
+                    f"{forced['file'].rsplit('-', 1)[1]}"
+                )
+                held_now.rename(earlier)
+                pipeline_routes._note_path(held_now).rename(
+                    pipeline_routes._note_path(earlier)
+                )
+                status, raw, _ = fetch({"refresh": True})
+                landed = json.loads(raw)
+                checks.equal(
+                    (status, landed["file"], len(kept()) - before_kept),
+                    (200, earlier.name, 1),
+                    "a re-fetch of bytes already on disk answers with the file that HOLDS "
+                    "them, whatever its name — found by digest and compared in full, because "
+                    "32 bits of digest is a name and not a proof",
+                )
+                earlier.rename(held_now)
+                pipeline_routes._note_path(earlier).rename(
+                    pipeline_routes._note_path(held_now)
+                )
+
+                # ------------------------------------- THE PREVIEW STILL PRESSES NOTHING
+                before_posts = posts()
+                status, raw, _ = request(
+                    port, "GET", f"/pipeline/runs/{second.directory.name}/scope"
+                )
+                scope_body = json.loads(raw)
+                checks.equal(
+                    (status, posts() - before_posts),
+                    (200, 0),
+                    "`GET .../scope` opens no export socket — it is the lever's position "
+                    "drawn before the press, and a preview that fetched would be the press",
+                )
+                checks.equal(
+                    bool(scope_body["reusable"]),
+                    True,
+                    "and it says the next press would answer without a request, so the "
+                    "operator is not re-fetching bytes this machine holds",
+                )
+                width = scope_body["width"]
+                checks.equal(
+                    (
+                        isinstance(width, dict)
+                        and width["bytes"] > 0
+                        and width["max_bytes"] == tcg_export.MAX_BYTES
+                        and width["headroom"] == width["max_bytes"] - width["bytes"]
+                    ),
+                    True,
+                    "AND IT DRAWS WHAT THE PRESS WOULD WEIGH AGAINST THE CAP (D65/D76). "
+                    "Measured 2026-09-12: the whole Pokemon category is 32,629,598 B — "
+                    "97.24% of MAX_BYTES, 903 KB of headroom — against 238,482 B for the "
+                    "one set the owner's 543 Pokemon cards name. A widening is 137x and "
+                    "lands two per cent short of a refusal, so it may not be silent",
+                )
+
+                # --------------------- AND A WIDENED FETCH THAT IS TOO LARGE SAYS WHY (D76)
+                #
+                # THE CAP IS LOWERED RATHER THAN THE BODY RAISED. `MAX_BYTES` is read off the
+                # module at call time by both the reader and the check, so moving it exercises
+                # the same path a 32 MB body would — without putting 32 MB through a harness
+                # that runs at every turn end.
+                hint_cards(1)
+                was_max = tcg_export.MAX_BYTES
+                tcg_export.MAX_BYTES = 64
+                try:
+                    status, raw, _ = fetch({"refresh": True})
+                finally:
+                    tcg_export.MAX_BYTES = was_max
+                message = str(
+                    (json.loads(raw or b"{}").get("error") or {}).get("message") or ""
+                )
+                checks.equal(
+                    (status, error_code(raw), "THE SCOPE IS WHY" in message),
+                    (502, "tcg_export_too_large", True),
+                    "the transport's own sentence blames the download and hands the "
+                    "operator nothing to act on — it still says the widest export this "
+                    "project has read is under 2 MB, and the widest it can ASK for is "
+                    "31.12 MB. The actionable half is that the scope went wide, and why",
+                )
+                checks.equal(
+                    "carry no set hint" in message,
+                    True,
+                    "and it names the cards that widened it — D76's own defect, said at the "
+                    "moment it costs something rather than left to be inferred",
+                )
+                hint_cards(0)
+                stub["mode"] = "csv"
+
+                # ------------------- THE MANIFEST KEEPS THE PATH AND THE DIGEST, AND USES IT
+                #
+                # THE RECORD IS THE ONLY LINK BACK once the file is not inside the run, and a
+                # shared directory is exactly where a path CAN change under a run that a
+                # run-local copy never could. So the digest is not decoration.
+                #
+                # AND THE JOIN ITSELF OPENS NO SOCKET, asserted rather than assumed. This is
+                # the second run over this game and it resolves against the file the FIRST
+                # one's press left in `inventory/.exports/pokemon/` — so the whole
+                # fetch-and-join pass for run two costs zero requests. Counted, because the
+                # join's own output says nothing about whether TCGplayer was asked.
+                before_posts = posts()
+                status, raw, _ = request(
+                    port,
+                    "POST",
+                    f"/pipeline/runs/{second.directory.name}/join",
+                    payload={"fetched": [first["file"]]},
+                )
+                joined = runs.open_run(second.directory)
+                recorded = (joined.manifest.get("exports") or {}).get("pokemon") or {}
+                export_path = Path(str(recorded.get("path") or ""))
+                checks.equal(
+                    (
+                        json.loads(raw)["ok"],
+                        export_path.parent.name,
+                        len(str(recorded.get("sha256") or "")),
+                        posts() - before_posts,
+                    ),
+                    (True, "pokemon", 64, 0),
+                    "the join records the file it resolved against — path AND digest, under "
+                    "the GAME's directory rather than the run's — and ISSUES ZERO NETWORK "
+                    "REQUESTS doing it, which is the half no join output can report",
+                )
+                checks.equal(
+                    runs.sha256_of(export_path),
+                    recorded["sha256"],
+                    "and the digest recorded is the digest of the file that was read",
+                )
+
+                # THE PATH MOVES AND THE DIGEST FINDS IT. A recorded export renamed under the
+                # shared directory is RECOVERED rather than refused — by full sha256, never by
+                # position, so this can never quietly join a run against a newer reading.
+                moved = export_path.with_name("export-tcgplayer-19700101-000000-" +
+                                              recorded["sha256"][:8] + ".csv")
+                export_path.rename(moved)
+                plan = resolve.exports_for(joined, None)
+                checks.equal(
+                    plan.by_game["pokemon"],
+                    moved,
+                    "a recorded export whose PATH has moved is found by the DIGEST the "
+                    "manifest recorded beside it — which is what makes that record "
+                    "load-bearing rather than a note",
+                )
+                moved.rename(export_path)
+
+                # A DIGEST THAT MATCHES NOTHING IS A REFUSAL, NEVER A SUBSTITUTE.
+                export_path.rename(export_path.with_suffix(".hidden"))
+                try:
+                    resolve.exports_for(joined, None)
+                    checks.equal(False, True, "unreachable")
+                except runs.RunError as caught:
+                    checks.equal(
+                        "recorded digest" in str(caught),
+                        True,
+                        "and a run whose file is gone entirely refuses exactly as before, "
+                        "naming the digest it looked for — a recovery that fell back to "
+                        "'some export of this game' would join against a newer reading in "
+                        "silence, which is the hazard the shared directory creates",
+                    )
+                export_path.with_suffix(".hidden").rename(export_path)
+
+                # AND THE MATCH IS THE FULL DIGEST, NOT THE 32 BITS IN THE NAME. The name
+                # carries `sha256[:8]` and that is a NAME rather than a proof — the same
+                # sentence `_keep_export` follows one module over. A recovery that trusted the
+                # filename would hand a run somebody else's file with a colliding prefix, and
+                # the join would be silently against the wrong reading.
+                impostor = export_path.with_name(
+                    "export-tcgplayer-19700102-000000-" + recorded["sha256"][:8] + ".csv"
+                )
+                impostor.write_bytes(thinner.read_bytes())
+                export_path.rename(export_path.with_suffix(".hidden"))
+                try:
+                    impostor_plan = resolve.exports_for(joined, None)
+                    checks.equal(
+                        impostor_plan.by_game.get("pokemon"),
+                        None,
+                        "a file whose NAME carries the recorded digest but whose bytes do "
+                        "not is refused, not adopted",
+                    )
+                except runs.RunError:
+                    checks.ok(
+                        True,
+                        "a file whose NAME carries the recorded digest but whose bytes do "
+                        "not is refused — the recovery verifies the full sha256, because 32 "
+                        "bits of digest is a name and not a proof",
+                    )
+                export_path.with_suffix(".hidden").rename(export_path)
+                impostor.unlink()
+
+                # ------------------------- A LEGACY RUN GOES ON JOINING ITS OWN LOCAL COPY
+                #
+                # THE OWNER'S STORE HOLDS 19 OF THESE. A run directory is an immutable input,
+                # so a run joined against a file inside it keeps that file and that answer.
+                legacy_name = pipeline_routes.FETCHED_PREFIX + "20260101-000000-abcdef12.csv"
+                (second.directory / legacy_name).write_bytes(whole.read_bytes())
+                before_posts = posts()
+                status, raw, _ = request(
+                    port,
+                    "POST",
+                    f"/pipeline/runs/{second.directory.name}/join",
+                    payload={"fetched": [legacy_name]},
+                )
+                checks.equal(
+                    (status, json.loads(raw)["ok"], posts() - before_posts),
+                    (200, True, 0),
+                    "a fetched export still inside a run directory is found there first and "
+                    "joined against — the legacy location is not a fallback, it is where "
+                    "those 19 files are and where they stay",
+                )
+
                 # ------------------------------------- THE COOKIE ROTATES, AND `get` CANNOT
                 #
                 # THE REFUSAL'S OWN REMEDY, EXERCISED. `tcg_session_expired` tells the
@@ -18782,7 +19975,9 @@ def check_export_fetch(checks: Checks) -> None:
 
                     dotenv.write_text("TCGPLAYER_STORE_COOKIE=TCGAuthTicket_Production=one\n")
                     stub["seen"] = []
-                    fetch()
+                    # FORCED, for `sent()`'s reason: this asserts what reached the SOCKET,
+                    # and a press that reuses a covering export never reaches one.
+                    fetch({"refresh": True})
                     checks.equal(
                         stub["seen"][-1] if stub["seen"] else None,
                         "TCGAuthTicket_Production=one",
@@ -18795,7 +19990,9 @@ def check_export_fetch(checks: Checks) -> None:
 
                     dotenv.write_text("TCGPLAYER_STORE_COOKIE=TCGAuthTicket_Production=two\n")
                     stub["seen"] = []
-                    fetch()
+                    # FORCED, for `sent()`'s reason: this asserts what reached the SOCKET,
+                    # and a press that reuses a covering export never reaches one.
+                    fetch({"refresh": True})
                     checks.equal(
                         stub["seen"][-1] if stub["seen"] else None,
                         "TCGAuthTicket_Production=two",
@@ -18807,7 +20004,9 @@ def check_export_fetch(checks: Checks) -> None:
 
                     os.environ["TCGPLAYER_STORE_COOKIE"] = "TCGAuthTicket_Production=from-env"
                     stub["seen"] = []
-                    fetch()
+                    # FORCED, for `sent()`'s reason: this asserts what reached the SOCKET,
+                    # and a press that reuses a covering export never reaches one.
+                    fetch({"refresh": True})
                     checks.equal(
                         stub["seen"][-1] if stub["seen"] else None,
                         "TCGAuthTicket_Production=from-env",
@@ -24385,6 +25584,9 @@ def run() -> Result:
     check_queue_starvation(checks)
     check_listing_release(checks)
     check_queue_supersede(checks)
+    check_queue_refresh(checks)
+    check_queue_refresh_agreement(checks)
+    check_queue_refresh_reading(checks)
     check_review_answer(checks)
     check_group_answer(checks)
     check_mark_sold(checks)

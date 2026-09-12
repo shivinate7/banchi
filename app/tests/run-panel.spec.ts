@@ -421,8 +421,9 @@ async function open(
   })
 
   /* D76's scope preview. Registered panel-wide because EVERY case that opens a run now draws
-     it, and a case that wanted a different scope re-registers over this one. A one-game run
-     whose cards are only partly hinted, which is the shape the defect was found in. */
+     it, and a case that wanted a different scope re-registers over this one — AFTER calling
+     `open`, because Playwright's LAST matching route wins and one declared above this is
+     silently shadowed by it. */
   await page.route(/\/pipeline\/runs\/[^/]+\/scope/, async (route) => {
     await route.fulfill({
       status: 200,
@@ -1911,4 +1912,302 @@ test('and it is not drawn on a run that has never been joined', async ({ page })
      too keeps this from passing merely because the fold never opened. */
   await expect(page.locator('.runs-figures')).toHaveCount(0)
   await expect(page.locator('.runs-correction')).toHaveCount(0)
+})
+
+/* ===================== THE EXPORT IS THE GAME'S, AND THE PRESS MAY NOT LIE ABOUT IT
+   (D166)
+
+   THE WHOLE POINT OF THESE FIVE IS THAT THE RECEIPT'S OTHER FIGURES CANNOT CARRY THEM. A
+   reuse and a fetch answer with the same file, the same rows, the same SKUs and the same
+   sets — so `Export reused` and the width line are the only places the difference exists on
+   screen. T7 proves the server skipped the request; these prove a human is told. */
+
+test('a reused export says so, because every other figure on the receipt is identical', async ({
+  page,
+}) => {
+  const wire = await open(page)
+  await routeFetch(page, wire, {
+    status: 200,
+    body: fetchedBody({ reused: true, age_s: 240, store: '/x/inventory/.exports/riftbound' }),
+  })
+  await openRun(page)
+  await fetchButton(page).click()
+
+  const receipt = page.locator('.run-receipt')
+  await expect(receipt).toContainText('Export reused')
+  await expect(receipt).not.toContainText('Export fetched')
+  /* THE AGE IS THE ACTIONABLE HALF. "Reused" alone does not say whether the reading is four
+     minutes or four hours old, and the operator's next decision is whether to refresh. */
+  await expect(receipt).toContainText('taken 4 minutes ago')
+  await expect(receipt).toContainText('nothing was downloaded')
+})
+
+test('a reuse seconds old reads as a sentence, not as a missing figure', async ({ page }) => {
+  /* THE BRANCH THE FIRST BUILD OF THIS GOT WRONG, and no assertion here read it: with the
+     helper returning a bare duration, `age_s: 12` rendered "Read just taken ago" on the
+     receipt and "just taken old" on the scope line. Both went past a green spec, because
+     every case above uses a minutes-old fixture. Found by rendering the screen and looking
+     at it, which is why the round number is not the only age tested. */
+  const wire = await open(page)
+  await routeFetch(page, wire, { status: 200, body: fetchedBody({ reused: true, age_s: 12 }) })
+  await openRun(page)
+  await fetchButton(page).click()
+
+  const receipt = page.locator('.run-receipt')
+  await expect(receipt).toContainText('taken moments ago')
+  await expect(receipt).not.toContainText('ago and already')
+  await expect(receipt).not.toContainText('old —')
+  await expect(receipt).not.toContainText('0 minutes')
+})
+
+test('and an hours-old reuse says hours, because minutes stop being readable', async ({
+  page,
+}) => {
+  /* A WHOLE NUMBER OF HOURS, because the first version of this asserted `2 hours` against
+     9000s and the screen correctly said 3 — `Math.round(2.5)` is 3. The fixture was wrong
+     and the code was right, which is the only kind of red worth having. */
+  const wire = await open(page)
+  await routeFetch(page, wire, { status: 200, body: fetchedBody({ reused: true, age_s: 7200 }) })
+  await openRun(page)
+  await fetchButton(page).click()
+
+  await expect(page.locator('.run-receipt')).toContainText('taken 2 hours ago')
+})
+
+test('and a real fetch still says fetched, so the word is not decoration', async ({ page }) => {
+  const wire = await open(page)
+  await routeFetch(page, wire, { status: 200, body: fetchedBody({ reused: false, age_s: 0 }) })
+  await openRun(page)
+  await fetchButton(page).click()
+
+  const receipt = page.locator('.run-receipt')
+  await expect(receipt).toContainText('Export fetched')
+  await expect(receipt).not.toContainText('Export reused')
+  await expect(receipt).not.toContainText('nothing was downloaded')
+})
+
+test('a widened scope carries its measured width against the cap, before the press', async ({
+  page,
+}) => {
+  /* MEASURED 2026-09-12, AND THESE ARE THE REAL FIGURES: one fetch of the whole Pokemon
+     category is 32,629,598 B against a 33,554,432 B ceiling — 97% — while the one set the
+     owner's 543 Pokemon cards name is 238,482 B. A widening is 137x and lands two per cent
+     short of a refusal, which is not a figure to meet by pressing. */
+  const wire = await open(page)
+  /* REGISTERED AFTER `open`, AND THE ORDER IS THE ASSERTION'S WHOLE VALIDITY.
+     Playwright's LAST matching route wins and `open()` registers the panel-wide scope stub,
+     so a stub declared above it is silently shadowed. Both of the cases that read a figure
+     were doing that and failed on the panel's own riftbound payload; the one that asserts an
+     ABSENCE was doing it too and PASSED, which is a green tick over the wrong page. */
+  await page.route(/\/pipeline\/runs\/[^/]+\/scope/, async (route) => {
+    await route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify({
+        run: '2026-08-30-box3-01',
+        games: [
+          {
+            game: 'pokemon',
+            display: 'Pokemon',
+            category_id: 3,
+            cards: 200,
+            hinted: 1,
+            unhinted: 199,
+            hints: ['ME01'],
+            policy: 'sets',
+          },
+        ],
+        scopes: ['category', 'sets'],
+        asked: {
+          game: 'pokemon',
+          category_id: 3,
+          hints: ['ME01'],
+          set_ids: [],
+          unresolved_hints: [],
+          sets: [],
+          widened: true,
+          scope: 'category',
+          policy: 'sets',
+          chosen_by: 'cards',
+          reason: 'partial_hints',
+          cards: 200,
+          hinted: 1,
+          unhinted: 199,
+        },
+        reason: null,
+        message: null,
+        width: {
+          bytes: 32629598,
+          max_bytes: 33554432,
+          headroom: 924834,
+          of_max: 0.9724,
+          near_cap: true,
+          measured: '2026-09-12T07:00:00Z',
+          from: 'export-tcgplayer-20260912-070000-deadbeef.csv',
+          widened: true,
+        },
+        reusable: null,
+      }),
+    })
+  })
+  await routeFetch(page, wire, { status: 200, body: fetchedBody() })
+  await openRun(page)
+
+  const says = page.locator('.run-scope-says')
+  await expect(says).toContainText('31 MB')
+  await expect(says).toContainText('97%')
+  /* AND THE REMEDY, not just the alarm. A figure with nothing to do about it is a figure an
+     operator learns to skip. */
+  await expect(says).toContainText('Hint the cards')
+})
+
+test('a narrow measurement is NOT drawn beside a widened scope', async ({ page }) => {
+  /* IT WOULD DESCRIBE A DIFFERENT REQUEST. 238 KB is the truth about one set and a lie about
+     the whole category, and drawing it under a `widened` scope reassures about the ask that
+     is not being made. `width.widened` is the field that separates them, and without this
+     case nothing reads it. */
+  const wire = await open(page)
+  /* REGISTERED AFTER `open`, AND THE ORDER IS THE ASSERTION'S WHOLE VALIDITY.
+     Playwright's LAST matching route wins and `open()` registers the panel-wide scope
+     stub, so a stub declared above it is silently shadowed — two of these read the
+     panel's own riftbound payload, and the one that asserts an ABSENCE passed while
+     doing it, which is a green tick over the wrong page. */
+  await page.route(/\/pipeline\/runs\/[^/]+\/scope/, async (route) => {
+    await route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify({
+        run: '2026-08-30-box3-01',
+        games: [
+          {
+            game: 'pokemon',
+            display: 'Pokemon',
+            category_id: 3,
+            cards: 200,
+            hinted: 1,
+            unhinted: 199,
+            hints: ['ME01'],
+            policy: 'sets',
+          },
+        ],
+        scopes: ['category', 'sets'],
+        asked: {
+          game: 'pokemon',
+          category_id: 3,
+          hints: ['ME01'],
+          set_ids: [],
+          unresolved_hints: [],
+          sets: [],
+          widened: true,
+          scope: 'category',
+          policy: 'sets',
+          chosen_by: 'cards',
+          reason: 'partial_hints',
+          cards: 200,
+          hinted: 1,
+          unhinted: 199,
+        },
+        reason: null,
+        message: null,
+        width: {
+          bytes: 238482,
+          max_bytes: 33554432,
+          headroom: 33315950,
+          of_max: 0.0071,
+          near_cap: false,
+          measured: '2026-09-12T07:00:00Z',
+          from: 'export-tcgplayer-20260912-070000-cafef00d.csv',
+          widened: false,
+        },
+        reusable: null,
+      }),
+    })
+  })
+  await routeFetch(page, wire, { status: 200, body: fetchedBody() })
+  await openRun(page)
+
+  const says = page.locator('.run-scope-says')
+  await expect(says).toContainText('Will ask TCGplayer for')
+  await expect(says).not.toContainText('0.2 MB')
+  await expect(says).not.toContainText('refused past')
+})
+
+test('a scope already on disk says the press will not ask TCGplayer at all', async ({ page }) => {
+  const wire = await open(page)
+  /* REGISTERED AFTER `open`, AND THE ORDER IS THE ASSERTION'S WHOLE VALIDITY.
+     Playwright's LAST matching route wins and `open()` registers the panel-wide scope
+     stub, so a stub declared above it is silently shadowed — two of these read the
+     panel's own riftbound payload, and the one that asserts an ABSENCE passed while
+     doing it, which is a green tick over the wrong page. */
+  await page.route(/\/pipeline\/runs\/[^/]+\/scope/, async (route) => {
+    await route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify({
+        run: '2026-08-30-box3-01',
+        games: [
+          {
+            game: 'riftbound',
+            display: 'Riftbound',
+            category_id: 89,
+            cards: 200,
+            hinted: 1,
+            unhinted: 199,
+            hints: ['OGN'],
+            policy: 'category',
+          },
+        ],
+        scopes: ['category', 'sets'],
+        asked: {
+          game: 'riftbound',
+          category_id: 89,
+          hints: ['OGN'],
+          set_ids: [],
+          unresolved_hints: [],
+          sets: [],
+          widened: true,
+          scope: 'category',
+          policy: 'category',
+          chosen_by: 'policy',
+          reason: 'game_policy',
+          cards: 200,
+          hinted: 1,
+          unhinted: 199,
+        },
+        reason: null,
+        message: null,
+        /* NO WIDTH, so the width line is absent and the reuse line is what is being read.
+           A case that drew both would pass on either. */
+        width: null,
+        reusable: {
+          file: 'export-tcgplayer-20260912-070000-deadbeef.csv',
+          age_s: 120,
+          window_s: 900,
+        },
+      }),
+    })
+  })
+  await routeFetch(page, wire, { status: 200, body: fetchedBody() })
+  await openRun(page)
+
+  const says = page.locator('.run-scope-says')
+  await expect(says).toContainText('Already have this one')
+  await expect(says).toContainText('taken 2 minutes ago')
+  await expect(says).toContainText('reuses it')
+  /* The width half is genuinely not drawn here — measured nothing, said nothing. */
+  await expect(says).not.toContainText('refused past')
+})
+
+test('and a scope with nothing on disk promises neither', async ({ page }) => {
+  const wire = await open(page)
+  await routeFetch(page, wire, { status: 200, body: fetchedBody() })
+  await openRun(page)
+
+  /* THE PANEL-WIDE STUB CARRIES NEITHER FIELD, which is also every client written before
+     this landed: the guards must read a missing field as "say nothing" rather than crash.
+     `undefined !== null` is true, and that is exactly how this would have thrown. */
+  const says = page.locator('.run-scope-says')
+  await expect(says).toContainText('Will ask TCGplayer for')
+  await expect(says).not.toContainText('Already have this one')
+  await expect(says).not.toContainText('refused past')
 })

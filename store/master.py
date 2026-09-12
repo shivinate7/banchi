@@ -434,6 +434,29 @@ class Card:
     number: Optional[str] = None
     printed_total: Optional[str] = None
     confidence: Optional[str] = None
+    # THE MODEL'S DETECTED FINISH, THE READING'S MISSING FIFTH FIELD
+    # (D167).
+    # `record_identification` writes `name`, `number`, `printed_total`
+    # and `confidence` — one identification, four fields — and the model answers a fifth,
+    # `finish`, which went only into the run's `identifications.json`. That asymmetry has no
+    # argument behind it and it cost one: a reader rebuilding a card's reading off the store
+    # had to take this one field from somewhere else, and the only other place it is written
+    # down is a queue entry, which may have been written by an OLDER identification of the
+    # same photograph. Measured on the owner's store: six of box 4's cards read `finish:
+    # null` on 2026-09-12 while their queue entries still said `foil` from 2026-09-11, and a
+    # refresh mixing the two queued six cards a join listed.
+    #
+    # NOT A CAPTURE CLAIM, so deliberately absent from `CAPTURE_CLAIM_FIELDS`:
+    # `metadata_finish` beside it is what the OPERATOR said about the stack and survives a
+    # re-record; this is what the MODEL saw in one photograph and is replaced whole by the
+    # next identification, exactly as `name` and `confidence` are. The two are told apart
+    # everywhere else in this pipeline (`pipeline/variant.py` rung 3 cross-checks one against
+    # the other) and telling them apart here is the same distinction.
+    #
+    # None ON EVERY CARD IDENTIFIED BEFORE THIS FIELD EXISTED, and that is the honest
+    # reading rather than a gap to backfill: the store does not know, and a value copied
+    # from a queue entry would be another reading's answer wearing this one's name.
+    detected_finish: Optional[str] = None
     sku: Optional[str] = None
     condition: Optional[str] = None
     state: str = CAPTURED
@@ -1566,6 +1589,7 @@ class Inventory:
         printed_total: Optional[str],
         confidence: Optional[str],
         run: Optional[str] = None,
+        detected_finish: Optional[str] = None,
     ) -> None:
         card = self.cards.get(key)
         if card is None:
@@ -1574,6 +1598,13 @@ class Inventory:
         card.number = number
         card.printed_total = printed_total
         card.confidence = confidence
+        # WRITTEN UNCONDITIONALLY, LIKE THE FOUR ABOVE. An identification REPLACES the
+        # reading; it does not merge into it. A caller that read no finish (a code card,
+        # whose profile is not asked for one) means "this reading detected none", and
+        # keeping the previous reading's answer here would be the stale-across-readings
+        # defect this field was added to remove. Defaulted so `codes/scan.py` says that by
+        # saying nothing.
+        card.detected_finish = detected_finish
         card.run = run or card.run
         if card.state == CAPTURED:
             self.set_state(key, IDENTIFIED, run=run)
