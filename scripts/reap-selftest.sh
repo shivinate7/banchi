@@ -71,6 +71,35 @@ print(p.pid)
 " "$1" "$2"
 }
 
+# THE SAME PROCESS, STARTED THE WAY `make server` STARTS ONE: a RELATIVE script path, with the
+# checkout as the working directory. Every other process in this fixture is spawned with an
+# ABSOLUTE path, which is exactly why the blanket sweep's blind spot survived thirteen mutation
+# arms — `pids_under` read argv alone, and every subject it was ever shown carried an absolute
+# path in argv. The Makefile does not: `$(PYTHON) server/capture_server.py`, where `$(PYTHON)`
+# is `.venv/bin/python`, puts nothing absolute on the command line at all.
+spawn_relative() {   # spawn_relative <script-basename> <cwd>
+  python3 -c "
+import subprocess, sys
+with open('/dev/null', 'wb') as null:
+    p = subprocess.Popen([sys.executable, sys.argv[1]], cwd=sys.argv[2],
+                         stdin=null, stdout=null, stderr=null, start_new_session=True)
+print(p.pid)
+" "$1" "$2"
+}
+
+# THE SAME AGAIN, CARRYING ONE EXTRA ARGV WORD. `_placed_under` reads every token of a command
+# line, so the arm that distinguishes a PATH from a word that merely looks like one needs a
+# subject whose argv holds such a word — see the directory-token case at the foot of this file.
+spawn_with_arg() {   # spawn_with_arg <script-path> <cwd> <extra-arg>
+  python3 -c "
+import subprocess, sys
+with open('/dev/null', 'wb') as null:
+    p = subprocess.Popen([sys.executable, sys.argv[1], sys.argv[3]], cwd=sys.argv[2],
+                         stdin=null, stdout=null, stderr=null, start_new_session=True)
+print(p.pid)
+" "$1" "$2" "$3"
+}
+
 # A FIXTURE PROCESS THAT ENDS WHEN ITS OWN SCRIPT FILE IS DELETED, so `cleanup`'s `rm -rf`
 # ENDS this run's processes rather than only asking them to. The leak it closes is structural
 # rather than careless: `spawn` starts every child in its own session precisely so a `killpg`
@@ -134,6 +163,10 @@ listen_script="$(fixture_script listen "$tmp")"
 client_script="$(fixture_script client "$tmp")"
 inner_script="$(fixture_script inner "$tmp")"
 probe_script="$(fixture_script probe "$tmp")"
+relative_script="$(fixture_script relative "$tmp")"
+chain_script="$(fixture_script chain "$tmp")"
+nested_script="$(fixture_script nested "$tmp")"
+dirtoken_script="$(fixture_script dirtoken "$tmp")"
 
 mkdir -p "$tmp/checkout" "$tmp/elsewhere"
 git -C "$tmp/checkout" init -q .
@@ -476,6 +509,161 @@ case "$out" in
   *pid\ $stranger*) bad "a bare run reached outside the checkout" ;;
   *) ok "and reaches nothing outside it" ;;
 esac
+
+# ------------------------------------------ the bare run: a process started by a relative path
+echo
+echo "  -- the bare run: the shape \`make server\` actually has --"
+
+# THE GAP THIS ARM EXISTS FOR, reproduced rather than asserted about. Reported from a worktree on
+# 2026-09-12: `make dev` and `make server` both running under that checkout, and a bare
+# `make reap ARGS=--confirm` stopped the Vite pair and did not list the capture server at all —
+# `make reap ARGS="port:8301 --confirm"` then stopped it. npm writes its argv absolutely and the
+# Makefile does not, so the two commands differed only in whether the sweep could SEE them.
+#
+# Nothing in this suite could catch it, because `spawn` gives every subject an absolute path.
+sleeper "$tmp/checkout/$relative_script"
+relative_pid="$(spawn_relative "$relative_script" "$tmp/checkout")"
+kids="$kids $relative_pid"
+sleep 1
+
+# THE CASE IS NOT VACUOUS, AND THAT IS CHECKED RATHER THAN ASSUMED: if the subject's command line
+# carried the checkout's path, the arm below would pass on the arm that was never broken.
+relative_cmd="$(ps -o command= -p "$relative_pid" 2>/dev/null)"
+case "$relative_cmd" in
+  *"$tmp/checkout"*) bad "the relative subject carries an absolute path — this arm proves nothing" ;;
+  "") bad "the relative subject is not running — this arm proves nothing" ;;
+  *) ok "the subject names its script relatively, as the Makefile does" ;;
+esac
+
+out="$(cd "$tmp/checkout" && python3 "$REAP" 2>&1)"
+case "$out" in
+  *pid\ $relative_pid*) ok "A BARE RUN FINDS A PROCESS STARTED BY A RELATIVE PATH" ;;
+  *) bad "the blanket sweep missed a live process under this checkout — the reported gap"
+     printf '%s\n' "$out" | sed 's/^/         /' ;;
+esac
+
+# And the same subject, named by pid, was ALWAYS found — which is what makes the miss a property
+# of the RESOLVER and not of the verdict. `port:` did this in the field; `pid:` poses it with no
+# socket to bind.
+out="$(cd "$tmp/checkout" && python3 "$REAP" --explain "pid:$relative_pid" 2>&1)"
+case "$out" in
+  *OURS*) ok "and naming it directly always did — the miss was the sweep, not the verdict" ;;
+  *) bad "the verdict does not place it either, so the fix is in the wrong place"
+     printf '%s\n' "$out" | sed 's/^/         /' ;;
+esac
+
+# A WORD THAT LOOKS LIKE A PATH IS NOT A PATH, which is the other half of arm two and the half
+# that decides whether the sweep stays narrow. Measured on the rig on 2026-09-12: matching a token
+# that merely EXISTS under the root places the bare word `server` in `make server` and in the
+# shell around it — the package DIRECTORY — and with it every process merely working in the tree.
+# Requiring a FILE selects the script and nothing else.
+#
+# The subject here stands IN the checkout (its working directory) and runs code from OUTSIDE it,
+# with a directory of the checkout named in its argv. Every one of those three clauses is needed:
+# without the outside script, arm one places it; without the directory word, the mutation this
+# case exists for changes nothing.
+mkdir -p "$tmp/checkout/pkg"
+sleeper "$tmp/elsewhere/$dirtoken_script"
+dirtoken_pid="$(spawn_with_arg "$tmp/elsewhere/$dirtoken_script" "$tmp/checkout" "pkg")"
+kids="$kids $dirtoken_pid"
+sleep 1
+
+out="$(cd "$tmp/checkout" && python3 "$REAP" 2>&1)"
+case "$out" in
+  *pid\ $dirtoken_pid*) bad "A DIRECTORY NAME IN ARGV PLACED A PROCESS RUNNING SOMEBODY ELSE'S CODE"
+     printf '%s\n' "$out" | sed 's/^/         /' ;;
+  *) ok "A WORD NAMING A DIRECTORY IS NOT A PATH INTO THIS CHECKOUT" ;;
+esac
+
+# The same subject with a FILE in place of the directory IS placed, or the case above would pass
+# on a sweep that had simply stopped reading argv at all.
+dirtoken_file_pid="$(spawn_with_arg "$tmp/elsewhere/$dirtoken_script" "$tmp/checkout" "$mine_script")"
+kids="$kids $dirtoken_file_pid"
+sleep 1
+out="$(cd "$tmp/checkout" && python3 "$REAP" 2>&1)"
+case "$out" in
+  *pid\ $dirtoken_file_pid*) ok "and the very same word, naming a FILE, still places it" ;;
+  *) bad "arm two reads no argv at all, so the case above proved nothing"
+     printf '%s\n' "$out" | sed 's/^/         /' ;;
+esac
+
+# ------------------------------------------------- the bare run: the session running the sweep
+echo
+echo "  -- the bare run: it may not stop the session running it --"
+
+# ONCE THE SWEEP PLACES A PROCESS BY A RELATIVE PATH, ITS OWN CALLER CAN QUALIFY. An agent's
+# shell carries an absolute `cd` into the checkout in its own argv, so this is reachable from the
+# main checkout even before the relative arm — a bare `--confirm` there would stop the shell the
+# sweep was typed into, and with it the turn and the session.
+#
+# The caller here is a real ancestor placed under the checkout by the relative rule, so the arm
+# is posed the way the hazard occurs rather than by faking a process tree.
+cat > "$tmp/checkout/$chain_script" <<CHAIN
+import os, subprocess, sys
+print("CALLER", os.getpid())
+print(subprocess.run([sys.executable, "$REAP"], capture_output=True, text=True).stdout)
+CHAIN
+out="$(cd "$tmp/checkout" && python3 "$chain_script" 2>&1)"
+caller="$(printf '%s' "$out" | awk '/^CALLER /{print $2; exit}')"
+if [ -z "$caller" ]; then
+  bad "the chain fixture did not report its pid — this arm proves nothing"
+else
+case "$out" in
+  *would\ stop*pid\ $caller*) bad "THE SWEEP OFFERED TO STOP THE PROCESS RUNNING IT"
+     printf '%s\n' "$out" | sed 's/^/         /' ;;
+  *) ok "THE SWEEP PASSES OVER ITS OWN CALLER" ;;
+esac
+case "$out" in
+  *skipped*own\ chain*) ok "and SAYS it did, rather than omitting it in silence" ;;
+  *) bad "the caller was passed over with no word — indistinguishable from not seeing it"
+     printf '%s\n' "$out" | sed 's/^/         /' ;;
+esac
+# The sweep still did its job in the same breath, or "skipped everything" would pass this block.
+case "$out" in
+  *pid\ $relative_pid*) ok "and still found the subject it was run for" ;;
+  *) bad "the chain rule swallowed the sweep's real target as well" ;;
+esac
+fi
+
+# ------------------------------------------------------ the bare run: a worktree nested inside
+echo
+echo "  -- the bare run: another checkout of this clone, nested inside this one --"
+
+# A LINKED WORKTREE LIVES UNDER `.claude/worktrees/` INSIDE THE MAIN CHECKOUT, so by path it is
+# under the root and by every rule this project has it is a different checkout — D43 gives it its
+# own store and its own ports, and `checkout_root` inside one answers with the worktree.
+# Measured from the owner's main checkout on 2026-09-12: a bare sweep proposed to stop FOUR
+# processes and all four were other trees' — two capture servers and a supervisor, one of the
+# trees holding a live session.
+git -C "$tmp/checkout" -c user.email=t@t -c user.name=t commit -q --allow-empty -m base 2>/dev/null
+if ! git -C "$tmp/checkout" worktree add -q "$tmp/checkout/.wt" -b nested 2>/dev/null; then
+  say "SKIP" "git worktree add failed — the nesting arm cannot be posed here"
+else
+sleeper "$tmp/checkout/.wt/$nested_script"
+nested_pid="$(spawn "$tmp/checkout/.wt/$nested_script" "$tmp/checkout/.wt")"
+kids="$kids $nested_pid"
+sleep 1
+
+out="$(cd "$tmp/checkout" && python3 "$REAP" 2>&1)"
+case "$out" in
+  *would\ stop*pid\ $nested_pid*) bad "A NESTED WORKTREE'S PROCESS WAS OFFERED UP BY THE PARENT TREE"
+     printf '%s\n' "$out" | sed 's/^/         /' ;;
+  *) ok "A NESTED WORKTREE IS ANOTHER CHECKOUT AND ITS PROCESSES ARE NOT SWEPT" ;;
+esac
+case "$out" in
+  *another\ checkout\ of\ this\ clone*) ok "and the sweep names the tree it belongs to" ;;
+  *) bad "it was dropped silently, which reads the same as not having been seen"
+     printf '%s\n' "$out" | sed 's/^/         /' ;;
+esac
+
+# AND THE WORKTREE'S OWN SESSION CAN STILL REAP IT, or this rule has traded one leak for another.
+out="$(cd "$tmp/checkout/.wt" && python3 "$REAP" 2>&1)"
+case "$out" in
+  *would\ stop*pid\ $nested_pid*) ok "THE WORKTREE ITSELF STILL SWEEPS IT — no new orphan class" ;;
+  *) bad "the worktree cannot reap its own process, which is a worse leak than the one fixed"
+     printf '%s\n' "$out" | sed 's/^/         /' ;;
+esac
+fi
 
 echo
 if [ "$fail" -eq 0 ]; then
