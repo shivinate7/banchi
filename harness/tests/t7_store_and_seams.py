@@ -18247,7 +18247,7 @@ def check_pipeline_routes(checks: Checks) -> None:
 
             with Store().write() as snapshot:
                 seeded, _ = snapshot.inventory.allocate_capture(
-                    3, capture_id="reallocated-1"
+                    3, capture_id="reallocated-1", cid=fake_cid("reallocated-1")
                 )
                 snapshot.inventory.record_identification(
                     seeded.key,
@@ -18418,7 +18418,9 @@ def check_open_section(checks: Checks) -> None:
         capture_server.do_create_box({"box": 4, "name": "S key"})
         with Store().write() as snapshot:
             for index in range(1, 41):
-                snapshot.inventory.record_capture(master.Card(box=4, index=index))
+                snapshot.inventory.record_capture(
+                    master.Card(box=4, index=index, cid=fake_cid(f"skey-4-{index}"))
+                )
 
         before = capture_server.do_boxes()["boxes"][0]
         checks.equal(
@@ -18461,7 +18463,9 @@ def check_open_section(checks: Checks) -> None:
         # arrives. Observed failing against a count before this case was kept.
         with Store().write() as snapshot:
             for index in (1, 2, 3, 7):
-                snapshot.inventory.record_capture(master.Card(box=6, index=index))
+                snapshot.inventory.record_capture(
+                    master.Card(box=6, index=index, cid=fake_cid(f"gaps-6-{index}"))
+                )
         checks.equal(
             capture_server.do_open_section(6, {})["sections"],
             [1, 8],
@@ -18498,7 +18502,9 @@ def check_open_section(checks: Checks) -> None:
         # count of zero) and is the one layout this route cannot append to, because the
         # divider it would add belongs BEHIND one that already exists.
         with Store().write() as snapshot:
-            snapshot.inventory.record_capture(master.Card(box=5, index=1))
+            snapshot.inventory.record_capture(
+                master.Card(box=5, index=1, cid=fake_cid("section-ahead-5-1"))
+            )
         capture_server.do_put_box(5, {"sections": [1, 51]})
         checks.raises(
             master.SectionAhead,
@@ -25576,8 +25582,16 @@ def check_value_table(checks: Checks) -> None:
             inventory.ensure_box(1, name="WB1 R2")
             inventory.ensure_box(2, name="ME01 C/UC")
 
+            # A COUNTER RATHER THAN THE BOX OR THE SKU (D172). `put` is called thirteen times
+            # across two drawers, and three of those calls are the SAME SKU in three slots —
+            # so a seed built from either would name several cards alike, and `cards_cid`
+            # refuses that, correctly: two cards cannot share one photograph's name.
+            minted = 0
+
             def put(box: int, sku, name, state=master.IDENTIFIED):
-                card, _ = inventory.allocate_capture(box)
+                nonlocal minted
+                minted += 1
+                card, _ = inventory.allocate_capture(box, cid=fake_cid(f"value-{minted}"))
                 card.sku = sku
                 card.name = name
                 card.game = "riftbound"

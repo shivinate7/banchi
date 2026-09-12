@@ -817,7 +817,14 @@ def write_run(
     cards_payload = {}
     for card, row in rows:
         cards_payload["%d/%d" % (card.box, card.index)] = {
-            "photo": "captures/cards/box%d/%04d.jpg" % (card.box, card.index),
+            # THE RECORD'S OWN PHOTO FIELD, VERBATIM, RATHER THAN A SECOND COMPOSITION OF
+            # IT. A run record's `photo` is what `cli/resolve.py:queue_entry` carries onto a
+            # queue entry and what the review screen renders, so it has to name the same
+            # file the card does — and the two agreeing because they are one string is
+            # stronger than the two agreeing because two format strings match today.
+            # D172's layout is why this matters now: the name is a digest, so a mismatch
+            # would no longer be a plausible-looking neighbouring slot, it would be nothing.
+            "photo": card.photo,
             "box": card.box,
             "index": card.index,
             "set_hint": None,
@@ -856,7 +863,17 @@ def write_run(
             {
                 "created_at": stamp(2.0),
                 "updated_at": stamp(1.0),
-                "capture_dir": "captures/cards/box%d" % box,
+                # THE BOX'S CAPTURE DIRECTORY, COMPOSED IN THE ONE MODULE ALLOWED TO AND
+                # THEN MADE RELATIVE. It is still the LEGACY address and that is correct:
+                # `server/pipeline_routes.py:box_capture_dir` keeps reading it while the
+                # relocation is unfinished, and the content store is flat and shared, so no
+                # run can be a directory of it — D172 §0.4 answers that with a built
+                # `.scopes/` view and this becomes that path when it is. Relative for
+                # `relative_photo`'s reason: this string reaches `#/runs` through
+                # `_summary`, and an absolute one would bake this machine's home into the
+                # recorded bundle. `_summary` reads `scope.box` first and falls back to the
+                # `box<N>` in this basename, which survives the `relative_to` either way.
+                "capture_dir": str(store_photos.legacy_box_dir(box, home).relative_to(home)),
                 # BOTH SHAPES, ONE PER RUN, because they are different products on screen.
                 # A whole-box run costs no temporary directory; a SCOPED one is the ticked
                 # selection handed over from `#/inventory` (D39), and `RunPanel.tsx` draws

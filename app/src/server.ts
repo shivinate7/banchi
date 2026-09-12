@@ -282,43 +282,61 @@ export function describeFailure(err: unknown): Failure {
  * cannot load one, and building a `file://` URL from it fails silently in a way that looks
  * like a missing photo. This is the only way to display a capture.
  *
- * KNOWN HAZARD, AND IT STOPPED BEING HYPOTHETICAL ON 2026-08-29 (D52). This URL names a SLOT,
- * and three operations put a different card in one: D10 ruling 1's mid-box delete slides
- * every higher card down an index, D10's undo releases an index the next capture reuses,
- * and D26's re-shoot replaces the bytes outright. The owner reported the first of those as
- * a delete that "doesn't kick in super quickly ... it makes you think you need to delete
- * more" — measured against a copy of their store, the delete answered in 288 ms and the
- * screen went on drawing the deleted card's photograph over its replacement's facts.
+ * THE HAZARD THAT SHAPED THIS FUNCTION IS ANSWERED BY THE ADDRESS NOW (D172), AND THE
+ * MEASUREMENT THAT PROVED IT STAYS. What D52 recorded is not rewritten: the owner reported a
+ * delete that "doesn't kick in super quickly ... it makes you think you need to delete more",
+ * and measured against a copy of their store, deleting box 2's card 180 shifted 363 cards in
+ * 288 ms while the screen went on drawing the DELETED card's photograph at `transferSize: 0`
+ * — served out of Chrome's in-document memory cache, which consults neither the ETag nor
+ * `no-cache`. Three operations put a different card in one slot: D10 ruling 1's mid-box delete
+ * slides every higher card down an index, D10's undo releases an index the next capture reuses,
+ * and D26's re-shoot replaces the bytes outright.
  *
- * THE HEADER THIS PARAGRAPH ASKED FOR IS BUILT, AND IT IS NOT ENOUGH ON ITS OWN. It read
- * "the server sends no validators ... the fix is a cache header on the server", and that
- * sentence is now false in its first half and incomplete in its second:
- * `server/capture_server.py:_photo` sends a strong `ETag` and `Cache-Control: no-cache`,
- * so a LOAD of one of these revalidates and gets the right bytes. Two things a header
- * cannot do, both observed rather than reasoned: it cannot make an `<img>` React keeps in
- * the document ask again, and it does not reach Chrome's in-document memory cache, which
- * satisfies a second load of an IDENTICAL URL without consulting either the ETag or
- * `no-cache`. A remount alone was measured showing the stale picture for exactly that
- * reason.
+ * WHAT CHANGED IS NOT THE HEADER BUT THE NAME. This paragraph used to argue that a caller
+ * "may say so in the URL" with `?card=<capture_id>`, because a header cannot make an `<img>`
+ * React keeps in the document ask again and does not reach that memory cache. That was a
+ * client-side patch over a server-side conflation, and the conflation is gone: the photograph
+ * is FILED under the card's own name and `GET /photo/by-card/<cid>` serves it. The URL means
+ * one thing forever — a mid-box delete does not change it, an undo does not change it, and two
+ * cards cannot share it because `cards_cid` is UNIQUE — so a cache hit is always the right
+ * bytes and the validator is a formality rather than the only defence. No caller has to know
+ * which capture it is drawing, because the address says.
  *
- * SO A CALLER THAT KNOWS WHICH CAPTURE IT IS DRAWING MAY SAY SO IN THE URL, and that is
- * not the thing this paragraph used to refuse. What it refused was a NONCE minted per
- * load because the bytes might have changed — a value that never repeats and therefore
- * defeats caching. A `capture_id` is stable for the life of a photograph, so it makes this
- * URL name the photograph rather than the slot and caches strictly better. `BoxBrowse.tsx`
- * does it, because it is the one screen that holds a slot SELECTED across a renumber; the
- * re-shoot exception below is now the same rule reaching one re-read early rather than a
- * separate mechanism. Callers whose element re-keys when the card moves — the copies list,
- * the review queue, the Fulfiller's card — need nothing, and the ETag covers them.
+ * THE SLOT ROUTE IS THE FALLBACK AND IT IS NOT DEPRECATION THEATRE. `runs/<n>/pricing.json`
+ * holds 3,629 position records across 12 immutable files, 0 of which carry a cid, and
+ * `#/pricing?run=<n>` is the screen that draws them — so a row whose cid the wire did not
+ * carry (a run's frozen positions, a queue entry, a code-card ledger line, an order pick, a
+ * deck built from box records alone) addresses the slot, exactly as it always did. The call
+ * sites that do that say so in a comment beside the call; none of them is an oversight.
+ *
+ * A `cid` THE ROUTE CANNOT SERVE FALLS BACK RATHER THAN 404ING, and the test is the route's
+ * own pattern rather than a second copy of `store/photos.py:is_photo_cid`. A cid comes in four
+ * shapes and only two name a photograph: `<64 hex>` and `<64 hex>-<n>` do, `moved:<…>` (a D83
+ * tombstone) and `nophoto:<box>/<index>@<stamp>` do not. `_copy_row` applies that predicate
+ * server-side before it puts a cid on a `SearchCopy`; `_card_row` does NOT, because it ships
+ * `asdict(card)` raw — so an `InventoryCard` really can arrive carrying `moved:…`, which
+ * `_PHOTO_BY_CARD_RE` refuses at the router. Both populations are 0 today, which is exactly
+ * why the guard is written down instead of discovered. One place, so no caller has to know the
+ * four shapes.
  */
-export function photoUrl(box: number, index: number): string {
+const PHOTO_CID = /^[0-9a-f]{64}(?:-[1-9][0-9]*)?$/
+
+export function photoUrl(box: number, index: number, cid?: string | null): string {
   /* THE DEMO BUILD HAS NO PHOTO SERVICE, so the same address resolves to a bundled file.
    * `BASE_URL` rather than a leading slash: a static host serves the demo from a
    * subdirectory (`/banchi/` on GitHub Pages), and an absolute path would 404 on every
    * photograph there while working perfectly at the root — the failure that only appears
    * once it is published. `.jpg` is appended here and nowhere else; the seed writes the
-   * store index undecorated, so this stays D52's contract exactly. */
+   * store index undecorated, so this stays D52's contract exactly.
+   *
+   * THE CID IS IGNORED HERE, DELIBERATELY AND FIRST. `scripts/demo-seed.py` writes
+   * `demo/photos/<box>/<index>.jpg` and nothing else, so addressing a name in the demo would
+   * 404 every photograph on the published page. Moving the demo onto the name is a
+   * coordinated change to the seed and the recorded bundle, not a change to this line. */
   if (DEMO) return `${import.meta.env.BASE_URL}demo/photos/${box}/${index}.jpg`
+  if (cid !== undefined && cid !== null && PHOTO_CID.test(cid)) {
+    return `${base}/photo/by-card/${cid}`
+  }
   return `${base}/photo/${box}/${index}`
 }
 
