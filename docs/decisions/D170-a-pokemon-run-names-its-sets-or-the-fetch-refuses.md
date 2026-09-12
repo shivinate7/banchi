@@ -1,4 +1,4 @@
-## D-a-pokemon-run-names-its-sets-or-the-fetch-refuses — A widening is safe only while the category fits, and Pokemon's does not
+## D170 — A widening is safe only while the category fits, and Pokemon's does not
 
 **A game whose whole category cannot be fetched may not have that fetch chosen for it by cards that said nothing.** Built 2026-09-12, on the owner's ruling.
 

@@ -608,7 +608,7 @@ COMPONENTS = [
                                  "travel without the measurement, and may not be authored on a "
                                  "`category` game, where it could never fire.",
                          "governed_by": ["D3", "D8", "D11", "D12", "D14", "D16", "D18", "D21", "D22", "D23", "D24", "D25", "D65", "D76",
-                                         "D-a-pokemon-run-names-its-sets-or-the-fetch-refuses"],
+                                         "D170"],
                          "note": "THE MATRIX IS A SUPERSET OF WHAT ANY ONE EXPORT PROVES, and that "
                                  "is load-bearing rather than sloppy: D23's capture screen renders "
                                  "a finish chip excluded by a rarity claim as unselectable, which "
@@ -3001,7 +3001,7 @@ COMPONENTS = [
                                 "D79", "D86", "D87", "D88", "D100", "D103", "D105", "D134",
                                 "D137", "D145", "D147", "D156", "D159", "D165", "D166",
                                 "D168",
-                                "D-a-pokemon-run-names-its-sets-or-the-fetch-refuses"],
+                                "D170"],
                 "tested_by": ["T7"],
             },
             "shipping_routes.py": {

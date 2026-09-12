@@ -1330,7 +1330,7 @@ A screen is not finished because it compiles.
   `width` block (bytes, cap, headroom, and whether the figure is the wide one), and
   `tcg_export_too_large` names the scope, the cards that widened it and the remedy.
 
-  **AND A POKEMON RUN THAT WIDENED ITSELF IS NOW REFUSED OUTRIGHT** (D-a-pokemon-run-names-its-sets-or-the-fetch-refuses,
+  **AND A POKEMON RUN THAT WIDENED ITSELF IS NOW REFUSED OUTRIGHT** (D170,
   2026-09-12, on the owner's ruling — *"make unhinted Pokémon cards impossible"*). Leaving the
   cliff merely VISIBLE was one of three options put to them and is not the one they took.
   `export_needs_hint` in `pipeline/games.py` marks a game whose whole category has been weighed
@@ -2008,7 +2008,7 @@ D166 The catalogue export is a property of the game, and the box never chose its
 D167 A queue entry is re-resolved where it stands, and the answer reaches the price without a second press
 D168 A typed price is cleared by a press, never by an expiry, and the set it may clear is the set the corpus dates
 D169 The blanket sweep asks the question the verdict answers, and a nested worktree is another checkout
-D-a-pokemon-run-names-its-sets-or-the-fetch-refuses A widening is safe only while the category fits, and Pokemon's does not
+D170 A widening is safe only while the category fits, and Pokemon's does not
 ```
 
 **THE GAP THIS LIST CARRIED BETWEEN D116 AND D118 IS CLOSED, AND IT CLOSED THE WAY IT SAID IT
