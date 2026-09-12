@@ -465,7 +465,19 @@ make merge          # merge a PR and move main onto it — BOTH HALVES, on your 
                     #   IT CLAIMS THIS BRANCH'S IDS FIRST, AND WAITS (D140): it
                     #   substitutes, commits to the PULL REQUEST's branch, pushes, and watches
                     #   that commit's checks to completion before merging — so nothing main has
-                    #   never run CI over reaches main. It REFUSES if this checkout is not
+                    #   never run CI over reaches main.
+                    #   THE WAIT NAMES THE COMMIT, AND AN ANSWER IT HAS NOT GOT IS NEVER A PASS
+                    #   (D-wait-names-the-commit). It polls that SHA's own check runs —
+                    #   `repos/{owner}/{repo}/commits/<sha>/check-runs` — and concludes only on
+                    #   a roster that is NON-EMPTY, complete, no smaller than the parent commit's,
+                    #   and unchanged across two reads. An empty answer, an unreadable one and a
+                    #   deadline are all `not known yet`, and all three REFUSE. It asked
+                    #   `gh pr checks <n>` until 2026-09-11, which answers about the PULL REQUEST
+                    #   out of the PREVIOUS head's runs and so exited 0 the instant the claim was
+                    #   pushed: #275 merged while its claim commit's own run was still
+                    #   `in_progress`, #277 with four of seven still running. Both went green
+                    #   afterwards, which is a coin landing right rather than a guard working.
+                    #   It REFUSES if this checkout is not
                     #   standing on the PR's own head branch, or if the tree is dirty: the claim
                     #   is a commit, and it would otherwise land on whatever is checked out.
                     #   `--no-claim` skips it, for a claim already pushed by hand.
@@ -1615,6 +1627,7 @@ D142 The setup outlives the browser, the box list is ordered by the hand, and on
 D143 The claim reads the checked-out tree, so which tree that is must be established before anything reads it
 D144  A card that will not settle is photographed off the quietest frame it manages, and there is one trigger again
 D145 A box has an index nobody sees, because the number on the drawer is a label and a label may be reused
+D-wait-names-the-commit The wait is about the claim commit, and an answer it has not got is never a pass
 
 ```
 

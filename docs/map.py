@@ -1292,7 +1292,14 @@ COMPONENTS = [
                         "the same predicate reference-transaction evaluates at `prepared` — so "
                         "the hook is never asked to refuse. Idempotent on a PR already merged, "
                         "which is what makes a failed local half re-runnable rather than a "
-                        "handoff. THEN IT DELETES THE HEAD BRANCH, since 2026-09-05: on origin "
+                        "handoff. THE CLAIM COMMIT'S WAIT NAMES THE COMMIT, since "
+                        "2026-09-11: it polls that SHA's own check runs until they are "
+                        "non-empty, complete, no fewer than the parent carried and unchanged "
+                        "across two reads, and REFUSES on an empty answer, an unreadable one "
+                        "or a deadline. It asked `gh pr checks <n>` until then, which answers "
+                        "about a pull request out of the PREVIOUS head's runs and exited 0 at "
+                        "once — two live merges went out unwatched on 2026-09-11. "
+                        "THEN IT DELETES THE HEAD BRANCH, since 2026-09-05: on origin "
                         "unconditionally, and in this clone only when no worktree holds it and "
                         "it is an ancestor of main. Before that it deleted neither, and 125 "
                         "merged pull requests had left 85 branches on origin and 106 here.",
@@ -1300,8 +1307,8 @@ COMPONENTS = [
                 # amends. D18 governs its shape — the preview is the read-only mode, and the
                 # act is behind a flag rather than a default. D33 is the instrument the two-step
                 # is borrowed from, one register down from a route that can spend money.
-                "governed_by": ["D18", "D33", "D42", "D72", "D111", "D140",
-                                "D143"],
+                "governed_by": ["D18", "D33", "D42", "D72", "D111", "D136", "D140",
+                                "D141", "D143", "D-wait-names-the-commit"],
                 "note": "IT NEVER SETS PKMNSCAN_MAIN AND NO REFUSAL IT PRINTS SUGGESTS IT. D42 "
                         "is explicit that a session reaching for that variable has left the "
                         "amendment behind; this needs no hatch because allow rule 3 already "
@@ -1744,11 +1751,18 @@ COMPONENTS = [
                         "MAIN MOVES underneath the branch — the only condition that can tell "
                         "an allocation against the ref from one against the branch's own "
                         "copy, and therefore the only one worth building a repository for. "
-                        "FORTY-TWO arms, twenty of them mutation-tested — fourteen arms and "
-                        "seven mutants cover the staleness half (D140, amended 2026-09-11), "
-                        "where a branch claims honestly and main takes the number underneath "
-                        "it. The count in this sentence said sixteen over a file that held "
-                        "eighteen, which is what an uncounted prose number does. THE BOUNDARY ARM FOUND A "
+                        "SIXTY-SEVEN arms, twenty-six of them mutation-tested — fourteen "
+                        "arms and seven mutants cover the staleness half (D140, amended "
+                        "2026-09-11), where a branch claims honestly and main takes the "
+                        "number underneath it, and twenty-five arms and six mutants cover the "
+                        "claim commit's WAIT, which asked about the pull REQUEST rather than "
+                        "about the commit and read an empty answer as a clean one "
+                        "(D-wait-names-the-commit). Those last run the real claim half against "
+                        "a fake `gh` on PATH that answers `gh pr checks` green and instantly, "
+                        "so the query that was wrong PASSES there rather than merely behaving "
+                        "differently. The count in this sentence said sixteen over a file that "
+                        "held eighteen, which is what an uncounted prose number does. "
+                        "THE BOUNDARY ARM FOUND A "
                         "REAL BUG IN THE UNMUTATED CODE: `\\b` fires between a letter and a "
                         "hyphen, so a slug was being substituted inside a longer slug that "
                         "extended it, leaving a number with a tail on it. In `make check`, "
@@ -1761,8 +1775,8 @@ COMPONENTS = [
                 # entries are composed from integers for exactly this reason, and the two that
                 # survive are in the prose that explains why. The superset rule reads a citation
                 # literally, which is the trade docs-audit.py's own entry records.
-                "governed_by": ["D1", "D2", "D16", "D18", "D80", "D140",
-                                "D143"],
+                "governed_by": ["D1", "D2", "D16", "D18", "D80", "D136", "D140", "D141",
+                                "D143", "D-wait-names-the-commit"],
             },
             "docs-audit-allow.txt": {
                 "does": "paths and identifiers the docs name before they exist, one "

@@ -49,6 +49,7 @@ import argparse
 import json
 import subprocess
 import sys
+import time
 from typing import List, NamedTuple, Optional, Sequence, Tuple
 
 WIDTH = 76
@@ -315,6 +316,190 @@ def claims_pending(root: str, ref: str = "origin/main") -> List[str]:
     return [line for line in got.out.splitlines() if line.strip()] if got.ok else []
 
 
+# ------------------------------------------------------- the wait, and what it is a wait FOR
+
+# THE SUBJECT IS THE COMMIT, AND ASKING ABOUT THE PULL REQUEST IS NOT A NEAR MISS.
+# `gh pr checks <n>` answers about a PULL REQUEST. Immediately after the claim commit is
+# pushed, GitHub has not attached any check run to the new head yet, so that question is
+# answered out of the PREVIOUS head's runs — complete, green, and about a tree that does not
+# carry the substitution. The command exits 0 at once and the wait D140 sells is not bought.
+# THE FASTER THE PUSH-TO-WATCH GAP, THE MORE RELIABLY IT READS THE WRONG COMMIT, and it has
+# to see the old head GREEN to be silent, which is why nothing noticed for as long as the
+# heads were green. Measured on two live merges the same evening:
+#
+#   PR #275   every job URL the merge printed belonged to run 34655700236, which is the
+#             PRE-CLAIM commit's. The claim commit had its own run, 34655942932, and that
+#             run was still `in_progress` when the merge fired.
+#   PR #277   read the instant the merge returned, pinned to the claim commit: four of its
+#             seven checks — all three design-check shards and `check` — were `in_progress`.
+#
+# Both trees later went green. That is a coin landing right, not a guard working.
+#
+# AND PINNING TO THE SHA IS NOT ENOUGH, WHICH IS THE WORSE HALF. A commit GitHub has not
+# dispatched anything for yet answers with an EMPTY list, and "nothing is pending" read off
+# an empty list is the same sentence as "everything passed". A watcher on #277 did exactly
+# that the same evening — empty answer, zero pending, reported SETTLED — which would have
+# merged a commit carrying no checks at all. So absence means ASK AGAIN here, never pass:
+# a reading is conclusive only when it is non-empty, complete, at least as large as the one
+# the parent commit carried, and unchanged across CHECK_SETTLE_READS consecutive reads.
+#
+# THE FLOOR IS THE PARENT'S COUNT BECAUSE IT IS THE ONLY LOWER BOUND THAT IS FREE. A claim
+# commit's diff against main is a superset of its parent's — the claim only adds — and both
+# gates this repo runs (`browser-scope`, D141, and `already-passed`, D136) only ever widen
+# under a superset, so the parent's roster cannot be larger for a reason that is correct.
+# Measured: #275's parent carried 6 runs and its claim commit 8, #277's parent 8 and its
+# claim commit 8. It is a floor rather than an equality for exactly that first pair.
+#
+# EVERY WAY THIS CAN END EXCEPT ONE IS A REFUSAL, and that is deliberate. A read that fails,
+# a roster that never fills, a deadline that arrives — none of them is evidence that the
+# tree is green, and D140's whole bargain is that main takes nothing no CI run has seen.
+
+# THE PAGE SIZE IS IN THE QUERY STRING AND NEVER IN A `-f`: gh switches the method to
+# POST the moment a field is given, and this endpoint does not answer a POST at all.
+CHECK_ENDPOINT = "repos/{owner}/{repo}/commits/%s/check-runs?per_page=100"
+CHECK_POLL_SECONDS = 10
+CHECK_SETTLE_READS = 2
+CHECK_DEADLINE_SECONDS = 45 * 60
+CHECK_HEARTBEAT_SECONDS = 60
+
+# `skipped` and `neutral` are not failures — D141 skips the browser matrix by design and
+# D136 skips a tree that has already passed, and both land here as completed check runs.
+CHECK_FAILED = frozenset({
+    "failure", "timed_out", "cancelled", "action_required", "startup_failure", "stale",
+})
+
+
+class Reading(NamedTuple):
+    """One answer about ONE COMMIT. `ok` is whether the question was answered at all.
+
+    An unanswered question is not an empty answer, and the two are kept apart here rather
+    than downstream: `Reading(False, (), err)` and `Reading(True, (), "")` both carry no
+    runs, and only the second one is a fact about the commit.
+    """
+
+    ok: bool
+    runs: Tuple[Tuple[str, str, str], ...]  # (name, status, conclusion), sorted
+    err: str
+
+
+def read_check_runs(sha: str) -> Reading:
+    """Every check run GitHub has attached to `sha`, or why it could not be asked.
+
+    `{owner}`/`{repo}` are gh's own placeholders and resolve from this checkout's remote,
+    which is the same repository `gh pr checks` resolved against — so the repository is
+    unchanged and only the SUBJECT moved.
+
+    The runs are SORTED, because GitHub's ordering is not stable across reads and the settle
+    below compares two readings for equality.
+    """
+    got = run(["gh", "api", CHECK_ENDPOINT % sha])
+    if not got.ok:
+        return Reading(False, (), got.err or got.out or "gh said nothing")
+    try:
+        body = json.loads(got.out)
+    except ValueError as exc:
+        return Reading(False, (), "gh api did not answer with JSON ({0})".format(exc))
+    if not isinstance(body, dict):
+        return Reading(False, (), "gh api answered with {0}, not an object".format(type(body).__name__))
+    runs = tuple(sorted(
+        (str(one.get("name") or "?"),
+         str(one.get("status") or "?"),
+         str(one.get("conclusion") or ""))
+        for one in (body.get("check_runs") or [])
+        if isinstance(one, dict)))
+    return Reading(True, runs, "")
+
+
+def attached_count(sha: str, read=None) -> int:
+    """How many check runs `sha` carries, or 0 when that cannot be established.
+
+    0 is the honest answer to an unreadable parent: it makes the floor inert and leaves the
+    non-empty rule and the settle carrying the wait, which is a weaker guard and never a
+    false one. A floor invented from a failed read would be the defect this file is fixing,
+    rebuilt one function along.
+    """
+    got = (read or read_check_runs)(sha)
+    return len(got.runs) if got.ok else 0
+
+
+def _roster(runs: Sequence[Tuple[str, str, str]]) -> List[str]:
+    return ["    {0:<12} {1}".format(status if status != "completed" else (conclusion or "?"), name)
+            for name, status, conclusion in runs]
+
+
+def wait_for_checks(sha: str, number: int, floor: int = 0,
+                    read=None, sleep=None, now=None) -> Tuple[bool, List[str]]:
+    """Poll ONE COMMIT's check runs until they are complete — or say why they never were.
+
+    Returns (green, lines to print). Never raises, and never reports green off a reading it
+    could not make, could not fill, or has not seen twice.
+    """
+    read = read or read_check_runs
+    sleep = sleep or time.sleep
+    now = now or time.monotonic
+
+    started = now()
+    spoke = started
+    stable = 0
+    seen: Optional[Tuple[Tuple[str, str, str], ...]] = None
+    unreadable = ""
+
+    while True:
+        got = read(sha)
+
+        if not got.ok:
+            stable, seen = 0, None
+            if got.err != unreadable:
+                say("  the check runs could not be read: {0}".format(got.err))
+                unreadable, spoke = got.err, now()
+            waiting = "the check runs cannot be read"
+        else:
+            failed = [one for one in got.runs if one[2] in CHECK_FAILED]
+            if failed:
+                return False, ["  {0} of {1} check runs did not pass:".format(
+                    len(failed), len(got.runs))] + _roster(got.runs)
+
+            unreadable = ""
+            if got.runs != seen:
+                say("  {0} check run{1} attached to {2}:".format(
+                    len(got.runs), "" if len(got.runs) == 1 else "s", sha[:9]))
+                say(*_roster(got.runs))
+                spoke = now()
+            pending = [one for one in got.runs if one[1] != "completed"]
+
+            if not got.runs:
+                # ABSENCE IS NOT A PASS. Nothing is attached YET is what this reads as, and
+                # the only other thing it could read as is the defect that made this rewrite.
+                waiting, stable = "no check run is attached to this commit yet", 0
+            elif pending:
+                waiting, stable = "{0} of {1} still running".format(
+                    len(pending), len(got.runs)), 0
+            elif len(got.runs) < floor:
+                waiting, stable = "{0} attached, and the parent commit carried {1}".format(
+                    len(got.runs), floor), 0
+            elif got.runs == seen:
+                stable += 1
+                waiting = "complete, and unchanged since the last read"
+            else:
+                stable = 1
+                waiting = "complete; reading once more in case another arrives"
+            seen = got.runs
+            if stable >= CHECK_SETTLE_READS:
+                return True, ["  all {0} check runs on {1} passed.".format(
+                    len(got.runs), sha[:9])]
+
+        spent = now() - started
+        if spent >= CHECK_DEADLINE_SECONDS:
+            return False, [
+                "  gave up after {0:.0f} minutes: {1}.".format(spent / 60.0, waiting),
+                "  PR #{0}'s claim commit is {1}.".format(number, sha),
+            ]
+        if now() - spoke >= CHECK_HEARTBEAT_SECONDS:
+            say("  {0:.0f}m — {1}".format(spent / 60.0, waiting))
+            spoke = now()
+        sleep(CHECK_POLL_SECONDS)
+
+
 def claim_half(root: str, number: int, branch: str, confirm: bool) -> int:
     """Allocate, commit, push, and wait for the claim commit's checks. 0 when clear.
 
@@ -403,17 +588,38 @@ def claim_half(root: str, number: int, branch: str, confirm: bool) -> int:
                       "", "The claim is committed here and main has NOT moved. Push it yourself,",
                       "then run this again — a second run finds no unclaimed id and skips.")
 
+    sha = run(["git", "rev-parse", "HEAD"], cwd=root).out.strip()
+    parent = run(["git", "rev-parse", "--verify", "--quiet", "HEAD^"], cwd=root).out.strip()
+    if not sha:
+        return refuse(
+            "the claim commit was pushed and its SHA could not be read back.",
+            "",
+            "The wait is about that commit and about nothing else, so there is nothing safe",
+            "to wait on. The claim is pushed and main has NOT moved; watch the pull request",
+            "yourself and run this again once it is green.")
+
     rule("waiting for the claim commit's checks")
     say("  this is the wait D140 buys: main never takes a substitution",
-        "  no CI run has seen.", "")
-    watched = run(["gh", "pr", "checks", str(number), "--watch", "--fail-fast"])
-    say((watched.out or watched.err).rstrip())
-    if not watched.ok:
+        "  no CI run has seen. The subject is the COMMIT — {0} — and".format(sha[:9]),
+        "  never the pull request, whose checks answer out of the PREVIOUS",
+        "  head until GitHub attaches runs to this one.", "")
+    floor = attached_count(parent) if parent else 0
+    if floor:
+        say("  its parent {0} carries {1} check runs, so fewer than that".format(parent[:9], floor),
+            "  on this commit means GitHub is still attaching them.", "")
+
+    green, lines = wait_for_checks(sha, number, floor)
+    say(*lines)
+    if not green:
         return refuse(
-            "PR #{0}'s checks are not green after the claim.".format(number),
+            "PR #{0}'s claim commit {1} is not green.".format(number, sha[:9]),
             "",
             "The claim is pushed and main has NOT moved. Fix the branch and run this again;",
-            "a second run finds no unclaimed id and goes straight to the merge.")
+            "a second run finds no unclaimed id and goes straight to the merge.",
+            "",
+            "A wait that ENDED WITHOUT AN ANSWER lands here too, and that is the point: an",
+            "empty answer, an unreadable one and a deadline are all `not known yet`, and",
+            "none of the three is evidence that anything passed.")
     return 0
 
 
