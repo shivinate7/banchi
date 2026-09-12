@@ -212,7 +212,16 @@ def selftest() -> int:
               f"sha256 {str(manifest.get('split_sha256', '?'))[:16]}…  provenance only")
         if not body.endswith("\n"):
             problems.append("the reassembled corpus does not end in a newline.")
-    order = list(manifest["order"]) + pending
+    # THE MISSING FILES ARE DROPPED HERE, AND THAT IS A REPAIR RATHER THAN A TIDY-UP. They
+    # are already recorded in `problems` above, but this loop used to `read_text()` every
+    # name in the manifest — so a registered entry whose FILE is gone raised a bare
+    # `FileNotFoundError` and the run died with a traceback instead of printing the
+    # "N file(s) in the manifest are gone" line it had already composed. Measured by a peer
+    # session on 2026-09-12 against a throwaway clone of main: delete one entry file, leave
+    # it in `ORDER.json`, and the selftest crashes. It still exited non-zero, so nothing
+    # merged silently — but a traceback is not a report, and the operator's next move is
+    # different when the check can name what is wrong.
+    order = [n for n in list(manifest["order"]) + pending if n not in set(missing)]
     ids = {}
     for name in order:
         head = (TARGET / name).read_text(encoding="utf-8").split("\n", 1)[0]
