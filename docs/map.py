@@ -445,7 +445,7 @@ COMPONENTS = [
                                      "`photos` previews by default and is resumable per card "
                                      "— it is the one thing here that touches 4.45 GB that "
                                      "cannot be re-taken",
-                             "governed_by": ["D172", "D-a-number-a-person-reads-is-never-a-key",
+                             "governed_by": ["D172", "D183",
                                              "D26", "D88", "D89"],
                              "tested_by": ["T7"]},
             "cmd_rescue.py": {"does": "`pkmnscan rescue <run>` re-addresses a STRANDED run's "
@@ -470,7 +470,7 @@ COMPONENTS = [
                                       "the emit correctly adds nothing — what the repair "
                                       "recovers is the PRICING surface, not the stock.",
                               "governed_by": ["D7", "D10", "D25", "D36", "D48", "D83", "D86",
-                                              "D134", "D145", "D165", "D-a-number-a-person-reads-is-never-a-key", "D26"],
+                                              "D134", "D145", "D165", "D183", "D26"],
                               "tested_by": ["T7"]},
             "cmd_reprice.py": {"does": "`pkmnscan reprice list` reports which live listings are "
                                         "not selling and writes a WORKLIST with a price already "
@@ -594,7 +594,7 @@ COMPONENTS = [
                                    "for every sale of the SKU, and a reading of nothing "
                                    "vouches for exactly the sales it was taken AFTER "
                                    "(D150).",
-                           "governed_by": ["D147", "D145", "D4", "D8", "D10", "D11", "D20", "D21", "D22", "D23", "D24", "D25", "D26", "D33", "D34", "D36", "D49", "D56", "D58", "D59", "D64", "D87", "D115", "D150", "D166", "D-a-number-a-person-reads-is-never-a-key", "D89"], "tested_by": ["T7"]},
+                           "governed_by": ["D147", "D145", "D4", "D8", "D10", "D11", "D20", "D21", "D22", "D23", "D24", "D25", "D26", "D33", "D34", "D36", "D49", "D56", "D58", "D59", "D64", "D87", "D115", "D150", "D166", "D183", "D89"], "tested_by": ["T7"]},
             "runs.py": {"does": "run directories and manifest.json", "governed_by": ["D1", "D25", "D49", "D54", "D86"], "tested_by": ["T7"]},
         },
     },
@@ -1056,7 +1056,7 @@ COMPONENTS = [
         "modules": {
             "prompt.py": {"does": "the identification prompt and its fingerprint", "governed_by": ["D2", "D3", "D22", "D23"], "tested_by": ["T1"]},
             "batch.py": {"does": "Batch API submit/poll/collect. Batch, never sequential.", "governed_by": ["D2", "D21", "D23"], "tested_by": ["T1"]},
-            "sidecar.py": {"does": "reading a capture directory: photos, JSON sidecars, position", "governed_by": ["D2", "D3", "D10", "D21", "D22", "D23", "D-a-number-a-person-reads-is-never-a-key"]},
+            "sidecar.py": {"does": "reading a capture directory: photos, JSON sidecars, position", "governed_by": ["D2", "D3", "D10", "D21", "D22", "D23", "D183"]},
             "images.py": {"does": "downscale, encode, hash a photograph for the API, and refuse a crop that is not the card",
                           "governed_by": ["D2", "D23", "D75"], "tested_by": ["T6"]},
             "cost.py": {"does": "the price sheet, and the ONE place it is applied — the preflight's "
@@ -1199,7 +1199,7 @@ COMPONENTS = [
                                   "still hands out the lowest free integer (D20) — the number is a "
                                   "label on a drawer and the id is an identity, which is `Place."
                                   "slot` and `Place.index` one register up (D58)",
-                          "governed_by": ["D145", "D3", "D7", "D8", "D10", "D11", "D20", "D21", "D23", "D26", "D34", "D36", "D56", "D58", "D59", "D83", "D87", "D88", "D89", "D100", "D115", "D132", "D167", "D172", "D-a-number-a-person-reads-is-never-a-key"], "tested_by": ["T7"]},
+                          "governed_by": ["D145", "D3", "D7", "D8", "D10", "D11", "D20", "D21", "D23", "D26", "D34", "D36", "D56", "D58", "D59", "D83", "D87", "D88", "D89", "D100", "D115", "D132", "D167", "D172", "D183"], "tested_by": ["T7"]},
             "queues.py": {"does": "the standing queues — the `queues` table, one mapping per queue "
                                   "name — and the cross-queue release a re-routed position needs",
                           "governed_by": ["D4", "D9", "D22", "D26", "D28", "D37", "D88"], "tested_by": ["T7"]},
@@ -1327,7 +1327,7 @@ COMPONENTS = [
                                   "OUTSIDE `captures/` for `_scopes_root`'s reason: `sidecar.scan` "
                                   "walks recursively and every photograph it finds is a PAID Batch "
                                   "request",
-                          "governed_by": ["D172", "D-a-number-a-person-reads-is-never-a-key", "D26",
+                          "governed_by": ["D172", "D183", "D26",
                                           "D43", "D52", "D83", "D89"],
                           "tested_by": ["T7"]},
         },
@@ -1964,7 +1964,7 @@ COMPONENTS = [
                         "digest is mutated; and a `-9` mid-transaction leaving the store "
                         "byte-identical",
                 "governed_by": ["D18", "D26", "D80", "D83", "D88", "D89", "D172",
-                                "D-a-number-a-person-reads-is-never-a-key"],
+                                "D183"],
             },
             "submission-selftest.py": {
                 "does": "proves the identify claim table by violating it. A throwaway store "
@@ -3269,7 +3269,7 @@ COMPONENTS = [
                                 "D77", "D79", "D83", "D86", "D87", "D88", "D89", "D90", "D91",
                                 "D92", "D93", "D96", "D100", "D103", "D104", "D108", "D113",
                                 "D115", "D116", "D132", "D134", "D137", "D138",
-                                "D168", "D174", "D-a-number-a-person-reads-is-never-a-key", "D172"],
+                                "D168", "D174", "D183", "D172"],
                 "tested_by": ["T7"],
             },
             "tcg_import.py": {"does": "THE OUTBOUND WRITE to the seller admin, and the only "

@@ -44,7 +44,7 @@ is left — so `box3-0017` cannot read its own box number as an index, which is 
 this gets quietly wrong.
 
 THE FOURTH ROW IS A REFUSAL RATHER THAN AN ABSENCE, AND IT IS A REAL GUARD. Since
-`D-a-number-a-person-reads-is-never-a-key` a photograph is filed under the card's name — a
+`D183` a photograph is filed under the card's name — a
 64-hex digest — and a digest is full of digits: the stem `6b1cf2fd…83713889` would have
 recovered index **83713889** through the rule above, a plausible and wrong position, which is
 this repo's signature defect in its purest form. A cid-shaped stem therefore yields no index,

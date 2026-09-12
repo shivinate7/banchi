@@ -1,7 +1,7 @@
 """Where a card's photograph lives, and the only module permitted to compose that path.
 
 THE PHOTOGRAPH IS STORED UNDER THE CARD'S NAME, NOT UNDER ITS ADDRESS. `docs/specs/
-stable-card-id.md` §0 is the argument and `D-a-number-a-person-reads-is-never-a-key` is the
+stable-card-id.md` §0 is the argument and `D183` is the
 ruling; the one-sentence form is that `(box, index)` was doing three jobs at once — the
 card's identity, the filename of its photograph, and the address a human reads off a shelf —
 and filing the bytes under a number that moves is what made all three of D172 §7's structural

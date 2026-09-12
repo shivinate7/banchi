@@ -2,7 +2,7 @@
 """`make cid-selftest` — the card's stable name and the photograph store, proved by violating them.
 
 WHY THIS EXISTS. D172 gives a card a name and
-`D-a-number-a-person-reads-is-never-a-key` files its photograph under that name. Both are
+`D183` files its photograph under that name. Both are
 worth exactly what their refusals and their WORK-SAVINGS are worth, and neither can be
 exercised against the real thing: the store is the owner's 2,535 real cards and the corpus is
 4.45 GB of photographs that cannot be re-taken. So every case here builds its own store under

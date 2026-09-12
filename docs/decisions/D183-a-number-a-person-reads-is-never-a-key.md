@@ -1,4 +1,4 @@
-## D-a-number-a-person-reads-is-never-a-key — A number a person reads is never a key a machine uses, so the photograph is stored under the card's name and the address is derived
+## D183 — A number a person reads is never a key a machine uses, so the photograph is stored under the card's name and the address is derived
 
 **A card's photograph is stored under the card's own name — `photos/<aa>/<cid>.jpg` — and `Box 3 · Section 2 · Card 17` goes back to being purely derived.** The owner's instruction, 2026-09-12, on reading D172's spec: *"I think this is a systems problem rather than worrying about the outcome we need to solve — can you think bigger?"* and then, on this answer, **"Yes rescope it, approved."** D172 gave the card a name; this says the name is what the bytes are filed under, which is the half that retires the work rather than defending against it.
 

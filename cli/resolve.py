@@ -1077,7 +1077,7 @@ def exports_for(
 # copy that a future defect could leave stale in the same way.
 #
 # AND THE READ IS GONE, BECAUSE THE STORE STOPPED HOLDING A DERIVED COPY AND STARTED HOLDING
-# THE NAME ITSELF (`D-a-number-a-person-reads-is-never-a-key`). `cards.cid` is the sha256 of
+# THE NAME ITSELF (`D183`). `cards.cid` is the sha256 of
 # the photograph, indexed and UNIQUE, and `store/photos.py` makes the path a pure function of
 # it — so the map this section is built on is one indexed query per box instead of 997 MB of
 # reads. The paragraph above is still the argument for reading the PHOTOGRAPHS rather than the
@@ -1125,7 +1125,7 @@ def _photo_digests(
 
     THE MAP IS A COLUMN NOW, NOT 997 MB OF READS. `cards.cid` IS the photograph's digest —
     frozen at the birth of the record, indexed and UNIQUE
-    (`D-a-number-a-person-reads-is-never-a-key`) — so the question this function asks is one
+    (`D183`) — so the question this function asks is one
     indexed query per box. It used to glob `captures/cards/box<N>/*.jpg`, `int()` each stem
     and hash every file: box 2's 543 photographs at 997 MB and 0.56 s, per box, per join. Two
     separate things retire that: after the relocation the legacy directory is EMPTY, and
@@ -1257,7 +1257,7 @@ def realign(
     run's join byte-for-byte unchanged.
 
     IT IS LOAD-BEARING FOR EVERY RUN WRITTEN BEFORE THE PHOTOGRAPH MOVED OUT OF THE ADDRESS,
-    AND DEAD FOR EVERY RUN WRITTEN AFTER (`D-a-number-a-person-reads-is-never-a-key` §0.7).
+    AND DEAD FOR EVERY RUN WRITTEN AFTER (`D183` §0.7).
     Its whole job is re-binding a remembered `(box, index)` to the slot that record's
     `photo_sha256` sits at now; under the layout that names a photograph by the card, a run
     record's digest IS the photograph's filename and there is no binding to repair, because

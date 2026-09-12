@@ -125,7 +125,7 @@ def _photo_for(key: str, box: int, index: int, inventory: master.Inventory) -> s
     THE WHOLE POINT OF THE RESCUE IS THAT THE PHOTOGRAPH IS THE TRUTH, AND THIS FIELD USED TO
     CONTRADICT IT. It composed `captures/cards/box<B>/<idx>.jpg` by hand — the slot, which is
     exactly the thing the rescue has just finished proving unreliable. Since
-    `D-a-number-a-person-reads-is-never-a-key` the bytes are filed under the card's own name,
+    `D183` the bytes are filed under the card's own name,
     so this asks `store/photos.py` for the file and writes down what it answers.
 
     THREE ANSWERS, IN ORDER, AND EACH ONE MEANS SOMETHING DIFFERENT:
@@ -365,7 +365,7 @@ def run(args, say) -> int:
     # It is still the LEGACY address, and that is the honest answer rather than an oversight:
     # a `capture_dir` is a directory `identify.sidecar.scan` could be pointed at, and the
     # content store is flat and shared — a run cannot be a directory of it.
-    # `D-a-number-a-person-reads-is-never-a-key` §0.4 answers that with a built `.scopes/`
+    # `D183` §0.4 answers that with a built `.scopes/`
     # view of symlinks named `<idx:04d>.jpg`, and this line becomes that view's path when it
     # is. Until then the string is the one it always was, composed in the one module allowed
     # to compose it, so the change lands in one place.

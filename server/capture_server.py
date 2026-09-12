@@ -4109,7 +4109,7 @@ def do_remove_card(box: int, index: int, payload: dict) -> dict:
 
         # ------------------------------------------------------------------- the files
         # THE RENUMBER MOVES NO FILE, AND THIS IS THE PAYOFF
-        # (`D-a-number-a-person-reads-is-never-a-key`). A loop stood here that renamed one
+        # (`D183`). A loop stood here that renamed one
         # photograph and rewrote one sidecar PER MOVER — N−k of each for a deletion at index
         # k in a box of N cards, which is 537 of each on the owner's box 2, 1,608 filesystem
         # operations to delete one junk capture. It is gone because the photographs of the
@@ -4259,7 +4259,7 @@ def _move_one(
     defense, not duplicated here, just not solely relied upon.
 
     NO FILE MOVES, AND THE CRASH WINDOW THIS FUNCTION USED TO ACCEPT IS GONE
-    (`D-a-number-a-person-reads-is-never-a-key`). What stood here was a paragraph conceding
+    (`D183`). What stood here was a paragraph conceding
     a real hazard: files moved AFTER the store call, because the destination index was not
     knowable until `move_card` allocated it, so "a crash between the successful file rename
     and this block's commit leaves a photo at the new path while the store still names the

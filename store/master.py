@@ -505,7 +505,7 @@ class Card:
     # renumber cost N−k renames, a move cost five hand-moved copies, and one
     # remove-then-capture able to overwrite a photograph that cannot be re-taken. The path
     # is a pure function of this field, and `cards_cid` holds it UNIQUE, so two cards cannot
-    # compose one path — see `D-a-number-a-person-reads-is-never-a-key`.
+    # compose one path — see `D183`.
     #
     # FOUR SHAPES, ALL NAMED, AND A NULL IS NEVER ONE OF THEM: `<64 hex>`, `<64 hex>-<n>`
     # for the nth card whose bytes match an earlier one's, `moved:<…>` on a D83 tombstone,
@@ -1353,7 +1353,7 @@ class Inventory:
     # with no database under it. `next_box_id` never trusts it alone for that reason.
     box_ids_issued: int = 0
     # WHETHER EVERY PHOTOGRAPH IS AT THE CARD'S OWN NAME YET, as an ISO stamp or None
-    # (`D-a-number-a-person-reads-is-never-a-key`). It is the gate on reading the legacy
+    # (`D183`). It is the gate on reading the legacy
     # `(box, index)` photograph address: while it is None `store/photos.find` still looks
     # there, so a resumable move of 4.45 GB can be interrupted without any screen going
     # dark, and once it is set the old address is NEVER consulted again — which is what

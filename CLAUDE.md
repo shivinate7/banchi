@@ -2331,7 +2331,7 @@ D179 Five shell commands are refused by resolving what they would do, not by mat
 D180 A press names the cards it is over, and the drawer is one of the names
 D181 The order is taken once, and a sale may not retake it
 D182 An unclaimed slug is not required in the shared index it will replace itself out of
-D-a-number-a-person-reads-is-never-a-key A number a person reads is never a key a machine uses, so the photograph is stored under the card's name and the address is derived
+D183 A number a person reads is never a key a machine uses, so the photograph is stored under the card's name and the address is derived
 ```
 
 **THE GAP THIS LIST CARRIED BETWEEN D116 AND D118 IS CLOSED, AND IT CLOSED THE WAY IT SAID IT
