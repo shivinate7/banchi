@@ -11648,7 +11648,7 @@ def check_store_backed_join(checks: Checks) -> None:
                     master.Card(
                         box=box,
                         index=index,
-                        photo=str(capture_server.photo_path(box, index)),
+                        photo=str(photo_of(box, index)),
                         metadata_finish=finish,
                     )
                 )
@@ -11758,7 +11758,7 @@ def check_store_backed_join(checks: Checks) -> None:
                     master.Card(
                         box=box,
                         index=index,
-                        photo=str(capture_server.photo_path(box, index)),
+                        photo=str(photo_of(box, index)),
                         metadata_finish=finish,
                     )
                 )
