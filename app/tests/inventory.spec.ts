@@ -5944,34 +5944,55 @@ test('the control that re-ranks reserves its own room, so appearing moves no cop
      build where the list itself had not moved at all. The offset within the scrolled content
      is the number the reservation is about.
 
-     THE PROBE THROWS RATHER THAN RETURNING A SENTINEL, because a sentinel invites exactly the
-     failure this case had: `-1` compared against a real measurement produces a message that
-     reads as a layout regression and sends the reader to the CSS, when what actually happened
-     is that neither node existed at the moment of the read — a fact about TIMING, not about
-     pixels. A check that cannot tell "nothing is wrong" from "nothing is known yet" is the
-     defect; this one now refuses to make that claim silently. */
-  const listTop = () =>
-    page.evaluate(() => {
-      const list = document.querySelector('.card-locations-rows')
-      const panel = document.querySelector('.card-locations-owner')
-      if (list === null || panel === null) {
-        throw new Error(
-          `listTop: expected both nodes mounted, got .card-locations-rows=${list !== null} ` +
-            `.card-locations-owner=${panel !== null}`,
-        )
-      }
-      /* The HEADER's height, read as the gap between the panel's own top and the first row —
-         two rects taken in the same frame, so the scroll cancels and no offsetParent is
-         assumed. `offsetTop` was the first build and moved 535 -> 637 on a press that changed
-         nothing about the header, because the scroller it is measured from is not the panel. */
-      return Math.round(list.getBoundingClientRect().top - panel.getBoundingClientRect().top)
-    })
+     THE PROBE DISTINGUISHES "NOTHING IS KNOWN YET" FROM "NOTHING IS WRONG", and does so by
+     POLLING rather than by sampling once. A single read that returns a sentinel on a missing
+     node was this case's first defect: `-1` compared against a real measurement produced a
+     message that read as a layout regression and sent the reader to the CSS. The second
+     defect, found chasing the first: `.card-locations-owner` and `.card-locations-rows`
+     genuinely are ABSENT for a frame or two as an ordinary part of this screen settling —
+     traced with a mount/unmount log on `CardLocations` itself, and it happens on the INITIAL
+     load, before any press, as many times as it happens after one. Nothing here is specific to
+     a sale; this component's own lifecycle is not the claim this case exists to prove. So the
+     read retries — `expect.poll`, the same tool Playwright hands you for "eventually true" —
+     until both nodes are present, and only THEN takes the measurement this case is actually
+     about. A press that genuinely left the panel gone still fails, past the poll's window,
+     with the same detail a single throw would have given. */
+  const listTop = async (): Promise<number> => {
+    let last: number | null = null
+    await expect
+      .poll(
+        async () => {
+          last = await page.evaluate(() => {
+            const list = document.querySelector('.card-locations-rows')
+            const panel = document.querySelector('.card-locations-owner')
+            if (list === null || panel === null) return null
+            /* The HEADER's height, read as the gap between the panel's own top and the first
+               row — two rects taken in the same frame, so the scroll cancels and no
+               offsetParent is assumed. `offsetTop` was the first build and moved 535 -> 637 on
+               a press that changed nothing about the header, because the scroller it is
+               measured from is not the panel. */
+            return Math.round(list.getBoundingClientRect().top - panel.getBoundingClientRect().top)
+          })
+          return last
+        },
+        {
+          message: '.card-locations-rows and .card-locations-owner never settled together',
+          intervals: [50, 100, 100],
+          timeout: 3000,
+        },
+      )
+      .not.toBeNull()
+    // The poll above only resolves once `last` is non-null, so this cast is the assertion's
+    // own guarantee, not a hope.
+    return last as unknown as number
+  }
   const before = await listTop()
   expect(before).toBeGreaterThan(0)
 
   await copyRow(page, 'Box 7 · Section 1 · Card 38').getByRole('button', { name: 'Mark sold' }).click()
   await expect(page.locator('.card-locations-rerank')).toBeVisible()
-  expect(await listTop()).toBe(before)
+  const after = await listTop()
+  expect(after).toBe(before)
 })
 
 test('the re-rank control clears the thumb floor on a phone', async ({ page }) => {
