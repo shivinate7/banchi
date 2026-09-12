@@ -2042,79 +2042,50 @@ decisions, the code-card C entries and the build order does not reach this file'
 had not landed on main when this was written. 23 is what was next on 2026-09-11 — renumber it
 rather than another branch's, the way this file's header already rules for sections 1 to 14.
 
-## 24 — A claim whose copies have sold cannot be aged, because the export never corroborated them
+## 24 — A zero reading cannot tell a sold-out listing from an import sitting in Staged
 
-`cli/resolve.py:_copies_out` ages a `pushed` claim by the SKU's sales — a copy cannot sell
-without having been listed — but **only where the export corroborates that our copies were
-live**:
+**The defect this section was opened for is FIXED**, by `D150`, the day
+after it was written. What is left is one ambiguity underneath it, and it is worth a section
+of its own rather than a line in that entry because it is the third defect to turn on the same
+missing field.
 
-    sold = (len(positions_for_sku) - len(copies_not_sold)) if read > 0 else 0
-    out[sku] = max(live, claim - sold)
+### What was fixed, so this is not read as still open
 
-With `Total Quantity` at zero the gate is off, `sold` is 0, and the claim stands at `pushed`
-forever. **On a store that has never reconciled, that is every SKU**: D87 measured 405 of 443
-listing records carrying pushed copies with `live: 0`, and the operator's own fetched export
-reports `Total Quantity` blank or `0` on every row this pipeline has ever sent.
+`cli/resolve.py:_copies_out` ages a stuck `pushed` claim by the SKU's sales only where the
+export corroborates them. It now reads the export's reading for two answers instead of one: a
+reading that reports copies LIVE vouches for every sale of the SKU, and **a reading of NOTHING
+vouches for exactly the sales it was taken AFTER** — a zero read four days after a copy sold is
+that sale's own result, not evidence the copy was never listed. The seven stranded SKUs this
+section tabulated are all offered now, Falling Star and Fizz, Trickster among them, and run
+`2026-09-11-box1-01` went from 239 of 246 SKUs and 310 copies to **246 and 317**. The report
+sentence this section also held — `nothing_to_add`'s *"every copy in this run is already listed
+or has left the box"*, false about a card sitting in the box — went with them: it was false
+because the arithmetic was.
 
-### What it costs, measured
+### The residue
 
-Run `2026-09-11-box1-01`, after `D147` fixed the ordering defect
-that was responsible for the other 52: **7 SKUs still add nothing, stranding 7 real cards.**
+**A SKU whose import landed in TCGplayer's Staged channel and never went live reads `Total
+Quantity` 0 as well.** A copy marked sold by hand against that state now ages a claim it should
+not, and the staged rows are still out there — so the next emit offers a copy of a row
+TCGplayer may already be holding.
 
-| sku | card | pushed | live | copies on hand | sold |
-|---|---|---|---|---|---|
-| 8925672 | Falling Star | 1 | 0 | 1 | `3/193` |
-| 8926007 | Blitzcrank, Impassive | 3 | 0 | 1 | `3/221`, `3/262`, `3/306` |
-| 8926047 | Tasty Faefolk | 4 | 0 | 3 | `3/249`, `3/255`, `3/258`, `3/259` |
-| 8926727 | Qiyana, Victorious | 2 | 0 | 1 | `3/236`, `3/240` |
-| 8927502 | Volibear, Relentless Storm | 1 | 0 | 1 | `3/325` |
-| 9018558 | Sterak's Gage | 1 | 0 | 1 | `3/500` |
-| 9035516 | Fizz, Trickster | 3 | 0 | 1 | `3/361`, `3/362`, `3/405` |
-
-**Every one of them has `copies_out >= len(copies_on_hand)`**, which is what makes this
-ordering-independent: the claim covers the whole shelf, so every copy is committed whichever
-copies are picked. No change to `_committed_keys` can reach them, and the ordering fix
-deliberately does not try.
-
-### Why the obvious repair is refused
-
-**Dropping the corroboration gate double-counts.** `pushed = 4, live = 0` is produced both by
-*four went live and some sold* and by *four are sitting in Staged and one was pulled by hand*,
-and those want opposite answers. D59 keeps the second as a negative case — `check_listing_commands`'
-re-emit idempotence block goes red on it — and records the refusal in as many words:
-*"a card marked sold against that state did not leave TCGplayer's hands."*
-
-**The shelf ceiling does not help either**, and this was checked rather than assumed. The
-pre-D7-amendment form `max(live, len(copies_not_sold(sku)))` gives 3 for Tasty Faefolk against
-3 on hand, and 1 for Falling Star against 1 on hand — every copy still committed. The old
-ceiling strands exactly the same seven.
-
-### The report sentence is wrong too, and is part of this debt rather than a separate one
-
-Those seven print `SkuMatch.nothing_to_add`'s *"every copy in this run is already listed or has
-left the box"*. The run's copy is neither listed nor departed, so the sentence is false about
-the card the operator is looking at — which is the shape D59 built that method to stop
-(*"a count under a false sentence is worse than no count"*).
-
-**It is not patched on its own because `SkuMatch` cannot tell this case from an ordinary
-un-reconciled re-emit.** Both have every copy committed, `live_now` at 0 and
-`pending = copies_out - live_now` equal to the whole claim; the discriminator is the SOLD
-count, which lives in the store and is not on the match. Threading it across would put a field
-on the wire for a figure nothing else reads, and it would be the wrong shape if the arithmetic
-fix below is taken. So the sentence waits for the fix rather than being separately invented.
+It is strictly narrower than what the gate refused before, which refused every sale under a
+zero reading, and the direction of the trade was the operator's: 58 copies of real backstock across 32 SKUs
+stranded against an unmeasured number of staged rows on a store whose operator does not stage
+by hand. **Nothing has ever measured how often the residual case occurs**, and that is the
+honest statement of it — `staged` is written only by `reconcile`, which this operator does not
+run, so the store cannot tell the two apart even in hindsight.
 
 ### What closes it
 
 **A marker that a copy actually reached an import file** — D59's own named reopener, one field
 on `Card` written by `cmd_emit`'s push loop beside the `sku` stamp. With it the committed set is
-read rather than inferred, a sold copy that carries the marker ages the claim without needing
-the export's word, and one that does not carry it cannot. That is the same field
-`D147` names as its reopener, and this is the second defect to
-turn on not having it.
+READ rather than inferred, and a sale of a copy carrying the marker ages the claim on the
+copy's own evidence rather than on a reading's silence. **This is the third entry to turn on
+not having it**, after D147 and the defect above, which is the argument for building it.
 
-**Or a reconcile.** `pkmnscan reconcile --live` writes `live` and the gate opens on its own.
-The operator does not run it — D59 opens on their saying so — which is why this is a debt and
-not an instruction.
+**Or a reconcile.** `pkmnscan reconcile --live` writes `live` and `staged`, and both halves of
+the ambiguity become facts. The operator does not run it, which is why this is a debt.
 
 **The number may move, and nothing allocates it.** 24 is what was next on 2026-09-11 —
 renumber it rather than another branch's, the way this file's header already rules.

@@ -488,8 +488,13 @@ COMPONENTS = [
                                    "`copies_on_hand` answers in: a copy captured after an "
                                    "emit was in no file that emit wrote, and picking the "
                                    "newest stranded 59 of one run's cards "
-                                   "(D147).",
-                           "governed_by": ["D147", "D145", "D4", "D8", "D10", "D11", "D20", "D21", "D22", "D23", "D24", "D25", "D26", "D33", "D34", "D36", "D49", "D56", "D58", "D59", "D64", "D87", "D115"], "tested_by": ["T7"]},
+                                   "(D147). And `_copies_out` ages a stuck `pushed` claim by "
+                                   "the sales the export CORROBORATES, which is two questions "
+                                   "and not one: a reading that reports copies live vouches "
+                                   "for every sale of the SKU, and a reading of nothing "
+                                   "vouches for exactly the sales it was taken AFTER "
+                                   "(D150).",
+                           "governed_by": ["D147", "D145", "D4", "D8", "D10", "D11", "D20", "D21", "D22", "D23", "D24", "D25", "D26", "D33", "D34", "D36", "D49", "D56", "D58", "D59", "D64", "D87", "D115", "D150"], "tested_by": ["T7"]},
             "runs.py": {"does": "run directories and manifest.json", "governed_by": ["D1", "D25", "D49", "D54", "D86"], "tested_by": ["T7"]},
         },
     },
