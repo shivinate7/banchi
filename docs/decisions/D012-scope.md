@@ -1,0 +1,9 @@
+## D12 — Scope
+
+**Modern era only (SWSH/SV), English, all Near Mint (hardcoded).** Vintage and WOTC condition strings — 1st Edition, Shadowless, Unlimited — are a spec change, not a parameter.
+
+**Those two sentences went missing between 2026-08-13 and 2026-08-23**, dropped by the motion-trigger commit rather than by any decision, leaving an entry titled *Scope* that stated no scope, two paragraphs referring to blocks and a parenthetical with nothing above them to name, and the Vintage/WOTC rule spliced onto an unrelated paragraph. D15 and D26 both cite this entry as though it said what it says again now. Restored verbatim from `e955afd` rather than rewritten, because the surrounding argument was built against that exact wording.
+
+**Gate B ran entirely outside the two blocks named above, and nothing noticed.** The 53 cards of 2026-08-22 were `ME01: Mega Evolution`, a block later than SV, and they went through capture, identification, join, emit, import to Staged and reconcile without a scope question arising — because nothing in the tree enforces the parenthetical. The only code citing this entry for scope is `pipeline/variant.py`'s `CONDITION_BY_FINISH`, which hardcodes the Near Mint strings; there is no set or era filter anywhere. Read `(SWSH/SV)` as the blocks that existed the day this was written, not as an allowlist.
+
+**Whether modern era is open at the top end is unsettled, and it is the owner's call.** Recorded rather than answered, because a passing gate is evidence that nothing broke rather than a decision that every future block is in scope. It matters in one place today: D15's mirror-scope paragraph reads this entry as the enumeration `SWSH/SV` when it sizes a narrowed image mirror at ~4.8 GB, so narrowing the mirror on that basis would exclude the only era this project has ever run against. Settle both lines together or neither.

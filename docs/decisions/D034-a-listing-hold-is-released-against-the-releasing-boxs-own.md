@@ -1,0 +1,45 @@
+## D34 — A listing hold is released against the releasing box's own copies
+
+**A box's listing holds can be released on the operator's word, budgeted by that box's own unsold copies.** Built 2026-08-24, and it was found by a box that could not be deleted. The owner asked why box 1 — the 53 Gate B cards — refused `box_not_empty_of_commitments` when nothing in it had been sold or retired. It was held by 45 listing records carrying **53 staged copies and one live**, written by run `2026-08-22-box1-03`, whose `reconcile.txt` records a real Export From Staged confirming the import had landed on TCGplayer. The rows had long since been cleared there. The store had no way to know that, and no way to be told.
+
+**The gate had two grounds and one door.** A box held open by a sold or retired card can be freed: both states reverse on their own routes, and the refusal names them. A box held open by a LISTING could not be, ever. `staged` is written by `reconcile` and drawn down in exactly one place — `cli/cmd_join.py`, by the **rise** in live quantity a fresh Filtered Export reports. That is the right answer for an import that lands: the copies move to live and the staged count follows them down. It has no answer at all for an import that does not. A staged row deleted on TCGplayer never becomes live, so live never rises, so the drawdown never runs. The count stands forever and the box is permanently undeletable.
+
+`store/master.py:staged_stale` has named exactly this case since D7's amendment — its own docstring calls it *the import nobody finished* — and until now **nothing anywhere could act on the warning**. A diagnostic with no remedy is the shape of this defect.
+
+**The release is budgeted by the calling box's unsold copies. It never zeroes a SKU outright, and this is the owner's ruling of 2026-08-24 overruling the first build.** That build zeroed the record, on the argument that *TCGplayer holds nothing for this SKU* is a claim about TCGplayer and therefore cannot be scoped to a box. The owner overruled it, and the replacement reason is better than the argument it replaced:
+
+> **A release reached from box 1 must never be able to give up commitments that only box 3's copies could account for.**
+
+A budget makes that impossible structurally rather than unlikely by care. Each SKU gives up at most the number of unsold copies the calling box holds; `pipeline` and `store` are untouched by the distinction because `Listing.release(budget)` is where it lives.
+
+**The remainder is deliberate, and confirmed by the owner.** Where a SKU is shared, what is left keeps `_listing_hold` non-empty, so **the box stays refused after a release that did exactly what it said**. That is the honest state — TCGplayer really is still holding copies of a SKU this box has copies of, and D7 makes every copy equally a candidate for being one of them. It is not a failure of the route, and the screen's job is to say so before the press rather than let it read as a broken gate.
+
+**Least-committed first: `pushed`, then `staged`, then `live`, against one shared budget.** Not `budget` from each stage — two departing cards cannot account for two staged *and* two live copies, and per-stage decrements would give up four commitments for two cards. Which stage a given copy actually backs is unknowable by construction (D7: the backing is deliberately unrecorded), so the order is a rule rather than a lookup, and it is the conservative one: `pushed` is a row in a file that may never have been imported, `staged` is a row TCGplayer confirmed, `live` is a card actually for sale. Being wrong about `live` costs the most, so it is surrendered last.
+
+**A sold or retired copy does not count toward the budget.** It has already left — a sale is counted against `live` where there is a record to count it against (D115) — and it is not one of the copies a remaining commitment could be backed by. It is also what the operator counts when they look in the box, which is the number they will check the screen against. Such a box is refused by the sold clause anyway, so this opens no new dead end.
+
+**`staged_at` clears only where `staged` reaches zero.** `Listing.set` stamps it as `staged_at or at`, so a record released to zero and later re-staged would otherwise carry the old date forward and read as stale on the day it was staged — a warning firing on success. A record with copies REMAINING keeps its stamp, because those copies really have been staged since that date and are exactly what the warning exists to find.
+
+**The record survives at zeros rather than being popped**, because `_listing_hold` already reads all-zeros as not held.
+
+**It asserts rather than measures, and that decides the rest.** D8 and D11 put the authority over these numbers in the export, and **no export this pipeline reads can say *nothing is staged***: a Filtered Export reports live quantity, and an Export From Staged lists the rows that *are* there, so absence from it is unbounded — a SKU can be missing because it was never staged. The only party who can state that TCGplayer holds nothing is the operator looking at TCGplayer. A route whose entire content is a human's claim owes three things:
+
+- **`confirm: true`, required.** D33's field one register down. That route refuses without it because the next thing that happens costs money; this one refuses because the next thing that happens is a fact being recorded on somebody's word.
+- **A history line, always.** `listings_released`, box-level like `box_deleted`, carrying the box, the SKU count, the copies given up **and `still_held`**. The last is the half a later reader cannot re-derive: without it the log would say a release happened and not that it was partial. After the write there is no other evidence the counts ever stood.
+- **The plan, ahead of the press.** `GET /boxes/<box>/listings` — free, read-only, creating nothing.
+
+**Two routes, and the free one comes first — D33's preflight shape, and the owner asked for it by name.** The first build reported the blast radius in the *receipt*: honest, and after the write. An operator releasing from box 1's header learned box 3 was involved once it was already done. The preflight names every SKU, its copy count, what it would give up, what it would keep, which other boxes hold copies, and **`frees_box`** — whether the box would actually become deletable. `server/capture_server.py:_release_plan` is the single source for both routes, and it simulates by copying the record and calling `Listing.release` itself, so the preview cannot drift from the write even if the ordering rule changes.
+
+**The screen fetches the plan on opening the panel, and the control that releases does not exist until it has answered** — absent, not disabled, `docs/DESIGN.md`'s rule for the run panel's spend button applied for the same reason. No extra press: the fetch runs on open.
+
+**It reaches no other ground of the refusal.** A sold or retired card still holds its box open after every listing in it is released, because those are departures recorded in the store and this route says nothing about a departure. T7 asserts the refusal survives.
+
+**One press on the screen, where the whole-box delete takes two.** That delete used to demand the box number TYPED, on the grounds that its risk is destroying box 9 while looking at box 95 and a gesture that cannot be performed by momentum answers that; the owner traded the typing for a second naming press on 2026-08-26 (D20, amended). The contrast survives and is smaller: this control's risk is a claim that turns out to be wrong, and neither typing digits nor pressing twice makes anyone go and look at TCGplayer. The plan above the button is the gate here — numbers a person can actually check. Nothing is destroyed either way: a wrongly released count is re-established by staging again.
+
+**Each press is its own assertion, and the cap is per press.** Releasing twice spends the budget twice; the route keeps no memory of what a box has released before. That follows from the budget being a statement about the copies in front of you rather than a quota.
+
+**`GET /boxes` now reports `retired` and `listed` beside `sold`.** Counted in the walk `_box_row` was already running. Without them a screen could say a box has commitments and never which kind, and the three kinds have three different remedies — so the delete panel recited the rule and the operator learned which clause applied by pressing an irreversible button and reading the error.
+
+**What would reopen this: a staged quantity the pipeline can read.** If `reconcile` were ever pointed at a *fresh* Export From Staged and allowed to set `staged` absolutely — absence meaning zero — the release would stop being the only way to clear a stale count, and the honest thing would be to prefer the measurement over the claim. That is a change to `cli/cmd_reconcile.py`'s contract (it currently moves `pushed → staged` and reads no absence), not a change to this entry, and it has not been argued.
+
+---

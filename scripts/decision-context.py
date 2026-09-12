@@ -36,13 +36,36 @@ from typing import Dict, List, Optional, Sequence, Tuple
 
 ROOT = Path(__file__).resolve().parent.parent
 MAP = ROOT / "docs" / "map.py"
-DECISIONS = ROOT / "docs" / "DECISIONS.md"
+# The corpus is `docs/decisions/`, one file per entry, and was one file until the split.
+# `scripts/decisions_corpus.py` reassembles it, so the parsing below is unchanged — and
+# `path_for` now makes "the file holding this entry" a real answer, which the entry that
+# dropped the `@` wanted and a monolith could not give: this hook can name a file a session
+# opens rather than a region of one it must not.
+DECISIONS = ROOT / "docs" / "DECISIONS.md"  # the stub; kept so a stale citation resolves
 
 MAX_RULINGS = 3  # per decision. The rest is a Read away, and this is a nudge, not a briefing.
 
 
 def read(path: Path) -> str:
     return path.read_text(encoding="utf-8", errors="replace")
+
+
+
+def _corpus_text() -> str:
+    """`docs/decisions/` as one document, or "" if it cannot be read.
+
+    FAIL-SOFT ON PURPOSE. This hook is wrapped in `except Exception: sys.exit(0)` and is
+    advisory by design (see .claude/settings.json); an unreadable corpus must cost the nudge
+    and never the edit.
+    """
+    try:
+        import json
+
+        directory = ROOT / "docs" / "decisions"
+        order = json.loads((directory / "ORDER.json").read_text(encoding="utf-8"))["order"]
+        return "\n".join(read(directory / name) for name in order)
+    except Exception:
+        return ""
 
 
 def literals(path: Path) -> Dict[str, object]:
@@ -69,9 +92,17 @@ def decision_gists(path: Optional[Path] = None, prefix: str = "D") -> Dict[str, 
     and is otherwise the same document shape. Both default to the singles track, so every
     existing caller (`scripts/status.py`, and this file's own hook path) is unchanged.
     """
-    DECISIONS_PATH = path or DECISIONS
-    if not DECISIONS_PATH.exists():
-        return {}
+    # A caller naming a path gets that file; the default is the CORPUS, reassembled. The
+    # `C` track is still one file and passes its own path, which is why this takes text from
+    # two places rather than always reaching for the directory.
+    if path is None:
+        body = _corpus_text()
+        if not body:
+            return {}
+    else:
+        if not path.exists():
+            return {}
+        body = read(path)
     gists: Dict[str, Tuple[str, List[str]]] = {}
     current: Optional[str] = None
     title = ""
@@ -81,7 +112,7 @@ def decision_gists(path: Optional[Path] = None, prefix: str = "D") -> Dict[str, 
         if current:
             gists[current] = (title, pick_rulings(bolds))
 
-    for line in read(DECISIONS_PATH).splitlines():
+    for line in body.splitlines():
         # The slug form is an id until the merge claims it (D72, rewritten 2026-09-11), and
         # a session editing a file its branch's own unclaimed entry governs must be shown
         # that entry — which is the one moment it is least likely to be remembered.

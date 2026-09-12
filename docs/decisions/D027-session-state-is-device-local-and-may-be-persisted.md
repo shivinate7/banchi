@@ -1,0 +1,31 @@
+## D27 — Session state is device-local and may be persisted
+
+**The capture screen's own scratch state may live in `sessionStorage`, because `CLAUDE.md`'s ban on browser storage is about inventory.** D13 puts one truth on the Mac so two devices cannot disagree about where a card is. It was never about the capture screen's scratch state, and reading it that way costs a real thing.
+
+**Box number, set hint, finish claim, rarity claim and the in-flight `capture_id` are device-local and meaningless anywhere else.** They are `useState` today, so a reload loses all of them — and the last one matters most: a reload during a halt makes a lost-response ambiguity permanently unresolvable, and D10's high-water mark hands the burned position straight to the next physical card.
+
+**`sessionStorage`, never `localStorage`**, and the permitted keys are named here so a lint rule can enforce the boundary. Session scope is the point: a new tab is a new session, and nothing about a shift survives closing the browser.
+
+**AMENDED 2026-09-06: THE ROSTER IS SPELLED HERE, BECAUSE IT NEVER WAS.** The sentence above promised the keys were "named here", and they were named only as English — *box number, set hint, finish claim, rarity claim, capture id* — while the app spelled them `pkmnscan.session.*`. A key described but never spelled is a key no search finds. Measured 2026-09-06: seven of the eight keys under this carve-out appeared in no markdown file in this repo, and two of those had never been described either, having arrived after this entry was written — `game` (D21's per-card claim, which is not the set hint beside it) and `product` (C10's sealed-product claim, `booster` / `etb` / `collection_box`). The whole set, as the app spells it after the rename the amendment below records:
+
+```
+banchi.session.box        banchi.session.setHint      banchi.session.finish
+banchi.session.game       banchi.session.rarityClaim  banchi.session.product
+banchi.session.captureId  banchi.run-scope
+```
+
+`app/src/CaptureScreen.tsx`'s `SESSION_KEYS` declares the first seven and `app/src/runHandoff.ts` the last, and **`make docs-audit`'s `storage keys` row now holds this roster against them**: a key the code writes that no markdown file names fails the commit. That is the bar `check_env_names` already sets for environment variables and it is deliberately the same low one — nothing mechanical can judge whether an explanation is any good, which is the semantic half D16 gives to a person, but it can hold that the key was written down once, on purpose, where a reader looking for it would find it. It is a bar this entry could not meet on the day it claimed to.
+
+**AMENDED THE SAME DAY, ON THE OWNER'S WORD: EVERY KEY IS `banchi.*` AND NOTHING MIGRATES.** The audit that spelled the roster above proposed freezing the `pkmnscan.` prefix — D94 keeps every name beneath the product, and a storage key is about as far beneath it as a thing gets — and the owner overruled it after being shown what a rename discards. The split was never a rule: `banchi.*` was simply what the three keys written after the rebrand got, and `pkmnscan.*` what the ten written before it kept. **A read-time fallback was offered and declined**, on the ground that a fallback read can never safely be deleted afterwards — removing it strands any browser that has not opened the app since — so the old values are abandoned in place rather than migrated.
+
+**What it cost, named rather than left to be discovered.** Two `localStorage` keys on the rig: the remembered 4K capture card and D13's quarter turn, both one press on the capture screen. Seven `sessionStorage` keys, which were dying at the end of every shift anyway and are lost only in a tab left OPEN across the deploy — six of them one press each. **The exception is `captureId`**, and it is this entry's own reason for existing: it is the in-flight id of a capture whose response was lost, losing it makes that ambiguity permanently unresolvable, and D10's high-water mark then hands the burned position to the next physical card. The window is exactly "a capture in flight at the moment the new build loaded" and nothing narrows it further. **`run-scope` is the cheapest of the ten**: reading nothing is its safe answer by construction, since its whole purpose is to stop a press paying for more than the operator ticked.
+
+**So the rule is the plain one, and there is no frozen set to remember**: every browser-storage key this app writes is `banchi.*`. D94 is unreconsidered and still governs the checkout, the CLI, the packages, the store, the wire and `PKMNSCAN_HOME`; what this establishes is that a storage key was never on that list, being a name the product itself writes and no other program reads.
+
+**A second use joined the carve-out on 2026-08-29, and it is a handoff rather than a memory** (D39). `banchi.run-scope` carries a box and the cards ticked in it from `#/inventory` to `#/runs`, because the pipeline moved to a route of its own and the one mass-select in the product did not. It qualifies on this entry's own test — device-local, meaningless anywhere else, not a fact about where a card IS — and it is `sessionStorage` for the same reason everything else here is: a tick list that outlived the browser would be a filter over a spend button that nobody alive remembered setting.
+
+**It differs from the four above in what a reload means.** Those exist so a reload does not lose the shift. This one exists so a reload does not silently WIDEN what the next press pays for, and it is cleared deliberately on three routes rather than expiring: the operator's control, picking a box, and arriving from `#/inventory` with nothing ticked. `app/src/runHandoff.ts` is the one module that reads or writes it.
+
+`useCamera.ts` already argues this carve-out informally for the device id and the rotation chip; this entry generalizes what that file worked out and makes it checkable.
+
+**Trigger mode is explicitly NOT covered.** D19 keeps arming an act, and an armed machine that survives a reload is exactly the automatic-anything that entry refuses.

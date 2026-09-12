@@ -4,7 +4,7 @@
 # the project would be built on top of — `make check` green means every check ran.
 
 .DEFAULT_GOAL := help
-.PHONY: help status map explain harness check ignore-check docs-audit vale audit-self-test verdict-selftest githooks-selftest merge merge-selftest revert-guard revert-selftest claim-ids claim-stale claim-selftest port-agreement set-hint-agreement screen-freshness sigil-check suite-lock-selftest icloud-sweep audit-history dev server screenshot design-check design-check-quiet lint typecheck venv launch-config worktree-setup hooks up down launch-agent demo demo-photos demo-seed demo-record demo-static demo-preview demo-freshness
+.PHONY: help status map explain harness check ignore-check docs-audit vale audit-self-test verdict-selftest githooks-selftest merge merge-selftest revert-guard revert-selftest claim-ids claim-stale claim-selftest decisions-selftest port-agreement set-hint-agreement screen-freshness sigil-check suite-lock-selftest icloud-sweep audit-history dev server screenshot design-check design-check-quiet lint typecheck venv launch-config worktree-setup hooks up down launch-agent demo demo-photos demo-seed demo-record demo-static demo-preview demo-freshness
 
 # Prefer the venv if it exists, so `make harness` works without anyone remembering to
 # activate anything. Falls back to system python3, which still runs T2-T5 — T1 needs the
@@ -70,6 +70,7 @@ help:
 	@echo "  make claim-stale      has an id this branch already claimed been taken by main"
 	@echo "                    since? Reports and never repairs (D140, amended). Writes nothing."
 	@echo "  make claim-selftest   the claimer, proved with main moving underneath the branch."
+	@echo "  make decisions-selftest  docs/decisions/ is complete and still round-trips."
 	@echo "  make janitor-selftest  the sweep, proved against a throwaway clone. In \`check\`, never in the hook."
 	@echo "  make reap-selftest  the kill guard, proved by pointing it at what it must not kill."
 	@echo "  make suite-lock-selftest  one browser fleet at a time, proved by violating it."
@@ -90,6 +91,7 @@ help:
 	@echo "                    write. Reaches the network, so it never gates a commit."
 	@echo "  make check        harness + docs-audit + audit-self-test + githooks-selftest +"
 	@echo "                    merge-selftest + revert-selftest + claim-selftest + claim-stale +"
+	@echo "                    decisions-selftest +"
 	@echo "                    revert-guard +"
 	@echo "                    janitor-selftest + reap-selftest + suite-lock-selftest +"
 	@echo "                    serve-selftest +"
@@ -391,6 +393,7 @@ check:
 	@$(MAKE) --no-print-directory revert-selftest
 	@$(MAKE) --no-print-directory claim-selftest
 	@$(MAKE) --no-print-directory claim-stale
+	@$(MAKE) --no-print-directory decisions-selftest
 	@$(MAKE) --no-print-directory revert-guard
 	@$(MAKE) --no-print-directory janitor-selftest
 	@$(MAKE) --no-print-directory reap-selftest
@@ -434,6 +437,7 @@ ci-check:
 	@$(MAKE) --no-print-directory revert-selftest
 	@$(MAKE) --no-print-directory claim-selftest
 	@$(MAKE) --no-print-directory claim-stale
+	@$(MAKE) --no-print-directory decisions-selftest
 	@$(MAKE) --no-print-directory revert-guard
 	@$(MAKE) --no-print-directory janitor-selftest
 	@$(MAKE) --no-print-directory reap-selftest
@@ -571,6 +575,17 @@ claim-stale:
 # moves underneath the branch. In `check`, never in the git hook — it writes (D18).
 claim-selftest:
 	@python3 scripts/claim-selftest.py
+
+# THE CORPUS IS COMPLETE AND STILL ROUND-TRIPS. `docs/decisions/` is one file per entry and
+# was one 1.4 MB document; this asserts the set is whole — every file the manifest names is
+# present, every file present is named, no id is in two files, and the reassembly matches the
+# digest recorded when the split was made. Stdlib only and it writes nothing, so it gates.
+#
+# WHAT IT DOES NOT ASSERT is that the entries are unedited: editing one is the normal way
+# this corpus changes, and `--rehash` re-records the digest when that is deliberate. The
+# one-time claim that the SPLIT itself lost nothing is `--verify` against the pre-split file.
+decisions-selftest:
+	@python3 scripts/split-decisions.py --selftest
 
 # HERE BECAUSE TWO LANGUAGES HOLD ONE ALGORITHM AND NEITHER CAN IMPORT THE OTHER (D43).
 # Python serves the capture port, TypeScript addresses it, and a disagreement is silent and

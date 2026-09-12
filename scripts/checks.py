@@ -213,6 +213,31 @@ CHECKS = (
         "governed_by": ("D16", "D42", "D80", "D140"),
     },
     {
+        "target": "decisions-selftest",
+        "runs": "python3 scripts/split-decisions.py --selftest",
+        "asserts": "`docs/decisions/` is a complete, well-formed set: every file "
+                   "`ORDER.json` names is present, every markdown file present is named, no "
+                   "id appears in two files, and the reassembly still ends in a newline. The "
+                   "duplicate arm is the one a directory newly needs — one entry copied "
+                   "rather than moved puts `## D58` in two files, which a single document "
+                   "could not express and nothing else would notice. It does NOT hash the "
+                   "live corpus: editing an entry is the normal way this corpus changes, and "
+                   "a digest over the whole thing would go red on the next decision entry "
+                   "and blame a routine append for a loss that had not happened. The "
+                   "historical claim — that the split itself lost nothing — is "
+                   "`--verify-split REF`, which reads both sides out of git.",
+        "needs": ("python3",),
+        "writes": "",
+        "commit_path": False,
+        "why_off_commit_path": "Nothing here is urgent enough to pay for on every commit: a "
+                               "corpus that has lost a file fails `decision ids` and "
+                               "`decision index` in the same run, so the commit gate already "
+                               "refuses the damage this names. It is in `check` and "
+                               "`ci-check` for the earlier, clearer message.",
+        "gates": True,
+        "governed_by": ("D16", "D18", "D60", "D160"),
+    },
+    {
         "target": "revert-guard",
         "runs": "python3 scripts/revert-audit.py branch",
         "asserts": "What this branch would land on origin/main — the clean merge's tree, or "
