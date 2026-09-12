@@ -1209,7 +1209,7 @@ COMPONENTS = [
                                        "HARNESS, which is why `tested_by` is empty: that field "
                                        "names harness tests, and this guard's subject is two "
                                        "OS processes racing a real flock over a throwaway store "
-                                       "— not something a harness test can pose. Twelve "
+                                       "— not something a harness test can pose. Fourteen "
                                        "mutation arms, all caught. WHAT IS UNPROVEN: no claim "
                                        "has been "
                                        "written by a real identify press, so nothing here has "
@@ -1780,8 +1780,11 @@ COMPONENTS = [
                         "locked, because a table that claimed nothing would pass every outcome "
                         "assertion in the file, and the schema upgrade a real operator's "
                         "2,535-card store will actually take rather than the create-all "
-                        "branch every other case goes through. Mutation-tested: twelve arms, "
-                        "all caught.",
+                        "branch every other case goes through, and the ONE door that releases a "
+                        "claim without its answers being banked — from both sides, because "
+                        "the arm that ignores the batch ids must not pass. Mutation-tested: "
+                        "fourteen arms, all caught, and arm 13 found two assertions of this "
+                        "suite's own passing for the wrong reason.",
                 "governed_by": ["D-a-claim-on-the-cards", "D7", "D18", "D48", "D88", "D136"],
             },
             "reap-selftest.sh": {

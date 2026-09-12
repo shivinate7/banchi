@@ -590,6 +590,45 @@ def _adopt_cached(item: Item, entry, fingerprints: Dict[str, str]) -> None:
     item.stale_prompt = expected is not None and entry.prompt_fingerprint != expected
 
 
+def _give_back_unspent(claim, run_dir, store, say) -> bool:
+    """Release this run's claim IF it can be proved nothing was submitted. Returns whether it did.
+
+    THE ONE PLACE A CLAIM IS RELEASED WITHOUT ITS ANSWERS BEING BANKED, and it is safe for
+    exactly one reason: `run_dir.batch_ids` is empty. `batch.run_batch` records every batch id
+    through `on_submit` AS IT SUBMITS, so no id means no chunk ever reached the API and there is
+    nothing in flight to collect. An empty id list is proof of an unspent press in a way a
+    caught exception is not.
+
+    WHY THIS IS NOT A `finally`. A submission that fails PART WAY through has ids recorded and
+    batches paid for, keeping for 29 days — so the exception alone cannot tell an unspent press
+    from a half-spent one, and releasing on the exception would hand the operator a green button
+    over an invoice already rung up. The ids can.
+
+    WHAT IT IS FOR is the ordinary self-inflicted failure: a missing or bad API key, on the
+    first press of a fresh checkout. Without it, that press leaves a drawer's worth of cards
+    claimed by a run that spent nothing, and every later press is refused until somebody goes
+    and releases it on `#/runs` — a stuck claim earned by a typo in `.env`.
+    """
+    if claim is None:
+        return False
+    if run_dir.batch_ids:
+        # Something WAS submitted. The claim stands, and the run is resumable — which is the
+        # case `--run-dir` exists for, and `claim_or_refuse`'s `resuming` lets it re-claim.
+        say(
+            f"claim           {len(claim.keys)} card(s) STAY held under {claim.receipt}: "
+            f"{len(run_dir.batch_ids)} batch(es) were submitted and are not collected. "
+            f"Resume with --run-dir {run_dir.directory}, or release the claim on #/runs."
+        )
+        return False
+    with store.write() as giving:
+        freed = giving.submissions.release(claim.receipt, submissions.BY_RUN)
+    say(
+        f"claim           {len(claim.keys)} card(s) released ({claim.receipt}) — no batch was "
+        f"submitted, so nothing was spent and nothing is being held"
+    )
+    return freed is not None
+
+
 def run(args, say) -> int:
     capture_dir = Path(args.capture_dir)
     store = Store()
@@ -1041,6 +1080,7 @@ def run(args, say) -> int:
             )
         except batch.BatchError as exc:
             say(f"reattach failed: {exc}")
+            _give_back_unspent(claim, run_dir, store, say)
             return 1
         _apply(items_by_key, result)
         usage_in += result.usage.input_tokens
@@ -1054,6 +1094,7 @@ def run(args, say) -> int:
             )
         except batch.BatchError as exc:
             say(f"identification did not run: {exc}")
+            _give_back_unspent(claim, run_dir, store, say)
             return 1
         _apply(items_by_key, result)
         usage_in += result.usage.input_tokens

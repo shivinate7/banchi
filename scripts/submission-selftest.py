@@ -56,6 +56,7 @@ import subprocess
 import sys
 import tempfile
 from pathlib import Path
+from typing import List
 
 REPO = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(REPO))
@@ -471,6 +472,77 @@ def case_pid_reuse_cannot_inherit_a_claim() -> None:
     )
 
 
+def case_an_unspent_press_gives_the_claim_back() -> None:
+    """A SUBMISSION THAT FAILED BEFORE SENDING ANYTHING RELEASES ITS CLAIM. A HALF-SENT ONE
+    DOES NOT.
+
+    THE ONE PLACE A CLAIM IS RELEASED WITHOUT ITS ANSWERS BEING BANKED, which is why it is
+    tested from both sides. `cli/cmd_identify.py:_give_back_unspent` keys on
+    `run_dir.batch_ids`: `batch.run_batch` records every id through `on_submit` AS IT SUBMITS,
+    so an EMPTY list is proof no chunk reached the API, and a non-empty one is proof some did
+    and are keeping for 29 days.
+
+    WITHOUT THE RELEASE ARM, a missing API key on the first press of a fresh checkout leaves a
+    drawer's worth of cards claimed by a run that spent nothing. WITHOUT THE HOLD ARM, a
+    submission that died half way hands the operator a green button over batches already paid
+    for — which is the failure this whole table exists to prevent, arriving through the door
+    built to relieve it.
+    """
+    fresh_store()
+    from cli import cmd_identify
+    from store.session import Store
+
+    class FakeRun:
+        """Only what `_give_back_unspent` reads: the ids and a path for the message."""
+
+        def __init__(self, ids):
+            self.batch_ids = list(ids)
+            self.directory = "/tmp/pkmnscan-selftest-run"
+
+    said: List[str] = []
+
+    # A `Store` CAPTURES ITS DIRECTORY AT CONSTRUCTION, so one built before the second
+    # `fresh_store()` below would write to the FIRST case's store — and every assertion in the
+    # second half would then pass for the wrong reason: the release would miss, `freed` would
+    # be falsy because the receipt was not there, and the new store's claim would still stand.
+    # Mutation arm 13 is what found that: it killed ONE assertion of four where it should have
+    # killed three, which is the only symptom such a defect has.
+    # --- nothing was submitted: the claim comes back.
+    store = Store()
+    held, _ = claim(["5/1", "5/2"])
+    live = Store().read().submissions.get(held["receipt"])
+    freed = cmd_identify._give_back_unspent(live, FakeRun([]), store, said.append)
+    check(freed, "an unspent press releases its claim")
+    rows, cards, _ = live_figures()
+    check(rows == 0 and cards == 0, f"and nothing is held ({rows} rows, {cards} cards)")
+    check(
+        any("no batch was submitted" in line for line in said),
+        "and the report says WHY it was safe to release",
+    )
+    after, conflicts = claim(["5/1"])
+    check(after is not None and not conflicts, "so the next press over those cards goes through")
+
+    # --- something WAS submitted: the claim stands.
+    fresh_store()
+    said.clear()
+    store = Store()
+    held, _ = claim(["6/1", "6/2"])
+    live = Store().read().submissions.get(held["receipt"])
+    freed = cmd_identify._give_back_unspent(live, FakeRun(["msgbatch_abc"]), store, said.append)
+    check(not freed, "a press that submitted a batch does NOT release its claim")
+    rows, cards, _ = live_figures()
+    check(
+        rows == 1 and cards == 2,
+        f"the cards stay held — the batch is paid for and uncollected ({rows} rows, {cards} cards)",
+    )
+    check(
+        any("STAY held" in line and "--run-dir" in line for line in said),
+        "and the report says they are held and how to resume the run that holds them",
+    )
+    blocked, conflicts = claim(["6/1"])
+    check(blocked is None and bool(conflicts), "so a second press over those cards is refused")
+
+
 def case_an_older_store_upgrades() -> None:
     """A STORE STAMPED AT THE PREVIOUS SCHEMA GAINS THE TABLE ON ITS FIRST OPEN.
 
@@ -708,6 +780,7 @@ CASES = (
     case_resume_releases_only_its_own,
     case_a_dead_holder_still_blocks,
     case_pid_reuse_cannot_inherit_a_claim,
+    case_an_unspent_press_gives_the_claim_back,
     case_an_older_store_upgrades,
     case_the_naive_order_loses_the_race,
     case_one_transaction_wins_the_race,

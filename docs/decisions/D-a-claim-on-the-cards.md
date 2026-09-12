@@ -52,6 +52,14 @@ The send list is decided by `cmd_identify`'s hash-and-consult pass, which on 678
 
 **Failing toward live is the safety direction.** A false "live" over-refuses a press and the operator releases the claim; a false "dead" is the double invoice. Everything unreadable — a `ps` that will not parse, a missing `proc_start` — reads live.
 
+### One release is not the banking commit, and it is keyed on proof
+
+**A submission that failed before sending anything releases its claim** — `cli/cmd_identify.py:_give_back_unspent`. It is the only place a claim is given back without its answers being banked, and it is safe for exactly one reason: `run_dir.batch_ids` is empty. `identify/batch.py` records every id through `on_submit` **as it submits**, so no id is proof no chunk reached the API and there is nothing in flight to collect.
+
+**It is not a `finally`, and the distinction is the whole point.** A submission that dies part way has ids recorded and batches paid for, keeping for 29 days — so a caught exception cannot tell an unspent press from a half-spent one, and releasing on the exception would be the double invoice arriving through the door built to relieve it. The ids can tell. A half-sent press keeps its claim and the report says so, naming `--run-dir` as the way to resume the run that holds them.
+
+**What it is for is the ordinary self-inflicted failure**: a missing or bad API key on the first press of a fresh checkout. Measured — a real press with a bad key claimed 3 cards, took a 401, and released them, naming why it was safe. Without this, that typo in `.env` leaves a drawer's worth of cards claimed by a run that spent nothing, and every later press refused until somebody goes and releases it by hand.
+
 ### The way out is a press with a receipt on it
 
 **A route is not a feature, so the release is the whole chain.** `POST /pipeline/submissions/<receipt>/release`, `releaseSubmission` in `app/src/server.ts`, and a panel on `#/runs` — `app/src/SubmissionClaims.tsx` — where the refusal already sends the operator: *"watch that run, or release its claim."*
@@ -88,7 +96,7 @@ So the figures are published rather than inferred from the fact that nothing has
 
 **The barrier is a barrier, not a sleep** (D136). The naive children synchronise twice — once to start, once after each has read and before either writes — so the window is held open by construction. A probabilistic reproduction of a money bug is a flake.
 
-**Mutation-tested: twelve arms, all killed** — ten over the claim and two over the schema upgrade, which is the one path a store that already has 2,535 cards in it actually takes. One arm survived the first pass and that was the useful one: every store-wide case shared its card with the LOWEST-numbered box in the pressing selection, so a guard narrowed to the first drawer it saw passed all four directions. The case with the overlap two drawers along was added for it.
+**Mutation-tested: fourteen arms, all killed** — ten over the claim, two over the schema upgrade (the one path a store that already holds 2,535 cards actually takes), and two over the release door below. Two arms paid for themselves. One survived the first pass: every store-wide case shared its card with the LOWEST-numbered box in the pressing selection, so a guard narrowed to the first drawer it saw passed all four directions. The case with the overlap two drawers along was added for it. The other found **two assertions of the suite's own passing for the wrong reason** — a `Store` built before the case's second `fresh_store()` was still bound to the first store's directory, so a release that should have fired missed, and both the "it did not release" and "the cards stay held" checks read right for the wrong cause. The symptom was an arm killing one assertion of four instead of three.
 
 ### What is NOT proved
 
