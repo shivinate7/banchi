@@ -3398,7 +3398,7 @@ COMPONENTS = [
             "src/types.ts": {"does": "the shapes the server speaks, in the server's own field "
                                      "names — captures, inventory, boxes, listings and the "
                                      "standing queues. Types only, it emits no JavaScript.",
-                             "governed_by": ["D145", "D3", "D4", "D6", "D7", "D8", "D9", "D10", "D11",
+                             "governed_by": ["D142", "D145", "D3", "D4", "D6", "D7", "D8", "D9", "D10", "D11",
                                              "D16", "D20", "D21", "D22", "D23", "D24", "D26",
                                              "D28", "D29", "D30", "D32", "D33", "D34", "D36",
                                              "D37", "D39", "D45", "D46", "D48", "D49", "D52",
@@ -3416,9 +3416,15 @@ COMPONENTS = [
                                             "started sorting on the same fact) and the setup "
                                             "the operator last worked at — box, game, set hint, "
                                             "finish, rarity and product, ONE document because "
-                                            "it is one habit (D141) — and nothing else",
+                                            "it is one habit (D141), plus the box's own true "
+                                            "index since 2026-09-12 "
+                                            "(D153), which is a field "
+                                            "in that document rather than a seventh key and is "
+                                            "the one value here no screen draws — and nothing "
+                                            "else",
                                     "governed_by": ["D13", "D27", "D91", "D94", "D95", "D114", "D132",
-                                                    "D142"],
+                                                    "D142", "D145",
+                                                    "D153"],
                                     "note": "IT EXISTS BECAUSE OF A LINT RULE, which is the "
                                             "rule working rather than being worked around. "
                                             "`app/eslint.config.js` bans the STORE and not the "
@@ -3580,21 +3586,33 @@ COMPONENTS = [
                     "left on the old clock, and it is what that carve-out was always for. "
                     "A RESTORED BOX IS CHECKED AGAINST `GET /boxes` and falls back to NOTHING "
                     "when it has been sealed or deleted, naming the box and opening the field "
-                    "with focus in it — a number can be deleted and reallocated to another "
-                    "drawer, which nothing else on this path refuses. "
+                    "with focus in it. AND SINCE 2026-09-12 IT COMPARES THE DRAWER'S ID AND NOT "
+                    "ITS NUMBER (D153): D142 enumerated three ways a "
+                    "restore goes stale and built two, so a number deleted and reallocated to "
+                    "another physical drawer kept the restore and every photograph of that "
+                    "sitting went to an address that does not match the shelf. `bid` (D145) is "
+                    "carried on `BoxRecord` and stored at the pick; where either side has no id "
+                    "the older rule decides for a STORE that cannot answer and the setup is let "
+                    "go of for a BROWSER that cannot, which is the whole migration. "
                     "THE BOX LIST IS ORDERED BY THE HAND, not the number: `#/inventory`'s own "
                     "rail rule over the same `banchi.box-recency` store, recency then "
                     "`on_hand` then the number. `chooseBox` is the only thing here that writes "
                     "it; a capture never does, at 623 ms a card. "
                     "AND THE BOX NUMBER IS OFF THE SCREEN — `runScope.ts:captureBoxLabel` "
                     "draws the NAME, falling back to `Box 3` only where D20 left one unnamed. "
-                    "The picker keeps the number as a de-emphasised suffix because its entry "
-                    "searches on it. `Clear the setup` at the foot of the Rig panel puts all "
+                    "THE PICKER DRAWS NO NUMBER EITHER, AS OF 2026-09-12 "
+                    "(D153, the owner: *\"i shouldn't even need to "
+                    "see box. numbers here\"*): the suffix survives only on a row that is in "
+                    "the list BECAUSE its number matched what was typed, which is the one job "
+                    "D142 kept it for, spent where it applies instead of on every row always. "
+                    "Searching by number still works and the placeholder says so. "
+                    "`Clear the setup` at the foot of the Rig panel puts all "
                     "six back to nothing chosen, with a receipt carrying an undo; it touches "
                     "no route, and the camera and rotation are `useCamera.ts`'s and stay.",
             "governed_by": ["D3", "D10", "D13", "D19", "D20", "D21", "D22", "D23", "D27", "D28",
                             "D34", "D41", "D56", "D58", "D65", "D81", "D92", "D118", "D128",
-                            "D130", "D131", "D132", "D142"]},
+                            "D130", "D131", "D132", "D142", "D145", "D36",
+                            "D153"]},
             # D3 earns its place on a stylesheet: the no-claim finish chip is drawn dashed
             # because rung 1 distinguishes "no metadata recorded" from a recorded claim, and
             # that distinction is carried here in a border style rather than in any logic.
@@ -4942,7 +4960,8 @@ COMPONENTS = [
                         "matters, which is negative — `c` stays the shutter and `b` stays "
                         "the Box field, because a literal a-z would have put Rainbow Rare on "
                         "the capture key. Run by `make design-check`.",
-                "governed_by": ["D3", "D22", "D23", "D27", "D65", "D101", "D118", "D142"],
+                "governed_by": ["D3", "D20", "D22", "D23", "D27", "D56", "D65", "D101", "D118",
+                                "D142", "D145", "D153"],
                 "note": "The shutter is never pressed, so no capture is ever taken — "
                         "motion-live.spec.ts's rule, for its reason. The `S` cases DO select a "
                         "box and stub the section route, because the act writes to one; "
