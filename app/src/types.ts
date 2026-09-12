@@ -242,11 +242,30 @@ export type CardSummary = {
   created: boolean
 
   /** A FILESYSTEM PATH ON THE MAC, not a URL. A browser cannot load it. Use
-   *  `server.photoUrl(box, index)` to display the photo — that is D6's route and the
+   *  `server.photoUrl(box, index, cid)` to display the photo — that is D6's route and the
    *  reason it exists. */
   photo: string | null
 
   capture_id: string | null
+
+  /** THE CARD'S OWN NAME, so a client can address the PHOTOGRAPH rather than the slot
+   *  (D172). Pass it to `photoUrl` as the third argument and the URL becomes
+   *  `GET /photo/by-card/<cid>`, which means one thing forever: frozen at issue, unique in
+   *  the store, and unmoved by the mid-box delete and the undo that both put a different
+   *  card in one `(box, index)`.
+   *
+   *  THIS IS THE SHAPE THE SLOT ROUTE SERVES WORST, which is why the server puts it here
+   *  first: the capture screen draws the frame it has just taken, at an index the box has
+   *  never had before, and a browser that cached that index is the undo hazard
+   *  `do_photo`'s own docstring opens with.
+   *
+   *  RAW, exactly as `_card_summary` sends it. A cid comes in four shapes and only two name
+   *  a photograph — `photoUrl` holds that predicate so no caller has to know them, and a
+   *  `moved:` or `nophoto:` name falls back to the slot rather than 404ing.
+   *
+   *  Optional because a server predating D172 sends no key at all, which is what an absent
+   *  key honestly is; `photoUrl` reads `undefined` as "no name offered". */
+  cid?: string | null
 }
 
 /** `GET /status`. Counts, the next index per box, and whether the store is healthy. */
@@ -412,6 +431,21 @@ export type InventoryCard = {
 
   captured_at: string | null
   capture_id: string | null
+
+  /** THE CARD'S OWN NAME (D172) — see `CardSummary.cid`, which is the same field arriving
+   *  through the same `asdict`. Pass it to `photoUrl` and the photograph is addressed by
+   *  name rather than by slot.
+   *
+   *  RAW HERE, AND THAT IS WORTH SAYING TWICE. `_card_row` and `do_inventory` ship
+   *  `asdict(card)` and apply no predicate, where `_copy_row` filters — so an
+   *  `InventoryCard` really can arrive carrying a `moved:` tombstone's name (D83) or a
+   *  `nophoto:` one, neither of which names a photograph. `photoUrl` refuses both and falls
+   *  back to the slot; no screen reading this field needs to know the four shapes.
+   *
+   *  It is NOT `photo_sha256` below. That one is set only by D89's reclaim and records the
+   *  digest of a photograph that has been DELETED; this is a name that was frozen at issue
+   *  and outlives every re-shoot — which is exactly why the two can differ. */
+  cid?: string | null
 
   /** D89. Set together by the reclaim and by nothing else: the digest of the photograph that
    *  used to be at `photo`, and when it was deleted. Both null while the file is on disk —
@@ -1327,6 +1361,18 @@ export type SearchCopy = {
    *  the camera; a copy carrying null cannot be taken, and the screen says so rather than
    *  sending a target the server would refuse. */
   capture_id: string | null
+
+  /** THE NAME, FOR THE SAME ONE READER `capture_id` IS HERE FOR, one layer along (D172).
+   *  `CardLocations.tsx` and `Inventory.tsx` draw a copy's photograph off this row, and the
+   *  carve-out D93 argued for `capture_id` applies unchanged: what this type refuses is a
+   *  SECOND INVENTORY VIEW growing inside a search result, and a name is not a view.
+   *
+   *  ALREADY FILTERED, unlike `InventoryCard.cid`. `_copy_row` applies
+   *  `store/photos.py:is_photo_cid` before it puts the field here, so a `moved:` tombstone
+   *  and a `nophoto:` card arrive as null — the same answer `has_photo` gives, for the same
+   *  reason. `photoUrl` applies the predicate again anyway; one side filtering is not a
+   *  reason for the other to stop. */
+  cid?: string | null
 
   place: Place
 }

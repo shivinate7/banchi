@@ -686,6 +686,11 @@ export function RunsComposer({
                     <div className="run-preview-frame" onPointerMove={aimAt} onPointerLeave={() => setAim(null)}>
                       <img
                         className="run-preview-ghost"
+                        /* THE SLOT ROUTE, BECAUSE THE PREVIEW HAS NO NAME TO OFFER (D172).
+                           `POST /pipeline/runs/<name>/crop` answers with `{box, index}` and
+                           nothing else — it describes a PHOTOGRAPH the detector just read off
+                           disk, not a store record — so there is no `cid` on this payload to
+                           address it by. */
                         src={photoUrl(preview.sample.box, preview.sample.index)}
                         alt=""
                         aria-hidden="true"
