@@ -1001,6 +1001,75 @@ def main() -> int:
         ok(code == 1 and "could not be asked" in out,
            "a claimer that cannot answer is REPORTED, never read as a clean main", out)
 
+        # ------------------------------------------------------------------------------
+        # THE CORPUS AS A DIRECTORY, which is the shape the product actually has now.
+        #
+        # EVERY ARM ABOVE WRITES `docs/DECISIONS.md` AS ONE FILE, and they all still pass —
+        # the claimer falls back to that path when a tree has no manifest, so a pre-split
+        # repository keeps working. That fallback is also how this whole file could have gone
+        # on being green against a layout the product no longer has, which is the failure
+        # this repo makes mechanical rather than trusting. So the directory gets its own
+        # fixture, and the two things a single file cannot express are asserted here: the
+        # entry FILE is renamed, and the MANIFEST follows it.
+        print("\n  -- the corpus as a directory --")
+        split = tmp / "split"
+        git(split.parent, "clone", "-q", str(tmp / "origin.git"), "split")
+        git(split, "checkout", "-q", "-b", "directory")
+        entry = f"D-{'a-third-thing'}"
+        write(split, "docs/decisions/_preamble.md", "# Fixture\n")
+        write(split, "docs/decisions/D001-first.md", f"## {D(1)} — First\n\nbody\n")
+        write(split, "docs/decisions/D002-second.md", f"## {D(2)} — Second\n\nbody\n")
+        write(split, f"docs/decisions/{entry}-a-third-thing.md",
+              f"## {entry} — A third thing\n\nbody\n")
+        write(split, "docs/decisions/ORDER.json", json.dumps({
+            "source": "docs/DECISIONS.md",
+            "order": ["_preamble.md", "D001-first.md", "D002-second.md",
+                      f"{entry}-a-third-thing.md"],
+        }, indent=2) + "\n")
+        write(split, "docs/DECISIONS.md", "# Stub\n\nThe entries are in `docs/decisions/`.\n")
+        write(split, "CLAUDE.md", f"# Fixture\n\nthe branch cites {entry} twice: {entry}.\n")
+        git(split, "add", "-A")
+        git(split, "commit", "-qm", "a branch writes a slug into the directory")
+
+        out = claim(split, "--root", str(split))
+        # THE NUMBER IS READ OUT OF THE PREVIEW, NEVER ASSUMED. Which id this fixture's main
+        # has reached depends on every arm above it, and an assertion that hardcoded one
+        # would break the next time somebody adds an arm — testing the test's arithmetic
+        # rather than the claimer's.
+        allocated = re.search(re.escape(entry) + r"\s+->\s+(D[0-9]+)", out)
+        ok(allocated is not None,
+           "the slug is FOUND in the directory, and allocated against main's ceiling", out)
+        number = int(allocated.group(1)[1:]) if allocated else 0
+
+        claim(split, "--root", str(split), "--write")
+        landed_name = f"D{number:03d}-a-third-thing.md"
+        ok((split / "docs/decisions" / landed_name).exists(),
+           "the entry FILE is renamed to its allocated number",
+           str(sorted(x.name for x in (split / "docs/decisions").glob("*.md"))))
+        ok(not (split / f"docs/decisions/{entry}-a-third-thing.md").exists(),
+           "and the slug-named file is gone rather than left beside it")
+        manifest = json.loads((split / "docs/decisions/ORDER.json").read_text(encoding="utf-8"))
+        ok(landed_name in manifest["order"],
+           "the MANIFEST follows the rename, so the corpus still reassembles",
+           str(manifest["order"]))
+        ok(f"{entry}-a-third-thing.md" not in manifest["order"],
+           "and does not still name the file that no longer exists")
+        # THE INVARIANT, rather than one mechanism that could break it. The manifest and the
+        # directory have to move together: a rename with no manifest update, or a manifest
+        # update with no rename, leaves a name pointing at nothing and the corpus stops
+        # reassembling with every audit row still green. An earlier version of this arm
+        # asserted that a blind substitution had not mangled the name — which tests nothing,
+        # because the claimer's token grammar already declines that match.
+        ok(all((split / "docs/decisions" / name).exists() for name in manifest["order"]),
+           "every name in the manifest is a file that exists — the two moved together",
+           str([n for n in manifest["order"]
+                if not (split / "docs/decisions" / n).exists()]))
+        body = (split / "docs/decisions" / landed_name).read_text(encoding="utf-8")
+        ok(body.startswith(f"## D{number} — A third thing"),
+           "the HEADING inside it is the number, not the slug", body.split("\n")[0])
+        ok(entry not in (split / "CLAUDE.md").read_text(encoding="utf-8"),
+           "and every citation of the slug elsewhere was substituted too")
+
     print("\nclaim self-test: {0} passed{1}".format(
         PASS, ", {0} FAILED".format(FAIL) if FAIL else ""))
     return 1 if FAIL else 0

@@ -33,6 +33,7 @@ from __future__ import annotations
 
 import argparse
 import os
+import json
 import re
 import subprocess
 import sys
@@ -176,7 +177,8 @@ def ceiling_at(ref: str, cwd: Optional[str] = None) -> Dict[str, int]:
     what main holds at the moment of the merge; allocating against the branch's own copy is
     the guess this entry exists to delete.
     """
-    return {kind: highest(git("show", f"{ref}:{path}", cwd=cwd), pattern)
+    return {kind: highest(corpus_text_at(ref, cwd=cwd) if kind == "decision"
+                          else git("show", f"{ref}:{path}", cwd=cwd), pattern)
             for kind, path, pattern, _ in KINDS}
 
 
@@ -207,10 +209,54 @@ def pending_in(decisions: str, codes: str, gates: str) -> Dict[str, List[str]]:
     return out
 
 
+# ------------------------------------------------------------- the corpus is a directory
+
+# THE DECISION CORPUS IS `docs/decisions/`, ONE FILE PER ENTRY, and `docs/DECISIONS.md` is a
+# stub. Everything below reads the same TEXT it always did — the entries concatenated in
+# `ORDER.json`'s order — so the allocation, the ceiling and the staleness question are
+# unchanged. What is new is the RENAME: a claim used to be a substitution and nothing else,
+# and now the file holding the entry is named after the id it no longer carries.
+#
+# READ FAIL-SOFT, AND THAT IS NOT COSMETIC HERE. An unreadable corpus must look like NO
+# UNCLAIMED SLUG rather than like an empty one — the invariant is "main carries no slug", and
+# a reader that returned "" on error would report every branch as clean and let an unclaimed
+# heading through the merge. That is the failure that turned main red on 2026-09-12, arriving
+# by a different road.
+DECISIONS_DIR = "docs/decisions"
+DECISIONS_MANIFEST = DECISIONS_DIR + "/ORDER.json"
+
+
+def corpus_text(root: Path) -> str:
+    """The entries of a working tree, concatenated in manifest order."""
+    manifest = root / DECISIONS_MANIFEST
+    if not manifest.exists():
+        return read(root / DECISIONS) if (root / DECISIONS).exists() else ""
+    order = json.loads(read(manifest))["order"]
+    return "\n".join(read(root / DECISIONS_DIR / name)
+                     for name in order if (root / DECISIONS_DIR / name).exists())
+
+
+def corpus_text_at(rev: str, cwd: Optional[str] = None) -> str:
+    """The entries AT A COMMIT, concatenated in that commit's own manifest order.
+
+    Falls back to that commit's `docs/DECISIONS.md` when it has no manifest, which is every
+    commit before the split — so `ceiling_at` and `pending_at` keep answering across the
+    boundary rather than reporting a repository with no decisions in it.
+    """
+    manifest = git("show", f"{rev}:{DECISIONS_MANIFEST}", cwd=cwd)
+    if not manifest.strip():
+        return git("show", f"{rev}:{DECISIONS}", cwd=cwd)
+    try:
+        order = json.loads(manifest)["order"]
+    except Exception:
+        return git("show", f"{rev}:{DECISIONS}", cwd=cwd)
+    return "\n".join(git("show", f"{rev}:{DECISIONS_DIR}/{name}", cwd=cwd) for name in order)
+
+
 def pending(root: Path) -> Dict[str, List[str]]:
     """`pending_in` over a working tree."""
     return pending_in(
-        read(root / DECISIONS) if (root / DECISIONS).exists() else "",
+        corpus_text(root),
         read(root / CODES_DECISIONS) if (root / CODES_DECISIONS).exists() else "",
         read(root / GATES) if (root / GATES).exists() else "",
     )
@@ -226,7 +272,7 @@ def pending_at(rev: str, cwd: Optional[str] = None) -> Dict[str, List[str]]:
     docs/CODES-DECISIONS.md has no unclaimed code-card id in it.
     """
     return pending_in(
-        git("show", f"{rev}:{DECISIONS}", cwd=cwd),
+        corpus_text_at(rev, cwd=cwd),
         git("show", f"{rev}:{CODES_DECISIONS}", cwd=cwd),
         git("show", f"{rev}:{GATES}", cwd=cwd),
     )
@@ -489,10 +535,65 @@ def renumber_map(text: str, claims: Sequence[Claim]) -> str:
     return text
 
 
+def rename_claimed_entries(root: Path, claims: Sequence[Claim], write: bool) -> Dict[str, str]:
+    """Rename each claimed entry's FILE, and rewrite the manifest to match.
+
+    A CLAIM USED TO BE A SUBSTITUTION AND NOTHING ELSE. With the corpus as a directory it is
+    also a rename: the slug-named file holds a heading that now reads as a number, and a file
+    named after an id it no longer carries is the drift `path_for` would resolve wrongly.
+
+    THE MANIFEST IS EDITED HERE, AND ITS EXCLUSION FROM THE GENERIC PASS IS DEFENCE IN DEPTH
+    RATHER THAN THE THING HOLDING IT UP. `ORDER.json` carries the slug inside a longer
+    filename, and `apply_to_text` already refuses that match — measured, not assumed:
+    substituting over a manifest naming `<slug>-<tail>.md` changes nothing today. The
+    exclusion stays because the cost is one comparison and the failure it would prevent is
+    silent, but it is NOT load-bearing, and a reader should not be told it is.
+
+    WHAT IS LOAD-BEARING is that the manifest and the directory move TOGETHER. A rename
+    without a manifest update, or the reverse, leaves a name pointing at nothing — and the
+    corpus stops reassembling with every audit row still green until something opens it.
+    That is the invariant the self-test asserts.
+    """
+    renames: Dict[str, str] = {}
+    manifest_path = root / DECISIONS_MANIFEST
+    if not manifest_path.exists():
+        return renames
+    manifest = json.loads(read(manifest_path))
+    order = list(manifest["order"])
+    for claim in claims:
+        if claim.kind != "decision":
+            continue
+        old_name = next((n for n in order if n.startswith(claim.slug + "-")
+                         or n == claim.slug + ".md"), None)
+        if old_name is None:
+            continue
+        # THE DESCRIPTIVE TAIL IS THE SLUG WITHOUT ITS LEADING LETTER AND DASH. A slug
+        # heading's file is named for the whole slug, so there is no separate tail to lift
+        # off; treating it as if there were produced a bare numeric filename that says
+        # nothing and sorts nowhere near its neighbours.
+        number = int(claim.number[1:])
+        described = claim.slug[2:] if claim.slug.startswith("D-") else claim.slug
+        tail = old_name[len(claim.slug) + 1:-3] if old_name.startswith(claim.slug + "-") else described
+        new_name = f"D{number:03d}-{tail}.md"
+        renames[old_name] = new_name
+        order[order.index(old_name)] = new_name
+        if write:
+            (root / DECISIONS_DIR / old_name).rename(root / DECISIONS_DIR / new_name)
+    if renames and write:
+        manifest["order"] = order
+        manifest_path.write_text(json.dumps(manifest, indent=2) + "\n", encoding="utf-8")
+    return renames
+
+
 def perform(root: Path, claims: Sequence[Claim], write: bool) -> Dict[str, int]:
     """Substitute every claim across the tree. Returns path -> replacements."""
     touched: Dict[str, int] = {}
+    manifest_path = root / DECISIONS_MANIFEST
     for path in text_files(root):
+        # The manifest is names, not prose, and `rename_claimed_entries` owns it. Belt and
+        # braces — the token grammar already declines a match inside a longer slug. See there.
+        if path == manifest_path:
+            continue
         before = read(path)
         after = before
         if path == root / GATES:
@@ -507,6 +608,8 @@ def perform(root: Path, claims: Sequence[Claim], write: bool) -> Dict[str, int]:
         ) or 1
         if write:
             path.write_text(after, encoding="utf-8")
+    for old_name, new_name in rename_claimed_entries(root, claims, write).items():
+        touched[f"{DECISIONS_DIR}/{old_name} -> {new_name}"] = 1
     return touched
 
 

@@ -1,0 +1,25 @@
+## D44 — an iCloud conflict copy is refused at the commit and never deleted on a guess
+
+**Built 2026-08-29, and it is a decision about an ENVIRONMENT rather than about the product.** This repo lived in iCloud Drive until later the same day (see the amendment at the foot of this entry). iCloud resolves a same-file race by writing a second file beside the original with `" 2"` appended to the stem — `pre-push 2`, `githooks-selftest 2.sh`. Three appeared in one afternoon. The owner was moving the repo off iCloud; this entry is what held until they did, and it costs nothing afterwards.
+
+**It had already done damage twice before anything guarded it.** `make hooks` copied `scripts/githooks/*` and installed **five hooks from three files**, two of them untracked and reviewed by nobody — git dispatches on exact names so it would not have run them, but the mechanism put unreviewed code into the hook directory. And `githooks-selftest 2.sh` failed a commit on the repo-map orphan rule, which is the *good* outcome and only happens inside a mapped directory with a declared suffix.
+
+**The third failure is the one worth recording, because it is not about file names at all.** An in-place overwrite of `server/ports.py` left iCloud serving **stale bytes to Python's import machinery**: in one interpreter, `open(path).read()` returned the new file and `import` ran the old one, with no `__pycache__` present and `-B` set. A test that had just been mutated read as passing against code that was no longer on disk. The mitigation is a same-directory stage plus `os.replace` — a rename swaps the inode and cannot be served stale — and it is why `scripts/status.py`'s helper preserves mode as well, having dropped `+x` from a SessionStart hook on its first outing.
+
+**Three responses, graded by how sure we can be:**
+
+- **`make hooks` installs only what `git ls-files` returns.** Not a guess — a hook directory whose contents are decided by what is lying on disk has given up the reviewability that is the reason those files are tracked at all.
+- **The pre-commit hook REFUSES a staged conflict copy.** They are untracked, so they are invisible until something says `git add -A`, which is exactly what an agent session says. A committed `foo 2.py` is a second copy of a module no import reaches and no test runs, read later as a file somebody meant to write. `PKMNSCAN_DUPES=off` is the bypass, for the deliberate `Section 2.md` nothing in this repo has yet needed.
+- **`make icloud-sweep` deletes ONLY a copy that is byte-identical to its original**, and reports every differing one without touching it. That asymmetry is the whole design. Identical means iCloud copied a file that still exists unchanged, so there is nothing in it to lose. Differing means it is not provably a duplicate — it may be the newer of two real edits, and this script cannot know which. Guessing there would be the one way a cleanup tool destroys work.
+
+**IT IS NOT IN `make check` AND NOT IN THE GIT HOOK.** D18 at its strongest: it is the only target in this repo that can delete a file. It is also not a defect to *have* conflict copies — the commit path already refuses them — so failing `check` would gate a tidy-up on something the filesystem creates on its own schedule. `make status` reports the count, which is where a fact you should know but need not act on belongs, and is silent when there are none.
+
+**What retires this: leaving iCloud Drive.** The sweep then finds nothing forever, the pre-commit rule costs one grep per commit, and the `git ls-files` enumeration in `make hooks` is correct on its own terms and stays regardless.
+
+**That condition fired on 2026-08-29. The repo is at `~/Developer/pkmnscan` and nothing in this entry is deleted.** The paragraph above is the whole disposition and it was written to be executed rather than re-argued: `make icloud-sweep` reports `no conflict copies` and will go on doing so, the pre-commit rule is one grep, and `make hooks` enumerating `git ls-files` was never about iCloud in the first place. So all three stay armed.
+
+**Kept rather than retired, and the distinction is what this amendment is for.** A guard that costs a grep is not worth the argument it takes to remove, and the hazard is a property of a DIRECTORY rather than of this project — the repo could move back, a checkout could be made inside a synced folder on another machine, and the same `foo 2.py` would appear with nothing watching for it. What IS retired is the urgency: this entry no longer describes the environment the work happens in, and a session reading it should treat the three failures below as an account of what the guards were built from rather than as conditions live today.
+
+**The one thing that genuinely ends is the stale-import hazard**, because it was never about file names: `os.replace` in `scripts/status.py`'s helper is correct on its own terms and stays, but the failure it mitigates — iCloud serving an interpreter bytes that are no longer on disk — cannot happen in a directory nothing syncs.
+
+---

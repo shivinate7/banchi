@@ -1,0 +1,22 @@
+## D24 — Code cards are pooled inventory, not located
+
+Owner's ruling: a code card has **no box, section or card position**. It is a count. An index is acceptable as a key — it is what the photo and sidecar are named after on disk — but it is not meaningful, because the physical cards are disposed of once the code is extracted.
+
+**The seam is one registry flag, `located`**, and it is the concrete form of D14's "two tracks, one rig". `code-card-fork/CLAUDE.md` already said it: *"Codes are fungible pool inventory, not located items. No box, no section, no position. Do not reuse the singles schema."*
+
+- `located: True` — D10 in full. Sequential position at capture, never renumbered, the label rendered everywhere — and since D58 that label counts the cards in the box rather than the slots, which changes what is rendered and not this flag's meaning.
+- `located: False` — `allocate_capture` is unchanged, because the record still needs an index to key its files. But **`Position.label` is never rendered**: not in the review queue, not in a run report, not in the pull preview. **Non-located cards never enter the Fulfillment view or the pull flow**, because there is nothing to walk to, and that is asserted in `app/tests/fulfillment.spec.ts` rather than left to prose.
+
+**Quantity is the unit, and the pipeline already computes it.** D7 aggregates by SKU with `Add to Quantity` = copy count. The count the owner wants is a thing the join already produces — surface it; do not build a second inventory.
+
+**D10 and the fork's C3 do not conflict, and the reason is worth having in one sentence:** D10 positions a piece of cardboard, C3 pools a code string. Two records, two primary keys, joined by the position key.
+
+**Disposal is a terminal state shared with Someday's `removed`.** A code card whose code has been extracted leaves inventory permanently — record kept, gap permanent, exactly `sold`'s shape. Someday already carries the same need for a single card pulled out, damaged or given away, and calls the alternative *"a sale record that lies"*. **Build them as one state, not two.** It is not a tombstone in D10's sense: D10's refusal was about *undo* inventing a third thing the store must explain, and `sold` already proved the state-machine shape.
+
+**Channel is a disposition, not a pipeline stage.** D9 wrote this three months early — *"everything under $0.40 hides the difference between a $0.38 rare and a $0.01 code card, and that difference is what decides later which of them are worth a bulk lot."* Above threshold, a code card lists by the ordinary path. Below it, "PKMNCODES eBay lot" becomes a third sub-threshold disposition beside flat-at-the-floor and flat-price-for-the-run, and `emit` already refuses to write while a disposition is unanswered.
+
+**The own-box convention (owner, 2026-08-23).** Code cards live in their own box, sorted by set. Mixed boxes stay legal (D21), but a pooled card captured into a LOCATED box knowingly consumes a slot number and inflates that box's denominator — the high-water mark counts slots consumed, and a code card consumes one it will never occupy. Convention rather than refusal, because a refusal mid-feed is the rhythm-breaker the capture screen is built to avoid. `docs/CODES-DECISIONS.md` C8 carries the ledger this feeds.
+
+**The render-conditions ruling (owner, 2026-08-23), which is what closes the `views exposure` questions.** Screenshot renders are LOCAL-ONLY: `captures/ui/` is gitignored, the pre-commit hook blocks stray images, and the standing opsec rule already forbids a code-card photo in any listing, README, screenshot or commit. A pooled card's photo appearing in a local render is therefore contained by guards that already exist, and the five advisory questions the `views exposure` row asks are answered by this paragraph rather than by per-screen filtering — which would have cost the owner's own screens their code-card rows. The row stays: it is the tripwire that re-asks the question if a new screen starts rendering stored photos.
+
+**Two opsec triggers fire with this work and must be discharged in the same commit.** `scripts/guard-opsec.sh` has been disabled since 2026-08-03, and D16 says in writing *"Revisit before the codes track handles real cards."* This work makes that condition true. The recorded failure was **over-triggering** — it blocked placeholders in prose about the code format — so the fix is a narrower pattern, never a toggle. And `scripts/views.txt` may never name a URL whose render can contain a code card.
