@@ -57,6 +57,40 @@
 .capture-odo .bn-stat-value { font-size: var(--bn-fs-2xl); }
 .capture-odo-rule { width: 1px; height: 24px; background: var(--bn-line); }
 .capture-odo-verdict { margin-left: var(--bn-1); }
+.capture-odo-wrap { display: flex; flex-direction: column; align-items: flex-end; gap: 2px; }
+/* WHERE THE SITTING WENT, AND IT HOLDS ITS HEIGHT EMPTY (D118). `min-height` is the line box
+   this text would occupy, so the first drawer switch adds a figure to a line that was already
+   there — nothing below it moves. Without the floor, the line appears on the first capture and
+   pushes the viewfinder down while the operator is feeding. */
+/* INLINE FLOW, NOT FLEX, AND THAT IS A FIX RATHER THAN A PREFERENCE. As a flex row each
+   drawer was an item, and a flex item's LEADING whitespace is trimmed — so the separator's
+   own spacing vanished and the line rendered `Box 3 4· Box 4 2`, measured in the 1440 render.
+   A `gap` would have fixed the spacing and moved the separator's spaces out of the text
+   content, which is the string the spec asserts. Block flow keeps both: the spans wrap where
+   the separator is, and `white-space: nowrap` below keeps a drawer and its count together.
+
+   IT DOES NOT WRAP AT THE OWNER'S WORST REAL CASE, measured in the browser at each of the
+   three widths rather than estimated. Their longest multi-drawer sitting is three drawers —
+   2026-09-01, boxes 3 → 4 → 5 at 394/56/105 — which renders `Box 3 394 · Box 4 56 · Box 5
+   105` at 189px against 313px available at 390, and 354px at 820 and 1440. One line, 17px,
+   everywhere. A fourth drawer would wrap and grow the header by a line; the owner has never
+   opened one in a sitting, and if they do this is the measurement to redo. */
+.capture-odo-split {
+  display: block;
+  text-align: right;
+  min-height: calc(var(--bn-fs-sm) * 1.4);
+  margin: 0;
+  font-size: var(--bn-fs-sm);
+  line-height: 1.4;
+  color: var(--bn-ink-4);
+  font-variant-numeric: tabular-nums;
+}
+.capture-odo-drawer { white-space: nowrap; }
+.capture-odo-drawer b { font-weight: 700; color: var(--bn-ink-3); }
+/* The drawer the Box field is on. The whole point of the split is that the operator can see
+   the drawer they are NOT on, so the one they are on is the thing to mark. */
+.capture-odo-drawer.is-here { color: var(--bn-ink-2); }
+.capture-odo-drawer.is-here b { color: var(--bn-ink); }
 
 /* ---- the shell: rail | stage | last, filmstrip underneath ------------------------------- */
 .capture-shell {
@@ -790,13 +824,34 @@
   bottom: 0;
   padding: 14px 0 4px;
   border-radius: 0 0 var(--bn-r) var(--bn-r);
-  background: linear-gradient(to top, color-mix(in srgb, var(--bn-surface) 88%, transparent), transparent);
+  /* THREE STOPS SINCE THE CAPTION GREW A SECOND LINE. At one line the old two-stop ramp put
+     the ink over its solid end; at two the drawer name sat in the faint half, and a card
+     photographed light would have taken it down to nothing. The bottom 62% is near-solid now
+     and the fade above it is unchanged, so the one-line case looks exactly as it did. */
+  background: linear-gradient(
+    to top,
+    color-mix(in srgb, var(--bn-surface) 92%, transparent) 0%,
+    color-mix(in srgb, var(--bn-surface) 84%, transparent) 62%,
+    transparent 100%
+  );
   color: var(--bn-ink);
   font-size: var(--bn-fs-xs);
   font-weight: 700;
   text-align: center;
   font-variant-numeric: tabular-nums;
   pointer-events: none;
+}
+/* THE DRAWER OVER THE COUNT, AND IT COSTS NO LAYOUT. The caption above is absolute against
+   the thumbnail, so this line grows upward over the photograph exactly as a wrapped caption
+   already does — the cell's height is the thumbnail's `aspect-ratio` and neither can reach
+   it. `Box 3` is a word and not the `B3` key sigil; the reason is on the JSX. */
+.capture-undo-drawer {
+  display: block;
+  font-family: var(--bn-font-ui);
+  font-size: var(--bn-fs-xs);
+  font-weight: 600;
+  line-height: 1.15;
+  color: var(--bn-ink-2);
 }
 .capture-undo-row .capture-key {
   position: absolute;
