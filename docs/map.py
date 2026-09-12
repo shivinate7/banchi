@@ -387,7 +387,7 @@ COMPONENTS = [
                                         "bind (D145, D165). Two boxes get no "
                                         "scope rather than a guessed one (D48).",
                                 "governed_by": ["D1", "D2", "D21", "D23", "D33", "D36", "D48",
-                                                "D145", "D163", "D165"]},
+                                                "D145", "D163", "D165", "D174"]},
             "cmd_join.py": {"does": "resolve identifications against the export; --dry-run previews. "
                                     "SEEDS inventory/prices.json's rule and basis on the first "
                                     "join of an EMPTY corpus and never reassigns them (D49, D86) "
@@ -1095,8 +1095,18 @@ COMPONENTS = [
         "status": "built",
         "does": "the master store: inventory, cache, standing queues, order ledger and the "
                 "history, in one SQLite file since D88",
-        "governed_by": ["D4", "D7", "D9", "D10", "D13", "D15", "D63", "D88", "D89"],
-        "note": "T7 reaches this package as of 2026-08-13 — the allocator, the lock and "
+        "governed_by": ["D4", "D7", "D9", "D10", "D13", "D15", "D63", "D88", "D89",
+                        "D172"],
+        "note": "THE CARD'S STABLE NAME IS SPECIFIED HERE AND NOT BUILT: "
+                "docs/specs/stable-card-id.md plans `cards.cid`, the sha256 of the "
+                "photograph the store held when the id was issued, frozen at issue and "
+                "arriving BESIDE `cards.key` rather than instead of it. Nothing in this "
+                "package carries it today — no column, no migration, no refusal — so the "
+                "decision above governs how db.py and master.py may change and describes "
+                "no code in the tree. Its receipts are real: 2,535 of 2,535 stored digests "
+                "equal the photograph on disk, and the migration, the byte-exact reverse "
+                "and a `-9` kill mid-transaction all ran on `.backup()` copies. "
+                "T7 reaches this package as of 2026-08-13 — the allocator, the lock and "
                 "the atomic replace — and as of 2026-08-22 asserts queues.apply_run "
                 "outright: check_queue_supersede calls it directly rather than watching it "
                 "through a route, which is what earned queues.py its tested_by. cache.py is "
@@ -1172,6 +1182,48 @@ COMPONENTS = [
                                           "D29", "D36", "D53", "D63", "D88", "D113"],
                           "tested_by": ["T7"]},
             "cache.py": {"does": "the `identifications` table — answers already paid for", "governed_by": ["D2", "D21", "D88"]},
+            # THE ONLY BINDING IN THIS PIPELINE THAT PROTECTS A DOLLAR, and it replaces a BOX
+            # number with the cards actually being bought. The box form is wrong in both
+            # directions — it refuses two disjoint selections in one drawer (D48's accepted
+            # narrowing) and it cannot see a run spanning two drawers at all, because
+            # `_run_box` answers None for one. The cache cannot stand in for either: an entry
+            # is written AFTER collection, so two presses racing both see an empty cache and
+            # both pay.
+            "submissions.py": {"does": "the `submissions` table — one row per press, holding the "
+                                       "position keys that press is about to pay to read. "
+                                       "`claim_or_refuse` is the guard and it is ONE ACT: it "
+                                       "RECOMPUTES the send list from the cache it is handed, "
+                                       "intersects it against every live claim, and writes the row "
+                                       "— all inside the caller's `Store.write()`, which is what "
+                                       "makes it atomic against another press (D88). The caller "
+                                       "computed its misses thousands of file reads earlier, so "
+                                       "the two things that can have moved — the cache and the "
+                                       "other claims — are both read here under the lock. WHAT IS "
+                                       "CLAIMED IS THE SEND LIST AND NEVER THE SELECTION: on the "
+                                       "operator's store 2,321 of 2,535 cards are cache hits, so a "
+                                       "press over everything locks ~214 cards, and a press that "
+                                       "buys nothing writes no row at all. `force` is the "
+                                       "deliberate re-read (`--reidentify-stale` targets are cache "
+                                       "hits by construction and would otherwise be dropped from "
+                                       "the claim); `resuming` releases the claims of the ONE run "
+                                       "being re-entered and of no other. A ROW DOES NOT SELF-HEAL "
+                                       "AND MAY NOT: a run killed after it submitted has a batch "
+                                       "in flight nobody collected, so `holder_alive` is REPORTED "
+                                       "— pid plus the `ps` start string recorded at claim time, "
+                                       "failing toward live — and never acted on. `release` is the "
+                                       "named way out and leaves a tombstone rather than deleting "
+                                       "the row. `counted` publishes the WORK: rows live, cards "
+                                       "locked, dead holders",
+                               "governed_by": ["D174", "D7", "D18", "D36", "D48", "D88"],
+                               "note": "PROVED BY `make submission-selftest` AND NOT BY THE "
+                                       "HARNESS, which is why `tested_by` is empty: that field "
+                                       "names harness tests, and this guard's subject is two "
+                                       "OS processes racing a real flock over a throwaway store "
+                                       "— not something a harness test can pose. Sixteen "
+                                       "mutation arms, all caught. WHAT IS UNPROVEN: no claim "
+                                       "has been "
+                                       "written by a real identify press, so nothing here has "
+                                       "yet prevented an invoice."},
             "files.py": {"does": "where the store lives, the lock, and the atomic replace the "
                                  "files still beside the database use (prices.json, codes.jsonl)",
                          "governed_by": ["D13", "D15", "D43", "D86", "D166"], "tested_by": ["T7"]},
@@ -1185,7 +1237,7 @@ COMPONENTS = [
                                    "loads only the rows a caller names. `buried()` (D134) is "
                                    "`history()`'s narrower sibling: the `buried` events alone, "
                                    "for `#/graveyard`'s read.",
-                           "governed_by": ["D145", "D13", "D53", "D63", "D88", "D134"], "tested_by": ["T7"]},
+                           "governed_by": ["D145", "D13", "D53", "D63", "D88", "D134", "D174"], "tested_by": ["T7"]},
             "rows.py": {"does": "`Rows`: a keyed mapping of records that is a dict to every "
                                 "caller and, bound to a `Source`, loads one row, one indexed "
                                 "column's matches, or column values with no object built at all. "
@@ -1200,7 +1252,7 @@ COMPONENTS = [
                               "`events_named` (D134) is an unindexed `WHERE event = ?` scan over "
                               "that same table — no new index, because this repo has no schema "
                               "migration to add one to a store already on disk.",
-                      "governed_by": ["D145", "D20", "D86", "D88", "D134"], "tested_by": ["T7"]},
+                      "governed_by": ["D145", "D20", "D86", "D88", "D134", "D174"], "tested_by": ["T7"]},
         },
     },
     {
@@ -1640,18 +1692,38 @@ COMPONENTS = [
                         "deleted, a registration `git worktree prune` disowns, a husk "
                         "directory holding nothing but `.serve/` caches with nothing running "
                         "under it. TIER 2 previews and waits for `--confirm`: a merged branch "
-                        "no tree holds, a worktree with no session in it. Liveness is READ "
+                        "no tree holds, a worktree with no session in it, and — since "
+                        "2026-09-12 — a PROCESS nothing owns. Liveness is READ "
                         "from `~/.claude/sessions/<pid>.json`, never inferred from mtimes — "
                         "see `_same_process` for the timezone bug that made every session "
                         "read as dead, and for why every unreadable case resolves to LIVE. "
                         "`--teardown` is the half a session-end hook runs. Repo-agnostic: no "
-                        "import from this tree, and `--root` points it at any clone.",
+                        "import from this tree, and `--root` points it at any clone. "
+                        "OWNERSHIP IS THAT SAME READ, POINTED AT A DIFFERENT QUESTION: not "
+                        "\"is this tree busy\" but \"does anything still own this process\". "
+                        "Every other test here is about a tree, a branch or a registration and "
+                        "tier 1 asks whether a thing can be live at all, so a background loop "
+                        "whose session had ended read as live, leave it alone — one merged "
+                        "pull requests for 3 h 58 m out from under its own successor and "
+                        "nothing in this repo could see it. `loose_processes` names only what "
+                        "it can PROVE a session started, by `_SESSION_MARK` in the argv of the "
+                        "process or an ancestor, so the owner's own hand-started server is "
+                        "passed over in silence rather than guessed at. IT CAN NEVER NAME THE "
+                        "MAIN CHECKOUT'S SERVER, BY CONSTRUCTION: being in a LINKED worktree "
+                        "is a requirement to be offered, not an exclusion applied afterwards, "
+                        "so no ordering and no failed `main_checkout()` lookup can let D53's "
+                        "process through — proved with the session oracle EMPTY. Tier 2 and "
+                        "not tier 1, because `sweep` reaps tier 1 before it reads `confirm` "
+                        "and `make status` runs the bare preview. A process a live session "
+                        "still owns, older than `STALE_HOURS`, is reported and never reaped at "
+                        "any flag.",
                 # D44 is the asymmetry it inherits — provably dead is reaped, doubtful is only
                 # ever reported. D18 keeps it off the gate: with icloud-sweep it is one of the
                 # two targets here that can delete a file. D53 is what it must not undo — the
                 # main checkout's supervisor is the product and is never touched. D42 is why a
                 # branch is judged by ancestry rather than by `git branch -d`.
-                "governed_by": ["D18", "D42", "D44", "D53"],
+                "governed_by": ["D18", "D42", "D44", "D53", "D111", "D127",
+                                "D175"],
             },
             "serve-selftest.py": {
                 "does": "THE SUPERVISOR'S BUILD JOB, PROVED AGAINST A THROWAWAY TREE (D138). "
@@ -1678,14 +1750,31 @@ COMPONENTS = [
                 "tested_by": [],
             },
             "janitor-selftest.sh": {
-                "does": "proves janitor.py against a throwaway origin, clone and four linked "
-                        "worktrees, with a fake liveness oracle and four short-lived processes "
+                "does": "proves janitor.py against a throwaway origin, clone and seven linked "
+                        "worktrees, with a fake liveness oracle and real processes "
                         "confined to the fixture by `--confine`. The cases that matter are the "
                         "refusals, and each asserts the janitor's own sentence rather than the "
                         "outcome alone — git would refuse some of them by itself, and survival "
-                        "by somebody else's refusal is not coverage. Mutation-tested: five "
-                        "guards removed one at a time, all five caught.",
-                "governed_by": ["D18", "D44"],
+                        "by somebody else's refusal is not coverage. 76 arms. SOME OF ITS "
+                        "PROCESSES CARRY A FAKE SHELL SNAPSHOT, because that is how "
+                        "`loose_processes` proves a session started something, and the most "
+                        "important case in the file is the one that must NOT fire: a "
+                        "long-lived marked process in the fixture's MAIN checkout owned by no "
+                        "session, which is what `make launch-agent` leaves running over the "
+                        "owner's real store. It is given the mark deliberately, so that being "
+                        "in the main checkout is the ONLY thing between it and a reap. A "
+                        "BYSTANDER LEADING THE GROUP an offered process sits in is what makes "
+                        "`_stop`'s leader-only rule load-bearing, and the child's path travels "
+                        "in the ENVIRONMENT rather than argv so the parent is not placed "
+                        "beside it. Mutation-tested: five guards removed one at a time, all "
+                        "five caught; then twelve arms over the ownership finding, eleven "
+                        "caught — the survivor under-signals and is recorded in the entry "
+                        "rather than explained away. That run also exposed two arms of its own "
+                        "that proved nothing: a needle looking for `janitor.py` in a line "
+                        "`_shorten` truncates first, and `ps -axww -o command= -p <pid>`, "
+                        "where BSD's `-a` overrides `-p` and prints the whole machine.",
+                "governed_by": ["D18", "D44", "D53", "D111", "D127",
+                                "D175"],
             },
             "reap.py": {
                 "does": "the kill guard, and the tool it names. ONE FILE, TWO FACES, ONE "
@@ -1718,6 +1807,33 @@ COMPONENTS = [
                 "governed_by": ["D169", "D18", "D43",
                                 "D53", "D88", "D111", "D127"],
             },
+            "submission-selftest.py": {
+                "does": "proves the identify claim table by violating it. A throwaway store "
+                        "per case with `PKMNSCAN_HOME` repointed, because the press this guard "
+                        "stops costs money and pointing it at the operator's store is the "
+                        "incident rather than the test. THE RACE CASE REPRODUCES THE BUG "
+                        "BEFORE THE FIX PROVES ANYTHING, which is reap-selftest.sh's rule: two "
+                        "real processes run the check-then-claim order anybody writes first and "
+                        "BOTH buy the same card, then the same two go through "
+                        "`claim_or_refuse` and exactly one wins, six rounds of six. The barrier "
+                        "is a barrier and not a sleep (D136) — the naive children synchronise "
+                        "twice, so the window is held open by construction rather than by hoping "
+                        "a sleep is long enough. Then: two disjoint selections in one drawer that "
+                        "the box form refuses, a press spanning drawers that the box form cannot "
+                        "see at all (in both orders, and overlapping in a drawer that is NOT the "
+                        "first one named — the arm that survived until that case existed), a "
+                        "holder killed with -9 whose claim must keep blocking and become "
+                        "releasable, a pid-reuse case, and THE FIGURES: rows live and CARDS "
+                        "locked, because a table that claimed nothing would pass every outcome "
+                        "assertion in the file, and the schema upgrade a real operator's "
+                        "2,535-card store will actually take rather than the create-all "
+                        "branch every other case goes through, and the ONE door that releases a "
+                        "claim without its answers being banked — from both sides, because "
+                        "the arm that ignores the batch ids must not pass. Mutation-tested: "
+                        "sixteen arms, all caught, and arm 13 found two assertions of this "
+                        "suite's own passing for the wrong reason.",
+                "governed_by": ["D174", "D7", "D18", "D48", "D88", "D136"],
+            },
             "reap-selftest.sh": {
                 "does": "proves reap.py by pointing it at processes it must not kill. A "
                         "throwaway checkout, a throwaway sibling standing in for "
@@ -1739,6 +1855,67 @@ COMPONENTS = [
                         "guards removed one at a time, all caught, the naming rule among them.",
                 "governed_by": ["D169", "D18", "D43",
                                 "D53", "D122", "D127", "D157"],
+            },
+            "silent-write-guard.py": {
+                "does": "the PreToolUse hook on Bash that refuses a git WRITE whose own output "
+                        "is thrown away. ONE INVARIANT, NOT A LIST OF SHAPES: a write must "
+                        "leave a trace the session can read, because stdout carries the proof "
+                        "(`[branch sha]`) and stderr carries the refusal (every byte the "
+                        "pre-commit hook prints) — discard either and the reader cannot tell "
+                        "`nothing is wrong` from `nothing is known yet`. Decided from the "
+                        "string alone, which is where it differs from reap.py: the fd state is "
+                        "WALKED IN ORDER, so `2>&1 >/dev/null` is read as losing the proof and "
+                        "keeping the refusal, and the tokenizer is shlex with "
+                        "`punctuation_chars` so a quoted `>/dev/null` in a commit message is a "
+                        "STRING. Heredoc BODIES are cut, because the message announcing this "
+                        "guard quotes the command it refuses. The verb roster is deliberately "
+                        "short and every exemption is a measured false positive: reads, "
+                        "`--dry-run`, `--abort`/`--quit`, a bare `git fetch`, `git merge-tree` "
+                        "and `make merge-selftest` all pass. Fails OPEN on its own bugs; "
+                        "`PKMNSCAN_SILENT=off` is the hatch and every refusal prints it.",
+                # D127 is the guard beside it whose fail-open asymmetry this one honours
+                # unchanged. D42 is the operation it most often protects — a silenced
+                # `make merge` or `git fetch origin main:main` hides that hook's refusal.
+                # D18 keeps its self-test off the commit path.
+                "governed_by": ["D18", "D42", "D127", "D133",
+                                "D171"],
+            },
+            "silent-write-selftest.sh": {
+                "does": "proves silent-write-guard.py by violating it. IT REPRODUCES THE "
+                        "2026-09-12 INCIDENT FIRST, in a throwaway repository with a "
+                        "pre-commit hook that refuses: the commit is silenced, exits non-zero, "
+                        "prints nothing, and `git log --oneline -1` answers with the PREVIOUS "
+                        "commit — the stale read that was reported as `pushed`. Only then is "
+                        "the guard asked about that command. THE FALSE POSITIVES ARE THE OTHER "
+                        "HALF and each is RUN in the fixture before it is scored, because a "
+                        "case that is secretly a typo passes the guard for the wrong reason. "
+                        "The refusal's CONTENT is scored too — the escape hatch, and which "
+                        "stream went where. Mutation-tested: twenty-one arms, nineteen caught; "
+                        "the two survivors are the JSON try/except and the bottom-of-file "
+                        "floor, which cover each other, and a twenty-first arm removing BOTH "
+                        "goes red, which is what makes them depth rather than a gap.",
+                "governed_by": ["D18", "D127", "D171"],
+            },
+            "coordinator.py": {
+                "does": "`make coordinator` — the merge queue READ rather than remembered, so "
+                        "a status report is generated instead of composed out of a session's "
+                        "memory and a driver's stdout. main's tip against origin's, every open "
+                        "PR with a verdict PINNED TO ITS HEAD SHA, how many merged in 24h, "
+                        "`id claims` out of the audit, every worktree holding uncommitted work "
+                        "(D135's symlinks excluded), live sessions read from the console app's "
+                        "own records with the start time checked, and any waiter loop or twice-"
+                        "running driver. THE FLOOR IS THE REQUIRED-CHECK SET FROM BRANCH "
+                        "PROTECTION AND NOT A COUNT, which is a measurement: main's tip carries "
+                        "10 runs including `demo.yml`'s main-only pair, while PR #309's head "
+                        "carried 6 with `design-check` gated to one run, so no single number is "
+                        "right. A missing or `skipped` required check is `not ready` and never "
+                        "clean; a null conclusion is `running` and never failed. Any block it "
+                        "cannot read prints UNKNOWN and makes the exit non-zero.",
+                # D42 is the operation it reports on; D43 is why the worktree block exists at
+                # all; D111 is where the liveness oracle and its argument come from; D141 is
+                # the path-gating that makes a count floor unusable.
+                "governed_by": ["D42", "D43", "D111", "D135", "D140", "D141",
+                                "D171"],
             },
             "session-teardown.sh": {
                 "does": "the SessionEnd / WorktreeRemove hook. Stops what a leaving session "
@@ -1800,7 +1977,7 @@ COMPONENTS = [
                 # (D104) and the seven order-line closers (D113).
                 "governed_by": ["D13", "D14", "D18", "D58", "D62", "D76", "D79", "D83", "D86",
                                 "D87", "D89", "D96", "D100", "D103", "D104", "D106", "D113",
-                                "D134", "D159", "D167", "D168"],
+                                "D134", "D159", "D167", "D168", "D174"],
             },
             "verdict-selftest.py": {"does": "PROVES `app/design-check-reporter.ts` STILL WRITES A "
                                             "VERDICT, BY RUNNING IT. `make docs-audit`'s "
@@ -2415,7 +2592,7 @@ COMPONENTS = [
                 # for vale. Change one and the entry describing that check goes stale with it,
                 # which is exactly what `governed_by` is for — so they are listed rather than
                 # allowlisted away.
-                "governed_by": ["D16", "D17", "D18", "D43", "D44", "D47", "D53", "D58", "D60", "D65", "D68", "D74", "D76", "D80", "D82", "D92", "D111", "D122", "D127", "D129", "D133", "D138", "D140", "D160"],
+                "governed_by": ["D7", "D16", "D17", "D18", "D42", "D43", "D44", "D47", "D48", "D53", "D58", "D60", "D65", "D68", "D74", "D76", "D80", "D82", "D88", "D92", "D111", "D122", "D127", "D129", "D133", "D138", "D140", "D141", "D160", "D173"],
                 "note": "IT DECLARES THE SUITE AND DELIBERATELY DOES NOT DRIVE IT, which is "
                         "the whole shape. A registry that drove `make check` could not "
                         "disagree with the recipe — and could silently stop running a check, "
@@ -2845,7 +3022,7 @@ COMPONENTS = [
                                 "D77", "D79", "D83", "D86", "D87", "D88", "D89", "D90", "D91",
                                 "D92", "D93", "D96", "D100", "D103", "D104", "D108", "D113",
                                 "D115", "D116", "D132", "D134", "D137", "D138",
-                                "D168"],
+                                "D168", "D174"],
                 "tested_by": ["T7"],
             },
             "tcg_import.py": {"does": "THE OUTBOUND WRITE to the seller admin, and the only "
@@ -2998,10 +3175,9 @@ COMPONENTS = [
                                 "D20", "D21", "D22", "D24", "D25", "D29", "D32", "D33",
                                 "D35", "D36", "D43", "D47", "D48", "D49", "D54", "D56",
                                 "D58", "D59", "D62", "D64", "D65", "D68", "D76", "D78",
-                                "D79", "D86", "D87", "D88", "D100", "D103", "D105", "D134",
-                                "D137", "D145", "D147", "D156", "D159", "D165", "D166",
-                                "D168",
-                                "D170"],
+                                "D79", "D86", "D87", "D88", "D89", "D100", "D103", "D105",
+                                "D134", "D137", "D145", "D147", "D156", "D159", "D165",
+                                "D166", "D168", "D170", "D174"],
                 "tested_by": ["T7"],
             },
             "shipping_routes.py": {
@@ -4486,6 +4662,44 @@ COMPONENTS = [
                                       # `make design-check`, not at turn end, so it is named
                                       # here in prose rather than in `tested_by`.
                                       },
+            "src/SubmissionClaims.tsx": {"does": "the panel on #/runs saying what a live send "
+                                                 "is holding, and the ONE way out of a stuck "
+                                                 "claim (D174). It draws "
+                                                 "NOTHING when nothing is claimed, which on a "
+                                                 "healthy store is always — that is why this is "
+                                                 "a panel and not a thirteenth route, since a "
+                                                 "route for it would be a nav item leading to an "
+                                                 "empty page. The free count comes before the "
+                                                 "control that fires (D89's shape): "
+                                                 "`getSubmissions` holds nothing and the release "
+                                                 "button does not exist until it has answered. A "
+                                                 "LIVE HOLDER IS OFFERED NO RELEASE AT ALL — "
+                                                 "releasing a claim whose run is still "
+                                                 "submitting re-opens those cards to the second "
+                                                 "press the claim exists to prevent — so the "
+                                                 "button is drawn only for `holder_alive: false` "
+                                                 "and a live one says to watch the run instead. "
+                                                 "Not a disabled control: D50's `not-allowed` is "
+                                                 "for an action that exists and cannot be used "
+                                                 "now. The poll stops when nothing is held, and "
+                                                 "a dropped poll holds the last list rather than "
+                                                 "letting a live claim vanish off the screen",
+                                         "governed_by": ["D174", "D33", "D39",
+                                                         "D50", "D57", "D89", "D94", "D118"]},
+            "src/SubmissionClaims.css": {"does": "that panel's own styles: the row's two columns "
+                                                 "and nothing else — the kit supplies the panel, "
+                                                 "the list, the pills and the buttons. The action "
+                                                 "slot RESERVES THE TALLEST OF ITS STATES (D118), "
+                                                 "floored at `max()` of the control tokens, "
+                                                 "because a holder dying under a poll swaps one "
+                                                 "pill for a pill and a button and an unreserved "
+                                                 "row would shove every row below it down while "
+                                                 "the operator is reading them. Positions are "
+                                                 "mono because `3/12` is a store key, which is "
+                                                 "the register rule and not a decoration. Names "
+                                                 "no color",
+                                         "governed_by": ["D174", "D94", "D117",
+                                                         "D118"]},
             "src/LiveReconcile.css": {"does": "the store-wide reconcile panel's own styles — "
                                              "quieter than the run panel above it on purpose, "
                                              "and the stdout block is `white-space: pre` with "
@@ -4506,7 +4720,7 @@ COMPONENTS = [
                              # sessionStorage carve-out the handoff rides. D10 is cards-not-
                              # high-water on the chip, D32 the crop pair whose estimate the
                              # scope key voids, D38 the layout this left behind.
-                             "governed_by": ["D5", "D10", "D13", "D20", "D27", "D32", "D33", "D38", "D39", "D56", "D87", "D100"]},
+                             "governed_by": ["D5", "D10", "D13", "D20", "D27", "D32", "D33", "D38", "D39", "D56", "D87", "D100", "D174"]},
             "src/Runs.css": {"does": "its page chrome, to docs/DESIGN.md's numbers literally: 16px "
                                      "on all four sides, a 20px display title sharing its line "
                                      "with the scope and the controls, a one-line lede, and the "
@@ -5646,7 +5860,7 @@ COMPONENTS = [
                         "re-add the link and all 20 brand cases fail naming the URL. Not "
                         "a harness test; it has no test of its own and is "
                         "exercised by every spec that imports it.",
-                "governed_by": ["D16", "D37", "D43", "D46", "D56", "D58", "D63", "D70", "D86", "D124", "D125", "D134"]},
+                "governed_by": ["D16", "D37", "D43", "D46", "D56", "D58", "D63", "D70", "D86", "D124", "D125", "D134", "D174"]},
             "tests/fontsReady.ts": {
                 "does": "one helper, `settleFonts`, awaited after every `page.goto` in the seven "
                         "specs that measure type — it said FOUR until 2026-09-06, and the "
@@ -5668,7 +5882,7 @@ COMPONENTS = [
                         "arrow belongs to the screens, a held Cmd in a text field belongs to the "
                         "caret, and a screen outside the ring keeps the browser's key. Not a "
                         "harness test; `make design-check` runs it.",
-                "governed_by": ["D5", "D31", "D39", "D43", "D51", "D69", "D70", "D86", "D100", "D105", "D134"],
+                "governed_by": ["D5", "D31", "D39", "D43", "D51", "D69", "D70", "D86", "D100", "D105", "D134", "D174"],
                 "note": "ITS RING IS PINNED ON PURPOSE AND RECONCILED AT THE COMMIT. A ring "
                         "derived from App.tsx could not assert the ORDER against anything "
                         "independent, so the copy stays and carries a `ROUTE-ROSTER hotkey` "
@@ -5794,7 +6008,7 @@ COMPONENTS = [
                         "than disabled, D33's shape applied to the press that settles the "
                         "ledger. The route is intercepted and its body read; no real request is "
                         "made and no store is touched.",
-                "governed_by": ["D7", "D33", "D87"]},
+                "governed_by": ["D7", "D33", "D87", "D174"]},
             "tests/markdown.spec.ts": {
                 "does": "the stale-listing markdown in a browser (D100): that a person can open "
                         "it from the Runs header at all, that it traps focus and Escape hands it "
@@ -5827,7 +6041,7 @@ COMPONENTS = [
                 # D1 is the two-phase split the four steps make visible; D3 is the ladder the
                 # join walks; D9 is the pricing answer that gates emit;
                 # D31 is why this is a panel on #/inventory rather than a seventh route.
-                "governed_by": ["D145", "D36", "D1", "D3", "D9", "D13", "D20", "D31", "D32", "D33", "D39", "D48", "D54", "D56", "D64", "D65", "D49", "D76", "D166"],
+                "governed_by": ["D145", "D36", "D1", "D3", "D9", "D13", "D20", "D31", "D32", "D33", "D39", "D48", "D54", "D56", "D64", "D65", "D49", "D76", "D166", "D174", "D57", "D118", "D136"],
                 "note": "THE PIPELINE WAS THE LARGEST INSTANCE OF THE ROUTE-IS-NOT-A-FEATURE "
                         "FAILURE AND NOBODY HAD COUNTED IT. The four commands have existed "
                         "since step 4 and have been through a 53-card run and a 544-card run; "

@@ -187,6 +187,28 @@ CHECKS = (
         "governed_by": ("D18",),
     },
     {
+        "target": "screen-freshness-selftest",
+        "runs": "node scripts/screen-freshness.mjs --self-test",
+        "asserts": "The freshness guard's own classifier, against pinned cases in both "
+                   "directions: a write with a re-read after it, the same write with nothing "
+                   "after it, a write behind a module-level wrapper with evidence at the "
+                   "caller, the same wrapper with no caller that re-reads — plus the one blind "
+                   "spot it CANNOT catch, pinned so it cannot change silently.",
+        "needs": ("node", "app deps"),
+        "writes": "",
+        "commit_path": False,
+        "why_off_commit_path": "screen-freshness' reason exactly — it runs node, and the git "
+                               "hook runs bare.",
+        "gates": True,
+        "why": "IT WAS ON NO TARGET AT ALL UNTIL 2026-09-12, and it was RED on main while the "
+               "plain `screen-freshness` beside it passed and printed \"run --self-test\". So "
+               "the check told the operator to run the check that was red, and nothing made "
+               "them. That is the whole shape of a rule with no reader, and it is why this "
+               "one is gated now rather than argued about: PR #307 filled the 17 exports its "
+               "RECORDED table was missing, so the gate is safe and costs one node process.",
+        "governed_by": ("D18", "D173"),
+    },
+    {
         "target": "sigil-check",
         "runs": "python3 scripts/sigil-check.py --self-test && python3 scripts/sigil-check.py",
         "asserts": "A bare `#` on an owner-side screen draws D58's COUNT and never the store "
@@ -372,6 +394,30 @@ CHECKS = (
         "governed_by": ("D16", "D18", "D60", "D160"),
     },
     {
+        "target": "submission-selftest",
+        "runs": "python3 scripts/submission-selftest.py",
+        "asserts": "store/submissions.py — the claim table that refuses a second `identify` "
+                   "press over cards a live run is already paying to read — by violating it "
+                   "against a throwaway store. The two concurrent cases are real separate "
+                   "processes racing a real flock over one card, and the first of them "
+                   "REPRODUCES the bug rather than asserting about it: the children run the "
+                   "check-then-claim order anybody writes first and both buy the same card. "
+                   "Then the disjoint selections in one drawer that the box form refuses, the "
+                   "press spanning drawers that the box form cannot see at all, a holder "
+                   "killed with -9 whose claim must keep blocking and become releasable, and "
+                   "the FIGURES — rows live and CARDS locked — because a table that claimed "
+                   "nothing would pass every outcome assertion here.",
+        "needs": ("python3",),
+        "writes": "one sqlite store per case and two short-lived processes, all under "
+                  "`mktemp -d`. `PKMNSCAN_HOME` is repointed for every case, so the "
+                  "operator's own store is never opened.",
+        "commit_path": False,
+        "why_off_commit_path": "D18 — it writes a temp store and it signals processes. Same "
+                               "standing as janitor-selftest and reap-selftest.",
+        "gates": True,
+        "governed_by": ("D7", "D18", "D48", "D88"),
+    },
+    {
         "target": "janitor-selftest",
         "runs": "bash scripts/janitor-selftest.sh",
         "asserts": "scripts/janitor.py, against a throwaway clone with real worktrees, a fake "
@@ -409,6 +455,53 @@ CHECKS = (
                                "guard here that can refuse a shell command outright.",
         "gates": True,
         "governed_by": ("D18", "D53", "D111", "D127"),
+    },
+    {
+        "target": "silent-write-selftest",
+        "runs": "bash scripts/silent-write-selftest.sh",
+        "asserts": "scripts/silent-write-guard.py, the PreToolUse hook that refuses a git "
+                   "write whose own output is discarded. THE INCIDENT IS REPRODUCED rather "
+                   "than asserted about: a throwaway repository with a pre-commit hook that "
+                   "refuses, the 2026-09-12 command run verbatim, and the proof that "
+                   "`git log --oneline -1` then answers with the PREVIOUS commit — the stale "
+                   "read that was reported as `pushed`. The half that decides whether this "
+                   "guard survives is the false positives, and each is RUN in the fixture "
+                   "before it is scored: `git rev-parse … 2>/dev/null`, `git fetch origin -q "
+                   "2>/dev/null`, `git merge --abort 2>/dev/null`, `git merge-tree`, "
+                   "`make merge-selftest`, and a quoted `>/dev/null` inside a commit message. "
+                   "The refusal's own text is scored too — a refusal that does not print "
+                   "`PKMNSCAN_SILENT=off` fails here.",
+        "needs": ("python3", "bash", "git"),
+        "writes": "a git repository, a pre-commit hook and two commits, all under `mktemp -d`. "
+                  "It starts no long-lived process and signals nothing.",
+        "commit_path": False,
+        "why_off_commit_path": "D18 — it writes a temp repository and makes real commits in "
+                               "it. Same standing as reap-selftest beside it, whose guard it "
+                               "copies its fail-open asymmetry from.",
+        "gates": True,
+        "governed_by": ("D18", "D42", "D127"),
+    },
+    {
+        "target": "coordinator-selftest",
+        "runs": "python3 scripts/coordinator.py --selftest",
+        "asserts": "scripts/coordinator.py's verdict rules, against synthetic check-run "
+                   "payloads. Every case is a payload that a reader looking at conclusions "
+                   "ALONE would call clean, and the assertion is that this one does not: one "
+                   "required check of two with everything reported passing, a required check "
+                   "that reported `skipped`, a commit with no runs at all. The two mirrors are "
+                   "cases as well — a null conclusion is `running` and never `failed`, and an "
+                   "OPTIONAL check may be skipped without spoiling a green. It also asserts "
+                   "the report's own floor: a block that could not be read makes the exit "
+                   "non-zero, so an incomplete report cannot be relayed as the state of the "
+                   "queue.",
+        "needs": ("python3",),
+        "writes": "",
+        "commit_path": False,
+        "why_off_commit_path": "D16 — it is a self-test rather than a doc check, and it belongs "
+                               "beside the other selftests at the end of `check` rather than "
+                               "on the hook. Nothing here writes, so D18 is not the reason.",
+        "gates": True,
+        "governed_by": ("D42", "D141"),
     },
     {
         "target": "suite-lock-selftest",

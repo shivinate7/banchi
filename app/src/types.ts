@@ -2162,6 +2162,68 @@ export type RunLegPreflight = {
   /** A live run already reading this box. The screen withholds its confirm on this rather
    *  than letting the operator press a button that is going to refuse. */
   busy_run: string | null
+  /** A live submission already holding CARDS in this leg, or null. The same courtesy as
+   *  `busy_run` beside it, one vocabulary down: that field answers "is a run reading this
+   *  DRAWER", and this answers "has a live submission already claimed any of these CARDS" —
+   *  the question that has an answer for a press over two drawers and for two disjoint
+   *  selections in one. `sentence` is the server's own refusal text and is rendered verbatim. */
+  claimed: ClaimConflict | null
+}
+
+/** Which cards in one leg a live submission is already holding, and whose it is.
+ *
+ *  THE SENTENCE COMES FROM THE SERVER AND IS NEVER REBUILT HERE. `store/submissions.py`
+ *  composes it for both refusal sites — the command's, before it submits, and the route's,
+ *  before it spawns — and a third spelling on this side would be a third message an operator
+ *  has to learn to read as one thing. */
+export type ClaimConflict = {
+  box: number
+  /** How many of this leg's cards are held. The figure is the point: two is a double-click,
+   *  four hundred is a different mistake. */
+  cards: number
+  receipts: string[]
+  runs: string[]
+  sentence: string
+}
+
+/** One live claim on the cards a run is paying to read (`GET /pipeline/submissions`).
+ *
+ *  `holder_alive` IS THE FIELD THE SCREEN BRANCHES ON, and it is reported rather than acted
+ *  on. A claim whose holder is gone still blocks: a run killed after it submitted has a batch
+ *  in flight nobody collected, and a guard that self-healed that row would offer a green
+ *  button over an invoice already rung up. So a live holder means WAIT and a dead one means
+ *  the release is offered — and the choice stays the operator's. */
+export type SubmissionClaim = {
+  receipt: string
+  /** Null for a claim written by a press that had not got as far as creating a run. */
+  run: string | null
+  pid: number
+  started_at: string
+  cards: number
+  /** A few of the positions, never the whole set — a store-wide press claims hundreds. */
+  sample: string[]
+  capture_dir: string | null
+  holder_alive: boolean
+}
+
+/** THE FREE COUNT THAT COMES BEFORE THE CONTROL THAT FIRES, which is `BoxPhotoPlan`'s shape
+ *  one feature over (D89). `counts` is the WORK this guard is doing — rows, cards locked, and
+ *  how many are held by a process that is gone — published rather than inferred from the fact
+ *  that nothing has gone wrong. */
+export type SubmissionClaims = {
+  claims: SubmissionClaim[]
+  counts: { claims: number; keys: number; stale: number }
+}
+
+/** What a release did. `released: false` is an ordinary answer and not a failure — the claim
+ *  was already released, which is what a replayed request and a stale screen both land on. */
+export type ClaimRelease = {
+  receipt: string
+  run: string | null
+  released: boolean
+  cards: number
+  /** The list as it stands after the press, so the caller never re-reads to redraw. */
+  claims: SubmissionClaim[]
 }
 
 /** The one card the crop preview is showing, and what this reading does to it.
