@@ -36,6 +36,24 @@
             "command": "scripts/silent-write-guard.py --hook"
           }
         ]
+      },
+      {
+        "matcher": "Bash",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "scripts/guard-shell.py --hook"
+          }
+        ]
+      },
+      {
+        "matcher": "Write|Edit",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "scripts/guard-shell.py --hook"
+          }
+        ]
       }
     ],
     "PostToolUse": [

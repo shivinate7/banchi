@@ -276,11 +276,21 @@ echo 1 > "$tmp/work/.serve/supervisor.pid"
 # was renamed in serve.py, and the hook would quietly start telling every switch that the guard
 # is missing. Copying the shipped file makes the rename a FAILED COMMIT in one direction, and
 # the gutted copy below covers the other.
+# THREE STATES NOW, NOT TWO (D176). A branch's serve.py either
+# SYNCS this tree back to main, or merely REFUSES to serve it (D158's shape), or does neither
+# and serves it. Each is a different sentence, and the ordinary state today is the first — so
+# the arm that used to expect "will REFUSE" over the SHIPPED file now expects the sync, and the
+# refusal case has to have its token taken away to be reached at all.
 cp "$REPO_ROOT/scripts/serve.py" "$tmp/work/scripts/serve.py"
 out="$(git switch -q feature 2>&1)"
 case "$out" in
+  *"$MARK"*"PUT THIS TREE BACK ON MAIN"*)
+     ok "a live supervisor whose serve.py carries the SELF-SYNC — the switch says the tree "\
+"will be put back, which is what will actually happen" ;;
   *"$MARK"*"will REFUSE to reload"*)
-     ok "a live supervisor whose serve.py carries the guard — the switch says it will refuse" ;;
+     bad "the switch promised a REFUSAL over a serve.py that syncs — the message describes "\
+"D158's behaviour and the tree will be moved instead"
+     printf '%s\n' "$out" | sed 's/^/         /' ;;
   *"$MARK"*)
      bad "the switch warned but said nothing about what the live server would do"
      printf '%s\n' "$out" | sed 's/^/         /' ;;
@@ -289,17 +299,34 @@ case "$out" in
 esac
 git switch -q main 2>/dev/null
 
+# D158'S SHAPE: a branch that refuses but cannot sync. Reached by taking the module's name away
+# and leaving the hatch's, which is also what proves the two greps are not reading one token.
+sed 's/primary_sync/RENAMED_BY_THIS_CASE/g' \
+  "$REPO_ROOT/scripts/serve.py" > "$tmp/work/scripts/serve.py"
+out="$(git switch -q feature 2>&1)"
+case "$out" in
+  *"$MARK"*"will REFUSE to reload"*)
+     ok "a branch that refuses but does NOT sync — the switch says refuse, not put back" ;;
+  *"$MARK"*"PUT THIS TREE BACK ON MAIN"*)
+     bad "a branch with no sync in it was reported as one that syncs — the greps are reading "\
+"the same token"
+     printf '%s\n' "$out" | sed 's/^/         /' ;;
+  *) bad "a branch that can refuse said nothing about the live server"
+     printf '%s\n' "$out" | sed 's/^/         /' ;;
+esac
+git switch -q main 2>/dev/null
+
 # THE OTHER DIRECTION, AND THE ONLY CASE THE SUPERVISOR'S OWN GUARD CANNOT COVER: a branch cut
 # before the guard existed. Its serve.py will be re-exec'd into and will serve the real store,
 # and nothing in that branch is going to say so — so this hook is the last thing that can.
-sed 's/PKMNSCAN_SERVE_MAIN/RENAMED_BY_THIS_CASE/g' \
+sed -e 's/PKMNSCAN_SERVE_MAIN/RENAMED_BY_THIS_CASE/g' -e 's/primary_sync/ALSO_RENAMED/g' \
   "$REPO_ROOT/scripts/serve.py" > "$tmp/work/scripts/serve.py"
 out="$(git switch -q feature 2>&1)"
 case "$out" in
   *"$MARK"*"predates the guard"*)
      ok "a branch whose serve.py predates the guard — the switch says so and names the stop" ;;
-  *"$MARK"*"will REFUSE to reload"*)
-     bad "a branch with NO guard was reported as one that would refuse — the grep is inverted"
+  *"$MARK"*"will REFUSE to reload"*|*"$MARK"*"PUT THIS TREE BACK ON MAIN"*)
+     bad "a branch with NO guard was reported as one that would act — the grep is inverted"
      printf '%s\n' "$out" | sed 's/^/         /' ;;
   *) bad "a branch predating the guard said nothing about the live server"
      printf '%s\n' "$out" | sed 's/^/         /' ;;

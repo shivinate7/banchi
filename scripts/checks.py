@@ -482,6 +482,35 @@ CHECKS = (
         "governed_by": ("D18", "D42", "D127"),
     },
     {
+        "target": "guard-shell-selftest",
+        "runs": "bash scripts/guard-shell-selftest.sh",
+        "asserts": "scripts/guard-shell.py, the PreToolUse hook that refuses five shell "
+                   "mistakes this repo has already paid for: `git checkout` over a modified "
+                   "file, a write outside this checkout, `gh api -f` with no method, `ln -s` "
+                   "at an existing path, and a polling loop. FOUR OF THE FIVE INCIDENTS ARE "
+                   "PERFORMED rather than asserted about — 240 lines really destroyed by a "
+                   "real `git checkout`, a real worktree whose root differs from its main "
+                   "checkout's, a real `harness/images/images` created by a real `ln -s`, and "
+                   "`pgrep -f` really matching a process that merely NAMES its pattern. The "
+                   "half that decides whether the guard survives is the false positives, and "
+                   "the git ones are RUN in the fixture before they are scored: a branch, a "
+                   "clean path, `--staged`, a named source, `-sfn`, `--method GET`, `graphql`, "
+                   "a pid wait, a bounded retry, and every `git`/`gh`/`ln` line swept out of "
+                   "this repo's own tooling. Each of the five hatches is scored in both of "
+                   "its forms, and the clause table is READ rather than retyped, so a sixth "
+                   "clause with no hatch fails here instead of shipping unescapable.",
+        "needs": ("python3", "bash", "git"),
+        "writes": "a git repository, a linked worktree, two commits, a symlink and one "
+                  "short-lived decoy process, all under `mktemp -d`. It signals only what it "
+                  "spawned there.",
+        "commit_path": False,
+        "why_off_commit_path": "D18 — it writes a temp repository, adds a worktree to it and "
+                               "makes real commits. Same standing as silent-write-selftest "
+                               "beside it, whose parser its guard shares.",
+        "gates": True,
+        "governed_by": ("D18", "D43", "D127", "D171", "D173"),
+    },
+    {
         "target": "coordinator-selftest",
         "runs": "python3 scripts/coordinator.py --selftest",
         "asserts": "scripts/coordinator.py's verdict rules, against synthetic check-run "
@@ -544,6 +573,34 @@ CHECKS = (
         "why_off_commit_path": "D18 — it writes, and it starts and signals real processes.",
         "gates": True,
         "governed_by": ("D18", "D43", "D53", "D138"),
+    },
+    {
+        "target": "sync-selftest",
+        "runs": "python3 scripts/sync-selftest.py",
+        "asserts": "the primary checkout's self-sync, proved by violating it in throwaway "
+                   "clones with their own worktrees and a real bare origin. Both parts, from "
+                   "one call: a tree parked on a feature branch goes back to main AND main "
+                   "fast-forwards to origin/main. And the six refusals, each a real repository "
+                   "state rather than a mock — uncommitted TRACKED work, named and never "
+                   "discarded; untracked exhaust, which must NOT block a sync; a half-finished "
+                   "merge and a stopped rebase, whose markers are a file and a directory; main "
+                   "held by another worktree; a local main that is ahead or diverged, which is "
+                   "no fast-forward; and a detached HEAD no ref contains. A LINKED WORKTREE IS "
+                   "LEFT COMPLETELY ALONE, asked from inside one. One arm arms D42's own "
+                   "`reference-transaction` hook and proves BOTH directions: the sync's "
+                   "fast-forward is permitted by allow rule 3, and a move to a commit origin "
+                   "does not carry is still refused. Its own bugs fail OPEN and silently; a "
+                   "fact it cannot read fails CLOSED and loud.",
+        "needs": ("python3", "git"),
+        "writes": "bare origins, clones and linked worktrees under `mktemp -d`, with real "
+                  "commits and real `refs/heads/main` moves in them. NEVER this checkout: the "
+                  "subject of a sync is the PRIMARY tree, which on this machine is the owner's "
+                  "live rig with a capture server kept alive at login over their real store.",
+        "commit_path": False,
+        "why_off_commit_path": "D18 — it writes, and what it writes are branch switches and "
+                               "ref moves. Same standing as merge-selftest beside it.",
+        "gates": True,
+        "governed_by": ("D18", "D42", "D43", "D53", "D139", "D158"),
     },
     {
         "target": "verdict-selftest",

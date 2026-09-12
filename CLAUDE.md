@@ -315,8 +315,9 @@ make check          # harness + docs-audit + audit-self-test + githooks-selftest
                     #   merge-selftest + revert-selftest + claim-selftest + claim-stale +
                     #   decisions-selftest + submission-selftest + revert-guard +
                     #   janitor-selftest + reap-selftest + silent-write-selftest +
+                    #   guard-shell-selftest +
                     #   coordinator-selftest + suite-lock-selftest +
-                    #   serve-selftest +
+                    #   serve-selftest + sync-selftest +
                     #   verdict-selftest + port-agreement + set-hint-agreement +
                     #   screen-freshness + screen-freshness-selftest +
                     #   sigil-check + ignore-check + lint +
@@ -447,6 +448,62 @@ make silent-write-selftest  # that guard, proved by REPRODUCING the incident: a 
                     #   a temp repo). Mutation-tested — twenty-one arms, nineteen caught, and the
                     #   two survivors are one requirement covered twice, proved by a twenty-first
                     #   arm that removes both and goes red.
+                    # FIVE SHELL MISTAKES ARE REFUSED BEFORE THEY RUN, AND THERE IS NO
+                    #   TARGET FOR THAT EITHER — `scripts/guard-shell.py --hook` is a
+                    #   PreToolUse hook on Bash AND on Write|Edit, armed in both rosters
+                    #   (D135). Every clause has an incident behind it, and every one of those
+                    #   incidents broke a rule that was already written down, which is D171's
+                    #   ruling about what a rule is applied five more times:
+                    #   `git checkout <path>` / `git restore <path>` OVER A MODIFIED FILE is
+                    #   refused, and the refusal names the `.bak` copy — on 2026-09-06 one
+                    #   `git checkout cli/cmd_reprice.py` put a mutation back and destroyed
+                    #   ~240 lines of that session's uncommitted work. A BRANCH, A CLEAN PATH,
+                    #   `--staged`, `-b` and a named source all pass, because the
+                    #   discriminator is RESOLUTION and never spelling: `git status --porcelain`
+                    #   decides, read-only, and an operand that resolves to neither a path nor
+                    #   a commit is REPORTED and allowed. `PKMNSCAN_CHECKOUT=off`.
+                    #   A WRITE OUTSIDE THIS CHECKOUT is refused, and the Write|Edit half needs
+                    #   no command parsing at all, so no shell form skirts it — on 2026-09-06 an
+                    #   absolute-path `cd` prefix wrote ~1,500 lines into the owner's MAIN tree
+                    #   on `main`, and the supervisor hot-reloaded that branch code into their
+                    #   live capture server while they used the app (D43). The user's own
+                    #   `~/.claude` and a temp directory that is no checkout both pass; a temp
+                    #   directory that IS one does not. `PKMNSCAN_TREE=off`.
+                    #   `gh api -f k=v` WITH NO METHOD is refused, because a field implies a
+                    #   body and gh then sends POST — it hung past a 120s tool timeout on
+                    #   2026-09-12. `--method`, `-X`, and `graphql` pass, and the refusal prints
+                    #   the query-string form it wants. `PKMNSCAN_GH=off`.
+                    #   `ln -s` AT AN EXISTING PATH is refused — on 2026-08-29 that nested a
+                    #   second `images` link inside `harness/images` instead of failing, and
+                    #   iCloud renamed the real 133 MB directory away, empty. `-sfn`, `-sf` and
+                    #   a genuinely absent path pass.
+                    #   `PKMNSCAN_LINK=off`.
+                    #   A POLLING LOOP is refused twice over: a `while`/`until` whose condition
+                    #   polls a PATTERN (`pgrep`, `pkill`, `lsof`, `ps -ef`) — which matches
+                    #   every process whose command line NAMES it and so cannot know what it
+                    #   matched — and a BACKGROUNDED
+                    #   loop with no counter, no deadline and no pid — including one inside a
+                    #   shell script the command merely names, which is READ. On 2026-09-12 a
+                    #   `pgrep` waiter never fired and a backgrounded driver ran 119 rounds over
+                    #   3h58m across a compaction, racing that session's own merges. A `for`
+                    #   loop, a pid wait, a `curl -m` probe, a counter and any FOREGROUND loop
+                    #   pass; so does backgrounding `make design-check ARGS=--wait`, which this
+                    #   file tells you to do. `PKMNSCAN_WAIT=off`.
+                    #   FIVE HATCHES AND NOT ONE, so disarming the symlink clause cannot disarm
+                    #   the one that guards uncommitted work. Each is honoured in the
+                    #   environment and inline, and printed in its own refusal. Fails OPEN on
+                    #   its own bugs, including a missing `scripts/shell_parse.py` — the
+                    #   tokenizer it shares with `silent-write-guard.py`.
+make guard-shell-selftest  # that guard, proved by COMMITTING its five mistakes in a throwaway
+                    #   repository: 240 lines really destroyed by a real `git checkout`, a real
+                    #   worktree whose root differs from its main checkout's, a real nested
+                    #   symlink nested inside `harness/images`, and `pgrep -f` really
+                    #   matching a process that merely NAMES its pattern. Every false positive above is
+                    #   pinned as passing and the git ones are RUN in the fixture first. In
+                    #   `check`, never in the git hook (D18 — it writes a temp repo).
+                    #   Mutation-tested — twenty-six arms, twenty-five caught; the one survivor
+                    #   removes half of the `.bak` advice and the other half still satisfies
+                    #   the assertion, which an arm removing BOTH proves by going red.
 make coordinator    # THE MERGE QUEUE, READ RATHER THAN REMEMBERED. The other half of
                     #   2026-09-12: a session relayed `#300 GREEN — merging` for several turns
                     #   while nothing merged, because the line came from a driver's stdout and
@@ -579,6 +636,11 @@ make claim-selftest # the claimer, proved where it can be wrong: a throwaway rep
                     #   MAIN MOVES underneath the branch — and, since D140's amendment, in which
                     #   main takes a number the branch had already claimed. In `check`, never in
                     #   the git hook.
+make sync-selftest  # THE PRIMARY CHECKOUT'S SELF-SYNC, proved by violating it in throwaway
+                    #   clones with their own worktrees and a real bare origin. In `check` and
+                    #   in `ci-check`, never in the git hook (D18). Never pointed at this clone:
+                    #   the subject of a sync is the PRIMARY tree, and on this machine that is
+                    #   the owner's live rig.
 make merge          # merge a PR and move main onto it — BOTH HALVES, on your word (D42).
                     #   IT REFUSES A CHECKOUT WHOSE OWN COPY OF THE MERGE IS BEHIND main's,
                     #   BEFORE ANYTHING ELSE (D151). This target
@@ -1250,18 +1312,31 @@ A screen is not finished because it compiles.
   about a card or the inventory in `localStorage`. Inventory state is server-side, in the
   store; the camera uses a device picker. Two devices share one truth.
 
-  **Nine keys are stored on the device, and each is a fact about THIS machine rather than
+  **Ten keys are stored on the device, and each is a fact about THIS machine rather than
   about a card**: `banchi.capture.deviceId` and `banchi.capture.rotation`
   (`app/src/useCamera.ts` — which camera and which way up, meaningless on another machine),
   `banchi.theme`, `banchi.rail`, `banchi.orders.fetch-filter`, `banchi.inventory.hide-sold`,
-  `banchi.box-recency` and `banchi.capture.setup` (`app/src/deviceMemory.ts` — how this
+  `banchi.box-recency`, `banchi.capture.setup` and `banchi.runs.spend-notice`
+  (`app/src/deviceMemory.ts` — how this
   browser is dressed, which order statuses this device bothers fetching (D114), whether the
-  inventory walk folds sold rows away, when THIS browser last reached for each box, and the
-  setup the operator last worked at), and `banchi.orders.last-check` (`app/src/Orders.tsx` —
+  inventory walk folds sold rows away, when THIS browser last reached for each box, the
+  setup the operator last worked at, and the figure above which THIS browser draws a louder
+  confirm on the identify press), and `banchi.orders.last-check` (`app/src/Orders.tsx` —
   when THIS device last checked TCGplayer, so a fetch receipt can say what is new since; the
   owner ruled it belongs there on 2026-09-03). None of them is a card, a position or an order.
 
-  **TWO OF THE NINE ARRIVED ON 2026-09-11 AND ONE OF THOSE IS A RENAME**
+  **THE TENTH IS A NOTICE AND NEVER A CAP**, on the owner's ruling of 2026-09-12: *"Give me
+  settings if I can have them, but if I want to run everything, then I get to run everything."*
+  `banchi.runs.spend-notice` is a dollar figure with a default of $1.00 — about 757 cards at
+  the measured 2,641 input tokens a card and $0.50/MTok batch-discounted, so larger than every
+  drawer on this store but box 3 and roughly a quarter of a full store re-read. Above it the
+  confirm says so and offers to raise the notice; it never withholds the press, because a
+  ceiling that refuses "everything" is the wrong shape. **Device-local is argued, not
+  convenient**: D13 puts one truth on one Mac so two devices cannot disagree about where a card
+  IS, and this is how loud a button is on THIS browser — the same side of that line as D114's
+  fetch filter, which the owner ruled belongs there.
+
+  **TWO OF THE TEN ARRIVED ON 2026-09-11 AND ONE OF THOSE IS A RENAME**
   (D142). `banchi.capture.setup` is the box, game, set hint, finish, rarity
   and product the operator last chose — six values that were `sessionStorage` under D27 until
   the owner overruled the session scope, in ONE document because they are one habit, the
@@ -1830,6 +1905,32 @@ apostrophes in names) live in the `tcgplayer-csv` skill. It loads on demand.
   then the local fast-forward. If the second half fails, report it as an incomplete operation
   rather than re-asking for permission.
 
+  **AND THE PRIMARY CHECKOUT PUTS ITSELF BACK, BOTH PARTS, AS OF 2026-09-12**
+  (D176). Asked whether that one directory is mechanically kept
+  on `main` at `origin/main`, and offered a guard that only refused, the owner answered: *"why
+  can't both parts sync, remember this is a one man show, it's just me working."* So
+  `scripts/primary_sync.py` runs the two commands — `git switch main`, then
+  `git merge --ff-only origin/main` — at the three moments something already knows main may have
+  moved: `scripts/serve.py`'s four adoption moments (which D158 made refuse, and which are now
+  the only surface that sees main *move* rather than a branch *change* — `post-checkout` fires
+  on neither a pull nor a merge), the SessionStart guard, and `make merge`'s local half.
+
+  **THIS IS NOT A REPEAL OF ANYTHING ABOVE.** The move is a fast-forward to a commit `origin`
+  already carries, which `scripts/githooks/reference-transaction`'s allow rule 3 has permitted
+  since the day it was written — so it decides WHO RUNS AN ALREADY-PERMITTED MOVE, and not which
+  moves run. **The fast-forward-only test is the module's own and not the hook's**: rule 3 asks
+  whether the destination is on `origin/main`, and the destination *is* `origin/main`, so rule 3
+  would permit a move that discarded local commits. `refs/heads/main` must be an ancestor of
+  `refs/remotes/origin/main` or it refuses.
+
+  **IT TOUCHES ONLY THE PRIMARY CHECKOUT AND NEVER A LINKED WORKTREE** — `is_linked_worktree`,
+  called and not respelled (D43, D139) — **and it refuses rather than discarding**: uncommitted
+  tracked work is NAMED, untracked exhaust never blocks a sync, a half-finished rebase or merge
+  waits, and a detached HEAD no ref contains is left standing. **`PKMNSCAN_SYNC=off` turns the
+  whole mechanism off** and is printed on every sync and every refusal — the one hatch in this
+  repo that stops an act rather than permitting one, because this is the one guard that acts on
+  your behalf. `make sync-selftest` proves all of it.
+
   **`make merge ARGS="<n> --confirm"` is that whole operation**, and `ARGS=<n>` alone previews
   it and presses nothing (D42, amended 2026-09-01). It does the GitHub half, fetches origin,
   asserts the merged commit is on `origin/main` — allow rule 3, checked BEFORE anything moves
@@ -2158,6 +2259,12 @@ D171 A refusal that reaches nobody did not happen, and a status line the session
 D172 A card's name is the first photograph of it, frozen at issue
 D173 A rule that can be enforced mechanically is enforced mechanically, and a rule with no reader is advice
 D174 A press claims the cards it is about to buy, and the claim is written in the transaction that decides what they are
+D175 Ownership is read the way liveness is, and a process a session no longer owns is offered rather than reaped
+D176 The primary checkout syncs itself, both parts, because the thing D42 was protecting is not the thing this moves
+D177 The corpus answers for listings no camera here ever saw, so a prune is a list the operator presses and never a rule a join runs
+D178 A document may name what it would create, and the marking expires by itself
+D179 Five shell commands are refused by resolving what they would do, not by matching what they say, and each clause carries its own escape hatch
+D180 A press names the cards it is over, and the drawer is one of the names
 D-a-gain-step-is-the-stand-rescaled A gain step is the baseline times one number, a card is not, and the machine re-baselines only on that proof
 ```
 
@@ -2236,6 +2343,16 @@ was open** — the rule is renumber your own, never another's.
   §5 is the one section the Banchi rebuild moved — the screen is a modal now and the pixel
   measurement that refused it a route is history — and §6 names the three things the first
   real upload would measure.
+- `docs/specs/corpus-pruning.md` — what pruning `inventory/prices.json` would delete, read off
+  the store on 2026-09-12 and against a digest. **RECORDED, NOT BUILT, and the answer is that
+  pruning may never be automatic** (D177). 430
+  answers examined, 11 unmatched, **0 safe** — and 7 of the 11 are prices on listings that are
+  live on TCGplayer right now, five of which are sealed product and accessories **no join can
+  ever match because no camera here can photograph them**. Read its §6 before trusting any
+  count: every empty category there is reported against its population, including the probe
+  that reached 1,430 catalog SKUs to come back with nothing. Read its §5 before quoting the
+  eleven — the figure is a FLOOR, and six of the seven ways this differs from a real
+  store-wide join make the real list longer.
 - `docs/specs/batch-script.md` — the four commands, storage, routing, pricing. Built.
 - `docs/specs/one-process.md` — D138's plan: the capture server serves `app/dist/` beside the
   API, the supervisor runs `vite build` when the source is newer than the bundle, and `restart`

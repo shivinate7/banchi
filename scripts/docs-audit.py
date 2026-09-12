@@ -426,6 +426,46 @@ KNOWN_SUFFIXES = {
 }
 
 
+# ------------------------------------------------------- the proposed-name sigil
+
+PROPOSED_SIGIL = "+"
+
+
+def marked_proposed(line: str, start: int) -> bool:
+    """Is the token at `start` marked as named-before-it-exists?
+
+    **A `+` immediately in front of a path, a `make` target or a `PKMNSCAN_` name says the
+    thing does not exist YET** — `+scripts/guard-shell.py`, `+make opsec-selftest`,
+    and `+PKMNSCAN_` followed by a name. Three rows here verify that a named thing is real, and a design
+    document's whole job is to name what it would create, so without a marker those rows and
+    that job cannot both be served.
+
+    **WHY AT THE POINT OF USE RATHER THAN IN THE ALLOWLIST.** `scripts/docs-audit-allow.txt`
+    already carries "named before it is built" as one of its reasons, and it is self-cleaning
+    — the `allowlist` row fails when a listed path exists. This keeps that property and moves
+    it to where a READER is: the status of the name is visible in the sentence that uses it,
+    rather than in a registry two directories away. It also stops the allowlist being a
+    conflict surface — it is an exact-match roster, and a shelf document naming twenty-one
+    unbuilt mechanisms would otherwise add twenty-one lines to one file that every other
+    branch also edits.
+
+    **The allowlist keeps a different job**, and the distinction is worth the two mechanisms:
+    a path listed there is meant to be unresolvable FOREVER — `app/src/orderWalk.ts` is
+    deleted and its references record the deletion. A `+` says *not yet*, which is a claim
+    with an expiry.
+
+    **IT IS SELF-CLEANING THE SAME WAY**: every row below FAILS when a marked name exists, so
+    the sigil has to come off in the PR that builds the thing. A marker that could be left
+    on would turn every proposal into a permanent exemption, which is the failure this repo
+    has already paid for once in the allowlist's own header.
+
+    **What it deliberately does not mark**: `+x` (a file mode) and any other `+`-prefixed
+    token that is not shaped like a path, a target or an env name. The sigil is only read
+    where a row was about to make a claim about existence.
+    """
+    return start > 0 and line[start - 1] == PROPOSED_SIGIL
+
+
 def path_candidates(line: str) -> List[str]:
     """Extract path-shaped tokens. Deliberately conservative — see the note above."""
     out: List[str] = []
@@ -439,7 +479,9 @@ def path_candidates(line: str) -> List[str]:
         text = match.group(0).rstrip(_TRAILING)
         if not text or "/" not in text:
             continue
-        out.append(text)
+        # A `+` in front says the doc is naming something it would CREATE. The token is
+        # still returned, marked, because the row has to fail when it becomes real.
+        out.append((PROPOSED_SIGIL if marked_proposed(line, match.start()) else "") + text)
     return out
 
 
@@ -611,7 +653,8 @@ def check_paths(report: Report, docs: List[Path], allowed: Dict[str, str]) -> No
     for doc in docs:
         for number, line in enumerate(read(doc).splitlines(), start=1):
             for candidate in path_candidates(line):
-                target = resolve_candidate(candidate, doc, tops)
+                mark = candidate.startswith(PROPOSED_SIGIL)
+                target = resolve_candidate(candidate.lstrip(PROPOSED_SIGIL), doc, tops)
                 if target is None:
                     continue
                 # `.git/` IS GIT'S OWN STORAGE AND NOT REPO CONTENT — see this module's
@@ -624,16 +667,25 @@ def check_paths(report: Report, docs: List[Path], allowed: Dict[str, str]) -> No
                 if rel(target).split("/")[0] == ".git":
                     continue
                 checked += 1
-                seen.append((doc, number, candidate, target))
+                seen.append((doc, number, candidate, target, mark))
 
-    missing = [item for item in seen if not exists(item[3])]
+    # A MARKED NAME THAT NOW EXISTS IS A FINDING, which is what keeps the sigil honest.
+    for doc, number, candidate, target, mark in seen:
+        if mark and exists(target):
+            findings.append(Finding(
+                f"{rel(doc)}:{number}",
+                f"`{candidate}` carries the `{PROPOSED_SIGIL}` proposed-name sigil and "
+                f"`{rel(target)}` now EXISTS. Drop the sigil — it says *not yet*, and "
+                f"leaving it on turns a proposal into a permanent exemption.",
+            ))
+    missing = [item for item in seen if not exists(item[3]) and not item[4]]
     probe: List[str] = []
     for item in missing:
         probe.append(rel(item[3]))
         probe.append(rel(item[3]) + "/")
     ignored = ignored_paths(probe)
 
-    for doc, number, candidate, target in missing:
+    for doc, number, candidate, target, _ in missing:
         if rel(target) in ignored or rel(target) + "/" in ignored:
             continue
         if rel(target) in allowed or rel(target) + "/" in allowed:
@@ -799,8 +851,19 @@ def check_make_targets(report: Report, docs: List[Path]) -> None:
     referenced = 0
     for doc in docs:
         for number, line in iter_code_lines(read(doc)):
-            for name in _MAKE_REF_RE.findall(line):
+            for match in _MAKE_REF_RE.finditer(line):
+                name = match.group(1)
                 referenced += 1
+                if marked_proposed(line, match.start()):
+                    # `+make opsec-selftest` — a target a proposal would add. It has to fail
+                    # the moment it exists, or the sigil becomes a permanent exemption.
+                    if name in targets:
+                        findings.append(Finding(
+                            f"{rel(doc)}:{number}",
+                            f"`{PROPOSED_SIGIL}make {name}` carries the proposed-name sigil "
+                            f"and that target NOW EXISTS. Drop the sigil.",
+                        ))
+                    continue
                 if name not in targets:
                     findings.append(
                         Finding(
@@ -3354,7 +3417,18 @@ def check_env_vars(report: Report, docs: List[Path], allowed: Dict[str, str]) ->
     seen: Set[str] = set()
     for doc in docs:
         for number, line in enumerate(read(doc).splitlines(), start=1):
-            for name in _ENV_RE.findall(line):
+            for _m in _ENV_RE.finditer(line):
+                name = _m.group(1)
+                if marked_proposed(line, _m.start()):
+                    # A `+`-marked hatch a proposal would introduce. Fails once
+                    # the code starts reading it, so the sigil cannot outlive the proposal.
+                    if name in haystack:
+                        findings.append(Finding(
+                            f"{rel(doc)}:{number}",
+                            f"`{PROPOSED_SIGIL}{name}` carries the proposed-name sigil and "
+                            f"the code READS it now. Drop the sigil.",
+                        ))
+                    continue
                 seen.add(name)
                 if name in allowed:
                     continue
@@ -14018,3 +14092,10 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
 
 if __name__ == "__main__":
     sys.exit(main())
+
+
+# A NOTE ON DOCUMENTING THE SIGIL, because writing it down broke it once. `env vars` reads the
+# scripts for a `PKMNSCAN_` token, so spelling a concrete example name in this file put that
+# name in its own haystack — and every `+`-marked reference to it in a design document then
+# failed as "the code reads it now". The examples above therefore name the PREFIX and stop.
+# A mechanism whose documentation is inside its own subject has to be written for that.
