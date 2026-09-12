@@ -3,27 +3,40 @@ import { createPortal } from 'react-dom'
 
 import { cropPreview, describeFailure, photoUrl, preflightRun, startRun, type Failure } from './server'
 import type { BoxRecord, CropPreview, RunPreflight, RunStartFailure, RunStartedLeg } from './types'
-import { Button, EmptyState, Icon, Kbd, Notice, Pill, Segmented } from './kit'
+import { Button, Chip, EmptyState, Icon, Kbd, Notice, Pill, Segmented } from './kit'
 import { toast } from './kit/toast'
 import { LogWell } from './RunsLog'
 import { useOverlayFocus } from './runsOverlay'
-import { boxLabel } from './runScope'
+import { boxesLabel, boxLabel } from './runScope'
+import { carriedByBox, type CarriedScope } from './runHandoff'
+import { narrowed, type Census, type RunSelection } from './runSelection'
 import { money } from './money'
 import { storeKeyText } from './storeKey'
 import './Runs.css'
 
 /* THE IDENTIFY COMPOSER — the one press on this product that spends money, as a staged
- * dialog: which boxes, how each is read, what it costs, and a receipt.
+ * dialog: what to identify, how it is read, what it costs, and a receipt.
  *
- * THE MONEY GATE IS TWO PRESSES AND NO TYPING (D33). `Check cost` runs the free preflight;
- * the confirm cannot be reached without it, and it carries the figure in its own label. The
- * estimate is void the moment the scope moves — a box added, a card ticked, a reading
- * changed — because a confirm whose first step described a different send is not a confirm.
+ * STAGE ONE ASKS WHICH STATE, NOT WHICH DRAWER, AND THAT IS WHAT CHANGED. It asked
+ * `Which boxes` until this landed, while `#/`'s one ranked sentence — the thing that sends an
+ * operator here — says *"412 cards are photographed and not identified"* and deliberately names
+ * no box. So the front door spoke in states and this room spoke in drawers, and the answer to
+ * the sentence they had just read was not among the options. `runSelection.ts` carries the whole
+ * argument and the model; this file draws it. THE DRAWER-SCOPED PRESS IS UNCHANGED AND IS ONE
+ * CLICK: ticking box 4 yields the cart `[{box: 4}]`, whole box and no indices, byte for byte
+ * what pressing box 4 sent before.
+ *
+ * THE MONEY GATE IS TWO PRESSES AND NO TYPING (D33), AND THAT IS UNTOUCHED. `Check cost` runs
+ * the free preflight; the confirm cannot be reached without it, and it carries the figure in its
+ * own label. The estimate is void the moment the scope moves — a drawer added, a game ticked, a
+ * reading changed — because a confirm whose first step described a different send is not a
+ * confirm. WHAT THE CONFIRM COUNTS IS CARDS: D33's ruling is that the total is "the number the
+ * operator agrees to spend", and boxes are not what is being bought.
  *
  * ONE PRESS, ONE REQUEST, N RUNS (D48). Each box in the cart is its own run with its own
  * reading, because which end of D32's cost-against-sharpness trade is right depends on what
- * is in the drawer. `Runs.tsx` owns which boxes are in the cart and where a ticked selection
- * came from; this dialog owns how each is read and everything after the press. */
+ * is in the drawer. `Runs.tsx` owns what the cart is and where a ticked selection came from;
+ * this dialog owns how each leg is read and everything after the press. */
 
 export type CartBox = { box: number; name?: string | null; indices: readonly number[] }
 
@@ -61,15 +74,18 @@ type ReadingKey = (typeof READINGS)[number]['key'] | 'custom'
 const DEFAULT_READING = { crop: true, maxEdge: 1200, custom: false }
 type Reading = typeof DEFAULT_READING
 
-type StageKey = 'boxes' | 'read' | 'quote' | 'started'
-const ORDER: readonly StageKey[] = ['boxes', 'read', 'quote', 'started']
+/* `what` AND NOT `boxes`, WHICH IS THE WHOLE OF THIS CHANGE IN ONE IDENTIFIER: the stage asks
+   which CARDS, and a drawer is one of three ways to narrow them. The strip's label is `Cards`
+   for the reason the confirm counts cards — that is the unit being bought. */
+type StageKey = 'what' | 'read' | 'quote' | 'started'
+const ORDER: readonly StageKey[] = ['what', 'read', 'quote', 'started']
 const STAGE_LIST: readonly { readonly key: StageKey; readonly n: string; readonly label: string }[] = [
-  { key: 'boxes', n: '1', label: 'Boxes' },
+  { key: 'what', n: '1', label: 'Cards' },
   { key: 'read', n: '2', label: 'Reading' },
   { key: 'quote', n: '3', label: 'Cost' },
 ]
 const TITLES: Record<StageKey, string> = {
-  boxes: 'Which boxes',
+  what: 'What to identify',
   read: 'How they are read',
   quote: 'What it costs',
   started: 'Started',
@@ -83,15 +99,30 @@ function plural(n: number, word: string): string {
   return `${n} ${word}${n === 1 ? '' : 's'}`
 }
 
+export type GameChip = { readonly game: string; readonly cards: number; readonly label: string }
+
 type Props = {
   readonly open: boolean
   readonly onClose: () => void
   readonly cart: readonly CartBox[]
   readonly boxes: readonly BoxRecord[] | null
   readonly boxesFailure: Failure | null
-  readonly picked: ReadonlySet<number>
+  /** What the next send is over, and what every control on stage one toggles. */
+  readonly selection: RunSelection
+  /** What each narrowing holds, unnarrowed — `runSelection.ts:census` says why. */
+  readonly state: Census
+  readonly games: readonly GameChip[]
+  /** Has the card map answered? A count nobody could read is drawn as absent, never as zero
+   *  (`CLAUDE.md`: unknown is not zero), and the drawers fall back to their own card totals. */
+  readonly counted: boolean
+  /** How many cards the current scope holds, or null where nothing could be counted. */
+  readonly scopeCards: number | null
   readonly onToggleBox: (box: number) => void
-  readonly carried: { readonly box: number; readonly indices: readonly number[] } | null
+  readonly onToggleGame: (game: string) => void
+  readonly onToggleSitting: () => void
+  /** Clears every narrowing, back to the state itself. */
+  readonly onEverything: () => void
+  readonly carried: CarriedScope | null
   readonly onDropCarried: () => void
   readonly onStarted: (run: string) => void
 }
@@ -102,14 +133,21 @@ export function RunsComposer({
   cart,
   boxes,
   boxesFailure,
-  picked,
+  selection,
+  state,
+  games,
+  counted,
+  scopeCards,
   onToggleBox,
+  onToggleGame,
+  onToggleSitting,
+  onEverything,
   carried,
   onDropCarried,
   onStarted,
 }: Props) {
   const dialog = useRef<HTMLDivElement | null>(null)
-  const [stage, setStage] = useState<StageKey>('boxes')
+  const [stage, setStage] = useState<StageKey>('what')
 
   /* The reading, per box: sparse, and `DEFAULT_READING` fills the gaps. A box that leaves the
      cart keeps its entry so re-ticking it does not silently reset a reading chosen on purpose. */
@@ -212,7 +250,7 @@ export function RunsComposer({
   const close = useCallback(() => {
     onClose()
     if (stage === 'started') {
-      setStage('boxes')
+      setStage('what')
       setStarted(null)
       setPartial(null)
     }
@@ -401,25 +439,47 @@ export function RunsComposer({
     })
 
   /* ---------------------------------------------------------------------------- render */
-  const rows = useMemo(() => (boxes === null ? [] : [...boxes].sort((a, b) => a.box - b.box)), [boxes])
-  const cardsPicked = useMemo(
-    () =>
-      cart.reduce(
-        (sum, row) =>
-          sum + (row.indices.length > 0 ? row.indices.length : (boxes?.find((b) => b.box === row.box)?.cards ?? 0)),
-        0,
-      ),
-    [cart, boxes],
-  )
-  const only = cart.length === 1 ? cart[0] : undefined
-  const scopeLine =
-    only !== undefined
-      ? `${boxLabel(only.box, only.name)} · ${
-          only.indices.length > 0 ? `${plural(only.indices.length, 'ticked card')}` : 'the whole box'
-        }`
-      : cart.length === 0
-        ? 'Pick a box. You can pick several.'
-        : `${plural(cart.length, 'box').replace('boxs', 'boxes')} · ${plural(cardsPicked, 'card')}`
+  /* THE DRAWERS, SOMETHING-TO-IDENTIFY FIRST AND EMPTY ONES SUNK (D78's shape). A drawer whose
+     cards are all identified is still drawn and still tickable — the operator asked for that
+     drawer and the preflight is what is entitled to answer "nothing to send", with the figure
+     on screen — but it is not what they are looking for, so it is not in the way.
+
+     THE ORDER MOVES ONLY WHEN THE DATA DOES, never under a press: the counts here are the
+     unnarrowed ones, so ticking a chip cannot reshuffle this grid (D118). */
+  const rows = useMemo(() => {
+    if (boxes === null) return []
+    return [...boxes].sort((a, b) => {
+      const left = state.byBox.get(a.box) ?? 0
+      const right = state.byBox.get(b.box) ?? 0
+      const ranked = Number(right > 0) - Number(left > 0)
+      return ranked !== 0 && counted ? ranked : a.box - b.box
+    })
+  }, [boxes, state.byBox, counted])
+
+  /** Which cards of the handoff are in each drawer, so a drawer's own tile can say how many.
+   *  One derivation for the tiles and the notice. */
+  const carriedHere = useMemo(() => {
+    const out = new Map<number, number>()
+    if (carried === null) return out
+    for (const leg of carriedByBox(carried)) out.set(leg.box, leg.indices.length)
+    return out
+  }, [carried])
+
+  /** THE SCOPE, IN ONE SENTENCE, AND IT IS WHAT THE FOOTER OF EVERY STAGE READS. Drawers first
+   *  (`boxesLabel` — one drawer keeps its name, several are counted and numbered), then what is
+   *  in them. `null` where nothing has been counted and nothing ticked, which is the one state
+   *  this stage can be in with no scope at all. */
+  const scopeLine = useMemo(() => {
+    const drawers = boxesLabel(cart)
+    if (drawers === null) {
+      return counted ? 'Nothing is waiting to be identified.' : 'Counting what is waiting…'
+    }
+    if (carried !== null) return `${drawers} · ${plural(carried.keys.length, 'ticked card')}`
+    if (!narrowed(selection)) {
+      return scopeCards === null ? drawers : `${drawers} · everything not yet identified`
+    }
+    return scopeCards === null ? drawers : `${drawers} · ${plural(scopeCards, 'card')}`
+  }, [cart, carried, counted, selection, scopeCards])
 
   const stageState = (key: StageKey): 'done' | 'current' | 'todo' =>
     stage === 'started' ? 'done' : ORDER.indexOf(key) < ORDER.indexOf(stage) ? 'done' : key === stage ? 'current' : 'todo'
@@ -495,25 +555,92 @@ export function RunsComposer({
             </Notice>
           )}
 
-          {/* ----------------------------------------------------------- 1 · which boxes */}
-          {stage === 'boxes' ? (
-            <div className="runs-composer-stage" key="boxes">
+          {/* ------------------------------------------------------- 1 · what to identify */}
+          {stage === 'what' ? (
+            <div className="runs-composer-stage" key="what">
               {boxesFailure === null ? null : (
                 <Notice tone="danger" code={boxesFailure.code}>
                   {boxesFailure.message}
                 </Notice>
               )}
+              {/* THE HANDOFF FROM `#/inventory` (D39), WHICH MAY NOW SPAN DRAWERS. It names the
+                  drawers rather than one box, because a mass-select walks whatever the search
+                  narrowed it to and that is not a drawer. The way out is the primary row below,
+                  which is also every other control here: D39's re-consent rule makes picking
+                  any scope drop the tick list. */}
               {carried === null ? null : (
-                <Notice tone="info" title={`${plural(carried.indices.length, 'card')} ticked in Box ${carried.box}`}>
+                <Notice
+                  tone="info"
+                  title={`${plural(carried.keys.length, 'card')} ticked in ${boxesLabel(cart) ?? 'the store'}`}
+                >
                   <div className="runs-handoff">
-                    <span>Only those cards are sent for that box.</span>
+                    <span>Only those cards are sent.</span>
                     <Button size="sm" variant="quiet" onClick={onDropCarried}>
-                      Identify all of box {carried.box} instead
+                      Identify everything not yet identified instead
                     </Button>
                   </div>
                 </Notice>
               )}
-              <div className="runs-boxes" role="group" aria-label="Which boxes to run">
+
+              {/* THE PRIMARY ROW — THE STATE ITSELF, TICKED UNTIL SOMETHING NARROWS IT.
+                  Its words never change under a press and neither does its height: the
+                  figures here are the UNNARROWED ones, so pressing a chip moves the pressed
+                  state and the footer sentence and nothing else on the page (D118). */}
+              <button
+                type="button"
+                className="runs-all"
+                aria-pressed={carried === null && !narrowed(selection)}
+                onClick={onEverything}
+              >
+                <span className="runs-all-check" aria-hidden="true">
+                  <Icon name="check" size={13} />
+                </span>
+                <span className="runs-all-text">
+                  <span className="runs-all-title">Everything not yet identified</span>
+                  <span className="runs-all-said">
+                    {counted
+                      ? state.total === 0
+                        ? 'Nothing is waiting. Every photograph has an answer.'
+                        : `${plural(state.total, 'card')}, across ${plural(state.drawers, 'drawer')}.`
+                      : 'Counting what is waiting…'}
+                  </span>
+                </span>
+              </button>
+
+              {/* THE NARROWINGS. Two of the three cut ACROSS drawers, which is what a filter is
+                  for and what the old stage could not express: 1,091 of the owner's 2,535
+                  stamped cards — 43% — were photographed in a sitting that spanned more than
+                  one drawer. `This sitting` is `storeHistory.ts`'s sitting and there is no
+                  second definition of one in this product. */}
+              {games.length === 0 && state.sitting === null ? null : (
+                <div className="runs-narrow">
+                  <span className="bn-label">Narrow it</span>
+                  <div className="runs-chips" role="group" aria-label="Narrow what to identify">
+                    {games.map((row) => (
+                      <Chip
+                        key={row.game}
+                        pressed={carried === null && selection.games.includes(row.game)}
+                        count={row.cards}
+                        onClick={() => onToggleGame(row.game)}
+                      >
+                        {row.label}
+                      </Chip>
+                    ))}
+                    {state.sitting === null ? null : (
+                      <Chip
+                        pressed={carried === null && selection.sitting}
+                        icon="clock"
+                        count={state.sitting.cards}
+                        onClick={onToggleSitting}
+                      >
+                        This sitting
+                      </Chip>
+                    )}
+                  </div>
+                </div>
+              )}
+
+              <div className="runs-boxes" role="group" aria-label="Which drawers to identify">
                 {boxes === null && boxesFailure === null ? (
                   Array.from({ length: 6 }, (_, i) => <div key={i} className="bn-skeleton runs-box-skel" />)
                 ) : rows.length === 0 ? (
@@ -534,8 +661,9 @@ export function RunsComposer({
                   />
                 ) : (
                   rows.map((record, i) => {
-                    const on = picked.has(record.box)
-                    const ticked = on && carried !== null && carried.box === record.box ? carried.indices.length : 0
+                    const on = carried === null && selection.boxes.includes(record.box)
+                    const ticked = carriedHere.get(record.box) ?? 0
+                    const waiting = state.byBox.get(record.box) ?? 0
                     return (
                       <button
                         key={record.box}
@@ -552,8 +680,17 @@ export function RunsComposer({
                           <span className="runs-box-name" title={boxLabel(record.box, record.name)}>
                             {boxLabel(record.box, record.name)}
                           </span>
-                          <span className="runs-box-cards">
-                            {plural(record.cards, 'card')}
+                          {/* WHAT THIS DRAWER HAS TO IDENTIFY, WHICH IS THE FIGURE THE STAGE
+                              IS ABOUT — not `record.cards`, which counts departed records
+                              too. Where the card map has not answered, the drawer's own total
+                              stands in and says which figure it is: an uncountable drawer is
+                              not an empty one. */}
+                          <span className="runs-box-cards" data-waiting={counted && waiting === 0 ? 'none' : undefined}>
+                            {counted
+                              ? waiting === 0
+                                ? 'nothing to identify'
+                                : `${waiting} not identified`
+                              : plural(record.cards, 'card')}
                             {ticked > 0 ? ` · ${ticked} ticked` : ''}
                           </span>
                         </span>
@@ -784,7 +921,7 @@ export function RunsComposer({
                 <span className="runs-quote-line">
                   <strong>{plural(quote.total.to_send ?? 0, 'card')}</strong> to send ·{' '}
                   {count(quote.total.cache_hits)} already answered · {count(quote.total.photographs)} photographs
-                  {quote.scopes.length > 1 ? ` · ${quote.scopes.length} boxes` : ''}
+                  {quote.scopes.length > 1 ? ` · ${plural(quote.scopes.length, 'drawer')}` : ''}
                 </span>
               </div>
 
@@ -835,11 +972,18 @@ export function RunsComposer({
                     disabled={busy !== null}
                     onClick={() => void doStart()}
                   >
-                    {`Spend ${money(quote.total.estimate_usd)} and identify ${count(quote.total.to_send)} cards` +
-                      (quote.scopes.length > 1 ? ` in ${quote.scopes.length} boxes` : '')}
+                    {/* CARDS, AND NOT BOXES, WHICH IS THE ONE NOUN THAT CHANGED ON THIS
+                        STAGE. D33's ruling is that this figure is "the number the operator
+                        agrees to spend", and a drawer is not what is being bought: it said
+                        `... in 3 boxes` and a cart of three drawers holding nine cards read as
+                        a bigger press than one drawer holding four hundred. The drawers are
+                        still named — on the per-leg list above this and on the footer line
+                        below it — where they are a fact about WHERE rather than HOW MUCH. */}
+                    {`Spend ${money(quote.total.estimate_usd)} and identify ${count(quote.total.to_send)} cards`}
                   </Button>
                   <span className="runs-quote-fine">
-                    One run per box. Identification takes minutes to hours and keeps going if you close this tab.
+                    {quote.scopes.length > 1 ? `${plural(quote.scopes.length, 'run')}, one per drawer. ` : 'One run. '}
+                    Identification takes minutes to hours and keeps going if you close this tab.
                   </span>
                 </div>
               )}
@@ -914,7 +1058,7 @@ export function RunsComposer({
         </div>
 
         <footer className="runs-composer-foot">
-          {stage === 'boxes' ? (
+          {stage === 'what' ? (
             <>
               <span className="runs-composer-note">{scopeLine}</span>
               <Button variant="ghost" onClick={close}>
@@ -927,8 +1071,8 @@ export function RunsComposer({
           ) : null}
           {stage === 'read' ? (
             <>
-              <Button variant="ghost" icon="arrowLeft" onClick={() => setStage('boxes')}>
-                Boxes
+              <Button variant="ghost" icon="arrowLeft" onClick={() => setStage('what')}>
+                Cards
               </Button>
               <span className="runs-composer-note">{scopeLine}</span>
               <Button

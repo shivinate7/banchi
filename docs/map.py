@@ -4667,8 +4667,16 @@ COMPONENTS = [
                                      "box strip as the first real content inside 150px of the top. "
                                      "No fill on the selected chip — the solid accent is reserved "
                                      "for a screen with exactly one thing to do, and this screen's "
-                                     "one fill is the spend button inside the panel.",
-                             "governed_by": ["D5", "D33", "D38", "D39", "D100", "D103", "D104", "D105", "D117"]},
+                                     "one fill is the spend button inside the panel. `.runs-all` "
+                                     "is the identify composer's primary row and is built out of "
+                                     "`.runs-box`'s own parts rather than a fourth hand-rolled "
+                                     "tile; its second line reserves its height, because it is "
+                                     "the one string on that stage that changes as the store is "
+                                     "read.",
+                             # D118 for the reserved line — a press changes what is on the screen
+                             # and never where the rest of it is.
+                             "governed_by": ["D5", "D33", "D38", "D39", "D100", "D103", "D104",
+                                             "D105", "D117", "D118"]},
             # ---- the runs screen's parts (Banchi, 2026-09) ----
             "src/RunsStage.tsx": {"does": "WHERE A RUN IS, in one vocabulary for the list, the "
                                           "run panel and Home. The server says which of the four "
@@ -4709,8 +4717,25 @@ COMPONENTS = [
                                              "are in the cart and where a ticked selection came "
                                              "from (D39 — `#/inventory` keeps the only mass "
                                              "select); this owns how each is read and everything "
-                                             "after the press.",
-                                     "governed_by": ["D32", "D33", "D39", "D48", "D52", "D58", "D65", "D76", "D94"]},
+                                             "after the press. STAGE ONE ASKS WHICH STATE AND NOT "
+                                             "WHICH DRAWER: it was headed `Which boxes` while "
+                                             "src/standing.ts's one ranked sentence on #/ says "
+                                             "how many cards are photographed and not identified "
+                                             "and deliberately names no box, so the front door "
+                                             "spoke in states and this room spoke in drawers. It "
+                                             "is now a primary row holding the state itself, "
+                                             "ticked by default, and three narrowings under it — "
+                                             "the drawers, the games and the newest sitting. THE "
+                                             "DRAWER-SCOPED PRESS IS UNCHANGED AND IS ONE CLICK. "
+                                             "The confirm counts CARDS rather than boxes, which "
+                                             "is D33's own ruling that the total is the number "
+                                             "the operator agrees to spend with one noun "
+                                             "corrected.",
+                                     # D78 for sinking a row that has a reason rather than hiding
+                                     # it; D118 for the stage's figures being the unnarrowed ones,
+                                     # so a chip press moves nothing on the page.
+                                     "governed_by": ["D32", "D33", "D39", "D48", "D52", "D58", "D65",
+                                                     "D76", "D78", "D94", "D118"]},
             "src/RunsLog.tsx": {"does": "a command's stdout, verbatim, in a well that follows its "
                                         "tail, counts its lines, folds and copies. NOTHING HERE "
                                         "SUMMARISES WHAT A COMMAND SAID — D33 puts every "
@@ -5353,6 +5378,49 @@ COMPONENTS = [
                 # the hand-authored alias table this folds through.
                 "governed_by": ["D19", "D22", "D65"],
             },
+            # WHAT THE COMPOSER'S FIRST STAGE ASKS, AS DATA. The defect it answers: #/'s one
+            # ranked sentence is store-wide and names no box — src/standing.ts says so in as many
+            # words, because BoxRecord carries no per-state counts — and it routed to a stage
+            # headed `Which boxes`. #/pricing's `_unreachable` had already settled the vocabulary
+            # (four states, a door each, store-wide) and two of its four doors had no press.
+            "src/runSelection.ts": {"does": "WHAT TO IDENTIFY, AS A STATE AND ITS NARROWINGS — the "
+                                            "model behind #/runs's first stage, pure and with no "
+                                            "JSX, which is src/runScope.ts's and src/holds.ts's "
+                                            "shape. A `RunSelection` is the `captured` state plus "
+                                            "up to three narrowings: drawers, games, and the "
+                                            "newest sitting. `legsFor` turns one into the cart, "
+                                            "and the rule that decides whether a leg carries "
+                                            "`indices` is whether the selection cuts WITHIN a "
+                                            "drawer: a drawer tick alone does not, so ticking box "
+                                            "4 yields `{box: 4}` — whole box, no indices, byte "
+                                            "for byte the request that drawer's press has always "
+                                            "sent. A game or a sitting cuts ACROSS drawers, so "
+                                            "each leg carries its matching indices, which is the "
+                                            "shape src/runHandoff.ts has always produced. NOTHING "
+                                            "NEW GOES ON THE WIRE. THE FIGURES ARE DERIVED FROM "
+                                            "GET /inventory's CARD MAP because there is no "
+                                            "narrower source: BoxRecord has no per-state counts "
+                                            "and ServerStatus.states is one number for the whole "
+                                            "store. That is reading a field the server wrote, not "
+                                            "the arithmetic src/server.ts forbids — the number "
+                                            "that GATES THE SPEND is still the preflight's. THE "
+                                            "SITTING IS src/storeHistory.ts's AND THERE IS NO "
+                                            "SECOND DEFINITION: GAP_MINUTES is imported, and the "
+                                            "window comes from `sittings()` over EVERY card "
+                                            "rather than the un-identified subset, because "
+                                            "clustering the subset splits one real sitting "
+                                            "wherever the identified cards filled a gap. It also "
+                                            "holds the hash codec — `#/runs?state=captured&box=4` "
+                                            "— which preserves every key it does not own, `?run=` "
+                                            "included, and answers null for anything unparseable "
+                                            "rather than half-reading a scope the next press "
+                                            "would spend on.",
+                                    # D33 is the money gate the selection feeds and D48 the cart
+                                    # shape it produces; D39 is the handoff it yields to; D58 is
+                                    # stored index against countable slot; D118 is why `census`
+                                    # answers the UNNARROWED figure for every chip; D121 is the
+                                    # standing sentence whose vocabulary this adopts.
+                                    "governed_by": ["D33", "D39", "D48", "D58", "D94", "D118", "D121"]},
             "src/runScope.ts": {"does": "WHICH DRAWER A RUN WAS OVER, AND WHAT THE OWNER CALLS "
                                         "IT — one answer, three screens (D56). `boxOf` prefers "
                                         "the `box` the server now sends and keeps the "
@@ -5363,10 +5431,22 @@ COMPONENTS = [
                                         "a placeholder would draw a fault where there is none. "
                                         "It replaced a second implementation of "
                                         "server/pipeline_routes.py:_run_box written in TypeScript "
-                                        "with a differently-anchored regex.",
+                                        "with a differently-anchored regex. AND `boxesLabel` IS "
+                                        "THE PLURAL, because a scope can now be a STATE narrowed "
+                                        "by a game or a sitting and 43% of the owner's stamped "
+                                        "cards were photographed in a sitting spanning more than "
+                                        "one drawer. One drawer keeps every word `boxLabel` gives "
+                                        "it; several are COUNTED and NUMBERED with the names "
+                                        "dropped, because `·` is both the name separator and "
+                                        "would be the list separator — `Box 1 · RB Epics, Box 4` "
+                                        "cannot be read as three drawers rather than five. The "
+                                        "names are drawn on the drawer tiles, which is where the "
+                                        "operator is choosing them.",
                                 # D20 is the name and its optionality; D10 ruling 3 is the deleted
-                                # box whose number a run still remembers; D56 is the entry.
-                                "governed_by": ["D145", "D10", "D20", "D56", "D142"]},
+                                # box whose number a run still remembers; D56 is the entry. D48 is
+                                # the cart `boxesLabel` counts — a send is several drawers and a
+                                # run is still one.
+                                "governed_by": ["D145", "D10", "D20", "D48", "D56", "D142"]},
             "src/money.ts": {"does": "A DOLLAR AMOUNT, SAID THE SAME WAY EVERYWHERE — `money` and "
                                      "`roundsToNothing`. Extracted from src/RunsComposer.tsx "
                                      "unchanged on 2026-09-11, when the run panel began "
@@ -5415,13 +5495,28 @@ COMPONENTS = [
                                           "`banchi.run-scope`, D27's carve-out. NOT CLEARED BY "
                                           "BEING READ, because a reload during a live run is "
                                           "ordinary and a read-once handoff would silently widen "
-                                          "what the next press pays for; cleared by the operator, "
-                                          "by picking a box, and by arriving with nothing ticked. "
-                                          "Validates field by field and falls through to no "
-                                          "handoff at all rather than guessing.",
+                                          "what the next press pays for; cleared by the operator "
+                                          "and by picking any scope on #/runs, which is D39's "
+                                          "re-consent rule. Validates key by key and falls "
+                                          "through to no handoff at all rather than guessing. "
+                                          "IT CARRIES POSITION KEYS AND NOT A BOX AND ITS "
+                                          "INDICES: `{box, indices}` was the reason a selection "
+                                          "could not span drawers, and the mass-select it comes "
+                                          "from walks whatever the search narrowed it to, which "
+                                          "is not a drawer. `box/index` is what the cache, both "
+                                          "queues, the join and D174's claim table are already "
+                                          "keyed by, and it is the STORED index rather than "
+                                          "D58's countable slot — a handoff spelled in slots "
+                                          "would name a different card the moment anything sold. "
+                                          "A `{box, indices}` handoff written by the previous "
+                                          "build reads as NOTHING, which is D27's own ruling on "
+                                          "the storage renames applied to the cheapest of them "
+                                          "to abandon.",
                                   # D3 for the fall-through-rather-than-guess rule its validation
-                                  # copies; D13 for the browser-storage ban D27 carves out of.
-                                  "governed_by": ["D3", "D13", "D27", "D33", "D39"]},
+                                  # copies; D13 for the browser-storage ban D27 carves out of;
+                                  # D58 for stored index against countable slot; D174 for the key
+                                  # this spelling is shared with.
+                                  "governed_by": ["D3", "D13", "D27", "D33", "D39", "D58", "D174"]},
             "src/RunPanel.tsx": {"does": "THE RUNS, AS MASTER AND DETAIL, on #/runs since D39 "
                                          "and in #/inventory's content column before it. The "
                                          "list is every run directory on disk, re-read while "

@@ -260,7 +260,13 @@ export function standing(input: StandingInput): Standing | null {
 
   /* 6 — photographed and never sent to a run. `states` is store-wide, so this deliberately
          does NOT name a box: `BoxRecord` carries no per-state counts, and attributing a
-         store-wide figure to one drawer would be a sentence the data cannot support. */
+         store-wide figure to one drawer would be a sentence the data cannot support.
+
+         AND THE DOOR IT OPENS NOW ANSWERS THE SENTENCE. `#/runs?state=captured` puts the
+         identify composer up with exactly this scope selected — every card photographed and
+         not identified — where `#/runs` alone landed on a stage headed `Which boxes`, which
+         is a second question about a different thing. The filter is a real part of the
+         address (`runSelection.ts`), so this link is the same one a bookmark would be. */
   const captured = status.states.captured ?? 0
   if (captured > 0) {
     return {
@@ -273,7 +279,7 @@ export function standing(input: StandingInput): Standing | null {
         n(captured),
         t(captured === 1 ? ' card is photographed and not identified.' : ' cards are photographed and not identified.'),
       ],
-      href: '#/runs',
+      href: '#/runs?state=captured',
       kbd: ',R',
       behind: [],
       problem,

@@ -37,12 +37,64 @@
  * would put a run over a box the operator did not choose.
  */
 
-/** A box, and the cards ticked inside it. Never an empty `indices` — a handoff that carries no
- *  selection is the whole box, which is what picking a box on `#/runs` already means, so the
- *  writer refuses to make one and there is no second spelling of the same scope. */
+/** THE CARDS TICKED, AS POSITION KEYS, AND NOT A BOX AND ITS INDICES.
+ *
+ *  WHY IT MOVED. This was `{box, indices}` until the composer started speaking in states, and
+ *  the shape was the reason a selection could not span drawers: `#/inventory`'s mass-select
+ *  walks whatever the search narrowed it to, which is not a box, and the RECEIVING end was what
+ *  made it one. A cross-drawer tick had nowhere to go and so was never offered.
+ *
+ *  `box/index` IS THE KEY THIS STORE ALREADY USES — `identify/sidecar.py:key`, and what the
+ *  identification cache, both standing queues, the join and D174's claim table are all keyed
+ *  by. So a handoff over three drawers is a flat list of strings every other layer already
+ *  understands, and the grouping back into one leg per drawer happens where the legs are built
+ *  (`runSelection.ts:legsFor` does the same for a filter) rather than in the storage shape.
+ *
+ *  IT IS THE STORED INDEX AND NEVER THE COUNTABLE SLOT (D58). `Place.index` is the key every
+ *  write aims by and what the photograph is named after; `Place.slot` moves under it every time
+ *  a card in front of this one leaves the box. A handoff spelled in slots would name a different
+ *  card the moment anything sold, which is a run over cards the operator did not tick.
+ *
+ *  NEVER EMPTY: a handoff that carries no selection is the whole drawer, which is what ticking
+ *  a drawer on `#/runs` already means, so the writer refuses to make one and there is no second
+ *  spelling of the same scope. */
 export type CarriedScope = {
-  readonly box: number
-  readonly indices: readonly number[]
+  readonly keys: readonly string[]
+}
+
+/** One key, parsed, or null. A key is two positive integers and nothing else; anything that is
+ *  not is dropped rather than coerced, for the falls-through-rather-than-guessing reason in the
+ *  header — `parseInt('4abc')` answers 4, and a run over box 4 is not what a malformed key
+ *  meant. */
+export function parseKey(key: string): { readonly box: number; readonly index: number } | null {
+  const found = /^([0-9]+)\/([0-9]+)$/.exec(key)
+  if (found === null) return null
+  const box = Number(found[1])
+  const index = Number(found[2])
+  return box >= 1 && index >= 1 ? { box, index } : null
+}
+
+/** A key for a box and a stored index — the one spelling, so no caller composes its own. */
+export function cardKey(box: number, index: number): string {
+  return `${box}/${index}`
+}
+
+/** The drawers a carried selection touches, and which of its cards are in each — ascending by
+ *  box and by index, so one selection has one rendering. */
+export function carriedByBox(
+  scope: CarriedScope,
+): readonly { readonly box: number; readonly indices: readonly number[] }[] {
+  const byBox = new Map<number, number[]>()
+  for (const key of scope.keys) {
+    const at = parseKey(key)
+    if (at === null) continue
+    const held = byBox.get(at.box)
+    if (held === undefined) byBox.set(at.box, [at.index])
+    else held.push(at.index)
+  }
+  return [...byBox]
+    .sort((a, b) => a[0] - b[0])
+    .map(([box, indices]) => ({ box, indices: indices.sort((a, b) => a - b) }))
 }
 
 /** THE ONE KEY, NAMED HERE AND NOWHERE ELSE. D27 requires the permitted keys to be nameable so
@@ -73,32 +125,41 @@ function read(): unknown {
  *  VALIDATED FIELD BY FIELD rather than cast. What comes back is a string this browser wrote,
  *  which is exactly the argument for trusting it and exactly why it is not trusted: the writer
  *  may be an older build of this app whose shape has since moved, and the cost of reading a
- *  stale shape is a run over the wrong cards. Indices are filtered to positive integers and
- *  deduplicated, because `server/pipeline_routes.py` builds a symlink directory out of them. */
+ *  stale shape is a run over the wrong cards. Keys are parsed to a pair of positive integers
+ *  and deduplicated, because `server/pipeline_routes.py` builds a symlink directory out of
+ *  them.
+ *
+ *  A `{box, indices}` HANDOFF WRITTEN BY THE PREVIOUS BUILD READS AS NOTHING, and that is
+ *  deliberate rather than unfinished. D27 carries this repo's own ruling on the same question:
+ *  the ten storage keys were renamed with no read-time fallback, on the ground that a fallback
+ *  can never safely be deleted afterwards. This is the cheapest of them all to abandon — the
+ *  handoff is cleared on three routes by design, its whole purpose is to stop a press paying
+ *  for more than the operator ticked, and reading nothing is the safe direction: the screen
+ *  draws every drawer and the operator ticks again. */
 export function carriedScope(): CarriedScope | null {
   const value = read()
   if (value === null || typeof value !== 'object') return null
   const record = value as Record<string, unknown>
-  const box = record.box
-  if (typeof box !== 'number' || !Number.isInteger(box) || box < 1) return null
-  if (!Array.isArray(record.indices)) return null
-  const indices = [
+  if (!Array.isArray(record.keys)) return null
+  const keys = [
     ...new Set(
-      record.indices.filter(
-        (index): index is number => typeof index === 'number' && Number.isInteger(index) && index > 0,
-      ),
+      record.keys.filter((key): key is string => typeof key === 'string' && parseKey(key) !== null),
     ),
-  ].sort((a, b) => a - b)
-  if (indices.length === 0) return null
-  return { box, indices }
+  ].sort((left, right) => {
+    const a = parseKey(left) as { box: number; index: number }
+    const b = parseKey(right) as { box: number; index: number }
+    return a.box === b.box ? a.index - b.index : a.box - b.box
+  })
+  if (keys.length === 0) return null
+  return { keys }
 }
 
 /** Hands a selection to `#/runs`. Refuses an empty selection for the reason `CarriedScope`
  *  gives — the whole box is not a handoff, it is what the picker already says. */
 export function carryScope(scope: CarriedScope): void {
-  if (scope.indices.length === 0) return
+  if (scope.keys.length === 0) return
   try {
-    window.sessionStorage.setItem(KEY, JSON.stringify({ box: scope.box, indices: [...scope.indices] }))
+    window.sessionStorage.setItem(KEY, JSON.stringify({ keys: [...scope.keys] }))
   } catch {
     /* Storage refused. The screen still navigates and still draws the whole box, which is the
        wider scope rather than a wrong one — the operator sees `the whole box` on the header and
