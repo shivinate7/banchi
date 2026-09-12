@@ -2004,6 +2004,82 @@ COMPONENTS = [
                 # docs-audit.py above.
                 "governed_by": ["D2", "D3", "D17", "D72", "D80", "D140"],
             },
+            "decisions_corpus.py": {
+                "does": "The decision corpus, read as one text or as one entry. "
+                        "`docs/decisions/` holds one markdown file per entry and was one "
+                        "1.4 MB file until the split; `text()` reassembles it in "
+                        "`ORDER.json`'s order and hands every checker the same bytes it used "
+                        "to get from `docs/DECISIONS.md`, so ten audit rows assert exactly "
+                        "what they asserted before. `path_for(id)` answers \"which file "
+                        "holds this entry\" by reading the HEADING rather than the filename, "
+                        "because a slug is lossy and the claimer renames files. Reads and "
+                        "never writes; stdlib only, so the git hook's bare python3 can use "
+                        "it. Underscored rather than hyphenated because it is imported "
+                        "rather than run.",
+                # The entry that made the corpus a directory is the ruling; D60 is what it
+                # serves, since one file per entry is what "a session reads one entry at a
+                # time" always wanted and a monolith could not give. D16 and D18 are the
+                # temperament: this reads, and the thing that writes the index is a separate
+                # program that does not gate.
+                #
+                # D58, D79 and D80 are worked examples in the docstrings, not rulings about
+                # this file: D58 supplies the id a duplicate would be spelled with, and
+                # D79/D80 are the two entries the three non-decision sections sit between.
+                # Cited, so listed — the superset rule takes a citation at face value, the
+                # same trade prose-guard.py's entry records.
+                # D140 is real here: the claimer renames the file a claim allocates, so both
+                # id shapes have to resolve. The rest are worked examples in the docstrings.
+                "governed_by": ["D16", "D18", "D58", "D60", "D79", "D80", "D140",
+                                "D160"],
+            },
+            "split-decisions.py": {
+                "does": "Performed the split of docs/DECISIONS.md into docs/decisions/, and "
+                        "proves it lost nothing. Cuts the file at every `## ` line so every "
+                        "line lands in exactly ONE chunk and reassembly is concatenation — "
+                        "losslessness true by construction, with no separator convention to "
+                        "get wrong. `--verify REF` diffs a reassembly against the pre-split "
+                        "bytes and was empty at 1,463,927 characters; `--verify-split REF` "
+                        "re-establishes that later by reading both sides out of git at one "
+                        "commit; `--selftest` is the ONGOING claim and runs in `make check` "
+                        "as `decisions-selftest` — the set is complete, no id is in two "
+                        "files. It deliberately does NOT hash the live corpus, because "
+                        "editing an entry is the normal way this corpus changes and such a "
+                        "check would go red on the next entry.",
+                # Kept after the move rather than deleted: it is the only reviewable account
+                # of what happened to 1.4 MB, and `--verify-split` is the reason a later
+                # session can re-check the claim rather than take this file's word for it.
+                #
+                # D58, D79 and D80 are worked examples in the docstrings rather than
+                # rulings about this file — the id a chunk is named by, and the pair the
+                # non-decision sections sit between. D140 is the one that is real: a claim
+                # slug has to name a file, or the claimer cannot find what it must rename.
+                "governed_by": ["D16", "D18", "D58", "D60", "D79", "D80", "D140",
+                                "D160"],
+            },
+            "index-decisions.py": {
+                "does": "Generates CLAUDE.md's decision index from the headings in "
+                        "docs/decisions/. The index is the OTHER half of the conflict a "
+                        "directory does not fix by itself: two branches that no longer "
+                        "collide in the corpus would still collide on a hand-typed index "
+                        "line. Locates the block BY SHAPE — the first fenced block whose "
+                        "non-blank lines all look like index lines — which is the same rule "
+                        "`decision index` finds it by, so re-titling the Map section cannot "
+                        "unhook one program without unhooking the other. Previews by "
+                        "default; `--write` applies.",
+                # D18 is the whole placement: this WRITES, so it is not on the commit path,
+                # and the checking half is docs-audit's `decision index` row, which computes
+                # the same answer and blocks. Two programs on purpose — a generator that also
+                # gated could satisfy itself, which is D16's rule.
+                #
+                # D79 and D80 are a worked example in the docstring — the two entries the
+                # three non-decision chunks sit between, which is why the order is the
+                # manifest's rather than a sort. D140 is why this runs at the merge: the
+                # index line and the manifest position are the same class of fact as the
+                # number, unknowable until then. D43 is why it takes a root — a generator
+                # hard-wired to one tree indexes the wrong checkout.
+                "governed_by": ["D16", "D18", "D43", "D60", "D79", "D80", "D140",
+                                "D160"],
+            },
             "prose-guard.py": {
                 "does": "D60's two guards over the four docs CLAUDE.md names. `--structure` asserts "
                         "what decision-context.py needs and cannot report for itself — a "
@@ -2224,7 +2300,7 @@ COMPONENTS = [
                 # for vale. Change one and the entry describing that check goes stale with it,
                 # which is exactly what `governed_by` is for — so they are listed rather than
                 # allowlisted away.
-                "governed_by": ["D16", "D17", "D18", "D43", "D44", "D47", "D53", "D58", "D60", "D65", "D68", "D74", "D76", "D80", "D82", "D92", "D111", "D122", "D127", "D129", "D133", "D138", "D140"],
+                "governed_by": ["D16", "D17", "D18", "D43", "D44", "D47", "D53", "D58", "D60", "D65", "D68", "D74", "D76", "D80", "D82", "D92", "D111", "D122", "D127", "D129", "D133", "D138", "D140", "D160"],
                 "note": "IT DECLARES THE SUITE AND DELIBERATELY DOES NOT DRIVE IT, which is "
                         "the whole shape. A registry that drove `make check` could not "
                         "disagree with the recipe — and could silently stop running a check, "

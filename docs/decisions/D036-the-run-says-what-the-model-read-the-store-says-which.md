@@ -1,0 +1,35 @@
+## D36 — The run says what the model read; the store says which slot it is in
+
+**Built 2026-08-24, immediately after D35, because applying D35 exposed it.** A re-join of box 2 wrote all 47 queue entries **one position off** — every entry carrying the right read with its neighbor's slot, photograph and label. On screen: `Wally's Compassion` described over a photograph of an Inteleon. It was caught before it was answered; the queue was restored from a backup taken minutes earlier.
+
+**Nothing about D35 caused it. Any re-join of that run would have done the same.**
+
+**The two halves are each correct and the seam between them was not.** `cli/runs.py` makes a run an immutable input on purpose: it is what lets a Batch outlive the server that started it (D33) and what makes a run an auditable record of what was submitted and billed. D10 ruling 1 lets a junk capture be deleted from the middle of a box, sliding every higher card down one slot, and the store does that completely — records, photographs, sidecars and **both queue files** are remapped and a `renumbered` event maps every old index to its new one. Neither is wrong. What was wrong is that the run's POSITIONS were then read as truth.
+
+Box 2: card `2/7` was deleted, 537 cards shifted down one, and the run directory — correctly unable to be rewritten — still described the box as it had been.
+
+**The owner's reading is the one this is built to, and it is a better diagnosis than the three options they were offered:**
+
+> *"It should've gone away and autocorrected all the others too... I don't see how these could've been disconnected."*
+
+**So the run no longer owns the slot number.** It owns what the model read from a PHOTOGRAPH; the store owns which slot that photograph is in. `photo_sha256` is the join between them, it is on every run record whose photograph could be read, and it is the only binding that survives a renumber (a record whose photograph raised an `ImageError` carries `None`, which is the digest-less case below) — a slot number is exactly what moved. `cli/resolve.py:realign` runs before anything reads a position out of the payload, and the run directory on disk is never touched.
+
+**Measured before it was chosen**: box 2's 543 photographs are 997 MB and hash in **0.56s**, to 543 distinct digests with no collisions. Reading the photographs is affordable per join and is strictly better than trusting the store's identification cache, which is another derived copy a future defect could leave stale in the same way.
+
+**Five outcomes, reasoned per box, and the per-box part is not a detail.** The first draft reasoned over the whole run and declared **all 53 of box 1's cards departed** — because box 1's photographs have been deleted from disk while its records live on. That inverts the check: absence of photographs is absence of evidence, not evidence of absent cards.
+
+- **moved** — the digest is on disk at a different slot. Re-bound, and named in the report.
+- **departed** — the digest is on no photograph in a box whose *other* photographs are present. The card has left: deleted mid-box or retired. Skipped, because there is nothing to join it to, and **named** — `CLAUDE.md` forbids dropping a card silently, not dropping one at all.
+- **ambiguous** — the digest is on two photographs. That is a question, not a slot, and guessing an identity is forbidden. Refuses the whole run.
+- **collided** — two RECORDS carry one digest, so they re-bind to one slot. **Added 2026-08-25, and it is `ambiguous`'s missing twin**: that outcome checks the DISK for a digest appearing twice, and nothing checked the PAYLOAD. Two records landing on one key overwrote each other in the rebuilt payload — measured at two cards in and one card out, with `departed` empty and nothing printed. A silent drop inside the function written to prevent one. Refuses the whole run and names the contested slot.
+- **unverified** — the box offers nothing to check against: no photographs on disk, no record carrying a digest, or no digest that matches any photograph there. Its records pass through exactly as the run recorded them, and the report says the slots were **not** checked, so an unchecked box cannot read as a verified one. The third case is why this is stated as "nothing to check against" rather than "no photographs": a box whose photographs have all been REPLACED (D26's re-shoot writes new bytes at the same slot) matches none of the run's digests, and calling its cards departed would be the same inversion the paragraph above refuses.
+
+**Amended 2026-09-02: a box whose number was deleted and reused after the run is refused outright, and `unverified` still means what it meant.** Box 1 was deleted 2026-08-25 with 53 Pokemon cards and its number reused 2026-08-29 for 133 Riftbound cards — `next_box_number` allocates the lowest free integer (D20 amended) — and `2026-08-22-box1-03` still describes the old drawer. `realign` never opens the store: none of the run's digests were among the new box's photographs, so it answered `unverified` and passed the keys through, and everything after it read the CURRENT box's records at those keys — the `held.game` fallback, `answered`, `committed`, `box_views` — until the refusal that fired said *"this run holds 53 riftbound card(s) and no export covers that game"* over a Pokemon run and sent the operator to edit live records that were never this run's. The rule is the one D56's `server/pipeline_routes.py:_box_name_for` has withheld a box's NAME on since it was built — the registry entry was made AFTER the run started AND the box's cards came from somewhere else — now shared from `store/master.py:box_disowns_run` rather than copied, read off the store by `Inventory.box_disowns_run`, and refused on by `cli/resolve.py:refuse_reallocated` before `_games_needed` or `load` reads a record. The photographs are deliberately not an input: `do_delete_box` deletes the cards with the entry, so a box `realign` can verify cannot satisfy the rule, and the honest `unverified` case — photographs missing, box unchanged — fails the time test or the membership test and passes through exactly as above.
+
+**A record with no digest is the fifth thing that can refuse, and it is not an outcome of a box.** `cli/cmd_identify.py` writes `photo_sha256` as `None` for any card whose photograph raised an `ImageError`, so a run written today can carry digest-less records — this is live, not merely a guard against payloads older than the field. Such a record is harmless while nothing in its box has moved and unplaceable once something has, so it refuses only in the second case.
+
+**A healthy run returns the identical payload object**, which is what keeps its join byte-for-byte unchanged — verified against Gate B's box-1 run, which diffs clean.
+
+**What would reopen this: a second binding that outlives a renumber.** `capture_id` is on the card record but not on the run record; if it were carried into the run payload it would be a cheaper key than hashing a gigabyte, and hashing could become the fallback rather than the primary. That is a change to what `identify` writes, not to this entry.
+
+---

@@ -504,11 +504,35 @@ def resolve_candidate(candidate: str, containing: Path, tops: Set[str]) -> Optio
     """
     text = candidate.lstrip("@")
     if text.startswith("../"):
-        target = (containing.parent / text).resolve()
-        try:
-            target.relative_to(ROOT)
-        except ValueError:
-            return None
+        # A `../` INSIDE A DECISION ENTRY MEANS EITHER `docs/` OR `docs/decisions/`, AND
+        # BOTH ARE TRIED. The entries were one file at `docs/DECISIONS.md` until the split;
+        # their bytes are unchanged by design, and a pre-split entry writing `../` meant the
+        # repo root because that is where it sat. D135 has one. Resolving only from the
+        # deeper directory makes a faithful move look like a broken citation.
+        #
+        # BUT THE RULE MAY NOT BE BLANKET, and that was the review's catch. An entry written
+        # AFTER the split, sitting in `docs/decisions/`, may legitimately mean its own
+        # parent — and a rule fixed on the historical reading would misresolve it silently,
+        # forever. A bound on the id would answer it and rot: the boundary is a date, not a
+        # number, and nothing would maintain it.
+        #
+        # So both are accepted. What is given up is narrow and worth naming: a `../` path
+        # that exists under one base and is a typo for something under the other resolves
+        # instead of being reported. That is a strictly smaller hole than either rule alone,
+        # and it needs no boundary anybody has to keep updating.
+        bases = [containing.parent]
+        if containing.parent == ROOT / "docs" / "decisions":
+            bases.append(ROOT / "docs")
+        target = None
+        for base in bases:
+            candidate_path = (base / text).resolve()
+            try:
+                candidate_path.relative_to(ROOT)
+            except ValueError:
+                continue
+            target = candidate_path
+            if exists(candidate_path):
+                break
         return target
     text = text[2:] if text.startswith("./") else text
     first = text.split("/", 1)[0]
@@ -1499,8 +1523,92 @@ def decision_heading_lines(path: Path, letter: str) -> List[Tuple[str, int]]:
     return out
 
 
+# ---------------------------------------------------------------- the corpus as a directory
+
+# THE DECISION CORPUS IS `docs/decisions/`, ONE FILE PER ENTRY, and was one 1.4 MB file until
+# the split. Every row below used to open `docs/DECISIONS.md`; they open the directory now and
+# assert exactly what they asserted before. What changed for the better is WHERE a finding
+# points: an over-budget entry names its own file and line 1, rather than an offset into a
+# file nobody scrolls to.
+#
+# READ FAIL-OPEN, deliberately, and this matches `browser scope`'s rule. A missing module or
+# manifest makes these rows report that they could not read the corpus, never that the corpus
+# is empty — an empty roster would turn every citation in the tree into a dangling-id finding
+# and bury the real cause under ten thousand lines.
+
+
+def _corpus():
+    """scripts/decisions_corpus.py, or None."""
+    return _sibling("decisions_corpus.py")
+
+
+def decision_files() -> List[Path]:
+    """Every file holding a `## D<id>` entry, in corpus order. Empty if unreadable."""
+    corpus = _corpus()
+    if corpus is None:
+        return []
+    try:
+        head = re.compile(r"^##\s+(D" + _ID_ANY + r")\b")
+        return [p for p in corpus.files() if head.match(read(p).split("\n", 1)[0])]
+    except Exception:
+        return []
+
+
+# AN EMPTY CORPUS IS A BROKEN CORPUS, NEVER A CLEAN ONE. This is the guard's own version of
+# the failure it exists to catch: `decision structure` and `entry budget` iterate the entry
+# files, so an unreadable directory gave them nothing to iterate and they reported `0 entries`
+# in green. Measured by deleting one entry file — `decision ids` and `decision index` both
+# went red, and those two passed over nothing while saying so in a sentence that reads like
+# success. A row that cannot tell "nothing is wrong" from "nothing is known" is worse than no
+# row, because it is believed.
+_EMPTY_CORPUS = ("the decision corpus read as EMPTY. docs/decisions/ holds one file per "
+                 "entry and its manifest is ORDER.json; a manifest naming a file that is "
+                 "gone, an unreadable directory or a missing scripts/decisions_corpus.py all "
+                 "arrive here. This row asserts nothing until that is fixed — which is why it "
+                 "fails rather than passing over an empty set. `make decisions-selftest` says "
+                 "which file.")
+
+
+def corpus_is_empty(report: Report, label: str, severity: str) -> bool:
+    """Report and return True when there are no entries to check."""
+    if decision_files():
+        return False
+    report.add(label, severity, [Finding("docs/decisions/", _EMPTY_CORPUS)])
+    return True
+
+
+def decisions_text() -> str:
+    """The corpus as the one document it used to be. Empty string if unreadable."""
+    corpus = _corpus()
+    if corpus is None:
+        return ""
+    try:
+        return corpus.text()
+    except Exception:
+        return ""
+
+
+def decision_heading_lines_across(paths: Iterable[Path], letter: str) -> List[Tuple[str, Path, int]]:
+    """Every heading across several files, carrying the file it is in.
+
+    THE FILE IS PART OF THE ANSWER NOW. One id in two files is the duplicate a directory
+    newly permits and a single file never could, so the duplicate row below compares across
+    the corpus rather than within one document.
+    """
+    pattern = re.compile(r"^##\s+(" + letter + _ID_ANY + r")\b")
+    out: List[Tuple[str, Path, int]] = []
+    for path in paths:
+        if not exists(path):
+            continue
+        for number, line in enumerate(read(path).splitlines(), start=1):
+            match = pattern.match(line)
+            if match:
+                out.append((match.group(1), path, number))
+    return out
+
+
 def check_decision_ids(report: Report, docs: List[Path]) -> None:
-    singles = decision_headings(ROOT / "docs" / "DECISIONS.md", "D")
+    singles = {i for i, _, _ in decision_heading_lines_across(decision_files(), "D")}
     codes = decision_headings(ROOT / "docs" / "CODES-DECISIONS.md", "C")
 
     def scan(paths: Iterable[Path], severity_findings: List[Finding]) -> None:
@@ -1546,20 +1654,24 @@ def check_decision_ids(report: Report, docs: List[Path]) -> None:
     #
     # BLOCKING, because there is no judgement in it: two headings carrying one id is provably
     # wrong however the file got that way, which is D16's own test for mechanical.
-    for path, letter in (
-        (ROOT / "docs" / "DECISIONS.md", "D"),
-        (ROOT / "docs" / "CODES-DECISIONS.md", "C"),
+    # ACROSS THE CORPUS, not within one file. The split made `docs/decisions/` a directory,
+    # so the duplicate this has to catch is now two FILES both declaring one id — which the
+    # old within-a-file comparison could not see at all, and which a directory makes easy to
+    # create by copying an entry rather than moving it.
+    for paths, letter in (
+        (decision_files(), "D"),
+        ([ROOT / "docs" / "CODES-DECISIONS.md"], "C"),
     ):
-        seen: Dict[str, List[int]] = {}
-        for found, number in decision_heading_lines(path, letter):
-            seen.setdefault(found, []).append(number)
-        for found, numbers in sorted(seen.items()):
-            if len(numbers) > 1:
-                where = ", ".join(str(n) for n in numbers)
+        seen: Dict[str, List[Tuple[Path, int]]] = {}
+        for found, path, number in decision_heading_lines_across(paths, letter):
+            seen.setdefault(found, []).append((path, number))
+        for found, sites in sorted(seen.items()):
+            if len(sites) > 1:
+                where = ", ".join(f"{rel(q)}:{n}" for q, n in sites)
                 in_docs.append(
                     Finding(
-                        f"{rel(path)}:{numbers[0]}",
-                        f"`## {found}` appears {len(numbers)} times — lines {where}. An id "
+                        f"{rel(sites[0][0])}:{sites[0][1]}",
+                        f"`## {found}` appears {len(sites)} times — {where}. An id "
                         f"names one entry: `governed_by`, the decision-context hook and every "
                         f"`({found})` in a comment resolve to whichever heading is found "
                         f"first. Renumber all but one, and every reference to them.",
@@ -1673,12 +1785,11 @@ def on_main() -> bool:
 
 def check_id_claims(report: Report) -> None:
     findings: List[Finding] = []
-    decisions = ROOT / "docs" / "DECISIONS.md"
     codes = ROOT / "docs" / "CODES-DECISIONS.md"
     gates = ROOT / "docs" / "GATES.md"
 
     unclaimed: List[str] = []
-    for path in (decisions, codes):
+    for path in decision_files() + [codes]:
         if not exists(path):
             continue
         for number, line in enumerate(read(path).splitlines(), start=1):
@@ -1719,7 +1830,7 @@ def check_id_claims(report: Report) -> None:
     # runs this on main after every merge, which is the one place and moment it can look.
     if on_main() and unclaimed:
         findings.append(Finding(
-            "docs/DECISIONS.md",
+            "docs/decisions/",
             "main carries {0} unclaimed id: {1}.\n"
             "  A slug is a branch's placeholder and `make merge` is what turns it into a "
             "number (D140). One on main means a claim half-landed — every "
@@ -1866,9 +1977,11 @@ def check_decision_structure(report: Report) -> None:
         report.add("decision structure", ADVISORY,
                    [Finding("scripts/prose-guard.py", "not readable; structure unchecked.")])
         return
-    target = ROOT / "docs" / "DECISIONS.md"
-    findings = [Finding(f.where, f.message) for f in guard.check_structure(target)]
-    entries = guard.entries(read(target))
+    if corpus_is_empty(report, "decision structure", MECHANICAL):
+        return
+    findings = [Finding(f.where, f.message)
+                for target in decision_files() for f in guard.check_structure(target)]
+    entries = [e for target in decision_files() for e in guard.entries(read(target))]
     report.add("decision structure", MECHANICAL, findings,
                f"{len(entries)} entries, every heading and bold reaches the hook")
 
@@ -1889,16 +2002,21 @@ def check_decision_index(report: Report) -> None:
     check-time split, with only the check half built.
     """
     claude = ROOT / "CLAUDE.md"
-    decisions = ROOT / "docs" / "DECISIONS.md"
-    if not exists(claude) or not exists(decisions):
+    corpus = decisions_text()
+    if not exists(claude) or not corpus:
         report.add("decision index", MECHANICAL,
                    [Finding("CLAUDE.md", "cannot read the index or the entries.")])
         return
 
+    # THE CORPUS IN MANIFEST ORDER, which is the order the entries sat in when they were one
+    # file. This row has always reconciled the index against the headings IN ORDER, and the
+    # split had to keep that meaning exactly — `docs/decisions/ORDER.json` is the order, not
+    # the filesystem's, because three chunks in it are not entries and sorting by name would
+    # move them.
     want = [
         (m.group(1), m.group(2).strip())
         for m in (re.match(r"^##\s+(D" + _ID_ANY + r")\s*[—-]\s*(.+)$", line)
-                  for line in read(decisions).split("\n"))
+                  for line in corpus.split("\n"))
         if m
     ]
     # The index is the first fenced block whose lines all start `D<n> `. Located by shape
@@ -1954,9 +2072,14 @@ def check_entry_budget(report: Report) -> None:
         report.add("entry budget", ADVISORY,
                    [Finding("scripts/prose-guard.py", "not readable; sizes unchecked.")])
         return
-    target = ROOT / "docs" / "DECISIONS.md"
-    findings = [Finding(f.where, f.message) for f in guard.check_budget(target, ENTRY_BUDGET)]
-    total = sum(len(e.body) for e in guard.entries(read(target)))
+    # MECHANICAL here even though the row itself is ADVISORY: a long entry is a judgement
+    # call, but a corpus that cannot be read at all is not.
+    if corpus_is_empty(report, "entry budget", MECHANICAL):
+        return
+    findings = [Finding(f.where, f.message)
+                for target in decision_files()
+                for f in guard.check_budget(target, ENTRY_BUDGET)]
+    total = sum(len(e.body) for target in decision_files() for e in guard.entries(read(target)))
     report.add("entry budget", ADVISORY, findings,
                f"{total:,} bytes of entries, {len(findings)} over {ENTRY_BUDGET:,}")
 
@@ -3544,7 +3667,7 @@ def check_map(report: Report, allowed: Dict[str, str]) -> None:
         report.add("repo map", MECHANICAL, [Finding("docs/map.py", "no COMPONENTS list to read")])
         return
 
-    singles = decision_headings(ROOT / "docs" / "DECISIONS.md", "D")
+    singles = {i for i, _, _ in decision_heading_lines_across(decision_files(), "D")}
     test_names = {name for name, _ in registered_tests()}
     claimed = 0
     # (component path, orphan) pairs, reported after the loop rather than inside it. The
@@ -9141,6 +9264,23 @@ def check_doc_hygiene(report: Report, docs: List[Path]) -> None:
                 target = ROOT / match.group(1)
                 if not target.is_file():
                     continue
+                # A LINE CITATION OF `docs/DECISIONS.md` MEANT THE CORPUS, and that file is a
+                # 38-line stub since the split. Measured against the stub, eight true
+                # citations written before the split read as pointing past the end — D149's
+                # four among them, landed an hour earlier. The author meant the entries, so
+                # the entries are what the number is checked against. Same ruling as the
+                # relative-path case in `resolve_candidate`, and for the same reason: the
+                # entries' bytes are unchanged by design, so the alternative is editing prose
+                # inside a change whose whole claim is that it edited none.
+                #
+                # WHAT THIS RESTORES IS EXACTLY WHAT EXISTED BEFORE — this row only ever
+                # proved the file was long enough, never that the line still says what the
+                # citation claims. A number drifting under an edit was invisible here before
+                # the split and is invisible now; docs/DEBTS.md carries that half.
+                if match.group(1) == "docs/DECISIONS.md":
+                    total = len(decisions_text().splitlines())
+                    if total and int(match.group(2)) <= total:
+                        continue
                 total = len(target.read_text(errors="replace").splitlines())
                 if int(match.group(2)) > total:
                     findings.append(
@@ -10939,7 +11079,17 @@ SELF = Path(__file__).resolve()
 # Self-cleaning in both directions, the property D16 wants of `scripts/docs-audit-allow.txt`:
 # an entry naming a check `audit()` does call is stale and reported, and an entry naming
 # nothing defined here is dangling and reported. A list that only grows stops being read.
-UNDISPATCHED: Dict[str, str] = {}
+UNDISPATCHED: Dict[str, str] = {
+    "corpus_is_empty":
+        "A HELPER THAT EMITS ON BEHALF OF TWO REAL CHECKS, not a check of its own. "
+        "`check_decision_structure` and `check_entry_budget` both iterate the entry files "
+        "in docs/decisions/, and both reported `0 entries` in GREEN when the corpus could "
+        "not be read — measured by deleting one entry file. This writes the row that says "
+        "so, under whichever of those two labels called it, which is why it calls "
+        "`report.add` and why `audit()` does not call it. Dispatching it directly would "
+        "print a third row nobody asked for; leaving it out of this list would report it "
+        "as a check that has never run.",
+}
 
 
 def _emits_row(func: ast.AST) -> bool:
