@@ -1784,10 +1784,14 @@ COMPONENTS = [
                 # the git hook. D14 is why it excludes the code-card track, by banner.
                 # The tail is the decisions whose client functions the RECORDED classification
                 # carries, which is what makes a landing a reason to update it: D96 took two
-                # names out when the envelope walk went, D100 put four in.
-                "governed_by": ["D13", "D14", "D18", "D58", "D76", "D79", "D83", "D86", "D87",
-                                "D89", "D96", "D100",
-                                "D168"],
+                # names out when the envelope walk went, D100 put four in, and eighteen more
+                # accrued unrecorded until 2026-09-12 — the graveyard read (D134), the markdown
+                # lens and its re-addressed history strip (D103, D62), the value band (D159),
+                # the queue refresh (D167), the push/publish pair (D106), the live export
+                # (D104) and the seven order-line closers (D113).
+                "governed_by": ["D13", "D14", "D18", "D58", "D62", "D76", "D79", "D83", "D86",
+                                "D87", "D89", "D96", "D100", "D103", "D104", "D106", "D113",
+                                "D134", "D159", "D167", "D168"],
             },
             "verdict-selftest.py": {"does": "PROVES `app/design-check-reporter.ts` STILL WRITES A "
                                             "VERDICT, BY RUNNING IT. `make docs-audit`'s "

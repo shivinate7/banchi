@@ -188,6 +188,13 @@ const RECORDED = {
     'getBoxListings', 'getPricing', 'getPriceHistory', 'getRuns', 'getRun', 'getTcgSets',
     'getOrders', 'getPriceTrends', 'getExportScope', 'getPricingWorklist', 'getPricingCorpus',
     'getBoxPhotos', 'getMarkdowns',
+    // The graveyard's one read (D134). Its own line, for the reason the writes below give.
+    'getGraveyard',
+    // The markdown lens's three (D103) — the survey table, and D62's history and trends
+    // strip re-addressed at a stamp instead of a run.
+    'getMarkdownTable', 'markdownHistory', 'markdownTrends',
+    // The band lens's whole input (D159): every card on hand, ranked, one row per copy.
+    'getValueTable',
   ],
   writes: [
     'capture', 'updateCard', 'undoCapture', 'reshootPhoto', 'answerReview', 'standDown',
@@ -202,6 +209,21 @@ const RECORDED = {
     // already names. On their own line so a branch adding its own writes does not conflict
     // with this one over the same line — the failure mode the header records happening twice.
     'clearPricingAnswers', 'restorePricingAnswers',
+    // AND THE ONE-DIRECTION DRIFT THE HEADER ABOVE PREDICTED RAN FOR A THIRD TIME, LONGER AND
+    // WIDER THAN EITHER EARLIER ONE: eighteen exports — five reads and thirteen writes —
+    // accumulated with nothing removed, so `--self-test` reported `2 FAILED` with `missing:
+    // (none)` in both buckets while every `make check` stayed green, because the Makefile
+    // runs this script WITHOUT `--self-test`. Every one of the eighteen is recorded here in
+    // the bucket the classifier already puts it in; not one recogniser was touched, because
+    // the ordinary run was clean throughout — what was stale is this table, never the
+    // analysis. Grouped by the decision that landed them, each group on its own line, so two
+    // branches adding writes in the same week conflict over neither.
+    'refreshQueues',                                              // D167, the store-wide re-resolve
+    'pushMarkdown', 'rollbackMarkdown', 'publishMarkdown',        // D106, the two presses and the undo
+    'fetchLiveExport',                                            // D104, the second document
+    'fillLine', 'undoFill', 'declareLineKind',                    // D113, a line closes three ways
+    'closeOrders', 'closeLines', 'reopenLines', 'reopenOrders',   // D113, the stand-down and its inverse
+    'fillShippingStamps',                                         // order-pipeline.md §3 T2b
   ],
   nonMutating: ['preflightRun', 'cropPreview', 'fetchOrders', 'previewOrders'],
   nonRequests: [
