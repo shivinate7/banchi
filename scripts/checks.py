@@ -99,95 +99,6 @@ CHECKS = (
         "governed_by": ("D16", "D18"),
     },
     {
-        "target": "audit-self-test",
-        "runs": "python3 scripts/docs-audit.py --self-test",
-        "asserts": "The auditor's own extractors, against fixtures it builds and destroys. It "
-                   "sat red and unnoticed until 2026-08-24 because nothing ran it at all.",
-        "needs": ("python3",),
-        "writes": "a temporary directory it makes and removes.",
-        "commit_path": False,
-        "why_off_commit_path": "D18: `--self-test` is the one mode of docs-audit.py that "
-                               "writes, and nothing that writes may run on the path that "
-                               "decides whether a commit proceeds. `make check` is invoked by a "
-                               "person, so it is not that path.",
-        "gates": True,
-        "governed_by": ("D16", "D18"),
-    },
-    {
-        "target": "githooks-selftest",
-        "runs": "bash scripts/githooks-selftest.sh",
-        "asserts": "D42's two hooks over main, exercised in a bare repo and a clone built for "
-                   "the run. A refusal must carry the hooks' own `REFUSED:` marker, so git's "
-                   "own refusals cannot score as the guard's.",
-        "needs": ("bash", "git"),
-        "writes": "a bare repo, a clone, commits and pushes, all under `mktemp -d`.",
-        "commit_path": False,
-        "why_off_commit_path": "D18, and a second reason of its own: it exercises the guard by "
-                               "VIOLATING it, so a version on the commit path would be refusing "
-                               "its own commits.",
-        "gates": True,
-        "governed_by": ("D18", "D42"),
-    },
-    {
-        "target": "merge-selftest",
-        "runs": "bash scripts/merge-selftest.sh",
-        "asserts": "scripts/merge-pr.py's local half, against a throwaway origin, clone and "
-                   "second worktree. The case that matters is the footgun D42 names: main "
-                   "checked out NOWHERE while a feature branch sits in the other tree, where "
-                   "the wrong command silently fast-forwards that branch and trips no hook.",
-        "needs": ("python3", "bash", "git"),
-        "writes": "a bare repo, a clone and a linked worktree, all under `mktemp -d`.",
-        "commit_path": False,
-        "why_off_commit_path": "D18 — it writes — and githooks-selftest's second reason applies "
-                               "unchanged: it drives the thing that moves main.",
-        "gates": True,
-        "governed_by": ("D18", "D42"),
-    },
-    {
-        "target": "revert-selftest",
-        "runs": "python3 scripts/revert-audit.py selftest",
-        "asserts": "The revert guard, against a throwaway origin and clone that rebuild the "
-                   "#218/#221 sequence: a deletion merged, a branch cut from before it that "
-                   "merges main keeping `ours` and squashes onto main. Ten cases: the fixture's "
-                   "own arming, the squash refused, the history walk naming the merge AND the "
-                   "deleting commit inside it, a clean branch allowed, a partial reversal "
-                   "noted and allowed, a declared restoration allowed, a silent one refused at "
-                   "hunk level, the escape hatch honoured, and main itself landing nothing.",
-        "needs": ("python3", "git"),
-        "writes": "a bare repo and a clone, under `mktemp -d`.",
-        "commit_path": False,
-        "why_off_commit_path": "D18 — it writes — and githooks-selftest's second reason: it "
-                               "drives the guard by defeating it.",
-        "gates": True,
-        "governed_by": ("D18", "D42", "D133"),
-    },
-    {
-        "target": "claim-selftest",
-        "runs": "python3 scripts/claim-selftest.py",
-        "asserts": "scripts/claim-ids.py against a throwaway repository in which MAIN MOVES "
-                   "underneath the branch, which is the only condition that can tell an "
-                   "allocation against the ref from an allocation against the branch's own "
-                   "copy. FORTY-TWO arms — the count in this sentence said sixteen over a "
-                   "file that held eighteen, which is what a prose count does. Fourteen of "
-                   "them cover the staleness half (D140, amended 2026-09-11): a branch claims "
-                   "honestly, main takes the number underneath it, and the check must go red "
-                   "and NAME it. Mutation-tested on twelve — five when the claimer landed, "
-                   "seven over the staleness half and eight over the tree precondition, none "
-                   "of which survived. The boundary "
-                   "arm found a real bug in the unmutated code — `\\b` fires between a letter "
-                   "and a hyphen, so one slug was substituted inside another that extended "
-                   "it; the staleness arms found a second, that reading the baseline from the "
-                   "REF rather than the merge base makes every collision cancel itself out.",
-        "needs": ("python3", "git"),
-        "writes": "a temporary directory it makes and removes.",
-        "commit_path": False,
-        "why_off_commit_path": "D18: it writes, and nothing that writes may run on the path "
-                               "that decides whether a commit proceeds. It also builds three "
-                               "git repositories, which the hook has no business doing.",
-        "gates": True,
-        "governed_by": ("D16", "D18", "D140"),
-    },
-    {
         "target": "claim-stale",
         "runs": "python3 scripts/claim-ids.py --stale",
         "asserts": "No id this branch ADDS since its merge base with `origin/main` — decision "
@@ -213,31 +124,6 @@ CHECKS = (
         "governed_by": ("D16", "D42", "D80", "D140"),
     },
     {
-        "target": "decisions-selftest",
-        "runs": "python3 scripts/split-decisions.py --selftest",
-        "asserts": "`docs/decisions/` is a complete, well-formed set: every file "
-                   "`ORDER.json` names is present, every markdown file present is named, no "
-                   "id appears in two files, and the reassembly still ends in a newline. The "
-                   "duplicate arm is the one a directory newly needs — one entry copied "
-                   "rather than moved puts `## D58` in two files, which a single document "
-                   "could not express and nothing else would notice. It does NOT hash the "
-                   "live corpus: editing an entry is the normal way this corpus changes, and "
-                   "a digest over the whole thing would go red on the next decision entry "
-                   "and blame a routine append for a loss that had not happened. The "
-                   "historical claim — that the split itself lost nothing — is "
-                   "`--verify-split REF`, which reads both sides out of git.",
-        "needs": ("python3",),
-        "writes": "",
-        "commit_path": False,
-        "why_off_commit_path": "Nothing here is urgent enough to pay for on every commit: a "
-                               "corpus that has lost a file fails `decision ids` and "
-                               "`decision index` in the same run, so the commit gate already "
-                               "refuses the damage this names. It is in `check` and "
-                               "`ci-check` for the earlier, clearer message.",
-        "gates": True,
-        "governed_by": ("D16", "D18", "D60", "D160"),
-    },
-    {
         "target": "revert-guard",
         "runs": "python3 scripts/revert-audit.py branch",
         "asserts": "What this branch would land on origin/main — the clean merge's tree, or "
@@ -256,117 +142,6 @@ CHECKS = (
                                "branch is not yet a claim about main — the push is.",
         "gates": True,
         "governed_by": ("D42", "D133"),
-    },
-    {
-        "target": "janitor-selftest",
-        "runs": "bash scripts/janitor-selftest.sh",
-        "asserts": "scripts/janitor.py, against a throwaway clone with real worktrees, a fake "
-                   "liveness oracle and real processes in their own process groups. The cases "
-                   "that matter are the refusals: a worktree with a live session in it, a "
-                   "branch that is unmerged and on no remote, and a husk directory something "
-                   "is still running under. Each asserts the janitor's OWN sentence, because "
-                   "git would refuse some of them on its own and survival by somebody else's "
-                   "refusal is not coverage.",
-        "needs": ("python3", "bash", "git"),
-        "writes": "a bare repo, a clone, four linked worktrees and four short-lived processes, "
-                  "all under `mktemp -d` and all confined to it by `--confine`.",
-        "commit_path": False,
-        "why_off_commit_path": "D18 — it writes, and it signals processes. It drives the one "
-                               "tool here besides icloud-sweep that can delete a worktree.",
-        "gates": True,
-        "governed_by": ("D18", "D44", "D53"),
-    },
-    {
-        "target": "reap-selftest",
-        "runs": "bash scripts/reap-selftest.sh",
-        "asserts": "scripts/reap.py, against a throwaway checkout, a throwaway sibling "
-                   "directory standing in for everywhere-else, and real processes in their own "
-                   "process groups. BOTH INCIDENTS ARE CASES rather than prose: `pkill -f "
-                   "<name>` where a stranger also matches, and `for p in $(lsof -ti tcp:PORT); "
-                   "do kill $p; done` where a CLIENT holds the port. The cases that matter "
-                   "either way are the two edges — that a stranger's process is refused AND "
-                   "survives, and that the session's own is still killable, because a guard "
-                   "that breaks cleanup is one that gets switched off.",
-        "needs": ("python3", "bash", "git", "lsof"),
-        "writes": "a git repo, two scripts, a `.serve/` pidfile and four short-lived "
-                  "processes, all under `mktemp -d`. It signals only what it spawned.",
-        "commit_path": False,
-        "why_off_commit_path": "D18 — it writes, and it signals processes. It drives the one "
-                               "guard here that can refuse a shell command outright.",
-        "gates": True,
-        "governed_by": ("D18", "D53", "D111", "D127"),
-    },
-    {
-        "target": "suite-lock-selftest",
-        "runs": "python3 scripts/suite-lock.py selftest",
-        "asserts": "scripts/suite-lock.py, by violating it: a holder, a second run refused, a "
-                   "`--wait` that queues and announces itself, and a holder killed with -9 to "
-                   "prove the OS releases what it took. That last case is the whole argument "
-                   "for `flock` over a pidfile, and it is the one a reader would otherwise "
-                   "have to take on trust.",
-        "needs": ("python3",),
-        "writes": "a lock directory and lock files under `mktemp -d`, reached through "
-                  "PKMNSCAN_LOCK_DIR so the real lock is never touched — a self-test that "
-                  "took the real one would refuse a suite running in another checkout.",
-        "commit_path": False,
-        "why_off_commit_path": "D18 — it writes, and it spawns processes and kills them. It "
-                               "also holds a lock for a second or two, and the commit path is "
-                               "not a place to queue behind anything.",
-        "gates": True,
-        "governed_by": ("D18", "D43", "D122"),
-    },
-    {
-        "target": "serve-selftest",
-        "runs": "python3 scripts/serve-selftest.py",
-        "asserts": "the supervisor's build job (D138), against a throwaway checkout whose "
-                   "`vite build` is a shell stub. What is under test is the supervisor and "
-                   "never the compiler: that a cold tree builds BEFORE the port opens, that a "
-                   "screen edit rebuilds and does not restart the capture child, that a "
-                   "Python edit restarts it and does not rebuild, that a failed build leaves "
-                   "the previous bundle byte-identical, that every request during a build "
-                   "answers 200 — the swap is two renames — and that with no node on PATH the "
-                   "API comes up anyway while `GET /` says 503. Five mutations were observed "
-                   "failing it, including building straight into `dist/`.",
-        "needs": ("python3",),
-        "writes": "two throwaway checkouts, their `.serve/` directories and the supervisors "
-                  "and capture servers running under them, all inside `mktemp -d`. The "
-                  "capture port is PINNED with `PKMNSCAN_PORT` rather than derived: a copied "
-                  "tree is not a linked worktree, so it would call itself the main checkout "
-                  "and claim :8000 — the owner's live server.",
-        "commit_path": False,
-        "why_off_commit_path": "D18 — it writes, and it starts and signals real processes.",
-        "gates": True,
-        "governed_by": ("D18", "D43", "D53", "D138"),
-    },
-    {
-        "target": "verdict-selftest",
-        "runs": "python3 scripts/verdict-selftest.py",
-        "asserts": "app/design-check-reporter.ts, run for real against one passing and one "
-                   "failing spec: the verdict, the counts, the failing title and its "
-                   "location — file AND line, the line asserted against the probe's own "
-                   "source, because Playwright 1.55.1 miscounted it under Node 23+ and the "
-                   "verdict named the wrong line (D129; 1.58.0 is the floor that counts it "
-                   "right, and this arm is what would see a bump bring it back) — the in-flight `running` sentinel (observed by the passing test "
-                   "from inside the run, which is the only way to see it that is not a race), "
-                   "and that the error text carries no ANSI escapes and no NUL bytes. "
-                   "`make docs-audit`'s `verdict file` row is the static half — it reconciles "
-                   "the four files that NAME the verdict path and cannot say the reporter "
-                   "still works. The regression neither name-checking nor the design suite "
-                   "would catch is a @playwright/test bump moving the Reporter API under it: "
-                   "every name stays in place and every count goes wrong, and a session reads "
-                   "a green verdict off a reporter that stopped counting.",
-        "needs": ("python3", "node", "app deps"),
-        "writes": "a throwaway tree under `tempfile.TemporaryDirectory()` holding a COPY of the "
-                  "reporter, the real app/package.json, a symlink to app/node_modules and two "
-                  "generated specs. The copy is what keeps its verdict inside the temporary "
-                  "directory: RESULT_FILE is derived from the reporter's own location, so "
-                  "running the real file in place would overwrite `.serve/design-check.json` — "
-                  "a file a session may be about to read, which would make this check cause "
-                  "the false green it exists to prevent.",
-        "commit_path": False,
-        "why_off_commit_path": "D18 — it writes, and it shells out to node.",
-        "gates": True,
-        "governed_by": ("D16", "D18", "D129"),
     },
     {
         "target": "port-agreement",
@@ -481,6 +256,231 @@ CHECKS = (
         "why_off_commit_path": "It runs node, and the git hook runs a bare python3.",
         "gates": True,
         "governed_by": ("D18",),
+    },
+    {
+        "target": "audit-self-test",
+        "runs": "python3 scripts/docs-audit.py --self-test",
+        "asserts": "The auditor's own extractors, against fixtures it builds and destroys. It "
+                   "sat red and unnoticed until 2026-08-24 because nothing ran it at all.",
+        "needs": ("python3",),
+        "writes": "a temporary directory it makes and removes.",
+        "commit_path": False,
+        "why_off_commit_path": "D18: `--self-test` is the one mode of docs-audit.py that "
+                               "writes, and nothing that writes may run on the path that "
+                               "decides whether a commit proceeds. `make check` is invoked by a "
+                               "person, so it is not that path.",
+        "gates": True,
+        "governed_by": ("D16", "D18"),
+    },
+    {
+        "target": "githooks-selftest",
+        "runs": "bash scripts/githooks-selftest.sh",
+        "asserts": "D42's two hooks over main, exercised in a bare repo and a clone built for "
+                   "the run. A refusal must carry the hooks' own `REFUSED:` marker, so git's "
+                   "own refusals cannot score as the guard's.",
+        "needs": ("bash", "git"),
+        "writes": "a bare repo, a clone, commits and pushes, all under `mktemp -d`.",
+        "commit_path": False,
+        "why_off_commit_path": "D18, and a second reason of its own: it exercises the guard by "
+                               "VIOLATING it, so a version on the commit path would be refusing "
+                               "its own commits.",
+        "gates": True,
+        "governed_by": ("D18", "D42"),
+    },
+    {
+        "target": "merge-selftest",
+        "runs": "bash scripts/merge-selftest.sh",
+        "asserts": "scripts/merge-pr.py's local half, against a throwaway origin, clone and "
+                   "second worktree. The case that matters is the footgun D42 names: main "
+                   "checked out NOWHERE while a feature branch sits in the other tree, where "
+                   "the wrong command silently fast-forwards that branch and trips no hook.",
+        "needs": ("python3", "bash", "git"),
+        "writes": "a bare repo, a clone and a linked worktree, all under `mktemp -d`.",
+        "commit_path": False,
+        "why_off_commit_path": "D18 — it writes — and githooks-selftest's second reason applies "
+                               "unchanged: it drives the thing that moves main.",
+        "gates": True,
+        "governed_by": ("D18", "D42"),
+    },
+    {
+        "target": "revert-selftest",
+        "runs": "python3 scripts/revert-audit.py selftest",
+        "asserts": "The revert guard, against a throwaway origin and clone that rebuild the "
+                   "#218/#221 sequence: a deletion merged, a branch cut from before it that "
+                   "merges main keeping `ours` and squashes onto main. Ten cases: the fixture's "
+                   "own arming, the squash refused, the history walk naming the merge AND the "
+                   "deleting commit inside it, a clean branch allowed, a partial reversal "
+                   "noted and allowed, a declared restoration allowed, a silent one refused at "
+                   "hunk level, the escape hatch honoured, and main itself landing nothing.",
+        "needs": ("python3", "git"),
+        "writes": "a bare repo and a clone, under `mktemp -d`.",
+        "commit_path": False,
+        "why_off_commit_path": "D18 — it writes — and githooks-selftest's second reason: it "
+                               "drives the guard by defeating it.",
+        "gates": True,
+        "governed_by": ("D18", "D42", "D133"),
+    },
+    {
+        "target": "claim-selftest",
+        "runs": "python3 scripts/claim-selftest.py",
+        "asserts": "scripts/claim-ids.py against a throwaway repository in which MAIN MOVES "
+                   "underneath the branch, which is the only condition that can tell an "
+                   "allocation against the ref from an allocation against the branch's own "
+                   "copy. FORTY-TWO arms — the count in this sentence said sixteen over a "
+                   "file that held eighteen, which is what a prose count does. Fourteen of "
+                   "them cover the staleness half (D140, amended 2026-09-11): a branch claims "
+                   "honestly, main takes the number underneath it, and the check must go red "
+                   "and NAME it. Mutation-tested on twelve — five when the claimer landed, "
+                   "seven over the staleness half and eight over the tree precondition, none "
+                   "of which survived. The boundary "
+                   "arm found a real bug in the unmutated code — `\\b` fires between a letter "
+                   "and a hyphen, so one slug was substituted inside another that extended "
+                   "it; the staleness arms found a second, that reading the baseline from the "
+                   "REF rather than the merge base makes every collision cancel itself out.",
+        "needs": ("python3", "git"),
+        "writes": "a temporary directory it makes and removes.",
+        "commit_path": False,
+        "why_off_commit_path": "D18: it writes, and nothing that writes may run on the path "
+                               "that decides whether a commit proceeds. It also builds three "
+                               "git repositories, which the hook has no business doing.",
+        "gates": True,
+        "governed_by": ("D16", "D18", "D140"),
+    },
+    {
+        "target": "decisions-selftest",
+        "runs": "python3 scripts/split-decisions.py --selftest",
+        "asserts": "`docs/decisions/` is a complete, well-formed set: every file "
+                   "`ORDER.json` names is present, every markdown file present is named, no "
+                   "id appears in two files, and the reassembly still ends in a newline. The "
+                   "duplicate arm is the one a directory newly needs — one entry copied "
+                   "rather than moved puts `## D58` in two files, which a single document "
+                   "could not express and nothing else would notice. It does NOT hash the "
+                   "live corpus: editing an entry is the normal way this corpus changes, and "
+                   "a digest over the whole thing would go red on the next decision entry "
+                   "and blame a routine append for a loss that had not happened. The "
+                   "historical claim — that the split itself lost nothing — is "
+                   "`--verify-split REF`, which reads both sides out of git.",
+        "needs": ("python3",),
+        "writes": "",
+        "commit_path": False,
+        "why_off_commit_path": "Nothing here is urgent enough to pay for on every commit: a "
+                               "corpus that has lost a file fails `decision ids` and "
+                               "`decision index` in the same run, so the commit gate already "
+                               "refuses the damage this names. It is in `check` and "
+                               "`ci-check` for the earlier, clearer message.",
+        "gates": True,
+        "governed_by": ("D16", "D18", "D60", "D160"),
+    },
+    {
+        "target": "janitor-selftest",
+        "runs": "bash scripts/janitor-selftest.sh",
+        "asserts": "scripts/janitor.py, against a throwaway clone with real worktrees, a fake "
+                   "liveness oracle and real processes in their own process groups. The cases "
+                   "that matter are the refusals: a worktree with a live session in it, a "
+                   "branch that is unmerged and on no remote, and a husk directory something "
+                   "is still running under. Each asserts the janitor's OWN sentence, because "
+                   "git would refuse some of them on its own and survival by somebody else's "
+                   "refusal is not coverage.",
+        "needs": ("python3", "bash", "git"),
+        "writes": "a bare repo, a clone, four linked worktrees and four short-lived processes, "
+                  "all under `mktemp -d` and all confined to it by `--confine`.",
+        "commit_path": False,
+        "why_off_commit_path": "D18 — it writes, and it signals processes. It drives the one "
+                               "tool here besides icloud-sweep that can delete a worktree.",
+        "gates": True,
+        "governed_by": ("D18", "D44", "D53"),
+    },
+    {
+        "target": "reap-selftest",
+        "runs": "bash scripts/reap-selftest.sh",
+        "asserts": "scripts/reap.py, against a throwaway checkout, a throwaway sibling "
+                   "directory standing in for everywhere-else, and real processes in their own "
+                   "process groups. BOTH INCIDENTS ARE CASES rather than prose: `pkill -f "
+                   "<name>` where a stranger also matches, and `for p in $(lsof -ti tcp:PORT); "
+                   "do kill $p; done` where a CLIENT holds the port. The cases that matter "
+                   "either way are the two edges — that a stranger's process is refused AND "
+                   "survives, and that the session's own is still killable, because a guard "
+                   "that breaks cleanup is one that gets switched off.",
+        "needs": ("python3", "bash", "git", "lsof"),
+        "writes": "a git repo, two scripts, a `.serve/` pidfile and four short-lived "
+                  "processes, all under `mktemp -d`. It signals only what it spawned.",
+        "commit_path": False,
+        "why_off_commit_path": "D18 — it writes, and it signals processes. It drives the one "
+                               "guard here that can refuse a shell command outright.",
+        "gates": True,
+        "governed_by": ("D18", "D53", "D111", "D127"),
+    },
+    {
+        "target": "suite-lock-selftest",
+        "runs": "python3 scripts/suite-lock.py selftest",
+        "asserts": "scripts/suite-lock.py, by violating it: a holder, a second run refused, a "
+                   "`--wait` that queues and announces itself, and a holder killed with -9 to "
+                   "prove the OS releases what it took. That last case is the whole argument "
+                   "for `flock` over a pidfile, and it is the one a reader would otherwise "
+                   "have to take on trust.",
+        "needs": ("python3",),
+        "writes": "a lock directory and lock files under `mktemp -d`, reached through "
+                  "PKMNSCAN_LOCK_DIR so the real lock is never touched — a self-test that "
+                  "took the real one would refuse a suite running in another checkout.",
+        "commit_path": False,
+        "why_off_commit_path": "D18 — it writes, and it spawns processes and kills them. It "
+                               "also holds a lock for a second or two, and the commit path is "
+                               "not a place to queue behind anything.",
+        "gates": True,
+        "governed_by": ("D18", "D43", "D122"),
+    },
+    {
+        "target": "serve-selftest",
+        "runs": "python3 scripts/serve-selftest.py",
+        "asserts": "the supervisor's build job (D138), against a throwaway checkout whose "
+                   "`vite build` is a shell stub. What is under test is the supervisor and "
+                   "never the compiler: that a cold tree builds BEFORE the port opens, that a "
+                   "screen edit rebuilds and does not restart the capture child, that a "
+                   "Python edit restarts it and does not rebuild, that a failed build leaves "
+                   "the previous bundle byte-identical, that every request during a build "
+                   "answers 200 — the swap is two renames — and that with no node on PATH the "
+                   "API comes up anyway while `GET /` says 503. Five mutations were observed "
+                   "failing it, including building straight into `dist/`.",
+        "needs": ("python3",),
+        "writes": "two throwaway checkouts, their `.serve/` directories and the supervisors "
+                  "and capture servers running under them, all inside `mktemp -d`. The "
+                  "capture port is PINNED with `PKMNSCAN_PORT` rather than derived: a copied "
+                  "tree is not a linked worktree, so it would call itself the main checkout "
+                  "and claim :8000 — the owner's live server.",
+        "commit_path": False,
+        "why_off_commit_path": "D18 — it writes, and it starts and signals real processes.",
+        "gates": True,
+        "governed_by": ("D18", "D43", "D53", "D138"),
+    },
+    {
+        "target": "verdict-selftest",
+        "runs": "python3 scripts/verdict-selftest.py",
+        "asserts": "app/design-check-reporter.ts, run for real against one passing and one "
+                   "failing spec: the verdict, the counts, the failing title and its "
+                   "location — file AND line, the line asserted against the probe's own "
+                   "source, because Playwright 1.55.1 miscounted it under Node 23+ and the "
+                   "verdict named the wrong line (D129; 1.58.0 is the floor that counts it "
+                   "right, and this arm is what would see a bump bring it back) — the in-flight `running` sentinel (observed by the passing test "
+                   "from inside the run, which is the only way to see it that is not a race), "
+                   "and that the error text carries no ANSI escapes and no NUL bytes. "
+                   "`make docs-audit`'s `verdict file` row is the static half — it reconciles "
+                   "the four files that NAME the verdict path and cannot say the reporter "
+                   "still works. The regression neither name-checking nor the design suite "
+                   "would catch is a @playwright/test bump moving the Reporter API under it: "
+                   "every name stays in place and every count goes wrong, and a session reads "
+                   "a green verdict off a reporter that stopped counting.",
+        "needs": ("python3", "node", "app deps"),
+        "writes": "a throwaway tree under `tempfile.TemporaryDirectory()` holding a COPY of the "
+                  "reporter, the real app/package.json, a symlink to app/node_modules and two "
+                  "generated specs. The copy is what keeps its verdict inside the temporary "
+                  "directory: RESULT_FILE is derived from the reporter's own location, so "
+                  "running the real file in place would overwrite `.serve/design-check.json` — "
+                  "a file a session may be about to read, which would make this check cause "
+                  "the false green it exists to prevent.",
+        "commit_path": False,
+        "why_off_commit_path": "D18 — it writes, and it shells out to node.",
+        "gates": True,
+        "governed_by": ("D16", "D18", "D129"),
     },
 )
 

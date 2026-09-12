@@ -327,8 +327,15 @@ make check          # harness + docs-audit + audit-self-test + githooks-selftest
                     #   NEITHER THIS NOR `make harness` HAS design-check's WAITING PROBLEM,
                     #   measured 2026-09-07 in a worktree: 17s and 13s, both well inside one
                     #   tool call, so run them in the foreground and read the output. What
-                    #   `check` is is LONG — ~3,000 lines — and the two rows that matter are
-                    #   at the end, since it stops at the first failing target. For the
+                    #   `check` is is LONG — ~3,000 lines — and it stops at the first failing
+                    #   target, which is why the ORDER is argued rather than historical
+                    #   (D161): the product first —
+                    #   harness, docs-audit, then every check that reads the code and says
+                    #   something about it — and the eleven selftests that prove a GUARD last,
+                    #   because those build throwaway clones, bind ports and send signals, so
+                    #   they can go red for a reason outside this tree. Eleven of them used to
+                    #   run AHEAD of lint, vale and typecheck, and on 2026-09-11 two sessions
+                    #   reported `check` red having never reached six of the rows. For the
                     #   docs-audit half alone, `python3 scripts/docs-audit.py --json` prints
                     #   the rows and the exit code as one object instead of ~100 lines of
                     #   render, which is what grepping `^  FAIL` was approximating.
@@ -1774,6 +1781,7 @@ D157 The fixture carries a per-run name, because the process table is the one th
 D158 The refusal goes where the damage is, so the primary checkout's server will not run a branch's code, and the checkout itself is left alone
 D159 The band is copies rather than SKUs, the drawer is the first answer, and nothing on hand is dropped
 D160 An entry is a file, because two branches appending to one file collide every single time
+D161 `make check` proves the product first and its own guards last, because a failure stops the rest
 D-hash-before-decode The cache is keyed by the digest, so the digest is what the press computes first
 ```
 
