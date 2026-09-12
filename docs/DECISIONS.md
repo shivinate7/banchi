@@ -10701,7 +10701,7 @@ They asked whether this was the `--quantity` control amended into D7 the same da
 
 **Seven SKUs still add nothing, and they are a different defect: a claim `_copies_out` cannot age.** `pushed` is stuck, the copies actually sent have SOLD, and `_copies_out` only ages a claim the export corroborates — with `Total Quantity` at 0 the gate is off, so the claim still covers the whole shelf. No ordering can reach them: `copies_out >= len(copies_on_hand)` for all seven, so every copy is committed whichever ones are picked.
 
-That guard is load-bearing, not defensive — D59 records that dropping it takes `check_listing_commands`' re-emit idempotence case red — and separating a Staged copy pulled by hand from a Live copy that sold needs information this pipeline does not have. **Recorded as `docs/DEBTS.md` §24 with the measurement, rather than half-fixed.** *(Fixed the next day by `D-sold-before-the-reading`: the export answers a second question, and all seven are offered. The measurement above is what this branch left and is not rewritten.)*
+That guard is load-bearing, not defensive — D59 records that dropping it takes `check_listing_commands`' re-emit idempotence case red — and separating a Staged copy pulled by hand from a Live copy that sold needs information this pipeline does not have. **Recorded as `docs/DEBTS.md` §24 with the measurement, rather than half-fixed.** *(Fixed the next day by `D150`: the export answers a second question, and all seven are offered. The measurement above is what this branch left and is not rewritten.)*
 
 **Their report sentence is still wrong and is deliberately not patched.** *(It went with the arithmetic — it was false because the arithmetic was.)* Those seven go on printing *"every copy in this run is already listed or has left the box"*, which is false about the run's copy. `SkuMatch` cannot tell them from an ordinary un-reconciled re-emit — both read `pending = copies_out - live_now` with `live_now` at zero — so a true sentence needs the sold count threaded onto the match, which is new surface area on the wire for a figure nothing else reads. It belongs with the arithmetic fix, and §24 carries both.
 
@@ -10808,7 +10808,7 @@ A row would have to decide what a sentence is ABOUT. The nearest mechanical prox
 
 **This is the distinction the whole entry turns on.** A guard over a document's SHAPE is mechanical and cheap. A guard over what a sentence MEANS is neither, and the measurement above is what that costs. The first is built; the second is recorded and declined.
 
-## D-sold-before-the-reading — A reading taken after a sale is that sale's own result, and it ages the claim
+## D150 — A reading taken after a sale is that sale's own result, and it ages the claim
 
 **`cli/resolve.py:_copies_out` ages a stuck `pushed` claim by the SKU's sales where the export corroborates them, and a reading of ZERO taken AFTER a sale is corroboration.** Built 2026-09-11, from the operator's report that two cards they had just scanned into box 1 could not be sent: *"you are aware that I scanned in new falling star and a new fizz and so i should ideally when everything is fixed have some quantity that could be pushed out on that pricing run?"* They were right, and `docs/DEBTS.md` §24 — written the same day, by the branch that fixed D147's ordering defect — had recorded this as deliberately unfixed.
 

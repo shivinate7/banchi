@@ -699,7 +699,7 @@ def _committed_keys(inventory: master.Inventory, copies_out: Mapping[str, int]) 
     operator read that sentence and said it was *"just not true/possible"*. 52 of the 59 are
     this defect; the other 7 are the stuck claim `_copies_out` could not age, which is
     `docs/DEBTS.md` §24 and is not fixed here — `_copies_out` aged them the next day
-    (`D-sold-before-the-reading`), and nothing about this ordering moved.
+    (`D150`), and nothing about this ordering moved.
 
     PREFERRING COPIES OUTSIDE THE RUN BEING EMITTED WAS THE OTHER CANDIDATE AND IT OVER-SENDS.
     It makes the committed set a function of which run is emitting, so two runs holding one

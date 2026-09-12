@@ -14914,7 +14914,7 @@ def check_listing_commands(checks: Checks) -> None:
             "and the file is still the first emit's — a retirement may never re-open the cap",
         )
 
-    # --- a zero reading taken AFTER the sale ages the claim (D-sold-before-the-reading) ---
+    # --- a zero reading taken AFTER the sale ages the claim (D150) ---
     #
     # THE OWNER'S OWN CASE, WHICH `docs/DEBTS.md` §24 RECORDED AS DELIBERATELY UNFIXED. A copy
     # is pushed, it sells, and a later export reads `Total Quantity` 0 for the SKU. `pushed`

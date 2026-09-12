@@ -2035,7 +2035,7 @@ rather than another branch's, the way this file's header already rules for secti
 
 ## 24 — A zero reading cannot tell a sold-out listing from an import sitting in Staged
 
-**The defect this section was opened for is FIXED**, by `D-sold-before-the-reading`, the day
+**The defect this section was opened for is FIXED**, by `D150`, the day
 after it was written. What is left is one ambiguity underneath it, and it is worth a section
 of its own rather than a line in that entry because it is the third defect to turn on the same
 missing field.
