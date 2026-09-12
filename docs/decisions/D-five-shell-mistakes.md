@@ -5,6 +5,11 @@ as mechanizable. Five of them are one command away from a session's fingers and 
 the five has a measured incident behind it. `scripts/guard-shell.py` is those five, as a
 PreToolUse hook on Bash and on Write|Edit, armed in both tools' rosters (D135).
 
+**D173 is that audit's ruling and this entry is one discharge of it**: a rule that can be
+enforced mechanically is enforced mechanically, and a rule with no reader is advice. What is
+added here is which five, what each cost, and — the part a ruling cannot carry — where these
+particular readers are blind.
+
 ### Why a hook and not a rule, which D171 already settled
 
 **Every one of these five was already written down when it was broken.** Four were in a memory
