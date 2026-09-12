@@ -901,6 +901,11 @@ def report(root: Path = REPO_ROOT) -> dict:
         "dev_port": dev_port,
         "dev_answering": port_answering(dev_port),
         "worktree": ports.is_linked_worktree(root),
+        # The branch this PRIMARY checkout stands on when serving is refused, else None
+        # (D158). `scripts/status.py:serving_branch()` already names the branch from D139;
+        # this is the second half of that line — whether the refusal is in force — and it is
+        # read from the same function the supervisor decides on rather than re-derived.
+        "off_main": off_main(root),
         "state_dir": str(state_dir(root)),
         # PRESENCE, LABELLED AS SUCH — not "running under launchd". `launchctl print` is slow
         # and its output is not stable enough to parse in a status tool, and a status line that
@@ -941,6 +946,110 @@ def print_where(root: Path = REPO_ROOT) -> None:
         print(f"            main tree serves :{ports.CAPTURE_BASE_PORT}")
 
 
+# ---------------------------------------- the primary checkout serves main
+# D158
+
+SERVE_MAIN_ENV = "PKMNSCAN_SERVE_MAIN"
+
+
+def off_main(root: Path = REPO_ROOT) -> Optional[str]:
+    """The branch this PRIMARY checkout stands on, when that is not `main`. `None` otherwise.
+
+    THE HARM IS NOT THE BRANCH, IT IS THE SERVER. D53 keeps one supervisor alive at login out
+    of the primary checkout over the owner's real `inventory/store.sqlite`, and since D138 that
+    process serves the built app as well — so the branch this ONE directory stands on decides
+    which code photographs real cards into a real store. D139 put three readers on that fact
+    and made every one of them a WARNING, on the ground that git has no `pre-checkout` hook.
+    That ceiling was right about git and wrong about where the guard goes: the checkout is not
+    the thing to refuse, the SERVING is, and this is the function that refuses it.
+
+    A LINKED WORKTREE IS NOT THE SUBJECT and must never be caught by this — it has its own
+    store and its own ports to be wrong on its own, which is what D43 bought. The test is
+    `server/ports.py:is_linked_worktree`, CALLED rather than respelled: D139 is emphatic that
+    the primary/linked question has exactly one answer in this repo, and a fourth spelling of
+    it here would be a fourth place for it to be written backwards.
+
+    IT READS `.git/HEAD` RATHER THAN SHELLING OUT, and that is this file's standing rule rather
+    than a micro-optimisation: the module docstring commits to stdlib only and to not paying
+    for a subprocess once a second, and `.git/HEAD` is plumbing — either `ref: refs/heads/<name>`
+    or a raw object id, stable across every git this repo has run on.
+
+    IT FAILS OPEN ON EVERYTHING IT CANNOT READ, for `scripts/githooks/reference-transaction`'s
+    stated reason one register over: this answer stops a server from starting, so a bug in it
+    must cost a warning that never fires rather than a rig that will not come up. No `.git` at
+    all — a container copy, the throwaway tree `scripts/serve-selftest.py` builds — has no
+    branch to be wrong about and reads as `None`.
+
+    AND IT IS GATED ON `main` BEING A REAL LOCAL BRANCH, the same gate `post-checkout` uses, so
+    a checkout of another repository that happens to run this file is not in violation for
+    calling its trunk something else. It is also what keeps this quiet on CI, where the checkout
+    is a primary one standing on a detached HEAD with no local `main` — measured, and the reason
+    that case is not a refusal waiting to happen on every pull request.
+    """
+    if os.environ.get(SERVE_MAIN_ENV) == "off":
+        return None
+    if ports.is_linked_worktree(root):
+        return None
+    # NO `git_dir.is_dir()` TEST, AND THE MUTATION SWEEP IS WHY IT IS NOT HERE. One was written
+    # — it read well and it could not decide anything: a linked worktree has already returned
+    # above, and a tree with no `.git` at all reaches `_has_local_main`, which finds neither a
+    # loose ref nor a readable `packed-refs` and answers False. Deleting it changed no verdict
+    # in any arm, which is this repo's own test for a line that is a guard rather than a
+    # sentence about one.
+    git_dir = root / ".git"
+    if not _has_local_main(git_dir):
+        return None
+    try:
+        head = (git_dir / "HEAD").read_text("utf-8").strip()
+    except OSError:
+        return None
+    if head.startswith("ref: "):
+        ref = head[5:].strip()
+        if ref == "refs/heads/main":
+            return None
+        return ref[len("refs/heads/"):] if ref.startswith("refs/heads/") else ref
+    # A raw object id is a detached HEAD, which is off main as surely as a branch is and is
+    # named as what it is rather than reported as a branch called `HEAD` (D139's own arm).
+    if len(head) >= 7 and all(c in "0123456789abcdef" for c in head.lower()):
+        return f"a detached HEAD at {head[:9]}"
+    return None
+
+
+def _has_local_main(git_dir: Path) -> bool:
+    """Loose and packed both, because `git gc` moves a ref between the two without warning."""
+    if (git_dir / "refs" / "heads" / "main").exists():
+        return True
+    try:
+        packed = (git_dir / "packed-refs").read_text("utf-8")
+    except OSError:
+        return False
+    return any(line.rstrip().endswith(" refs/heads/main") for line in packed.splitlines())
+
+
+def stand_down_lines(branch: str, running: bool) -> list[str]:
+    """The refusal, in one place, because `do_up` prints it and the supervisor logs it."""
+    out = [
+        f"NOT SERVING: this is the PRIMARY checkout and it is on {branch}, not main.",
+        "  D53 keeps THIS directory's server alive over the owner's REAL store, and since",
+        "  D138 it serves the built app too — so serving this branch would photograph real",
+        "  cards through code that is not main's.",
+    ]
+    if running:
+        # THE SAME BARGAIN `_first_syntax_error` ALREADY MAKES, and deliberately the same
+        # sentence: what is already serving is left alone. Stopping the owner's capture server
+        # to enforce this would be the repair that cuts a write in flight.
+        out += [
+            "  The server already running is NOT stopped and NOT reloaded — it goes on serving",
+            "  the code it started with, the way a file that will not parse leaves the last",
+            "  code that parsed running.",
+        ]
+    out += [
+        "  Back on main:  git switch main      (serving resumes by itself)",
+        f'  Anyway:        {SERVE_MAIN_ENV}=off make up ARGS="--restart --confirm"',
+    ]
+    return out
+
+
 # ---------------------------------------------------------------------------- the supervisor
 
 class Supervisor:
@@ -960,6 +1069,10 @@ class Supervisor:
         self.restarts = 0
         self.capture_started = 0.0
         self.last_syntax_error: Optional[tuple[str, str]] = None
+        # The branch this primary checkout was standing on when serving was last refused, or
+        # None. Held rather than recomputed so the refusal is said once per branch instead of
+        # once per second — `last_syntax_error` beside it exists for exactly that reason.
+        self.stood_down: Optional[str] = None
 
     # -- lifecycle ---------------------------------------------------------
 
@@ -982,6 +1095,16 @@ class Supervisor:
         nothing to guard: there is no second long-lived child to start after capture. What
         replaced it is `_refuse_capture` below, which still stops rather than retrying a wall.
         """
+        # BEFORE THE BUILD AND BEFORE THE PORT, because both are ways of adopting this tree's
+        # code and neither is worth doing for a tree that must not be served (D158). The
+        # supervisor stays ALIVE and watching rather than exiting: `git switch main` brings it
+        # back by itself, and exiting would also hand launchd a process to think about — the
+        # plist's `KeepAlive: {SuccessfulExit: false}` restarts anything that exits non-zero,
+        # which would be a refusal on a ten-second loop.
+        branch = off_main(self.root)
+        if branch is not None:
+            self._stand_down(branch)
+            return
         if self.watch and not app_built(self.root):
             log("no build to serve — building the app before opening the port")
             build_app(self.root)
@@ -1026,6 +1149,47 @@ class Supervisor:
                 f"{READY_SECONDS:.0f}s — see {STATE_DIRNAME}/{CAPTURE_LOG}")
             self._tail(CAPTURE_LOG)
 
+    def _stand_down(self, branch: str) -> None:
+        """Refuse to adopt this tree's code, and say so once per branch (D158).
+
+        IT STOPS NOTHING. Every other arm of this guard refuses an ADOPTION — a spawn, a
+        restart, a re-exec, a build. Killing the capture server the owner may be mid-capture
+        against would be the repair that cuts the write, which is the 2026-09-04 incident
+        `refuse_unconfirmed` carries the account of, and it would make this guard the thing
+        they switch off.
+        """
+        if self.stood_down == branch:
+            return
+        self.stood_down = branch
+        for line in stand_down_lines(branch, self.capture is not None):
+            log(line)
+
+    def _recover(self) -> None:
+        """Standing down is not terminal: `git switch main` undoes it with nothing typed.
+
+        Called only while standing down, so the ordinary tick pays nothing for it.
+        """
+        if off_main(self.root) is not None:
+            return
+        self.stood_down = None
+        if self.capture is not None:
+            # Never stopped, so it is still serving main's code. The switch back is a file
+            # change like any other and `_check_files` reloads into it on the next window.
+            log("back on main — the watcher will reload into it.")
+            return
+        log("back on main — serving again.")
+        self.start()
+        # AND THE FINGERPRINTS ARE RE-TAKEN HERE, WHICH `_check_app` FORBIDS ITSELF. The rule
+        # there is that a build adopts `app/src` alone, so absorbing the whole tree afterwards
+        # would swallow an edit that landed mid-build. `start()` adopts the tree ENTIRE — it is
+        # what the child was just spawned from — so the tree as it stands is exactly what is
+        # being served, and not re-taking would restart the child a second time for one switch.
+        if self.capture is not None:
+            self.fingerprint = fingerprint(self.root)
+            self.app_fingerprint = app_fingerprint(self.root)
+            self.pending.clear()
+            self.app_pending = False
+
     def stop(self) -> None:
         self.stopping = True
         if self.capture is not None:
@@ -1061,6 +1225,8 @@ class Supervisor:
                 time.sleep(POLL_SECONDS)
                 self._reap()
                 if self.watch:
+                    if self.stood_down is not None:
+                        self._recover()
                     self._check_files()
                     self._check_app()
         except KeyboardInterrupt:
@@ -1170,6 +1336,14 @@ class Supervisor:
             return
         if self.app_pending and time.monotonic() - self.app_quiet_since >= QUIET_SECONDS:
             self.app_pending = False
+            # THE APP HALF NEEDS ITS OWN ARM, because the two watch sets are independent by
+            # design (D138) and a branch that differs only under `app/src` reaches this method
+            # and never `_restart_for`. Since D138 the bundle IS what a person looks at, so a
+            # rebuild here is as much an adoption of branch code as a child restart is.
+            branch = off_main(self.root)
+            if branch is not None:
+                self._stand_down(branch)
+                return
             if app_stale(self.root):
                 log("app source changed — rebuilding")
                 build_app(self.root)
@@ -1214,6 +1388,17 @@ class Supervisor:
             self.start()
 
     def _restart_for(self, changed: list[str]) -> None:
+        # FIRST IN THIS METHOD, AND THAT ORDER IS THE LOAD-BEARING PART (D158). The arm below
+        # re-execs this process into the `scripts/serve.py` ON DISK, and a branch switch is
+        # exactly how a DIFFERENT serve.py arrives — one cut before this guard existed and
+        # carrying no guard at all. Asked here, the question is answered by the image already
+        # running, which is main's, so a branch cannot ship the code that disables it. Asked
+        # after `_reexec`, it would be answered by the branch's own copy, which is no guard.
+        branch = off_main(self.root)
+        if branch is not None:
+            self._stand_down(branch)
+            return
+        self.stood_down = None
         bad = self._first_syntax_error(changed)
         if bad is not None:
             path, message = bad
@@ -1301,6 +1486,14 @@ def do_up(args: argparse.Namespace) -> int:
         print(f"already running (pid {existing}).")
         print_where()
         return 0
+    # AND BEFORE THE PORT, because a tree that must not be served is refused whoever holds the
+    # socket (D158). Non-zero here where the supervisor's own arm stays alive and silent: a
+    # person typed this and an exit status is what they are reading.
+    branch = off_main()
+    if branch is not None:
+        for line in stand_down_lines(branch, running=False):
+            print(line)
+        return 1
     # PREFLIGHT, BEFORE ANYTHING IS SPAWNED. `supervisor_pid()` above answers "is OUR
     # supervisor up"; it says nothing about the port, and the port is what actually decides
     # whether a capture server can start. Checking here means the refusal costs no processes

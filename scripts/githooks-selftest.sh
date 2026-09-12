@@ -24,6 +24,7 @@ set -uo pipefail
 # than points now (D42, amended), and a copy that lands wrong is a guard that reads as armed
 # and does nothing. Proving the files behave is not the same claim as proving the install did.
 HOOKS_DIR="${PKMNSCAN_HOOKS_DIR:-$(cd "$(dirname "${BASH_SOURCE[0]}")/githooks" && pwd)}"
+REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 pass=0
 fail=0
 
@@ -259,6 +260,68 @@ echo two > "$tmp/foreign/f.txt"; git -C "$tmp/foreign" add f.txt
 git -C "$tmp/foreign" commit -qm "second"
 git -C "$tmp/foreign" config core.hooksPath "$HOOKS_DIR"
 silent "a branch switch where there is no \`main\`" git -C "$tmp/foreign" switch -q -c topic master~1
+
+echo "  -- D158: the switch says what the SERVER will do about it --"
+# WHY THE SECOND HALF IS IN THIS FILE AT ALL. The refusal itself lives in `scripts/serve.py`,
+# and `scripts/serve.py` is a tracked file — so the checkout that just happened is exactly the
+# event that can replace it with a copy carrying no guard. `make hooks` COPIES this hook into
+# the common `.git` dir that `core.hooksPath` points every worktree at, so the copy git runs
+# here is the one thing a branch switch cannot rewrite. It reports; it still refuses nothing.
+mkdir -p "$tmp/work/.serve" "$tmp/work/scripts"
+echo 1 > "$tmp/work/.serve/supervisor.pid"
+
+# THE REAL serve.py, NOT A FIXTURE OF ONE, AND THAT IS THE POINT OF THIS PAIR. The hook decides
+# whether a branch can refuse for itself by grepping that branch's serve.py for the escape
+# hatch's name. A case that wrote the token by hand would stay green forever after the token
+# was renamed in serve.py, and the hook would quietly start telling every switch that the guard
+# is missing. Copying the shipped file makes the rename a FAILED COMMIT in one direction, and
+# the gutted copy below covers the other.
+cp "$REPO_ROOT/scripts/serve.py" "$tmp/work/scripts/serve.py"
+out="$(git switch -q feature 2>&1)"
+case "$out" in
+  *"$MARK"*"will REFUSE to reload"*)
+     ok "a live supervisor whose serve.py carries the guard — the switch says it will refuse" ;;
+  *"$MARK"*)
+     bad "the switch warned but said nothing about what the live server would do"
+     printf '%s\n' "$out" | sed 's/^/         /' ;;
+  *) bad "no warning at all on a branch switch with a live supervisor"
+     printf '%s\n' "$out" | sed 's/^/         /' ;;
+esac
+git switch -q main 2>/dev/null
+
+# THE OTHER DIRECTION, AND THE ONLY CASE THE SUPERVISOR'S OWN GUARD CANNOT COVER: a branch cut
+# before the guard existed. Its serve.py will be re-exec'd into and will serve the real store,
+# and nothing in that branch is going to say so — so this hook is the last thing that can.
+sed 's/PKMNSCAN_SERVE_MAIN/RENAMED_BY_THIS_CASE/g' \
+  "$REPO_ROOT/scripts/serve.py" > "$tmp/work/scripts/serve.py"
+out="$(git switch -q feature 2>&1)"
+case "$out" in
+  *"$MARK"*"predates the guard"*)
+     ok "a branch whose serve.py predates the guard — the switch says so and names the stop" ;;
+  *"$MARK"*"will REFUSE to reload"*)
+     bad "a branch with NO guard was reported as one that would refuse — the grep is inverted"
+     printf '%s\n' "$out" | sed 's/^/         /' ;;
+  *) bad "a branch predating the guard said nothing about the live server"
+     printf '%s\n' "$out" | sed 's/^/         /' ;;
+esac
+git switch -q main 2>/dev/null
+
+# AND IT MAY NOT INVENT A SERVER. D139's warning asserted that the live capture server "now
+# runs THIS branch's code" whether or not one was running — the hazard printed as a fact. With
+# no supervisor there is nothing to say about one, and a line that appears anyway is the same
+# defect a register down.
+rm -f "$tmp/work/.serve/supervisor.pid"
+out="$(git switch -q feature 2>&1)"
+case "$out" in
+  *"supervisor is live"*)
+     bad "no supervisor is running and the hook claimed one was"
+     printf '%s\n' "$out" | sed 's/^/         /' ;;
+  *"$MARK"*) ok "with no supervisor running, the switch warns and claims nothing about a server" ;;
+  *) bad "the branch warning stopped firing when .serve/supervisor.pid went away"
+     printf '%s\n' "$out" | sed 's/^/         /' ;;
+esac
+git switch -q main 2>/dev/null
+rm -rf "$tmp/work/.serve" "$tmp/work/scripts/serve.py"
 
 # AND THE BLOCK D139 DID NOT TOUCH, which was covered by nothing: deleting the `make hooks`
 # staleness reminder outright left every other case in this file green. Two blocks now share one
