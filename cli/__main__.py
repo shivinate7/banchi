@@ -99,7 +99,68 @@ def build_parser() -> argparse.ArgumentParser:
     identify = sub.add_parser(
         "identify", help="submit, wait, collect, cache. THE ONE THAT COSTS MONEY."
     )
-    identify.add_argument("capture_dir", help="directory of photos + JSON sidecars")
+    # THE POSITIONAL IS A LIST NOW, AND IT MEANS EXACTLY WHAT IT ALWAYS MEANT: the positions
+    # whose photographs are under these paths, resolved through `sidecar.scan` unchanged. What
+    # is new is that there may be none of them, in which case the selection flags below say
+    # which cards — and `--all` says every one in the store.
+    #
+    # `nargs="*"` IS WHY `--all` HAS TO EXIST. `./pkmnscan identify "$DIR"` with `$DIR` unset was
+    # an argparse error and is now an empty list, so the one thing this change could quietly do
+    # is turn a typo into a paid store-wide submission. It refuses instead and names the flag.
+    identify.add_argument(
+        "capture_dir",
+        nargs="*",
+        help="directories of photos + JSON sidecars. Omit to select with the flags below.",
+    )
+    identify.add_argument(
+        "--all",
+        action="store_true",
+        help="every photograph in the store. Required to say so: with no paths and no "
+        "selection flag this command refuses rather than submitting everything.",
+    )
+    # ------------------------------------------------------- the selection (D180)
+    #
+    # ONE OBJECT, AND `pipeline/selection.py` IS THE READER FOR BOTH SURFACES. Every flag here
+    # is a name the store already has for a group of cards, and every one NARROWS — so the order
+    # they are given in cannot change the answer.
+    identify.add_argument(
+        "--state",
+        help="only cards the store has in this state (captured, identified, sold, retired, "
+        "moved). `captured` is the cards that have never been identified.",
+    )
+    # REPEATABLE AND COMMA-SPLIT, because one press on this store has named three drawers
+    # (2026-09-01: boxes 3, 4 and 5 in one send). A filter naming three values is still one
+    # selection and one run — which is less work than the three runs that press produced.
+    identify.add_argument(
+        "--box",
+        action="append",
+        help="only cards whose SIDECAR records this box (not the path). Comma-separated or "
+        "repeatable, so `--box 3,5` is one selection over two drawers.",
+    )
+    identify.add_argument(
+        "--bid",
+        action="append",
+        help="only cards in the drawer with this true index (D145) — fixed at creation and "
+        "never handed back out, unlike the box number. Comma-separated or repeatable.",
+    )
+    identify.add_argument(
+        "--section",
+        type=int,
+        help="only cards between these dividers in the box (D10). Needs --box or --bid.",
+    )
+    identify.add_argument("--game", help="only cards claiming this game (D21)")
+    identify.add_argument(
+        "--since",
+        help="only cards captured at or after this ISO-8601 instant — the sitting, as a bound",
+    )
+    identify.add_argument(
+        "--keys",
+        action="append",
+        help="only these cards, as `box/index` position keys, comma-separated. Repeatable.",
+    )
+    identify.add_argument(
+        "--run", help="only the cards this run's own answers name"
+    )
     identify.add_argument(
         "--crop",
         action="store_true",
@@ -111,8 +172,23 @@ def build_parser() -> argparse.ArgumentParser:
     identify.add_argument(
         "--run-dir", help="resume into an existing run instead of creating one"
     )
+    # RENAMED FROM `--box`, AND IT IS NOT THE SAME JOB WEARING A LONGER NAME. This FILLS a gap:
+    # `sidecar.scan(box=...)` supplies a box for a photograph whose sidecar and filename carry
+    # none, which is the no-card-is-lost path for a pile somebody dropped on the desk. `--box`
+    # above FILTERS on what each capture recorded. Two opposite jobs under one name is how a
+    # press aimed at box 3 quietly relabels an unpositioned photograph as box 3 — so the fill
+    # keeps the verb and the filter keeps the noun.
+    #
+    # IT HAS FIRED ON 0 OF 2,535 CAPTURES on the operator's store (measured 2026-09-12: every
+    # one resolved from a sidecar, none from a filename and none from nowhere). It is kept for
+    # the pile the store has never seen, which is the one case that cannot be recovered any
+    # other way.
     identify.add_argument(
-        "--box", type=int, help="box number for photos whose position has no box"
+        "--assume-box",
+        type=int,
+        dest="assume_box",
+        help="box number for photos whose sidecar and filename carry NONE. Fills gaps; it is "
+        "not a filter — see --box.",
     )
     identify.add_argument(
         "--variant",

@@ -93,7 +93,14 @@ async function pumpCrops(): Promise<void> {
       const [box, index] = key.split('/').map(Number)
       let read: CropRead = null
       try {
-        const { sample } = await cropPreview({ box: box!, indices: [index!], crop: true, maxEdge: 256 })
+        const { sample } = await cropPreview({
+          // ONE CARD, NAMED AS A POSITION KEY — the selection's own vocabulary, and the same
+          // string this cache is keyed by. It was `{box, indices: [index]}`, which was the one
+          // idea spelled twice: `keys` is what the cache, the queues and the join use.
+          selection: { keys: [`${box!}/${index!}`] },
+          crop: true,
+          maxEdge: 256,
+        })
         if (sample.rect != null && sample.frame != null && sample.crop_refused == null) {
           read = { frame: sample.frame, rect: sample.rect }
         }
