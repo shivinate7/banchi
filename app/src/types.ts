@@ -1939,6 +1939,48 @@ export type PricingCorpus = {
   [key: string]: unknown
 }
 
+/** Which answers a mass-clear MAY remove, and how old each one is — the ENVELOPE of
+ *  `GET /pricing`, never part of the document (D168).
+ *
+ *  THE SERVER SAYS WHICH; THE SCREEN ONLY COUNTS. `#/pricing` puts the figure in the label
+ *  before the press — per scope and per age window — by intersecting `days` with the rows it
+ *  drew. Re-deriving membership here would be `pipeline/corpus.py:clearable` written a second
+ *  time in TypeScript, on the one file in this product that holds money.
+ *
+ *  WHAT IS ABSENT FROM `days` IS THE POINT AS MUCH AS WHAT IS IN IT. A hold is a judgement
+ *  with a reason, a watch and a note attached (D49) and is never clearable; a `channel` other
+ *  than `"price"` is the ABSENCE of an answer, which `emit` reads to refuse. Both are counted
+ *  so the sheet can say what it is leaving alone rather than leaving it to be discovered. */
+export type PricingClearable = {
+  /** SKU -> whole days since that answer was written, or `null` for one carrying no readable
+   *  `at`. `null` is honest and not a zero: those answers predate the stamp or were folded in
+   *  by the migration, and D103 rules that inventing a date for them is refused — so an age
+   *  filter leaves them alone and the sheet names them. */
+  days: Record<string, number | null>
+  /** Left alone always: a hold is a judgement, not a typed price. */
+  holds: number
+  /** Left alone always: `channel !== 'price'` is the absence of an answer. */
+  unknown: number
+}
+
+/** What one press of the mass-clear removed, and everything it left standing. */
+export type PricingClearResult = {
+  ok: boolean
+  /** THE WAY BACK, AND IT IS THE ANSWERS RATHER THAN THE SKUS. Each carries the value and the
+   *  date it was typed on, which is what lets `restorePricingAnswers` put a price back without
+   *  re-dating it — a restore that stamped would read as a store-wide re-pricing on the next
+   *  markdown survey. */
+  cleared: Record<string, { value: string | number | null; at?: string; from_run?: string }>
+  count: number
+  holds: number
+  unknown: number
+  /** In scope, a typed price, and left alone because an age filter cannot place an answer with
+   *  no readable date. Zero when the press asked for every age. */
+  undated: number
+  answers: number
+  revision: string
+}
+
 export type PricingWorklist = {
   runs: RunSummary[]
   /** EVERY joined run and what it still owes — the picker's list, not the worklist's. The

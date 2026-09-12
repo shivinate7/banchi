@@ -1770,7 +1770,8 @@ COMPONENTS = [
                 # carries, which is what makes a landing a reason to update it: D96 took two
                 # names out when the envelope walk went, D100 put four in.
                 "governed_by": ["D13", "D14", "D18", "D58", "D76", "D79", "D83", "D86", "D87",
-                                "D89", "D96", "D100"],
+                                "D89", "D96", "D100",
+                                "D168"],
             },
             "verdict-selftest.py": {"does": "PROVES `app/design-check-reporter.ts` STILL WRITES A "
                                             "VERDICT, BY RUNNING IT. `make docs-audit`'s "
@@ -2814,7 +2815,8 @@ COMPONENTS = [
                                 "D62", "D63", "D64", "D65", "D66", "D67", "D69", "D70", "D76",
                                 "D77", "D79", "D83", "D86", "D87", "D88", "D89", "D90", "D91",
                                 "D92", "D93", "D96", "D100", "D103", "D104", "D108", "D113",
-                                "D115", "D116", "D132", "D134", "D137", "D138"],
+                                "D115", "D116", "D132", "D134", "D137", "D138",
+                                "D168"],
                 "tested_by": ["T7"],
             },
             "tcg_import.py": {"does": "THE OUTBOUND WRITE to the seller admin, and the only "
@@ -2963,12 +2965,13 @@ COMPONENTS = [
                 # D32 is why --force-resubmit is deliberately not offered to a screen.
                 # D58 is the pricing route's label re-render — the stored rendering is
                 # never served, which that entry's own amendment records at this site.
-                "governed_by": ["D156", "D147", "D145", "D137", "D1", "D2", "D3", "D8", "D9", "D12", "D13", "D16", "D19",
-                                "D20", "D21", "D22", "D24", "D25", "D29", "D32", "D33", "D35",
-                                "D36", "D43", "D47", "D48", "D49", "D54", "D56", "D58", "D59",
-                                "D62", "D64", "D65", "D68", "D76", "D78", "D79", "D86", "D87",
-                                "D88", "D100", "D103", "D134", "D147",
-                                "D159", "D165", "D166"],
+                "governed_by": ["D1", "D2", "D3", "D8", "D9", "D12", "D13", "D16", "D19",
+                                "D20", "D21", "D22", "D24", "D25", "D29", "D32", "D33",
+                                "D35", "D36", "D43", "D47", "D48", "D49", "D54", "D56",
+                                "D58", "D59", "D62", "D64", "D65", "D68", "D76", "D78",
+                                "D79", "D86", "D87", "D88", "D100", "D103", "D105", "D134",
+                                "D137", "D145", "D147", "D156", "D159", "D165", "D166",
+                                "D168"],
                 "tested_by": ["T7"],
             },
             "shipping_routes.py": {
@@ -3585,6 +3588,7 @@ COMPONENTS = [
                                               "D61", "D62", "D63", "D64", "D65", "D68", "D69",
                                               "D70", "D73", "D76", "D79", "D83", "D86", "D87",
                                               "D89", "D90", "D91", "D92", "D100", "D103",
+                                              "D168",
                                               "D104", "D113", "D116", "D132", "D134"]},
             "src/demoFlag.d.ts": {"does": "declares `__BN_DEMO__`, the build-time demo flag "
                                           "`vite.config.ts` substitutes with a boolean "
@@ -3649,6 +3653,7 @@ COMPONENTS = [
                                              "D37", "D39", "D45", "D46", "D48", "D49", "D52",
                                              "D53", "D54", "D56", "D58", "D59", "D61", "D62",
                                              "D63", "D64", "D65", "D67", "D69", "D73", "D76",
+                                             "D168",
                                              "D79", "D83", "D86", "D87", "D89", "D91", "D92",
                                              "D93", "D100", "D103", "D104", "D113", "D115",
                                              "D116", "D132", "D134", "D147",
@@ -4687,7 +4692,53 @@ COMPONENTS = [
                                                 "D49", "D51", "D54", "D56", "D58", "D59",
                                                 "D62", "D78", "D79", "D85", "D86", "D89",
                                                 "D99", "D100", "D103", "D101", "D105", "D107", "D98", "D109", "D115", "D117", "D125", "D38",
-                                                "D159"]},
+                                                "D118", "D159", "D168"]},
+            "src/ClearPrices.tsx": {"does": "THE MASS-CLEAR, the third sheet off #/pricing's "
+                                            "header (D168). The operator's "
+                                            "own ask - \"after several emits a lot of pricing "
+                                            "is pre typed but stale and there's no way to mass "
+                                            "clear\" - and measured on their store: 269 of 407 "
+                                            "typed prices, 66%, were answered five days "
+                                            "earlier and still pre-filling their fields. IT IS "
+                                            "A PRESS AND NOT A POLICY: offered an expiry after "
+                                            "N days they refused it, so `older_than_days` is a "
+                                            "filter spent by one press and nothing here runs "
+                                            "on a clock. A SHEET RATHER THAN A BUTTON because "
+                                            "the corpus is one file for the whole store (D86), "
+                                            "so the scope is a control with two positions, the "
+                                            "narrow one selected, and the figure that will go "
+                                            "is in the danger button's own label. The scope is "
+                                            "the WORKLIST and not the visible rows: a lens "
+                                            "chip would make the blast radius depend on a "
+                                            "filter set ten minutes ago. Every age window "
+                                            "draws its own count before the press, which is "
+                                            "D103's finding - a window can be empty for a "
+                                            "reason that is about the store's age. It decides "
+                                            "NOTHING about what may be cleared: the server "
+                                            "ships that list, and re-deriving membership here "
+                                            "would be `pipeline/corpus.py:clearable` written a "
+                                            "second time in TypeScript against money.",
+                                    "governed_by": ["D27", "D49", "D86", "D103", "D105", "D118",
+                                                    "D168"]},
+            "src/ClearPrices.css": {"does": "the sheet's own chrome, named for the COMPONENT "
+                                            "rather than the screen it hangs off, which is "
+                                            "Markdown.css's rule after that sheet changed host "
+                                            "and left forty class names asserting one it had "
+                                            "left. The kit has `.bn-sheet` and NOT a scrolling "
+                                            "body between a fixed head and a fixed foot - this "
+                                            "is the THIRD statement of that shape and "
+                                            "Markdown.css called the second the last before "
+                                            "promoting it; the debt is named here rather than "
+                                            "discharged on the way past a destructive money "
+                                            "control. NO COLOR IS NAMED: the danger red is the "
+                                            "kit's `danger-solid`, so a second red here would "
+                                            "be a second answer to what destructive looks "
+                                            "like. The age cells declare no `transition` "
+                                            "because base.css's response floor already eases "
+                                            "them and a component's own transition REPLACES "
+                                            "the floor's.",
+                                    "governed_by": ["D50", "D94", "D103", "D118",
+                                                    "D168"]},
             "src/Pricing.css": {"does": "the worklist at owner density. One grid template read by "
                                         "the caption AND every row, so the two cannot drift; a "
                                         "row height invariant across every state, because the "
@@ -5681,7 +5732,8 @@ COMPONENTS = [
                                               "seventy-one cases measuring the uncropped "
                                               "fallback. Named by `app/tests/shell.ts`'s seal; "
                                               "all seventy-one pass against the cropped render.",
-                                      "governed_by": ["D156", "D8", "D9", "D20", "D28", "D33", "D48", "D49", "D51", "D54", "D56", "D57", "D58", "D59", "D62", "D68", "D78", "D79", "D85", "D86", "D98", "D99", "D115", "D117"]},
+                                      "governed_by": ["D156", "D8", "D9", "D20", "D28", "D33", "D48", "D49", "D51", "D54", "D56", "D57", "D58", "D59", "D62", "D68", "D78", "D79", "D85", "D86", "D98", "D99", "D103", "D115", "D117", "D118",
+                                                      "D168"]},
             "tests/live-reconcile.spec.ts": {
                 "does": "the store-wide reconcile in a browser (D87): that it is reachable from "
                         "#/runs at all, that the preview asks for no write, and that the settle "

@@ -10902,6 +10902,27 @@ class CaptureHandler(BaseHTTPRequestHandler):
                 return self._json(
                     HTTPStatus.OK, pipeline_routes.do_pipeline_merged_emit(self._body())
                 )
+            if path == "/pricing/clear":
+                # THE MASS-CLEAR (D168). FREE, and it is the
+                # only route in this server that DELETES a pricing answer. Beside `PUT
+                # /pricing` rather than under `/pipeline/` because it acts on the store's one
+                # corpus and not on any run — the same reason `GET /pricing` is not
+                # `GET /pipeline/pricing`.
+                #
+                # A POST AND NOT A DELETE, because the request carries a scope, a window and a
+                # revision, and the response carries the answers it removed — which is what the
+                # undo is built from. A DELETE whose whole meaning is in its body is a POST
+                # spelled to look tidier.
+                return self._json(
+                    HTTPStatus.OK, pipeline_routes.do_pricing_clear(self._body())
+                )
+            if path == "/pricing/restore":
+                # THE WAY BACK, and the exact inverse of the route above. It writes only SKUs
+                # the corpus does not currently answer, so an undo can never overwrite a price
+                # typed since the clear.
+                return self._json(
+                    HTTPStatus.OK, pipeline_routes.do_pricing_restore(self._body())
+                )
             if path == "/pipeline/identify":
                 status, body = pipeline_routes.do_pipeline_identify(self._body())
                 return self._json(status, body)

@@ -819,6 +819,18 @@ sentence**, and see "the census" below for what enforces that.
                               `reconcile --live` reads a zero quantity to see a SKU sell out.
                               THE SHEET THAT MAKES ONE IS HERE TOO (D105), off the header —
                               read an export, write a worklist, price it without changing screen.
+                              AND A MASS-CLEAR, off the same header
+                              (D168): a typed price pre-fills
+                              its row until somebody clears it, and 269 of the owner's 407 were
+                              five days old. NOTHING EXPIRES — the owner was offered a TTL and
+                              refused it — so the age is a filter on one press, every window
+                              draws its count before the press, and the figure is in the danger
+                              button's own label because the corpus is ONE FILE for the store
+                              (D86) and the default scope is this worklist, not everywhere.
+                              A HOLD IS NEVER CLEARED and neither is a `channel != "price"`
+                              seed: what may go is exactly what `corpus.stamp_answers` dates.
+                              The receipt's Undo restores each answer with the date it was
+                              typed on, and skips any SKU answered again since.
                               THE DEFAULT LANDING IS EVERY UNSENT COPY IN THE STORE
                               (D156): a run is open while it owes an answer
                               OR holds a copy TCGplayer does not, the chip says how many, and
@@ -1890,6 +1902,7 @@ D164 The undo stack is the sitting, not the drawer, and the counter counts the s
 D165 A run is bound to the drawer's true index, and the run the number stranded is repaired once by hand
 D166 The catalogue export is a property of the game, and the box never chose its scope
 D167 A queue entry is re-resolved where it stands, and the answer reaches the price without a second press
+D168 A typed price is cleared by a press, never by an expiry, and the set it may clear is the set the corpus dates
 ```
 
 **THE GAP THIS LIST CARRIED BETWEEN D116 AND D118 IS CLOSED, AND IT CLOSED THE WAY IT SAID IT
