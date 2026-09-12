@@ -1,4 +1,4 @@
-## D-a-name-can-be-marked-not-yet — A document may name what it would create, and the marking expires by itself
+## D178 — A document may name what it would create, and the marking expires by itself
 
 **A `+` in front of a path, a `make` target or a `PKMNSCAN_` name means the thing does not exist yet.** Three mechanical docs-audit rows verify that a named thing is real — the `paths` row, the make-targets row and the `env vars` row — and a design document's whole job is to name what it would create. Without a marker those two things cannot both be served.
 
