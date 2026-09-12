@@ -4037,7 +4037,14 @@ GAME_REQUIRED_KEYS = frozenset({
     "crop_bands", "card_aspect", "catalogued", "unverified",
 })
 GAME_OPTIONAL_KEYS = frozenset(
-    {"product_line_rarities", "tcgplayer_category_id", "set_aliases", "export_scope"}
+    {
+        "product_line_rarities",
+        "tcgplayer_category_id",
+        "set_aliases",
+        "export_scope",
+        "export_needs_hint",
+        "export_category_bytes",
+    }
 )
 
 # The `join_key` an uncatalogued game must name. Written here rather than read out of the
@@ -4806,6 +4813,69 @@ def check_game_vocabulary(report: Report) -> None:
                         "`tcgplayer_category_id`, so there is no category to fetch whole.",
                     )
                 )
+
+        # THE HINT REQUIREMENT, AND ITS EVIDENCE, WHICH MAY NOT TRAVEL APART.
+        #
+        # `export_needs_hint` refuses a real run — it is the only field here that can stop
+        # an operator mid-pipeline — and it is a JUDGEMENT ABOUT A NUMBER: that this game's
+        # whole category is too close to `tcg_export.MAX_BYTES` to widen into on a guess.
+        # Authored without `export_category_bytes` beside it, that judgement is unarguable
+        # and unre-makeable by the next person to read the entry, so it is refused.
+        #
+        # AND IT IS REFUSED ON A `category` GAME, which would be a DEAD field rather than a
+        # wrong one: `_scope_for_run` only reaches the question where the CARDS widened the
+        # scope, and a game that always fetches its whole category widens by policy and
+        # never gets there. A rule that cannot fire is worse than no rule, which is the
+        # argument `NOT_JOINED_STRATEGY` above is written out for.
+        needs_hint = entry.get("export_needs_hint")
+        measured = entry.get("export_category_bytes")
+        if needs_hint is not None and not isinstance(needs_hint, bool):
+            findings.append(
+                Finding(
+                    where,
+                    f"export_needs_hint is {needs_hint!r}, which is not a boolean. It "
+                    f"gates a refusal; it may not be a string that is merely truthy.",
+                )
+            )
+        elif needs_hint:
+            if not isinstance(measured, int) or isinstance(measured, bool) or measured <= 0:
+                findings.append(
+                    Finding(
+                        where,
+                        "export_needs_hint is authored but `export_category_bytes` is not a "
+                        "positive integer. The requirement is a judgement about how wide "
+                        "this game's whole category is, so the measurement has to sit "
+                        "beside it — the refusal quotes it to the operator.",
+                    )
+                )
+            if not entry.get("tcgplayer_category_id"):
+                findings.append(
+                    Finding(
+                        where,
+                        "export_needs_hint is authored but the entry names no "
+                        "`tcgplayer_category_id`, so there is no export for a hint to "
+                        "narrow.",
+                    )
+                )
+            if scope == "category":
+                findings.append(
+                    Finding(
+                        where,
+                        "export_needs_hint is authored beside `export_scope: category`. "
+                        "That game widens by policy and never reaches the cards, so the "
+                        "requirement could never fire.",
+                    )
+                )
+        if measured is not None and (
+            not isinstance(measured, int) or isinstance(measured, bool) or measured <= 0
+        ):
+            findings.append(
+                Finding(
+                    where,
+                    f"export_category_bytes is {measured!r}, which is not a positive "
+                    f"integer of bytes.",
+                )
+            )
 
         if entry.get("join_key") not in join_keys:
             findings.append(

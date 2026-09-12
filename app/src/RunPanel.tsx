@@ -1015,6 +1015,21 @@ export function RunPanel({ cart, openRun, onOpenRun, reloadTick, onIdentify, pag
                   </p>
                 ) : null}
 
+                {/* A SCOPE THAT COULD NOT BE DECIDED, SAID WHERE THE PRESS IS.
+                    `asked === null` means the fetch has no width to ask at — the cards
+                    under-specified it on a game that cannot afford a widening
+                    (`export_needs_set_hint`), or the run holds two games and one has to be
+                    picked. Both are sentences with an action in them, and both used to be
+                    drawn only inside the Options well, which is shut. The server's own
+                    message is rendered verbatim rather than re-worded here: it is the one
+                    that names the counts, the width and the screen that fixes it, and a
+                    second wording on this side is a second thing to keep true. */}
+                {scopeInfo !== null && scopeInfo.asked === null && scopeInfo.message !== null ? (
+                  <Notice tone="warn" code={scopeInfo.reason ?? undefined}>
+                    {scopeInfo.message}
+                  </Notice>
+                ) : null}
+
                 <div className="run-actions">
                   <Button
                     variant="primary"
@@ -1153,7 +1168,14 @@ export function RunPanel({ cart, openRun, onOpenRun, reloadTick, onIdentify, pag
                             )}
                           </div>
                         )}
-                        {scopeInfo.message === null ? null : (
+                        {/* PICKER FEEDBACK ONLY, SINCE THE REFUSAL MOVED OUT OF THIS WELL.
+                            A scope that could not be decided at all (`asked === null`) is
+                            drawn up beside the Fetch button instead — this well is shut by
+                            default, and a refusal nobody can see is a refusal that reads as
+                            a broken button. What stays here is the kind of complaint this
+                            well is the context for: a tick the portal does not know, a
+                            vocabulary that would not load. */}
+                        {scopeInfo.message === null || scopeInfo.asked === null ? null : (
                           <Notice tone="warn" code={scopeInfo.reason ?? undefined}>
                             {scopeInfo.message}
                           </Notice>

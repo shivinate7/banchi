@@ -18796,6 +18796,35 @@ def check_export_fetch(checks: Checks) -> None:
                 ]
                 run, _ = seam_run(checks, cards)
                 directory = run.directory
+
+                # ------------------------------------- THE BASELINE IS A HINTED POKEMON RUN
+                #
+                # AND IT HAS TO BE, BECAUSE `pokemon` CARRIES `export_needs_hint`. Every
+                # fetch below this line is a fetch this block wants to SUCCEED — it is
+                # testing the transport, the reuse, the receipt and the join seam, using
+                # Pokemon as the stand-in for "a catalogued game". An unhinted Pokemon run
+                # is refused before a socket opens now, so leaving the cards bare would
+                # fail forty assertions about the transport with a message about set hints.
+                #
+                # THIS IS ALSO THE REALISTIC STATE: the owner's store holds 543 Pokemon
+                # cards and 543 of them carry `ME01`. Unanimous is what a Pokemon run
+                # looks like; the bare one is the defect, and it is asserted where the
+                # refusal is built rather than assumed for a thousand lines here.
+                def hint_run(run_dir, hinted):
+                    """Give the first `hinted` of a run's cards a set hint, clear the rest."""
+                    path = run_dir / pipeline_routes.run_files.IDENTIFICATIONS
+                    payload = json.loads(path.read_text())
+                    for at, key in enumerate(sorted(payload["cards"])):
+                        payload["cards"][key].pop("set_hint", None)
+                        if at < hinted:
+                            payload["cards"][key]["set_hint"] = "SV09"
+                    path.write_text(json.dumps(payload))
+
+                def hint_cards(hinted):
+                    """`hint_run` over THIS block's first run, which most checks here use."""
+                    hint_run(directory, hinted)
+
+                hint_cards(len(cards))
                 whole = write_export(home / "whole.csv")
                 stub["body"] = whole.read_bytes()
 
@@ -19071,6 +19100,7 @@ def check_export_fetch(checks: Checks) -> None:
                 stub["body"] = whole.read_bytes()
                 bare = runs.create("t7-unjoined")
                 bare.write_identifications(identifications_for(cards))
+                hint_run(bare.directory, len(cards))
                 status, raw, _ = request(
                     port, "POST", f"/pipeline/runs/{bare.directory.name}/export", payload={}
                 )
@@ -19290,10 +19320,13 @@ def check_export_fetch(checks: Checks) -> None:
                 )
                 checks.equal(
                     sent.get("SetNameIds"),
-                    ["0"],
-                    "a box whose cards carry no set hint widens to the whole category, and "
-                    "`0` is the portal's own all-sets row rather than an empty list — the "
-                    "empty list is the one that fails, and widening is the safe direction",
+                    ["4242"],
+                    "and the run's own cards decide the SET — this box is unanimous, so the "
+                    "request names the one set rather than the category. This asserted the "
+                    "widening (`['0']`, the portal's all-sets row) while the baseline run "
+                    "here carried no hint; the baseline is unanimous now, because Pokemon "
+                    "has to be, and both the widening and the `0` convention are asserted "
+                    "below where the hint rules are what is under test",
                 )
                 checks.equal(
                     (
@@ -19326,16 +19359,9 @@ def check_export_fetch(checks: Checks) -> None:
                 # ASSERTED OFF THE POST BODY, never off the response: a fetch that answers
                 # with the right file proves nothing about what was asked for, and asking
                 # for too little is precisely the failure that still returns a valid CSV.
-                identifications = directory / pipeline_routes.run_files.IDENTIFICATIONS
-
-                def hint_cards(hinted):
-                    """Give the first `hinted` of the run's cards a set hint, clear the rest."""
-                    payload = json.loads(identifications.read_text())
-                    for at, key in enumerate(sorted(payload["cards"])):
-                        payload["cards"][key].pop("set_hint", None)
-                        if at < hinted:
-                            payload["cards"][key]["set_hint"] = "SV09"
-                    identifications.write_text(json.dumps(payload))
+                # `hint_cards` and `identifications` are hoisted to the top of this block —
+                # the baseline fetch needed them, because an unhinted Pokemon run no longer
+                # reaches a socket.
 
                 def sent(payload=None):
                     """What went out on the wire for this scope. ALWAYS FORCES THE FETCH.
@@ -19366,20 +19392,140 @@ def check_export_fetch(checks: Checks) -> None:
                     "narrows to that set — D65's saving is intact, and D76 narrows the "
                     "condition rather than removing it",
                 )
-                hint_cards(1)
-                checks.equal(
-                    sent().get("SetNameIds"),
-                    ["0"],
-                    "and one hinted card among unhinted ones widens to the whole category. "
-                    "This is the defect: the hints describe part of the box, a filter built "
-                    "from them cuts the export to that part, and every card outside it "
-                    "queues no_catalog_row behind a fetch that reported success",
+                # D76'S WIDENING IS STILL PROVED, AND IT IS PROVED WITH THE HINT REQUIREMENT
+                # HELD OFF.
+                #
+                # `pokemon` carries `export_needs_hint` now, so the two runs below REFUSE on
+                # this game rather than widening — which is the whole point of that field and
+                # is asserted directly after this. But D76's defect is about the WIDENING
+                # rule, which every game without the field still uses, and an assertion
+                # deleted because one game stopped reaching it is coverage silently dropped.
+                # So the flag is lifted for exactly these two, the way `MAX_BYTES` is lowered
+                # further down rather than a 32 MB body being put through the harness: read
+                # off the module at call time, restored in `finally`.
+                # `pipeline_routes` holds this module as `game_registry` and looks the name
+                # up on it per call, so patching the module attribute here is what the route
+                # actually reads — the same indirection `MAX_BYTES` is lowered through.
+                was_needs = games.export_needs_hint
+                games.export_needs_hint = lambda key: False
+                try:
+                    hint_cards(1)
+                    checks.equal(
+                        sent().get("SetNameIds"),
+                        ["0"],
+                        "and one hinted card among unhinted ones widens to the whole "
+                        "category. This is the defect: the hints describe part of the box, a "
+                        "filter built from them cuts the export to that part, and every card "
+                        "outside it queues no_catalog_row behind a fetch that reported "
+                        "success",
+                    )
+                    hint_cards(0)
+                    checks.equal(
+                        sent().get("SetNameIds"),
+                        ["0"],
+                        "a box with no hint at all widens, as it always did",
+                    )
+                finally:
+                    games.export_needs_hint = was_needs
+
+                # ------------- AND A GAME THAT CANNOT AFFORD THE WIDENING REFUSES INSTEAD
+                #
+                # THE CLIFF, CLOSED AT THE CAUSE. Measured 2026-09-12: the whole Pokemon
+                # category is 32,629,598 B — 97.24% of `MAX_BYTES`, 903 KB of headroom —
+                # against 238,482 B for the one set the owner's 543 Pokemon cards name. D76
+                # held that a widening is always safe; here it is 903 KB short of a refusal,
+                # and D76's own unanimity rule means ONE unhinted card reaches it. So the two
+                # runs above, which widen on any other game, are refused on this one.
+                #
+                # BOTH DIRECTIONS, AND THE SAME CARDS IN EACH. A refusal that never fires and
+                # a refusal that always fires both leave an outcome assertion green, so the
+                # unanimous run is asserted to pass THROUGH this immediately below — the
+                # `["4242"]` narrowing at the top of this block is that same proof off the
+                # wire. The only thing that differs between the two is which cards carry a
+                # hint.
+                for hinted, code, phrase, label in (
+                    (
+                        0,
+                        "export_needs_set_hint",
+                        "none of its 2 cards carries one",
+                        "a Pokemon run where NO card names its set is refused before a "
+                        "socket is opened, and the sentence counts the cards rather than "
+                        "naming the rule",
+                    ),
+                    (
+                        1,
+                        "export_needs_set_hint",
+                        "1 of its 2 do not",
+                        "and so is the partial box, which is the case that matters: one "
+                        "unhinted card is the whole difference between a 238 KB fetch and a "
+                        "32.6 MB one, because unanimity is what D76 narrows on",
+                    ),
+                ):
+                    hint_cards(hinted)
+                    before_posts = len(stub["posted"])
+                    status, raw, _ = fetch({"refresh": True})
+                    message = str(
+                        (json.loads(raw or b"{}").get("error") or {}).get("message") or ""
+                    )
+                    checks.equal(
+                        (status, error_code(raw), phrase in message, len(stub["posted"])),
+                        (409, code, True, before_posts),
+                        label,
+                    )
+                    checks.equal(
+                        ("32.6 MB" in message, "97%" in message, "Manage box" in message),
+                        (True, True, True),
+                        "and it carries the three things a refusal owes: what the widening "
+                        "would have weighed, how close that is to the ceiling the download "
+                        "is refused past, and the screen that sets the hint on the cards "
+                        "that lack one — a refusal with no way forward strands the cards it "
+                        "protects",
+                    )
+
+                # AND THE PREVIEW DRAWS IT RATHER THAN FAILING ON IT. One refusal, two
+                # behaviours: `POST .../export` is a 409 that spends nothing, and
+                # `GET .../scope` — which presses nothing by construction — reports the same
+                # code as DATA with the counts still drawn beside it, because that route
+                # already reads a `PipelineRefusal` that way (D76). This is where the
+                # operator meets it, ahead of the money gate.
+                status, raw, _ = request(
+                    port, "GET", f"/pipeline/runs/{directory.name}/scope"
                 )
-                hint_cards(0)
+                preview = json.loads(raw)
                 checks.equal(
-                    sent().get("SetNameIds"),
+                    (
+                        status,
+                        preview["reason"],
+                        preview["asked"],
+                        "32.6 MB" in str(preview["message"]),
+                        [g["unhinted"] for g in preview["games"] if g["game"] == "pokemon"],
+                    ),
+                    (200, "export_needs_set_hint", None, True, [1]),
+                    "the press-nothing preview answers 200 and DRAWS the refusal — the code, "
+                    "the sentence with the width in it, and the unhinted count still on the "
+                    "game row — so the operator reads it on the screen that costs nothing "
+                    "rather than discovering it by pressing the one that would",
+                )
+
+                # AND THE OPERATOR STILL OUTRANKS IT, WHICH IS WHY NOTHING IS EVER STRANDED.
+                # D76's three voices are unchanged: `chosen_by` is the whole predicate, and it
+                # is `cards` only where the CARDS under-specified the scope. Somebody asking
+                # for the category is making a claim about the box, and this refusal has no
+                # opinion about that — it exists to stop the machine widening on a guess, not
+                # to stop a person.
+                checks.equal(
+                    sent({"scope": "category"}).get("SetNameIds"),
                     ["0"],
-                    "a box with no hint at all widens, as it always did",
+                    "an operator asking for `category` on the same unhinted run fetches it — "
+                    "the refusal reads the cards' silence, never the operator's word, so the "
+                    "escape hatch D76 already published is the reason a refused run is never "
+                    "a stranded one",
+                )
+                checks.equal(
+                    sent({"set_ids": [4242]}).get("SetNameIds"),
+                    ["4242"],
+                    "and naming the sets outright narrows it on a run with no hint at all, "
+                    "which is the second half of the same override",
                 )
 
                 # ------------------- THE SECOND DOCUMENT: THE OPERATOR'S OWN LIVE LISTINGS
@@ -19521,14 +19667,32 @@ def check_export_fetch(checks: Checks) -> None:
                     "carry a hint, and this game's own rule — which is the fact that was "
                     "invisible while one hinted card could scope a whole box's export",
                 )
+                # THE VOICE AND THE REASON, READ WITH THE HINT REQUIREMENT HELD OFF. On
+                # `pokemon` this exact run is now refused `export_needs_set_hint` and `asked`
+                # comes back null — asserted where that refusal is built. What is under test
+                # HERE is that a widening still NAMES its voice, which is the half of D76
+                # every game without the field still relies on, so the flag is lifted rather
+                # than the assertion weakened to whichever shape the code happens to produce.
+                was_needs = games.export_needs_hint
+                games.export_needs_hint = lambda key: False
+                try:
+                    status, raw, _ = request(
+                        port, "GET", f"/pipeline/runs/{directory.name}/scope"
+                    )
+                    asked_now = json.loads(raw or b"{}")["asked"]
+                finally:
+                    games.export_needs_hint = was_needs
                 checks.equal(
-                    (body["asked"]["scope"], body["asked"]["reason"]),
+                    (asked_now["scope"], asked_now["reason"]),
                     ("category", "partial_hints"),
                     "and it says WHICH of the three voices chose the scope and why, in the "
                     "same shape the fetch's own receipt carries — a scope is only "
                     "correctable by somebody who can see what decided it",
                 )
-                hint_cards(0)
+                # BACK TO THE HINTED BASELINE, because everything below this fetches for
+                # real. This line used to clear the hints; on a game that needs one that
+                # leaves every fetch in the next two sections refused.
+                hint_cards(len(cards))
 
                 # ================= THE EXPORT IS A PROPERTY OF THE GAME (D166)
                 #
@@ -19589,6 +19753,7 @@ def check_export_fetch(checks: Checks) -> None:
                 # already held. Store-wide the real rules produce TWO requests for that whole
                 # store — one per game — and this is the arm that makes that true.
                 second, _ = seam_run(checks, cards)
+                hint_run(second.directory, len(cards))
                 before_posts = posts()
                 status, raw, _ = request(
                     port,
@@ -19805,13 +19970,22 @@ def check_export_fetch(checks: Checks) -> None:
                 # module at call time by both the reader and the check, so moving it exercises
                 # the same path a 32 MB body would — without putting 32 MB through a harness
                 # that runs at every turn end.
+                # AND THE HINT REQUIREMENT IS HELD OFF FOR IT, for the same reason as the two
+                # widening checks above: the sentence under test is the `partial_hints`
+                # wording, which every game WITHOUT `export_needs_hint` still reaches, and on
+                # `pokemon` those cards no longer get as far as a download. The wide paths
+                # that survive on this game are the operator's two, and they are asserted
+                # where the refusal is. Both patches are read off the module at call time.
                 hint_cards(1)
                 was_max = tcg_export.MAX_BYTES
+                was_needs = games.export_needs_hint
                 tcg_export.MAX_BYTES = 64
+                games.export_needs_hint = lambda key: False
                 try:
                     status, raw, _ = fetch({"refresh": True})
                 finally:
                     tcg_export.MAX_BYTES = was_max
+                    games.export_needs_hint = was_needs
                 message = str(
                     (json.loads(raw or b"{}").get("error") or {}).get("message") or ""
                 )
@@ -19829,7 +20003,8 @@ def check_export_fetch(checks: Checks) -> None:
                     "and it names the cards that widened it — D76's own defect, said at the "
                     "moment it costs something rather than left to be inferred",
                 )
-                hint_cards(0)
+                # AND BACK TO THE HINTED BASELINE AGAIN, for the join seam below.
+                hint_cards(len(cards))
                 stub["mode"] = "csv"
 
                 # ------------------- THE MANIFEST KEEPS THE PATH AND THE DIGEST, AND USES IT
