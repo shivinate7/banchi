@@ -135,12 +135,21 @@ against the filesystem, and sharing the parse is not sharing the judgement.
   for shell loop grammar. `make up`'s supervisor and `make design-check ARGS=--wait` are both
   long-lived loops this repository tells a session to start, so a guard that guessed at another
   language's loops would refuse the documented workflow.
-- **Which process a pattern waiter matches.** Measured on this machine: BSD `pgrep` excludes
-  itself and all its ancestors unless `-a` is given, so whether the waiter matches ITSELF
-  depends on the process tree the harness happens to build. That is the argument for the clause
+- **Which process a pattern waiter matches.** Measured on BOTH platforms: BSD `pgrep` excludes
+  itself *and all its ancestors* unless `-a` is given, while procps excludes only itself — so
+  whether the waiter matches ITSELF depends on the machine. That is the argument for the clause
   rather than a gap in it — a predicate whose answer depends on that is not one a session can
-  reason about — and `scripts/guard-shell-selftest.sh` asserts the platform fact instead of
-  assuming it.
+  reason about — and the refusal says so rather than claiming either platform's answer.
+
+- **This guard's own self-test proved the rule it was written under, on itself.** It passed 165
+  cases on the author's machine and went red on the Linux runner in two arms, both of them
+  fixture defects rather than logic: the throwaway repo's default branch is whatever
+  `init.defaultBranch` says (`main` here, `master` there), so two cases asked about a branch
+  that did not exist and the guard's correct *"I have no opinion"* read as a failure; and the
+  `pgrep` arm asserted BSD's exclusion rule as though it were universal.
+  **A green check proves its own platform, not "anywhere"** — already a memory in this
+  repository, and now a measurement inside the thing that exists to make rules mechanical. The fixture names its own
+  branch, asserts it, and refuses to score a case git itself rejected.
 
 ### Standing
 
