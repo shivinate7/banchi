@@ -3042,6 +3042,11 @@ export function CaptureScreen() {
                         on a bright lamp is the machine working; non-zero on a dim one is worth a
                         trace. */}
                     <span>escape {motionDiag.escapes}</span>
+                    {/* Settles refused as the stand at a NEW GAIN and adopted as the baseline —
+                        the camera's exposure moved while armed. Zero on a body in Manual
+                        Exposure, which §4 of the spec asks for; non-zero is the receipt that
+                        it was not, and that the machine survived it. */}
+                    <span>uniform {motionDiag.uniform}</span>
                     {swallowedTotal === 0 ? null : (
                       <span className="capture-refused">dropped {swallowedTotal}</span>
                     )}

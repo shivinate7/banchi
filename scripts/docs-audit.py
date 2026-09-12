@@ -5570,21 +5570,26 @@ MOTION_MIRROR = {
     "stillFrames": "STILL_FRAMES",
     "stillWindow": "STILL_WINDOW",
     "refractoryMs": "REFRACTORY_MS",
+    "tNovel": "T_NOVEL",
     "presenceK": "PRESENCE_K",
     "presenceMin": "PRESENCE_MIN",
     "rescueK": "RESCUE_K",
     "rescueAfter": "RESCUE_AFTER",
     "maxMoveMs": "MAX_MOVE_MS",
+    "uniformMinShare": "UNIFORM_MIN_SHARE",
+    "uniformToe": "UNIFORM_TOE",
+    "uniformShoulder": "UNIFORM_SHOULDER",
 }
 
 # Parameters the offline scorer deliberately does not carry, each with the reason. The list
 # is checked in BOTH directions below: an entry naming a parameter that no longer exists is
 # as much a finding as a parameter in neither map, because a stale excuse is how a real gap
 # hides.
-MOTION_UNMIRRORED = {
-    "tNovel": "the scorer replays the stillness and presence halves; it does not implement "
-              "the novelty gate, so there is no constant to disagree with",
-}
+# EMPTY SINCE 2026-09-12. `tNovel` sat here for as long as the scorer replayed only the
+# stillness and presence halves; `score-trace.py gain` now reads the scaled novelty between
+# consecutive fires against it, so it is mirrored like the rest. The map stays, checked in
+# both directions, so the next parameter the scorer does not need has somewhere to say why.
+MOTION_UNMIRRORED: Dict[str, str] = {}
 
 _NUMERIC = re.compile(r"^[\d.\s()*/+-]+$")
 

@@ -2332,6 +2332,7 @@ D180 A press names the cards it is over, and the drawer is one of the names
 D181 The order is taken once, and a sale may not retake it
 D182 An unclaimed slug is not required in the shared index it will replace itself out of
 D183 A number a person reads is never a key a machine uses, so the photograph is stored under the card's name and the address is derived
+D184 A gain step is the baseline times one number, a card is not, and the machine re-baselines only on that proof
 ```
 
 **THE GAP THIS LIST CARRIED BETWEEN D116 AND D118 IS CLOSED, AND IT CLOSED THE WAY IT SAID IT
@@ -2514,6 +2515,14 @@ was open** — the rule is renumber your own, never another's.
   number inside a collapsed disclosure. **NOT VALIDATED AT THE RIG** — the replay says the
   machine fires on more cards; only the JPEGs say whether they are readable, and §7 is that
   run's checklist.
+
+  **AN EXPOSURE STEP IS REFUSED AS THE STAND RESCALED SINCE 2026-09-12, AND IT IS NOT
+  VALIDATED AT THE RIG.** §4's camera lock stays the recommendation; what changed is that a
+  settled frame over the presence floor is asked whether it is the baseline TIMES ONE NUMBER,
+  and a gain step is while a card never is — zero of 748 fired frames in the corpus, every one
+  3.6× clear. **No banked trace holds a real exposure step or a pixel outside the watch region**,
+  so the step is a model over real plates; `scripts/score-trace.py gain` over the first trace
+  saved in an auto mode is what validates it, and the HUD's `uniform` count is the receipt.
 
   **THERE IS NO `stalled:flare`, AND THAT IS A FINDING.** The remaining misses are bright, and
   three candidate glare discriminators were measured across the whole corpus: saturation reads
