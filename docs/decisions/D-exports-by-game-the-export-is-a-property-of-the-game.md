@@ -40,6 +40,16 @@ A reuse and a fetch produce the same file, the same rows, the same SKUs, the sam
 
 **Four pre-existing checks had to start forcing the fetch, and that is a finding rather than an inconvenience.** `sent()` and the three cookie-rotation cases assert on what reached the SOCKET. Under reuse they would have read the previous request's body — or no body at all — and reported it as the scope this run implies. **The saving hiding the assertion is the same error as the assertion being unable to see the saving, pointed the other way.**
 
+### And a FILE COUNT cannot prove the dedupe either, which took a mutation to find
+
+**Deleting the digest lookup outright left all 88 checks green.** The name is `stamp-digest`, so identical bytes inside one second compose the identical path and `write_bytes` OVERWRITES rather than adds — and the whole block runs inside one second on this machine (measured: three files all stamped at the same second). Every count reads the same whether the lookup happened or not.
+
+**That is T7's own same-second collision, showing up as a hole in the test rather than in the product.** The arm survived not because the dedupe is unimportant but because the instrument could not see it — the same class of error as an outcome assertion over a saving, one register down.
+
+**The assertion is the receipt's own file name now, against a held file whose stamp cannot collide:** rename it into the past, re-fetch the same bytes, and the press must answer with the renamed file. That is the digest lookup and nothing else, and no clock can make it pass by accident.
+
+**The measuring instrument had the same disease, and this is where it is written down.** My first mutation runner read an EMPTY stdout as a pass, and so reported a caught arm as a survivor: the probe had died and said nothing, and silence scored as success. Twelve arms, twelve caught, no survivors and no equivalent mutants — but only after the runner stopped treating no answer as a good one.
+
 ### D65 and D76 — the argument holds, the denominator widens later, and the new risk is measured
 
 **D76's unanimity rule is untouched.** What this entry changes is where the file lives, not how the scope is decided. The denominator widening — from *the cards in this box* to *the cards being joined* — belongs to the selection and arrives with it.

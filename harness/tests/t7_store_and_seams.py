@@ -18356,6 +18356,43 @@ def check_export_fetch(checks: Checks) -> None:
                     "are outside anything a per-run glob could ever have reached",
                 )
 
+                # A FILE COUNT CANNOT PROVE THE DEDUPE, AND MEASURING THAT IS WHY THIS EXISTS.
+                #
+                # THE NAME IS `stamp-digest`, SO IDENTICAL BYTES INSIDE ONE SECOND COMPOSE THE
+                # IDENTICAL PATH. `write_bytes` then OVERWRITES rather than adds, and every
+                # count above reads the same whether the digest was looked up or not — this
+                # whole block runs inside one second on this machine (measured: three files
+                # all stamped at the same second), so deleting the lookup outright left all 88
+                # checks green. That is T7's own same-second collision showing up as a hole in
+                # the test rather than in the product.
+                #
+                # SO THE ASSERTION IS THE RECEIPT'S OWN FILE NAME, against a held file whose
+                # stamp CANNOT collide: rename it into the past, re-fetch the same bytes, and
+                # the press must answer with the renamed file. That is the digest lookup and
+                # nothing else, and no clock can make it pass by accident.
+                held_now = exports_root / "pokemon" / forced["file"]
+                earlier = held_now.with_name(
+                    f"{pipeline_routes.FETCHED_PREFIX}19700101-000000-"
+                    f"{forced['file'].rsplit('-', 1)[1]}"
+                )
+                held_now.rename(earlier)
+                pipeline_routes._note_path(held_now).rename(
+                    pipeline_routes._note_path(earlier)
+                )
+                status, raw, _ = fetch({"refresh": True})
+                landed = json.loads(raw)
+                checks.equal(
+                    (status, landed["file"], len(kept()) - before_kept),
+                    (200, earlier.name, 1),
+                    "a re-fetch of bytes already on disk answers with the file that HOLDS "
+                    "them, whatever its name — found by digest and compared in full, because "
+                    "32 bits of digest is a name and not a proof",
+                )
+                earlier.rename(held_now)
+                pipeline_routes._note_path(earlier).rename(
+                    pipeline_routes._note_path(held_now)
+                )
+
                 # ------------------------------------- THE PREVIEW STILL PRESSES NOTHING
                 before_posts = posts()
                 status, raw, _ = request(
