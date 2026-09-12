@@ -1928,6 +1928,36 @@ def run() -> Result:
         "in the queue is what stamping `number` unconditionally would have produced",
     )
 
+    # ONE ROW IS NOT THE SAME AS ONE SETTLED ROW, AND THIS CASE SHIPPED BROKEN FOR AN HOUR.
+    #
+    # The release gate counted `len(alternatives) == 1`, which is true in two different
+    # situations: the ladder narrowed a stack to one row, and the name answered a card the
+    # export stocks in exactly ONE finish and the ladder REFUSED it. `Alcremie ex` is the
+    # second — a single `Near Mint Holofoil` row — so a `normal` claim resolves
+    # `metadata_not_stocked` with no row at all, and the gate read that as settled and
+    # listed the card on a finish the ladder had just rejected. `CLAUDE.md`'s first hard
+    # rule, broken by an off-by-one-concept in a boolean.
+    #
+    # `NameSide.settled` is the fix: the ladder's own answer, carried rather than inferred.
+    refused = join.join_batch(
+        [_card(95, "Alcremie ex", "120", metadata="normal")],
+        catalog,
+        router=join.default_router(),
+    )
+    c.equal(
+        list(refused.matches),
+        [],
+        "A SINGLE ROW THE LADDER REFUSED IS NOT RELEASED. `Alcremie ex` is stocked in one "
+        "finish and the claim contradicts it, so there is no settled answer to release — "
+        "counting rows instead of asking the ladder listed this card on a finish it had "
+        "just rejected",
+    )
+    c.equal(
+        len(refused.queued),
+        1,
+        "and it queues instead, which is where a card whose finish nobody can settle goes",
+    )
+
     # WHAT COUNTS AS ONE CARD, ASSERTED DIRECTLY — because the fixture cannot reach it.
     #
     # `distinct_cards` keys on `(Set Name, folded Number)`, and SV09 is a SINGLE SET, so a

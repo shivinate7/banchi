@@ -164,9 +164,16 @@ reopen D48.
 T3 carries the ladder — the release, the two-card name that is still queued, the unsettled
 finish that is still queued, the `found_by` stamp, and `distinct_cards` asserted directly
 because a single-set fixture cannot reach its set half. T7 carries the group grade in both
-directions. **Mutation-tested, nineteen arms, seventeen caught.** The two survivors are
-proved unreachable rather than unguarded: `variant.resolve` constructs no REVIEW resolution
-carrying a row, and `name_disputes` makes the two row sets disjoint by construction, so the
-lines those arms break are invariant restatements. Both are kept, for the reason
-`name_corroborates` keeps its blank-read line: a later edit must not make them matter
-silently.
+directions. **Mutation-tested, twenty arms, nineteen caught.** The one survivor is proved
+unreachable rather than unguarded — `name_disputes` makes the two row sets disjoint by
+construction, so deleting the de-duplication filter is a no-op — and it is kept for the
+reason `name_corroborates` keeps its blank-read line.
+
+**One arm found a real hole, which is the argument for running them at all.** The release
+gate first read `len(alternatives) == 1`, and a single row means two different things: the
+ladder narrowed a stack to one, or the name answered a card the export stocks in ONE finish
+and the ladder REFUSED it. `Alcremie ex` is the second on the committed fixture — one
+`Near Mint Holofoil` row, `metadata_not_stocked` under a `normal` claim — so the gate read a
+refusal as an answer and would have listed the card on a finish the ladder had just
+rejected. `CLAUDE.md`'s first hard rule, broken by a boolean that counted rows instead of
+asking. `NameSide.settled` carries the ladder's own answer now, and T3 holds that case.

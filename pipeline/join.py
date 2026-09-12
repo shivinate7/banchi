@@ -882,11 +882,30 @@ def name_disputes(read_name, rows: Sequence[tcgcsv.Row]) -> bool:
 NAME_ALTERNATIVE_LIMIT = 8
 
 
+class NameSide(NamedTuple):
+    """The rows the name found, and whether the ladder could settle a finish among them.
+
+    TWO FACTS, BECAUSE ONE OF THEM CANNOT BE INFERRED FROM THE OTHER, and a version of this
+    that returned only the rows shipped a real hole for an hour. `rows` is a single row in
+    two different situations — the ladder narrowed a stack to one, or the name answered a
+    card the export stocks in exactly ONE finish and the ladder REFUSED it. A caller
+    counting `len(rows) == 1` reads those as the same thing and releases the second, which
+    is a card listed on a finish the ladder had just rejected.
+
+    It is reachable on the committed fixture: `Alcremie ex` is one row, `Near Mint
+    Holofoil`, and a `normal` claim resolves `metadata_not_stocked` with no row at all.
+    `settled` is that answer stated rather than guessed at.
+    """
+
+    rows: Tuple[tcgcsv.Row, ...]
+    settled: bool
+
+
 def name_alternatives(
     named: Sequence[tcgcsv.Row],
     card: "IdentifiedCard",
     disputed_row: tcgcsv.Row,
-) -> Tuple[tcgcsv.Row, ...]:
+) -> NameSide:
     """The rows the READ NAME finds, for a card whose NUMBER found something else.
 
     THE PIPELINE HAD ALREADY REASONED THE NUMBER'S ROW WAS WRONG AND THEN OFFERED IT ALONE.
@@ -918,21 +937,20 @@ def name_alternatives(
     every row is offered and the operator settles it — which is the ordinary multi-row entry
     this screen has always drawn.
 
-    TWO LINES HERE ARE INVARIANT RESTATEMENTS RATHER THAN GUARDS, AND BOTH ARE KEPT ON
-    PURPOSE — mutation arms 4 and 5 break each of them and no test can tell, because neither
-    condition is reachable today:
+    ONE LINE HERE IS AN INVARIANT RESTATEMENT RATHER THAN A GUARD, AND IT IS KEPT ON
+    PURPOSE. The SKU filter cannot fire: a row is in both sets only if one of the rows the
+    NUMBER found carries the read name, and `name_disputes` returns False exactly then, so
+    this function is never called at all. The sets are disjoint by construction and the
+    mutation arm that deletes the filter survives the suite because it is a no-op.
 
-      the SKU filter    a row can only be in both sets if one of the rows the NUMBER found
-                        carries the read name — and `name_disputes` returns False exactly
-                        then, so this function is never called. The sets are disjoint by
-                        construction.
-      `not needs_review` `variant.resolve` constructs no REVIEW resolution carrying a row,
-                        so `row is not None` already implies it.
+    It stays for `name_corroborates`'s reason two hundred lines up: a later edit loosening
+    the dispute test would otherwise draw one row twice, silently, in the function whose
+    whole job is to be honest about which reading found what.
 
-    They stay for `name_corroborates`'s reason two hundred lines up: a later edit loosening
-    the dispute test, or a ladder rung that starts returning a row beside a review reason,
-    would otherwise draw one row twice or narrow to a row the ladder had refused — silently,
-    and in a function whose whole job is to be honest about which reading found what.
+    `not narrowed.needs_review` is NOT in that category and reads like it. It is redundant
+    against `row is not None` for every resolution `variant.resolve` builds today — but what
+    the caller does with the answer turns on `settled`, and that flag is exactly the
+    difference between a narrowed row and a fallen-back one. See `NameSide`.
     """
     rows = [
         row
@@ -940,7 +958,7 @@ def name_alternatives(
         if str(row[tcgcsv.SKU_COLUMN]) != str(disputed_row[tcgcsv.SKU_COLUMN])
     ]
     if not rows:
-        return ()
+        return NameSide((), False)
 
     narrowed = variant.resolve(
         rows,
@@ -951,8 +969,8 @@ def name_alternatives(
         name_corroborated=True,
     )
     if not narrowed.needs_review and narrowed.row is not None:
-        return (narrowed.row,)
-    return tuple(rows[:NAME_ALTERNATIVE_LIMIT])
+        return NameSide((narrowed.row,), True)
+    return NameSide(tuple(rows[:NAME_ALTERNATIVE_LIMIT]), False)
 
 
 def distinct_cards(rows: Sequence[tcgcsv.Row]) -> int:
@@ -2520,7 +2538,8 @@ def join_batch(
             # below counts the CARDS among them; fetching the name twice would let the two
             # answers disagree if a later edit moved either one.
             named = catalog.rows_for_name(card.name)
-            alternatives = name_alternatives(named, card, resolution.row)
+            side = name_alternatives(named, card, resolution.row)
+            alternatives = side.rows
 
             # THE NAME DECIDES WHERE IT RESOLVES TO EXACTLY ONE CARD — the owner's ruling of
             # 2026-09-12, in their words: *"Release them when the name resolves to exactly
@@ -2539,7 +2558,12 @@ def join_batch(
             # resolves to two cards, or the ladder cannot settle the finish beneath it,
             # nothing is decided here and the card faces a human with its photograph and
             # BOTH readings on the list — which is the branch below.
-            settled = len(alternatives) == 1 and distinct_cards(named) == 1
+            # `side.settled` AND NOT `len(alternatives) == 1`. The two agree on most
+            # cards and part company on the one that matters: a name answering a card the
+            # export stocks in ONE finish returns one row whether the ladder settled it or
+            # REFUSED it, and releasing the second is listing a card on a finish the ladder
+            # rejected. `Alcremie ex` is that card on the committed fixture.
+            settled = side.settled and distinct_cards(named) == 1
             if settled:
                 chosen = alternatives[0]
                 resolution = variant.Resolution(
