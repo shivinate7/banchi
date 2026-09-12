@@ -8026,6 +8026,21 @@ def _box_row(
 
     return {
         "box": int(box),
+        # THE TRUE INDEX OF THIS DRAWER, NEVER DRAWN (D145). It is here so a CLIENT can tell
+        # two drawers that have worn one number apart — which is the whole of what the capture
+        # screen's restore needs and the one question the number cannot answer.
+        #
+        # `bid` AND NOT `box_bid`, because this record IS a box. `server/pipeline_routes.py`
+        # spells it `box_bid` on a run row, where `box`, `box_name` and `box_bid` are three
+        # facts ABOUT some other object; here it sits beside `box` and `name` as this object's
+        # own, which is the spelling `store/master.py`'s column and that module's scope block
+        # already use.
+        #
+        # None IS AN ORDINARY ANSWER AND NOT A FAULT. A box holding cards with no registry
+        # entry has no id to give (see above), and so does a store an older build migrated.
+        # `app/src/CaptureScreen.tsx` has a named arm for it: where the store cannot tell its
+        # drawers apart, the rule that predates the id decides, unchanged.
+        "bid": master.int_or_none(entry.bid) if entry is not None else None,
         "name": entry.name if entry is not None else None,
         # The STORED list, not the validated tuple. They differ only when the file was edited
         # by hand, and that is exactly when the operator needs to see what is in it.

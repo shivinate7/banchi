@@ -10177,9 +10177,9 @@ reader decides it.
 
 ### A RESTORED BOX IS CHECKED AGAINST THE STORE, AND FAILS SOFTLY
 
-**Photographing into the wrong drawer is the expensive failure on this screen**, and the setup now outlives the browser, so the gap between "the box I last picked" and "a box that still exists and still takes cards" can be days wide. Between two sittings a box can be sealed (D20), deleted (D34's panel), or **deleted and its number handed to a different physical drawer** by `next_box_number`'s lowest-free allocation. The first two are refused at the shutter anyway. The third is refused nowhere, because box 7 exists and takes cards — it is simply not the box the operator thinks they are looking at.
+**Photographing into the wrong drawer is the expensive failure on this screen**, and the setup now outlives the browser, so the gap between "the box I last picked" and "a box that still exists and still takes cards" can be days wide. Between two sittings a box can be sealed (D20), deleted (D34's panel), or **deleted and its number handed to a different physical drawer** by `next_box_number`'s lowest-free allocation. The first two are refused at the shutter anyway. **The third was refused nowhere when this entry was written, and this entry BUILT two of the three it had just enumerated** — box 7 exists and takes cards, so a reallocated number passed every test the restore made; it is simply not the box the operator thinks they are looking at. **That gap is closed as of 2026-09-12 (D153), and the closing needed a fact this entry did not have**: a drawer's identity, which D145 gave it. The sentence below described two cases in words that read as three, and is corrected rather than deleted because the overclaim is the defect worth remembering.
 
-**So the restore falls back to NO SELECTION, never to a guess**, names the box it let go of, says why, and opens the field with focus in the entry — the state `Pick a box` would have put them in, so the remedy is the press they were about to make.
+**So the restore falls back to NO SELECTION, never to a guess** — for the box that is GONE and the box that is SEALED here, and for the reallocated one since D153. It names the box it let go of, says why, and opens the field with focus in the entry — the state `Pick a box` would have put them in, so the remedy is the press they were about to make.
 
 **It waits for the answer, not for a non-empty list.** `boxRecords` starts `[]` and `[]` is also what a store with no boxes returns; judging on emptiness would clear a good box on every slow fetch, which on a cold capture server is every fetch. A separate flag records that `GET /boxes` actually answered.
 
@@ -10206,6 +10206,8 @@ reader decides it.
 **`runScope.ts:captureBoxLabel` is that rule, beside `boxLabel` rather than inside it.** Every other screen keeps `Box 3 · RB Epics` for the reason written there: the number is the shelf, the photograph directory, and what every refusal in `server/pipeline_routes.py` names. The capture screen is the one place the operator is holding the physical box.
 
 **The PICKER keeps the number, inverted.** The name leads and `Box 3` trails as a de-emphasised suffix, because the entry above it searches number and name together — a row that hid the number would answer a search for `9` with nine rows that do not visibly contain a 9. That is the one place on this screen where the number is still doing a job.
+
+**AMENDED 2026-09-12 (D153), ON THE OWNER LOOKING AT THIS VERY LIST**: *"on the capture screen, i shouldn't even need to see box. numbers here, it's waste of space"*. The reason above is correct and was spent too widely — it is about a row's answer to a TYPED NUMBER, and it was applied to every row at all times. The suffix is now drawn only where the row matched BECAUSE of a number the operator typed, so the list is names at rest and the `9` case is untouched. The reason survives the amendment intact; what changed is its scope.
 
 **Nothing else moved.** `pipeline/join.py:Position` is untouched, including on this screen's own filmstrip and receipts: the Fulfiller reads those, and he is walking a shelf he did not pack. Nothing on the wire changed and no route was added.
 
@@ -10887,6 +10889,316 @@ The seven are §24's own table, Falling Star and Fizz, Trickster among them. Sto
 ### What is left, and it is named rather than papered over
 
 **A SKU whose import landed in Staged and never went live reads zero too.** A copy sold by hand against that state ages a claim it should not, and the copies are still sitting in TCGplayer's staged channel. Telling that from a sold-out listing needs D59's own reopener — a marker that a copy actually reached an import file, one field on `Card` written by `cmd_emit`'s push loop beside the `sku` stamp. **`docs/DEBTS.md` §24 is now that residue** rather than this whole defect; it is the third entry to turn on not having that field, after D147 and §24 itself.
+## D151 — The merge is run by a checkout, so the checkout is asked whether it is current, and main is read for a slug the moment it moves
+
+**Built 2026-09-12, after an unclaimed id reached `main` for the second time.** D140 made a decision number something a branch writes as a slug and `make merge` turns into a number. The claim is a function in `scripts/merge-pr.py` — and `make merge` runs **the `scripts/merge-pr.py` of whatever checkout invoked it.** A checkout cut before that function does not fail: it performs the GitHub half, performs the local half, reports complete success, and main lands carrying a raw `## D-<slug>` heading that no citation can resolve against and no later merge can ever find, because the branch that wrote it is merged and gone. Pull request #270 stranded one, repaired by #273; pull request #280 stranded the next, repaired by #285.
+
+**This is not D143 again.** That entry fixed a precondition that was seven lines too late *inside* the claim — a guard that existed and was unreachable. This one is about a checkout in which **the guard is not present at all**, which no ordering inside the file can reach. D143's own refusal is among the capabilities a stale copy does not have.
+
+### The scale is measurable and it is not two checkouts
+
+**Measured 2026-09-12 across the working trees of this clone: 30 trees, and 24 of them behind `origin/main`'s copy of the merge surface. Sixteen were missing `84c57d7` — the commit that introduced the claim at all.** So on the day this was written, more than half the trees on this machine would have stranded an id had a merge been run from them, and the two that did were the two that happened to be asked.
+
+**The two pull requests' own head branches were current**, which is what took so long to see: neither stranding is visible in the pull request. `18dcf7c^2` carries a complete `claim_half`. The stale copy was a **third tree** — the one the session typed `make merge` in — and nothing in the merge's output, the pull request, or main's history records which that was.
+
+### The predicate is BEHIND, and DIFFERS would have been the wrong one
+
+**A branch developing the merge is supposed to differ from main's copy of it.** #280 was exactly that, and a guard comparing content would have refused the one workflow that keeps this file alive — which is how a guard gets switched off in a week. What is refused is a copy **missing commits main has**: `git log HEAD..origin/main -- <file>` non-empty. A checkout cut before a capability reads behind; a branch carrying main's commits plus its own reads clear.
+
+**A diverged branch reads behind, and that is right rather than harsh.** If this branch has changed the merge AND has not taken main's change to it, it lacks the capability exactly as the stale checkout does. The refusal prints the same one-command fix either way: `git merge origin/main`.
+
+**The surface is derived, not listed.** It is this file plus every `scripts/*.py` a module-level constant in it names — today `scripts/claim-ids.py`, through the `CLAIMER` constant that was already written that way. A guard that only ever checked itself would have been green through the half of the incident that lives in the claimer.
+
+**What it cannot see is named rather than left to be found**: a merge that took `ours` over one of these files. That commit IS an ancestor, so reachability answers *not behind* over content that lost the capability anyway. `make revert-guard` is the guard whose subject that is — and the second half below catches the consequence regardless of cause.
+
+### It has no escape hatch, which is a departure and is meant
+
+**Every other refusal in this repository prints one** — `PKMNSCAN_SUITE_LOCK=off`, `PKMNSCAN_KILL=off`, `PKMNSCAN_REVERT=off`. Those exist because the thing they bypass can cost real minutes or stand between a session and the only route through. **This one costs `git merge origin/main`**, which is seconds and is the right thing to have done anyway. A hatch printed in the refusal is the button a session presses instead of reading, and what it would restore is a command that reports success while doing nothing — the worst failure shape this repository has.
+
+### And the symptom is caught by the symptom, in the one file every checkout shares
+
+**A guard inside `scripts/merge-pr.py` is absent from exactly the checkouts that need it.** That is the whole defect, and it applies to the refusal above as much as to the claim: it protects every checkout cut from this commit onward and reaches none of the twenty-four standing today. So there is a second half, and it is in `scripts/githooks/reference-transaction`:
+
+**`core.hooksPath` is one installed directory in the common `.git` dir, so every working tree of this clone runs the same hook file**, and a local move of `refs/heads/main` is the one event all of them share. At the `committed` phase the hook reads the commit main just moved to and prints, loudly, when it carries a slug heading. It fires for the session that merged and for every session that pulls afterwards.
+
+**It reports and never refuses, and the asymmetry is the argument.** By the time main moves locally the pull request is merged and origin carries the slug whatever happens here; refusing the fast-forward would leave this clone behind a main that is already wrong, repairing nothing and breaking every read downstream. Refusing is right before the damage and wrong after it. It runs at `committed` rather than `prepared` for the same reason the rest of that file fails open: a bug in it must not be able to abort anybody's ref transaction.
+
+**Its pattern is deliberately looser than the claimer's.** `scripts/claim-ids.py` owns the grammar an id is ALLOCATED by; a report only has to notice a heading that is not a number, and a loose reader over-reports, which for a report is the safe direction. The strict answer is one command away and the message names it.
+
+**`make merge` asks the same question itself**, through `scripts/claim-ids.py --landed <rev>` — the first reader in that file whose subject is a commit rather than a checkout — and its exit status becomes the merge's. A claimer that cannot answer is reported rather than read as clean, which is the rule the claim commit's wait is built on, one function along.
+
+### Proved by reproducing the stale checkout, not by asserting about it
+
+`scripts/merge-selftest.sh` builds the progression in a throwaway origin and clone: main moves on something unrelated (allowed — a guard that refused every branch behind main would be off within a day), main takes a capability in the merge (**refused, naming the file, both blobs and the commit**), the branch merges main (allowed), the branch then edits the merge itself (allowed — #280's case), and main moves again underneath it (refused, naming the derived second file). `scripts/githooks-selftest.sh` moves a fixture main onto a slugged commit and asserts the report, its content, that it fires once, and that main moved anyway; `scripts/claim-selftest.py` proves `--landed` reads the commit and not the tree it is standing in, in both directions.
+
+**Ten mutations, none survived.** The one worth naming is the first: rewriting the predicate as *differs from origin/main* turns the AHEAD case red and nothing else — which is the case that chose the predicate, and the only arm that can tell the two apart.
+
+**One case could not be built out of a fetch and the fixture records the measurement.** Whether the hook reads `refs/heads/main` rather than every line of the payload needs a transaction carrying two refs; `git fetch` with two refspecs issues **one transaction per ref** on this machine's git, measured. `git update-ref --stdin` is the porcelain that batches, so that is what the case uses — a real gesture rather than the hook being fed by hand.
+
+### What it does not decide
+
+**Not that `make check` gains a row.** The question is about a checkout's relationship to `origin/main` at the moment of a merge; asked on the commit path it would refuse commits for being behind, which is not a defect. **Not that the surface grows to `scripts/`**: a merge refused because an unrelated script moved is noise, and narrowness is what the unrelated-file arm exists to hold. **Not that the hook learns the strict grammar** — that would be a third declaration of it, and `claim vocabulary` reconciles two. **And not that any of this repairs a stranded id.** Nothing here rewrites main: a substitution made after the merge reaches main's own copy of the entry, which D140 settled and this does not reopen.
+
+## D152 — Every row in the collapsed rail draws one glyph on one spine, and a rule that lists the children it knows about will miss one
+
+**Settled 2026-09-12, on the owner's report of two defects in the collapsed sidebar foot.** Both
+were visible in one screenshot of the 64px rail, both had shipped, and the browser suite was green
+through both. They are recorded as one entry because they are one cause.
+
+**WHAT THEY WERE, MEASURED.** The rail is 64px and every glyph in it rests on a spine at x = 32 —
+the sidebar's 8px gutter plus half of the 48px box each row draws in. Read off the running app at
+1440 with the sidebar collapsed:
+
+- **The hand-off row wore two glyphs.** `App.tsx` draws the Fulfiller's link as an 18px `hand`, the
+  label, and a 14px `external` mark saying the screen opens in its own tab. The rail folded the
+  label away and kept both icons, so that row drew glyphs at **x = 19 and x = 47** — a pair
+  straddling the whole rail, in a 48px box, beside three rows carrying one glyph at 32.
+- **The server dot was never centred at all.** `.bn-server` kept its OPEN-sidebar layout into the
+  rail: `padding: 0 var(--bn-3)` with the label `display: none`, shrink-wrapped to **32px** by the
+  foot's `align-items: flex-start`. The dot was therefore placed by the left padding and nothing
+  else — 8 (gutter) + 12 (that padding) + 4 (half an 8px dot) = **24**, eight pixels left of the
+  spine. Not off by half a border, and not centred against an asymmetric container; those are the
+  two other shapes this failure comes in and neither is this one. It is correct in the OPEN
+  sidebar, where that row is meant to be left-aligned and the dot lines up under the button icons
+  above it. **Collapse-only, and a missing rule rather than a wrong number.**
+
+**THE CAUSE IS THE SHAPE OF THE RULES, NOT EITHER ELEMENT.** `App.css`'s rail block describes the
+foot by LISTING what was in it when the block was written. The fold-away is an enumeration of class
+names — `.bn-nav-text`, the link's `.bn-kbd`, `.bn-nav-badge`, `.bn-side-foot-text`,
+`.bn-brand-chevron` — and the spine rule names `.bn-btn`. The external glyph is in none of those
+classes; `.bn-server` is not a `.bn-btn`.
+**Anything the list does not name keeps its open-sidebar layout** — silently, and looking like a
+rule that is simply doing its job.
+
+**`.bn-btn` NEXT TO BOTH OF THEM NEVER HAD THE DEFECT, AND THAT IS THE ARGUMENT.** Its rule is
+`> :not(.bn-icon)` — structural, so it folds away whatever it was not told about. The fix is that
+rule's shape applied to the other two: `.bn-nav-link > :not(:first-child)` keeps the leading glyph
+and nothing else, and `.bn-server` takes the identical `width: 48px; padding: 0;
+justify-content: center` its siblings already had. One declaration repeated, not a second
+arithmetic to keep in step.
+
+**THE WIDTH IS FIXED AND THE CENTRING RESOLVES AGAINST THAT**, which is the trap this block is
+written around: `justify-content: center` against the SIDEBAR's width resolves against a box that
+animates for 320ms, and this file already carries two measured excursions from exactly that. A
+48px box pinned at the gutter does not travel; the dot rests on 32 from frame 0.
+
+**IT EXISTED TWICE, BECAUSE THE BLOCK EXISTS TWICE.** The shell is railed two ways — `data-rail`
+above 1023px, and a media query at 768-1023px that has no `data-rail` at all and deliberately
+copies the block. The copy carried a copy of both defects. A fix or a test that looked only at
+1440 would have covered half of it.
+
+**WHY THE SUITE WAS GREEN.** `brand.spec.ts` already asserts the spine, and it asserts TRAVEL: it
+samples through the collapse and requires nothing to leave the corridor between its two resting
+positions. That is blind by construction to a glyph whose RESTING position is wrong — a sample
+sitting between two identical wrong numbers is inside the corridor. Both defects were exactly that.
+
+**THE GUARD IS THE RESTING POSITION, AND THE SPINE IS READ RATHER THAN TYPED.** `every foot row in
+the rail draws one glyph, on the nav's own spine` asserts one visible glyph per foot row and every
+glyph within 1px of the nav icons above it. Hard-coding 32 would restate `--bn-rail-w` in a second
+place and go stale the day the rail is resized; the nav IS the column the foot continues, so it is
+what the foot is measured against. It runs at 1440 and at 820, once per rail.
+
+**Observed red before it was kept, four arms**: drop the `:not(:first-child)` rule and the guard
+names the link and the two centers it found (`drew 2 at 19, 47`); drop the `.bn-server` rule and it
+reports `rests at 24, the nav at 32`. Each fails at both widths.
+
+**WHAT THIS DOES NOT REACH.** The phone drawer below 767px is full-width and draws both glyphs and
+every label on purpose; nothing here applies to it, and the guard does not look at it. And the
+guard is a floor over the FOOT — a second glyph appearing in the main nav's rows would be caught by
+the same rule in the stylesheet but is not asserted, because no nav row draws one today and a test
+over an empty set is the failure this repo keeps finding.
+
+
+## D153 — The restore asks which drawer, not which number, and the picker stops drawing a number nobody reads
+
+**Settled 2026-09-12, on a defect found in merged work and an instruction given the same evening.** Two changes to the capture screen, and they are one change: D145 gave a drawer an identity, so the screen can start asking the question the number was never able to answer — and, having asked it there, can stop putting the number in front of the operator everywhere else.
+
+### The restore kept a box that was not the box
+
+**D142 enumerated three ways a remembered box goes stale and built two.** Its own words: a box can be sealed, deleted, or *"deleted and its number handed to a different physical drawer"* by `next_box_number`'s lowest-free allocation — and, correctly, *"The third is refused nowhere, because box 7 exists and takes cards."* The very next paragraph opened *"So the restore falls back to NO SELECTION, never to a guess"*, which reads as covering all three. **It covered two**, and nothing in the tree could say so:
+
+```ts
+const found = boxRecords.find((record) => record.box === wanted)
+if (found !== undefined && found.state !== 'closed') return
+```
+
+A reallocated number is found, and open, and takes cards. The restore holds, the operator resumes into a drawer that is not the one they left, and every photograph of that sitting is filed at an address that does not match the shelf. **Silently** — there is no refusal, no banner, and the screen is correct about everything it is able to check.
+
+**This repo already knew the hazard by name and had already refused it once.** D36 as amended refuses to JOIN a run over a reallocated box (`cli/resolve.py:refuse_reallocated`, on `store/master.py:box_disowns_run`), and it names the owner's own drawer: box 1 held 53 Pokemon cards on 2026-08-22 and 133 Riftbound cards since 2026-08-29. **What D36 cannot do is undo the photographs.** Its realign re-binds a run to the slots its photographs are at NOW; these photographs are in a drawer the operator never meant, so there is nothing to re-bind them to. The capture screen was the last place the mistake could still be prevented, and it was the one place with no rule about it.
+
+### The signal is the id, and the two plausible alternatives are both wrong
+
+Both were considered and both are worth recording, because each looks serviceable:
+
+**The NAME turns a rename into a false positive.** D20 makes a rename a live edit; a drawer relabelled between two sittings is the same drawer, and a name comparison calls it a different one. It also says nothing at all about an unnamed box, which D20 explicitly permits.
+
+**`next_index` cannot tell a reallocation from an undo.** It does drop when a number is reused — and it drops identically on a capture-undo, which writes `target.index` back in `doUndo`. A decrease proves nothing, and the screen that would read it is the screen that causes the other case.
+
+**`Box.bid` is allocated once at creation and never reused (D145), so a disagreement is a fact rather than an inference.** It reaches the client as `bid` on `BoxRecord` — the spelling `store/master.py`'s column and `server/pipeline_routes.py`'s scope block already use, because this record IS a box; `box_bid` is that module's spelling on a RUN row, where it is one of three facts about some other object. **Nothing draws it.** The owner's ruling that the id is *"not visible anywhere in the app"* is unchanged: what a screen draws is the sentence a comparison of two ids produces.
+
+### The two silences are not the same silence, and that is the migration decision
+
+A comparison needs two values and either can be missing. **They are answered differently, on purpose:**
+
+**A BOX with no id keeps the restore.** `Box.bid` is optional forever, so a box holding cards with no registry entry has none, and neither does a store an older build migrated. The rule that predates the id decides, unchanged — which is D145's own two-arm shape (*"Where it does not, the older rule decides"*). **Clearing here would refuse a good box on every load, for ever, over a fault the operator cannot fix from this screen.** A rule that punishes the operator permanently for the store's silence is not a safety rule.
+
+**A SETUP with no id clears, and says it cannot tell.** This is the browser holding a document written before this landed. Weighed as the asymmetry it is:
+
+| | cost |
+|---|---|
+| trust the number | the expensive silent failure this entry exists to prevent — and live on the very machine that reported it, since the owner deleted a box 1 and started another this week |
+| clear it | one press, once, with a sentence on screen — and the press is the remedy D142 already says the operator *"was about to make"* anyway |
+
+**So it clears.** D142's own rule decides it without needing a new one: a stored number with no id IS *"a guess"*, and that paragraph already says the restore never falls back to one.
+
+**D27's amendment is the precedent for declining a fallback and it is not in tension with this.** There the owner declined a read-time fallback for a renamed key on the ground that *"a fallback can never safely be deleted afterwards"*. This arm has no such problem, and the difference is exact: **it is not a fallback preserving old behaviour, it is the same refusal the unknown-box arm already makes**, self-extinguishing after one pick, and correct whether it is kept for ever or folded into the disagreement arm later.
+
+**It says "cannot tell" and never "your drawer changed"**, because it does not hold that fact. D145 forbids an abstention softening a fact; the same care forbids it hardening into one.
+
+### Where the number stays, and it is one sentence
+
+**The reallocation sentence is the one place on this screen that names a box by NUMBER**: *"Box 3 is a different drawer now — the one you last captured into was deleted, and its number went to this one."* The number is the only thing the two drawers share — it is the thing that was handed over, and the subject of the sentence. Naming the box now at it would tell the operator their drawer is `Epics`, which it has never been. **The other three restore sentences keep `captureBoxLabel`** (name, or number where there is none): each of those is about a box that is, or probably is, theirs.
+
+### The picker stops drawing numbers, and D142's reason survives its own amendment
+
+**The owner, looking at the list:** *"on the capture screen, i shouldn't even need to see box. numbers here, it's waste of space"*. Their screenshot: `WB1 R2  Box 4  next index 679` over `ME01 C/UC  Box 2  Sealed` over an already-ellipsised `UNL BBOX C/UC 1…`.
+
+**D142 argued the picker should keep the number and the argument was right:** *"a row that hid the number would answer a search for `9` with nine rows that do not visibly contain a 9."* **It was spent too widely.** That is a claim about a row's answer to a TYPED NUMBER, and it was applied to every row all of the time, including the resting list the owner was looking at — where nothing has been typed and no row is answering anything.
+
+**So the suffix is drawn exactly where that reason applies**: the query is non-empty and this row is in the list because its NUMBER matched it. Type `9` and every row that matched on a 9 shows the 9. Type `com` and no number appears, because no row matched on one. At rest the list is drawer names. **D145 is why this is givable at all** — with identity moved to `bid`, the number here is a label and a search term, and never the thing that says which drawer this is.
+
+**Three things are deliberately unchanged:**
+
+**Searching by number still works, and the placeholder still says so** — `Name or number`, name first because that is what the rows show and what the operator thinks in, number kept because D20 makes this one control over both and a drawer may have no name at all. A placeholder that stopped saying so would make a working search undiscoverable.
+
+**An unnamed box still draws its number and that is not an exception.** `captureBoxLabel` already puts it in the name's place (D142, D56: a placeholder would draw a fault where there is none). What had to be prevented is the doubling — a suffix beside it reads `Box 6 Box 6` — and the test for it is the TRIMMED name, which is what `captureBoxLabel` itself applies. The old test was `option.name === null`, and a whitespace-only name slipped past it into exactly that doubling.
+
+**Nothing is added to the row, and the space this frees is ATTENTION rather than width.** That distinction was checked against the renders rather than assumed, and the first draft of this paragraph had it wrong: the option row is a grid whose name column is `minmax(0, 1fr)`, so it already takes every pixel the trail does not, and dropping a suffix that sat AFTER the name inside that column moves no boundary. `UNL BBOX C/UC 1…` ellipsises at exactly the same character before and after. **What the number was costing is a second thing to read on every row** — the owner's *"waste of space"* about a list of drawers where one fact identifies each. The row already carries `next index N` or `Sealed`, which is the useful half, and adding anything to a row the operator reads at a feeder's pace would spend the instruction on fresh clutter.
+
+### What is guarded
+
+`app/tests/capture-claims.spec.ts` carries seven new cases and **the fixture's ids are deliberately not its numbers** (boxes 1-4 wear 21-24) — against a fixture where box 2 wears id 2, a case comparing the wrong pair passes. Four are the restore's arms, including the two that stop the guard being vacuous: a box the store still calls the same drawer is KEPT, and a store issuing no ids KEEPS the restore. One asserts the pick records the id, without which every restore falls down the "cannot tell" arm for ever while looking exactly like a working guard. Two are the picker, at rest and under a typed number.
+
+### What would reopen it
+
+**A route that takes an id.** D145 forbids it and this does not ask for one: the comparison happens in the client, against a field that rides along on a record it was already fetching.
+
+**A second operator, or a browser profile shared between rigs.** The setup is one device's memory of one hand (D142). Two hands would make "the drawer I left" a question with two answers, and the id would be comparing against somebody else's pick.
+
+**A drawer whose number the operator does read.** The picker assumes the name is what they recognise — D142's own reopening condition, and this spends it further. If drawers start being named by content and referred to by position, the number comes back to the resting list.
+## D154 — The camera's automatic functions are inputs to the trigger's arithmetic, and the ones that step are locked
+
+**Settled 2026-09-12.** The question was which Sony settings the motion trigger wants and why,
+answered by measuring the twenty traces banked in `harness/traces/` rather than by reasoning
+about photography. The rig is a **Sony RX100 VII over micro-HDMI into an Elgato Cam Link 4K**,
+confirmed by the owner; `docs/specs/motion-trigger.md` §4's last block is the settings, the
+derivations and the rig checklist, and `scripts/score-trace.py camera` is the reader that
+re-derives every figure.
+
+### The determination
+
+**A drifting camera setting is dangerous precisely because of D81.** Every threshold is now a
+multiple of something the session measures: presence is the distance from the watch region
+as it stood at arming; `tLo` and `tHi` ride the session's own median still-frame difference. A
+setting that moves BETWEEN rigs is now absorbed — that is the change working. A setting that
+moves WHILE a session runs moves the baseline the thresholds were derived from, mid-run, with
+nothing reporting it. **No constant in `motion.ts` can defend against that.** This entry is the
+ruling that the camera configuration is where it is defended instead.
+
+**A camera setting is therefore a repo fact, not a rig preference.** It is written down, it has
+a measured reason per row, and it has a reader — the same bargain `docs/map.py` makes, for the
+same reason: a claim nobody can re-derive is one nobody can contradict.
+
+### What was measured, and the two that came back null
+
+**EXPOSURE IS THE ROW THAT MATTERS.** One 1/3 EV step — the smallest a Sony AE takes — moves the
+watch region by **8.5 to 22.5 luma levels** across the fifteen traces carrying a baseline, over
+`tLo` on **15 of 15** and over `presenceMin` on **9 of 15**. On more than half this corpus a
+single AE step on an empty stand reads as **a card arriving**. The transform is multiplicative in
+code space and the gamma bracket 1.9–2.4 moves the median figure over 18.7–23.3, so the
+conclusion does not rest on the assumed exponent.
+
+**GAIN IS A CLIFF, NOT A GRADIENT, AND THAT IS THE FINDING WITH TEETH.** The still-frame floor is
+independent cell to cell — **lag-1 spatial correlation +0.009 across, +0.008 down, 299 pairs** —
+against a shuffled control of +0.001, so it is sensor and codec noise
+and gain reaches `typ` directly. A slow drift is absorbed. A step is not: on the 2026-09-11 03:25
+session, **+1/3 stop costs 48% of the fires after it**.
+At **+1.5 stops it never fires again**, for the whole of its remaining 75 seconds.
+The mechanism is D131's ratchet — only frames already
+under `tLo` enter the noise window, so a sudden rise means nothing qualifies and `tLo` freezes at
+the seeded 4.50 — and **this is deliberately NOT a reason to change D131**: the escape refuses to
+act when its own quantile sits at or above the presence floor, which is exactly where a large
+gain step puts it, and loosening that would be repealing the guard that makes the escape safe.
+The failure is in the camera's gift. `ISO AUTO` is what is banned.
+
+**AND THE LAMP IS NEARLY NO LEVER, WHICH IS THE USEFUL SURPRISE.** On one rig over twelve
+sessions the floor tracks the plate level as **log(typ) = −0.125 × log(level), r = −0.868** —
+halving the light raises the floor 9%. Shot noise at a FIXED gain predicts −0.10 after the
+display gamma, and the measured slope is that. A brighter lamp does not buy a quieter trigger; a
+lower ISO does, at √2 per stop. Reach for the lamp to buy exposure headroom, then spend the
+headroom on ISO.
+
+**SHUTTER SPEED IS A NULL RESULT AND THE NULL IS WORTH MORE THAN THE INTUITION.** At the instant
+the trigger fires the card is moving at **184 sensor px/s** (median of 756 real fired-card
+regions, via the region's own measured gradient of 20.93 luma/cell).
+**At 1/60 that smears it by 3.1 px of a 3840-px frame** — 1.3 px once the pipeline
+resamples to its 1568-px long edge. A transit's peak is
+twenty times faster, which is precisely why firing on a settle makes the shutter a non-issue.
+`docs/specs/motion-trigger.md` §7's line *"if the rescued frames blur, the lever is the camera's
+exposure"* is answered: at the fire phase it is not, and a rescued frame is 1.5 px worse than an
+ordinary one. **Open the shutter and spend it on ISO.**
+
+**SHARPENING AND NOISE REDUCTION ARE A NULL RESULT TOO.** They act at a few sensor pixels, and a
+blur out to a **12-pixel radius costs `d` 0.000** on 84 real card regions — the 60×60-pixel cell
+average destroys it; the knee is at 21–30 pixels. The Picture Profile is locked only so it does
+not CHANGE mid-run, not because its value matters.
+
+**FRAME RATE IS THE ONE FREE IMPROVEMENT.** The stream is **24p on 20 of 20 traces** (modal gap
+41.5–42.5 ms, 69.7% of 26,943 intervals; a dropped 30p feed would be bimodal at 33.3 and 66.7 ms
+and only 0.13% sits there). `4K Output Select → HDMI Only(30p)` is one menu item. Frames are the
+currency: decimating the real series to 12 fps costs **8.7% of the corpus's fires** and takes
+stalls from 12 to 76. **Going UP is not measured and the entry says so** — only the risk half can
+be scored offline, and it is mild.
+
+**AUTOFOCUS AND STABILISATION ARE LOCKED ON A MEASUREMENT AND A DOCUMENTED LIMIT.** The RX100 VII
+offers **only Continuous AF and Manual Focus when shooting movies**, so there is no lock to reach
+for and MF is the only answer. A hunt costs `d` 3.03 at 1% of focus breathing and 5.83 at 2% —
+over `tLo`, never near `presenceMin` — so it extends a motion episode rather than firing one.
+`SteadyShot Active` is a 1.19× crop plus a digital warp, priced by the same row.
+
+### D84's three quantities, and the one that could not be taken
+
+The pipeline behind this **reproduces D84's own published figures exactly** — its two bare-stand
+fires at `dBase` 9.07 and 9.10, and its quietest card at 32.53 — which is what licenses the rest.
+Re-derived for this camera: the **idle stand** reads 1.41–1.55 on the 2026-09-11 rig, and the
+**quietest card** 25.81 against a median of 107.67 over 578 fires.
+
+**The worst approach could not be measured, and that is recorded rather than estimated.** On the
+2026-09-01 rig the hand took about two seconds to arrive and D84 read 11.15 off it. On this rig
+**the whole hand-to-card ramp is four to six frames, about 200 ms** — under the trace's 1 Hz
+keyframe grid — so no stored frame is unambiguously a bare plate with a hand over it, which the
+contact sheet confirms by eye. The per-frame `dBase` bounds it at **12 to 23**, which
+**straddles `presenceMin` rather than sitting under it**. What keeps that from being D84's defect
+returning is that a 200 ms ramp cannot settle — on this rig the settle rule is doing the work and
+presence is not the binding protection.
+**That is a fact about this feeder's speed and not a margin**, so it is checked by eye at the
+rig whenever the feed changes — step 6 of
+§4's checklist. `presenceMin` does not move on this entry's authority.
+
+### What this deliberately does not do
+
+**No parameter in `app/src/motion.ts` moves.** Everything here is arithmetic over recordings, and
+this subsystem's entire history is of stillness rules that bought cards on one rig by spending
+them on another (D81's brightness floor rescued one session of three and broke the other two). A
+setting is a rig fact and a threshold is a repo fact; this entry changes only the first.
+
+**The traces cannot prove the body was in manual**, and the entry says so rather than implying
+it. Every drift figure is measured on stretches where nothing was moving, and auto exposure only
+steps when the scene changes — which on this rig is exactly when a card is in flight and `d` is
+the card. The corpus bounds the drift of whatever the body was set to; step 2 of the checklist is
+what decides which mode that was, and it takes thirty seconds.
+
+**Nothing here is validated at the rig.** SPECIFIED and RECORDED; not BUILT, not VALIDATED.
 ## D-section-is-the-ruler — The section is the ruler and the box is the margin note, and the bracket between them is deleted
 
 **Settled 2026-09-11, on the owner's two sentences about their own copies list.** *"The interface/view of the box is nicer than section"*, and the lens between the two scales is *"more noise than useful"*. The section scale is promoted to a full-width graduated 26px ruler with a fill, a pin that crosses it and the section's own bounds written inside its two ends; the box scale is demoted to an 8px strip of chips with a caret on the chip the card is in; and the SVG trapezoid is deleted outright with nothing drawn in its place. **The component's total height is unchanged at 73px, so no row on `#/inventory` moves by a pixel.**

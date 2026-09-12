@@ -1417,6 +1417,26 @@ export type BoxState = 'open' | 'closed'
  *  — see `BoxState`. This value comes off disk. */
 export type BoxRecord = {
   box: number
+
+  /** THE TRUE INDEX OF THIS DRAWER — allocated once at its creation, never reused, and never
+   *  rendered (D145). The owner said the last part twice: *"a box needs an index # not visible
+   *  anywhere in the app thats a true index rather than cheaply using boxes as an index"*.
+   *
+   *  NOTHING IN `app/` MAY DRAW THIS. It is in the same relationship to `box` that `Place.index`
+   *  is to `Place.slot` (D58): the key a machine joins on, beside the number a person reads off
+   *  the drawer. What a screen draws is the ANSWER a comparison of two of these produces — and
+   *  today there is exactly one such answer, the capture screen's restore.
+   *
+   *  WHY A CLIENT NEEDS IT AT ALL, which `box_bid` on a run row does not make obvious: the
+   *  capture screen remembers a box between sittings (D142), and `next_box_number` hands a
+   *  deleted box's number straight back out to the next drawer. The number cannot tell those
+   *  two drawers apart and this can.
+   *
+   *  `null` IS AN ORDINARY ANSWER. A box that holds cards but has no registry entry has no id,
+   *  and neither does a store an older build migrated — `store/master.py:Box.bid` is optional
+   *  forever, for `Card.rarity_claim`'s reason. Absent altogether from a server predating the
+   *  field, which is the same nothing. */
+  bid: number | null
   name: string | null
 
   /** THE BOX'S DIVIDER INDICES, not a count of sections. D10 as amended 2026-08-23: a box
