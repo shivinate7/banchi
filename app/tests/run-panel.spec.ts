@@ -1434,7 +1434,11 @@ test('a run that names no drawer at all draws none, rather than a number off a f
     ],
   })
 
-  await expect(page.locator('.run-row-scope')).toHaveCount(0)
+  /* AN EM DASH, NOT A BLANK AND NOT A NUMBER. `scopeOf` draws `—` where `runBoxLabel` answers
+     null, which is the row saying "this run does not say" — and it is the honest rendering of a
+     manifest that names no drawer. The capture directory in this fixture is `.../box6`, which is
+     exactly the string the deleted regex would have read `6` out of. */
+  await expect(page.locator('.run-row-scope')).toHaveText('—')
 })
 
 // ------------------------------------------------------------------- several drawers
@@ -1562,7 +1566,8 @@ test('a drawer is untickable, and the last one out leaves nothing to price', asy
      IT IS NOT THE DIALOG'S OPENING STATE ANY MORE, which is the one thing that changed here:
      the dialog opens on `Everything that needs it`, which IS answered. An empty `Drawers` is
      reached by unticking, and is the state this asserts. */
-  await pickBox(page, 9)
+  /* Box 9 is still ticked at this point — the untick above took 12 out — so the way forward is
+     enabled, and taking the LAST drawer out is what disables it. */
   await expect(page.getByRole('button', { name: /^Next · how they are read$/ })).toBeEnabled()
   await pickBox(page, 9)
   await expect(page.getByRole('button', { name: /^Next · how they are read$/ })).toBeDisabled()

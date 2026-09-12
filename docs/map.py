@@ -4823,7 +4823,9 @@ COMPONENTS = [
                                      "No fill on the selected chip — the solid accent is reserved "
                                      "for a screen with exactly one thing to do, and this screen's "
                                      "one fill is the spend button inside the panel.",
-                             "governed_by": ["D5", "D33", "D38", "D39", "D100", "D103", "D104", "D105", "D117"]},
+                             "governed_by": ["D5", "D33", "D38", "D39", "D100", "D103", "D104",
+                                             "D105", "D117", "D118",
+                                             "D-a-selection-of-cards"]},
             # ---- the runs screen's parts (Banchi, 2026-09) ----
             "src/RunsStage.tsx": {"does": "WHERE A RUN IS, in one vocabulary for the list, the "
                                           "run panel and Home. The server says which of the four "
