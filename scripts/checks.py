@@ -394,6 +394,30 @@ CHECKS = (
         "governed_by": ("D16", "D18", "D60", "D160"),
     },
     {
+        "target": "submission-selftest",
+        "runs": "python3 scripts/submission-selftest.py",
+        "asserts": "store/submissions.py — the claim table that refuses a second `identify` "
+                   "press over cards a live run is already paying to read — by violating it "
+                   "against a throwaway store. The two concurrent cases are real separate "
+                   "processes racing a real flock over one card, and the first of them "
+                   "REPRODUCES the bug rather than asserting about it: the children run the "
+                   "check-then-claim order anybody writes first and both buy the same card. "
+                   "Then the disjoint selections in one drawer that the box form refuses, the "
+                   "press spanning drawers that the box form cannot see at all, a holder "
+                   "killed with -9 whose claim must keep blocking and become releasable, and "
+                   "the FIGURES — rows live and CARDS locked — because a table that claimed "
+                   "nothing would pass every outcome assertion here.",
+        "needs": ("python3",),
+        "writes": "one sqlite store per case and two short-lived processes, all under "
+                  "`mktemp -d`. `PKMNSCAN_HOME` is repointed for every case, so the "
+                  "operator's own store is never opened.",
+        "commit_path": False,
+        "why_off_commit_path": "D18 — it writes a temp store and it signals processes. Same "
+                               "standing as janitor-selftest and reap-selftest.",
+        "gates": True,
+        "governed_by": ("D7", "D18", "D48", "D88"),
+    },
+    {
         "target": "janitor-selftest",
         "runs": "bash scripts/janitor-selftest.sh",
         "asserts": "scripts/janitor.py, against a throwaway clone with real worktrees, a fake "
