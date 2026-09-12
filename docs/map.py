@@ -1915,7 +1915,7 @@ COMPONENTS = [
                         "excused by a RECORDED digest with the audit going red when that "
                         "digest is mutated; and a `-9` mid-transaction leaving the store "
                         "byte-identical",
-                "governed_by": ["D18", "D26", "D83", "D88", "D89", "D172",
+                "governed_by": ["D18", "D26", "D80", "D83", "D88", "D89", "D172",
                                 "D-a-number-a-person-reads-is-never-a-key"],
             },
             "submission-selftest.py": {

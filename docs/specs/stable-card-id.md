@@ -342,11 +342,37 @@ symlink at that name. `make ignore-check` is what reads it.
 
 ### 0.9 · BUILT, RECORDED, NEITHER
 
-**BUILT** — reachable, exercised and asserted: `cards.cid` at schema 3, the seeding with its
-receipt, the forward-version guard, the column-roster arm, the partial-index self-heal,
-`store/photos.py`, the relocation with its preview, the view-directory builder, the
-`/photo/by-card/<cid>` route and the client that addresses photographs through it, the
-pkmnscan cards subcommand, and the two targets.
+**BUILT** — reachable, exercised and asserted: `cards.cid` at **schema 4** (D174's
+`submissions` took 3 while this was open, which is the merge conflict §5 predicted by name),
+the seeding with its receipt, the forward-version guard, the four-roster reconciliation, the
+partial-index self-heal, `store/photos.py`, the relocation with its preview, the view-directory
+builder, the `GET /photo/by-card/<cid>` route and the client that addresses photographs through
+it, `./pkmnscan cards name` / `audit` / `photos`, and `make cid-selftest` / `make cid-audit`.
+
+**AND TWO DEFECTS THAT WERE FOUND RATHER THAN DESIGNED FOR, both in `store/db.py` and
+neither in this file's plan.** `SqliteSource.upsert` was `INSERT OR REPLACE`, which resolves a
+conflict in ANY constraint by DELETING the conflicting row — so a second card carrying a name
+another card already held did not refuse, it silently deleted that other card's row and the
+store came back one card short. It is `ON CONFLICT (<primary key>) DO UPDATE` now, which
+resolves a collision on the row's own identity and lets every other constraint raise. That
+mattered because `cards_cid` is load-bearing in an ARGUMENT rather than merely tidy: the claim
+that two cards cannot compose one photograph's path rests entirely on two cards never holding
+one name. **And fixing it exposed the second**: `flush_rows` wrote its row writes one statement at
+a time, and a mid-box renumber re-keys rows — card 4 to index 3, card 5 to index 4 — so
+part-way through that loop two rows transiently carry one name. The end state is fine and the
+intermediate one is not, and a UNIQUE index in SQLite is IMMEDIATE with no deferred form. Every
+touched key is cleared before any is written.
+
+**EVERY GUARD HERE IS MUTATION-TESTED: 16 arms, 16 caught, 0 survived.** Three survived the
+first pass and each was information rather than something to explain away. `column_names`
+survived because **nothing in this repo reads `TableSpec.column_names` at all** — `grep -rn
+"\.column_names"` returns nothing, `SqliteSource` takes its columns from `db.TABLES[table]`,
+and that field is a declaration with no consumer on every `TableSpec` in the store. It has a
+reader now. The relocation's two guards survived because they **mask each other**: the source
+check refuses before linking and the destination re-hash catches after, and both end in the
+same observable outcome, so no single-arm mutation could see either. The link tally
+distinguishes the first; the second is provoked by making `os.link` land different bytes, which
+is not a contrivance but the exact fault it is for.
 
 **RECORDED** — this file, §0 in particular, and the decision entry. The shard width, the
 `(size, mtime_ns)` re-stat and the refusal's new home are decisions with arguments here and

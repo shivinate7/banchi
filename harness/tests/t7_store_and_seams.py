@@ -176,6 +176,7 @@ import json
 import hashlib
 import http.server
 import inspect
+import itertools
 import os
 import shutil
 import socket
@@ -332,7 +333,10 @@ def entry(box: int, index: int, **extra) -> queues.QueueEntry:
         "box": box,
         "index": index,
         "label": join.Position(box, index).label,
-        "photo": str(capture_server.photo_path(box, index)),
+        # `run_photo`'s string, not a composed one, for the reason it gives: this field is
+        # carried onto the entry from the run's `identifications.json` verbatim
+        # (`cli/resolve.py:queue_entry`), and the review screen renders exactly that file.
+        "photo": run_photo(box, index),
         # RETIRED as a reason the pipeline emits (D3, amended 2026-09-02), and kept here on
         # purpose: the owner's store holds 16 history events carrying this string, the
         # routes validate only `STAND_DOWN_REASONS`, and a fixture wearing the code a real
@@ -438,10 +442,45 @@ class QuietHandler(capture_server.CaptureHandler):
         pass
 
 
+# EVERY CAPTURE THIS FILE MAKES CARRIES BYTES OF ITS OWN, AND SINCE D172 THAT IS THE STORE'S
+# REQUIREMENT RATHER THAN A CASE'S PREFERENCE. A card is NAMED by the sha256 of its photograph
+# and `cards_cid` holds that name UNIQUE, so two captures of one blob are two rows carrying one
+# name and the second one raises. `check_remove_and_box_delete` and `check_photo_cache` already
+# minted a byte per card for their own reason — "a photograph attributed to the wrong record is
+# the failure a position label may never cause" — and the store has now made that rule the
+# whole file's.
+_MINTED_PHOTOGRAPHS = itertools.count(1)
+
+
+def photograph() -> bytes:
+    """JPEG-shaped bytes nothing else in this run will produce. One per capture.
+
+    A COUNTER RATHER THAN A FUNCTION OF THE POSITION, because the caller does not know which
+    index it is about to be handed — the allocator decides that inside the store lock, which
+    is the whole subject of `check_allocator`. A case that needs to compare what came back out
+    of the store keeps the payload it sent and decodes its `image` field; nothing here can
+    recover a blob from a position, and that is correct rather than awkward.
+
+    67 bytes, like the `JPEG` constant it replaces at the shutter: enough for the magic-number
+    check, and small enough that a few hundred captures cost nothing.
+    """
+    seed = f"t7-photograph-{next(_MINTED_PHOTOGRAPHS)}".encode()
+    return b"\xff\xd8\xff" + hashlib.sha256(seed).digest() * 2
+
+
 def capture_payload(box: int, **extra) -> dict:
-    payload = {"box": box, "image": base64.b64encode(JPEG).decode("ascii")}
+    payload = {"box": box, "image": base64.b64encode(photograph()).decode("ascii")}
     payload.update(extra)
     return payload
+
+
+def sent_image(payload: dict) -> bytes:
+    """The photograph a capture body carries, decoded — what the store should hold afterwards.
+
+    The cases that compare stored bytes against sent bytes used to name the `JPEG` constant on
+    both sides, which stopped being possible when every capture began carrying its own.
+    """
+    return base64.b64decode(payload["image"])
 
 
 def fake_cid(seed) -> str:
@@ -470,6 +509,105 @@ def fake_cid(seed) -> str:
     store's bookkeeping is checked without a camera in the way.
     """
     return hashlib.sha256(str(seed).encode()).hexdigest()
+
+
+def photo_of(box: int, index: int) -> Path:
+    """Where the card at this position files its photograph, on disk or not (D172).
+
+    THE FIRST OF THE THREE QUESTIONS `capture_server.photo_path` USED TO ANSWER AT ONCE, and
+    the one nearly every case here is asking: *where is THIS CARD's photograph*. The
+    photograph is filed under the card's own name, so answering it means reading the store —
+    a position is a lookup in FRONT of the path now, and never the path itself.
+
+    DERIVED (`photo_target`) RATHER THAN FOUND (`photo_at`), which is the choice worth
+    stating. A great many assertions below are that a photograph is NOT on disk, and
+    `photo_at` answers None for "no file" and "no card" alike, collapsing two failures this
+    file exists to tell apart. D89's reclaim needs the derivation for a second reason: it
+    deletes the photograph and KEEPS the claims file beside it, so there is a sidecar at a
+    path no `find` will ever return.
+
+    The other two questions have their own spellings and a case may not borrow this one for
+    them: `photo_named_by` is *where WOULD this capture land*, for a case with no record to
+    look up, and `capture_server.legacy_photo_path` is the address the store is moving away
+    from, for the cases that are about the move itself.
+    """
+    key = master.position_key(box, index)
+    card = Store().read().inventory.get(key)
+    if card is None:
+        # Loud, because the alternative is a path composed out of nothing that then fails an
+        # `is_file()` for a reason that reads exactly like the behaviour under test.
+        raise AssertionError(
+            f"`photo_of` was asked about {key}, which holds no record. It answers for a card "
+            f"that exists; a case with no record wants `photo_named_by` or "
+            f"`capture_server.legacy_photo_path`."
+        )
+    return capture_server.photo_target(card)
+
+
+def photo_named_by(blob: bytes) -> Path:
+    """Where a capture of THESE BYTES would be filed, whether or not one ever was (D172).
+
+    The second question: *where would a capture land*. `do_capture` names the card by hashing
+    the photograph before it takes the store lock (`photos.sha256_of_bytes`), so the path is
+    knowable from the request body alone — which is what lets a case assert that a REFUSED
+    capture wrote no file at all, with no record left behind to look one up by.
+    """
+    return photos.path(photos.sha256_of_bytes(blob))
+
+
+def stored_captures():
+    """Every capture `identify` would read out of this store, in the order `scan` returns.
+
+    THE ROOT MOVED AND THE ORDER STOPPED MEANING ANYTHING (D172). These cases all scanned
+    `capture_server.captures_root()`, where a photograph's filename WAS its index — so
+    filename order was position order and `[0]` was box 3's first card. Photographs are filed
+    under their cards' names now, and the same sort is DIGEST order: `[0]` is whichever card
+    happened to hash low. Reach one by position with `capture_named` and keep this for
+    COUNTING, which is what the money rule needs — every photograph `scan` finds is a paid
+    Batch request, and the count is the whole assertion.
+
+    `store/photos.py` explains why the root it scans is a sibling of `captures/` rather than
+    a directory inside it: a content store under `captures/cards/` would be swept by any run
+    pointed at the directory above it, and every card in it billed twice.
+    """
+    return sidecar.scan(photos.root())
+
+
+def capture_named(key: str):
+    """The stored capture whose sidecar claims this position — `stored_captures`' index.
+
+    By the position the sidecar claims rather than by the filename, because the filename is a
+    digest now and says nothing about where the card is.
+    """
+    found = [capture for capture in stored_captures() if capture.key == key]
+    if len(found) != 1:
+        raise AssertionError(
+            f"{len(found)} stored captures claim {key!r}; `capture_named` answers for one. "
+            f"Keys on disk: {sorted(capture.key for capture in stored_captures())}"
+        )
+    return found[0]
+
+
+def run_photo(box: int, index: int) -> str:
+    """The `photo` an `identifications.json` records for this position (D172).
+
+    IT COMES OUT OF THE STORE, because that is where the name is. `identify` reads a capture
+    directory and writes down the file it actually read; under this layout that file is the
+    card's own name, so a payload composing `captures/cards/box3/0017.jpg` from a position
+    would be a fixture asserting against a layout the product no longer has — and
+    `cli/resolve.py:realign` now watches for exactly that string, refusing to rewrite a
+    cid-named path into a slot-named one.
+
+    A POSITION THE STORE HAS NEVER SEEN FALLS BACK TO THE LEGACY ADDRESS, and that is the
+    third question rather than a default. `check_listing_commands` joins a run over a position
+    nothing here ever photographed — a recovered or hand-made file, which `cli/resolve.py`
+    names as a supported case — and the only address such a file can honestly carry is the one
+    that predates the naming.
+    """
+    card = Store().read().inventory.get(master.position_key(box, index))
+    if card is None:
+        return str(capture_server.legacy_photo_path(box, index))
+    return str(capture_server.photo_target(card))
 
 
 # --------------------------------------------------------------- the command-seam fixture
@@ -548,7 +686,7 @@ def identifications_for(cards) -> dict:
         "prompt_fingerprint": "t7-seam",
         "cards": {
             master.position_key(box, index): {
-                "photo": str(capture_server.photo_path(box, index)),
+                "photo": run_photo(box, index),
                 "box": box,
                 "index": index,
                 "set_hint": None,
@@ -1154,7 +1292,7 @@ def check_photo_reclaim(checks: Checks) -> None:
             for at in (1, 3):
                 snapshot.inventory.set_state(f"3/{at}", master.SOLD)
             snapshot.inventory.retire("3/2", "damaged")
-        before = capture_server.photo_path(3, 1).read_bytes()
+        before = photo_of(3, 1).read_bytes()
         expected_digest = hashlib.sha256(before).hexdigest()
 
         plan = answers(checks, lambda: capture_server.do_box_photos(3), "the free count answers")
@@ -1179,7 +1317,7 @@ def check_photo_reclaim(checks: Checks) -> None:
             "the reclaim refuses without `confirm: true`",
         )
         checks.ok(
-            capture_server.photo_path(3, 1).is_file(),
+            photo_of(3, 1).is_file(),
             "and the refusal deleted nothing",
         )
         refusal(
@@ -1207,16 +1345,16 @@ def check_photo_reclaim(checks: Checks) -> None:
                 "and reports what went, by key and by byte",
             )
         checks.ok(
-            not capture_server.photo_path(3, 1).is_file()
-            and not capture_server.photo_path(3, 3).is_file(),
+            not photo_of(3, 1).is_file()
+            and not photo_of(3, 3).is_file(),
             "the two sold cards' photographs are gone",
         )
         checks.ok(
-            capture_server.photo_path(3, 2).is_file() and capture_server.photo_path(3, 4).is_file(),
+            photo_of(3, 2).is_file() and photo_of(3, 4).is_file(),
             "the retired card's and the on-hand card's are not",
         )
         checks.ok(
-            capture_server.sidecar_path(capture_server.photo_path(3, 1)).is_file(),
+            capture_server.sidecar_path(photo_of(3, 1)).is_file(),
             "the sidecar stays — it is the operator's claims, a few hundred bytes, and inert "
             "without a photograph beside it",
         )
@@ -1287,7 +1425,7 @@ def check_photo_reclaim(checks: Checks) -> None:
         payload = {"cards": {
             "3/1": {"box": 3, "index": 1, "photo_sha256": expected_digest},
             "3/4": {"box": 3, "index": 4,
-                    "photo_sha256": hashlib.sha256(capture_server.photo_path(3, 4).read_bytes()).hexdigest()},
+                    "photo_sha256": hashlib.sha256(photo_of(3, 4).read_bytes()).hexdigest()},
         }}
         _, moved, departed, unverified = resolve.realign(payload)
         checks.equal(
@@ -1318,7 +1456,11 @@ def check_server_routes(checks: Checks) -> None:
     checks.note("SERVER ROUTES — server/capture_server.py")
 
     with isolated_home():
-        status, body = capture_server.do_capture(capture_payload(3))
+        # HELD, because the bytes are the assertion below and every capture now carries its
+        # own — the card is NAMED by the sha256 of its photograph (D172), so no two captures
+        # in one store may send the same blob and no constant can stand in for one.
+        first_payload = capture_payload(3)
+        status, body = capture_server.do_capture(first_payload)
         checks.equal(status, HTTPStatus.CREATED, "a first capture answers 201")
         checks.equal(body["key"], "3/1", "and reports the position it allocated")
         checks.ok(body["new_box"], "and flags the box as new")
@@ -1344,10 +1486,16 @@ def check_server_routes(checks: Checks) -> None:
             replayed_again["key"], replayed["key"], "and returns the original position"
         )
 
-        photo = capture_server.photo_path(3, 1)
-        checks.ok(photo.is_file(), "the photo is on disk at its position-derived path")
+        photo = photo_of(3, 1)
+        checks.ok(
+            photo.is_file(),
+            "the photo is on disk at the path derived from the CARD'S NAME — not from its "
+            "position, which is a lookup in front of that path now (D172)",
+        )
         served, tag = capture_server.do_photo(3, 1)
-        checks.equal(served, JPEG, "GET /photo returns the stored bytes")
+        checks.equal(
+            served, sent_image(first_payload), "GET /photo returns the stored bytes"
+        )
         checks.ok(
             tag.startswith('"') and tag.endswith('"') and len(tag) == 34,
             "and a quoted strong ETag beside them — the validator that lets a browser find "
@@ -1595,7 +1743,7 @@ def check_undo(checks: Checks) -> None:
         for _ in range(3):
             capture_server.do_capture(capture_payload(3, set_hint="sv9", variant="holo"))
 
-        photo = capture_server.photo_path(3, 3)
+        photo = photo_of(3, 3)
         sidecar_file = capture_server.sidecar_path(photo)
         checks.ok(
             photo.is_file() and sidecar_file.is_file(),
@@ -1619,7 +1767,7 @@ def check_undo(checks: Checks) -> None:
             "and so is the sidecar, which is what carried the set hint and the toggle",
         )
         checks.equal(
-            len(sidecar.scan(capture_server.captures_root())),
+            len(stored_captures()),
             2,
             "so scan() now finds two captures — the undone card costs nothing to identify",
         )
@@ -1712,7 +1860,7 @@ def check_undo(checks: Checks) -> None:
             )
         checks.ok(
             Store().read().inventory.get("3/3") is not None
-            and capture_server.photo_path(3, 3).is_file(),
+            and photo_of(3, 3).is_file(),
             "and the refusal reached neither the record nor the photo",
         )
 
@@ -1777,7 +1925,7 @@ def check_undo(checks: Checks) -> None:
         )
         checks.ok(
             Store().read().inventory.get("3/2") is not None
-            and capture_server.photo_path(3, 2).is_file(),
+            and photo_of(3, 2).is_file(),
             "and the refusal reached neither the record nor the photo",
         )
         # The hold's own refusal, on the route that reaches identified cards: the remove
@@ -1872,7 +2020,9 @@ def check_undo(checks: Checks) -> None:
                     box=queued["box"],
                     index=queued["index"],
                     label=queued["label"],
-                    photo=str(capture_server.photo_path(queued["box"], queued["index"])),
+                    # The capture's own answer, which is where the path came from in the
+                    # first place — no second derivation, and no store read inside a write.
+                    photo=queued["photo"],
                     reason="identification_failed",
                     market="12.00",
                 )
@@ -2776,7 +2926,7 @@ def check_remove_and_box_delete(checks: Checks) -> None:
             snapshot.review.upsert(
                 queues.QueueEntry(
                     position="3/5", box=3, index=5, label=join.Position(3, 5).label,
-                    photo=str(capture_server.photo_path(3, 5)),
+                    photo=str(photo_of(3, 5)),
                     reason="metadata_detection_disagreement", market="2.00",
                 )
             )
@@ -2859,6 +3009,18 @@ def check_remove_and_box_delete(checks: Checks) -> None:
             snapshot.inventory.listing("8608859").set(master.PUSHED, 0)
 
         # ------------------------------------------------------- the successful shift
+        # WHAT THE CONTENT STORE HOLDS BEFORE THE SHIFT, AND UNDER WHICH NAMES (D172). The
+        # payoff of filing a photograph under its card's own name is that a renumber renames
+        # NOTHING, so the way to assert it is as an absence — afterwards the store holds
+        # exactly this set less the one card that was deleted. Read here rather than composed
+        # afterwards, because a set computed from the post-shift store could not fail.
+        before_names = set(photos.stored_names())
+        target_cid = Store().read().inventory.get("3/2").cid
+        # And the path the queue entry names, before anything is touched. It has to come out
+        # the other side byte-identical: the entry follows the card, and the card's
+        # photograph has not been anywhere.
+        entry_photo_before = Store().read().review.entries["3/5"].photo
+
         body = capture_server.do_remove_card(3, 2, {"capture_id": "r2"})
         checks.equal(body["deleted"], "3/2", "the remove answers with the position it deleted")
         checks.equal(body["shifted"], 3, "and how many records slid down one index")
@@ -2875,37 +3037,49 @@ def check_remove_and_box_delete(checks: Checks) -> None:
             ["r3", "r4", "r5"],
             "capture_ids ride along untouched — they name photographs, and no photograph changed",
         )
-        photos = sorted(
-            p.name for p in capture_server.photo_path(3, 1).parent.glob("*.jpg")
-        )
         checks.equal(
-            photos,
-            ["0001.jpg", "0002.jpg", "0003.jpg", "0004.jpg"],
-            "the photos were renamed down with their records — no file left at the top slot",
+            sorted(photos.stored_names()),
+            sorted(before_names - {target_cid}),
+            "NOT ONE PHOTOGRAPH WAS RENAMED, and that absence is what D172 bought. The four "
+            "cards that slid down an index are filed under their own names, which did not "
+            "move, so only the deleted card's file left the content store. The loop this "
+            "replaces renamed N-k photographs and rewrote N-k sidecars for a deletion at "
+            "index k — 537 of each on the owner's box 2, to remove one junk capture",
         )
         checks.ok(
             all(
-                capture_server.photo_path(3, idx).read_bytes()[3:4] == bytes([byte])
+                photo_of(3, idx).read_bytes()[3:4] == bytes([byte])
                 for idx, byte in ((2, 3), (3, 4), (4, 5))
             ),
-            "and each renamed photo still holds ITS OWN card's bytes — a photograph "
-            "attributed to the wrong record is the failure a position label may never cause",
+            "and every card still reads ITS OWN bytes through its new position — a "
+            "photograph attributed to the wrong record is the failure a position label may "
+            "never cause, and the lookup is what has to follow the card now that the "
+            "filename cannot",
         )
         sidecar_now = json.loads(
-            capture_server.sidecar_path(capture_server.photo_path(3, 4)).read_text("utf-8")
+            capture_server.sidecar_path(photo_of(3, 4)).read_text("utf-8")
         )
         checks.equal(
-            sidecar_now.get("index"), 4,
-            "the sidecar is regenerated at the new index — the reader can never find one "
-            "whose `index` disagrees with its filename",
+            sidecar_now.get("index"), 5,
+            "AND THE SIDECAR STILL CLAIMS THE INDEX ITS CAPTURE CLAIMED, which is the reverse "
+            "of what this case asserted while the filename WAS the index. The claims file "
+            "travels with the photograph, and its `index` is a historical fact about one "
+            "capture rather than an address: the index a run reads is materialised from the "
+            "store when the scope directory is built (`server/pipeline_routes.py` §0.4), so "
+            "there is nothing left on disk for a shift to correct",
         )
         moved_entry = after.review.entries.get("3/4")
         checks.ok(
             moved_entry is not None
             and after.review.entries.get("3/5") is None
             and moved_entry.index == 4
-            and moved_entry.photo == str(capture_server.photo_path(3, 4)),
-            "the queue entry is re-keyed: position, box, index, and the photo path it names",
+            and moved_entry.photo == entry_photo_before
+            and moved_entry.photo == str(photo_of(3, 4)),
+            "the queue entry is re-keyed — position, box and index — while THE PHOTO PATH IT "
+            "NAMES DOES NOT MOVE, which is the same absence one register out: the entry "
+            "followed the card, and the card's photograph never went anywhere. It is still "
+            "this card's own path, asserted both ways so a re-point to some other card's "
+            "file could not pass as 'unchanged'",
             f"entry was: {moved_entry!r}",
         )
         checks.ok(
@@ -3046,16 +3220,25 @@ def check_remove_and_box_delete(checks: Checks) -> None:
             f"body was: {body}",
         )
         checks.ok(
-            body["registry_deleted"] and body["directory_removed"],
-            "and the registry entry and the emptied photo directory went with it",
+            body["registry_deleted"] and not body["directory_removed"],
+            "and the registry entry went with it. `directory_removed` is FALSE, and that is "
+            "the honest answer rather than a regression: it reports on `captures/cards/box3`, "
+            "which a store written since D172 never creates — every photograph is filed by "
+            "its card's name under one sharded root. The field is kept because a store part "
+            "way through the relocation still has those directories to leave behind",
+            f"body was: {body}",
         )
         after = Store().read()
+        transplant = after.inventory.get(moved_to)
         checks.ok(
             not after.inventory.records_in(3)
             and after.inventory.boxes.get("3") is None
-            and not capture_server.photo_path(3, 1).parent.exists(),
-            "a deleted box is a box the store has never heard of — box 9, holding the "
-            "card that moved out before the delete, is untouched",
+            and photos.stored_names() == [transplant.cid],
+            "a deleted box is a box the store has never heard of, and the one photograph "
+            "left in the content store is the one belonging to the card that moved out "
+            "before the delete — box 9 is untouched. Asserted over the store's own names "
+            "rather than over a box directory, because there is no longer any such thing",
+            f"names left: {photos.stored_names()}",
         )
         checks.ok(
             any(
@@ -3616,7 +3799,7 @@ def check_queues(checks: Checks) -> None:
         checks.equal(row["reason"], "metadata_detection_disagreement", "and the reason code")
         checks.equal(
             row["photo"],
-            str(capture_server.photo_path(3, 3)),
+            run_photo(3, 3),
             "photo is the path on the Mac, exactly as Card.photo is — GET /photo is D6's "
             "route and the only way a browser sees it",
         )
@@ -5048,7 +5231,7 @@ def check_mark_sold(checks: Checks) -> None:
             "into it, which is what makes a printed label true a year later",
         )
         checks.ok(
-            capture_server.photo_path(3, 1).is_file(),
+            photo_of(3, 1).is_file(),
             "and the capture photo survives too: a sold card is what the pull preview "
             "shows (D6), and what makes a dispute answerable afterwards",
         )
@@ -5428,7 +5611,7 @@ def check_retire(checks: Checks) -> None:
             "and the position is a permanent gap — the next capture steps past it",
         )
         checks.ok(
-            capture_server.photo_path(3, 1).is_file(),
+            photo_of(3, 1).is_file(),
             "and the capture photo survives, which is what lets the retirement be "
             "questioned later",
         )
@@ -5735,10 +5918,15 @@ def check_reshoot(checks: Checks) -> None:
     }
 
     with isolated_home():
-        capture_server.do_capture(
-            capture_payload(3, set_hint="sv9", variant="holo", capture_id="t7-shot-one")
+        # HELD FOR THE SAME REASON `check_server_routes` HOLDS ITS FIRST BODY: the bytes are
+        # what this section compares, and a card is named by the sha256 of its own
+        # photograph (D172), so there is no shared constant to compare against any more.
+        shot_one = capture_payload(
+            3, set_hint="sv9", variant="holo", capture_id="t7-shot-one"
         )
-        capture_server.do_capture(capture_payload(3, capture_id="t7-shot-two"))
+        capture_server.do_capture(shot_one)
+        shot_two = capture_payload(3, capture_id="t7-shot-two")
+        capture_server.do_capture(shot_two)
 
         # ----------------------------------------------------------------- the refusals
         refusal(
@@ -5788,7 +5976,7 @@ def check_reshoot(checks: Checks) -> None:
         # A sidecar that disagrees with the record — the drift this route must repair
         # rather than preserve. Written directly, because nothing in the product can
         # produce it: the seed is the hazard, not a path.
-        photo = capture_server.photo_path(3, 1)
+        photo = photo_of(3, 1)
         drifted = capture_server.sidecar_path(photo)
         files.write_json(
             drifted, {"box": 3, "index": 1, "variant": "normal", "set_hint": "swsh1"}
@@ -5800,7 +5988,7 @@ def check_reshoot(checks: Checks) -> None:
         # hand-written sidecar in the old shape is still read — which is the whole reason
         # there is no migration.
         checks.equal(
-            sidecar.scan(capture_server.captures_root())[0].metadata_finish,
+            capture_named("3/1").metadata_finish,
             ("normal",),
             "the seeded drift is REAL — the reader believes the drifted sidecar, which "
             "is what makes the repair below a repair and not a restatement",
@@ -5809,7 +5997,9 @@ def check_reshoot(checks: Checks) -> None:
         before = Store().read().inventory.get("3/1")
         captured_at = before.captured_at
         checks.equal(before.capture_id, "t7-shot-one", "and the record still names shot one")
-        checks.equal(photo.read_bytes(), JPEG, "and the first photograph is on disk")
+        checks.equal(
+            photo.read_bytes(), sent_image(shot_one), "and the first photograph is on disk"
+        )
 
         body = capture_server.do_reshoot(3, 1, dict(reshoot_payload))
 
@@ -5817,25 +6007,26 @@ def check_reshoot(checks: Checks) -> None:
             photo.read_bytes(),
             JPEG_RESHOT,
             "THE BYTES ON DISK ARE THE NEW PHOTOGRAPH'S — same path, same position, "
-            "allocator never involved",
-        )
-        jpgs = sorted(
-            p.name for p in photo.parent.iterdir() if p.suffix == capture_server.PHOTO_SUFFIX
+            "allocator never involved. The path is the same because `cid` is FROZEN at issue "
+            "(D172): a re-shoot replaces the bytes behind a name that does not move, which "
+            "is also the one place a card's name and its photograph's digest may differ",
         )
         checks.equal(
-            jpgs,
-            sorted({photo.name, capture_server.photo_path(3, 2).name}),
+            sorted(photos.stored_names()),
+            sorted({photo.stem, photo_of(3, 2).stem}),
             "and the OLD PHOTO IS GONE — replaced, not archived (D26): an archived copy "
-            "under the capture root would be scanned as a third capture and billed as one",
+            "would be scanned as a third capture and billed as one. Asserted over the whole "
+            "content store rather than one directory's listing, because two cards' shards "
+            "are only the same directory by coincidence of their first two hex",
         )
         checks.equal(
-            len(sidecar.scan(capture_server.captures_root())),
+            len(stored_captures()),
             2,
             "scan() still finds exactly two captures, so the re-shoot costs one "
             "identification, not two",
         )
 
-        repaired = sidecar.scan(capture_server.captures_root())[0]
+        repaired = capture_named("3/1")
         checks.equal(
             repaired.set_hint,
             "sv9",
@@ -5954,8 +6145,8 @@ def check_reshoot(checks: Checks) -> None:
                 f"message was: {caught}",
             )
         checks.equal(
-            capture_server.photo_path(3, 2).read_bytes(),
-            JPEG,
+            photo_of(3, 2).read_bytes(),
+            sent_image(shot_two),
             "and neither refusal touched the photograph",
         )
 
@@ -6474,7 +6665,7 @@ def check_sidecar_seam(checks: Checks) -> None:
         capture_server.do_capture(capture_payload(3))
         capture_server.do_capture(capture_payload(4, variant="holo"))
 
-        captures = sidecar.scan(capture_server.captures_root())
+        captures = stored_captures()
         checks.equal(len(captures), 3, "every stored capture is found by scan()")
         checks.ok(
             all(c.has_position for c in captures),
@@ -6517,7 +6708,7 @@ def check_sidecar_seam(checks: Checks) -> None:
         # THE REGRESSION. A correction that stops at inventory.json never reaches the
         # variant ladder. This was broken while passing its own route test.
         capture_server.do_put_card(3, 2, {"variant": "holo"})
-        corrected = sidecar.scan(capture_server.captures_root())[1]
+        corrected = capture_named("3/2")
         checks.equal(
             corrected.metadata_finish,
             ("holo",),
@@ -6525,7 +6716,7 @@ def check_sidecar_seam(checks: Checks) -> None:
         )
 
         capture_server.do_put_card(3, 1, {"set_hint": "sv3pt5"})
-        after = sidecar.scan(capture_server.captures_root())[0]
+        after = capture_named("3/1")
         checks.equal(after.set_hint, "sv3pt5", "a hint-only PUT updates the hint")
         checks.equal(
             after.metadata_finish,
@@ -6534,14 +6725,17 @@ def check_sidecar_seam(checks: Checks) -> None:
         )
 
         # The money rule, both directions. `scan()` counts photos, and every photo it finds
-        # is a paid Batch request. The capture root is captures/cards/ and not captures/ so
-        # that screenshot renders under captures/ui/ are never scanned as paid captures.
-        stray = capture_server.captures_root() / "box3" / "stray.png"
+        # is a paid Batch request. The root it walks is the CONTENT STORE now (D172), and
+        # `store/photos.py` argues at length why that store is a SIBLING of `captures/`
+        # rather than a directory inside it: one under `captures/cards/` would be swept by
+        # any run pointed at the directory above it, and every card in it billed twice.
+        stray = photos.root() / "aa" / "stray.png"
+        stray.parent.mkdir(parents=True, exist_ok=True)
         stray.write_bytes(b"\x89PNG\r\n\x1a\n")
         checks.equal(
-            len(sidecar.scan(capture_server.captures_root())),
+            len(stored_captures()),
             4,
-            "a stray .png under the capture root WOULD be scanned — 4 paid requests, not 3",
+            "a stray .png under the content store WOULD be scanned — 4 paid requests, not 3",
         )
         stray.unlink()
 
@@ -6549,9 +6743,10 @@ def check_sidecar_seam(checks: Checks) -> None:
         render.parent.mkdir(parents=True, exist_ok=True)
         render.write_bytes(b"\x89PNG\r\n\x1a\n")
         checks.equal(
-            len(sidecar.scan(capture_server.captures_root())),
+            len(stored_captures()),
             3,
-            "but a render under captures/ui/ is outside the root and costs nothing",
+            "but a render under captures/ui/ is outside the root and costs nothing — and so "
+            "is every photograph, now that the two roots are siblings",
         )
 
         # ------------------------------------- a SET-VALUED claim, wire to record to reader
@@ -6582,7 +6777,7 @@ def check_sidecar_seam(checks: Checks) -> None:
 
         raw = json.loads(
             capture_server.sidecar_path(
-                capture_server.photo_path(3, 3)
+                photo_of(3, 3)
             ).read_text("utf-8")
         )
         checks.equal(
@@ -6593,7 +6788,7 @@ def check_sidecar_seam(checks: Checks) -> None:
         )
         empty_raw = json.loads(
             capture_server.sidecar_path(
-                capture_server.photo_path(3, 4)
+                photo_of(3, 4)
             ).read_text("utf-8")
         )
         checks.ok(
@@ -6603,7 +6798,7 @@ def check_sidecar_seam(checks: Checks) -> None:
             f"sidecar was: {empty_raw}",
         )
 
-        both = {c.key: c for c in sidecar.scan(capture_server.captures_root())}
+        both = {c.key: c for c in stored_captures()}
         checks.equal(
             both["3/3"].metadata_finish,
             ("normal", "reverse_holo"),
@@ -6617,11 +6812,11 @@ def check_sidecar_seam(checks: Checks) -> None:
             "...and no claim stays None across the whole hop, so rungs 2 and 3 stay live",
         )
 
-        # The money rule, both directions. `scan()` counts photos, and every photo it finds
-        # is a paid Batch request. The capture root is captures/cards/ and not captures/ so
-        # that screenshot renders under captures/ui/ are never scanned as paid captures.
-        stray = capture_server.captures_root() / "box3" / "stray.png"
-        stray.write_bytes(b"\x89PNG\r\n\x1a\n")
+        # A SECOND COPY OF THE MONEY-RULE BLOCK STOOD HERE AND ASSERTED NOTHING: it wrote a
+        # stray `.png` into the capture root and ended the function, with no `checks` call
+        # after it and no `unlink`. The live copy is forty lines up and now reads the content
+        # store, which is the root that costs money. Deleted rather than repointed, because
+        # two identical seeds and one assertion is the shape that made it invisible.
 
 
 # ------------------------------------------------------------------ the capture-claim chain
@@ -6789,7 +6984,7 @@ def check_game_and_note_seam(checks: Checks) -> None:
 
     def raw_sidecar(box: int, index: int) -> dict:
         return json.loads(
-            capture_server.sidecar_path(capture_server.photo_path(box, index)).read_text(
+            capture_server.sidecar_path(photo_of(box, index)).read_text(
                 "utf-8"
             )
         )
@@ -6813,7 +7008,7 @@ def check_game_and_note_seam(checks: Checks) -> None:
             "a note is not a capture field: nothing about a capture waits for a keyboard",
         )
 
-        claimed, unclaimed = sidecar.scan(capture_server.captures_root())[:2]
+        claimed, unclaimed = capture_named("6/1"), capture_named("6/2")
         checks.equal(claimed.game, "riftbound", "the reader identify uses reads it back")
         checks.ok(
             unclaimed.game is None,
@@ -6856,7 +7051,7 @@ def check_game_and_note_seam(checks: Checks) -> None:
             "from the record, so nothing the body did not mention is dropped",
         )
         checks.equal(
-            sidecar.scan(capture_server.captures_root())[0].note,
+            capture_named("6/1").note,
             "bent corner, top left",
             "with the note readable by identify — a note is what a misc card is described "
             "by, and nothing else in the pipeline will ever name it",
@@ -7577,7 +7772,7 @@ def check_box_claims(checks: Checks) -> None:
             "and the sold and retired records are untouched",
         )
         sidecar_now = json.loads(
-            capture_server.sidecar_path(capture_server.photo_path(6, 1)).read_text("utf-8")
+            capture_server.sidecar_path(photo_of(6, 1)).read_text("utf-8")
         )
         checks.ok(
             sidecar_now.get("variant") == ["reverse_holo"]
@@ -8218,7 +8413,7 @@ def check_consolidated_numbering(checks: Checks) -> None:
             "rendering, and the allocator never heard about it",
         )
         checks.ok(
-            capture_server.photo_path(3, 4).is_file()
+            photo_of(3, 4).is_file()
             and inventory.get("3/4") is not None
             and inventory.get("3/3") is not None,
             "the photograph is at the slot it was written to, and both records survive: "
@@ -8386,9 +8581,18 @@ def check_concurrency(checks: Checks) -> None:
                     list(range(1, count + 1)),
                     f"{count} simultaneous captures: indices are contiguous and unique",
                 )
-                photos = sorted(capture_server.captures_root().glob(f"box{count}/*.jpg"))
+                # THROUGH THE STORE, BECAUSE A BOX HAS NO DIRECTORY OF ITS OWN ANY MORE
+                # (D172). This globbed `box{count}/*.jpg`; photographs are filed under their
+                # cards' names in one sharded root, so the only way to ask "one photo per
+                # card in this box" is to walk the box and look each card's name up. That is
+                # also the stronger question — a file per card rather than a file count.
+                stored = [
+                    index
+                    for index in range(1, count + 1)
+                    if photo_of(count, index).is_file()
+                ]
                 checks.equal(
-                    len(photos), count, f"{count} simultaneous captures: one photo each"
+                    len(stored), count, f"{count} simultaneous captures: one photo each"
                 )
         finally:
             httpd.shutdown()
@@ -8584,8 +8788,12 @@ def check_origin_gate(checks: Checks) -> None:
         thread.start()
         try:
             # --- a mutating verb from an origin this server does not know ---------------
+            # THE BODY IS HELD RATHER THAN INLINED, because the assertion below is about the
+            # name those bytes WOULD have been filed under. A refused capture leaves no
+            # record, so there is no position to ask the store about afterwards.
+            refused = capture_payload(3)
             status, body, _ = request(
-                port, "POST", "/capture", origin=unknown, payload=capture_payload(3)
+                port, "POST", "/capture", origin=unknown, payload=refused
             )
             checks.equal(status, 403, "POST from an unknown origin is refused")
             checks.equal(
@@ -8605,9 +8813,11 @@ def check_origin_gate(checks: Checks) -> None:
                 "AND THE REFUSAL CHANGED NOTHING: no index was burned",
             )
             checks.ok(
-                not capture_server.photo_path(3, 4).is_file(),
+                not photo_named_by(sent_image(refused)).is_file(),
                 "and no photo was written — the gate runs before the body is read, so the "
-                "24 MB buffer for the image was never allocated either",
+                "24 MB buffer for the image was never allocated either. Asserted at the name "
+                "those bytes WOULD have been filed under (D172): a capture names its card by "
+                "hashing its own photograph, so the path is knowable from the request alone",
             )
 
             status, body, _ = request(
@@ -8636,7 +8846,7 @@ def check_origin_gate(checks: Checks) -> None:
             checks.equal(error_code(body), "origin_not_allowed", "in the same code again")
             checks.ok(
                 Store().read().inventory.get("3/3") is not None
-                and capture_server.photo_path(3, 3).is_file(),
+                and photo_of(3, 3).is_file(),
                 "and the card, its position and its photograph are all still there",
             )
 
@@ -8647,7 +8857,7 @@ def check_origin_gate(checks: Checks) -> None:
             )
             checks.ok(
                 Store().read().inventory.get("3/3") is None
-                and not capture_server.photo_path(3, 3).is_file(),
+                and not photo_of(3, 3).is_file(),
                 "and it really did the work — so the case above is the gate refusing, not "
                 "the route failing for some other reason",
             )
@@ -17444,8 +17654,13 @@ def check_pipeline_routes(checks: Checks) -> None:
     """
     with isolated_home() as home:
         # A capture directory with two real photographs, so a scope can be built from it and
-        # `sidecar.scan` has something to find. The bytes are the same tiny JPEG every other
-        # section captures with — nothing here reads a card out of them.
+        # `sidecar.scan` has something to find. THE LEGACY ADDRESS ON PURPOSE: these files
+        # are written by hand and never by the shutter, so they carry no card and no name,
+        # and `box3/0001.jpg` is exactly the shape of the corpus a store part way through
+        # the relocation still holds. All four are the same `JPEG` constant, which no
+        # capture may reuse now (a card is named by its photograph's digest, and
+        # `cards_cid` is UNIQUE) but which costs nothing here: nothing reads a card out of
+        # them and no record is ever written.
         box_dir = home / "captures" / "cards" / "box3"
         box_dir.mkdir(parents=True)
         for index in (1, 2):
@@ -20904,7 +21119,7 @@ def check_history_route(checks: Checks) -> None:
                 "prompt_fingerprint": "t7-history",
                 "cards": {
                     "7/1": {
-                        "photo": str(capture_server.photo_path(7, 1)),
+                        "photo": run_photo(7, 1),
                         "box": 7,
                         "index": 1,
                         "set_hint": None,
