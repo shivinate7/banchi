@@ -1812,6 +1812,9 @@ D158 The refusal goes where the damage is, so the primary checkout's server will
 D159 The band is copies rather than SKUs, the drawer is the first answer, and nothing on hand is dropped
 D160 An entry is a file, because two branches appending to one file collide every single time
 D161 `make check` proves the product first and its own guards last, because a failure stops the rest
+D162 The name decides a disputed number, and both readings reach the screen
+D163 The cache is keyed by the digest, so the digest is what the press computes first
+D164 The undo stack is the sitting, not the drawer, and the counter counts the sitting
 D-the-queue-is-refreshed-where-it-stands A queue entry is re-resolved where it stands, and the answer reaches the price without a second press
 ```
 
