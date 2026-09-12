@@ -1961,6 +1961,61 @@ def check_entry_budget(report: Report) -> None:
                f"{total:,} bytes of entries, {len(findings)} over {ENTRY_BUDGET:,}")
 
 
+def check_debts_headings(report: Report) -> None:
+    """Every `## ` heading in `docs/DEBTS.md` is one `_debts_section` can address.
+
+    That helper matches `## <n> — ` and returns None otherwise, and BOTH its consumers
+    tolerate a None — one with `or ""`, one with an early return. So a heading written in
+    any other shape is not a failure, it is a section that silently does not exist, and
+    every row reading that file inherits it.
+
+    MEASURED 2026-09-11: sections 20 to 24 were written `## <n>. ` — five of the file's
+    twenty-three live sections, invisible to the only reader the audit has for it, with
+    every row green throughout. Normalized the same day under `D149`;
+    this row is what stops the next one being written that way.
+
+    MECHANICAL on D16's test: a heading either parses or it does not, which is the same
+    standard `decision structure` is held to. It says nothing about what a section CONTAINS
+    — that is the check `docs/DEBTS.md` section 25 measured and declined to build.
+    """
+    target = ROOT / "docs" / "DEBTS.md"
+    if not exists(target):
+        report.add("debts headings", MECHANICAL,
+                   [Finding("docs/DEBTS.md", "does not exist.")])
+        return
+
+    findings: List[Finding] = []
+    seen: Dict[int, int] = {}
+    total = 0
+    for lineno, line in enumerate(read(target).split("\n"), 1):
+        if not line.startswith("## "):
+            continue
+        total += 1
+        good = re.match(r"^## (\d+) — \S", line)
+        if good is None:
+            findings.append(Finding(
+                f"docs/DEBTS.md:{lineno}",
+                f"`{line[:60]}` is not the `## <n> — <title>` shape "
+                f"`_debts_section` matches, so this section cannot be addressed by any "
+                f"row that reads this file, and asking for it returns None rather than "
+                f"failing.",
+            ))
+            continue
+        number = int(good.group(1))
+        if number in seen:
+            findings.append(Finding(
+                f"docs/DEBTS.md:{lineno}",
+                f"section {number} is also the heading at line {seen[number]}; "
+                f"`_debts_section({number})` returns the FIRST and the second is "
+                f"unreachable.",
+            ))
+            continue
+        seen[number] = lineno
+
+    report.add("debts headings", MECHANICAL, findings,
+               f"{total} headings, every one addressable by `_debts_section`")
+
+
 def _debts_section(number: int) -> Optional[str]:
     """The body of one `## <n> — ...` section of `docs/DEBTS.md`, or None if it is not there.
 
@@ -13279,6 +13334,7 @@ def audit(staged_only: bool) -> Report:
     check_id_claims(report)
     check_claim_vocabulary(report)
     check_entry_budget(report)
+    check_debts_headings(report)
     check_env_vars(report, docs, allowed)
     check_env_names(report)
     check_claim_decode(report)

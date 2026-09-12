@@ -1905,7 +1905,7 @@ on purpose. The `recorded deletions` audit row covers the one case a session reg
 and D133's whole-file detector covers the keep-ours merge, which restores whole blobs and so
 never depends on hunk boundaries.
 
-## 20. Two liveness oracles read a pid, and a recycled one lies to both
+## 20 — Two liveness oracles read a pid, and a recycled one lies to both
 
 **Recorded 2026-09-11 with D33's amendment**, which made the capture server hold the `Popen` of
 each identify child it spawns and reap it by polling. That closes the zombie — an unwaited child
@@ -1933,7 +1933,7 @@ argues against the CPython source rather than asserts — the eviction guard, wh
 without sixty-four spawns, and the false-alive answer the lock prevents, which is a race that
 cannot be produced on demand.
 
-## 21. The double-click guard cannot see a run started in a terminal
+## 21 — The double-click guard cannot see a run started in a terminal
 
 **Found 2026-09-11 while building D33's amendment, and older than it.**
 `server/pipeline_routes.py:_run_box` argues at length that the guard must read the box out of the
@@ -1948,7 +1948,7 @@ is one line in `cli/cmd_identify.py`: write the marker there too, which would ma
 and put every terminal run in the fallback case. Not taken here because it widens a change that
 is about a different defect, and because it wants its own T7 case.
 
-## 22. A control shrunk inside its own sticky bar is invisible to the thumb-floor sweep
+## 22 — A control shrunk inside its own sticky bar is invisible to the thumb-floor sweep
 
 **Measured 2026-09-11, while answering the CI failure that PR #252 could not.**
 `app/tests/phone.spec.ts` decides whether a probe landed on the control with
@@ -1972,7 +1972,7 @@ it wants its own measurement across all twelve routes rather than a fix smuggled
 The `mode === 'box'` sweep on `#/gallery` already asserts the box outright and would catch a
 shrunken kit component; what escapes is a screen-level control shrunk inside its own bar.
 
-## 23. A sale fixture that moves after the press is only wrong sometimes, so no check can flag it
+## 23 — A sale fixture that moves after the press is only wrong sometimes, so no check can flag it
 
 **Measured 2026-09-11, sweeping the eight sites left by `inventory.spec.ts:5074`'s fix.** A case
 in `app/tests/inventory.spec.ts` that mutates its store on the line AFTER a press is racing the
@@ -2033,79 +2033,129 @@ decisions, the code-card C entries and the build order does not reach this file'
 had not landed on main when this was written. 23 is what was next on 2026-09-11 — renumber it
 rather than another branch's, the way this file's header already rules for sections 1 to 14.
 
-## 24. A claim whose copies have sold cannot be aged, because the export never corroborated them
+## 24 — A zero reading cannot tell a sold-out listing from an import sitting in Staged
 
-`cli/resolve.py:_copies_out` ages a `pushed` claim by the SKU's sales — a copy cannot sell
-without having been listed — but **only where the export corroborates that our copies were
-live**:
+**The defect this section was opened for is FIXED**, by `D150`, the day
+after it was written. What is left is one ambiguity underneath it, and it is worth a section
+of its own rather than a line in that entry because it is the third defect to turn on the same
+missing field.
 
-    sold = (len(positions_for_sku) - len(copies_not_sold)) if read > 0 else 0
-    out[sku] = max(live, claim - sold)
+### What was fixed, so this is not read as still open
 
-With `Total Quantity` at zero the gate is off, `sold` is 0, and the claim stands at `pushed`
-forever. **On a store that has never reconciled, that is every SKU**: D87 measured 405 of 443
-listing records carrying pushed copies with `live: 0`, and the operator's own fetched export
-reports `Total Quantity` blank or `0` on every row this pipeline has ever sent.
+`cli/resolve.py:_copies_out` ages a stuck `pushed` claim by the SKU's sales only where the
+export corroborates them. It now reads the export's reading for two answers instead of one: a
+reading that reports copies LIVE vouches for every sale of the SKU, and **a reading of NOTHING
+vouches for exactly the sales it was taken AFTER** — a zero read four days after a copy sold is
+that sale's own result, not evidence the copy was never listed. The seven stranded SKUs this
+section tabulated are all offered now, Falling Star and Fizz, Trickster among them, and run
+`2026-09-11-box1-01` went from 239 of 246 SKUs and 310 copies to **246 and 317**. The report
+sentence this section also held — `nothing_to_add`'s *"every copy in this run is already listed
+or has left the box"*, false about a card sitting in the box — went with them: it was false
+because the arithmetic was.
 
-### What it costs, measured
+### The residue
 
-Run `2026-09-11-box1-01`, after `D147` fixed the ordering defect
-that was responsible for the other 52: **7 SKUs still add nothing, stranding 7 real cards.**
+**A SKU whose import landed in TCGplayer's Staged channel and never went live reads `Total
+Quantity` 0 as well.** A copy marked sold by hand against that state now ages a claim it should
+not, and the staged rows are still out there — so the next emit offers a copy of a row
+TCGplayer may already be holding.
 
-| sku | card | pushed | live | copies on hand | sold |
-|---|---|---|---|---|---|
-| 8925672 | Falling Star | 1 | 0 | 1 | `3/193` |
-| 8926007 | Blitzcrank, Impassive | 3 | 0 | 1 | `3/221`, `3/262`, `3/306` |
-| 8926047 | Tasty Faefolk | 4 | 0 | 3 | `3/249`, `3/255`, `3/258`, `3/259` |
-| 8926727 | Qiyana, Victorious | 2 | 0 | 1 | `3/236`, `3/240` |
-| 8927502 | Volibear, Relentless Storm | 1 | 0 | 1 | `3/325` |
-| 9018558 | Sterak's Gage | 1 | 0 | 1 | `3/500` |
-| 9035516 | Fizz, Trickster | 3 | 0 | 1 | `3/361`, `3/362`, `3/405` |
-
-**Every one of them has `copies_out >= len(copies_on_hand)`**, which is what makes this
-ordering-independent: the claim covers the whole shelf, so every copy is committed whichever
-copies are picked. No change to `_committed_keys` can reach them, and the ordering fix
-deliberately does not try.
-
-### Why the obvious repair is refused
-
-**Dropping the corroboration gate double-counts.** `pushed = 4, live = 0` is produced both by
-*four went live and some sold* and by *four are sitting in Staged and one was pulled by hand*,
-and those want opposite answers. D59 keeps the second as a negative case — `check_listing_commands`'
-re-emit idempotence block goes red on it — and records the refusal in as many words:
-*"a card marked sold against that state did not leave TCGplayer's hands."*
-
-**The shelf ceiling does not help either**, and this was checked rather than assumed. The
-pre-D7-amendment form `max(live, len(copies_not_sold(sku)))` gives 3 for Tasty Faefolk against
-3 on hand, and 1 for Falling Star against 1 on hand — every copy still committed. The old
-ceiling strands exactly the same seven.
-
-### The report sentence is wrong too, and is part of this debt rather than a separate one
-
-Those seven print `SkuMatch.nothing_to_add`'s *"every copy in this run is already listed or has
-left the box"*. The run's copy is neither listed nor departed, so the sentence is false about
-the card the operator is looking at — which is the shape D59 built that method to stop
-(*"a count under a false sentence is worse than no count"*).
-
-**It is not patched on its own because `SkuMatch` cannot tell this case from an ordinary
-un-reconciled re-emit.** Both have every copy committed, `live_now` at 0 and
-`pending = copies_out - live_now` equal to the whole claim; the discriminator is the SOLD
-count, which lives in the store and is not on the match. Threading it across would put a field
-on the wire for a figure nothing else reads, and it would be the wrong shape if the arithmetic
-fix below is taken. So the sentence waits for the fix rather than being separately invented.
+It is strictly narrower than what the gate refused before, which refused every sale under a
+zero reading, and the direction of the trade was the operator's: 58 copies of real backstock across 32 SKUs
+stranded against an unmeasured number of staged rows on a store whose operator does not stage
+by hand. **Nothing has ever measured how often the residual case occurs**, and that is the
+honest statement of it — `staged` is written only by `reconcile`, which this operator does not
+run, so the store cannot tell the two apart even in hindsight.
 
 ### What closes it
 
 **A marker that a copy actually reached an import file** — D59's own named reopener, one field
 on `Card` written by `cmd_emit`'s push loop beside the `sku` stamp. With it the committed set is
-read rather than inferred, a sold copy that carries the marker ages the claim without needing
-the export's word, and one that does not carry it cannot. That is the same field
-`D147` names as its reopener, and this is the second defect to
-turn on not having it.
+READ rather than inferred, and a sale of a copy carrying the marker ages the claim on the
+copy's own evidence rather than on a reading's silence. **This is the third entry to turn on
+not having it**, after D147 and the defect above, which is the argument for building it.
 
-**Or a reconcile.** `pkmnscan reconcile --live` writes `live` and the gate opens on its own.
-The operator does not run it — D59 opens on their saying so — which is why this is a debt and
-not an instruction.
+**Or a reconcile.** `pkmnscan reconcile --live` writes `live` and `staged`, and both halves of
+the ambiguity become facts. The operator does not run it, which is why this is a debt.
 
 **The number may move, and nothing allocates it.** 24 is what was next on 2026-09-11 —
 renumber it rather than another branch's, the way this file's header already rules.
+
+## 25 — A cited section number still resolves when it is the wrong section, and no check can read what a sentence is about
+
+**No work proposed.** Seven citations in this tree named section 11 for a record that has only
+ever been in section 8. They were repaired by hand on 2026-09-11 under `D149`.
+This section exists so the next session does not re-derive whether a guard was possible: it was
+looked for, measured, and declined.
+
+**The failure is that a stale or wrong section number STILL RESOLVES.** Every one of the seven
+pointed at a real section that exists and reads plausibly — section 11 is the capture server's
+concurrency debt, which is a coherent thing for a CI comment to cite and simply not what the
+sentence was about. That is `docs/map.py`'s own rule about step ids arriving in this file:
+*"a renumber leaves every one pointing at a real step that is not the one meant — which nothing
+can detect, because a stale number still resolves."*
+
+**It was a propagated wrong citation, not a renumber, and the history is unambiguous.** The flake
+record entered this file in `86e70c2` (2026-09-11) already under section 8, and section 11 was
+already the capture-server section on that same commit. Across every revision of this file,
+section 11 has only ever carried two wordings of one subject — `The capture server has no bound
+on concurrency…` and today's `…bounds concurrent requests, not threads…` — and the flake record
+has only ever been in section 8. The first wrong citation and three of its copies landed in ONE
+commit (`e06eb8a`, D136) across three files; `bc39785` (D141) then copied it into two more, and
+the Makefile took it from the same source. **So no audit row would have caught this by watching
+for a renumber**, which is the guard that would otherwise have been the obvious one to build.
+
+**This file does not renumber, and section 15 is the proof.** It was CLOSED on 2026-09-07
+(`db1903c`, D120 answered it) by deleting the heading and leaving 16 to 24 where they were. The
+hole is deliberate, it is the same discipline `docs/map.py` applies to build-order ids, and it
+means the renumber hazard is structurally absent here rather than merely unobserved.
+
+### Why no `docs-audit` row, measured rather than argued
+
+The shape a row would have to take is *the section a sentence cites must be the section that
+section is about*, and deciding what a sentence is about is semantics. The nearest mechanical
+proxy is the one this file's own section 1 already establishes for `server concurrency`: require
+an ATTRIBUTED form — compare a phrase the citation quotes against the section it names, rather
+than asking whether a bare number appears somewhere in it. **Measured over all 38 citations of a
+`docs/DEBTS.md` section in this tree, across 15 files and 11 distinct sections:**
+
+| | count |
+|---|---|
+| citations carrying any double-quoted span | 4 |
+| of those, a span that is really a quotation of the section | 2 |
+| of those, quotations that resolve TRUE against the section named | 1 |
+| wrong citations the rule would have caught, of the seven | 1 |
+
+The other three quoted spans are a code flag (`--shard=N/3 --workers=1`), an f-string fragment
+(`can — see docs/DEBTS.md section 11.`) and a slice of this very checker's own error text — all
+three would be reported as broken citations, so the rule arrives at **one catch and three false
+alarms.** The prose in this repo cites by narrating, not by quoting, and a row that is wrong three
+times for every time it is right is one the next session turns off.
+
+**And the most-repeated distinctive token cannot be matched literally at all.** Five of the seven
+said `one-in-thirteen`; this file spells it `1 in 13`, in a table cell. A containment test on that
+phrase fails against section 8 — the correct section — so the naive rule would flag the REPAIRED
+text too.
+
+**The remaining option is a hand-maintained (phrase → section) list**, which is a claim with a
+reader that is itself unread — section 4's subject exactly — and which would have to be extended
+by hand for every future pair of sections. That is the thing this file calls half-working, and it
+is not built.
+
+**What IS mechanically true and worth keeping**: all 38 citations name a section that exists, and
+`_debts_section` can now address every live section in this file. It could not until this entry:
+sections 20 to 24 were written `## N.` where that helper matches `## N — `, so five of the file's
+twenty-three live sections were invisible to the one reader the audit has for it, and any check
+built on it would have read them as absent. The headings were normalized in the same change and
+**`make docs-audit`'s `debts headings` row is what stops the next one being written that way** —
+it refuses a heading that shape and a section number used twice, because both make a section
+that silently does not exist rather than one that fails. Mutation-tested, four arms: the dotted
+form, a duplicate number, a number with no title, and an en-dash for the em-dash.
+
+**That row is a guard over this file's SHAPE and not over what a citation MEANS**, and the gap
+above is still open. The distinction is the whole of this section: a heading either parses or it
+does not, which is decidable; whether a sentence is about the capture server or about a flake is
+not.
+
+**The number may move, and nothing allocates it.** 25 is what was next on 2026-09-11 — renumber
+it rather than another branch's, the way this file's header already rules.

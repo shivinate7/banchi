@@ -9519,7 +9519,7 @@ regardless; it was never one of the three copies.
 
 ### Three changes, each proven before the next
 
-**1. Three shards, one worker each, and the worker count is the deliberate half.** The matrix runs `make design-check PW_ARGS="--shard=N/3 --workers=1"`; `--shard` splits the CASES across three runners and each still runs one worker. `workers` was not raised, and the reason is docs/DEBTS.md section 11: a one-in-thirteen red whose only known mechanism is "the suite around it" — the case passes 555 times outside the suite on the box it fails in — and more workers on one box is more suite around it. The owner ranked flakes beside wall-clock, so the lever that buys wall-clock by widening the suite is the one lever not pulled. That section already records three shards of one worker as the shape the runner was measured in (240 of 240, 315 of 315). `PW_ARGS` is the Makefile's new way to hand Playwright a flag: `ARGS` reaches `scripts/suite-lock.py` and stops at its `--`, and until this entry nothing could reach `playwright test` at all. `make docs-audit`'s `verdict file` row still reconciles both recipes, since each shard leaves its own `.serve/design-check.json` on its own runner. The failure-trace artifact is named per shard, or the second red shard's upload collides with the first's.
+**1. Three shards, one worker each, and the worker count is the deliberate half.** The matrix runs `make design-check PW_ARGS="--shard=N/3 --workers=1"`; `--shard` splits the CASES across three runners and each still runs one worker. `workers` was not raised, and the reason is docs/DEBTS.md section 8: a one-in-thirteen red whose only known mechanism is "the suite around it" — the case passes 555 times outside the suite on the box it fails in — and more workers on one box is more suite around it. The owner ranked flakes beside wall-clock, so the lever that buys wall-clock by widening the suite is the one lever not pulled. That section already records three shards of one worker as the shape the runner was measured in (240 of 240, 315 of 315). `PW_ARGS` is the Makefile's new way to hand Playwright a flag: `ARGS` reaches `scripts/suite-lock.py` and stops at its `--`, and until this entry nothing could reach `playwright test` at all. `make docs-audit`'s `verdict file` row still reconciles both recipes, since each shard leaves its own `.serve/design-check.json` on its own runner. The failure-trace artifact is named per shard, or the second red shard's upload collides with the first's.
 
 **2. The seven sleeps become a fake clock, installed before the first navigation and only ever advanced.** `page.clock.install()` with no fixed time: measured against 1.58 with a probe page rather than assumed, the installed clock starts at the real time and keeps ticking at the real pace — a 500ms interval fired on schedule under it — so the 63 `toLocaleDateString` sites and every stubbed wire draw today. `page.clock.runFor(n)` replaces `waitForTimeout(n)` with the SAME `n`: it fires every timer and interval due inside the span, in order, with `Date.now()` moving in step. The sampled windows, the sample counts and the expected values are untouched, and `brand.spec.ts` keeps its sentence that the window is deliberately not derived from the app's constants — a fake clock advanced by an explicit number honours that just the same.
 
@@ -9550,11 +9550,13 @@ regardless; it was never one of the three copies.
 
 **The gate's lookup half is proven on the runner and the record half is not, and the reason is main's.** Both dispatches printed `0 unexpired pass record(s)` for their tree and released the matrix, and `design-check-passed` was correctly SKIPPED when a shard went red. It went red on `phone.spec.ts`'s thumb-floor case at 390, which main's own run at `591285b` fails on Linux too — PR #252's fix for it was red on the runner at the time of writing — so no tree that includes today's main has had a green matrix to upload a record from. The upload is `actions/upload-artifact@v4` with a name computed by the job, and it runs on this PR's own check the first time main's Linux reds are fixed and merged in; a re-dispatch of the same tree then prints `1 unexpired pass record(s)`. Reported as unexercised rather than claimed.
 
-**One more red was seen and is main's, not this entry's**: `inventory.spec.ts:5074`'s D132 case failed on main's push run and on the first dispatch's shard 2, and passed on the second dispatch — a `toHaveText` over the walk's position cells, not the Escape shape docs/DEBTS.md section 11 records. Written down here because it is a second shape, and left to that section.
+**One more red was seen and is main's, not this entry's**: `inventory.spec.ts:5074`'s D132 case failed on main's push run and on the first dispatch's shard 2, and passed on the second dispatch — a `toHaveText` over the walk's position cells, not the Escape shape docs/DEBTS.md section 8 records. Written down here because it is a second shape, and left to that section.
 
 ### What is left, and flagged rather than done
 
 **Branch protection names no required status check.** `gh api repos/shivinate7/banchi/branches/main/protection` shows `checks: []`: a PR is required and a red CI blocks nothing today. Making `check` and the three shards required is a settings change on GitHub, which is the owner's, not a session's.
+
+**CLOSED 2026-09-11, and half of it was declined rather than done** (`D149`). The owner made `check` and `revert-guard` required contexts; `strict` is false and `required_approving_review_count` is 0. **The three shards were deliberately NOT made required**, and the reason is a naming fact this entry could not have known when it was written: D141 gave the job two shapes, so it reports `design-check (1..3)` when the matrix runs and a single `design-check` when `browser-scope` skips it, and neither name is present in both. `design-check-passed` is present in both and is `needs: design-check` under an implicit `success()` — a failed shard makes it `skipped`, and a skipped required check is satisfied. Requiring it would install a gate that is green exactly when the suite is red. CLAUDE.md's D42 paragraph carries the standing form.
 
 **Whether the runner minutes are billed at all is unverified.** The billing endpoint needs a `user` token scope this machine's `gh` lacks, and the per-run timing endpoint reports zero billable milliseconds; whether the ~6,800 minutes a month the old shape projected were drawn against Pro's included 3,000 is not known either way, and this entry does not assert it. 
 ---
@@ -10081,7 +10083,7 @@ reader decides it.
 
 **Replayed over main's last 14 first-parent merges with `python3 scripts/browser-scope.py history 14`, the night this landed: 5 would run the matrix and 9 would skip it.** The five are #258, #259, #253, the thumb-floor fix under `app/src/BoxBrowse.css`, and D136's own commit, which touched the workflow. Two of the nine — #266 and D137's #255 — touched the `Makefile` and skip only because the Makefile entry is narrowed to the `design-check` recipe's own text; whole-file, they would have run, and every third merge here touches the Makefile.
 
-**The cost argument evaporated the same night, and the entry stands on what is left.** The owner made the repository public before this merged, and Actions minutes on a public repository are free. What survives: a docs-only pull request's whole verdict lands in about 100 seconds instead of eight and a half minutes; every needless matrix run is a draw against docs/DEBTS.md section 11's one-in-thirteen red — over the 14 merges replayed above, nine draws for changes that could not have caused one, each red costing a re-run and a session's attention; and three shards per push across seven open pull requests queue behind one another on the account's concurrent-job cap. The requirement that was load-bearing — that the list has a mechanical reader — was never about cost.
+**The cost argument evaporated the same night, and the entry stands on what is left.** The owner made the repository public before this merged, and Actions minutes on a public repository are free. What survives: a docs-only pull request's whole verdict lands in about 100 seconds instead of eight and a half minutes; every needless matrix run is a draw against docs/DEBTS.md section 8's one-in-thirteen red — over the 14 merges replayed above, nine draws for changes that could not have caused one, each red costing a re-run and a session's attention; and three shards per push across seven open pull requests queue behind one another on the account's concurrent-job cap. The requirement that was load-bearing — that the list has a mechanical reader — was never about cost.
 
 ### What already existed, and how the two gates compose
 
@@ -10699,9 +10701,9 @@ They asked whether this was the `--quantity` control amended into D7 the same da
 
 **Seven SKUs still add nothing, and they are a different defect: a claim `_copies_out` cannot age.** `pushed` is stuck, the copies actually sent have SOLD, and `_copies_out` only ages a claim the export corroborates — with `Total Quantity` at 0 the gate is off, so the claim still covers the whole shelf. No ordering can reach them: `copies_out >= len(copies_on_hand)` for all seven, so every copy is committed whichever ones are picked.
 
-That guard is load-bearing, not defensive — D59 records that dropping it takes `check_listing_commands`' re-emit idempotence case red — and separating a Staged copy pulled by hand from a Live copy that sold needs information this pipeline does not have. **Recorded as `docs/DEBTS.md` §24 with the measurement, rather than half-fixed.**
+That guard is load-bearing, not defensive — D59 records that dropping it takes `check_listing_commands`' re-emit idempotence case red — and separating a Staged copy pulled by hand from a Live copy that sold needs information this pipeline does not have. **Recorded as `docs/DEBTS.md` §24 with the measurement, rather than half-fixed.** *(Fixed the next day by `D150`: the export answers a second question, and all seven are offered. The measurement above is what this branch left and is not rewritten.)*
 
-**Their report sentence is still wrong and is deliberately not patched.** Those seven go on printing *"every copy in this run is already listed or has left the box"*, which is false about the run's copy. `SkuMatch` cannot tell them from an ordinary un-reconciled re-emit — both read `pending = copies_out - live_now` with `live_now` at zero — so a true sentence needs the sold count threaded onto the match, which is new surface area on the wire for a figure nothing else reads. It belongs with the arithmetic fix, and §24 carries both.
+**Their report sentence is still wrong and is deliberately not patched.** *(It went with the arithmetic — it was false because the arithmetic was.)* Those seven go on printing *"every copy in this run is already listed or has left the box"*, which is false about the run's copy. `SkuMatch` cannot tell them from an ordinary un-reconciled re-emit — both read `pending = copies_out - live_now` with `live_now` at zero — so a true sentence needs the sold count threaded onto the match, which is new surface area on the wire for a figure nothing else reads. It belongs with the arithmetic fix, and §24 carries both.
 
 ### What would reopen this
 
@@ -10756,7 +10758,7 @@ That guard is load-bearing, not defensive — D59 records that dropping it takes
 
 **What it does not cover is the expensive half.** `design-check` is not a required context, so a merge is free to proceed while three browser shards are still running or already red. That is the half that takes 8.4 minutes and the half D136 and D141 spend their gates on, and the wrapper's wait is the only thing that sees it today.
 
-**Requiring the shards is not one settings change away, and the reason is a fifth instance of this entry's own sentence.** The matrix reports `design-check (1)`, `(2)`, `(3)` when it runs and a single `design-check` when `browser-scope` skips it, so the shard names are not a fixed set — measured across `0f166b8` and `3ee3b00`. There IS a fixed name in both shapes, `design-check-passed`, and it looks like the aggregator to require. **It is not safe to require as written**: it is `needs: design-check` under the implicit `success()`, so a FAILED shard makes it `skipped` rather than `failed`, and a skipped check run is not a failing one. A guard that cannot tell "the shards passed" from "the shards never reported" is the same defect at the CI layer, and requiring that context would install it. **This is recorded as a finding, not a change** — nothing here touches the workflow or the protection settings. **And it is not queued work**: the session that turned the required contexts on reports the owner ruling separately against requiring the browser suite at all, on the ground that a flaky gate teaches a reader to reach for `--admin`. That rate is real and open — 1 in 13 completed `design-check` jobs since D128 merged, whose only known mechanism is "the suite around it" (docs/DEBTS.md §8 — not §11, the capture-server section. Measured 2026-09-12: of nine citations of §11 in the tree, seven meant §8 and two were right, so a blanket substitution would have broken the two. Repaired separately the same night; the direction was a propagated copy rather than a renumber). So the aggregator's skipped-for-failed reading is a trap to know about rather than a defect to fix, and a session proposing the fix should read this paragraph first.
+**Requiring the shards is not one settings change away, and the reason is a fifth instance of this entry's own sentence.** The matrix reports `design-check (1)`, `(2)`, `(3)` when it runs and a single `design-check` when `browser-scope` skips it, so the shard names are not a fixed set — measured across `0f166b8` and `3ee3b00`. There IS a fixed name in both shapes, `design-check-passed`, and it looks like the aggregator to require. **It is not safe to require as written**: it is `needs: design-check` under the implicit `success()`, so a FAILED shard makes it `skipped` rather than `failed`, and a skipped check run is not a failing one. A guard that cannot tell "the shards passed" from "the shards never reported" is the same defect at the CI layer, and requiring that context would install it. **This is recorded as a finding, not a change** — nothing here touches the workflow or the protection settings. **And it is not queued work**: the session that turned the required contexts on reports the owner ruling separately against requiring the browser suite at all, on the ground that a flaky gate teaches a reader to reach for `--admin`. That rate is real and open — 1 in 13 completed `design-check` jobs since D128 merged, whose only known mechanism is "the suite around it" (docs/DEBTS.md §8 — not §11, the capture-server section. Measured 2026-09-12: of sixteen citations of §11 in the tree, seven meant §8 and nine were right, so a blanket substitution would have broken nine to fix seven. (This sentence said nine and two until the repair landed: that count came from a pattern requiring nothing between the filename and the reference, which cannot see a site spelling it `docs/DEBTS.md` §11 with backticks. `D149` carries the population and the three spellings.) Repaired separately the same night; the direction was a propagated copy rather than a renumber). So the aggregator's skipped-for-failed reading is a trap to know about rather than a defect to fix, and a session proposing the fix should read this paragraph first.
 
 **The other difference is register, and this repo already ruled on it.** The server gate refuses with a merge-state error; the wrapper refuses with a sentence naming which check is still running and for how long. `make design-check` names the tree holding the lock and exits 75 rather than failing opaquely (D122), and this is that same call one command along. **A backstop that only ever fires as an error is a backstop; it is not a wait.**
 
@@ -10764,6 +10766,127 @@ That guard is load-bearing, not defensive — D59 records that dropping it takes
 
 **Not that a commit status is the same thing as a check run.** This reads `/check-runs`, which is GitHub Actions and the only kind this repository has — and the required-contexts gate above reads the same shapes, so neither layer sees a status the other misses. An external service reporting through the statuses API would be invisible to it, and the floor would not notice either, since the parent's count comes from the same endpoint. **Not the deadline's value**: forty-five minutes is a guess sized against a suite measured at 8.4 minutes (D136) and it has never been reached. **And not whether a green claim commit means a green merge** — the merge commit is a different tree and nothing here waits on it, which is the same thing D140 said and is not reopened.
 
+## D149 — A section number that resolves is not a citation that is right, and no check can read what a sentence is about
+
+**Seven citations across five files named `docs/DEBTS.md` section 11 for a record that has only ever been in section 8.** Repaired by hand 2026-09-11. The repair is two characters per site; what is decided here is that **no `docs-audit` row will be built to catch the next one**, and the measurement behind that.
+
+### The five files, and the two that were nearly broken with them
+
+Wrong, all citing section 11 for the one-in-thirteen `design-check` flake, which is section 8's: `CLAUDE.md:174`, `Makefile:835`, `.github/workflows/check.yml:81` and `:246`, and `docs/DECISIONS.md:9522`, `:9553` (D136) and `:10084` (D141).
+
+**Nine other sites cite section 11 and are RIGHT** — not merely untouched: every one is about the capture server's concurrency, which is what section 11 is. They are `CLAUDE.md:916` and `:932`, `docs/DECISIONS.md:6111`, `docs/map.py:2483`, `harness/tests/t7_store_and_seams.py:21593`, `scripts/docs-audit.py:2456` and `:2509`, `scripts/serve.py:1393`, and `server/capture_server.py:10196` and `:11049`. **A blanket find-and-replace would have broken nine to fix seven**, and not one of the nine quotes anything distinctive, so nothing in the text separates them from the wrong ones. The repair was per-site and subject-checked.
+
+**The count was wrong three times before it was right, and every miss was a search pattern too narrow.** Five sites, from a `§`-only search over three globs. Then seven, by searching both spellings over the whole tree — `Makefile:835` and `docs/DECISIONS.md:10084` say `section 11` and a `§`-scoped search cannot see them. Then a reviewer put the population at nine and the correct sites at two, from `DEBTS\.md ?(§|section )11` — which requires nothing between the filename and the reference and so misses every site spelling it `` `docs/DEBTS.md` §11 ``, backticks included.
+
+**The population is 16, and the pattern that finds all of it is `DEBTS\.md`? ?(§|section )11`** — seven wrong, nine correct, the nine being `CLAUDE.md:916` and `:932`, `docs/DECISIONS.md:6111`, `docs/map.py:2483`, `harness/tests/t7_store_and_seams.py:21593`, `scripts/docs-audit.py:2456` and `:2509`, `scripts/serve.py:1393`, and `server/capture_server.py:10196` and `:11049`. **A citation of this file is spelled three ways** — `§11`, `section 11`, and either of those behind a backticked filename — which is worth more to the next session than the count is, because the count is what three searches got wrong.
+
+### It was copied, not renumbered, and only one of those argues for a row
+
+The obvious hypothesis is D80's: a section was renumbered and every citation went stale pointing at a real section. **It is not what happened, and the history settles it rather than suggesting it.** The flake record entered `docs/DEBTS.md` in `86e70c2` already under section 8, on a tree where section 11 was already the capture-server section. Across every revision of that file, section 11 has carried two wordings of one subject and the flake record has only ever been in section 8. The first wrong citation and three copies landed in ONE commit, `e06eb8a` (D136), across three files; `bc39785` (D141) copied it into two more and the Makefile took it from the same source.
+
+**That file does not renumber, and section 15 is the proof**: closed 2026-09-07 by deleting the heading and leaving 16 to 24 in place. So a renumber guard — the row this would otherwise argue for — would have caught none of the seven, and the hazard it guards is structurally absent in the one file at issue.
+
+**What this was instead is a copying failure**, and the reason it survived is that a wrong section number *still resolves*: section 11 is a coherent thing for a CI comment about worker counts to cite. It is `docs/map.py`'s rule about step ids — *"a renumber leaves every one pointing at a real step that is not the one meant — which nothing can detect"* — reaching a second file by a second route.
+
+### Why no row, measured
+
+A row would have to decide what a sentence is ABOUT. The nearest mechanical proxy is the discipline `docs/DEBTS.md` section 1 already established when `server concurrency` passed with both its constants inverted: require an **attributed form**, and compare a phrase the citation quotes against the section it names. **Measured over all 38 citations of a `docs/DEBTS.md` section in this tree, 15 files and 11 sections: four carry a double-quoted span at all, two of those are really quotations, one resolves true, and the rule would have caught one of the seven while raising three false alarms** — the other spans being a code flag, an f-string fragment and a slice of the checker's own error text. This repo's prose cites by narrating, not by quoting.
+
+**And the most-repeated token cannot be matched literally**: five of the seven say `one-in-thirteen`; the file spells it `1 in 13` in a table cell, so a containment test flags the REPAIRED text too. The remaining option is a hand-maintained (phrase → section) list, which is section 4's subject — a claim whose reader is itself unread — and is not built. Recorded in `docs/DEBTS.md` section 25 rather than half-built, which is the ruling the owner asked for by name.
+
+### One reader was made whole, and it did get a guard — over shape, not over meaning
+
+`scripts/docs-audit.py:_debts_section` matches `## <n> — ` and returns None otherwise, and **both** its consumers tolerate a None — one with `or ""`, one with an early return. So sections 20 to 24, written `## <n>. `, were not a failure anywhere: they were five of that file's twenty-three live sections **silently not existing**, with every row green throughout. The headings are normalized here.
+
+**`make docs-audit`'s `debts headings` row is the guard that keeps them that way**, and it can be built for exactly the reason the citation-subject row cannot: a heading either parses or it does not. It refuses a heading that is not `## <n> — <title>` and a section number used twice, the second being the same defect wearing a different hat — `_debts_section` returns the first match, so the second section is unreachable. Mutation-tested with four arms: the dotted form, a duplicate number, a number with no title, and an en-dash for the em-dash. All four fire; the baseline is clean.
+
+### A probe that cannot express a failure is the purest form of this
+
+**This entry's own verification had the defect the entry is about, and it took two rounds to see.** The first probe read `r['name']` and `r['status']` where `scripts/docs-audit.py --json` emits `label`, `severity` and `findings`. Every row therefore read as ok, the audit was reported clean three times, and the reading was worth nothing — `make check`'s exit code was the only real signal in play. Re-running it with the right keys immediately surfaced a genuine `repo map` finding the broken probe had been hiding.
+
+**That is worse than a check with a gap, and it is the same shape as the five unreadable headings above.** A guard that is too narrow measures something adjacent to what it claims. A probe keyed to fields that do not exist measures NOTHING, and nothing renders as clean — which is why `_debts_section` returning None for an unparseable heading was never a failure anywhere, and why three separate searches for these citations each reported a population smaller than the real one and each read as complete. **A pattern that finds nothing reports nothing, and nothing reads as green.** The countermeasure is the one this repo already applies to its rows and did not apply to a throwaway probe: make it fail once, on purpose, before believing it.
+
+**This is the distinction the whole entry turns on.** A guard over a document's SHAPE is mechanical and cheap. A guard over what a sentence MEANS is neither, and the measurement above is what that costs. The first is built; the second is recorded and declined.
+
+## D150 — A reading taken after a sale is that sale's own result, and it ages the claim
+
+**`cli/resolve.py:_copies_out` ages a stuck `pushed` claim by the SKU's sales where the export corroborates them, and a reading of ZERO taken AFTER a sale is corroboration.** Built 2026-09-11, from the operator's report that two cards they had just scanned into box 1 could not be sent: *"you are aware that I scanned in new falling star and a new fizz and so i should ideally when everything is fixed have some quantity that could be pushed out on that pricing run?"* They were right, and `docs/DEBTS.md` §24 — written the same day, by the branch that fixed D147's ordering defect — had recorded this as deliberately unfixed.
+
+### The expression, and the premise that was false
+
+`pushed` is a count of copies SENT and it has **no drawdown**: `cli/cmd_emit.py` writes it, `cli/cmd_reconcile.py` moves it to `staged`, and `cli/cmd_join.py` draws `staged` down by the RISE in live quantity. Nothing anywhere decrements it on a sale. So once an import lands, the claim counts copies TCGplayer has already sold, and the copies on hand are committed against a shelf that no longer exists.
+
+A SALE is the one event that proves a sent copy has left, so the claim is aged by the sales — but only where the export vouched for the copies having been there:
+
+    sold = (positions - copies_not_sold) if read > 0 else 0
+    out[sku] = max(live, claim - sold)
+
+The comment on that gate argued: *"A sale reduces what TCGplayer holds only if the copy was LIVE there, and with `Total Quantity` at zero nothing of ours ever was."*
+
+**That conflates "never was live" with "was live, sold, and now reads zero."** The store already dates both facts and nothing was reading them together — `Card.state_at` for the sale, `Listing.live_as_of` for the reading:
+
+| sku | card | sale(s) | the reading |
+|---|---|---|---|
+| 8925672 | Falling Star | 09-07 | 2026-09-11T22:50:36Z |
+| 9035516 | Fizz, Trickster | 09-02, 09-07, 09-07 | 2026-09-11T22:50:36Z |
+
+A zero read four days after the copies sold is the sale's own result. **This is D115's rule pointed the other way**: that entry clears the store's counted sales where it adopts a reading taken after them, on exactly this reasoning about exactly these two stamps.
+
+### The arithmetic, worked rather than asserted
+
+The reading is the only witness this Mac has to a copy having been at TCGplayer, and it can answer two questions rather than one:
+
+- **A reading that reports copies LIVE vouches for every sale of the SKU.** Our copies reach that shelf, so a copy that sold sold from it, whenever it sold. `sold` is every sale ever — the arm that has always been here.
+- **A reading of NOTHING vouches for exactly the sales it was taken AFTER.** `Inventory.sales_before` is that count. A sale after a zero reading is still not aged: the reading said nothing of ours was live at its own time, so a copy that sold later cannot be shown to have been one of the copies this claim counts.
+
+**Neither arm double-counts, and the comment this replaced said one did.** The two are a `max` over two independent estimates and never a sum, and `claim` is never decremented by a sale, so a sale the reading has already absorbed is one the claim has NOT. Four sentences of arithmetic, since a claim about double-counting has to be checkable:
+
+| case | reading | sales | `live` arm | `claim - sold` | out | truth |
+|---|---|---|---|---|---|---|
+| landed live, sales after it | 4 @ T | 2 @ T+ | 4 − 2 = 2 | 4 − 2 = 2 | **2** | 2 |
+| landed live, reading after the sales | 2 @ T+ | 2 @ T | 2 − 0 = 2 | 4 − 2 = 2 | **2** | 2 |
+| sold out, reading after the sale | 0 @ T+ | 1 @ T | 0 | 1 − 1 = 0 | **0** | 0 |
+| pushed, never read, sold here | none | 1 | 0 | 1 − 0 = 1 | **1** | 1 |
+
+Row 1 is the case a naive date rule gets wrong — age only by sales BEFORE the reading and it answers 4, stranding two copies — which is why the fix is a second arm on the gate and not a replacement for the first. Row 3 is the operator's. Row 4 is D59's negative case.
+
+### What `check_listing_commands`' re-emit idempotence case does under this change
+
+**Nothing. It has no reading at all.** Four pushed, one sold, export silent: an emit takes no reading of `live` and that case asserts `live_as_of is None` by name, so `reading_taken_at` returns None, `sales_before` counts nothing, the claim stands at four and no fifth row is offered. Proved by mutation rather than by reading: dropping the gate outright takes that case red at *"and the re-emit adds nothing (D54)"*, expected 4 and actual 5 — the exact regression the old comment predicted.
+
+Three mutation arms, all run:
+
+| arm | what breaks |
+|---|---|
+| the old gate back (`else 0`) | the new positive case, `(0, 1, 0)` for `(0, 0, 1)` |
+| no gate at all (age by every sale) | the new negative case AND D54's re-emit idempotence |
+| the date comparison reversed | all three |
+
+### What it is worth, measured on the operator's real store
+
+Run `2026-09-11-box1-01`, joined against its own fetched export, read-only against a copy of `inventory/store.sqlite`:
+
+| | before | after |
+|---|---|---|
+| matched SKUs offering a copy | 239 of 246 | **246 of 246** |
+| copies `emit` would send | 310 | **317** |
+| SKUs adding nothing | 7 | **0** |
+
+The seven are §24's own table, Falling Star and Fizz, Trickster among them. Store-wide, against each listing's own stored reading: **32 SKUs and 58 copies** where `live` is 0, the claim is stuck, a sale predates the reading and stock is physically on hand.
+
+**And the false report sentence goes with them.** §24 recorded that those seven print `SkuMatch.nothing_to_add`'s *"every copy in this run is already listed or has left the box"* over a card sitting in the box, and that patching it needed the sold count threaded onto the match. It needed no such thing: the sentence was false because the arithmetic was, and with the claim aged the rows are offered rather than named.
+
+### Why not just tell the operator to reconcile
+
+`pkmnscan reconcile --live` writes `live` and the old gate opens on its own. **The operator does not run it**, D59 opens on their saying so, and a fix available only to someone who runs a command they do not run is not a fix. Nothing here writes: the ageing is derived per resolve from two stamps the store already holds.
+
+### The three rules stay in one place each
+
+`Listing.live_reading` answers WHICH reading to believe, `Listing.sales_pending` answers which counted sales survive it, and `Listing.reading_taken_at` — new here — answers its DATE. Its branches mirror `live_reading` exactly, including the stampless one, so `_copies_out` cannot ask "was this sale before the reading" of a reading that was not the one used. That is D87's amendment's own property, extended to a third fact rather than abandoned for it.
+
+### What is left, and it is named rather than papered over
+
+**A SKU whose import landed in Staged and never went live reads zero too.** A copy sold by hand against that state ages a claim it should not, and the copies are still sitting in TCGplayer's staged channel. Telling that from a sold-out listing needs D59's own reopener — a marker that a copy actually reached an import file, one field on `Card` written by `cmd_emit`'s push loop beside the `sku` stamp. **`docs/DEBTS.md` §24 is now that residue** rather than this whole defect; it is the third entry to turn on not having that field, after D147 and §24 itself.
 ## D-a-camera-is-an-input — The camera's automatic functions are inputs to the trigger's arithmetic, and the ones that step are locked
 
 **Settled 2026-09-12.** The question was which Sony settings the motion trigger wants and why,
