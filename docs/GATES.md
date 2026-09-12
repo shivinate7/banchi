@@ -401,6 +401,20 @@ at a temporary directory, so nothing here touches the real inventory.
   figure once over the union, and every unusable pair is a sentence before the store is read —
   on the flag and on the route's parser. Mutation-tested: twelve assertions red with the bound
   removed from `add_to_quantity`.
+- **The stranded-run repair is covered as of 2026-09-12, and the case is `check_reused_box_refusal`
+  read the other way round.** That block asserts D36's refusal; `check_rescue_stranded_run`
+  asserts the way OUT of it — a run whose cards were moved into another drawer before its own was
+  deleted and its number reused. It rebuilds the owner's own case in miniature: two records
+  describing box 1, whose photographs are at new indices in box 3, with box 1's number reused for
+  somebody else's cards. It asserts the preview presses nothing, the re-keying, that the SOURCE
+  run is untouched, that the derived run passes `refuse_reallocated` on its `scope.bid`, that a
+  second press writes nothing, and each of the five refusals. **Its strongest assertion swaps box
+  3's `bid` and moves nothing else** — same number, same cards at the same keys, same registry
+  stamp — so the refusal fires on the ID alone, which is the case the timestamp-and-card-set rule
+  structurally cannot reach. `check_run_binds_to_bid` covers the other end: that a run started in
+  a TERMINAL now records that id at all, off the sidecars rather than the capture directory's
+  name, and that two boxes get no scope rather than a guessed one. Nineteen mutation arms across
+  both, every one caught.
 - **Concurrency is small-N on purpose.** Two and four simultaneous captures over real
   sockets, matching D5's two devices. The twenty-way case that found the listen backlog
   proved something about a socket option and is not worth paying for at every turn end.
