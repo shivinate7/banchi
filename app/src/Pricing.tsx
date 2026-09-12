@@ -4229,20 +4229,35 @@ function UnreachableLine({ at }: { at: Unreachable | null }) {
         </a>
       </span>,
     )
-  const unjoined = at.unjoined.reduce((n, run) => n + run.cards, 0)
-  if (at.unjoined.length > 0)
+  /* A RUN HOLDING NOTHING IS NOT A WARNING. Both lists counted RUNS, so an empty husk and a
+     run withholding 99 sellable cards produced the same sentence — and the owner's store was
+     saying both at once: two husks with no manifest counts at all, and `2026-08-22-box1-03`
+     (0 cards left) beside `2026-08-29-box1-01` (99 on hand, all identified, all with a SKU).
+     Nothing is dropped by this: a run with no card on hand is withholding no card, so the
+     figures below still account for every copy the worklist cannot offer. A `null` count is
+     an unreadable store rather than a zero, and is kept. */
+  const heldBack = (rows: { cards: number | null }[]) =>
+    rows.filter((row) => row.cards === null || row.cards > 0)
+  const unjoinedRuns = heldBack(at.unjoined)
+  const unjoined = unjoinedRuns.reduce((n, run) => n + (run.cards ?? 0), 0)
+  if (unjoinedRuns.length > 0)
     parts.push(
       <span key="unjoined">
         <a href="#/runs">
           {unjoined > 0 ? `${unjoined} in ` : ''}
-          {at.unjoined.length} run{at.unjoined.length === 1 ? '' : 's'} not joined
+          {unjoinedRuns.length} run{unjoinedRuns.length === 1 ? '' : 's'} not joined
         </a>
       </span>,
     )
-  if (at.reallocated.length > 0)
+  const strandedRuns = heldBack(at.reallocated)
+  const stranded = strandedRuns.reduce((n, run) => n + (run.cards ?? 0), 0)
+  // THE TOOLTIP NAMES THE WAY OUT, AND CARRIES NO BACKTICKS: a title attribute renders its
+  // text literally, so markdown punctuation in one is just punctuation on screen.
+  if (strandedRuns.length > 0)
     parts.push(
-      <span key="reallocated" title="A run over a drawer whose number was deleted and reused since (D36). Its cards are another drawer's now; re-identify the box as it is today.">
-        {at.reallocated.length} run{at.reallocated.length === 1 ? '' : 's'} over a deleted box
+      <span key="reallocated" title="A run over a drawer whose number was deleted and reused since. The cards are still on your shelf — run pkmnscan rescue on that run and it re-binds them to where they are now, as a run that can be joined and sent.">
+        {stranded > 0 ? `${stranded} in ` : ''}
+        {strandedRuns.length} run{strandedRuns.length === 1 ? '' : 's'} over a deleted box
       </span>,
     )
   if (parts.length === 0) return null

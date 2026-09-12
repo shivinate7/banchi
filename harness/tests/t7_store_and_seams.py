@@ -10199,6 +10199,468 @@ def check_box_true_index(checks: Checks) -> None:
             "younger than the run and the box's 133 cards are all another run's",
         )
 
+def check_rescue_stranded_run(checks: Checks) -> None:
+    """The one-time repair for a run D36 refuses, and the binding that ends the class.
+
+    THE CASE, MEASURED ON THE OWNER'S STORE 2026-09-12 AND REPRODUCED HERE IN MINIATURE.
+    `2026-08-29-box1-01` read 133 cards out of box 1. On 2026-09-11 the operator MOVED 99 of
+    them into box 3 (D83) — `1/1 -> 3/724` through `3/822` — then deleted box 1, which buried
+    the 133 source records (D134), and box 1's number was reused the same evening. So the run
+    describes a drawer that no longer exists, `refuse_reallocated` refuses its join forever,
+    and 99 identified cards carrying a SKU each were reachable from no press in the product.
+    `check_reused_box_refusal` above asserts the refusal; this asserts the way out of it.
+
+    IT IS `realign`'s MECHANISM WITH ONE RESTRICTION LIFTED, AND THAT RESTRICTION IS RIGHT
+    WHERE IT IS. `cli/resolve.py:realign` looks for a record's photograph only in the boxes
+    THE RUN NAMES, because a join must never follow a card into a drawer nobody asked it
+    about. `rescue` searches every live drawer — safe only because it is an explicit operator
+    act, previews first, and produces a NEW run rather than changing what a join does. The
+    digest rules are `realign`'s unchanged: a digest on two records or on two photographs is a
+    question, not a slot, and refuses the whole run.
+
+    AND IT BINDS THE NEW RUN TO THE DRAWER'S `bid` (D145), which is what stops the class
+    recurring: box 3 may be deleted and its number reused tomorrow, and the rescue run will
+    still say which drawer it was over.
+    """
+    checks.note("")
+    checks.note("RESCUE — a stranded run's cards, re-addressed to where they are now")
+
+    from cli import __main__ as entry
+    from cli import cmd_rescue
+
+    def hush(*_args) -> None:
+        """A `say` that says nothing: these cases assert the RETURN, not the report."""
+
+    def photo(home, box: int, index: int, body: bytes) -> str:
+        directory = home / "captures" / "cards" / f"box{box}"
+        directory.mkdir(parents=True, exist_ok=True)
+        (directory / f"{index:04d}.jpg").write_bytes(body)
+        return hashlib.sha256(body).hexdigest()
+
+    def stranded_payload(digests: dict) -> dict:
+        """Two records still describing box 1, exactly as the run wrote them."""
+        cards = {}
+        for i, (name, number) in {1: ("Dunsparce", "120"), 2: ("Articuno", "145")}.items():
+            cards[f"1/{i}"] = {
+                "box": 1,
+                "index": i,
+                "photo": f"captures/cards/box1/{i:04d}.jpg",
+                "photo_sha256": digests[i],
+                "game": "pokemon",
+                "identification": {
+                    "name": name,
+                    "number": number,
+                    "printed_total": "159",
+                    "confidence": "high",
+                    "finish": None,
+                },
+            }
+        return {"prompt_fingerprint": "t7-rescue", "cards": cards}
+
+    def says(caught, label: str, *needles: str) -> None:
+        text = str(caught) if caught is not None else ""
+        missing = [needle for needle in needles if needle not in text]
+        checks.ok(not missing, label, f"missing {missing!r} in:\n{text}")
+
+    def run_count() -> int:
+        return len([d for d in files.runs_dir().iterdir() if d.is_dir()])
+
+    class Args:
+        def __init__(self, run_dir, write=False):
+            self.run_dir = str(run_dir)
+            self.write = write
+
+    other = "2026-09-11-box1-01"
+
+    def reuse_box_one(snapshot, how_many: int = 2) -> None:
+        """Box 1's number, reused for somebody else's cards — the reallocation itself."""
+        snapshot.inventory.ensure_box(1)
+        for n in range(1, how_many + 1):
+            card, _ = snapshot.inventory.allocate_capture(1, capture_id=f"foreign-{n}")
+            snapshot.inventory.record_identification(
+                card.key, name="Moonfall", number="198/219",
+                printed_total="219", confidence="high", run=other,
+            )
+
+    # ------------------------------------------------------------------ the whole repair
+    with isolated_home() as home:
+        # The cards are in box 3 now, at 3/2 and 3/3 — the same BYTES the run recorded a
+        # digest for, under new names at new indices in a different drawer. Nothing but those
+        # bytes ties the run's records to them.
+        moved = {1: photo(home, 3, 2, b"rescue-card-one"), 2: photo(home, 3, 3, b"rescue-card-two")}
+        run = runs.create("box1")
+        run.set(
+            capture_dir=str(home / "captures" / "cards" / "box1"),
+            created_at="2026-08-29T22:37:47+00:00",
+            model="claude-haiku-4-5-20251001",
+            rule="match",
+            flags={"max_edge": 1200},
+            joined=True,
+            emitted={"pushed": 133},
+        )
+        run.write_identifications(stranded_payload(moved))
+        export = write_export(run.path("export.csv"))
+
+        with Store().write() as snapshot:
+            snapshot.inventory.ensure_box(3, name="RB Epics")
+            for n in (1, 2, 3):
+                snapshot.inventory.allocate_capture(3, capture_id=f"dest-{n}", game="pokemon")
+            reuse_box_one(snapshot)
+
+        box3_bid = Store().read().inventory.box(3).bid
+        checks.ok(
+            isinstance(box3_bid, int) and box3_bid > 0,
+            "fixture: box 3 carries a true index (D145)",
+            f"bid: {box3_bid!r}",
+        )
+        checks.raises(
+            runs.RunError,
+            lambda: resolve.exports_for(run, [str(export)]),
+            "fixture: the join refuses this run, which is what makes it stranded",
+        )
+
+        # (a) THE PREVIEW PRESSES NOTHING.
+        before = run_count()
+        with quiet() as said:
+            code = cmd_rescue.run(Args(run.directory), print)
+        checks.equal(code, 0, "`pkmnscan rescue` previews and exits 0")
+        checks.equal(
+            run_count(), before,
+            "and writes no run directory — the preview is the default and it presses nothing",
+        )
+        preview = said.getvalue()
+        for needle in ("stranded", "2 card(s), all in box 3", "1/1 -> 3/2", "1/2 -> 3/3"):
+            checks.ok(needle in preview, f"the preview names {needle!r}", preview)
+        checks.ok(
+            f"bid           {box3_bid}" in preview,
+            "and it names the drawer's true index before anything is written",
+            preview,
+        )
+
+        # (b) THE WRITE, AND WHAT IT PRODUCES.
+        with quiet():
+            code = cmd_rescue.run(Args(run.directory, write=True), print)
+        checks.equal(code, 0, "`--write` exits 0")
+        checks.equal(run_count(), before + 1, "and creates exactly one run directory")
+        rescued = [
+            runs.open_run(d)
+            for d in sorted(files.runs_dir().iterdir())
+            if d.is_dir() and d.name != run.directory.name
+        ][0]
+        checks.equal(
+            rescued.manifest.get("scope"),
+            {"box": 3, "whole_box": False, "cards": 2, "bid": box3_bid},
+            "THE SCOPE IS THE DRAWER THE CARDS ARE IN, WITH ITS TRUE INDEX ON IT (D145) — "
+            "which is the whole reason this run can never become the thing it was derived "
+            "from, whatever number that drawer wears later",
+        )
+        checks.equal(
+            rescued.manifest.get(cmd_rescue.RESCUED_FROM),
+            run.name,
+            "and it names the run it came from, which is the only thing that tells a rescue "
+            "run from an ordinary one",
+        )
+        checks.equal(
+            [rescued.manifest.get("joined"), rescued.manifest.get("emitted")],
+            [None, None],
+            "WHAT IS CARRIED IS THE READING AND WHAT IS DROPPED IS THE SOURCE'S OWN ACTS — a "
+            "copied `joined`/`emitted` would claim this run had spent money and sent a file",
+        )
+        checks.equal(
+            rescued.manifest.get("model"),
+            "claude-haiku-4-5-20251001",
+            "while the reading itself carries over: these are the same answers, re-addressed",
+        )
+        checks.equal(
+            sorted(rescued.read_identifications()["cards"]),
+            ["3/2", "3/3"],
+            "every record is re-keyed to the position its PHOTOGRAPH is at now — D36's own "
+            "sentence, applied across drawers instead of within one",
+        )
+        checks.equal(
+            [
+                rescued.read_identifications()["cards"]["3/2"][field]
+                for field in ("box", "index", "photo_sha256", "rescued_from_position")
+            ],
+            [3, 2, moved[1], "1/1"],
+            "with the address moved, the DIGEST kept — it is the same bytes and the basis the "
+            "record was matched on — and where it came from recorded on the record",
+        )
+        checks.equal(
+            sorted(run.read_identifications()["cards"]),
+            ["1/1", "1/2"],
+            "AND THE SOURCE RUN IS UNTOUCHED. `cli/runs.py`'s first sentence is that a run is "
+            "an immutable input; the repair derives a second run rather than editing the "
+            "record of what was read",
+        )
+
+        # (c) THE RESCUE RUN JOINS, WHICH IS THE POINT.
+        plan = resolve.exports_for(rescued, [str(export)])
+        checks.equal(
+            list(plan.by_game),
+            ["pokemon"],
+            "and the rescue run passes `refuse_reallocated` — not by weakening it, but "
+            "because `scope.bid` matches box 3's own and there is nothing left to infer",
+        )
+
+        # (d) SAFE TO RUN TWICE.
+        with quiet() as said:
+            code = cmd_rescue.run(Args(run.directory, write=True), print)
+        checks.equal(code, 0, "a second `--write` exits 0")
+        checks.equal(
+            run_count(), before + 1,
+            "and writes NOTHING — an identical rescue already exists, so the command is "
+            "re-runnable rather than a directory generator",
+        )
+        checks.ok(
+            "already rescued" in said.getvalue(),
+            "and says so by name rather than silently doing nothing",
+            said.getvalue(),
+        )
+
+        # (e) A HEALTHY RUN IS REFUSED. Rescuing one would put a second run over the same
+        # positions in runs/, which is the shape D86 measured a capped send over.
+        caught = checks.raises(
+            runs.RunError,
+            lambda: cmd_rescue.run(Args(rescued.directory), hush),
+            "a run the store still reads as its own is refused rather than duplicated",
+        )
+        says(caught, "and the refusal says so and names the join", "not stranded", "join")
+
+        # (f) THE ID IS THE WHOLE ARM, PROVED BY MOVING NOTHING ELSE. Box 3 is deleted and its
+        # number reused: same number, same cards at the same keys, same registry stamp — the
+        # ONE thing that changes is the drawer's identity. The older inference rule cannot see
+        # this at all, because the box still holds this run's own cards.
+        with Store().write() as snapshot:
+            snapshot.inventory.box(3).bid = box3_bid + 50
+        checks.ok(
+            Store().read().inventory.box_disowns_run(
+                3, rescued.name, rescued.created_at, bid=box3_bid
+            )
+            is not None,
+            "A DRAWER THAT SWAPPED ITS IDENTITY UNDER A RUN IS REFUSED ON THE ID ALONE — the "
+            "number, the cards and the registry stamp are all unchanged, so this is the case "
+            "the timestamp-and-card-set rule structurally cannot reach. This is what the run "
+            "carrying a `bid` buys",
+        )
+        checks.ok(
+            Store().read().inventory.box_disowns_run(3, rescued.name, rescued.created_at)
+            is None,
+            "and with no id passed the older rule abstains towards the box being the run's "
+            "own, which is correct of it and is exactly why the id has to be recorded",
+        )
+
+        # AND A RESCUE OF A RESCUE IS REACHABLE, so it must not collide with itself: the
+        # manifest it derives from already carries this command's own three keys.
+        before = run_count()
+        with quiet():
+            code = cmd_rescue.run(Args(rescued.directory, write=True), print)
+        checks.equal(code, 0, "a stranded RESCUE run is itself rescuable")
+        checks.equal(run_count(), before + 1, "and writes one more run directory")
+        again = [
+            runs.open_run(d)
+            for d in sorted(files.runs_dir().iterdir())
+            if d.is_dir() and d.name not in (run.directory.name, rescued.directory.name)
+        ][0]
+        checks.equal(
+            [
+                again.manifest.get(cmd_rescue.RESCUED_FROM),
+                again.manifest.get("rescued_cards"),
+                (again.manifest.get("scope") or {}).get("bid"),
+            ],
+            [rescued.name, 2, box3_bid + 50],
+            "naming the run it came from, counting its own cards, and taking the drawer's NEW "
+            "id — not the one it was derived from",
+        )
+
+    # ------------------------------------------------------------------ the refusals
+    with isolated_home() as home:
+        # ONE RECORD'S DIGEST ON TWO PHOTOGRAPHS: a digest that names two slots is a question.
+        # The two records carry DIFFERENT digests on purpose — the payload half of the rule is
+        # the case below, and a fixture where both records share one digest fires that instead.
+        body = b"rescue-ambiguous"
+        digests = {1: photo(home, 3, 2, body), 2: photo(home, 3, 4, b"rescue-unique")}
+        photo(home, 3, 3, body)
+        run = runs.create("box1")
+        run.set(created_at="2026-08-29T22:37:47+00:00")
+        run.write_identifications(stranded_payload(digests))
+        with Store().write() as snapshot:
+            snapshot.inventory.ensure_box(3)
+            reuse_box_one(snapshot)
+        before = run_count()
+        caught = checks.raises(
+            runs.RunError,
+            lambda: cmd_rescue.run(Args(run.directory, write=True), hush),
+            "a digest on two photographs refuses the whole run — `realign`'s rule, unchanged",
+        )
+        says(caught, "and says it is a question rather than a slot", "two photographs", "guessing")
+        checks.equal(run_count(), before, "and nothing is written")
+
+    with isolated_home() as home:
+        # ONE DIGEST ON TWO RECORDS — the payload half of the same rule, which is where
+        # `realign` found a silent drop.
+        one = hashlib.sha256(b"rescue-same-record").hexdigest()
+        photo(home, 3, 2, b"rescue-same-record")
+        run = runs.create("box1")
+        run.set(created_at="2026-08-29T22:37:47+00:00")
+        run.write_identifications(stranded_payload({1: one, 2: one}))
+        with Store().write() as snapshot:
+            snapshot.inventory.ensure_box(3)
+            reuse_box_one(snapshot)
+        caught = checks.raises(
+            runs.RunError,
+            lambda: cmd_rescue.run(Args(run.directory, write=True), hush),
+            "and a digest carried by two RECORDS refuses too, before any photograph is read",
+        )
+        says(caught, "naming what it refuses", "more than one record")
+
+    with isolated_home() as home:
+        # THE CARDS ARE SPREAD ACROSS TWO DRAWERS. D48 keeps a run to one box.
+        digests = {1: photo(home, 3, 2, b"split-a"), 2: photo(home, 4, 20, b"split-b")}
+        run = runs.create("box1")
+        run.set(created_at="2026-08-29T22:37:47+00:00")
+        run.write_identifications(stranded_payload(digests))
+        with Store().write() as snapshot:
+            snapshot.inventory.ensure_box(3)
+            snapshot.inventory.ensure_box(4)
+            reuse_box_one(snapshot)
+        before = run_count()
+        caught = checks.raises(
+            runs.RunError,
+            lambda: cmd_rescue.run(Args(run.directory, write=True), hush),
+            "cards spread across two drawers refuse — a rescue that wrote one run over "
+            "several would be a cart nobody has argued for (D48)",
+        )
+        says(caught, "and names both drawers", "3, 4")
+        checks.equal(run_count(), before, "and nothing is written")
+
+    with isolated_home():
+        # NOTHING ON A SHELF — the owner's OTHER reallocated run, `2026-08-22-box1-03`, whose
+        # 53 cards went with box 1 on 2026-08-25. There is nothing to repair, and the warning
+        # `_on_hand_by_run` feeds says so rather than counting it as stranded stock.
+        digests = {
+            1: hashlib.sha256(b"gone-a").hexdigest(),
+            2: hashlib.sha256(b"gone-b").hexdigest(),
+        }
+        run = runs.create("box1")
+        run.set(created_at="2026-08-22T22:40:24+00:00")
+        run.write_identifications(stranded_payload(digests))
+        with Store().write() as snapshot:
+            reuse_box_one(snapshot)
+        caught = checks.raises(
+            runs.RunError,
+            lambda: cmd_rescue.run(Args(run.directory, write=True), hush),
+            "a stranded run whose cards have all left the store is refused rather than "
+            "rescued into an empty run — measured: `2026-08-22-box1-03` is exactly this",
+        )
+        says(caught, "and says the cards have left", "nothing on a shelf")
+
+        with quiet() as said:
+            code = entry.main(["rescue", str(run.directory)])
+        checks.equal(code, 1, "`pkmnscan rescue` is a real subcommand and exits 1 on a refusal")
+        checks.ok("REFUSING" in said.getvalue(), "printing the refusal", said.getvalue())
+
+
+def check_run_binds_to_bid(checks: Checks) -> None:
+    """A run records its drawer's TRUE INDEX from every path that starts one (D145).
+
+    THE HALF THE RUN OBJECT NEVER ADOPTED. `server/pipeline_routes.py:_resolve_scope` has
+    written `bid` into the scope block since D145, so a run started from `#/runs` is bound.
+    A run started in a TERMINAL had no `scope` block at all — `_run_box` says so in as many
+    words and falls back to parsing the box number out of the capture directory's NAME — so
+    `cli/resolve.py:refuse_reallocated` had nothing to compare and the older inference rule
+    decided every one of them. This asserts the CLI half, which was the last creation path
+    that could still produce a run nobody can bind.
+
+    AND THE WARNING COUNTS CARDS RATHER THAN RUNS. `_on_hand_by_run` is what lets
+    `#/pricing` say "99 in 1 run over a deleted box" instead of "1 run over a deleted box" —
+    the same sentence the owner's store was printing for one run holding 99 sellable cards
+    and another holding none.
+    """
+    checks.note("")
+    checks.note("RUN -> BID — every path that starts a run records the drawer's true index")
+
+    from cli import cmd_identify
+
+    class FakeItem:
+        def __init__(self, box):
+            self.capture = sidecar.Capture(photo=Path("x.jpg"), box=box, index=1)
+
+    with isolated_home() as home:
+        with Store().write() as snapshot:
+            snapshot.inventory.ensure_box(3, name="RB Epics")
+            snapshot.inventory.ensure_box(4)
+        inventory = Store().read().inventory
+        bid3 = inventory.box(3).bid
+        bid4 = inventory.box(4).bid
+        checks.ok(bid3 != bid4, "fixture: two drawers, two ids", f"{bid3} vs {bid4}")
+
+        own = home / "captures" / "cards" / "box3"
+        own.mkdir(parents=True, exist_ok=True)
+        checks.equal(
+            cmd_identify._scope_for([FakeItem(3), FakeItem(3)], own, inventory),
+            {"box": 3, "whole_box": True, "cards": None, "bid": bid3},
+            "a terminal run over box 3's own capture directory records the box, `whole_box`, "
+            "and THE DRAWER'S TRUE INDEX — the shape `_resolve_scope` writes on the route",
+        )
+        elsewhere = home / "captures" / "cards" / "box3" / "sub"
+        elsewhere.mkdir(parents=True, exist_ok=True)
+        checks.equal(
+            cmd_identify._scope_for([FakeItem(3), FakeItem(3)], elsewhere, inventory),
+            {"box": 3, "whole_box": False, "cards": 2, "bid": bid3},
+            "and a directory that is not the box's own is not a whole box, so the count is "
+            "the cards rather than null",
+        )
+        checks.equal(
+            cmd_identify._scope_for([FakeItem(3), FakeItem(4)], own, inventory),
+            None,
+            "A RUN WHOSE CAPTURES NAME TWO BOXES GETS NO SCOPE RATHER THAN A GUESSED ONE. "
+            "D48 keeps a run to one box; a scope naming one of two would be a claim this "
+            "command cannot support, and the older rule still reads such a run",
+        )
+        checks.equal(
+            cmd_identify._scope_for([FakeItem(9)], own, inventory),
+            {"box": 9, "whole_box": False, "cards": 1, "bid": None},
+            "and a box the registry has never seen gets a scope with NO id rather than a "
+            "refusal — `_box_bid` abstains the same way, and a run with no id is read by the "
+            "older rule, which is the arm that has always worked",
+        )
+        checks.equal(
+            cmd_identify._scope_for([], own, inventory),
+            None,
+            "no captures, no box, no scope",
+        )
+
+    # ------------------------------------------------------------------ the warning's figure
+    with isolated_home():
+        with Store().write() as snapshot:
+            snapshot.inventory.ensure_box(1)
+            for n in range(1, 5):
+                card, _ = snapshot.inventory.allocate_capture(1, capture_id=f"count-{n}")
+                snapshot.inventory.record_identification(
+                    card.key, name="Moonfall", number="198/219",
+                    printed_total="219", confidence="high", run="stranded-run",
+                )
+        with Store().write() as snapshot:
+            # Straight at the field: this case is about the COUNT, and `do_mark_sold`'s own
+            # refusals and undo are `check_mark_sold`'s subject.
+            snapshot.inventory.cards.get("1/4").state = master.SOLD
+        counted = pipeline_routes._on_hand_by_run(Store().read().inventory)
+        checks.equal(
+            counted.get("stranded-run"),
+            3,
+            "A RUN'S FIGURE IS WHAT THE STORE STILL HOLDS, NOT WHAT THE RUN READ — four cards "
+            "identified, one sold, three on hand. Counted off the CARDS because that is the "
+            "number a warning about stranded stock has to carry",
+        )
+        checks.equal(
+            counted.get("no-such-run"),
+            None,
+            "and a run holding nothing is absent rather than zero, which is what lets the "
+            "screen drop a false alarm without dropping a card",
+        )
+
+
 def check_printed_code_profiles(checks: Checks) -> None:
     """`riftbound_card_v1` and `one_piece_card_v1`: the wiring, and the one seam that lies.
 
@@ -10593,18 +11055,19 @@ def check_cli_refusals(checks: Checks) -> None:
 
     from cli import __main__ as entry
 
-    # SEVEN SINCE 2026-09-04, and `scan` is still the only one that is free AND writes to the
+    # EIGHT SINCE 2026-09-12, and `scan` is still the only one that is free AND writes to the
     # store. `prices` writes the CORPUS — `prices adopt` previews unless given `--write`, and
     # `prices show` reads. `reprice` writes the corpus too, on `apply --write` and nowhere else
-    # (D100); both of its subcommands preview by default, and neither touches a card. Still an
-    # exact match rather than a superset check: the point of this line is that a command cannot
-    # appear in the dispatch without somebody editing this list, and a membership test would
-    # let one arrive unnoticed — which matters most for a command that touches the store, as
-    # `scan` does.
+    # (D100); both of its subcommands preview by default, and neither touches a card. `rescue`
+    # writes a RUN DIRECTORY on `--write` and nothing else — never the store, and never the run
+    # it is given. Still an exact match rather than a superset check: the point of this line is
+    # that a command cannot appear in the dispatch without somebody editing this list, and a
+    # membership test would let one arrive unnoticed — which matters most for a command that
+    # touches the store, as `scan` does.
     checks.equal(
         sorted(entry.COMMANDS),
-        ["emit", "identify", "join", "prices", "reconcile", "reprice", "scan"],
-        "seven commands are registered, and only seven",
+        ["emit", "identify", "join", "prices", "reconcile", "reprice", "rescue", "scan"],
+        "eight commands are registered, and only eight",
     )
 
     # No command may read stdin. Asserted against the source of every module the dispatch
@@ -23769,6 +24232,8 @@ def run() -> Result:
     check_run_realignment(checks)
     check_reused_box_refusal(checks)
     check_box_true_index(checks)
+    check_rescue_stranded_run(checks)
+    check_run_binds_to_bid(checks)
     check_printed_code_profiles(checks)
     check_cli_refusals(checks)
     check_listing_commands(checks)
