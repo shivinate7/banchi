@@ -2002,13 +2002,14 @@ COMPONENTS = [
                 # crashing on one — found the moment `.agents/skills` became the first such
                 # link this repo's own history ever produced.
                 "governed_by": ["D2", "D3", "D6", "D7", "D8", "D9", "D10", "D12", "D16", "D17",
-                                "D18", "D22", "D23", "D24", "D26", "D27", "D31", "D39", "D43",
+                                "D18", "D22", "D23", "D24", "D26", "D27", "D31", "D33", "D39", "D43",
                                 "D47", "D49", "D50", "D51", "D53", "D60", "D64", "D65", "D67", "D69",
-                                "D70", "D72", "D75", "D76", "D80", "D81", "D83", "D84", "D87",
+                                "D70", "D72", "D74", "D75", "D76", "D80", "D81", "D83", "D84", "D87",
                                 "D88", "D90", "D92", "D94", "D96", "D101", "D102", "D104",
                                 "D110", "D111", "D113",
-                                "D119", "D122", "D127", "D129", "D132", "D133", "D135", "D136",
-                                "D140", "D141", "D142", "D143", "D144", "D149", "D155"],
+                                "D119", "D122", "D127", "D132", "D135", "D136",
+                                "D140", "D141", "D142", "D143", "D144", "D149", "D155",
+                                "D161"],
             },
             "claim-ids.py": {
                 "does": "allocate the numbers this branch's SLUG ids will take, and "

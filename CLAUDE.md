@@ -311,19 +311,22 @@ make demo-freshness # whether the bundle still matches the wire it recorded. ON 
 make lint           # eslint over app/ (guards a bug earned, see app/eslint.config.js) plus ruff over
                     #   the Python packages, scoped to a slice measured against this tree (D82) —
                     #   never ruff's own defaults, never --fix. Config: ruff.toml.
-make check          # harness + docs-audit + audit-self-test + githooks-selftest +
-                    #   merge-selftest + revert-selftest + claim-selftest + claim-stale +
-                    #   decisions-selftest + revert-guard +
+make check          # harness + docs-audit + claim-stale + revert-guard +
+                    #   port-agreement + set-hint-agreement + screen-freshness +
+                    #   sigil-check + ignore-check + lint + vale + typecheck +
+                    #   audit-self-test + githooks-selftest + merge-selftest +
+                    #   revert-selftest + claim-selftest + decisions-selftest +
                     #   janitor-selftest + reap-selftest + silent-write-selftest +
                     #   coordinator-selftest + suite-lock-selftest +
-                    #   serve-selftest +
-                    #   verdict-selftest + port-agreement + set-hint-agreement +
-                    #   screen-freshness + sigil-check + ignore-check + lint +
-                    #   vale + typecheck.
-                    #   THIS LIST IS CHECKED NOW —
+                    #   serve-selftest + verdict-selftest.
+                    #   THIS LIST IS CHECKED NOW, AND IN THIS ORDER —
                     #   `make docs-audit`'s `check census` row reconciles it and `make help`'s
                     #   against the recipe, and it earned the row: help said five of these
                     #   for months while this line said eleven, and nothing compared them.
+                    #   IT COMPARED THEM AS SETS UNTIL 2026-09-12, so D161's reorder — the
+                    #   product first, the guards' selftests last — left BOTH published lists
+                    #   in the old order while the row printed ok and that commit's own
+                    #   message cited it as verification. The sequence is compared now.
                     #   `make explain` is the same list with what each row is worth.
                     #   NEITHER THIS NOR `make harness` HAS design-check's WAITING PROBLEM,
                     #   measured 2026-09-07 in a worktree: 17s and 13s, both well inside one

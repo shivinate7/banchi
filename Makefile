@@ -95,16 +95,14 @@ help:
 	@echo "  make coordinator  the merge queue, READ rather than remembered: main, every open"
 	@echo "                    PR with a SHA-pinned verdict, the worktrees, the live sessions."
 	@echo "                    Reaches the network, so it never gates a commit."
-	@echo "  make check        harness + docs-audit + audit-self-test + githooks-selftest +"
-	@echo "                    merge-selftest + revert-selftest + claim-selftest + claim-stale +"
-	@echo "                    decisions-selftest +"
-	@echo "                    revert-guard +"
+	@echo "  make check        harness + docs-audit + claim-stale + revert-guard +"
+	@echo "                    port-agreement + set-hint-agreement + screen-freshness +"
+	@echo "                    sigil-check + ignore-check + lint + vale + typecheck +"
+	@echo "                    audit-self-test + githooks-selftest + merge-selftest +"
+	@echo "                    revert-selftest + claim-selftest + decisions-selftest +"
 	@echo "                    janitor-selftest + reap-selftest + silent-write-selftest +"
 	@echo "                    coordinator-selftest + suite-lock-selftest +"
-	@echo "                    serve-selftest +"
-	@echo "                    verdict-selftest + port-agreement + set-hint-agreement +"
-	@echo "                    screen-freshness + sigil-check + ignore-check + lint +"
-	@echo "                    vale + typecheck"
+	@echo "                    serve-selftest + verdict-selftest"
 	@echo
 	@echo "  ./pkmnscan identify <capture-dir>                 submit, wait, collect. COSTS MONEY."
 	@echo "  ./pkmnscan join     <run-dir> --export <csv>      resolve against the export. Free."
@@ -983,6 +981,11 @@ design-check-quiet:
 # is the exact output a binary-less machine produced. One `if` keeps the run inside the
 # branch that only exists once the guard has already passed.
 vale:
+	@echo "NOT A GATE: prose style is reported and never blocks (D74). --no-exit swallows"
+	@echo "  the status, and a missing binary reports and exits 0 — so this slot in"
+	@echo "  \`make check\` cannot fail, and a reader of a green run should not count it"
+	@echo "  among the ones that can. \`make docs-audit\`'s \`check registry\` row pairs this"
+	@echo "  line against the entry's \`gates: False\` in both directions."
 	@if command -v vale >/dev/null; then \
 		git ls-files '*.md' | xargs vale --no-exit; \
 	else \
