@@ -131,6 +131,7 @@ from cli import cmd_reprice  # noqa: E402
 from cli import resolve as run_resolve  # noqa: E402
 from cli import runs as run_files  # noqa: E402
 from pipeline import corpus, decisions, games as game_registry, join, reprice, tcgcsv  # noqa: E402
+from pipeline import worklist  # noqa: E402
 # ALIASED, BECAUSE `pricing` IS A LOCAL IN THIS MODULE. Two handlers bind the name to a
 # run's parsed `pricing.json`; importing the module under it would make which one you
 # got a matter of where in the function you were standing.
@@ -2053,6 +2054,48 @@ def _run_live_by_sku(run: "run_files.Run") -> Dict[str, "run_resolve.LiveReading
     return run_resolve._live_by_sku(parsed, as_of)
 
 
+def _catalog_rows(
+    tables: Sequence[Tuple["run_files.Run", dict]], wanted: set
+) -> "Dict[str, Tuple[tcgcsv.Row, str]]":
+    """The export row for each wanted SKU, with the game whose catalogue named it.
+
+    FOR THE SKUS A REVIEW ANSWER STAMPED AND NO TABLE CARRIES, and for nothing else: the
+    caller passes the handful the ledger found, so the early return costs a screen with no
+    such answers exactly nothing. On a store that has some, this is one parse per export the
+    chosen runs recorded — the same files `_run_live_by_sku` reads, and the same refusal
+    posture, since a file that has moved simply does not answer for its SKUs.
+
+    FIRST FILE WINS, WALKING THE RUNS IN THE ORDER THE CALLER CHOSE THEM — ascending name
+    order, which is ascending date, so the OLDEST export that still carries the SKU answers.
+    That is deliberate and it is the conservative direction: the row is only ever used to
+    compose a row for a card whose copies are on the shelf, and the newest reading of its
+    PRICE is not here to be had — a SKU no table names is one no recent join priced. The row
+    carries its own `TCG Market Price` cell and `#/pricing` draws the age of the run beside
+    it, which is the existing sentence for "this reading is as old as its run".
+
+    A SKU NO EXPORT NAMES IS SIMPLY ABSENT from the result, and the caller then draws no row
+    for it. That is not a silent drop: the copies stay counted in `unreachable` and in the
+    run's own `unsent`, and the operator's door is `Join again` — which is the one case where
+    a re-join really is the answer, because the catalogue on hand does not describe the card.
+    """
+    found: "Dict[str, Tuple[tcgcsv.Row, str]]" = {}
+    if not wanted:
+        return found
+    for run, _table in tables:
+        if len(found) == len(wanted):
+            break
+        for game, path in run.exports_by_game.items():
+            try:
+                export = tcgcsv.read_export(path)
+            except (OSError, ValueError, KeyError):
+                continue
+            for row in export.rows:
+                sku = str(row.get(tcgcsv.SKU_COLUMN) or "")
+                if sku in wanted and sku not in found:
+                    found[sku] = (row, game)
+    return found
+
+
 def _unsent_ledger(
     inventory: master.Inventory, tables: Sequence[Tuple["run_files.Run", dict]]
 ) -> UnsentLedger:
@@ -2116,17 +2159,59 @@ def _unsent_ledger(
                 key = master.position_key(int(at["box"]), int(at["index"]))
                 positions.setdefault(sku, OrderedDict())[key] = None
                 mine.setdefault(sku, set()).add(key)
-        # THIS LEG'S READING FOR THIS LEG'S OWN SKUS. Narrowed before anything walks it — a
-        # Filtered Export names ~10,000 SKUs and a per-SKU answer does not depend on the other
-        # 9,800 — and folded newest-wins per SKU across legs, which is `_live_by_sku`'s own
-        # rule across the files of one run.
+    on_screen = set(per_run)
+
+    # ------------------------------------------------------------------------------------
+    # A SKU NO TABLE CARRIES IS STILL THIS STORE'S COPY (the review answer's fold-through).
+    #
+    # The union below used to iterate `positions` — the SKUs some run's `pricing.json`
+    # already names — so a review answer only counted when a SIBLING copy of the same card
+    # had resolved at join time. A card whose answer named a SKU no table carried had no row
+    # to be counted onto, and so appeared on `#/pricing` nowhere at all: the operator
+    # answered it by hand and the only way to make it reachable was to press Join again on
+    # another screen, which is the chore the owner named — *"after finishing review queue
+    # having to do 'join' again, is so fucking unintuitive."*
+    #
+    # Measured on the owner's store 2026-09-12: of 489 hand-answered copies still on hand,
+    # 458 carried a SKU some table names and folded through already; **31 copies across 17
+    # SKUs carried one no table names** and were invisible. Three runs held them —
+    # `2026-08-29-box1-01` 18, `2026-09-01-box5-01` 9, `2026-09-11-box1-01` 4.
+    #
+    # `distinct` IS ONE INDEXED PASS AND `copies_on_hand` IS ANOTHER, which is why this is
+    # affordable at all: `cards.sku` is indexed and `cards.run` is not, so asking "every SKU
+    # any card carries" and subtracting the tables' is two index reads, where asking each
+    # run for its cards would be a full table scan per leg. The orphan set is tiny by
+    # construction — it is the answers a join has not seen yet.
+    orphans: List[str] = []
+    for value in inventory.cards.distinct("sku"):
+        sku = str(value or "")
+        if not sku or sku in positions:
+            continue
+        orphans.append(sku)
+    for sku in sorted(orphans):
+        for card in inventory.copies_on_hand(sku):
+            if card.run not in on_screen:
+                continue
+            positions.setdefault(sku, OrderedDict())[card.key] = None
+            per_run[card.run].setdefault(sku, set()).add(card.key)
+    # ------------------------------------------------------------------------------------
+
+    # THIS LEG'S READING FOR THIS LEG'S OWN SKUS, AFTER THE ORPHANS ARE IN. Narrowed before
+    # anything walks it — a Filtered Export names ~10,000 SKUs and a per-SKU answer does not
+    # depend on the other 9,800 — and folded newest-wins per SKU across legs, which is
+    # `_live_by_sku`'s own rule across the files of one run. It reads `per_run` rather than a
+    # local because the orphan pass above may have added SKUs to this leg since the tables
+    # were walked, and a reading this loop skipped would leave `_copies_out` answering off
+    # the store alone for a SKU whose own export reports it.
+    for run, _table in tables:
+        mine = per_run.get(run.name) or {}
         for sku, reading in _run_live_by_sku(run).items():
             if sku not in mine:
                 continue
             held = readings.get(sku)
             if held is None or master.newer_stamp(reading.as_of, held.as_of):
                 readings[sku] = reading
-    on_screen = set(per_run)
+
     for sku in list(positions):
         for card in inventory.copies_on_hand(sku):
             if card.run in on_screen and card.key not in positions[sku]:
@@ -2418,6 +2503,85 @@ def do_pipeline_worklist(wanted: Sequence[str]) -> dict:
     views = (
         run_resolve.box_views(snapshot.inventory) if snapshot is not None and ledger else {}
     )
+
+    # ------------------------------------------------------------------------------------
+    # THE ROW A REVIEW ANSWER EARNED, COMPOSED HERE BECAUSE NO TABLE CARRIES IT.
+    #
+    # `_unsent_ledger` now finds a SKU the store holds that no joined run's `pricing.json`
+    # names — a card the operator identified by hand since the join. The loop below draws
+    # every merged row's live figures, and it can only draw a row that EXISTS, so without
+    # this the ledger would count those copies in `by_run` and the screen would show no row
+    # to price them on: the run would read `3 unsent` and offer nothing.
+    #
+    # THE ROW IS THE JOIN'S OWN (`pipeline/worklist.py:sku_row`) AND NOT A SECOND
+    # DESCRIPTION OF IT. Twenty fields with four arithmetic ones is not a shape to write
+    # twice — `over_cap` and `claimed_add` a few lines down exist because two descriptions
+    # of one send disagreed once already. The `SkuMatch` handed to it is composed from the
+    # export row the card's own run recorded, the positions the ledger says may still go,
+    # and the store's policy; every figure it computes is `pipeline/join.py`'s.
+    #
+    # `claimed_add` IS ZERO AND THAT IS THE HONEST ANSWER. That field is what the runs'
+    # TABLES believe they may add, and no table believes anything about this SKU — so the
+    # single leg carries `add_to_quantity: 0` and `over_cap` stays False. What CAN go is
+    # `add_to_quantity`, written by the loop below off the live store like every other row.
+    if ledger is not None and snapshot is not None:
+        orphans = {
+            sku for sku, keys in ledger.unsent.items() if keys and sku not in merged
+        }
+        policy = book.policy_for()
+        for sku, (export_row, game) in _catalog_rows(tables, orphans).items():
+            places = []
+            for key in ledger.unsent.get(sku, []):
+                card = snapshot.inventory.cards.get(key)
+                if card is None or card.run not in loaded_names:
+                    continue
+                places.append(
+                    views.get(int(card.box), join.BoxView()).at(card.box, card.index)
+                )
+            if not places:
+                continue
+            match = join.SkuMatch(
+                sku=sku,
+                row=export_row,
+                positions=places,
+                threshold=pricing_mod.check_threshold(policy.get("threshold")),
+                rule=pricing_mod.Rule.parse(str(policy.get("rule", "match"))),
+                basis=str(policy.get("basis", "market")),
+                held_out=ledger.held_out.get(sku),
+                live_out=ledger.live_out.get(sku),
+            )
+            record = snapshot.inventory.listings.get(sku)
+            built = worklist.sku_row(
+                match,
+                game,
+                worklist.bucket_for(
+                    match,
+                    below=match.has_market_data and not match.listable,
+                    unpriced=not match.has_market_data,
+                ),
+                None
+                if record is None
+                else {
+                    "pushed": int(record.pushed),
+                    "staged": int(record.staged),
+                    "live": int(record.live),
+                    "sold_here": int(record.sold_here),
+                },
+            )
+            # THE LEG NAMES THE RUN THE COPY BELONGS TO, so `app/src/pricingSource.ts` can
+            # say where it came from rather than falling back to whichever run is in scope.
+            owner = snapshot.inventory.cards.get(
+                next(iter(ledger.unsent.get(sku, [])), "")
+            )
+            leg = dict(built)
+            leg["run"] = (owner.run if owner is not None else None) or next(
+                iter(sorted(loaded_names)), ""
+            )
+            leg["add_to_quantity"] = 0
+            built["in"] = [leg]
+            merged[sku] = built
+    # ------------------------------------------------------------------------------------
+
     for sku, row in merged.items():
         # THE CAP, COMPUTED ONCE ACROSS THE RUNS THIS SCREEN IS SHOWING.
         #
@@ -2984,6 +3148,46 @@ def do_reconcile_live(payload: dict) -> dict:
     # reading rather than two downloads taken minutes apart.
     path = _live_export_from(payload)
     argv = [str(PKMNSCAN), "reconcile", "--live", str(path)]
+    if payload.get("write"):
+        argv.append("--write")
+    code, console = _run_sync(argv, STEP_TIMEOUT_S)
+    return {
+        "ok": code == 0,
+        "exit_code": code,
+        "wrote": bool(payload.get("write")) and code == 0,
+        "console": console,
+    }
+
+
+# --------------------------------------------------------- the standing queues, refreshed
+
+
+def do_queue_refresh(payload: dict) -> dict:
+    """`POST /queues/refresh` — re-resolve every OPEN queue entry, store-wide.
+
+    FREE, RE-RUNNABLE, AND IT WRITES ONLY WITH `write` — `do_reconcile_live`'s shape, for
+    `do_reconcile_live`'s reason: it rewrites every open entry at once, and a migration
+    nobody watched is how a wrong number becomes the new floor. The preview is the default.
+
+    NOT RUN-SCOPED, WHICH IS THE WHOLE POINT, and the same sentence D87 wrote one screen over.
+    `store/queues.py:upsert` refreshes an entry and is reached only from `queues.apply_run`,
+    which is reached only from a join; a join is scoped to a run and a run to a box, so an
+    entry whose box holds no live run froze at the code that wrote it. Measured on the
+    owner's store: 513 of 565 entries carried neither the `rarity` that landed on candidate
+    rows on 2026-09-11 nor D137's Near Mint filter, and no re-join could reach them.
+
+    NO FILE IS UPLOADED AND NO PATH IS NAMED ON THE WIRE, which is where this differs from
+    `do_reconcile_live`. The exports are the ones the joined runs already recorded, chosen by
+    the command itself — and that is not a shortcut: what the frozen entries need is the
+    LADDER as it stands now, which repairs them against the very file they were joined
+    against. A route that took a path would be `_store_upload`'s file-read primitive behind
+    an origin header for no gain.
+
+    STDOUT VERBATIM, like every other command on this server (D33). The command's own report
+    names what it would change, what it refuses and why, and a structured summary here would
+    be a second description of it to keep in step.
+    """
+    argv = [str(PKMNSCAN), "queue", "refresh"]
     if payload.get("write"):
         argv.append("--write")
     code, console = _run_sync(argv, STEP_TIMEOUT_S)

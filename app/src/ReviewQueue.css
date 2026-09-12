@@ -1026,3 +1026,136 @@
     .review-filters { animation: bn-edgefade linear both; animation-timeline: scroll(self inline); }
   }
 }
+
+/* ---- the store-wide re-check ------------------------------------------------------------
+   `POST /queues/refresh` as a right-hand sheet off this screen's header, and a bottom sheet
+   on a phone — that is the kit's rule for every `.bn-sheet` and is not restated here. The
+   frame is the reconcile sheet's (`LiveReconcile.css`), because the two are the same kind of
+   thing: a store-wide command, previewed, then applied. The console itself is `LogWell`'s, so
+   the only thing this sheet writes about it is how tall it may grow. */
+/* WIDER THAN THE RECONCILE SHEET'S 520px, AND THE CONSOLE IS WHY. Measured on a real report
+   from this tree: `queue refresh` prints 630px of JetBrains Mono at `--bn-fs-sm` on its
+   longest line. Rendered at 560 the well was 512px wide and every `skipped` row was cut
+   mid-word, a reader having to drag the well sideways to find out WHAT was skipped; at 640 it
+   is 592px and the cut is the last five characters of the two longest lines. Not sized to the
+   line — a sheet wide enough for any report is a sheet that has stopped being one, and the
+   well scrolls horizontally for exactly this. */
+.review-recheck {
+  width: min(640px, 100vw);
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+/* `.bn-sheet` sets `display: flex` above, which outranks the attribute on its own. */
+.review-recheck[hidden] { display: none; }
+.review-recheck:focus { outline: none; }
+
+.review-recheck-top {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--bn-3);
+  padding: var(--bn-5) var(--bn-4) var(--bn-4) var(--bn-6);
+  padding-top: calc(var(--bn-5) + env(safe-area-inset-top));
+  border-bottom: 1px solid var(--bn-line);
+  flex: none;
+}
+.review-recheck-heading { display: flex; flex-direction: column; gap: 4px; min-width: 0; }
+.review-recheck-head {
+  margin: 0;
+  font-family: var(--bn-font-display);
+  font-size: var(--bn-fs-2xl);
+  font-weight: 800;
+  letter-spacing: -0.02em;
+  line-height: 1.1;
+}
+
+/* The body is the only thing that scrolls: the heading and the press stay put while the
+   console grows, so the control that writes cannot be scrolled off the bottom. */
+.review-recheck-body {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow: auto;
+  display: flex;
+  flex-direction: column;
+  gap: var(--bn-4);
+  padding: var(--bn-5) var(--bn-6);
+}
+.review-recheck-says { margin: 0; font-size: var(--bn-fs-base); line-height: 1.55; color: var(--bn-ink-2); }
+.review-recheck-says strong { color: var(--bn-ink); }
+
+/* What the press cannot reach. Quiet — it is a reassurance, never a refusal — and it sits
+   directly under the sentence it qualifies, so the negative-margin pulls it out of the body's
+   gap and onto that paragraph. */
+.review-recheck-safe {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--bn-2);
+  margin: calc(var(--bn-3) * -1) 0 0;
+  padding: var(--bn-3);
+  border-radius: var(--bn-r);
+  background: var(--bn-surface-2);
+  font-size: var(--bn-fs-md);
+  line-height: 1.5;
+  color: var(--bn-ink-3);
+}
+.review-recheck-safe .bn-icon { flex: none; margin-top: 2px; color: var(--bn-ink-4); }
+.review-recheck-safe strong { color: var(--bn-ink-2); font-weight: 650; }
+
+.review-recheck-status {
+  display: flex;
+  align-items: center;
+  gap: var(--bn-2);
+  margin: 0;
+  font-size: var(--bn-fs-md);
+  color: var(--bn-ink-3);
+}
+
+/* The console's shape while the first read is in flight — the well's ground with three lines
+   of it, so the sheet is not two thirds empty for the second or two the command takes. The
+   widths are uneven because a report is. */
+.review-recheck-wait {
+  display: flex;
+  flex-direction: column;
+  gap: var(--bn-2);
+  padding: var(--bn-4);
+  border-radius: var(--bn-r);
+  background: var(--bn-surface-2);
+}
+.review-recheck-wait-line { height: 12px; }
+.review-recheck-wait-line:nth-child(1) { width: 62%; }
+.review-recheck-wait-line:nth-child(2) { width: 88%; }
+.review-recheck-wait-line:nth-child(3) { width: 43%; }
+
+/* THE CONSOLE'S HEIGHT IS THE PROP AND NOT A RULE HERE, deliberately: `.run-console`'s own
+   280px is one class deep in `Runs.css`, so a rule of the same specificity in this sheet wins
+   or loses on bundle order. `LogWell`'s `maxHeight` is an inline style and always wins, which
+   is why the reconcile sheet passes its height the same way. What this sheet does not have to
+   say at all is that the block scrolls: `.run-console` is `overflow: auto` over
+   `white-space: pre`, so a long line moves that block and never the page.
+   `.review-recheck-console` is passed for the hook alone. */
+
+.review-recheck-foot {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: var(--bn-2);
+  padding: var(--bn-3) var(--bn-6);
+  padding-bottom: calc(var(--bn-3) + env(safe-area-inset-bottom));
+  border-top: 1px solid var(--bn-line);
+  background: var(--bn-surface);
+  flex: none;
+}
+
+@media (max-width: 767px) {
+  .review-recheck-top { padding-left: var(--bn-4); }
+  .review-recheck-body,
+  .review-recheck-foot { padding-left: var(--bn-4); padding-right: var(--bn-4); }
+}
+
+/* THE THUMB FLOOR, ON THE POINTER TOO (D117), and read from the token rather than typed: the
+   sheet's Close is icon-only and its two presses are the whole point of the screen. */
+@media (max-width: 767px), (hover: none) and (pointer: coarse) {
+  .review-recheck-top .bn-btn-icon,
+  .review-recheck-foot .bn-btn { --btn-h: var(--bn-control-h-sm); }
+}

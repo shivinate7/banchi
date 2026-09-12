@@ -24,7 +24,7 @@ import json
 from collections import Counter
 
 from cli import resolve, runs
-from pipeline import corpus, decisions, join, pricing, routing, tcgcsv
+from pipeline import corpus, decisions, join, pricing, routing, worklist
 from store import master, queues
 from store import files
 from store.session import Store
@@ -62,23 +62,6 @@ def _counts_block(say, counts: Counter, indent: str = "                   ") -> 
 PRESETS = pricing.PRESETS
 
 
-def _cell(row, column):
-    """One export cell as a rendered price, or `None` where it is blank.
-
-    Rendered through `tcgcsv.format_price` rather than passed raw, because three of the four
-    price columns are FOUR-decimal in every populated cell and two are two — so a screen
-    drawing them side by side without this reads `$0.0100` beside `$0.07` and loses the
-    decimal column. The raw string travels too (`row`), so nothing is lost.
-    """
-    value = tcgcsv.parse_price(row.get(column, ""))
-    return None if value is None else tcgcsv.format_price(value)
-
-
-def _preset_prices(match):
-    """What each named preset would list this SKU at. `pipeline/pricing.py` owns the figures."""
-    return pricing.preset_prices(match.row)
-
-
 def _pricing_table(run_dir, resolved, choice, snapshot):
     """`pricing.json` — every SKU this run matched, with everything needed to price it.
 
@@ -100,89 +83,28 @@ def _pricing_table(run_dir, resolved, choice, snapshot):
         listing_of = snapshot.inventory.listings
         for match in report.matches.values():
             record = listing_of.get(match.sku)
+            # THE ROW IS COMPOSED IN ONE PLACE (`pipeline/worklist.py`), because a join is
+            # no longer its only writer: `server/pipeline_routes.py` composes the same row
+            # for a SKU a review answer stamped onto a card that no table names. Twenty
+            # fields with four arithmetic ones among them is not a shape to describe twice.
             skus.append(
-                {
-                    "sku": match.sku,
-                    "game": game_join.game,
-                    # VERBATIM, every cell, unmodified. D49's whole premise is the owner's
-                    # "I want all the data from the CSV shown when I make the decision".
-                    "row": dict(match.row),
-                    "bucket": (
-                        "no_market_data"
-                        if match.sku in unpriced
-                        else "sub_threshold"
-                        if match.sku in below
-                        else "listable"
+                worklist.sku_row(
+                    match,
+                    game_join.game,
+                    worklist.bucket_for(
+                        match,
+                        below=match.sku in below,
+                        unpriced=match.sku in unpriced,
                     ),
-                    "copies": match.copies,
-                    "add_to_quantity": match.add_to_quantity,
-                    "backstock": match.backstock,
-                    "live_before": match.live_before,
-                    # THE LIVE FIGURE THE CAP WAS COMPUTED FROM: the newer of the store's
-                    # reading and this export's (D87, amended). `live_before` beside it is
-                    # the export's column alone, kept because it is what the CSV says.
-                    "live_now": match.live_now,
-                    "committed": len(match.committed_positions),
-                    # WHAT TCGPLAYER ACTUALLY HOLDS, AND WHY `live_before` BESIDE IT IS NOT
-                    # THAT NUMBER. `live_before` is the export's live column alone, which
-                    # reads 0 for every copy sitting on an import nobody has reconciled —
-                    # measured at 167 pushed copies across 72 SKUs of the owner's store,
-                    # zero of them live, so a screen drawing it said TCGplayer holds
-                    # nothing about SKUs it holds several of. `copies_out` is live plus
-                    # pending, per SKU and across every box. All three ship: the screen
-                    # names the export's own figure where it means the export, `live_now`
-                    # where it means what was believed, and this one where it means the
-                    # shelf (D59).
-                    "copies_out": match.copies_out,
-                    "at_cap": match.add_to_quantity == 0,
-                    # The SENTENCE, composed where the numbers are, never re-derived from
-                    # the three fields above. `at_cap` says a row was not written and
-                    # cannot say why — at the cap, or held out by an unreconciled push, or
-                    # every copy in this run already gone. A screen reassembling that from
-                    # parts is a second copy of `SkuMatch.nothing_to_add`'s reasoning with
-                    # nothing auditing the two against each other.
-                    "nothing_to_add": match.nothing_to_add,
-                    "condition": match.condition,
-                    "set_name": match.set_name,
-                    "name": match.name,
-                    "snap": {
-                        "market": _cell(match.row, tcgcsv.MARKET_PRICE_COLUMN),
-                        "direct_low": _cell(match.row, tcgcsv.DIRECT_LOW_COLUMN),
-                        "low": _cell(match.row, tcgcsv.LOW_PRICE_COLUMN),
-                        "low_with_shipping": _cell(
-                            match.row, tcgcsv.LOW_WITH_SHIPPING_COLUMN
-                        ),
-                        "now": _cell(match.row, tcgcsv.PRICE_COLUMN),
+                    None
+                    if record is None
+                    else {
+                        "pushed": record.pushed,
+                        "staged": record.staged,
+                        "live": record.live,
+                        "sold_here": record.sold_here,
                     },
-                    "presets": _preset_prices(match),
-                    "rule_price": (
-                        None if match.list_price is None else str(match.list_price)
-                    ),
-                    # The first copy in box-walk order and how many there are — the
-                    # representative photograph, named rather than picked silently, and
-                    # steppable on the screen. `positions` is already sorted.
-                    "positions": [
-                        {"box": pos.box, "index": pos.index, "label": pos.label}
-                        for pos in match.positions
-                    ],
-                    # FOUR KEYS SINCE D115, AND THE FOURTH IS NOT OPTIONAL. `live` is the
-                    # export's READING and the screen draws the ESTIMATE, so freezing the
-                    # reading alone would have `#/pricing` over-report by exactly the copies
-                    # sold since — on the screen where the operator decides money, and with
-                    # nothing to catch it: no browser spec reads the run door's `LiveCount`.
-                    # A derived value never rides a payload; the two numbers travel and the
-                    # reader subtracts.
-                    "listing": (
-                        None
-                        if record is None
-                        else {
-                            "pushed": record.pushed,
-                            "staged": record.staged,
-                            "live": record.live,
-                            "sold_here": record.sold_here,
-                        }
-                    ),
-                }
+                )
             )
 
     # Market descending, and `None` last. The sort is the hierarchy on the screen — there are

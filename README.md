@@ -96,6 +96,10 @@ human. One blocking command would put a person in the middle of a poll loop.
 ./pkmnscan prices     adopt [--write]                 fold the legacy per-run answers into
                                                       inventory/prices.json. Previews first.
 ./pkmnscan prices     show [--held]                   the corpus, and what is held back.
+./pkmnscan queue      refresh [--export <file.csv>]   re-resolve every OPEN queue entry
+                        against a current export, store-wide — a join only ever reached
+                        the entries its own box held. Previews; --write applies. An
+                        answered card is never re-queued.
 ./pkmnscan reconcile  <run-dir> <staged-export.csv>   confirm what TCGplayer staged.
 ./pkmnscan reconcile  --live <my-pricing.csv>         the WHOLE store against one live
                         export, both directions. Previews; --write settles `live`.

@@ -910,6 +910,15 @@ def run(args, say) -> int:
                     printed_total=item.parsed.printed_total,
                     confidence=item.parsed.confidence,
                     run=run_dir.name,
+                    # THE RAW `finish` KEY, WHICH IS WHAT `cli/resolve.py:load` READS. The
+                    # parsed fields above are the parser's hygiene applied to the model's
+                    # answer; this one has no parsed twin, and `load` takes it off the
+                    # identification dict exactly like this before handing it to
+                    # `_detected` — so the store and the run record now carry one value,
+                    # read the same way. Interpreting it here would put the per-game finish
+                    # whitelist in a second place; `_detected` applies it at the point of
+                    # use and this line stores the raw answer unchanged.
+                    detected_finish=(item.identification or {}).get("finish"),
                 )
 
         # C8's ledger, in the same locked session that recorded the cards it indexes.

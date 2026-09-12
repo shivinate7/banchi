@@ -19,6 +19,7 @@ from cli import (  # noqa: E402
     cmd_identify,
     cmd_join,
     cmd_prices,
+    cmd_queue,
     cmd_reconcile,
     cmd_reprice,
     cmd_scan,
@@ -235,6 +236,33 @@ def build_parser() -> argparse.ArgumentParser:
         help="with --live: settle the ledger. Previews without it.",
     )
 
+    # --------------------------------------------------------------------------- queue
+    #
+    # THE STANDING QUEUES, RE-RESOLVED STORE-WIDE. `upsert` refreshes an entry and is reached
+    # only from a join, a join is scoped to a run and a run to a box — so an entry whose box
+    # holds no live run froze at the code that wrote it. Previews by default for
+    # `reconcile --live`'s reason: it rewrites every open entry at once.
+    queue = sub.add_parser(
+        "queue", help="the standing review queues: re-resolve every open entry"
+    )
+    queue_sub = queue.add_subparsers(dest="queue_command")
+    refreshing = queue_sub.add_parser(
+        "refresh",
+        help="re-resolve every OPEN entry against a current export. Free, re-runnable.",
+    )
+    refreshing.add_argument(
+        "--export",
+        action="append",
+        metavar="FILE.CSV",
+        help="an export to resolve against; repeat for several. Defaults to the ones the "
+        "joined runs recorded, newest per game.",
+    )
+    refreshing.add_argument(
+        "--write",
+        action="store_true",
+        help="apply the refresh. Previews without it.",
+    )
+
     # -------------------------------------------------------------------------- prices
     #
     # THE CORPUS, AND THE ONE-TIME FOLD THAT FILLS IT (D86). `adopt` previews by default
@@ -359,6 +387,7 @@ COMMANDS = {
     "emit": cmd_emit.run,
     "reconcile": cmd_reconcile.run,
     "prices": cmd_prices.run,
+    "queue": cmd_queue.run,
     "reprice": cmd_reprice.run,
 }
 

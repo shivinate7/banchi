@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
+import { createPortal } from 'react-dom'
 import { PositionLabel } from './PositionLabel'
 import { isEditableTarget } from './keys'
 import type {
@@ -20,6 +21,7 @@ import {
   describeFailure,
   getQueues,
   photoUrl,
+  refreshQueues,
   retireCard,
   reviewCatalog,
   standDown,
@@ -28,6 +30,9 @@ import {
   undoStandDown,
 } from './server'
 import { Button, EmptyState, Icon, Kbd, Notice, PageHeader, Pill } from './kit'
+import { toast } from './kit/toast'
+import { LogWell } from './RunsLog'
+import { useOverlayFocus } from './runsOverlay'
 import './ReviewQueue.css'
 import { isRetiredReason, reasonLabel } from './reasons'
 import { collectorNumber as sharedCollectorNumber } from './cardNumber'
@@ -610,6 +615,8 @@ export function ReviewQueue() {
   const [tally, setTally] = useState<Tally>({ answered: 0, closed: 0, skipped: 0 })
   const startedAt = useRef(Date.now())
   const [queueOpen, setQueueOpen] = useState(false)
+  /** The store-wide re-check sheet. Closed on arrival: opening it takes a reading. */
+  const [recheckOpen, setRecheckOpen] = useState(false)
 
   useEffect(() => {
     let live = true
@@ -981,6 +988,9 @@ export function ReviewQueue() {
 
   const clearSkips = useCallback(() => setDeferred([]), [])
   const reload = useCallback(() => setReloads((n) => n + 1), [])
+  /* Stable, because the sheet re-previews whenever `open` goes true and a new identity for
+     either prop would be a second reading of the store on the same opening. */
+  const closeRecheck = useCallback(() => setRecheckOpen(false), [])
 
   /* D46/D77: the export's rows, unasked for a zero-candidate card and on `L` for one with rows. */
   const looking = current !== null && lookingAt === current.key
@@ -1058,6 +1068,12 @@ export function ReviewQueue() {
     if (event.metaKey || event.ctrlKey || event.altKey) return
     if (isEditableTarget(event.target)) return
     if (busyRef.current || loadingRef.current) return
+
+    /* THE RE-CHECK SHEET OWNS THE KEYBOARD WHILE IT IS UP, which is the rule the close panel
+     * and the group state already follow. Every key below answers, closes, skips or reloads
+     * the card behind the scrim — a digit pressed at this sheet would list a card the
+     * operator cannot see. Escape is the sheet's own, through `useOverlayFocus`. */
+    if (recheckOpen) return
 
     const key = event.key.toLowerCase()
 
@@ -1259,6 +1275,13 @@ export function ReviewQueue() {
                 Answer all {groupOffer.rows.length} together
               </Button>
             )}
+            {/* NOT THE RELOAD BESIDE IT, and the two labels are written to be unmistakable:
+                that one re-fetches these two queues, this one asks the pipeline to look at
+                every waiting card again. Same header, different verb, and neither says
+                "refresh" — the word that would make them one control. */}
+            <Button icon="wand" onClick={() => setRecheckOpen(true)} disabled={disabled} className="review-recheck-open">
+              {phone ? 'Re-check all' : 'Re-check every waiting card'}
+            </Button>
             <Button variant="ghost" icon="refresh" iconOnly kbd={phone ? undefined : RELOAD_KEY_LABEL} onClick={reload} disabled={disabled} className="review-reload">
               Reload the queue
             </Button>
@@ -1372,6 +1395,8 @@ export function ReviewQueue() {
           </>
         )}
       </div>
+
+      <QueueRefresh open={recheckOpen} onClose={closeRecheck} onWrote={reload} />
     </main>
   )
 }
@@ -2375,5 +2400,223 @@ function Waiting({
         })}
       </ul>
     </aside>
+  )
+}
+
+// ------------------------------------------------------- the store-wide re-check (a sheet)
+
+/* EVERY WAITING CARD, PUT BACK THROUGH THE LADDER — `POST /queues/refresh`, reachable from
+ * this screen's header because this is the screen the waiting cards are on.
+ *
+ * TWO PRESSES, PREVIEW FIRST, AND THE SECOND CONTROL DOES NOT EXIST UNTIL THE FIRST HAS
+ * ANSWERED. `LiveReconcile`'s shape (D87) and for its reason: this rewrites every open entry
+ * in the store in one act, so what it would do is READ before it is done. The preview runs on
+ * opening — there is nothing to ask for first, no file, no scope, no figure — and writes
+ * nothing. `Apply the refresh` is rendered only once a preview has landed, absent rather than
+ * disabled: a control that cannot be pressed yet still says the press is available.
+ *
+ * IT IS NOT THE `R` RELOAD. That re-fetches these two queues and asks the pipeline nothing.
+ * This re-resolves each open entry against the export its run was joined against, which is
+ * what a frozen entry needs — so a write can clear a card outright, and the queue list is
+ * RE-READ afterwards through the screen's own `reload` rather than patched from here.
+ *
+ * AN ANSWERED CARD IS NEVER RE-QUEUED, AND THE SHEET SAYS SO. `store/queues.py:upsert`
+ * refuses a cleared position and `release` refuses to drop one, so D28's undo stays the only
+ * door back out of an answer. It is on screen because the operator is being asked for a
+ * store-wide write over the work they have just been doing by hand.
+ *
+ * A NON-ZERO EXIT IS AN ANSWER, NOT A CRASH. The command's own stdout is the only thing that
+ * says what went wrong, so a refusal draws the console too, under a danger notice carrying
+ * the exit code. What CANNOT be drawn is a request that never reached the command — that is a
+ * `Failure`, and it gets the message and the code it came with. */
+function QueueRefresh({
+  open,
+  onClose,
+  onWrote,
+}: {
+  readonly open: boolean
+  readonly onClose: () => void
+  /** The screen's own queue re-read, pressed once a write has landed. */
+  readonly onWrote: () => void
+}) {
+  const [busy, setBusy] = useState(false)
+  const [report, setReport] = useState<string | null>(null)
+  const [wrote, setWrote] = useState(false)
+  /** The command's own exit code when it refused; null while it has not. */
+  const [refused, setRefused] = useState<number | null>(null)
+  const [failure, setFailure] = useState<Failure | null>(null)
+  const sheet = useRef<HTMLElement | null>(null)
+
+  const send = useCallback(
+    async (write: boolean) => {
+      setBusy(true)
+      setFailure(null)
+      try {
+        const answer = await refreshQueues({ write })
+        setReport(answer.console)
+        setWrote(answer.ok && answer.wrote)
+        setRefused(answer.ok ? null : answer.exit_code)
+        if (answer.ok && answer.wrote) {
+          toast({
+            kind: 'ok',
+            title: 'The queues were re-checked',
+            body: 'Every waiting card the pipeline could answer has left the queue.',
+          })
+          onWrote()
+        }
+      } catch (err) {
+        setFailure(describeFailure(err))
+      } finally {
+        setBusy(false)
+      }
+    },
+    [onWrote],
+  )
+
+  /* The preview, on opening, once. Reopening takes a FRESH reading rather than showing the
+     last one — answers have usually been written in between, and a preview describing the
+     queue as it was two minutes ago is the one thing a two-step gate may not show. The ref is
+     what keeps StrictMode's second mount from sending it twice. */
+  const asked = useRef(false)
+  useEffect(() => {
+    if (!open) {
+      asked.current = false
+      return
+    }
+    if (asked.current) return
+    asked.current = true
+    setReport(null)
+    setWrote(false)
+    setRefused(null)
+    setFailure(null)
+    void send(false)
+  }, [open, send])
+
+  /* Focus lands inside on open, stays inside under Tab, and returns to the header button on
+     close; Escape closes unless a read or a write is in flight. */
+  useOverlayFocus(sheet, open, onClose, busy)
+
+  /* The press that writes exists only while there is a preview to have read and nothing has
+     been written yet. A refusal takes it away too: the write would refuse identically, and
+     the remedy is in the console rather than in a second press. */
+  const applyable = report !== null && !wrote && refused === null
+
+  /* Portalled to <body>: `main.bn-page` keeps a filled transform after its enter animation,
+     and a fixed sheet inside it would hang off the column. */
+  return createPortal(
+    <>
+      {open ? <div className="bn-scrim" onClick={onClose} /> : null}
+      <aside
+        ref={sheet}
+        className="bn-sheet review-recheck"
+        hidden={!open}
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="review-recheck-head"
+        tabIndex={-1}
+      >
+        <header className="review-recheck-top">
+          <div className="review-recheck-heading">
+            <span className="bn-eyebrow">Store-wide · free</span>
+            <h2 className="review-recheck-head" id="review-recheck-head">
+              Re-check every waiting card
+            </h2>
+          </div>
+          <Button variant="ghost" icon="x" iconOnly onClick={onClose}>
+            Close
+          </Button>
+        </header>
+
+        <div className="review-recheck-body">
+          <p className="review-recheck-says">
+            Every card still waiting in these two queues, in every box, put back through the
+            pipeline as it stands now — against the same export its run was joined against. A
+            card the pipeline can place on its own is listed and leaves the queue; a card it
+            still cannot place stays here, usually with a better sentence on it.{' '}
+            <strong>Nothing is uploaded and nothing is identified</strong>, so this costs no
+            money and can be run again.
+          </p>
+
+          {/* WHAT IT WILL NOT DO, said before the press rather than in the receipt. The
+              operator has just spent the session answering cards by hand, and a store-wide
+              write over that work has to state what it cannot reach. */}
+          <p className="review-recheck-safe">
+            <Icon name="lock" size={14} />
+            <span>
+              A card you have already answered is never put back in the queue — not by this, not
+              by anything. The <strong>Undo</strong> beside the answer stays the only way back
+              out of one.
+            </span>
+          </p>
+
+          {!busy ? null : (
+            <p className="review-recheck-status" role="status">
+              <span className="bn-dot bn-dot-accent" />
+              {report === null ? 'Reading what the pipeline would do…' : 'Re-checking every waiting card…'}
+            </p>
+          )}
+
+          {/* THE SHAPE OF THE ANSWER WHILE IT IS COMING, in the idiom this screen already uses
+              for the catalog rows. Only on the FIRST read: once there is a report, replacing it
+              with bars would take away the thing the operator is deciding from, and the status
+              line above already says a write is in flight. The bars are decoration for a
+              sentence that is `role="status"`, so they are hidden from the reader. */}
+          {busy && report === null ? (
+            <div className="review-recheck-wait" aria-hidden="true">
+              {[0, 1, 2].map((at) => (
+                <span key={at} className="bn-skeleton review-recheck-wait-line" />
+              ))}
+            </div>
+          ) : null}
+
+          {failure === null ? null : (
+            /* The TITLE carries the reassurance, not the body. `describeFailure`'s own
+               messages already end with one — `origin_blocked`'s says "Nothing was saved" —
+               and appending a second read as two different claims about one refusal. */
+            <Notice tone="danger" title="The re-check did not run, and nothing was written" code={failure.code}>
+              {failure.message}
+            </Notice>
+          )}
+
+          {report === null ? null : (
+            <>
+              {refused !== null ? (
+                <Notice tone="danger" title="The re-check refused" code={`exit ${refused}`}>
+                  It ran and stopped on its own. What it printed is below, and it is the whole of
+                  what it said.
+                </Notice>
+              ) : wrote ? (
+                <Notice tone="ok" title="Re-checked">
+                  The queues are written and this screen has re-read them. No answer of yours was
+                  touched.
+                </Notice>
+              ) : (
+                <Notice tone="info" title="Preview — nothing written yet">
+                  Read what would move, then apply it below.
+                </Notice>
+              )}
+              <LogWell
+                text={report}
+                label={wrote ? 'What the re-check printed' : 'What the preview printed'}
+                className="review-recheck-console"
+                maxHeight={360}
+              />
+            </>
+          )}
+        </div>
+
+        {!applyable ? null : (
+          <footer className="review-recheck-foot">
+            <Button variant="ghost" onClick={onClose} disabled={busy}>
+              Not now
+            </Button>
+            <Button variant="primary" icon="check" busy={busy} disabled={busy} onClick={() => void send(true)}>
+              Apply the refresh
+            </Button>
+          </footer>
+        )}
+      </aside>
+    </>,
+    document.body,
   )
 }

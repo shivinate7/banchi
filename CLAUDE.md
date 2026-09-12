@@ -595,6 +595,36 @@ make merge          # merge a PR and move main onto it — BOTH HALVES, on your 
 ./pkmnscan prices   show [--held]   # what the corpus holds. `--held` is the cross-run view of
                                    #   what is held back — D49 named its absence, D62 repeated
                                    #   it, and it is one line now that the answers are one file.
+./pkmnscan queue    refresh [--export <file.csv>] [--write]
+                                   # RE-RESOLVE EVERY OPEN QUEUE ENTRY, STORE-WIDE. Free,
+                                   #   re-runnable, previews by default. `store/queues.py:upsert`
+                                   #   refreshes an entry and is reached only from
+                                   #   `queues.apply_run`, which is reached only from a join — and
+                                   #   a join is scoped to a run, a run to a box. So an entry whose
+                                   #   box holds no live run FROZE at the code that wrote it: 513
+                                   #   of the owner's 565 entries carried neither the `rarity` that
+                                   #   landed on candidate rows on 2026-09-11 nor D137's Near Mint
+                                   #   filter, and no re-join could reach them. `reconcile --live`
+                                   #   is the precedent, word for word (D87): the scoping was the
+                                   #   command's and never the data's.
+                                   #   IT IS THE LADDER AND NOT A SECOND READING OF IT — the same
+                                   #   `IdentifiedCard`, `join_batch`, `default_router` and
+                                   #   `queue_entry` a join runs, so a ladder fix reaches this path
+                                   #   the day it lands. Measured against a real join over one
+                                   #   run's own export: 172 of 172 verdicts and 132 of 132 reasons
+                                   #   and candidate rows agree.
+                                   #   AN ANSWERED ENTRY IS NEVER RE-QUEUED AND NEVER DROPPED, and
+                                   #   that is `apply_run`'s two refusals rather than this
+                                   #   command's code — D28's undo stays the only door back out of
+                                   #   an answer. `first_seen` survives. A card that has LEFT the
+                                   #   box is skipped, never re-asked about (D26, D83).
+                                   #   --export <file.csv>  resolve against this file; repeat for
+                                   #                        several. Defaults to the exports the
+                                   #                        joined runs recorded, newest per game —
+                                   #                        a frozen entry needs the current LADDER,
+                                   #                        not a newer catalogue
+                                   #   --write              apply it. Previews without it
+                                   #   Reachable on `#/review`, from the header.
 ./pkmnscan reconcile <run-dir> <staged-export.csv>   # one import, one Export From Staged
 ./pkmnscan reconcile --live <my-pricing.csv> [--write]
                                    # THE WHOLE STORE against one live export (D87). Previews
@@ -1782,6 +1812,7 @@ D158 The refusal goes where the damage is, so the primary checkout's server will
 D159 The band is copies rather than SKUs, the drawer is the first answer, and nothing on hand is dropped
 D160 An entry is a file, because two branches appending to one file collide every single time
 D161 `make check` proves the product first and its own guards last, because a failure stops the rest
+D-the-queue-is-refreshed-where-it-stands A queue entry is re-resolved where it stands, and the answer reaches the price without a second press
 ```
 
 **THE GAP THIS LIST CARRIED BETWEEN D116 AND D118 IS CLOSED, AND IT CLOSED THE WAY IT SAID IT
