@@ -2192,6 +2192,7 @@ D174 A press claims the cards it is about to buy, and the claim is written in th
 D175 Ownership is read the way liveness is, and a process a session no longer owns is offered rather than reaped
 D176 The primary checkout syncs itself, both parts, because the thing D42 was protecting is not the thing this moves
 D177 The corpus answers for listings no camera here ever saw, so a prune is a list the operator presses and never a rule a join runs
+D178 A document may name what it would create, and the marking expires by itself
 D-a-cache-hit-is-not-a-divisor A per-card price is divided by the cards actually submitted, and a reading is chosen on a metric the reading can move
 ```
 
