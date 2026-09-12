@@ -226,14 +226,32 @@ DECISIONS_DIR = "docs/decisions"
 DECISIONS_MANIFEST = DECISIONS_DIR + "/ORDER.json"
 
 
-def corpus_text(root: Path) -> str:
-    """The entries of a working tree, concatenated in manifest order."""
+def corpus_order(root: Path) -> List[str]:
+    """Corpus membership: the manifest's list, then anything on disk it has not been told of.
+
+    DERIVED, BECAUSE A BRANCH DOES NOT EDIT THE MANIFEST. An entry-adding branch carries its
+    own file and nothing shared — `settle_corpus` writes the manifest at claim time. A
+    claimer reading only the manifest would therefore be blind to exactly the entry it exists
+    to claim, which is how this was found: an unregistered slug reported `nothing to claim`
+    while sitting in the directory.
+    """
     manifest = root / DECISIONS_MANIFEST
     if not manifest.exists():
+        return []
+    listed = json.loads(read(manifest))["order"]
+    known = set(listed)
+    extra = sorted(p.name for p in (root / DECISIONS_DIR).glob("*.md")
+                   if p.name not in known)
+    return listed + extra
+
+
+def corpus_text(root: Path) -> str:
+    """The entries of a working tree, concatenated in corpus order."""
+    if not (root / DECISIONS_MANIFEST).exists():
         return read(root / DECISIONS) if (root / DECISIONS).exists() else ""
-    order = json.loads(read(manifest))["order"]
     return "\n".join(read(root / DECISIONS_DIR / name)
-                     for name in order if (root / DECISIONS_DIR / name).exists())
+                     for name in corpus_order(root)
+                     if (root / DECISIONS_DIR / name).exists())
 
 
 def corpus_text_at(rev: str, cwd: Optional[str] = None) -> str:
@@ -559,7 +577,10 @@ def rename_claimed_entries(root: Path, claims: Sequence[Claim], write: bool) -> 
     if not manifest_path.exists():
         return renames
     manifest = json.loads(read(manifest_path))
-    order = list(manifest["order"])
+    listed = list(manifest["order"])
+    # The file may not be in the manifest yet — a branch does not put it there. Look in the
+    # DERIVED order so a claim can rename an entry the manifest has never heard of.
+    order = corpus_order(root)
     for claim in claims:
         if claim.kind != "decision":
             continue
@@ -577,10 +598,14 @@ def rename_claimed_entries(root: Path, claims: Sequence[Claim], write: bool) -> 
         new_name = f"D{number:03d}-{tail}.md"
         renames[old_name] = new_name
         order[order.index(old_name)] = new_name
+        if old_name in listed:
+            listed[listed.index(old_name)] = new_name
         if write:
             (root / DECISIONS_DIR / old_name).rename(root / DECISIONS_DIR / new_name)
     if renames and write:
-        manifest["order"] = order
+        # Only what the manifest already NAMED is rewritten here; an entry it has never heard
+        # of is appended by `settle_corpus`, which runs after this and knows the final order.
+        manifest["order"] = listed
         manifest_path.write_text(json.dumps(manifest, indent=2) + "\n", encoding="utf-8")
     return renames
 
@@ -610,7 +635,48 @@ def perform(root: Path, claims: Sequence[Claim], write: bool) -> Dict[str, int]:
             path.write_text(after, encoding="utf-8")
     for old_name, new_name in rename_claimed_entries(root, claims, write).items():
         touched[f"{DECISIONS_DIR}/{old_name} -> {new_name}"] = 1
+    for label in settle_corpus(root, write):
+        touched[label] = 1
     return touched
+
+
+def settle_corpus(root: Path, write: bool) -> List[str]:
+    """Write the two DERIVED things at claim time: the manifest's order and the index.
+
+    THE MERGE IS THE ONE MOMENT EITHER IS KNOWABLE, which is exactly D140's argument for the
+    number and the reason both belong here rather than on a branch. A branch adding an entry
+    would otherwise have to append to a shared JSON array and add a line to CLAUDE.md's index
+    at the position every other such branch touches — two more collisions, in the change that
+    exists to remove one.
+
+    So a branch carries its entry FILE and nothing shared. Corpus membership is derived by
+    `decisions_corpus.order()` until this runs, and the index is regenerated from the headings
+    that exist after the claim — including the number this claim just allocated, which is why
+    it runs AFTER the substitution and the rename rather than beside them.
+
+    D18 PUTS THIS ON THE WRITING SIDE and keeps the checking side elsewhere: `decision index`
+    still computes the index independently and blocks, and it is a different program. A
+    generator that also gated could satisfy itself.
+    """
+    moved: List[str] = []
+    try:
+        import importlib.util
+
+        spec = importlib.util.spec_from_file_location(
+            "index_decisions", root / "scripts" / "index-decisions.py")
+        index = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(index)
+    except Exception as exc:                       # a tree without the generator still claims
+        return [f"(index generator not runnable: {exc})"]
+    try:
+        appended = index.normalize(root, write)
+        if appended:
+            moved.append(f"{DECISIONS_MANIFEST} (+{len(appended)} entry)")
+        if index.rewrite_index(root, write):
+            moved.append("CLAUDE.md (decision index regenerated)")
+    except Exception as exc:
+        return [f"(corpus not settled: {exc})"]
+    return moved
 
 
 # ------------------------------------------------------------------------------------ cli

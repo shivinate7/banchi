@@ -504,21 +504,35 @@ def resolve_candidate(candidate: str, containing: Path, tops: Set[str]) -> Optio
     """
     text = candidate.lstrip("@")
     if text.startswith("../"):
-        # A `../` INSIDE A DECISION ENTRY IS RESOLVED FROM `docs/`, NOT FROM
-        # `docs/decisions/`. The entries were one file at `docs/DECISIONS.md` until the
-        # split, their bytes are unchanged by design, and `../.claude/skills` in D135 meant
-        # the repo root when it was written. Resolving it from the deeper directory would
-        # make a faithful move look like a broken citation — the author's meaning is the
-        # thing being preserved, and the alternative was editing entry text inside a change
-        # whose whole claim is that it edited none.
-        base = containing.parent
-        if base == ROOT / "docs" / "decisions":
-            base = ROOT / "docs"
-        target = (base / text).resolve()
-        try:
-            target.relative_to(ROOT)
-        except ValueError:
-            return None
+        # A `../` INSIDE A DECISION ENTRY MEANS EITHER `docs/` OR `docs/decisions/`, AND
+        # BOTH ARE TRIED. The entries were one file at `docs/DECISIONS.md` until the split;
+        # their bytes are unchanged by design, and a pre-split entry writing `../` meant the
+        # repo root because that is where it sat. D135 has one. Resolving only from the
+        # deeper directory makes a faithful move look like a broken citation.
+        #
+        # BUT THE RULE MAY NOT BE BLANKET, and that was the review's catch. An entry written
+        # AFTER the split, sitting in `docs/decisions/`, may legitimately mean its own
+        # parent — and a rule fixed on the historical reading would misresolve it silently,
+        # forever. A bound on the id would answer it and rot: the boundary is a date, not a
+        # number, and nothing would maintain it.
+        #
+        # So both are accepted. What is given up is narrow and worth naming: a `../` path
+        # that exists under one base and is a typo for something under the other resolves
+        # instead of being reported. That is a strictly smaller hole than either rule alone,
+        # and it needs no boundary anybody has to keep updating.
+        bases = [containing.parent]
+        if containing.parent == ROOT / "docs" / "decisions":
+            bases.append(ROOT / "docs")
+        target = None
+        for base in bases:
+            candidate_path = (base / text).resolve()
+            try:
+                candidate_path.relative_to(ROOT)
+            except ValueError:
+                continue
+            target = candidate_path
+            if exists(candidate_path):
+                break
         return target
     text = text[2:] if text.startswith("./") else text
     first = text.split("/", 1)[0]

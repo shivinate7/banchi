@@ -49,15 +49,55 @@ HEADING_RE = re.compile(r"^##\s+(D" + _ID + r")\b")
 _cache: Dict[str, object] = {}
 
 
+def _rank(name: str) -> tuple:
+    """Where an unregistered file sorts: numbered entries by number, slugs last.
+
+    A CLAIM SLUG SORTS AFTER EVERY NUMBER, and that is not what a plain string sort does —
+    `-` is 0x2D and `0` is 0x30, so a slug-named file sorts BEFORE a zero-padded number and
+    an unclaimed entry would land at the top of the corpus instead of the bottom. It is by
+    definition the newest thing in the tree.
+    """
+    stem = name[:-3] if name.endswith(".md") else name
+    head = stem.split("-", 1)[0]
+    if head.startswith("D") and head[1:].isdigit():
+        return (0, int(head[1:]), name)
+    return (1, 0, name)
+
+
 def order() -> List[str]:
-    """The manifest's filenames, in corpus order."""
+    """Corpus order: the manifest's list, then anything on disk it has not been told about.
+
+    A BRANCH ADDING AN ENTRY TOUCHES ONLY ITS OWN FILE. The manifest was the second shared
+    surface hiding inside this change — every entry-adding branch appending to one JSON array
+    at the same position is the collision this split exists to remove, wearing a different
+    file extension. So membership is DERIVED: the manifest pins the order of what it knows,
+    which is what keeps the three non-entry sections between D79 and D80, and a file it has
+    never heard of is appended rather than rejected.
+
+    `make merge` normalizes the manifest at claim time, which is the one moment the final
+    order is knowable — the same argument D140 makes for the number itself. Until then an
+    unregistered entry is corpus content, not an error.
+
+    A file the manifest names that is NOT on disk stays an error, because that is real damage
+    rather than a branch in flight; `make decisions-selftest` is what reports it.
+    """
     if "order" not in _cache:
-        _cache["order"] = json.loads(MANIFEST.read_text(encoding="utf-8"))["order"]
+        listed = json.loads(MANIFEST.read_text(encoding="utf-8"))["order"]
+        known = set(listed)
+        extra = sorted((p.name for p in DIRECTORY.glob("*.md") if p.name not in known),
+                       key=_rank)
+        _cache["order"] = listed + extra
     return list(_cache["order"])  # a copy: callers sort and filter it
 
 
+def unregistered() -> List[str]:
+    """Entry files on disk that the manifest has not been told about."""
+    listed = set(json.loads(MANIFEST.read_text(encoding="utf-8"))["order"])
+    return sorted((p.name for p in DIRECTORY.glob("*.md") if p.name not in listed), key=_rank)
+
+
 def files() -> List[Path]:
-    return [DIRECTORY / name for name in order()]
+    return [DIRECTORY / name for name in order() if (DIRECTORY / name).exists()]
 
 
 def text() -> str:

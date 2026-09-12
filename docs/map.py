@@ -2027,7 +2027,9 @@ COMPONENTS = [
                 # D79/D80 are the two entries the three non-decision sections sit between.
                 # Cited, so listed — the superset rule takes a citation at face value, the
                 # same trade prose-guard.py's entry records.
-                "governed_by": ["D16", "D18", "D58", "D60", "D79", "D80",
+                # D140 is real here: the claimer renames the file a claim allocates, so both
+                # id shapes have to resolve. The rest are worked examples in the docstrings.
+                "governed_by": ["D16", "D18", "D58", "D60", "D79", "D80", "D140",
                                 "D-the-corpus-is-a-directory"],
             },
             "split-decisions.py": {
@@ -2071,8 +2073,11 @@ COMPONENTS = [
                 #
                 # D79 and D80 are a worked example in the docstring — the two entries the
                 # three non-decision chunks sit between, which is why the order is the
-                # manifest's rather than a sort. Cited, so listed.
-                "governed_by": ["D16", "D18", "D60", "D79", "D80",
+                # manifest's rather than a sort. D140 is why this runs at the merge: the
+                # index line and the manifest position are the same class of fact as the
+                # number, unknowable until then. D43 is why it takes a root — a generator
+                # hard-wired to one tree indexes the wrong checkout.
+                "governed_by": ["D16", "D18", "D43", "D60", "D79", "D80", "D140",
                                 "D-the-corpus-is-a-directory"],
             },
             "prose-guard.py": {

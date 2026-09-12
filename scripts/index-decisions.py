@@ -27,6 +27,7 @@ from __future__ import annotations
 
 import argparse
 import importlib.util
+import json
 import re
 import sys
 from pathlib import Path
@@ -44,21 +45,65 @@ HEADING_RE = re.compile(r"^##\s+(D" + _ID + r")\s*[—-]\s*(.+)$")
 LINE_RE = re.compile(r"^D" + _ID + r"\s")
 
 
-def corpus():
+def corpus(root: Path = ROOT):
+    """`scripts/decisions_corpus.py` as seen from `root`.
+
+    ROOT-AWARE because `make merge` reuses this at claim time and the claimer takes a
+    `--root` — a throwaway checkout in the self-test, the PR's own branch at a merge. A
+    module hard-wired to this file's parent would silently index the WRONG TREE, which is
+    D43's defect in a different costume.
+    """
     spec = importlib.util.spec_from_file_location(
-        "decisions_corpus", ROOT / "scripts" / "decisions_corpus.py")
+        "decisions_corpus", root / "scripts" / "decisions_corpus.py")
     module = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(module)
+    module.ROOT = root
+    module.DIRECTORY = root / "docs" / "decisions"
+    module.MANIFEST = module.DIRECTORY / "ORDER.json"
+    module.invalidate()
     return module
 
 
-def wanted() -> List[str]:
+def wanted(root: Path = ROOT) -> List[str]:
     out: List[str] = []
-    for path in corpus().files():
+    for path in corpus(root).files():
         match = HEADING_RE.match(path.read_text(encoding="utf-8").split("\n", 1)[0])
         if match:
             out.append(f"{match.group(1):<4} {match.group(2).strip()}")
     return out
+
+
+def normalize(root: Path = ROOT, write: bool = False) -> List[str]:
+    """Append every unregistered entry to the manifest, in corpus order. Returns what moved.
+
+    THE MANIFEST IS WRITTEN AT THE MERGE AND NEVER BY A BRANCH. A branch adding an entry
+    carries its own FILE and nothing shared; membership is derived until this runs. That is
+    the same fact D140 makes about the number — what the final order is cannot be known
+    until the moment of the merge, so it is settled there.
+    """
+    module = corpus(root)
+    pending = module.unregistered()
+    if not pending:
+        return []
+    path = module.MANIFEST
+    manifest = json.loads(path.read_text(encoding="utf-8"))
+    manifest["order"] = list(manifest["order"]) + pending
+    if write:
+        path.write_text(json.dumps(manifest, indent=2) + "\n", encoding="utf-8")
+    return pending
+
+
+def rewrite_index(root: Path = ROOT, write: bool = False) -> bool:
+    """Regenerate the index block in `root`'s CLAUDE.md. True when it changed."""
+    claude = root / "CLAUDE.md"
+    lines = claude.read_text(encoding="utf-8").split("\n")
+    start, stop = locate(lines)
+    want = wanted(root)
+    if lines[start:stop] == want:
+        return False
+    if write:
+        claude.write_text("\n".join(lines[:start] + want + lines[stop:]), encoding="utf-8")
+    return True
 
 
 def locate(lines: List[str]) -> Tuple[int, int]:
@@ -87,6 +132,10 @@ def main(argv: List[str]) -> int:
     ap.add_argument("--write", action="store_true", help="apply (default: preview)")
     args = ap.parse_args(argv)
 
+    moved = normalize(ROOT, args.write)
+    if moved:
+        print(f"manifest: {len(moved)} entr{'y' if len(moved) == 1 else 'ies'} "
+              f"{'appended' if args.write else 'would be appended'}: {', '.join(moved)}")
     lines = CLAUDE.read_text(encoding="utf-8").split("\n")
     start, stop = locate(lines)
     have = [b for b in lines[start:stop]]

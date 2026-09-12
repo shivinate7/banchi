@@ -72,6 +72,14 @@ def with_claimer(repo: Path) -> None:
     precondition cannot run at all, and an arm would pass for the wrong reason."""
     (repo / "scripts").mkdir(parents=True, exist_ok=True)
     shutil.copy(CLAIMER, repo / "scripts" / "claim-ids.py")
+    # AND THE TWO THE CLAIM STEP REACHES FOR. `settle_corpus` writes the manifest and the
+    # index through these, and it is written to survive their absence — so a fixture without
+    # them would exercise the SURVIVAL path on every arm and never the settling one, which is
+    # a self-test passing for the wrong reason.
+    for helper in ("decisions_corpus.py", "index-decisions.py"):
+        source = CLAIMER.parent / helper
+        if source.exists():
+            shutil.copy(source, repo / "scripts" / helper)
 
 # ------------------------------------------------- driving the wait for the claim commit
 #
@@ -1015,19 +1023,25 @@ def main() -> int:
         split = tmp / "split"
         git(split.parent, "clone", "-q", str(tmp / "origin.git"), "split")
         git(split, "checkout", "-q", "-b", "directory")
+        with_claimer(split)
         entry = f"D-{'a-third-thing'}"
         write(split, "docs/decisions/_preamble.md", "# Fixture\n")
         write(split, "docs/decisions/D001-first.md", f"## {D(1)} — First\n\nbody\n")
         write(split, "docs/decisions/D002-second.md", f"## {D(2)} — Second\n\nbody\n")
         write(split, f"docs/decisions/{entry}-a-third-thing.md",
               f"## {entry} — A third thing\n\nbody\n")
+        # THE BRANCH DOES NOT REGISTER ITS OWN ENTRY, and that is the point rather than an
+        # oversight. If it had to, every entry-adding branch would append to one shared JSON
+        # array at the same position — the collision this whole split removes, wearing a
+        # different file extension. Membership is derived until the claim settles it.
         write(split, "docs/decisions/ORDER.json", json.dumps({
             "source": "docs/DECISIONS.md",
-            "order": ["_preamble.md", "D001-first.md", "D002-second.md",
-                      f"{entry}-a-third-thing.md"],
+            "order": ["_preamble.md", "D001-first.md", "D002-second.md"],
         }, indent=2) + "\n")
         write(split, "docs/DECISIONS.md", "# Stub\n\nThe entries are in `docs/decisions/`.\n")
-        write(split, "CLAUDE.md", f"# Fixture\n\nthe branch cites {entry} twice: {entry}.\n")
+        write(split, "CLAUDE.md",
+              f"# Fixture\n\nthe branch cites {entry} twice: {entry}.\n\n"
+              f"```\n{D(1):<4} First\n{D(2):<4} Second\n```\n")
         git(split, "add", "-A")
         git(split, "commit", "-qm", "a branch writes a slug into the directory")
 
@@ -1050,8 +1064,16 @@ def main() -> int:
            "and the slug-named file is gone rather than left beside it")
         manifest = json.loads((split / "docs/decisions/ORDER.json").read_text(encoding="utf-8"))
         ok(landed_name in manifest["order"],
-           "the MANIFEST follows the rename, so the corpus still reassembles",
+           "the claim APPENDS the unregistered entry to the manifest, under its new name",
            str(manifest["order"]))
+        ok(manifest["order"][-1] == landed_name,
+           "and appends it LAST, so the three non-entry sections keep their place",
+           str(manifest["order"][-3:]))
+        index_lines = [l for l in (split / "CLAUDE.md").read_text(encoding="utf-8").split("\n")
+                       if re.match(r"^D[0-9]+\s", l)]
+        ok(any(l.startswith(f"D{number} ") for l in index_lines),
+           "and the CLAUDE.md index is regenerated with the allocated number",
+           str(index_lines))
         ok(f"{entry}-a-third-thing.md" not in manifest["order"],
            "and does not still name the file that no longer exists")
         # THE INVARIANT, rather than one mechanism that could break it. The manifest and the

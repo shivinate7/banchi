@@ -193,19 +193,28 @@ def selftest() -> int:
     missing = [n for n in manifest["order"] if not (TARGET / n).exists()]
     if missing:
         problems.append(f"{len(missing)} file(s) in the manifest are gone: {missing[:3]}")
+    # AN UNREGISTERED FILE IS A BRANCH IN FLIGHT, NOT DAMAGE, and the two are not the same
+    # finding. Requiring a new entry to be listed here would put every entry-adding branch
+    # back into one shared JSON array at the same position — the collision this whole split
+    # removes, wearing a different file extension. Membership is derived by
+    # `decisions_corpus.order()` and normalized by `make merge` at claim time, which is the
+    # one moment the final order is knowable (D140's own argument for the number).
+    #
+    # THE REVERSE IS STILL DAMAGE. A manifest naming a file that is gone is not a branch in
+    # flight; nothing legitimate produces it, and the corpus stops reassembling.
     on_disk = {p.name for p in TARGET.glob("*.md")}
-    stray = sorted(on_disk - set(manifest["order"]))
-    if stray:
-        problems.append(f"{len(stray)} file(s) on disk are not in the manifest: {stray[:3]}")
+    pending = sorted(on_disk - set(manifest["order"]))
     if not missing:
         body = join()
-        print(f"reassembled  {len(body.encode('utf-8')):,} bytes from {len(manifest['order'])} files")
+        print(f"reassembled  {len(body.encode('utf-8')):,} bytes from "
+              f"{len(manifest['order']) + len(pending)} files")
         print(f"split from   {manifest.get('split_bytes', 0):,} bytes  "
               f"sha256 {str(manifest.get('split_sha256', '?'))[:16]}…  provenance only")
         if not body.endswith("\n"):
             problems.append("the reassembled corpus does not end in a newline.")
+    order = list(manifest["order"]) + pending
     ids = {}
-    for name in manifest["order"]:
+    for name in order:
         head = (TARGET / name).read_text(encoding="utf-8").split("\n", 1)[0]
         match = ENTRY_RE.match(head)
         if match:
@@ -213,20 +222,34 @@ def selftest() -> int:
     duplicated = {k: v for k, v in ids.items() if len(v) > 1}
     if duplicated:
         problems.append(f"one id in two files: {duplicated}")
-    print(f"entries      {len(ids)}  files {len(manifest['order'])}  duplicates {len(duplicated)}")
+    print(f"entries      {len(ids)}  files {len(order)}  duplicates {len(duplicated)}")
+    if pending:
+        print(f"pending      {len(pending)} entr{'y' if len(pending) == 1 else 'ies'} not yet "
+              f"in the manifest — normal on a branch, normalized by `make merge`:")
+        for name in pending[:5]:
+            print(f"               {name}")
     for problem in problems:
         print("  FAIL " + problem)
     print("decisions-selftest: " + ("FAIL" if problems else "ok"))
     return 1 if problems else 0
 
 
-def verify_split(ref: str) -> int:
+def verify_split(ref: str, before_ref: Optional[str] = None) -> int:
     """Re-establish the historical claim: the split lost nothing.
 
-    Reads `docs/DECISIONS.md` from REF's PARENT and diffs it against a reassembly of the
-    entry files at REF. Both sides come out of git, so the answer does not drift as entries
-    are edited afterwards, and the original never has to be on disk. This is the check a
-    reviewer runs to satisfy themselves that 1.4 MB moved without loss.
+    RE-RUNNABLE FOREVER, WHICH TOOK A CORRECTION TO BE TRUE. Reads `docs/DECISIONS.md` from
+    REF's PARENT (or from a second ref you name) and diffs it against a reassembly of the
+    entry files at REF. Both sides come from git, so the original never has to be on disk.
+
+    THE PARENT IS THE POINT. An earlier version read both sides from ONE ref, which cannot
+    work and made this docstring a promise nobody could keep: the split is a single atomic
+    commit, so AT that commit `docs/DECISIONS.md` is already the stub, and no commit anywhere
+    in the history has the monolith and the directory side by side. Asking one ref for both
+    compared 38 lines against 1.4 MB and reported a catastrophic difference that was entirely
+    an artefact of the question.
+
+    Usage: `--verify-split <the split commit>` — the commit that emptied the monolith. Pointed
+    anywhere else it says so rather than answering.
     """
     import subprocess
 
@@ -241,17 +264,20 @@ def verify_split(ref: str) -> int:
     # reports a catastrophic difference that is entirely an artefact of asking wrongly. The
     # question is "did REF's entries preserve what REF's PARENT held", and it has to be
     # spelled that way.
-    before = show("docs/DECISIONS.md", f"{ref}^")
+    source_ref = before_ref or f"{ref}^"
+    before = show("docs/DECISIONS.md", source_ref)
     if before is None:
-        print(f"no docs/DECISIONS.md at {ref}^ — nothing to compare")
+        print(f"no docs/DECISIONS.md at {source_ref} — nothing to compare")
         return 1
     manifest_text = show("docs/decisions/" + MANIFEST)
     if manifest_text is None:
         print(f"{ref} has no corpus manifest — it is not the commit that performed the split.")
         return 1
     if len(before.encode("utf-8")) < 100_000:
-        print(f"docs/DECISIONS.md at {ref}^ is only {len(before.encode('utf-8')):,} bytes — "
-              f"{ref} is not the split commit, or the split had already happened before it.")
+        print(f"docs/DECISIONS.md at {source_ref} is only "
+              f"{len(before.encode('utf-8')):,} bytes — that is the stub, not the corpus. "
+              f"{ref} is not the commit that performed the split. Name that commit, or pass "
+              f"an explicit before-ref as a second argument.")
         return 1
     order = json.loads(manifest_text)["order"]
     parts = [show("docs/decisions/" + name) for name in order]
@@ -260,7 +286,7 @@ def verify_split(ref: str) -> int:
         return 1
     after = "\n".join(part for part in parts if part is not None)
     if after == before:
-        print(f"IDENTICAL — docs/DECISIONS.md at {ref}^ ({len(before.encode('utf-8')):,} "
+        print(f"IDENTICAL — docs/DECISIONS.md at {source_ref} ({len(before.encode('utf-8')):,} "
               f"bytes) equals the {len(order)} files at {ref}. The split lost nothing.")
         return 0
     # THE SPLIT COMMIT ALSO ADDS ITS OWN ENTRY, and that is not a loss. The claim being made
@@ -277,7 +303,7 @@ def verify_split(ref: str) -> int:
         # a property of the text rather than of the filesystem.
         arrived = ENTRY_RE.findall("\n".join(
             line for line in extra.split("\n") if line.startswith("## ")))
-        print(f"PRESERVED — docs/DECISIONS.md at {ref}^ ({len(before.encode('utf-8')):,} "
+        print(f"PRESERVED — docs/DECISIONS.md at {source_ref} ({len(before.encode('utf-8')):,} "
               f"bytes) is a byte-for-byte PREFIX of the {len(order)} files at {ref}.")
         print(f"            Nothing the parent held was changed, reordered or dropped.")
         print(f"            {len(extra.encode('utf-8')):,} bytes follow it — "
@@ -315,13 +341,15 @@ def main(argv: List[str]) -> int:
     ap.add_argument("--verify", metavar="REF", help="reassemble and diff against REF")
     ap.add_argument("--selftest", action="store_true",
                     help="assert the corpus is complete and round-trips")
-    ap.add_argument("--verify-split", metavar="REF",
-                    help="diff docs/DECISIONS.md at REF^ against the entry files at REF")
+    ap.add_argument("--verify-split", metavar="REF", nargs="+",
+                    help="diff docs/DECISIONS.md at REF^ (or at a second ref you name) "
+                         "against the entry files at REF")
     args = ap.parse_args(argv)
     if args.selftest:
         return selftest()
     if args.verify_split:
-        return verify_split(args.verify_split)
+        return verify_split(args.verify_split[0],
+                            args.verify_split[1] if len(args.verify_split) > 1 else None)
     if args.verify:
         return verify(Path(args.verify))
     return split(args.write)
