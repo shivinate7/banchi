@@ -2427,7 +2427,7 @@ COMPONENTS = [
                 "status": "built",
             },
             "score-trace.py": {
-                "does": "`scripts/score-trace.py summary|presence|sweep|stalls|camera|contact` "
+                "does": "`scripts/score-trace.py summary|presence|sweep|stalls|camera|gain|contact` "
                         "— re-scores a "
                         "saved motion trace offline, which is docs/specs/motion-trigger.md §4 "
                         "step 5's standing promise written down. `summary` says what the "
@@ -2440,6 +2440,10 @@ COMPONENTS = [
                         "cards did — how the frames were paced, how bright the plate is and "
                         "therefore what ONE exposure step would cost it, and whether the "
                         "still-frame floor is independent noise or the whole picture moving; "
+                        "`gain` (2026-09-12) runs the uniformity test over each trace's own "
+                        "pixels — an exposure step injected on the baseline, every fired card, "
+                        "and the scaled novelty between fires — the offline half of "
+                        "`suppressed:uniform`; "
                         "`contact` writes the verdict frames out as a labelled PNG. "
                         "ITS CONSTANTS MIRROR motion.ts's DEFAULT_PARAMS and are reconciled "
                         "against them by scripts/docs-audit.py's `motion params` row, which "
