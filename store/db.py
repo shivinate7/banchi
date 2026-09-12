@@ -85,7 +85,14 @@ BOX_IDS_ISSUED = "box_ids_issued"
 CARD_IDS_SEEDED = "card_ids_seeded"
 CARD_ID_SOURCES = "card_id_sources"
 PHOTOS_RELOCATED = "photos_relocated"
-SCHEMA_VERSION = 3
+# FOUR, AND THE JUMP FROM 3 IS THE MERGE THIS FUNCTION WAS WARNED ABOUT.
+# `docs/specs/stable-card-id.md` §5 predicted it in as many words: "Two concurrent 2→3 steps
+# in `_upgrade` is a conflict in the one function where taking either side silently loses a
+# migration. Whichever merges first is 2→3 and the second is 3→4." D174's `submissions`
+# table merged first (PR #312) and took 3, so the naming is 4. THE RESOLUTION WAS TO ADD A
+# STEP, NEVER TO TAKE A SIDE — both `if` arms below are live, and the owner's real store had
+# already been stamped 3 by the main checkout's own supervisor before this branch merged.
+SCHEMA_VERSION = 4
 
 # The six files a legacy store is made of, and the one that is a log rather than a document.
 LEGACY_INVENTORY = "inventory.json"
@@ -116,9 +123,14 @@ TABLES: Dict[str, Tuple[str, ...]] = {
     "queues": ("box", "idx", "reason", "cleared_by_human", "first_seen"),
     "orders": ("source", "number", "status"),
     "fulfilment": (),
+    # D174: the cards a live run has claimed and is about to pay to read.
+    # `keys` is the claim itself and is NOT a column — it is a set, and a column holds one
+    # value; the intersection is computed in Python over the handful of live rows, which is
+    # what `Submissions.live` keeps small by filtering on the `state` column first.
+    "submissions": ("pid", "state", "started_at", "run"),
 }
 
-_INTEGER = {"box", "bid", "idx", "pushed", "staged", "live", "cleared_by_human"}
+_INTEGER = {"box", "bid", "idx", "pushed", "staged", "live", "cleared_by_human", "pid"}
 
 _INDEXES = (
     ("cards", "box"), ("cards", "sku"), ("cards", "capture_id"), ("cards", "state"),
@@ -126,6 +138,7 @@ _INDEXES = (
     ("queues", "box"),
     ("events", "position"),
     ("boxes", "bid"),
+    ("submissions", "state"),
 )
 
 # D172'S TWO INDEXES, DELIBERATELY NOT IN `_INDEXES` BECAUSE NEITHER IS A PLAIN ONE.
@@ -298,7 +311,7 @@ def _upgrade(
     # record, which renumbers every card behind it — silent, and physical. So the reading is
     # taken out here, where it blocks nobody, and re-checked inside the lock.
     prehashed = (
-        _prehash_photographs(conn, directory) if (stored or 0) < 3 else {}
+        _prehash_photographs(conn, directory) if (stored or 0) < 4 else {}
     )
     guard = (
         _already_locked()
@@ -318,6 +331,8 @@ def _upgrade(
             if stored < 2:
                 receipt = _add_box_ids(conn)
             if stored < 3:
+                _add_submissions(conn)
+            if stored < 4:
                 card_receipt = _add_card_ids(conn, prehashed, directory)
             conn.execute(
                 "INSERT OR REPLACE INTO meta (key, value) VALUES ('schema', ?)",
@@ -780,6 +795,23 @@ def _reissue_card_ids(
             "idempotent."
         ),
     }
+
+
+def _add_submissions(conn: sqlite3.Connection) -> None:
+    """Schema 3: the `submissions` claim table (D174).
+
+    THE PUREST ADDITIVE STEP THERE IS — a table nothing older has, so there is nothing to
+    backfill and nothing to read wrong. It writes no receipt file for that reason: `_add_box_ids`
+    leaves one because it DERIVED an id for every existing box and a later question about which
+    box got which id has no other answer, and there is no corresponding question here.
+
+    AN EMPTY CLAIM TABLE IS THE CORRECT STATE FOR AN UPGRADED STORE, and it is worth saying why
+    it is not a loss. A claim protects a press that is happening NOW; every run that was live
+    before this build existed was guarded by `_busy_run` and is either finished or is a run this
+    build can see on `#/runs`. There is no past to reconstruct, only presses from here on.
+    """
+    conn.execute(_ddl("submissions", TABLES["submissions"]))
+    conn.execute("CREATE INDEX IF NOT EXISTS submissions_state ON submissions(state)")
 
 
 def _add_box_ids(conn: sqlite3.Connection) -> dict:

@@ -313,7 +313,7 @@ make lint           # eslint over app/ (guards a bug earned, see app/eslint.conf
                     #   never ruff's own defaults, never --fix. Config: ruff.toml.
 make check          # harness + docs-audit + audit-self-test + githooks-selftest +
                     #   merge-selftest + revert-selftest + claim-selftest + claim-stale +
-                    #   decisions-selftest + revert-guard +
+                    #   decisions-selftest + submission-selftest + revert-guard +
                     #   janitor-selftest + reap-selftest + silent-write-selftest +
                     #   coordinator-selftest + suite-lock-selftest +
                     #   serve-selftest +
@@ -2157,6 +2157,7 @@ D170 A widening is safe only while the category fits, and Pokemon's does not
 D171 A refusal that reaches nobody did not happen, and a status line the session wrote is not a reading
 D172 A card's name is the first photograph of it, frozen at issue
 D173 A rule that can be enforced mechanically is enforced mechanically, and a rule with no reader is advice
+D174 A press claims the cards it is about to buy, and the claim is written in the transaction that decides what they are
 D-a-number-a-person-reads-is-never-a-key A number a person reads is never a key a machine uses, so the photograph is stored under the card's name and the address is derived
 ```
 

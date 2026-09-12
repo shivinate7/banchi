@@ -224,6 +224,20 @@ async function open(
      *  with. A partial send is the one failure no validation can pre-empt (D48), so it is the
      *  one the screen has to draw rather than swallow. */
     failed?: { box: number; code: string; message: string }[]
+    /** Live submission claims, in the shape `GET /pipeline/submissions` answers with
+     *  (D174). Empty by default: nothing in this file is about a claim, and
+     *  a healthy store holds none. It is an option rather than a constant so the one case
+     *  below that needs the panel drawn can have it. */
+    claims?: {
+      receipt: string
+      run: string | null
+      pid: number
+      started_at: string
+      cards: number
+      sample: string[]
+      capture_dir: string | null
+      holder_alive: boolean
+    }[]
   } = {},
 ): Promise<Wire[]> {
   const wire: Wire[] = []
@@ -364,6 +378,27 @@ async function open(
         runs:
           options.runs ??
           [runRow(options.live ? { live: true, pid: 999, phase: 'identifying' } : {})],
+      }),
+    })
+  })
+
+  /* THE CLAIMS PANEL'S OWN READ (D174). `#/runs` draws
+     `SubmissionClaims`, which reads this on mount — and the spec seal means an unstubbed read
+     is a FAILURE rather than a missing panel, which is how every case in this file went red
+     the first time the panel landed. An EMPTY list is the right default here: nothing in this
+     file is about a live claim, and a panel that draws nothing is the state a healthy store is
+     in. `claims-panel.spec.ts` is where the panel itself is asserted. */
+  await page.route(/\/pipeline\/submissions$/, async (route) => {
+    await route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify({
+        claims: options.claims ?? [],
+        counts: {
+          claims: (options.claims ?? []).length,
+          keys: (options.claims ?? []).reduce((sum, claim) => sum + claim.cards, 0),
+          stale: (options.claims ?? []).filter((claim) => !claim.holder_alive).length,
+        },
       }),
     })
   })
@@ -2337,4 +2372,180 @@ test('and a scope with nothing on disk promises neither', async ({ page }) => {
   await expect(says).toContainText('Will ask TCGplayer for')
   await expect(says).not.toContainText('Already have this one')
   await expect(says).not.toContainText('refused past')
+})
+
+/* ------------------------------------------------------------------ the claims panel
+ *
+ * WHAT A LIVE SEND IS HOLDING, AND THE ONE WAY OUT OF A STUCK CLAIM
+ * (D174). The guard itself is proved by `make submission-selftest`, which
+ * races two real processes over one card; what these cases are for is the half that suite
+ * cannot see — whether a human can reach any of it, which is the failure `docs/GATES.md`
+ * step 7 records at length and which nothing on the commit path can tell.
+ *
+ * THE FIXTURE IS `open`'s `claims` OPTION, so the panel is drawn from the wire rather than
+ * from a hand-built DOM: a spec that mounted the component directly would pass over a route
+ * the screen never calls, which is exactly the shape of the 7b defect.
+ */
+
+/** One live claim, in the shape `GET /pipeline/submissions` answers with — EVERY FIELD.
+ *
+ *  A PARTIAL FIXTURE HERE DOES NOT FAIL PARTIALLY, IT CRASHES THE SCREEN, which is the rule
+ *  `card()` at the top of this file already states and which this function had to learn: it
+ *  omitted `sample`, the panel does `claim.sample.join(', ')`, and all three cases below died
+ *  in `open()` on `main.runs` never becoming visible — the route's error boundary doing its
+ *  job, and nothing at all about the panel. The failure named the wrong subject, which is the
+ *  whole cost of a fixture that is not the wire's real shape. */
+function claimRow(
+  over: Partial<{
+    receipt: string
+    run: string | null
+    pid: number
+    started_at: string
+    cards: number
+    sample: string[]
+    capture_dir: string | null
+    holder_alive: boolean
+  }> = {},
+) {
+  return {
+    receipt: 'sub-20260912T090000-aaaaaa',
+    run: '2026-09-12-box3-01',
+    pid: 4242,
+    started_at: '2026-09-12T09:00:00+00:00',
+    cards: 14,
+    sample: ['3/1', '3/2', '3/3'],
+    capture_dir: 'captures/cards/box3',
+    holder_alive: true,
+    ...over,
+  }
+}
+
+test('no claim draws no panel at all, which is what a healthy store looks like', async ({ page }) => {
+  await open(page)
+  /* NOT "hidden" — NOT RENDERED. A claim exists only between a press and the collection it
+     paid for, so this is the state the screen is in almost always, and a panel that took
+     height to say nothing would be on this screen forever. */
+  await expect(page.locator('.claims')).toHaveCount(0)
+})
+
+test('a live send says what it is holding, and is NOT offered a release', async ({ page }) => {
+  await open(page, { claims: [claimRow()] })
+  const panel = page.locator('.claims')
+  await expect(panel).toBeVisible()
+  /* THE FIGURE IS THE CARDS, NOT THE ROWS. One claim over fourteen cards and fourteen claims
+     over one card each are the same row count and completely different situations. */
+  await expect(panel).toContainText('14 cards held by 1 send')
+  await expect(panel).toContainText('2026-09-12-box3-01')
+  await expect(panel.getByText('Running')).toBeVisible()
+  /* THE SAFETY PROPERTY, AND THE REASON THIS CASE EXISTS. Releasing a claim whose run is
+     still submitting re-opens those cards to a second press — the double invoice the claim
+     was written to prevent — so the control is NOT DRAWN, rather than drawn and disabled. */
+  await expect(panel.getByRole('button', { name: /Release/ })).toHaveCount(0)
+  /* And no warning: nothing here is stuck. */
+  await expect(panel.locator('.bn-notice')).toHaveCount(0)
+})
+
+test('a send whose holder is gone keeps its cards, says so, and offers the way out', async ({ page }) => {
+  await open(page, { claims: [claimRow({ holder_alive: false, cards: 3, run: '2026-09-12-box7-01' })] })
+  const panel = page.locator('.claims')
+  await expect(panel).toContainText('3 cards held by 1 send')
+  await expect(panel.getByText('Holder gone')).toBeVisible()
+  /* THE SENTENCE HAS TO SAY WHY THE CARDS ARE STILL HELD, because a dead holder looks like a
+     bug until you know a killed send has already been billed. */
+  await expect(panel.locator('.bn-notice')).toContainText('already been billed')
+  await expect(panel.getByRole('button', { name: /^Release 3 cards/ })).toBeVisible()
+})
+
+test('the release names its receipt and confirms, and the page does not move under the press', async ({ page }) => {
+  const wire = await open(page, {
+    claims: [
+      claimRow({ receipt: 'sub-live-1', run: '2026-09-12-box3-01', cards: 14, holder_alive: true }),
+      claimRow({ receipt: 'sub-dead-1', run: '2026-09-12-box7-01', cards: 3, holder_alive: false }),
+    ],
+  })
+  await page.route(/\/pipeline\/submissions\/[^/]+\/release$/, async (route) => {
+    wire.push({
+      method: 'POST',
+      path: new URL(route.request().url()).pathname,
+      body: route.request().postDataJSON(),
+    })
+    await route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify({ receipt: 'sub-dead-1', run: '2026-09-12-box7-01', released: true, cards: 3, claims: [] }),
+    })
+  })
+
+  const panel = page.locator('.claims')
+  /* THE THREE THINGS D118 ACTUALLY FLOORS, measured the way `inventory.spec.ts` measures them
+     for `Mark sold`: the panel does not change height, the page does not change height, and
+     the page does not scroll. Those are the three whose violation moved 25 elements 156px, and
+     they are the three this panel's shape controls.
+
+     WHAT IS DELIBERATELY NOT ASSERTED IS A SIBLING'S OWN OFFSET, and that is a measurement
+     rather than a shrug. The first version of this case compared `.runs-body`'s viewport `y`
+     and saw a stable -4px — with the panel's height unchanged, the page height unchanged and
+     the scroll unchanged, all three verified in the same assertion. The run list beside it
+     re-reads on its own tick, so a sibling's top moves for reasons that are not this press,
+     and a floor that fails on that is a floor people delete. Measured in a real browser at
+     1440 and 1280 against the real server: 0 elements moved anywhere, page height unchanged.
+     `cursor.spec.ts` holds the CSS half of this floor, which is the part a fixture cannot
+     drift out from under. */
+  const panelHeight = () =>
+    page.evaluate(() => Math.round(document.querySelector('.claims')?.getBoundingClientRect().height ?? -1))
+  const pageShape = () =>
+    page.evaluate(() => ({ height: document.documentElement.scrollHeight, scroll: window.scrollY }))
+  const rowCount = () => page.locator('.claims-row').count()
+
+  /* SAMPLED ONLY ONCE THE PAGE HAS STOPPED SETTLING, and that is not a sleep — it is a wait
+     on a condition (D136). `open()` returns as soon as the panel is visible, and the run list
+     beside it is still finishing its own first paint: sampled immediately, the page measured
+     1033px and had settled to 1029px by the time the release landed, so the case failed on
+     4px that no press caused. This is the click-then-mutate race in its other direction —
+     the BEFORE sample racing something that had not finished. */
+  const settled = async () => {
+    let last = -1
+    for (let i = 0; i < 40; i += 1) {
+      const now = await page.evaluate(() => document.documentElement.scrollHeight)
+      if (now === last) return now
+      last = now
+      await page.waitForTimeout(50)
+    }
+    return last
+  }
+  await settled()
+  /* THE CONTROL IS BROUGHT INTO VIEW BEFORE THE BEFORE-SAMPLE, because `click()` scrolls it
+     into view ITSELF — measured at 309px of scroll, attributed to the press by a case that
+     sampled first and clicked second. That is the test's own mechanics, not the panel's, and
+     a floor that cannot tell them apart is measuring Playwright. */
+  await panel.getByRole('button', { name: /^Release 3 cards/ }).scrollIntoViewIfNeeded()
+  await settled()
+
+  const beforePanel = await panelHeight()
+  const beforeShape = await pageShape()
+  const beforeRows = await rowCount()
+
+  await panel.getByRole('button', { name: /^Release 3 cards/ }).click()
+
+  /* THE CONTROL BECOMES ITS OWN RESULT, IN THE SLOT IT STOOD IN (D57). */
+  await expect(panel.getByText('Released 3 cards')).toBeVisible()
+
+  expect({
+    panel: await panelHeight(),
+    shape: await pageShape(),
+    rows: await rowCount(),
+  }).toEqual({ panel: beforePanel, shape: beforeShape, rows: beforeRows })
+
+  /* THE HEADLINE COUNTS WHAT IS STILL HELD, never the rows on screen — a row kept for its
+     receipt is holding nothing, and counting it would overstate the lock at the one moment
+     the operator is watching it fall. */
+  await expect(panel).toContainText('14 cards held by 1 send')
+
+  const release = wire.filter((call) => call.path.endsWith('/release'))
+  expect(release).toHaveLength(1)
+  /* THE RECEIPT IS IN THE PATH and the confirm is in the body: the route refuses without it,
+     because releasing a claim whose holder is still submitting is the second invoice. */
+  expect(release.map((call) => [call.path, call.body])).toEqual([
+    ['/pipeline/submissions/sub-dead-1/release', { confirm: true }],
+  ])
 })
