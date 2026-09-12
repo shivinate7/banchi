@@ -4381,12 +4381,83 @@ test('a narrow copies column shortens the bar, never the position label', async 
   expect(geom.capHeights.length).toBe(2)
   expect(geom.barH).toBeLessThan(96)
 
-  /* AND BOTH SCALES SURVIVE, which is docs/DESIGN.md's constraint on this component: the box
-     track is 16px and the section track 8px, and their differing heights are one of the three
-     cues that keep the two scales distinguishable at a glance. A "denser" row that flattened
-     them into one would pass every height check above and lose the thing the bar is for. */
-  expect(geom.boxTrackH).toBeGreaterThan(geom.sectTrackH!)
-  expect(geom.sectTrackH).toBeGreaterThan(0)
+  /* AND BOTH SCALES SURVIVE, WITH THE SECTION AS THE LARGER — REVERSED IN PLACE 2026-09-11 ON
+     THE OWNER'S INSTRUCTION (D-section-is-the-ruler). This assertion read
+     `boxTrackH > sectTrackH`, which is the literal encoding of the priority the owner asked to
+     flip: *"the interface/view of the box is nicer than section"*. The section is the ruler now
+     — 26px, graduated, with a fill and a crossing pin — and the box is an 8px strip of chips
+     beneath it. It is amended rather than deleted, per D118's own precedent, so a later session
+     reads this as a reversal somebody made and not as drift.
+
+     IT STILL REFUSES A FLATTENED BAR and now refuses a box-dominant one too, which is the claim
+     that has to survive a re-tune: a "denser" row that collapsed the two into one would pass
+     every height check above and lose the thing the bar is for.
+
+     ITS OWN FIGURES WERE STALE WHEN IT WAS REVERSED. This comment said "the box track is 16px
+     and the section track 8px"; the tree had shipped `--pb-track: 12px` since the rebrand, and
+     docs/DESIGN.md carried the identical stale 16. Both were fixed in the same edit.
+
+     AND THE HAZARD THE DESIGN IS SAVED FROM ONLY BY DISCIPLINE: `el.querySelector(
+     '.position-bar-track')` above ALSO matches the section ruler, which carries both classes.
+     Document order is the only thing that makes it return the box strip. The inversion is done
+     entirely with CSS `order` — a later session that inverts it by reordering the JSX instead
+     silently measures the wrong element and takes this assertion green over nothing. */
+  expect(geom.sectTrackH!).toBeGreaterThan(geom.boxTrackH * 2)
+  expect(geom.boxTrackH).toBeGreaterThan(0)
+})
+
+/* EVERY BAR IN THE LIST IS THE SAME HEIGHT, WHATEVER STATE ITS COPY IS IN (D118, and the repair
+   D-section-is-the-ruler made to it). D118 kept the second scale mounted through a SALE so the
+   row would not change height — and it covered exactly one of the three ways the depth can fail
+   to resolve. `sectionDepthOf` also returns null on `place.section === null` (app/src/position.ts,
+   the `section === null` guard) and on `box_total <= 0`, and the whole zoom block was gated on
+   `depth !== null`, so a copy in either of those states drew a ~29px bar in a list of ~73px ones.
+
+   MEASURED ON THE PRE-CHANGE TREE, ON #/gallery's OWN COPIES SPECIMEN: one bar at 73px and five
+   at 29px. Two of the five are the states above; the other three are the `spans.length > 1` gate
+   that this change also deletes. The design's own spec predicted two, which is why this is
+   asserted as a SET of one rather than as a list of expected numbers.
+
+   THE FIX IS STRUCTURAL, NOT ARITHMETIC: the zoom block mounts on the `sectionDepth` PROP and
+   never on whether the depth resolved, so there is no branch left to take and a later fixture
+   cannot reintroduce one. MUTATED TO CONFIRM THIS CASE CAN SEE ITS SUBJECT: re-gating the block
+   on `depth !== null` takes it red with `bars disagreed on height: [73,73,29,73]`. */
+test('every copy row draws the same bar height, located or not', async ({ page }) => {
+  /* ONE SKU, FIVE COPIES, AND THREE DIFFERENT WAYS FOR THE SECOND SCALE TO HAVE NO ANSWER.
+     2/1 and 2/3 are ordinary located copies of a DIVIDED box — the control. 2/4 is departed,
+     which `sectionDepthOf` answers with its own branch. 6/1 is located in an UNDIVIDED box, so
+     `spansOf` returns ONE span and the deleted `spans.length > 1` gate refused it. 7/1 is in a
+     box the server could not size, so `sectionDepthOf` returns null on `box_total <= 0`. */
+  const cards: Cards = {
+    ...CARDS,
+    '2/4': card({ index: 4, state: 'sold', name: 'Thievul', sku: '8937370', section: 1, sectionStart: 1, sectionEnd: 3 }),
+    '6/1': card({ box: 6, boxTotal: 4, index: 1, state: 'identified', name: 'Thievul', sku: '8937370', section: 1, sectionStart: 1, sectionEnd: 4, boxName: 'Bulk, unsorted' }),
+    '7/1': card({ box: 7, boxTotal: 0, index: 1, state: 'identified', name: 'Thievul', sku: '8937370', section: 1, sectionStart: 1, sectionEnd: 1, boxName: 'Just opened' }),
+  }
+  const boxes = {
+    boxes: [
+      { ...BOXES.boxes[0] },
+      { ...BOXES.boxes[0], box: 6, name: 'Bulk, unsorted', cards: 4, on_hand: 4, fill: 4, next_index: 5, sold: 0, retired: 0, sections: [1], sections_detail: [{ section: 1, start: 1, end: 4, count: 4 }] },
+      { ...BOXES.boxes[0], box: 7, name: 'Just opened', cards: 1, on_hand: 1, fill: 1, next_index: 2, sold: 0, retired: 0, sections: [], sections_detail: [] },
+    ],
+  }
+
+  await open(page, boxes, { cards, search: (query) => searchAnswer(query, cards) })
+  await page.setViewportSize({ width: 1440, height: 900 })
+  await expandAll(page)
+  await page.locator('.browse-row', { hasText: 'Thievul' }).first().click()
+  await expect(page.locator('.card-locations-owner .position-bar').first()).toBeVisible()
+  /* The bar's own transitions are 320ms and one of them is on `width`; measuring inside them
+     reads a bar mid-ease. */
+  await page.waitForTimeout(400)
+
+  const hs = await page
+    .locator('.card-locations-owner .position-bar')
+    .evaluateAll((els) => els.map((e) => Math.round(e.getBoundingClientRect().height)))
+  /* The fixture really did produce every state — a count of one would satisfy the set below
+     without proving anything, which is the way this case could pass while blind. */
+  expect(hs.length).toBe(5)
+  expect(new Set(hs).size, `bars disagreed on height: ${hs}`).toBe(1)
 })
 
 test('a wider copies column never makes its rows taller', async ({ page }) => {

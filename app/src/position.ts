@@ -127,6 +127,50 @@ export type SectionDepth = {
    *  `PositionBar.tsx`. */
   marker: number | null
   sentence: string
+  /** THE CAPTION'S TWO HALVES, HANDED OVER AS FIELDS AND NEVER RECOVERED BY SPLITTING
+   *  `sentence`. The ruler's caption ellipsizes its head and pins its tail, which needs two
+   *  elements — and `head` contains a ` · ` of its own whenever the owner has named the
+   *  section (D132), so a caller splitting on the separator cuts a name in half.
+   *  `head + tail` is byte-identical to `sentence`, which stays whole because it is also the
+   *  accessible name. */
+  head: string
+  tail: string
+  /** The section's bounds IN BOX CARDS — `86` and `170` of a box holding 400 — so the ruler's
+   *  two ends can state the nesting as a number the reader checks against the box caption
+   *  rather than as a shape they have to trust. D58's unit: a card COUNT, never a stored
+   *  index. */
+  firstCard: number
+  lastCard: number
+}
+
+/** The pitch of the ruler's minor graduations, in cards, so the comb never draws more than 24
+ *  teeth. The ladder is the ordinary 1-2-5 one; past 500-card sections it falls back to an
+ *  exact 24. Narrowest render this component has in the product is the retire dialog at a 390
+ *  viewport — 194px — which is 8.1px a tooth at the cap. */
+const GRADUATIONS = [1, 2, 5, 10, 25, 50, 100, 250, 500] as const
+export function graduationStep(of: number): number {
+  return GRADUATIONS.find((step) => of / step <= 24) ?? Math.ceil(of / 24)
+}
+
+/**
+ * The section caption for the two states `sectionDepthOf` cannot answer — a card whose record
+ * carries no section, and a box the server could not size. The ruler is drawn in both of them
+ * (the box is still there; what is unknown is which part of it), so it needs a sentence.
+ *
+ * "WHICH PART OF THE BOX", NOT "WHICH SECTION", on purpose: the sentence must not presuppose
+ * the very thing it is saying is unknown. This stays on the right side of D68 — that entry
+ * deleted an object that drew a FAILED MEASUREMENT as if it were a position; this one claims
+ * nothing at all.
+ */
+export function sectionBlankSentence(place: Place, persona: Persona = 'owner'): string {
+  if (isDeparted(place)) {
+    return persona === 'fulfiller'
+      ? 'Which part of the box it was in is not recorded'
+      : 'which part of the box it was in is not recorded'
+  }
+  return persona === 'fulfiller'
+    ? 'Which part of the box this sits in is not known yet'
+    : 'which part of the box this sits in is not known yet'
 }
 
 /**
@@ -161,26 +205,40 @@ export function sectionDepthOf(place: Place): SectionDepth | null {
      the front of both tracks sits at the front of both. */
   const marker = gone || slot === null ? null : clamp(((slot - 1) / of) * 100, 0, 100)
 
+  /* THE SECTION'S OWN RUN, COUNTED IN BOX CARDS, which is what the ruler writes inside its two
+     ends. `of` is already the width in the growing and the settled case alike, so the far bound
+     follows from the near one and cannot disagree with the denominator the caption prints. */
+  const firstCard = clamp(start, 1, total)
+  const lastCard = firstCard + of - 1
+
   if (gone || slot === null) {
+    const tail = growing
+      ? ` · ${of} cards so far · this copy is not among them`
+      : ` · ${of} slots · this copy is not in one`
     return {
       slot: null,
       of,
       growing,
       marker: null,
-      sentence: growing
-        ? `${named} · ${of} cards so far · this copy is not among them`
-        : `${named} · ${of} slots · this copy is not in one`,
+      sentence: named + tail,
+      head: named,
+      tail,
+      firstCard,
+      lastCard,
     }
   }
 
+  const tail = growing ? ` · card ${slot} of ${of} so far` : ` · card ${slot} of ${of} slots`
   return {
     slot,
     of,
     growing,
     marker,
-    sentence: growing
-      ? `${named} · card ${slot} of ${of} so far`
-      : `${named} · card ${slot} of ${of} slots`,
+    sentence: named + tail,
+    head: named,
+    tail,
+    firstCard,
+    lastCard,
   }
 }
 

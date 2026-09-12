@@ -1,32 +1,47 @@
 import { useRef } from 'react'
 
 import type { Place, SectionDetail } from './types'
-import { clamp, sentenceOf, sectionDepthOf, spansOf } from './position'
+import {
+  clamp,
+  graduationStep,
+  sectionBlankSentence,
+  sectionDepthOf,
+  sentenceOf,
+  spansOf,
+} from './position'
 import { isDeparted } from './server'
-import type { Persona, Span } from './position'
+import type { Persona } from './position'
 import './PositionBar.css'
 
-/* How far into the box a card sits, drawn as the box — a lens.
+/* How far into the box a card sits, at two scales — and the SECTION is the instrument.
  *
- * Two scales: the box track (one segment per section, the card's own section painted) and,
- * beneath a bracket that zooms out of that segment, the section track. Nothing here decides
- * where a divider is: every width and percentage comes off numbers the server sent. `persona`
- * picks the density and nothing else — the Fulfiller's is bigger and his captions clear the
- * 20px floor his view is asserted against.
+ * THE SECTION IS THE RULER AND THE BOX IS THE MARGIN NOTE. A graduated 26px ruler with a fill,
+ * a pin that crosses it and the section's own bounds written inside its two ends; under it an
+ * 8px strip of chips for the box, with a caret on the chip the card is in. The box scale is
+ * kept because the owner asked for it and because it is the one that gets a thumb near the
+ * right drawer — but at a 580px bar it is 1.45px a card, which is three or four distinguishable
+ * states, while the caption above it already says `#51 of 53 · 96% in` exactly. The section
+ * scale is 6.8 to 82.9px a card, which is a number you can point at.
+ *
+ * WHAT THERE IS NO LONGER: the SVG trapezoid that used to bracket the two. It carried three
+ * defects and two of them were unfixable in principle — its two legs' slope ratio contains
+ * neither a width nor a height term, and its arithmetic computed segment edges from card counts
+ * while the real segments are flex children with a gap and a `min-width`, so its mouth pointed
+ * at the wrong chip by 8px on a five-section box and 42px on a 22-section one. The caret that
+ * replaces it is a pseudo-element ON the chip, so the browser registers it to its subject and
+ * there is no second calculation to disagree.
+ *
+ * THE HEIGHT IS DECIDED BY THE PROP AND THE PAINT BY THE CARD'S STATE (D118). The zoom block is
+ * mounted whenever `sectionDepth` is on — never on whether the depth RESOLVED — so the four
+ * owner states render the identical DOM at the identical height. Before this the block was
+ * gated on `depth !== null`, and two states nobody had measured drew a 29px bar in a list of
+ * 73px ones.
+ *
+ * Nothing here decides where a divider is: every width and percentage comes off numbers the
+ * server sent. `persona` picks the density and nothing else — the Fulfiller never turns the
+ * second scale on, his captions clear the 20px floor his view is asserted against, and every
+ * rule this file's stylesheet adds is scoped to `.position-bar-owner` or to `[data-depth]`.
  */
-
-/** Where the current section's edges sit along the box track, 0..100, for the bracket. */
-function lensOf(spans: readonly Span[]): { left: number; right: number } | null {
-  const total = spans.reduce((n, span) => n + (span.end - span.start + 1), 0)
-  if (total <= 0) return null
-  let at = 0
-  for (const span of spans) {
-    const width = span.end - span.start + 1
-    if (span.current) return { left: (at / total) * 100, right: ((at + width) / total) * 100 }
-    at += width
-  }
-  return null
-}
 
 export type PositionBarProps = {
   place: Place
@@ -38,9 +53,10 @@ export type PositionBarProps = {
   /** The box's real spans, from `GET /boxes`. Optional, and the picture is honest without it. */
   sections?: readonly SectionDetail[]
 
-  /** Draw the second, section-scale depth beneath the box one. Off by default; the Fulfiller's
-   *  view never turns it on. Skipped on a box with one section, where both tracks would say
-   *  the same numbers. */
+  /** Draw the section ruler above the box strip. Off by default; the Fulfiller's view never
+   *  turns it on. NOT gated on the box having more than one section: an undeclared box gets the
+   *  ruler too, which is what `docs/DESIGN.md` has claimed since it was written and the old
+   *  `spans.length > 1` gate always prevented. */
   sectionDepth?: boolean
 }
 
@@ -52,8 +68,14 @@ export function PositionBar({
 }: PositionBarProps) {
   const spans = spansOf(place, sections)
   const sentence = sentenceOf(place, persona)
-  const depth = sectionDepth && spans.length > 1 ? sectionDepthOf(place) : null
-  const lens = depth === null ? null : lensOf(spans)
+  /* TWO SEPARATE FACTS, AND THE SECOND ONE DOES NOT DECIDE THE SHAPE. `sectionDepth` says the
+     ruler is drawn; `depth` says what can be painted in it. The old single expression folded
+     them together and took 44px out of the row in every state the arithmetic declined to
+     answer. */
+  const depth = sectionDepth ? sectionDepthOf(place) : null
+  const sectionSentence = sectionDepth
+    ? (depth?.sentence ?? sectionBlankSentence(place, persona))
+    : null
   const gone = isDeparted(place)
 
   /* Drawn only when the server said where the card is. The clamp is for layout, not truth. */
@@ -76,19 +98,35 @@ export function PositionBar({
     <div
       className={`position-bar position-bar-${persona}`}
       role="img"
-      aria-label={depth === null ? sentence : `${sentence} · ${depth.sentence}`}
+      /* THE SECOND SCALE IS ANNOUNCED HERE OR NOT AT ALL — `role="img"` hides every descendant.
+         It follows the VISIBLE text, so the blank sentence travels too: a reader who cannot see
+         the empty ruler is told in words why it is empty. */
+      aria-label={sectionSentence === null ? sentence : `${sentence} · ${sectionSentence}`}
       data-place={place.label}
       data-gone={gone ? 'true' : undefined}
+      data-depth={sectionDepth ? 'on' : undefined}
     >
+      {/* DOM ORDER IS LOAD-BEARING AND IS NOT THE VISUAL ORDER. `inventory.spec.ts` reads the box
+          track with `querySelector('.position-bar-track')`, and the section ruler carries that
+          class too — only document order makes that selector return this one. The inversion is
+          done entirely with CSS `order`. Reorder this JSX and that assertion silently measures
+          the wrong element and goes green over nothing. */}
       <p className="position-bar-text position-bar-text-box">{sentence}</p>
       <div className="position-bar-track">
-        {spans.map((span) => (
-          <span
-            key={`${span.start}-${span.end}`}
-            className={span.current ? 'position-bar-segment position-bar-here' : 'position-bar-segment'}
-            style={{ flexGrow: span.end - span.start + 1 }}
-          />
-        ))}
+        {spans.length === 0 ? (
+          /* A BOX THE SERVER COULD NOT SIZE STILL GETS AN OBJECT, not a void. `spansOf` returns
+             nothing on `box_total <= 0`, and an empty flex row is three pixels of nothing under
+             a caption that says the size is not known. */
+          <span className="position-bar-segment position-bar-segment-blank" />
+        ) : (
+          spans.map((span) => (
+            <span
+              key={`${span.start}-${span.end}`}
+              className={span.current ? 'position-bar-segment position-bar-here' : 'position-bar-segment'}
+              style={{ flexGrow: span.end - span.start + 1 }}
+            />
+          ))
+        )}
         {/* MOUNTED EVEN WITH NOWHERE TO STAND (D118), which is the whole of the animation the
             owner asked for. React keeps this node across the render that sells the card, so the
             mark eases out and drops instead of being deleted between two frames — and the row
@@ -102,30 +140,52 @@ export function PositionBar({
         />
       </div>
 
-      {depth === null ? null : (
+      {!sectionDepth ? null : (
         <div className="position-bar-zoom">
-          {lens === null ? null : (
-            <svg
-              className="position-bar-lens"
-              viewBox="0 0 100 10"
-              preserveAspectRatio="none"
-              aria-hidden="true"
-              focusable="false"
-            >
-              <polygon points={`${lens.left},0 ${lens.right},0 100,10 0,10`} />
-              <line x1={lens.left} y1="0" x2="0" y2="10" />
-              <line x1={lens.right} y1="0" x2="100" y2="10" />
-            </svg>
-          )}
           <div className="position-bar-track position-bar-sectiontrack">
+            {depth === null ? null : (
+              <>
+                {/* THE CARDS COUNTED PAST TO REACH THIS ONE, and not the card itself: `marker` is
+                    `(slot - 1) / of`, the server's own `fraction` convention, so a card at slot 1
+                    draws an empty bar and the pin IS the boundary. Left-only radius for the same
+                    reason — the filled edge is hard. */}
+                <span className="position-bar-fill" style={{ width: `${sectionAt}%` }} aria-hidden="true" />
+                <span
+                  className="position-bar-rule"
+                  style={{ ['--pb-marks' as string]: String(depth.of / graduationStep(depth.of)) }}
+                  aria-hidden="true"
+                />
+                {/* THE SECTION'S RUN IN BOX CARDS, read against the box caption's own `#54 of
+                    400`. The trapezoid was reaching for how much of the box this slice is and
+                    asked the reader to trust a drawing; these two numbers let them check one. */}
+                <span className="position-bar-edge position-bar-edge-start" aria-hidden="true">{depth.firstCard}</span>
+                <span className="position-bar-edge position-bar-edge-end" aria-hidden="true">{depth.lastCard}</span>
+              </>
+            )}
+            {/* ALWAYS RENDERED, IN EVERY STATE, so the marker counts two specs pin hold whatever
+                the arithmetic could answer — and so the pin drops out of an unlocated bar on the
+                same mechanism a departed one uses rather than by a second code path. */}
             <span
               className="position-bar-marker"
-              data-gone={depth.marker === null ? 'true' : undefined}
+              data-gone={depth?.marker == null ? 'true' : undefined}
               style={{ left: `${sectionAt}%` }}
               aria-hidden="true"
             />
           </div>
-          <p className="position-bar-text position-bar-text-section">{depth.sentence}</p>
+          <p className="position-bar-text position-bar-text-section">
+            {depth === null ? (
+              sectionSentence
+            ) : (
+              /* TWO SPANS, AND THE STRING IS NEVER SPLIT TO GET THEM. D132 lets the owner name a
+                 section and nothing forbids a name containing ` · `, so a caption built by
+                 splitting `sentence` cuts a name in half. The parts come out of `sectionDepthOf`
+                 as fields; concatenated they are byte-identical to it. */
+              <>
+                <span className="position-bar-cap-head">{depth.head}</span>
+                <span className="position-bar-cap-tail">{depth.tail}</span>
+              </>
+            )}
+          </p>
         </div>
       )}
     </div>

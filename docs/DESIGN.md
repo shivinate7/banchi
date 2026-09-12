@@ -385,10 +385,24 @@ divider. They routinely disagree: a card reading `#51 of 53` draws hard right at
 and is `Card 1` of section 3 — the very front — at section scale. Both are true, and a person
 walking to a box needs the first to get near it and the second to land on it.
 
-Three cues separate them, and none is a new color: the section track is shorter (8px against
-16px), a hairline indents it beneath the box track, and its caption opens with the section
-number where the box caption opens with `#`. The marker convention is the server's own
-`fraction`, so a card at the front of both sits at the front of both.
+**THE SECTION IS THE RULER AND THE BOX IS THE MARGIN NOTE, AND THAT ORDER WAS REVERSED ON
+2026-09-11** (D-section-is-the-ruler, on the owner's *"the interface/view of the box is nicer
+than section"*). The section is a graduated 26px ruler with a fill, a pin that crosses it and
+its own bounds written inside its two ends; the box is an 8px strip of chips beneath it. The
+argument is resolution: at the 580px bar this screen draws, the box track is **1.45px a card**
+and the mark's own footprint covers about 7.6 of them, while the caption above it already says
+`#51 of 53 · 96% in` exactly — and the section scale is 6.8 to 82.9px a card.
+
+Three cues separate them, and none is a new color: the two are **26px against 8px**, a caret on
+the box chip indents the ruler beneath it, and the ruler's caption opens with the section number
+where the box caption opens with `#`. Each scale keeps exactly one of the two ornaments — the
+ruler has graduations and no chips, the strip has chips and no graduations — so they cannot be
+confused at any width. The marker convention is the server's own `fraction`, so a card at the
+front of both sits at the front of both.
+
+**This paragraph said "8px against 16px" until that day, and the tree had shipped 12px since the
+rebrand.** `app/tests/inventory.spec.ts` carried the identical stale 16 in its own comment: two
+documents agreeing on a number neither of them read.
 
 **The section denominator says which kind it is** — `slots` for a settled divider, `so far`
 for the growing last section of an open box. That rule is D20's, argued there; it is repeated
@@ -401,7 +415,15 @@ so both tracks draw the same marker over the same denominator and both say `so f
 they said before was worse: the section scale was measured against a divider at every 25th
 card that nobody had put in, so `Card 6 of 25 slots` was drawn under a box holding 133 cards
 and no dividers at all. Two tracks agreeing is a box nobody has divided yet; the second track
-earns its 8px the moment somebody presses `S`.
+earns its height the moment somebody presses `S`.
+
+**AND THIS PARAGRAPH WAS DESCRIBING SOMETHING THE CODE DID NOT DO, FROM THE DAY IT WAS WRITTEN
+UNTIL 2026-09-11** (D-section-is-the-ruler). `PositionBar` gated the second scale on
+`spans.length > 1`, and `spansOf` returns exactly ONE span for an undeclared box — so the box
+this paragraph is about drew one track, not two. The gate is deleted. It could not survive the
+flip in any case: with the ruler promoted, keeping it would have left the owner's largest
+undivided box drawing only the 8px strip — the biggest box on the smallest picture. The cost is
+real and is named in the entry: such a box now spends 26px saying one fact twice.
 
 **`pipeline/join.py:Position.label` is the record; HOW A SCREEN DRAWS IT IS A VIEW (D41).**
 The owner: *"i didn't ever like the dot theme to separate"*. The interpuncts are deleted
