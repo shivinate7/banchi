@@ -3776,7 +3776,7 @@ COMPONENTS = [
             "governed_by": ["D3", "D10", "D13", "D19", "D20", "D21", "D22", "D23", "D27", "D28",
                             "D34", "D41", "D56", "D58", "D65", "D81", "D92", "D118", "D121",
                             "D128", "D130", "D131", "D132", "D142", "D145", "D36",
-                            "D153", "D-the-undo-stack-is-the-sitting-not-the-drawer"]},
+                            "D153", "D164"]},
             # D3 earns its place on a stylesheet: the no-claim finish chip is drawn dashed
             # because rung 1 distinguishes "no metadata recorded" from a recorded claim, and
             # that distinction is carried here in a border style rather than in any logic.
@@ -3792,7 +3792,7 @@ COMPONENTS = [
                                       # move what is around it when a drawer changes.
                                       "governed_by": ["D3", "D5", "D27", "D41", "D50", "D65", "D117",
                                                       "D118", "D130", "D142",
-                                                      "D-the-undo-stack-is-the-sitting-not-the-drawer"]},
+                                                      "D164"]},
             "src/PositionLabel.tsx": {
                 "does": "ONE rendering of `pipeline/join.py:Position.label` for every OWNER site "
                         "(D41, amended 2026-08-29). Recomposes `Box N \u00b7 Section N \u00b7 Card N` into a "
@@ -5239,7 +5239,7 @@ COMPONENTS = [
                         "it, and a walk refused partway reporting how far it got in the "
                         "server's own words. Run by `make design-check`.",
                 "governed_by": ["D10", "D41", "D58", "D101", "D118",
-                                "D-the-undo-stack-is-the-sitting-not-the-drawer"],
+                                "D164"],
                 "note": "THE ONLY SPEC THAT CAPTURES, and it is the opposite of "
                         "capture-claims.spec.ts's rule rather than an exception to it: "
                         "`POST /capture` and `DELETE /inventory/...` are both intercepted, so "

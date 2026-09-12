@@ -1,4 +1,4 @@
-## D-the-undo-stack-is-the-sitting-not-the-drawer — The undo stack is the sitting, not the drawer, and the counter counts the sitting
+## D164 — The undo stack is the sitting, not the drawer, and the counter counts the sitting
 
 **Settled 2026-09-12, out of the unbox-the-pipeline survey, which found it in passing.**
 Two figures on the capture screen were filtered by `shot.card.box === box` — the CURRENT value
