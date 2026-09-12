@@ -318,7 +318,8 @@ make check          # harness + docs-audit + audit-self-test + githooks-selftest
                     #   coordinator-selftest + suite-lock-selftest +
                     #   serve-selftest + sync-selftest +
                     #   verdict-selftest + port-agreement + set-hint-agreement +
-                    #   screen-freshness + sigil-check + ignore-check + lint +
+                    #   screen-freshness + screen-freshness-selftest +
+                    #   sigil-check + ignore-check + lint +
                     #   vale + typecheck.
                     #   THIS LIST IS CHECKED NOW —
                     #   `make docs-audit`'s `check census` row reconciles it and `make help`'s
@@ -349,6 +350,17 @@ make screen-freshness # every server write in app/src has a way back: a re-read,
                     #   invalidation signal, or a reason in the code why none is owed.
                     #   Needs node, so it is in `check` and never in the git hook.
                     #   Finds nothing today — it guards write number 39.
+make screen-freshness-selftest # THAT GUARD'S OWN CASES, AND IT WAS ON NO TARGET UNTIL
+                    #   2026-09-12. `screen-freshness.mjs --self-test` pins its classifier
+                    #   in both directions — a write with a re-read, the same write with
+                    #   nothing after it, a write behind a module-level wrapper, the same
+                    #   wrapper with no caller — plus the one blind spot it cannot catch,
+                    #   pinned so it cannot change silently.
+                    #   **NOTHING RAN IT.** `check` called the plain form, which passed and
+                    #   then printed "run --self-test" — so the check told the operator to
+                    #   run the check that was red, and nothing made them. It WAS red on
+                    #   main: `2 FAILED`, 17 exports missing from its RECORDED table, which
+                    #   is why gating it had to wait for #307 to fill them.
 make audit-self-test # the checker checks itself. In `check`, never in the git hook (D16/D18).
 make icloud-sweep   # iCloud conflict copies (`foo 2.py`). ARGS=--delete removes the
                     #   byte-identical ones; a DIFFERING copy is only ever reported (D44).
@@ -1602,6 +1614,39 @@ apostrophes in names) live in the `tcgplayer-csv` skill. It loads on demand.
 
 ## Hard rules
 
+- **A RULE THAT CAN BE MECHANICALLY ENFORCED MUST BE MECHANICALLY ENFORCED, AND A NEW RULE IS
+  NOT FINISHED UNTIL ITS ENFORCEMENT EXISTS OR ITS UNENFORCEABILITY IS ARGUED.**
+  The owner's instruction, 2026-09-12: *"i need this everything fucking mechanically fixed im
+  tired of prose being bypassed"* … *"every rule for all time, anything that can be mechanically
+  enforced, should be mechanically enforced, and make this a rule to enforce going forward
+  too."*
+
+  Prose in this file is advice a session can skirt, and sessions have skirted it — including
+  rules they wrote themselves, in the same session that wrote them. So **when you add a rule
+  here, you add the thing that makes it fail a commit, refuse a command, or go red in a check,
+  in the same PR.** If it genuinely cannot be mechanized, write `NOT MECHANIZED:` inside the
+  rule and say what a machine would have to be able to SEE.
+
+  **THIS RULE READS ITSELF.** `make docs-audit`'s `rule enforcement` row parses every rule in
+  this section and fails the commit when one names neither a mechanism nor an argument, and it
+  checks the citation RESOLVES — a rule naming a deleted guard reads as coverage, which is
+  worse than naming nothing. It pins two numbers, and both are deliberate: the rule count, so
+  that a reworded heading or a broken reader reads as a FAILURE rather than a clean tree, and
+  the number of rules still carrying the sentinel — **this file's prose debt, which is only
+  ever lowered.** Raising it is allowed and is meant to be visible in the diff.
+
+  **The evidence, all of it inside twenty-four hours on 2026-09-11/12.** A session wrote
+  `a-pgrep-waiter-matches-itself` into its own memory, READ it, and then wrote the exact
+  forbidden waiter loop; that file now records why — it was *"phrased as an explanation to
+  recall rather than a prohibition to trip over."* The same session wrote a rule against
+  silencing a write and then swallowed two commit refusals with `>/dev/null 2>&1`.
+  `docs/DEBTS.md` §11 carried a sentence about two observed mutation failures that were
+  measured false on both counts. `node scripts/screen-freshness.mjs --self-test` exited 1 on
+  main while sitting on no `make` target and printing *"run --self-test"* — the check told the
+  operator to run the check that was red, and nothing made them. **Against all of that:
+  `raw color`, `storage keys`, `route census`, `check census`, `codex hooks`, `id claims` and
+  `shell substitution` have not been bypassed once, because none of them can be.**
+
 - **A route is not a feature. Nothing is built until it is reachable from a screen.**
   A capability that exists only in `server/` is not done, is not "landed", and must never be
   reported as either. Done means the whole chain: the route, a client function in
@@ -1627,14 +1672,39 @@ apostrophes in names) live in the `tcgplayer-csv` skill. It loads on demand.
   capability is wrong, not merely incomplete. It goes under NEITHER until a screen reaches
   it.
 
+  **NOT MECHANIZED:** a machine would have to know which screen a human would look for a
+  capability on. The arithmetic half is buildable and is worth building — every route in
+  `server/` reconciled against `app/src/server.ts` — but three legitimate cases break a naive
+  reader: `OFF_NAV` declares two routes deliberately absent from the nav, the Fulfiller's
+  screen renders no shell at all, and a capability reached only from a sheet or a modal has no
+  route of its own. `make design-check` is the nearest thing that can see the last one, and it
+  is deliberately off the commit path.
+
 - Never guess an identification, a variant, or a price. Ambiguity goes to the review
   queue with its photo. Never silently drop a card.
+  **NOT MECHANIZED:** a machine cannot tell a guess from a confident correct reading — both
+  are a string in a field. The second sentence IS mechanized and is the half that can be:
+  `harness/tests/t3_join_coverage.py` fails when a card leaves the join unrecorded, in both
+  directions, and `pipeline/join.py`'s `cards_in - cards_out` is the arithmetic behind it. What
+  no check reads is whether the model should have declined.
 - Never write output before reporting unmatched rows in both directions.
+  Mechanized: `harness/tests/t3_join_coverage.py`, whose own header records why one direction
+  is not enough — *"a one-directional check passes on that bug"* — and which refuses to write
+  a file at all while a card is unrecorded.
 - Scope is argued, not gated. New surface area needs a reason and a decision entry — it no
   longer needs a gate to pass first, because none is open. This rule used to read "No new
   surface area until the current gate passes."
+  Mechanized for the half that is arithmetic: `make docs-audit`'s `repo map` row fails a commit
+  that adds a file under a mapped directory with no entry, and `decision index` fails one that
+  cites an entry that does not exist. Whether the REASON is any good is a person's judgement,
+  and that is the part this rule is really about.
 - No manual third-party UI step inside the autonomous pipeline. External tools without
   an API contract can be benchmarks, never components.
+  **NOT MECHANIZED:** a machine would have to know that a step needs a human's hands in a
+  browser, which is a fact about the outside world and not about this tree. The nearest
+  readable proxy is that every pipeline command is re-runnable from the CLI with no prompt, and
+  `make harness`'s T1 through T9 do run them that way — so a step that could not be automated
+  would fail to have a test at all, which is evidence and not a gate.
 - **FIX THE CAUSE, NEVER THE SYMPTOM — AND FIRST ASK WHETHER THE PRIMITIVE ALREADY EXISTS.**
   The owner's standing instruction, 2026-09-11: *"Always ensure you take the best practices to
   resolve things, never the band aid routes."*
@@ -1663,6 +1733,11 @@ apostrophes in names) live in the `tcgplayer-csv` skill. It loads on demand.
   argument rather than the patch. What is refused is a patch PRESENTED as the solution, which is
   the report format's own rule one register up: "solved" with no bucket named is the phrasing
   this repo does not accept.
+
+  **NOT MECHANIZED:** a machine would have to read intent — whether the author knew the cause
+  and chose the symptom. Two things nearby are mechanical and neither is this: `make revert-guard`
+  refuses a file put back the way main had it without the branch saying so, and `make map
+  ARGS=--stale` ranks entries whose file moved after the prose about it did.
 - **A SETTLED DECISION IS AN ARGUMENT, NOT AN AUTHORITY. THINK IN OUTCOMES, AND SAY SO WHEN A
   RULE HAS STOPPED SERVING ONE.** The owner's instruction, 2026-09-12: *"i want it to feel
   empowered that it think from the lens of outcomes not processes, ie if a decision made seems
@@ -1700,6 +1775,13 @@ apostrophes in names) live in the `tcgplayer-csv` skill. It loads on demand.
   *"you're telling me rules that are more or less arbitrary rather than anything that's
   rational logic of why something should be, stop being systems first -- think outcomes."*
 
+  **NOT MECHANIZED:** a machine cannot tell a premise that has rotted from one that still
+  holds — D48 had two of three grounds false for weeks and every sentence in it still parsed.
+  What a machine would need is the ability to re-measure each entry's own stated evidence,
+  which is exactly what the entries do not carry in a readable form. `make map ARGS=--stale`
+  is the nearest partial: it ranks entries whose FILE has moved since the prose about it did,
+  which catches the drift and never the rot.
+
 - **BEFORE YOU HAND THE OWNER A TASK, CHECK WHETHER IT IS YOURS TO DO.** Their instruction,
   2026-09-12: *"before you ever bring a task for me to do, see if you're able to do it
   yourself (ie double check before sending a message that has a task for me that it's not in
@@ -1720,8 +1802,16 @@ apostrophes in names) live in the `tcgplayer-csv` skill. It loads on demand.
   that is theirs, money, or anything a buyer can see), is asking correct. **When it does need
   them, say precisely why** rather than leaving it implied.
 
+  **NOT MECHANIZED:** a machine would have to read a sentence addressed to a person, decide
+  which action it asks for, and then decide whether this repo can already perform it. The
+  failure it exists for was exactly that gap — a session said a fresh pricing export was
+  *"yours to fetch"* when `POST /pipeline/live-export` had fetched it free since D104. A route
+  no screen reaches still counts, so even the lookup is not a grep for a control.
+
 - **Opsec, repo-wide**: a live unredeemed code card is a bearer instrument. No code-card
-  photo in a listing, README, screenshot, or commit. Enforced by pre-commit hook.
+  photo in a listing, README, screenshot, or commit.
+  Mechanized by `scripts/githooks/pre-commit`, armed by `make hooks`, which refuses the commit
+  and prints its escape hatch. Enforced by pre-commit hook.
 - **A screen answers to the system.** New CSS reads `--bn-*` tokens and never names a color;
   a primitive the kit already has is not rewritten in a screen sheet; a screen is verified at
   1440, 820 and 390, in light and in dark, before it is called done. **`docs/DESIGN.md` is
@@ -2097,6 +2187,7 @@ D169 The blanket sweep asks the question the verdict answers, and a nested workt
 D170 A widening is safe only while the category fits, and Pokemon's does not
 D171 A refusal that reaches nobody did not happen, and a status line the session wrote is not a reading
 D172 A card's name is the first photograph of it, frozen at issue
+D173 A rule that can be enforced mechanically is enforced mechanically, and a rule with no reader is advice
 D-the-primary-checkout-syncs-itself The primary checkout syncs itself, both parts, because the thing D42 was protecting is not the thing this moves
 ```
 

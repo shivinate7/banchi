@@ -187,6 +187,28 @@ CHECKS = (
         "governed_by": ("D18",),
     },
     {
+        "target": "screen-freshness-selftest",
+        "runs": "node scripts/screen-freshness.mjs --self-test",
+        "asserts": "The freshness guard's own classifier, against pinned cases in both "
+                   "directions: a write with a re-read after it, the same write with nothing "
+                   "after it, a write behind a module-level wrapper with evidence at the "
+                   "caller, the same wrapper with no caller that re-reads — plus the one blind "
+                   "spot it CANNOT catch, pinned so it cannot change silently.",
+        "needs": ("node", "app deps"),
+        "writes": "",
+        "commit_path": False,
+        "why_off_commit_path": "screen-freshness' reason exactly — it runs node, and the git "
+                               "hook runs bare.",
+        "gates": True,
+        "why": "IT WAS ON NO TARGET AT ALL UNTIL 2026-09-12, and it was RED on main while the "
+               "plain `screen-freshness` beside it passed and printed \"run --self-test\". So "
+               "the check told the operator to run the check that was red, and nothing made "
+               "them. That is the whole shape of a rule with no reader, and it is why this "
+               "one is gated now rather than argued about: PR #307 filled the 17 exports its "
+               "RECORDED table was missing, so the gate is safe and costs one node process.",
+        "governed_by": ("D18", "D173"),
+    },
+    {
         "target": "sigil-check",
         "runs": "python3 scripts/sigil-check.py --self-test && python3 scripts/sigil-check.py",
         "asserts": "A bare `#` on an owner-side screen draws D58's COUNT and never the store "

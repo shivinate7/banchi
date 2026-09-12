@@ -11888,6 +11888,261 @@ def check_shell_substitution(report: Report) -> None:
     )
 
 
+# --------------------------------------------------- rule enforcement (mechanise, or argue)
+
+HARD_RULES_HEADING = "## Hard rules"
+
+# THREE PINNED NUMBERS, AND THEY ARE PINNED RATHER THAN DERIVED ON PURPOSE. The whole
+# argument of this row is that prose gets skirted, so the only figures it can trust are ones
+# a person had to edit in a diff somebody read.
+#
+# `HARD_RULE_FLOOR` is the NON-VACUITY guard and it is the important one. A parser that finds
+# nothing, over a section somebody reworded or renamed, would otherwise print `ok` — which is
+# this repo's signature defect in a new costume: a check that cannot tell "nothing is wrong"
+# from "nothing is known yet". Nine instances of that shape landed in twenty-four hours on
+# 2026-09-12, two of them docs rows that passed while reporting `0 entries` over an emptied
+# corpus. So: fewer rules than this reads as a BROKEN READER, never as a clean tree.
+#
+# `PROSE_ONLY_EXPECTED` is this repo's prose debt, mechanically tracked: the number of hard
+# rules that name no mechanism and instead argue why none can exist. **It is an EQUALITY and
+# not a ceiling, which a mutation arm taught me.** With a ceiling, arm 2 — deleting rule 5's
+# `NOT MECHANIZED:` admission — SURVIVED: that rule's prose also mentions `make harness` as
+# EVIDENCE, so with the admission gone it read as mechanized, and the debt silently fell from
+# six to five. A number that can only be checked in one direction lets an honest admission be
+# deleted for free, which is the precise accounting this row exists to prevent. So both
+# directions fail: build a mechanism and you lower the pin in the same commit; add a rule with
+# no enforcement and you raise it and say why.
+HARD_RULE_FLOOR = 12
+PROSE_ONLY_EXPECTED = 6
+
+# BOLD, AND THAT IS NOT COSMETIC. The sentinel has to be a DECLARATION, so it is matched as
+# the bold run a rule writes it in — otherwise the rule immediately above, which explains the
+# sentinel and quotes it in backticks, would read as having claimed one, and rule 0 would
+# count itself as prose. A check that miscounts its own author is not a check.
+NOT_MECHANIZED = "**NOT MECHANIZED:**"
+_ARGUMENT_MIN_WORDS = 12
+
+_ROW_NAME_RE = re.compile(r'report\.add\(\s*\n?\s*"([^"\n]+)"')
+_MECH_PATHS = ("scripts/", "harness/tests/", "app/tests/", "app/eslint.config.js", "ruff.toml",
+               ".claude/settings.json", ".codex/hooks.json", ".github/workflows/")
+
+
+def audit_row_names() -> Set[str]:
+    """Every row name this file registers, read out of its own source.
+
+    Self-referential on purpose: a rule that cites `` `raw color` `` as its enforcement is
+    citing a row, and the only authority on which rows exist is the file that adds them. A
+    hand-kept list here would be a second enumeration of the same thing, which is the drift
+    `check census` already exists to catch one level up.
+    """
+    return set(_ROW_NAME_RE.findall(read(Path(__file__))))
+
+
+def hard_rule_blocks(text: str) -> List[Tuple[int, str]]:
+    """(line number, block text) for every top-level bullet under `## Hard rules`.
+
+    A block is the bullet and everything indented under it, up to the next top-level bullet
+    or the end of the section — so a rule's mechanism may be named anywhere in its own prose
+    and not only on the first line.
+    """
+    lines = text.splitlines()
+    start = None
+    for number, line in enumerate(lines, start=1):
+        if line.strip() == HARD_RULES_HEADING:
+            start = number
+            break
+    if start is None:
+        return []
+    blocks: List[Tuple[int, str]] = []
+    current: List[str] = []
+    at = 0
+    for number in range(start + 1, len(lines) + 1):
+        line = lines[number - 1]
+        if line.startswith("## "):
+            break
+        if line.startswith("- "):
+            if current:
+                blocks.append((at, "\n".join(current)))
+            current, at = [line], number
+        elif current:
+            current.append(line)
+    if current:
+        blocks.append((at, "\n".join(current)))
+    return blocks
+
+
+def mechanism_refs(block: str, targets: Set[str], rows: Set[str]) -> Tuple[List[str], List[str]]:
+    """(references that RESOLVE, references that name something that does not exist).
+
+    Three spellings count as naming a mechanism, and each is checked against the thing it
+    names rather than against a pattern — a citation of a deleted guard is worse than no
+    citation, because it reads as coverage:
+
+    - `` `make <target>` `` where the target is a real rule in the Makefile
+    - a backticked docs-audit row name this file actually registers
+    - a path under `scripts/`, `harness/tests/`, `app/tests/` or `.github/workflows/`, or one
+      of the four config files that carry a repo rule, that exists on disk
+
+    Prose is read only inside backticks and fences, for `iter_code_lines`' reason: English is
+    full of `make it` and `make the`.
+    """
+    resolves: List[str] = []
+    dangling: List[str] = []
+    for _, spans in iter_code_lines(block):
+        for span in spans.split("\n"):
+            token = span.strip().strip("`")
+            match = _MAKE_REF_RE.match(token)
+            if match:
+                (resolves if match.group(1) in targets else dangling).append(f"make {match.group(1)}")
+                continue
+            if token in rows:
+                resolves.append(f"the `{token}` row")
+                continue
+            if token.startswith(_MECH_PATHS):
+                bare = token.split(":")[0].split()[0]
+                (resolves if exists(ROOT / bare) else dangling).append(bare)
+    return resolves, dangling
+
+
+def argued_exemption(block: str) -> Tuple[bool, int]:
+    """(the block argues its own unenforceability, words of argument it gives).
+
+    The sentinel is a fixed string rather than a pattern because the point is a DELIBERATE
+    claim: a session writing it is saying "I looked, and here is what a machine would have to
+    be able to see." A bare sentinel with nothing after it is the rubber stamp this row would
+    otherwise become, so the argument has a length floor.
+    """
+    at = block.find(NOT_MECHANIZED)
+    if at < 0:
+        return False, 0
+    return True, len(block[at + len(NOT_MECHANIZED):].split())
+
+
+def check_rule_enforcement(report: Report) -> None:
+    """Every hard rule names the thing that enforces it, or argues why nothing can.
+
+    **Blocking, on D16's test: there is nothing to judge here.** A rule either cites a
+    mechanism that resolves, or carries the sentinel and an argument. Whether the mechanism is
+    any *good* is a question for a person; whether one is named at all is arithmetic.
+
+    **The owner's instruction, 2026-09-12, is the whole specification**: *"i need this
+    everything fucking mechanically fixed im tired of prose being bypassed"* … *"every rule
+    for all time, anything that can be mechanically enforced, should be mechanically enforced,
+    and make this a rule to enforce going forward too."*
+
+    **Why it is a row and not a sentence in `CLAUDE.md`.** A sentence is the thing being
+    complained about. The evidence, all of it from one twenty-four hour stretch: a session
+    wrote `a-pgrep-waiter-matches-itself` into its own memory, READ it, and then wrote the
+    exact forbidden waiter loop — and its own file now records that the rule failed *because*
+    it was phrased as an explanation to recall rather than a prohibition to trip over. The
+    same session wrote a rule against silencing a write and then swallowed two commit refusals
+    with `>/dev/null 2>&1`. `docs/DEBTS.md` §11 carried a sentence about two observed mutation
+    failures that were measured false on both counts. `screen-freshness --self-test` exited 1
+    on main while sitting on no make target and printing *"run --self-test"*. Against that:
+    `raw color`, `storage keys`, `route census`, `check census`, `codex hooks`, `id claims`
+    and `shell substitution` have never once been bypassed, because none of them can be.
+
+    **What it cannot see, by name.** Whether the named mechanism actually covers the rule —
+    a rule could cite `make lint` and be about something lint never reads, and this row would
+    pass it. It reads the citation, not the coverage. It also reads only `CLAUDE.md`'s Hard
+    rules section: the Working agreement, the Commands prose, the decision corpus and the
+    memory directory are all rule surfaces and none is governed here yet. And it cannot rank —
+    a trivial guard and a mutation-tested one count the same.
+
+    **And it cannot detect its own absence.** Deleting the rule-count floor from this function
+    leaves the row printing `ok` over a section a rule short — arm 9, which survived by
+    definition rather than by oversight. `check dispatch` sees a whole row go missing and
+    nothing sees an assertion inside one go missing, which the comment on that row already
+    states as the shape of the thing rather than a bug to patch.
+    """
+    findings: List[Finding] = []
+    doc = ROOT / "CLAUDE.md"
+    if not exists(doc):
+        report.add("rule enforcement", MECHANICAL, [Finding("CLAUDE.md", "does not exist")])
+        return
+    text = read(doc)
+    blocks = hard_rule_blocks(text)
+    if not blocks:
+        report.add("rule enforcement", MECHANICAL, [Finding(
+            "CLAUDE.md",
+            f"found no rules under `{HARD_RULES_HEADING}`. Either the heading was reworded or "
+            f"this reader is broken — and a reader that finds nothing must never print `ok`, "
+            f"which is the whole reason this row has a floor.",
+        )])
+        return
+
+    makefile = ROOT / "Makefile"
+    targets = set(_MAKE_RULE_RE.findall(read(makefile))) if exists(makefile) else set()
+    rows = audit_row_names()
+
+    prose_only: List[str] = []
+    for line, block in blocks:
+        headline = block[2:].strip().split("\n")[0].strip("*").strip()[:64]
+        resolves, dangling = mechanism_refs(block, targets, rows)
+        argued, words = argued_exemption(block)
+        for dead in dangling:
+            findings.append(Finding(
+                f"CLAUDE.md:{line}",
+                f"the rule “{headline}…” names `{dead}` as its enforcement and "
+                f"that does not exist. A citation of a deleted guard reads as coverage, which "
+                f"is worse than naming nothing.",
+            ))
+        # THE SENTINEL IS READ FIRST, AND THAT ORDER IS THE HONEST ONE. Several rules here
+        # cite a mechanism that covers a PART of what they demand — the join's both-ways
+        # report for "never silently drop a card", the stale-map ranking for a decision whose
+        # premises have rotted. Counting those as mechanized would let the ceiling fall while
+        # the operative demand stayed prose, which is the accounting this row exists to stop.
+        if argued:
+            prose_only.append(headline)
+            if words < _ARGUMENT_MIN_WORDS:
+                findings.append(Finding(
+                    f"CLAUDE.md:{line}",
+                    f"the rule “{headline}…” carries `{NOT_MECHANIZED}` with "
+                    f"{words} words after it. Say what a machine would have to be able to SEE "
+                    f"— at least {_ARGUMENT_MIN_WORDS} words — or the sentinel is a "
+                    f"rubber stamp.",
+                ))
+            continue
+        if resolves:
+            continue
+        findings.append(Finding(
+            f"CLAUDE.md:{line}",
+            f"the rule “{headline}…” names no mechanism and argues no exemption. "
+            f"Name the `make` target, docs-audit row, hook or test that makes it fail — or "
+            f"write `{NOT_MECHANIZED}` and say what a machine would have to be able to see.",
+        ))
+
+    if len(blocks) < HARD_RULE_FLOOR:
+        findings.append(Finding(
+            "CLAUDE.md",
+            f"read {len(blocks)} hard rules where {HARD_RULE_FLOOR} are pinned. A rule was "
+            f"deleted, or reworded past this reader. Lower `HARD_RULE_FLOOR` deliberately if "
+            f"a rule genuinely went — never leave a shrinking reader printing `ok`.",
+        ))
+    if len(prose_only) != PROSE_ONLY_EXPECTED:
+        if len(prose_only) > PROSE_ONLY_EXPECTED:
+            what = (f"{len(prose_only)} hard rules argue their own unenforceability where "
+                    f"{PROSE_ONLY_EXPECTED} are pinned: {', '.join(prose_only)[:200]}. Build the "
+                    f"mechanism, or raise `PROSE_ONLY_EXPECTED` in the same commit and say why "
+                    f"in the message.")
+        else:
+            what = (f"only {len(prose_only)} hard rules argue their own unenforceability where "
+                    f"{PROSE_ONLY_EXPECTED} are pinned. If you BUILT a mechanism, lower the pin "
+                    f"in this commit. If an admission was deleted, put it back — a rule that "
+                    f"stops saying it is unenforced is not a rule that became enforced, and "
+                    f"reading this in one direction only is what let a mutation arm delete one "
+                    f"for free.")
+        findings.append(Finding("CLAUDE.md", what))
+
+    report.add(
+        "rule enforcement",
+        MECHANICAL,
+        findings,
+        f"{len(blocks)} hard rules: {len(blocks) - len(prose_only)} name a mechanism that "
+        f"resolves, {len(prose_only)} argue why none can (pinned at {PROSE_ONLY_EXPECTED})",
+    )
+
+
 def check_identifier_spelling(report: Report) -> None:
     """A name spelled British, anywhere a session might grep for its American twin.
 
@@ -13073,6 +13328,7 @@ def self_test() -> int:
     report = Report()
     check_identifier_spelling(report)
     check_shell_substitution(report)
+    check_rule_enforcement(report)
     by_label = {check: findings for check, _, findings, _ in report.checks}
     ok(
         not by_label["identifier spelling"],
@@ -13684,6 +13940,7 @@ def audit(staged_only: bool) -> Report:
     check_audit_invocation(report)
     check_identifier_spelling(report)
     check_shell_substitution(report)
+    check_rule_enforcement(report)
     # Last, and it is the row that says the rows above are all of them. It reconciles this
     # file's check definitions against the calls in this function.
     #

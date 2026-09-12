@@ -2548,7 +2548,9 @@ COMPONENTS = [
                 # for vale. Change one and the entry describing that check goes stale with it,
                 # which is exactly what `governed_by` is for — so they are listed rather than
                 # allowlisted away.
-                "governed_by": ["D16", "D17", "D18", "D42", "D43", "D44", "D47", "D53", "D58", "D60", "D65", "D68", "D74", "D76", "D80", "D82", "D92", "D111", "D122", "D127", "D129", "D133", "D138", "D139", "D140", "D141", "D158", "D160",
+                "governed_by": ["D16", "D17", "D18", "D42", "D43", "D44", "D47", "D53", "D58", "D60", "D65", "D68",
+                                "D74", "D76", "D80", "D82", "D92", "D111", "D122", "D127", "D129", "D133", "D138",
+                                "D139", "D140", "D141", "D158", "D160", "D173",
                                 "D-the-primary-checkout-syncs-itself"],
                 "note": "IT DECLARES THE SUITE AND DELIBERATELY DOES NOT DRIVE IT, which is "
                         "the whole shape. A registry that drove `make check` could not "

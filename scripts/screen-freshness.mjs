@@ -163,7 +163,9 @@ const NON_MUTATING_CLAIM = /writes nothing|creates no run directory|creates noth
  * amendment had left three unrecorded the same day (`getPricingCorpus`, `putPricingCorpus`,
  * `emitMerged`) and D87's reconcile a fourth (`reconcileLive`), so `--self-test` was red on
  * main while the ordinary run printed the drift line; they are recorded here too, and the
- * `check` target is what runs the self-test.
+ * `check` target is what runs the self-test — TRUE SINCE 2026-09-12 AND FALSE FOR AS LONG AS
+ * IT HAD BEEN WRITTEN. `make screen-freshness-selftest` is a target of its own and is in both
+ * `check` and `ci-check`; until then no recipe, hook or workflow passed `--self-test` at all.
  *
  * FIVE NAMES ARRIVED IN ONE UPDATE ON 2026-09-01, AND FOUR OF THEM WERE ALREADY OVERDUE.
  * `getPriceTrends` (D79), `getExportScope` (D76), `moveCard` and `moveCards` (D83) all landed
@@ -178,8 +180,9 @@ const NON_MUTATING_CLAIM = /writes nothing|creates no run directory|creates noth
  * (D96, amended), so that half was the deliberate act; D100's four — `getMarkdowns`,
  * `markdownListings`, `applyMarkdown` and `markdownFileUrl`, one per bucket but `writes` — landed
  * two commits later against a record nobody re-read, and `--self-test` went from green to
- * `3 FAILED` while every `make check` on the branch stayed green, because line 436 of the
- * Makefile runs this script WITHOUT `--self-test`. A record that is only ever pruned drifts in
+ * `3 FAILED` while every `make check` on the branch stayed green, because the Makefile ran this
+ * script WITHOUT `--self-test` — the gap closed on 2026-09-12 by `make screen-freshness-selftest`,
+ * which is why this paragraph is a record rather than a live hazard. A record that is only ever pruned drifts in
  * one direction. The four are recorded here now, in the buckets the classifier already puts
  * them in. */
 const RECORDED = {
@@ -1857,7 +1860,22 @@ function selfTest() {
     const readOnly = path.join(tmp, 'ReadOnly.tsx')
     fs.writeFileSync(readOnly, head + '\nexport function R() { void doRead(); return null }\n', 'utf8')
     const quiet = audit([readOnly], synthetic)
-    ok(quiet.findings.length === 0 && quiet.covered.length === 0, 'no write sites, no findings')
+    /* NON-VACUOUS, AND IT WAS NOT BEFORE. `findings.length === 0 && covered.length === 0`
+     * is the same answer whether this screen genuinely has no writes or whether nothing was
+     * READ AT ALL — a clean subject and an empty subject printing one word. That is this
+     * repo's signature defect (a guard that cannot tell "nothing is wrong" from "nothing is
+     * known yet"), and it matters more now that `make check` gates this self-test: the case
+     * that certifies "no writes here" was the one case that would also have certified a
+     * classifier which had stopped reading files. So the SUBJECT is asserted too. */
+    ok(
+      quiet.screens.length === 1 &&
+        quiet.screens[0].src !== undefined &&
+        writeSites(quiet.screens[0]).length === 0 &&
+        quiet.findings.length === 0 &&
+        quiet.covered.length === 0,
+      'a read-only screen is READ and holds no write site — the subject asserted, not inferred from silence',
+      `screens=${quiet.screens.length} sites=${quiet.screens.length === 1 ? writeSites(quiet.screens[0]).length : '?'} findings=${quiet.findings.length} covered=${quiet.covered.length}`,
+    )
   } finally {
     fs.rmSync(tmp, { recursive: true, force: true })
   }

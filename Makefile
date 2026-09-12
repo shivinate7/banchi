@@ -4,7 +4,7 @@
 # the project would be built on top of — `make check` green means every check ran.
 
 .DEFAULT_GOAL := help
-.PHONY: help status map explain harness check ignore-check docs-audit vale audit-self-test verdict-selftest githooks-selftest merge merge-selftest revert-guard revert-selftest claim-ids claim-stale claim-selftest decisions-selftest port-agreement set-hint-agreement screen-freshness sigil-check suite-lock-selftest icloud-sweep audit-history dev server screenshot design-check design-check-quiet lint typecheck venv launch-config worktree-setup hooks up down launch-agent demo demo-photos demo-seed demo-record demo-static demo-preview demo-freshness
+.PHONY: help status map explain harness check ignore-check docs-audit vale audit-self-test verdict-selftest githooks-selftest merge merge-selftest revert-guard revert-selftest claim-ids claim-stale claim-selftest decisions-selftest port-agreement set-hint-agreement screen-freshness screen-freshness-selftest sigil-check suite-lock-selftest icloud-sweep audit-history dev server screenshot design-check design-check-quiet lint typecheck venv launch-config worktree-setup hooks up down launch-agent demo demo-photos demo-seed demo-record demo-static demo-preview demo-freshness
 
 # Prefer the venv if it exists, so `make harness` works without anyone remembering to
 # activate anything. Falls back to system python3, which still runs T2-T5 — T1 needs the
@@ -83,6 +83,8 @@ help:
 	@echo "  make port-agreement  server/ports.py and app/devPort.ts answer the same numbers."
 	@echo "  make set-hint-agreement  the capture screen and the export fetch resolve a set hint alike."
 	@echo "  make screen-freshness  every server write in app/ has a way back. Needs node."
+	@echo "  make screen-freshness-selftest  that guard's own cases, both directions. It sat"
+	@echo "                    on no target at all until 2026-09-12 and was red on main."
 	@echo "  make sigil-check   a bare \`#\` on a screen is a COUNT, never a store key (D92)."
 	@echo "  make ignore-check  every path a worktree provisions is gitignored, link or not (D47)."
 	@echo "  make icloud-sweep  list iCloud conflict copies. ARGS=--delete removes the identical ones."
@@ -104,7 +106,8 @@ help:
 	@echo "                    coordinator-selftest + suite-lock-selftest +"
 	@echo "                    serve-selftest + sync-selftest +"
 	@echo "                    verdict-selftest + port-agreement + set-hint-agreement +"
-	@echo "                    screen-freshness + sigil-check + ignore-check + lint +"
+	@echo "                    screen-freshness + screen-freshness-selftest +"
+	@echo "                    sigil-check + ignore-check + lint +"
 	@echo "                    vale + typecheck"
 	@echo
 	@echo "  ./pkmnscan identify <capture-dir>                 submit, wait, collect. COSTS MONEY."
@@ -400,6 +403,7 @@ check:
 	@$(MAKE) --no-print-directory port-agreement
 	@$(MAKE) --no-print-directory set-hint-agreement
 	@$(MAKE) --no-print-directory screen-freshness
+	@$(MAKE) --no-print-directory screen-freshness-selftest
 	@$(MAKE) --no-print-directory sigil-check
 	@$(MAKE) --no-print-directory ignore-check
 	@$(MAKE) --no-print-directory lint
@@ -461,6 +465,7 @@ ci-check:
 	@$(MAKE) --no-print-directory port-agreement
 	@$(MAKE) --no-print-directory set-hint-agreement
 	@$(MAKE) --no-print-directory screen-freshness
+	@$(MAKE) --no-print-directory screen-freshness-selftest
 	@$(MAKE) --no-print-directory sigil-check
 	@$(MAKE) --no-print-directory ignore-check
 	@$(MAKE) --no-print-directory lint
@@ -631,6 +636,24 @@ set-hint-agreement:
 screen-freshness:
 	$(NPM_GUARD)
 	@node scripts/screen-freshness.mjs
+
+# THE GUARD'S OWN SELFTEST, AND IT SAT ON NO TARGET UNTIL NOW. `screen-freshness.mjs`
+# carries a `--self-test` that exercises its classifier against pinned cases in both
+# directions, and NOTHING RAN IT: `make check` called the plain form, which passed and then
+# printed "classification has moved since it was recorded — run --self-test". So the check
+# told the operator to run the check that was red, and nothing made them — a rule with no
+# reader, which is the thing this repo has now made a hard rule about.
+#
+# IT WAS RED ON MAIN FOR AN UNKNOWN STRETCH — `2 FAILED`, from 17 exports missing from its
+# RECORDED table — and gating it while it was red would have broken `make check` for every
+# session, which is why it waited. PR #307 filled the table; it passes today, so the gate
+# is safe now and it is the cheapest one outstanding.
+#
+# Needs node, so it is in `check` and never in the git hook — `screen-freshness`' own
+# reason, one line up.
+screen-freshness-selftest:
+	$(NPM_GUARD)
+	@node scripts/screen-freshness.mjs --self-test
 
 # NOT IN `check`, AND NOT IN THE GIT HOOK. It is the one target here that can DELETE a file,
 # so D18's rule applies at its strongest: nothing that writes may run on the path that decides
