@@ -890,6 +890,29 @@ class Listing:
             return quantity
         return max(0, int(self.live))
 
+    def reading_taken_at(
+        self, quantity: Optional[int], as_of: Optional[str]
+    ) -> Optional[str]:
+        """WHEN the reading `live_reading` would return was taken.
+
+        `live_reading`'s third sibling, and it exists for the same reason the other two do:
+        the rule is written ONCE so two callers cannot answer differently about one file. It
+        answers the figure; `sales_pending` answers which counted sales survive it; this
+        answers its DATE, which `cli/resolve.py:_copies_out` needs to ask whether a sale
+        happened before or after the observation it is weighing the claim against.
+
+        EVERY BRANCH MIRRORS `live_reading` EXACTLY, including the stampless one: where the
+        export keeps the authority D8 and D11 gave it, the stamp returned is the export's,
+        `None` and all — and a `None` stamp is one nothing can be shown to predate, which is
+        the conservative end of every comparison that reads it.
+        """
+        if quantity is None:
+            return self.live_observed_at
+        verdict = newer_stamp(as_of, self.live_observed_at)
+        if verdict is None or verdict:
+            return as_of
+        return self.live_observed_at
+
     def observe_live(self, quantity: int, as_of: Optional[str]) -> str:
         """Offer the store a reading of `live` taken at `as_of`. Returns what happened.
 
@@ -2236,6 +2259,32 @@ class Inventory:
         an unsent backstock copy is in both counts and cancels out.
         """
         return [c for c in self.positions_for_sku(sku) if c.state != SOLD]
+
+    def sales_before(self, sku: str, as_of: Optional[str]) -> int:
+        """Copies of this SKU marked SOLD before a reading taken at `as_of`.
+
+        THE SECOND WAY AN EXPORT CORROBORATES A SALE, and the reason it is a count rather
+        than a flag is `cli/resolve.py:_copies_out`, its one caller. That expression ages a
+        `pushed` claim by the SKU's sales only where the export vouches for the copies having
+        been AT TCGplayer; a reading that reports copies live now vouches for all of them,
+        and a reading of nothing vouches for exactly the sales it was taken AFTER — a zero
+        read four days after a copy sold is that sale's own result, not evidence the copy was
+        never listed.
+
+        STRICTLY BEFORE, AND AN UNDATEABLE STAMP ON EITHER SIDE COUNTS NOTHING. `newer_stamp`
+        gives ties and unparseable pairs to the store, and both land here as "cannot be shown
+        to predate the reading" — which leaves the claim standing, the direction that strands
+        a copy rather than double-listing one. A record with no reading at all (`as_of` None)
+        counts nothing for the same reason, and that is the case that keeps D59's negative
+        case green: four pushed, one sold, no export ever read, and nothing here ages it.
+        """
+        if not as_of:
+            return 0
+        return sum(
+            1
+            for card in self.positions_for_sku(sku)
+            if card.state == SOLD and newer_stamp(as_of, card.state_at) is True
+        )
 
     def listing_counts(self) -> Dict[str, int]:
         """Copies at each TCGplayer stage, summed across every SKU."""
