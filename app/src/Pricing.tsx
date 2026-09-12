@@ -59,6 +59,7 @@ import { Markdown } from './Markdown'
 import { LogWell } from './RunsLog'
 import { runBoxLabel } from './runScope'
 import {
+  bandInHash,
   markdownInHash,
   markdownSource,
   runSource,
@@ -70,6 +71,7 @@ import { forSale, soldSince } from './cardState'
 import { useCardCropWhenSeen } from './cardCrop'
 import { Button, Chip, cropStyle, EmptyState, Icon, Kbd, Notice, Segmented } from './kit'
 import { toast } from './kit/toast'
+import { ValueBands, type ValueEnd } from './ValueBands'
 import './Pricing.css'
 
 /* #/pricing — THE HAND-PRICING WORKLIST (D49, D86).
@@ -769,6 +771,11 @@ export function Pricing() {
    *  which is every visit that does not carry `?markdown=`. Separate state from `work` on
    *  purpose: the two are different documents and nothing folds them together. */
   const [stamp, setStamp] = useState<string | null>(() => markdownInHash())
+  /* WHICH END OF THE MONEY THE VALUE LENS IS OPEN ON, or null for the worklist
+     (D159). It follows the hash in both directions, exactly as the
+     stamp above does and for its reason: leaving `#/pricing?band=…` has to put the screen back
+     on the worklist, or the lens would survive the operator navigating out of it. */
+  const [valueEnd, setValueEnd] = useState<ValueEnd | null>(() => bandInHash())
   const [sheet, setSheet] = useState<MarkdownTable | null>(null)
   /** The lens's press, as a state machine rather than a call — for the emit press's reason:
    *  `reprice apply` reads `inventory/prices.json` OFF DISK, so it must not run while a save
@@ -1002,6 +1009,7 @@ export function Pricing() {
       // ever widens. Leaving `#/pricing?markdown=…` has to put the screen back on runs, or the
       // lens would survive the operator navigating out of it.
       setStamp(markdownInHash())
+      setValueEnd(bandInHash())
     }
     window.addEventListener('hashchange', fromHash)
     return () => window.removeEventListener('hashchange', fromHash)
@@ -2430,6 +2438,16 @@ export function Pricing() {
       </>
     )
 
+  /* THE LENS IS A QUERY ON THIS ROUTE AND THE HASH IS WHERE IT LIVES, so a press and a typed
+     URL land in the same place and the back button works. `?markdown=` is cleared on the way
+     in: two lenses on one screen is one lens too many. */
+  const openValue = useCallback((end: ValueEnd) => {
+    window.location.hash = `#/pricing?band=${end}`
+  }, [])
+  const closeValue = useCallback(() => {
+    window.location.hash = '#/pricing'
+  }, [])
+
   const chrome = (
     <header className="bn-head pricing-head">
       <div className="bn-head-text">
@@ -2468,6 +2486,14 @@ export function Pricing() {
             Its own step-2 press writes `#/pricing?markdown=<stamp>`, which now lands on the
             screen the operator is standing on rather than navigating anywhere: `App.tsx` keys
             the view on the hash MINUS its query. */}
+        {/* THE THIRD DOOR ON THIS SCREEN (D159). Verb-first, like the
+            one below it, and deliberately NOT "Pull by value" — that promises a write this
+            lens does not do, and a button here says exactly what happens. It reads the whole
+            STORE rather than the worklist, so it is live whether or not anything is joined. */}
+        <Button icon="trendUp" onClick={() => openValue('top')} aria-label="Find the most and least valuable cards">
+          <span className="pricing-hide-sm">Find by value</span>
+          <span className="pricing-only-sm">By value</span>
+        </Button>
         <Button icon="trendDown" onClick={() => setMdOpen(true)} aria-label="Mark down stale listings">
           <span className="pricing-hide-sm">Mark down stale</span>
           <span className="pricing-only-sm">Mark down</span>
@@ -2530,6 +2556,20 @@ export function Pricing() {
      every open run has been answered — and, on a lens, an export TCGplayer returned nothing
      live in. THE GUARD IS ABOUT ROWS AND NOT ABOUT `work`, because a markdown has no `runs`
      and would otherwise take the runs mode's "nothing joined" branch forever. */
+  /* THE VALUE LENS, AND IT IS BRANCHED AHEAD OF EVERY WORKLIST STATE ON PURPOSE. It reads the
+     whole store through `GET /pipeline/value` and needs no joined run, no picked run and no
+     markdown — so putting it below the "nothing joined" empty state would hide the one view
+     that works on a store with 2,245 cards in it and nothing joined. That is D109's defect,
+     and this branch is what stops it repeating. */
+  if (valueEnd !== null) {
+    /* IT IS THE PAGE ROOT AND NOT A CHILD OF `.pricing`. `.value-page` declares
+       `container-type: inline-size` so its tiers can ask their own COLUMN rather than the
+       window, and that implies `contain: inline-size` — which makes the element contribute no
+       intrinsic width to a flex parent. Nested inside `.pricing`, which is a flex column, the
+       whole screen collapsed to min-content. Measured, not reasoned about. */
+    return <ValueBands end={valueEnd} onEnd={openValue} onLeave={closeValue} />
+  }
+
   if (source.rows.length === 0) {
     const joined = work?.roster ?? []
     return (
@@ -2598,6 +2638,12 @@ export function Pricing() {
                 </Button>
                 <Button icon="play" onClick={() => (window.location.hash = '#/runs')}>
                   Go to Runs
+                </Button>
+                {/* AND A THIRD, WHICH NEEDS NEITHER (D159). The value
+                    lens reads the store, so it has something to say on exactly the machine this
+                    empty state is drawn on: 2,245 cards on hand and not one joined run. */}
+                <Button icon="trendUp" onClick={() => openValue('top')}>
+                  See what you already own
                 </Button>
               </>
             }

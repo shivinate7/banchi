@@ -3033,3 +3033,130 @@ export type MarkdownSummary = {
    *  TCGplayer with no control in this app able to publish them. */
   pushed?: MarkdownPush['pushed'] | null
 }
+
+/* ----------------------------------------------- every card on hand, ranked by what it is worth */
+
+/** Why a card on hand carries no market price. Three causes, three different remedies, so a
+ *  screen that collapsed them into "unpriced" would be telling the operator to do one thing
+ *  about three problems.
+ *
+ *  `never_identified`  captured and never put through a run. The remedy is `#/runs`.
+ *  `read_nothing`      identified, and the model returned neither a name nor a number, so no
+ *                      SKU was ever bound. Every one of these has a photograph. The remedy is
+ *                      a person looking at it.
+ *  `no_reading`        a SKU this machine has never seen a market price for. The remedy is a
+ *                      join or a live fetch. */
+export type Unrankable = 'never_identified' | 'read_nothing' | 'no_reading'
+
+/** One physical copy on hand, and what it is worth.
+ *
+ *  THE UNIT IS THE COPY AND NEVER THE SKU, which is the whole reason this type exists beside
+ *  `PricingSku`. A hand goes to a slot: measured on the owner's store, the 122 cards at or
+ *  above $5 are 38 SKUs — Rengar, Trophy Hunter sits in three slots of box 4 and Vilemaw in
+ *  seven — so a per-SKU list draws a third of the rows and sends the operator to a third of
+ *  the drawers they actually have to open. */
+export type ValueCopy = {
+  /** The store key — `/inventory/<box>/<index>`, the `<index>.jpg`, and what `photoUrl`
+   *  addresses. `label` beside it is a RENDERING of it, composed fresh on every read against
+   *  the box as it stands today (D58, on D56's rule); the label frozen into a run's
+   *  `pricing.json` is never served. Same split `PricingSku.positions` states. */
+  box: number
+  index: number
+  /** `null` where the server will not compose one — a box whose walk degraded, or a pooled
+   *  card that never had a slot (D24). A caller draws its own fallback; it may never
+   *  substitute `Box N · Section N · Card M`, which is the numbering D58 replaced. */
+  label: string | null
+  sku: string | null
+  /** The CATALOGUE's name where there is a reading, the model's where there is not. 172 of
+   *  the owner's on-hand cards carry the empty string from the model, which is why this can
+   *  still be null on a row that has a photograph. */
+  name: string | null
+  set_name: string | null
+  condition: string | null
+  game: string | null
+  state: string
+  /** What TCGplayer says the card is worth, to two decimals, or `null` with `why` saying
+   *  which of the three causes that is. NEVER `"0.00"` for an unreadable cell — a malformed
+   *  market price ranked as zero lands at the very bottom of the cheap band and into a bulk
+   *  pull, which is a wrong answer wearing the shape of a confident one. */
+  market: string | null
+  /** What the operator DECIDED to ask for this SKU, which is a different fact from what the
+   *  card is worth (D86). Round-tripped as the corpus holds it — a string, a number, or a
+   *  `WithheldRecord` — because flattening the last shape would turn a deliberate hold (D49)
+   *  into a missing price. */
+  answer: string | number | WithheldRecord | null
+  /** How many copies of this SKU TCGplayer is holding, NEVER whether this copy is one of
+   *  them. `live` is per-SKU and the store does not record which physical copy a push spent
+   *  (D147 settles that ordering at the write), so a row claiming "this one is listed" would
+   *  be inventing a fact. The operator ruled these are shown with no distinction — 70% of the
+   *  copies under their cut-off are live — so it is context on the row and never a filter. */
+  live: number
+  /** When the reading was taken, as a UNIX SECOND, and which file it came from. Both null on
+   *  an unpriced row. */
+  read_at: number | null
+  source: string | null
+  why: Unrankable | null
+}
+
+/** One drawer, and whether the whole thing is bulk.
+ *
+ *  IT IS NOT A ROLLUP OF `copies` AND MUST NOT BE RECOMPUTED FROM ONE. `cards` counts every
+ *  card in the drawer including the unpriced ones, and `per_card` divides by that — because
+ *  the question at this level is *is this whole box bulk*, and dividing by the priced subset
+ *  would flatter box 4 (633 cards, 215 unpriced) against box 2, where every card has a price.
+ *  Measured: boxes 2 and 5 are 540 of 542 and 102 of 102 cards under the cut-off, together
+ *  646 cards worth $66.79 — those two drawers ARE the bulk, whole. */
+export type ValueBox = {
+  box: number
+  /** D20 leaves a name optional, so `null` is the ordinary case and never a fault. */
+  name: string | null
+  cards: number
+  valued: number
+  unpriced: number
+  under_cutoff: number
+  at_or_over: number
+  total: string
+  per_card: string
+  top: string | null
+}
+
+/** Which file a reading came out of, and when. Sorted newest first. A thin list here is what
+ *  makes a thin ranking legible as a thin ranking rather than as a store with nothing
+ *  valuable in it. */
+export type ValueSource = {
+  kind: 'run' | 'live'
+  name: string
+  at: number
+  skus: number
+}
+
+/** `GET /pipeline/value` — every card on hand, ranked, with nothing dropped.
+ *
+ *  `copies` ARRIVES SORTED BY MARKET DESCENDING, UNPRICED LAST, ties broken on `(box,
+ *  index)`. The band the operator asks for is a SLICE of that one order — a typed price, the
+ *  store's own cut-off, a top-N percentile, or the drawers ranked by value — and the slice is
+ *  the client's because a percentile cannot be taken without the whole list anyway, and two
+ *  sorts of one list is two places for a tie-break to differ.
+ *
+ *  NOTHING ON HAND IS OMITTED. 390 of the owner's 2,245 on-hand cards carry no market price,
+ *  and a ranked view that quietly dropped 17% of the store would be the silent drop this repo
+ *  forbids. Those rows are in `copies` with `market: null` and a `why`; `unrankable` counts
+ *  them for the header. */
+export type ValueTable = {
+  at: string
+  basis: 'market'
+  /** The store's own cut-off (D9, amended) — the line `under_cutoff` partitions on, and the
+   *  line `emit` partitions on. `null` only where no policy could be read. */
+  threshold: string | null
+  sources: ValueSource[]
+  copies: ValueCopy[]
+  boxes: ValueBox[]
+  unrankable: {
+    total: number
+    never_identified: number
+    read_nothing: number
+    no_reading: number
+    by_box: Record<string, number>
+  }
+  totals: { cards: number; valued: number; value: string }
+}

@@ -10437,6 +10437,14 @@ class CaptureHandler(BaseHTTPRequestHandler):
                 return self._json(
                     HTTPStatus.OK, pipeline_routes.do_pipeline_worklist(asked)
                 )
+            if path == "/pipeline/value":
+                # EVERY CARD ON HAND, RANKED BY WHAT IT IS WORTH. A read, free, and it presses
+                # nothing — the store-wide sibling of the worklist one branch up: that one
+                # answers what a run owes a price, this one answers what is in the drawers and
+                # which end of the money it sits at. No band, no filter and no percentile in
+                # the query string: every one of those is a slice of the one ranked list this
+                # answers with, and the screen takes the slice (see `do_pipeline_value`).
+                return self._json(HTTPStatus.OK, pipeline_routes.do_pipeline_value())
             if path == "/pipeline/runs":
                 return self._json(HTTPStatus.OK, pipeline_routes.do_pipeline_runs())
             if path == "/pipeline/markdowns":

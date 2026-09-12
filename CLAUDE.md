@@ -754,6 +754,17 @@ sentence**, and see "the census" below for what enforces that.
                               than read off the join's table — 381 copies across five runs
                               were closed away under the old rule. What no press here can send
                               is named on the deck with a door each.
+                              AND A THIRD LENS, `?band=top|bottom` (D159):
+                              WHAT IS WORTH PULLING — every card ON HAND ranked by market, ONE ROW
+                              PER PHYSICAL COPY, with the drawer each sits in. It reads the STORE
+                              and needs no joined run, so it is branched ahead of every worklist
+                              empty state. Read-only: every row is a link into `#/inventory`,
+                              which is where a card still leaves a box. The cheap end opens on
+                              DRAWERS and the rich end on CARDS, off the contiguity measurement —
+                              1.40 cards per reach at one end against 6.51 at the other. A drawer
+                              total is a FLOOR whenever any of its cards is unpriced, and NOTHING
+                              ON HAND IS DROPPED: 390 of the owner's 2,245 have no price and each
+                              is counted under one of three causes with its own door
 #/orders       Orders         which copies this buyer gets and where they are, ranked by how
                               many of them sit in one box, pulled one copy at a time
 #/shipping     Shipping       which envelope an order goes in, out of TCGplayer's own shipping
@@ -1761,6 +1772,7 @@ D155 The section is the ruler and the box is the margin note, and the bracket be
 D156 Every copy TCGplayer does not hold is one worklist, and a run stays open until the last of them has gone
 D157 The fixture carries a per-run name, because the process table is the one thing a run cannot have its own of
 D158 The refusal goes where the damage is, so the primary checkout's server will not run a branch's code, and the checkout itself is left alone
+D159 The band is copies rather than SKUs, the drawer is the first answer, and nothing on hand is dropped
 
 ```
 
