@@ -366,7 +366,7 @@ git commit -qm "work on the merge itself"
 if [ -n "$(git diff --stat origin/main -- scripts/merge-pr.py)" ]; then
   ok "the fixture arms the case: this branch's copy DIFFERS from main's"
 else
-  bad "the fixture is wrong — the branch's copy is identical, so `differs` could not fire"
+  bad "the fixture is wrong — the branch's copy is identical, so \`differs\` could not fire"
 fi
 expect allow "AHEAD of main on the merge, and carrying every commit main has" \
   python3 "$MERGE_PR" --surface
