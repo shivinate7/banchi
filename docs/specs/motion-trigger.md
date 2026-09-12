@@ -80,7 +80,7 @@ re-derives all of it. **SPECIFIED and RECORDED, NOT BUILT and NOT VALIDATED** �
 moves, and §4's last block is the checklist that is owed.
 
 **AND SINCE THE SAME EVENING THE MACHINE SURVIVES THE STEP THE LOCK PREVENTS (2026-09-12,
-D181).** A settled frame over the presence floor is asked one
+D183).** A settled frame over the presence floor is asked one
 more question — is it the baseline TIMES ONE NUMBER? — and a frame that is (a gain step on the
 bare stand) is refused as `suppressed:uniform` and becomes the baseline, while a card, which is
 a pattern and not a level, never is: zero of the 748 fired frames in the corpus, every one 3.6×
@@ -548,7 +548,7 @@ body was in manual. **Step 2 of the checklist is what decides that**, and it tak
 
 **Added the evening the owner asked whether the lock was essential or "just coding bad".** The
 lock is a correct fix and not the only one. This block is the version that does not need their
-hand, built over recordings alone; D181 is the decision.
+hand, built over recordings alone; D183 is the decision.
 
 **What the corpus holds, and does not.** Every trace stores the watch region and nothing outside
 it — 1,064 cells at 38×28, keyframes and verdict frames alike — so a reference region outside the
