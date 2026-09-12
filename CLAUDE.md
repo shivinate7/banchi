@@ -1335,6 +1335,34 @@ apostrophes in names) live in the `tcgplayer-csv` skill. It loads on demand.
   surface area until the current gate passes."
 - No manual third-party UI step inside the autonomous pipeline. External tools without
   an API contract can be benchmarks, never components.
+- **FIX THE CAUSE, NEVER THE SYMPTOM — AND FIRST ASK WHETHER THE PRIMITIVE ALREADY EXISTS.**
+  The owner's standing instruction, 2026-09-11: *"Always ensure you take the best practices to
+  resolve things, never the band aid routes."*
+
+  **This tree lands primitives faster than its screens adopt them, which is what makes a bandaid
+  so easy to reach for.** The instruction was earned the same day, on the capture screen's
+  restore. D142 says a restored box falls back to no selection *"never to a guess"*; the code
+  checks only that the box exists and is not sealed, so a box DELETED and its number handed to a
+  different physical drawer by `next_box_number`'s lowest-free allocation restores silently —
+  the one case D142's own prose names as *"refused nowhere"*. Three fixes were put to the owner:
+  compare the box NAME, compare it narrowly, or record the gap. Their reply was *"are any of
+  these actually a good solution? or a bandaid"*, and every one of the three was a heuristic
+  standing in for an identity **D145 had already built hours earlier** — `bid`, an integer
+  allocated once at a drawer's creation and never reused. The screen had simply not adopted it:
+  `CaptureSetup` stored the reusable NUMBER, and `BoxRecord` did not carry `bid` on the wire at
+  all.
+
+  So before proposing a workaround, **read for the thing that would make it unnecessary** —
+  `make map ARGS=<path>` and `scripts/decision-context.py` exist to answer exactly that, and a
+  decision entry is settled whether or not the screen in front of you knows it. **An option set
+  in which every entry is a heuristic is evidence the real fix is upstream**, not a menu to
+  choose from.
+
+  **A bandaid may still be the right call, and then it is NAMED as one** — in the wrap-up, in
+  the commit, and with the cause recorded in `docs/DEBTS.md` so the next session finds the
+  argument rather than the patch. What is refused is a patch PRESENTED as the solution, which is
+  the report format's own rule one register up: "solved" with no bucket named is the phrasing
+  this repo does not accept.
 - **Opsec, repo-wide**: a live unredeemed code card is a bearer instrument. No code-card
   photo in a listing, README, screenshot, or commit. Enforced by pre-commit hook.
 - **A screen answers to the system.** New CSS reads `--bn-*` tokens and never names a color;
@@ -1663,6 +1691,7 @@ D146 Two agreeing signals release the rarity claim, and the same comparison run 
 D147 The claim is spent on the oldest copies, because a card captured tonight was in no file sent last week
 D148 The wait is about the claim commit, and an answer it has not got is never a pass
 D149 A section number that resolves is not a citation that is right, and no check can read what a sentence is about
+D150 A reading taken after a sale is that sale's own result, and it ages the claim
 D-the-restore-compares-the-id The restore asks which drawer, not which number, and the picker stops drawing a number nobody reads
 
 ```
