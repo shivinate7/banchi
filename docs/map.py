@@ -2008,7 +2008,7 @@ COMPONENTS = [
                 # fail-open asymmetry this one takes unchanged. D43 is the second clause's
                 # whole subject. D18 keeps its self-test off the commit path.
                 "governed_by": ["D-five-shell-mistakes", "D18", "D43", "D127", "D157",
-                                "D171", "D173"],
+                                "D171", "D173", "D175"],
             },
             "guard-shell-selftest.sh": {
                 "does": "proves guard-shell.py by COMMITTING its five mistakes in a throwaway "

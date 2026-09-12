@@ -953,10 +953,11 @@ _RUNAWAY = [
     "  On 2026-09-12 a backgrounded `while`/`sleep` merge driver ran 119 rounds over 3h58m,",
     "  across a compaction of the session that started it, racing that session's own merges "
     "and",
-    "  re-resolving branches it was resolving. `make janitor` reads a live process as live "
-    "and",
-    "  `make reap` acts only when asked, so nothing here could see it: a human noticed a",
-    "  four-hour bash in their own UI.",
+    "  re-resolving branches it was resolving. A human noticed a four-hour bash in their own "
+    "UI.",
+    "  (`make janitor` finds a poller that is ALREADY running and that nobody owns any more "
+    "— D175.",
+    "  This refuses the one being created, which is the half no sweep can reach.)",
 ]
 
 _WAIT_ADVICE = [
