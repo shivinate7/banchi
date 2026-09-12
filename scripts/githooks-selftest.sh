@@ -279,6 +279,115 @@ case "$out" in
      printf '%s\n' "$out" | sed 's/^/         /' ;;
 esac
 
+# ------------------------------------------- main carrying an unclaimed id, the moment it moves
+#
+# WHY THIS BELONGS IN A HOOK AND NOT ONLY IN scripts/merge-pr.py. `make merge` runs the merge
+# script of whatever checkout invoked it, so a guard inside that script is absent from exactly
+# the checkouts that need it — 24 of the 30 working trees of this clone were behind main's copy
+# of it the day this was written. `core.hooksPath` is one installed directory in the common
+# .git dir, so THIS file is the same file for every one of them, and a main move is the one
+# event all of them share.
+#
+# IT IS ASSERTED ON OUTPUT AND NOT ON EXIT STATUS, for the reason the branch warning above is:
+# this half refuses nothing and exits 0 whatever it decides, so `expect allow` would pass over
+# a hook that printed nothing at all. The marker it leads with is what the cases read.
+echo "  -- main carrying an unclaimed id is reported the moment it moves --"
+SLUG_MARK="UNCLAIMED ID ON main"
+# THE FIXTURE'S IDS ARE COMPOSED AND NEVER SPELLED. This file sits inside the auditor's own
+# haystack, so a literal `D-...` heading here IS a citation of an entry that does not exist and
+# a literal number is a citation the map would then have to carry under `governed_by`. Both
+# were reported on the first run of this block. scripts/claim-selftest.py composes its fixture
+# ids from integers for exactly this reason and records it in the same words.
+SLUG_ID="D-""an-id-nobody-claimed"
+cd "$tmp/work" || exit 1
+git switch -q -c slugful main 2>/dev/null
+mkdir -p docs
+printf '## %s — a title\n' "$SLUG_ID" > docs/DECISIONS.md
+git add docs/DECISIONS.md
+git commit -qm "an entry whose id the merge never claimed" >/dev/null 2>&1
+git push -q -u origin slugful 2>/dev/null
+SLUGGED="$(git rev-parse HEAD)"
+git -C "$tmp/origin.git" update-ref refs/heads/main "$SLUGGED"
+git switch -q --detach HEAD 2>/dev/null      # main checked out nowhere: the refspec form works
+git fetch -q origin 2>/dev/null
+
+slug_out="$(git fetch origin main:main 2>&1)"
+case "$slug_out" in
+  *"$SLUG_MARK"*) ok "a main that carries a slug is reported when it lands" ;;
+  *) bad "main moved onto an unclaimed id and the hook said nothing"
+     printf '%s\n' "$slug_out" | sed 's/^/         /' ;;
+esac
+case "$slug_out" in
+  *"$SLUG_ID"*) ok "AND NAMES THE ID, so the repair does not need a search" ;;
+  *) bad "reported, but did not name the id"
+     printf '%s\n' "$slug_out" | sed 's/^/         /' ;;
+esac
+# ONCE, AND ABOUT main. A fetch that writes the refspec moves refs/heads/main and the
+# remote-tracking ref in transactions the hook sees back to back; a report that does not ask
+# which ref it is looking at says the same thing twice about one move, and a reader who has
+# learned to skim a doubled warning is a reader this hook has already lost.
+if [ "$(printf '%s\n' "$slug_out" | grep -c "$SLUG_MARK")" = "1" ]; then
+  ok "exactly once — the report asks which ref moved"
+else
+  bad "the report fired $(printf '%s\n' "$slug_out" | grep -c "$SLUG_MARK") times for one move"
+fi
+# AND IT REFUSED NOTHING: main is where the fetch was taking it.
+if [ "$(git rev-parse refs/heads/main)" = "$SLUGGED" ]; then
+  ok "and main moved anyway — the report is a report"
+else
+  bad "the report blocked the move; main is at $(git rev-parse --short refs/heads/main)"
+fi
+
+# The other direction, which is the one a vacuous implementation passes: a clean main is SILENT.
+git switch -q slugful 2>/dev/null
+printf '## D%s — the same entry, with its number\n' 1 > docs/DECISIONS.md
+git add docs/DECISIONS.md
+git commit -qm "the number claimed" >/dev/null 2>&1
+git push -q origin slugful 2>/dev/null
+CLAIMED="$(git rev-parse HEAD)"
+git -C "$tmp/origin.git" update-ref refs/heads/main "$CLAIMED"
+git switch -q --detach HEAD 2>/dev/null
+git fetch -q origin 2>/dev/null
+clean_out="$(git fetch origin main:main 2>&1)"
+case "$clean_out" in
+  *"$SLUG_MARK"*) bad "a main with no unclaimed id was reported anyway"
+     printf '%s\n' "$clean_out" | sed 's/^/         /' ;;
+  *) ok "a main whose ids are all numbers — silent" ;;
+esac
+
+# AND IT IS main IT READS, NOT WHATEVER ELSE IS IN THE PAYLOAD. This clone's `main` moves to a
+# clean commit while a second ref in the SAME transaction moves to the slugged one; a hook that
+# read every line of a main-mentioning payload would report that other ref's commit under a
+# heading that says `ON main`, which is worse than saying nothing.
+#
+# `update-ref --stdin` RATHER THAN A FETCH, AND THE FIXTURE MEASURED WHY. `git fetch` with two
+# refspecs issues ONE TRANSACTION PER REF here — measured on this machine's git, two `prepared`
+# payloads of one ref each — so no fetch can produce the shape this case needs. `update-ref
+# --stdin` is the porcelain that batches, and it is a real gesture rather than the hook being
+# fed by hand.
+git switch -q slugful 2>/dev/null
+printf '## D%s — the same entry\n## D%s — and another\n' 1 2 > docs/DECISIONS.md
+git add docs/DECISIONS.md
+git commit -qm "a second numbered entry" >/dev/null 2>&1
+git push -q origin slugful 2>/dev/null
+CLAIMED2="$(git rev-parse HEAD)"
+git -C "$tmp/origin.git" update-ref refs/heads/main "$CLAIMED2"
+git switch -q --detach HEAD 2>/dev/null
+git fetch -q origin 2>/dev/null
+both_out="$(printf 'update refs/heads/main %s\nupdate refs/heads/sidecar %s\n' \
+              "$CLAIMED2" "$SLUGGED" | git update-ref --stdin 2>&1)"
+if [ "$(git rev-parse refs/heads/sidecar 2>/dev/null)" = "$SLUGGED" ]; then
+  ok "the fixture arms the case: one transaction moved main AND a slugged sidecar"
+else
+  bad "the fixture is wrong — the batched update-ref did not land"
+  printf '%s\n' "$both_out" | sed 's/^/         /'
+fi
+case "$both_out" in
+  *"$SLUG_MARK"*) bad "reported another ref's commit as main's"
+     printf '%s\n' "$both_out" | sed 's/^/         /' ;;
+  *) ok "a slug on a ref that is NOT main — silent" ;;
+esac
+
 echo
 if [ "$fail" -eq 0 ]; then
   echo "githooks self-test: $pass passed"
