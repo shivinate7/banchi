@@ -282,7 +282,7 @@ from codes import products  # noqa: E402
 from pipeline import games, join, tcgcsv  # noqa: E402
 from pipeline import orders as order_engine  # noqa: E402
 from cli import runs as cli_runs  # noqa: E402
-from store import Store, files, master, queues  # noqa: E402
+from store import Store, files, master, photos, queues  # noqa: E402
 from store import orders as order_store  # noqa: E402
 
 # The pipeline seam, in its own module because it is the one part of this server that can
@@ -532,6 +532,12 @@ def allowed_origins() -> Tuple[str, ...]:
     )
 
 _PHOTO_RE = re.compile(r"^/photo/(\d+)/(\d+)$")
+# D172'S ADDRESS: the photograph called by the card's own name. 64 hex, with the `-<n>`
+# suffix a duplicate photograph earns — ANCHORED and bounded like every other pattern here,
+# so a path that is nearly a cid is a 404 from the router rather than a lookup. It does not
+# widen `_PHOTO_RE` above, which keeps `(\d+)/(\d+)` exactly as it is: the slot route stays
+# for the 3,629 position records in 12 immutable run files that carry no cid.
+_PHOTO_BY_CARD_RE = re.compile(r"^/photo/by-card/([0-9a-f]{64}(?:-[1-9][0-9]*)?)$")
 _INVENTORY_ITEM_RE = re.compile(r"^/inventory/(\d+)/(\d+)$")
 # The box-level claim apply: `PUT /inventory/<box>` is `PUT /inventory/<box>/<index>` one
 # path segment broader — same verb, same claim vocabulary, one level up. Matched AFTER the
@@ -1163,17 +1169,71 @@ def captures_root() -> Path:
     return files.home() / CAPTURES_DIRNAME / CARDS_DIRNAME
 
 
-def photo_path(box: int, index: int) -> Path:
-    """`<root>/box3/0017.jpg`.
+def legacy_photo_path(box: int, index: int) -> Path:
+    """`<root>/box3/0017.jpg` — WHERE PHOTOGRAPHS WERE FILED BEFORE THE CARD HAD A NAME.
 
-    The stem is the index and nothing else. `identify.sidecar` strips the box marker and
-    then reads the LAST run of digits in what remains, so a stem like `0017.2` parses as
-    index 2. Zero-padded to four because `scan()` sorts by path string.
+    THIS WAS `photo_path` AND IT WAS THE DEFECT, not the accessor. The filename WAS the
+    index, so deleting one junk capture at index k in a box of N cost N−k renames and N−k
+    rewritten sidecars (537 of each on the owner's box 2), a D83 move cost a rename, and one
+    remove followed by one capture could compose a path a live card's photograph still
+    occupied — `files.write_atomic` does no existence check. `store/photos.py` is the layout
+    now: the photograph is filed under the card's own name, which is a pure function of a
+    UNIQUE column, so two cards cannot compose one path.
+
+    It survives because 4.45 GB moves ONCE and resumably: `store/photos.find` reads this
+    address while `meta.photos_relocated` is unset, so a partial move leaves no screen dark,
+    and never reads it again afterwards. `pkmnscan cards photos` is what moves them.
     """
     return captures_root() / f"box{int(box)}" / f"{int(index):0{INDEX_PAD}d}{PHOTO_SUFFIX}"
 
 
+def _relocated(inventory: "master.Inventory") -> bool:
+    return bool(getattr(inventory, "photos_relocated", None))
+
+
+def photo_for(inventory: "master.Inventory", card) -> Optional[Path]:
+    """This card's photograph on disk, or None when there is no file at either name.
+
+    THE ONE READ ACCESSOR. It takes the CARD rather than a position, because the card is
+    what carries the name and a position is only how a person finds the card. Sites that
+    hold a position and not a record use `photo_at` below, which is this with a lookup in
+    front of it.
+    """
+    return photos.find(
+        card.cid, card.box, card.index, relocated=_relocated(inventory)
+    )
+
+
+def photo_at(inventory: "master.Inventory", box, index) -> Optional[Path]:
+    """The photograph of whatever card is at this position now, or None.
+
+    A POSITION IS A LOOKUP AND NOT AN ADDRESS ANY MORE, and that is the whole change. The
+    slot route and D89's reclaim both arrive holding `(box, index)` and both have to go
+    through the store to reach the bytes — which is what makes the stale-cache hazard D52
+    measured fixable at all: the photograph a URL names can now be named by its own digest.
+    """
+    card = inventory.cards.get(master.position_key(box, index))
+    return None if card is None else photo_for(inventory, card)
+
+
+def photo_target(card) -> Path:
+    """Where this card's photograph belongs. Refuses a card with no name to file it under."""
+    return photos.path(card.cid)
+
+
+def sidecar_for(inventory: "master.Inventory", card) -> Optional[Path]:
+    """This card's claims file on disk, or None."""
+    return photos.find_sidecar(
+        card.cid, card.box, card.index, relocated=_relocated(inventory)
+    )
+
+
 def sidecar_path(photo: Path) -> Path:
+    """The claims file beside a photograph, whatever name that photograph wears.
+
+    Kept, and still purely derivational: the sidecar has always been the photograph's path
+    with a different suffix, and that is true of both layouts.
+    """
     return photo.with_suffix(SIDECAR_SUFFIX)
 
 
@@ -1953,6 +2013,19 @@ class _Places:
     argues, applied to the decoration this class gained after it.
     """
 
+    @property
+    def inventory(self) -> "master.Inventory":
+        """The store this renderer is answering from.
+
+        EXPOSED FOR `_copy_row`, WHICH NEEDS ONE FACT ABOUT THE STORE AND NOT ABOUT A CARD:
+        whether the photographs have reached the card's own name yet
+        (`Inventory.photos_relocated`), which is what decides whether a lookup still falls
+        back to the legacy `(box, index)` address. It reaches it through this class rather
+        than growing a third argument, because that function already holds the renderer and
+        the renderer already holds the store.
+        """
+        return self._inventory
+
     def __init__(self, inventory: master.Inventory):
         self._inventory = inventory
         self._cache: Dict[
@@ -2397,20 +2470,30 @@ def do_capture(payload: dict) -> Tuple[HTTPStatus, dict]:
     # to fix its request.
     blob = _require_image(payload)
 
+    # THE CARD'S NAME, FROM BYTES ALREADY IN RAM, AT ZERO EXTRA I/O (D172). `blob` is
+    # decoded above, before the store lock is taken, so the shutter can never reach
+    # `record_capture`'s refusal for a nameless card — which is the property that lets that
+    # refusal exist at all without risking a 500 on a capture mid-feeder.
+    #
+    # COMPUTED BEFORE THE LOCK, so the hash is not inside the window a feeder's next card
+    # queues behind. ~1.9 MB of sha256 is under a millisecond, but the ordering is free and
+    # the rule this file already follows is that nothing avoidable happens under the flock.
+    cid = photos.sha256_of_bytes(blob)
+
     with Store().write() as snapshot:
         card, created = snapshot.inventory.allocate_capture(
-            box, capture_id=capture_id, **claims
+            box, capture_id=capture_id, cid=cid, **claims
         )
         if created:
-            path = photo_path(card.box, card.index)
-            path.parent.mkdir(parents=True, exist_ok=True)
-            files.write_atomic(path, blob)
+            # THE PATH IS KNOWABLE BEFORE THE INDEX NOW, and that is the change. It used to
+            # be derived from `(card.box, card.index)` — which is why `card.photo` had to be
+            # set after the write and why a renumber had to rename the file. It is derived
+            # from the card's own name, so the allocator has no say in it and two captures
+            # cannot compose one path.
+            path = photos.write(card.cid, blob)
             files.write_json(
                 sidecar_path(path), sidecar_payload(card.box, card.index, **claims)
             )
-            # Set after the write, because the path is not knowable before the index. The
-            # history event `record_capture` already appended carries the position and a
-            # null photo for that reason; the record itself carries the path.
             card.photo = str(path)
         body = _card_summary(snapshot.inventory, card, created=created)
 
@@ -2461,6 +2544,12 @@ def _card_summary(inventory: master.Inventory, card: master.Card, *, created: bo
         "created": created,
         "photo": card.photo,
         "capture_id": card.capture_id,
+        # THE CARD'S NAME, SO THE CLIENT CAN ADDRESS THE PHOTOGRAPH RATHER THAN THE SLOT
+        # (D172). `GET /photo/by-card/<cid>` is the address to prefer; the capture screen
+        # draws the frame it has just taken, which is precisely the case the slot route
+        # serves worst — the index is one the box has never had before, and a browser that
+        # cached it is the undo hazard `do_photo`'s docstring opens with.
+        "cid": card.cid,
     }
 
 
@@ -2830,9 +2919,24 @@ def do_photo(box: int, index: int) -> Tuple[bytes, str]:
 
     TRUNCATED TO 128 BITS because an ETag is an opaque string a browser compares for
     equality, and the full digest is 64 characters on every photo response for no reader.
+
+    AND THIS ROUTE IS NO LONGER THE ONE TO PREFER (D172). `GET /photo/by-card/<cid>` names
+    the PHOTOGRAPH rather than the slot, which is what actually retires the hazard above:
+    the URL changes when the thing behind it changes, so a cache hit is always the right
+    bytes and the validator becomes a formality instead of the only defence. This one stays,
+    and the reason is measured rather than deference — `runs/<n>/pricing.json` holds 3,629
+    position records across 12 immutable files, none of which carries a cid, and
+    `#/pricing?run=<n>` is the screen that draws them. Deleting the slot route would leave
+    those photographs unreachable.
+
+    IT GOES THROUGH THE STORE NOW, because a position is a lookup and not an address: the
+    photograph is filed under the card's own name, so finding it means finding the card
+    that is in this slot today. That read is what makes the answer correct across a
+    renumber, which is the very thing the ETag was patching over.
     """
-    path = photo_path(box, index)
-    if not path.is_file():
+    with Store().read() as snapshot:
+        path = photo_at(snapshot.inventory, box, index)
+    if path is None or not path.is_file():
         raise BadRequest(
             HTTPStatus.NOT_FOUND,
             "photo_not_found",
@@ -2840,6 +2944,50 @@ def do_photo(box: int, index: int) -> Tuple[bytes, str]:
         )
     blob = path.read_bytes()
     return blob, '"' + hashlib.sha256(blob).hexdigest()[:32] + '"'
+
+
+def do_photo_by_card(cid: str) -> Tuple[bytes, str]:
+    """The photograph called `cid`, addressed by the card's own name (D172).
+
+    THE URL NAMES THE PHOTOGRAPH, WHICH IS WHAT `do_photo` ABOVE COULD NOT DO. A cid is
+    frozen at issue and the path is a pure function of it, so this URL means one thing
+    forever: a mid-box delete does not change it, an undo does not change it, and two cards
+    cannot share it because `cards_cid` is UNIQUE. The staleness D52 measured — box 2's card
+    180 deleted, 363 cards shifted, and the screen serving the deleted card's photograph at
+    `transferSize: 0` — cannot happen through this address, because the address moved with
+    the card.
+
+    SO THE CACHING IS THE OPPOSITE OF THE SLOT ROUTE'S. `immutable` and a year, rather than
+    `no-cache` plus a digest computed on every request including the 304s: there is nothing
+    to revalidate, because the only thing that could change these bytes is a D26 re-shoot,
+    and a re-shoot of a card whose photograph is addressed by its name is a new photograph
+    at the same name — which is the one case this deliberately accepts, because D26 forbids
+    archiving the old one and the operator who pressed re-shoot is looking at the screen
+    that asked for it.
+
+    THE ETag IS THE NAME'S OWN FIRST 32 HEX and costs no read: the slot route has to hash
+    the bytes it is sending because a slot's occupant changes under it, and this one already
+    knows what it is serving.
+
+    IT DOES NOT TOUCH THE STORE. The path is a function of the argument, so an unknown or
+    malformed name is a 404 from the filesystem rather than a lookup — which also means this
+    route cannot be used to ask whether a card exists.
+    """
+    if not photos.is_photo_cid(cid):
+        raise BadRequest(
+            HTTPStatus.NOT_FOUND,
+            "photo_not_found",
+            f"{cid[:24]!r} is not a photograph's name. `moved:` and `nophoto:` cards have "
+            "no photograph at a name of their own.",
+        )
+    path = photos.path(cid)
+    if not path.is_file():
+        raise BadRequest(
+            HTTPStatus.NOT_FOUND,
+            "photo_not_found",
+            f"No photograph stored under {cid[:12]}….",
+        )
+    return path.read_bytes(), '"' + cid[:32] + '"'
 
 
 def do_inventory() -> dict:
@@ -3039,8 +3187,11 @@ def do_put_card(box: int, index: int, payload: dict) -> dict:
                 changed[field] = {"from": current, "to": value}
                 setattr(card, field, value)
 
-        photo = photo_path(card.box, card.index)
-        wrote_sidecar = photo.is_file()
+        # The photograph is found through the CARD, because it is filed under the card's
+        # name and not at its position. The sidecar is still written beside whatever
+        # photograph was found, which is what keeps `sidecar_path` purely derivational.
+        photo = photo_for(snapshot.inventory, card)
+        wrote_sidecar = photo is not None
         if wrote_sidecar:
             # EVERY SIDECAR CLAIM, READ OFF THE RECORD — not just the ones this request
             # touched. The sidecar is rewritten whole, so composing it from `incoming` would
@@ -3259,8 +3410,8 @@ def do_put_box_claims(box: int, payload: dict) -> dict:
                 unchanged += 1
                 continue
             applied.append((at, key, changed))
-            photo = photo_path(box, at)
-            if photo.is_file():
+            photo = photo_for(inventory, card)
+            if photo is not None:
                 files.write_json(
                     sidecar_path(photo),
                     sidecar_payload(
@@ -3602,14 +3753,15 @@ def do_delete_card(box: int, index: int) -> dict:
                 f"press it again to walk back one card at a time.",
             )
 
-        photo = photo_path(card.box, card.index)
-        sidecar = sidecar_path(photo)
+        # DERIVED FROM THE CARD'S NAME, AND `card.photo` IS STILL NOT CONSULTED. The
+        # argument that stood here was that the layout is derived from the POSITION, "the
+        # one layout this server ever writes", because a record created by `emit` carries a
+        # null photo and a stale absolute path from another machine's store would send this
+        # at a file that is not ours. Both halves survive the move: the name is what the
+        # layout is derived from now, and a stored path string is still never trusted.
+        photo = photo_for(inventory, card)
+        sidecar = sidecar_for(inventory, card)
 
-        # `card.photo` is deliberately not consulted as the path to delete. The layout is
-        # derived from the position, the same way `do_put_card` derives it, because that is
-        # the one layout this server ever writes — and a record created by `emit` carries a
-        # null photo while a stale absolute path from another machine's store would send
-        # this at a file that is not ours.
         del inventory.cards[key]
 
         # `_drop_from_stores` has the argument in full — the wreckage undo used to leave in
@@ -3891,64 +4043,34 @@ def do_remove_card(box: int, index: int, payload: dict) -> dict:
         movers.sort()
 
         # ------------------------------------------------------------------- the files
-        target_photo = photo_path(box, index)
-        target_sidecar = sidecar_path(target_photo)
-        photo_deleted = target_photo.is_file()
-        sidecar_deleted = target_sidecar.is_file()
-
-        if not movers:
-            # The target is the top of its box: nothing shifts, and the files go the way
-            # undo's do — photo before sidecar, the money rule, so any partial failure
-            # left behind is a cheap one.
-            photo_deleted = _unlink(target_photo)
-            sidecar_deleted = _unlink(target_sidecar)
-        else:
-            for at, _, other in movers:
-                src = photo_path(box, at)
-                dst = photo_path(box, at - 1)
-                if src.is_file():
-                    # Atomic on one filesystem, and on the first pass `dst` is the
-                    # target's photo — consumed by overwrite, never unlinked ahead of
-                    # time. On later passes `dst` was vacated by the previous rename, so
-                    # the only thing this can ever clobber is a recordless orphan, which
-                    # was a billable hazard anyway.
-                    os.replace(src, dst)
-                    moved = True
-                elif other.photo:
-                    # The record says this card has a photograph and the file is not at
-                    # its old name: an interrupted earlier attempt already moved it, and
-                    # the destination is the photograph. If it is at NEITHER name the
-                    # file is genuinely gone from disk, and a renumber that cannot prove
-                    # where a photo is refuses rather than guessing.
-                    if not dst.is_file():
-                        raise BadRequest(
-                            HTTPStatus.CONFLICT,
-                            "photo_missing",
-                            f"Box {box}, card {at}'s record names a photo, and the file "
-                            f"is at neither {src.name} nor {dst.name}. A renumber moves "
-                            f"files it can prove exist — re-shoot that card "
-                            f"(POST /inventory/{box}/{at}/photo) or restore the file, "
-                            f"then retry. Nothing has been committed.",
-                        )
-                    moved = True
-                else:
-                    # A card that never had a photograph (recorded by `emit`, not
-                    # captured). Nothing to move — and whatever target leftovers sit at
-                    # `dst` still have to go, photo before sidecar as ever.
-                    _unlink(dst)
-                    moved = False
-                if moved:
-                    files.write_json(
-                        sidecar_path(dst),
-                        sidecar_payload(
-                            box,
-                            at - 1,
-                            **{name: getattr(other, name) for name in CLAIM_WIRE_NAMES},
-                        ),
-                    )
-                else:
-                    _unlink(sidecar_path(dst))
-                _unlink(sidecar_path(src))
+        # THE RENUMBER MOVES NO FILE, AND THIS IS THE PAYOFF
+        # (`D-a-number-a-person-reads-is-never-a-key`). A loop stood here that renamed one
+        # photograph and rewrote one sidecar PER MOVER — N−k of each for a deletion at index
+        # k in a box of N cards, which is 537 of each on the owner's box 2, 1,608 filesystem
+        # operations to delete one junk capture. It is gone because the photographs of the
+        # cards behind the target are not named after their indices: they are named after
+        # their own cards, and those cards are not changing.
+        #
+        # THE SIDECARS ARE GONE FROM THIS LOOP FOR A SECOND, SEPARATE REASON. They were
+        # rewritten here to keep their `index` true after the shift; a run's capture
+        # directory is a VIEW built on demand now (`server/pipeline_routes.py`), whose
+        # sidecar is materialised from the store at the moment of the press, so it cannot be
+        # stale and there is nothing on disk to correct.
+        #
+        # AND THE CONTRADICTION D172 §7 ITEM 2 NAMED IS RETIRED RATHER THAN RESOLVED. The
+        # photos survey said a kill-then-retry of that loop destroys 2 photographs,
+        # reproduced on an APFS clone of real box 2; this function's own docstring argued the
+        # opposite in detail — "a rename RESUMES rather than repeating … the RECORD is what
+        # breaks the tie". Neither party is right or wrong any more, because the loop they
+        # disagreed about does not exist. The `photo_missing` refusal it needed is gone with
+        # it, and `grep photo_missing harness/` returned 0 the whole time it stood.
+        #
+        # WHAT IS LEFT IS THE TARGET'S OWN TWO FILES. Photo before sidecar, the money rule,
+        # so any partial failure left behind is a cheap one.
+        target_photo = photo_for(inventory, card)
+        target_sidecar = sidecar_for(inventory, card)
+        photo_deleted = _unlink(target_photo)
+        sidecar_deleted = _unlink(target_sidecar)
 
         # ----------------------------------------------------------------- the records
         del inventory.cards[key]
@@ -3960,11 +4082,15 @@ def do_remove_card(box: int, index: int, payload: dict) -> dict:
             del inventory.cards[old_key]
             other.box = int(box)
             other.index = new_index
-            dst = photo_path(box, new_index)
-            # Derived fresh rather than string-edited, for `do_delete_card`'s reason: the
-            # layout below `captures/cards/` is the one this server writes, and a stale
-            # absolute path from another machine's store must not survive a renumber.
-            other.photo = str(dst) if dst.is_file() else None
+            # DERIVED FROM THE CARD'S NAME AND THEREFORE UNCHANGED BY THE SHIFT. It was
+            # re-derived from `(box, new_index)` here, fresh rather than string-edited, to
+            # keep a stale absolute path from another machine's store from surviving a
+            # renumber — and that whole hazard was a property of a path that contained the
+            # index. This still re-derives rather than trusting the stored string, for the
+            # same reason and with a smaller surface: the name is the card's, so the answer
+            # is the same before and after.
+            dst = photo_for(inventory, other)
+            other.photo = str(dst) if dst is not None else None
             inventory.cards[new_key] = other
 
             # NO LABEL IS WRITTEN HERE, AND THAT IS THE POINT (D92). This wrote one in INDEX
@@ -4067,16 +4193,22 @@ def _move_one(
     generic handlers for any caller that skips these checks — store/master.py's own
     defense, not duplicated here, just not solely relied upon.
 
-    FILES MOVE AFTER THE STORE CALL, not before, and that is a real difference from
-    `do_remove_card`'s "files first" rule — worth stating rather than silently diverging.
-    That rule exists because the shift's destination indices are deterministic (`at - 1`)
-    before a single record is touched. This move's destination index is not knowable until
-    `Inventory.move_card` allocates it, so the file move necessarily comes after. What this
-    costs, named rather than engineered around: a crash between the successful file rename
-    and this block's commit leaves a photo at the new path while `inventory.json` on disk
-    still names the old one. Recovery is manual in that narrow window — move the file back,
-    or finish the record side by hand — the same class of accepted risk this file already
-    takes with `_sale_origin`'s unlocked read, stated rather than hidden.
+    NO FILE MOVES, AND THE CRASH WINDOW THIS FUNCTION USED TO ACCEPT IS GONE
+    (`D-a-number-a-person-reads-is-never-a-key`). What stood here was a paragraph conceding
+    a real hazard: files moved AFTER the store call, because the destination index was not
+    knowable until `move_card` allocated it, so "a crash between the successful file rename
+    and this block's commit leaves a photo at the new path while the store still names the
+    old one. Recovery is manual in that narrow window." The photograph is filed under the
+    CARD's name and the card is what moved, so there is no rename to order against the
+    commit and no window to accept. The `photo_missing` refusal that guarded it is gone
+    with it.
+
+    WHAT THAT LEAVES IS FOUR HAND-MOVED COPIES INSTEAD OF FIVE, and the fifth was the
+    expensive one. The photograph and its sidecar stay exactly where they are; the review
+    entry, the parked entry and the cache entry are still re-keyed by hand below, because
+    those are keyed by POSITION and the position genuinely changed. That is the honest
+    remainder: this takes the box out of the photograph's address and leaves it in the
+    queues' key, which `docs/specs/stable-card-id.md` §4 says is not this PR's to move.
     """
     card = inventory.cards.get(key)
     if card is None:
@@ -4110,44 +4242,24 @@ def _move_one(
             f"the transplant at {card.moved_to} instead.",
         )
 
-    had_photo = bool(card.photo)
     tombstone, transplant = inventory.move_card(key, to_box)
     new_key = transplant.key
 
-    photo_moved = False
-    sidecar_moved = False
-    if had_photo:
-        src = photo_path(box, index)
-        dst = photo_path(transplant.box, transplant.index)
-        if src.is_file():
-            dst.parent.mkdir(parents=True, exist_ok=True)
-            os.replace(src, dst)
-            photo_moved = True
-        elif dst.is_file():
-            # A retry of a request that already moved the file — same "source missing
-            # means an earlier attempt already moved it" reasoning `do_remove_card` uses,
-            # narrower here because there is only ever one destination to check.
-            photo_moved = True
-        else:
-            raise BadRequest(
-                HTTPStatus.CONFLICT,
-                "photo_missing",
-                f"Box {box}, card {index}'s record names a photo, and the file is at "
-                f"neither its old path nor the new one. A move relocates a file it can "
-                f"prove exists — re-shoot the card first, or restore the file, then "
-                f"retry. Nothing has been committed.",
-            )
-        transplant.photo = str(dst)
-        files.write_json(
-            sidecar_path(dst),
-            sidecar_payload(
-                transplant.box,
-                transplant.index,
-                **{name: getattr(transplant, name) for name in CLAIM_WIRE_NAMES},
-            ),
-        )
-        sidecar_moved = True
-        _unlink(sidecar_path(src))
+    # THE TRANSPLANT KEEPS THE NAME AND THEREFORE THE PATH. `move_card` hands it this card's
+    # `cid` through `replace()` — the name is the card's and the card is what moved — and
+    # prefixes the TOMBSTONE's with `moved:` so one name is never on two rows under the
+    # UNIQUE index. `photo` is re-derived rather than copied, for `do_remove_card`'s reason:
+    # a stale absolute path from another machine's store must not survive.
+    #
+    # BOTH FLAGS STAY IN THE RESPONSE AND BOTH NOW MEAN SOMETHING NARROWER: not "this
+    # server renamed a file" but "the photograph and its claims travelled with the card",
+    # which they do by construction. The route's own body is what a screen reads, and a
+    # screen that learned to draw "photo moved" should keep drawing it — the operator's
+    # question is whether the picture followed the card, and the answer is still yes.
+    found = photo_for(inventory, transplant)
+    transplant.photo = str(found) if found is not None else None
+    photo_moved = found is not None
+    sidecar_moved = sidecar_for(inventory, transplant) is not None
 
     # Re-keyed, not dropped — `do_remove_card`'s rule and its reason: an open review
     # question or a paid identification answer follows the physical card to its new
@@ -4606,7 +4718,9 @@ def _reclaimable(inventory: master.Inventory, box: int) -> Tuple[list, list]:
         if card.photo_reclaimed_at:
             reclaimed.append((at, key, card))
             continue
-        path = photo_path(box, at)
+        path = photo_for(inventory, card)
+        if path is None:
+            continue
         try:
             size = path.stat().st_size
         except OSError:
@@ -4634,7 +4748,8 @@ def do_box_photos(box: int) -> dict:
     reclaimable, reclaimed = _reclaimable(inventory, box)
     on_hand = sum(
         1 for at, _, card in inventory.records_in(box)
-        if card.state not in master.TERMINAL_STATES and photo_path(box, at).is_file()
+        if card.state not in master.TERMINAL_STATES
+        and photo_for(inventory, card) is not None
     )
     return {
         "box": int(box),
@@ -4824,18 +4939,28 @@ def do_delete_box(box: int) -> dict:
             )
 
         holds.sort()
-        photos = 0
-        sidecars = 0
+        # RENAMED OFF `photos`, WHICH IS NOW A MODULE. `store.photos` is imported at the top
+        # of this file, and a local of the same name shadows it for the whole function — so
+        # this pair carries what it counts in its name, which it should have done anyway.
+        photos_deleted = 0
+        sidecars_deleted = 0
         review_dropped = 0
         parked_dropped = 0
         cache_dropped = 0
         buried = 0
         box_name = registered.name if registered is not None else None
         for at, card_key, card in holds:
-            photo = photo_path(box, at)
+            photo = photo_for(inventory, card)
             if card.state in master.TERMINAL_STATES:
-                digest = card.photo_sha256
-                if digest is None:
+                # THE CARD'S NAME IS THE DIGEST, SO THIS RARELY READS A FILE ANY MORE. The
+                # `buried` line needs the digest of what was photographed, and before D172
+                # the only way to get it was to hash the bytes on the way out — which is
+                # a full read per departed card, and impossible once they were gone. The
+                # frozen name answers it for every card that was not re-shot; the read
+                # stays as the fallback for one that was, and for a record older than the
+                # naming.
+                digest = card.photo_sha256 or photos.digest_of(card.cid)
+                if digest is None and photo is not None:
                     try:
                         digest = hashlib.sha256(photo.read_bytes()).hexdigest()
                     except OSError:
@@ -4882,9 +5007,9 @@ def do_delete_box(box: int) -> dict:
                 )
                 buried += 1
             if _unlink(photo):
-                photos += 1
-            if _unlink(sidecar_path(photo)):
-                sidecars += 1
+                photos_deleted += 1
+            if _unlink(None if photo is None else sidecar_path(photo)):
+                sidecars_deleted += 1
             del inventory.cards[card_key]
             review_gone, parked_gone, cache_gone = _drop_from_stores(snapshot, card_key)
             review_dropped += review_gone
@@ -4925,8 +5050,8 @@ def do_delete_box(box: int) -> dict:
         # through a departure door rather than as on-hand junk (D134).
         "cards": len(holds),
         "buried": buried,
-        "photos": photos,
-        "sidecars": sidecars,
+        "photos": photos_deleted,
+        "sidecars": sidecars_deleted,
         "review_deleted": review_dropped,
         "parked_deleted": parked_dropped,
         "cache_deleted": cache_dropped,
@@ -7521,9 +7646,13 @@ def do_reshoot(box: int, index: int, payload: dict) -> dict:
         # The caller's own integers, exactly as `_card_row` renders from them: the record
         # was found under their key, and they have already matched (\\d+)/(\\d+) in the
         # route, while the stored fields may be strings `Inventory.parse` never coerced.
-        path = photo_path(box, index)
-        path.parent.mkdir(parents=True, exist_ok=True)
-        files.write_atomic(path, blob)
+        # THE NEW BYTES GO AT THE CARD'S OWN NAME, WHICH IS THE SAME NAME AS BEFORE.
+        # `cid` is FROZEN — the birth certificate, never recomputed (D172) — so a re-shoot
+        # replaces the bytes behind a name that does not move. That is what makes the name
+        # survive D26 at all, and it is also the one place the name and the current
+        # photograph's digest can legitimately differ, which is what the `photo_sha256` on
+        # the history event below exists to record.
+        path = photos.write(card.cid, blob)
         files.write_json(
             sidecar_path(path),
             sidecar_payload(
@@ -7532,9 +7661,9 @@ def do_reshoot(box: int, index: int, payload: dict) -> dict:
                 **{name: getattr(card, name) for name in CLAIM_WIRE_NAMES},
             ),
         )
-        # Normally a no-op — the path is derived from the position and the position did not
+        # Normally a no-op — the path is derived from the card's name and the name does not
         # move. It is a real write for one record shape: a card recorded by `emit` carries
-        # a null photo, and a re-shoot of it is the first photograph that position has.
+        # a null photo, and a re-shoot of it is the first photograph that card has.
         card.photo = str(path)
         card.capture_id = capture_id
 
@@ -7547,6 +7676,17 @@ def do_reshoot(box: int, index: int, payload: dict) -> dict:
             # ids simply carries no `replaced_capture_id` — absent reads as "nobody
             # recorded one", which is the truth.
             replaced_capture_id=previous_capture_id,
+            # THE DIGEST OF WHAT IS NOW BEHIND THE NAME, AND THIS LINE IS WHY THE AUDIT CAN
+            # BE HONEST (D172 section 7 item 1). `cid` is frozen, so after a re-shoot the
+            # card's name no longer equals its photograph's digest — and `cards audit` needs
+            # an EXCUSED set for exactly that card. Before this, the one `reshot` event on
+            # the owner's store carried two capture ids and NO DIGEST AT ALL, so nothing in
+            # the store recorded the boundary between two photographs of one card and the
+            # excuse could only ever have been the bare FACT of a re-shoot — which excuses
+            # anything. The bytes are in RAM; this is one field.
+            photo_sha256=photos.sha256_of_bytes(blob),
+            # The name the bytes now sit behind, so the chain is readable from either end.
+            cid=card.cid,
         )
 
         body = _card_summary(inventory, card, created=False)
@@ -7701,7 +7841,7 @@ def _copy_row(places: _Places, card: master.Card) -> dict:
         key = f"{card.box}/{card.index}"
     try:
         place = places.of(card.box, card.index)
-        has_photo = photo_path(card.box, card.index).is_file()
+        has_photo = photo_for(places.inventory, card) is not None
     except (TypeError, ValueError, master.BadSections):
         place, has_photo = None, False
     return {
@@ -7710,6 +7850,13 @@ def _copy_row(places: _Places, card: master.Card) -> dict:
         "state_at": card.state_at,
         "has_photo": has_photo,
         "capture_id": card.capture_id,
+        # THE NAME, FOR THE SAME ONE READER `capture_id` IS HERE FOR, one layer along.
+        # `app/src/CardLocations.tsx` draws a copy's photograph off this row, and the
+        # carve-out D93 argued for `capture_id` applies unchanged: what `SearchCopy` refuses
+        # is a SECOND INVENTORY VIEW growing inside a search result, and a name is not a
+        # view. Null on a `moved:` tombstone and on a `nophoto:` card, which is the same
+        # answer `has_photo` gives and for the same reason.
+        "cid": card.cid if photos.is_photo_cid(card.cid) else None,
         "place": place,
     }
 
@@ -10199,6 +10346,43 @@ class CaptureHandler(BaseHTTPRequestHandler):
             return self.end_headers()
         return self._send(HTTPStatus.OK, blob, "image/jpeg", headers)
 
+    def _photo_by_card(self, cid: str) -> None:
+        """`GET /photo/by-card/<cid>`. See `do_photo_by_card`.
+
+        `immutable`, WHICH IS THE HEADER `_photo` ABOVE CANNOT SEND. That route serves a
+        SLOT, whose occupant changes under it, so it can only ever say "keep the bytes and
+        ask me again" and pay a digest per request to answer. This one serves a name, and
+        the name moves with the card — so there is nothing to revalidate and the right
+        answer is a year plus `immutable`, which tells the browser not to ask even on a
+        reload. That is the 1.9 MB per photograph D52 measured, not spent.
+
+        IT STILL HONOURS `If-None-Match`, because a browser that has been told `immutable`
+        may still revalidate — a hard reload does — and answering 200 with 1.9 MB to a
+        question the ETag already settles would waste exactly what this route exists to
+        save. The tag costs no read here: it is the name's own first 32 hex.
+        """
+        blob, etag = do_photo_by_card(cid)
+        headers = (
+            ("ETag", etag),
+            ("Cache-Control", "public, max-age=31536000, immutable"),
+        )
+        offered = [
+            tag.strip()
+            for tag in (self.headers.get("If-None-Match") or "").split(",")
+            if tag.strip()
+        ]
+        fresh = "*" in offered or etag in [
+            tag[2:] if tag.startswith("W/") else tag for tag in offered
+        ]
+        if fresh:
+            self.send_response(int(HTTPStatus.NOT_MODIFIED))
+            for header, value in self._cors_headers():
+                self.send_header(header, value)
+            for header, value in headers:
+                self.send_header(header, value)
+            return self.end_headers()
+        return self._send(HTTPStatus.OK, blob, "image/jpeg", headers)
+
     def _json(self, status: HTTPStatus, payload) -> None:
         self._send(status, json.dumps(payload).encode("utf-8") + b"\n", "application/json")
 
@@ -10448,6 +10632,13 @@ class CaptureHandler(BaseHTTPRequestHandler):
                     f"There is no GET /boxes/{match.group(1)}. Read /boxes and take the row "
                     f"you want; PUT /boxes/{match.group(1)} is where a box is changed.",
                 )
+            # BEFORE THE SLOT PATTERN, and the order is free rather than load-bearing:
+            # `/photo/by-card/<hex>` cannot match `^/photo/(\d+)/(\d+)$` because `by-card`
+            # is not digits. Matched first anyway, because it is the address to prefer and a
+            # reader should meet it first.
+            match = _PHOTO_BY_CARD_RE.match(path)
+            if match:
+                return self._photo_by_card(match.group(1))
             match = _PHOTO_RE.match(path)
             if match:
                 # Its own method because it is the one read in this server that answers a

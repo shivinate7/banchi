@@ -47,6 +47,7 @@ from typing import Dict, List, Tuple
 from cli import resolve, runs
 from store import files
 from store import master
+from store import photos
 from store.session import Store
 
 # The manifest key naming the run this one was derived from. Read by `rescue` itself to spot
@@ -118,7 +119,47 @@ def _existing_rescues(source: str, root: Path) -> List[runs.Run]:
     return found
 
 
-def _rebound(payload: dict, moved: Dict[str, str]) -> dict:
+def _photo_for(key: str, box: int, index: int, inventory: master.Inventory) -> str:
+    """The path that NAMES the photograph now at `key`, rather than the slot it sits in.
+
+    THE WHOLE POINT OF THE RESCUE IS THAT THE PHOTOGRAPH IS THE TRUTH, AND THIS FIELD USED TO
+    CONTRADICT IT. It composed `captures/cards/box<B>/<idx>.jpg` by hand — the slot, which is
+    exactly the thing the rescue has just finished proving unreliable. Since
+    `D-a-number-a-person-reads-is-never-a-key` the bytes are filed under the card's own name,
+    so this asks `store/photos.py` for the file and writes down what it answers.
+
+    THREE ANSWERS, IN ORDER, AND EACH ONE MEANS SOMETHING DIFFERENT:
+
+      the file that exists   `photos.find` — the card's name first, then the legacy address
+                             while `meta.photos_relocated` is unset. This is the one every
+                             rescued card takes, because the rescue only matched it against a
+                             photograph in the first place.
+      the name it would have a card whose photograph has gone since the match: the canonical
+                             path is still the honest thing to write, because it is where the
+                             bytes are if they come back (a D26 re-shoot writes there) and it
+                             is what an audit compares against.
+      the old address        a card with no cid naming a photograph at all — a `moved:`
+                             tombstone or a `nophoto:` record. There is no name to compose, so
+                             the field keeps the only shape it ever had, and the review screen
+                             renders exactly what it rendered before.
+    """
+    card = inventory.cards.get(key)
+    cid = getattr(card, "cid", None)
+    found = photos.find(
+        cid,
+        box,
+        index,
+        relocated=bool(inventory.photos_relocated),
+        home=files.home(),
+    )
+    if found is not None:
+        return str(found)
+    if photos.is_photo_cid(cid):
+        return str(photos.path(cid))
+    return str(photos.legacy_path(box, index))
+
+
+def _rebound(payload: dict, moved: Dict[str, str], inventory: master.Inventory) -> dict:
     """The source payload with every rescued record re-keyed and re-addressed.
 
     THREE FIELDS MOVE AND NOTHING ELSE DOES. `box` and `index` are the address, `photo` is
@@ -127,6 +168,10 @@ def _rebound(payload: dict, moved: Dict[str, str]) -> dict:
     revising one. `photo_sha256` is deliberately kept: it is the same bytes, which is the
     whole basis on which this record was matched, and it is what lets `realign` go on
     checking the rescue run at every later join.
+
+    `inventory` IS THE SNAPSHOT `run` ALREADY HELD, and it is here for one field: `photo` is
+    now asked of `store/photos.py` against the card at the new key rather than composed from
+    the slot — see `_photo_for`. Nothing else reads it, and nothing here writes the store.
     """
     cards = payload.get("cards") or {}
     rebuilt: Dict[str, dict] = {}
@@ -137,9 +182,7 @@ def _rebound(payload: dict, moved: Dict[str, str]) -> dict:
         record["index"] = int(index)
         photo = record.get("photo")
         if isinstance(photo, str) and photo:
-            record["photo"] = str(
-                files.home() / "captures" / "cards" / f"box{int(box)}" / f"{int(index):04d}.jpg"
-            )
+            record["photo"] = _photo_for(new_key, int(box), int(index), inventory)
         record["rescued_from_position"] = old_key
         rebuilt[new_key] = record
     out = {key: value for key, value in payload.items() if key != "cards"}
@@ -199,7 +242,13 @@ def run(args, say) -> int:
     # ------------------------------------------------------------------ where they are now
     boxes = sorted(int(entry.box) for entry in inventory.boxes.values())
     say(f"  searching     box {', '.join(str(b) for b in boxes) or 'none'} (every live drawer)")
-    at, twice_on_disk = resolve._photo_digests(boxes)
+    # THE SNAPSHOT IS HANDED IN, AND THE SOURCE IS PRINTED. The map comes off `cards.cid`
+    # now rather than out of 997 MB of photographs, so passing the snapshot this command
+    # already holds is one store read instead of a second one — and `source` says which
+    # mechanism answered, because a rescue that searched the wrong thing would otherwise
+    # report "none of this run's records match" in the same words either way.
+    at, twice_on_disk, digest_source = resolve._photo_digests(boxes, inventory)
+    say(f"  slots read    from the {digest_source}")
 
     moved: Dict[str, str] = {}
     missing: List[str] = []
@@ -254,7 +303,7 @@ def run(args, say) -> int:
     say("")
 
     # ------------------------------------------------------------------ already done?
-    rebuilt = _rebound(payload, moved)
+    rebuilt = _rebound(payload, moved, inventory)
     # COMPARED AS DATA AND NOT AS BYTES. Two `json.dumps` call sites agreeing on `indent`,
     # `sort_keys` and `default` is a coupling nothing checks; what "already rescued" means is
     # that the same records landed at the same positions.
@@ -312,7 +361,15 @@ def run(args, say) -> int:
     }
     exports = _carry_exports(source, rescued)
     written[RESCUED_FROM] = source.name
-    written["capture_dir"] = str(files.home() / "captures" / "cards" / f"box{box}")
+    # THE BOX'S CAPTURE DIRECTORY, ASKED OF `store/photos.py` RATHER THAN SPELLED HERE.
+    # It is still the LEGACY address, and that is the honest answer rather than an oversight:
+    # a `capture_dir` is a directory `identify.sidecar.scan` could be pointed at, and the
+    # content store is flat and shared — a run cannot be a directory of it.
+    # `D-a-number-a-person-reads-is-never-a-key` §0.4 answers that with a built `.scopes/`
+    # view of symlinks named `<idx:04d>.jpg`, and this line becomes that view's path when it
+    # is. Until then the string is the one it always was, composed in the one module allowed
+    # to compose it, so the change lands in one place.
+    written["capture_dir"] = str(photos.legacy_box_dir(box))
     # THE SCOPE THE WHOLE REPAIR TURNS ON (D145). `bid` is what stops this run ever becoming
     # the thing it was derived from: box 3 may be deleted and its number reused tomorrow, and
     # this run will still say which drawer it was over.

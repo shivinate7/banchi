@@ -236,7 +236,7 @@ from server import (  # noqa: E402
     tcg_export,
     tcg_import,
 )
-from store import db, files, master, queues  # noqa: E402
+from store import db, files, master, photos, queues  # noqa: E402
 # `orders` is already `pipeline.orders` above. The store's ledger is a DIFFERENT module
 # — the resolver computes and stores nothing, this one persists — so it takes an alias
 # rather than shadowing the name half this file's order cases are written against.
@@ -442,6 +442,34 @@ def capture_payload(box: int, **extra) -> dict:
     payload = {"box": box, "image": base64.b64encode(JPEG).decode("ascii")}
     payload.update(extra)
     return payload
+
+
+def fake_cid(seed) -> str:
+    """A distinct, deterministic 64-hex name for a card a test invents (D172).
+
+    A TEST'S CARD HAS NO PHOTOGRAPH, so it has no digest to be named by — and
+    `record_capture` refuses a nameless row, because the one caller that cannot supply a
+    name is a caller that forgot. This is the fixture's way of saying "this card exists and
+    is distinct", and it is a real sha256 of the seed rather than a padded constant so that
+    `cards_cid`'s UNIQUE index is actually exercised: N cards built from N seeds collide
+    under a constant and do not collide here.
+
+    THE SEED HAS TO BE DISTINCT WITHIN ONE STORE AND NOWHERE WIDER. Every case below builds
+    its own `Inventory` or its own `isolated_home`, so two functions reusing the seed `1`
+    are two stores each holding one card; two cards in ONE store sharing a seed would hit
+    `cards_cid` — which is a real refusal from the database rather than a fixture accident,
+    and is exactly the property this helper exists to leave intact. Where a case creates
+    cards in a loop the seed carries the loop variable, and where it creates them across
+    boxes it carries the box too, for that reason.
+
+    IT IS NOT WHAT THE SHUTTER DOES, AND MUST NOT BE MISTAKEN FOR IT.
+    `capture_server.do_capture` names a card by hashing the photograph itself
+    (`photos.sha256_of_bytes`), which is the only naming this product ships; the cases that
+    go through the route get their names that way and never through here. This is for the
+    cases that reach `allocate_capture` and `record_capture` directly, which is where a
+    store's bookkeeping is checked without a camera in the way.
+    """
+    return hashlib.sha256(str(seed).encode()).hexdigest()
 
 
 # --------------------------------------------------------------- the command-seam fixture
@@ -666,14 +694,14 @@ def check_allocator(checks: Checks) -> None:
     inventory = master.Inventory()
     checks.equal(inventory.next_index(3), 1, "an empty box starts at index 1")
 
-    first, created = inventory.allocate_capture(3)
+    first, created = inventory.allocate_capture(3, cid=fake_cid("alloc-3-1"))
     checks.ok(created, "the first allocation into an unseen box creates it implicitly")
     checks.equal(first.key, "3/1", "first card is keyed 3/1")
 
-    second, _ = inventory.allocate_capture(3)
+    second, _ = inventory.allocate_capture(3, cid=fake_cid("alloc-3-2"))
     checks.equal(second.key, "3/2", "allocation is sequential")
 
-    other, _ = inventory.allocate_capture(7)
+    other, _ = inventory.allocate_capture(7, cid=fake_cid("alloc-7-1"))
     checks.equal(other.key, "7/1", "boxes are independent — box 7 starts over at 1")
     checks.equal(inventory.next_index(3), 3, "and allocating into 7 left box 3 untouched")
 
@@ -698,8 +726,8 @@ def check_allocator(checks: Checks) -> None:
     # releases its index; this is asserted because step 7's undo is built on it, and a
     # refactor that changed it would silently change what undo does.
     scratch = master.Inventory()
-    scratch.allocate_capture(1)
-    newest, _ = scratch.allocate_capture(1)
+    scratch.allocate_capture(1, cid=fake_cid("scratch-1"))
+    newest, _ = scratch.allocate_capture(1, cid=fake_cid("scratch-2"))
     checks.equal(scratch.next_index(1), 3, "two cards in box 1, next index is 3")
     del scratch.cards[newest.key]
     checks.equal(
@@ -741,8 +769,14 @@ def check_allocator(checks: Checks) -> None:
     # The retry guard. A response lost between commit and client makes the app repost; the
     # capture_id is what stops that from burning a second index for one physical card.
     replay = master.Inventory()
-    original, first_created = replay.allocate_capture(2, capture_id="abc")
-    again, second_created = replay.allocate_capture(2, capture_id="abc")
+    # ONE NAME ACROSS BOTH CALLS, WHICH IS THE TRUTHFUL FIXTURE HERE (D172). A repost is the
+    # same photograph arriving twice, so `do_capture` hashes the same bytes to the same
+    # `cid` — and the replay branch returns before `record_capture`, so the second call
+    # never reaches the name at all. Two distinct names would describe two physical cards,
+    # which is the thing this guard exists to stop happening.
+    reposted = fake_cid("replay-2-1")
+    original, first_created = replay.allocate_capture(2, capture_id="abc", cid=reposted)
+    again, second_created = replay.allocate_capture(2, capture_id="abc", cid=reposted)
     checks.ok(first_created and not second_created, "a replayed capture_id reports created=False")
     checks.equal(again.key, original.key, "and returns the original card")
     checks.equal(replay.next_index(2), 2, "and burns no second index")
@@ -772,7 +806,7 @@ def check_allocator(checks: Checks) -> None:
     )
 
     events = master.Inventory()
-    events.allocate_capture(9)
+    events.allocate_capture(9, cid=fake_cid("events-9-1"))
     captured = [e for e in events.events if e.get("event") == master.CAPTURED]
     checks.equal(len(captured), 1, "allocation logs exactly one captured event")
     checks.equal(captured[0].get("position"), "9/1", "and the event carries the position")
@@ -807,7 +841,7 @@ def check_store(checks: Checks) -> None:
         )
 
         with Store().write() as snapshot:
-            snapshot.inventory.allocate_capture(3)
+            snapshot.inventory.allocate_capture(3, cid=fake_cid("committed"))
         checks.equal(
             Store().read().inventory.next_index(3), 2, "a committed write is visible to a later read"
         )
@@ -816,7 +850,7 @@ def check_store(checks: Checks) -> None:
         # the yield, so a crash halfway through a transition leaves the store as it was.
         try:
             with Store().write() as snapshot:
-                snapshot.inventory.allocate_capture(3)
+                snapshot.inventory.allocate_capture(3, cid=fake_cid("abandoned"))
                 raise RuntimeError("deliberate")
         except RuntimeError:
             pass
@@ -854,7 +888,7 @@ def check_store_of_record(checks: Checks) -> None:
 
     with isolated_home():
         with Store().write() as snapshot:
-            snapshot.inventory.allocate_capture(3, capture_id="seed")
+            snapshot.inventory.allocate_capture(3, capture_id="seed", cid=fake_cid("seed"))
         checks.ok(
             db.path(files.inventory_dir()).is_file(),
             "a fresh store is one SQLite file",
@@ -871,7 +905,7 @@ def check_store_of_record(checks: Checks) -> None:
         db.SqliteSource.upsert = torn
         try:
             with Store().write() as snapshot:
-                snapshot.inventory.allocate_capture(3, capture_id="torn")
+                snapshot.inventory.allocate_capture(3, capture_id="torn", cid=fake_cid("torn"))
                 snapshot.review.upsert(entry(3, 2))
         except RuntimeError:
             pass
@@ -900,7 +934,9 @@ def check_store_of_record(checks: Checks) -> None:
         for at in range(1, 21):
             capture_server.do_capture(capture_payload(4, capture_id=f"d{at}", set_hint="sv9"))
         with Store().write() as snapshot:
-            card, created = snapshot.inventory.allocate_capture(3, capture_id="lazy")
+            card, created = snapshot.inventory.allocate_capture(
+                3, capture_id="lazy", cid=fake_cid("lazy")
+            )
             built = snapshot.inventory.cards.loaded_count
             complete = snapshot.inventory.cards.complete
         checks.ok(created and card.key == "3/41", "a capture lands at the high-water mark")
@@ -6645,7 +6681,7 @@ def check_capture_claim_chain(checks: Checks) -> None:
     # proves the two lists match; only a round trip proves the claim is still there.
     marks = {name: f"mark-{name}" for name in master.CAPTURE_CLAIM_FIELDS}
     inventory = master.Inventory()
-    inventory.record_capture(master.Card(box=7, index=1, **marks))
+    inventory.record_capture(master.Card(box=7, index=1, cid=fake_cid("claims-7-1"), **marks))
     reloaded = master.Inventory.parse(inventory.to_payload())
     checks.equal(
         {name: getattr(reloaded.cards["7/1"], name) for name in marks},
@@ -6657,6 +6693,11 @@ def check_capture_claim_chain(checks: Checks) -> None:
     # THE RE-RECORD, which is the hop that worked until the operator corrected a card. A
     # second `record_capture` at the same position takes the existing-record branch and
     # copies the claims over the incumbent; a list of three would leave the fourth behind.
+    #
+    # NO `cid` HERE, AND THE ABSENCE IS THE POINT (D172). The name is issued once, at the
+    # birth of the record, so the existing-record branch never looks at it — passing one
+    # would be describing a re-record as a naming, which is the one thing a re-record must
+    # not be able to do. The card created above keeps the name it was born with.
     inventory.record_capture(
         master.Card(box=7, index=1, **{name: f"re-{name}" for name in marks})
     )
@@ -6705,6 +6746,12 @@ def check_capture_claim_chain(checks: Checks) -> None:
     with isolated_home(), Store().write() as snapshot:
         checks.raises(
             master.UnknownClaim,
+            # DELIBERATELY NAMELESS, AND THE ORDER IN `allocate_capture` IS WHY (D172). The
+            # claim check runs before the index is computed and therefore long before
+            # `record_capture`'s refusal for a nameless card, so this case still hears
+            # `UnknownClaim` — which is the refusal it is about. Passing a `cid` would make
+            # the case pass for a reason it is not testing, and would hide a reordering that
+            # made a typo answer `UnnamedCard` instead.
             lambda: snapshot.inventory.allocate_capture(7, set_hnit="sv9"),
             "an unrecognised claim refuses as UnknownClaim rather than raising from a "
             "constructor two frames down",
@@ -10642,7 +10689,7 @@ def check_reused_box_refusal(checks: Checks) -> None:
         with Store().write() as snapshot:
             for n in (1, 2, 3):
                 card, _ = snapshot.inventory.allocate_capture(
-                    1, capture_id=f"reused-{n}", game="riftbound"
+                    1, capture_id=f"reused-{n}", game="riftbound", cid=fake_cid(f"reused-{n}")
                 )
                 snapshot.inventory.record_identification(
                     card.key,
@@ -10792,8 +10839,8 @@ def check_box_true_index(checks: Checks) -> None:
             inventory = snapshot.inventory
             old = inventory.ensure_box(1, name="Pokemon shakedown")
             old.created_at = "2026-08-22T09:00:00+00:00"
-            for _ in range(53):
-                card, _ = inventory.allocate_capture(1)
+            for n in range(53):
+                card, _ = inventory.allocate_capture(1, cid=fake_cid(f"shakedown-{n}"))
                 card.game, card.run = "pokemon", OLD_RUN
             old_bid = old.bid
         checks.equal(old_bid, 1, "the first drawer in an empty store is index 1")
@@ -10823,8 +10870,8 @@ def check_box_true_index(checks: Checks) -> None:
             )
             new = inventory.ensure_box(number, name="RB Epics")
             new.created_at = "2026-08-29T14:00:00+00:00"
-            for _ in range(133):
-                card, _ = inventory.allocate_capture(number)
+            for n in range(133):
+                card, _ = inventory.allocate_capture(number, cid=fake_cid(f"epics-{n}"))
                 card.game, card.run = "riftbound", NEW_RUN
             new_bid = new.bid
         manifest(NEW_RUN, "2026-08-29T15:00:00+00:00", new_bid)
@@ -10998,7 +11045,9 @@ def check_rescue_stranded_run(checks: Checks) -> None:
         """Box 1's number, reused for somebody else's cards — the reallocation itself."""
         snapshot.inventory.ensure_box(1)
         for n in range(1, how_many + 1):
-            card, _ = snapshot.inventory.allocate_capture(1, capture_id=f"foreign-{n}")
+            card, _ = snapshot.inventory.allocate_capture(
+                1, capture_id=f"foreign-{n}", cid=fake_cid(f"foreign-{n}")
+            )
             snapshot.inventory.record_identification(
                 card.key, name="Moonfall", number="198/219",
                 printed_total="219", confidence="high", run=other,
@@ -11026,7 +11075,9 @@ def check_rescue_stranded_run(checks: Checks) -> None:
         with Store().write() as snapshot:
             snapshot.inventory.ensure_box(3, name="RB Epics")
             for n in (1, 2, 3):
-                snapshot.inventory.allocate_capture(3, capture_id=f"dest-{n}", game="pokemon")
+                snapshot.inventory.allocate_capture(
+                    3, capture_id=f"dest-{n}", game="pokemon", cid=fake_cid(f"dest-{n}")
+                )
             reuse_box_one(snapshot)
 
         box3_bid = Store().read().inventory.box(3).bid
@@ -11358,7 +11409,9 @@ def check_run_binds_to_bid(checks: Checks) -> None:
         with Store().write() as snapshot:
             snapshot.inventory.ensure_box(1)
             for n in range(1, 5):
-                card, _ = snapshot.inventory.allocate_capture(1, capture_id=f"count-{n}")
+                card, _ = snapshot.inventory.allocate_capture(
+                    1, capture_id=f"count-{n}", cid=fake_cid(f"count-{n}")
+                )
                 snapshot.inventory.record_identification(
                     card.key, name="Moonfall", number="198/219",
                     printed_total="219", confidence="high", run="stranded-run",
@@ -17116,6 +17169,11 @@ def check_boxes_and_listings(checks: Checks) -> None:
             )
             checks.raises(
                 master.BoxClosed,
+                # DELIBERATELY NAMELESS, for the reason the `UnknownClaim` case above gives
+                # (D172): the seal is checked before the index is computed and therefore
+                # before `record_capture` can refuse a nameless card, so this still hears
+                # `BoxClosed`. A `cid` here would let a reordering turn the seal's refusal
+                # into `UnnamedCard` with the case still green.
                 lambda: snapshot.inventory.allocate_capture(5),
                 "A SEALED BOX TAKES NO MORE CARDS — one more would falsify every fraction",
             )
@@ -17128,13 +17186,15 @@ def check_boxes_and_listings(checks: Checks) -> None:
                 snapshot.inventory.box(5).capacity, None,
                 "re-opening drops capacity rather than leaving a stale number standing",
             )
-            card, created = snapshot.inventory.allocate_capture(5)
+            card, created = snapshot.inventory.allocate_capture(5, cid=fake_cid("reopened"))
             checks.ok(created and card.index == 5, "and the box takes cards again")
 
     # --- listings are quantities, never addresses --------------------------------------
     inventory = master.Inventory()
     for index in range(1, 8):
-        inventory.record_capture(master.Card(box=9, index=index, sku="777"))
+        inventory.record_capture(
+            master.Card(box=9, index=index, sku="777", cid=fake_cid(f"playset-{index}"))
+        )
     listing = inventory.listing("777", condition="Near Mint")
     listing.live = 4
 
@@ -17668,12 +17728,12 @@ def check_pipeline_routes(checks: Checks) -> None:
                 "`cards: 1` is a statement about the selection rather than about the box",
             )
             # The scope directory this one built is swept with the others below; it is
-            # symlinks, and `_sweep_scopes` is what `_scope_dir` calls on every press.
+            # symlinks, and `_sweep_scopes` is what `_view_dir` calls on every press.
 
             # ------------------------------------------- the double-click guard, by BOX
             #
             # IT USED TO COMPARE CAPTURE-DIRECTORY PATHS, which works for a whole box and
-            # cannot work for a ticked selection: `_scope_dir` builds a fresh
+            # cannot work for a ticked selection: `_view_dir` builds a fresh
             # `.scopes/box3-<n>-<timestamp>` on every press, so two presses over one
             # selection were two paths and neither saw the other. The subset path had no
             # double-click guard at all.

@@ -151,7 +151,7 @@ from pipeline import pricehistory  # noqa: E402
 # it reaches geometry, PIL and sqlite.
 from identify import cost  # noqa: E402
 from identify import sidecar  # noqa: E402
-from store import Store, files, master  # noqa: E402
+from store import Store, files, master, photos  # noqa: E402
 from store import submissions as claims  # noqa: E402
 from store.session import Snapshot  # noqa: E402
 
@@ -371,6 +371,12 @@ class PipelineRefusal(Exception):
 
 
 def box_capture_dir(box: int) -> Path:
+    """The LEGACY capture directory for a box — where photographs were filed before D172.
+
+    Kept because 4.45 GB moves once and resumably: while `meta.photos_relocated` is unset
+    the photographs are still here, and `_view_dir` below prefers this directory outright
+    when it is populated, so a half-moved store identifies exactly as it always did.
+    """
     return files.home() / "captures" / "cards" / f"box{int(box)}"
 
 
@@ -385,44 +391,149 @@ def _scopes_root() -> Path:
     return files.home() / ".scopes"
 
 
-def _scope_dir(box: int, indices: Sequence[int]) -> Path:
-    """A directory of symlinks to the chosen cards, so `identify` can be pointed at a subset.
+def _view_dir(box: int, indices: Optional[Sequence[int]]) -> Path:
+    """The box's readable address, MATERIALIZED — a view over the content store (D172).
 
-    `identify` takes a DIRECTORY — that is its contract and widening it to take a list of
-    files would put a second input shape through `sidecar.scan`, which is the one function
-    that decides what a capture is. Symlinks keep the photograph and its sidecar side by
-    side under their real names, which is all `scan` reads, and cost nothing on disk.
+    THIS IS THE RULE MADE INTO DIRECTORY ENTRIES. The photograph is filed under the card's
+    own name, so `box3/0017.jpg` is not a place on disk any more; it is a RENDERING of
+    `Box 3 · Card 17`, computed from the store the way `pipeline/join.py:Position` computes
+    the label a Fulfiller reads. So it is built on demand and thrown away, which is what a
+    rendering should be — and the reason a renumber no longer rewrites 537 sidecars is that
+    there is nothing on disk left to correct.
 
-    Rebuilt from scratch each time rather than reused: the scope is derived from a selection
-    the operator just made, and a stale link to a card since deleted would submit a
-    photograph the store no longer knows about.
+    `indices is None` MEANS THE WHOLE BOX, which is the case the function this replaces
+    never had to serve: a whole box used to BE a directory. `_scope_dir` stood here and
+    built exactly this for a ticked SELECTION, and its argument for symlinks is the
+    argument for this whole approach, so it is kept verbatim — `identify` takes a
+    DIRECTORY, and widening it to take a list of files would put a second input shape
+    through `sidecar.scan`, which is the one function that decides what a capture is.
+    Symlinks keep the photograph under the name `scan` reads and cost nothing on disk;
+    the view is rebuilt from scratch each time rather than reused, because a stale link
+    to a card since deleted would submit a photograph the store no longer knows about.
+
+    THE PHOTOGRAPH IS LINKED AND THE SIDECAR IS WRITTEN, WHICH IS THE ONE DIFFERENCE THAT
+    PAYS. A symlinked sidecar would carry the index the CAPTURE claimed, which goes stale
+    the first time a card in front of it is deleted — and that staleness is precisely what
+    `do_remove_card` used to spend N-k file rewrites preventing. A sidecar composed here
+    from the record is current by construction, because it is made at the moment of the
+    press out of the store's own answer.
+
+    `sidecar.load` NEEDS NO CHANGE FOR THIS, and that is not luck: its resolution is
+    per-field — `resolved_index = sidecar_index if sidecar_index is not None else
+    file_index` — so a view's sidecar naming the current index is read as the sidecar's own
+    claim, through the path it has always taken, and `FROM_SIDECAR` still means what it
+    meant.
+
+    A HALF-MOVED STORE IDENTIFIES EXACTLY AS IT ALWAYS DID. When the legacy directory still
+    holds the photographs and the whole box was asked for, that directory IS returned — no
+    view, no links, nothing temporary. `store/photos.find` is what decides, per card.
+
+    AND A PHOTOGRAPH WITH NO RECORD BEHIND IT IS STILL IN SCOPE, which is not a leftover:
+    the SELECTION is resolved per requested index and not from the store's rows, so a box
+    holding photographs the store has never seen identifies exactly as it did before this
+    function existed. That case is real — `cli/cmd_emit.py`'s own comment names it, "a
+    position the store has never seen, a run joined from a recovered identifications file"
+    — and it is what a directory of photographs from before there was a store looks like.
+    Such an index gets its LEGACY sidecar symlinked rather than a composed one, because the
+    claims in it are the only claims there are.
     """
+    from_legacy = box_capture_dir(box)
+    inventory = Store().read().inventory
+    relocated = bool(getattr(inventory, "photos_relocated", None))
+    by_index = {at: card for at, _key, card in inventory.records_in(box)}
+
+    # THE WHOLE-BOX SHORTCUT, AND IT IS A REAL SHORTCUT RATHER THAN A FALLBACK: before the
+    # relocation the legacy directory IS the box, exactly as it always was, and building a
+    # view of symlinks pointing back into it would be work for no difference.
+    if indices is None and not relocated and from_legacy.is_dir():
+        return from_legacy
+    wanted = (
+        sorted(by_index) if indices is None
+        else sorted(set(int(value) for value in indices))
+    )
+    if not wanted:
+        raise PipelineRefusal(
+            HTTPStatus.NOT_FOUND,
+            "box_has_no_captures",
+            f"Box {box} holds no card this run could read. Nothing has been photographed "
+            f"into it, or the selection names indices the box does not have.",
+        )
+
     root = _scopes_root()
-    token = f"box{int(box)}-{len(indices)}-{int(time.time())}"
-    scope = root / token
-    if scope.exists():
-        shutil.rmtree(scope)
-    scope.mkdir(parents=True)
-    source = box_capture_dir(box)
+    token = f"box{int(box)}-{len(wanted)}-{int(time.time())}"
+    view = root / token
+    if view.exists():
+        shutil.rmtree(view)
+    view.mkdir(parents=True)
     linked = 0
-    for index in indices:
-        photo = source / f"{int(index):04d}.jpg"
-        sidecar = photo.with_suffix(".json")
-        if not photo.is_file():
+    for at in wanted:
+        card = by_index.get(at)
+        found = photos.find(
+            None if card is None else card.cid, box, at, relocated=relocated
+        )
+        if found is None:
             continue
-        os.symlink(photo, scope / photo.name)
-        if sidecar.is_file():
-            os.symlink(sidecar, scope / sidecar.name)
+        # THE READABLE ADDRESS IS THE FILENAME, padded to four for `sidecar.scan`'s reason:
+        # it sorts by path string, so `10` before `9` would reorder a whole run.
+        name = f"{int(at):0{photos.INDEX_PAD}d}{photos.PHOTO_SUFFIX}"
+        os.symlink(found, view / name)
+        sidecar = (view / name).with_suffix(photos.SIDECAR_SUFFIX)
+        if card is None:
+            # NO RECORD, SO NOTHING TO COMPOSE FROM. Its own sidecar beside its own
+            # photograph is the whole of what is known about it, and it is linked rather
+            # than copied for the reason the photograph is.
+            beside = found.with_suffix(photos.SIDECAR_SUFFIX)
+            if beside.is_file():
+                os.symlink(beside, sidecar)
+        else:
+            files.write_json(sidecar, _view_sidecar(box, at, card))
         linked += 1
     if not linked:
-        shutil.rmtree(scope, ignore_errors=True)
+        shutil.rmtree(view, ignore_errors=True)
         raise PipelineRefusal(
             HTTPStatus.NOT_FOUND,
             "no_photos_in_scope",
-            f"None of the {len(indices)} selected card(s) in box {box} has a photograph on "
-            f"disk. Nothing to identify.",
+            f"None of the {len(wanted)} card(s) in scope for box {box} has a photograph "
+            f"on disk. Nothing to identify.",
         )
-    return scope
+    return view
+
+
+def _view_sidecar(box: int, index: int, card: "master.Card") -> dict:
+    """The claims a view's sidecar carries, composed from the record.
+
+    `capture_server.sidecar_payload` IS THE WRITER FOR EVERY OTHER SIDECAR IN THIS REPO and
+    this is deliberately NOT a call to it: that function lives in the module which imports
+    THIS one, so calling it would invert the dependency the `PipelineRefusal` docstring
+    already spends a paragraph keeping one-way. What it costs is a second place that knows
+    the wire spelling of a claim, and `make docs-audit`'s `claim vocabulary` row is what
+    keeps the two in step — it reconciles every claim writer against one vocabulary.
+
+    A FALSY CLAIM IS OMITTED RATHER THAN WRITTEN NULL, which is `sidecar_payload`'s own rule
+    and matters for one field: an empty finish set is no claim at all (D3 amended), and a
+    written `null` would read the same as an absent key to `sidecar.load` but differently to
+    a person reading the file.
+    """
+    payload = {"box": int(box), "index": int(index)}
+    for field, wire in _VIEW_CLAIM_NAMES.items():
+        value = getattr(card, field, None)
+        if value:
+            payload[wire] = value
+    return payload
+
+
+# The record field -> sidecar key mapping, which is `capture_server.CLAIM_WIRE_NAMES` seen
+# from the other side of the import. Reconciled by `make docs-audit`'s `claim vocabulary`
+# row rather than trusted: `metadata_finish` writes `variant`, which is the one spelling a
+# reader would get wrong by guessing.
+_VIEW_CLAIM_NAMES = {
+    "set_hint": "set_hint",
+    "metadata_finish": "variant",
+    "game": "game",
+    "rarity_claim": "rarity_claim",
+    "product": "product",
+    "note": "note",
+}
 
 
 def _sweep_scopes(keep_hours: int = 48) -> None:
@@ -484,9 +595,12 @@ def _box_bid(box: int) -> Optional[int]:
 def _resolve_scope(payload: dict) -> Tuple[Path, dict]:
     """`{box}` or `{box, indices}` -> the directory to identify, and what it describes.
 
-    Whole-box is the common case and takes no temporary anything: the box's own capture
-    directory IS the scope, which is exactly what an agent typing the command would have
-    pointed at.
+    WHOLE-BOX USED TO TAKE NO TEMPORARY ANYTHING, AND NOW IT TAKES A VIEW (D172). The box's
+    own capture directory WAS the scope, because the photographs were filed under
+    `box<N>/<index>.jpg` and that directory therefore listed the box. They are filed under
+    the card's own name now, so the readable address has to be MATERIALIZED — which is
+    exactly the mechanism a ticked selection was already served by, one case wider. See
+    `_view_dir`, which replaced `_scope_dir` by growing it a whole-box case.
     """
     box = payload.get("box")
     if not isinstance(box, int) or isinstance(box, bool) or box <= 0:
@@ -495,18 +609,13 @@ def _resolve_scope(payload: dict) -> Tuple[Path, dict]:
             "box_required",
             "Send a positive integer `box`. A run is always scoped to one box.",
         )
-    source = box_capture_dir(box)
-    if not source.is_dir():
-        raise PipelineRefusal(
-            HTTPStatus.NOT_FOUND,
-            "box_has_no_captures",
-            f"Box {box} has no capture directory at {source}. Nothing has been "
-            f"photographed into it.",
-        )
 
     raw = payload.get("indices")
     if raw is None:
-        return source, {"box": box, "whole_box": True, "cards": None, "bid": _box_bid(box)}
+        _sweep_scopes()
+        return _view_dir(box, None), {
+            "box": box, "whole_box": True, "cards": None, "bid": _box_bid(box),
+        }
     if not isinstance(raw, list) or not raw:
         # The same refusal `PUT /inventory/<box>` makes about an empty selection, for the
         # same reason: an empty array quietly meaning "the whole box" is how a selection
@@ -528,7 +637,7 @@ def _resolve_scope(payload: dict) -> Tuple[Path, dict]:
         indices.append(value)
     indices = sorted(set(indices))
     _sweep_scopes()
-    return _scope_dir(box, indices), {
+    return _view_dir(box, indices), {
         "box": box,
         "whole_box": False,
         "cards": len(indices),
@@ -977,7 +1086,7 @@ def _busy_run(box: int) -> Optional[str]:
     IT COMPARES BOXES AND NOT PATHS, AND THAT CLOSED A REAL HOLE. It used to resolve the
     incoming capture directory against each live run's recorded one, which works for a whole
     box — `captures/cards/box3` both times — and cannot work for a ticked selection, because
-    `_scope_dir` builds a FRESH `.scopes/box3-<n>-<timestamp>` on every press. Two presses
+    `_view_dir` builds a FRESH `.scopes/box3-<n>-<timestamp>` on every press. Two presses
     over one selection were two different paths, neither saw the other, and the subset path
     therefore had no double-click guard at all.
 

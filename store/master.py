@@ -533,6 +533,23 @@ class UnknownClaim(ValueError):
     """A capture tried to write a field that is not a capture claim."""
 
 
+# D172's shape-3 marker: the tombstone a moved card leaves behind wears `moved:<name>` so
+# one name is never on two rows. Spelled here rather than imported from `store.photos`
+# because this module imports nothing from the rest of the package — see the note above
+# `BadPosition` — and `photos.MOVED_PREFIX` is the same string, reconciled by a T7 arm.
+MOVED_CID_PREFIX = "moved:"
+
+
+class UnnamedCard(ValueError):
+    """A new card row was minted with no `cid` (D172).
+
+    A PROGRAMMING ERROR IN A CALLER AND NEVER A DATA CONDITION, which is why it is raised at
+    the birth of a record and not at the flush: `_card_columns` is the single chokepoint
+    every row passes through, and a refusal there would be a 500 on the shutter mid-feeder.
+    See `record_capture`.
+    """
+
+
 # ---------------------------------------------------------------- the capture claims
 #
 # EVERY FIELD A CAPTURE WRITES, IN ONE PLACE, read by `allocate_capture`, `record_capture`
@@ -1335,6 +1352,18 @@ class Inventory:
     # ZERO IS "NOTHING ISSUED YET" and is the honest default for a memory-backed inventory
     # with no database under it. `next_box_id` never trusts it alone for that reason.
     box_ids_issued: int = 0
+    # WHETHER EVERY PHOTOGRAPH IS AT THE CARD'S OWN NAME YET, as an ISO stamp or None
+    # (`D-a-number-a-person-reads-is-never-a-key`). It is the gate on reading the legacy
+    # `(box, index)` photograph address: while it is None `store/photos.find` still looks
+    # there, so a resumable move of 4.45 GB can be interrupted without any screen going
+    # dark, and once it is set the old address is NEVER consulted again — which is what
+    # stops a migration-window fallback becoming a permanent second lookup.
+    #
+    # A STAMP RATHER THAN A BOOLEAN, because "when" is the question a person asks about a
+    # move, and because `pkmnscan cards photos` is the only writer: no session sets this,
+    # so unlike `box_ids_issued` it travels one way only and `store/session.py` does not
+    # write it back.
+    photos_relocated: Optional[str] = None
 
     def __post_init__(self) -> None:
         # A caller handing in a plain dict gets the same mapping the default gives.
@@ -1406,11 +1435,13 @@ class Inventory:
             issued = int(payload.get("box_ids_issued") or 0)
         except (TypeError, ValueError):
             issued = 0
+        relocated = payload.get("photos_relocated")
         return cls(
             cards=Rows(cls.CARDS, objects=cards),
             boxes=Rows(cls.BOXES, objects=boxes),
             listings=Rows(cls.LISTINGS, objects=listings),
             box_ids_issued=max(0, issued),
+            photos_relocated=str(relocated) if relocated else None,
         )
 
     def to_payload(self) -> dict:
@@ -1424,6 +1455,7 @@ class Inventory:
             # the id sequence. A payload written before the field reads 0, and `next_box_id`
             # recovers from that by taking the live maximum into account.
             "box_ids_issued": int(self.box_ids_issued or 0),
+            "photos_relocated": self.photos_relocated,
             "cards": {key: asdict(card) for key, card in sorted(self.cards.items())},
             "boxes": {key: asdict(box) for key, box in sorted(self.boxes.items())},
             "listings": {
@@ -1505,6 +1537,7 @@ class Inventory:
         box,
         *,
         capture_id: Optional[str] = None,
+        cid: Optional[str] = None,
         **claims,
     ) -> Tuple[Card, bool]:
         """Assign the next index in `box` and record the card. Returns `(card, created)`.
@@ -1573,7 +1606,13 @@ class Inventory:
                 "was mutated outside the lock."
             )
 
-        card = Card(box=box, index=index, capture_id=capture_id, **claims)
+        # `cid` IS A KEYWORD BESIDE `capture_id` AND DELIBERATELY NOT A MEMBER OF
+        # `CAPTURE_CLAIM_FIELDS` (D172). A claim survives a re-record and is settable by the
+        # operator; the card's NAME is issued once, at the birth of the record, and a
+        # re-record must neither invent it nor replace it. Passing it through the claims
+        # would make it correctable from the capture screen, which is the one thing it must
+        # never be.
+        card = Card(box=box, index=index, capture_id=capture_id, cid=cid, **claims)
         return self.record_capture(card), True
 
     def card_by_capture_id(self, capture_id: str) -> Optional[Card]:
@@ -1590,11 +1629,40 @@ class Inventory:
         """Upsert a captured card. An existing record keeps its state and its history."""
         existing = self.cards.get(card.key)
         if existing is None:
+            # THE REFUSAL FOR A NAMELESS CARD LIVES HERE AND NOWHERE ELSE (D172, amended by
+            # `docs/specs/stable-card-id.md` §0.6 hazard 2).
+            #
+            # THIS IS WHERE A CARD IS BORN, and it is the birth site every writer reaches —
+            # `allocate_capture` above, and the three that do not go through it:
+            # `cli/cmd_identify.py` and `cli/cmd_emit.py` twice, which is the seam this
+            # class's own header calls "a seam to watch rather than a guarantee". A record
+            # minted without a name would be a card the photograph store cannot address.
+            #
+            # AND IT IS DELIBERATELY NOT IN `_card_columns`, WHICH IS THE OBVIOUS PLACE.
+            # That function is the single chokepoint every card row passes on its way to
+            # SQLite, so a refusal there would cover every writer including ones nobody has
+            # enumerated — and would be a 500 on `POST /capture` in the middle of a feeder
+            # sitting, with the physical card already in the drawer and no record of it,
+            # which renumbers every card behind it. `_ensure_schema`'s own docstring rejects
+            # exactly that shape one layer up. A missing name HERE is a programming error in
+            # a caller; a NULL that reaches disk anyway is healed by `store/db.py:_repair`.
+            #
+            # THE SHUTTER CANNOT REACH IT: `do_capture` hashes a blob already in RAM, so a
+            # capture arrives named at zero extra I/O.
+            if not card.cid:
+                raise UnnamedCard(
+                    f"{card.key} would be a new card with no `cid`. A card's name is the "
+                    "sha256 of the photograph the store held when the id was issued (D172), "
+                    "it is issued once here, and the photograph is filed under it — so a "
+                    "record without one names bytes nothing can find. Pass `cid=` to "
+                    "`allocate_capture`, or compute it from the photograph with "
+                    "`store.photos.sha256_of`."
+                )
             card.captured_at = card.captured_at or now()
             card.state = card.state or CAPTURED
             card.state_at = card.state_at or card.captured_at
             self.cards[card.key] = card
-            self._log(CAPTURED, card.key, photo=card.photo)
+            self._log(CAPTURED, card.key, photo=card.photo, cid=card.cid)
             return card
 
         # THE TUPLE, NOT A LITERAL LIST OF THREE NAMES. This loop is where a claim added
@@ -1819,8 +1887,23 @@ class Inventory:
         card.condition = None
         card.capture_id = None
         card.photo = None
+        # A FIFTH THING THE TOMBSTONE GIVES UP, AND IT IS A PREFIX RATHER THAN A CLEAR
+        # (D172). `replace(card, ...)` above already handed the transplant this card's name
+        # — the name is the CARD's and the card is what moved — so leaving it on the
+        # tombstone as well would put one value on two rows and fire `cards_cid`, which is
+        # UNIQUE. It is NOT cleared to NULL, because a NULL cannot distinguish "no
+        # photograph was found" from "this migration did not look" and because `_repair`
+        # would then re-issue a name for a vacated slot. `moved:<name>` is shape 3: it says
+        # whose slot this was and where the bytes went, and `photos.is_photo_cid` answers
+        # False for it so nothing composes a path from it.
+        #
+        # AND NO FILE MOVES ANY MORE. Under the old layout the caller renamed the photograph
+        # into the destination box's directory, because the filename WAS the address; the
+        # photograph is filed under the card's name now, so a move is this field update and
+        # nothing else.
+        card.cid = f"{MOVED_CID_PREFIX}{card.cid}" if card.cid else None
 
-        self._log(MOVED, key, moved_to=new_key, run=card.run)
+        self._log(MOVED, key, moved_to=new_key, run=card.run, cid=transplant.cid)
         self._log(str(transplant.state), new_key, moved_from=key, run=transplant.run)
         return card, transplant
 

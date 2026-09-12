@@ -714,8 +714,6 @@ def _reissue_card_ids(
     directory: Optional[Path],
 ) -> dict:
     """The heal itself: name the stripped rows off the same ladder, and say so in the history."""
-    from store import photos
-
     home = _home_for(directory)
     identifications: Dict[str, str] = {}
     for key, digest in conn.execute(
@@ -946,6 +944,22 @@ def box_ids_issued(conn: sqlite3.Connection) -> int:
         return max(0, int(row[0]))
     except (TypeError, ValueError):
         return 0
+
+
+def photos_relocated(conn: sqlite3.Connection) -> Optional[str]:
+    """When every photograph reached the card's own name, or None.
+
+    THE GATE ON THE LEGACY PHOTOGRAPH ADDRESS. `store/photos.find` reads
+    `captures/cards/box<N>/<idx>.jpg` only while this is None, which is what keeps every
+    screen drawing during a resumable move of 4.45 GB — and once it is set that address is
+    never consulted again, so the fallback cannot quietly become permanent.
+    """
+    row = conn.execute(
+        "SELECT value FROM meta WHERE key = ?", (PHOTOS_RELOCATED,)
+    ).fetchone()
+    if row is None or not row[0]:
+        return None
+    return str(row[0])
 
 
 def set_box_ids_issued(conn: sqlite3.Connection, value: int) -> None:

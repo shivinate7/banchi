@@ -51,7 +51,7 @@ import hashlib
 import os
 import re
 from pathlib import Path
-from typing import Dict, Iterable, List, Optional, Tuple
+from typing import List, Optional, Tuple
 
 from store import files
 
