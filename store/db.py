@@ -1090,13 +1090,50 @@ class SqliteSource:
     # ----------------------------------------------------------------- the writes
 
     def upsert(self, key: str, columns: Dict[str, Any], payload: dict) -> None:
+        """Write one row, replacing the one at this key.
+
+        `ON CONFLICT (<primary key>) DO UPDATE`, AND IT WAS `INSERT OR REPLACE` UNTIL D172
+        GAVE THIS TABLE A SECOND UNIQUENESS CONSTRAINT. The two are identical while the
+        primary key is the only thing a row can collide on, and they stop being identical
+        the moment one is not — because `OR REPLACE` resolves a conflict in ANY constraint
+        by DELETING the conflicting row. `cards_cid` is UNIQUE, so under the old form a
+        second card carrying a name another card already held did not refuse: it silently
+        deleted that other card's row, and the store came back one card short with no error.
+
+        THAT MATTERED BECAUSE THE INDEX IS LOAD-BEARING IN AN ARGUMENT, not merely tidy. The
+        photograph's path is a pure function of the name (`store/photos.py`), and the claim
+        that two cards can never compose one path rests entirely on two cards never holding
+        one name. An index that cannot refuse cannot support that claim. Found by
+        `scripts/cid-selftest.py:case_two_captures_cannot_compose_one_photograph_path`,
+        which asserted the refusal and watched the insert succeed.
+
+        THE CONFLICT TARGET IS NAMED RATHER THAN LEFT OPEN, which is the whole fix: this
+        resolves a collision on the row's OWN identity and lets every other constraint
+        raise. `queues` is the one table with a composite key, and it is the reason the
+        target is built from `self.fixed` rather than hard-coded to `key`.
+
+        UNREACHED IN PRODUCTION TODAY and repaired anyway: a cid is the sha256 of a
+        photograph, so two cards holding one name means two records of one photograph, and
+        `allocate_capture`'s capture-id replay guard stands in front of that. A guard whose
+        correctness depends on another guard never failing is one this repo writes down; a
+        constraint that cannot fire is one it fixes.
+        """
         names = list(self.fixed) + ["key"] + list(self.columns) + ["payload"]
         values = list(self.fixed.values()) + [str(key)]
         values += [columns.get(name) for name in self.columns]
         values.append(payload_text(payload))
         marks = ", ".join("?" for _ in names)
+        # The primary key, which for every table but `queues` is `key` alone.
+        target = ", ".join(list(self.fixed) + ["key"])
+        # Everything that is not part of the key gets written on a collision. `excluded` is
+        # SQLite's name for the row the INSERT was carrying.
+        assignments = ", ".join(
+            f"{name} = excluded.{name}" for name in list(self.columns) + ["payload"]
+        )
         self.conn.execute(
-            f"INSERT OR REPLACE INTO {self.table} ({', '.join(names)}) VALUES ({marks})", values
+            f"INSERT INTO {self.table} ({', '.join(names)}) VALUES ({marks}) "
+            f"ON CONFLICT ({target}) DO UPDATE SET {assignments}",
+            values,
         )
 
     def delete(self, key: str) -> None:
@@ -1113,12 +1150,38 @@ def source(conn: sqlite3.Connection, table: str, fixed: Optional[Dict[str, Any]]
 
 
 def flush_rows(rows: Rows) -> Tuple[int, int]:
-    """Write one mapping's diff through its own source. `(deleted, upserted)`."""
+    """Write one mapping's diff through its own source. `(deleted, upserted)`.
+
+    EVERY TOUCHED KEY IS CLEARED BEFORE ANY IS WRITTEN, AND THAT IS ABOUT A TRANSIENT STATE
+    RATHER THAN ABOUT THE RESULT. A re-key is a delete and an insert — `do_remove_card`'s
+    mid-box renumber moves card 4 to index 3, card 5 to index 4, and so on up the box — so
+    part-way through the second loop the row at `2/3` carries card 4's name while the row at
+    `2/4` still carries it too, because that row has not been rewritten yet. The end state is
+    fine and the intermediate one is not, and `cards_cid` is an IMMEDIATE constraint: SQLite
+    checks it per statement, not at COMMIT, and it has no deferred form for a unique index.
+
+    So the first pass clears every key the second pass will write. It costs one extra DELETE
+    per upserted row inside a transaction that is already paying an fsync, and it is what
+    lets the UNIQUE index stay strict — which matters, because that index is what makes two
+    cards unable to compose one photograph's path (`store/photos.py`).
+
+    IT DOES NOT WEAKEN THE CONSTRAINT, which is the property worth stating: clearing the
+    TOUCHED keys leaves every untouched row in place, so two rows genuinely ending up with
+    one name still collide and still raise. `scripts/cid-selftest.py`'s
+    `case_two_captures_cannot_compose_one_photograph_path` is the proof, and it fires from a
+    second session against a row the first one left behind.
+
+    FOUND BY THE RENUMBER AND NOT BY REASONING. `INSERT OR REPLACE` hid it completely — it
+    resolved the transient collision by DELETING the other row — which is the same masking
+    that let a duplicate name pass silently, and both were one defect.
+    """
     src = rows.source
     if src is None:
         raise files.StoreError(f"{rows.spec.name} is not bound to the database")
     deleted, upserts = rows.changes()
     for key in deleted:
+        src.delete(key)
+    for key, _columns, _payload in upserts:
         src.delete(key)
     for key, columns, payload in upserts:
         src.upsert(key, columns, payload)

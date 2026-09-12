@@ -44,16 +44,21 @@ the rest are a transcript. So §5 is readable as an ORDERING ARGUMENT — which 
 first, and why two 2→3 steps in one function is the one merge conflict that loses data — and
 is not readable as a roster anybody can look up. Do not treat a letter in it as an identifier.
 
-**NAMES OF THINGS THAT DO NOT EXIST ARE WRITTEN BARE, ON PURPOSE.** A target spelled
-`make <name>` or a subcommand spelled `pkmnscan <name>` in any markdown file is reconciled
-against the Makefile and `cli/__main__.py` by `make docs-audit`'s make targets and pkmnscan
-commands rows — both MECHANICAL, and both deliberately named here without backticks, because a
-backticked span is exactly what they read. Spelling an unbuilt one fails the commit. The
-two targets are therefore written `cid-audit` and `cid-selftest`, and the subcommand
-`cards name` / `cards audit`, with no prefix, until the implementation adds them and the
-prefixes can go back on. `scripts/cid-audit.py` is named as a path and carries a line in
-`scripts/docs-audit-allow.txt` for the same reason; that line is stale the day the file
-arrives, which is the allowlist's whole design.
+**THE NAMES HAVE THEIR PREFIXES BACK, BECAUSE THE THINGS EXIST.** This file carried a
+note explaining that a target spelled `make <name>` or a subcommand spelled
+`pkmnscan <name>` is reconciled against the Makefile and `cli/__main__.py` by
+`make docs-audit`'s make targets and pkmnscan commands rows — both MECHANICAL — so
+spelling an unbuilt one fails the commit, and the two targets and the subcommand were
+therefore written bare until the implementation landed. It has. They are `make cid-selftest`,
+`make cid-audit`, and `./pkmnscan cards name` / `audit` / `photos`.
+
+**AND THE AUDIT DID NOT LAND WHERE THIS FILE PUT IT.** §6.3 and §6.5 planned a script under
+`scripts/`, and it is a CLI SUBCOMMAND instead — `./pkmnscan cards audit`, with
+`make cid-audit` as the one-word way to reach it. That is a real change of shape and it has a
+reason: the audit needs the same read-only store opening, the same photograph resolution and
+the same four value shapes the preview needs, and a script beside a subcommand that shared all
+three would be a second reader of the layout. The allowlist line this file's own note pointed
+at is deleted rather than left to go stale.
 
 _Executable specification. Written 2026-09-12 against **main `df6ec79`** (`Merge pull request #309`), worktree clean at the same sha. Every figure below was read from the owner's live store opened `mode=ro&immutable=1` or from a `.backup()` copy under the session scratchpad. **The live store ends this session at `md5 b3373ed823a7b397054e9980f2ddcaa9`, 7,438,336 B, mtime `Sep 12 11:28`, schema 2, no `cid` column** — unchanged from before the survey. Every writable probe ran on a copy. Re-read before trusting any number here: three of the store survey's figures did not reproduce against this tree and two of mine will not reproduce against the next one._
 
@@ -580,7 +585,7 @@ Byte-exact rather than semantically equal, because the reversal reproduces `stor
 
 **What the audit does and does not prove, stated plainly.** Run immediately after the seeding it is close to tautological — the migration read those bytes and the audit reads them again. Its value is **temporal**: it proves the link still holds later, after renumbers, moves, deletions and reclaims. What proves it was right in the first place is a different thing: the source census, plus the fact that only rungs 2 and 3 are accepted without a named report.
 
-**`cid-audit` is not in `make check`.** It reads the owner's 4.4 GB, and `make check` answers from the tree alone — `make lan-check`'s reason exactly. It is its own target, and `do_status` reports when it has never been run against this store.
+**`make cid-audit` is not in `make check`.** It reads the owner's 4.4 GB, and `make check` answers from the tree alone — `make lan-check`'s reason exactly. It is its own target, and `do_status` reports when it has never been run against this store.
 
 ### 3.8 · Killed with `-9` halfway: the store comes back unchanged. Proven, not asserted
 
@@ -603,7 +608,7 @@ Why that is a property of the design and not of my harness: every write is a row
 
 The other three ways a run can stop: **killed after COMMIT, before the receipt** — fully migrated, receipt absent, harmless by construction (`_write_migration_receipt` is already `contextlib.suppress(OSError)`, *"a read-only or full disk must not make an already-committed upgrade look like a failure"*); `cards audit` reconstructs everything it would have said. **Killed and re-run** — rung E.1 makes it a no-op. **Killed while another process holds the store** — `_upgrade` re-reads the stamp inside `files.exclusive`, the loser returns early, and a dead holder's flock is released by the OS on process death, which is `make suite-lock-selftest`'s own argument for `flock` over a pidfile.
 
-**NEVER open the owner's live `inventory/store.sqlite` for writing.** Every figure above came from a `.backup()` through a `mode=ro&immutable=1` connection (0.014 s, 7,438,336 B) into the scratchpad, with `captures/` read through absolute paths and never written. `cid-selftest` builds its own throwaway store under `PKMNSCAN_HOME`; the real store is migrated by the owner's own `git pull`, on the supervisor's first read, once.
+**NEVER open the owner's live `inventory/store.sqlite` for writing.** Every figure above came from a `.backup()` through a `mode=ro&immutable=1` connection (0.014 s, 7,438,336 B) into the scratchpad, with `captures/` read through absolute paths and never written. `make cid-selftest` builds its own throwaway store under `PKMNSCAN_HOME`; the real store is migrated by the owner's own `git pull`, on the supervisor's first read, once.
 
 ---
 
@@ -672,7 +677,7 @@ A migration half-applied *inside* the transaction cannot exist — §3.8 proved 
 2. **Seeded, then STRIPPED by an older build, then re-opened.** `select count(*) from cards where cid is null` with `meta.card_ids_seeded` present is a named refusal, `card_ids_stripped`, naming the keys and the instruction — never a silent re-issue, even though under a digest the re-issue would be correct. Probe 2 is the harness case, verbatim: plant ids, stamp 3, run one `set_state` with `Card.cid` monkey-deleted, assert the refusal fires and names `3/17`.
 3. **Column and payload disagreeing.** `select count(*) from cards where cid is not json_extract(payload,'$.cid')` must be 0 — **after the migration AND after a subsequent ordinary write.** That single query is what catches commit 2's roster reconciliation having been missed anyway, and it is the assertion `2,535 ids in 3.0 s` cannot make.
 
-### 6.2 · `cid-selftest` — counts work, on a throwaway store under `PKMNSCAN_HOME`
+### 6.2 · `make cid-selftest` — counts work, on a throwaway store under `PKMNSCAN_HOME`
 
 - **the seeding hashes exactly `card_count` files** on a store with complete identifications — not "at least", not "zero is fine";
 - **a re-run hashes 0 files and issues 0 ids**, and every cid is byte-identical to the first run's (the self-heal, measured at `3/17`);
@@ -684,25 +689,25 @@ A migration half-applied *inside* the transaction cannot exist — §3.8 proved 
 - **the reverse restores all nine tables byte-identically**, reproducing `payload_text`'s exact serialization (measured: 0.033 s, nine of nine);
 - **the `-9` case**: fork, `BEGIN IMMEDIATE`, write half, `kill -9`, reopen, assert 2,535 cards, stamp 2, **no cid column**, and the `cards` table byte-identical to the baseline. Prove it by violating it, `make suite-lock-selftest`'s standard.
 
-### 6.3 · `cid-audit` — and it has a NOT-KNOWN verdict
+### 6.3 · `./pkmnscan cards audit` — and it has a NOT-KNOWN verdict
 
 Read-only, re-runnable by anybody on any copy, **2.68 s over 4,445,351,065 bytes measured**. Three verdicts, never two: `pass` (every card's cid equals its photograph's digest, or is excused by a recorded digest), `fail` (a named mismatch, listed), and **`not known`** — which it prints when the `cid` column is absent, when any cid is NULL, or when it was pointed at no photographs. A "for every card, `sha256(file) == cid`" check over zero rows prints `checked 0, mismatch 0` and reads as a pass; that is the shape this repo has now hit nine times in twenty-four hours and it does not get a tenth.
 
-`do_status` reports when `cid-audit` has never been run against this store, and reports a `nophoto:` population above zero by name.
+`do_status` reports when `make cid-audit` has never been run against this store, and reports a `nophoto:` population above zero by name.
 
 ### 6.4 · Harness placement, and the mechanical rosters that must move with it
 
 - **T7** takes the new arms — the store's own seams live there: the forward-version guard, the roster reconciliation, the strip refusal, the column/payload query, the move tombstone's `moved:` prefix, the CLI roster going nine → ten.
 - **T3** needs `cid=` at `t3_join_coverage.py:220` (it flushes).
-- `cid-selftest` joins **`make check`**, which means editing three things together or `make docs-audit`'s **`check census`** row fails the commit: the `check:` recipe in the `Makefile` (23 targets today), `scripts/checks.py`'s `CHECKS` tuple (a full entry with `runs`, `asserts`, `needs`, `writes`, `commit_path`, `why_off_commit_path`, `gates`, `governed_by`), and every published list — `CLAUDE.md`'s and `make help`'s. That row exists because `make help` under-reported by five targets for months with nothing comparing the two, and **it refuses to go quiet**: a claim reworded past its pattern is reported as an unwatched sentence.
-- `cid-audit` does **not** join `make check` — §3.7.
+- `make cid-selftest` joins **`make check`**, and that turned out to be FIVE places rather than the three this line predicted: the `check:` recipe in the `Makefile` (29 targets now), `ci-check:` beside it — which NOTHING reconciles and which therefore drifts silently — the `.PHONY` line, `scripts/checks.py`'s `CHECKS` tuple (a full entry with `runs`, `asserts`, `needs`, `writes`, `commit_path`, `why_off_commit_path`, `gates`, `governed_by`, in recipe order), and every published list — `CLAUDE.md`'s and `make help`'s, the latter twice because the target needs its own help line as well as a place in the `make check` claim. That row exists because `make help` under-reported by five targets for months with nothing comparing the two, and **it refuses to go quiet**: a claim reworded past its pattern is reported as an unwatched sentence.
+- `make cid-audit` does **not** join `make check` — §3.7.
 - **Mutation arms, one per guard, and report a survivor rather than explaining it away** (PR #305's survivor revealed two dead exclusions carrying a comment that claimed otherwise): delete the forward-version comparison; delete one name from each of the three column rosters; delete `_card_columns`' refusal; delete rung E.1's `record.get("cid")`; delete the suffix loop; delete the `moved:` prefix; make the preview call `db.connect`; make `_add_card_ids` stamp without the source-count check. Re-run each against the whole nine-test harness, not just the new check, and **report equivalent mutants as equivalent instead of counting them as caught.**
 
 ### 6.5 · A decision entry, in the same session
 
 `docs/decisions/D172-the-first-photograph-is-the-name.md`. **Never guess a D number** — write the heading as `## D-` followed by a lowercase hyphenated slug and let `make merge` claim it (D140); `make claim-stale` catches a claimed number that goes stale. One-line bold runs, `_add_box_ids`' receipt shape. It must carry: the 2,535/2,535 proof and the 2.68 s figure; the 701-of-3,728 run-record measurement as the production receipt that a content id beats a positional one; the two probes (the silent downgrade, the one-write strip) with their outputs; **the self-heal measurement, because it is the whole argument against an allocator**; the frozen-not-tracked distinction in one sentence; D89's narrowing with its population-of-zero measurement; the four shapes with their zero populations and the honest admission that three of them have never fired; and the reverse sentence. `python3 scripts/index-decisions.py --write` also appends to `docs/decisions/ORDER.json` — expected, and the manifest line is resolved by hand, main's numbers first and the slug last.
 
-`docs/map.py` needs an entry for `scripts/cid-audit.py`; adding a file under the mapped directories without one fails the commit.
+`docs/map.py` needs an entry for every new file under a mapped directory or the commit fails; the two that landed are `cli/cmd_cards.py` and `scripts/cid-selftest.py`, not the standalone audit script this line predicted.
 
 ---
 

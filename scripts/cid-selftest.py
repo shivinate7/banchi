@@ -40,7 +40,6 @@ never named. The one case that kills a process kills one this script forked.
 
 from __future__ import annotations
 
-import contextlib
 import hashlib
 import json
 import os
@@ -49,7 +48,7 @@ import sqlite3
 import sys
 import tempfile
 from pathlib import Path
-from typing import Dict, List, Optional, Tuple
+from typing import Dict, List, Optional
 
 REPO = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(REPO))
@@ -250,7 +249,7 @@ def seed_legacy_store(home: Path, box: int, count: int) -> Dict[str, str]:
     from the payload, and the stamp is set back — which is precisely the state an older build
     leaves behind, and the state probe 2 measured.
     """
-    from store import db, master
+    from store import master
     from store.session import Store
 
     digests: Dict[str, str] = {}
@@ -445,13 +444,17 @@ def case_the_naming_writes_nothing_outside_the_database() -> None:
     seed_legacy_store(home, 4, 10)
     with Tally() as tally:
         open_store(home)
-    equal(tally.counts["replace"], 0, "the naming renames nothing")
-    equal(tally.counts["unlink"], 0, "and unlinks nothing")
+    equal(tally.counts["unlink"], 0, "the naming unlinks nothing")
     equal(tally.counts["link"], 0, "and links nothing")
-    equal(tally.counts["write_atomic"], 0,
-          "and writes no file outside the database — the receipt goes through `write_json`, "
-          "which is the one write this is allowed and is best-effort by construction")
-    equal(names(home) and len(set(names(home).values())), 10,
+    # THE RECEIPT IS THE ONE FILE IT WRITES, and it is counted rather than excluded: it goes
+    # through `write_json`, which goes through `write_atomic`, which lands with `os.replace`.
+    # Asserting zero here would have been asserting the wrong thing, and excluding it
+    # silently would leave the one write this step makes unwatched.
+    equal(tally.counts["write_json"], 1, "and writes exactly one file — the receipt")
+    equal((tally.counts["write_atomic"], tally.counts["replace"]), (1, 1),
+          "which is the same write seen one and two layers down, so no OTHER file was "
+          "touched outside the database")
+    equal(len(set(names(home).values())), 10,
           "while still naming all ten, which is why the tallies above are the assertion and "
           "the outcome is not")
 
@@ -461,7 +464,7 @@ def case_two_cards_with_one_photograph_get_a_suffix() -> None:
     photographs and 0 among 132 demo pool files, so a green suite over zero firings would
     prove nothing at all."""
     home = fresh_home()
-    from store import master, photos
+    from store import photos
     from store.session import Store
 
     blob = photo_bytes("identical")
@@ -547,7 +550,7 @@ def case_a_new_card_with_no_name_is_refused_at_its_birth() -> None:
     `POST /capture` mid-feeder, with the physical card already in the drawer and no record
     of it, which renumbers every card behind it.
     """
-    home = fresh_home()
+    fresh_home()
     from store import master
     from store.session import Store
 
@@ -592,8 +595,12 @@ def case_the_preview_never_migrates() -> None:
     # that reaches `db.connect` on a store which happens to need no migration.
     source = (REPO / "cli" / "cmd_cards.py").read_text()
     preview = source.split("def _name(")[1].split("\ndef ")[0]
-    check("db.connect" not in preview,
-          "and `_name`'s own source does not name `db.connect` at all")
+    # THE CALL, NOT THE NAME. That function's own closing sentence says it never calls
+    # `db.connect`, so a check for the bare string fails on the prose that promises the
+    # property — which is the shape of a guard that cannot tell a claim from its subject.
+    check("db.connect(" not in preview,
+          "and `_name`'s own source never CALLS `db.connect`, which is the only way a "
+          "preview could perform the migration it is previewing")
 
 
 def case_the_reverse_restores_every_table_byte_identically() -> None:
@@ -688,10 +695,8 @@ def case_a_renumber_moves_no_file() -> None:
             digests[index] = digest
 
     with Tally() as tally:
-        answer = capture_server.do_remove_card(
-            2, 3, {"confirm": True, "capture_id": "rn-3"}
-        )
-    equal(answer["renumbered"], 7, "seven higher cards shifted down one")
+        answer = capture_server.do_remove_card(2, 3, {"capture_id": "rn-3"})
+    equal(answer["shifted"], 7, "seven higher cards shifted down one")
     equal(tally.counts["replace"], 0,
           "AND NOT ONE PHOTOGRAPH WAS RENAMED. Under the old layout this was 7 renames; on "
           "the owner's box 2 it was 537. The photographs of the cards behind the target are "
@@ -705,20 +710,20 @@ def case_a_renumber_moves_no_file() -> None:
 
     # AND THE CARDS REALLY DID MOVE, which is the assertion that would pass on its own and
     # is therefore stated second.
-    with Store().read() as snapshot:
-        after = {
-            at: card.cid for at, _key, card in snapshot.inventory.records_in(2)
-        }
+    after = {
+        at: card.cid for at, _key, card in Store().read().inventory.records_in(2)
+    }
     equal(after.get(3), digests[4],
           "card 4's record is at index 3 now, still wearing its own name — the name did not "
           "move, the record did")
     equal(len(after), 9, "and nine records remain")
-    for index, digest in digests.items():
-        if index == 3:
-            continue
-        check(photos.path(digest, home).is_file(),
-              f"card {index}'s photograph is still at its own name") if index == 4 else None
-        break
+    equal(
+        sorted(index for index, digest in digests.items()
+               if index != 3 and not photos.path(digest, home).is_file()),
+        [],
+        "and every surviving card's photograph is still at its own name, untouched by the "
+        "shift that renumbered its record",
+    )
 
 
 def case_a_move_moves_no_file() -> None:
@@ -746,9 +751,9 @@ def case_a_move_moves_no_file() -> None:
           "it did — that is what filing it under the card's name means")
     check(photos.path(digest, home).is_file(),
           "the photograph is exactly where it was, under the card's own name")
-    with Store().read() as snapshot:
-        transplant = snapshot.inventory.cards.get("4/1")
-        tombstone = snapshot.inventory.cards.get("1/1")
+    snapshot = Store().read()
+    transplant = snapshot.inventory.cards.get("4/1")
+    tombstone = snapshot.inventory.cards.get("1/1")
     equal(transplant.cid if transplant else None, digest,
           "the transplant in box 4 wears the name")
     equal(tombstone.cid if tombstone else None, f"{photos.MOVED_PREFIX}{digest}",
@@ -765,7 +770,7 @@ def case_two_captures_cannot_compose_one_photograph_path() -> None:
     twice, and the bytes are then the same bytes.
     """
     home = fresh_home()
-    from store import files, master, photos
+    from store import photos
     from store.session import Store
 
     first = hashlib.sha256(photo_bytes("a")).hexdigest()
@@ -799,12 +804,10 @@ def case_two_captures_cannot_compose_one_photograph_path() -> None:
 def case_the_relocation_verifies_every_file_and_resumes() -> None:
     """4.45 GB moves once, per card, checked rather than trusted."""
     home = fresh_home()
-    from store import files, photos
-    from store.session import Store
+    from store import photos
 
     digests = seed_legacy_store(home, 3, 6)
     open_store(home)
-    relocated = names(home)
 
     from cli import cmd_cards
 
@@ -825,10 +828,6 @@ def case_the_relocation_verifies_every_file_and_resumes() -> None:
           "the only other copy is gone")
     equal(tally.counts["unlink"], 12, "and twelve unlinks, each AFTER its destination was "
                                       "re-hashed and found correct")
-    for key, digest in digests.items():
-        check(photos.path(digest, home).is_file(),
-              f"{key}'s photograph is at its own name") if key == "3/1" else None
-        break
     check(all(photos.path(d, home).is_file() for d in digests.values()),
           "every photograph is at its card's own name")
     check(not any(photos.legacy_path(3, i, home).is_file() for i in range(1, 7)),
@@ -884,7 +883,7 @@ def case_a_reshoot_is_excused_by_a_recorded_digest_and_never_by_the_fact() -> No
         "box": 1, "image": base64.b64encode(first).decode(), "capture_id": "shot-1",
         "game": "pokemon",
     })
-    equal(int(status), 200, "a capture lands")
+    equal(int(status), 201, "a capture lands")
     name = body["cid"]
     equal(name, hashlib.sha256(first).hexdigest(),
           "and the response carries the card's name, which is the digest of the bytes it "
@@ -950,8 +949,9 @@ def case_the_audit_says_not_known_rather_than_passing_over_nothing() -> None:
     )
     equal(code, 2, "an unnamed store answers `not known`, not `pass`")
     check(any("VERDICT: not known" in line for line in lines), "and says so in as many words")
-    check(any("never been named" in line for line in lines),
-          "and says which of the three reasons it is")
+    check(any("carry no name" in line for line in lines),
+          "and says WHICH of the three reasons it is — here, that rows carry no name, which "
+          "is a different fact from the column being absent and has a different repair")
 
     open_store(home)
     lines = []
@@ -974,27 +974,50 @@ def case_killed_with_minus_nine_leaves_the_store_unchanged() -> None:
     seed_legacy_store(home, 3, 6)
     baseline = table_bytes(home)
 
-    pid = os.fork()
-    if pid == 0:  # child
-        code = 1
-        try:
-            conn = sqlite3.connect(
-                str(home / "inventory" / "store.sqlite"), isolation_level=None
-            )
-            conn.execute("PRAGMA journal_mode = WAL")
-            conn.execute("PRAGMA synchronous = FULL")
-            conn.execute("BEGIN IMMEDIATE")
-            conn.execute("ALTER TABLE cards ADD COLUMN cid_probe TEXT")
-            for key, in conn.execute("SELECT key FROM cards LIMIT 3").fetchall():
-                conn.execute("UPDATE cards SET cid = ? WHERE key = ?", ("x" * 64, key))
-            os.kill(os.getpid(), 9)
-        except BaseException:
-            os._exit(code)
-        os._exit(code)
+    # A SUBPROCESS RATHER THAN `os.fork`, and the difference is not cosmetic: forking with
+    # an open SQLite handle and then killing the child produced SIGSEGV rather than SIGKILL,
+    # so the signal the parent observed was 11 and the case was proving "the child died
+    # somehow" instead of "the child was killed mid-transaction". A separate process opens
+    # its own handle and dies of exactly the signal it was sent.
+    import subprocess
 
-    _, status = os.waitpid(pid, 0)
-    equal(os.WTERMSIG(status) if os.WIFSIGNALED(status) else None, 9,
-          "the child died with SIGKILL, mid-transaction")
+    # NO INDENTATION AND NO `textwrap.dedent`: the program is passed to `python3 -c`, where
+    # a leading space on the first line is an IndentationError, and a dedent that has to be
+    # right about an f-string's own layout is one more thing to get wrong in a test whose
+    # whole job is to be trusted.
+    store_path = str(home / "inventory" / "store.sqlite")
+    program = "\n".join([
+        "import sqlite3, sys, time",
+        f"conn = sqlite3.connect({store_path!r}, isolation_level=None)",
+        "conn.execute('PRAGMA journal_mode = WAL')",
+        "conn.execute('PRAGMA synchronous = FULL')",
+        "conn.execute('BEGIN IMMEDIATE')",
+        "conn.execute('ALTER TABLE cards ADD COLUMN cid_probe TEXT')",
+        # DISTINCT PER ROW, because `cards_cid` is UNIQUE and three rows carrying one name
+        # is the very thing it refuses — the first draft of this probe wrote `x * 64` three
+        # times and was refused, which is the constraint doing its job inside the test that
+        # exists to prove the transaction is atomic.
+        "for n, row in enumerate(conn.execute('SELECT key FROM cards LIMIT 3').fetchall()):",
+        "    conn.execute('UPDATE cards SET cid = ? WHERE key = ?',",
+        "                 ('%063x' % n + 'f', row[0]))",
+        "sys.stdout.write('mid\\n')",
+        "sys.stdout.flush()",
+        "time.sleep(30)",
+    ])
+    child = subprocess.Popen(
+        [sys.executable, "-c", program], stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE, text=True
+    )
+    first = child.stdout.readline().strip()
+    if first != "mid":
+        child.kill()
+        bad(f"the child reached the middle of an open transaction (said {first!r}, "
+            f"stderr {child.stderr.read()[-400:]!r})")
+        return
+    ok("the child reached the middle of an open transaction")
+    child.kill()
+    child.wait(timeout=30)
+    equal(child.returncode, -9, "and was killed with SIGKILL there")
 
     after = table_bytes(home)
     equal(sorted(after), sorted(baseline), "no table appeared or vanished")

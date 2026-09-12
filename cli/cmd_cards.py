@@ -404,15 +404,26 @@ def _photos(args, say) -> int:
             # and both are counted rather than skipped silently.
             census["unnamed"] += 1
             continue
+        source = photos.legacy_path(box, idx, home) if box is not None and idx is not None \
+            else None
         target = photos.path(cid, home)
         if target.is_file():
             census["already"] += 1
+            # A SOURCE STILL SITTING AT THE OLD ADDRESS IS THE FOOTPRINT OF AN INTERRUPTED
+            # RUN, and clearing it is step 5 of that run finishing rather than a tidy-up:
+            # `adopt` links, re-hashes the destination, and only then unlinks — so a kill in
+            # that window leaves both names, and skipping this branch would leave the legacy
+            # copy there forever while the census reported a clean pass.
+            if write and source is not None and source.is_file():
+                try:
+                    photos.adopt(source, cid, home)
+                except files.StoreError as exc:
+                    census["refused"] += 1
+                    refusals.append((key, str(exc)))
             continue
         if record.get("photo_reclaimed_at"):
             census["reclaimed"] += 1
             continue
-        source = photos.legacy_path(box, idx, home) if box is not None and idx is not None \
-            else None
         if source is None or not source.is_file():
             census["no_file"] += 1
             continue

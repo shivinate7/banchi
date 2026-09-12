@@ -364,7 +364,7 @@ COMPONENTS = [
         "note": "NO INTERACTIVE PROMPTS, ever — the pipeline runs unattended, so a command "
                 "that cannot proceed refuses and says what to edit.",
         "modules": {
-            "__main__.py": {"does": "parser, COMMANDS dispatch, exit codes", "governed_by": ["D1", "D3", "D9", "D25", "D36", "D86", "D87", "D100"], "tested_by": ["T7"]},
+            "__main__.py": {"does": "parser, COMMANDS dispatch, exit codes", "governed_by": ["D1", "D3", "D9", "D25", "D36", "D86", "D87", "D100", "D172"], "tested_by": ["T7"]},
             "cmd_scan.py": {"does": "read the QR codes off a directory of code-card photos into "
                                     "the ledger. FREE — no model call, no network, no money gate "
                                     "(C9). Presentation only; the core is `codes/scan.py`, shared "
@@ -414,6 +414,22 @@ COMPONENTS = [
                                       "named as missing and D62 repeated.",
                               "governed_by": ["D9", "D49", "D62", "D86"],
                               "tested_by": ["T7"]},
+            "cmd_cards.py": {"does": "`pkmnscan cards <name|audit|photos>` — the card's "
+                                     "stable name (D172). `name` previews what the naming "
+                                     "sees and would do, `audit` asks whether every card's "
+                                     "name still resolves to its photograph, and `photos` "
+                                     "moves the corpus off the legacy `(box, index)` address "
+                                     "onto the card's own name. TWO OF THE THREE WRITE "
+                                     "NOTHING EVER and neither may call `db.connect`: that "
+                                     "function is the single entry to the store and always "
+                                     "calls `_ensure_schema`, so a preview routed through it "
+                                     "would PERFORM the migration it claims to be previewing. "
+                                     "`photos` previews by default and is resumable per card "
+                                     "— it is the one thing here that touches 4.45 GB that "
+                                     "cannot be re-taken",
+                             "governed_by": ["D172", "D-a-number-a-person-reads-is-never-a-key",
+                                             "D26", "D88", "D89"],
+                             "tested_by": ["T7"]},
             "cmd_rescue.py": {"does": "`pkmnscan rescue <run>` re-addresses a STRANDED run's "
                                       "cards to the positions their photographs are at now and "
                                       "derives a SECOND run over the drawer they are actually "
@@ -436,7 +452,7 @@ COMPONENTS = [
                                       "the emit correctly adds nothing — what the repair "
                                       "recovers is the PRICING surface, not the stock.",
                               "governed_by": ["D7", "D10", "D25", "D36", "D48", "D83", "D86",
-                                              "D134", "D145", "D165"],
+                                              "D134", "D145", "D165", "D-a-number-a-person-reads-is-never-a-key", "D26"],
                               "tested_by": ["T7"]},
             "cmd_reprice.py": {"does": "`pkmnscan reprice list` reports which live listings are "
                                         "not selling and writes a WORKLIST with a price already "
@@ -560,7 +576,7 @@ COMPONENTS = [
                                    "for every sale of the SKU, and a reading of nothing "
                                    "vouches for exactly the sales it was taken AFTER "
                                    "(D150).",
-                           "governed_by": ["D147", "D145", "D4", "D8", "D10", "D11", "D20", "D21", "D22", "D23", "D24", "D25", "D26", "D33", "D34", "D36", "D49", "D56", "D58", "D59", "D64", "D87", "D115", "D150", "D166"], "tested_by": ["T7"]},
+                           "governed_by": ["D147", "D145", "D4", "D8", "D10", "D11", "D20", "D21", "D22", "D23", "D24", "D25", "D26", "D33", "D34", "D36", "D49", "D56", "D58", "D59", "D64", "D87", "D115", "D150", "D166", "D-a-number-a-person-reads-is-never-a-key", "D89"], "tested_by": ["T7"]},
             "runs.py": {"does": "run directories and manifest.json", "governed_by": ["D1", "D25", "D49", "D54", "D86"], "tested_by": ["T7"]},
         },
     },
@@ -992,7 +1008,7 @@ COMPONENTS = [
         "modules": {
             "prompt.py": {"does": "the identification prompt and its fingerprint", "governed_by": ["D2", "D3", "D22", "D23"], "tested_by": ["T1"]},
             "batch.py": {"does": "Batch API submit/poll/collect. Batch, never sequential.", "governed_by": ["D2", "D21", "D23"], "tested_by": ["T1"]},
-            "sidecar.py": {"does": "reading a capture directory: photos, JSON sidecars, position", "governed_by": ["D2", "D3", "D10", "D21", "D22", "D23"]},
+            "sidecar.py": {"does": "reading a capture directory: photos, JSON sidecars, position", "governed_by": ["D2", "D3", "D10", "D21", "D22", "D23", "D-a-number-a-person-reads-is-never-a-key"]},
             "images.py": {"does": "downscale, encode, hash a photograph for the API, and refuse a crop that is not the card",
                           "governed_by": ["D2", "D23", "D75"], "tested_by": ["T6"]},
             "cost.py": {"does": "the price sheet, and the ONE place it is applied — the preflight's "
@@ -1880,6 +1896,28 @@ COMPONENTS = [
                 "governed_by": ["D169", "D18", "D43",
                                 "D53", "D88", "D111", "D127"],
             },
+            "cid-selftest.py": {
+                "does": "proves D172's card name and the photograph store filed under it by "
+                        "violating both, against a throwaway store with photographs this "
+                        "script draws — the operator's corpus cannot be re-taken, so pointing "
+                        "a destructive suite at it is the incident rather than the test. TWO "
+                        "CASES COUNT FILESYSTEM CALLS RATHER THAN OUTCOMES, which is PR A's "
+                        "arm 9 rule applied to the thing this whole change is worth: a "
+                        "renumber renames nothing where it renamed one photograph and rewrote "
+                        "one sidecar per higher card, and a move touches no file at all — and "
+                        "both of those read as 'the cards ended up in the right places', which "
+                        "was already true before. Then the naming's SOURCE CENSUS, because "
+                        "every row gets a value and a count cannot tell a correct seeding from "
+                        "one nothing checked; a name stripped by an older build re-issued "
+                        "BYTE-IDENTICALLY; the three shapes that have never fired in "
+                        "production, PROVOKED; the forward-version guard; the relocation's "
+                        "link-verify-unlink with its resumption and its refusal; a re-shoot "
+                        "excused by a RECORDED digest with the audit going red when that "
+                        "digest is mutated; and a `-9` mid-transaction leaving the store "
+                        "byte-identical",
+                "governed_by": ["D18", "D26", "D83", "D88", "D89", "D172",
+                                "D-a-number-a-person-reads-is-never-a-key"],
+            },
             "submission-selftest.py": {
                 "does": "proves the identify claim table by violating it. A throwaway store "
                         "per case with `PKMNSCAN_HOME` repointed, because the press this guard "
@@ -2670,7 +2708,7 @@ COMPONENTS = [
                 "governed_by": ["D7", "D16", "D17", "D18", "D42", "D43", "D44", "D47", "D48", "D53", "D58",
                                 "D60", "D65", "D68", "D74", "D76", "D80", "D82", "D88", "D92", "D111", "D122",
                                 "D127", "D129", "D133", "D138", "D139", "D140", "D141", "D158", "D160", "D173",
-                                "D176"],
+                                "D176", "D172", "D26", "D83", "D89"],
                 "note": "IT DECLARES THE SUITE AND DELIBERATELY DOES NOT DRIVE IT, which is "
                         "the whole shape. A registry that drove `make check` could not "
                         "disagree with the recipe — and could silently stop running a check, "
@@ -2829,7 +2867,7 @@ COMPONENTS = [
                 # the export carries whole and a card record carries in halves.
                 "governed_by": ["D3", "D4", "D7", "D10", "D13", "D21", "D25", "D26", "D39",
                                 "D43", "D46", "D49", "D67", "D70", "D78", "D83", "D86",
-                                "D87"],
+                                "D87", "D172"],
             },
             "demo-record.py": {
                 "does": "spawns its own capture server over the demo store on its own port, "
@@ -3100,7 +3138,7 @@ COMPONENTS = [
                                 "D77", "D79", "D83", "D86", "D87", "D88", "D89", "D90", "D91",
                                 "D92", "D93", "D96", "D100", "D103", "D104", "D108", "D113",
                                 "D115", "D116", "D132", "D134", "D137", "D138",
-                                "D168", "D174"],
+                                "D168", "D174", "D-a-number-a-person-reads-is-never-a-key", "D172"],
                 "tested_by": ["T7"],
             },
             "tcg_import.py": {"does": "THE OUTBOUND WRITE to the seller admin, and the only "
@@ -3255,7 +3293,7 @@ COMPONENTS = [
                                 "D58", "D59", "D62", "D64", "D65", "D68", "D76", "D78",
                                 "D79", "D86", "D87", "D88", "D89", "D100", "D103", "D105",
                                 "D134", "D137", "D145", "D147", "D156", "D159", "D165",
-                                "D166", "D168", "D170", "D174"],
+                                "D166", "D168", "D170", "D174", "D172"],
                 "tested_by": ["T7"],
             },
             "shipping_routes.py": {
@@ -3873,7 +3911,7 @@ COMPONENTS = [
                                               "D70", "D73", "D76", "D79", "D83", "D86", "D87",
                                               "D89", "D90", "D91", "D92", "D100", "D103",
                                               "D168",
-                                              "D104", "D113", "D116", "D132", "D134"]},
+                                              "D104", "D113", "D116", "D132", "D134", "D172"]},
             "src/demoFlag.d.ts": {"does": "declares `__BN_DEMO__`, the build-time demo flag "
                                           "`vite.config.ts` substitutes with a boolean "
                                           "literal. It exists because three other forms of "
