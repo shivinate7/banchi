@@ -16,6 +16,8 @@ from __future__ import annotations
 import contextlib
 import importlib.util
 import io
+import json
+import os
 import re
 import shutil
 import subprocess
@@ -57,6 +59,176 @@ def with_claimer(repo: Path) -> None:
     precondition cannot run at all, and an arm would pass for the wrong reason."""
     (repo / "scripts").mkdir(parents=True, exist_ok=True)
     shutil.copy(CLAIMER, repo / "scripts" / "claim-ids.py")
+
+# ------------------------------------------------- driving the wait for the claim commit
+#
+# THE WAIT IS THE ONE PART OF `claim_half` THAT PREVIEW CANNOT REACH, so everything below
+# runs it with `confirm=True` against the throwaway origin — a real claim, a real commit, a
+# real push — and a FAKE `gh` on PATH. Stubbing the function would prove the loop and say
+# nothing about the question it asks, and the question is the whole defect.
+
+
+class Clock:
+    """A monotonic clock that only moves when the code under test sleeps.
+
+    The deadline is forty-five minutes and a poll is ten seconds; on a real clock the
+    deadline arm is untestable and the settle arm is slow. On this one both are instant and
+    the constants under test stay at their shipped values.
+    """
+
+    def __init__(self) -> None:
+        self.t = 0.0
+
+    def now(self) -> float:
+        return self.t
+
+    def sleep(self, seconds: float) -> None:
+        self.t += seconds or 1.0
+
+
+class Scripted:
+    """A check-run reader answering from a list — one reading per call, holding the last."""
+
+    def __init__(self, *steps) -> None:
+        self.steps = list(steps)
+        self.asked: list = []
+
+    def __call__(self, sha):
+        self.asked.append(sha)
+        return self.steps[min(len(self.asked) - 1, len(self.steps) - 1)]
+
+
+def reading(module, *runs, ok: bool = True, err: str = ""):
+    """A `Reading` in the shape `read_check_runs` returns — sorted, three fields per run."""
+    return module.Reading(ok, tuple(sorted(runs)), err)
+
+
+def done(name: str, conclusion: str = "success"):
+    return (name, "completed", conclusion)
+
+
+def running(name: str):
+    return (name, "in_progress", "")
+
+
+# THE FAKE `gh` ANSWERS BOTH QUESTIONS, AND THAT IS THE POINT. `gh pr checks <n>` answers
+# green and instantly, the way the real one does off the PREVIOUS head's runs the moment a
+# claim commit is pushed. The SHA-pinned endpoint answers from a script. A wait that asks
+# the wrong question therefore PASSES here, loudly and wrongly, which is what makes the
+# mutation that restores it turn an arm red instead of merely slower.
+FAKE_GH = '''#!/usr/bin/env python3
+import json, os, re, sys
+
+home = os.environ["FAKE_GH_DIR"]
+argv = sys.argv[1:]
+with open(os.path.join(home, "calls.log"), "a") as fh:
+    fh.write(" ".join(argv) + "\\n")
+
+if argv[:2] == ["pr", "checks"]:
+    print("All checks were successful")
+    sys.exit(0)
+
+if argv[:1] == ["api"]:
+    found = re.search(r"commits/([^/?]+)/check-runs", " ".join(argv))
+    if not found:
+        sys.stderr.write("fake gh: not a check-runs question: " + " ".join(argv) + "\\n")
+        sys.exit(1)
+    sha = found.group(1)
+    book = os.path.join(home, sha + ".json")
+    if not os.path.exists(book):
+        book = os.path.join(home, "default.json")
+    with open(book) as fh:
+        steps = json.load(fh)
+    tally = os.path.join(home, sha + ".seen")
+    n = int(open(tally).read()) if os.path.exists(tally) else 0
+    with open(tally, "w") as fh:
+        fh.write(str(n + 1))
+    runs = steps[min(n, len(steps) - 1)]
+    if runs is None:
+        sys.stderr.write("gh: No commit found for SHA: " + sha + " (HTTP 422)\\n")
+        sys.exit(1)
+    print(json.dumps({"total_count": len(runs), "check_runs": runs}))
+    sys.exit(0)
+
+sys.stderr.write("fake gh: unscripted " + " ".join(argv) + "\\n")
+sys.exit(1)
+'''
+
+
+class FakeGh:
+    """A `gh` on PATH, with a scripted answer per commit and a log of every question."""
+
+    def __init__(self, home: Path) -> None:
+        self.home = home
+        (home / "bin").mkdir(parents=True, exist_ok=True)
+        exe = home / "bin" / "gh"
+        exe.write_text(FAKE_GH, encoding="utf-8")
+        exe.chmod(0o755)
+        self.script("default", [[]])
+
+    def script(self, sha: str, steps) -> None:
+        """`steps[n]` is the answer to the n-th question about `sha`; the last one holds."""
+        (self.home / (sha + ".json")).write_text(
+            json.dumps([None if s is None else
+                        [{"name": n, "status": st, "conclusion": c} for n, st, c in s]
+                        for s in steps]), encoding="utf-8")
+
+    def calls(self) -> list:
+        log = self.home / "calls.log"
+        return log.read_text(encoding="utf-8").splitlines() if log.exists() else []
+
+    def __enter__(self):
+        self.was = dict(os.environ)
+        os.environ["PATH"] = str(self.home / "bin") + os.pathsep + os.environ.get("PATH", "")
+        os.environ["FAKE_GH_DIR"] = str(self.home)
+        return self
+
+    def __exit__(self, *_):
+        os.environ.clear()
+        os.environ.update(self.was)
+        return False
+
+
+def waitable(deadline: float = 0):
+    """`scripts/merge-pr.py` with its poll shortened, and optionally its deadline.
+
+    THE ARMS THAT DRIVE THE LOOP LEAVE THE DEADLINE AT ITS SHIPPED VALUE and move a fake
+    clock instead, so the forty-five minutes is the forty-five minutes that ships. The arms
+    that drive the whole claim half cannot inject a clock — `claim_half` builds its own —
+    so they take a short real one, which bounds a BROKEN fixture rather than proving
+    anything about the constant: with the poll at zero, a `gh` that cannot be run spins for
+    three quarters of an hour and reads as a hung test.
+    """
+    module = merge_pr_module()
+    module.CHECK_POLL_SECONDS = 0
+    if deadline:
+        module.CHECK_DEADLINE_SECONDS = deadline
+    return module
+
+
+def quietly(fn, *args, **kw):
+    """Run it with its progress swallowed. The wait prints a heartbeat a minute and the
+    fake clock spends forty-five of them in a blink, which is 45 lines per arm of a stream
+    that exists for a human watching one real run."""
+    buf = io.StringIO()
+    with contextlib.redirect_stdout(buf):
+        got = fn(*args, **kw)
+    return got
+
+
+def signable(repo: Path) -> None:
+    """`claim_half` commits with a plain `git commit`, so the identity has to be in config."""
+    subprocess.run(["git", "config", "user.email", "t@t"], cwd=str(repo), check=False)
+    subprocess.run(["git", "config", "user.name", "t"], cwd=str(repo), check=False)
+
+
+def drive_claim_commit(module, repo: Path, branch: str, number: int = 99) -> Tuple[str, int]:
+    """`claim_half` with `confirm=True` — the claim, the commit, the push and the wait."""
+    buf = io.StringIO()
+    with contextlib.redirect_stdout(buf):
+        code = module.claim_half(str(repo), number, branch, True)
+    return buf.getvalue(), code
+
 
 # THE FIXTURE'S IDS ARE COMPOSED, NEVER WRITTEN, on this repo's standing rule for test data.
 # This file sits inside the auditor's own haystack, so a literal slug here IS a citation
@@ -512,6 +684,237 @@ def main() -> int:
            "standing on a stale branch while merging a DIFFERENT pull request refuses about "
            "the TREE, not about this tree's staleness — the precondition is above the "
            "staleness read and not only above the pending check", out)
+
+
+        # ------------------------------- the wait, and what it is a wait FOR
+        # TWO DEFECTS, AND THE SECOND IS THE WORSE ONE. The wait called
+        # `gh pr checks <n>`, which asks about a PULL REQUEST: right after the claim commit
+        # is pushed GitHub has attached nothing to the new head, so that question is answered
+        # out of the PREVIOUS head's runs and exits 0 at once. It has to see the OLD head
+        # green to be silent, which is why nothing noticed. And pinning to the SHA does not
+        # fix it on its own — a commit with nothing attached yet answers with an EMPTY list,
+        # and "zero pending" read off an empty list is the same sentence as "all passed".
+        # Both were measured on live merges on 2026-09-11: #275 merged while its claim
+        # commit's own run was `in_progress`, #277 with four of seven still running, and a
+        # watcher reported #277 SETTLED off an empty answer.
+        print("\n  -- a complete roster goes green, and only after a second look --")
+        module = waitable()
+        eyes = Scripted(reading(module, done("check"), done("revert-guard")))
+        watch = Clock()
+        green, lines = quietly(module.wait_for_checks,"abc1234", 99, 0, eyes, watch.sleep, watch.now)
+        ok(green, "a non-empty, complete, unchanging roster passes", "\n".join(lines))
+        ok(len(eyes.asked) == 2,
+           "and it read TWICE before saying so — one complete reading is `nothing is running "
+           "right now`, which is not the same as `nothing more is coming`",
+           str(len(eyes.asked)))
+        ok(eyes.asked == ["abc1234", "abc1234"],
+           "every question was about the COMMIT it was handed", str(eyes.asked))
+
+        print("\n  -- ABSENCE IS NOT A PASS, which is the defect that cost the most --")
+        eyes = Scripted(reading(module))
+        watch = Clock()
+        green, lines = quietly(module.wait_for_checks,"abc1234", 99, 0, eyes, watch.sleep, watch.now)
+        ok(not green,
+           "a commit GitHub has attached NOTHING to never goes green, however many times it "
+           "is asked — zero pending is not zero checks", "\n".join(lines))
+        ok("no check run is attached" in "\n".join(lines),
+           "and it says which of the two it saw, so the reader is not left to guess whether "
+           "CI is broken or slow", "\n".join(lines))
+        ok(watch.now() >= module.CHECK_DEADLINE_SECONDS,
+           "it spent the whole deadline asking again rather than concluding", str(watch.now()))
+
+        print("\n  -- an empty first answer is a `not yet`, not a verdict --")
+        eyes = Scripted(reading(module), reading(module, done("check")))
+        watch = Clock()
+        green, lines = quietly(module.wait_for_checks,"abc1234", 99, 0, eyes, watch.sleep, watch.now)
+        ok(green and len(eyes.asked) == 3,
+           "the empty reading was waited through and the roster that followed was the one it "
+           "concluded from", "\n".join(lines) + "\nasked " + str(len(eyes.asked)))
+
+        print("\n  -- an unreadable answer is not an empty one, and neither is green --")
+        eyes = Scripted(reading(module, ok=False, err="gh: HTTP 502"))
+        watch = Clock()
+        green, lines = quietly(module.wait_for_checks,"abc1234", 99, 0, eyes, watch.sleep, watch.now)
+        ok(not green and "cannot be read" in "\n".join(lines),
+           "a read that FAILED carries no runs either, and a wait that treated the two alike "
+           "would pass every time GitHub was down", "\n".join(lines))
+
+        print("\n  -- a run still going holds it, and a failed one ends it at once --")
+        eyes = Scripted(reading(module, done("check"), running("design-check (1)")),
+                        reading(module, done("check"), done("design-check (1)")))
+        watch = Clock()
+        green, lines = quietly(module.wait_for_checks,"abc1234", 99, 0, eyes, watch.sleep, watch.now)
+        ok(green and len(eyes.asked) == 3,
+           "an `in_progress` run is waited for — #277 merged with four of these", str(len(eyes.asked)))
+
+        eyes = Scripted(reading(module, done("check", "failure"), done("revert-guard")))
+        watch = Clock()
+        green, lines = quietly(module.wait_for_checks,"abc1234", 99, 0, eyes, watch.sleep, watch.now)
+        ok(not green and len(eyes.asked) == 1 and "did not pass" in "\n".join(lines),
+           "a failed conclusion refuses on the FIRST reading — the `--fail-fast` the old "
+           "watch had, kept", "\n".join(lines))
+
+        print("\n  -- skipped and neutral are not failures --")
+        # D141 skips the browser matrix when a change reaches nothing a browser draws, and
+        # D136 skips a tree that has already passed. Both land here as completed check runs.
+        eyes = Scripted(reading(module, done("design-check", "skipped"),
+                                done("already-passed", "neutral"), done("check")))
+        watch = Clock()
+        green, _ = quietly(module.wait_for_checks,"abc1234", 99, 0, eyes, watch.sleep, watch.now)
+        ok(green, "a roster of skipped and neutral runs is complete, not failed")
+
+        print("\n  -- the floor: a roster smaller than the parent's is still filling --")
+        eyes = Scripted(reading(module, done("already-passed")),
+                        reading(module, done("already-passed"), done("check"),
+                                done("revert-guard")))
+        watch = Clock()
+        green, lines = quietly(module.wait_for_checks,"abc1234", 99, 3, eyes, watch.sleep, watch.now)
+        ok(green and len(eyes.asked) == 3,
+           "one green check out of the three the parent carried is not an answer — this is "
+           "the shape #275 would have merged on if its own run had been slower to attach",
+           "\n".join(lines) + "\nasked " + str(len(eyes.asked)))
+        eyes = Scripted(reading(module, done("already-passed")))
+        watch = Clock()
+        green, lines = quietly(module.wait_for_checks,"abc1234", 99, 3, eyes, watch.sleep, watch.now)
+        ok(not green and "parent commit carried 3" in "\n".join(lines),
+           "and a roster that never fills to the floor RUNS OUT rather than passing, naming "
+           "the shortfall", "\n".join(lines))
+
+        print("\n  -- a roster that grows between two complete reads is not settled --")
+        eyes = Scripted(reading(module, done("check")),
+                        reading(module, done("check"), done("revert-guard")))
+        watch = Clock()
+        green, lines = quietly(module.wait_for_checks,"abc1234", 99, 0, eyes, watch.sleep, watch.now)
+        ok(green and len(eyes.asked) == 3,
+           "the first complete reading was not concluded from, because the next one was "
+           "bigger — the settle is what catches a workflow GitHub dispatches late",
+           str(len(eyes.asked)))
+
+        print("\n  -- the deadline refuses, and names the commit --")
+        eyes = Scripted(reading(module, running("check")))
+        watch = Clock()
+        green, lines = quietly(module.wait_for_checks,"deadbeefcafe", 271, 0, eyes, watch.sleep, watch.now)
+        ok(not green and "gave up" in "\n".join(lines) and "deadbeefcafe" in "\n".join(lines),
+           "a wait that never ends is a REFUSAL naming the claim commit, never a pass and "
+           "never a hang", "\n".join(lines))
+
+        print("\n  -- the reader itself, against a `gh` that answers and one that cannot --")
+        # EVERY ARM ABOVE HANDS `wait_for_checks` A READING, so none of them can see how a
+        # reading is MADE. `read_check_runs` is where the two kinds of nothing are told apart,
+        # and collapsing them there is invisible to a stub: an unreadable answer carries no
+        # runs, and a wait that read it as an empty one would pass every time GitHub is down.
+        reader = tmp / "reader"
+        reader.mkdir()
+        bench = FakeGh(reader / "gh")
+        bench.script("cafe0001", [[done("check"), running("design-check (1)")]])
+        bench.script("cafe0002", [None])
+        module = waitable()
+        with bench:
+            spoke = module.read_check_runs("cafe0001")
+            mute = module.read_check_runs("cafe0002")
+        ok(spoke.ok and spoke.runs == (("check", "completed", "success"),
+                                       ("design-check (1)", "in_progress", "")),
+           "an answered question yields one (name, status, conclusion) per run, sorted — "
+           "GitHub's own order is not stable across reads and the settle compares readings "
+           "for equality", str(spoke))
+        ok(not mute.ok and not mute.runs and "422" in mute.err,
+           "AND A QUESTION `gh` COULD NOT ANSWER IS `ok=False`, NEVER AN EMPTY ANSWER. Both "
+           "carry no runs; only one of them is a fact about the commit", str(mute))
+
+        print("\n  -- and now the whole claim half, with a fake `gh` on PATH --")
+        # THE LOOP ABOVE IS NOT THE DEFECT; THE QUESTION IS. These arms run the real
+        # `claim_half` — real claimer, real commit, real push to the throwaway origin — and
+        # let it build its own `gh` argv. The fake answers `gh pr checks` GREEN AND INSTANTLY,
+        # exactly as the real one does off the previous head, so a wait that asks the pull
+        # request passes here rather than merely behaving differently.
+        ninth = tmp / "ninth"
+        ninth.mkdir()
+        watched = build(ninth)
+        with_claimer(watched)
+        signable(watched)
+        git(watched, "add", "-A")
+        git(watched, "commit", "-qm", "the checkout carries the claimer")
+        git(watched, "checkout", "-q", "-b", "feature")
+        write(watched, "docs/DECISIONS.md", DECISIONS_MAIN + f"\n## {SD} — Third\n\nbody\n")
+        git(watched, "add", "-A")
+        git(watched, "commit", "-qm", "the branch writes a slug")
+        before = git(watched, "rev-parse", "HEAD").strip()
+
+        fake = FakeGh(ninth / "gh")
+        # The parent — the PRE-CLAIM head, whose checks are the ones `gh pr checks` answers
+        # out of — is complete and green, and carries three runs.
+        fake.script(before, [[done("check"), done("revert-guard"), done("browser-scope")]])
+        # The claim commit itself is still running when the wait first looks.
+        fake.script("default", [
+            [done("check"), running("revert-guard"), running("browser-scope")],
+            [done("check"), done("revert-guard"), done("browser-scope")],
+        ])
+        with fake:
+            out, code = drive_claim_commit(waitable(deadline=20), watched, "feature")
+        after = git(watched, "rev-parse", "HEAD").strip()
+        asked = fake.calls()
+
+        ok(code == 0, "the claim half completes: claim, commit, push, wait", out)
+        ok(any(after in line and line.startswith("api ") for line in asked),
+           "THE WAIT ASKED ABOUT THE CLAIM COMMIT'S OWN SHA — the commit the substitution is "
+           "in, which is what `gh pr checks <n>` never names", "\n".join(asked))
+        ok(not any(line.startswith("pr checks") for line in asked),
+           "AND IT NEVER ASKED THE PULL REQUEST. That question answers green and instantly "
+           "out of the previous head, which is why two live merges went out unwatched",
+           "\n".join(asked))
+        ok(before != after and sum(1 for line in asked if after in line) >= 3,
+           "it read the claim commit more than once — the `in_progress` answer did not end "
+           "the wait, and the complete one was confirmed", "\n".join(asked))
+        ok(any(before in line for line in asked),
+           "and it read the PARENT once, for the floor: how many runs the pre-claim head "
+           "carried is the only free lower bound on how many this one will",
+           "\n".join(asked))
+
+        print("\n  -- the same half, against a commit `gh` reports nothing for --")
+        tenth = tmp / "tenth"
+        tenth.mkdir()
+        silent = build(tenth)
+        with_claimer(silent)
+        signable(silent)
+        git(silent, "add", "-A")
+        git(silent, "commit", "-qm", "the checkout carries the claimer")
+        git(silent, "checkout", "-q", "-b", "feature")
+        write(silent, "docs/DECISIONS.md", DECISIONS_MAIN + f"\n## {SD} — Third\n\nbody\n")
+        git(silent, "add", "-A")
+        git(silent, "commit", "-qm", "the branch writes a slug")
+
+        quiet = FakeGh(tenth / "gh")
+        quiet.script("default", [[]])
+        module = waitable(deadline=0.5)
+        with quiet:
+            out, code = drive_claim_commit(module, silent, "feature")
+        ok(code != 0 and "REFUSED" in out,
+           "WITH NOTHING ATTACHED TO THE CLAIM COMMIT THE MERGE IS REFUSED. A watcher read "
+           "this exact answer on #277 and called it settled, which would have merged a "
+           "commit carrying no checks at all", out)
+        ok("no check run is attached" in out or "gave up" in out,
+           "and the refusal says the checks are not KNOWN rather than not green", out)
+
+        print("\n  -- and against a commit `gh` cannot be asked about at all --")
+        eleventh = tmp / "eleventh"
+        eleventh.mkdir()
+        unasked = build(eleventh)
+        with_claimer(unasked)
+        signable(unasked)
+        git(unasked, "add", "-A")
+        git(unasked, "commit", "-qm", "the checkout carries the claimer")
+        git(unasked, "checkout", "-q", "-b", "feature")
+        write(unasked, "docs/DECISIONS.md", DECISIONS_MAIN + f"\n## {SD} — Third\n\nbody\n")
+        git(unasked, "add", "-A")
+        git(unasked, "commit", "-qm", "the branch writes a slug")
+        broken = FakeGh(eleventh / "gh")
+        broken.script("default", [None])
+        with broken:
+            out, code = drive_claim_commit(waitable(deadline=0.5), unasked, "feature")
+        ok(code != 0 and "could not be read" in out,
+           "a `gh` that cannot answer refuses the merge and SAYS SO IN THOSE WORDS — an "
+           "outage read as an empty roster would be the same defect one function along, "
+           "and the message is the only place the two are distinguishable to a reader", out)
 
     print("\nclaim self-test: {0} passed{1}".format(
         PASS, ", {0} FAILED".format(FAIL) if FAIL else ""))

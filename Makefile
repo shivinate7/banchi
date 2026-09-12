@@ -832,7 +832,7 @@ screenshot:
 # three shards on three 2-vCPU runners — `PW_ARGS="--shard=1/3 --workers=1"` — because one
 # runner ran all 481 cases on ONE worker in 15 minutes, against 89-175s for the rig's seven.
 # Sharding splits the CASES and leaves the worker count alone, which is the half that matters:
-# docs/DEBTS.md section 11 measured a one-in-thirteen red whose only known mechanism is "the
+# docs/DEBTS.md section 8 measured a one-in-thirteen red whose only known mechanism is "the
 # suite around it", and more workers on one box is more suite around it. On the rig `PW_ARGS`
 # is for a session that wants one spec — `PW_ARGS=tests/brand.spec.ts` — and nothing else.
 # Each shard leaves its own `.serve/design-check.json`; on a runner that is one file per job.
