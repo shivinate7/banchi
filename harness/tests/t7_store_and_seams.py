@@ -14914,6 +14914,72 @@ def check_listing_commands(checks: Checks) -> None:
             "and the file is still the first emit's — a retirement may never re-open the cap",
         )
 
+    # --- a zero reading taken AFTER the sale ages the claim (D150) ---
+    #
+    # THE OWNER'S OWN CASE, WHICH `docs/DEBTS.md` §24 RECORDED AS DELIBERATELY UNFIXED. A copy
+    # is pushed, it sells, and a later export reads `Total Quantity` 0 for the SKU. `pushed`
+    # has no drawdown and the old gate aged it only where the export reported copies LIVE, so
+    # the claim stood at its full count forever: the copies on hand were committed against it
+    # and a card captured tonight could not be sent. Seven real cards on run
+    # `2026-09-11-box1-01`, two of them cards the operator had just scanned in.
+    #
+    # TWO COPIES AND A CAP OF ONE, because the difference is only observable where there is
+    # stock behind the claim — at `copies_out >= copies on hand` every copy is committed
+    # whatever the claim is, which is the property that made the seven ordering-independent.
+    with isolated_home():
+        pair = [(3, i, "Dunsparce", "120", "normal") for i in (1, 2)]
+        run_dir, _ = seam_run(checks, pair)
+        command(checks, "emit", str(run_dir.directory), "--cap", "1")
+        checks.equal(
+            Store().read().inventory.listing_for(DUNSPARCE_SKU).pushed,
+            1,
+            "one copy sent, one behind it: the claim is one and the second copy is backstock",
+        )
+        capture_server.do_mark_sold(3, 1, {})
+        # THE READING IS TAKEN AFTER THE SALE, AND THAT IS THE WHOLE DISCRIMINATOR. The file
+        # is dated an hour from now so the ordering is ASSERTED rather than relied on — the
+        # sale's `state_at` is `now()`, and a fixture that let the two land in the same second
+        # would be deciding this case on `newer_stamp`'s tie rule instead of on the arithmetic.
+        after = write_export(run_dir.path("after.csv"), live={DUNSPARCE_SKU: 0})
+        later = time.time() + 3600
+        os.utime(after, (later, later))
+        match = resolve.load(runs.open_run(run_dir.directory), after).matches[DUNSPARCE_SKU]
+        checks.equal(
+            (match.live_out, match.copies_out, match.add_to_quantity),
+            (0, 0, 1),
+            "A ZERO READ AFTER THE SALE IS THE SALE'S OWN RESULT. Nothing is live, the one "
+            "sent copy has gone, the claim ages to zero and the copy on hand is offered — "
+            "against the old gate `copies_out` stood at 1, the backstock copy was committed "
+            "against a claim TCGplayer had already drawn down, and the SKU printed "
+            "`nothing_to_add` over a card sitting in the box",
+        )
+
+    # --- and a sale AFTER the reading is not aged, which is the other half ------------------
+    #
+    # THE SAME FIXTURE WITH THE FILE AND THE SALE THE OTHER WAY ROUND. A reading that said
+    # nothing of ours was live at its own time cannot vouch for a copy that sold later: the
+    # copies may be sitting in Staged, and a card marked sold against THAT state did not leave
+    # TCGplayer's hands (D59). Ageing here is the double-list the corroboration gate was built
+    # to prevent, and it is what keeps the re-emit idempotence case above green.
+    with isolated_home():
+        pair = [(3, i, "Dunsparce", "120", "normal") for i in (1, 2)]
+        run_dir, _ = seam_run(checks, pair)
+        command(checks, "emit", str(run_dir.directory), "--cap", "1")
+        stale = write_export(run_dir.path("stale.csv"), live={DUNSPARCE_SKU: 0})
+        earlier = time.time() - 3600
+        os.utime(stale, (earlier, earlier))
+        capture_server.do_mark_sold(3, 1, {})
+        match = resolve.load(runs.open_run(run_dir.directory), stale).matches[DUNSPARCE_SKU]
+        checks.equal(
+            (match.live_out, match.copies_out, match.add_to_quantity),
+            (0, 1, 0),
+            "THE CLAIM STANDS AT ONE. The export predates the sale, so it corroborates "
+            "nothing about it — `copies_out` is the unaged claim, the backstock copy is "
+            "committed against it, and nothing is offered. A date comparison that read the "
+            "wrong way, or a fix that dropped the gate outright, offers a second copy of a "
+            "row TCGplayer may still be holding staged",
+        )
+
     # --- the v1 -> v2 migration, through a real store session ------------------------------
     # `check_boxes_and_listings` drives `Inventory.parse` directly. This is the other half:
     # that the migration survives a read and a commit through `store/session.py`, which is
