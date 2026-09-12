@@ -27,6 +27,15 @@
             "command": "scripts/reap.py --hook"
           }
         ]
+      },
+      {
+        "matcher": "Bash",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "scripts/silent-write-guard.py --hook"
+          }
+        ]
       }
     ],
     "PostToolUse": [

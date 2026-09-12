@@ -314,7 +314,8 @@ make lint           # eslint over app/ (guards a bug earned, see app/eslint.conf
 make check          # harness + docs-audit + audit-self-test + githooks-selftest +
                     #   merge-selftest + revert-selftest + claim-selftest + claim-stale +
                     #   decisions-selftest + revert-guard +
-                    #   janitor-selftest + reap-selftest + suite-lock-selftest +
+                    #   janitor-selftest + reap-selftest + silent-write-selftest +
+                    #   coordinator-selftest + suite-lock-selftest +
                     #   serve-selftest +
                     #   verdict-selftest + port-agreement + set-hint-agreement +
                     #   screen-freshness + screen-freshness-selftest +
@@ -415,6 +416,60 @@ make reap-selftest  # the guard, proved by pointing it at what it must not kill:
                     #   suite had never shown the sweep a process its miss applied to. There is
                     #   a `spawn_relative` beside `spawn` now, and eight cases over the sweep —
                     #   five of them red against the pre-fix reaper.
+                    # A GIT WRITE WHOSE OUTPUT IS DISCARDED IS REFUSED, AND THERE IS NO TARGET
+                    #   FOR IT — `scripts/silent-write-guard.py --hook` is a PreToolUse hook on
+                    #   Bash, armed in both rosters (D135). On 2026-09-12 a session reported work
+                    #   as landed that had not landed, twice, through
+                    #   `git commit -q -F - >/dev/null 2>&1 <<'EOF'`: the pre-commit hook
+                    #   REFUSED, the refusal went to /dev/null, and a stale
+                    #   `git log --oneline -1` showed the PREVIOUS commit, which was read as the
+                    #   new one. The push then said `Everything up-to-date` and that read as
+                    #   success too. A rule for this already existed and the session that wrote
+                    #   it broke it again — hence a hook.
+                    #   THE PREDICATE IS ONE INVARIANT, not a list of redirection spellings: a
+                    #   write must leave a trace the session can read. stdout carries the proof
+                    #   (`[branch sha]`) and stderr carries the refusal, so discarding EITHER is
+                    #   refused. The fd state is walked in ORDER, so `2>&1 >/dev/null` is
+                    #   correctly reported as losing the proof and keeping the refusal.
+                    #   READS AND UNWINDS PASS, and that half is what keeps it armed:
+                    #   `git rev-parse … 2>/dev/null`, `git fetch origin -q 2>/dev/null`,
+                    #   `git merge --abort 2>/dev/null`, `--dry-run`, `git merge-tree`,
+                    #   `make merge-selftest`, and a quoted `>/dev/null` inside a commit message
+                    #   — which is a STRING, because the parser is shlex and never a regex.
+                    #   Fails OPEN on its own bugs. `PKMNSCAN_SILENT=off` runs the command
+                    #   anyway and is printed in every refusal.
+make silent-write-selftest  # that guard, proved by REPRODUCING the incident: a throwaway repo
+                    #   with a pre-commit hook that refuses, the 2026-09-12 command run verbatim,
+                    #   and the proof that `git log --oneline -1` then answers with the previous
+                    #   commit. Every false positive above is pinned as passing and RUN in the
+                    #   fixture first, because a case that is secretly a typo passes the guard
+                    #   for the wrong reason. In `check`, never in the git hook (D18 — it writes
+                    #   a temp repo). Mutation-tested — twenty-one arms, nineteen caught, and the
+                    #   two survivors are one requirement covered twice, proved by a twenty-first
+                    #   arm that removes both and goes red.
+make coordinator    # THE MERGE QUEUE, READ RATHER THAN REMEMBERED. The other half of
+                    #   2026-09-12: a session relayed `#300 GREEN — merging` for several turns
+                    #   while nothing merged, because the line came from a driver's stdout and
+                    #   two copies of that driver were racing behind a `pgrep` waiter matching
+                    #   its own command line. Every figure here is read from the repo or from
+                    #   GitHub at the moment you run it — main against origin/main, every open
+                    #   PR with a verdict PINNED TO ITS HEAD SHA, how many merged in 24h,
+                    #   `id claims`, every worktree holding uncommitted work, the live sessions,
+                    #   and any waiter loop or twice-running driver.
+                    #   THE FLOOR IS THE REQUIRED-CHECK SET FROM BRANCH PROTECTION, NOT A COUNT,
+                    #   and that is measured: main's tip carries 10 runs including `demo.yml`'s
+                    #   main-only `build`/`deploy`, while PR #309's head carried 6 with
+                    #   `design-check` gated to one run — so no single number is right for both.
+                    #   A required check that is MISSING or `skipped` is `not ready` and never
+                    #   clean; a null conclusion is `running` and never failed.
+                    #   ANY BLOCK IT CANNOT READ PRINTS UNKNOWN AND EXITS NON-ZERO, because an
+                    #   incomplete report must not be relayable as the state of the queue.
+                    #   Reaches the network, so it is NOT in `make check` — `lan-check`'s
+                    #   reasoning. ARGS=--json for one object, ARGS=--no-network for the repo
+                    #   half alone.
+make coordinator-selftest  # that report's verdict rules, against synthetic check-run payloads.
+                    #   Every case is a payload a reader looking at conclusions ALONE would call
+                    #   clean. No network, so it is in `check`.
 make janitor        # WHAT A FINISHED SESSION LEFT BEHIND, and what is safe to reap (D111).
                     #   Previews; `ARGS=--confirm` presses. TIER 1 goes without asking because
                     #   it cannot be live — a process whose own script has been deleted, a
@@ -2099,6 +2154,7 @@ D167 A queue entry is re-resolved where it stands, and the answer reaches the pr
 D168 A typed price is cleared by a press, never by an expiry, and the set it may clear is the set the corpus dates
 D169 The blanket sweep asks the question the verdict answers, and a nested worktree is another checkout
 D170 A widening is safe only while the category fits, and Pokemon's does not
+D171 A refusal that reaches nobody did not happen, and a status line the session wrote is not a reading
 D-a-rule-with-no-reader-is-advice A rule that can be enforced mechanically is enforced mechanically, and a rule with no reader is advice
 ```
 
