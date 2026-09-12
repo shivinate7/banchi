@@ -163,7 +163,7 @@ async function open(
      *  many. */
     unsent?: Record<string, number>
     /** What no worklist can send, as the server names it. */
-    unreachable?: { captured: number; in_review: number; unjoined: { run: string; cards: number }[]; reallocated: { run: string; box: number | null }[] }
+    unreachable?: { captured: number; in_review: number; unjoined: { run: string; cards: number }[]; reallocated: { run: string; box: number | null; cards: number | null }[] }
     /** WHICH ANSWERS A MASS-CLEAR MAY REMOVE, as the server names them — SKU to age in whole
      *  days, or `null` for one carrying no readable date
      *  (D-a-typed-price-is-cleared-by-a-press). It rides the ENVELOPE of `GET /pricing`, so a
@@ -842,11 +842,22 @@ test('an emitted run with copies still unsent stays open, and the chip counts th
       { run: '2026-09-02-box6-01', box: 6, box_name: 'Riftbound rares', skus: 40, created_at: '2026-09-02T18:00:00+00:00' },
     ],
     unsent: { '2026-08-24-box2-01': 148 },
+    /* THE OWNER'S OWN FOUR ROWS, 2026-09-12, AND THREE OF THEM ARE A FALSE ALARM. Two
+       unjoined husks with no manifest counts at all, one reallocated run whose 53 cards went
+       with box 1 on 2026-08-25, and one reallocated run holding 99 cards that are identified,
+       priced and on a shelf. Counted as RUNS — which is how this line read until 2026-09-12 —
+       all four produce the same two phrases and the operator cannot tell which is which. */
     unreachable: {
       captured: 214,
       in_review: 1,
-      unjoined: [{ run: '2026-09-11-box4-01', cards: 0 }],
-      reallocated: [{ run: '2026-08-22-box1-03', box: 1 }],
+      unjoined: [
+        { run: '2026-09-11-box4-01', cards: 0 },
+        { run: '2026-09-11-box4-02', cards: 0 },
+      ],
+      reallocated: [
+        { run: '2026-08-22-box1-03', box: 1, cards: 0 },
+        { run: '2026-08-29-box1-01', box: 1, cards: 99 },
+      ],
     },
   })
 
@@ -857,13 +868,55 @@ test('an emitted run with copies still unsent stays open, and the chip counts th
   await expect(chips.nth(0).locator('.pricing-run-owes')).toHaveText('All sent')
   await expect(page.locator('.pricing-runs-count')).toHaveText('1 with work left · showing all of them')
 
-  /* WHAT THE LIST CANNOT SEND IS NAMED ON THE DECK, each figure a door. */
+  /* WHAT THE LIST CANNOT SEND IS NAMED ON THE DECK, each figure a door — AND THE FIGURE IS
+     CARDS. The two zero-card husks and the zero-card reallocated run are withholding nothing,
+     so they are not warned about; the one holding 99 sellable cards says the number. */
   const line = page.getByTestId('pricing-unreachable')
   await expect(line).toContainText('214 never identified')
   await expect(line).toContainText('1 in review')
-  await expect(line).toContainText('1 run not joined')
-  await expect(line).toContainText('1 run over a deleted box')
+  await expect(line).toContainText('99 in 1 run over a deleted box')
+  await expect(line).not.toContainText('not joined')
+  await expect(line).not.toContainText('2 runs over a deleted box')
   await expect(line.getByRole('link', { name: '1 in review' })).toHaveAttribute('href', '#/review')
+})
+
+test('an unknown card count is still warned about, and a known zero is not', async ({ page }) => {
+  /* THE FALSE ALARM AND THE UNKNOWN, TOLD APART. `2026-08-22-box1-03` read 53 cards and holds
+     none — they went with box 1 on 2026-08-25 — so there is nothing to rescue and nothing to
+     say. A `null` count is a store the server could not open, which is not the same claim as
+     nothing, so that row IS named and simply carries no figure.
+
+     THE FIXTURE IS THE CASE ABOVE'S ON PURPOSE, changing only `unreachable`. Written with a
+     thinner one this line did not render at all, and a `toHaveCount(0)` assertion passed for
+     the wrong reason — the trap this repo already has a name for: a guard must see its subject.
+     The non-zero `captured` is what puts the line on the screen, so every absence asserted
+     below is an absence FROM a line that is provably there. */
+  await open(page, {
+    noRun: true,
+    emitted: true,
+    runs: [
+      { run: '2026-08-24-box2-01', box: 2, box_name: 'Pokemon bulk', skus: 148, created_at: '2026-08-24T18:00:00+00:00' },
+      { run: '2026-09-02-box6-01', box: 6, box_name: 'Riftbound rares', skus: 40, created_at: '2026-09-02T18:00:00+00:00' },
+    ],
+    unsent: { '2026-08-24-box2-01': 148 },
+    unreachable: {
+      captured: 214,
+      in_review: 0,
+      unjoined: [],
+      reallocated: [
+        { run: '2026-08-22-box1-03', box: 1, cards: 0 },
+        { run: '2026-08-29-box1-01', box: 1, cards: null },
+      ],
+    },
+  })
+
+  const line = page.getByTestId('pricing-unreachable')
+  await expect(line).toContainText('214 never identified')
+  /* One of the two rows survives — the unknown — and it carries no figure, because there is no
+     honest one to carry. The zero-card row is gone from the sentence entirely. */
+  await expect(line).toContainText('1 run over a deleted box')
+  await expect(line).not.toContainText('in 1 run over a deleted box')
+  await expect(line).not.toContainText('2 runs')
 })
 
 test('every export column that carries data is on the row', async ({ page }) => {

@@ -364,7 +364,7 @@ COMPONENTS = [
         "note": "NO INTERACTIVE PROMPTS, ever — the pipeline runs unattended, so a command "
                 "that cannot proceed refuses and says what to edit.",
         "modules": {
-            "__main__.py": {"does": "parser, COMMANDS dispatch, exit codes", "governed_by": ["D1", "D3", "D9", "D25", "D86", "D87", "D100"], "tested_by": ["T7"]},
+            "__main__.py": {"does": "parser, COMMANDS dispatch, exit codes", "governed_by": ["D1", "D3", "D9", "D25", "D36", "D86", "D87", "D100"], "tested_by": ["T7"]},
             "cmd_scan.py": {"does": "read the QR codes off a directory of code-card photos into "
                                     "the ledger. FREE — no model call, no network, no money gate "
                                     "(C9). Presentation only; the core is `codes/scan.py`, shared "
@@ -374,7 +374,20 @@ COMPONENTS = [
                                     "what is covered is the reading and the write, while the "
                                     "argument parsing and the printed report here are not.",
                             "governed_by": ["D14", "D21", "D24"]},
-            "cmd_identify.py": {"does": "submit, wait, collect, cache. The one that costs money. HASHES BEFORE IT DECODES: the cache is keyed by the photograph's sha256, so only what is being sent is cropped and downscaled, and `Item.stage` is the sentinel that keeps `prepared is None` from meaning both `unreadable` and `cache hit` (D163).", "governed_by": ["D1", "D2", "D21", "D23", "D36", "D163"]},
+            "cmd_identify.py": {"does": "submit, wait, collect, cache. The one that costs money. "
+                                        "HASHES BEFORE IT DECODES: the cache is keyed by the "
+                                        "photograph's sha256, so only what is being sent is "
+                                        "cropped and downscaled, and `Item.stage` is the "
+                                        "sentinel that keeps `prepared is None` from meaning "
+                                        "both `unreadable` and `cache hit` (D163). "
+                                        "`_scope_for` records the run's box AND that drawer's "
+                                        "`bid` in the manifest's scope block, off the SIDECARS "
+                                        "rather than off the capture directory's name — the last "
+                                        "run-creation path that produced a run nothing could "
+                                        "bind (D145, D165). Two boxes get no "
+                                        "scope rather than a guessed one (D48).",
+                                "governed_by": ["D1", "D2", "D21", "D23", "D33", "D36", "D48",
+                                                "D145", "D163", "D165"]},
             "cmd_join.py": {"does": "resolve identifications against the export; --dry-run previews. "
                                     "SEEDS inventory/prices.json's rule and basis on the first "
                                     "join of an EMPTY corpus and never reassigns them (D49, D86) "
@@ -400,6 +413,30 @@ COMPONENTS = [
                                       "is the cross-run view of what is being held that D49 "
                                       "named as missing and D62 repeated.",
                               "governed_by": ["D9", "D49", "D62", "D86"],
+                              "tested_by": ["T7"]},
+            "cmd_rescue.py": {"does": "`pkmnscan rescue <run>` re-addresses a STRANDED run's "
+                                      "cards to the positions their photographs are at now and "
+                                      "derives a SECOND run over the drawer they are actually "
+                                      "in, carrying that drawer's `bid` (D165). "
+                                      "The repair for a run D36 refuses: it is "
+                                      "`cli/resolve.py:realign`'s digest mechanism with the "
+                                      "per-box restriction lifted, which is safe here and not "
+                                      "inside a join because it is an explicit operator act, it "
+                                      "previews unless given --write, and it produces a new run "
+                                      "rather than changing what any join does. NEVER EDITS THE "
+                                      "RUN IT IS GIVEN — a run is an immutable input — and never "
+                                      "writes the store. Refuses a run that is NOT stranded, a "
+                                      "digest carried by two records or two photographs, cards "
+                                      "spread across two drawers (D48), and a run whose cards "
+                                      "have all left the shelf. Safe to run twice: an identical "
+                                      "rescue already on disk writes nothing and says so. "
+                                      "Measured on the owner's store: 99 of "
+                                      "`2026-08-29-box1-01`'s 133 records rebind with 0 "
+                                      "ambiguities, and all 99 are already live at TCGplayer, so "
+                                      "the emit correctly adds nothing — what the repair "
+                                      "recovers is the PRICING surface, not the stock.",
+                              "governed_by": ["D7", "D10", "D25", "D36", "D48", "D83", "D86",
+                                              "D134", "D145", "D165"],
                               "tested_by": ["T7"]},
             "cmd_reprice.py": {"does": "`pkmnscan reprice list` reports which live listings are "
                                         "not selling and writes a WORKLIST with a price already "
@@ -2880,12 +2917,13 @@ COMPONENTS = [
                 # D32 is why --force-resubmit is deliberately not offered to a screen.
                 # D58 is the pricing route's label re-render — the stored rendering is
                 # never served, which that entry's own amendment records at this site.
-                "governed_by": ["D156", "D147", "D145", "D1", "D2", "D3", "D8", "D9", "D12", "D13", "D16", "D19",
-                                "D20", "D21", "D22", "D24", "D25", "D29", "D32", "D33", "D35",
-                                "D36", "D43", "D47", "D48", "D49", "D54", "D56", "D58", "D59",
-                                "D62", "D64", "D65", "D68", "D76", "D78", "D79", "D86", "D87",
-                                "D88", "D100", "D103", "D105", "D147",
-                                "D159", "D-a-typed-price-is-cleared-by-a-press"],
+                "governed_by": ["D1", "D2", "D3", "D8", "D9", "D12", "D13", "D16", "D19",
+                                "D20", "D21", "D22", "D24", "D25", "D29", "D32", "D33",
+                                "D35", "D36", "D43", "D47", "D48", "D49", "D54", "D56",
+                                "D58", "D59", "D62", "D64", "D65", "D68", "D76", "D78",
+                                "D79", "D86", "D87", "D88", "D100", "D103", "D105", "D134",
+                                "D145", "D147", "D156", "D159", "D165",
+                                "D-a-typed-price-is-cleared-by-a-press"],
                 "tested_by": ["T7"],
             },
             "shipping_routes.py": {
