@@ -1,4 +1,4 @@
-## D-a-rule-with-no-reader-is-advice — A rule that can be enforced mechanically is enforced mechanically, and a rule with no reader is advice
+## D172 — A rule that can be enforced mechanically is enforced mechanically, and a rule with no reader is advice
 
 **A rule that can be mechanically enforced must be mechanically enforced, and a new rule is not finished until its enforcement exists or its unenforceability is argued.**
 
