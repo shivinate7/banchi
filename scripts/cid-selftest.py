@@ -1120,6 +1120,29 @@ def case_only_a_store_with_photographs_left_behind_reports_a_residue() -> None:
           "a store with a photograph still at the legacy address DOES report one, and names "
           "the command that finishes the move")
 
+    # AND A BOX DIRECTORY THAT IS A SYMLINK IS STILL SEEN, which the first probe was blind to.
+    # `pathlib` DELIBERATELY does not follow symlinked directories when it RECURSES, and a
+    # throwaway copy of the owner's store is built exactly that way — `captures/cards/box<N>`
+    # linked at their real photographs, so 4.45 GB is read without being copied. The route
+    # reported NO residue over a full corpus, which is the worst answer a health route has.
+    # `photos.first_at_legacy_address` walks the layout it is about instead, one level deep,
+    # because an explicit `iterdir` on a symlinked directory DOES follow it.
+    store_with("linked")
+    card = sorted(Store().read().inventory.cards.values(), key=lambda c: c.index)[0]
+    linked_home = Path(os.environ["PKMNSCAN_HOME"])
+    real_box = linked_home / "elsewhere" / "box1"
+    real_box.mkdir(parents=True, exist_ok=True)
+    (real_box / "0001.jpg").write_bytes(photo_bytes("linked-0"))
+    legacy_boxes = linked_home / "captures" / "cards"
+    legacy_boxes.mkdir(parents=True, exist_ok=True)
+    shutil.rmtree(legacy_boxes / "box1", ignore_errors=True)
+    (legacy_boxes / "box1").symlink_to(real_box)
+    check((legacy_boxes / "box1").is_symlink(),
+          "the fixture's box directory really is a symlink, which is the whole subject")
+    check(says_residue(),
+          "and a photograph behind it is FOUND — a recursive glob skips a symlinked "
+          "directory, so the probe walks the layout rather than recursing")
+
     store_with("done")
     conn = sqlite3.connect(
         str(Path(os.environ["PKMNSCAN_HOME"]) / "inventory" / "store.sqlite"),

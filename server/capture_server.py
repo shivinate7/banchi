@@ -2752,13 +2752,18 @@ def do_status() -> dict:
         # problem on every poll, forever, and a health route that is always complaining is
         # one nobody reads.
         #
-        # `next(..., None)` RATHER THAN A COUNT, and that is what makes it cheap in both
+        # THE FIRST ONE RATHER THAN A COUNT, and that is what makes it cheap in both
         # directions: it stops at the first file it finds when there IS a residue, and a
         # relocated store's legacy directories are empty so there is nothing to walk. The
         # COUNT is `./pkmnscan cards photos`' job, which is a command somebody runs rather
         # than a route something polls.
+        #
+        # `store/photos.py` OWNS THE PROBE because it owns the layout, and the first draft of
+        # this composed its own `rglob` here and was WRONG: `pathlib` does not follow
+        # symlinked directories when it recurses, so a checkout whose box directories are
+        # links read as having no residue while holding 2,535 photographs.
         try:
-            leftover = next(captures_root().rglob(f"*{PHOTO_SUFFIX}"), None)
+            leftover = photos.first_at_legacy_address()
         except OSError as exc:  # noqa: BLE001 — never take down /status
             leftover = None
             problems.append(f"the legacy photograph directory could not be read ({exc}).")

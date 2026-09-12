@@ -353,6 +353,42 @@ def adopt_sidecar(source: Path, cid: str, home: Optional[Path] = None) -> str:
 # ------------------------------------------------------------------------- reporting
 
 
+def first_at_legacy_address(home: Optional[Path] = None) -> Optional[Path]:
+    """One photograph still filed at the old `(box, index)` address, or None.
+
+    THE CHEAPEST HONEST ANSWER TO "IS THERE A MOVE STILL TO DO", for `do_status` — which the
+    app POLLS, so it may not count what it can stop at the first of.
+
+    IT WALKS THE LAYOUT RATHER THAN RECURSING, AND THAT IS A CORRECTION. The first draft used
+    `captures_root().rglob("*.jpg")`, and `pathlib` DELIBERATELY DOES NOT FOLLOW SYMLINKED
+    DIRECTORIES when it recurses — so a checkout whose `captures/cards/box<N>` are links
+    (which is exactly how a throwaway copy of the owner's store is built, to read their
+    photographs without copying 4.45 GB) reported NO residue while holding 2,535 of them.
+    A health route answering "nothing to do" over a full corpus is the worst shape a health
+    route has.
+
+    The legacy layout is one level deep by construction — `box<N>/<idx:04d>.jpg` — so this
+    asks for exactly that: the box directories, then the first photograph in one. An explicit
+    `iterdir` on a symlinked directory follows it, which is the whole difference.
+    """
+    base = (Path(home) if home is not None else files.home()) / LEGACY_CAPTURES_DIRNAME \
+        / LEGACY_CARDS_DIRNAME
+    try:
+        boxes = sorted(base.iterdir())
+    except OSError:
+        return None
+    for box in boxes:
+        if not box.name.startswith("box"):
+            continue
+        try:
+            for entry in box.iterdir():
+                if entry.suffix.lower() == PHOTO_SUFFIX and entry.is_file():
+                    return entry
+        except OSError:
+            continue
+    return None
+
+
 def survey(home: Optional[Path] = None) -> Tuple[int, int]:
     """`(photographs, bytes)` in the content store. The one walk in this module.
 
