@@ -1282,6 +1282,43 @@ A screen is not finished because it compiles.
   `inventory/prices.json` since D86's amendment, not `runs/<n>/decisions.json`; the ruling is
   unchanged and the file moved.
 
+  **WIDENING IS 137x AND IT LANDS 903 KB SHORT OF THE CAP, MEASURED 2026-09-12.** One fetch of
+  the whole Pokemon category: **32,629,598 B, 222,849 rows — 97.24% of `tcg_export.py`'s
+  `MAX_BYTES`**, against **238,482 B** for the one set the owner's 543 Pokemon cards all name.
+  So a pokemon run with partial hints is one D76 widening away from a hard refusal, and
+  `MAX_BYTES`'s own comment — *"the widest export this project has ever read is ~1.5 MB"* — is
+  true about what has been READ and badly misleading about what can be ASKED FOR. At the
+  category's average of 148 KB per set that is about six set releases of headroom.
+  **The widening is therefore never silent**: the preview and the fetch receipt both carry a
+  `width` block (bytes, cap, headroom, and whether the figure is the wide one), and
+  `tcg_export_too_large` names the scope, the cards that widened it and the remedy. A hard
+  refusal of a file that parses and joins today was declined on purpose — see the entry.
+
+- **THE CATALOGUE EXPORT IS A PROPERTY OF THE GAME, NOT THE DRAWER** (D166,
+  2026-09-12). A fetch lands in **`inventory/.exports/<game>/`** — `inventory/.live/`'s shape
+  one directory over, kept and never swept — deduped **store-wide by digest**, and a press
+  whose game already holds a covering export fetched inside `EXPORT_REUSE_S` (900s)
+  **opens no socket at all**. `refresh: true` forces one and the receipt says `reused` either
+  way. Measured on the owner's `runs/` the day it landed: **19 exports, 27.1 MB, 13 distinct —
+  9.0 MB in 6 redundant copies, and 5 of those 6 were CROSS-RUN**, so the dedupe that had
+  existed since 2026-09-02 could not see them: it globbed the RUN's own directory. Five
+  byte-identical 1,733,052 B copies landed in five run directories in eighteen seconds.
+  **Store-wide the real rules ask for TWO files for the whole store** — pokemon 543/543 hinted
+  `ME01` to one set, riftbound's `category` policy — which is what any per-box join already
+  produces.
+  **A REUSE DOES NOT TOUCH THE MTIME**: that is when the reading was TAKEN
+  (`cli/runs.py:describe_source`), and dating a reading nobody took lets a stale export
+  outrank a newer sale. A re-fetch of identical bytes is a real observation and is touched.
+  **The 19 files already inside run directories are neither moved nor deleted** — a run
+  directory is an immutable input, so `_find_fetched` looks there FIRST. The manifest's
+  `exports` record (path **and** `sha256`) is the only link back to a shared file, so
+  `exports_for` recovers one whose path moved **by full digest**, never by game — a fallback to
+  "some export of this game" would join against a newer reading in silence.
+  **AN OUTCOME ASSERTION CANNOT SEE THIS SAVING**: a reuse and a fetch produce the same file,
+  rows, SKUs and join, so T7 asserts on the stub's **request count** and the dedupe arm forces
+  the fetch on purpose. Four pre-existing checks had to start forcing too — they assert on what
+  reached the socket, and reuse would have handed them the previous request's body.
+
 - **THE PRICING ANSWER IS ONE FILE FOR THE WHOLE STORE, KEYED BY SKU** (D86, amended
   2026-09-02 on the owner's question). `pipeline/corpus.py` over `inventory/prices.json` holds
   every listing answer — a price, or a hold with its reason, watch and note — plus the standing
@@ -1851,6 +1888,7 @@ D162 The name decides a disputed number, and both readings reach the screen
 D163 The cache is keyed by the digest, so the digest is what the press computes first
 D164 The undo stack is the sitting, not the drawer, and the counter counts the sitting
 D165 A run is bound to the drawer's true index, and the run the number stranded is repaired once by hand
+D166 The catalogue export is a property of the game, and the box never chose its scope
 D-the-queue-is-refreshed-where-it-stands A queue entry is re-resolved where it stands, and the answer reaches the price without a second press
 ```
 

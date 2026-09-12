@@ -25,6 +25,17 @@ INVENTORY_DIRNAME = "inventory"
 # otherwise conflate, and one of them is authoritative.
 PRICES_NAME = "prices.json"
 RUNS_DIRNAME = "runs"
+
+# WHERE A FETCHED CATALOGUE EXPORT LIVES, AND IT IS HERE BECAUSE BOTH LAYERS READ IT
+# (D166). `server/pipeline_routes.py` WRITES the file and `cli/resolve.py` READS
+# a run's record of one back; the server imports the cli and never the reverse, so the one
+# name they must agree on cannot live in either of them. `inventory/.exports/<game>/`, keyed
+# by game because `exports_for` maps game -> exactly one file and a category id is scalar.
+#
+# NEVER SWEPT, which is `LIVE_DIR`'s rule one directory over: the file is the evidence for
+# the reading a run was joined against, and a run's manifest names it by path and digest.
+EXPORTS_DIRNAME = ".exports"
+
 LOCK_NAME = ".lock"
 
 # The code ledger (docs/CODES-DECISIONS.md C8): one line per code card, the transcribed
