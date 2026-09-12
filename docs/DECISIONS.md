@@ -11086,7 +11086,7 @@ A comparison needs two values and either can be missing. **They are answered dif
 **A second operator, or a browser profile shared between rigs.** The setup is one device's memory of one hand (D142). Two hands would make "the drawer I left" a question with two answers, and the id would be comparing against somebody else's pick.
 
 **A drawer whose number the operator does read.** The picker assumes the name is what they recognise — D142's own reopening condition, and this spends it further. If drawers start being named by content and referred to by position, the number comes back to the resting list.
-## D-a-camera-is-an-input — The camera's automatic functions are inputs to the trigger's arithmetic, and the ones that step are locked
+## D154 — The camera's automatic functions are inputs to the trigger's arithmetic, and the ones that step are locked
 
 **Settled 2026-09-12.** The question was which Sony settings the motion trigger wants and why,
 answered by measuring the twenty traces banked in `harness/traces/` rather than by reasoning

@@ -2073,7 +2073,7 @@ COMPONENTS = [
                         "against them by scripts/docs-audit.py's `motion params` row, which "
                         "D84 built after finding the row had been CLAIMED in this file's own "
                         "header since D81 and never written.",
-                "governed_by": ["D-a-camera-is-an-input", "D18", "D19", "D81", "D84",
+                "governed_by": ["D154", "D18", "D19", "D81", "D84",
                                  "D130", "D131"],
                 "note": "WRITTEN BECAUSE THE SAME PASS HAD BEEN DONE BY HAND THREE TIMES AND "
                         "THE SECOND ONE GOT IT WRONG, 2026-08-31. The 2026-08-29 presence fix "
