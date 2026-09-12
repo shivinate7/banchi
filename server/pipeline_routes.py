@@ -359,9 +359,14 @@ class PipelineRefusal(Exception):
 
 
 def box_capture_dir(box: int) -> Path:
+    """The LEGACY capture directory for a box — where photographs were filed before D172.
+
+    Kept because 4.45 GB moves once and resumably: while `meta.photos_relocated` is unset
+    the photographs are still here, and `pipeline/selection.py:Selection.roots()` names this
+    directory alongside the content-addressed store, so a half-moved store identifies exactly
+    as it always did.
+    """
     return files.home() / "captures" / "cards" / f"box{int(box)}"
-
-
 
 
 def _run_box_id(manifest: dict) -> Optional[int]:
@@ -449,6 +454,12 @@ def _selection_captures(selection: selection_mod.Selection) -> List["sidecar.Cap
     refusal a well-formed selection can earn belongs to the caller: the preflight wants to say
     "this names no photograph, out of N scanned" with the terms on it, and a `FileNotFoundError`
     from three frames down cannot.
+
+    THE CONTENT-ADDRESSED STORE (D172) IS ONE OF `selection.roots()`'S OWN ROOTS NOW, not a
+    second scan bolted on here — this function has exactly one caller that spends
+    (`do_pipeline_identify`, through the child it spawns) and `cli/cmd_identify.py` walks the
+    same roots for the same reason, so the fix belongs where both read it. See
+    `Selection.roots()`.
     """
     captures: List["sidecar.Capture"] = []
     for root in selection.roots(files.home()):

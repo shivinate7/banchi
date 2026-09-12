@@ -52,6 +52,7 @@ from identify import cost  # noqa: E402
 from store import Box, Card, Listing, Store  # noqa: E402
 from store import files as store_files  # noqa: E402
 from store import orders as orders_mod  # noqa: E402
+from store import photos as store_photos  # noqa: E402
 from store.queues import QueueEntry  # noqa: E402
 
 SEED = 20260906
@@ -168,8 +169,42 @@ def catalog() -> Tuple[List[Row], List[Row]]:
 # ------------------------------------------------------------------------ photographs
 
 
-def write_photo(path: Path, row: "Row") -> None:
-    """The curated photograph, into the store's own layout.
+def photo_digest(row: "Row") -> str:
+    """This card's NAME: the sha256 of the photograph the store is about to hold (D172).
+
+    DETERMINISTIC BY CONSTRUCTION, WHICH IS THE PROPERTY THIS WHOLE FILE RESTS ON. A digest
+    is a pure function of bytes that are TRACKED — `demo-assets/photos/` is the one
+    tracked-image exception in this repo — so an unchanged tree rebuilds the same names, and
+    the bundle CI republishes on every merge does not churn. There is no RNG here and there
+    must never be one: `store/master.py:record_capture` refuses a nameless card, so the seed
+    has to issue the name itself, and a name drawn from the seeded stream would make the
+    store's primary content addresses depend on the order the boxes happen to be walked in.
+
+    UNIQUE BY CONSTRUCTION TOO, AND MEASURED RATHER THAN ASSUMED: the pool is 132 files with
+    132 distinct digests, 0 duplicate groups, and `pick_rows` threads `taken` on `row.photo`
+    so no photograph is placed twice. The store's 122 cards therefore hold 122 distinct
+    names, which is what `cards_cid`'s UNIQUE index requires — and it is why no card here
+    needs D172's `<digest>-<n>` shape for a second card holding identical bytes.
+    """
+    return store_photos.sha256_of(ASSETS / "photos" / row.photo)
+
+
+def relative_photo(digest: str) -> str:
+    """`photos/6b/6b1cf2fd….jpg` — what goes in `Card.photo`, RELATIVE TO THE HOME.
+
+    A REAL CAPTURE WRITES THE ABSOLUTE PATH HERE (`do_capture`: `card.photo = str(path)`) AND
+    THIS ONE MAY NOT. `Card.photo` reaches the wire — `types.ts:CardSummary.photo`, a
+    filesystem path and not a URL, which the app never fetches because every photograph is
+    addressed through `photoUrl` — so an absolute path would bake this machine's
+    `PKMNSCAN_HOME` into the recorded bundle and make every rebuild a diff. The store already
+    holds both shapes on the owner's own machine (1,993 absolute, 542 relative, 0 tail-drift),
+    so nothing downstream cares which; determinism does.
+    """
+    return f"{store_photos.DIRNAME}/{digest[:store_photos.SHARD]}/{digest}.jpg"
+
+
+def write_photo(digest: str, row: "Row") -> None:
+    """The curated photograph, filed under the card's own name.
 
     COPIED, NOT DRAWN. Until 2026-09-06 this rendered a card plate with Pillow — safe, and
     it looked exactly like what it was. The owner's ruling: *"i'd rather it show real
@@ -177,7 +212,13 @@ def write_photo(path: Path, row: "Row") -> None:
     issue."* So the picture is theirs, of their own card, on their own rig, and it was
     cleared of carrying a decodable QR before it was ever written to a tracked path
     (`scripts/demo-photos.py`).
+
+    FILED UNDER THE DIGEST RATHER THAN THE SLOT (D172). `store/photos.py` composes the path
+    and is the only module allowed to, so this takes the card's name and not a box and an
+    index — and `shutil.copyfile` rather than `photos.write` because the bytes are already a
+    file on disk and there is no reason to read 1.9 MB into RAM to hand it straight back.
     """
+    path = store_photos.path(digest)
     path.parent.mkdir(parents=True, exist_ok=True)
     shutil.copyfile(ASSETS / "photos" / row.photo, path)
 
@@ -389,10 +430,29 @@ def build_store(force: bool) -> dict:
                 state = state_for(offset, len(rows), rng)
                 captured_at = stamps[offset]
 
+                # THE CARD'S NAME, AND THE SEED HAS TO ISSUE IT ITSELF (D172). These rows go
+                # into `inventory.cards` directly rather than through `record_capture` —
+                # which is where a real capture's name is minted and where a nameless card
+                # is refused — so the digest is computed here, off the photograph this loop
+                # is about to write, exactly as `do_capture` computes it off the blob in RAM.
+                #
+                # A `moved` CARD IS A TOMBSTONE AND WEARS `moved:<name>` (D83). The photograph
+                # belongs to the TRANSPLANT, so one name never sits on two rows and
+                # `photos.is_photo_cid` answers False for this one — which is why the
+                # graveyard draws no photograph for it. The demo writes no transplant record
+                # (`moved_to` names a slot in box 4 that another card holds), so the bytes
+                # under the plain digest are claimed by no row here: a simplification of the
+                # fiction, not of the layout, and it is written down rather than discovered.
+                digest = photo_digest(row)
                 card = Card(
                     box=number,
                     index=index,
-                    photo="captures/cards/box%d/%04d.jpg" % (number, index),
+                    photo=relative_photo(digest),
+                    cid=(
+                        store_photos.MOVED_PREFIX + digest
+                        if state == "moved"
+                        else digest
+                    ),
                     game=row.game,
                     capture_id="demo-%d-%04d" % (number, index),
                     captured_at=captured_at,
@@ -422,10 +482,7 @@ def build_store(force: bool) -> dict:
                 if state in counts:
                     counts[state] += 1
 
-                write_photo(
-                    home / "captures" / "cards" / ("box%d" % number) / ("%04d.jpg" % index),
-                    row,
-                )
+                write_photo(digest, row)
                 counts["photos"] += 1
 
         # D83's third door — a card that left its box by being MOVED rather than sold or
@@ -436,6 +493,14 @@ def build_store(force: bool) -> dict:
                 if card.state == "identified" and card.box == 1:
                     card.state = "moved"
                     card.moved_to = "4/7"
+                    # AND THE NAME BECOMES A TOMBSTONE'S, WHICH THE LOOP ABOVE DOES AT BIRTH
+                    # AND THIS HAS TO DO AFTER THE FACT (D83). `move_card` wears
+                    # `moved:<name>` for one reason: the transplant keeps the plain name, and
+                    # `cards_cid` holds it UNIQUE, so one photograph's name can never sit on
+                    # two rows. Rewriting it here rather than re-deriving the digest, because
+                    # the card in hand already carries the name the seed issued it.
+                    if card.cid and not card.cid.startswith(store_photos.MOVED_PREFIX):
+                        card.cid = store_photos.MOVED_PREFIX + card.cid
                     inventory.cards[card.key] = card
                     counts["moved"] += 1
                     counts["identified"] = counts.get("identified", 0) - 1
@@ -752,7 +817,14 @@ def write_run(
     cards_payload = {}
     for card, row in rows:
         cards_payload["%d/%d" % (card.box, card.index)] = {
-            "photo": "captures/cards/box%d/%04d.jpg" % (card.box, card.index),
+            # THE RECORD'S OWN PHOTO FIELD, VERBATIM, RATHER THAN A SECOND COMPOSITION OF
+            # IT. A run record's `photo` is what `cli/resolve.py:queue_entry` carries onto a
+            # queue entry and what the review screen renders, so it has to name the same
+            # file the card does — and the two agreeing because they are one string is
+            # stronger than the two agreeing because two format strings match today.
+            # D172's layout is why this matters now: the name is a digest, so a mismatch
+            # would no longer be a plausible-looking neighbouring slot, it would be nothing.
+            "photo": card.photo,
             "box": card.box,
             "index": card.index,
             "set_hint": None,
@@ -791,7 +863,17 @@ def write_run(
             {
                 "created_at": stamp(2.0),
                 "updated_at": stamp(1.0),
-                "capture_dir": "captures/cards/box%d" % box,
+                # THE BOX'S CAPTURE DIRECTORY, COMPOSED IN THE ONE MODULE ALLOWED TO AND
+                # THEN MADE RELATIVE. It is still the LEGACY address and that is correct:
+                # `server/pipeline_routes.py:box_capture_dir` keeps reading it while the
+                # relocation is unfinished, and the content store is flat and shared, so no
+                # run can be a directory of it — D172 §0.4 answers that with a built
+                # `.scopes/` view and this becomes that path when it is. Relative for
+                # `relative_photo`'s reason: this string reaches `#/runs` through
+                # `_summary`, and an absolute one would bake this machine's home into the
+                # recorded bundle. `_summary` reads `scope.box` first and falls back to the
+                # `box<N>` in this basename, which survives the `relative_to` either way.
+                "capture_dir": str(store_photos.legacy_box_dir(box, home).relative_to(home)),
                 # BOTH SHAPES, ONE PER RUN, because they are different products on screen.
                 # A whole-box run costs no temporary directory; a SCOPED one is the ticked
                 # selection handed over from `#/inventory` (D39), and `RunPanel.tsx` draws

@@ -118,6 +118,12 @@ function card(input: {
   /** D89: when this card's photograph was reclaimed after its sale, or null while the file is
    *  on disk — the default, and what every case written before D89 assumed. */
   reclaimed?: string | null
+  /** D172's stable name for the card's photograph. OMITTED BY DEFAULT AND THAT IS THE POINT:
+   *  `cid` is optional on the wire because a server predating it sends no key, and every case
+   *  in this file was written against that server — so the fixture leaves the key OFF unless a
+   *  case is about the name, and those cases keep drawing `GET /photo/<box>/<index>`. One test
+   *  passes one, which is what makes the two addresses assertable side by side. */
+  cid?: string
 }) {
   const box = input.box ?? 2
   const boxTotal = input.boxTotal ?? 5
@@ -211,6 +217,7 @@ function card(input: {
     note: input.note ?? null,
     captured_at: '2026-08-22T12:34:00+00:00',
     capture_id: input.captureId === undefined ? `cap-${input.index}` : input.captureId,
+    ...(input.cid === undefined ? {} : { cid: input.cid }),
     name: input.name,
     number: number,
     printed_total: printedTotal,
@@ -944,7 +951,11 @@ async function open(
     })
   })
 
-  await page.route(/\/photo\/\d+\/\d+/, async (route) => {
+  /* BOTH ADDRESSES, because the app now mints both (D172): `GET /photo/by-card/<cid>` where the
+     row carries a name and `GET /photo/<box>/<index>` where it does not. A stub matching only
+     the slot would leave the named form unrouted — and `sealEveryTest` refuses an unrouted
+     request, so the failure would arrive as a seal rather than as the assertion's own. */
+  await page.route(/\/photo\/(by-card\/[0-9a-f]+|\d+\/\d+)/, async (route) => {
     await route.fulfill({ status: 200, contentType: 'image/svg+xml', body: PHOTO_SVG })
   })
 
@@ -3018,6 +3029,119 @@ test('and the photograph follows the shift, because the URL names the capture', 
      did; it is the photograph that used to lie. */
   await expect(page.locator('.browse-about')).toContainText('Eiscue')
   await expect(photo).toHaveAttribute('src', /\/photo\/2\/3\?card=cap-slid-into-3$/)
+})
+
+/* AND WHERE THE ROW CARRIES A NAME, THE ADDRESS IS THE NAME (D172).
+ *
+ * THE CASE ABOVE IS THE HAZARD AND THIS IS THE FIX ONE LAYER DOWN. `?card=` made the URL
+ * change when the occupant did; `GET /photo/by-card/<cid>` makes the URL NAME THE PHOTOGRAPH
+ * outright — frozen at issue, UNIQUE in `cards_cid` — so a slot that changes hands cannot
+ * produce one URL for two cards at all. The route landed with `#/inventory` drawing none of
+ * it, which is `CLAUDE.md`'s route-is-not-a-feature rule exactly; this is the reader that
+ * says the screen reaches it.
+ *
+ * THE STAMP IS ASSERTED ON PURPOSE AND IS NOT A LEFTOVER. `cid` is FROZEN, so D26's re-shoot
+ * writes new bytes at the same name, and `/photo/by-card/` answers `immutable` for a year with
+ * an ETag that is the NAME's own hex — so when the bytes change, neither the URL, the lifetime
+ * nor the validator moves, and a browser that revalidates is answered 304 into the stale
+ * picture. `capture_id` is the one field that moves when the bytes do. This screen owns the
+ * re-shoot; deleting the stamp here would make a replaced photograph invisible on the screen
+ * that replaced it, and this line is what goes red for it.
+ *
+ * THE FIXTURE PASSES A NAME FOR THIS CASE AND NO OTHER, which is why the case above still
+ * reads `/photo/2/3` — `cid` is optional on the wire, a server predating D172 sends no key,
+ * and both addresses have to keep working. */
+test('a card whose row carries a name is addressed by the name, stamp and all', async ({
+  page,
+}) => {
+  /* 64 hex, because `server.ts:PHOTO_CID` is what decides whether a name reaches the route at
+     all — `moved:` and `nophoto:` names fall back to the slot, and a fixture carrying a
+     plausible-looking short string would silently assert the fallback instead. */
+  const NAME = '3f5a1c7e9b0d2468ace13579bdf02468ace13579bdf02468ace13579bdf02468'
+  const NAMED: Cards = {
+    ...CARDS,
+    '2/1': card({
+      index: 1,
+      state: 'identified',
+      name: 'Thievul',
+      sku: '8937370',
+      section: 1,
+      sectionStart: 1,
+      sectionEnd: 3,
+      cid: NAME,
+    }),
+  }
+
+  await open(page, BOXES, { cards: NAMED, search: (query) => searchAnswer(query, NAMED) })
+  await expandAll(page)
+  await page.locator('.browse-row', { hasText: 'Thievul' }).first().click()
+
+  await expect(page.locator('.browse-photo')).toHaveAttribute(
+    'src',
+    new RegExp(`/photo/by-card/${NAME}\\?card=cap-1$`),
+  )
+})
+
+/* AND A NAME THAT NAMES NO PHOTOGRAPH FALLS BACK TO THE SLOT (D172's four shapes).
+ *
+ * THE CASE ABOVE SAYS THIS IN A COMMENT AND NOTHING ASSERTED IT, which is the shape this repo
+ * refuses: a claim with no reader has no way of ever being contradicted. A mutation arm that
+ * replaced `server.ts:PHOTO_CID.test(cid)` with `true` left all 100 tests green.
+ *
+ * THE ASYMMETRY THAT MAKES IT REACHABLE IS ON THE WIRE, and it is deliberate on both sides.
+ * `_copy_row` filters — it sends `cid` only when `photos.is_photo_cid` — but `_card_row` is
+ * `asdict(card)` and `_card_summary` names the field outright, so an `InventoryCard` carries
+ * the RAW name including `moved:<hex>` on a D83 tombstone and `nophoto:<key>@<stamp>` on a
+ * record `emit` created for a position no camera ever saw. Two of D172's four shapes name no
+ * file at all, and `photos.path` REFUSES to compose one from them — so a client that sent them
+ * to `/photo/by-card/` would ask for a photograph that cannot exist, and the operator would
+ * get a broken image on the walk rather than the card they are standing at.
+ *
+ * SO `PHOTO_CID` IS LOAD-BEARING RATHER THAN DEFENSIVE, and it is the client's half of a
+ * predicate the server spells `is_photo_cid`. This is what goes red when it stops matching. */
+test('a name that names no photograph falls back to the slot address', async ({ page }) => {
+  /* Both shapes that name no file, against one that does — because a guard tested on one
+     rejection is a guard that might be testing the prefix rather than the shape. */
+  const TOMBSTONE = 'moved:3f5a1c7e9b0d2468ace13579bdf02468ace13579bdf02468ace13579bdf02468'
+  const NOPHOTO = 'nophoto:2/2@2026-08-22T12:34:00+00:00'
+  const SHAPED: Cards = {
+    ...CARDS,
+    '2/1': card({
+      index: 1,
+      state: 'identified',
+      name: 'Thievul',
+      sku: '8937370',
+      section: 1,
+      sectionStart: 1,
+      sectionEnd: 3,
+      cid: TOMBSTONE,
+    }),
+    '2/2': card({
+      index: 2,
+      state: 'identified',
+      name: 'Nickit',
+      sku: '8937371',
+      section: 1,
+      sectionStart: 1,
+      sectionEnd: 3,
+      cid: NOPHOTO,
+    }),
+  }
+
+  await open(page, BOXES, { cards: SHAPED, search: (query) => searchAnswer(query, SHAPED) })
+  await expandAll(page)
+
+  await page.locator('.browse-row', { hasText: 'Thievul' }).first().click()
+  await expect(page.locator('.browse-photo')).toHaveAttribute(
+    'src',
+    /\/photo\/2\/1\?card=cap-1$/,
+  )
+
+  await page.locator('.browse-row', { hasText: 'Nickit' }).first().click()
+  await expect(page.locator('.browse-photo')).toHaveAttribute(
+    'src',
+    /\/photo\/2\/2\?card=cap-2$/,
+  )
 })
 
 test('a sold or retired card is not offered the mid-box delete at all', async ({ page }) => {

@@ -1382,6 +1382,19 @@ def run(args, say) -> int:
                     master.Card(
                         box=item.capture.box,
                         index=item.capture.index,
+                        # THE CARD'S NAME, AND THIS SITE IS ONE OF THE THREE `store/master.py`
+                        # CALLS "a seam to watch rather than a guarantee" (D172). A position
+                        # the store has never seen is BORN here rather than at
+                        # `allocate_capture` — an ordinary case, which `cli/cmd_emit.py`'s own
+                        # comment names — and `record_capture` refuses a nameless new card, so
+                        # without this line `identify` over such a directory refuses outright.
+                        #
+                        # `item.photo_sha256` IS THE RIGHT VALUE AND NOT MERELY AN AVAILABLE
+                        # ONE: it is `images.sha256_of(item.capture.photo)`, set for every item
+                        # before the cache is consulted, which is exactly D172's definition —
+                        # the sha256 of the photograph the store held when the id was issued,
+                        # read off the disk. Free here; the digest is already computed.
+                        cid=item.photo_sha256,
                         photo=str(item.capture.photo),
                         set_hint=item.capture.set_hint,
                         # LIST, NOT THE READER'S TUPLE, and this conversion is load-bearing

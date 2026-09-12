@@ -50,6 +50,7 @@ Replace it the day a two-set export is committed.
 
 from __future__ import annotations
 
+import hashlib
 import os
 import time
 import tempfile
@@ -214,12 +215,24 @@ def _capture_at(box, copies):
     emitted are invisible to `Inventory.positions_for_sku` — which is the ordinary state of
     the box a second run is pointed at, and what makes `committed_positions` zero there
     however the SKU's counts are read.
+
+    EVERY CARD IS NAMED, AND THE NAME IS SHA256 OF `<box>/<index>` (D172). A test's card has
+    no photograph, so it has no digest to be named by — and `record_capture` refuses a
+    nameless row, because the one caller that cannot supply a name is a caller that forgot.
+    The seed carries the BOX as well as the index because `_stock_at` deliberately splits one
+    SKU's copies across two drawers of one store, and two cards sharing a name is what
+    `cards_cid` refuses. It is a real digest rather than a padded constant so that the UNIQUE
+    index is actually exercised: N cards from N seeds collide under a constant and do not
+    collide here. Deterministic, so a re-record at the same key carries the same name.
     """
     with Store().write() as snapshot:
         for index in range(1, copies + 1):
             snapshot.inventory.record_capture(
                 master.Card(
-                    box=box, index=index, photo=f"captures/box{box}/{index:04d}.jpg"
+                    box=box,
+                    index=index,
+                    photo=f"captures/box{box}/{index:04d}.jpg",
+                    cid=hashlib.sha256(f"{box}/{index}".encode()).hexdigest(),
                 )
             )
 

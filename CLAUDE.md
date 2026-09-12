@@ -313,7 +313,8 @@ make lint           # eslint over app/ (guards a bug earned, see app/eslint.conf
                     #   never ruff's own defaults, never --fix. Config: ruff.toml.
 make check          # harness + docs-audit + audit-self-test + githooks-selftest +
                     #   merge-selftest + revert-selftest + claim-selftest + claim-stale +
-                    #   decisions-selftest + submission-selftest + revert-guard +
+                    #   decisions-selftest + submission-selftest + cid-selftest +
+                    #   revert-guard +
                     #   janitor-selftest + reap-selftest + silent-write-selftest +
                     #   guard-shell-selftest +
                     #   coordinator-selftest + suite-lock-selftest +
@@ -778,6 +779,42 @@ make merge          # merge a PR and move main onto it — BOTH HALVES, on your 
                                    #   --split-threshold  the old pair back: import-listed.csv
                                    #                      and import-subthreshold.csv
                                    #   --split-games      one file per game
+./pkmnscan cards    name             # WHAT THE CARD'S STABLE NAME IS AND WHERE ITS PHOTOGRAPH
+                                   #   SITS (D172). Free, READ-ONLY, and it must never call
+                                   #   `db.connect` — that function is the single entry to the
+                                   #   store and always calls `_ensure_schema`, so a preview
+                                   #   routed through it would PERFORM the migration it claims
+                                   #   to be previewing. Prints the source census, every card
+                                   #   that would land a `nophoto:` name, every duplicate
+                                   #   photograph, and two digests a human can check by hand
+                                   #   with `sha256sum`.
+./pkmnscan cards    audit [--verbose]
+                                   # DOES EVERY CARD'S NAME STILL RESOLVE TO ITS PHOTOGRAPH?
+                                   #   Free, re-runnable by anybody on any copy, and it reads
+                                   #   the whole corpus — 4.45 GB in ~2 s. THREE VERDICTS,
+                                   #   NEVER TWO: `pass`, `fail`, and `not known` when the
+                                   #   column is absent, a name is NULL, or there were no
+                                   #   photographs to read. A check shaped "for every card,
+                                   #   sha256(file) == cid" over zero rows prints
+                                   #   `checked 0, mismatch 0` and reads as a pass.
+                                   #   A RE-SHOT CARD IS EXCUSED BY THE DIGEST ITS `reshot`
+                                   #   EVENT RECORDS, never by the bare fact of a re-shoot —
+                                   #   a `reshot` line with no digest is a NAMED UNPROVABLE.
+                                   #   `make cid-audit` is this, and it is deliberately NOT in
+                                   #   `make check`: that answers from the tree alone, which
+                                   #   is `make lan-check`'s reason.
+./pkmnscan cards    photos [--write] [--limit N]
+                                   # MOVE THE CORPUS OFF THE LEGACY `(box, index)` ADDRESS
+                                   #   onto the card's own name. Previews by default. Per
+                                   #   card: hash the source, REFUSE it by name if it does not
+                                   #   match, hard link, RE-HASH THE DESTINATION, and only
+                                   #   then unlink the source — so the bytes exist under at
+                                   #   least one name at every instant and a kill costs
+                                   #   nothing. It takes no store write lock and there is no
+                                   #   state it can stop in that a re-run does not finish.
+                                   #   Stamps `meta.photos_relocated` only on a clean pass;
+                                   #   until then `store/photos.find` still reads the old
+                                   #   address, and after it never does again.
 ./pkmnscan prices   adopt [--write] # fold every run's legacy decisions.json into the corpus.
                                    #   Previews by default; newest-wins, and it NAMES the holds
                                    #   a later price replaced rather than counting them.
@@ -2294,6 +2331,7 @@ D179 Five shell commands are refused by resolving what they would do, not by mat
 D180 A press names the cards it is over, and the drawer is one of the names
 D181 The order is taken once, and a sale may not retake it
 D182 An unclaimed slug is not required in the shared index it will replace itself out of
+D183 A number a person reads is never a key a machine uses, so the photograph is stored under the card's name and the address is derived
 ```
 
 **THE GAP THIS LIST CARRIED BETWEEN D116 AND D118 IS CLOSED, AND IT CLOSED THE WAY IT SAID IT

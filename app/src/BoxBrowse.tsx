@@ -2021,11 +2021,48 @@ export function BoxBrowse({
   )
 }
 
-/* THE URL NAMES THE PHOTOGRAPH, NOT THE SLOT (D52): `capture_id` is stable for the life of a
- * photograph, so a URL only changes when the thing behind it does. A re-shoot's new id wins
- * while it is set. */
+/* THE ADDRESS NAMES THE PHOTOGRAPH NOW (D172), AND THE STAMP STAYS FOR THE ONE THING THE
+ * ADDRESS CANNOT SAY — WHICH IS THIS SCREEN'S OWN RE-SHOOT.
+ *
+ * D52 gave this URL a `?card=<capture_id>` because `/photo/<box>/<index>` names a SLOT and
+ * three operations put different bytes behind one slot: a mid-box delete slides every higher
+ * card down an index (D10 ruling 1), an undo releases an index the next capture reuses, and
+ * D26's re-shoot replaces the bytes outright. `GET /photo/by-card/<cid>` answers the first two
+ * outright — the name is frozen at issue and `cards_cid` is UNIQUE, so a different card is a
+ * different URL and no stamp can improve on that.
+ *
+ * IT DOES NOT ANSWER THE THIRD, AND UNDER THE NEW ADDRESS THE THIRD IS STRICTLY HARDER THAN IT
+ * WAS. A re-shoot writes NEW bytes at the SAME name, deliberately — `cid` is the birth
+ * certificate and is never recomputed — and that response is `Cache-Control: public,
+ * max-age=31536000, immutable` with an ETag that is the NAME's own first 32 hex. So when the
+ * bytes change, the URL does not move, the freshness lifetime does not move, and THE VALIDATOR
+ * DOES NOT MOVE EITHER: a browser that revalidates anyway is answered 304 into the stale
+ * photograph. The slot route's `no-cache` plus a digest ETag used to make a re-shoot correct
+ * everywhere for free; nothing is free about it now.
+ *
+ * MEASURED AGAINST A LIVE CAPTURE SERVER, because this is the sentence the whole line rests on.
+ * Re-shooting one card through `POST /inventory/<box>/<index>/photo`: the bytes went 31,889 ->
+ * 37,293, the cid did not move, the ETag did not move (`"a85f840ba226018d13c99d101f029c80"`
+ * before and after), and a request carrying the OLD `If-None-Match` was answered **304** — the
+ * browser keeps the old picture, and `immutable` means it would not usually have asked at all.
+ * `capture_id` moved, which is the whole reason it is the stamp.
+ *
+ * `capture_id` IS THE ONE FIELD ON THE RECORD THAT MOVES WHEN THE BYTES MOVE — `do_reshoot`
+ * writes a fresh one in the same transaction as the file — so it is the honest cache key for
+ * these bytes, and it is stable in between, which is what keeps the year of caching this
+ * screen would otherwise spend on every scroll. The `nonce` is the same id arriving one step
+ * earlier: it is the re-shoot response's own, and it covers the window between that response
+ * and the inventory re-read that carries the new `capture_id` on the row.
+ *
+ * SO THE STAMP IS NOT A LEFTOVER AND IS NOT UNDER-APPLIED AT THE OTHER SITES. It is the
+ * re-shoot's cache key, and the re-shoot is reachable from this screen and from no other
+ * (`#/inventory` → the card panel). The route's own docstring accepts the residue by name —
+ * a re-shot card drawn BY NAME on another screen may show the pre-re-shoot bytes until that
+ * cache entry goes — on the ground that what is stale is then an older photograph of the RIGHT
+ * card, where D52's hazard was a photograph of a DIFFERENT one. The address killed that class;
+ * this line covers the screen where the replacement is pressed and looked at. */
 function photoSrc(row: Row, nonce: string | null): string {
-  const base = photoUrl(row.card.box, row.card.index)
+  const base = photoUrl(row.card.box, row.card.index, row.card.cid)
   const stamp = nonce ?? row.card.capture_id
   return stamp === null ? base : `${base}?card=${encodeURIComponent(stamp)}`
 }

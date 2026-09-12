@@ -72,7 +72,9 @@ from collections import OrderedDict
 
 from cli import resolve, runs
 from pipeline import corpus, decisions, join, merge, pricing, routing, tcgcsv
-from store import master, files
+from pathlib import Path
+
+from store import master, files, photos
 from store.session import Store
 
 
@@ -345,6 +347,42 @@ def _write_merged(resolved, priced, choice, run_dir, args, say):
         listed_skus += sorted(listed & shipped)
         sub_skus += sorted(sub & shipped)
     return listed_skus, sub_skus
+
+
+
+def _name_for(key: str, photo) -> str:
+    """The card's name for a position the store has never seen (D172, section 3.4).
+
+    TWO OF `store/master.py`'s THREE "seam to watch rather than a guarantee" SITES ARE IN
+    THIS FILE, and this is what they were missing. `record_capture` refuses a nameless new
+    card — the refusal lives at the BIRTH of a record because a refusal at the flush would be
+    a 500 on the shutter mid-feeder — so an emit over a run whose positions the store has
+    never seen refused outright without this. That case is real and this file's own comment
+    names it: "a position the store has never seen — a run joined from a recovered
+    identifications file, say".
+
+    THE LADDER IS THE SPEC'S, BOTH RUNGS. Where the run resolved a photograph, the name is
+    that photograph's digest — which is D172's definition exactly, read off the disk rather
+    than allocated, so the record this creates is named the same way one born at the shutter
+    is. Where it did not, there is no photograph and no digest anywhere, and the honest
+    answer is shape 4: a NAME that says so, never a NULL. A NULL cannot distinguish "no
+    photograph was found" from "this writer did not look", which is this repo's signature
+    defect.
+
+    IT CARRIES `master.now()` AND NOT THE RECORD'S `captured_at`, which is absent here by
+    construction: this is the first time the store has seen the position, so there is no
+    capture stamp to borrow. The stamp is what keeps two photograph-less cards in one box
+    from composing one name.
+    """
+    if photo:
+        try:
+            return photos.sha256_of(Path(photo))
+        except OSError:
+            # The manifest resolved a path and the file is not there. Falling through to
+            # shape 4 is right and is not a swallowed error: the position genuinely has no
+            # photograph to be named by, and the name says exactly that.
+            pass
+    return f"{photos.NOPHOTO_PREFIX}{key}@{master.now()}"
 
 
 def run(args, say) -> int:
@@ -684,6 +722,7 @@ def run(args, say) -> int:
                     master.Card(
                         box=position.box,
                         index=position.index,
+                        cid=_name_for(key, resolved.photos.get(key)),
                         photo=resolved.photos.get(key),
                     )
                 )
@@ -1065,6 +1104,7 @@ def run_merged(args, say) -> int:
                     master.Card(
                         box=position.box,
                         index=position.index,
+                        cid=_name_for(key, resolved_by_run[run_name].photos.get(key)),
                         photo=resolved_by_run[run_name].photos.get(key),
                     )
                 )
