@@ -441,3 +441,68 @@ export function forgetCaptureSetup(): void {
        pressed for. */
   }
 }
+
+/* ------------------------------------------------------- how loud the spend confirm gets */
+
+/**
+ * THE FIGURE ABOVE WHICH THE IDENTIFY CONFIRM SAYS SOMETHING EXTRA — AND IT IS A NOTICE, NEVER
+ * A CEILING.
+ *
+ * THE OWNER'S RULING, 2026-09-12, is the whole shape of this key: *"Give me settings if I can
+ * have them, but if I want to run everything, then I get to run everything."* So this raises a
+ * sentence and a one-press way to stop being asked; it never disables the spend button, never
+ * hides it, and there is no number at which a press is refused. A ceiling that refused
+ * "everything" would be this app deciding how much of their own store the operator may read —
+ * which `server/pipeline_routes.py:do_pipeline_preflight` refuses in writing on the same ground.
+ *
+ * WHY IT IS DEVICE-LOCAL AND NOT IN THE STORE. It is a statement about how loud this screen
+ * should be, in the same family as the theme and the order fetch filter above: it names no card,
+ * no position, no SKU and no run, and losing it costs one press of a control that is on screen.
+ * The figures it is compared against are the server's — `RunPreflightTotal.estimate_usd`, lifted
+ * out of the command's own preflight — and no arithmetic about money happens on this side.
+ *
+ * THE DEFAULT IS $1.00 AND IT IS DERIVED, NOT PICKED. `identify/cost.py:INPUT_PER_MTOK` is
+ * $0.50/MTok — Haiku 4.5's $1 input, halved by the Batch API's 50% discount — and a card at
+ * `max_edge` 1200 measures 2,641 input tokens, so a card costs about $0.00132 and a dollar is
+ * about 757 cards. Measured against the real store the same day: that is larger than every
+ * drawer on it but box 3 (887 cards), and roughly a quarter of a full store re-read (2,535
+ * cards, about $3.35). So an ordinary drawer press never trips it and a store-wide one always
+ * does, which is exactly the line worth a second sentence.
+ *
+ * THE 2,641 FIGURE IS A CORRECTION AND THE OLD ONE IS NAMED SO IT DOES NOT COME BACK: ~2,420
+ * tokens a card divided one run's input tokens by its 723 cards when 191 of those were cache
+ * hits. A cache hit sends no image, so it is not a divisor — it is a card that cost nothing.
+ */
+const SPEND_NOTICE_KEY = 'banchi.runs.spend-notice'
+
+/** What this device asks about above, in dollars. See the block above for the derivation. */
+export const SPEND_NOTICE_DEFAULT = 1
+
+export function storedSpendNotice(): number {
+  try {
+    const raw = localStorage.getItem(SPEND_NOTICE_KEY)
+    if (raw === null) return SPEND_NOTICE_DEFAULT
+    const parsed = Number(raw)
+    /* A stored value is INPUT, and this file validates what it can: a figure that is not a
+       positive finite number is not a dollar amount. Zero is refused along with the rest —
+       a notice at $0.00 fires on every press including the free ones, which reads as a
+       malfunction rather than as a setting, and the honest way to never be asked is a figure
+       above the biggest press this store can make. */
+    return Number.isFinite(parsed) && parsed > 0 ? parsed : SPEND_NOTICE_DEFAULT
+  } catch {
+    /* Private mode, blocked storage, or a half-written value. The default, which is the
+       loudest of the honest answers: being asked about a dollar is cheap, and a browser that
+       refuses storage is asked again next visit. */
+    return SPEND_NOTICE_DEFAULT
+  }
+}
+
+export function rememberSpendNotice(dollars: number): void {
+  if (!Number.isFinite(dollars) || dollars <= 0) return
+  try {
+    localStorage.setItem(SPEND_NOTICE_KEY, String(dollars))
+  } catch {
+    /* Quota or a blocked origin. The figure still holds for this tab, which is the press that
+       was made — only the next visit is asked again. */
+  }
+}
