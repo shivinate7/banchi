@@ -762,7 +762,7 @@ export function ReviewQueue() {
    * own grade and simply is not grouped, which NARROWS the offer. The server, which can read
    * the registry, is the one that decides — so the client being conservative costs a press
    * and can never propose a group the route would refuse. */
-  const groupOffer = useMemo((): { rows: Row[]; reason: string; grade: string; left: number } | null => {
+  const groupOffer = useMemo((): { rows: Row[]; reason: string; left: number } | null => {
     const anchor = worklist[0]
     if (anchor === undefined) return null
     if (anchor.entry.reason === 'name_disputed') return null
@@ -776,7 +776,7 @@ export function ReviewQueue() {
       return row_only !== undefined && row.entry.candidates.length === 1 && gradeOf(row_only.condition) === grade
     })
     if (cluster.length < 2) return null
-    return { rows: cluster, reason, grade, left: worklist.length - cluster.length }
+    return { rows: cluster, reason, left: worklist.length - cluster.length }
   }, [worklist])
 
   useEffect(() => {
@@ -1621,7 +1621,7 @@ function GroupConfirm({
   onLeave,
   tray,
 }: {
-  offer: { rows: Row[]; reason: string; grade: string; left: number }
+  offer: { rows: Row[]; reason: string; left: number }
   activity: string | null
   onConfirm: () => void
   onLeave: () => void
