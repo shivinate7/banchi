@@ -92,6 +92,8 @@ So the figures are published rather than inferred from the fact that nothing has
 
 ### What is NOT proved
 
-**No real press has been through this.** The self-test races `claim_or_refuse`, which is the mechanism and is the same call the command makes — it is not `pkmnscan identify` end to end, which needs photographs, sidecars and the Batch API, and a test that mocked the API would be racing the mock. **No claim has been written by a real identify run, and no invoice has been prevented in production.** The first real press is what measures that.
+**The REFUSAL has been through the real command; the RELEASE has not.** `pkmnscan identify` over a two-card box with one card already claimed was refused by hand on 2026-09-12: the preflight printed, the refusal named the run, the receipt, the card and the remedy, the command exited **1**, **no run directory was created at all** — which is what writing the claim before `runs.create` buys — and the standing claim was left untouched. `--dry-run` over the same directory claimed nothing, as it must.
 
-**The release control has not been exercised against a real stuck claim.** Its chain is complete and typechecked; what it has met is the self-test's store, not a run that died mid-batch on the rig.
+**What has NOT happened is a claim written by a press that went on to spend.** The self-test races `claim_or_refuse`, which is the mechanism and the same call the command makes; it is not `pkmnscan identify` through to collection, which needs the Batch API, and a test that mocked the API would be racing the mock. So **the release path — the claim given back by the commit that banks the answers — has never run**, and no invoice has been prevented in production. The first real press is what measures both.
+
+**The release control has not been exercised against a real stuck claim.** Its chain is complete, typechecked, and pressed for real against a seeded claim whose holder had been killed with `-9` — the row went, the figures fell, and the receipt named the run. What it has not met is a run that died mid-batch on the rig, which is the case it exists for.
