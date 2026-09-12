@@ -20,7 +20,7 @@ Measured on the owner's store, grouped by `first_seen`:
 
 **Proved rather than inferred.** The `Calm Rune` entry is position `4/357`, `first_seen: 2026-09-11`. All six runs over box 4 — `2026-09-01-box4-01`, `2026-09-11-box4-01` through `-04`, `2026-09-12-box4-01` — were re-joined with a freshly fetched export each, and every one reported `+0 main, +0 parked, -0 resolved`. No run alive covers index 357.
 
-**The precedent is exact and is `reconcile --live` (D87).** That command is store-wide *because* a run-scoped reconcile could not reach everything, and its own sentence transfers without amendment: the scoping was a property of the command, not of the data. `Queue` is keyed by position across every box, and `upsert` was written to refresh.
+**The precedent is exact and is `reconcile --live` (D87), whose argument transfers unamended.** `Queue` is keyed by position across every box, and `upsert` was written to refresh.
 
 ### What the refresh is, and what it deliberately is not
 
@@ -28,17 +28,17 @@ Measured on the owner's store, grouped by `first_seen`:
 
 **It previews by default and writes only with `--write`**, which is `join`, `reconcile` and `reprice list`'s posture for `reconcile --live`'s reason: it rewrites every open entry at once.
 
-**The exports default to the ones the joined runs already recorded, and that is the ordinary case rather than a convenience.** The 513 frozen entries do not need a NEWER catalogue — they need the CURRENT LADDER. `rarity` on a candidate row and the Near Mint filter are properties of the code, not of the CSV, so re-running the ladder over the very file a run used repairs both. `--export` accepts a fresher or wider file and changes what the ladder can find; it is not what makes the refresh work.
+**The exports default to the ones the joined runs already recorded, and that is the ordinary case rather than a convenience.** The 513 do not need a NEWER catalogue — they need the CURRENT LADDER, and `rarity` and the Near Mint filter are properties of the code rather than of the CSV. `--export` accepts a fresher or wider file and changes what the ladder can FIND; it is not what makes the refresh work.
 
-**No quantity arithmetic runs.** `join_batch` is handed no `copies_out` and no `live_now`: routing reads the resolution, the confidence and the cheapest candidate price, and none of those is a quantity. What this writes is a QUESTION, never a price and never a copy.
+**No quantity arithmetic runs** — routing reads no quantity, so `_copies_out`'s full pass is never paid. What this writes is a QUESTION, never a price and never a copy.
 
 ### The three refusals, and two of them are not this module's code
 
-**An answered entry is never re-queued and never dropped, and that comes free from reusing `queues.apply_run`.** `upsert` refuses a `cleared_by_human` position and `release` refuses to drop one, so **D28's undo window stays the only door back out of an answer**. Reusing that function rather than writing the pair of loops was the point: it is the seam T7 already tests, and it is what keeps the two queues from being released in ignorance of each other. Measured on the owner's real store: 564 cleared entries, 565 rows before the write and 565 after, nothing written.
+**An answered entry is never re-queued and never dropped, and that comes free from reusing `queues.apply_run`.** `upsert` refuses a `cleared_by_human` position and `release` refuses to drop one, so **D28's undo window stays the only door back out of an answer** — by construction rather than by a test. Measured on the owner's real store: 564 cleared entries, 565 rows before the write and 565 after, nothing written.
 
 **`first_seen` survives**, because `upsert` preserves it. A card that has been waiting nineteen days has been waiting nineteen days.
 
-**A card that has LEFT THE BOX is skipped, not re-asked about.** Sold, retired and moved are terminal (D26, D83): the physical copy is gone, so the question is moot and a refreshed version of it on the review screen would spend a person's attention on a card they cannot look at. `cli/cmd_join.py` already draws this line — *"skipped: N card(s) in this run are no longer in the box"* — and this is that line for the store-wide pass. **Skipped rather than released**, which is the conservative half: this pass has no opinion about a card it will not resolve. Found by reconstruction: six of box 4's entries sat over `sold` cards, and without the rule the refresh re-queued every one.
+**A card that has LEFT THE BOX is skipped, not re-asked about** (D26, D83) — `cli/cmd_join.py` already draws that line for a run and this is it for the store. **Skipped rather than released**, which is the conservative half: this pass has no opinion about a card it will not resolve. Found by reconstruction: six of box 4's entries sat over `sold` cards, and without the rule the refresh re-queued every one.
 
 ### The agreement measurement, which is what makes the ladder claim checkable
 
@@ -46,7 +46,7 @@ Measured on the owner's store, grouped by `first_seen`:
 
 **An empty string is not a number, and the two route differently.** `load` normalises `(x or "").strip() or None`; this module passed `""` through. `_key_number_and_printed_total` answers None for a card with no number, which sends it down the blank-`Number` name branch, where `""` walks the number key, misses, and lands on D35's last-resort name rung. Six positions the join listed, this queued.
 
-**A reading must be ONE reading, and the store was missing its fifth field.** `record_identification` wrote `name`, `number`, `printed_total` and `confidence`; the model also answers `finish`, and that went only into the run's `identifications.json`. Taking it off the queue entry instead looked free and is not — **an entry may have been written by an OLDER identification of the same photograph**, and six of box 4's cards read `finish: null` on 2026-09-12 while their 2026-09-11 entries still said `foil`. **`store/master.py:Card.detected_finish` closes it**: the store now carries the whole reading, the queue entry contributes nothing to it, and the entry decides only WHICH positions the pass examines. It is None on every card identified before the field existed, which is the honest reading rather than a gap to backfill.
+**A reading must be ONE reading, and the store was missing its fifth field.** `record_identification` wrote four; the model also answers `finish`, which went only into the run record. Taking it off the queue entry looked free and is not — **an entry may have been written by an OLDER identification of the same photograph**, and six of box 4's cards read `finish: null` on 2026-09-12 while their 2026-09-11 entries still said `foil`. **`store/master.py:Card.detected_finish` closes it** and carries the argument at the field; the entry now decides only WHICH positions the pass examines.
 
 **AND THE LADDER MOVED UNDER IT WHILE THIS BRANCH WAS OPEN, WHICH IS THE CLAIM DEMONSTRATED RATHER THAN ASSERTED.** D162 — the name deciding a disputed number — merged to main mid-branch. The agreement above was re-measured against it with **not one line changed here**, and it held: 172 of 172 verdicts, 81 of 81 reasons and candidate rows. The join's own queue fell from 132 entries to 81 over the same run, and the refresh's verdict fell with it. **A refresh that had restated the ladder would have had to be found and edited; this one delivered D162 to the frozen entries by doing nothing.**
 
@@ -98,4 +98,4 @@ The owner's words: *"and then after finishing review queue having to do 'join' a
 
 **The fold's off-screen guard is real and untested.** `do_pipeline_worklist` drops a synthesized row's position when `card.run not in loaded_names`, and deleting that clause changes nothing on the owner's store: every orphan SKU there belongs to a run that is on screen, so no real data reaches the branch. It needs a fixture with two joined runs where only one is loaded and the closed one holds a card carrying a SKU no table names. **A guard whose arm survives is recorded rather than presented as covered** — the sixteen arms over the refresh engine were all caught, this one was not, and the distinction is the point.
 
-**Four more of the engine's paths are reachable and unexercised**: a multi-game catalogue, `photo_moved` (asserted 0, as a check that the fixture is not quietly exercising D10's slide), the `no_export` / `no_game` / `unjoinable` refusals, and `catalogs_from`'s last-file-wins for a game two exports both claim. Each is cheap to add; none is load-bearing for the measurements above.
+**Four more of the engine's paths are reachable and unexercised**: a multi-game catalogue, `photo_moved`, the `no_export` / `no_game` / `unjoinable` refusals, and `catalogs_from`'s last-file-wins. Each is cheap to add; none is load-bearing for the measurements above.
