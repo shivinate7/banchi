@@ -4058,11 +4058,21 @@ COMPONENTS = [
             # sentence: each takes a `persona` and renders owner-dense or Fulfiller-large from
             # ONE implementation. The alternative — a second component per screen — is what
             # docs/DESIGN.md rejected when it declined two visual worlds.
-            "src/PositionBar.tsx": {"does": "D20's sentence drawn: the box as a track, a tick per "
-                                            "divider, a marker at this card. Says '#40 of 250 · 16% "
-                                            "in' for a sealed box and '#12 of 62 so far' for an open "
-                                            "one, because an open box's denominator still moves.",
-                                    "governed_by": ["D5", "D10", "D13", "D20", "D24", "D30", "D58", "D68", "D118"]},
+            "src/PositionBar.tsx": {"does": "D20's sentence drawn, at two scales — and the SECTION is "
+                                            "the instrument. A graduated 26px ruler with a fill, a pin "
+                                            "that crosses it and the section's own bounds written "
+                                            "inside its two ends; under it an 8px strip of chips for "
+                                            "the box, with a caret on the chip this card is in. Says "
+                                            "'#40 of 250 · 16% in' for a sealed box and '#12 of 62 so "
+                                            "far' for an open one, because an open box's denominator "
+                                            "still moves. THE SVG TRAPEZOID IS DELETED "
+                                            "(D155): its two legs' slope ratio "
+                                            "carried neither a width nor a height term and its "
+                                            "arithmetic pointed at the wrong chip by up to 42px. THE "
+                                            "ZOOM BLOCK MOUNTS ON THE `sectionDepth` PROP and never on "
+                                            "whether the depth resolved, so all four owner states are "
+                                            "one DOM at one height (D118).",
+                                    "governed_by": ["D5", "D10", "D13", "D20", "D24", "D30", "D41", "D58", "D68", "D118", "D132", "D155"]},
             "src/position.ts": {"does": "the position ARITHMETIC with no component in it — `spansOf`, "
                                         "`sentenceOf`, `sectionDepthOf`, their types and the shared "
                                         "`clamp`. Split out of PositionBar.tsx 2026-09-06 so the "
@@ -4073,10 +4083,25 @@ COMPONENTS = [
                                         "together as one module rather than un-exporting the two with "
                                         "no outside caller, because where a card sits said three ways "
                                         "is one concept. Nothing here decides where a divider is; every "
-                                        "bound is a card COUNT and not a stored index (D58).",
-                                "governed_by": ["D5", "D10", "D20", "D24", "D30", "D58", "D68", "D118", "D132"]},
-            "src/PositionBar.css": {"does": "the track at two densities, and the marker",
-                                    "governed_by": ["D5", "D20", "D118"]},
+                                        "bound is a card COUNT and not a stored index (D58). Also "
+                                        "`graduationStep`, the ruler's 1-2-5 pitch ladder capped at 24 "
+                                        "teeth, and `sectionBlankSentence`, the caption for the two "
+                                        "states `sectionDepthOf` cannot answer — a record with no "
+                                        "section, and a box the server could not size. `SectionDepth` "
+                                        "hands the caption over as `head`/`tail` FIELDS, never as a "
+                                        "string to split: a section name may itself contain ` · ` "
+                                        "(D132).",
+                                "governed_by": ["D5", "D10", "D20", "D24", "D30", "D58", "D68", "D118", "D132", "D155"]},
+            "src/PositionBar.css": {"does": "the two scales at two densities: the section ruler with "
+                                            "its fill, graduations, edge labels and crossing pin, the "
+                                            "demoted box strip with the caret that replaced the "
+                                            "bracket, and both marks' knockout ring as `--pb-knockout` "
+                                            "so the row the walk stands on can answer it. The "
+                                            "inversion is CSS `order` and never a JSX reorder — "
+                                            "`.position-bar-sectiontrack` carries `.position-bar-track` "
+                                            "too, so document order is the only thing that makes the "
+                                            "spec's `querySelector` return the box strip.",
+                                    "governed_by": ["D5", "D20", "D41", "D50", "D118", "D155"]},
             "src/cardState.ts": {"does": "the card-state vocabulary and the age of a reading, with no "
                                          "component in it — `readingAgo`, `readingExact`, `stateTone`, "
                                          "`stateLabel`, and the `SOLD` / `RETIRED` words those two are "
@@ -5404,7 +5429,7 @@ COMPONENTS = [
                         "and `product_game` outright — `undefined.find` inside `ClaimEditor`, "
                         "the screen behind its error boundary, and six cases here spending "
                         "thirty seconds each on a switch that had been detached. AND THE HASH'S OWN BOX SINCE 2026-09-05: `#/inventory?box=<n>` was honoured only for a box that already had ROWS, because the shelf list is built from the rows first and the registry second and the ref was consumed on the first list — so every box of code cards, which D24 pools and which therefore has none, was unreachable by the one link that aims at one. Two cases, with `GET /boxes` held back so the ordering is the defect's rather than a race.",
-                "governed_by": ["D5", "D7", "D8", "D9", "D10", "D13", "D20", "D22", "D23", "D24", "D26", "D28", "D30", "D31", "D33", "D34", "D37", "D38", "D40", "D41", "D43", "D45", "D49", "D55", "D57", "D58", "D63", "D67", "D68", "D71", "D83", "D89", "D92", "D101", "D115", "D116", "D118", "D124", "D125", "D119", "D132", "D27", "D134", "D142"],
+                "governed_by": ["D5", "D7", "D8", "D9", "D10", "D13", "D20", "D22", "D23", "D24", "D26", "D28", "D30", "D31", "D33", "D34", "D37", "D38", "D40", "D41", "D43", "D45", "D49", "D55", "D57", "D58", "D63", "D67", "D68", "D71", "D83", "D89", "D92", "D101", "D115", "D116", "D118", "D124", "D125", "D119", "D132", "D27", "D134", "D142", "D155"],
                 "note": "THE CHECK `CLAUDE.md`'s ROUTE-IS-NOT-A-FEATURE RULE SAYS DOES NOT "
                         "EXIST. That rule was written on 2026-08-23 after three routes shipped "
                         "with full T7 coverage and no client function and no control — green "
