@@ -471,6 +471,61 @@ def case_pid_reuse_cannot_inherit_a_claim() -> None:
     )
 
 
+def case_an_older_store_upgrades() -> None:
+    """A STORE STAMPED AT THE PREVIOUS SCHEMA GAINS THE TABLE ON ITS FIRST OPEN.
+
+    THE ONE PATH A REAL OPERATOR ACTUALLY TAKES, and nothing else in this file touches it:
+    every other case builds a store fresh, which goes through `_ensure_schema`'s create-all
+    branch and never through `_upgrade`. The owner's store has 2,535 cards in it and will meet
+    the upgrade instead — so the case is posed against a file that genuinely has the older
+    shape, built by dropping this build's table and re-stamping the version, rather than
+    asserted about.
+
+    IT IS THE PUREST ADDITIVE STEP THERE IS — a table nothing older has, so there is nothing
+    to backfill — and an EMPTY claim table is the correct state for an upgraded store: a claim
+    protects a press happening now, and every run live before this build existed was guarded
+    by the box form and is either finished or visible on `#/runs`.
+    """
+    import sqlite3
+
+    from store import db
+    from store.session import Store
+
+    fresh_store()
+    st = Store()
+    live_figures()  # opens the store, so the file and its schema exist
+
+    # Put the file back into the shape the previous build left: no `submissions`, stamped 2.
+    conn = sqlite3.connect(db.path(st.directory))
+    conn.execute("DROP TABLE IF EXISTS submissions")
+    conn.execute("INSERT OR REPLACE INTO meta (key, value) VALUES ('schema', '2')")
+    conn.commit()
+    had = bool(conn.execute(
+        "SELECT name FROM sqlite_master WHERE type='table' AND name='submissions'"
+    ).fetchone())
+    conn.close()
+    check(not had, "a store stamped at the previous schema has no claim table")
+
+    # The first open of it by this build is the upgrade.
+    got, conflicts = claim(["1/1"])
+    check(got is not None and not conflicts, "the first press against it claims normally")
+
+    conn = sqlite3.connect(db.path(st.directory))
+    stamp = conn.execute("SELECT value FROM meta WHERE key='schema'").fetchone()
+    indexed = bool(conn.execute(
+        "SELECT name FROM sqlite_master WHERE type='index' AND name='submissions_state'"
+    ).fetchone())
+    conn.close()
+    check(stamp == (str(db.SCHEMA_VERSION),), f"the file is re-stamped ({stamp})")
+    check(indexed, "and the `state` index the live query reads is created with the table")
+
+    blocked, conflicts = claim(["1/1"])
+    check(
+        blocked is None and bool(conflicts),
+        "and the guard is armed on the upgraded store — a second press over that card refuses",
+    )
+
+
 # ------------------------------------------------------------------------------- the race
 
 CHILD = '''
@@ -653,6 +708,7 @@ CASES = (
     case_resume_releases_only_its_own,
     case_a_dead_holder_still_blocks,
     case_pid_reuse_cannot_inherit_a_claim,
+    case_an_older_store_upgrades,
     case_the_naive_order_loses_the_race,
     case_one_transaction_wins_the_race,
 )

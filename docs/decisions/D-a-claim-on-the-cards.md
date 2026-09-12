@@ -88,7 +88,7 @@ So the figures are published rather than inferred from the fact that nothing has
 
 **The barrier is a barrier, not a sleep** (D136). The naive children synchronise twice — once to start, once after each has read and before either writes — so the window is held open by construction. A probabilistic reproduction of a money bug is a flake.
 
-**Mutation-tested: ten arms, all killed.** One of them survived the first pass and that was the useful one: every store-wide case shared its card with the LOWEST-numbered box in the pressing selection, so a guard narrowed to the first drawer it saw passed all four directions. The case with the overlap two drawers along was added for it.
+**Mutation-tested: twelve arms, all killed** — ten over the claim and two over the schema upgrade, which is the one path a store that already has 2,535 cards in it actually takes. One arm survived the first pass and that was the useful one: every store-wide case shared its card with the LOWEST-numbered box in the pressing selection, so a guard narrowed to the first drawer it saw passed all four directions. The case with the overlap two drawers along was added for it.
 
 ### What is NOT proved
 

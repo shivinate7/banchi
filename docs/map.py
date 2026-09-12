@@ -1209,8 +1209,9 @@ COMPONENTS = [
                                        "HARNESS, which is why `tested_by` is empty: that field "
                                        "names harness tests, and this guard's subject is two "
                                        "OS processes racing a real flock over a throwaway store "
-                                       "— not something a harness test can pose. Ten mutation "
-                                       "arms, all caught. WHAT IS UNPROVEN: no claim has been "
+                                       "— not something a harness test can pose. Twelve "
+                                       "mutation arms, all caught. WHAT IS UNPROVEN: no claim "
+                                       "has been "
                                        "written by a real identify press, so nothing here has "
                                        "yet prevented an invoice."},
             "files.py": {"does": "where the store lives, the lock, and the atomic replace the "
@@ -1777,7 +1778,10 @@ COMPONENTS = [
                         "holder killed with -9 whose claim must keep blocking and become "
                         "releasable, a pid-reuse case, and THE FIGURES: rows live and CARDS "
                         "locked, because a table that claimed nothing would pass every outcome "
-                        "assertion in the file. Mutation-tested: ten arms, all caught.",
+                        "assertion in the file, and the schema upgrade a real operator's "
+                        "2,535-card store will actually take rather than the create-all "
+                        "branch every other case goes through. Mutation-tested: twelve arms, "
+                        "all caught.",
                 "governed_by": ["D-a-claim-on-the-cards", "D7", "D18", "D48", "D88", "D136"],
             },
             "reap-selftest.sh": {
