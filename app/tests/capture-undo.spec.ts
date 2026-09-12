@@ -71,6 +71,7 @@ const GAMES: GameRegistry = {
  *  file asserts are the ones D10's amendment renders: one section, card = index. */
 const BOX = {
   box: 3,
+  bid: 13,
   name: 'S key',
   sections: [],
   state: 'open',

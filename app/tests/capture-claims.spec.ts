@@ -120,11 +120,16 @@ const THIRTEEN = {
   ],
 }
 
-/** The six settings the capture screen now remembers on the DEVICE (D142),
- *  as `deviceMemory.ts` stores them. Partial, because a case seeds the one field it is about
- *  and the reader fills the rest from `NO_CAPTURE_SETUP`. */
+/** The settings the capture screen now remembers on the DEVICE (D142), as `deviceMemory.ts`
+ *  stores them — seven since `bid` joined them (D145). Partial, because a case seeds the one
+ *  field it is about and the reader fills the rest from `NO_CAPTURE_SETUP`. */
 type SeedSetup = {
   box?: number | null
+  /** WHICH DRAWER that box number was, at the moment it was picked. Seeded apart from `box` on
+   *  purpose: the cases worth having are the ones where the two disagree, and a browser that
+   *  predates the field carries a box and no id at all — which is what seeding `box` alone
+   *  reproduces exactly. */
+  bid?: number | null
   game?: string | null
   setHint?: string
   finish?: readonly string[]
@@ -210,6 +215,7 @@ async function open(
         'banchi.capture.setup',
         JSON.stringify({
           box: null,
+          bid: null,
           game: null,
           setHint: '',
           finish: [],
@@ -539,6 +545,7 @@ const ONE_BOX = {
   boxes: [
     {
       box: 3,
+      bid: 3,
       name: 'S key',
       sections: [],
       state: 'open',
@@ -999,20 +1006,25 @@ test('a hint is never accused while there is no list to check it against', async
  *  step would pass under the rule this replaced. */
 const HAND_BOXES = {
   boxes: [
-    { box: 1, name: 'Bulk', sections: [], state: 'open', capacity: null, fill: 10, next_index: 11,
+    { box: 1, bid: 21, name: 'Bulk', sections: [], state: 'open', capacity: null, fill: 10, next_index: 11,
       cards: 10, sold: 0, retired: 0, moved: 0, listed: 0, on_hand: 10,
       sections_detail: [{ section: 1, start: 1, end: 10, count: 10 }] },
-    { box: 2, name: 'Slabs', sections: [], state: 'open', capacity: null, fill: 3, next_index: 4,
+    { box: 2, bid: 22, name: 'Slabs', sections: [], state: 'open', capacity: null, fill: 3, next_index: 4,
       cards: 3, sold: 0, retired: 0, moved: 0, listed: 0, on_hand: 3,
       sections_detail: [{ section: 1, start: 1, end: 3, count: 3 }] },
-    { box: 3, name: 'Epics', sections: [], state: 'open', capacity: null, fill: 7, next_index: 8,
+    { box: 3, bid: 23, name: 'Epics', sections: [], state: 'open', capacity: null, fill: 7, next_index: 8,
       cards: 7, sold: 0, retired: 0, moved: 0, listed: 0, on_hand: 7,
       sections_detail: [{ section: 1, start: 1, end: 7, count: 7 }] },
-    { box: 4, name: 'Commons', sections: [], state: 'open', capacity: null, fill: 40, next_index: 41,
+    { box: 4, bid: 24, name: 'Commons', sections: [], state: 'open', capacity: null, fill: 40, next_index: 41,
       cards: 40, sold: 0, retired: 0, moved: 0, listed: 0, on_hand: 40,
       sections_detail: [{ section: 1, start: 1, end: 40, count: 40 }] },
   ],
 }
+
+/* THE IDS ABOVE ARE DELIBERATELY NOT THE NUMBERS (D145). A fixture where box 2 carries id 2
+   passes a comparison of the two even when the code compares the wrong pair, which is the one
+   thing these cases exist to catch. 21-24 also keeps every id two digits, so a case that
+   searches the picker for `2` gets a stable answer off the NUMBERS alone. */
 
 /** The same four with box 2 SEALED, for the restore that has to fail softly. */
 const HAND_BOXES_SEALED_2 = {
@@ -1035,11 +1047,14 @@ test('the box list leads with the fullest box, and the number is last', async ({
      decides: 40, 10, 7, 3. Sorted by NUMBER — which is what this field did until
      2026-09-11 — `Commons` would be LAST rather than first, so this assertion is the one
      the old rule fails. */
+  /* AND NOT ONE OF THEM DRAWS ITS NUMBER (D145). Nothing is typed, so no row is an answer to
+     a typed number and the number is doing no job on any of them — which is the owner's
+     instruction, *"i shouldn't even need to see box. numbers here"*, asserted at rest. */
   expect(await boxOptionText(page)).toEqual([
-    'Commons Box 4 next index 41',
-    'Bulk Box 1 next index 11',
-    'Epics Box 3 next index 8',
-    'Slabs Box 2 next index 4',
+    'Commons next index 41',
+    'Bulk next index 11',
+    'Epics next index 8',
+    'Slabs next index 4',
   ])
 })
 
@@ -1068,7 +1083,7 @@ test('the box picked last time leads, even when it is the emptiest', async ({ pa
 
   await page.keyboard.press('b')
   await expect(page.locator('.capture-opt').first()).toBeVisible()
-  expect((await boxOptionText(page))[0]).toBe('Slabs Box 2 next index 4')
+  expect((await boxOptionText(page))[0]).toBe('Slabs next index 4')
 })
 
 test('the setup survives a reload, and the in-flight capture id is not on the device', async ({
@@ -1138,7 +1153,7 @@ test('a restored box that has been sealed since is let go of, by name', async ({
 
   /* AND THE REMEDY IS THE PRESS THEY WERE ABOUT TO MAKE: the field is open with focus in the
      entry, which is where `Pick a box` would have put them. */
-  await expect(page.getByLabel(/Find a box by number or name/)).toBeFocused()
+  await expect(page.getByLabel(/Find a box by name or number/)).toBeFocused()
 })
 
 test('a restored box that is gone is let go of, and says so without naming a drawer', async ({
@@ -1148,13 +1163,160 @@ test('a restored box that is gone is let go of, and says so without naming a dra
 
   await expect(page.locator('.capture-foot-box-name')).toHaveText('No box')
   await expect(page.locator('.capture-refused').filter({ hasText: /not in the store/ })).toBeVisible()
-  await expect(page.getByLabel(/Find a box by number or name/)).toBeFocused()
+  await expect(page.getByLabel(/Find a box by name or number/)).toBeFocused()
+})
+
+/* ============================================================================================
+   THE RESTORE COMPARES THE DRAWER'S ID, NOT ITS NUMBER (D145)
+
+   D142 enumerated three ways a restored box goes stale and built two of them. The third — the
+   number deleted and handed to a different physical drawer by `next_box_number`'s lowest-free
+   allocation — passed `found !== undefined` and `state !== 'closed'` and kept the restore,
+   because box 7 really does exist and really does take cards. Every photograph of that sitting
+   then goes to an address that does not match the shelf, and nothing says a word.
+
+   THE FIXTURE'S IDS ARE NOT ITS NUMBERS, on purpose (see `HAND_BOXES`). A case here that
+   compared the wrong pair would pass against a fixture where box 2 wears id 2.
+   ========================================================================================== */
+
+/** The four boxes as a store that has never issued an id: every row's `bid` is null, which is
+ *  what a box holding cards with no registry entry answers, and what a store an older build
+ *  migrated answers for all of them. */
+const HAND_BOXES_NO_IDS = {
+  boxes: HAND_BOXES.boxes.map((row) => ({ ...row, bid: null })),
+}
+
+test('a restored box whose number now belongs to another drawer is let go of', async ({
+  page,
+}) => {
+  /* THE OWNER'S OWN CASE, 2026-09-11: *"i deleted an old box 1, started writing into a new box
+     (now new box 1)"*. This browser was set to box 3 when box 3 was the drawer with id 40; the
+     store says box 3 is id 23 today, so the drawer they left is gone and this is not it. */
+  await open(page, { box: 3, bid: 40 }, GAMES, HAND_BOXES, { probe: false })
+
+  await expect(page.locator('.capture-foot-box-name')).toHaveText('No box')
+
+  /* IT SAYS SO AS A FACT, because it holds one — D145 forbids an id softening what it knows.
+     AND IT SAYS IT BY NUMBER, which is the one sentence on this screen that has to: the number
+     is the only thing the two drawers share, and naming the box now at it (`Epics`) would be
+     telling the operator their drawer is something it has never been. */
+  const note = page.locator('.capture-refused').filter({ hasText: /different drawer now/ })
+  await expect(note).toContainText('Box 3')
+  await expect(note).not.toContainText('Epics')
+
+  await expect(page.getByLabel(/Find a box by name or number/)).toBeFocused()
+})
+
+test('a restored box the store still calls the same drawer is kept', async ({ page }) => {
+  /* THE ARM THAT STOPS THE GUARD BEING VACUOUS. A comparison that cleared unconditionally would
+     satisfy every case above it, and the operator would lose their box on every single load. */
+  await open(page, { box: 3, bid: 23 }, GAMES, HAND_BOXES)
+
+  await expect(page.locator('.capture-foot-box-name')).toHaveText('Epics')
+  await expect(page.locator('.capture-refused')).toHaveCount(0)
+})
+
+test('a box remembered before ids existed is let go of, and says it cannot tell', async ({
+  page,
+}) => {
+  /* THE MIGRATION ARM. A browser holding a setup written before this landed has a number and no
+     id, and the honest answer is that nothing can tell whether that number still means the same
+     drawer. It clears — the same fallback D142 already chose for its other two cases — and the
+     cost is one press, once, because the very next pick records an id. */
+  await open(page, { box: 1 }, GAMES, HAND_BOXES, { probe: false })
+
+  await expect(page.locator('.capture-foot-box-name')).toHaveText('No box')
+
+  /* AND IT DOES NOT CLAIM THE DRAWER CHANGED, which would be a fact it does not hold. It names
+     the box the operator would recognise, because that box probably IS theirs. */
+  const note = page.locator('.capture-refused').filter({ hasText: /may not be the drawer/ })
+  await expect(note).toContainText('Bulk')
+  await expect(note).not.toContainText('different drawer now')
+})
+
+test('a store that issues no ids keeps the restore, rather than refusing it forever', async ({
+  page,
+}) => {
+  /* THE OTHER SILENCE, AND IT IS NOT THE SAME SILENCE. A browser with no id is one press from
+     having one. A STORE with no ids can never answer the question, so clearing here would empty
+     a good box on every load for ever, over something the operator cannot fix from this screen.
+     The rule that predates the id decides, unchanged — which is D145's own two-arm shape. */
+  await open(page, { box: 1 }, GAMES, HAND_BOXES_NO_IDS)
+
+  await expect(page.locator('.capture-foot-box-name')).toHaveText('Bulk')
+  await expect(page.locator('.capture-refused')).toHaveCount(0)
+})
+
+test('picking a box records which drawer it was, so the next sitting can compare', async ({
+  page,
+}) => {
+  /* THE HALF THAT MAKES THE REST WORK. Without this the id is never written, every restore falls
+     down the "cannot tell" arm for ever, and that would look exactly like a working guard while
+     throwing the whole feature away. */
+  await open(page, undefined, GAMES, HAND_BOXES)
+  await page.keyboard.press('b')
+  await expect(page.locator('.capture-opt').first()).toBeVisible()
+  await page.getByRole('button', { name: /^Slabs/ }).click()
+
+  expect(await storedSetup(page)).toMatchObject({ box: 2, bid: 22 })
+})
+
+/* ============================================================================================
+   THE PICKER DRAWS NAMES, AND A NUMBER ONLY WHERE ONE WAS TYPED (D145)
+   ========================================================================================== */
+
+test('a typed number puts the number back on the rows that answer it', async ({ page }) => {
+  /* D142 KEPT THE NUMBER HERE FOR EXACTLY THIS, and the reason is still good: *"a row that hid
+     the number would answer a search for `9` with nine rows that do not visibly contain a 9."*
+     What changed is that the reason is spent where it applies instead of on every row always. */
+  await open(page, undefined, GAMES, HAND_BOXES)
+  await page.keyboard.press('b')
+  await expect(page.locator('.capture-opt').first()).toBeVisible()
+
+  await page.keyboard.type('2')
+  await expect(page.locator('.capture-opt')).toHaveCount(1)
+  expect(await boxOptionText(page)).toEqual(['Slabs Box 2 next index 4'])
+
+  /* AND A NAME SEARCH BRINGS NO NUMBER BACK, because none of those rows matched on one. The
+     second row is the create-box offer, which every non-exact entry draws last. */
+  await page.keyboard.press('Backspace')
+  await page.keyboard.type('om')
+  await expect(page.locator('.capture-opt')).toHaveCount(2)
+  expect(await boxOptionText(page)).toEqual(['Commons next index 41', 'om New'])
+})
+
+test('an unnamed box draws its number once, typed or not', async ({ page }) => {
+  /* AN UNNAMED BOX IS NOT AN EXCEPTION TO THE INSTRUCTION — D20 leaves a name optional, so the
+     number is the only thing such a drawer HAS to be called, and a placeholder would draw a
+     fault where there is none (D56). The hazard is the other way round: `captureBoxLabel` has
+     already put the number in the name's place, so a suffix drawn beside it reads `Box 6 Box 6`.
+   */
+  const UNNAMED = {
+    boxes: [
+      { ...HAND_BOXES.boxes[0], box: 6, bid: 26, name: null },
+      /* A name that is only whitespace is unnamed to `captureBoxLabel`, which trims — and was
+         NOT unnamed to the `name === null` test this replaced, so it doubled. */
+      { ...HAND_BOXES.boxes[1], box: 7, bid: 27, name: '   ' },
+    ],
+  }
+  await open(page, undefined, GAMES, UNNAMED)
+  await page.keyboard.press('b')
+  await expect(page.locator('.capture-opt')).toHaveCount(2)
+  expect(await boxOptionText(page)).toEqual(['Box 6 next index 11', 'Box 7 next index 4'])
+
+  await page.keyboard.type('6')
+  await expect(page.locator('.capture-opt')).toHaveCount(1)
+  expect(await boxOptionText(page)).toEqual(['Box 6 next index 11'])
 })
 
 test('clearing the setup empties every claim, forgets the key, and can be undone', async ({
   page,
 }) => {
-  await open(page, { box: 3, setHint: 'MEG', finish: ['normal'] }, GAMES, HAND_BOXES)
+  /* `bid` SEEDED TO THE FIXTURE'S OWN, so the restore holds and this case is about the CLEAR
+     (D145). Seeding `box` alone is a browser that remembered a number before it recorded which
+     drawer that was, and the restore lets such a box go — correctly, and it would empty the
+     screen before this case pressed anything. */
+  await open(page, { box: 3, bid: 23, setHint: 'MEG', finish: ['normal'] }, GAMES, HAND_BOXES)
 
   const clear = page.getByRole('button', { name: 'Clear the setup' })
   await expect(clear).toBeEnabled()

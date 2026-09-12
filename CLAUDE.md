@@ -459,6 +459,29 @@ make claim-selftest # the claimer, proved where it can be wrong: a throwaway rep
                     #   main takes a number the branch had already claimed. In `check`, never in
                     #   the git hook.
 make merge          # merge a PR and move main onto it — BOTH HALVES, on your word (D42).
+                    #   IT REFUSES A CHECKOUT WHOSE OWN COPY OF THE MERGE IS BEHIND main's,
+                    #   BEFORE ANYTHING ELSE (D151). This target
+                    #   runs the `scripts/merge-pr.py` OF THE CHECKOUT YOU TYPE IT IN, and on
+                    #   2026-09-12 24 of this clone's 30 working trees were behind main's copy
+                    #   of it — 16 of them missing the commit that added the id claim at all.
+                    #   Such a copy does not fail: it merges, moves main, reports success, and
+                    #   the claim simply does not happen, which stranded an unclaimed id on
+                    #   main twice. THE PREDICATE IS `BEHIND`, NEVER `DIFFERS` — a branch
+                    #   developing the merge itself is AHEAD and goes straight through; what is
+                    #   refused is a copy MISSING commits main has, on this file or on any
+                    #   `scripts/*.py` it shells out to. THERE IS NO ESCAPE HATCH, deliberately:
+                    #   the fix is `git merge origin/main`, which is seconds.
+                    #   `make merge ARGS=--surface` asks that question alone.
+                    #   AND IT READS WHAT main LANDED WITH, afterwards: an unclaimed
+                    #   `## D-<slug>` on the merge commit is reported by name and becomes the
+                    #   command's exit status. The merge itself COMPLETED when that happens —
+                    #   nothing there repairs main, because a substitution made after the merge
+                    #   reaches main's own copy of the entry.
+                    #   THE SAME READING IS IN THE REF HOOK, which is the half that reaches a
+                    #   stale checkout at all: `core.hooksPath` is one directory in the common
+                    #   `.git` dir, so every worktree of this clone runs that file, and it
+                    #   prints the moment refs/heads/main moves onto a slug. It REFUSES
+                    #   NOTHING — main already carries it on origin by then.
                     #   IT CHECKS FOR A STALE CLAIM BEFORE ANYTHING ELSE (D140, amended):
                     #   a number this branch claimed that main has taken since is REFUSED here,
                     #   in preview as well as on the press, and nothing is rewritten for you.
@@ -1033,7 +1056,13 @@ A screen is not finished because it compiles.
   (D142). `banchi.capture.setup` is the box, game, set hint, finish, rarity
   and product the operator last chose — six values that were `sessionStorage` under D27 until
   the owner overruled the session scope, in ONE document because they are one habit, the
-  argument `banchi.orders.fetch-filter` already makes for its own two fields.
+  argument `banchi.orders.fetch-filter` already makes for its own two fields. **A SEVENTH
+  JOINED THEM ON 2026-09-12 AND IT IS THE ONLY ONE NO SCREEN DRAWS**
+  (D153): `bid`, the box's true index (D145), recorded at the pick so
+  the next sitting's restore can tell the drawer the operator left from a different drawer
+  wearing its number today — which `next_box_number`'s lowest-free allocation makes an ordinary
+  event. It is not a seventh KEY and the roster count is unchanged: this is a field inside the
+  one document, which is the whole point of storing them as a document.
   `banchi.box-recency` is `banchi.inventory.box-recency` renamed: the capture screen's box
   list now sorts on it too, so the name had stopped saying what the fact is — which drawer
   this operator's hand is in — and started saying which screen happened to write it. **No
@@ -1345,6 +1374,34 @@ apostrophes in names) live in the `tcgplayer-csv` skill. It loads on demand.
   surface area until the current gate passes."
 - No manual third-party UI step inside the autonomous pipeline. External tools without
   an API contract can be benchmarks, never components.
+- **FIX THE CAUSE, NEVER THE SYMPTOM — AND FIRST ASK WHETHER THE PRIMITIVE ALREADY EXISTS.**
+  The owner's standing instruction, 2026-09-11: *"Always ensure you take the best practices to
+  resolve things, never the band aid routes."*
+
+  **This tree lands primitives faster than its screens adopt them, which is what makes a bandaid
+  so easy to reach for.** The instruction was earned the same day, on the capture screen's
+  restore. D142 says a restored box falls back to no selection *"never to a guess"*; the code
+  checks only that the box exists and is not sealed, so a box DELETED and its number handed to a
+  different physical drawer by `next_box_number`'s lowest-free allocation restores silently —
+  the one case D142's own prose names as *"refused nowhere"*. Three fixes were put to the owner:
+  compare the box NAME, compare it narrowly, or record the gap. Their reply was *"are any of
+  these actually a good solution? or a bandaid"*, and every one of the three was a heuristic
+  standing in for an identity **D145 had already built hours earlier** — `bid`, an integer
+  allocated once at a drawer's creation and never reused. The screen had simply not adopted it:
+  `CaptureSetup` stored the reusable NUMBER, and `BoxRecord` did not carry `bid` on the wire at
+  all.
+
+  So before proposing a workaround, **read for the thing that would make it unnecessary** —
+  `make map ARGS=<path>` and `scripts/decision-context.py` exist to answer exactly that, and a
+  decision entry is settled whether or not the screen in front of you knows it. **An option set
+  in which every entry is a heuristic is evidence the real fix is upstream**, not a menu to
+  choose from.
+
+  **A bandaid may still be the right call, and then it is NAMED as one** — in the wrap-up, in
+  the commit, and with the cause recorded in `docs/DEBTS.md` so the next session finds the
+  argument rather than the patch. What is refused is a patch PRESENTED as the solution, which is
+  the report format's own rule one register up: "solved" with no bucket named is the phrasing
+  this repo does not accept.
 - **Opsec, repo-wide**: a live unredeemed code card is a bearer instrument. No code-card
   photo in a listing, README, screenshot, or commit. Enforced by pre-commit hook.
 - **A screen answers to the system.** New CSS reads `--bn-*` tokens and never names a color;
@@ -1674,6 +1731,11 @@ D147 The claim is spent on the oldest copies, because a card captured tonight wa
 D148 The wait is about the claim commit, and an answer it has not got is never a pass
 D149 A section number that resolves is not a citation that is right, and no check can read what a sentence is about
 D150 A reading taken after a sale is that sale's own result, and it ages the claim
+D151 The merge is run by a checkout, so the checkout is asked whether it is current, and main is read for a slug the moment it moves
+D152 Every row in the collapsed rail draws one glyph on one spine, and a rule that lists the children it knows about will miss one
+D153 The restore asks which drawer, not which number, and the picker stops drawing a number nobody reads
+D154 The camera's automatic functions are inputs to the trigger's arithmetic, and the ones that step are locked
+D155 The section is the ruler and the box is the margin note, and the bracket between them is deleted
 D-unsent-copies-worklist Every copy TCGplayer does not hold is one worklist, and a run stays open until the last of them has gone
 
 ```
