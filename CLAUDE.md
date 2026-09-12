@@ -2065,7 +2065,7 @@ D168 A typed price is cleared by a press, never by an expiry, and the set it may
 D169 The blanket sweep asks the question the verdict answers, and a nested worktree is another checkout
 D170 A widening is safe only while the category fits, and Pokemon's does not
 D171 A refusal that reaches nobody did not happen, and a status line the session wrote is not a reading
-D-the-first-photograph-is-the-name A card's name is the first photograph of it, frozen at issue
+D172 A card's name is the first photograph of it, frozen at issue
 ```
 
 **THE GAP THIS LIST CARRIED BETWEEN D116 AND D118 IS CLOSED, AND IT CLOSED THE WAY IT SAID IT
@@ -2151,7 +2151,7 @@ was open** — the rule is renumber your own, never another's.
   `localStorage` key once.
 - `docs/specs/stable-card-id.md` — a card's name is the first photograph of it: `cards.cid`,
   the sha256 of the photograph the store held when the id was issued, frozen at issue and
-  never recomputed (D-the-first-photograph-is-the-name). **SPECIFIED 2026-09-12, NOT BUILT.**
+  never recomputed (D172). **SPECIFIED 2026-09-12, NOT BUILT.**
   No store carries the column, no migration exists, and the two targets and the one subcommand
   it describes are not in the tree — which is why it spells them bare. What IS real is its
   evidence: 2,535 of 2,535 stored digests equal the photograph on disk, 0 duplicates, 2.68 s

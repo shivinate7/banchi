@@ -1,4 +1,4 @@
-## D-the-first-photograph-is-the-name — A card's name is the first photograph of it, frozen at issue
+## D172 — A card's name is the first photograph of it, frozen at issue
 
 **A card's stable identity is the sha256 of the photograph the store held when the id was issued — read off the disk, frozen from that moment, never recomputed.** SPECIFIED 2026-09-12, NOT BUILT. `docs/specs/stable-card-id.md` is the plan, its measurements and its receipts; this entry is the ruling and the four alternatives it rejects.
 

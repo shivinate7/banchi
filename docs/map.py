@@ -1096,7 +1096,7 @@ COMPONENTS = [
         "does": "the master store: inventory, cache, standing queues, order ledger and the "
                 "history, in one SQLite file since D88",
         "governed_by": ["D4", "D7", "D9", "D10", "D13", "D15", "D63", "D88", "D89",
-                        "D-the-first-photograph-is-the-name"],
+                        "D172"],
         "note": "THE CARD'S STABLE NAME IS SPECIFIED HERE AND NOT BUILT: "
                 "docs/specs/stable-card-id.md plans `cards.cid`, the sha256 of the "
                 "photograph the store held when the id was issued, frozen at issue and "
