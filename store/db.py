@@ -74,7 +74,7 @@ MIGRATIONS_DIRNAME = "migrations"
 BOX_ID_RECEIPT = "box-ids.json"
 # The `meta` key holding `Inventory.box_ids_issued` (D145).
 BOX_IDS_ISSUED = "box_ids_issued"
-SCHEMA_VERSION = 2
+SCHEMA_VERSION = 3
 
 # The six files a legacy store is made of, and the one that is a log rather than a document.
 LEGACY_INVENTORY = "inventory.json"
@@ -105,9 +105,14 @@ TABLES: Dict[str, Tuple[str, ...]] = {
     "queues": ("box", "idx", "reason", "cleared_by_human", "first_seen"),
     "orders": ("source", "number", "status"),
     "fulfilment": (),
+    # D-a-claim-on-the-cards: the cards a live run has claimed and is about to pay to read.
+    # `keys` is the claim itself and is NOT a column — it is a set, and a column holds one
+    # value; the intersection is computed in Python over the handful of live rows, which is
+    # what `Submissions.live` keeps small by filtering on the `state` column first.
+    "submissions": ("pid", "state", "started_at", "run"),
 }
 
-_INTEGER = {"box", "bid", "idx", "pushed", "staged", "live", "cleared_by_human"}
+_INTEGER = {"box", "bid", "idx", "pushed", "staged", "live", "cleared_by_human", "pid"}
 
 _INDEXES = (
     ("cards", "box"), ("cards", "sku"), ("cards", "capture_id"), ("cards", "state"),
@@ -115,6 +120,7 @@ _INDEXES = (
     ("queues", "box"),
     ("events", "position"),
     ("boxes", "bid"),
+    ("submissions", "state"),
 )
 
 
@@ -244,6 +250,8 @@ def _upgrade(
             receipt: Optional[dict] = None
             if stored < 2:
                 receipt = _add_box_ids(conn)
+            if stored < 3:
+                _add_submissions(conn)
             conn.execute(
                 "INSERT OR REPLACE INTO meta (key, value) VALUES ('schema', ?)",
                 (str(SCHEMA_VERSION),),
@@ -255,6 +263,23 @@ def _upgrade(
             raise
         if receipt is not None and directory is not None:
             _write_migration_receipt(directory, BOX_ID_RECEIPT, receipt)
+
+
+def _add_submissions(conn: sqlite3.Connection) -> None:
+    """Schema 3: the `submissions` claim table (D-a-claim-on-the-cards).
+
+    THE PUREST ADDITIVE STEP THERE IS — a table nothing older has, so there is nothing to
+    backfill and nothing to read wrong. It writes no receipt file for that reason: `_add_box_ids`
+    leaves one because it DERIVED an id for every existing box and a later question about which
+    box got which id has no other answer, and there is no corresponding question here.
+
+    AN EMPTY CLAIM TABLE IS THE CORRECT STATE FOR AN UPGRADED STORE, and it is worth saying why
+    it is not a loss. A claim protects a press that is happening NOW; every run that was live
+    before this build existed was guarded by `_busy_run` and is either finished or is a run this
+    build can see on `#/runs`. There is no past to reconstruct, only presses from here on.
+    """
+    conn.execute(_ddl("submissions", TABLES["submissions"]))
+    conn.execute("CREATE INDEX IF NOT EXISTS submissions_state ON submissions(state)")
 
 
 def _add_box_ids(conn: sqlite3.Connection) -> dict:

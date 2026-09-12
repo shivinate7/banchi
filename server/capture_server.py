@@ -52,6 +52,10 @@
     POST   /pipeline/crop-preview          what the reading sends: the cut, and the digits
     POST   /pipeline/identify              START A RUN. THE ONE THAT SPENDS MONEY
     GET    /tcg/sets                       D65's real set names for a game, for the hint field
+    GET    /pipeline/submissions           the cards a live run has already claimed and is
+                                           paying to read. FREE, and the count that comes
+                                           before the release control
+    POST   /pipeline/submissions/<receipt>/release   give up a claim, on the operator's word
     GET    /pipeline/runs                  every run, newest first, with its phase
     GET    /pipeline/runs/<name>           one run: manifest, console tail, artefacts
     GET    /pipeline/runs/<name>/file      one artefact's bytes — the import CSVs, the report
@@ -588,6 +592,10 @@ _BOX_PHOTOS_RECLAIM_RE = re.compile(r"^/boxes/(\d+)/photos/reclaim$")
 # The pipeline routes. A run name is `<date>-<slug>-<nn>` and nothing else builds one, so
 # the character class here is the same one `pipeline_routes._open_run` validates against —
 # a path that reaches the handler is already known not to hold a separator.
+# A receipt is the same character class a run name is, and for the same reason: it is built
+# in one place (`store/submissions.py:new_receipt`) and nothing else ever should, so anything
+# carrying a separator or a dot-dot is not a receipt and never reaches the store.
+_SUBMISSION_RELEASE_RE = re.compile(r"^/pipeline/submissions/([A-Za-z0-9._-]+)/release$")
 _RUN_ITEM_RE = re.compile(r"^/pipeline/runs/([A-Za-z0-9._-]+)$")
 _RUN_FILE_RE = re.compile(r"^/pipeline/runs/([A-Za-z0-9._-]+)/file$")
 # The pricing table and this run's answers, in one read (D49). Matched before the
@@ -10489,6 +10497,11 @@ class CaptureHandler(BaseHTTPRequestHandler):
                 # the query string: every one of those is a slice of the one ranked list this
                 # answers with, and the screen takes the slice (see `do_pipeline_value`).
                 return self._json(HTTPStatus.OK, pipeline_routes.do_pipeline_value())
+            if path == "/pipeline/submissions":
+                # WHAT IS CLAIMED RIGHT NOW (D-a-claim-on-the-cards). Free, reads the store and
+                # holds nothing — the count that has to be on screen before the control that
+                # releases one exists, which is `GET /boxes/<box>/photos`' shape (D89).
+                return self._json(HTTPStatus.OK, pipeline_routes.do_pipeline_submissions())
             if path == "/pipeline/runs":
                 return self._json(HTTPStatus.OK, pipeline_routes.do_pipeline_runs())
             if path == "/pipeline/markdowns":
@@ -10922,6 +10935,18 @@ class CaptureHandler(BaseHTTPRequestHandler):
                 # typed since the clear.
                 return self._json(
                     HTTPStatus.OK, pipeline_routes.do_pricing_restore(self._body())
+                )
+            match = _SUBMISSION_RELEASE_RE.match(path)
+            if match:
+                # THE NAMED WAY OUT OF A STUCK CLAIM (D-a-claim-on-the-cards). It spends
+                # nothing and it can COST something — releasing a claim whose holder is still
+                # submitting re-opens those cards to a second press — so it takes a `confirm`
+                # like the money route above it, and the free preview says which case it is.
+                return self._json(
+                    HTTPStatus.OK,
+                    pipeline_routes.do_pipeline_submission_release(
+                        match.group(1), self._body()
+                    ),
                 )
             if path == "/pipeline/identify":
                 status, body = pipeline_routes.do_pipeline_identify(self._body())

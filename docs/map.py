@@ -387,7 +387,7 @@ COMPONENTS = [
                                         "bind (D145, D165). Two boxes get no "
                                         "scope rather than a guessed one (D48).",
                                 "governed_by": ["D1", "D2", "D21", "D23", "D33", "D36", "D48",
-                                                "D145", "D163", "D165"]},
+                                                "D145", "D163", "D165", "D-a-claim-on-the-cards"]},
             "cmd_join.py": {"does": "resolve identifications against the export; --dry-run previews. "
                                     "SEEDS inventory/prices.json's rule and basis on the first "
                                     "join of an EMPTY corpus and never reassigns them (D49, D86) "
@@ -1163,6 +1163,47 @@ COMPONENTS = [
                                           "D29", "D36", "D53", "D63", "D88", "D113"],
                           "tested_by": ["T7"]},
             "cache.py": {"does": "the `identifications` table — answers already paid for", "governed_by": ["D2", "D21", "D88"]},
+            # THE ONLY BINDING IN THIS PIPELINE THAT PROTECTS A DOLLAR, and it replaces a BOX
+            # number with the cards actually being bought. The box form is wrong in both
+            # directions — it refuses two disjoint selections in one drawer (D48's accepted
+            # narrowing) and it cannot see a run spanning two drawers at all, because
+            # `_run_box` answers None for one. The cache cannot stand in for either: an entry
+            # is written AFTER collection, so two presses racing both see an empty cache and
+            # both pay.
+            "submissions.py": {"does": "the `submissions` table — one row per press, holding the "
+                                       "position keys that press is about to pay to read. "
+                                       "`claim_or_refuse` is the guard and it is ONE ACT: it "
+                                       "RECOMPUTES the send list from the cache it is handed, "
+                                       "intersects it against every live claim, and writes the row "
+                                       "— all inside the caller's `Store.write()`, which is what "
+                                       "makes it atomic against another press (D88). The caller "
+                                       "computed its misses thousands of file reads earlier, so "
+                                       "the two things that can have moved — the cache and the "
+                                       "other claims — are both read here under the lock. WHAT IS "
+                                       "CLAIMED IS THE SEND LIST AND NEVER THE SELECTION: on the "
+                                       "operator's store 2,321 of 2,535 cards are cache hits, so a "
+                                       "press over everything locks ~214 cards, and a press that "
+                                       "buys nothing writes no row at all. `force` is the "
+                                       "deliberate re-read (`--reidentify-stale` targets are cache "
+                                       "hits by construction and would otherwise be dropped from "
+                                       "the claim); `resuming` releases the claims of the ONE run "
+                                       "being re-entered and of no other. A ROW DOES NOT SELF-HEAL "
+                                       "AND MAY NOT: a run killed after it submitted has a batch "
+                                       "in flight nobody collected, so `holder_alive` is REPORTED "
+                                       "— pid plus the `ps` start string recorded at claim time, "
+                                       "failing toward live — and never acted on. `release` is the "
+                                       "named way out and leaves a tombstone rather than deleting "
+                                       "the row. `counted` publishes the WORK: rows live, cards "
+                                       "locked, dead holders",
+                               "governed_by": ["D-a-claim-on-the-cards", "D7", "D18", "D36", "D48", "D88"],
+                               "note": "PROVED BY `make submission-selftest` AND NOT BY THE "
+                                       "HARNESS, which is why `tested_by` is empty: that field "
+                                       "names harness tests, and this guard's subject is two "
+                                       "OS processes racing a real flock over a throwaway store "
+                                       "— not something a harness test can pose. Ten mutation "
+                                       "arms, all caught. WHAT IS UNPROVEN: no claim has been "
+                                       "written by a real identify press, so nothing here has "
+                                       "yet prevented an invoice."},
             "files.py": {"does": "where the store lives, the lock, and the atomic replace the "
                                  "files still beside the database use (prices.json, codes.jsonl)",
                          "governed_by": ["D13", "D15", "D43", "D86", "D166"], "tested_by": ["T7"]},
@@ -1176,7 +1217,7 @@ COMPONENTS = [
                                    "loads only the rows a caller names. `buried()` (D134) is "
                                    "`history()`'s narrower sibling: the `buried` events alone, "
                                    "for `#/graveyard`'s read.",
-                           "governed_by": ["D145", "D13", "D53", "D63", "D88", "D134"], "tested_by": ["T7"]},
+                           "governed_by": ["D145", "D13", "D53", "D63", "D88", "D134", "D-a-claim-on-the-cards"], "tested_by": ["T7"]},
             "rows.py": {"does": "`Rows`: a keyed mapping of records that is a dict to every "
                                 "caller and, bound to a `Source`, loads one row, one indexed "
                                 "column's matches, or column values with no object built at all. "
@@ -1191,7 +1232,7 @@ COMPONENTS = [
                               "`events_named` (D134) is an unindexed `WHERE event = ?` scan over "
                               "that same table — no new index, because this repo has no schema "
                               "migration to add one to a store already on disk.",
-                      "governed_by": ["D145", "D20", "D86", "D88", "D134"], "tested_by": ["T7"]},
+                      "governed_by": ["D145", "D20", "D86", "D88", "D134", "D-a-claim-on-the-cards"], "tested_by": ["T7"]},
         },
     },
     {
@@ -1708,6 +1749,27 @@ COMPONENTS = [
                 # duplicating. D18 keeps its self-test off the commit path: it signals.
                 "governed_by": ["D169", "D18", "D43",
                                 "D53", "D88", "D111", "D127"],
+            },
+            "submission-selftest.py": {
+                "does": "proves the identify claim table by violating it. A throwaway store "
+                        "per case with `PKMNSCAN_HOME` repointed, because the press this guard "
+                        "stops costs money and pointing it at the operator's store is the "
+                        "incident rather than the test. THE RACE CASE REPRODUCES THE BUG "
+                        "BEFORE THE FIX PROVES ANYTHING, which is reap-selftest.sh's rule: two "
+                        "real processes run the check-then-claim order anybody writes first and "
+                        "BOTH buy the same card, then the same two go through "
+                        "`claim_or_refuse` and exactly one wins, six rounds of six. The barrier "
+                        "is a barrier and not a sleep (D136) — the naive children synchronise "
+                        "twice, so the window is held open by construction rather than by hoping "
+                        "a sleep is long enough. Then: two disjoint selections in one drawer that "
+                        "the box form refuses, a press spanning drawers that the box form cannot "
+                        "see at all (in both orders, and overlapping in a drawer that is NOT the "
+                        "first one named — the arm that survived until that case existed), a "
+                        "holder killed with -9 whose claim must keep blocking and become "
+                        "releasable, a pid-reuse case, and THE FIGURES: rows live and CARDS "
+                        "locked, because a table that claimed nothing would pass every outcome "
+                        "assertion in the file. Mutation-tested: ten arms, all caught.",
+                "governed_by": ["D-a-claim-on-the-cards", "D7", "D18", "D48", "D88", "D136"],
             },
             "reap-selftest.sh": {
                 "does": "proves reap.py by pointing it at processes it must not kill. A "
@@ -2406,7 +2468,7 @@ COMPONENTS = [
                 # for vale. Change one and the entry describing that check goes stale with it,
                 # which is exactly what `governed_by` is for — so they are listed rather than
                 # allowlisted away.
-                "governed_by": ["D16", "D17", "D18", "D43", "D44", "D47", "D53", "D58", "D60", "D65", "D68", "D74", "D76", "D80", "D82", "D92", "D111", "D122", "D127", "D129", "D133", "D138", "D140", "D160"],
+                "governed_by": ["D16", "D17", "D18", "D43", "D44", "D47", "D53", "D58", "D60", "D65", "D68", "D74", "D76", "D80", "D82", "D92", "D111", "D122", "D127", "D129", "D133", "D138", "D140", "D160", "D7", "D48", "D88"],
                 "note": "IT DECLARES THE SUITE AND DELIBERATELY DOES NOT DRIVE IT, which is "
                         "the whole shape. A registry that drove `make check` could not "
                         "disagree with the recipe — and could silently stop running a check, "
@@ -2836,7 +2898,7 @@ COMPONENTS = [
                                 "D77", "D79", "D83", "D86", "D87", "D88", "D89", "D90", "D91",
                                 "D92", "D93", "D96", "D100", "D103", "D104", "D108", "D113",
                                 "D115", "D116", "D132", "D134", "D137", "D138",
-                                "D168"],
+                                "D168", "D-a-claim-on-the-cards"],
                 "tested_by": ["T7"],
             },
             "tcg_import.py": {"does": "THE OUTBOUND WRITE to the seller admin, and the only "
@@ -2991,7 +3053,7 @@ COMPONENTS = [
                                 "D58", "D59", "D62", "D64", "D65", "D68", "D76", "D78",
                                 "D79", "D86", "D87", "D88", "D100", "D103", "D105", "D134",
                                 "D137", "D145", "D147", "D156", "D159", "D165", "D166",
-                                "D168"],
+                                "D168", "D-a-claim-on-the-cards", "D89"],
                 "tested_by": ["T7"],
             },
             "shipping_routes.py": {
@@ -4453,6 +4515,44 @@ COMPONENTS = [
                                       # `make design-check`, not at turn end, so it is named
                                       # here in prose rather than in `tested_by`.
                                       },
+            "src/SubmissionClaims.tsx": {"does": "the panel on #/runs saying what a live send "
+                                                 "is holding, and the ONE way out of a stuck "
+                                                 "claim (D-a-claim-on-the-cards). It draws "
+                                                 "NOTHING when nothing is claimed, which on a "
+                                                 "healthy store is always — that is why this is "
+                                                 "a panel and not a thirteenth route, since a "
+                                                 "route for it would be a nav item leading to an "
+                                                 "empty page. The free count comes before the "
+                                                 "control that fires (D89's shape): "
+                                                 "`getSubmissions` holds nothing and the release "
+                                                 "button does not exist until it has answered. A "
+                                                 "LIVE HOLDER IS OFFERED NO RELEASE AT ALL — "
+                                                 "releasing a claim whose run is still "
+                                                 "submitting re-opens those cards to the second "
+                                                 "press the claim exists to prevent — so the "
+                                                 "button is drawn only for `holder_alive: false` "
+                                                 "and a live one says to watch the run instead. "
+                                                 "Not a disabled control: D50's `not-allowed` is "
+                                                 "for an action that exists and cannot be used "
+                                                 "now. The poll stops when nothing is held, and "
+                                                 "a dropped poll holds the last list rather than "
+                                                 "letting a live claim vanish off the screen",
+                                         "governed_by": ["D-a-claim-on-the-cards", "D33", "D39",
+                                                         "D50", "D89", "D94", "D118"]},
+            "src/SubmissionClaims.css": {"does": "that panel's own styles: the row's two columns "
+                                                 "and nothing else — the kit supplies the panel, "
+                                                 "the list, the pills and the buttons. The action "
+                                                 "slot RESERVES THE TALLEST OF ITS STATES (D118), "
+                                                 "floored at `max()` of the control tokens, "
+                                                 "because a holder dying under a poll swaps one "
+                                                 "pill for a pill and a button and an unreserved "
+                                                 "row would shove every row below it down while "
+                                                 "the operator is reading them. Positions are "
+                                                 "mono because `3/12` is a store key, which is "
+                                                 "the register rule and not a decoration. Names "
+                                                 "no color",
+                                         "governed_by": ["D-a-claim-on-the-cards", "D94", "D117",
+                                                         "D118"]},
             "src/LiveReconcile.css": {"does": "the store-wide reconcile panel's own styles — "
                                              "quieter than the run panel above it on purpose, "
                                              "and the stdout block is `white-space: pre` with "
@@ -4473,7 +4573,7 @@ COMPONENTS = [
                              # sessionStorage carve-out the handoff rides. D10 is cards-not-
                              # high-water on the chip, D32 the crop pair whose estimate the
                              # scope key voids, D38 the layout this left behind.
-                             "governed_by": ["D5", "D10", "D13", "D20", "D27", "D32", "D33", "D38", "D39", "D56", "D87", "D100"]},
+                             "governed_by": ["D5", "D10", "D13", "D20", "D27", "D32", "D33", "D38", "D39", "D56", "D87", "D100", "D-a-claim-on-the-cards"]},
             "src/Runs.css": {"does": "its page chrome, to docs/DESIGN.md's numbers literally: 16px "
                                      "on all four sides, a 20px display title sharing its line "
                                      "with the scope and the controls, a one-line lede, and the "

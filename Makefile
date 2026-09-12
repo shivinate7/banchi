@@ -71,6 +71,8 @@ help:
 	@echo "                    since? Reports and never repairs (D140, amended). Writes nothing."
 	@echo "  make claim-selftest   the claimer, proved with main moving underneath the branch."
 	@echo "  make decisions-selftest  docs/decisions/ is complete and still round-trips."
+	@echo "  make submission-selftest  the identify claim table, proved by racing two presses"
+	@echo "                    over one card. In \`check\`, never in the hook."
 	@echo "  make janitor-selftest  the sweep, proved against a throwaway clone. In \`check\`, never in the hook."
 	@echo "  make reap-selftest  the kill guard, proved by pointing it at what it must not kill."
 	@echo "  make suite-lock-selftest  one browser fleet at a time, proved by violating it."
@@ -91,7 +93,7 @@ help:
 	@echo "                    write. Reaches the network, so it never gates a commit."
 	@echo "  make check        harness + docs-audit + audit-self-test + githooks-selftest +"
 	@echo "                    merge-selftest + revert-selftest + claim-selftest + claim-stale +"
-	@echo "                    decisions-selftest +"
+	@echo "                    decisions-selftest + submission-selftest +"
 	@echo "                    revert-guard +"
 	@echo "                    janitor-selftest + reap-selftest + suite-lock-selftest +"
 	@echo "                    serve-selftest +"
@@ -403,6 +405,7 @@ check:
 	@$(MAKE) --no-print-directory revert-selftest
 	@$(MAKE) --no-print-directory claim-selftest
 	@$(MAKE) --no-print-directory decisions-selftest
+	@$(MAKE) --no-print-directory submission-selftest
 	@$(MAKE) --no-print-directory janitor-selftest
 	@$(MAKE) --no-print-directory reap-selftest
 	@$(MAKE) --no-print-directory suite-lock-selftest
@@ -438,6 +441,7 @@ ci-check:
 	@$(MAKE) --no-print-directory claim-selftest
 	@$(MAKE) --no-print-directory claim-stale
 	@$(MAKE) --no-print-directory decisions-selftest
+	@$(MAKE) --no-print-directory submission-selftest
 	@$(MAKE) --no-print-directory revert-guard
 	@$(MAKE) --no-print-directory janitor-selftest
 	@$(MAKE) --no-print-directory reap-selftest
@@ -684,6 +688,24 @@ reap-selftest:
 	@bash scripts/reap-selftest.sh
 
 .PHONY: reap reap-selftest
+
+# THE ONE BINDING THAT PROTECTS A DOLLAR, PROVED BY VIOLATING IT (D-a-claim-on-the-cards).
+# `store/submissions.py` refuses a second `identify` press over cards a live run has already
+# claimed, and that refusal cannot be exercised against the real thing: the press it stops
+# costs money at Anthropic, so "run two presses at the operator's store and read the invoice"
+# is the incident rather than the test. Every case runs against a throwaway store under
+# `mktemp -d` and the concurrent ones are real separate processes racing a real flock.
+#
+# IT REPRODUCES THE BUG BEFORE IT PROVES THE FIX, which is reap-selftest's rule: one case runs
+# the children in the check-then-claim order anybody writes first and watches BOTH presses buy
+# the same card. Without that, the case beside it proves only that something happened.
+#
+# In `check`, never in the git hook: D18 — it writes a temp tree and it signals processes.
+# Same standing as janitor-selftest and reap-selftest. Mutation-tested: ten arms, all caught.
+submission-selftest:
+	@$(PYTHON) scripts/submission-selftest.py
+
+.PHONY: submission-selftest
 
 # THE SWEEP, WHERE EVERY REPO CAN REACH IT. `~/.claude/settings.json` hooks apply to every
 # session in every project, but the command they name has to exist without this checkout in

@@ -47,6 +47,7 @@ from identify import batch, cost, images, prompt, sidecar
 from pipeline import games
 from store import files as store_files
 from store import master
+from store import submissions
 from store.session import Store
 
 # THE RATES MOVED TO `identify/cost.py` ON 2026-09-11, and nothing about them changed. They
@@ -565,6 +566,30 @@ def _code_ledger_lines(items: List[Item], run_name: str, captured_at_of):
     return lines, skipped
 
 
+def _adopt_cached(item: Item, entry, fingerprints: Dict[str, str]) -> None:
+    """Take an answer the store already owns onto this item. NOT a cache read — the caller did
+    that and hands the entry in.
+
+    IT IS A FUNCTION BECAUSE IT HAS TWO CALLERS, and the second one is the reason the first was
+    extracted (D-a-claim-on-the-cards). The consult pass below reads the cache once, minutes
+    and thousands of file reads before the claim is written; `claim_or_refuse` reads it AGAIN
+    inside the transaction it writes the claim in, and a key that became a hit in between is
+    dropped from the claim. A card dropped there would otherwise be submitted with nothing
+    holding it, and reporting it as a failure instead would be an `identification_failed` queue
+    entry for a card whose answer is sitting in the store. So the narrowing adopts the answer,
+    through this, and the two paths cannot drift.
+
+    `parsed` IS LEFT None ON PURPOSE, which is `Item.parsed`'s own rule: a cache hit's payload
+    was parsed on the run that paid for it and is not re-parsed on a run that did not.
+    """
+    item.cached = True
+    item.stage = STAGE_CACHED
+    item.identification = dict(entry.identification)
+    item.status = batch.SUCCEEDED
+    expected = fingerprints.get(item.strategy)
+    item.stale_prompt = expected is not None and entry.prompt_fingerprint != expected
+
+
 def run(args, say) -> int:
     capture_dir = Path(args.capture_dir)
     store = Store()
@@ -660,12 +685,7 @@ def run(args, say) -> int:
         if item.key in stale_targets:
             item.retry_reasons.append("reidentify-stale")
             continue
-        item.cached = True
-        item.stage = STAGE_CACHED
-        item.identification = dict(entry.identification)
-        item.status = batch.SUCCEEDED
-        expected = fingerprints.get(item.strategy)
-        item.stale_prompt = expected is not None and entry.prompt_fingerprint != expected
+        _adopt_cached(item, entry, fingerprints)
 
     # A CARD NOBODY HAS A PROMPT FOR IS REFUSED HERE, BEFORE IT COSTS ANYTHING — the same
     # refusal, in the same words, that `identify/batch.py` would answer at submission. In
@@ -878,6 +898,88 @@ def run(args, say) -> int:
         say("--dry-run: nothing submitted, nothing written.")
         return 0
 
+    # ------------------------------------------------------- claim what is about to be bought
+    #
+    # THE LAST FREE ACT BEFORE THE MONEY, AND THE ONLY THING THAT STOPS A DOUBLE INVOICE
+    # (D-a-claim-on-the-cards). Everything above this line is reads and decodes; everything
+    # below it can spend. `server/pipeline_routes.py:_busy_run` refuses a second press over one
+    # BOX and cannot see this run at all when its captures span two drawers — `_scope_for`
+    # writes no scope block for such a run — so the guard that counts is here, in the one
+    # command every press goes through, keyed by the cards rather than by the drawer.
+    #
+    # THE CHECK AND THE WRITE ARE ONE TRANSACTION AND THE SEND LIST IS RECOMPUTED INSIDE IT.
+    # `to_send` was decided by the consult pass above, against a snapshot read before the
+    # prepare pass — on 678 photographs that is a minute of decoding ago. Two presses can both
+    # reach here believing they are first, so the intersection is computed against claims read
+    # under the lock and the row is written before it is released. See `store/submissions.py`.
+    claim = None
+    if to_send:
+        with store.write() as claiming:
+            claim, conflicts = claiming.submissions.claim_or_refuse(
+                {item.key: item.photo_sha256 for item in to_send},
+                claiming.cache,
+                # THE DELIBERATE RE-READS, WHICH ARE CACHE HITS BY CONSTRUCTION. Without this
+                # the recompute would drop every `--reidentify-stale` target from the claim and
+                # the run would submit cards nothing was holding.
+                force=stale_targets,
+                # A RESUME IS THIS RUN CONTINUING. `--run-dir` re-enters a run that already
+                # claimed these cards, so its own stale claim is the first thing this would
+                # collide with; naming it releases that run's claims and nobody else's.
+                resuming=(Path(args.run_dir).name if getattr(args, "run_dir", None) else None),
+                capture_dir=str(capture_dir),
+            )
+            if conflicts:
+                # NOTHING WAS WRITTEN, so leaving the block commits nothing — `Rows.changes()`
+                # finds no diff. The refusal is the answer and the run is not created: a press
+                # refused here has cost a preflight and not a run directory.
+                say("")
+                say("refused: these cards are already claimed by a live submission.")
+                say(f"  {submissions.conflict_sentence(conflicts)}")
+                say("")
+                say(
+                    "Two live batches over one card is two invoices for one answer. Watch that "
+                    "run, or release its claim on #/runs if its holder is gone."
+                )
+                return 1
+        if claim is None:
+            # THE RECOMPUTE EMPTIED THE SEND LIST: every card this press was going to buy
+            # became a cache hit while it was preparing, which means another run finished and
+            # banked the answers. Nothing is claimed because nothing is being bought.
+            say("")
+            say(
+                f"every one of the {len(to_send)} card(s) this run was going to send is now "
+                f"answered in the store — another run banked them while this one was preparing. "
+                f"Nothing is being submitted."
+            )
+            for item in to_send:
+                entry = store.read().cache.reusable(item.key, item.photo_sha256 or "")
+                if entry is not None:
+                    _adopt_cached(item, entry, fingerprints)
+            to_send = [i for i in items if i.stage == STAGE_PENDING]
+        elif len(claim.keys) != len(to_send):
+            # NARROWED, NOT REFUSED. Same cause as above and a partial version of it: the cards
+            # the recompute dropped take the answer the store now owns, and the send list
+            # becomes exactly what was claimed — which is the property the claim's whole
+            # meaning rests on, asserted here rather than assumed.
+            held = set(claim.keys)
+            adopted = 0
+            for item in list(to_send):
+                if item.key in held:
+                    continue
+                entry = store.read().cache.reusable(item.key, item.photo_sha256 or "")
+                if entry is None:
+                    continue
+                _adopt_cached(item, entry, fingerprints)
+                adopted += 1
+            to_send = [i for i in items if i.stage == STAGE_PENDING]
+            say("")
+            say(
+                f"claim           {len(claim.keys)} card(s) held under {claim.receipt}; "
+                f"{adopted} dropped from the send — answered in the store since the preflight"
+            )
+        else:
+            say(f"claim           {len(claim.keys)} card(s) held under {claim.receipt}")
+
     # ------------------------------------------------------------------------- the run
     run_dir = (
         runs.open_run(args.run_dir)
@@ -904,6 +1006,15 @@ def run(args, say) -> int:
         },
     )
     say(f"run             {run_dir.directory}")
+
+    # THE CLAIM LEARNS ITS RUN'S NAME, and this is the second of the two tiny transactions
+    # `Submissions.attach_run` argues for. It cannot be folded into the claim above: the claim
+    # has to be written BEFORE `runs.create`, or a press refused on intersection leaves an
+    # empty run directory on `#/runs`. This write failing is harmless — the claim still holds,
+    # still blocks and still releases; the screen just draws it without a run name.
+    if claim is not None:
+        with store.write() as naming:
+            naming.submissions.attach_run(claim.receipt, run_dir.name)
 
     # Keyed by the SUBMITTED id, not the store key: outcomes come back named by
     # custom_id, and building the lookup through the same translation is what lets
@@ -1050,6 +1161,7 @@ def run(args, say) -> int:
     run_dir.write_identifications(payload)
 
     disagreements: List[dict] = []
+    released_keys = 0
     with store.write() as writable:
         for item in items:
             if item.capture.has_position:
@@ -1159,6 +1271,19 @@ def run(args, say) -> int:
                 ).encode("utf-8"),
             )
 
+        # THE CLAIM IS GIVEN BACK BY THE SAME COMMIT THAT BANKS WHAT IT BOUGHT
+        # (D-a-claim-on-the-cards). Both, or neither: the cards stop being held at the exact
+        # moment the answers they paid for become the cache entries that make a second press
+        # free. A `finally` here would be the defect — this command can die between submitting
+        # a batch and collecting it, and the batch is paid for and keeps for 29 days, so a
+        # claim released on the way out of a crash is a green button over an invoice that has
+        # already been rung up. A run that does not reach this line KEEPS its claim, and the
+        # release control on `#/runs` is the named way out.
+        if claim is not None:
+            freed = writable.submissions.release(claim.receipt, submissions.BY_RUN)
+            if freed is not None:
+                released_keys = len(freed.keys)
+
     # --------------------------------------------------------------------------- report
     answered = [i for i in items if i.identification is not None]
     failed = [i for i in items if i.identification is None]
@@ -1210,6 +1335,12 @@ def run(args, say) -> int:
             f"identification_failed — never dropped:")
         for item in failed:
             say(f"                  {item.key} {item.status}: {item.error}")
+    if claim is not None:
+        # THE WORK, NOT THE OUTCOME. A guard whose figures are never printed is a guard nobody
+        # can tell is armed — the addendum to the hash-first PR records deleting its gate and
+        # watching every outcome stay green. So the press says how many cards it held and that
+        # it gave them back, and `make submission-selftest` asserts both figures.
+        say(f"claim           {released_keys} card(s) released ({claim.receipt})")
     say("")
     say(f"next: pkmnscan join {run_dir.directory} --export <filtered-export.csv>")
     return 0

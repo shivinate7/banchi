@@ -52,6 +52,7 @@ from store.master import Inventory
 from store.orders import Ledger
 from store.queues import MAIN, PARKED, Queue
 from store.rows import Rows
+from store.submissions import Submissions
 
 
 @dataclass
@@ -64,6 +65,11 @@ class Snapshot:
     review: Queue
     parked: Queue
     ledger: Ledger
+    # THE CARDS A LIVE RUN HAS ALREADY CLAIMED (D-a-claim-on-the-cards). It is in the snapshot
+    # rather than beside it for the one reason that makes the claim worth anything: the check
+    # against it and the write of it have to be the SAME transaction as the cache consult that
+    # decides what is being bought, and D88 is what makes that one transaction.
+    submissions: Submissions
 
     def queue(self, name: str) -> Queue:
         return self.review if name == MAIN else self.parked
@@ -85,6 +91,7 @@ class Snapshot:
             self.parked.entries,
             self.ledger.orders,
             self.ledger.fulfilment,
+            self.submissions.entries,
         ]
 
 
@@ -123,6 +130,7 @@ class Store:
                 orders=bound(Ledger.ORDERS, "orders"),
                 fulfilment=bound(Ledger.FULFILMENT, "fulfilment"),
             ),
+            submissions=Submissions(entries=bound(Submissions.ENTRIES, "submissions")),
         )
 
     def read(self) -> Snapshot:

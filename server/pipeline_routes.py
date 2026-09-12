@@ -150,7 +150,9 @@ from pipeline import pricehistory  # noqa: E402
 # in it, so this costs one stdlib module. The command module could not be imported for them:
 # it reaches geometry, PIL and sqlite.
 from identify import cost  # noqa: E402
+from identify import sidecar  # noqa: E402
 from store import Store, files, master  # noqa: E402
+from store import submissions as claims  # noqa: E402
 from store.session import Snapshot  # noqa: E402
 
 PKMNSCAN = REPO_ROOT / "pkmnscan"
@@ -184,6 +186,11 @@ MAX_LEGS = 16
 # four take while making the machine unusable. Bounded rather than unbounded for the same
 # reason `MAX_LEGS` exists one constant up.
 PREFLIGHT_WORKERS = 4
+
+# How many of a claim's cards the wire carries. Enough to recognise which selection it is —
+# two or three positions is what tells a double-click from a drawer you had forgotten — and
+# bounded because a store-wide press claims hundreds and the screen draws a sentence.
+CLAIM_KEYS_SHOWN = 8
 
 # ------------------------------------------------------------ the children we started
 #
@@ -996,6 +1003,182 @@ def _busy_run(box: int) -> Optional[str]:
     return None
 
 
+def _leg_keys(leg: Leg) -> List[str]:
+    """Every position key the photographs in this leg's directory carry.
+
+    THE SELECTION, NOT THE SEND LIST, and the difference is what makes this check cheap enough
+    to run at a press. The send list needs a digest per photograph and a cache consult; the
+    SELECTION needs only the sidecars, which is what `cli/cmd_identify.py` reads first anyway.
+    A claim holds the other press's MISSES, so intersecting this against it is exact in the
+    direction that matters — a press whose selection touches a claimed card is refused, and a
+    press whose selection touches none of them is not.
+
+    WHAT IT CAN OVER-REFUSE, named rather than hidden: a card of mine that is a cache HIT and
+    somebody else's live miss. My press would pay nothing for it and is refused anyway, for as
+    long as their claim stands. That is the correct trade at a money press, and their claim
+    goes when their run finishes.
+
+    THE SIDECARS AND NOT THE FILENAMES. `<index>.jpg` looks like it names the key and does not:
+    `Capture.box` is what the capture RECORDED, and the two disagree the moment a directory is
+    renamed or handed over as a pile — `cli/cmd_identify.py:_scope_for` carries the same note.
+    Reading them is one small file per photograph and no decode.
+
+    IT NEVER RAISES. A directory this cannot read costs the press its courtesy check and not
+    the press: the authoritative claim is written by the command itself, under the store lock,
+    and an empty answer here degrades to exactly the guard that was there before.
+    """
+    try:
+        captures = sidecar.scan(leg.directory, box=leg.scope["box"])
+    except Exception:  # noqa: BLE001 — a courtesy check is never worth an unstarted run
+        return []
+    return [capture.key for capture in captures if capture.has_position]
+
+
+def _claim_conflicts(legs: Sequence[Leg]) -> List[dict]:
+    """Which legs of this cart hold cards a live submission has already claimed.
+
+    THE COURTESY HALF OF THE GUARD (D-a-claim-on-the-cards), AND IT IS NOT THE GUARD. The
+    binding one is `store/submissions.py:claim_or_refuse`, called by the command inside the
+    transaction it writes the claim in — that is the only place a refusal can be atomic with
+    respect to another press. This runs before anything is spawned so that the ordinary
+    double-click is answered AT THE PRESS, with a sentence, instead of by a child that starts,
+    refuses and dies as a red row on the screen.
+
+    BOTH EXIST BECAUSE THEY FAIL DIFFERENTLY. This one can be beaten by a press that lands
+    between the read and the spawn; the command's cannot. This one is the only one that can
+    refuse the whole cart before a single child is started, which is `_resolve_legs`'
+    validate-everything-then-write-everything applied to money.
+    """
+    try:
+        held = Store().read().submissions
+        live = held.live()
+    except Exception:  # noqa: BLE001
+        return []
+    if not live:
+        return []
+    found: List[dict] = []
+    for leg in legs:
+        overlap = held.overlap(_leg_keys(leg))
+        if not overlap:
+            continue
+        found.append(
+            {
+                "box": leg.scope["box"],
+                "cards": sum(len(shared) for _, shared in overlap),
+                "receipts": [sub.receipt for sub, _ in overlap],
+                "runs": [sub.run for sub, _ in overlap if sub.run],
+                "sentence": claims.conflict_sentence(overlap),
+            }
+        )
+    return found
+
+
+def _claim_rows() -> List[dict]:
+    """Every live claim, as the screen draws it. FREE, reads the store and holds nothing.
+
+    THE COUNT BEFORE THE CONTROL THAT FIRES, which is `GET /boxes/<box>/photos`' shape one
+    feature over (D89): the release button is not drawn until this has answered, so the
+    receipt, the run, the number of cards and whether the holder is still alive are all on
+    screen before anything can be pressed.
+
+    `holder_alive` IS THE FIELD THE SCREEN BRANCHES ON, and it is reported rather than acted
+    on. A claim whose holder is gone still blocks — a run killed after it submitted has a
+    batch in flight that nobody collected, and a guard that auto-healed that row would hand
+    the operator a green button over an invoice already rung up. So the screen says WAIT for a
+    live holder and OFFERS THE RELEASE for a dead one, and the choice stays the operator's.
+    """
+    held = Store().read().submissions
+    rows = []
+    for sub in held.live():
+        rows.append(
+            {
+                "receipt": sub.receipt,
+                "run": sub.run,
+                "pid": sub.pid,
+                "started_at": sub.started_at,
+                "cards": len(sub.keys),
+                # Enough to recognise the selection, never the whole set: a store-wide press
+                # claims hundreds and the screen draws a sentence, not a manifest. IN POSITION
+                # ORDER AND NOT THE STORED ORDER — the row's `keys` is sorted as strings so the
+                # payload is stable, which puts `3/10` before `3/2` and reads on screen like a
+                # fault in the guard itself.
+                "sample": sorted(sub.keys, key=claims.by_position)[:CLAIM_KEYS_SHOWN],
+                "capture_dir": sub.capture_dir,
+                "holder_alive": claims.holder_alive(sub),
+            }
+        )
+    return rows
+
+
+def do_pipeline_submissions() -> dict:
+    """`GET /pipeline/submissions` — what is claimed right now, and what it cost to know."""
+    rows = _claim_rows()
+    return {
+        "claims": rows,
+        # THE WORK, ON THE WIRE. Rows, cards locked, and how many are held by a process that
+        # is gone — the three figures that say whether this guard is doing anything, published
+        # rather than inferred from the fact that nothing went wrong.
+        "counts": {
+            "claims": len(rows),
+            "keys": sum(row["cards"] for row in rows),
+            "stale": len([row for row in rows if not row["holder_alive"]]),
+        },
+    }
+
+
+def do_pipeline_submission_release(receipt: str, payload: dict) -> dict:
+    """`POST /pipeline/submissions/<receipt>/release` — give up a claim, on the operator's word.
+
+    THE NAMED WAY OUT, and the reason a row is allowed not to self-heal. `_busy_run` recovered
+    from a wedge by itself because `_CHILDREN` empties on a restart; a row does not, and that
+    is deliberate — see `store/submissions.py`. What replaces the automatic recovery is this:
+    one press, with the receipt on it, after a free preview that says whether the holder is
+    still there.
+
+    IT SPENDS NOTHING AND IT CAN COST SOMETHING, which is why it takes a `confirm` exactly as
+    the money route does. Releasing a claim whose holder is still submitting re-opens those
+    cards to a second press, and that press would be the double invoice the claim existed to
+    prevent. The refusal says so, and the preview says which case this is.
+
+    A RECEIPT THAT IS NOT THERE IS A 404 AND ONE ALREADY RELEASED IS AN ORDINARY ANSWER. The
+    distinction `do_review_answer`'s undo already draws: nothing there, versus already done —
+    so a replayed request and a stale screen both land on the first press's answer.
+    """
+    if payload.get("confirm") is not True:
+        raise PipelineRefusal(
+            HTTPStatus.BAD_REQUEST,
+            "confirm_required",
+            "Releasing a claim re-opens its cards to another press. If its holder is still "
+            "submitting, that press is the second invoice this claim exists to prevent. Send "
+            "`confirm: true`, and show the operator whether the holder is alive first.",
+        )
+    if not isinstance(receipt, str) or not re.fullmatch(r"[A-Za-z0-9._-]+", receipt or ""):
+        raise PipelineRefusal(
+            HTTPStatus.BAD_REQUEST, "receipt_invalid", f"{receipt!r} is not a receipt."
+        )
+    with Store().write() as writable:
+        claim = writable.submissions.get(receipt)
+        if claim is None:
+            raise PipelineRefusal(
+                HTTPStatus.NOT_FOUND,
+                "no_such_claim",
+                f"There is no claim {receipt}. Read /pipeline/submissions for the ones there "
+                f"are — a claim released earlier is gone from that list by design.",
+            )
+        was_live = claim.live
+        cards = len(claim.keys)
+        run = claim.run
+        writable.submissions.release(receipt, claims.BY_OPERATOR)
+    return {
+        "receipt": receipt,
+        "run": run,
+        # WHAT THE PRESS ACTUALLY DID, so the receipt on screen is a figure and not a word.
+        "released": was_live,
+        "cards": cards,
+        "claims": _claim_rows(),
+    }
+
+
 # ------------------------------------------------------------------------- the preflight
 
 
@@ -1086,6 +1269,12 @@ def _preflight_leg(leg: Leg) -> dict:
         # confirm before the operator reaches for it, rather than letting them press a
         # button that is going to refuse.
         "busy_run": _busy_run(leg.scope["box"]),
+        # THE SAME COURTESY, ONE VOCABULARY DOWN (D-a-claim-on-the-cards). `busy_run` answers
+        # "is a run reading this DRAWER"; this answers "has a live submission already claimed
+        # any of these CARDS", which is the question that has an answer for a press over two
+        # drawers and for two disjoint selections in one. Null where nothing is claimed, so a
+        # screen branching on it reads exactly like `busy_run` beside it.
+        "claimed": (_claim_conflicts([leg]) or [None])[0],
     }
 
 
@@ -1531,6 +1720,27 @@ def do_pipeline_identify(payload: dict) -> Tuple[HTTPStatus, dict]:
                 f"batches over one box is two invoices for one answer — watch that run, or "
                 f"wait for it to finish. Nothing in this send was started.",
             )
+    # THE CARD-LEVEL REFUSAL, OVER THE WHOLE CART, BEFORE THE FIRST CHILD STARTS
+    # (D-a-claim-on-the-cards). It sits beside the box check rather than replacing it, and it
+    # sees the two things the box check structurally cannot: a live run whose captures span
+    # more than one drawer (`_run_box` answers None for one, so `_busy_run` is blind to it in
+    # both directions), and a claim whose holder died with a batch in flight.
+    #
+    # IT IS NOT THE BINDING GUARD AND MUST NOT BE READ AS ONE. `store/submissions.py`'s claim,
+    # written by the command inside the transaction that recomputes what is being bought, is
+    # the only refusal that is atomic against another press; this one can be beaten by a press
+    # landing between the read and the spawn, and its job is to answer the ordinary
+    # double-click AT THE PRESS with a sentence instead of with a dead run on the screen.
+    conflicts = _claim_conflicts(legs)
+    if conflicts:
+        raise PipelineRefusal(
+            HTTPStatus.CONFLICT,
+            "cards_already_claimed",
+            "; ".join(row["sentence"] for row in conflicts)
+            + ". Two live batches over one card is two invoices for one answer. Watch that "
+            "run, or release its claim on this screen if its holder is gone. Nothing in this "
+            "send was started.",
+        )
 
     started: List[dict] = []
     failed: List[dict] = []

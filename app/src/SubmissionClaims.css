@@ -1,0 +1,134 @@
+/* ============================================================================
+   SUBMISSION CLAIMS — what a live send is holding, and the release for a claim
+   whose holder is gone (D-a-claim-on-the-cards).
+
+   IT DRAWS NOTHING MOST OF THE TIME. A claim exists only between a press and the
+   collection it paid for, so on a healthy store the component returns null and
+   none of this is mounted. Every rule here is for the minutes a send is live.
+
+   THE KIT DOES THE WORK. `.bn-panel`, `.bn-list`, Button, Pill and Notice are all
+   the kit's; what is below is the row's own two-column layout and nothing else.
+   No color is named here — `tokens.css` is the only file in `app/` that may.
+   ========================================================================== */
+
+.claims {
+  display: flex;
+  flex-direction: column;
+  gap: var(--bn-3);
+}
+
+.claims-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--bn-3);
+  flex-wrap: wrap;
+}
+
+.claims-title {
+  margin: 0;
+  font-family: var(--bn-font-display);
+  font-size: var(--bn-fs-lg);
+  font-weight: 600;
+  color: var(--bn-ink);
+}
+
+.claims-lede {
+  margin: 0;
+  max-width: 62ch;
+  color: var(--bn-ink-3);
+}
+
+.claims-list {
+  margin: 0;
+}
+
+/* THE ROW RESERVES THE TALLEST OF ITS STATES (D118). The action slot holds either one Pill or
+   a Pill AND a Button, and a claim's holder dying under a poll swaps the first for the second
+   — so an unreserved row would grow and shove every row below it down at the moment the
+   operator is reading them. `min-height` floors it at the button's own height rather than at
+   a literal, so it follows the control token if that ever moves. */
+/* THE SEPARATOR IS WRITTEN HERE RATHER THAN TAKEN FROM `.bn-list-row`, and that is a choice
+   about what the row IS. The kit's row class carries `:hover { background: var(--bn-hover) }`
+   because every row it was written for is a control you press; these rows are RECORDS — the
+   only thing pressable in one is the release button inside it — and a hover response on a row
+   that answers nothing is the product telling the operator to press something that does not
+   exist. So the border is borrowed and the hover is not. */
+.claims-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--bn-4);
+  min-height: max(var(--bn-control-h), var(--bn-8));
+  padding-block: var(--bn-3);
+  border-bottom: 1px solid var(--bn-line);
+}
+
+.claims-row:last-child {
+  border-bottom: 0;
+}
+
+.claims-what {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.claims-who {
+  font-family: var(--bn-font-mono);
+  font-size: var(--bn-fs-sm);
+  color: var(--bn-ink);
+}
+
+.claims-meta {
+  font-size: var(--bn-fs-sm);
+  color: var(--bn-ink-3);
+  font-variant-numeric: tabular-nums;
+}
+
+/* The positions themselves are machine strings — `3/12` is a store key — so they are mono,
+   which is the register rule rather than a decoration. Truncated rather than wrapped: the
+   count beside them is the load-bearing figure and the sample is only for recognition. */
+.claims-sample {
+  font-family: var(--bn-font-mono);
+  font-size: var(--bn-fs-xs);
+  color: var(--bn-ink-4);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.claims-act {
+  display: flex;
+  align-items: center;
+  gap: var(--bn-2);
+  flex-shrink: 0;
+}
+
+.claims-receipt {
+  margin: 0;
+  font-family: var(--bn-font-mono);
+  font-size: var(--bn-fs-xs);
+  color: var(--bn-ink-4);
+  overflow-wrap: anywhere;
+}
+
+/* A phone stacks the row: the action slot is full width so the release is a real thumb
+   target, and the control tokens raise themselves under 767px already (D117), so nothing
+   here names a height. */
+@media (max-width: 639px) {
+  .claims-row {
+    flex-direction: column;
+    align-items: stretch;
+    gap: var(--bn-2);
+  }
+
+  .claims-act {
+    justify-content: flex-start;
+  }
+
+  .claims-act .bn-btn {
+    flex: 1;
+  }
+}

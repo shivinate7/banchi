@@ -76,6 +76,8 @@ import type {
   OrderCloseReason,
   OrderCloseResult,
   ValueTable,
+  SubmissionClaims,
+  ClaimRelease,
 } from './types'
 
 /* The only module in this app that talks to the capture server.
@@ -1901,6 +1903,50 @@ export async function cropPreview(input: {
  * cards — two batches over one box is two invoices), and every scope refusal the preflight
  * would have shown first.
  */
+/**
+ * What cards a live run has already claimed and is paying to read. FREE, reads the store and
+ * holds nothing.
+ *
+ * THE STEP THAT COMES FIRST, exactly as `getBoxPhotos` is for the reclaim: the control that
+ * releases a claim is not drawn until this has answered, so the receipt, the run, the number
+ * of cards and whether the holder is still alive are all on screen before anything can be
+ * pressed. An empty list is the ordinary state of a healthy store and is not an error.
+ *
+ * `counts` IS THE WORK, NOT THE OUTCOME. Rows live, CARDS locked, and how many are held by a
+ * process that is gone — the three figures that say whether this guard is doing anything.
+ * They are the server's, summed there, for `preflightRun`'s reason: the screen does not
+ * recompute a figure the pipeline owns.
+ */
+export async function getSubmissions(): Promise<SubmissionClaims> {
+  return (await request('/pipeline/submissions', NO_CACHE)) as SubmissionClaims
+}
+
+/**
+ * Give up a claim's hold on its cards, on the operator's word.
+ *
+ * THE NAMED WAY OUT, and the reason a claim is allowed not to self-heal. `_busy_run` recovered
+ * from a wedge by itself because the server's table of children empties on a restart; a row in
+ * the store does not, and that is deliberate — a run killed after it submitted has a batch in
+ * flight at Anthropic that nobody collected, so a guard that dropped the row on finding the
+ * pid gone would offer a green button over an invoice already rung up.
+ *
+ * IT SPENDS NOTHING AND IT CAN COST SOMETHING, which is why the server requires `confirm:
+ * true` here exactly as `startRun` does. Releasing a claim whose holder is still submitting
+ * re-opens those cards to a second press, and that press is the double invoice the claim
+ * existed to prevent — so call `getSubmissions` first and draw `holder_alive`.
+ *
+ * Refusals worth branching on: `no_such_claim` (404 — a claim released earlier is gone from
+ * the list by design, so this is a stale screen). An already-released claim is NOT a refusal:
+ * it answers `released: false`, which is what a replayed request lands on.
+ */
+export async function releaseSubmission(receipt: string): Promise<ClaimRelease> {
+  return (await request(`/pipeline/submissions/${encodeURIComponent(receipt)}/release`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ confirm: true }),
+  })) as ClaimRelease
+}
+
 export async function startRun(cart: readonly RunLeg[]): Promise<RunStarted> {
   return (await request('/pipeline/identify', {
     method: 'POST',

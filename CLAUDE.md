@@ -313,7 +313,7 @@ make lint           # eslint over app/ (guards a bug earned, see app/eslint.conf
                     #   never ruff's own defaults, never --fix. Config: ruff.toml.
 make check          # harness + docs-audit + audit-self-test + githooks-selftest +
                     #   merge-selftest + revert-selftest + claim-selftest + claim-stale +
-                    #   decisions-selftest + revert-guard +
+                    #   decisions-selftest + submission-selftest + revert-guard +
                     #   janitor-selftest + reap-selftest + suite-lock-selftest +
                     #   serve-selftest +
                     #   verdict-selftest + port-agreement + set-hint-agreement +
@@ -1986,6 +1986,7 @@ D166 The catalogue export is a property of the game, and the box never chose its
 D167 A queue entry is re-resolved where it stands, and the answer reaches the price without a second press
 D168 A typed price is cleared by a press, never by an expiry, and the set it may clear is the set the corpus dates
 D169 The blanket sweep asks the question the verdict answers, and a nested worktree is another checkout
+D-a-claim-on-the-cards A press claims the cards it is about to buy, and the claim is written in the transaction that decides what they are
 ```
 
 **THE GAP THIS LIST CARRIED BETWEEN D116 AND D118 IS CLOSED, AND IT CLOSED THE WAY IT SAID IT
