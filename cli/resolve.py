@@ -28,7 +28,7 @@ from dataclasses import dataclass, field
 from decimal import Decimal
 from pathlib import Path, PurePosixPath
 from typing import (
-    Dict, List, Mapping, NamedTuple, Optional, Sequence, Tuple, Union,
+    Any, Dict, List, Mapping, NamedTuple, Optional, Sequence, Tuple, Union,
 )
 
 from cli import runs
@@ -759,40 +759,42 @@ class ExportPlan:
     notes: Tuple[str, ...] = ()
 
 
-def _games_needed(run: runs.Run) -> "OrderedDict[str, List[str]]":
-    """game -> position labels, for every card this run will hand to a catalog.
+def _needed_games(
+    cards: Mapping[str, dict], inventory: master.Inventory
+) -> "OrderedDict[str, List[str]]":
+    """game -> position labels, for every card in `cards` that will reach a catalog.
 
-    THE SAME RESOLUTION `load` APPLIES, source for source — the run's own record, then the
-    live inventory record, then the default-game backfill — so that the pre-flight check
-    and the join can never disagree about which games a run holds. Cards that never reach
-    a catalog claim no export: a card with no position or no identification is a pre-join
-    failure, and a game with `catalogued: False` is held out by design. An UNREGISTERED
-    game string raises here exactly as it would in `load` — a typo'd game is a loud stop,
-    never a quiet bucket.
+    THE HALF OF `_games_needed` THAT DOES NOT NEED A RUN, split out for `exports_for_store`
+    (D-a-join-with-no-run-directory): a store-backed join has no `identifications.json` to read and no
+    reallocation to check — its `cards` mapping is `store_payload`'s own output, built from
+    the CURRENT store, so a foreign box's cards can never be in it by construction. `_games_needed`
+    below is now the thin wrapper that reads a run's file and clears D36's reallocation
+    check before calling this.
+
+    THE SAME RESOLUTION `load` APPLIES, source for source — the record's own claim, then the
+    live inventory record, then the default-game backfill — so that the pre-flight check and
+    the join can never disagree about which games a run holds. Cards that never reach a
+    catalog claim no export: a card with no position or no identification is a pre-join
+    failure, and a game with `catalogued: False` is held out by design. An UNREGISTERED game
+    string raises here exactly as it would in `load` — a typo'd game is a loud stop, never a
+    quiet bucket.
     """
-    # Positions are not read here beyond the box number, and `load` realigns them a moment
-    # later — so this reads the payload raw rather than paying for the photo digests twice.
-    payload = run.read_identifications()
-    inventory = Store().read().inventory
-    # D36 (amended) — BEFORE the loop reads a record out of the store at this run's keys. A
-    # box whose number was deleted and reused since this run is somebody else's drawer, and
-    # the `held.game` fallback below would read a foreign card's game as this card's — which
-    # is how the first refusal to fire named 53 riftbound cards in a Pokemon run.
-    refuse_reallocated(payload, inventory, run)
     held_cards = inventory.cards
     # The same coordinates `load` renders in, off the same store, so a refusal names cards
     # by the numbers the operator will see on the screen they go looking on (D58).
     views = box_views(inventory)
     needed: "OrderedDict[str, List[str]]" = OrderedDict()
-    for key, record in sorted((payload.get("cards") or {}).items()):
+    for key, record in sorted(cards.items()):
         box, index = record.get("box"), record.get("index")
         if box is None or index is None or not record.get("identification"):
             continue
         held = held_cards.get(key)
         # The store rung reads a live record at this run's RAW key, and it is safe against
-        # a reused box number only because `refuse_reallocated` fired above. Residual, and
-        # pre-existing: a pre-D21 record with no `game` in a box that had a mid-box delete
-        # reads its NEIGHBOUR's game here, since this pass deliberately skips `realign`.
+        # a reused box number only because `refuse_reallocated` fired above (the file path)
+        # or because `cards` was built from the live store to begin with (the store path).
+        # Residual, and pre-existing: a pre-D21 record with no `game` in a box that had a
+        # mid-box delete reads its NEIGHBOUR's game here, since this pass deliberately skips
+        # `realign`.
         game = (
             record.get("game")
             or (held.game if held is not None else None)
@@ -812,6 +814,25 @@ def _games_needed(run: runs.Run) -> "OrderedDict[str, List[str]]":
     return OrderedDict(
         (game, needed[game]) for game in games.keys() if game in needed  # noqa: SIM118 — `games` is the pipeline.games MODULE; `.keys()` is a real function, not dict.keys()
     )
+
+
+def _games_needed(run: runs.Run) -> "OrderedDict[str, List[str]]":
+    """game -> position labels, for every card this run will hand to a catalog.
+
+    THE FILE PATH'S OWN TWIN OF `_needed_games`: read the run's frozen payload, clear D36's
+    reallocation check against it, then hand the same per-record resolution the store path
+    uses.
+    """
+    # Positions are not read here beyond the box number, and `load` realigns them a moment
+    # later — so this reads the payload raw rather than paying for the photo digests twice.
+    payload = run.read_identifications()
+    inventory = Store().read().inventory
+    # D36 (amended) — BEFORE the loop reads a record out of the store at this run's keys. A
+    # box whose number was deleted and reused since this run is somebody else's drawer, and
+    # the `held.game` fallback below would read a foreign card's game as this card's — which
+    # is how the first refusal to fire named 53 riftbound cards in a Pokemon run.
+    refuse_reallocated(payload, inventory, run)
+    return _needed_games(payload.get("cards") or {}, inventory)
 
 
 def _refuse_uncovered(
@@ -958,20 +979,16 @@ def exports_for(
     # wasted on a dead run. `read_identifications` refuses a run never identified the same
     # way, and that too is the run's own fault before any file's.
     needed = _games_needed(run)
-    claimed_by: Dict[str, List[Path]] = {}
-    lines_of: Dict[Path, Tuple[str, ...]] = {}
+    # RECOVERY IS THE RUN PATH'S OWN (D166): only a manifest-recorded path — never an explicit
+    # `--export` — has a digest on file to recover a moved file by. `exports_for_store` has no
+    # manifest at all, so it calls `_claim_files` with no recovery and a missing file there is
+    # refused outright.
+    recover = None if overrides else (lambda missing: _by_recorded_digest(run, missing))
     for index, path in enumerate(distinct):
         if not path.is_file():
-            # THE DIGEST IS WHAT SURVIVES A MOVE, AND RECORDING IT IS WHY (D166).
-            # A fetched export lives in `inventory/.exports/<game>/` now rather than inside the
-            # run, so the manifest's path is the only link back to it — and a shared directory
-            # is exactly where a path CAN change under a run that a run-local copy never
-            # could. The manifest records `sha256` beside `path` for this, and the file's own
-            # NAME carries the first 32 bits of it, so the file is found by the record rather
-            # than by a guess, and the full digest is verified before it is used.
-            found = None if overrides else _by_recorded_digest(run, path)
+            found = recover(path) if recover is not None else None
             if found is not None:
-                distinct[index] = path = found
+                distinct[index] = found
             else:
                 recorded = (
                     ""
@@ -988,6 +1005,27 @@ def exports_for(
                     f"run that joins against it.\n"
                     f"Nothing was joined, nothing was written, and no queue was touched."
                 )
+
+    by_game, notes = _claim_files(distinct, needed)
+    return ExportPlan(by_game=by_game, notes=notes)
+
+
+def _claim_files(
+    distinct: Sequence[Path], needed: "OrderedDict[str, List[str]]"
+) -> Tuple["OrderedDict[str, Path]", Tuple[str, ...]]:
+    """Match export files to games by their own `Product Line` cells, and check coverage.
+
+    THE HALF OF `exports_for` THAT NEVER READ A RUN, split out so `exports_for_store` (a
+    store-backed join, which has no manifest and therefore no recorded-digest recovery for a
+    missing file — see `exports_for`'s own recovery step, run BEFORE this) can share it rather
+    than carry a second copy of three refusals to keep in step: a file whose `Product Line`
+    cells match no registered game, two files claiming one game, and a game the selection needs
+    with no file to cover it (`_refuse_uncovered`). Every path here is assumed to already exist —
+    the caller resolves (or refuses on) a missing file before calling this.
+    """
+    claimed_by: Dict[str, List[Path]] = {}
+    lines_of: Dict[Path, Tuple[str, ...]] = {}
+    for path in distinct:
         export = tcgcsv.read_export(path)
         lines = tcgcsv.product_lines(export)
         lines_of[path] = lines
@@ -1038,6 +1076,50 @@ def exports_for(
         for path in distinct
         if path not in set(by_game.values())
     )
+    return by_game, notes
+
+
+def exports_for_store(
+    keys: Sequence[str], overrides: Optional[Sequence[str]]
+) -> ExportPlan:
+    """`exports_for`'s run-less twin: which files answer which game, for a selection of keys
+    rather than a run directory.
+
+    ALWAYS EXPLICIT, NEVER RECALLED. A run's manifest remembers its export so a later `join`
+    need not repeat `--export` (`exports_for`'s whole "with no `--export` at all" paragraph);
+    a store-backed join has no manifest to have recorded one in, because there was no earlier
+    join over exactly this selection to have recorded it. So this refuses outright with no
+    `--export` at all, rather than silently reading nothing.
+
+    NO DIGEST RECOVERY, for the same reason: recovery (D166) resolves a manifest-recorded path
+    that has since moved, and there is no recorded path here to have moved.
+
+    READS ITS OWN SNAPSHOT, LIKE `_games_needed` DOES FOR THE RUN PATH. `load_from_store`
+    takes its own snapshot again a moment later to build the actual join — the same two-read
+    shape `exports_for`/`load` already have for a run directory, not a new one this
+    introduces. Between the two, the answer can only ever have moved forward.
+    """
+    if not overrides:
+        raise runs.RunError(
+            "pass --export <filtered-export.csv> — a store-backed join has no run manifest "
+            "to recall an export from. Repeat --export per game if this selection holds more "
+            "than one."
+        )
+    distinct: List[Path] = []
+    for path in (Path(p) for p in overrides):
+        if path not in distinct:
+            distinct.append(path)
+    for path in distinct:
+        if not path.is_file():
+            raise runs.RunError(
+                f"export not found: {path}. Pass --export <filtered-export.csv> to name "
+                f"another file, or fetch a fresh one on #/runs (Fetch from TCGplayer).\n"
+                f"Nothing was joined, nothing was written, and no queue was touched."
+            )
+    inventory = Store().read().inventory
+    payload = store_payload(keys, inventory)
+    needed = _needed_games(payload.get("cards") or {}, inventory)
+    by_game, notes = _claim_files(distinct, needed)
     return ExportPlan(by_game=by_game, notes=notes)
 
 
@@ -1417,6 +1499,15 @@ def load(
     every caller passed before D25, resolved through `exports_for` so the file answers for
     the games its own `Product Line` cells claim. Either way the coverage check runs
     BEFORE any catalog is built: a run that will refuse costs nothing and touches nothing.
+
+    THIS IS THE REPLAY PATH — see `load_from_store` for the store-backed twin. A run
+    directory is a frozen file, so it is REPLAYED here: `realign` and `refuse_reallocated`
+    (D36) reconcile that frozen snapshot's positions against the store as it stands NOW,
+    because a card may have moved slot or a box may have been deleted and reused since the
+    run was identified. `load_from_store` reads the store directly, at the instant it is
+    called — there is no snapshot to reconcile, so neither check runs there. `_resolve` is
+    the shared tail both loaders hand off to once they have a `payload` in the one shape
+    both understand.
     """
     if isinstance(exports, (str, Path)):
         mapping = exports_for(run, [str(exports)]).by_game
@@ -1430,6 +1521,180 @@ def load(
     # now. Matched by photograph, refused when uncertain, untouched when nothing has moved.
     payload, realigned, departed, unverified = realign(payload)
 
+    snapshot = Store().read()
+    # D36 (amended) — the same refusal `_games_needed` raises on the `exports_for` path, as
+    # the backstop for a caller handing a mapping straight in. Before `held_cards` is read:
+    # every read below at this run's keys assumes the box is this run's drawer.
+    refuse_reallocated(payload, snapshot.inventory, run)
+    return _resolve(
+        run,
+        payload,
+        mapping,
+        snapshot,
+        rule=rule,
+        basis=basis,
+        review_below=review_below,
+        live_cap=live_cap,
+        threshold=threshold,
+        quantities=quantities,
+        realigned=realigned,
+        departed=departed,
+        unverified=unverified,
+    )
+
+
+def store_payload(keys: Sequence[str], inventory: master.Inventory) -> Dict[str, Any]:
+    """The store-backed twin of `Run.read_identifications()` — the SAME `{"cards": {...}}`
+    shape, built fresh from the store's CURRENT records instead of a run directory's frozen
+    file.
+
+    EVERY FIELD `_resolve`'S LOOP READS OFF A RECORD, AND NOTHING ELSE — checked against
+    `cli/cmd_identify.py:run`'s own payload write field by field, which is the diff PR G's
+    plan named as the place this is most likely wrong. `photo`, `box`, `index`, `set_hint`,
+    `metadata_finish`, `rarity_claim`, `game`, `identification` (`name`, `number`,
+    `printed_total`, `confidence`, `finish`), `status` and `error` are every key `_resolve`
+    ever calls `record.get` for. What the FILE carries and this does not — `strategy`,
+    `note`, `variant_from_flag`, `position_source`, `sidecar_problem`, `cached`,
+    `stale_prompt`, `detection`, `retries`, `retry_reasons`, `photo_sha256` — is a run's own
+    audit trail of ONE submission attempt, which `_resolve` never reads; the store instead
+    answers with whichever attempt is CURRENT. `photo_sha256` is the one field this costs on
+    purpose: it exists for `realign` to re-bind a FROZEN payload to today's slots, and a
+    store-backed payload is already at today's slots by construction (see `load_from_store`).
+
+    A CARD ALREADY IDENTIFIED, EVER, IS NOT RE-DETECTED BY STATE ALONE. `record_identification`
+    writes `confidence` UNCONDITIONALLY together with `name`/`number`/`printed_total` and
+    never with the Python `None` a field predating identification carries — `routing.py`'s
+    `CONFIDENCE_NONE` is the STRING `"none"` the model answers with, never a null — so
+    `card.confidence is not None` is the same fact `record_identification` last wrote and
+    survives a card that skipped straight from `captured` to `retired` (a card can be marked
+    `pulled`/`damaged`/`lost`/`given_away` before it is ever identified), which `state !=
+    captured` alone would have misread as identified.
+
+    A KEY WITH NO CARD IS REFUSED, NEVER SILENTLY DROPPED — `CLAUDE.md`'s standing rule. A
+    typo'd key names no card, and a card this store has never captured is not this pipeline's
+    to guess at. A key whose card exists but has never been identified is NOT refused: it is
+    a real, positioned card waiting on this pipeline, so it gets a record with
+    `identification: None`, which `_resolve`'s existing `if not identification` branch
+    already routes to the main queue exactly as an `identify` failure would.
+    """
+    cards: Dict[str, Any] = {}
+    missing: List[str] = []
+    for key in keys:
+        card = inventory.cards.get(key)
+        if card is None:
+            missing.append(key)
+            continue
+        identified = card.confidence is not None
+        cards[key] = {
+            "photo": card.photo,
+            "box": card.box,
+            "index": card.index,
+            "set_hint": card.set_hint,
+            "metadata_finish": card.metadata_finish,
+            "rarity_claim": card.rarity_claim,
+            "game": card.game,
+            "status": "succeeded" if identified else "not_identified",
+            "error": (
+                None
+                if identified
+                else "this card has not been identified yet — run `pkmnscan identify` first"
+            ),
+            "identification": (
+                {
+                    "name": card.name,
+                    "number": card.number,
+                    "printed_total": card.printed_total,
+                    "confidence": card.confidence,
+                    "finish": card.detected_finish,
+                }
+                if identified
+                else None
+            ),
+        }
+    if missing:
+        raise runs.RunError(
+            "no card is recorded at "
+            + ", ".join(missing[:8])
+            + (f" and {len(missing) - 8} more" if len(missing) > 8 else "")
+            + ". A store-backed join reads position keys the store already has a card at; "
+            "a typo, or a card this store has never captured, has none."
+        )
+    return {"cards": cards}
+
+
+def load_from_store(
+    run: runs.Run,
+    keys: Sequence[str],
+    exports: Mapping[str, Path],
+    *,
+    rule: pricing.Rule = pricing.MATCH,
+    basis: str = pricing.BASIS_MARKET,
+    review_below: str = routing.CONFIDENCE_LOW,
+    live_cap: Optional[int] = None,
+    threshold: Decimal = pricing.THRESHOLD,
+    quantities: Optional[Mapping[str, int]] = None,
+) -> Resolved:
+    """`load`'s store-backed twin: no run directory to read, no frozen snapshot to reconcile.
+
+    `run` IS WHERE THIS JOIN'S OWN OUTPUTS LAND, NOT WHERE ITS IDENTIFICATIONS CAME FROM.
+    `cli/cmd_join.py` creates it fresh (`runs.create`) exactly as `identify` creates one for a
+    selection with no single capture directory (D180) — a place for `report.txt`,
+    `pricing.json` and the manifest this join writes — and `Resolved.run` carries it through
+    for the same reason `load`'s does. `exports` is always a resolved mapping here, never a
+    bare path: there is no manifest to recall one from (see `exports_for_store`), so the
+    caller has already turned `--export` into `game -> Path` before this is called.
+
+    NO `realign`, NO `refuse_reallocated`. Both exist to reconcile a FROZEN snapshot against
+    the store as it now stands (D36) — `store_payload` reads the store at the instant this is
+    called, so there is no snapshot to reconcile and no reallocated box to be fooled by: a
+    key's CURRENT occupant is read directly, which is correct by construction rather than by
+    a check. That is `load`'s docstring's "replay path" distinction, the other way round.
+    """
+    mapping = OrderedDict((game, Path(path)) for game, path in exports.items())
+    snapshot = Store().read()
+    payload = store_payload(keys, snapshot.inventory)
+    return _resolve(
+        run,
+        payload,
+        mapping,
+        snapshot,
+        rule=rule,
+        basis=basis,
+        review_below=review_below,
+        live_cap=live_cap,
+        threshold=threshold,
+        quantities=quantities,
+        realigned={},
+        departed=[],
+        unverified=[],
+    )
+
+
+def _resolve(
+    run: runs.Run,
+    payload: Dict[str, Any],
+    mapping: "OrderedDict[str, Path]",
+    snapshot,
+    *,
+    rule: pricing.Rule,
+    basis: str,
+    review_below: str,
+    live_cap: Optional[int],
+    threshold: Decimal,
+    quantities: Optional[Mapping[str, int]],
+    realigned: Dict[str, str],
+    departed: List[str],
+    unverified: List[int],
+) -> Resolved:
+    """The shared tail of `load` and `load_from_store`: build one catalog per game, walk the
+    ladder, route every card.
+
+    Both callers have already produced a `payload` in the one shape this reads — a run
+    replayed and reconciled against the store (D36), or a fresh read straight off it — and a
+    `snapshot` taken at the moment those identifications were decided. Nothing below this
+    line can tell which loader built either one, which is the property that makes the two
+    loaders interchangeable rather than two joins that happen to agree.
+    """
     # The store's settled identities, read off the live inventory. A record carries
     # `sku` + `condition` from exactly two writers — `do_review_answer` (a human chose the
     # row) and `cmd_emit`'s push (the pipeline chose it and wrote it into a file) — and in
@@ -1440,9 +1705,10 @@ def load(
     # Read here rather than in the loop so the store is opened once.
     # THE EXPORTS, READ ONCE AND UP FRONT (D59). `parsed` used to fill lazily inside the join
     # loop, and `_copies_out` below needs every file's `Total Quantity` before the first card
-    # is built. It costs nothing new: `exports_for` has already read each of these files to
-    # map its `Product Line` cells, and `_refuse_uncovered` still runs before a single
-    # catalog is cut, still touches nothing, and still refuses on the same grounds.
+    # is built. It costs nothing new: `exports_for`/`exports_for_store` have already read each
+    # of these files to map its `Product Line` cells, and `_refuse_uncovered` still runs
+    # before a single catalog is cut, still touches nothing, and still refuses on the same
+    # grounds.
     parsed: Dict[Path, tcgcsv.Export] = {}
     # ONE `describe_source` PER DISTINCT FILE. It hashes the file, and it used to run once
     # per GAME, so two games sharing one export paid for it twice. Its `mtime` is the time
@@ -1455,11 +1721,6 @@ def load(
             parsed[_path] = tcgcsv.read_export(_path)
             sources[_path] = runs.describe_source(_path)
 
-    snapshot = Store().read()
-    # D36 (amended) — the same refusal `_games_needed` raises on the `exports_for` path, as
-    # the backstop for a caller handing a mapping straight in. Before `held_cards` is read:
-    # every read below at this run's keys assumes the box is this run's drawer.
-    refuse_reallocated(payload, snapshot.inventory, run)
     held_cards = snapshot.inventory.cards
     copies_out, live_now = _copies_out(
         snapshot.inventory,

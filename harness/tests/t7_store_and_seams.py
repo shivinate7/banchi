@@ -11284,6 +11284,260 @@ def check_rescue_stranded_run(checks: Checks) -> None:
         checks.ok("REFUSING" in said.getvalue(), "printing the refusal", said.getvalue())
 
 
+def check_store_backed_join(checks: Checks) -> None:
+    """PR G — `join` without a run directory, reading identifications straight off the store.
+
+    THE PLAN'S OWN NAMED RISK, SETTLED FIRST. `cli/resolve.py:store_payload` is a NEW loader,
+    built to answer for a run's `identifications.json` field for field. The surest way to trust
+    it is to build one run and one store that describe the SAME three cards the same way —
+    `identifications_for`'s own shape, mirrored onto the store through `record_capture` and
+    `record_identification`, which is the ordinary writer `cli/cmd_identify.py` uses rather
+    than a hand-poked field — load one through `resolve.load` and the other through
+    `resolve.load_from_store`, and require every `SkuMatch` and every queue entry the two
+    produce to compare EQUAL by dataclass equality: every field, not the ones this test
+    happened to think of.
+
+    THE REPLAY BRANCH (D36), THE OTHER WAY ROUND. `load`'s run is REPLAYED and reconciled
+    against the store (`realign`, `refuse_reallocated`); `load_from_store` has no frozen
+    snapshot to reconcile, so it never calls either — asserted directly below, because a
+    loader that silently started calling them over a live read would be re-hashing every
+    photograph in the box for nothing.
+    """
+    checks.note("")
+    checks.note("STORE-BACKED JOIN (PR G) — `resolve.load_from_store`, and `join --keys`")
+
+    from cli import __main__ as entry
+    from cli import cmd_rescue
+
+    cards = [
+        (5, 1, "Dunsparce", "120/159", None),
+        (5, 2, "Dunsparce", "120/159", "reverse_holo"),
+        (5, 3, "Articuno", "161/159", "holo"),
+    ]
+    keys = [master.position_key(box, index) for box, index, *_ in cards]
+
+    with isolated_home() as home:
+        for box, index, *_ in cards:
+            while Store().read().inventory.next_index(box) <= index:
+                capture_server.do_capture(capture_payload(box))
+
+        # A run's frozen `identifications.json`, describing three cards — `identifications_for`'s
+        # own shape. Created BEFORE the store write below so the store's own `run` stamp can
+        # name it: `refuse_reallocated` (D36) refuses a run whose keys are stamped by some
+        # OTHER run, on purpose (`check_reused_box_refusal` exercises exactly that refusal),
+        # and this fixture wants the ORDINARY case — the store and the run agreeing — not it.
+        run_dir = runs.create("t7-store-parity")
+        run_dir.write_identifications(identifications_for(cards))
+        export = write_export(run_dir.path("export.csv"))
+
+        # The store's own reading, written through the ordinary writers `identify` uses —
+        # never a `Card` field poked directly — so this fixture exercises the real path.
+        with Store().write() as snapshot:
+            for box, index, name, number, finish in cards:
+                key = master.position_key(box, index)
+                snapshot.inventory.record_capture(
+                    master.Card(
+                        box=box,
+                        index=index,
+                        photo=str(capture_server.photo_path(box, index)),
+                        metadata_finish=finish,
+                    )
+                )
+                snapshot.inventory.record_identification(
+                    key,
+                    name=name,
+                    number=number,
+                    printed_total="159",
+                    confidence="high",
+                    detected_finish=finish,
+                    run=run_dir.name,
+                )
+
+        via_file = resolve.load(run_dir, {"pokemon": export})
+        via_store = resolve.load_from_store(run_dir, keys, {"pokemon": export})
+
+        checks.equal(
+            set(via_store.matches), set(via_file.matches),
+            "the store loader matches the same SKUs the file loader does",
+        )
+        for sku in via_file.matches:
+            checks.equal(
+                via_store.matches.get(sku), via_file.matches[sku],
+                f"SkuMatch for {sku} agrees FIELD BY FIELD between `load` and "
+                f"`load_from_store` (dataclass equality, not a hand-picked subset)",
+            )
+        checks.equal(
+            via_store.failures, via_file.failures,
+            "no pre-join failures on either path",
+        )
+        checks.equal(
+            via_store.not_joined, via_file.not_joined,
+            "nothing held out of the catalog on either path",
+        )
+        checks.equal(
+            via_store.photos, via_file.photos,
+            "the same photo path per position on both paths",
+        )
+        checks.equal(
+            via_store.realigned, {},
+            "the store path never realigns — there is no frozen snapshot to reconcile",
+        )
+        checks.equal(via_store.departed, [], "and never marks a card departed")
+        checks.equal(via_store.unverified_boxes, [], "and never marks a box unverified")
+
+        main_file, parked_file = resolve.entries_for(via_file)
+        main_store, parked_store = resolve.entries_for(via_store)
+
+        def entry_shape(one):
+            # `first_seen` is stamped to "now" by each loader's own pass and is not a fact
+            # about the card — excluded here for the reason `check_review_answer` excludes
+            # timestamps elsewhere in this file, never because the rest of the shape may drift.
+            return (
+                one.position, one.box, one.index, one.label, one.photo, one.read,
+                one.confidence, one.reason, one.candidates, one.market,
+            )
+
+        checks.equal(
+            [entry_shape(e) for e in main_store],
+            [entry_shape(e) for e in main_file],
+            "the main review queue entry the ambiguous Dunsparce card earns is identical "
+            "on both paths, candidates and all",
+        )
+        checks.equal(
+            [entry_shape(e) for e in parked_store],
+            [entry_shape(e) for e in parked_file],
+            "and the parked queue agrees too (empty on this fixture)",
+        )
+
+        # ---------------------------------------------------- a card the store never saw
+        caught = checks.raises(
+            runs.RunError,
+            lambda: resolve.store_payload(["999/999"], Store().read().inventory),
+            "a key with no card at all is REFUSED, never silently dropped or matched to "
+            "the wrong card (`CLAUDE.md`'s standing rule)",
+        )
+        checks.ok(
+            caught is not None and "999/999" in str(caught),
+            "and the refusal names the key",
+            str(caught) if caught else "",
+        )
+
+        # ------------------------------------------------- a real, positioned, unidentified card
+        capture_server.do_capture(capture_payload(5))
+        blank_key = master.position_key(5, 4)
+        payload = resolve.store_payload([blank_key], Store().read().inventory)
+        checks.equal(
+            payload["cards"][blank_key]["identification"], None,
+            "a captured-but-never-identified card gets a real record with `identification: "
+            "None` — never refused and never silently skipped, so `_resolve`'s existing "
+            "`if not identification` branch routes it to the main queue exactly as an "
+            "`identify` failure would",
+        )
+        checks.equal(
+            payload["cards"][blank_key]["box"], 5, "and it still carries its real position"
+        )
+
+    # -------------------------------------------------------------- the CLI: `join --keys`
+    with isolated_home() as home:
+        for box, index, *_ in cards:
+            while Store().read().inventory.next_index(box) <= index:
+                capture_server.do_capture(capture_payload(box))
+        with Store().write() as snapshot:
+            for box, index, name, number, finish in cards:
+                key = master.position_key(box, index)
+                snapshot.inventory.record_capture(
+                    master.Card(
+                        box=box,
+                        index=index,
+                        photo=str(capture_server.photo_path(box, index)),
+                        metadata_finish=finish,
+                    )
+                )
+                snapshot.inventory.record_identification(
+                    key,
+                    name=name,
+                    number=number,
+                    printed_total="159",
+                    confidence="high",
+                    detected_finish=finish,
+                    run="an-earlier-run",
+                )
+        export = write_export(home / "export.csv")
+        keys_arg = ",".join(keys)
+
+        with quiet() as said:
+            code = entry.main(["join", "some-run-dir", "--keys", keys_arg, "--export", str(export)])
+        checks.equal(
+            code, 1,
+            "naming a run directory AND --keys together is refused rather than guessed at",
+        )
+        checks.ok("both" in said.getvalue().lower(), "and says so", said.getvalue())
+
+        with quiet() as said:
+            code = entry.main(["join", "--export", str(export)])
+        checks.equal(code, 1, "naming NEITHER is refused rather than reading the whole store")
+        checks.ok(
+            "--keys" in said.getvalue(), "and names the flag that would fix it", said.getvalue()
+        )
+
+        def run_names() -> set:
+            root = files.runs_dir()
+            return {d.name for d in root.iterdir() if d.is_dir()} if root.is_dir() else set()
+
+        before = run_names()
+        with quiet() as said:
+            code = entry.main(
+                ["join", "--keys", keys_arg, "--export", str(export), "--dry-run"]
+            )
+        checks.equal(code, 0, "a store-backed dry run exits 0")
+        checks.equal(
+            run_names(), before,
+            "and creates NO run directory at all — `_preview`'s own \"no manifest\" line "
+            "would otherwise be false the moment `runs.create` ran ahead of it",
+        )
+        checks.ok(
+            "no manifest" in said.getvalue(),
+            "and the preview still says so", said.getvalue(),
+        )
+
+        with quiet() as said:
+            code = entry.main(["join", "--keys", keys_arg, "--export", str(export)])
+        checks.equal(code, 0, "the real store-backed join exits 0")
+        created = run_names() - before
+        checks.equal(len(created), 1, "and creates exactly one new run directory")
+        new_run = runs.open_run(files.runs_dir() / next(iter(created)))
+        checks.equal(
+            new_run.manifest.get("selection"), {"keys": sorted(keys)},
+            "the manifest records the selection that was asked for, `identify`'s own style",
+        )
+        checks.ok(
+            not new_run.path(runs.IDENTIFICATIONS).is_file(),
+            "and NEVER writes `identifications.json` — there was no snapshot to freeze",
+        )
+        checks.ok(
+            new_run.path(runs.PRICING).is_file() and new_run.path(runs.REPORT).is_file(),
+            "and DOES write this join's own report and pricing table, exactly like a "
+            "run-directory join does",
+        )
+
+        # ------------------------------------------------- rescue refuses this run by name
+        caught = checks.raises(
+            runs.RunError,
+            lambda: cmd_rescue.run(
+                type("Args", (), {"run_dir": str(new_run.directory), "write": False})(),
+                lambda *_: None,
+            ),
+            "`pkmnscan rescue` refuses a store-backed join's own output directory rather "
+            "than crashing on a missing `identifications.json` or treating it as an "
+            "ordinary un-stranded run",
+        )
+        checks.ok(
+            caught is not None and "store-backed join" in str(caught),
+            "and names WHY — this directory was never an `identify` run",
+            str(caught) if caught else "",
+        )
+
+
 def check_run_binds_to_bid(checks: Checks) -> None:
     """A run records its drawer's TRUE INDEX from every path that starts one (D145).
 
@@ -26069,6 +26323,7 @@ def run() -> Result:
     check_reused_box_refusal(checks)
     check_box_true_index(checks)
     check_rescue_stranded_run(checks)
+    check_store_backed_join(checks)
     check_run_binds_to_bid(checks)
     check_printed_code_profiles(checks)
     check_cli_refusals(checks)

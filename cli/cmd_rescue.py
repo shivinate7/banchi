@@ -161,6 +161,24 @@ def _sort_key(position: str) -> Tuple[int, int]:
 
 def run(args, say) -> int:
     source = runs.open_run(args.run_dir)
+    # THE REPLAY BRANCH (D-a-join-with-no-run-directory). `realign` and this whole command
+    # exist to repair a FROZEN snapshot's stale positions (D36), and only `pkmnscan identify`
+    # ever writes one — every identify run, single-drawer or store-wide (D180), ends by writing
+    # `identifications.json` unconditionally. `pkmnscan join` with no run directory
+    # (`cli/cmd_join.py`'s store-backed path) creates a run directory too, but purely to hold
+    # ITS OWN report and pricing table — it reads the store directly at press time and never
+    # freezes a payload, so there is no `identifications.json` here and nothing for a digest
+    # match to repair. Such a run is never "stranded" in D36's sense: read it again and its
+    # cards are wherever they currently are, by construction, every time.
+    if not source.path(runs.IDENTIFICATIONS).is_file():
+        raise runs.RunError(
+            f"REFUSING: {source.name} has no {runs.IDENTIFICATIONS} — it looks like a "
+            f"store-backed join's own output directory (`pkmnscan join` with no run "
+            f"directory), not a run `pkmnscan identify` wrote. A store-backed join reads the "
+            f"store directly at press time, so it can never go stale the way an `identify` "
+            f"run's frozen positions can; there is nothing here for `rescue` to re-bind.\n"
+            f"Nothing was read past the manifest, and nothing was written."
+        )
     payload = source.read_identifications()
     snapshot = Store().read()
     inventory = snapshot.inventory

@@ -202,13 +202,27 @@ def _numbers(raw, term: str):
 def _run_keys_of(name: str, say) -> List[str]:
     """Every position key a run's own answers name. `--run <name>`'s reader.
 
+    THE MANIFEST FIRST, AND `identifications.json` ONLY WHERE IT PREDATES `submitted`. A run
+    written since 2026-09-12 carries its own key list in the manifest — a few hundred bytes —
+    so this no longer has to open the (potentially megabyte-sized) identifications file just
+    to answer "which keys". `Run.submitted` is `None` for an older run, and this falls back
+    to the file exactly as it always did.
+
     A RUN WITH NO ANSWERS NAMES NO CARD, and it says so rather than selecting nothing in
     silence: `identifications.json` goes through `write_atomic`, so it is absent or whole, and
     absent means that run has not collected yet. Selecting zero cards from it would refuse one
     step later with the selection's own sentence, which blames the terms for a missing file.
     """
     try:
-        payload = runs.open_run(name).read_identifications()
+        run = runs.open_run(name)
+    except Exception as exc:  # noqa: BLE001
+        say(f"--run {name}: {exc}")
+        return []
+    submitted = run.submitted
+    if submitted is not None:
+        return sorted(submitted)
+    try:
+        payload = run.read_identifications()
     except Exception as exc:  # noqa: BLE001
         say(f"--run {name}: {exc}")
         return []
@@ -1196,6 +1210,21 @@ def run(args, say) -> int:
     # reader can reconstruct — a press over the store that swept up only box 3 and a press aimed
     # at box 3 leave the same `scope` and different selections.
     run_dir.set(selection=selection.describe())
+    # AND WHAT WAS ACTUALLY SUBMITTED FOR IDENTIFICATION, BESIDE BOTH OF THOSE. `selection`
+    # is the query and `scope` is the drawer it turned out to touch; neither says which
+    # position keys were actually SENT to the model this run — a cache-hit-heavy selection
+    # can process 678 cards and send 214, and nothing before this recorded that 214 anywhere
+    # a caller could read without opening `identifications.json`. `to_send` is already final
+    # here: the claim negotiation above (D174) has already narrowed it against cards another
+    # run banked in the meantime, so this is the same list that is about to be billed, not an
+    # earlier guess at it.
+    #
+    # WRITTEN BEFORE ANYTHING IS SUBMITTED, like `scope` above: a run that dies mid-batch
+    # still records what it was over. `Run.submitted` is the cheap reader — a manifest read
+    # rather than the (potentially large) identifications file — and `_run_keys_of` below
+    # reads it first so a `--run <name>` selection term no longer has to open that file to
+    # learn a run's own keys.
+    run_dir.set(submitted=sorted(item.key for item in to_send))
     run_dir.set(
         capture_dir=_recorded_dir(roots),
         prompt_fingerprint=fingerprint,

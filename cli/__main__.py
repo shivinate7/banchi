@@ -245,7 +245,28 @@ def build_parser() -> argparse.ArgumentParser:
 
     # ----------------------------------------------------------------------------- join
     joined = sub.add_parser("join", help="resolve against the export. Free, re-runnable.")
-    joined.add_argument("run_dir", help="run directory from `identify`")
+    # OPTIONAL, AS OF PR G. A run directory from `identify` still works exactly as before —
+    # the FILE path, replayed and reconciled against the store (D36's `realign`). Omit it and
+    # name `--keys` instead for a STORE-BACKED join: cards this pipeline already identified,
+    # read straight off the store at press time, with no run directory required to have
+    # produced them. `identify`'s own selection went the same way under D180; this is the
+    # join side of that generalization.
+    joined.add_argument(
+        "run_dir",
+        nargs="?",
+        help="run directory from `identify`. Omit and pass --keys for a store-backed join.",
+    )
+    joined.add_argument(
+        "--keys",
+        action="append",
+        help="join these cards straight from the store, as `box/index` position keys, "
+        "comma-separated. Repeatable. Only with no run directory.",
+    )
+    joined.add_argument(
+        "--label",
+        help="the run directory a store-backed join writes its own report and pricing "
+        "table into (default: store). Only with no run directory.",
+    )
     _pricing_arguments(joined)
     joined.add_argument(
         "--dry-run",
