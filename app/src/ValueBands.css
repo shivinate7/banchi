@@ -1,0 +1,350 @@
+/* app/src/ValueBands.css — the value lens on `#/pricing` (D-a-band-is-copies-in-drawers).
+ *
+ * NO COLOR IS NAMED HERE. `app/src/tokens.css` is the only file in `app/` that may name one,
+ * and the single place this screen would reach for a hex — the drawer's verdict — is the kit's
+ * `bn-pill-warn`.
+ *
+ * IT ASKS ITS OWN COLUMN AND NEVER THE WINDOW. This draws inside `.bn-shell-main`, which is the
+ * viewport minus 236px or minus 64px railed — a 172px swing a `@media` width cannot see. The
+ * container is declared on the page root and every tier below is measured against it.
+ *
+ * NOTHING HERE DECLARES A `transition` ON AN INTERACTIVE ELEMENT WITHOUT NAMING EVERY PROPERTY
+ * THE FLOOR ANIMATES. `base.css` supplies `background-color`, `border-color`, `color` and
+ * `box-shadow`, and a component transition REPLACES that list rather than adding to it — the
+ * defect `.bn-nav-link` shipped. `.value-row` and `.value-field` therefore either declare all
+ * four or declare none.
+ */
+
+.value-page {
+  --bn-page-max: 1120px;
+  container-type: inline-size;
+  container-name: value;
+  display: flex;
+  flex-direction: column;
+  gap: var(--bn-5);
+}
+
+.value-loading { color: var(--bn-ink-3); font-size: var(--bn-fs-md); margin: 0; }
+.value-skeleton { height: 240px; border-radius: var(--bn-r-lg); }
+
+/* ---- the bar --------------------------------------------------------------------------- */
+
+/* STICKY, SO THE CONTROLS STAY UNDER THE THUMB WHATEVER THE LIST DOES (D118). Pressing a band
+   replaces a 92-row body with a 1,042-row one; what a press may not do is move the control that
+   caused it. Below the phone step it stops being sticky — three wrapped rows plus a sentence is
+   half the fold on a 390px screen, and a phone is not where a 1,042-row pull happens. */
+.value-bar {
+  position: sticky;
+  top: 0;
+  z-index: 3;
+  display: flex;
+  flex-direction: column;
+  gap: var(--bn-3);
+  padding: var(--bn-3) var(--bn-4);
+  background: var(--bn-surface-glass);
+  backdrop-filter: blur(12px);
+}
+
+.value-bar-controls {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--bn-3);
+}
+
+.value-bands { display: flex; flex-wrap: wrap; align-items: center; gap: var(--bn-2); min-height: var(--bn-control-h); }
+
+/* THE COUNT BADGE RESERVES FOUR DIGITS (D118). `Over $0.29 · 813` and `Under $0.29 · 1,042`
+   are the same chip with the direction flipped, and three digits becoming four widens it and
+   shoves every chip to its right. Tabular figures in a floored track means the press changes
+   the number and never the geometry. */
+.value-bands .bn-chip-count {
+  min-width: 4ch;
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+
+/* A CHIP THAT CONTAINS A FIELD — `.pricing-flat`'s shape, which is the precedent and the
+   reason this is a screen class rather than a kit component. A third instance makes it one. */
+.value-field {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  height: var(--bn-control-h);
+  padding: 0 var(--bn-3) 0 var(--bn-3);
+  border-radius: var(--bn-r-full);
+  background: var(--bn-surface);
+  box-shadow: inset 0 0 0 1px var(--bn-line-strong);
+  color: var(--bn-ink-3);
+  font-size: var(--bn-fs-md);
+  font-weight: 600;
+  transition: box-shadow var(--bn-t-fast) var(--bn-ease);
+}
+.value-field:focus-within,
+.value-field-on { box-shadow: inset 0 0 0 1.5px var(--bn-accent), 0 0 0 3px var(--bn-accent-tint-2); }
+.value-field-sign { color: var(--bn-ink-3); }
+/* FIXED WIDTH, SO TYPING NEVER REFLOWS THE BAR. `.pricing-flat-input`'s 76px. */
+.value-field-input {
+  width: 76px;
+  min-height: 0;
+  height: 100%;
+  border: 0;
+  background: transparent;
+  box-shadow: none;
+  padding: 0;
+  text-align: right;
+  font: inherit;
+  font-variant-numeric: tabular-nums;
+  font-weight: 700;
+  color: var(--bn-ink);
+  cursor: text;
+}
+.value-field-input:focus { box-shadow: none; outline: none; }
+.value-field-says { color: var(--bn-ink-3); font-size: var(--bn-fs-sm); font-weight: 500; }
+
+/* THE STANDING SENTENCE IS WHAT MAKES THE TERSE CHIPS LEGIBLE. Its leading figure is the count,
+   so nothing sits to the left of the number that changes on every keystroke. */
+.value-standing {
+  margin: 0;
+  color: var(--bn-ink-2);
+  font-size: var(--bn-fs-md);
+  line-height: 1.45;
+  min-height: calc(var(--bn-fs-md) * 1.45);
+}
+
+.value-scope {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--bn-3);
+  padding: var(--bn-2) var(--bn-4);
+  border-radius: var(--bn-r);
+  background: var(--bn-accent-tint);
+  color: var(--bn-ink-2);
+  font-size: var(--bn-fs-md);
+}
+.value-scope-says { font-weight: 600; color: var(--bn-ink); }
+
+/* ---- the list -------------------------------------------------------------------------- */
+
+.value-list { padding: 0; overflow: hidden; }
+
+.value-heads {
+  display: grid;
+  grid-template-columns: 150px minmax(0, 1fr) 140px;
+  gap: var(--bn-4);
+  padding: var(--bn-3) var(--bn-4);
+  border-bottom: 1px solid var(--bn-line);
+  color: var(--bn-ink-3);
+  font-size: var(--bn-fs-xs);
+  font-weight: 700;
+  letter-spacing: var(--bn-tracking-caps);
+  text-transform: uppercase;
+}
+.value-heads-money { text-align: right; }
+
+/* THE ROW IS A LINK AND IT IS THE ONLY CONTROL IN IT — one press per row, and it is the bridge
+   to the write this screen deliberately does not do. No `transition` of its own, so `base.css`'
+   three floors apply whole: the pointer, the ease, and the 1px dip. */
+.value-row {
+  display: grid;
+  grid-template-columns: 150px minmax(0, 1fr) 140px;
+  gap: var(--bn-4);
+  align-items: center;
+  padding: var(--bn-3) var(--bn-4);
+  border-bottom: 1px solid var(--bn-line);
+  color: inherit;
+  text-decoration: none;
+  /* The long band is 1,042 rows of static content. This is the one-line answer for that and it
+     is free where the list is short. The intrinsic size is the row's own floor, so the
+     scrollbar does not lie while the rows below the fold are unrendered. */
+  content-visibility: auto;
+  contain-intrinsic-size: auto 58px;
+}
+.value-row:last-child { border-bottom: 0; }
+/* THE HOVER IS AN ALPHA AND NOTHING ELSE (D110). `base.css` underlines every `a:hover` in the
+   product, which is right for a link inside a sentence and wrong for a row — three cells of one
+   row underlining at once reads as a fault. `.bn-btn` and `.home-deck` opt out the same way. */
+.value-row:hover,
+.value-gap-row:hover { background: var(--bn-hover); text-decoration: none; }
+
+.value-where { min-width: 0; }
+.value-where .bn-pos { --pos-slot: 22px; --pos-path: 11px; }
+/* A LABEL THE SERVER WOULD NOT COMPOSE KEEPS THE TREATMENT AND LOSES THE FIGURE (D71). It may
+   never fall back to `Box N · Section N · Card M`, which is the numbering D58 replaced. */
+.value-nolabel { color: var(--bn-ink-3); font-size: var(--bn-fs-xs); }
+
+.value-identity { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.value-name {
+  font-size: var(--bn-fs-base);
+  font-weight: 600;
+  color: var(--bn-ink);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.value-meta {
+  font-size: var(--bn-fs-sm);
+  color: var(--bn-ink-3);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+/* A LISTED CARD GETS NO DISTINCTION, on the owner's ruling — 70% of the cards under their
+   cut-off are live, so dimming or badging them would grey out most of the cheap band. The
+   count is a fact in the meta sentence and nothing filters on it. */
+.value-live { color: var(--bn-live); font-weight: 600; }
+
+.value-money { display: flex; flex-direction: column; align-items: flex-end; gap: 2px; }
+.value-market {
+  font-family: var(--bn-font-display);
+  font-size: var(--bn-fs-xl);
+  font-weight: 700;
+  color: var(--bn-money);
+  font-variant-numeric: tabular-nums;
+  line-height: 1.1;
+}
+/* WHAT WAS DECIDED IS A CAPTIONED CLAUSE AND WHAT IT IS WORTH IS THE FIGURE (D86). They are
+   different facts and the row may never let them read as one. A null answer draws NOTHING —
+   on 1,855 priced cards most are null, and a thousand dashes are noise. */
+.value-asking { font-size: var(--bn-fs-sm); color: var(--bn-ink-3); font-variant-numeric: tabular-nums; }
+
+.value-more {
+  display: flex;
+  align-items: center;
+  gap: var(--bn-3);
+  padding: var(--bn-4);
+}
+.value-more-says { color: var(--bn-ink-3); font-size: var(--bn-fs-sm); font-variant-numeric: tabular-nums; }
+
+/* ---- the drawers ----------------------------------------------------------------------- */
+
+.value-drawers { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--bn-4); }
+.value-drawer { display: flex; flex-direction: column; gap: var(--bn-3); padding: var(--bn-4); }
+.value-drawer-head { display: flex; align-items: baseline; gap: var(--bn-2); flex-wrap: wrap; }
+.value-drawer-title { font-size: var(--bn-fs-lg); font-weight: 700; color: var(--bn-ink); }
+.value-drawer-index { font-size: var(--bn-fs-sm); color: var(--bn-ink-3); }
+.value-drawer-figures { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: var(--bn-3); }
+/* "AT LEAST" IS THE WHOLE POINT OF THE FLOOR. A drawer with unpriced cards is worth at least
+   what it says and not exactly, and a total that claimed otherwise would be a silent drop
+   wearing the shape of a figure. */
+.value-atleast { font-family: var(--bn-font-ui); font-size: var(--bn-fs-sm); font-weight: 600; color: var(--bn-ink-3); }
+
+/* THE VERDICT SLOT FLOORS AT THE TALLEST OF ITS THREE STATES (D118) — a pill, a sentence, or a
+   sentence with a press beside it. A slot that took each one's own height would move every
+   drawer below it whenever the band moved. */
+.value-drawer-verdict {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--bn-3);
+  min-height: max(var(--bn-control-h-sm), calc(var(--bn-fs-md) * 1.45 * 2));
+}
+.value-drawer-says { color: var(--bn-ink-2); font-size: var(--bn-fs-md); line-height: 1.45; }
+.value-drawer-gap { margin: 0; color: var(--bn-ink-3); font-size: var(--bn-fs-sm); }
+
+/* ---- what cannot be ranked -------------------------------------------------------------- */
+
+.value-gapline {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--bn-4);
+  font-size: var(--bn-fs-md);
+  color: var(--bn-ink-2);
+  line-height: 1.45;
+}
+.value-gapline strong { color: var(--bn-ink); }
+
+.value-gaps { display: flex; flex-direction: column; gap: var(--bn-3); padding: var(--bn-4); }
+.value-gaps-title { margin: 0; font-size: var(--bn-fs-lg); font-weight: 700; color: var(--bn-ink); }
+.value-gaps-says { margin: 0; color: var(--bn-ink-2); font-size: var(--bn-fs-md); max-width: 72ch; }
+
+.value-causes { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: var(--bn-2); }
+/* ALL THREE CAUSES ARE DRAWN INCLUDING AT ZERO, which is a true statement and is what keeps
+   this panel's height off the state of the store. */
+.value-cause {
+  display: grid;
+  grid-template-columns: 4ch minmax(0, 1fr) auto;
+  gap: var(--bn-3);
+  align-items: center;
+  padding: var(--bn-3);
+  border-radius: var(--bn-r);
+  background: var(--bn-surface-2);
+}
+.value-cause-count {
+  font-family: var(--bn-font-display);
+  font-size: var(--bn-fs-lg);
+  font-weight: 700;
+  color: var(--bn-ink);
+  font-variant-numeric: tabular-nums;
+  text-align: right;
+}
+.value-cause-says { color: var(--bn-ink-2); font-size: var(--bn-fs-md); line-height: 1.4; }
+.value-cause-says strong { color: var(--bn-ink); }
+
+.value-gap-rows { display: flex; flex-direction: column; border-top: 1px solid var(--bn-line); }
+.value-gap-row {
+  display: grid;
+  grid-template-columns: 190px minmax(0, 1fr);
+  gap: var(--bn-4);
+  align-items: center;
+  padding: var(--bn-2) var(--bn-1);
+  border-bottom: 1px solid var(--bn-line);
+  color: inherit;
+  text-decoration: none;
+}
+.value-gap-row:last-child { border-bottom: 0; }
+.value-gap-name { font-size: var(--bn-fs-md); color: var(--bn-ink-2); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+/* ---- tiers, measured against THIS COLUMN ------------------------------------------------ */
+
+/* `value 760` — the drawer grid goes to one column, and the row gives up its gaps and part of
+   the money track. THE ADDRESS TRACK DOES NOT MOVE: measured at 130px, `SECTION 4` wraps onto
+   its own line and every row grows 15px unevenly depending on the section number, which is the
+   ragged column D41 is about. 150px is what the stacked path needs and it is cheap — the money
+   track has the slack. */
+@container value (max-width: 760px) {
+  .value-drawers { grid-template-columns: minmax(0, 1fr); }
+  .value-heads,
+  .value-row { grid-template-columns: 150px minmax(0, 1fr) 120px; gap: var(--bn-3); }
+}
+
+/* `value 620` — the row becomes a card: the address takes its own line above the identity, and
+   the money sits with it. Below this the three-track grid puts the name in ~140px, which is
+   two words of `Rengar, Trophy Hunter`. */
+@container value (max-width: 619px) {
+  .value-heads { display: none; }
+  .value-row {
+    grid-template-columns: minmax(0, 1fr) auto;
+    grid-template-areas: 'where money' 'identity money';
+    row-gap: 2px;
+    contain-intrinsic-size: auto 74px;
+  }
+  .value-where { grid-area: where; }
+  .value-identity { grid-area: identity; }
+  .value-money { grid-area: money; align-self: center; }
+  /* THE ROW HAS BECOME A CARD, SO ITS TEXT WRAPS RATHER THAN TRUNCATING. Measured at 390:
+     `copy 2 of 7` arrived as `copy 2 of …`, which throws away the half of the clause that says
+     WHICH copy — the one thing seven identical Vilemaw rows need in order to read as seven
+     reaches rather than as a repetition. */
+  .value-name,
+  .value-meta { white-space: normal; overflow: visible; text-overflow: clip; }
+  .value-drawer-figures { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .value-gap-row { grid-template-columns: minmax(0, 1fr); gap: 2px; }
+}
+
+/* `value 470` — the bar stops being sticky and the cause row loses its third column. Three
+   wrapped control rows plus a sentence is half a 390px fold, and a phone is not where a
+   1,042-row pull happens. */
+@container value (max-width: 469px) {
+  .value-bar { position: static; padding: var(--bn-3); }
+  .value-bar-controls > .bn-seg { width: 100%; }
+  .value-bands { width: 100%; }
+  .value-bands > .bn-chip { flex: 1 1 45%; justify-content: center; }
+  .value-field { flex: 1 1 100%; justify-content: center; }
+  .value-gapline { flex-direction: column; align-items: flex-start; gap: var(--bn-2); }
+  .value-cause { grid-template-columns: 4ch minmax(0, 1fr); row-gap: var(--bn-2); }
+  .value-cause > .bn-chip { grid-column: 2; justify-self: start; }
+  .value-scope { flex-direction: column; align-items: flex-start; }
+}

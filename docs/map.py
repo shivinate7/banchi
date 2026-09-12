@@ -4173,6 +4173,65 @@ COMPONENTS = [
                                          "nothing in reachability. Both forms take a drop as well "
                                          "as a click.",
                                  "governed_by": ["D5", "D33", "D94"]},
+            "src/ValueBands.tsx": {"does": "WHAT IS WORTH PULLING "
+                                           "(D-a-band-is-copies-in-drawers) — every card ON HAND "
+                                           "ranked by market, with the drawer each one sits in, "
+                                           "at #/pricing?band=top|bottom. A lens on the screen "
+                                           "where prices are decided (D105) by D103's own "
+                                           "mechanism, so it costs no ROUTES row. THE UNIT IS "
+                                           "THE COPY AND NEVER THE SKU: the owner's 122 cards at "
+                                           "or above $5 are 38 SKUs, so a per-SKU list draws a "
+                                           "third of the rows and sends a hand to a third of the "
+                                           "drawers — and `copy N of M` is what keeps seven "
+                                           "identical Vilemaw rows reading as seven reaches "
+                                           "rather than as a repetition. DIRECTION RE-DEFAULTS "
+                                           "THE VIEW off the contiguity measurement: 1.40 cards "
+                                           "per reach at the rich end is a pick list, 6.51 at "
+                                           "the cheap end is a sweep of which two whole drawers "
+                                           "are 646 of 1,042 cards. `pulls()` is the one figure "
+                                           "here that is not on the wire — a band's reaches — "
+                                           "because the band is chosen on this screen. A DRAWER "
+                                           "TOTAL IS A FLOOR whenever any of its cards is "
+                                           "unpriced, and the bulk verdict is suppressed with "
+                                           "it: box 4 is 633 cards of which 215 have no price, "
+                                           "and a bare total would be a silent drop wearing the "
+                                           "shape of a figure. It WRITES NOTHING on the owner's "
+                                           "ruling; every row is a link into #/inventory, where "
+                                           "the store already learns a card has left.",
+                                   "governed_by": ["D9", "D10", "D27", "D31", "D41", "D49", "D56", "D58",
+                                                   "D71", "D86", "D94", "D95", "D103", "D105",
+                                                   "D109", "D110", "D118", "D132", "D147",
+                                                   "D-a-band-is-copies-in-drawers"],
+                                   # `app/tests/value-bands.spec.ts` is the check, and it runs
+                                   # under `make design-check` rather than at turn end — named
+                                   # here in prose for `Markdown.tsx`'s reason. Two arms were
+                                   # mutation-tested: dropping `copy N of M`, and letting the
+                                   # bulk verdict fire over a drawer holding unread cards.
+                                   },
+            "src/ValueBands.css": {"does": "the value lens's own chrome, `--bn-*` only. Its tiers "
+                                           "ask THIS COLUMN and never the window — the screen "
+                                           "draws inside .bn-shell-main, a 172px swing a @media "
+                                           "width cannot see — so the page root carries "
+                                           "`container-name: value` and three steps hang off it: "
+                                           "760 the drawer grid goes to one column, 620 the row "
+                                           "becomes a card, 470 the bar stops being sticky. THE "
+                                           "BAR IS STICKY ABOVE THAT FOR D118's REASON: a band "
+                                           "press replaces a 92-row body with a 1,042-row one, "
+                                           "and the control that caused it may not move. The "
+                                           "count badge reserves four digits because `Over "
+                                           "$0.29 805` and `Under $0.29 1,042` are one chip with "
+                                           "the direction flipped. `.value-row` declares no "
+                                           "transition of its own so base.css's three floors "
+                                           "apply whole, and opts out of the global `a:hover` "
+                                           "underline the way `.bn-btn` and `.home-deck` do — "
+                                           "three cells of one row underlining at once reads as "
+                                           "a fault. `.value-field` is a chip that contains a "
+                                           "field, which the kit lacks: `.pricing-flat` is the "
+                                           "first instance and this is the second, so a third "
+                                           "makes it a kit component.",
+                                   "governed_by": ["D41", "D50", "D58", "D71", "D86", "D94",
+                                                   "D110", "D117", "D118", "D123",
+                                                   "D-a-band-is-copies-in-drawers"]},
             "src/Markdown.tsx": {"does": "THE STALE-LISTING MARKDOWN (D100), the second sheet off "
                                          "the Runs header and a structural clone of "
                                          "LiveReconcile.tsx — same bn-sheet/bn-scrim shell, same "
@@ -4281,7 +4340,8 @@ COMPONENTS = [
                                                 "D33", "D35", "D37", "D39", "D41", "D48",
                                                 "D49", "D51", "D54", "D56", "D58", "D59",
                                                 "D62", "D78", "D79", "D85", "D86", "D89",
-                                                "D99", "D100", "D103", "D101", "D105", "D107", "D98", "D109", "D115", "D117", "D125", "D38"]},
+                                                "D99", "D100", "D103", "D101", "D105", "D107", "D98", "D109", "D115", "D117", "D125", "D38",
+                                                "D-a-band-is-copies-in-drawers"]},
             "src/Pricing.css": {"does": "the worklist at owner density. One grid template read by "
                                         "the caption AND every row, so the two cannot drift; a "
                                         "row height invariant across every state, because the "
@@ -4744,7 +4804,8 @@ COMPONENTS = [
                                              "eleven and three mechanical counts do not move.",
                                      # D103 is the entry; D86 is the one answer file the write
                                      # path is keyed by; D62 is the press the trends scoping keeps.
-                                     "governed_by": ["D28", "D62", "D86", "D100", "D103", "D101", "D99", "D115", "D59", "D87"]},
+                                     "governed_by": ["D28", "D62", "D86", "D100", "D103", "D101", "D99", "D115", "D59", "D87",
+                                                     "D-a-band-is-copies-in-drawers"]},
             "src/runHandoff.ts": {"does": "the one module that reads or writes the run scope "
                                           "carried from #/inventory to #/runs — key "
                                           "`banchi.run-scope`, D27's carve-out. NOT CLEARED BY "
@@ -5213,6 +5274,25 @@ COMPONENTS = [
                                                "harness test — it starts a browser; "
                                                "`make design-check` runs it.",
                                        "governed_by": ["D16", "D61", "D63", "D66", "D69"]},
+            "tests/value-bands.spec.ts": {"does": "the value lens "
+                                                  "(D-a-band-is-copies-in-drawers), in its own "
+                                                  "file so `pricing.spec.ts` stays the unedited "
+                                                  "gate that proves a second lens cost the first "
+                                                  "one nothing. Every fixture is a shape the "
+                                                  "owner's store actually has — one SKU in three "
+                                                  "slots, a drawer bulk except for two cards, a "
+                                                  "drawer whose priced cards are all cheap and "
+                                                  "which still holds unread ones — because no "
+                                                  "rounder fixture contains the cases. Three of "
+                                                  "the thirteen are about rows that are NOT "
+                                                  "ranked and none can pass by drawing a zero. "
+                                                  "It found two defects before the screen "
+                                                  "shipped: a top-5% band that rounded to zero "
+                                                  "rows on a store with fewer than ten priced "
+                                                  "cards, and its own D118 case sampling a rect "
+                                                  "mid page-enter animation.",
+                                          "governed_by": ["D103", "D105", "D109", "D118",
+                                                          "D-a-band-is-copies-in-drawers"]},
             "tests/pricing-markdown.spec.ts": {"does": "`#/pricing` AS A LENS OVER LIVE "
                                                "TCGPLAYER LISTINGS (D103), in its own file so "
                                                "that `tests/pricing.spec.ts` could stay "

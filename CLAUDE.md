@@ -701,7 +701,18 @@ sentence**, and see "the census" below for what enforces that.
                               which can never be priced. The EXPORT still carries them, because
                               `reconcile --live` reads a zero quantity to see a SKU sell out.
                               THE SHEET THAT MAKES ONE IS HERE TOO (D105), off the header —
-                              read an export, write a worklist, price it without changing screen
+                              read an export, write a worklist, price it without changing screen.
+                              AND A THIRD LENS, `?band=top|bottom` (D-a-band-is-copies-in-drawers):
+                              WHAT IS WORTH PULLING — every card ON HAND ranked by market, ONE ROW
+                              PER PHYSICAL COPY, with the drawer each sits in. It reads the STORE
+                              and needs no joined run, so it is branched ahead of every worklist
+                              empty state. Read-only: every row is a link into `#/inventory`,
+                              which is where a card still leaves a box. The cheap end opens on
+                              DRAWERS and the rich end on CARDS, off the contiguity measurement —
+                              1.40 cards per reach at one end against 6.51 at the other. A drawer
+                              total is a FLOOR whenever any of its cards is unpriced, and NOTHING
+                              ON HAND IS DROPPED: 390 of the owner's 2,245 have no price and each
+                              is counted under one of three causes with its own door
 #/orders       Orders         which copies this buyer gets and where they are, ranked by how
                               many of them sit in one box, pulled one copy at a time
 #/shipping     Shipping       which envelope an order goes in, out of TCGplayer's own shipping
