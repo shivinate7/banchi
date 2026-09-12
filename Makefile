@@ -75,6 +75,9 @@ help:
 	@echo "                    over one card. In \`check\`, never in the hook."
 	@echo "  make janitor-selftest  the sweep, proved against a throwaway clone. In \`check\`, never in the hook."
 	@echo "  make reap-selftest  the kill guard, proved by pointing it at what it must not kill."
+	@echo "  make silent-write-selftest  the silenced-write guard, proved by reproducing the"
+	@echo "                    refused commit whose refusal went to /dev/null."
+	@echo "  make coordinator-selftest  the merge-queue verdict rules. No network."
 	@echo "  make suite-lock-selftest  one browser fleet at a time, proved by violating it."
 	@echo "  make verdict-selftest  the design-check verdict reporter, run for real. No browser."
 	@echo "  make serve-selftest  the supervisor's build job, against a throwaway tree. No node."
@@ -91,11 +94,15 @@ help:
 	@echo "  make janitor-install  copy the sweep to ~/.claude/bin so every repo's hooks can reach it."
 	@echo "  make lan-check    is the LAN URL still good? DNS, both servers, and a real"
 	@echo "                    write. Reaches the network, so it never gates a commit."
+	@echo "  make coordinator  the merge queue, READ rather than remembered: main, every open"
+	@echo "                    PR with a SHA-pinned verdict, the worktrees, the live sessions."
+	@echo "                    Reaches the network, so it never gates a commit."
 	@echo "  make check        harness + docs-audit + audit-self-test + githooks-selftest +"
 	@echo "                    merge-selftest + revert-selftest + claim-selftest + claim-stale +"
 	@echo "                    decisions-selftest + submission-selftest +"
 	@echo "                    revert-guard +"
-	@echo "                    janitor-selftest + reap-selftest + suite-lock-selftest +"
+	@echo "                    janitor-selftest + reap-selftest + silent-write-selftest +"
+	@echo "                    coordinator-selftest + suite-lock-selftest +"
 	@echo "                    serve-selftest +"
 	@echo "                    verdict-selftest + port-agreement + set-hint-agreement +"
 	@echo "                    screen-freshness + sigil-check + ignore-check + lint +"
@@ -408,6 +415,8 @@ check:
 	@$(MAKE) --no-print-directory submission-selftest
 	@$(MAKE) --no-print-directory janitor-selftest
 	@$(MAKE) --no-print-directory reap-selftest
+	@$(MAKE) --no-print-directory silent-write-selftest
+	@$(MAKE) --no-print-directory coordinator-selftest
 	@$(MAKE) --no-print-directory suite-lock-selftest
 	@$(MAKE) --no-print-directory serve-selftest
 	@$(MAKE) --no-print-directory verdict-selftest
@@ -445,6 +454,8 @@ ci-check:
 	@$(MAKE) --no-print-directory revert-guard
 	@$(MAKE) --no-print-directory janitor-selftest
 	@$(MAKE) --no-print-directory reap-selftest
+	@$(MAKE) --no-print-directory silent-write-selftest
+	@$(MAKE) --no-print-directory coordinator-selftest
 	@$(MAKE) --no-print-directory suite-lock-selftest
 	@$(MAKE) --no-print-directory serve-selftest
 	@$(MAKE) --no-print-directory verdict-selftest
@@ -708,6 +719,49 @@ submission-selftest:
 	@$(PYTHON) scripts/submission-selftest.py
 
 .PHONY: submission-selftest
+
+# A GIT WRITE MUST LEAVE A TRACE THE SESSION CAN READ. On 2026-09-12 a coordinator session
+# reported work as landed that had not landed, twice, through `git commit -q -F - >/dev/null
+# 2>&1 <<'EOF'`: the pre-commit hook refused, the refusal went to /dev/null, and a stale
+# `git log --oneline -1` was read as the new commit. `scripts/silent-write-guard.py --hook` is
+# a PreToolUse hook on Bash that refuses that command — it is not a target you run, and this
+# self-test is what proves it.
+#
+# IN `check`, NEVER IN THE GIT HOOK: it writes a temp repository. Same standing as
+# reap-selftest, and for the same D18 reason. It REPRODUCES the incident rather than asserting
+# about it, and it pins every legitimate `2>/dev/null` as passing — `git rev-parse … 2>/dev/null`,
+# `git fetch origin -q 2>/dev/null`, `git merge --abort 2>/dev/null` — because a guard that
+# fires on those is worse than no guard. Mutation-tested: twenty-one arms, nineteen caught, and
+# the two survivors are proved to be one requirement covered twice.
+silent-write-selftest:
+	@bash scripts/silent-write-selftest.sh
+
+.PHONY: silent-write-selftest
+
+# THE MERGE QUEUE, READ RATHER THAN REMEMBERED. The other half of 2026-09-12: a session relayed
+# `#300 GREEN — merging` for several turns while nothing merged, because the line came from a
+# driver's stdout and two copies of that driver were racing behind a `pgrep` waiter that matched
+# its own command line. Every figure here is read from the repository or from GitHub at the
+# moment you run it, and a PR's verdict is pinned to its HEAD SHA.
+#
+# NOT IN `check`, and `lan-check` above is the precedent: it reaches the network, and `check`
+# answers from the tree alone — a row that fails on a train is a row people learn to ignore.
+# Its VERDICT RULES do gate, through `make coordinator-selftest`, which needs no network; that
+# is the same split `verdict-selftest` makes.
+#
+# Exit 1 means a block could not be read, which is the point: an incomplete report must not be
+# relayable as the state of the queue.
+coordinator:
+	@python3 scripts/coordinator.py $(ARGS)
+
+# The verdict rules, against synthetic check-run payloads. No network, so this is in `check`.
+# Every case is a payload a reader looking at conclusions alone would call clean: one required
+# check of two all passing, a required check that reported `skipped`, a null conclusion that
+# must read as `running` and never as failed.
+coordinator-selftest:
+	@python3 scripts/coordinator.py --selftest
+
+.PHONY: coordinator coordinator-selftest
 
 # THE SWEEP, WHERE EVERY REPO CAN REACH IT. `~/.claude/settings.json` hooks apply to every
 # session in every project, but the command they name has to exist without this checkout in

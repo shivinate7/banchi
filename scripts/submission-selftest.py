@@ -815,7 +815,7 @@ def main() -> int:
                 case()
             except Exception as exc:  # noqa: BLE001 — every case must run and be scored
                 bad(f"{case.__name__} raised {type(exc).__name__}: {exc}")
-            if PASS + FAIL == scored:
+            if scored == PASS + FAIL:
                 silent.append(case.__name__)
     finally:
         cleanup()
@@ -824,7 +824,7 @@ def main() -> int:
         bad(f"{name} asserted NOTHING — a case that scores nothing is not a case that passed")
     if attempted != len(CASES):
         bad(f"{attempted} of {len(CASES)} cases were attempted")
-    if PASS + FAIL == 0:
+    if (PASS + FAIL) == 0:
         print("\nREFUSED: this run examined nothing. 0 checks is not a pass.")
         return 1
     print(f"\n{PASS} passed, {FAIL} failed, over {attempted} case(s)")

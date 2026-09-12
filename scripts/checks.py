@@ -435,6 +435,53 @@ CHECKS = (
         "governed_by": ("D18", "D53", "D111", "D127"),
     },
     {
+        "target": "silent-write-selftest",
+        "runs": "bash scripts/silent-write-selftest.sh",
+        "asserts": "scripts/silent-write-guard.py, the PreToolUse hook that refuses a git "
+                   "write whose own output is discarded. THE INCIDENT IS REPRODUCED rather "
+                   "than asserted about: a throwaway repository with a pre-commit hook that "
+                   "refuses, the 2026-09-12 command run verbatim, and the proof that "
+                   "`git log --oneline -1` then answers with the PREVIOUS commit — the stale "
+                   "read that was reported as `pushed`. The half that decides whether this "
+                   "guard survives is the false positives, and each is RUN in the fixture "
+                   "before it is scored: `git rev-parse … 2>/dev/null`, `git fetch origin -q "
+                   "2>/dev/null`, `git merge --abort 2>/dev/null`, `git merge-tree`, "
+                   "`make merge-selftest`, and a quoted `>/dev/null` inside a commit message. "
+                   "The refusal's own text is scored too — a refusal that does not print "
+                   "`PKMNSCAN_SILENT=off` fails here.",
+        "needs": ("python3", "bash", "git"),
+        "writes": "a git repository, a pre-commit hook and two commits, all under `mktemp -d`. "
+                  "It starts no long-lived process and signals nothing.",
+        "commit_path": False,
+        "why_off_commit_path": "D18 — it writes a temp repository and makes real commits in "
+                               "it. Same standing as reap-selftest beside it, whose guard it "
+                               "copies its fail-open asymmetry from.",
+        "gates": True,
+        "governed_by": ("D18", "D42", "D127"),
+    },
+    {
+        "target": "coordinator-selftest",
+        "runs": "python3 scripts/coordinator.py --selftest",
+        "asserts": "scripts/coordinator.py's verdict rules, against synthetic check-run "
+                   "payloads. Every case is a payload that a reader looking at conclusions "
+                   "ALONE would call clean, and the assertion is that this one does not: one "
+                   "required check of two with everything reported passing, a required check "
+                   "that reported `skipped`, a commit with no runs at all. The two mirrors are "
+                   "cases as well — a null conclusion is `running` and never `failed`, and an "
+                   "OPTIONAL check may be skipped without spoiling a green. It also asserts "
+                   "the report's own floor: a block that could not be read makes the exit "
+                   "non-zero, so an incomplete report cannot be relayed as the state of the "
+                   "queue.",
+        "needs": ("python3",),
+        "writes": "",
+        "commit_path": False,
+        "why_off_commit_path": "D16 — it is a self-test rather than a doc check, and it belongs "
+                               "beside the other selftests at the end of `check` rather than "
+                               "on the hook. Nothing here writes, so D18 is not the reason.",
+        "gates": True,
+        "governed_by": ("D42", "D141"),
+    },
+    {
         "target": "suite-lock-selftest",
         "runs": "python3 scripts/suite-lock.py selftest",
         "asserts": "scripts/suite-lock.py, by violating it: a holder, a second run refused, a "
