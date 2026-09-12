@@ -10721,7 +10721,9 @@ Wrong, all citing section 11 for the one-in-thirteen `design-check` flake, which
 
 **Two other sites cite section 11 and are correct** — `docs/map.py:2483` and `server/capture_server.py:10196`, both about the capture server's concurrency, which is what section 11 is. Nine more name it correctly elsewhere. **A blanket find-and-replace would have broken all eleven to fix seven**, and neither of the two quotes anything distinctive, so nothing in the text separates them from the wrong ones. The repair was per-site and subject-checked.
 
-**The count was wrong twice before it was right.** It was reported as five sites, then found to be seven by re-running the search with both spellings — `§11` and `section 11` — over the whole tree rather than three globs. `Makefile:835` and `docs/DECISIONS.md:10084` were the two a `§`-scoped search could not see.
+**The count was wrong three times before it was right, and every miss was a search pattern too narrow.** Five sites, from a `§`-only search over three globs. Then seven, by searching both spellings over the whole tree — `Makefile:835` and `docs/DECISIONS.md:10084` say `section 11` and a `§`-scoped search cannot see them. Then a reviewer put the population at nine and the correct sites at two, from `DEBTS\.md ?(§|section )11` — which requires nothing between the filename and the reference and so misses every site spelling it `` `docs/DEBTS.md` §11 ``, backticks included.
+
+**The population is 16, and the pattern that finds all of it is `DEBTS\.md`? ?(§|section )11`** — seven wrong, nine correct, the nine being `CLAUDE.md:916` and `:932`, `docs/DECISIONS.md:6111`, `docs/map.py:2483`, `harness/tests/t7_store_and_seams.py:21593`, `scripts/docs-audit.py:2456` and `:2509`, `scripts/serve.py:1393`, and `server/capture_server.py:10196` and `:11049`. **A citation of this file is spelled three ways** — `§11`, `section 11`, and either of those behind a backticked filename — which is worth more to the next session than the count is, because the count is what three searches got wrong.
 
 ### It was copied, not renumbered, and only one of those argues for a row
 
