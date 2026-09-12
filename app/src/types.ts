@@ -132,6 +132,31 @@ export type GameEntry = {
    *  of two real answers would be authoring a number nobody measured. */
   card_aspect: number | null
 
+  /** MUST EVERY CARD OF THIS GAME NAME ITS SET BEFORE ITS EXPORT MAY BE FETCHED?
+   *
+   *  `true` on a game whose whole TCGplayer category has been weighed and found too close
+   *  to the transport's own ceiling to widen into on a guess. D76 scopes an export to the
+   *  sets the run's cards name and widens the moment they stop agreeing, so on such a game
+   *  ONE unhinted card is the whole difference between a narrow fetch and a refused one.
+   *  `server/pipeline_routes.py:_scope_for_run` refuses that run; this flag is why.
+   *
+   *  READ HERE SO THE CAPTURE SCREEN CAN SAY SO AT THE RIG, WHERE IT IS FREE TO FIX. It
+   *  NEVER gates the shutter — D65 and `setHint.ts` both hold that the rig does not stop
+   *  for an autocomplete, and a capture that refused mid-feeder would be a card on the
+   *  floor. The screen draws a note; the fetch is what refuses.
+   *
+   *  IT IS THE REGISTRY'S OWN FIELD AND NOT A COPY OF THE RULE. `GET /games` serves the
+   *  entry verbatim, so the boolean an operator meets on the capture screen is the same
+   *  literal `_scope_for_run` refuses on — there is no second threshold here to drift. */
+  export_needs_hint?: boolean
+
+  /** What this game's whole category weighs, where anyone has measured it. Bytes, or absent.
+   *
+   *  The evidence for the flag above, carried so a sentence can quote a figure instead of
+   *  an adjective: Pokemon is 32,629,598 B, 97% of the 32 MB the download is refused past,
+   *  against 238,482 B for one set. Absent means nobody has weighed it — never zero. */
+  export_category_bytes?: number
+
   /** THESE TWO FLAGS ARE NOT THE SAME FLAG, AND A SCREEN THAT TREATS THEM ALIKE IS WRONG.
    *
    *  `unverified: true` is a measurement somebody owes: no TCGplayer export has been seen,

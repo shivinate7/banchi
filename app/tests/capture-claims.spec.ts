@@ -1357,3 +1357,82 @@ test('the clear is disabled while there is nothing to clear, rather than absent'
   await expect(clear).toBeVisible()
   await expect(clear).toBeDisabled()
 })
+
+/* ------------------------------------------------------------------------------------------
+ * A GAME WHOSE EXPORT NEEDS THE HINT SAYS SO AT THE RIG — AND STILL TAKES THE CLAIM
+ *
+ * `pokemon` carries `export_needs_hint` in the registry: its whole TCGplayer category is
+ * 32,629,598 B, 97% of the ceiling the download is refused past, so a run whose own cards
+ * under-specify the scope is refused at the fetch rather than quietly widened. That refusal
+ * lives on the server. What lives HERE is telling the operator while it is still free to
+ * fix, because the alternative is learning it an hour of captures later — which is the exact
+ * defect `app/src/setHint.ts` was written for.
+ *
+ * THE LOAD-BEARING HALF IS THAT NOTHING IS REFUSED. D65's rule stands: the rig does not stop
+ * for an autocomplete, and a shutter that refused mid-feeder at a 623 ms cadence would leave
+ * a physical card in the drawer with no record and every card behind it renumbered. The
+ * field still takes any text, the row still draws, and no control is disabled.
+ *
+ * THE STUB CARRIES THE FLAG BECAUSE THE REGISTRY DOES. `GET /games` serves the entry
+ * verbatim, so this boolean is the same literal `_scope_for_run` refuses on — there is no
+ * second threshold on this side to drift out of step with it.
+ */
+const NEEDS_HINT = {
+  default: 'pokemon',
+  games: [{ ...GAMES.games[0], export_needs_hint: true, export_category_bytes: 32629598 }],
+}
+
+test('a game whose export needs a set hint says so, in all three states of the field', async ({
+  page,
+}) => {
+  /* THE VOCABULARY IS STUBBED BECAUSE `unchecked` OUTRANKS EVERY OTHER VERDICT, and rightly:
+     a portal outage must read as "cannot tell" rather than as a judgement (D65). Without
+     this the note under the field is the transport refusal and says nothing about hints. */
+  await routeSets(page, RIFTBOUND_SETS)
+  await open(page, { box: 3, bid: 23 }, NEEDS_HINT, HAND_BOXES)
+  await page.keyboard.press('h')
+
+  /* THREE PLACES, BECAUSE THE OPERATOR MEETS THIS FIELD IN THREE STATES: the head while it
+     is open, the meta beside the cursor, and the row once it is shut. The row is the one
+     that matters at the rig — it is where the screen sits for every card of a sitting
+     nobody pressed H on, and `None` on its own reads as a choice that was made. */
+  await expect(page.locator('.capture-open').filter({ hasText: /Set hint/ })).toContainText(
+    'Needed for this game',
+  )
+  await expect(hintMeta(page)).toHaveText(/needed/i)
+  await expect(hintNote(page)).toContainText('needs one')
+  await expect(hintNote(page)).toContainText('will refuse the run')
+
+  /* AND IT NAMES THE WAY BACK. A note saying only "this will be refused" leaves an operator
+     who has already captured the box with nowhere to go; the retroactive claim editor is
+     where a hint is set after the fact, and it is on the screen this sentence names. */
+  await expect(hintNote(page)).toContainText('Manage box')
+
+  await page.keyboard.press('Escape')
+  const row = page.locator('.capture-row').filter({ hasText: /Set hint/ })
+  await expect(row).toContainText('None')
+  await expect(row.locator('.capture-sub')).toHaveText(/needed for this game/i)
+})
+
+test('the same blank field on a game that needs no hint reads Optional, and is not flagged', async ({
+  page,
+}) => {
+  /* THE OTHER DIRECTION, AND IT IS THE ARM THAT MATTERS AS MUCH AS THE FIRST. A note that
+     fired on every game would be a note nobody reads, and an outcome assertion cannot tell
+     "drawn correctly" from "drawn always" — so this pair differs in exactly one boolean, on
+     the same stub, at the same blank field, and asserts the opposite of each claim above. */
+  await routeSets(page, RIFTBOUND_SETS)
+  await open(page, { box: 3, bid: 23 }, GAMES, HAND_BOXES)
+  await page.keyboard.press('h')
+
+  await expect(page.locator('.capture-open').filter({ hasText: /Set hint/ })).toContainText(
+    'Optional',
+  )
+  await expect(hintMeta(page)).toHaveText(/no hint/i)
+  await expect(hintNote(page)).toContainText('Optional')
+  await expect(hintNote(page)).not.toContainText('needs one')
+
+  await page.keyboard.press('Escape')
+  const row = page.locator('.capture-row').filter({ hasText: /Set hint/ })
+  await expect(row.locator('.capture-sub')).toHaveCount(0)
+})
