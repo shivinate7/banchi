@@ -10887,7 +10887,7 @@ The seven are §24's own table, Falling Star and Fizz, Trickster among them. Sto
 ### What is left, and it is named rather than papered over
 
 **A SKU whose import landed in Staged and never went live reads zero too.** A copy sold by hand against that state ages a claim it should not, and the copies are still sitting in TCGplayer's staged channel. Telling that from a sold-out listing needs D59's own reopener — a marker that a copy actually reached an import file, one field on `Card` written by `cmd_emit`'s push loop beside the `sku` stamp. **`docs/DEBTS.md` §24 is now that residue** rather than this whole defect; it is the third entry to turn on not having that field, after D147 and §24 itself.
-## D-the-merge-refuses-a-stale-half — The merge is run by a checkout, so the checkout is asked whether it is current, and main is read for a slug the moment it moves
+## D151 — The merge is run by a checkout, so the checkout is asked whether it is current, and main is read for a slug the moment it moves
 
 **Built 2026-09-12, after an unclaimed id reached `main` for the second time.** D140 made a decision number something a branch writes as a slug and `make merge` turns into a number. The claim is a function in `scripts/merge-pr.py` — and `make merge` runs **the `scripts/merge-pr.py` of whatever checkout invoked it.** A checkout cut before that function does not fail: it performs the GitHub half, performs the local half, reports complete success, and main lands carrying a raw `## D-<slug>` heading that no citation can resolve against and no later merge can ever find, because the branch that wrote it is merged and gone. Pull request #270 stranded one, repaired by #273; pull request #280 stranded the next, repaired by #285.
 

@@ -1271,7 +1271,7 @@ COMPONENTS = [
                         "pulling a merged pull request looks like. PKMNSCAN_MAIN=off is the "
                         "visible escape hatch, and every refusal prints it. AND SINCE "
                         "2026-09-12 IT ALSO REPORTS WHAT main IS CARRYING once it has moved "
-                        "(D-the-merge-refuses-a-stale-half): at the `committed` phase it reads "
+                        "(D151): at the `committed` phase it reads "
                         "the commit refs/heads/main just landed on and prints, loudly, when "
                         "that commit holds an unclaimed `## D-<slug>` heading. It refuses "
                         "nothing and exits 0 whatever it finds — by then the pull request is "
@@ -1289,7 +1289,7 @@ COMPONENTS = [
                 # rather than the content: this file is on the path that decides whether a
                 # commit proceeds, so it reads and refuses and never writes.
                 "governed_by": ["D18", "D42", "D140",
-                                "D-the-merge-refuses-a-stale-half"],
+                                "D151"],
                 "note": "THE ORPHAN RULE CANNOT SEE THIS FILE either — no suffix. It is the "
                         "case the comment above this modules block predicted by name.",
             },
@@ -1352,7 +1352,7 @@ COMPONENTS = [
                         "about a pull request out of the PREVIOUS head's runs and exited 0 at "
                         "once — two live merges went out unwatched on 2026-09-11. "
                         "IT IS BRACKETED BY TWO GUARDS OVER ITSELF since 2026-09-12 "
-                        "(D-the-merge-refuses-a-stale-half), because `make merge` runs the "
+                        "(D151), because `make merge` runs the "
                         "copy of THIS FILE belonging to whatever checkout invoked it: 24 of "
                         "this clone's 30 working trees were behind main's copy that day, 16 "
                         "of them missing the claim entirely, and such a copy merges, moves "
@@ -1373,7 +1373,7 @@ COMPONENTS = [
                 # is borrowed from, one register down from a route that can spend money.
                 "governed_by": ["D18", "D33", "D42", "D72", "D111", "D136", "D140",
                                 "D141", "D143", "D148",
-                                "D-the-merge-refuses-a-stale-half"],
+                                "D151"],
                 "note": "IT NEVER SETS PKMNSCAN_MAIN AND NO REFUSAL IT PRINTS SUGGESTS IT. D42 "
                         "is explicit that a session reaching for that variable has left the "
                         "amendment behind; this needs no hatch because allow rule 3 already "
@@ -1398,7 +1398,7 @@ COMPONENTS = [
                         "not carry, an unknown rev, a bare invocation — and the footgun, main "
                         "checked out nowhere while another tree sits on a branch that is "
                         "BEHIND its upstream. NINE OF THEM ARE THE STALE CHECKOUT, since "
-                        "2026-09-12 (D-the-merge-refuses-a-stale-half), built as one "
+                        "2026-09-12 (D151), built as one "
                         "progression rather than six repositories because the arms that "
                         "matter are the ones that must NOT fire: main moves on something "
                         "unrelated (allowed), main takes a capability in the merge (refused, "
@@ -1406,7 +1406,7 @@ COMPONENTS = [
                         "(allowed), the branch EDITS the merge itself (allowed — the pull "
                         "request that wrote this), and main moves under it again (refused, "
                         "naming the derived second file).",
-                "governed_by": ["D18", "D42", "D-the-merge-refuses-a-stale-half"],
+                "governed_by": ["D18", "D42", "D151"],
                 "note": "THE FOOTGUN CASE WAS GREEN FOR THE WRONG REASON WHEN IT WAS FIRST "
                         "WRITTEN, and the fixture carries the repair in a comment. The other "
                         "tree sat on a branch already at the commit a wrong pull would have "
@@ -1484,7 +1484,7 @@ COMPONENTS = [
                         "branch in the two worktree cases, so their silence can only come "
                         "from the primary/linked test rather than from the gate beside it. "
                         "AND SIX MORE OVER THE UNCLAIMED-ID REPORT since 2026-09-12 "
-                        "(D-the-merge-refuses-a-stale-half): a fixture main is moved onto a "
+                        "(D151): a fixture main is moved onto a "
                         "slugged commit and the report is asserted by its marker, by the id "
                         "it names, by firing ONCE, and by main having moved anyway — it "
                         "refuses nothing, so exit status says nothing about it. The case that "
@@ -1498,7 +1498,7 @@ COMPONENTS = [
                 # D43 and D53 join with D139: the cases turn on a linked worktree having its own
                 # store, and on the primary checkout being the one the live server is built from.
                 "governed_by": ["D18", "D42", "D43", "D53", "D139",
-                                "D-the-merge-refuses-a-stale-half"],
+                                "D151"],
             },
             "lan-check.py": {
                 "does": "answers whether the owner's LAN URL still works, end to end and from "
@@ -1826,7 +1826,7 @@ COMPONENTS = [
                         "asks about a checkout; the invariant the whole design rests on — "
                         "main carries no slug — is a claim about main's own trees, and it "
                         "failed twice with nothing asking that question "
-                        "(D-the-merge-refuses-a-stale-half). It reports and never repairs, "
+                        "(D151). It reports and never repairs, "
                         "for `--stale`'s reason turned around: a substitution made after the "
                         "merge reaches main's own copy of the entry.",
                 # D72 IS THE FAILURE THIS REPLACES and D16 the rule its audit rows answer to.
@@ -1835,7 +1835,7 @@ COMPONENTS = [
                 # skips, `AGENTS.md` being the same file as `CLAUDE.md` under another name.
                 # D18 is why it is not in `make check`: it writes.
                 "governed_by": ["D16", "D18", "D42", "D47", "D72", "D80", "D135",
-                                "D140", "D-the-merge-refuses-a-stale-half"],
+                                "D140", "D151"],
             },
             "claim-selftest.py": {
                 "does": "scripts/claim-ids.py proved against a throwaway repository in which "
@@ -1868,7 +1868,7 @@ COMPONENTS = [
                 # literally, which is the trade docs-audit.py's own entry records.
                 "governed_by": ["D1", "D2", "D16", "D18", "D80", "D136", "D140", "D141",
                                 "D143", "D148",
-                                "D-the-merge-refuses-a-stale-half"],
+                                "D151"],
             },
             "docs-audit-allow.txt": {
                 "does": "paths and identifiers the docs name before they exist, one "

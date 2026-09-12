@@ -460,7 +460,7 @@ make claim-selftest # the claimer, proved where it can be wrong: a throwaway rep
                     #   the git hook.
 make merge          # merge a PR and move main onto it — BOTH HALVES, on your word (D42).
                     #   IT REFUSES A CHECKOUT WHOSE OWN COPY OF THE MERGE IS BEHIND main's,
-                    #   BEFORE ANYTHING ELSE (D-the-merge-refuses-a-stale-half). This target
+                    #   BEFORE ANYTHING ELSE (D151). This target
                     #   runs the `scripts/merge-pr.py` OF THE CHECKOUT YOU TYPE IT IN, and on
                     #   2026-09-12 24 of this clone's 30 working trees were behind main's copy
                     #   of it — 16 of them missing the commit that added the id claim at all.
@@ -1709,7 +1709,7 @@ D147 The claim is spent on the oldest copies, because a card captured tonight wa
 D148 The wait is about the claim commit, and an answer it has not got is never a pass
 D149 A section number that resolves is not a citation that is right, and no check can read what a sentence is about
 D150 A reading taken after a sale is that sale's own result, and it ages the claim
-D-the-merge-refuses-a-stale-half The merge is run by a checkout, so the checkout is asked whether it is current, and main is read for a slug the moment it moves
+D151 The merge is run by a checkout, so the checkout is asked whether it is current, and main is read for a slug the moment it moves
 
 ```
 
