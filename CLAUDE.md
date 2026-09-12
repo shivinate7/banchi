@@ -363,6 +363,26 @@ make reap           # STOP WHAT THIS SESSION STARTED, AND NOTHING ELSE (D127). P
                     #   IT SIGNALS ONLY WHAT IS RUNNING UNDER THIS CHECKOUT and PRINTS what it
                     #   refused, which is the half a `pkill` that quietly does the right thing on
                     #   a good day can never do.
+                    #   AND THE BARE FORM SEES A SERVER STARTED BY A RELATIVE PATH SINCE
+                    #   2026-09-12 (D169). It resolved argv
+                    #   ALONE while the verdict reads argv AND the working directory — so
+                    #   `make dev`, whose argv npm writes absolutely, was found, and
+                    #   `make server`, which the Makefile spells `$(PYTHON) server/capture_server.py`
+                    #   with a relative `$(PYTHON)`, was resolved as NOTHING AT ALL. Measured in a
+                    #   worktree with a live capture server: `0 process(es)`, `nothing to stop`,
+                    #   while `port:8235` found the same pid and judged it OURS. Three orphaned
+                    #   capture servers from three trees were running on the machine at the time.
+                    #   NOT D53's CARVE-OUT, which was checked first and is keyed exactly where
+                    #   that entry puts it: the main checkout's `.serve/*.pid`, refused from
+                    #   anywhere, and silent about a worktree's own server.
+                    #   IT PASSES OVER TWO THINGS AND NAMES BOTH, with the reason and the pids:
+                    #   THIS SESSION'S OWN CHAIN — the shell it was typed into carries an
+                    #   absolute `cd` into the checkout, so a bare `--confirm` from the main tree
+                    #   would have stopped the turn — and ANOTHER CHECKOUT OF THIS CLONE, because
+                    #   a linked worktree sits under `.claude/worktrees/` inside the main tree and
+                    #   is a different checkout by every rule here (D43). From the owner's main
+                    #   checkout a bare sweep had proposed four processes and all four were other
+                    #   trees'.
                     #   AND YOU DO NOT HAVE TO REMEMBER ANY OF THAT. `scripts/reap.py --hook` is
                     #   a PreToolUse hook on Bash: it RESOLVES a kill's real targets — running
                     #   pgrep and lsof itself, read-only — and refuses the command when one of
@@ -378,7 +398,12 @@ make reap-selftest  # the guard, proved by pointing it at what it must not kill:
                     #   `pgrep`, so a fixed fixture name makes two concurrent runs refuse each
                     #   other their own processes — D122's shape one register down, and it reddened
                     #   `make check` four times over a byte-identical tree. Mutation-tested —
-                    #   fourteen arms.
+                    #   twenty-two arms.
+                    #   ITS FIXTURE SPAWNED EVERY SUBJECT BY AN ABSOLUTE PATH UNTIL 2026-09-12,
+                    #   which is exactly why it could not see the bare form's blind spot: the
+                    #   suite had never shown the sweep a process its miss applied to. There is
+                    #   a `spawn_relative` beside `spawn` now, and eight cases over the sweep —
+                    #   five of them red against the pre-fix reaper.
                     # A GIT WRITE WHOSE OUTPUT IS DISCARDED IS REFUSED, AND THERE IS NO TARGET
                     #   FOR IT — `scripts/silent-write-guard.py --hook` is a PreToolUse hook on
                     #   Bash, armed in both rosters (D135). On 2026-09-12 a session reported work
@@ -2015,6 +2040,7 @@ D165 A run is bound to the drawer's true index, and the run the number stranded 
 D166 The catalogue export is a property of the game, and the box never chose its scope
 D167 A queue entry is re-resolved where it stands, and the answer reaches the price without a second press
 D168 A typed price is cleared by a press, never by an expiry, and the set it may clear is the set the corpus dates
+D169 The blanket sweep asks the question the verdict answers, and a nested worktree is another checkout
 D-a-refusal-that-reaches-nobody A refusal that reaches nobody did not happen, and a status line the session wrote is not a reading
 ```
 

@@ -190,6 +190,33 @@ def main_checkout(root: str) -> str:
     return _real(str(Path(got.out).parent)) if got.ok and got.out else ""
 
 
+def linked_worktrees(root: str) -> List[str]:
+    """This clone's LINKED worktrees — every working tree except the one `root` is.
+
+    A LINKED WORKTREE LIVES INSIDE THE MAIN CHECKOUT ON THIS MACHINE, which makes it nested by
+    path and separate by every rule this project has: D43 gives it its own store, its own
+    `inventory/`, its own derived ports, and `checkout_root` called from inside one answers with
+    the worktree rather than with main. So "under this checkout", asked from the main tree, must
+    not mean "and everything in `.claude/worktrees/` too" — those are other sessions' checkouts,
+    and their servers are other sessions' servers.
+
+    Measured from the main checkout on 2026-09-12: a blanket sweep proposed to stop four
+    processes, and ALL FOUR were worktrees' — two capture servers and a supervisor belonging to
+    three other trees, one of them holding a live session. Two of the four were already reachable
+    before the relative-path arm landed, so this is an older hole that the arm widens rather than
+    opens; it is closed here because closing it is what keeps the widening safe.
+
+    Empty from inside a linked worktree, which is correct and not a special case: `git worktree
+    list` names every tree, and the only one excluded is `root` itself.
+    """
+    got = run(["git", "worktree", "list", "--porcelain"], cwd=root)
+    if not got.ok:
+        return []
+    trees = [_real(line[len("worktree "):]) for line in got.out.splitlines()
+             if line.startswith("worktree ")]
+    return [tree for tree in trees if tree and tree != root and _under(tree, root)]
+
+
 # ---------------------------------------------------------------------------- the processes
 
 
@@ -214,6 +241,22 @@ def _commands_of(pids: Sequence[int]) -> Dict[int, str]:
     return {pid: table.get(pid, "") for pid in pids}
 
 
+def _parse_lsof_cwd(text: str) -> Dict[int, str]:
+    """`lsof -Fpn` output as {pid: cwd}. One parser, because two callers ask `lsof` the same
+    question over different pid sets and a second copy of this loop is a second thing to fix."""
+    found: Dict[int, str] = {}
+    pid: Optional[int] = None
+    for line in text.splitlines():
+        if line.startswith("p"):
+            try:
+                pid = int(line[1:])
+            except ValueError:
+                pid = None
+        elif line.startswith("n") and pid is not None:
+            found.setdefault(pid, _real(line[1:]))
+    return found
+
+
 def _cwds_of(pids: Sequence[int]) -> Dict[int, str]:
     """Each pid's working directory, for the pids `lsof` will answer about.
 
@@ -227,19 +270,25 @@ def _cwds_of(pids: Sequence[int]) -> Dict[int, str]:
     if not pids:
         return {}
     got = run(["lsof", "-a", "-d", "cwd", "-p", ",".join(str(p) for p in pids), "-Fpn"])
-    found: Dict[int, str] = {}
     if not got.ok and not got.out:
-        return found
-    pid: Optional[int] = None
-    for line in got.out.splitlines():
-        if line.startswith("p"):
-            try:
-                pid = int(line[1:])
-            except ValueError:
-                pid = None
-        elif line.startswith("n") and pid is not None:
-            found.setdefault(pid, _real(line[1:]))
-    return found
+        return {}
+    return _parse_lsof_cwd(got.out)
+
+
+def _all_cwds() -> Dict[int, str]:
+    """Every process's working directory, in ONE call — 0.1s for 1,458 rows on the rig.
+
+    The blanket sweep cannot name the pids it wants to ask about; that is what makes it the
+    blanket sweep. So it reads the whole table and filters, exactly as `pids_under` already
+    reads the whole process table and filters.
+
+    An `lsof` that is absent or refuses answers with nothing, and the sweep then falls back to
+    argv alone — the behaviour this file shipped with. Degrading is right here for the same
+    reason a missing `lsof` leaves a pid UNKNOWN rather than OURS: less evidence never becomes
+    more permission.
+    """
+    got = run(["lsof", "-a", "-d", "cwd", "-Fpn"])
+    return _parse_lsof_cwd(got.out) if got.out else {}
 
 
 def _descendants(roots: Set[int]) -> Set[int]:
@@ -271,6 +320,43 @@ def _descendants(roots: Set[int]) -> Set[int]:
             walk = parent[walk]
             seen += 1
     return family
+
+
+def _ancestors(pid: int) -> Set[int]:
+    """`pid` and everything above it in the process tree. `_descendants` pointed the other way.
+
+    THE SWEEP MAY NOT SIGNAL THE SESSION THAT IS RUNNING IT. Once the blanket form places a
+    process by its working directory, the session's own chain qualifies: measured in a worktree
+    on 2026-09-12, five processes had a cwd under the checkout and THREE of them were the
+    session — the Claude Code process, its launcher, and the shell the sweep was typed into.
+    Signalling those stops the sweep, the turn and the session, which is a worse outcome than
+    the leak this rule exists to close.
+
+    It is the CHAIN and not the whole tree, deliberately. Excluding everything below the top
+    ancestor would exclude the servers themselves: a `make server` backgrounded from a session's
+    shell is a descendant of that session, and it is exactly what a sweep is for. The residue is
+    a SIBLING shell — another tool call running concurrently in the same checkout — which this
+    cannot tell from any other process working out of the tree. `make reap` previews by default,
+    so that one is seen before it is signalled rather than discovered afterwards.
+    """
+    got = run(["ps", "-axo", "pid=,ppid="])
+    if not got.ok:
+        return {pid}
+    parent: Dict[int, int] = {}
+    for line in got.out.splitlines():
+        bits = line.split()
+        if len(bits) == 2:
+            with contextlib.suppress(ValueError):
+                parent[int(bits[0])] = int(bits[1])
+    chain = {pid}
+    walk, seen = pid, 0
+    while walk in parent and seen < 64:
+        walk = parent[walk]
+        if walk <= 1 or walk in chain:
+            break
+        chain.add(walk)
+        seen += 1
+    return chain
 
 
 def protected_pids(main: str) -> Set[int]:
@@ -392,17 +478,114 @@ def _ints(text: str) -> List[int]:
     return found
 
 
-def pids_under(root: str, mine: int) -> List[int]:
-    """Everything running out of this checkout. `servers_under` in janitor.py, by pid."""
+class Sweep(NamedTuple):
+    pids: List[int]
+    skipped: List[Tuple[int, str]]    # pid and why, printed rather than dropped in silence
+
+
+def _placed_under(command: str, cwd: str, root: str) -> bool:
+    """Does this process run code out of `root`? Two arms, and the second one is the fix.
+
+    ARM ONE — an ABSOLUTE path in argv under the root. What this file shipped with, unchanged,
+    and it stands on its own: a process can run this checkout's code from anywhere, and one
+    whose script has since been DELETED still names it. Requiring existence would drop both.
+
+    ARM TWO — a RELATIVE token in argv that, resolved against the process's own working
+    directory, names an existing FILE under the root. This is the arm that was missing, and
+    `make server` is the whole of why it is needed: the Makefile runs
+    `$(PYTHON) server/capture_server.py`, `$(PYTHON)` is `.venv/bin/python`, and neither token
+    is absolute — so the command line of a live capture server carries nothing under any
+    checkout at all.
+
+    "AN EXISTING FILE" IS THE WHOLE OF ARM TWO'S PRECISION, AND BOTH HALVES WERE MEASURED ON THE
+    RIG'S OWN PROCESS TABLE ON 2026-09-12. `ps -o command=` prints argv space-joined, so a word
+    is not a path just because it looks like one:
+
+      * without EXISTENCE, the redirection inside a `zsh -c` script arrives as the word
+        `2>/dev/null`, joins onto any working directory, and places every shell in the tree —
+        it selected the Claude Code session itself and the sweep's own shell.
+      * without FILE, the bare word `server` in `make server` resolves to the package DIRECTORY
+        and places `make`, the shell around it, and anything else merely working in the tree.
+
+    With both, the same table yields one process per real server and nothing else. A token is
+    tried whether or not it holds a `/`, because a script run by its bare name in its own
+    directory is as ordinary as one run by a path — and that is what the self-test's own subject
+    is, so requiring a separator made the arm miss its own fixture.
+
+    A FLAG IS NOT SKIPPED BY NAME, and that is not an oversight. An early build passed over any
+    token starting with `-`; every mutation of that arm survived, because `<root>/-v` and
+    `<root>/--shard=1/3` are not files and the test above already rejects them. This file's own
+    `_too_broad` makes the ruling for cases like it: redundancy no test can distinguish is not
+    defence in depth, it is code whose deletion nothing would notice.
+
+    THE COST IS A DELETED SCRIPT, and arm one is why that is affordable: a process whose file has
+    since been removed is still placed when its argv names it absolutely, and `scripts/janitor.py`
+    owns the deleted-script class outright as its Tier 1.
+    """
+    for raw in _ABS_PATH_RE.findall(command):
+        if _under(_real(raw), root):
+            return True
+    if not cwd:
+        return False
+    for token in command.split():
+        if token.startswith("/"):
+            continue
+        joined = _real(os.path.join(cwd, token))
+        if _under(joined, root) and os.path.isfile(joined):
+            return True
+    return False
+
+
+def pids_under(root: str, mine: int) -> Sweep:
+    """Everything running out of this checkout. `servers_under` in janitor.py, by pid.
+
+    THE BLANKET FORM COULD NOT SEE A PROCESS LAUNCHED BY A RELATIVE PATH, AND THAT IS THE WHOLE
+    DEFECT. `verdict_for` places a pid by an argv path under the root OR by a working directory
+    under it, and says in as many words why the second arm is there — `npm` and `node` routinely
+    carry no absolute path at all. This resolver read argv alone, so it could only ever offer the
+    verdict the pids the verdict's FIRST arm would have caught, and every process the second arm
+    exists for was invisible to the sweep.
+
+    MEASURED IN A WORKTREE ON 2026-09-12, with a live capture server on that tree's own derived
+    port: `make reap` resolved **0 processes** and printed `nothing to stop`, while
+    `make reap ARGS=port:8235` resolved the same pid and judged it OURS. Three orphaned
+    `capture_server.py` from three different trees were running on the machine at that moment,
+    which is what the miss leaves behind. `make dev` was resolved throughout, because npm writes
+    its argv absolutely — so the gap presented as "reap sees Vite and not Python", which reads
+    like a carve-out and is not one.
+
+    IT IS NOT D53'S CARVE-OUT, and that was established before anything here was changed.
+    `protected_pids` globs `<main checkout>/.serve/*.pid` and nothing else; from a worktree it
+    spares the main tree's supervisor and its children, correctly, and has nothing to say about
+    a worktree's own server. The same measurement confirms it from both sides: the main
+    checkout's live server judged MAIN, this worktree's judged OURS the moment it was named.
+
+    AND THE SWEEP DOES NOT SIGNAL THE SESSION RUNNING IT. That hazard is older than this fix and
+    reachable from the main checkout today: an agent's shell carries an absolute `cd` into the
+    checkout in its own argv, so arm one already places it, and a bare `--confirm` would stop the
+    shell the sweep was typed into. `_ancestors` is what keeps that from happening, and the
+    skipped pids are printed rather than dropped in silence.
+    """
+    family = _ancestors(mine)
+    nested = linked_worktrees(root)
+    cwds = _all_cwds()
     found: List[int] = []
+    skipped: List[Tuple[int, str]] = []
     for pid, command in process_table():
         if pid == mine:
             continue
-        for raw in _ABS_PATH_RE.findall(command):
-            if _under(_real(raw), root):
-                found.append(pid)
-                break
-    return found
+        cwd = cwds.get(pid, "")
+        if not _placed_under(command, cwd, root):
+            continue
+        if pid in family:
+            skipped.append((pid, "this session's own chain"))
+            continue
+        tree = next((t for t in nested if _placed_under(command, cwd, t)), "")
+        if tree:
+            skipped.append((pid, "another checkout of this clone: {0}".format(tree)))
+            continue
+        found.append(pid)
+    return Sweep(found, skipped)
 
 
 # ------------------------------------------------------------------- reading a shell command
@@ -691,8 +874,16 @@ def _targets_from_args(specs: Sequence[str], root: str, mine: int) -> Tuple[List
         else:
             how.append("unknown target `{0}` — use pid:, port: or match:".format(spec))
     if not specs:
-        pids = pids_under(root, mine)
+        sweep = pids_under(root, mine)
+        pids = sweep.pids
         how.append("everything running under this checkout -> {0} process(es)".format(len(pids)))
+        # SAY WHAT IS BEING PASSED OVER. A sweep that silently omits something is the defect
+        # this resolver had, one register up: each of these is skipped for a real reason, and a
+        # reader who is not told cannot tell a reason from the process not having been seen.
+        for reason in sorted({why for _, why in sweep.skipped}):
+            these = sorted(pid for pid, why in sweep.skipped if why == reason)
+            how.append("skipped {0} — {1}: {2}".format(
+                len(these), reason, ", ".join(str(p) for p in these)))
     return pids, how
 
 
