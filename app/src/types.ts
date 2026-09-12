@@ -2270,6 +2270,47 @@ export type ExportFetched = {
    *  which is slower and always correct; `unresolved_hints` names the hints that did not
    *  match a TCGplayer set, which is the thing worth seeing. */
   asked: ExportAsked
+  /** Whether this answer came off a file already on disk rather than off the wire
+   *  (D166). The export is a property of the GAME now, kept once in
+   *  `inventory/.exports/<game>/`, so a second run over the same game opens no socket at all.
+   *
+   *  THIS IS THE ONE FIGURE THE REST OF THE RECEIPT CANNOT IMPLY. A reuse and a fetch answer
+   *  with the same file, rows, SKUs and sets — the only difference is whether TCGplayer was
+   *  asked — so it is said rather than inferred. `age_s` is how old the reading is, and zero
+   *  for anything this press observed. */
+  reused: boolean
+  age_s: number
+  /** The directory the game's exports live in. Never inside the run any more, so a client
+   *  that composed a path out of the run's name would be wrong in silence. */
+  store: string
+  /** What this scope weighs against the transport's ceiling (D65/D76), or null where nothing
+   *  covering has been measured yet. */
+  width: ExportWidth | null
+}
+
+/** WHAT A FETCH AT THIS SCOPE WEIGHS, AGAINST THE CEILING IT WOULD BE REFUSED AT (D65/D76).
+ *
+ *  MEASURED, NEVER ESTIMATED — the only thing that can size an export is an export, so this is
+ *  null until the game has been fetched once at a scope that covers what is being asked for.
+ *
+ *  WHY IT IS ON THE WIRE AT ALL. `server/tcg_export.py:MAX_BYTES` is 32 MB and the fetch
+ *  refuses past it. Measured 2026-09-12, the whole Pokemon category is 32,629,598 B —
+ *  **97.24% of that cap**, 903 KB of headroom — against 238,482 B for the one set the owner's
+ *  543 Pokemon cards all name. So a D76 widening is a 137x change in what comes back and lands
+ *  two per cent short of a hard refusal, which is not a thing an operator should discover by
+ *  pressing. `widened` says whether the figure is the WIDE one: a narrow reading drawn beside a
+ *  widened scope is a measurement of a different request, and saying so is the difference
+ *  between a preview and a reassurance. */
+export type ExportWidth = {
+  bytes: number
+  max_bytes: number
+  headroom: number
+  /** `bytes / max_bytes`, to four places. */
+  of_max: number
+  near_cap: boolean
+  measured: string | null
+  from: string
+  widened: boolean
 }
 
 /** WHAT THE FETCH ASKED TCGPLAYER FOR, AND WHICH OF THE THREE VOICES CHOSE IT (D76).
@@ -2332,6 +2373,13 @@ export type ExportScope = {
   asked: ExportAsked | null
   reason: string | null
   message: string | null
+  /** What the press would weigh, drawn before it (D65/D76). Null until this game has been
+   *  fetched once at a covering scope — and answerable at all only because the exports are
+   *  per-game now: per-run copies gave every drawer its own unrelated sample. */
+  width: ExportWidth | null
+  /** The file a press would answer from without asking TCGplayer, if there is one
+   *  (D166). Null means the press opens a socket. */
+  reusable: { file: string; age_s: number; window_s: number } | null
 }
 
 /** One code on the ledger, as `GET /codes` serves it (C3, C8, C11).

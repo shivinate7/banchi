@@ -17890,7 +17890,31 @@ def check_export_fetch(checks: Checks) -> None:
                 whole = write_export(home / "whole.csv")
                 stub["body"] = whole.read_bytes()
 
-                def fetched_files():
+                # WHERE A FETCHED EXPORT LIVES SINCE D166: the GAME's own
+                # directory under `inventory/.exports/`, store-wide, not the run's. Every
+                # assertion below that used to read the run directory reads this instead,
+                # which is the move — and `run_local()` is kept beside it so the two
+                # locations can be told apart rather than conflated.
+                exports_root = home / "inventory" / files.EXPORTS_DIRNAME
+
+                def kept(game="pokemon"):
+                    holder = exports_root / game
+                    if not holder.is_dir():
+                        return []
+                    # THE SUFFIX IS PART OF THE FILTER, because the export's own scope note
+                    # sits beside it carrying the same prefix. Matching on the prefix alone
+                    # counts a file per export twice and reads as a dedupe that did not fire.
+                    return sorted(
+                        entry.name
+                        for entry in holder.iterdir()
+                        if entry.name.startswith(pipeline_routes.FETCHED_PREFIX)
+                        and entry.name.endswith(".csv")
+                    )
+
+                def fetched_files(game="pokemon"):
+                    return kept(game)
+
+                def run_local():
                     return sorted(
                         entry.name
                         for entry in directory.iterdir()
@@ -17939,11 +17963,12 @@ def check_export_fetch(checks: Checks) -> None:
                     status, raw, _ = fetch()
                     checks.equal((status, error_code(raw)), (502, expected), label)
                 checks.equal(
-                    fetched_files(),
-                    [],
-                    "and NOT ONE of those refusals left a file in the run directory — a run "
-                    "accumulating a dead export per failed press stops explaining itself, "
-                    "which is the whole reason a run directory is worth keeping",
+                    (fetched_files(), run_local()),
+                    ([], []),
+                    "and NOT ONE of those refusals left a file — in the game's directory or "
+                    "in the run's. A directory accumulating a dead export per failed press "
+                    "stops explaining itself, and the shared one has more readers to "
+                    "confuse than the run directory ever had",
                 )
 
                 # ------------------------------------------------------- the good download
@@ -17964,12 +17989,12 @@ def check_export_fetch(checks: Checks) -> None:
                     "many SKUs came back, and which game the file answers for off its own "
                     "Product Line cells rather than off its name",
                 )
-                kept = fetched_files()
+                kept_now = fetched_files()
                 checks.equal(
-                    len(kept), 1, "exactly one file is kept, and it is the one just fetched"
+                    len(kept_now), 1, "exactly one file is kept, it is the one just fetched"
                 )
                 checks.equal(
-                    kept[0] if kept else None,
+                    kept_now[0] if kept_now else None,
                     body.get("file"),
                     "the response NAMES the file it wrote, which is what the join is then "
                     "handed — a fetch that kept a file the client could not name would be a "
@@ -18000,7 +18025,7 @@ def check_export_fetch(checks: Checks) -> None:
                     port,
                     "POST",
                     f"/pipeline/runs/{directory.name}/join",
-                    payload={"fetched": [kept[0]]},
+                    payload={"fetched": [kept_now[0]]},
                 )
                 checks.equal(
                     (status, json.loads(raw or b"{}").get("ok")),
@@ -18012,7 +18037,7 @@ def check_export_fetch(checks: Checks) -> None:
                 recorded = runs.open_run(directory).exports_by_game.get("pokemon")
                 checks.equal(
                     recorded.name if recorded else None,
-                    kept[0],
+                    kept_now[0],
                     "and the manifest now records THAT file as what pokemon was joined "
                     "against, which is the seam: a route that fetched a file the join never "
                     "used would report success and change nothing",
@@ -18025,18 +18050,24 @@ def check_export_fetch(checks: Checks) -> None:
                 # always added a copy — run `2026-08-31-box3-01` holds two byte-identical
                 # 366 KB exports 29 seconds apart, while the comment above the name claimed
                 # the opposite. The digest is looked up first now, and a hit IS the file.
-                status, raw, _ = fetch()
+                #
+                # FORCED, AND THAT IS WHAT MAKES IT A DEDUPE TEST. Without `refresh` this
+                # press would answer out of the file already on disk without opening a
+                # socket — which is a different saving and would leave the dedupe itself
+                # unexercised. Forcing the fetch is what puts identical bytes back through
+                # the digest lookup, which is the thing being asserted.
+                status, raw, _ = fetch({"refresh": True})
                 body = json.loads(raw or b"{}")
                 checks.equal(
                     (status, body.get("ok"), fetched_files(), body.get("file")),
-                    (200, True, kept, kept[0]),
+                    (200, True, kept_now, kept_now[0]),
                     "a re-fetch of identical bytes lands on the file the run already holds "
                     "— still one file, and the receipt names it — rather than adding a "
                     "second copy under a later stamp",
                 )
                 checks.equal(
                     (body.get("previous") or {}).get("pokemon", {}).get("file"),
-                    kept[0],
+                    kept_now[0],
                     "and `previous` names that same file, because it is what the last join "
                     "used: the receipt says so rather than refusing over a comparison of a "
                     "file with itself",
@@ -18101,7 +18132,7 @@ def check_export_fetch(checks: Checks) -> None:
                     thinner, source.header, [by_sku[DUNSPARCE_SKU], by_sku[ARTICUNO_SKU]]
                 )
                 stub["body"] = thinner.read_bytes()
-                status, raw, _ = fetch()
+                status, raw, _ = fetch({"refresh": True})
                 body = json.loads(raw or b"{}")
                 checks.equal(
                     (status, body.get("ok")),
@@ -18213,7 +18244,7 @@ def check_export_fetch(checks: Checks) -> None:
                 stub["body"] = (
                     Path(FIXTURE_EXPORT).parent / "riftbound_export_untouched.csv"
                 ).read_bytes()
-                status, raw, _ = fetch()
+                status, raw, _ = fetch({"refresh": True})
                 checks.equal(
                     (status, error_code(raw)),
                     (409, "export_wrong_game"),
@@ -18337,7 +18368,7 @@ def check_export_fetch(checks: Checks) -> None:
                 stub["mode"] = "csv"
                 stub["body"] = whole.read_bytes()
                 stub["posted"] = []
-                fetch()
+                fetch({"refresh": True})
                 sent = json.loads(
                     urllib.parse.parse_qs(stub["posted"][-1])["model"][0]
                 ) if stub["posted"] else {}
@@ -18398,10 +18429,22 @@ def check_export_fetch(checks: Checks) -> None:
                     identifications.write_text(json.dumps(payload))
 
                 def sent(payload=None):
+                    """What went out on the wire for this scope. ALWAYS FORCES THE FETCH.
+
+                    EVERY CHECK BELOW IS ABOUT THE REQUEST, so it must make one. A press whose
+                    game already holds a covering export answers without opening a socket
+                    (D166), and a wide file covers every narrower scope — so
+                    without `refresh` these would read the LAST request's body, or no body at
+                    all, and report it as the scope this run implies. Which is the same class
+                    of error as an outcome assertion that cannot see a saving, pointed the
+                    other way: here the saving would hide the assertion.
+                    """
                     stub["mode"] = "csv"
                     stub["body"] = whole.read_bytes()
                     stub["posted"] = []
-                    fetch(payload or {})
+                    asking = dict(payload or {})
+                    asking["refresh"] = True
+                    fetch(asking)
                     return json.loads(
                         urllib.parse.parse_qs(stub["posted"][-1])["model"][0]
                     ) if stub["posted"] else {}
@@ -18578,6 +18621,428 @@ def check_export_fetch(checks: Checks) -> None:
                 )
                 hint_cards(0)
 
+                # ================= THE EXPORT IS A PROPERTY OF THE GAME (D166)
+                #
+                # EVERY ASSERTION IN THIS SECTION THAT MATTERS COUNTS REQUESTS, AND THAT IS
+                # DELIBERATE. PR A's arm 9 is the lesson: deleting its work-saving gate left
+                # every other assertion green, because the old path and the new one agree on
+                # every OUTCOME and differ only in the work done to reach them. A reuse and a
+                # fetch here produce the same file, the same rows, the same SKUs, the same
+                # receipt figures and the same join — so an outcome assertion can say nothing
+                # at all about whether the socket was opened. `stub["posted"]` is the counter.
+                # BYTES OF ITS OWN, so every count below is a DELTA this block caused rather
+                # than a total the sections above happen to have reached. An absolute count
+                # here reads as a dedupe failure the moment another case adds a file.
+                stub["mode"] = "csv"
+                mine = home / "one-sku.csv"
+                tcgcsv.write_csv(mine, source.header, [by_sku[DUNSPARCE_SKU]])
+                stub["body"] = mine.read_bytes()
+
+                def posts():
+                    return len(stub["posted"])
+
+                # --------------------------------------- the file leaves the run directory
+                before_posts, before_kept = posts(), len(kept())
+                status, raw, _ = fetch({"refresh": True})
+                first = json.loads(raw)
+                checks.equal(
+                    (status, first["ok"], posts() - before_posts),
+                    (200, True, 1),
+                    "a fetch of bytes nothing on disk carries opens exactly one socket",
+                )
+                checks.equal(
+                    (len(kept()) - before_kept, first["file"] in kept()),
+                    (1, True),
+                    "and the file lands in `inventory/.exports/<game>/` — the export is a "
+                    "property of the GAME, and a per-run copy is what made the dedupe below "
+                    "blind to its own siblings",
+                )
+                checks.equal(
+                    run_local(),
+                    [],
+                    "and NOT in the run directory, which is the whole move: five "
+                    "byte-identical 1,733,052 B copies landed in five run directories in "
+                    "eighteen seconds on the owner's store because each run deduped against "
+                    "itself alone",
+                )
+                checks.equal(
+                    Path(first["store"]).name,
+                    "pokemon",
+                    "and the receipt says where it went, because a client that built a "
+                    "download path out of the run's name would otherwise break in silence",
+                )
+
+                # ------------------------------ A SECOND RUN OF THE SAME GAME OPENS NOTHING
+                #
+                # THE MEASUREMENT THIS IS BUILT FOR. Re-joining the owner's store meant
+                # pressing Fetch once per run: seven presses over nine minutes, five of them
+                # eighteen seconds apart, every one asking TCGplayer for bytes the machine
+                # already held. Store-wide the real rules produce TWO requests for that whole
+                # store — one per game — and this is the arm that makes that true.
+                second, _ = seam_run(checks, cards)
+                before_posts = posts()
+                status, raw, _ = request(
+                    port,
+                    "POST",
+                    f"/pipeline/runs/{second.directory.name}/export",
+                    payload={},
+                )
+                reuse = json.loads(raw)
+                checks.equal(
+                    (status, reuse["ok"], reuse["reused"], posts() - before_posts),
+                    (200, True, True, 0),
+                    "A SECOND RUN OVER THE SAME GAME ISSUES ZERO NETWORK REQUESTS and "
+                    "answers out of the file already on disk. This is the assertion no "
+                    "outcome can make: every other figure on this receipt is identical to "
+                    "the fetched one, so only the request count can see the saving",
+                )
+                checks.equal(
+                    len(kept()) - before_kept,
+                    1,
+                    "and nothing new is written either — one game, one file, however many "
+                    "runs join against it",
+                )
+                checks.equal(
+                    (reuse["rows"], reuse["skus"]),
+                    (first["rows"], first["skus"]),
+                    "and the receipt it answers with is the fetched one's, figure for "
+                    "figure — which is exactly why the count above had to be asserted",
+                )
+
+                # ---------------------- A WIDER FILE COVERS A NARROWER NEED, NEVER THE OTHER
+                #
+                # ASSERTED ON THE RULE ITSELF, because the reuse path cannot be steered to it
+                # from here: a category-scoped export is already on disk and legitimately
+                # covers every narrower scope, so a route-level case would reuse THAT file and
+                # prove nothing about the asymmetry. The direction is what is load-bearing —
+                # a file fetched for {A} serving a run needing {A, B} leaves every card of B
+                # queueing `no_catalog_row` behind a press that reported success, which is
+                # D76's defect arriving through a different door.
+                checks.equal(
+                    (
+                        pipeline_routes._covers(
+                            {"category_id": 3, "set_ids": []},
+                            tcg_export.Scope(category_id=3, set_ids=(4242,)),
+                        ),
+                        pipeline_routes._covers(
+                            {"category_id": 3, "set_ids": [4242]},
+                            tcg_export.Scope(category_id=3, set_ids=()),
+                        ),
+                        pipeline_routes._covers(
+                            {"category_id": 3, "set_ids": [4242]},
+                            tcg_export.Scope(category_id=3, set_ids=(4242, 99)),
+                        ),
+                        pipeline_routes._covers(
+                            {"category_id": 89, "set_ids": []},
+                            tcg_export.Scope(category_id=3, set_ids=()),
+                        ),
+                    ),
+                    (True, False, False, False),
+                    "the whole category covers one set; one set does NOT cover the category "
+                    "or a superset of itself; and another game's file covers nothing here",
+                )
+
+                # ------------------- A REUSE OBSERVED NOTHING, SO IT MAY NOT DATE THE READING
+                #
+                # `describe_source` READS AN EXPORT'S OBSERVATION TIME OFF ITS MTIME, and
+                # `Listing.live_reading` weighs that against the store's own stamps. Touching
+                # it on a reuse would date a reading nobody took and let a stale export
+                # outrank a newer sale — silently, and only in the arithmetic.
+                held = exports_root / "pokemon" / first["file"]
+                was_mtime = held.stat().st_mtime
+                request(
+                    port,
+                    "POST",
+                    f"/pipeline/runs/{second.directory.name}/export",
+                    payload={},
+                )
+                checks.equal(
+                    held.stat().st_mtime,
+                    was_mtime,
+                    "a reuse leaves the mtime alone, because it took no reading",
+                )
+
+                # ------------------------- AND A READING OLDER THAN THE WINDOW IS RE-TAKEN
+                #
+                # EVERY FILE THE GAME HOLDS IS AGED, not just the one this block fetched.
+                # `_reusable` walks the whole directory newest first and answers with the
+                # first covering file — which is right, and means ageing one of several
+                # proves nothing: the press would reuse a sibling and the check would read
+                # as a reuse that ignored the window.
+                stale = was_mtime - pipeline_routes.EXPORT_REUSE_S - 60
+                for entry in (exports_root / "pokemon").glob("*.csv"):
+                    os.utime(entry, (stale, stale))
+                was_mtime = held.stat().st_mtime
+                before_posts = posts()
+                status, raw, _ = request(
+                    port,
+                    "POST",
+                    f"/pipeline/runs/{second.directory.name}/export",
+                    payload={},
+                )
+                checks.equal(
+                    (json.loads(raw)["reused"], posts() - before_posts),
+                    (False, 1),
+                    "an export older than EXPORT_REUSE_S is re-fetched rather than reused — "
+                    "the window is sized to a SITTING, and a reuse long enough that the "
+                    "operator thinks they refreshed and did not is worse than the request",
+                )
+                checks.equal(
+                    held.stat().st_mtime > was_mtime,
+                    True,
+                    "and THAT one touches the mtime, because identical bytes arriving from "
+                    "the portal really are a fresh observation of the same reading",
+                )
+
+                # ------------------------------------------ `refresh` FORCES THE SOCKET OPEN
+                before_posts = posts()
+                status, raw, _ = request(
+                    port,
+                    "POST",
+                    f"/pipeline/runs/{second.directory.name}/export",
+                    payload={"refresh": True},
+                )
+                forced = json.loads(raw)
+                checks.equal(
+                    (status, forced["reused"], posts() - before_posts),
+                    (200, False, 1),
+                    "`refresh: true` opens the socket whatever the age — an operator who "
+                    "means to take a new reading must be able to, or the reuse window is a "
+                    "trap rather than a saving",
+                )
+                checks.equal(
+                    len(kept()) - before_kept,
+                    1,
+                    "AND THE IDENTICAL BYTES DEDUPE STORE-WIDE: a real fetch that produces "
+                    "bytes already on disk lands on the file that holds them, ACROSS RUNS. "
+                    "5 of the 6 redundant copies on the owner's store are cross-run and so "
+                    "are outside anything a per-run glob could ever have reached",
+                )
+
+                # A FILE COUNT CANNOT PROVE THE DEDUPE, AND MEASURING THAT IS WHY THIS EXISTS.
+                #
+                # THE NAME IS `stamp-digest`, SO IDENTICAL BYTES INSIDE ONE SECOND COMPOSE THE
+                # IDENTICAL PATH. `write_bytes` then OVERWRITES rather than adds, and every
+                # count above reads the same whether the digest was looked up or not — this
+                # whole block runs inside one second on this machine (measured: three files
+                # all stamped at the same second), so deleting the lookup outright left all 88
+                # checks green. That is T7's own same-second collision showing up as a hole in
+                # the test rather than in the product.
+                #
+                # SO THE ASSERTION IS THE RECEIPT'S OWN FILE NAME, against a held file whose
+                # stamp CANNOT collide: rename it into the past, re-fetch the same bytes, and
+                # the press must answer with the renamed file. That is the digest lookup and
+                # nothing else, and no clock can make it pass by accident.
+                held_now = exports_root / "pokemon" / forced["file"]
+                earlier = held_now.with_name(
+                    f"{pipeline_routes.FETCHED_PREFIX}19700101-000000-"
+                    f"{forced['file'].rsplit('-', 1)[1]}"
+                )
+                held_now.rename(earlier)
+                pipeline_routes._note_path(held_now).rename(
+                    pipeline_routes._note_path(earlier)
+                )
+                status, raw, _ = fetch({"refresh": True})
+                landed = json.loads(raw)
+                checks.equal(
+                    (status, landed["file"], len(kept()) - before_kept),
+                    (200, earlier.name, 1),
+                    "a re-fetch of bytes already on disk answers with the file that HOLDS "
+                    "them, whatever its name — found by digest and compared in full, because "
+                    "32 bits of digest is a name and not a proof",
+                )
+                earlier.rename(held_now)
+                pipeline_routes._note_path(earlier).rename(
+                    pipeline_routes._note_path(held_now)
+                )
+
+                # ------------------------------------- THE PREVIEW STILL PRESSES NOTHING
+                before_posts = posts()
+                status, raw, _ = request(
+                    port, "GET", f"/pipeline/runs/{second.directory.name}/scope"
+                )
+                scope_body = json.loads(raw)
+                checks.equal(
+                    (status, posts() - before_posts),
+                    (200, 0),
+                    "`GET .../scope` opens no export socket — it is the lever's position "
+                    "drawn before the press, and a preview that fetched would be the press",
+                )
+                checks.equal(
+                    bool(scope_body["reusable"]),
+                    True,
+                    "and it says the next press would answer without a request, so the "
+                    "operator is not re-fetching bytes this machine holds",
+                )
+                width = scope_body["width"]
+                checks.equal(
+                    (
+                        isinstance(width, dict)
+                        and width["bytes"] > 0
+                        and width["max_bytes"] == tcg_export.MAX_BYTES
+                        and width["headroom"] == width["max_bytes"] - width["bytes"]
+                    ),
+                    True,
+                    "AND IT DRAWS WHAT THE PRESS WOULD WEIGH AGAINST THE CAP (D65/D76). "
+                    "Measured 2026-09-12: the whole Pokemon category is 32,629,598 B — "
+                    "97.24% of MAX_BYTES, 903 KB of headroom — against 238,482 B for the "
+                    "one set the owner's 543 Pokemon cards name. A widening is 137x and "
+                    "lands two per cent short of a refusal, so it may not be silent",
+                )
+
+                # --------------------- AND A WIDENED FETCH THAT IS TOO LARGE SAYS WHY (D76)
+                #
+                # THE CAP IS LOWERED RATHER THAN THE BODY RAISED. `MAX_BYTES` is read off the
+                # module at call time by both the reader and the check, so moving it exercises
+                # the same path a 32 MB body would — without putting 32 MB through a harness
+                # that runs at every turn end.
+                hint_cards(1)
+                was_max = tcg_export.MAX_BYTES
+                tcg_export.MAX_BYTES = 64
+                try:
+                    status, raw, _ = fetch({"refresh": True})
+                finally:
+                    tcg_export.MAX_BYTES = was_max
+                message = str(
+                    (json.loads(raw or b"{}").get("error") or {}).get("message") or ""
+                )
+                checks.equal(
+                    (status, error_code(raw), "THE SCOPE IS WHY" in message),
+                    (502, "tcg_export_too_large", True),
+                    "the transport's own sentence blames the download and hands the "
+                    "operator nothing to act on — it still says the widest export this "
+                    "project has read is under 2 MB, and the widest it can ASK for is "
+                    "31.12 MB. The actionable half is that the scope went wide, and why",
+                )
+                checks.equal(
+                    "carry no set hint" in message,
+                    True,
+                    "and it names the cards that widened it — D76's own defect, said at the "
+                    "moment it costs something rather than left to be inferred",
+                )
+                hint_cards(0)
+                stub["mode"] = "csv"
+
+                # ------------------- THE MANIFEST KEEPS THE PATH AND THE DIGEST, AND USES IT
+                #
+                # THE RECORD IS THE ONLY LINK BACK once the file is not inside the run, and a
+                # shared directory is exactly where a path CAN change under a run that a
+                # run-local copy never could. So the digest is not decoration.
+                #
+                # AND THE JOIN ITSELF OPENS NO SOCKET, asserted rather than assumed. This is
+                # the second run over this game and it resolves against the file the FIRST
+                # one's press left in `inventory/.exports/pokemon/` — so the whole
+                # fetch-and-join pass for run two costs zero requests. Counted, because the
+                # join's own output says nothing about whether TCGplayer was asked.
+                before_posts = posts()
+                status, raw, _ = request(
+                    port,
+                    "POST",
+                    f"/pipeline/runs/{second.directory.name}/join",
+                    payload={"fetched": [first["file"]]},
+                )
+                joined = runs.open_run(second.directory)
+                recorded = (joined.manifest.get("exports") or {}).get("pokemon") or {}
+                export_path = Path(str(recorded.get("path") or ""))
+                checks.equal(
+                    (
+                        json.loads(raw)["ok"],
+                        export_path.parent.name,
+                        len(str(recorded.get("sha256") or "")),
+                        posts() - before_posts,
+                    ),
+                    (True, "pokemon", 64, 0),
+                    "the join records the file it resolved against — path AND digest, under "
+                    "the GAME's directory rather than the run's — and ISSUES ZERO NETWORK "
+                    "REQUESTS doing it, which is the half no join output can report",
+                )
+                checks.equal(
+                    runs.sha256_of(export_path),
+                    recorded["sha256"],
+                    "and the digest recorded is the digest of the file that was read",
+                )
+
+                # THE PATH MOVES AND THE DIGEST FINDS IT. A recorded export renamed under the
+                # shared directory is RECOVERED rather than refused — by full sha256, never by
+                # position, so this can never quietly join a run against a newer reading.
+                moved = export_path.with_name("export-tcgplayer-19700101-000000-" +
+                                              recorded["sha256"][:8] + ".csv")
+                export_path.rename(moved)
+                plan = resolve.exports_for(joined, None)
+                checks.equal(
+                    plan.by_game["pokemon"],
+                    moved,
+                    "a recorded export whose PATH has moved is found by the DIGEST the "
+                    "manifest recorded beside it — which is what makes that record "
+                    "load-bearing rather than a note",
+                )
+                moved.rename(export_path)
+
+                # A DIGEST THAT MATCHES NOTHING IS A REFUSAL, NEVER A SUBSTITUTE.
+                export_path.rename(export_path.with_suffix(".hidden"))
+                try:
+                    resolve.exports_for(joined, None)
+                    checks.equal(False, True, "unreachable")
+                except runs.RunError as caught:
+                    checks.equal(
+                        "recorded digest" in str(caught),
+                        True,
+                        "and a run whose file is gone entirely refuses exactly as before, "
+                        "naming the digest it looked for — a recovery that fell back to "
+                        "'some export of this game' would join against a newer reading in "
+                        "silence, which is the hazard the shared directory creates",
+                    )
+                export_path.with_suffix(".hidden").rename(export_path)
+
+                # AND THE MATCH IS THE FULL DIGEST, NOT THE 32 BITS IN THE NAME. The name
+                # carries `sha256[:8]` and that is a NAME rather than a proof — the same
+                # sentence `_keep_export` follows one module over. A recovery that trusted the
+                # filename would hand a run somebody else's file with a colliding prefix, and
+                # the join would be silently against the wrong reading.
+                impostor = export_path.with_name(
+                    "export-tcgplayer-19700102-000000-" + recorded["sha256"][:8] + ".csv"
+                )
+                impostor.write_bytes(thinner.read_bytes())
+                export_path.rename(export_path.with_suffix(".hidden"))
+                try:
+                    impostor_plan = resolve.exports_for(joined, None)
+                    checks.equal(
+                        impostor_plan.by_game.get("pokemon"),
+                        None,
+                        "a file whose NAME carries the recorded digest but whose bytes do "
+                        "not is refused, not adopted",
+                    )
+                except runs.RunError:
+                    checks.ok(
+                        True,
+                        "a file whose NAME carries the recorded digest but whose bytes do "
+                        "not is refused — the recovery verifies the full sha256, because 32 "
+                        "bits of digest is a name and not a proof",
+                    )
+                export_path.with_suffix(".hidden").rename(export_path)
+                impostor.unlink()
+
+                # ------------------------- A LEGACY RUN GOES ON JOINING ITS OWN LOCAL COPY
+                #
+                # THE OWNER'S STORE HOLDS 19 OF THESE. A run directory is an immutable input,
+                # so a run joined against a file inside it keeps that file and that answer.
+                legacy_name = pipeline_routes.FETCHED_PREFIX + "20260101-000000-abcdef12.csv"
+                (second.directory / legacy_name).write_bytes(whole.read_bytes())
+                before_posts = posts()
+                status, raw, _ = request(
+                    port,
+                    "POST",
+                    f"/pipeline/runs/{second.directory.name}/join",
+                    payload={"fetched": [legacy_name]},
+                )
+                checks.equal(
+                    (status, json.loads(raw)["ok"], posts() - before_posts),
+                    (200, True, 0),
+                    "a fetched export still inside a run directory is found there first and "
+                    "joined against — the legacy location is not a fallback, it is where "
+                    "those 19 files are and where they stay",
+                )
+
                 # ------------------------------------- THE COOKIE ROTATES, AND `get` CANNOT
                 #
                 # THE REFUSAL'S OWN REMEDY, EXERCISED. `tcg_session_expired` tells the
@@ -18601,7 +19066,9 @@ def check_export_fetch(checks: Checks) -> None:
 
                     dotenv.write_text("TCGPLAYER_STORE_COOKIE=TCGAuthTicket_Production=one\n")
                     stub["seen"] = []
-                    fetch()
+                    # FORCED, for `sent()`'s reason: this asserts what reached the SOCKET,
+                    # and a press that reuses a covering export never reaches one.
+                    fetch({"refresh": True})
                     checks.equal(
                         stub["seen"][-1] if stub["seen"] else None,
                         "TCGAuthTicket_Production=one",
@@ -18614,7 +19081,9 @@ def check_export_fetch(checks: Checks) -> None:
 
                     dotenv.write_text("TCGPLAYER_STORE_COOKIE=TCGAuthTicket_Production=two\n")
                     stub["seen"] = []
-                    fetch()
+                    # FORCED, for `sent()`'s reason: this asserts what reached the SOCKET,
+                    # and a press that reuses a covering export never reaches one.
+                    fetch({"refresh": True})
                     checks.equal(
                         stub["seen"][-1] if stub["seen"] else None,
                         "TCGAuthTicket_Production=two",
@@ -18626,7 +19095,9 @@ def check_export_fetch(checks: Checks) -> None:
 
                     os.environ["TCGPLAYER_STORE_COOKIE"] = "TCGAuthTicket_Production=from-env"
                     stub["seen"] = []
-                    fetch()
+                    # FORCED, for `sent()`'s reason: this asserts what reached the SOCKET,
+                    # and a press that reuses a covering export never reaches one.
+                    fetch({"refresh": True})
                     checks.equal(
                         stub["seen"][-1] if stub["seen"] else None,
                         "TCGAuthTicket_Production=from-env",

@@ -86,7 +86,41 @@ function count(value: number | null | undefined): string {
   return typeof value === 'number' ? String(value) : '—'
 }
 
-/** The scope, in the words the receipt says it in: the third fact on its headline. */
+/** Bytes as the operator reads them. SENTENCES, NOT MACHINE STRINGS — the register rule.
+ *
+ *  MB AND NOT MiB, and it is the honest unit here: the figure it is compared against is
+ *  `tcg_export.MAX_BYTES`, which is 32 * 1024 * 1024, so both sides go through this one
+ *  function and the percentage beside them is computed on the server off the raw bytes. A
+ *  reader comparing "31 MB" with "32 MB" is reading the same arithmetic the refusal uses. */
+function mb(bytes: number): string {
+  const mib = bytes / 1024 / 1024
+  return `${mib >= 10 ? Math.round(mib) : mib.toFixed(1)} MB`
+}
+
+/** A fraction as a whole percent. */
+function pct(fraction: number): string {
+  return `${Math.round(fraction * 100)}%`
+}
+
+/** How old a reading is, AS THE WHOLE PHRASE — `taken moments ago`, `taken 4 minutes ago`.
+ *
+ *  THE PHRASE AND NOT THE DURATION, because the sub-minute case has no duration to put in a
+ *  sentence and every attempt to leave one out at the call site reads wrong. Returning
+ *  `just taken` and appending ` old` at the call site rendered **"just taken old"** on the
+ *  scope line and **"Read just taken ago"** on the receipt — both of them past a green
+ *  spec, because the specs were written against a four-minute fixture and neither reads
+ *  the branch. Caught by looking at the screen, which is the one thing a typecheck cannot
+ *  do for you. */
+function ageWords(seconds: number): string {
+  if (seconds < 60) return 'taken moments ago'
+  if (seconds < 5400) {
+    const mins = Math.max(1, Math.round(seconds / 60))
+    return `taken ${mins} minute${mins === 1 ? '' : 's'} ago`
+  }
+  const hours = Math.round(seconds / 3600)
+  return `taken ${hours} hour${hours === 1 ? '' : 's'} ago`
+}
+
 function scopeWords(asked: ExportAsked): string {
   if (asked.scope === 'category') return 'whole category'
   const names = asked.sets
@@ -949,6 +983,34 @@ export function RunPanel({ cart, openRun, onOpenRun, reloadTick, onIdentify, pag
                     <span>
                       Will ask TCGplayer for <strong>{scopeSentence.what}</strong>
                       {scopeSentence.why === null ? '.' : ` — ${scopeSentence.why}.`}
+                      {/* WHAT IT WEIGHS, BEFORE THE PRESS (D65/D76). A widening is 137x on
+                          Pokemon and lands at 97% of the ceiling the fetch refuses at, which is
+                          not a figure an operator should meet by pressing. Drawn only where it
+                          is the WIDE reading: a narrow measurement beside a widened scope
+                          describes a different request, and showing it would reassure about
+                          the wrong one. */}
+                      {scopeInfo.width != null && scopeInfo.width.widened ? (
+                        <>
+                          {' '}
+                          About <strong>{mb(scopeInfo.width.bytes)}</strong>
+                          {scopeInfo.width.near_cap
+                            ? ` — ${pct(scopeInfo.width.of_max)} of the ${mb(
+                                scopeInfo.width.max_bytes,
+                              )} this download is refused past. Hint the cards, or tick the sets, to narrow it.`
+                            : '.'}
+                        </>
+                      ) : null}
+                      {/* AND WHETHER THE PRESS OPENS A SOCKET AT ALL. The export is the game's
+                          now, kept once, so a second run over one game answers off the file
+                          already here — and an operator who cannot see that is an operator
+                          re-fetching bytes this machine holds, which is the measured defect. */}
+                      {scopeInfo.reusable != null ? (
+                        <>
+                          {' '}
+                          Already have this one, {ageWords(scopeInfo.reusable.age_s)} — the press reuses it
+                          rather than asking again.
+                        </>
+                      ) : null}
                     </span>
                   </p>
                 ) : null}
@@ -1113,11 +1175,30 @@ export function RunPanel({ cart, openRun, onOpenRun, reloadTick, onIdentify, pag
                     </span>
                     <div className="run-receipt-said">
                       <p className="run-receipt-head">
-                        <span className="run-receipt-what">Export fetched</span>
+                        {/* FETCHED OR REUSED, AND THE RECEIPT MAY NOT CONFLATE THEM. Every
+                            other figure here is identical either way — same file, rows, SKUs
+                            and sets — so whether TCGplayer was asked is the one thing only
+                            this word can carry. An operator told "fetched" about a reading
+                            taken twenty minutes ago has been told the wrong thing. */}
+                        <span className="run-receipt-what">
+                          {fetched.reused === true ? 'Export reused' : 'Export fetched'}
+                        </span>
                         <span className="run-receipt-rows">{fetched.rows.toLocaleString()} rows</span>
                         <span>{gameDisplay(fetched.asked.game)}</span>
                         <span>{scopeWords(fetched.asked)}</span>
                       </p>
+                      {fetched.reused === true ? (
+                        <p className="run-receipt-fine">
+                          Already on this machine, {ageWords(fetched.age_s)} — nothing was downloaded.
+                          Press again with a refresh to take a new reading.
+                        </p>
+                      ) : null}
+                      {fetched.width != null && fetched.width.near_cap ? (
+                        <p className="run-receipt-fine">
+                          {mb(fetched.width.bytes)} of the {mb(fetched.width.max_bytes)} this download is refused
+                          past — {pct(fetched.width.of_max)}. Narrowing the scope is what buys that back.
+                        </p>
+                      ) : null}
                       <p className="run-receipt-was">{previousLine(fetched, gameDisplay)}</p>
                       <span className="run-receipt-tear" aria-hidden="true" />
                       {/* The counts only. WHY the scope is what it is stands two lines above this,

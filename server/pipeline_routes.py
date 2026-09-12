@@ -285,11 +285,50 @@ def _child_of(run_dir: Path) -> Optional[_Child]:
 # serve, and nothing built from user input is ever joined onto a path.
 _DOWNLOADABLE = re.compile(r"^[A-Za-z0-9._-]+\.(csv|txt|json|log)$")
 
-# What a fetched export is called inside a run directory. It keeps the `export-` prefix every
-# uploaded one has, so the run's artefact list reads the same either way, and adds a segment
-# that says WHERE it came from — which is the one fact a file dropped into a run directory
-# cannot otherwise carry, and the one a later reader of `runs/` will want.
+# What a fetched export is called. It keeps the `export-` prefix every uploaded one has, so a
+# run's artefact list reads the same either way, and adds a segment that says WHERE it came
+# from — which is the one fact a file dropped into a run directory cannot otherwise carry.
 FETCHED_PREFIX = "export-tcgplayer-"
+
+# THE EXPORT IS A PROPERTY OF THE GAME, NOT THE DRAWER, AND THIS IS WHERE THAT IS SPELT.
+# `inventory/.exports/<game>/`, store-wide, one copy of any given bytes — `LIVE_DIR`'s shape
+# one directory over and for `LIVE_DIR`'s reason: the file is the evidence for the reading a
+# run was joined against, so it is kept and never swept. The GAME is in the path because
+# `cli/resolve.py:exports_for` maps game -> exactly one file and `Scope.category_id` is
+# scalar; there is no third axis a directory could be cut on.
+#
+# WHAT IT REPLACES IS A PER-RUN COPY WHOSE DEDUPE COULD NOT SEE ITS SIBLINGS. The dedupe
+# below globbed the run's OWN directory, so bytes already on disk one directory over were
+# invisible to it. Measured on the owner's store 2026-09-12: 19 exports, 27.1 MB, 13
+# distinct — 9.0 MB in 6 redundant copies, and 5 of those 6 are CROSS-RUN and therefore
+# outside anything a per-run glob can reach. Five byte-identical 1,733,052 B copies landed
+# in eighteen seconds (07:41:33 to 07:41:51) across five run directories.
+EXPORTS_DIR = files.EXPORTS_DIRNAME
+
+# HOW LONG A FETCHED EXPORT ANSWERS THE NEXT PRESS, IN SECONDS, AND THIS IS THE HALF THAT
+# SAVES THE REQUEST RATHER THAN THE DISK. Deduping after the fetch turns six files into one
+# and still spends six round trips; re-joining a store means pressing Fetch once per run, and
+# the seven presses that produced the measurement above were nine minutes apart end to end
+# while five of them were eighteen seconds apart. A press whose game already holds an export
+# fetched inside this window, at a scope that COVERS what this run needs, answers from that
+# file and opens no socket.
+#
+# FIFTEEN MINUTES IS SIZED TO THE SITTING AND NOT TO THE READING. An export is a reading of
+# `Total Quantity` and `TCG Market Price`, and `describe_source`'s mtime is when that reading
+# was taken — so reuse must never be long enough that an operator thinks they refreshed and
+# did not. A re-join pass over a store is minutes; a deliberate refresh the next morning is
+# hours. `refresh: true` on the request forces the socket open whatever the age, and the
+# receipt says `reused` with the file's age on it either way, so nothing here is silent.
+EXPORT_REUSE_S = 900
+
+# WHEN A WIDENED FETCH IS REPORTED WITH BOTH FIGURES ON IT (D65/D76). `tcg_export.MAX_BYTES`
+# is 32 MB and refuses past it; a scope that widens to the whole category is the only way to
+# approach that, and it is much closer than the constant's own comment believed. MEASURED
+# 2026-09-12, one fetch of the whole Pokemon category: 32,629,598 B — 222,849 rows, 31.12 MB,
+# 97.24% of the cap, 903 KB of headroom, against 238,482 B for the one set the owner's 543
+# Pokemon cards actually name. A widening is 137x here and it lands two per cent short of a
+# hard refusal, so it may not be silent.
+EXPORT_NEAR_CAP = 0.80
 
 # The box a capture directory names, anchored at the start so `box3` and `box3-12-1724936400`
 # both read as 3 and nothing further down a name can be mistaken for one. Used only by
@@ -4626,6 +4665,29 @@ def _store_upload(directory: Path, upload: dict, prefix: str) -> Path:
 _UPLOAD_MTIME_FLOOR = 946684800.0
 
 
+def _find_fetched(directory: Path, wanted: str) -> Optional[Path]:
+    """A fetched export by name: this run's own directory, then the game directories.
+
+    SHAPE, THEN PREFIX, THEN MEMBERSHIP — `_open_live_export`'s rule, and the caller has
+    already done the first two. What changed with the move is that membership is now of a SET
+    of directories rather than of one, and it is still membership: the name is matched against
+    files that exist, never joined onto a path and opened.
+
+    THE RUN'S OWN DIRECTORY IS FIRST AND IT IS NOT A FALLBACK — it is the LEGACY location, and
+    the owner's store holds 19 files there. Those runs go on joining against the file they were
+    joined against, which is the rule a run directory being an immutable input already implies.
+    """
+    legacy = directory / wanted
+    if legacy.is_file():
+        return legacy
+    root = files.inventory_dir() / EXPORTS_DIR
+    for game in sorted(game_registry.keys()):  # noqa: SIM118 — pipeline.games MODULE
+        candidate = root / game / wanted
+        if candidate.is_file():
+            return candidate
+    return None
+
+
 def _exports_for_join(directory: Path, payload: dict) -> List[str]:
     """`--export` arguments: what was fetched, what was uploaded, or what the manifest holds.
 
@@ -4667,13 +4729,14 @@ def _exports_for_join(directory: Path, payload: dict) -> List[str]:
                     "fetched_invalid",
                     f"{wanted!r} is not the name of a fetched export.",
                 )
-            candidate = directory / wanted
-            if not candidate.is_file():
+            candidate = _find_fetched(directory, wanted)
+            if candidate is None:
                 raise PipelineRefusal(
                     HTTPStatus.NOT_FOUND,
                     "no_such_file",
-                    f"Run {directory.name} holds no {wanted}. A fetch that refused deletes "
-                    f"what it wrote, so this is a name from a fetch that did not land.",
+                    f"No fetched export named {wanted}, in run {directory.name} or under "
+                    f"inventory/{EXPORTS_DIR}/. A fetch that refused deletes what it wrote, "
+                    f"so this is a name from a fetch that did not land.",
                 )
             argv += ["--export", str(candidate)]
 
@@ -5146,7 +5209,290 @@ def do_pipeline_scope(name: str, payload: dict) -> dict:
         "asked": asked,
         "reason": reason,
         "message": message,
+        # WHAT THE PRESS WOULD WEIGH, DRAWN BEFORE IT (D65/D76). Null until this game has been
+        # fetched at a covering scope once — an honest "not measured" rather than an estimate,
+        # because the only thing that can size an export is an export.
+        #
+        # IT IS ANSWERABLE ONLY BECAUSE THE EXPORTS ARE PER-GAME NOW. Per-run copies gave every
+        # drawer its own unrelated sample and no one of them was the game's, so this figure had
+        # nowhere to be read from and the widening was priced at nothing.
+        "width": _width_note(str(asked["game"]), asked) if asked else None,
+        # AND THE FILE THAT WOULD ANSWER WITHOUT A REQUEST, if there is one. A preview that
+        # showed the scope but not whether pressing would even open a socket leaves the
+        # operator re-fetching bytes the machine holds, which is the measured defect.
+        "reusable": _reuse_note(asked),
     }
+
+
+def _exports_dir(game: str) -> Path:
+    """`inventory/.exports/<game>/`, made on demand.
+
+    THE GAME IS VALIDATED BY ITS REGISTRY MEMBERSHIP AND NEVER BY ITS SHAPE. Every caller
+    reaches here through `_scope_for_run`, which answers a key out of `pipeline/games.py`,
+    so the segment cannot be built from a request — the same rule `_open_run` follows one
+    directory over, and the reason a name is never joined onto a path in this module.
+    """
+    if game not in set(game_registry.keys()):  # noqa: SIM118 — pipeline.games MODULE
+        raise PipelineRefusal(
+            HTTPStatus.BAD_REQUEST,
+            "unknown_game",
+            f"{game!r} is not a registered game, so it has no export directory.",
+        )
+    return files.inventory_dir() / EXPORTS_DIR / game
+
+
+def _note_path(export: Path) -> Path:
+    """Where an export's own scope note lives: the file's name plus `.scope.json`.
+
+    THE FILE CANNOT SAY WHAT IT WAS ASKED FOR, WHICH IS D65's WHOLE ARGUMENT. Completeness
+    is not readable off an export — three filters narrow it and one leaves no trace — so a
+    reuse that inferred the scope from the contents would be exactly the inference D65 exists
+    to replace. The note records what was ASKED, beside the file that answered.
+    """
+    return export.with_name(export.name + ".scope.json")
+
+
+def _read_note(export: Path) -> Optional[dict]:
+    """One export's scope note, or None for a file that has none or whose note is unreadable.
+
+    NONE IS "CANNOT BE REUSED", NEVER "REUSE IT ANYWAY". A file with no note is an export
+    this build did not fetch — an operator's own drop, or one written before this landed —
+    and the safe answer for an unknown scope is to fetch rather than to guess that it covers.
+    """
+    try:
+        note = json.loads(_note_path(export).read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return None
+    return note if isinstance(note, dict) else None
+
+
+def _write_note(export: Path, asked: dict, size: int) -> None:
+    """Record what this file was asked for, beside it. Never fatal.
+
+    A NOTE THAT FAILS TO WRITE COSTS A REUSE AND NOTHING ELSE, which is why it is not allowed
+    to take a good fetch down with it: the export is on disk and joinable, and the next press
+    simply opens a socket it could have skipped.
+    """
+    with contextlib.suppress(OSError):
+        _note_path(export).write_text(
+            json.dumps(
+                {
+                    "game": asked["game"],
+                    "category_id": int(asked["category_id"]),
+                    "set_ids": [int(i) for i in asked["set_ids"]],
+                    "scope": asked["scope"],
+                    "widened": bool(asked["widened"]),
+                    "bytes": int(size),
+                    "at": master.now(),
+                },
+                indent=2,
+            )
+            + "\n",
+            encoding="utf-8",
+        )
+
+
+def _covers(note: dict, scope: "tcg_export.Scope") -> bool:
+    """Does the file this note describes answer for `scope`?
+
+    ONE DIRECTION ONLY, AND THE ASYMMETRY IS THE POINT. A file fetched for the whole category
+    covers every set in it; a file fetched for {A} does NOT cover {A, B}, and the missing set
+    would queue as `no_catalog_row` for every card in it — the defect D76 is named for,
+    arriving by a different door. So a wider file serves a narrower need and never the
+    reverse, and `set_ids` empty means "all of them" exactly as `Scope` encodes it.
+    """
+    if int(note.get("category_id") or 0) != int(scope.category_id):
+        return False
+    held = {int(i) for i in (note.get("set_ids") or [])}
+    if not held:
+        return True
+    return bool(scope.set_ids) and {int(i) for i in scope.set_ids} <= held
+
+
+def _held_exports(game: str) -> List[Path]:
+    """Every export this game holds, newest reading first.
+
+    ORDERED BY MTIME BECAUSE THE MTIME IS THE READING'S OWN TIME (`cli/runs.py`
+    `describe_source`), not by the stamp in the name: a dedupe hit touches the file, so the
+    name says when the bytes were first seen and the mtime says when they were last observed,
+    and the fresher OBSERVATION is the one a reuse is entitled to.
+    """
+    directory = _exports_dir(game)
+    if not directory.is_dir():
+        return []
+    return sorted(
+        (p for p in directory.glob(f"{FETCHED_PREFIX}*.csv") if p.is_file()),
+        key=lambda p: p.stat().st_mtime,
+        reverse=True,
+    )
+
+
+def _reusable(game: str, scope: "tcg_export.Scope") -> Optional[Tuple[Path, float]]:
+    """The export that answers this scope without a request, with its age in seconds.
+
+    THIS IS THE HALF THAT SAVES THE REQUEST, and it is the only part of this route whose
+    saving an outcome assertion cannot see: a reuse and a fetch produce the same file, the
+    same receipt figures and the same join. `harness/tests/t7_store_and_seams.py` counts the
+    stub's requests for exactly that reason.
+    """
+    for path in _held_exports(game):
+        note = _read_note(path)
+        if note is None or not _covers(note, scope):
+            continue
+        try:
+            age = time.time() - path.stat().st_mtime
+        except OSError:
+            continue
+        if 0 <= age <= EXPORT_REUSE_S:
+            return path, age
+    return None
+
+
+def _keep_export(store_dir: Path, body: bytes) -> Tuple[Path, bool, float]:
+    """Keep these bytes in the game's own directory, or answer with the copy already there.
+
+    THE NAME CARRIES A DIGEST, AND A ONE-SECOND STAMP ALONE WAS A DATA-LOSS BUG. T7 found it:
+    two fetches inside the same second composed the same filename, so the second one OVERWROTE
+    the first — and the first is what a run was joined against. A file silently replaced by
+    the very thing being checked against it passes every check by comparing itself to itself.
+    T7's same-second case is the record of that.
+
+    THE SEARCH IS THE GAME'S WHOLE DIRECTORY, WHICH IS THE CHANGE. It used to be the RUN's own
+    directory, so bytes already on disk one directory over were invisible: measured on the
+    owner's store 2026-09-12, 19 exports holding 13 distinct files, 9.0 MB in 6 redundant
+    copies — and 5 of those 6 were CROSS-RUN and outside anything a per-run glob can reach.
+    Five byte-identical 1,733,052 B copies landed in eighteen seconds across five run
+    directories, each one a fetch that reported success and wrote a file that already existed.
+
+    THE DIGEST IS COMPUTED FIRST AND THE BYTES ARE COMPARED IN FULL — 32 bits of digest is a
+    name, not a proof. A hit IS the file: an identical re-fetch is a fresh observation of the
+    same reading, so its mtime is touched, because the export's observation time is read off
+    that mtime. A miss gets a stamped name of its own and can never clobber a predecessor.
+
+    THE STAMP GOES ON THE MISS AND THE AGE COMES BACK ZERO EITHER WAY, because both arms here
+    OBSERVED these bytes just now; `_reusable` is the arm that did not, and it reports a real
+    age. Two presses racing one game can still each write a stamped name for the same digest —
+    bounded, benign (the byte compare means neither is wrong) and not worth a lock on a
+    directory that is deliberately outside the store transaction.
+    """
+    digest = hashlib.sha256(body).hexdigest()[:8]
+    held = [
+        path
+        for path in sorted(store_dir.glob(f"{FETCHED_PREFIX}*-{digest}.csv"))
+        if path.read_bytes() == body
+    ]
+    # WHETHER THIS REQUEST CREATED IT DECIDES WHETHER A REFUSAL MAY DELETE IT, AND THE STAKES
+    # WENT UP WITH THE MOVE. "A refusal tears down what it built" is the rule, and the emphasis
+    # is on BUILT: this file is now SHARED, so unlinking one another run's manifest names would
+    # destroy a recorded export over a refusal that fired on something else. `fresh` is false
+    # for every hit by construction — bytes nothing on disk carries cannot be in a manifest —
+    # so the rule holds without the refusal having to know who else is reading.
+    if held:
+        target = held[0]
+        os.utime(target, None)
+        return target, False, 0.0
+    stamp = time.strftime("%Y%m%d-%H%M%S", time.gmtime())
+    target = store_dir / f"{FETCHED_PREFIX}{stamp}-{digest}.csv"
+    target.write_bytes(body)
+    return target, True, 0.0
+
+
+def _width_note(game: str, asked: Optional[dict]) -> Optional[dict]:
+    """What a fetch at this scope is known to weigh, against the cap — or None if unmeasured.
+
+    PRESS-NOTHING, AND IT IS READ OFF FILES THIS CHECKOUT ALREADY HOLDS. The store-wide
+    export directory is what makes this answerable at all: per-run copies gave every drawer
+    its own unrelated sample, and no one of them was the game's.
+
+    WHY IT EXISTS (D65/D76). `tcg_export.MAX_BYTES` is 32 MB and the fetch refuses past it.
+    A widening to the whole category is the only scope that approaches it, and MEASURED
+    2026-09-12 the whole Pokemon category is 32,629,598 B — 97.24% of the cap, 903 KB of
+    headroom — against 238,482 B for the one set the owner's 543 Pokemon cards name. So the
+    widening is not a detail of how the request is spelt: it is a 137x change in what comes
+    back, two per cent short of a refusal. `GET /pipeline/runs/<name>/scope` draws this
+    BEFORE the press, which is the whole reason that route is a preview.
+    """
+    if not asked:
+        return None
+    try:
+        held = _held_exports(game)
+    except PipelineRefusal:
+        return None
+    scope = tcg_export.Scope(
+        category_id=int(asked["category_id"]),
+        set_ids=tuple(int(i) for i in asked["set_ids"]),
+    )
+    for path in held:
+        note = _read_note(path)
+        if note is None or not _covers(note, scope):
+            continue
+        size = int(note.get("bytes") or 0)
+        if size <= 0:
+            continue
+        return {
+            "bytes": size,
+            "max_bytes": int(tcg_export.MAX_BYTES),
+            "headroom": int(tcg_export.MAX_BYTES) - size,
+            "of_max": round(size / float(tcg_export.MAX_BYTES), 4),
+            "near_cap": size >= EXPORT_NEAR_CAP * tcg_export.MAX_BYTES,
+            "measured": note.get("at"),
+            "from": path.name,
+            # WHETHER THIS FIGURE IS THE WIDE ONE. A narrow reading beside a `widened: true`
+            # scope is a measurement of a DIFFERENT request, and saying so is the difference
+            # between a preview and a reassurance.
+            "widened": bool(note.get("widened")),
+        }
+    return None
+
+
+def _reuse_note(asked: Optional[dict]) -> Optional[dict]:
+    """The file a press would answer from without a request, or None. PRESSES NOTHING."""
+    if not asked:
+        return None
+    scope = tcg_export.Scope(
+        category_id=int(asked["category_id"]),
+        set_ids=tuple(int(i) for i in asked["set_ids"]),
+    )
+    try:
+        held = _reusable(str(asked["game"]), scope)
+    except PipelineRefusal:
+        return None
+    if held is None:
+        return None
+    path, age = held
+    return {"file": path.name, "age_s": int(age), "window_s": EXPORT_REUSE_S}
+
+
+def _too_large_sentence(asked: Optional[dict]) -> str:
+    """What to add to `tcg_export_too_large` when the scope is what made it large (D65/D76).
+
+    THE TRANSPORT'S OWN SENTENCE BLAMES THE DOWNLOAD AND HANDS THE OPERATOR NOTHING. It says
+    the widest export this project has read is under 2 MB — measured 2026-09-12, the widest
+    it can ask for is 31.12 MB and the owner's own catalogue is one of the two that can. The
+    actionable half is never "the file was big": it is that the scope went wide, and why, and
+    that hinting the cards or naming the sets is what narrows it.
+    """
+    if not asked or not asked.get("widened"):
+        return ""
+    unhinted = int(asked.get("unhinted") or 0)
+    cards = int(asked.get("cards") or 0)
+    why = {
+        "no_hints": f"none of this run's {cards} {asked['game']} cards carries a set hint",
+        "partial_hints": (
+            f"{unhinted} of this run's {cards} {asked['game']} cards carry no set hint, so "
+            f"the hints describe part of it and cutting the export to them would queue every "
+            f"other card as no_catalog_row (D76)"
+        ),
+        "unresolved_hints": "this run's set hints match no set TCGplayer knows",
+        "no_hints_resolved": "this run's set hints resolved to no set",
+        "game_policy": f"{asked['game']}'s export_scope is `category` in pipeline/games.py",
+        "operator_asked": "the scope was asked for as `category`",
+    }.get(str(asked.get("reason") or ""), "the scope widened to the whole category")
+    return (
+        f" THE SCOPE IS WHY: this asked TCGplayer for the whole {asked['game']} category "
+        f"because {why}. Hint the cards, or name the sets on #/runs — "
+        f"GET /pipeline/runs/<name>/scope draws what would be asked for and presses nothing."
+    )
 
 
 def do_pipeline_export(name: str, payload: dict) -> dict:
@@ -5176,55 +5522,63 @@ def do_pipeline_export(name: str, payload: dict) -> dict:
     """
     directory = _open_run(name)
 
+    # THE SCOPE IS DECIDED IN ITS OWN TRY, AHEAD OF THE FETCH, so that a refusal raised by the
+    # FETCH can be told apart from one raised while deciding what to ask for — and so
+    # `_too_large_sentence` below has an `asked` to read. These two shared a `try` and a
+    # handler, which left `asked` unbound on exactly the path that most needs it.
     try:
         scope, asked = _scope_for_run(directory, payload)
-        body = tcg_export.fetch(scope)
     except tcg_export.FetchRefusal as caught:
-        # A BAD GATEWAY AND NOT A 500. The failure is at TCGplayer or in the credential this
-        # machine holds for it, and every one of these carries a sentence saying which.
         raise PipelineRefusal(
             HTTPStatus.BAD_GATEWAY, caught.code, caught.message
         ) from None
 
-    # THE NAME CARRIES A DIGEST, AND A ONE-SECOND STAMP ALONE WAS A DATA-LOSS BUG. T7 found
-    # it: two fetches inside the same second composed the same filename, so the second one
-    # OVERWROTE the first — and the first is what the run was joined against. A file silently
-    # replaced by the very thing being checked against it passes every check by comparing
-    # itself to itself. T7's same-second case is the record of that.
+    game = str(asked["game"])
+    store_dir = _exports_dir(game)
+    store_dir.mkdir(parents=True, exist_ok=True)
+
+    # ------------------------------------------------ THE REQUEST THAT IS NOT SENT
     #
-    # IDENTICAL BYTES LAND ON THE FILE THE RUN ALREADY HOLDS — AND THAT CLAIM WAS FALSE UNTIL
-    # 2026-09-02. This comment said a re-fetch of identical bytes "lands on the identical
-    # name", while the per-second stamp came BEFORE the digest in that name: two fetches a
-    # second apart never composed the same name, `fresh` was always true, and every re-fetch
-    # added a copy. Measured: run `2026-08-31-box3-01` holds two byte-identical 366 KB exports
-    # 29 seconds apart. So the digest is computed first and the run directory is searched for
-    # a file already carrying it, compared in full — 32 bits of digest is a name, not a proof.
-    # A hit IS the file: an identical re-fetch is a fresh observation of the same reading, so
-    # its mtime is touched, because the export's observation time is read off that mtime. A
-    # miss gets a stamped name of its own and can never clobber a predecessor.
-    digest = hashlib.sha256(body).hexdigest()[:8]
-    held = [
-        path
-        for path in sorted(directory.glob(f"{FETCHED_PREFIX}*-{digest}.csv"))
-        if path.read_bytes() == body
-    ]
-    # WHETHER THIS REQUEST CREATED IT DECIDES WHETHER A REFUSAL MAY DELETE IT. "A refusal
-    # tears down what it built" is the rule, and the emphasis is on BUILT: re-fetching bytes
-    # this run already holds lands on the existing file, and unlinking that would destroy a
-    # recorded export over a refusal that fired on something else.
-    if held:
-        target = held[0]
+    # A PRESS WHOSE GAME ALREADY HOLDS A COVERING, RECENT EXPORT OPENS NO SOCKET. This is the
+    # saving, and it is the one thing about this route that no assertion over its OUTPUT can
+    # see: a reuse and a fetch answer with the same file, the same figures and the same join.
+    # The measurement it is built for is on the owner's store — seven presses over nine
+    # minutes re-joining one store, five of them eighteen seconds apart, every one of them
+    # asking TCGplayer for bytes the machine already had.
+    #
+    # `refresh: true` FORCES THE SOCKET OPEN, and the receipt says `reused` with the file's
+    # age either way. An operator who means to take a new reading must be able to, and one
+    # who did not mean to must be able to see that they did not.
+    reused = None if payload.get("refresh") else _reusable(game, scope)
+    if reused is not None:
+        target, age = reused
+        body = target.read_bytes()
         fresh = False
-        os.utime(target, None)
+        # THE MTIME IS NOT TOUCHED HERE, AND THAT IS THE DIFFERENCE BETWEEN THIS ARM AND THE
+        # DEDUPE ARM BELOW. `describe_source` reads an export's OBSERVATION TIME off its
+        # mtime, and `Listing.live_reading` weighs that against the store's own stamps. A
+        # re-fetch of identical bytes really is a fresh observation and is touched; a reuse
+        # observed nothing, and touching it would date a reading that was never taken —
+        # letting a stale export outrank a newer sale.
     else:
-        stamp = time.strftime("%Y%m%d-%H%M%S", time.gmtime())
-        target = directory / f"{FETCHED_PREFIX}{stamp}-{digest}.csv"
-        fresh = True
-        target.write_bytes(body)
+        try:
+            body = tcg_export.fetch(scope)
+        except tcg_export.FetchRefusal as caught:
+            # A BAD GATEWAY AND NOT A 500. The failure is at TCGplayer or in the credential
+            # this machine holds for it, and every one of these carries a sentence saying
+            # which — plus, for the one refusal a SCOPE can cause, what made it wide.
+            message = caught.message
+            if caught.code == "tcg_export_too_large":
+                message += _too_large_sentence(asked)
+            raise PipelineRefusal(
+                HTTPStatus.BAD_GATEWAY, caught.code, message
+            ) from None
+        target, fresh, age = _keep_export(store_dir, body)
 
     def refuse(status, code, message):
         if fresh:
             target.unlink(missing_ok=True)
+            _note_path(target).unlink(missing_ok=True)
         return PipelineRefusal(status, code, message)
 
     try:
@@ -5329,6 +5683,12 @@ def do_pipeline_export(name: str, payload: dict) -> dict:
             continue
         previous[game] = {"file": was["file"], "rows": was["rows"], "skus": was["skus"]}
 
+    # THE NOTE IS WRITTEN LAST, AFTER EVERY REFUSAL THIS ROUTE CAN RAISE. It is what makes the
+    # file reusable without a request, so writing it before the file has been ruled on would
+    # let the NEXT press answer out of an export this one was about to tear down.
+    if fresh:
+        _write_note(target, asked, len(body))
+
     report = _export_report(target, answers_for)
     report.update(
         {
@@ -5342,6 +5702,21 @@ def do_pipeline_export(name: str, payload: dict) -> dict:
             # cannot be read for whether the scope was right — and the scope is the operator's
             # own capture claims, so it is the half they can correct.
             "asked": asked,
+            # WHETHER A SOCKET WAS OPENED, AND THIS IS THE ONE FIGURE THE REST OF THE RECEIPT
+            # CANNOT IMPLY. A reuse and a fetch produce the same file, the same rows, the same
+            # SKUs and the same join; the only difference is the work done to get there, so it
+            # is said rather than left to be inferred. `age_s` is how old the reading is —
+            # zero for anything observed by this press.
+            "reused": reused is not None,
+            "age_s": int(age),
+            "kept": True,
+            # WHERE THE FILE IS, WHICH IS NO LONGER INSIDE THE RUN (D166). A
+            # client that built a download path out of the run's name would break silently;
+            # this says the directory the game's exports live in.
+            "store": str(store_dir),
+            # WHAT THIS SCOPE WEIGHS AGAINST THE CAP (D65/D76). Measured, not estimated — it
+            # is the file that just landed.
+            "width": _width_note(game, asked),
         }
     )
     return report
