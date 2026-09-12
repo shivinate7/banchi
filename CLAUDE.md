@@ -1328,8 +1328,30 @@ A screen is not finished because it compiles.
   category's average of 148 KB per set that is about six set releases of headroom.
   **The widening is therefore never silent**: the preview and the fetch receipt both carry a
   `width` block (bytes, cap, headroom, and whether the figure is the wide one), and
-  `tcg_export_too_large` names the scope, the cards that widened it and the remedy. A hard
-  refusal of a file that parses and joins today was declined on purpose — see the entry.
+  `tcg_export_too_large` names the scope, the cards that widened it and the remedy.
+
+  **AND A POKEMON RUN THAT WIDENED ITSELF IS NOW REFUSED OUTRIGHT** (D170,
+  2026-09-12, on the owner's ruling — *"make unhinted Pokémon cards impossible"*). Leaving the
+  cliff merely VISIBLE was one of three options put to them and is not the one they took.
+  `export_needs_hint` in `pipeline/games.py` marks a game whose whole category has been weighed
+  and found too close to the ceiling to widen into on a guess; `export_category_bytes` beside it
+  is the measurement, and `make docs-audit`'s `games registry` row refuses the boolean on an
+  entry carrying no figure, no category, or an `export_scope` of `category` — that last could
+  never fire. **`_scope_for_run` raises `export_needs_set_hint`, and one refusal gets two
+  behaviours**: the press-nothing preview DRAWS it, the fetch refuses 409 without opening a
+  socket.
+
+  **`chosen_by == "cards"` IS THE WHOLE PREDICATE, so nothing is ever stranded.** Only the four
+  card-caused widenings refuse; an operator sending `set_ids` or `scope: category` is `operator`
+  and passes through, which is the override D76 already published. **It is NOT enforced at the
+  shutter** — `app/src/setHint.ts` carries D65's rule that the rig does not stop for an
+  autocomplete, and a capture refused mid-feeder leaves a physical card with no record and
+  renumbers every card behind it. The capture screen NOTES it instead, off the registry's own
+  field. **The already-unhinted card is fixed where it always could be**: `PUT /inventory/<box>`
+  over a box or a selection, from `#/inventory` → Manage box → Set claims, which the refusal
+  names. **`pokemon_code` shares category 3 and is deliberately exempt** — it joins by name, so
+  a hint narrows nothing there; the cliff stays reachable on that track and the entry names it
+  as a measured gap needing a narrower transport.
 
 - **THE CATALOGUE EXPORT IS A PROPERTY OF THE GAME, NOT THE DRAWER** (D166,
   2026-09-12). A fetch lands in **`inventory/.exports/<game>/`** — `inventory/.live/`'s shape
@@ -1986,6 +2008,7 @@ D166 The catalogue export is a property of the game, and the box never chose its
 D167 A queue entry is re-resolved where it stands, and the answer reaches the price without a second press
 D168 A typed price is cleared by a press, never by an expiry, and the set it may clear is the set the corpus dates
 D169 The blanket sweep asks the question the verdict answers, and a nested worktree is another checkout
+D170 A widening is safe only while the category fits, and Pokemon's does not
 ```
 
 **THE GAP THIS LIST CARRIED BETWEEN D116 AND D118 IS CLOSED, AND IT CLOSED THE WAY IT SAID IT

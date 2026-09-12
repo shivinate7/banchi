@@ -598,8 +598,17 @@ COMPONENTS = [
                                  "facts per game. Hand-authored, audited against the committed "
                                  "exports, and it REFUSES on an empty vocabulary rather than "
                                  "falling back to Pokemon's — riftbound and one_piece ship "
-                                 "unverified because no export for either has ever been seen.",
-                         "governed_by": ["D3", "D8", "D11", "D12", "D14", "D16", "D18", "D21", "D22", "D23", "D24", "D25", "D65", "D76"],
+                                 "unverified because no export for either has ever been seen. "
+                                 "TWO FIELDS DECIDE HOW WIDE THE EXPORT IS ASKED FOR AND ONE OF "
+                                 "THEM CAN REFUSE A RUN: `export_scope` is D76's per-game axis, "
+                                 "and `export_needs_hint` marks a game whose whole category has "
+                                 "been WEIGHED — `export_category_bytes`, 32,629,598 B for "
+                                 "Pokemon, 97% of the download's own ceiling — and found too "
+                                 "close to it to widen into on a guess. The boolean may not "
+                                 "travel without the measurement, and may not be authored on a "
+                                 "`category` game, where it could never fire.",
+                         "governed_by": ["D3", "D8", "D11", "D12", "D14", "D16", "D18", "D21", "D22", "D23", "D24", "D25", "D65", "D76",
+                                         "D170"],
                          "note": "THE MATRIX IS A SUPERSET OF WHAT ANY ONE EXPORT PROVES, and that "
                                  "is load-bearing rather than sloppy: D23's capture screen renders "
                                  "a finish chip excluded by a rarity claim as unselectable, which "
@@ -2991,7 +3000,8 @@ COMPONENTS = [
                                 "D58", "D59", "D62", "D64", "D65", "D68", "D76", "D78",
                                 "D79", "D86", "D87", "D88", "D100", "D103", "D105", "D134",
                                 "D137", "D145", "D147", "D156", "D159", "D165", "D166",
-                                "D168"],
+                                "D168",
+                                "D170"],
                 "tested_by": ["T7"],
             },
             "shipping_routes.py": {

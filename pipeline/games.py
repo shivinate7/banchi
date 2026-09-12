@@ -58,7 +58,7 @@ and T4 pass untouched.
 
 from __future__ import annotations
 
-from typing import Dict, Tuple
+from typing import Dict, Optional, Tuple
 
 
 class UnknownGame(KeyError):
@@ -392,11 +392,42 @@ GAMES = (
             "Secret Rare": ("holo",),
             "Rainbow Rare": ("holo",),
         },
-        # D76. `sets` because the whole category is NOT measured: 220 sets in the live
-        # picker, and the widest Pokemon file this repo holds is four of them. So the fetch
-        # narrows — but only where every card in the run carries a hint and every hint
-        # resolved, which is the condition D65's first build did not check.
+        # D76. `sets` because a whole-category fetch is not what this game wants: 220 sets
+        # in the live picker, and the widest Pokemon file this repo holds is four of them.
+        # So the fetch narrows — but only where every card in the run carries a hint and
+        # every hint resolved, which is the condition D65's first build did not check.
+        #
+        # THE WHOLE CATEGORY IS MEASURED NOW, and this comment said it was not until
+        # 2026-09-12 — see `export_category_bytes` below, which is what changed.
         "export_scope": "sets",
+        # THE WHOLE CATEGORY, WEIGHED. One forced fetch, 2026-09-12: 32,629,598 B over
+        # 222,849 rows — 97.24% of `server/tcg_export.py:MAX_BYTES`, 903 KB of headroom —
+        # against 238,482 B for the one set the owner's 543 Pokemon cards all name. A
+        # widening is 137x here and it lands two per cent short of the ceiling the fetch is
+        # refused past.
+        #
+        # THIS IS THE EVIDENCE FOR THE FIELD BELOW AND IT IS AUDITED TO TRAVEL WITH IT.
+        # `export_needs_hint` is a judgement about a number, so the number is written down
+        # beside it rather than left in a commit message; `scripts/docs-audit.py`'s
+        # `games registry` row refuses the boolean on an entry that names no measurement.
+        "export_category_bytes": 32629598,
+        # D76 SAID A WIDENING IS ALWAYS SAFE. For this category it is 903 KB from a refusal,
+        # so "safe" has a measured boundary now and this is where that boundary is written
+        # down: a run of this game whose own cards widened the scope is REFUSED rather than
+        # quietly spent, because one unhinted card is all it takes — the unanimity rule
+        # widens the moment the box stops agreeing.
+        #
+        # NOT A RULE ABOUT THE SHUTTER, and that is the whole of the design. D65 and
+        # `app/src/setHint.ts` both say the rig does not stop for an autocomplete, and a
+        # capture that refused mid-feeder at a 623 ms cadence would be a card on the floor —
+        # a physical card in the drawer with no record, which renumbers every card behind it.
+        # The refusal is at the fetch, where the width is actually spent; the capture screen
+        # NOTES it and never blocks.
+        #
+        # `pokemon_code` SHARES THIS CATEGORY AND DELIBERATELY DOES NOT CARRY THIS FIELD.
+        # See its own entry: it joins by name, so a set filter buys it nothing, and a hint
+        # it cannot supply is not a hint it can be refused for.
+        "export_needs_hint": True,
         "located": True,
         "join_key": "number_and_printed_total",
         "prompt": "pokemon_card_v1",
@@ -439,10 +470,24 @@ GAMES = (
         # after it, but `Position.label` is never rendered for one and it never enters the
         # pull flow or the Fulfillment view — there is nothing to walk to. This flag is the
         # concrete form of D14's "two tracks, one rig".
-        # D76. `sets`, and it is the same unmeasured Pokemon category as above. Code cards
-        # rarely carry a set hint, so in practice this widens — which is correct and is what
-        # it already did; what changed is that a single hinted card can no longer narrow it.
+        # D76. `sets`, and it is the same Pokemon category as above. Code cards rarely carry
+        # a set hint, so in practice this widens — which is correct and is what it already
+        # did; what changed is that a single hinted card can no longer narrow it.
         "export_scope": "sets",
+        # AND IT CARRIES NO `export_needs_hint`, DELIBERATELY, THOUGH IT IS CATEGORY 3 AND SO
+        # SITS ON THE SAME 97.24% CLIFF THE ENTRY ABOVE MEASURES.
+        #
+        # A hint is refusable only where a hint would have narrowed the fetch. This game's
+        # `join_key` is `name_only` — the blank-`Number` rows — so a set filter buys the
+        # MATCH nothing, and the set is not something a code card reliably prints for the
+        # operator to read off. Demanding one here would be friction with no narrowing at
+        # the end of it, which is exactly the argument `riftbound` wins its `category` on.
+        #
+        # SO THE CLIFF STAYS REACHABLE ON THIS TRACK, AND THAT IS A NAMED GAP RATHER THAN AN
+        # OVERSIGHT. What covers it is what covered it before: the width is drawn on
+        # `GET /pipeline/runs/<name>/scope` before the press, and `_too_large_sentence` says
+        # the scope is why if the download is ever refused. Closing it needs a narrower
+        # transport — a paged or streamed fetch — not a claim the operator cannot make.
         "located": False,
         # Code cards are the blank-`Number` rows. The name fallback is not a degraded path
         # here, it is the only key there is.
@@ -833,6 +878,63 @@ def export_scope(key: str) -> str:
         return DEFAULT_EXPORT_SCOPE
     scope = str(entry.get("export_scope") or DEFAULT_EXPORT_SCOPE)
     return scope if scope in EXPORT_SCOPES else DEFAULT_EXPORT_SCOPE
+
+
+def export_needs_hint(key: str) -> bool:
+    """Must this game's cards name their set before its export may be fetched?
+
+    THE CLIFF THIS ANSWERS FOR, MEASURED 2026-09-12. The whole Pokemon category is
+    32,629,598 B — 97.24% of `server/tcg_export.py:MAX_BYTES`, 903 KB of headroom — against
+    238,482 B for the one set the owner's 543 Pokemon cards name. D76's rule is that a set
+    filter needs the box to be UNANIMOUS, so ONE unhinted card widens the fetch by 137x and
+    lands it two per cent short of the ceiling the transport refuses past. D76 wrote that a
+    widening is always safe, and for this category it is not.
+
+    SO THE GAME THAT CANNOT AFFORD A WIDENING SAYS SO, and `_scope_for_run` refuses a run
+    whose own cards caused one. The other three voices are untouched: an operator naming
+    sets or asking for `category` outranks this exactly as it outranks the unanimity rule
+    (D76), and a game whose `export_scope` IS `category` never reaches the question.
+
+    FALSE BY OMISSION, AND THAT IS THE SAFE DIRECTION HERE — the opposite of
+    `export_scope`'s. A game nobody has weighed gets the behaviour it has always had: it
+    widens, and the width is drawn on the preview before the press. Refusing on an
+    unmeasured game would strand real cards on a guess, which is the one thing a rule about
+    not spending money must not do.
+
+    IT IS NOT DERIVED FROM `export_scope`, AND THREE OF THE FOUR ENTRIES ARE WHY. `sets` is
+    the default and is carried by `pokemon_code` and `one_piece` as well — the first joins
+    by name on the SAME category-3 cliff and can narrow nothing, the second is a small
+    catalogue nobody has measured. A predicate off `export_scope` would refuse both for a
+    measurement neither has.
+
+    A GAME OUTSIDE THE REGISTRY ANSWERS FALSE rather than raising, for `export_scope`'s
+    reason: the caller is deciding how wide to ask, not what a card IS.
+    """
+    try:
+        entry = get(key)
+    except UnknownGame:
+        return False
+    return bool(entry.get("export_needs_hint"))
+
+
+def export_category_bytes(key: str) -> Optional[int]:
+    """What this game's whole TCGplayer category weighs, if anything ever measured it.
+
+    THE EVIDENCE FOR `export_needs_hint`, AND IT IS A SEPARATE FIELD ON PURPOSE. The
+    boolean is a judgement about this number; keeping the number beside it means the
+    judgement can be re-made by somebody reading the entry rather than archaeology through
+    a commit message. `scripts/docs-audit.py`'s `games registry` row refuses the boolean on
+    an entry that names no measurement, so the two cannot come apart.
+
+    NULL IS "NOBODY HAS WEIGHED IT", never zero. Three of the four catalogued entries are
+    null and the sentences this feeds say so rather than printing a figure they do not have.
+    """
+    try:
+        entry = get(key)
+    except UnknownGame:
+        return None
+    measured = entry.get("export_category_bytes")
+    return int(measured) if isinstance(measured, int) and measured > 0 else None
 
 
 def require(key: str) -> Dict[str, object]:
