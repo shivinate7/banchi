@@ -268,7 +268,7 @@ def _sanctioned_outside(target: str) -> str:
     return ""
 
 
-# --------------------------------------------------------- 1. the destructive checkout (D-…)
+# ------------------------------------------------------------- 1. the destructive checkout
 
 _RESTORE_VERBS = {"checkout", "restore"}
 
@@ -498,8 +498,8 @@ def _write_targets(reading: "shell_parse.Reading") -> List[str]:
     operands are its whole purpose. `cp`, `mv`, `install`, `rsync` and `sed -i` are NOT read
     here: their destination is positional and mixed in with patterns and flags, and a clause
     that guessed wrong would refuse an ordinary copy. The Write|Edit half of this clause needs
-    no parsing at all, which is why it is the half that cannot be skirted — and D-…'s entry
-    names this gap rather than leaving it to be discovered.
+    no parsing at all, which is why it is the half that cannot be skirted, and
+    D-five-shell-mistakes names this gap rather than leaving it to be discovered.
     """
     targets: List[str] = []
     for placed in reading.placed:
