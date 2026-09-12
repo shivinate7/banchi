@@ -1980,18 +1980,26 @@ COMPONENTS = [
                 "status": "built",
             },
             "score-trace.py": {
-                "does": "`scripts/score-trace.py summary|presence|sweep|contact` — re-scores a "
+                "does": "`scripts/score-trace.py summary|presence|sweep|stalls|camera|contact` "
+                        "— re-scores a "
                         "saved motion trace offline, which is docs/specs/motion-trigger.md §4 "
                         "step 5's standing promise written down. `summary` says what the "
                         "machine did live and what today's adaptive form would do; `presence` "
                         "re-runs the card-present gate over each verdict's own pixels; `sweep` "
                         "scores the stillness thresholds across a grid over every trace at "
-                        "once; `contact` writes the verdict frames out as a labelled PNG. "
+                        "once; `stalls` prints every episode the rescue could not save with "
+                        "its brightness against the session's own fired cards, and names "
+                        "nothing; `camera` reads what the CAMERA did rather than what the "
+                        "cards did — how the frames were paced, how bright the plate is and "
+                        "therefore what ONE exposure step would cost it, and whether the "
+                        "still-frame floor is independent noise or the whole picture moving; "
+                        "`contact` writes the verdict frames out as a labelled PNG. "
                         "ITS CONSTANTS MIRROR motion.ts's DEFAULT_PARAMS and are reconciled "
                         "against them by scripts/docs-audit.py's `motion params` row, which "
                         "D84 built after finding the row had been CLAIMED in this file's own "
                         "header since D81 and never written.",
-                "governed_by": ["D18", "D19", "D81", "D84", "D130", "D131"],
+                "governed_by": ["D-a-camera-is-an-input", "D18", "D19", "D81", "D84",
+                                 "D130", "D131"],
                 "note": "WRITTEN BECAUSE THE SAME PASS HAD BEEN DONE BY HAND THREE TIMES AND "
                         "THE SECOND ONE GOT IT WRONG, 2026-08-31. The 2026-08-29 presence fix "
                         "derived its 'empty stand' brightness from twenty frames that were "

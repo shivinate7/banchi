@@ -1635,6 +1635,7 @@ D145 A box has an index nobody sees, because the number on the drawer is a label
 D146 Two agreeing signals release the rarity claim, and the same comparison run backwards is a review reason
 D147 The claim is spent on the oldest copies, because a card captured tonight was in no file sent last week
 D148 The wait is about the claim commit, and an answer it has not got is never a pass
+D-a-camera-is-an-input The camera's automatic functions are inputs to the trigger's arithmetic, and the ones that step are locked
 
 ```
 

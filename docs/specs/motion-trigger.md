@@ -69,6 +69,16 @@ third Trigger cell, the period pin and the beat's HUD spans. The sessions record
 stay banked in `harness/traces/`, because a recording is evidence about a rig rather than
 about a trigger.
 
+**AND §4 NOW LOCKS THE CAMERA, WHICH IS D81'S BARGAIN COMING DUE (2026-09-12).** Every
+threshold being a multiple of a session measurement is what makes a setting that DRIFTS
+mid-session dangerous, and nothing in `motion.ts` can see one. Measured over all twenty banked
+traces: one 1/3 EV auto-exposure step moves the watch region 8.5-22.5 luma levels and reads as a
+CARD on nine of the fifteen sessions that carry a baseline, and a mid-session gain step is a
+cliff rather than a gradient — one session stops firing altogether at +1.5 stops. The shutter and
+the picture profile came back NULL and are recorded as findings. `scripts/score-trace.py camera`
+re-derives all of it. **SPECIFIED and RECORDED, NOT BUILT and NOT VALIDATED** — no parameter
+moves, and §4's last block is the checklist that is owed.
+
 **§4's protocol changed shape because of D81.** The parameters are no longer what a rig
 session tunes; the rig session now reads whether the machine's own measurements are sane and
 whether the baseline was taken on an empty stand. Read §4 before treating any number here as
@@ -344,6 +354,231 @@ old session it changes no count and recovers the cards D84 counted as stalls.
 **The dim lamp was not a fix**, and the trace says so: 65 fires and 13 stalls live, ten real
 misses on cards that slid for 1.7 s, seven gaps that were pauses — about 87%, with worse
 photographs.
+
+### The camera is an input to the arithmetic, and these settings are locked by measurement
+
+**Added 2026-09-12. The rig is a Sony RX100 VII over micro-HDMI into an Elgato Cam Link 4K**
+(`app/src/useCamera.ts`'s header), so the browser sees a plain UVC device and every setting
+below lives in the camera's own menus — there is no Sony USB-streaming layer in this path and
+nothing on the Cam Link to configure.
+
+**WHY THIS SECTION EXISTS, AND IT IS D81'S OWN BARGAIN COMING DUE.** Since D81 every threshold
+is a multiple of something the session measures: presence is the distance from the watch region
+as it stood at arming, and `tLo`/`tHi` ride the session's own median still-frame difference.
+That buys portability to a rig this code has never seen, and it buys with it a new exposure —
+**a camera setting that moves WHILE a session runs moves the baseline those thresholds were
+derived from, mid-run, and nothing reports it.** No constant in `motion.ts` can defend against
+that. Only the camera configuration can, which is why it is written down here rather than left
+to whatever the body was last set to.
+
+**Every figure below was measured on the twenty traces banked in `harness/traces/` and is
+re-derivable with `scripts/score-trace.py camera`.** Where a number is a derivation rather than
+a measurement it says so in the row. **Two of the questions came back NULL and the null is the
+answer** — sharpening and shutter speed — and they are recorded as findings rather than omitted.
+
+#### The locked settings
+
+| setting | lock to | the measurement behind it |
+|---|---|---|
+| **Exposure mode** | `Movie` → **Manual Exposure** | **the single most consequential row.** One 1/3 EV step — the smallest a Sony AE can take — moves the watch region by **8.5 to 22.5 luma levels** across the fifteen traces that carry a baseline. That is over `tLo` on **15 of 15** and over `presenceMin` on **9 of 15**: on more than half this corpus, one AE step on an empty stand reads as **a card arriving** |
+| **ISO** | a **fixed** value. Never `ISO AUTO` | a gain step taken mid-session is **a cliff, not a gradient**. On the 2026-09-11 03:25 session, **+1/3 stop costs 48% of the fires after it** and **+1.5 stops stops the session firing at all** for its remaining 75 seconds. Mechanism in "the cliff" below |
+| **Shutter** | **1/60 or slower**, as slow as the feeder allows — spend it on keeping ISO down | **NULL RESULT.** At the instant the trigger fires the card is moving at **184 sensor px/s** (median) and 367 at p90, so 1/60 smears it **3.1 px of a 3840-px frame** (6.1 at p90, 4.6 at the rescue bar). Blur is not the binding constraint at the fire phase; noise is. Derivation below |
+| **Aperture** | **fixed**, wherever the lamp allows the ISO above | it is half the same exposure budget, and a body left in `A` re-levels when the scene changes |
+| **White balance** | a **preset or Custom WB**, not `AWB` | **DERIVED, not measured** — a trace carries luma and no chroma. Rec.601 puts a `±3%` gain wobble at **1.1 luma levels** on the median plate and a full `±10%` preset jump at **3.6**, so WB sits at `tLo` at worst and never near `presenceMin`. Second-order against exposure, and free to lock |
+| **Focus mode** | **Manual Focus** | the RX100 VII offers **only Continuous AF and Manual Focus when shooting movies** — there is no single-shot lock to reach for, so MF is the only way to stop a hunt. A hunt costs: **1% of focus breathing reads `d` 3.03** and 2% reads 5.83, both over `tLo` and neither near `presenceMin`, so a hunt opens or extends a motion episode rather than firing one |
+| **SteadyShot** | **Off** | `Active` is a 1.19× crop plus a digital warp, and a warp is exactly the geometric change the breathing row prices. Sony's own guidance is `Off` on a tripod, and this mount is a tripod that never moves |
+| **4K Output Select** | **`HDMI Only(30p)`** | the corpus is **24p** and 30p is one menu item away. Frames are the currency: **halving the rate costs 8.7% of the corpus's fires and multiplies stalls 6.3×**. See "the frame rate" below, including what is NOT known about going higher |
+| **Creative Style / Picture Profile** | **fixed** — any value, not changed mid-run | **NULL RESULT.** In-camera sharpening and noise reduction act at a few sensor pixels, and a blur out to a **12-pixel radius costs `d` 0.000** on 84 real card regions. The 60×60-pixel cell average destroys it. What matters is only that the setting does not CHANGE while a session runs |
+| **Auto Power OFF Temp** | **High** | not a trigger fact. A body that shuts down mid-box ends the run, and `HDMI Only` writes no card, which is the other half of the thermal budget |
+
+#### The cliff — why `ISO AUTO` is the row that can lose a whole box
+
+The still-frame floor is **sensor and codec noise**, and this is measurable rather than assumed.
+Over **299 quiet keyframe pairs** across all twenty sessions the delta field's **lag-1 spatial
+correlation is +0.009 across and +0.008 down**, against a shuffled control of +0.001 — that is
+independent cell to cell, which flicker, an AE micro-adjustment and a lamp ripple are not. The
+same pairs put the **global brightness move at p50 0.00, p90 1.00 and max 4.00 luma levels per
+second**, so during quiet stretches nothing in the picture is moving as a whole.
+
+So gain reaches `typ` directly, and `typ` carries `tLo`, `tHi` and the adaptive half of the
+presence floor with it. **A slow drift is absorbed — that is D81 working.** A STEP is not:
+
+| gain step at the session midpoint | corpus fires | corpus stalls | sessions that stop firing entirely |
+|---|---|---|---|
+| none | 915 | 12 | — |
+| +1 stop | 879 | 18 | 0 of 20 |
+| +2 stops | 864 | 17 | 1 of 20 |
+| +3 stops | 789 | 22 | 2 of 20 |
+
+**The corpus totals understate it, and the per-session column is the one to read.** Two sessions
+do not degrade, they STOP: 03:25 loses 48% of its post-step fires at **+1/3 stop**, 82% at +1
+stop, and **all** of them at +1.5; 03:20 survives +2 stops intact and fires **zero** times in its
+last 65 seconds at +3.
+
+**The mechanism is D131's ratchet, and the escape only half covers it.** Only frames already
+under `tLo` enter the noise window, so a sudden rise in the floor means no frame qualifies, the
+estimate cannot climb, and `tLo` freezes — measured freezing at the seeded **4.50** for the rest
+of the session. D131 gave that ratchet an escape, and the escape refuses to act when its own
+quantile sits at or above the presence floor, which is exactly where a large gain step puts it.
+**This is not a reason to change D131.** It is the reason `ISO AUTO` is banned: the failure is
+in the camera's gift and not in the machine's.
+
+**What does NOT move, at any usable gain**: `presenceFloor` is `max(16.0, 3 × typ)`, so the
+adaptive term only binds past `typ` 5.33 — **3.8 stops above the quietest session in the corpus**.
+`presenceMin` stays the binding term through anything a camera can be set to, which is D84's
+debt neither widened nor closed by this section.
+
+**And the lamp is nearly no lever here, which is the useful surprise.** On one rig over twelve
+sessions the floor tracks the plate level as **log(typ) = −0.125 × log(level), r = −0.868** —
+halving the light raises the floor **9%**. Shot noise under a FIXED gain predicts −0.10 after the
+display gamma, and the measured −0.125 is that. So a brighter lamp does not buy a quieter
+trigger; a lower ISO does, at **√2 per stop**. Reach for the lamp to buy shutter and aperture
+headroom, and then spend that headroom on ISO.
+
+#### The frame rate — 24p is the floor, and it is being run AT the floor
+
+**The stream is 24p, on 20 of 20 traces.** The modal frame gap is **41.5–42.5 ms** everywhere
+and **69.7% of all 26,943 intervals** fall in 40.5–42.5 ms. That is the source rate rather than a
+browser dropping a 30p feed: a dropped 30p stream is bimodal at 33.3 and 66.7 ms, and only
+**0.13%** of the corpus sits near 66.7.
+
+`stillWindow` is a **frame count**, so the rate decides how much TIME a settle needs and how
+finely a card's rest is sampled. Decimating the real frame series — which is faithful, because
+taking real frames further apart is what a lower rate delivers:
+
+| rate | fires | doubles | stalls |
+|---|---|---|---|
+| 24 fps, as recorded | 915 | 36 | 12 |
+| 12 fps | 835 | 25 | **76** |
+| 8 fps | 728 | 11 | **118** |
+
+The hand-fed sessions barely move; the feeder sessions carry all of it, which is the mechanism
+D131 already named — the bright-lamp feeder rests a card **two to four frames**, and three of
+those must fill `stillWindow`.
+
+**GOING UP IS NOT MEASURED AND MUST NOT BE READ AS MEASURED.** Only the RISK half can be scored
+offline: raising the rate shrinks the window's time width, which is reproduced by shortening the
+window at the recorded rate. Doing that gains **+11 fires for +8 doubles** at a two-frame window
+and +19 for +7 at one frame, with no session losing a fire. The BENEFIT half — finer sampling of
+the rest that `stillWindow` is failing to fill — cannot be synthesised from 24 fps frames and is
+step 5 of the checklist below. **The doubles counted here use this section's own definition (a
+fire with no fresh `tHi` crossing since the previous fire) and are not comparable to section 7's
+count.**
+
+**Dropped frames are real and worst where the stalls are.** Per session the drop share runs
+**0.00% to 4.95%**, and the 4.95% session (22:12) is one of the four carrying live stalls. A drop
+inside a settle widens the window in time and can lose it.
+
+#### The shutter derivation, and why it is a null result
+
+`d` is a mean-abs luma change per frame, so for a small rigid displacement `u` in cells the
+change per cell is `u × |spatial gradient|`. Measured on **756 real fired-card watch regions**
+the region's own mean abs gradient is **20.93 luma/cell** (p10 15.31, p90 28.70). One cell is 60
+sensor pixels and the frame period is 41.7 ms:
+
+| phase | `d` | cells/frame | sensor px/s | blur at 1/60 | at 1/125 | at 1/250 |
+|---|---|---|---|---|---|---|
+| median fire | 2.66 | 0.127 | 184 | **3.1 px** | 1.5 px | 0.7 px |
+| p90 fire | 5.32 | 0.254 | 367 | 6.1 px | 2.9 px | 1.5 px |
+| the rescue bar, 4/3 × `tLo` | 4.00 | 0.191 | 276 | 4.6 px | 2.2 px | 1.1 px |
+| peak transit | 53.26 | 2.544 | 3679 | 61.3 px | 29.4 px | 14.7 px |
+
+**The last row is why the first three are so small**: the trigger fires at the phase of least
+motion, and the phase of most motion is twenty times faster. Three pixels of smear on a 3840-px
+frame is **1.3 px after `identify/images.py` resamples to its 1568-px long edge**. So section 7's
+line — *"if the rescued frames blur, the lever is the camera's exposure"* — is answered: at the
+fire phase it is not, and a rescued frame is only 1.5 px worse than an ordinary one. **Spend the
+shutter on ISO.** If a rig run does show blurred rescues, the cause is a card still in transit
+and the reading to check is `rescue` against `fires`, not the shutter.
+
+#### D84's three quantities, re-derived for this camera
+
+D84 names three quantities that re-derive `presenceMin` on a new rig — the idle stand, the worst
+approach, the quietest card. **The pipeline that produced the table below reproduces D84's own
+published figures exactly** (its two bare-stand fires at `dBase` 9.07 and 9.10, and its quietest
+card at 32.53), which is what licenses the rest of it.
+
+| quantity | 2026-09-01 rig | 2026-09-11 rig | `presenceMin` = 16.0 |
+|---|---|---|---|
+| **1. the idle stand** | 2.01–2.18 | **1.41–1.55** (p99 6.45, max 19.96 over 5,436 frames) | 10× clear at the median |
+| **2. the worst approach** | 11.15 (D84's) | **NOT MEASURABLE FROM THESE TRACES** — bounded at 12–23 | **straddled** |
+| **3. the quietest card** | 32.53 | **25.81** (median 107.67 over 578 fires) | 1.6× clear at worst |
+
+**Quantity 2 is the honest gap and it is the reason step 3 of the protocol still needs a person.**
+On the 2026-09-01 rig the hand took about two seconds to arrive and the ramp is legible frame by
+frame. On the 2026-09-11 rig **the whole hand-to-card ramp is four to six frames, about 200 ms** —
+under the trace's 1 Hz keyframe grid — so nothing in the file separates the hand from the card,
+and the contact sheet of every session's approach shows no frame that is unambiguously a bare
+plate with a hand over it. The per-frame `dBase` bounds it at **12 to 23**, which **straddles 16.0
+rather than sitting under it**. What keeps this from being D84's defect returning is that a
+200 ms ramp cannot settle: the settle rule is doing the work on this rig, not presence. **That is
+a fact about this feeder's speed and not a margin, so it is measured again at the rig, by eye,
+whenever the feed changes.**
+
+The two rigs are not the same picture and the contact sheet says so plainly: 2026-09-01 is a
+dark textured stand with a specular hot-spot (plate level 74–77), 2026-09-11 is a **bright white
+plate with a dark card landing on it** (plate level 128–218). The second arrangement is much the
+better one — cards read `dBase` 26–128 against 9–45 — **and it is also what makes the exposure
+row above bite hardest**, because an exposure step costs luma levels in proportion to the plate's
+own level. With exposure locked that trade does not exist, and the bright plate is pure gain.
+
+**Clipping has headroom on cards and almost none on the plate.** Card frames put **0.00–0.22%**
+of cells at 250 or above on the twelve newest sessions (against 1.89% and 0.97%, worst frame
+16.4%, on the 2026-08-23 pair). The plate itself reaches a bright quantile of 255 on **0.1–2.9%**
+of frames in five sessions, so an exposure step DOWN is fully visible and a step UP is partly
+absorbed — one more reason not to leave the decision to the camera.
+
+**One thing the corpus cannot settle, and it is named rather than glossed.** Every drift figure
+here is measured on stretches where nothing was moving, and **auto exposure only steps when the
+scene changes** — which on this rig is exactly when a card is in flight and `d` is dominated by
+the card. So these traces bound the drift of whatever the body was set to; they cannot prove the
+body was in manual. **Step 2 of the checklist is what decides that**, and it takes thirty seconds.
+
+#### The rig checklist — one sitting, before the next feeder run
+
+Cost: about fifteen minutes, one box of expendable commons, and it ends with a saved trace.
+Steps 1 to 4 are the camera; 5 to 7 are what only the rig can answer.
+
+1. **Set the body, movie side, in this order.** `MENU → Movie2 → Exposure Mode → Manual
+   Exposure`. Then on the body: **shutter 1/60**, **aperture** wherever the lamp allows,
+   **ISO a fixed number** — raise the lamp until a fixed ISO gives a correct exposure rather
+   than raising ISO to meet the lamp. Then `MENU → Camera Settings1 → Focus Mode → Manual
+   Focus`, `MENU → Camera Settings2 → SteadyShot → Off`, and white balance to a **preset or
+   Custom WB**. Leave Creative Style and Picture Profile wherever they are; only stop changing
+   them.
+2. **Prove the exposure is locked, which the traces cannot.** With the stand empty, sweep your
+   hand right through the frame and out again, twice. Watch `typ` on the HUD. **If `typ` and the
+   plate's own brightness come back to where they were within a frame or two, exposure is
+   locked**; if the picture visibly re-levels after your hand leaves, the body is still in an
+   auto mode and step 1 did not take.
+3. **Set 30p and confirm it arrived.** `MENU → Setup → 4K Output Select → HDMI Only(30p)` — the
+   camera must be in movie mode with the Cam Link connected for the item to be selectable. Then
+   arm, take a ten-second trace of nothing, and run `scripts/score-trace.py camera <trace>`: the
+   `delivery` line must read **30 fps and a modal gap near 33.4 ms**. If it still reads 24, the
+   body did not take the setting and everything after this step is being measured at the old rate.
+4. **Read the plate.** The same `camera` output prints the plate level and what one exposure step
+   would have cost on it. That row is now hypothetical — it is the size of the mistake step 1
+   prevents — and it is the number to quote if anyone proposes putting the body back in `P`.
+5. **The frame-rate question the corpus could not answer.** Feed one hopper at 30p with no box
+   selected, then one at 24p, and compare `fires` and `stall` between them. The prediction is
+   more fires and fewer stalls at 30p, because a card rests two to four frames at 24 and three
+   must fill `stillWindow`. **The counter-risk is doubles**, which the offline proxy put at
+   +8 for +11 fires, so **count the doubles by hand on this run** — it is the only place they
+   can be counted honestly.
+6. **The approach, by eye, because quantity 2 above has no other instrument.** Stand empty and
+   armed, reach in as if placing a card and stop short — do not put one down. Watch `dbase`
+   against `floor`. It must not reach 16 while your hand alone is in frame. **If it does, that is
+   the number to raise**, and it is the one quantity in this file no session statistic measures.
+7. **Then a 50-card run**, box selected, and save the trace before disarming. Reconcile `fires`
+   against records, `rescue` against the roughly one-in-nine of section 7, and `stall` against
+   cards you had to re-feed. Run `camera` on it last: `delivery` says whether 30p held under
+   load, and the drop share is the number to watch — the corpus's worst session dropped **4.95%**
+   of its frames and was one of the four carrying live stalls.
+
+**What this section is: SPECIFIED and RECORDED. Nothing in it is BUILT — no parameter in
+`motion.ts` moves — and nothing in it is VALIDATED at the rig.** Every figure is arithmetic over
+recordings, which is exactly as far as a trace can go, and the checklist above is the part that
+is owed.
 
 ## 5. Known limits, and what this deliberately does not do
 
