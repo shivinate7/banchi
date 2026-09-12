@@ -3082,6 +3082,68 @@ test('a card whose row carries a name is addressed by the name, stamp and all', 
   )
 })
 
+/* AND A NAME THAT NAMES NO PHOTOGRAPH FALLS BACK TO THE SLOT (D172's four shapes).
+ *
+ * THE CASE ABOVE SAYS THIS IN A COMMENT AND NOTHING ASSERTED IT, which is the shape this repo
+ * refuses: a claim with no reader has no way of ever being contradicted. A mutation arm that
+ * replaced `server.ts:PHOTO_CID.test(cid)` with `true` left all 100 tests green.
+ *
+ * THE ASYMMETRY THAT MAKES IT REACHABLE IS ON THE WIRE, and it is deliberate on both sides.
+ * `_copy_row` filters — it sends `cid` only when `photos.is_photo_cid` — but `_card_row` is
+ * `asdict(card)` and `_card_summary` names the field outright, so an `InventoryCard` carries
+ * the RAW name including `moved:<hex>` on a D83 tombstone and `nophoto:<key>@<stamp>` on a
+ * record `emit` created for a position no camera ever saw. Two of D172's four shapes name no
+ * file at all, and `photos.path` REFUSES to compose one from them — so a client that sent them
+ * to `/photo/by-card/` would ask for a photograph that cannot exist, and the operator would
+ * get a broken image on the walk rather than the card they are standing at.
+ *
+ * SO `PHOTO_CID` IS LOAD-BEARING RATHER THAN DEFENSIVE, and it is the client's half of a
+ * predicate the server spells `is_photo_cid`. This is what goes red when it stops matching. */
+test('a name that names no photograph falls back to the slot address', async ({ page }) => {
+  /* Both shapes that name no file, against one that does — because a guard tested on one
+     rejection is a guard that might be testing the prefix rather than the shape. */
+  const TOMBSTONE = 'moved:3f5a1c7e9b0d2468ace13579bdf02468ace13579bdf02468ace13579bdf02468'
+  const NOPHOTO = 'nophoto:2/2@2026-08-22T12:34:00+00:00'
+  const SHAPED: Cards = {
+    ...CARDS,
+    '2/1': card({
+      index: 1,
+      state: 'identified',
+      name: 'Thievul',
+      sku: '8937370',
+      section: 1,
+      sectionStart: 1,
+      sectionEnd: 3,
+      cid: TOMBSTONE,
+    }),
+    '2/2': card({
+      index: 2,
+      state: 'identified',
+      name: 'Nickit',
+      sku: '8937371',
+      section: 1,
+      sectionStart: 1,
+      sectionEnd: 3,
+      cid: NOPHOTO,
+    }),
+  }
+
+  await open(page, BOXES, { cards: SHAPED, search: (query) => searchAnswer(query, SHAPED) })
+  await expandAll(page)
+
+  await page.locator('.browse-row', { hasText: 'Thievul' }).first().click()
+  await expect(page.locator('.browse-photo')).toHaveAttribute(
+    'src',
+    /\/photo\/2\/1\?card=cap-1$/,
+  )
+
+  await page.locator('.browse-row', { hasText: 'Nickit' }).first().click()
+  await expect(page.locator('.browse-photo')).toHaveAttribute(
+    'src',
+    /\/photo\/2\/2\?card=cap-2$/,
+  )
+})
+
 test('a sold or retired card is not offered the mid-box delete at all', async ({ page }) => {
   await open(page)
 

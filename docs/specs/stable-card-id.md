@@ -383,6 +383,27 @@ same observable outcome, so no single-arm mutation could see either. The link ta
 distinguishes the first; the second is provoked by making `os.link` land different bytes, which
 is not a contrivance but the exact fault it is for.
 
+**AND THREE MORE ON THE CLIENT, WHERE THE SURVIVOR WAS THE POINT.** `app/tests/
+inventory.spec.ts` gets one case asserting the by-card address, and both halves of it are
+mutation-tested against the whole spec: deleting `photoUrl`'s by-card branch fails **exactly
+that one test** of 100, and deleting the `?card=` stamp `BoxBrowse` appends fails **three**,
+which is the right answer — that stamp is what survives a D26 re-shoot, because the name is
+frozen and the by-card response is `immutable` for a year with an ETag that is the name's own
+hex, so when the bytes change neither the URL, the lifetime nor the validator moves.
+
+**THE THIRD AROSE FROM A CLAIM THE CASE MADE IN A COMMENT AND NOBODY ASSERTED**, which is the
+shape this repo refuses: replacing `server.ts:PHOTO_CID.test(cid)` with `true` left **all 100
+green**. The asymmetry that makes it reachable is on the wire and is deliberate on both sides
+— `_copy_row` filters, sending `cid` only when `photos.is_photo_cid`, while `_card_row` is
+`asdict(card)` and `_card_summary` names the field outright, so an `InventoryCard` carries the
+RAW name including `moved:<hex>` on a D83 tombstone and `nophoto:<key>@<stamp>` on a record
+`emit` created for a position no camera ever saw. Two of the four shapes name no file at all
+and `photos.path` REFUSES to compose one from them, so a client that sent them would ask for a
+photograph that cannot exist and the operator would get a broken image on the walk. `PHOTO_CID`
+is therefore load-bearing rather than defensive — the client's half of a predicate the server
+spells `is_photo_cid` — and it has a reader now, over both shapes rather than one, because a
+guard tested on a single rejection might be testing the prefix rather than the shape.
+
 **RECORDED** — this file, §0 in particular, and the decision entry. The shard width, the
 `(size, mtime_ns)` re-stat and the refusal's new home are decisions with arguments here and
 nowhere else.
