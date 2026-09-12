@@ -479,7 +479,9 @@ make silent-write-selftest  # that guard, proved by REPRODUCING the incident: a 
                     #   a genuinely absent path pass.
                     #   `PKMNSCAN_LINK=off`.
                     #   A POLLING LOOP is refused twice over: a `while`/`until` whose condition
-                    #   polls a PATTERN (`pgrep`, `pkill`, `lsof`, `ps -ef`), and a BACKGROUNDED
+                    #   polls a PATTERN (`pgrep`, `pkill`, `lsof`, `ps -ef`) — which matches
+                    #   every process whose command line NAMES it and so cannot know what it
+                    #   matched — and a BACKGROUNDED
                     #   loop with no counter, no deadline and no pid — including one inside a
                     #   shell script the command merely names, which is READ. On 2026-09-12 a
                     #   `pgrep` waiter never fired and a backgrounded driver ran 119 rounds over

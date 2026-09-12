@@ -470,8 +470,14 @@ refuses "a \`ps -ef\` pattern poll"   "$tmp/main" "while ps -ef | grep -q drive.
 refuses "an \`lsof\` poll"            "$tmp/main" "until lsof -ti tcp:5173; do sleep 2; done"
 
 judge "$tmp/main" "until ! pgrep -f drive.sh; do sleep 5; done"
-case "$out" in *"matches this loop's own"*) ok "the refusal explains the self-match" ;;
+case "$out" in *"command line NAMES it"*) ok "the refusal explains that the pattern is not the process" ;;
   *) bad "the refusal does not explain why the loop never fires" ;; esac
+# AND IT DOES NOT ASSERT THE PLATFORM'S ANSWER. The arm above this file's own reproduction
+# measured BSD `pgrep` excluding its ancestors, so a refusal claiming the waiter matches
+# ITSELF would be wrong here — and a refusal a session can disprove in one command is one it
+# learns to argue with. The refusal names the dependency instead.
+case "$out" in *"platform-dependent"*) ok "and names the platform dependency rather than asserting past it" ;;
+  *) bad "the refusal asserts a self-match this platform does not produce" ;; esac
 case "$out" in *"PKMNSCAN_WAIT=off"*) ok "the refusal prints its escape hatch" ;;
   *) bad "the refusal does not name PKMNSCAN_WAIT=off" ;; esac
 case "$out" in *"make coordinator"*) ok "the refusal names what to do instead" ;;

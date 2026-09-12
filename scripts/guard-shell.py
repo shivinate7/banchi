@@ -892,17 +892,30 @@ def clause_wait(reading: "shell_parse.Reading", command: str, cwd: str,
         if poller:
             refusals.append(Refusal("wait", [
                 "  {0}".format(shell_parse.short(loop.text)),
-                "      the condition polls a PATTERN with `{0}`, and `{0}` matches this "
-                "loop's own".format(poller),
-                "      command line — so the condition never goes false and whatever is "
-                "chained",
-                "      after the loop never runs.",
+                "      the condition polls a PATTERN with `{0}`, which matches every process "
+                "whose".format(poller),
+                "      command line NAMES it — an editor with that file open, a `grep` for "
+                "it, this",
+                "      session's own wrapper for this very command, a second copy of the "
+                "thing you",
+                "      are waiting for. The pattern is not the process, so the condition can "
+                "stay",
+                "      true long after the work has finished and whatever is chained after "
+                "the loop",
+                "      never runs.",
+                "      (And WHICH of those matches is platform-dependent: BSD `pgrep` "
+                "excludes itself",
+                "      and its own ancestors unless `-a` is given, so the answer depends on "
+                "the process",
+                "      tree your harness happens to build. That is the argument, not a "
+                "detail.)",
                 "",
                 "  On 2026-09-12 a session that had read that rule four days earlier wrote",
                 "  `until ! pgrep -f 'scratchpad/drive.sh'`. The loop never fired, a second "
                 "copy of",
                 "  the driver raced a live one for ~15 minutes, and the owner caught it.",
-            ] + _WAIT_ADVICE, "BLOCKED: a polling loop over a pattern matches itself."))
+            ] + _WAIT_ADVICE, "BLOCKED: a polling loop over a pattern cannot know what it "
+                              "matched."))
             continue
         if outliving and not _bounded(loop):
             refusals.append(Refusal("wait", [
