@@ -171,7 +171,7 @@ make design-check   # DESIGN.md's Fulfillment floors, asserted in a browser. IT 
                     #   worker each — `PW_ARGS="--shard=1/3 --workers=1"` — because one runner
                     #   ran all 481 cases on one worker in 15 minutes; on the rig it is for one
                     #   spec (`PW_ARGS=tests/brand.spec.ts`). NEVER RAISE THE WORKER COUNT TO GO
-                    #   FASTER: docs/DEBTS.md §11's one-in-thirteen red has "the suite around
+                    #   FASTER: docs/DEBTS.md §8's one-in-thirteen red has "the suite around
                     #   it" as its only known mechanism.
                     #   AND IT LEAVES A VERDICT, WHICH IS HOW A SESSION WAITS FOR IT. 89-175s
                     #   measured across five runs, against a 120s tool timeout — so a session
@@ -490,7 +490,7 @@ make merge          # merge a PR and move main onto it — BOTH HALVES, on your 
                     #   that commit's checks to completion before merging — so nothing main has
                     #   never run CI over reaches main.
                     #   THE WAIT NAMES THE COMMIT, AND AN ANSWER IT HAS NOT GOT IS NEVER A PASS
-                    #   (D-wait-names-the-commit). It polls that SHA's own check runs —
+                    #   (D148). It polls that SHA's own check runs —
                     #   `repos/{owner}/{repo}/commits/<sha>/check-runs` — and concludes only on
                     #   a roster that is NON-EMPTY, complete, no smaller than the parent commit's,
                     #   and unchanged across two reads. An empty answer, an unreadable one and a
@@ -1445,6 +1445,27 @@ apostrophes in names) live in the `tcgplayer-csv` skill. It loads on demand.
   remote, and every session cut from main is already on a different history by then. The
   `reference-transaction` hook is the only thing that sees that. So: the remote gate is real
   now and the local one is still the only cover for the local half.
+
+  **TWO STATUS CHECKS ARE REQUIRED AS OF 2026-09-11, AND NO APPROVAL IS** (D42 amended again).
+  `check` and `revert-guard` are required contexts on `main`; `strict` is false, so a branch is
+  not forced to be up to date with main before it merges; and
+  `required_approving_review_count` is **0** — a pull request is required, a REVIEW is not. So
+  a red `check` blocks the merge server-side, which is the half D136 left flagged as the
+  owner's to do rather than a session's.
+
+  **THE BROWSER MATRIX IS DELIBERATELY NOT REQUIRED, AND ITS NAMES ARE WHY IT COULD NOT BE
+  SAFELY.** `design-check` reports as `design-check (1..3)` when the matrix runs and as a single
+  `design-check` when `browser-scope` skips it (D141), so **neither name is present in both
+  shapes** and requiring either one would block every run of the other shape. `design-check-passed`
+  IS present in both — and it is `needs: design-check` under an implicit `success()`, so a FAILED
+  shard makes it `skipped`, and **a skipped required check is satisfied.** Requiring it would
+  install a gate that is green precisely when the browser suite is red.
+
+  **The owner has separately ruled against gating on the browser suite at all**, on the ground
+  that `docs/DEBTS.md` section 8's flake rate would teach reaching for `--admin` — and a habit of
+  `--admin` takes the two required checks down with it, which is the same argument this file
+  already makes about `core.hooksPath` and the three opsec rules.
+
 ## Working agreement
 
 - Run `make harness` before you tell me something works. Show me the output, not a claim.
@@ -1657,7 +1678,8 @@ D144  A card that will not settle is photographed off the quietest frame it mana
 D145 A box has an index nobody sees, because the number on the drawer is a label and a label may be reused
 D146 Two agreeing signals release the rarity claim, and the same comparison run backwards is a review reason
 D147 The claim is spent on the oldest copies, because a card captured tonight was in no file sent last week
-D-wait-names-the-commit The wait is about the claim commit, and an answer it has not got is never a pass
+D148 The wait is about the claim commit, and an answer it has not got is never a pass
+D149 A section number that resolves is not a citation that is right, and no check can read what a sentence is about
 D-the-merge-refuses-a-stale-half The merge is run by a checkout, so the checkout is asked whether it is current, and main is read for a slug the moment it moves
 
 ```
