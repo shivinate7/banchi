@@ -1385,7 +1385,7 @@ test('a run predating the box field still finds its box from its scope, and is g
   /* THE FALLBACK, NARROWED TO THE ONE ARM THAT IS NOT A GUESS. `boxOf` read three sources in
      order: the server's `box`, the manifest's `scope.box`, and — last — `/box(\d+)/` over the
      capture directory. THE PATH ARM IS DELETED on both sides of the wire
-     (D-a-selection-of-cards), because it is confidently WRONG on two of the operator's own
+     (D180), because it is confidently WRONG on two of the operator's own
      runs: `2026-09-02-box6-01`'s 65 cards are all in box 3 today and `2026-08-29-box1-01`'s 99
      are too, while the regex answers 6 and 1. A number read off a folder is a guess that
      RESOLVES, which is the one kind of wrong nothing downstream can catch.
@@ -1414,7 +1414,7 @@ test('a run predating the box field still finds its box from its scope, and is g
 test('a run that names no drawer at all draws none, rather than a number off a folder', async ({
   page,
 }) => {
-  /* THE DELETION, ASSERTED (D-a-selection-of-cards). A run whose manifest carries neither a
+  /* THE DELETION, ASSERTED (D180). A run whose manifest carries neither a
      `box` on the wire nor a `scope` block used to be placed by parsing its capture directory's
      name. It draws NO drawer now.
 
@@ -1443,7 +1443,7 @@ test('a run that names no drawer at all draws none, rather than a number off a f
 
 // ------------------------------------------------------------------- several drawers
 //
-// THE CART IS GONE AND THE CAPABILITY IS NOT (D-a-selection-of-cards, overtaking D48). That
+// THE CART IS GONE AND THE CAPABILITY IS NOT (D180, overtaking D48). That
 // entry made a send a cart of boxes, one detached child per drawer, each with its own reading.
 // It also named its own reopening condition — *"a cart that is never used with more than one
 // box"* — and the measurement does NOT meet it: on 2026-09-01 the operator sent boxes 3, 4 and

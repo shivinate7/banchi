@@ -118,7 +118,7 @@ def build_parser() -> argparse.ArgumentParser:
         help="every photograph in the store. Required to say so: with no paths and no "
         "selection flag this command refuses rather than submitting everything.",
     )
-    # ------------------------------------------------------- the selection (D-a-selection-of-cards)
+    # ------------------------------------------------------- the selection (D180)
     #
     # ONE OBJECT, AND `pipeline/selection.py` IS THE READER FOR BOTH SURFACES. Every flag here
     # is a name the store already has for a group of cards, and every one NARROWS — so the order

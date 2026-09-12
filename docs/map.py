@@ -374,7 +374,7 @@ COMPONENTS = [
                                     "that were wearing one name, and the fill has fired on 0 of "
                                     "2,535 real captures.",
                             "governed_by": ["D1", "D3", "D9", "D21", "D25", "D36", "D48", "D86",
-                                            "D87", "D100", "D145", "D-a-selection-of-cards"],
+                                            "D87", "D100", "D145", "D180"],
                             "tested_by": ["T7"]},
             "cmd_scan.py": {"does": "read the QR codes off a directory of code-card photos into "
                                     "the ledger. FREE — no model call, no network, no money gate "
@@ -405,7 +405,7 @@ COMPONENTS = [
                                         "second copy of it.",
                                 "governed_by": ["D1", "D2", "D21", "D23", "D33", "D36", "D43",
                                                 "D48", "D145", "D163", "D165", "D174",
-                                                "D-a-selection-of-cards"]},
+                                                "D180"]},
             "cmd_join.py": {"does": "resolve identifications against the export; --dry-run previews. "
                                     "SEEDS inventory/prices.json's rule and basis on the first "
                                     "join of an EMPTY corpus and never reassigns them (D49, D86) "
@@ -927,7 +927,7 @@ COMPONENTS = [
                                      "by a comment in each pointing at the other.",
                              "governed_by": ["D10", "D21", "D22", "D33", "D36", "D39", "D43",
                                              "D48", "D56", "D58", "D65", "D76", "D145", "D165",
-                                             "D174", "D-a-selection-of-cards"],
+                                             "D174", "D180"],
                              "tested_by": ["T7"]},
             "merge.py": {"does": "one import file over several runs: the copies union, deduped "
                                  "on (box, index), and any cap the send asked for spent ONCE "
@@ -3311,7 +3311,7 @@ COMPONENTS = [
                         "Its own module because it is the one part of this server that can "
                         "cost money: everything in capture_server.py still holds no key, "
                         "opens no socket and starts no child. A SEND IS ONE SELECTION "
-                        "(D-a-selection-of-cards, overtaking D48): both money routes take "
+                        "(D180, overtaking D48): both money routes take "
                         "`{state?, box?, bid?, section?, game?, since?, keys?, run?, paths?}` "
                         "— `box` is a TERM and accepts one drawer or several — a bare "
                         "`{box: N}` still resolves as box N with no migration, the response "
@@ -3374,7 +3374,7 @@ COMPONENTS = [
                                 "D58", "D59", "D62", "D64", "D65", "D68", "D76", "D78",
                                 "D79", "D86", "D87", "D88", "D89", "D100", "D103", "D105",
                                 "D134", "D137", "D145", "D147", "D156", "D159", "D163", "D165",
-                                "D166", "D168", "D170", "D174", "D-a-selection-of-cards"],
+                                "D166", "D168", "D170", "D174", "D180"],
                 "tested_by": ["T7"],
             },
             "shipping_routes.py": {
@@ -3991,7 +3991,7 @@ COMPONENTS = [
                                               "D61", "D62", "D63", "D64", "D65", "D68", "D69",
                                               "D70", "D73", "D76", "D79", "D83", "D86", "D87",
                                               "D89", "D90", "D91", "D92", "D100", "D103",
-                                              "D168", "D174", "D-a-selection-of-cards",
+                                              "D168", "D174", "D180",
                                               "D104", "D113", "D116", "D132", "D134"]},
             "src/demoFlag.d.ts": {"does": "declares `__BN_DEMO__`, the build-time demo flag "
                                           "`vite.config.ts` substitutes with a boolean "
@@ -4060,7 +4060,7 @@ COMPONENTS = [
                                              "D79", "D83", "D86", "D87", "D89", "D91", "D92",
                                              "D93", "D100", "D103", "D104", "D113", "D115",
                                              "D116", "D132", "D134", "D147",
-                                             "D159", "D174", "D-a-selection-of-cards"]},
+                                             "D159", "D174", "D180"]},
             "src/deviceMemory.ts": {"does": "every `localStorage` key the shell owns — the "
                                             "theme, the rail, which order statuses this "
                                             "device bothers fetching (D114), whether the "
@@ -4904,7 +4904,7 @@ COMPONENTS = [
                                      "one fill is the spend button inside the panel.",
                              "governed_by": ["D5", "D33", "D38", "D39", "D100", "D103", "D104",
                                              "D105", "D117", "D118",
-                                             "D-a-selection-of-cards"]},
+                                             "D180"]},
             # ---- the runs screen's parts (Banchi, 2026-09) ----
             "src/RunsStage.tsx": {"does": "WHERE A RUN IS, in one vocabulary for the list, the "
                                           "run panel and Home. The server says which of the four "
@@ -4938,7 +4938,7 @@ COMPONENTS = [
                                              "picked, a reading changed — because a confirm whose "
                                              "first step described a different send is not a "
                                              "confirm. ONE PRESS, ONE SELECTION, ONE RUN "
-                                             "(D-a-selection-of-cards, overtaking D48): stage 1 "
+                                             "(D180, overtaking D48): stage 1 "
                                              "is a selection builder — a start (everything that "
                                              "needs it, drawers, the ticked cards, a previous "
                                              "run's cards) and narrowings that cut across it "
@@ -4961,7 +4961,7 @@ COMPONENTS = [
                                      "governed_by": ["D13", "D27", "D32", "D33", "D39", "D48",
                                                      "D52", "D56", "D58", "D65", "D76", "D94",
                                                      "D114", "D118", "D145", "D174",
-                                                     "D-a-selection-of-cards"]},
+                                                     "D180"]},
             "src/RunsLog.tsx": {"does": "a command's stdout, verbatim, in a well that follows its "
                                         "tail, counts its lines, folds and copies. NOTHING HERE "
                                         "SUMMARISES WHAT A COMMAND SAID — D33 puts every "
@@ -5615,7 +5615,7 @@ COMPONENTS = [
                                         "It replaced a second implementation of "
                                         "server/pipeline_routes.py:_run_box written in TypeScript "
                                         "with a differently-anchored regex — AND IT IS DELETED "
-                                        "on both sides now (D-a-selection-of-cards), because it "
+                                        "on both sides now (D180), because it "
                                         "is confidently wrong on two of the operator's own runs: "
                                         "2026-09-02-box6-01's 65 cards are all in box 3 today and "
                                         "2026-08-29-box1-01's 99 are too, while the regex answers "
@@ -5627,7 +5627,7 @@ COMPONENTS = [
                                 # D20 is the name and its optionality; D10 ruling 3 is the deleted
                                 # box whose number a run still remembers; D56 is the entry.
                                 "governed_by": ["D145", "D10", "D20", "D56", "D142",
-                                                "D-a-selection-of-cards"]},
+                                                "D180"]},
             "src/money.ts": {"does": "A DOLLAR AMOUNT, SAID THE SAME WAY EVERYWHERE — `money` and "
                                      "`roundsToNothing`. Extracted from src/RunsComposer.tsx "
                                      "unchanged on 2026-09-11, when the run panel began "
@@ -6242,7 +6242,7 @@ COMPONENTS = [
                 # D1 is the two-phase split the four steps make visible; D3 is the ladder the
                 # join walks; D9 is the pricing answer that gates emit;
                 # D31 is why this is a panel on #/inventory rather than a seventh route.
-                "governed_by": ["D145", "D36", "D1", "D3", "D9", "D13", "D20", "D31", "D32", "D33", "D39", "D48", "D54", "D56", "D64", "D65", "D49", "D76", "D166", "D174", "D57", "D118", "D136", "D-a-selection-of-cards"],
+                "governed_by": ["D145", "D36", "D1", "D3", "D9", "D13", "D20", "D31", "D32", "D33", "D39", "D48", "D54", "D56", "D64", "D65", "D49", "D76", "D166", "D174", "D57", "D118", "D136", "D180"],
                 "note": "THE PIPELINE WAS THE LARGEST INSTANCE OF THE ROUTE-IS-NOT-A-FEATURE "
                         "FAILURE AND NOBODY HAD COUNTED IT. The four commands have existed "
                         "since step 4 and have been through a 53-card run and a 544-card run; "

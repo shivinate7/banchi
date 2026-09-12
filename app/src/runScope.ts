@@ -34,7 +34,7 @@ import type { RunSummary } from './types'
 export function boxOf(row: RunSummary): number | null {
   if (typeof row.box === 'number') return row.box
   if (row.scope != null) return row.scope.box
-  /* THE PATH ARM IS GONE FROM BOTH SIDES OF THE WIRE (D-a-selection-of-cards).
+  /* THE PATH ARM IS GONE FROM BOTH SIDES OF THE WIRE (D180).
      `/box(\d+)/` over the capture directory was this file's copy of
      `server/pipeline_routes.py:_run_box`'s fallback, and deleting the server's while leaving
      this one would have put the same wrong answer back one layer out. It is wrong on two of

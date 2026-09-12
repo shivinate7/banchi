@@ -11294,7 +11294,7 @@ def check_run_binds_to_bid(checks: Checks) -> None:
     older inference rule decided every one of them. This asserts the CLI half, which was the
     last creation path that could still produce a run nobody can bind.
 
-    THERE IS ONE DERIVATION NOW AND THIS CASE DRIVES IT (D-a-selection-of-cards). The message
+    THERE IS ONE DERIVATION NOW AND THIS CASE DRIVES IT (D180). The message
     below used to read *"the shape `_resolve_scope` writes on the route"* about a call into the
     CLI's own copy — two implementations of one block, asserted to agree by prose in each
     pointing at the other. `pipeline/selection.py:scope_block` is the single reader and both
@@ -15949,7 +15949,7 @@ def check_crop_preview(checks: Checks) -> None:
             "one route above the one that does, and it is fired on every chip press and every "
             "press of an arrow key",
         )
-        # AND IT WROTE NOTHING ANYWHERE, WHICH IS NEW AND IS COUNTED (D-a-selection-of-cards).
+        # AND IT WROTE NOTHING ANYWHERE, WHICH IS NEW AND IS COUNTED (D180).
         #
         # THIS ROUTE BUILT EVERY SCOPE DIRECTORY ON THE OPERATOR'S CHECKOUT. Measured
         # 2026-09-12: 264 of them under `.scopes/`, and 264 of 264 are named `box<n>-1-<stamp>`
@@ -17681,7 +17681,7 @@ def check_pipeline_routes(checks: Checks) -> None:
 
             # -------------------------------------------- NO DIRECTORY IS BUILT, EVER
             #
-            # THE WORK, NOT THE OUTCOME (D-a-selection-of-cards). `_resolve_scope` built a
+            # THE WORK, NOT THE OUTCOME (D180). `_resolve_scope` built a
             # directory of symlinks per ticked selection — `.scopes/box3-<n>-<stamp>` — because
             # `identify` took a path and a subset is not one. Every assertion in this file about
             # what the preview and the preflight ANSWERED stayed green throughout: the old shape
@@ -18398,7 +18398,7 @@ def check_pipeline_routes(checks: Checks) -> None:
             )
 
             # AND A RUN WITH NEITHER NAMES NO DRAWER, WHICH IS THE DELETION
-            # (D-a-selection-of-cards). `_run_box` used to parse `^box(\d+)` off the capture
+            # (D180). `_run_box` used to parse `^box(\d+)` off the capture
             # directory's basename for exactly this run, and it was CONFIDENTLY WRONG twice on
             # the operator's store: `2026-09-02-box6-01`'s 65 cards are all in box 3 today and
             # `2026-08-29-box1-01`'s 99 are too, while the regex answers 6 and 1. Box 6 has

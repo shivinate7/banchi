@@ -1,4 +1,4 @@
-## D-a-selection-of-cards — A press names the cards it is over, and the drawer is one of the names
+## D180 — A press names the cards it is over, and the drawer is one of the names
 
 **The box stops being the unit of work. `POST /pipeline/identify` and `pkmnscan identify` take ONE SELECTION — a set of terms, each of which narrows a set of cards — and the drawer is a term in it rather than the thing a run is made of.** Built 2026-09-12. **This OVERTAKES D48**, on the owner's word, and the rot in that entry is documented below rather than deleted.
 
