@@ -874,6 +874,41 @@ def games_claimed(export: tcgcsv.Export) -> Tuple[str, ...]:
     )
 
 
+def _by_recorded_digest(run: runs.Run, missing: Path) -> Optional[Path]:
+    """The file this run recorded, found by its DIGEST under `inventory/.exports/`.
+
+    NEVER A GUESS AND NEVER A SUBSTITUTE (D-exports-by-game). It answers only with a file
+    whose FULL sha256 equals the one the manifest recorded for this exact path, so it cannot
+    quietly join a run against a newer reading — which is the whole hazard of exports moving
+    into a directory several runs share. A run that finds nothing carrying its digest refuses
+    exactly as before; this recovers the file, it does not choose one.
+
+    WHAT IT IS FOR: the manifest's `path` is the only link from a run to its export now that
+    the file is not inside the run, and a path is the half of that record which can go stale.
+    The digest is the half that cannot.
+    """
+    recorded = run.manifest.get("exports")
+    if not isinstance(recorded, dict):
+        return None
+    wanted = next(
+        (
+            str(source.get("sha256") or "")
+            for source in recorded.values()
+            if isinstance(source, dict) and Path(str(source.get("path") or "")) == missing
+        ),
+        "",
+    )
+    if len(wanted) != 64:
+        return None
+    root = files.inventory_dir() / files.EXPORTS_DIRNAME
+    if not root.is_dir():
+        return None
+    for candidate in sorted(root.glob(f"*/*-{wanted[:8]}.csv")):
+        if candidate.is_file() and runs.sha256_of(candidate) == wanted:
+            return candidate
+    return None
+
+
 def exports_for(
     run: runs.Run, overrides: Optional[Sequence[str]]
 ) -> ExportPlan:
@@ -925,21 +960,34 @@ def exports_for(
     needed = _games_needed(run)
     claimed_by: Dict[str, List[Path]] = {}
     lines_of: Dict[Path, Tuple[str, ...]] = {}
-    for path in distinct:
+    for index, path in enumerate(distinct):
         if not path.is_file():
-            recorded = (
-                ""
-                if overrides
-                else " — this run's manifest recorded it there and it has since moved or "
-                "been deleted"
-            )
-            raise runs.RunError(
-                f"export not found: {path}{recorded}. Pass --export <filtered-export.csv> "
-                f"to name another file, or fetch a fresh one on #/runs (Fetch from "
-                f"TCGplayer), which writes it into the run directory where it cannot go "
-                f"missing.\n"
-                f"Nothing was joined, nothing was written, and no queue was touched."
-            )
+            # THE DIGEST IS WHAT SURVIVES A MOVE, AND RECORDING IT IS WHY (D-exports-by-game).
+            # A fetched export lives in `inventory/.exports/<game>/` now rather than inside the
+            # run, so the manifest's path is the only link back to it — and a shared directory
+            # is exactly where a path CAN change under a run that a run-local copy never
+            # could. The manifest records `sha256` beside `path` for this, and the file's own
+            # NAME carries the first 32 bits of it, so the file is found by the record rather
+            # than by a guess, and the full digest is verified before it is used.
+            found = None if overrides else _by_recorded_digest(run, path)
+            if found is not None:
+                distinct[index] = path = found
+            else:
+                recorded = (
+                    ""
+                    if overrides
+                    else " — this run's manifest recorded it there and it has since moved or "
+                    "been deleted, and no file carrying its recorded digest is under "
+                    "inventory/.exports/"
+                )
+                raise runs.RunError(
+                    f"export not found: {path}{recorded}. Pass --export "
+                    f"<filtered-export.csv> to name another file, or fetch a fresh one on "
+                    f"#/runs (Fetch from TCGplayer), which writes it into "
+                    f"inventory/.exports/<game>/ — kept, never swept, and shared by every "
+                    f"run that joins against it.\n"
+                    f"Nothing was joined, nothing was written, and no queue was touched."
+                )
         export = tcgcsv.read_export(path)
         lines = tcgcsv.product_lines(export)
         lines_of[path] = lines
