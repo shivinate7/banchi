@@ -1095,8 +1095,18 @@ COMPONENTS = [
         "status": "built",
         "does": "the master store: inventory, cache, standing queues, order ledger and the "
                 "history, in one SQLite file since D88",
-        "governed_by": ["D4", "D7", "D9", "D10", "D13", "D15", "D63", "D88", "D89"],
-        "note": "T7 reaches this package as of 2026-08-13 — the allocator, the lock and "
+        "governed_by": ["D4", "D7", "D9", "D10", "D13", "D15", "D63", "D88", "D89",
+                        "D172"],
+        "note": "THE CARD'S STABLE NAME IS SPECIFIED HERE AND NOT BUILT: "
+                "docs/specs/stable-card-id.md plans `cards.cid`, the sha256 of the "
+                "photograph the store held when the id was issued, frozen at issue and "
+                "arriving BESIDE `cards.key` rather than instead of it. Nothing in this "
+                "package carries it today — no column, no migration, no refusal — so the "
+                "decision above governs how db.py and master.py may change and describes "
+                "no code in the tree. Its receipts are real: 2,535 of 2,535 stored digests "
+                "equal the photograph on disk, and the migration, the byte-exact reverse "
+                "and a `-9` kill mid-transaction all ran on `.backup()` copies. "
+                "T7 reaches this package as of 2026-08-13 — the allocator, the lock and "
                 "the atomic replace — and as of 2026-08-22 asserts queues.apply_run "
                 "outright: check_queue_supersede calls it directly rather than watching it "
                 "through a route, which is what earned queues.py its tested_by. cache.py is "
