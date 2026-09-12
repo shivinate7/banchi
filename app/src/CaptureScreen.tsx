@@ -35,6 +35,9 @@ import {
 } from './deviceMemory'
 import type { CaptureSetup } from './deviceMemory'
 import { captureBoxLabel } from './runScope'
+// The one thing this screen takes from the library drawing: how long a pause has to be
+// before it is a different sitting. Imported rather than restated — see `sitting` below.
+import { GAP_MINUTES } from './storeHistory'
 import { Button, Icon, Kbd, Notice, Pill, Stat } from './kit'
 import { toast } from './kit/toast'
 import type { IconName, PillTone } from './kit'
@@ -110,6 +113,14 @@ type Shot = {
   // reason as the other two — the sidebar shows what the NEXT card gets, and the game is
   // the one claim that decides whether this card will ever be identified at all.
   game: GameEntry
+
+  /* WHEN THIS BROWSER TOOK IT — `Date.now()` at the moment the capture response landed, and
+   * the only field here the server has no opinion about. `CardSummary` carries no
+   * `captured_at`, so there is nothing to echo; the store stamps its own in
+   * `store/master.py:record_capture` and this is deliberately not a second copy of that. It
+   * answers one question and it is a question about THIS HAND: which of these shots belong
+   * to the stretch of work still going on. See `sitting` below. */
+  at: number
 }
 
 /** A message the app shows verbatim. `code` is the server's own error code, or null when
@@ -1847,44 +1858,163 @@ export function CaptureScreen() {
   const last = shots.length === 0 ? undefined : shots[shots.length - 1]
 
   
+  /* THIS SITTING: the tail of `shots` after the last gap longer than `GAP_MINUTES`.
+   *
+   * WHY A SITTING AND NOT "SINCE THIS SCREEN LOADED". `shots` is already only what THIS
+   * browser took, so the two agree on every day the owner has ever worked. They part on one
+   * case and it is the cheap one to rule out: a screen left open overnight, where the load
+   * time would count yesterday's drawer as part of this morning's work and offer a card from
+   * it under `U`. One subtraction per shot removes that.
+   *
+   * WHY THIS GAP AND NOT A SECOND ONE. `GAP_MINUTES` is `storeHistory.ts`'s own — the 30
+   * minutes `#/` clusters the library drawing by (D121) — and that file records it as a
+   * measurement rather than a preference: 30, 60, 120 and 240 all give the owner's store the
+   * same answer. A word this product already defines does not get a second definition on one
+   * screen; two definitions of "sitting" is how `#/` and `#/capture` come to disagree about
+   * what the operator just did.
+   *
+   * WHAT IT COSTS ON A RELOAD: the whole sitting. `shots` is memory, so a reload empties it
+   * and the count restarts at zero. That is exactly today's behaviour, unchanged — and the
+   * undo stack's blind arm below is what covers the reload, for the reason its own comment
+   * has always given.
+   *
+   * NOT PER-FRAME WORK. This runs when `shots` changes, which is once per capture — 623 ms
+   * apart at the rig's measured cadence — over a list that is one sitting long (555 at the
+   * owner's longest). The camera and the trigger never touch it. */
+  const sitting = useMemo(() => {
+    const gap = GAP_MINUTES * 60_000
+    let from = 0
+    for (let i = 1; i < shots.length; i += 1) {
+      if (shots[i]!.at - shots[i - 1]!.at > gap) from = i
+    }
+    return shots.slice(from)
+  }, [shots])
+
+  /* THE ODOMETER COUNTS THE SITTING, AND THE SPLIT UNDERNEATH SAYS WHERE IT WENT.
+   *
+   * It counted `shots.filter((shot) => shot.card.box === box)` until 2026-09-12, so changing
+   * the Box field restarted the figure at zero mid-sitting. Measured on the owner's store by
+   * clustering `captured_at` at `GAP_MINUTES`: the 2026-09-01 sitting ran 555 cards in 23.9
+   * minutes across boxes 3 → 4 → 5 and this stat read 394 → 0 → 56 → 0 → 105; the 2026-09-11
+   * sitting ran 536 in 46.2 minutes across boxes 4 and 1 and read 214 → 0 → 322. Two of ten
+   * sittings, 1,091 of 2,535 cards — the figure was wrong for 43% of the store.
+   *
+   * THE SPAN AND THE GAP COUNT STAY IN ONE DRAWER'S INDEX SPACE, because that is the only
+   * space either means anything in: box 3 #394 beside box 4 #1 is not a span of 1–394, it is
+   * two spans, and the subtraction that finds a hole would report 337 of them. `span` is the
+   * CURRENT drawer's within this sitting; `gaps` is summed per drawer, so a hole left behind
+   * in box 3 is still on screen after the hand has moved to box 5 — which the old per-box
+   * figure could not do either.
+   *
+   * `ids` IS COUNTED OVER THE WHOLE SITTING, because a `capture_id` is per photograph: two
+   * shots sharing one is the same defect whichever drawers they landed in. */
   const runCount = useMemo(() => {
-    const mine = box === null ? [] : shots.filter((shot) => shot.card.box === box)
-    if (mine.length === 0) return null
-    const indices = mine.map((shot) => shot.card.index)
-    const low = Math.min(...indices)
-    const high = Math.max(...indices)
-    const ids = new Set(mine.map((shot) => shot.card.capture_id ?? `none:${shot.card.key}`))
+    if (sitting.length === 0) return null
+
+    // One entry per drawer, ordered by when the hand first opened it. A drawer returned to
+    // later is one entry, not two — the split is where the sitting went, not a tape of the
+    // switches.
+    const order: number[] = []
+    const byBox = new Map<number, number[]>()
+    for (const shot of sitting) {
+      const seen = byBox.get(shot.card.box)
+      if (seen === undefined) {
+        byBox.set(shot.card.box, [shot.card.index])
+        order.push(shot.card.box)
+      } else {
+        seen.push(shot.card.index)
+      }
+    }
+
+    let gaps = 0
+    const drawers = order.map((which) => {
+      const indices = byBox.get(which)!
+      const low = Math.min(...indices)
+      const high = Math.max(...indices)
+      gaps += high - low + 1 - new Set(indices).size
+      return { box: which, shots: indices.length, low, high }
+    })
+
+    const ids = new Set(sitting.map((shot) => shot.card.capture_id ?? `none:${shot.card.key}`))
+    const here = box === null ? undefined : drawers.find((drawer) => drawer.box === box)
+
     return {
-      shots: mine.length,
-      low,
-      high,
-      gaps: high - low + 1 - new Set(indices).size,
+      shots: sitting.length,
+      drawers,
+      span: here === undefined ? null : { low: here.low, high: here.high },
+      gaps,
       ids: ids.size,
     }
-  }, [box, shots])
+  }, [box, sitting])
 
   
+  /* THE UNDO STACK IS THIS SITTING'S OWN SHOTS, NEWEST FIRST, WHATEVER DRAWER THEY WENT IN.
+   *
+   * It was `shots.filter((shot) => shot.card.box === box)` until 2026-09-12 — a filter on a
+   * field the operator changes with one keystroke, so switching the Box field mid-sitting
+   * refilled the stack from the NEW drawer. Capture-undo deletes the record AND the
+   * photograph (D10 ruling 1), so what sat under `U` was never a display: it was a hard
+   * delete aimed where the hand had not been.
+   *
+   * MEASURED ON THE OWNER'S STORE, at all three real mid-sitting switches: 394, 56 and 214
+   * shots left the stack at the instant the field changed. 664 photographs that had been one
+   * keypress from a correction, and then were not reachable at all.
+   *
+   * THE SHARPER ARM HAS NOT FIRED AND IS ONE KEYSTROKE AWAY. All three real switches went to
+   * a drawer that was empty, so the fall-through offered nothing. Switch instead to a drawer
+   * already fed — a top-up, which is most of what a second drawer is for — and the old code
+   * offered ITS high-water card, with a null label, for `U` to delete: box 2 has stood at
+   * #543 through nine consecutive sittings, 19 days old, the whole time.
+   *
+   * NOT "reset the stack on a box change", which hides the card just shot rather than
+   * offering it. The order is the order the hand took them, and `spansDrawers` puts the
+   * drawer on every row, so `Box 3 · 412` and `Box 4 · 1` sit adjacent — which is what
+   * actually happened.
+   *
+   * THE WALK IS STILL CORRECT ACROSS DRAWERS, and this is the property that makes the whole
+   * change safe. `undoBack` walks the plan in order and the server removes only the newest
+   * card in a box (`server/capture_server.py`'s DELETE route). Reverse-chronological over the
+   * sitting preserves reverse-chronological WITHIN each drawer, so every target is still its
+   * own box's newest when it is reached: B4 #2, B4 #1, B3 #411, B3 #410 is four legal deletes
+   * in that order. A target that is not the newest earns a refusal naming the one that is —
+   * `undoBack` already renders exactly that — and never a mid-box delete.
+   *
+   * THE BLIND ARM IS KEPT AND NARROWED TO AN EMPTY SITTING. Its job, in its own words, is a
+   * card captured before this session loaded: with no shots in hand there is nothing else to
+   * offer and the server's high-water mark is the honest answer, which is what covers a
+   * reload. With shots in hand that job is done by the shots, and leaving the arm live is
+   * precisely what aimed `U` at another drawer. What is given up is named: where another
+   * device writes into the drawer this one is shooting, the head is now this hand's card, the
+   * server refuses it, and the note says which position is undoable. A loud wrong answer in
+   * place of a quiet deletion of a card this operator never took. */
   const undoStack = useMemo<UndoTarget[]>(() => {
-    if (box === null) return []
-
-    // The server's own newest for this box: the high-water mark, minus one. Zero for a box
-    // it has never heard of, which is the same thing as empty for the comparison below.
-    const serverNewest = nextForBox === undefined ? 0 : nextForBox - 1
-
-    const mine = shots.filter((shot) => shot.card.box === box)
-    const newest = mine[mine.length - 1]
-
-    
-    if (newest === undefined || serverNewest > newest.card.index) {
-      if (serverNewest < 1) return []
-      return [{ box, index: serverNewest, label: null }]
+    if (sitting.length === 0) {
+      if (box === null) return []
+      // The server's own newest for this box: the high-water mark, minus one. Zero for a box
+      // it has never heard of, which is the same thing as empty.
+      const serverNewest = nextForBox === undefined ? 0 : nextForBox - 1
+      return serverNewest < 1 ? [] : [{ box, index: serverNewest, label: null }]
     }
 
-    return mine
+    return sitting
       .slice(-UNDO_DEPTH)
       .reverse()
       .map((shot) => ({ box: shot.card.box, index: shot.card.index, label: shot.card.label }))
-  }, [box, nextForBox, shots])
+  }, [box, nextForBox, sitting])
+
+  /* WHETHER THE STRIP NAMES A DRAWER ON EVERY ROW — it does the moment what is IN VIEW spans
+   * more than one, and then on every row rather than only the rows that differ from the Box
+   * field. A label on some rows makes the unlabelled ones read as "the current drawer", which
+   * is the exact inference the old box filter invited and this change exists to end. With one
+   * drawer in view there is nothing to disambiguate and the Box field two panels up already
+   * says which, so the caption stays off the photograph.
+   *
+   * OVER `undoStack` AND NOT THE SITTING: switch drawers, shoot ten, and the strip is one
+   * drawer again. Nothing in view is ambiguous, so nothing in view is labelled. */
+  const spansDrawers = useMemo(
+    () => new Set(undoStack.map((target) => target.box)).size > 1,
+    [undoStack],
+  )
 
   /* WHAT ONE PRESS OF `U` DELETES IS `undoStack[0]`, and there is deliberately no binding
    * for it any more. There used to be an `undoTarget`, and every guard on this screen read
@@ -1971,7 +2101,7 @@ export function CaptureScreen() {
           // physical card, which would put a phantom position under the undo control.
           prev.some((shot) => shot.card.key === card.key)
             ? prev
-            : [...prev, { card, setHint: hint ?? null, finish, game: gameEntry }],
+            : [...prev, { card, setHint: hint ?? null, finish, game: gameEntry, at: Date.now() }],
         )
         setNextIndex((prev) => ({ ...prev, [String(card.box)]: card.index + 1 }))
         setRevision((prev) => prev + 1)
@@ -2571,26 +2701,56 @@ export function CaptureScreen() {
             Capture
           </h1>
         </div>
-        <div className="capture-odo" aria-label="This run">
-          <Stat value={runCount === null ? '0' : String(runCount.shots)} label="captured" />
-          <span className="capture-odo-rule" aria-hidden="true" />
-          <Stat value={box === null ? '—' : String(nextForBox ?? 1)} label="next index" />
-          <span className="capture-odo-rule" aria-hidden="true" />
-          <Stat
-            value={runCount === null ? '—' : `${runCount.low}–${runCount.high}`}
-            label="index span"
-          />
-          {runCount === null ? null : runCount.gaps === 0 && runCount.ids === runCount.shots ? (
-            <Pill tone="ok" icon="check" className="capture-odo-verdict">
-              no gaps
-            </Pill>
-          ) : (
-            <Pill tone="danger" icon="alert" className="capture-odo-verdict">
-              {runCount.gaps === 0 ? '' : `${runCount.gaps} missing`}
-              {runCount.gaps !== 0 && runCount.ids !== runCount.shots ? ' · ' : ''}
-              {runCount.ids === runCount.shots ? '' : `${runCount.ids} ids of ${runCount.shots}`}
-            </Pill>
-          )}
+        {/* THE ODOMETER IS THE SITTING'S, AND THE SPLIT UNDER IT IS WHERE THE SITTING WENT.
+            `index span` is still one drawer's — the current one — because two drawers do not
+            share an index space. See `runCount`. */}
+        <div className="capture-odo-wrap">
+          <div className="capture-odo" aria-label="This sitting">
+            <Stat value={runCount === null ? '0' : String(runCount.shots)} label="captured" />
+            <span className="capture-odo-rule" aria-hidden="true" />
+            <Stat value={box === null ? '—' : String(nextForBox ?? 1)} label="next index" />
+            <span className="capture-odo-rule" aria-hidden="true" />
+            <Stat
+              value={
+                runCount === null || runCount.span === null
+                  ? '—'
+                  : `${runCount.span.low}–${runCount.span.high}`
+              }
+              label="index span"
+            />
+            {runCount === null ? null : runCount.gaps === 0 && runCount.ids === runCount.shots ? (
+              <Pill tone="ok" icon="check" className="capture-odo-verdict">
+                no gaps
+              </Pill>
+            ) : (
+              <Pill tone="danger" icon="alert" className="capture-odo-verdict">
+                {runCount.gaps === 0 ? '' : `${runCount.gaps} missing`}
+                {runCount.gaps !== 0 && runCount.ids !== runCount.shots ? ' · ' : ''}
+                {runCount.ids === runCount.shots ? '' : `${runCount.ids} ids of ${runCount.shots}`}
+              </Pill>
+            )}
+          </div>
+          {/* ALWAYS RENDERED, EVEN AT ONE DRAWER AND EVEN EMPTY — the line holds its own
+              height from a `min-height` in the sheet, so opening a second drawer adds a
+              figure and moves nothing (D118). A line that appeared on the first switch would
+              push the whole screen down at the exact moment the operator's hands are full. */}
+          <p className="capture-odo-split" aria-label="Where this sitting went">
+            {runCount === null
+              ? null
+              : runCount.drawers.map((drawer, at) => (
+                  <span
+                    key={drawer.box}
+                    className={
+                      drawer.box === box
+                        ? 'capture-odo-drawer is-here'
+                        : 'capture-odo-drawer'
+                    }
+                  >
+                    {at === 0 ? null : <span aria-hidden="true"> · </span>}
+                    Box {drawer.box} <b>{drawer.shots}</b>
+                  </span>
+                ))}
+          </p>
         </div>
       </header>
 
@@ -3187,7 +3347,10 @@ export function CaptureScreen() {
               ) : null}
             </p>
             {undoStack.length === 0 ? null : (
-              <p className="capture-film-hint" title="A thumbnail undoes that card and everything captured after it">
+              <p
+                className="capture-film-hint"
+                title="This sitting, newest first, whichever drawer each card went in. A thumbnail undoes that card and everything captured after it."
+              >
                 <Kbd>{UNDO_KEY_LABEL}</Kbd> undoes the newest
               </p>
             )}
@@ -3196,9 +3359,15 @@ export function CaptureScreen() {
           {undoStack.length === 0 ? (
             <p className="capture-quiet capture-film-empty">
               <Icon name="film" size={14} />
+              {/* THE SECOND BRANCH IS BOTH FACTS AT ONCE, which is the only way to reach it:
+                  the stack falls back to the box's own newest when this sitting has no
+                  shots, so an empty strip with a box picked means this sitting is empty AND
+                  the box is. It read "Nothing in this box to undo yet", which was the box
+                  filter speaking — under a sitting-ordered stack a full box and an empty
+                  strip is a state that cannot happen. */}
               {box === null
                 ? 'Captures you can undo will appear here once a box is picked.'
-                : 'Nothing in this box to undo yet.'}
+                : 'Nothing to undo yet — this sitting has no captures and this box is empty.'}
             </p>
           ) : (
             <ul className="capture-undo-list">
@@ -3221,7 +3390,24 @@ export function CaptureScreen() {
                       src={photoSrc(target.box, target.index, revision)}
                       alt=""
                     />
-                    <span className="capture-undo-pos">{undoFigure(target)}</span>
+                    {/* THE DRAWER GOES IN THE CAPTION, WHICH IS ALREADY ABSOLUTE — `left: 0;
+                        right: 0; bottom: 0` over the bottom of the thumbnail, so a second
+                        line grows UPWARD over the photograph and moves no layout at all
+                        (D118). The cell's height is the thumbnail's `aspect-ratio`, which
+                        this cannot reach.
+                        `Box 3` AND NOT `B3`: the figure beside it is a COUNT out of a
+                        rendered label, and `B3 #40` would be the key spelling wearing a
+                        count — the one confusion D92 exists to end. A word is not a sigil.
+                        The accessible name needed nothing: `positionText` is the server's own
+                        `Box 3 · Section 1 · Card 40`, which has always named the drawer. This
+                        is the visible half catching up with what a screen reader was already
+                        being told. */}
+                    <span className="capture-undo-pos">
+                      {spansDrawers ? (
+                        <span className="capture-undo-drawer">Box {target.box}</span>
+                      ) : null}
+                      {undoFigure(target)}
+                    </span>
                     <span className={at === 0 ? 'capture-key is-newest' : 'capture-key'}>
                       {at === 0 ? UNDO_KEY_LABEL : at + 1}
                     </span>
