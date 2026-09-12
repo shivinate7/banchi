@@ -2157,6 +2157,7 @@ D170 A widening is safe only while the category fits, and Pokemon's does not
 D171 A refusal that reaches nobody did not happen, and a status line the session wrote is not a reading
 D172 A card's name is the first photograph of it, frozen at issue
 D173 A rule that can be enforced mechanically is enforced mechanically, and a rule with no reader is advice
+D-a-name-can-be-marked-not-yet A document may name what it would create, and the marking expires by itself
 ```
 
 **THE GAP THIS LIST CARRIED BETWEEN D116 AND D118 IS CLOSED, AND IT CLOSED THE WAY IT SAID IT
