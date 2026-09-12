@@ -2174,9 +2174,17 @@ is not built.
 **What IS mechanically true and worth keeping**: all 38 citations name a section that exists, and
 `_debts_section` can now address every live section in this file. It could not until this entry:
 sections 20 to 24 were written `## N.` where that helper matches `## N — `, so five of the file's
-twenty-three live sections were invisible to the one reader the audit has for it, and any
-citation guard built on it would have called them dangling. The headings were normalized in the
-same change. **That is a reader made whole, not a guard**, and the gap above is still open.
+twenty-three live sections were invisible to the one reader the audit has for it, and any check
+built on it would have read them as absent. The headings were normalized in the same change and
+**`make docs-audit`'s `debts headings` row is what stops the next one being written that way** —
+it refuses a heading that shape and a section number used twice, because both make a section
+that silently does not exist rather than one that fails. Mutation-tested, four arms: the dotted
+form, a duplicate number, a number with no title, and an en-dash for the em-dash.
+
+**That row is a guard over this file's SHAPE and not over what a citation MEANS**, and the gap
+above is still open. The distinction is the whole of this section: a heading either parses or it
+does not, which is decidable; whether a sentence is about the capture server or about a flake is
+not.
 
 **The number may move, and nothing allocates it.** 25 is what was next on 2026-09-11 — renumber
 it rather than another branch's, the way this file's header already rules.

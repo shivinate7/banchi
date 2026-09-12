@@ -10739,7 +10739,11 @@ A row would have to decide what a sentence is ABOUT. The nearest mechanical prox
 
 **And the most-repeated token cannot be matched literally**: five of the seven say `one-in-thirteen`; the file spells it `1 in 13` in a table cell, so a containment test flags the REPAIRED text too. The remaining option is a hand-maintained (phrase → section) list, which is section 4's subject — a claim whose reader is itself unread — and is not built. Recorded in `docs/DEBTS.md` section 25 rather than half-built, which is the ruling the owner asked for by name.
 
-### One reader was made whole, and it is not a guard
+### One reader was made whole, and it did get a guard — over shape, not over meaning
 
-`scripts/docs-audit.py:_debts_section` matches `## <n> — `. Sections 20 to 24 were written `## <n>. `, so **five of that file's twenty-three live sections were invisible to the only helper the audit has for reading it**, and any citation guard built on it would have called them dangling. The headings are normalized in this change. That makes an existing reader correct; it does not close the gap above.
+`scripts/docs-audit.py:_debts_section` matches `## <n> — ` and returns None otherwise, and **both** its consumers tolerate a None — one with `or ""`, one with an early return. So sections 20 to 24, written `## <n>. `, were not a failure anywhere: they were five of that file's twenty-three live sections **silently not existing**, with every row green throughout. The headings are normalized here.
+
+**`make docs-audit`'s `debts headings` row is the guard that keeps them that way**, and it can be built for exactly the reason the citation-subject row cannot: a heading either parses or it does not. It refuses a heading that is not `## <n> — <title>` and a section number used twice, the second being the same defect wearing a different hat — `_debts_section` returns the first match, so the second section is unreachable. Mutation-tested with four arms: the dotted form, a duplicate number, a number with no title, and an en-dash for the em-dash. All four fire; the baseline is clean.
+
+**This is the distinction the whole entry turns on.** A guard over a document's SHAPE is mechanical and cheap. A guard over what a sentence MEANS is neither, and the measurement above is what that costs. The first is built; the second is recorded and declined.
 
