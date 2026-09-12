@@ -2293,6 +2293,7 @@ D178 A document may name what it would create, and the marking expires by itself
 D179 Five shell commands are refused by resolving what they would do, not by matching what they say, and each clause carries its own escape hatch
 D180 A press names the cards it is over, and the drawer is one of the names
 D181 The order is taken once, and a sale may not retake it
+D182 An unclaimed slug is not required in the shared index it will replace itself out of
 D183 A gain step is the baseline times one number, a card is not, and the machine re-baselines only on that proof
 ```
 
