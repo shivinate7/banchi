@@ -150,6 +150,7 @@ from pipeline import pricehistory  # noqa: E402
 # it reaches geometry, PIL and sqlite.
 from identify import cost  # noqa: E402
 from store import Store, files, master  # noqa: E402
+from store.session import Snapshot  # noqa: E402
 
 PKMNSCAN = REPO_ROOT / "pkmnscan"
 CONSOLE = "console.log"
@@ -2013,14 +2014,208 @@ def _policy_threshold(book) -> str:
         return str(pricing_mod.THRESHOLD)
 
 
+# ----------------------------------------- every unsent copy in the store, counted live
+
+
+class UnsentLedger(NamedTuple):
+    """Which copies in every joined run TCGplayer does not hold yet, decided against the
+    store as it stands NOW rather than as each run's `pricing.json` recorded it.
+
+    `unsent` is sku -> the position keys (`box/index`) that may still go; `by_run` is
+    run -> how many of that run's own positions are among them; `held_out` and `live_out`
+    are the per-SKU figures the merge would carry (`pipeline/merge.py:_merged_match`).
+    """
+
+    unsent: Dict[str, List[str]]
+    by_run: Dict[str, int]
+    held_out: Dict[str, int]
+    live_out: Dict[str, int]
+
+
+def _run_live_by_sku(run: "run_files.Run") -> Dict[str, "run_resolve.LiveReading"]:
+    """Each SKU's `Total Quantity` off the exports this run recorded, dated the way
+    `cli/resolve.py:load` dates them — so the figure this route draws is the figure `emit`
+    computes for the same leg, and not a second reading of the same file.
+
+    AN EXPORT THAT HAS MOVED COSTS THE RUN ITS READING AND NOTHING ELSE. `_copies_out`
+    keeps the store's own figure for a SKU no file reports (D87), which is exactly the
+    answer a run whose file is gone should get here: the send will refuse it by name
+    (`exports_for`), and this route says what the store knows in the meantime.
+    """
+    parsed: Dict[Path, tcgcsv.Export] = {}
+    as_of: Dict[Path, str] = {}
+    for path in set(run.exports_by_game.values()):
+        try:
+            parsed[path] = tcgcsv.read_export(path)
+            as_of[path] = str(run_files.describe_source(path)["mtime"])
+        except (OSError, ValueError, KeyError):
+            continue
+    return run_resolve._live_by_sku(parsed, as_of)
+
+
+def _unsent_ledger(
+    inventory: master.Inventory, tables: Sequence[Tuple["run_files.Run", dict]]
+) -> UnsentLedger:
+    """THE ARITHMETIC `emit` DOES, DONE HERE SO THE SCREEN AGREES WITH THE PRESS
+    (D156).
+
+    `pricing.json` froze `add_to_quantity`, `committed` and `copies_out` at the moment of the
+    JOIN, and every emit since has moved what they describe: a run emitted under the old
+    standing cap of four wrote `add 4 · backstock 3` and closed, and the three copies it held
+    back went on reading `4 of 7` on every later visit while `emit` — which re-derives the
+    join against the live store — would have offered exactly those three. Measured on the
+    owner's store on 2026-09-11: 387 copies across 138 SKUs sat in runs this screen no longer
+    opened, and every one of them drew a figure the press disagreed with.
+
+    IT IS `cli/resolve.py`'s OWN FUNCTIONS AND NOT A RESTATEMENT OF THEM. `_live_by_sku`
+    reads each run's recorded export the way `load` reads it and keeps the NEWEST reading of
+    a SKU across every file, which is D87's rule; `_copies_out` answers what TCGplayer holds
+    per SKU off that reading and the store's own; `_committed_keys` spends the figure on
+    positions — oldest capture first (D147) — and the same set
+    subtraction `SkuMatch.uncommitted_positions` makes decides what is left. A copy in a
+    TERMINAL state is committed by the same arm `load` uses for one. Nothing here is a third
+    implementation of the claim, which is what would have let the two figures drift again.
+
+    ONE READING PER SKU AND ONE `_copies_out`, WHERE THE SEND RESOLVES ONE PER LEG. That
+    function walks every listing the store holds with two queries each — measured at 0.9s
+    per call on the owner's 492 listings — and ten legs would put nine seconds in front of
+    every reload. The newest reading is what `Listing.live_reading` would have picked inside
+    each leg anyway; the one shape where the two answers differ is two legs of one SKU whose
+    OLDER export read higher than the newer, where `pipeline/merge.py:_merged_match` keeps
+    the larger and calls that a stand-in in its own words. On a store that reconciles, the
+    store's reading is newer than both files and the case does not arise.
+
+    A COPY STAMPED SINCE THE JOIN IS COUNTED, because the send counts it. A review answer
+    writes `sku` onto a record after `pricing.json` was written, and `load` adopts that
+    identity on the next resolve; so a SKU's positions here are the tables' union PLUS every
+    copy on hand carrying the SKU whose `run` is one of these runs. Measured on the owner's
+    store: 74 copies across the ten joinable runs were in no table and in the press.
+
+    THE KEY IS READ AS STORED AND NEVER REALIGNED (D36), which is the posture of every other
+    reader on this route: `box` and `index` are the store key the photograph is addressed by,
+    and `paperwork_for` — the one reader that does realign — hashes every photograph in the
+    box to do it, which is not a cost a screen's reload may carry. A mid-box delete since the
+    join therefore counts the card now standing at the slid key, and the send, which does
+    realign, corrects it. NO CAP IS SPENT HERE. This previews the worklist; `--cap` and a
+    row's own quantity are asked for at the press and spent there (D7).
+    """
+    positions: Dict[str, "OrderedDict[str, None]"] = OrderedDict()
+    per_run: Dict[str, Dict[str, set]] = {}
+    readings: Dict[str, "run_resolve.LiveReading"] = {}
+    for run, table in tables:
+        mine: Dict[str, set] = per_run.setdefault(run.name, {})
+        for row in table.get("skus") or []:
+            if not isinstance(row, dict):
+                continue
+            sku = str(row.get("sku") or "")
+            if not sku:
+                continue
+            for at in row.get("positions") or []:
+                if not isinstance(at, dict) or at.get("box") is None or at.get("index") is None:
+                    continue
+                key = master.position_key(int(at["box"]), int(at["index"]))
+                positions.setdefault(sku, OrderedDict())[key] = None
+                mine.setdefault(sku, set()).add(key)
+        # THIS LEG'S READING FOR THIS LEG'S OWN SKUS. Narrowed before anything walks it — a
+        # Filtered Export names ~10,000 SKUs and a per-SKU answer does not depend on the other
+        # 9,800 — and folded newest-wins per SKU across legs, which is `_live_by_sku`'s own
+        # rule across the files of one run.
+        for sku, reading in _run_live_by_sku(run).items():
+            if sku not in mine:
+                continue
+            held = readings.get(sku)
+            if held is None or master.newer_stamp(reading.as_of, held.as_of):
+                readings[sku] = reading
+    on_screen = set(per_run)
+    for sku in list(positions):
+        for card in inventory.copies_on_hand(sku):
+            if card.run in on_screen and card.key not in positions[sku]:
+                positions[sku][card.key] = None
+                per_run[card.run].setdefault(sku, set()).add(card.key)
+
+    held_out, live_out = run_resolve._copies_out(inventory, readings)
+    committed = run_resolve._committed_keys(inventory, held_out)
+    unsent: Dict[str, List[str]] = {}
+    for sku, keys in positions.items():
+        free: List[str] = []
+        for key in keys:
+            card = inventory.cards.get(key)
+            if card is None or card.state in master.TERMINAL_STATES:
+                continue
+            # A RECORD RE-IDENTIFIED SINCE THE JOIN IS NOT THIS SKU'S COPY ANY MORE — the
+            # review answer or a later emit stamped it with the card it actually is.
+            if card.sku and str(card.sku) != sku:
+                continue
+            if key in committed:
+                continue
+            free.append(key)
+        unsent[sku] = free
+    by_run = {
+        name: sum(len(keys & set(unsent.get(sku, ()))) for sku, keys in mine.items())
+        for name, mine in per_run.items()
+    }
+    return UnsentLedger(unsent=unsent, by_run=by_run, held_out=held_out, live_out=live_out)
+
+
+def _unreachable(inventory: master.Inventory, review_count: int, root: Path) -> dict:
+    """The copies NO worklist can offer, named rather than left out (`CLAUDE.md`: never
+    silently drop a card). Each figure is a door to the screen that can move it.
+
+    `captured` has never been identified — `#/runs` is the press. `in_review` is waiting on
+    a person at `#/review`. `unjoined` is identified and never joined, run by run, and
+    `reallocated` is a run over a drawer whose number was deleted and reused (D36), which
+    no join can reach and which is left out of the union above for exactly that reason —
+    counted here, it would offer the NEW drawer's cards under the OLD run's identities.
+    """
+    unjoined: List[dict] = []
+    for entry in sorted(root.iterdir()):
+        if not entry.is_dir() or not (entry / run_files.MANIFEST).is_file():
+            continue
+        manifest = _manifest(entry)
+        if manifest.get("joined") or _live_pid(entry) is not None:
+            continue
+        try:
+            cards = len(run_files.open_run(entry).read_identifications().get("cards") or {})
+        except (run_files.RunError, OSError, ValueError, AttributeError):
+            cards = 0
+        unjoined.append({"run": entry.name, "cards": cards})
+    return {
+        "captured": inventory.counts().get(master.CAPTURED, 0),
+        "in_review": review_count,
+        "unjoined": unjoined,
+        # filled by the caller, which is the one that walked the joined runs
+        "reallocated": [],
+    }
+
+
 def do_pipeline_worklist(wanted: Sequence[str]) -> dict:
-    """`GET /pipeline/pricing` — one pricing worklist over several runs (D86).
+    """`GET /pipeline/pricing` — one pricing worklist over several runs (D86), and since
+    D156 the standing list of EVERY COPY THE STORE HOLDS THAT TCGPLAYER
+    DOES NOT, across every joined run.
 
     THE WORKLIST SPANS RUNS, AND SO DOES THE ANSWER. D48's resolution — a send is a cart of
     boxes and a run is still one box, because a run carries a reading that is a property of
     what is in the drawer — stays true of the READING. What this route adds is a VIEW across
     runs; the answer is the corpus's (D86, amended), and there is one write, `PUT /pricing`,
     whatever is on screen.
+
+    WHAT "OPEN" MEANS WIDENED, AND THAT IS THE WHOLE OF THE UNSENT WORKLIST. A run was open
+    while `emit` would still refuse it or had never run; a run that had emitted and been
+    answered closed, and every copy it had held back — under the old standing cap of four,
+    or under a `--cap` or a per-card quantity since — closed with it. The operator's words:
+    *"the only time it's intuitive to push supply is right when pricing a run, which
+    shouldn't be the case."* A run is open now while it OWES something OR HOLDS AN UNSENT
+    COPY, `roster[].unsent` says how many, and the default landing — no `?run=` — is
+    therefore every copy anywhere in the store that can still go out, priced where prices
+    are decided and sent by the press that already writes one file across runs
+    (`POST /pipeline/emit`). `owes` itself is untouched: it is still emit's own refusal
+    vocabulary plus "never emitted", which is what Home's "runs to price" counts.
+
+    AND THE FIGURES ARE LIVE. Every merged row's `add_to_quantity`, `committed`, `copies_out`
+    and `listing` are re-derived against the store as it stands by `_unsent_ledger`, which
+    is `cli/resolve.py`'s own arithmetic and not a copy of it; the stored table's figures are
+    the join's record and are not served. `claimed_add` keeps what the runs' tables SAY, so
+    `over_cap` still names a table the press disagrees with.
 
     WHY A ROUTE RATHER THAN N FETCHES FROM THE CLIENT. Two reasons and the second is the one
     that matters. The default landing is every open run, which on this machine is eight tables
@@ -2040,7 +2235,9 @@ def do_pipeline_worklist(wanted: Sequence[str]) -> dict:
     re-implementing. A run that refuses (never joined, unreadable table) is REPORTED in
     `skipped` and does not take the others down with it: an operator whose eight-run worklist
     would not draw because one directory is half-written is worse off than one who is told
-    which directory that is.
+    which directory that is. A run over a REALLOCATED drawer (D36) is skipped the same way,
+    under `box_reallocated`, whether or not it was asked for: the send refuses it outright,
+    and its positions now belong to another drawer's cards.
     """
     root = files.runs_dir()
     if not root.is_dir():
@@ -2052,6 +2249,7 @@ def do_pipeline_worklist(wanted: Sequence[str]) -> dict:
             "asked": list(wanted),
             "threshold": None,
             "floor": None,
+            "unreachable": {"captured": 0, "in_review": 0, "unjoined": [], "reallocated": []},
         }
 
     names = _box_names()
@@ -2068,8 +2266,20 @@ def do_pipeline_worklist(wanted: Sequence[str]) -> dict:
         # able to SEE the file that is wrong. Every run then reads as owing an answer, which
         # is the honest reading of "nobody can tell what has been answered".
         book = corpus.Corpus()
+
+    # THE STORE, ONCE, FOR EVERYTHING BELOW THAT COUNTS A COPY. Lock-free like every other
+    # read on this route: a screen must not serialise behind a running `./pkmnscan join`.
+    try:
+        snapshot: Optional[Snapshot] = Store().read()
+    except (files.StoreError, OSError, ValueError, TypeError):
+        snapshot = None
+
     roster: List[dict] = []
     owed_by_run: Dict[str, List[str]] = {}
+    reallocated: List[dict] = []
+    # THE TABLES THE LEDGER IS DERIVED OVER — every joined run whose drawer is still its own.
+    tables: List[Tuple["run_files.Run", dict]] = []
+    parsed_by_run: Dict[str, dict] = {}
     for entry in sorted(root.iterdir()):
         if not entry.is_dir() or not (entry / run_files.MANIFEST).is_file():
             continue
@@ -2079,6 +2289,7 @@ def do_pipeline_worklist(wanted: Sequence[str]) -> dict:
         table = entry / run_files.PRICING
         parsed: dict = {}
         answers: Optional[dict] = None
+        summary = _summary(entry, names)
         try:
             if table.is_file():
                 parsed = json.loads(table.read_text("utf-8"))
@@ -2096,16 +2307,39 @@ def do_pipeline_worklist(wanted: Sequence[str]) -> dict:
         except (OSError, ValueError, decisions.MalformedDecisions):
             owed_by_run[entry.name] = ["run files cannot be read"]
             roster.append(
-                {**_summary(entry, names), "owes": owed_by_run[entry.name], "open": True}
+                {**summary, "owes": owed_by_run[entry.name], "open": True, "unsent": 0}
             )
+            continue
+        if summary.get("box_former"):
+            # A RUN OVER A DRAWER THAT NO LONGER EXISTS (D36). Never open, never in the
+            # union: its positions are another drawer's cards now, and `emit` refuses it by
+            # name. Drawn in the picker as `Box N (deleted)` so the operator can see why.
+            reallocated.append({"run": entry.name, "box": summary.get("box")})
+            roster.append({**summary, "owes": [], "open": False, "unsent": 0})
             continue
         owes = _run_owes(manifest, parsed, answers)
         owed_by_run[entry.name] = owes
-        roster.append({**_summary(entry, names), "owes": owes, "open": bool(owes)})
+        parsed_by_run[entry.name] = parsed
+        if parsed:
+            tables.append((run_files.open_run(entry), parsed))
+        roster.append({**summary, "owes": owes, "open": bool(owes), "unsent": 0})
+
+    ledger: Optional[UnsentLedger] = None
+    if snapshot is not None and tables:
+        ledger = _unsent_ledger(snapshot.inventory, tables)
+        for row in roster:
+            held = ledger.by_run.get(row["run"], 0)
+            row["unsent"] = held
+            # OPEN WHILE IT HOLDS AN UNSENT COPY, whatever its answers say. `owes` is left
+            # exactly as `_run_owes` wrote it — Home counts "runs to price" off it, and a
+            # run that is priced and merely under-sent is not one of those.
+            row["open"] = bool(row["open"] or held > 0)
+
     # AN EXPLICIT ASK WINS OVER THE FILTER, whether or not the run is open: naming a run has
     # already answered the question `open` exists to ask, and an answered run has to stay
     # openable — that is how a price gets looked at again.
-    chosen = asked or [row["run"] for row in roster if row["open"]]
+    former = {row["run"] for row in reallocated}
+    chosen = [name for name in (asked or [row["run"] for row in roster if row["open"]])]
 
     summaries: List[dict] = []
     written_at: Dict[str, int] = {}
@@ -2116,6 +2350,19 @@ def do_pipeline_worklist(wanted: Sequence[str]) -> dict:
     merged: Dict[str, dict] = OrderedDict()
 
     for name in chosen:
+        if name in former:
+            skipped.append(
+                {
+                    "run": name,
+                    "code": "box_reallocated",
+                    "message": (
+                        f"Run {name} describes a drawer whose number was deleted and reused "
+                        f"since (D36); its positions are another drawer's cards now and "
+                        f"`emit` refuses it. Re-identify the box as it is today."
+                    ),
+                }
+            )
+            continue
         try:
             payload = do_pipeline_pricing(name)
         except PipelineRefusal as exc:
@@ -2167,7 +2414,11 @@ def do_pipeline_worklist(wanted: Sequence[str]) -> dict:
                 here["positions"] = positions
                 here["copies"] = len(positions)
 
-    for row in merged.values():
+    loaded_names = {row["run"] for row in summaries}
+    views = (
+        run_resolve.box_views(snapshot.inventory) if snapshot is not None and ledger else {}
+    )
+    for sku, row in merged.items():
         # THE CAP, COMPUTED ONCE ACROSS THE RUNS THIS SCREEN IS SHOWING.
         #
         # `pipeline/join.py:add_to_quantity` spends `live_cap - copies_out` per RUN against a
@@ -2178,25 +2429,63 @@ def do_pipeline_worklist(wanted: Sequence[str]) -> dict:
         # per-BOX capping inside one join, and this is per-RUN capping across joins that never
         # saw each other.
         #
-        # `claimed_add` IS WHAT THE RUNS SEPARATELY BELIEVE AND `add_to_quantity` IS WHAT CAN
+        # `claimed_add` IS WHAT THE RUNS' TABLES SAY AND `add_to_quantity` IS WHAT CAN
         # ACTUALLY GO. Drawing the sum would put "7" in the Qty column of a card four of which
-        # may be listed, which is the same false-sentence failure D59 named. `copies_out` comes
-        # off the NEWEST leg because it read the newest export; the two older `pricing.json`
-        # shapes on this machine predate that field, so `live_before` is the documented
-        # fallback and never a guess.
-        #
-        # REPORTED HERE, CORRECTED IN `emit`. This route writes nothing, so the honest thing it
-        # can do is show the true figure and flag that the runs disagree with it.
+        # may be listed, which is the same false-sentence failure D59 named.
         claimed = sum(leg.get("add_to_quantity") or 0 for leg in row["in"])
-        # THE MERGED FIGURE IS THE POSITIONS THE MERGE HOLDS (D7, amended 2026-09-08). There is
-        # no standing cap to re-derive against any more, and the cap a SEND asks for is not on
-        # this request — this route previews the worklist, and `--cap` is spent when the file
-        # is written. What survives is the term that always did the work: a card in three runs
-        # is one row over the deduped union, so the claims summing past it is the over-claim
-        # D86 exists to correct and `over_cap` still names it.
         held = len(row.get("positions") or [])
         row["claimed_add"] = claimed
-        row["add_to_quantity"] = min(claimed, held)
+        if ledger is None:
+            # THE STORE COULD NOT BE READ. The tables' own figures are all there is, and the
+            # merge over positions is still the deduped union (D7, amended 2026-09-08).
+            row["add_to_quantity"] = min(claimed, held)
+        else:
+            # THE LIVE FIGURE (D156): the copies of this card, across
+            # every run on screen, that the store says TCGplayer does not hold and that have
+            # not left a box — `_unsent_ledger`'s docstring is the argument. `copies` is the
+            # union; `committed` is what is not free; `copies_out` and `listing` are the
+            # store's own, so the row's sentences describe now and not the join.
+            drawn = {
+                master.position_key(int(p["box"]), int(p["index"]))
+                for p in row.get("positions") or []
+                if p.get("box") is not None and p.get("index") is not None
+            }
+            # A COPY THE SEND COUNTS THAT NO TABLE DREW — stamped by a review answer after
+            # the join — joins the row's positions here, labelled off the live store like
+            # every other, so the Qty cell's denominator is the copies the press will see.
+            for key in ledger.unsent.get(sku, []):
+                if key in drawn:
+                    continue
+                card = snapshot.inventory.cards.get(key) if snapshot is not None else None
+                if card is None or card.run not in loaded_names:
+                    continue
+                row.setdefault("positions", []).append(
+                    {
+                        "box": card.box,
+                        "index": card.index,
+                        "label": _position_label(views, snapshot.inventory, card.box, card.index),
+                    }
+                )
+                drawn.add(key)
+            free = [key for key in ledger.unsent.get(sku, []) if key in drawn]
+            held = len(row.get("positions") or [])
+            row["add_to_quantity"] = len(free)
+            row["copies"] = held
+            row["committed"] = held - len(free)
+            row["backstock"] = 0
+            row["copies_out"] = ledger.held_out.get(sku, row.get("copies_out") or 0)
+            row["at_cap"] = len(free) == 0
+            row["nothing_to_add"] = (
+                "every copy is already at TCGplayer or has left the box" if not free else None
+            )
+            entry = snapshot.inventory.listings.get(sku) if snapshot is not None else None
+            if entry is not None:
+                row["listing"] = {
+                    "pushed": int(entry.pushed),
+                    "staged": int(entry.staged),
+                    "live": int(entry.live),
+                    "sold_here": int(entry.sold_here),
+                }
         row["over_cap"] = claimed > row["add_to_quantity"]
         # A MERGED ROW THAT CAN ADD MUST NOT CARRY ONE RUN'S REASON FOR ADDING NOTHING.
         # `nothing_to_add` reads "every copy in this run is already listed or has left the
@@ -2204,6 +2493,13 @@ def do_pipeline_worklist(wanted: Sequence[str]) -> dict:
         if row["add_to_quantity"] > 0:
             row["nothing_to_add"] = None
             row["at_cap"] = False
+
+    unreachable = (
+        _unreachable(snapshot.inventory, len(snapshot.review), root)
+        if snapshot is not None
+        else {"captured": 0, "in_review": 0, "unjoined": []}
+    )
+    unreachable["reallocated"] = reallocated
 
     return {
         "runs": summaries,
@@ -2235,6 +2531,10 @@ def do_pipeline_worklist(wanted: Sequence[str]) -> dict:
         # above; the floor simply had not been given it.
         "threshold": _policy_threshold(book),
         "floor": _policy_threshold(book),
+        # WHAT NO WORKLIST CAN OFFER, NAMED (D156). A copy never
+        # identified, one waiting in review, one in a run nobody has joined, and one in a run
+        # over a reallocated drawer are each a door to another screen rather than a row here.
+        "unreachable": unreachable,
         # `remembered_sub_threshold` IS GONE, HERE AND FROM THE PER-RUN ROUTE (D86, amended
         # 2026-09-02). It walked up to five sibling run directories for the newest answer to a
         # question each run had to be asked separately, and offered it as a LABEL because D9
