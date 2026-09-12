@@ -528,7 +528,8 @@ COMPONENTS = [
                                 "condition at all, which was invisible while the operator downloaded "
                                 "Near-Mint-only exports by hand and cost D3 rung 2 outright once the "
                                 "fetch started sending every play grade",
-                        "governed_by": ["D2", "D3", "D4", "D7", "D9", "D10", "D11", "D12", "D16", "D20", "D21", "D23", "D24", "D25", "D29", "D30", "D35", "D36", "D41", "D49", "D54", "D55", "D56", "D58", "D59", "D64", "D65", "D67", "D68", "D71", "D76", "D87", "D137"], "tested_by": ["T3"]},
+                        "governed_by": ["D2", "D3", "D4", "D7", "D9", "D10", "D11", "D12", "D16", "D20", "D21", "D23", "D24", "D25", "D29", "D30", "D35", "D36", "D41", "D49", "D54", "D55", "D56", "D58", "D59", "D64", "D65", "D67", "D68", "D71", "D76", "D87", "D137",
+                                        "D146"], "tested_by": ["T3"]},
             # Rung 0 (a human's answer) sits above the ladder and is applied by join.py, so
             # T3 is what covers it — T4 owns the four rungs that infer.
             # D22 because FINISHES and CONDITION_BY_FINISH are no longer written here: they
@@ -536,7 +537,8 @@ COMPONENTS = [
             # makes the registry believable before anything else is built on it.
             "variant.py": {"does": "the variant ladder: four rungs that infer, under a rung 0 that does not, "
                                    "over a per-game finish vocabulary and a set-valued rung 1 claim",
-                           "governed_by": ["D3", "D12", "D21", "D22", "D23"], "tested_by": ["T3", "T4"]},
+                           "governed_by": ["D3", "D12", "D21", "D22", "D23",
+                                           "D146"], "tested_by": ["T3", "T4"]},
             # ONE MATCHER, WHERE THERE WERE TWO. The fetch scoped the export by its rules and
             # the join narrowed a colliding key by different ones, so a hint could scope
             # correctly and then fail to disambiguate the very rows it fetched. Merging them
@@ -569,8 +571,17 @@ COMPONENTS = [
                                    "is deliberately no policy.floor.",
                            "governed_by": ["D8", "D9", "D86", "D98", "D99", "D49"],
                            "tested_by": ["T5"]},
-            "routing.py": {"does": "which queue a card lands in — batch script v2 section 5.4",
-                           "governed_by": ["D3", "D4", "D9", "D29", "D35"], "tested_by": ["T4"]},
+            "routing.py": {"does": "which queue a card lands in — batch script v2 section 5.4. "
+                                   "`NAME_DISPUTED` is the second reason here the JOIN writes "
+                                   "OVER a ladder resolution that succeeded: the number found "
+                                   "rows and the name read off the same photograph matches none "
+                                   "of them. D23's cross-check run backwards, and the only "
+                                   "signal that catches a confidently misread number — box 1's "
+                                   "`1/51` read `Irelia, Blade Dancer` at `190/221`, which that "
+                                   "export calls `Forgefire Cape`, and the rarity claim agreed.",
+                           "governed_by": ["D3", "D4", "D9", "D23", "D29", "D35",
+                                           "D146"],
+                           "tested_by": ["T4"]},
             # THE ONLY MODULE IN THIS PACKAGE THAT IMPORTS `store`, and the edge is one-way:
             # store/ imports nothing from pipeline/, so there is no cycle. What it buys is
             # that `Inventory.copies_on_hand`'s terminal-state rule (D26 — a retired card
@@ -5327,7 +5338,14 @@ COMPONENTS = [
                 # constant case argues from D32's measured 39-81% card fill, and the reason the
                 # old fixed centre was wrong is that it magnified the Pokedex strip — D35's
                 # misread-as-collector-number string exactly.
-                "governed_by": ["D4", "D13", "D24", "D28", "D29", "D32", "D35", "D16", "D41", "D37", "D46", "D77", "D136"],
+                # D23 and the release arrived together: the contradiction now names both
+                # words on screen, which is D23 job (a)'s own vocabulary, and the group press
+                # answers the largest cluster anchored on the card in front of you rather than
+                # an all-or-nothing worklist — two entries out of a hundred and one used to
+                # suppress it for the other ninety-nine.
+                "governed_by": ["D4", "D13", "D23", "D24", "D28", "D29", "D32", "D35", "D16",
+                                "D41", "D37", "D46", "D77", "D136",
+                                "D146"],
                 "note": "NOT a harness test — it starts a browser, which docs/GATES.md keeps "
                         "off the seven-test contract deliberately. The photograph stub is "
                         "2160x3840 and that is load-bearing: the rig's stored frame is 9:16 "

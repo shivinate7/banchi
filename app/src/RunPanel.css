@@ -516,3 +516,21 @@
 @container (max-width: 640px) {
   .runs-detail-files { padding-left: var(--bn-4); padding-right: var(--bn-4); }
 }
+
+/* The rarity-correction note, under the joined run's figures. Quiet by construction — it is
+   standing advice rather than a finding, so it reads as prose and never as a Notice, which
+   this screen reserves for something that actually happened on this run. */
+.runs-correction {
+  margin: 0;
+  padding: 0 var(--bn-5) var(--bn-5);
+  max-width: 78ch;
+  font-size: var(--bn-fs-sm);
+  line-height: 1.6;
+  color: var(--bn-ink-3);
+}
+.runs-correction strong { color: var(--bn-ink-2); font-weight: 600; }
+.runs-correction a { color: var(--bn-accent); text-decoration: underline; text-underline-offset: 3px; }
+.runs-correction a:hover { color: var(--bn-accent-hover); }
+@container (max-width: 640px) {
+  .runs-correction { padding-left: var(--bn-4); padding-right: var(--bn-4); }
+}

@@ -477,6 +477,11 @@ make merge          # merge a PR and move main onto it — BOTH HALVES, on your 
                     #   pushed: #275 merged while its claim commit's own run was still
                     #   `in_progress`, #277 with four of seven still running. Both went green
                     #   afterwards, which is a coin landing right rather than a guard working.
+                    #   GITHUB REFUSES THE SAME RACE SERVER-SIDE SINCE 2026-09-12, for the two
+                    #   REQUIRED contexts (`check`, `revert-guard`) and for no others — so the
+                    #   browser shards, which are not required and not requirable as the
+                    #   workflow stands, are this wait's alone. Two guards, two layers; the
+                    #   entry has the measurement.
                     #   It REFUSES if this checkout is not
                     #   standing on the PR's own head branch, or if the tree is dirty: the claim
                     #   is a commit, and it would otherwise land on whatever is checked out.
@@ -1627,6 +1632,7 @@ D142 The setup outlives the browser, the box list is ordered by the hand, and on
 D143 The claim reads the checked-out tree, so which tree that is must be established before anything reads it
 D144  A card that will not settle is photographed off the quietest frame it manages, and there is one trigger again
 D145 A box has an index nobody sees, because the number on the drawer is a label and a label may be reused
+D146 Two agreeing signals release the rarity claim, and the same comparison run backwards is a review reason
 D-wait-names-the-commit The wait is about the claim commit, and an answer it has not got is never a pass
 
 ```

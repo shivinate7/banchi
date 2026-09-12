@@ -353,6 +353,17 @@ def claims_pending(root: str, ref: str = "origin/main") -> List[str]:
 # EVERY WAY THIS CAN END EXCEPT ONE IS A REFUSAL, and that is deliberate. A read that fails,
 # a roster that never fills, a deadline that arrives — none of them is evidence that the
 # tree is green, and D140's whole bargain is that main takes nothing no CI run has seen.
+#
+# THIS IS NOT THE ONLY GUARD, SINCE 2026-09-12, AND IT IS NOT MADE REDUNDANT BY THE OTHER.
+# GitHub's required status checks cover `check` and `revert-guard` server-side: a merge is
+# refused while either is running AND while either is absent, so for those two contexts the
+# race is closed at a layer no wrapper can be talked out of. What that gate does NOT cover is
+# `design-check` — not required, and not requirable as the workflow stands, because the
+# matrix reports `design-check (1..3)` when it runs and a bare `design-check` when
+# `browser-scope` skips it, and the one fixed name in both shapes goes SKIPPED rather than
+# FAILED when a shard is red. So the expensive half is this wait's alone. The other half is
+# register: a refusal here names the check and the minutes, where the server gate names a
+# merge state. See the entry above for the measurement and the finding.
 
 # THE PAGE SIZE IS IN THE QUERY STRING AND NEVER IN A `-f`: gh switches the method to
 # POST the moment a field is given, and this endpoint does not answer a POST at all.
