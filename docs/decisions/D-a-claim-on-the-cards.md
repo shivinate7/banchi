@@ -12,7 +12,7 @@
 
 **TOO WIDE.** Two live runs over disjoint selections in one drawer are refused. `_busy_run` says so in as many words — *"It narrows what is allowed, deliberately"* — and D48 records that narrowing as accepted for want of a card-level vocabulary. Nothing was ever going to be double-billed there: the two presses are buying different cards.
 
-**TOO NARROW, AND THIS IS THE HALF THAT COSTS MONEY.** `_run_box` answers `None` for a run whose captures span more than one box: `cli/cmd_identify.py:_scope_for` returns no scope block when the sidecars name two boxes (*"A run whose captures name two boxes gets NO scope rather than a guessed one"*), and the capture directory's name does not parse as `boxN` either. So a run over a multi-box pile is **invisible to the guard in both directions** — a box press and that run do not see each other, and the overlap is billed twice.
+**Too narrow, and this is the half that costs money.** `_run_box` answers `None` for a run whose captures span more than one box: `cli/cmd_identify.py:_scope_for` returns no scope block when the sidecars name two boxes (*"A run whose captures name two boxes gets NO scope rather than a guessed one"*), and the capture directory's name does not parse as `boxN` either. So a run over a multi-box pile is **invisible to the guard in both directions** — a box press and that run do not see each other, and the overlap is billed twice.
 
 **Widening `_busy_run` to be store-wide does not fix this.** A store-wide press and a box press would still resolve to `None` and `3`, which are not equal, so they would still not see each other. The vocabulary is the problem, not the scope.
 
@@ -24,7 +24,7 @@
 
 ### What is claimed is the send list, never the selection
 
-**This is the property that keeps the guard armable at all.** On the operator's store 2,321 of 2,535 cards are cache hits, so a press over everything claims **~214 keys** and leaves the other 2,321 free for any other press. A table that claimed the selection would lock the store on the first press, which is a guard nobody would keep armed — and switching a money guard off is worse than not having written it.
+**This is the property that keeps the guard worth arming at all.** On the operator's store 2,321 of 2,535 cards are cache hits, so a press over everything claims **~214 keys** and leaves the other 2,321 free for any other press. A table that claimed the selection would lock the store on the first press, which is a guard nobody would keep armed — and switching a money guard off is worse than not having written it.
 
 **A press whose send list is empty writes no row at all.** It is spending nothing, so there is nothing to protect. That is the limit case of the same rule rather than an exception to it.
 
@@ -92,6 +92,6 @@ So the figures are published rather than inferred from the fact that nothing has
 
 ### What is NOT proved
 
-**No real press has been through this.** The selftest races `claim_or_refuse`, which is the mechanism and is the same call the command makes — it is not `pkmnscan identify` end to end, which needs photographs, sidecars and the Batch API, and a test that mocked the API would be racing the mock. **No claim has been written by a real identify run, and no invoice has been prevented in production.** The first real press is what measures that.
+**No real press has been through this.** The self-test races `claim_or_refuse`, which is the mechanism and is the same call the command makes — it is not `pkmnscan identify` end to end, which needs photographs, sidecars and the Batch API, and a test that mocked the API would be racing the mock. **No claim has been written by a real identify run, and no invoice has been prevented in production.** The first real press is what measures that.
 
-**The release control has not been exercised against a real stuck claim.** Its chain is complete and typechecked; what it has met is the selftest's store, not a run that died mid-batch on the rig.
+**The release control has not been exercised against a real stuck claim.** Its chain is complete and typechecked; what it has met is the self-test's store, not a run that died mid-batch on the rig.
