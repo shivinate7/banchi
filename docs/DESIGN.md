@@ -386,7 +386,7 @@ and is `Card 1` of section 3 — the very front — at section scale. Both are t
 walking to a box needs the first to get near it and the second to land on it.
 
 **THE SECTION IS THE RULER AND THE BOX IS THE MARGIN NOTE, AND THAT ORDER WAS REVERSED ON
-2026-09-11** (D-section-is-the-ruler, on the owner's *"the interface/view of the box is nicer
+2026-09-11** (D155, on the owner's *"the interface/view of the box is nicer
 than section"*). The section is a graduated 26px ruler with a fill, a pin that crosses it and
 its own bounds written inside its two ends; the box is an 8px strip of chips beneath it. The
 argument is resolution: at the 580px bar this screen draws, the box track is **1.45px a card**
@@ -418,7 +418,7 @@ and no dividers at all. Two tracks agreeing is a box nobody has divided yet; the
 earns its height the moment somebody presses `S`.
 
 **AND THIS PARAGRAPH WAS DESCRIBING SOMETHING THE CODE DID NOT DO, FROM THE DAY IT WAS WRITTEN
-UNTIL 2026-09-11** (D-section-is-the-ruler). `PositionBar` gated the second scale on
+UNTIL 2026-09-11** (D155). `PositionBar` gated the second scale on
 `spans.length > 1`, and `spansOf` returns exactly ONE span for an undeclared box — so the box
 this paragraph is about drew one track, not two. The gate is deleted. It could not survive the
 flip in any case: with the ruler promoted, keeping it would have left the owner's largest

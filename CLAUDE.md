@@ -1719,7 +1719,7 @@ D151 The merge is run by a checkout, so the checkout is asked whether it is curr
 D152 Every row in the collapsed rail draws one glyph on one spine, and a rule that lists the children it knows about will miss one
 D153 The restore asks which drawer, not which number, and the picker stops drawing a number nobody reads
 D154 The camera's automatic functions are inputs to the trigger's arithmetic, and the ones that step are locked
-D-section-is-the-ruler The section is the ruler and the box is the margin note, and the bracket between them is deleted
+D155 The section is the ruler and the box is the margin note, and the bracket between them is deleted
 
 ```
 

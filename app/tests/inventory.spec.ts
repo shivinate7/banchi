@@ -4382,7 +4382,7 @@ test('a narrow copies column shortens the bar, never the position label', async 
   expect(geom.barH).toBeLessThan(96)
 
   /* AND BOTH SCALES SURVIVE, WITH THE SECTION AS THE LARGER — REVERSED IN PLACE 2026-09-11 ON
-     THE OWNER'S INSTRUCTION (D-section-is-the-ruler). This assertion read
+     THE OWNER'S INSTRUCTION (D155). This assertion read
      `boxTrackH > sectTrackH`, which is the literal encoding of the priority the owner asked to
      flip: *"the interface/view of the box is nicer than section"*. The section is the ruler now
      — 26px, graduated, with a fill and a crossing pin — and the box is an 8px strip of chips
@@ -4407,7 +4407,7 @@ test('a narrow copies column shortens the bar, never the position label', async 
 })
 
 /* EVERY BAR IN THE LIST IS THE SAME HEIGHT, WHATEVER STATE ITS COPY IS IN (D118, and the repair
-   D-section-is-the-ruler made to it). D118 kept the second scale mounted through a SALE so the
+   D155 made to it). D118 kept the second scale mounted through a SALE so the
    row would not change height — and it covered exactly one of the three ways the depth can fail
    to resolve. `sectionDepthOf` also returns null on `place.section === null` (app/src/position.ts,
    the `section === null` guard) and on `box_total <= 0`, and the whole zoom block was gated on

@@ -4066,13 +4066,13 @@ COMPONENTS = [
                                             "'#40 of 250 · 16% in' for a sealed box and '#12 of 62 so "
                                             "far' for an open one, because an open box's denominator "
                                             "still moves. THE SVG TRAPEZOID IS DELETED "
-                                            "(D-section-is-the-ruler): its two legs' slope ratio "
+                                            "(D155): its two legs' slope ratio "
                                             "carried neither a width nor a height term and its "
                                             "arithmetic pointed at the wrong chip by up to 42px. THE "
                                             "ZOOM BLOCK MOUNTS ON THE `sectionDepth` PROP and never on "
                                             "whether the depth resolved, so all four owner states are "
                                             "one DOM at one height (D118).",
-                                    "governed_by": ["D5", "D10", "D13", "D20", "D24", "D30", "D41", "D58", "D68", "D118", "D132", "D-section-is-the-ruler"]},
+                                    "governed_by": ["D5", "D10", "D13", "D20", "D24", "D30", "D41", "D58", "D68", "D118", "D132", "D155"]},
             "src/position.ts": {"does": "the position ARITHMETIC with no component in it — `spansOf`, "
                                         "`sentenceOf`, `sectionDepthOf`, their types and the shared "
                                         "`clamp`. Split out of PositionBar.tsx 2026-09-06 so the "
@@ -4091,7 +4091,7 @@ COMPONENTS = [
                                         "hands the caption over as `head`/`tail` FIELDS, never as a "
                                         "string to split: a section name may itself contain ` · ` "
                                         "(D132).",
-                                "governed_by": ["D5", "D10", "D20", "D24", "D30", "D58", "D68", "D118", "D132", "D-section-is-the-ruler"]},
+                                "governed_by": ["D5", "D10", "D20", "D24", "D30", "D58", "D68", "D118", "D132", "D155"]},
             "src/PositionBar.css": {"does": "the two scales at two densities: the section ruler with "
                                             "its fill, graduations, edge labels and crossing pin, the "
                                             "demoted box strip with the caret that replaced the "
@@ -4101,7 +4101,7 @@ COMPONENTS = [
                                             "`.position-bar-sectiontrack` carries `.position-bar-track` "
                                             "too, so document order is the only thing that makes the "
                                             "spec's `querySelector` return the box strip.",
-                                    "governed_by": ["D5", "D20", "D41", "D50", "D118", "D-section-is-the-ruler"]},
+                                    "governed_by": ["D5", "D20", "D41", "D50", "D118", "D155"]},
             "src/cardState.ts": {"does": "the card-state vocabulary and the age of a reading, with no "
                                          "component in it — `readingAgo`, `readingExact`, `stateTone`, "
                                          "`stateLabel`, and the `SOLD` / `RETIRED` words those two are "
@@ -5429,7 +5429,7 @@ COMPONENTS = [
                         "and `product_game` outright — `undefined.find` inside `ClaimEditor`, "
                         "the screen behind its error boundary, and six cases here spending "
                         "thirty seconds each on a switch that had been detached. AND THE HASH'S OWN BOX SINCE 2026-09-05: `#/inventory?box=<n>` was honoured only for a box that already had ROWS, because the shelf list is built from the rows first and the registry second and the ref was consumed on the first list — so every box of code cards, which D24 pools and which therefore has none, was unreachable by the one link that aims at one. Two cases, with `GET /boxes` held back so the ordering is the defect's rather than a race.",
-                "governed_by": ["D5", "D7", "D8", "D9", "D10", "D13", "D20", "D22", "D23", "D24", "D26", "D28", "D30", "D31", "D33", "D34", "D37", "D38", "D40", "D41", "D43", "D45", "D49", "D55", "D57", "D58", "D63", "D67", "D68", "D71", "D83", "D89", "D92", "D101", "D115", "D116", "D118", "D124", "D125", "D119", "D132", "D27", "D134", "D142", "D-section-is-the-ruler"],
+                "governed_by": ["D5", "D7", "D8", "D9", "D10", "D13", "D20", "D22", "D23", "D24", "D26", "D28", "D30", "D31", "D33", "D34", "D37", "D38", "D40", "D41", "D43", "D45", "D49", "D55", "D57", "D58", "D63", "D67", "D68", "D71", "D83", "D89", "D92", "D101", "D115", "D116", "D118", "D124", "D125", "D119", "D132", "D27", "D134", "D142", "D155"],
                 "note": "THE CHECK `CLAUDE.md`'s ROUTE-IS-NOT-A-FEATURE RULE SAYS DOES NOT "
                         "EXIST. That rule was written on 2026-08-23 after three routes shipped "
                         "with full T7 coverage and no client function and no control — green "

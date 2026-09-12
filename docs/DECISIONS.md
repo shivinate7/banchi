@@ -11199,7 +11199,7 @@ the card. The corpus bounds the drift of whatever the body was set to; step 2 of
 what decides which mode that was, and it takes thirty seconds.
 
 **Nothing here is validated at the rig.** SPECIFIED and RECORDED; not BUILT, not VALIDATED.
-## D-section-is-the-ruler — The section is the ruler and the box is the margin note, and the bracket between them is deleted
+## D155 — The section is the ruler and the box is the margin note, and the bracket between them is deleted
 
 **Settled 2026-09-11, on the owner's two sentences about their own copies list.** *"The interface/view of the box is nicer than section"*, and the lens between the two scales is *"more noise than useful"*. The section scale is promoted to a full-width graduated 26px ruler with a fill, a pin that crosses it and the section's own bounds written inside its two ends; the box scale is demoted to an 8px strip of chips with a caret on the chip the card is in; and the SVG trapezoid is deleted outright with nothing drawn in its place. **The component's total height is unchanged at 73px, so no row on `#/inventory` moves by a pixel.**
 
