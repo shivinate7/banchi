@@ -126,6 +126,17 @@ SOURCES = (
                "one file",
     },
     {
+        "path": "scripts/stop-gate.sh",
+        "kind": "file",
+        "requires": (),
+        "why": "whether the per-turn harness gate is armed, and its own reason if not — run "
+               "by guards() below through its `--status` flag. That flag exists to answer "
+               "exactly this and had no caller anywhere: not in the Makefile, not here, not "
+               "in checks.py, not in either hook roster. A guard that has stood down prints "
+               "nothing while it is standing down, so the one output a cold session reads "
+               "is where its state belongs",
+    },
+    {
         "path": "scripts/janitor.py",
         "kind": "file",
         "requires": (),
@@ -684,6 +695,54 @@ def hooks() -> List[str]:
     return out
 
 
+def guards() -> List[str]:
+    """Which guards are standing down right now, and whether the turn gate is armed.
+
+    **A GUARD SWITCHED OFF IS INVISIBLE BY CONSTRUCTION.** Every hatch in this repo is
+    printed by the refusal it lifts — which means that when it is SET, no refusal happens,
+    nothing prints, and the guard is gone with no trace in any output a session reads.
+    `PKMNSCAN_DOCS=off` exported in a shell profile, a launchd plist or a wrapper kills one
+    of the only two checks on the commit path in every session from then on.
+
+    So the two things that cannot report themselves are reported here, where a cold session
+    starts. `env | grep PKMNSCAN` is the one-line version of the first half and nobody runs
+    it unprompted.
+
+    **`scripts/stop-gate.sh --status` existed to answer the second and had no caller.** It
+    is the per-turn harness gate — armed or disarmed, with its own reason — and it was
+    reachable from no Makefile target, no status output, and neither hook roster. Run
+    rather than reimplemented, for `icloud-sweep`'s reason: the rule that decides whether
+    the gate is armed lives in one file.
+
+    GATES NOTHING. This script's job is saying what state you are actually in.
+    """
+    lines: List[str] = []
+    names = sorted(
+        name for name in os.environ
+        if name.startswith("PKMNSCAN_") and os.environ[name].strip().lower() == "off"
+    )
+    if names:
+        lines.append(field("hatches", f"{len(names)} SET: " + ", ".join(names)))
+        lines.append(cont("A guard standing down prints nothing while it stands down."))
+        lines.append(cont("Typed for one command? fine. Inherited? that guard has been"))
+        lines.append(cont("refusing nothing in every session since."))
+    else:
+        lines.append(field("hatches", "none set — every guard in this shell is armed"))
+
+    gate = resolve("scripts/stop-gate.sh")
+    if gate:
+        try:
+            done = subprocess.run(
+                [str(gate[0]), "--status"], cwd=str(ROOT),
+                stdout=subprocess.PIPE, stderr=subprocess.DEVNULL, timeout=15, check=False,
+            )
+            answer = done.stdout.decode("utf-8", errors="replace").strip() or "no answer"
+        except (OSError, subprocess.SubprocessError) as exc:
+            answer = f"could not be asked — {exc}"
+        lines.append(field("turn gate", answer))
+    return lines
+
+
 def serving_branch() -> List[str]:
     """WHICH BRANCH THE LIVE SERVER IS SERVING, when that is not main (D139).
 
@@ -1093,7 +1152,7 @@ def render() -> str:
     lines += blind_spots(mapdata)
     lines.append(field("the map", "`make map` renders docs/map.py — a package, a path, a"))
     lines.append(cont("decision id, or `--stale` for prose its file has outrun."))
-    lines += ["", "REPO"] + repo() + hooks() + ports_and_store() + icloud() + leftovers() + janitor_install()
+    lines += ["", "REPO"] + repo() + hooks() + guards() + ports_and_store() + icloud() + leftovers() + janitor_install()
     lines += ["", "SERVING"] + serving()
     lines += ["", "STORE"] + store()
 
