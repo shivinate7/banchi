@@ -496,6 +496,28 @@ function corpusAsDoc(book: PricingCorpus | null, run: string | null = null): Dec
 }
 
 /** Set or clear one card's answer, returning a NEW corpus. `undefined` deletes the key. */
+/** The corpus with a clear's answers put back on it — value, date and provenance, verbatim.
+ *
+ *  ONLY THE SKUS THE SERVER SAID IT RESTORED. `POST /pricing/restore` writes an answer only for
+ *  a SKU the corpus no longer holds, so one answered again between the clear and the undo comes
+ *  back in `skipped` and the newer answer stands. Folding the request's whole map instead would
+ *  put the older price over the newer one on exactly those rows.
+ *
+ *  A FUNCTION AND NOT AN INLINE LOOP, so the setter's argument is visibly built from the
+ *  response — which is what `make screen-freshness` reads to say this write has a way back. */
+function withRestored(
+  book: PricingCorpus,
+  restored: readonly string[],
+  answers: PricingClearResult['cleared'],
+): PricingCorpus {
+  const skus = { ...(book.skus ?? {}) }
+  for (const sku of restored) {
+    const was = answers[sku]
+    if (was !== undefined) skus[sku] = was
+  }
+  return { ...book, skus }
+}
+
 function setAnswer(book: PricingCorpus, sku: string, value: unknown, channel: 'price' | 'unknown'): PricingCorpus {
   const skus = { ...(book.skus ?? {}) }
   if (value === undefined) delete skus[sku]
@@ -2274,13 +2296,44 @@ export function Pricing() {
       ? 'the cards on this screen'
       : `${loaded.length} run${loaded.length === 1 ? '' : 's'}`)
 
-  /** A clear landed: drop those answers, clear the fields, and offer the way back.
+  /** Re-read the corpus for WHAT MAY STILL BE CLEARED, and for the digest. Not for the answers.
    *
-   *  NO RELOAD. The screen holds the document the server confirmed, so the new one is that minus
-   *  the cleared keys — and putting BOTH `book` and `savedBook` on the same object is what keeps
-   *  `dirty` false, so the autosave effect does not immediately PUT a document the server just
-   *  wrote. A reload would be correct too and would flash skeletons over the whole list, which
-   *  is D118's rule broken by the one press that has no business moving anything. */
+   *  IT IS NOT `load()`, WHICH IS THE POINT OF HAVING IT. That refetches the worklist too and
+   *  draws skeletons over the whole list; a clear moves no row and changes no position, so a
+   *  press that reflowed the page would be D118's rule broken by the one act that has no
+   *  business moving anything.
+   *
+   *  `clearable` IS WHY THIS IS OWED AT ALL, rather than the fold below being enough. That block
+   *  is the SERVER's answer to which answers may go; after a clear it still names every SKU that
+   *  just left, so a sheet reopened without this would count answers that are gone and offer to
+   *  remove them again. There is no narrower route — it rides `GET /pricing`'s envelope — so the
+   *  whole document arrives and only two things off it are taken.
+   *
+   *  AND THE ANSWERS ARE DELIBERATELY NOT ADOPTED, WHICH COST A REAL DEFECT TO LEARN. The first
+   *  build guarded the adoption with `setBook((current) => current === savedBook.current ? …)`
+   *  and assigned `savedBook.current` INSIDE that updater. React invokes an updater TWICE under
+   *  StrictMode: the first pass moved the ref, so the second pass no longer matched and returned
+   *  the old document — leaving `book` and `savedBook` different objects, which is exactly what
+   *  `dirty` means. The screen then PUT the pre-refresh document it had just been told was
+   *  stale. Measured: `app/tests/pricing.spec.ts` caught it as a restore quoting the PUT's
+   *  revision instead of the read's.
+   *
+   *  Not adopting them is also the honest reading. What the fold produced IS the document the
+   *  server just confirmed, minus what it just removed; a cross-tab write landing in between is
+   *  what `PUT /pricing`'s own `corpus_moved` refusal is for (D86), and that guard is unchanged
+   *  — this screen has never resolved that case by silently taking the other tab's answers. */
+  const refreshCorpus = useCallback(async () => {
+    const held = await getPricingCorpus()
+    setClearable(held.clearable ?? null)
+    revision.current = held.revision
+  }, [])
+
+  /** A clear landed: drop those answers, clear the fields, re-read, and offer the way back.
+   *
+   *  THE FOLD IS FIRST AND THE RE-READ IS AUTHORITATIVE. Putting BOTH `book` and `savedBook` on
+   *  the same object is what keeps `dirty` false, so the autosave effect does not immediately
+   *  PUT a document the server just wrote; the fold is what empties the fields on the frame of
+   *  the press rather than a round trip later. */
   const onCleared = useCallback((result: PricingClearResult) => {
     const gone = Object.keys(result.cleared)
     const current = savedBook.current
@@ -2302,6 +2355,7 @@ export function Pricing() {
       flash(input)
       touched.current.delete(sku)
     }
+    void refreshCorpus()
     toast({
       kind: 'receipt',
       title: `${result.count} typed price${result.count === 1 ? '' : 's'} cleared`,
@@ -2320,15 +2374,14 @@ export function Pricing() {
               revision.current = back.revision
               const held = savedBook.current
               if (held !== null) {
-                const skus = { ...(held.skus ?? {}) }
-                for (const sku of back.restored) {
-                  const was = result.cleared[sku]
-                  if (was !== undefined) skus[sku] = was
-                }
-                const next = { ...held, skus }
+                /* THE RESPONSE IS WHAT DECIDES WHICH ROWS COME BACK, not the request: `restored`
+                   omits any SKU answered again since the clear, and folding the request instead
+                   would put the older answer over the newer one. */
+                const next = withRestored(held, back.restored, result.cleared)
                 savedBook.current = next
                 setBook(next)
               }
+              void refreshCorpus()
               for (const sku of back.restored) {
                 const input = inputs.current.get(sku)
                 const was = result.cleared[sku]
@@ -2354,7 +2407,10 @@ export function Pricing() {
         },
       },
     })
-  }, [])
+    /* `refreshCorpus` IS THE ONLY DEPENDENCY AND IT IS STABLE — a `useCallback` over refs and
+       setters with an empty list of its own — so this handler is built once and the sheet's
+       prop never changes identity under it. */
+  }, [refreshCorpus])
   const closePicker = useCallback(() => setRunsOpen(false), [])
   useDismiss(pickerRef, runsOpen, closePicker)
 

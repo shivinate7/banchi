@@ -197,6 +197,11 @@ const RECORDED = {
     'ingestOrders', 'pullCopy', 'undoPull', 'readShippingExport', 'forgetShippingExport',
     'moveCard', 'moveCards', 'putPricingCorpus', 'emitMerged', 'reconcileLive', 'reclaimBoxPhotos',
     'markdownListings', 'applyMarkdown',
+    // The mass-clear and its inverse (D-a-typed-price-is-cleared-by-a-press), recorded by the
+    // deliberate act this table's header asks for rather than left to widen the drift it
+    // already names. On their own line so a branch adding its own writes does not conflict
+    // with this one over the same line — the failure mode the header records happening twice.
+    'clearPricingAnswers', 'restorePricingAnswers',
   ],
   nonMutating: ['preflightRun', 'cropPreview', 'fetchOrders', 'previewOrders'],
   nonRequests: [
@@ -842,6 +847,21 @@ function callbackBindingReReads(screens, component, prop, depth = 0, seen = new 
 
   for (const binding of jsxBindings(screens, component, prop)) {
     const { screen, node, host } = binding
+    const where = `${screen.name}:<${component} ${prop}>`
+
+    /** The two mechanisms a binding may carry, asked of whatever expression really holds it. */
+    const verdict = (expression) => {
+      if (reachesRead(screen, expression)) return { where, how: 're-reads' }
+      const bump = collect(expression, isCounterBump)[0]
+      if (bump !== undefined) {
+        const stateName = screen.stateOf.get(bump.expression.text)
+        if (stateName !== undefined && counterCausesRead(screens, screen, stateName) !== null) {
+          return { where, how: 'bumps a reload counter' }
+        }
+      }
+      return null
+    }
+
     if (ts.isIdentifier(node)) {
       const owner = ownerComponent(screen, host)
       if (owner !== null && owner.props.has(node.text)) {
@@ -849,17 +869,26 @@ function callbackBindingReReads(screens, component, prop, depth = 0, seen = new 
         if (deeper !== null) return deeper
         continue
       }
-    }
-    if (reachesRead(screen, node)) {
-      return { where: `${screen.name}:<${component} ${prop}>`, how: 're-reads' }
-    }
-    const bump = collect(node, isCounterBump)[0]
-    if (bump !== undefined) {
-      const stateName = screen.stateOf.get(bump.expression.text)
-      if (stateName !== undefined && counterCausesRead(screens, screen, stateName) !== null) {
-        return { where: `${screen.name}:<${component} ${prop}>`, how: 'bumps a reload counter' }
+      /* A BARE IDENTIFIER NAMING A LOCAL HANDLER — `onCleared={onCleared}` — AND IT WAS
+       * INVISIBLE HERE UNTIL 2026-09-12. Every case in this script's own self-test binds an
+       * inline arrow (`onChanged={() => setReloads(...)}`), and `reachesRead` walks for CALL
+       * expressions: an identifier contains none, so it answered false without resolving
+       * anything. A parent that re-reads through a named `useCallback` — the commonest binding
+       * in this app — therefore read as NO MECHANISM AT ALL, while the identical handler
+       * written inline was recognised. Found by a write whose parent folds and re-reads in a
+       * named callback; the two cases below pin both directions.
+       *
+       * IT DOES NOT WIDEN WHAT COUNTS AS A MECHANISM, only where the script looks for one: the
+       * handler still has to reach a read or bump a counter that does. */
+      const local = screen.declarations.get(node.text)
+      if (local?.node !== undefined) {
+        const found = verdict(local.node)
+        if (found !== null) return found
+        continue
       }
     }
+    const found = verdict(node)
+    if (found !== null) return found
   }
   return null
 }
@@ -1566,6 +1595,27 @@ function selfTest() {
         const [reloads, setReloads] = useState(0)
         useEffect(() => { void doRead().then(setRows) }, [reloads])
         return <div>{rows}<Ops onChanged={() => setReloads((n) => n + 1)} /></div>
+      }`],
+    ['3d. the callback bound as a bare identifier naming a local handler', 'callback prop, re-read owned by the parent', `
+      export function Named({ onChanged }: { onChanged: () => void }) {
+        const press = async () => { await doWrite(1, 2); onChanged() }
+        return <button onClick={press} />
+      }
+      export function NamedOwner() {
+        const [rows, setRows] = useState(null)
+        const refresh = useCallback(async () => { setRows(await doRead()) }, [])
+        useEffect(() => { void refresh() }, [refresh])
+        return <div>{rows}<Named onChanged={refresh} /></div>
+      }`],
+    ['3e. the same bare identifier where the handler re-reads nothing', null, `
+      export function Inert({ onChanged }: { onChanged: () => void }) {
+        const press = async () => { await doWrite(1, 2); onChanged() }
+        return <button onClick={press} />
+      }
+      export function InertOwner() {
+        const [rows, setRows] = useState(null)
+        const shrug = useCallback(() => { setRows(null) }, [])
+        return <div>{rows}<Inert onChanged={shrug} /></div>
       }`],
     ['3b. the same callback with no binding site anywhere', null, `
       export function Loose({ onChanged }: { onChanged: () => void }) {

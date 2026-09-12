@@ -83,6 +83,12 @@ The remedy is that the count sits ON the option, before the press. An empty wind
 
 **And the screen does not reload afterwards.** It holds the document the server confirmed, so the new one is that minus the cleared keys, with `book` and `savedBook` put on the same object so `dirty` stays false. A reload would be correct and would flash skeletons over the whole list, which is D118's rule broken by the one press that has no business moving anything.
 
+**What it DOES re-read is `clearable`, and that is owed rather than optional.** That block is the server's answer to which answers may go; after a clear it still names every SKU that just left, so a sheet reopened without the re-read would count answers that are gone and offer to remove them again. There is no narrower route — it rides `GET /pricing`'s envelope — so the whole document arrives and two things off it are taken.
+
+**THE ANSWERS ARE DELIBERATELY NOT ADOPTED FROM THAT READ, AND THE FIRST BUILD THAT DID COST A REAL DEFECT.** It guarded the adoption with `setBook((current) => current === savedBook.current ? … : current)` and assigned `savedBook.current` **inside that updater**. React invokes an updater **twice** under StrictMode: the first pass moved the ref, the second no longer matched and returned the old document — leaving `book` and `savedBook` different objects, which is precisely what `dirty` means. The screen then PUT the pre-refresh document it had just been told was stale, wholesale, onto the one file in this product that holds money. `app/tests/pricing.spec.ts` caught it as a restore quoting the PUT's revision instead of the read's, which is the only place the difference was visible.
+
+Not adopting them is also the honest reading. What the fold produced *is* the document the server just confirmed, minus what it just removed; a cross-tab write landing in between is what `PUT /pricing`'s own `corpus_moved` refusal is for, and this screen has never resolved that case by silently taking the other tab's answers.
+
 ### What this does not do, named rather than left to be discovered
 
 **No hold is ever cleared, by any control here, and there is no option that would.** An operator who wants a hold gone lifts it on its own row, where the reason and the watch are visible. If holds ever need a bulk lift that is a different press with a different argument, and it is not this one.

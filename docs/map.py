@@ -1685,7 +1685,8 @@ COMPONENTS = [
                 # carries, which is what makes a landing a reason to update it: D96 took two
                 # names out when the envelope walk went, D100 put four in.
                 "governed_by": ["D13", "D14", "D18", "D58", "D76", "D79", "D83", "D86", "D87",
-                                "D89", "D96", "D100"],
+                                "D89", "D96", "D100",
+                                "D-a-typed-price-is-cleared-by-a-press"],
             },
             "verdict-selftest.py": {"does": "PROVES `app/design-check-reporter.ts` STILL WRITES A "
                                             "VERDICT, BY RUNNING IT. `make docs-audit`'s "

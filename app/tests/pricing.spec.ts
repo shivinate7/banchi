@@ -3522,23 +3522,61 @@ test('the store-wide scope sends no SKUs, and says so in the label', async ({ pa
 })
 
 test('a clear empties the fields it cleared, and offers the way back', async ({ page }) => {
+  const TYPED = { value: '4.50', at: '2026-09-07T06:50:31.891+00:00' }
   const wire = await open(page, {
     skus: CLEAR_ROWS,
     clearable: CLEARABLE,
     decisions: { rule: 'match', basis: 'market', overrides: { '8608859': '4.50' } },
-    clear: () => ({
-      ok: true,
-      cleared: { '8608859': { value: '4.50', at: '2026-09-07T06:50:31.891+00:00' } },
-      count: 1,
-      holds: 2,
-      unknown: 1,
-      undated: 0,
-      answers: 3,
-      revision: 'rev-cleared',
-    }),
   })
   const field = page.getByLabel('Price for Articuno')
   await expect(field).toHaveValue('4.50')
+
+  /* A CORPUS THAT ACTUALLY MOVES, because the screen RE-READS after both presses — `clearable`
+     is the server's answer to which answers may go, and a fixture that kept serving the cleared
+     SKU would have the sheet offering to remove an answer that is gone.
+
+     ALL THREE ARE REGISTERED BEFORE ANY PRESS. A stub swapped in after `click()` loses to the
+     press's own re-read, and the assertion then retries a STABLE wrong answer — the race
+     `docs/DEBTS.md` §23 records. These mutate one object in place instead. */
+  const live: Record<string, unknown> = { '8608859': { ...TYPED } }
+  await page.route(/\/pricing$/, async (route) => {
+    if (route.request().method() === 'PUT') return route.fallback()
+    await route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify({
+        corpus: { version: 1, policy: { rule: 'match', basis: 'market' }, skus: { ...live } },
+        path: '/tmp/prices.json',
+        revision: 'rev-live',
+        clearable: { days: Object.fromEntries(Object.keys(live).map((k) => [k, 5])), holds: 2, unknown: 1 },
+      }),
+    })
+  })
+  await page.route(/\/pricing\/clear$/, async (route) => {
+    wire.push({ method: 'POST', path: '/pricing/clear', body: route.request().postDataJSON() })
+    const cleared = { '8608859': { ...TYPED } }
+    delete live['8608859']
+    await route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify({
+        ok: true, cleared, count: 1, holds: 2, unknown: 1, undated: 0, answers: 3,
+        revision: 'rev-cleared',
+      }),
+    })
+  })
+  await page.route(/\/pricing\/restore$/, async (route) => {
+    const body = route.request().postDataJSON() as { answers: Record<string, unknown> }
+    wire.push({ method: 'POST', path: '/pricing/restore', body })
+    for (const [key, value] of Object.entries(body.answers)) live[key] = value
+    await route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify({
+        ok: true, restored: Object.keys(body.answers), skipped: [], revision: 'rev-restored',
+      }),
+    })
+  })
 
   await page.getByRole('button', { name: 'Clear typed prices in bulk' }).click()
   await page.locator('.clearprices-foot .bn-btn-danger-solid').click()
@@ -3558,10 +3596,24 @@ test('a clear empties the fields it cleared, and offers the way back', async ({ 
   await toast.getByRole('button', { name: 'Undo' }).click()
   await expect(field).toHaveValue('4.50')
   const back = wire.filter((r) => r.path === '/pricing/restore').at(-1)
-  expect(back?.body).toEqual({
-    answers: { '8608859': { value: '4.50', at: '2026-09-07T06:50:31.891+00:00' } },
-    revision: 'rev-cleared',
+  /* THE ANSWER ITSELF TRAVELS, VALUE AND DATE. A restore that sent only the SKU would make the
+     undo a re-type, and one that let the server stamp a fresh date would read as a store-wide
+     re-pricing on the next markdown survey (D103's ratchet).
+
+     THE REVISION IS THE ONE THE RE-READ LEFT, not the clear's: the screen refreshed between the
+     two presses, which is the whole reason `clearable` is not stale by the time the sheet can
+     be opened again. */
+  expect((back?.body as { answers: unknown }).answers).toEqual({
+    '8608859': { value: '4.50', at: '2026-09-07T06:50:31.891+00:00' },
   })
+  expect((back?.body as { revision: string }).revision).toBe('rev-live')
+
+  /* AND THE SHEET AGREES WITH THE STORE AFTERWARDS. Reopened, it counts the restored answer
+     again rather than the four it opened on. */
+  await page.getByRole('button', { name: 'Clear typed prices in bulk' }).click()
+  await expect(page.locator('.clearprices-foot .bn-btn-danger-solid')).toContainText(
+    'Clear 1 typed price',
+  )
 })
 
 test('the clear is refused while the screen has an unsaved answer', async ({ page }) => {
