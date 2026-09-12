@@ -11599,6 +11599,75 @@ def spelling_findings(text: str, suffix: str) -> List[Tuple[int, str, str, str]]
     return found
 
 
+SHELL_SUFFIXES = (".sh",)
+SHELL_EXTRA = ("scripts/githooks/pre-commit", "scripts/githooks/pre-push",
+               "scripts/githooks/post-merge", "scripts/githooks/post-checkout",
+               "scripts/githooks/reference-transaction")
+
+_DQ = re.compile(r'"(?:[^"\\]|\\.)*"')
+
+
+def shell_substitution_findings(text: str):
+    """Unescaped backticks inside a double-quoted shell string — command substitution."""
+    for number, line in enumerate(text.split("\n"), 1):
+        stripped = line.lstrip()
+        if stripped.startswith("#"):
+            continue
+        for match in _DQ.finditer(line):
+            body = match.group(0)
+            # A backtick the author escaped is a literal and is what every other site here does.
+            if re.search(r'(?<!\\)`', body):
+                yield number, body.strip()
+
+
+def check_shell_substitution(report: Report) -> None:
+    """A backtick inside a double-quoted shell string RUNS, and every other site here escapes it.
+
+    **Blocking, on D16's test: this is mechanical and there is nothing to judge.** A backtick
+    inside double quotes is command substitution, so a message that names a command EXECUTES
+    it. `bash -n` is silent — the line is valid shell, it simply does something else.
+
+    **It is kept for one measured incident.** `scripts/reap-selftest.sh:216` carried
+    `bad "refused without naming `` `make down` ``, ..."` on a failure path. On the primary
+    checkout `make down` stops the capture server `make launch-agent` keeps alive over the
+    owner's real store, so a FAILING assertion in the test suite would have taken the owner's
+    server down as a side effect of printing why it failed. It fires only when that arm fails,
+    which is why it survived every green run; the arm failed repeatedly on 2026-09-11 from an
+    unrelated flake.
+
+    **Twelve other sites in this repo already spell it `` \\` ``** — the rule was understood
+    everywhere but one line, which is exactly the shape a mechanical check is for.
+
+    **What it cannot see.** A backtick in a heredoc body (not a double-quoted string), and a
+    deliberate substitution someone wrote in the modern `$(...)` form, which this never flags.
+    """
+    findings: List[Finding] = []
+    scanned = 0
+    paths = list(_walk(ROOT, SHELL_SUFFIXES))
+    for extra in SHELL_EXTRA:
+        candidate = ROOT / extra
+        if candidate.exists():
+            paths.append(candidate)
+    for path in paths:
+        scanned += 1
+        for line, body in shell_substitution_findings(read(path)):
+            findings.append(
+                Finding(
+                    f"{rel(path)}:{line}",
+                    f"a backtick inside a double-quoted string RUNS as command "
+                    f"substitution: {body[:90]}. Escape it (\\`) or single-quote the "
+                    f"string. `bash -n` cannot see this — the line is valid shell.",
+                )
+            )
+    report.add(
+        "shell substitution",
+        MECHANICAL,
+        findings,
+        f"{len(findings)} unescaped backtick(s) in a double-quoted shell string" if findings
+        else f"no double-quoted shell string in {scanned} files runs a command by accident",
+    )
+
+
 def check_identifier_spelling(report: Report) -> None:
     """A name spelled British, anywhere a session might grep for its American twin.
 
@@ -12783,6 +12852,7 @@ def self_test() -> int:
     )
     report = Report()
     check_identifier_spelling(report)
+    check_shell_substitution(report)
     by_label = {check: findings for check, _, findings, _ in report.checks}
     ok(
         not by_label["identifier spelling"],
@@ -13393,6 +13463,7 @@ def audit(staged_only: bool) -> Report:
     check_positional_references(report, docs)
     check_audit_invocation(report)
     check_identifier_spelling(report)
+    check_shell_substitution(report)
     # Last, and it is the row that says the rows above are all of them. It reconciles this
     # file's check definitions against the calls in this function.
     #
