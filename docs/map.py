@@ -1723,7 +1723,7 @@ COMPONENTS = [
                 # main checkout's supervisor is the product and is never touched. D42 is why a
                 # branch is judged by ancestry rather than by `git branch -d`.
                 "governed_by": ["D18", "D42", "D44", "D53", "D111", "D127",
-                                "D-a-loop-nobody-is-listening-to"],
+                                "D175"],
             },
             "serve-selftest.py": {
                 "does": "THE SUPERVISOR'S BUILD JOB, PROVED AGAINST A THROWAWAY TREE (D138). "
@@ -1774,7 +1774,7 @@ COMPONENTS = [
                         "`_shorten` truncates first, and `ps -axww -o command= -p <pid>`, "
                         "where BSD's `-a` overrides `-p` and prints the whole machine.",
                 "governed_by": ["D18", "D44", "D53", "D111", "D127",
-                                "D-a-loop-nobody-is-listening-to"],
+                                "D175"],
             },
             "reap.py": {
                 "does": "the kill guard, and the tool it names. ONE FILE, TWO FACES, ONE "

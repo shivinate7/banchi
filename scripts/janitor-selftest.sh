@@ -214,7 +214,7 @@ husk_pid="$(plain_spawn "$tmp/work/.claude/worktrees/husk-busy/.serve/keep.py")"
 # an orphan: its own script is gone, its project directory is not
 orphan_pid="$(plain_spawn "$tmp/work/.claude/worktrees/ghost/scripts/serve.py")"; kids="$kids $orphan_pid"
 
-# ------------------------------------------------- the process nothing owns any more (D-a-loop-nobody-is-listening-to)
+# ------------------------------------------------- the process nothing owns any more (D175)
 #
 # THE FAKE SHELL SNAPSHOT IS THE FIXTURE'S WHOLE LEVER. `loose_processes` will name only a
 # process it can PROVE a session started, and the proof is this path in the argv. It lives

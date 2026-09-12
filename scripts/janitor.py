@@ -368,7 +368,7 @@ def servers_under(tree: str, mine: int) -> List[Server]:
     return found
 
 
-# ------------------------------------------------- the process nothing owns any more (D-a-loop-nobody-is-listening-to)
+# ------------------------------------------------- the process nothing owns any more (D175)
 
 class Loose(NamedTuple):
     pid: int

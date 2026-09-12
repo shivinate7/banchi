@@ -1,4 +1,4 @@
-## D-a-loop-nobody-is-listening-to — Ownership is read the way liveness is, and a process a session no longer owns is offered rather than reaped
+## D175 — Ownership is read the way liveness is, and a process a session no longer owns is offered rather than reaped
 
 **Built 2026-09-12, ninety minutes after the incident that specifies it.** A coordinator session
 backgrounded `scratchpad/autodrive.sh` — a hand-written merge driver, a `while`/`sleep` loop
