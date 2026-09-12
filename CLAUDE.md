@@ -2069,6 +2069,7 @@ D169 The blanket sweep asks the question the verdict answers, and a nested workt
 D170 A widening is safe only while the category fits, and Pokemon's does not
 D171 A refusal that reaches nobody did not happen, and a status line the session wrote is not a reading
 D172 A card's name is the first photograph of it, frozen at issue
+D-a-row-that-examined-nothing-says-so A row declares how many subjects it had, an empty one is pinned by name with a reason, and eleven published claims get the reader they were already cited as having
 ```
 
 **THE GAP THIS LIST CARRIED BETWEEN D116 AND D118 IS CLOSED, AND IT CLOSED THE WAY IT SAID IT

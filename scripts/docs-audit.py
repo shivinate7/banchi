@@ -12606,6 +12606,15 @@ def check_subject_counts(report: Report, staged_only: bool = False) -> None:
     for row in report.checks:
         if row.check == "subject counts":
             continue
+        # A ROW THAT PRINTED A PROBLEM IS NOT THIS ROW'S SUBJECT. The defect is the
+        # vacuous `ok`, and a row rendering FAIL or ask is not rendering it — so a
+        # findings-bearing row is judged on its findings and nothing else. It also keeps
+        # the error paths honest-looking: `make targets` with no Makefile adds a finding
+        # and no count, and "declared no subject count" beside it would be noise pointing
+        # at the wrong thing. A row whose CLEAN path declares no count is caught the first
+        # time that path is taken, which is the first time it could mislead anybody.
+        if row.findings:
+            continue
         if row.scanned is None:
             findings.append(
                 Finding(
@@ -14913,6 +14922,108 @@ def self_test() -> int:
     _code = "const T = {\n  'harness/traces/x.json': 1,\n} // docs/DEBTS.md\n"
     ok(_repo_literals(_code, {"harness/traces/x.json", "docs/DEBTS.md"}) == ["harness/traces/x.json"],
        "a code string naming a tracked file is a dependency and a comment naming one is not")
+
+    # A ROW THAT EXAMINED NOTHING IS NOT A ROW THAT PASSED. Driven over a synthetic report,
+    # because the thing under test is the REPORTING LAYER and a real run cannot pose a row
+    # with no subject without breaking a walk. Every arm here is a state the file printed
+    # `ok` for before 2026-09-12.
+    print("\na row that examined nothing does not print the word a row that examined everything does")
+
+    # ROWS BUILT AS `Row`, NEVER THROUGH `report.add`. `defined_checks` marks any
+    # module-level function that emits a row AS A CHECK, deliberately and by union — so a
+    # `report.add` anywhere in `self_test` makes `check dispatch` report `self_test` as an
+    # undispatched check. Measured, one edit after that row was extended. Appending the
+    # tuple is also the more honest fixture: it poses the report a check would leave.
+    def _subject(rows, staged=False, drop=""):
+        report = Report()
+        posed = {check for check, _, _ in rows}
+        # Every pinned name present, so the stale-pin leg is satisfied and the arm under
+        # test is the only thing being read. `drop` omits one, which is how the stale-pin
+        # arm is posed.
+        for name in EXPECTED_EMPTY:
+            if name not in posed and name != drop:
+                report.checks.append(Row(name, MECHANICAL, [], "", 1))
+        for check, findings, scanned in rows:
+            report.checks.append(Row(check, MECHANICAL, findings, "", scanned))
+        check_subject_counts(report, staged)
+        return {row.check: row.findings for row in report.checks}["subject counts"]
+
+    _pinned = next(n for n, (when, _) in EXPECTED_EMPTY.items() if when == "always")
+    _staged_pin = next(n for n, (when, _) in EXPECTED_EMPTY.items() if when == "staged")
+    ok(not _subject([("paths", [], 2964)]), "a row with subjects and no findings is clean")
+    ok(any("declared no subject count" in m for _, m in _subject([("paths", [], None)])),
+       "a row that declared no subject count is a finding, not an ok")
+    ok(any("examined NOTHING" in m for _, m in _subject([("unpinned row", [], 0)])),
+       "an UNPINNED row that examined nothing is a finding")
+    ok(not _subject([(_pinned, [], 0)]),
+       f"a row pinned expected-empty ({_pinned}) may examine nothing")
+    ok(any("examined nothing in a FULL run" in m
+           for _, m in _subject([(_staged_pin, [], 0)], staged=False))
+       and not _subject([(_staged_pin, [], 0)], staged=True),
+       "a `staged` pin permits zero under --staged and refuses it in a full run")
+    ok(any("no row by that name was emitted" in m
+           for _, m in _subject([(_pinned + "-renamed", [], 1)], drop=_pinned)),
+       "a pin naming a row the file no longer emits is reported stale")
+    ok(not _subject([("with findings", [Finding("x", "y")], 0)]),
+       "a row WITH findings is judged on the findings, never on an empty subject")
+    _rendered = Report()
+    _rendered.checks.append(Row("zero", MECHANICAL, [], "a summary", 0))
+    _rendered.checks.append(Row("some", MECHANICAL, [], "a summary", 7))
+    _rendered.checks.append(Row("bare", MECHANICAL, [], "a summary", None))
+    ok("none zero" in re.sub(r"\s+", " ", _rendered.render()),
+       "the render prints `none` for an empty subject")
+    ok("ok   some" in _rendered.render(), "and `ok` where there was one")
+    ok("bare bare" in re.sub(r"\s+", " ", _rendered.render()),
+       "and `bare` where no count was declared")
+    ok(json.loads(_rendered.as_json(0))["rows"][0]["vacuous"] is True
+       and json.loads(_rendered.as_json(0))["rows"][1]["vacuous"] is False,
+       "--json carries the integer and the flag, so nothing parses the render")
+
+    # A DELETION NARRATED IN PROSE IS NOT A RESURRECTION, and `capture_server.py` narrates
+    # one. The classifier is what keeps the row off it, so it is exercised here directly.
+    print("\na deleted symbol in a comment is the record of the deletion; in code it is the defect")
+    _py = 'def f():\n    """Mentions Ghost in a docstring."""\n    # Ghost in a comment\n    return 1\n'
+    ok("Ghost" not in _prose_blanked(Path("x.py"), _py),
+       "a Python docstring and a comment are both blanked")
+    ok("Ghost" in _prose_blanked(Path("x.py"), 'Ghost = 1\n# Ghost\n'),
+       "and an assignment to the same name survives")
+    ok(_prose_blanked(Path("x.py"), _py).count("\n") == _py.count("\n"),
+       "offsets survive, so a reported line number is the real one")
+    ok("Ghost" not in _prose_blanked(Path("x.ts"), "/* Ghost */\nconst a = 1\n"),
+       "a TypeScript block comment is blanked too")
+    ok("Ghost" in _prose_blanked(Path("x.ts"), "const Ghost = 1 /* gone */\n"),
+       "and a declaration beside one survives")
+
+    # THE MONEY BUTTON'S FIGURE, over source strings rather than the tree, so the two
+    # readers are proved before the row is trusted to compare with them.
+    print("\nthe money button's figure is read from the call, never from the wording")
+    _reader = ast.parse('import re\n_E = re.compile(r"^cost\\s+\\$([0-9.]+)\\s*$", re.M)\n')
+    ok(_compiled_assign(_reader, "_E") == ("^cost\\s+\\$([0-9.]+)\\s*$", re.M),
+       "a module-level re.compile is read with its multiline flag")
+    ok(_compiled_assign(_reader, "_MISSING") is None, "and a name that is not there is None")
+    _writer = ast.parse('say(f"cost  ${_estimate(x)}")\nsay(f"other  ${bill(x)}")\n')
+    ok(_rendered_say(_writer, "_estimate") == f"cost  ${_ESTIMATE_SAMPLE}",
+       "the line a say() whose f-string calls the producer would print is rendered")
+    ok(_rendered_say(_writer, "bill") == f"other  ${_ESTIMATE_SAMPLE}",
+       "and the sibling line is a different subject, not the same one")
+    ok(_rendered_say(ast.parse('say("cost  $0.00")\n'), "_estimate") is None,
+       "a line that no longer calls the producer is reported absent rather than matched")
+
+    print("\na published gate threshold is compared as a number")
+    ok(_CRITERION_BAR.search("holdout_accuracy >= 0.95").group(2) == "0.95",
+       "the floor is lifted out of the criterion's own comparison")
+    ok(_CRITERION_BAR.search("holdout_accuracy > 0.9").group(1) == ">",
+       "and the operator with it, so `>` is not read as `>=`")
+    ok(_CRITERION_BAR.search("holdout_accuracy is high") is None,
+       "a criterion with no comparison is unreadable rather than guessed at")
+
+    print("\nevery published harness count is the length of TESTS")
+    ok(not _harness_claim_findings({f"T{n}" for n in range(1, 10)}),
+       "nine registered against a tree that publishes nine")
+    ok(any("registers 10" in m for _, m in _harness_claim_findings({f"T{n}" for n in range(1, 11)})),
+       "ten registered is a finding against every one of the published counts")
+    ok(not _harness_claim_findings(set()),
+       "and an unreadable TESTS yields nothing here — `harness tests` own legs say so instead")
 
     report = Report()
     check_dispatch(report)
