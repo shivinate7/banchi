@@ -32,6 +32,7 @@ import { useSearch } from './useSearch'
 import { Button, Icon, Notice, Pill } from './kit'
 import { dismissToast, toast } from './kit/toast'
 import { rememberHideSold, storedHideSold } from './deviceMemory'
+import { RANK_IS_CURRENT, type FrozenRank } from './frozenRank'
 import { Overlay } from './InventoryOverlay'
 import './Inventory.css'
 
@@ -255,6 +256,37 @@ export function Inventory() {
   const [sold, setSold] = useState<string[]>([])
   const [retired, setRetired] = useState<string[]>([])
 
+  /* THE COPIES THAT HAVE LEFT SINCE THE ORDER ON SCREEN WAS TAKEN (`frozenRank.ts`).
+   *
+   * Not a second overlay on top of `sold`/`retired`: those two are OPTIMISM, cleared the moment
+   * the re-read agrees with them, and they exist so a press shows its own result before the wire
+   * catches up. This is MEMORY, and it outlives the re-read on purpose — it is what lets every
+   * ranking under a query go on computing the order it was computing before the press.
+   *
+   * It is held here rather than in either list because ONE PRESS MAKES BOTH OF THEM STALE and
+   * one press must clear both: the copies list and the box rail rank the same departure two
+   * ways, and two freezes released by two controls is the owner pressing twice to stop one
+   * list moving. */
+  const [frozen, setFrozen] = useState<FrozenRank>(RANK_IS_CURRENT)
+  const holdRank = useCallback((key: string) => {
+    setFrozen((held) => (held.has(key) ? held : new Set(held).add(key)))
+  }, [])
+  const releaseRank = useCallback((key: string) => {
+    setFrozen((held) => {
+      if (!held.has(key)) return held
+      const next = new Set(held)
+      next.delete(key)
+      return next
+    })
+  }, [])
+  /* THE RE-RANK, and the only way the order ever moves under a standing query. Also what a new
+     query gets: a fresh answer has not been worked down yet, so there is nothing to hold still —
+     `BoxBrowse` calls this when the searchbox changes. Identity-stable when already current, so
+     the walk's own effect cannot loop on it. */
+  const rerank = useCallback(() => {
+    setFrozen((held) => (held.size === 0 ? held : RANK_IS_CURRENT))
+  }, [])
+
   /* The copy the walk is pointing at, as the search knows it — for the phone's action bar,
    * which is its one reader since D119 deleted the location card. */
   const [currentCopy, setCurrentCopy] = useState<SearchCopy | null>(null)
@@ -340,6 +372,7 @@ export function Inventory() {
       try {
         const reversible = canTakeBack(await markSold(copy.place.box, copy.place.index))
         setSold((held) => (held.includes(copy.key) ? held : [...held, copy.key]))
+        holdRank(copy.key)
         remember({
           ...seat,
           kind: 'sale',
@@ -354,6 +387,10 @@ export function Inventory() {
       } catch (err) {
         if (refusalCode(err) === ALREADY_SOLD) {
           setSold((held) => (held.includes(copy.key) ? held : [...held, copy.key]))
+          /* ANOTHER DEVICE SOLD IT, AND THE ROW STILL MAY NOT MOVE. The re-read is about to
+             bring the departure back whatever this screen wrote, so the order has gone stale
+             here exactly as it would have on a sale of its own. */
+          holdRank(copy.key)
           remember({
             ...seat,
             kind: 'sale',
@@ -369,7 +406,7 @@ export function Inventory() {
         setBusyKey(null)
       }
     },
-    [busyKey, remember],
+    [busyKey, remember, holdRank],
   )
 
   /* The sibling write (D26), shaped move for move on `doSell`. */
@@ -390,6 +427,7 @@ export function Inventory() {
           await retireCard(copy.place.box, copy.place.index, reason),
         )
         setRetired((held) => (held.includes(copy.key) ? held : [...held, copy.key]))
+        holdRank(copy.key)
         remember({
           ...seat,
           kind: 'retirement',
@@ -405,6 +443,7 @@ export function Inventory() {
       } catch (err) {
         if (refusalCode(err) === ALREADY_RETIRED) {
           setRetired((held) => (held.includes(copy.key) ? held : [...held, copy.key]))
+          holdRank(copy.key)
           remember({
             ...seat,
             kind: 'retirement',
@@ -420,7 +459,7 @@ export function Inventory() {
         setBusyKey(null)
       }
     },
-    [busyKey, remember],
+    [busyKey, remember, holdRank],
   )
 
   const doUndo = useCallback(
@@ -448,11 +487,15 @@ export function Inventory() {
       }
       if (receipt.kind === 'sale') setSold((held) => held.filter((key) => key !== receipt.key))
       else setRetired((held) => held.filter((key) => key !== receipt.key))
+      /* THE COPY IS BACK, SO THE ORDER IS NO LONGER STALE BY IT. Releasing rather than leaving
+         it held is what keeps the staleness figure a count of what actually left: an undone sale
+         that went on being counted would offer a re-rank for a store that never moved. */
+      releaseRank(receipt.key)
       toast({ kind: 'ok', icon: 'undo', title: receipt.kind === 'sale' ? 'Sale undone' : 'Retirement undone', body: receipt.place, ttlMs: 4000 })
       setReloads((n) => n + 1)
       setBusyKey(null)
     },
-    [busyKey],
+    [busyKey, releaseRank],
   )
   doUndoRef.current = doUndo
 
@@ -525,6 +568,8 @@ export function Inventory() {
           onCurrent={setCurrentCopy}
           renderAction={actionFor}
           hideSold={hideSold}
+          frozen={frozen}
+          onRerank={rerank}
         />
       </div>
     )
@@ -542,6 +587,8 @@ export function Inventory() {
         reloadToken={reloads}
         hideSold={hideSold}
         onHideSold={toggleHideSold}
+        frozen={frozen}
+        onQuery={rerank}
         boxPanel={<BoxRuns box={runScope.box} indices={runScope.indices} />}
         actionBar={currentCopy === null || selected === null || currentCopy.key !== selected.key ? null : actionFor(currentCopy, true)}
       />
@@ -583,6 +630,8 @@ function CopiesPanel({
   onCurrent,
   renderAction,
   hideSold,
+  frozen,
+  onRerank,
 }: {
   row: Row
   layouts: ReadonlyMap<number, readonly SectionDetail[]>
@@ -596,6 +645,8 @@ function CopiesPanel({
   onCurrent: (copy: SearchCopy | null) => void
   renderAction: (copy: SearchCopy, primary: boolean) => ReactNode
   hideSold: boolean
+  frozen: FrozenRank
+  onRerank: () => void
 }) {
   const { query, setQuery, results, loading, failure, reload } = useSearch()
 
@@ -718,6 +769,8 @@ function CopiesPanel({
              one call site, the phone's sticky action bar, and is phone-only from here. */
           renderAction={(copy) => renderAction(copy, false)}
           hideSold={hideSold}
+          frozen={frozen}
+          onRerank={onRerank}
         />
       )}
     </section>

@@ -4046,7 +4046,7 @@ COMPONENTS = [
             # D90 is main's order-driven mode, whose two props this file no longer carries; the
             # citation stays so a session reading main's history knows they were removed on
             # purpose rather than lost.
-            "governed_by": ["D6", "D8", "D9", "D10", "D16", "D19", "D20", "D21", "D22", "D23", "D24", "D26", "D27", "D30", "D31", "D33", "D35", "D38", "D39", "D41", "D45", "D46", "D49", "D52", "D58", "D67", "D68", "D89", "D90", "D92", "D118", "D125", "D132", "D119"]},
+            "governed_by": ["D6", "D8", "D9", "D10", "D16", "D19", "D20", "D21", "D22", "D23", "D24", "D26", "D27", "D30", "D31", "D33", "D35", "D38", "D39", "D41", "D45", "D46", "D49", "D52", "D58", "D67", "D68", "D89", "D90", "D92", "D118", "D125", "D132", "D119", "D-the-order-is-taken-once-and-a-sale-may-not-retake-it"]},
             "src/BoxBrowse.css": {"does": "its layout, and why no accent appears anywhere in it. Its list keeps an "
                                   "INSET focus ring and says so — it clips its own overflow, which is the "
                                   "case base.css's standing ring cannot serve. D38's band lives here: the "
@@ -4189,7 +4189,8 @@ COMPONENTS = [
                 # was removed on purpose rather than lost.
                 "governed_by": ["D5", "D6", "D7", "D8", "D10", "D13", "D24", "D26", "D27", "D28",
                                 "D31", "D33", "D36", "D38", "D39", "D41", "D45", "D49", "D57",
-                                "D58", "D68", "D71", "D90", "D93", "D118", "D119", "D125", "D132"],
+                                "D58", "D68", "D71", "D90", "D93", "D118", "D119", "D125", "D132",
+                                "D-the-order-is-taken-once-and-a-sale-may-not-retake-it"],
             },
             "src/Inventory.css": {
                 "does": "its layout, at the dense owner-side end of the one system, two "
@@ -4407,6 +4408,28 @@ COMPONENTS = [
                                          "owner's screens draws through, so a raw wire value is never "
                                          "printed as a label.",
                                  "governed_by": ["D5", "D26", "D31", "D83", "D92", "D115"]},
+            "src/frozenRank.ts": {"does": "THE ORDER IS TAKEN ONCE AND HELD UNTIL SOMEBODY ASKS "
+                                          "FOR A NEW ONE — the copies that have left since the "
+                                          "ranking on screen was computed, as a set of store keys, "
+                                          "plus the three predicates every ranking under a search "
+                                          "asks of it (`ranksAsLive`, `ranksAsShown`, "
+                                          "`stalenessSentence`). D132's amendment ranks the copies "
+                                          "list, the box rail and the walk's landing by which "
+                                          "section holds the most LIVE copies, all three off the "
+                                          "current state — so marking one copy sold re-ranked the "
+                                          "list the operator was working down. What is frozen is "
+                                          "the INPUT and never the rendered order: a snapshotted "
+                                          "array of keys would be a fourth copy of an ordering "
+                                          "three call sites compute, and would disagree with them "
+                                          "silently the day one gains a term. The fold is the "
+                                          "half that is easy to miss — a frozen departure has to "
+                                          "go on being DRAWN with `Hide sold` on, because a row "
+                                          "that vanishes moves everything under it exactly as a "
+                                          "reshuffle does, and D132's sink is a movement too. "
+                                          "The set lives in Inventory.tsx beside the writes, "
+                                          "because one sale makes both lists stale at once. D28 "
+                                          "is the precedent, on the other screen.",
+                                  "governed_by": ["D26", "D28", "D31", "D68", "D97", "D118", "D132"]},
             "src/CardLocations.tsx": {"does": "one SKU group: every copy, its position, its bar and "
                                               "its sold action. D7's fungibility made visible — every "
                                               "unsold copy is offered, and the listed quantity is read "
@@ -4426,7 +4449,7 @@ COMPONENTS = [
                                               "counts line: `emit` has written no listing record, so "
                                               "every one of those numbers would be a structural zero "
                                               "under a headroom promise nothing can keep.",
-                                      "governed_by": ["D4", "D5", "D6", "D7", "D10", "D20", "D24", "D26", "D30", "D31", "D38", "D41", "D45", "D58", "D67", "D68", "D71", "D92", "D115", "D118", "D132", "D119"]},
+                                      "governed_by": ["D4", "D5", "D6", "D7", "D10", "D20", "D24", "D26", "D28", "D30", "D31", "D38", "D41", "D45", "D58", "D67", "D68", "D71", "D92", "D115", "D118", "D132", "D119", "D-the-order-is-taken-once-and-a-sale-may-not-retake-it"]},
             "src/CardLocations.css": {"does": "the group at two densities. The Fulfiller's copy is a "
                                               "card with a photo; the owner's is a row. The walk-to "
                                               "wrapper takes the button chrome back off and shows "
@@ -5856,7 +5879,7 @@ COMPONENTS = [
                         "and `product_game` outright — `undefined.find` inside `ClaimEditor`, "
                         "the screen behind its error boundary, and six cases here spending "
                         "thirty seconds each on a switch that had been detached. AND THE HASH'S OWN BOX SINCE 2026-09-05: `#/inventory?box=<n>` was honoured only for a box that already had ROWS, because the shelf list is built from the rows first and the registry second and the ref was consumed on the first list — so every box of code cards, which D24 pools and which therefore has none, was unreachable by the one link that aims at one. Two cases, with `GET /boxes` held back so the ordering is the defect's rather than a race.",
-                "governed_by": ["D5", "D7", "D8", "D9", "D10", "D13", "D20", "D22", "D23", "D24", "D26", "D28", "D30", "D31", "D33", "D34", "D37", "D38", "D40", "D41", "D43", "D45", "D49", "D55", "D57", "D58", "D63", "D67", "D68", "D71", "D83", "D89", "D92", "D101", "D115", "D116", "D118", "D124", "D125", "D119", "D132", "D27", "D134", "D142", "D155"],
+                "governed_by": ["D5", "D7", "D8", "D9", "D10", "D13", "D20", "D22", "D23", "D24", "D26", "D28", "D30", "D31", "D33", "D34", "D37", "D38", "D40", "D41", "D43", "D45", "D49", "D55", "D57", "D58", "D63", "D67", "D68", "D71", "D83", "D89", "D92", "D101", "D115", "D116", "D118", "D124", "D125", "D119", "D132", "D27", "D134", "D142", "D155", "D117", "D136", "D-the-order-is-taken-once-and-a-sale-may-not-retake-it"],
                 "note": "THE CHECK `CLAUDE.md`'s ROUTE-IS-NOT-A-FEATURE RULE SAYS DOES NOT "
                         "EXIST. That rule was written on 2026-08-23 after three routes shipped "
                         "with full T7 coverage and no client function and no control — green "

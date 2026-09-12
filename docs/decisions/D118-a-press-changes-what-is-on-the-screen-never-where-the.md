@@ -79,3 +79,26 @@ The copies list is what absorbs the difference because it is the only part of th
 **What it costs, named**: a row whose key is wider than its slot number starts its name further right than it used to, so a long name ellipsises one word sooner. That is the price of the press not moving anything, and it is paid once at render rather than at the moment of the sale. Looked at in both themes at 1440: the names now align down the list, where before the departed row's name sat out of line with its neighbours.
 
 **The guard is a third case in `inventory.spec.ts`** — *the slot column is already as wide as the key the sale will write into it* — with its own one-card fixture in box 12, card 133, because **the case that already existed could not see this**: its sweep records position and height and deliberately not width, so the column that grows is invisible to it, and its box is the one whose key fits under the floor. The new case reads its own subject before it judges it (the key must clear 34px, measured on the state the sale leaves) and was mutation-tested against the reservation being deleted.
+### Amended 2026-09-12: the same sentence on a second axis, which none of these guards can see
+
+**"A press changes what is on the screen, never where the rest of it is" is a claim about ORDER as well as about pixels, and everything above measures only pixels.**
+`D-the-order-is-taken-once-and-a-sale-may-not-retake-it` is the entry; the report is the owner's,
+about `#/inventory` under a search: *"if i mark sold while on that sorta view it can reorganize the
+rankings right in front of me, which feels unintuitive if im trying to mark multiple as sold."*
+
+**Why the four guards this entry built were silent through it.** `cursor.spec.ts`'s two cases read
+the STYLESHEETS, and a reshuffle is not a CSS rule. The sweep in `inventory.spec.ts` records every
+element outside `.browse-card` by a stable id and its rectangle — and the copies list is INSIDE
+that panel, and, decisively, **the rows a re-rank exchanges are identically shaped boxes**: swap two
+of them and every rectangle this entry records is exactly where it was. The document height does
+not move, the scroll does not move, and the operator's list has rearranged itself under their hand.
+
+**So the new proof compares the IDENTITY of the rows and not their geometry** — the ordered list of
+each row's `aria-label`, which is the one string saying WHICH copy is drawn there — in both
+directions, with a fixture built so a frozen order and a recomputed one give different answers.
+`toHaveCount` cannot see a length-preserving reshuffle, and neither can anything above.
+
+**And the control that fixes it is bound by this entry in the ordinary way**: it appears on the
+press that makes the order stale, inside a band whose height is fixed, so its slot is reserved
+whether or not it is occupied — the same bargain `.browse-row-slotghost` makes in the amendment
+above, paid once at render rather than at the moment of the sale.

@@ -885,6 +885,33 @@ sentence**, and see "the census" below for what enforces that.
                               the live ones. The address leads with the box's NAME and the
                               rail orders boxes by when this browser last opened them; a
                               section can be named from the Manage box sheet.
+                              THE ORDER UNDER A SEARCH IS TAKEN ONCE AND A SALE MAY NOT RETAKE
+                              IT (D-the-order-is-taken-once-and-a-sale-may-not-retake-it, an
+                              amendment to D118). D132's ranking — the copies list, the box
+                              rail and the walk's landing all led by the section holding the
+                              most LIVE copies — was recomputed on every press, so marking one
+                              copy sold rearranged the list the operator was working down:
+                              *"it can reorganize the rankings right in front of me, which
+                              feels unintuitive if im trying to mark multiple as sold"*.
+                              WHAT IS FROZEN IS THE INPUT AND NEVER THE RENDERED ORDER
+                              (`app/src/frozenRank.ts`): the copies that have LEFT since the
+                              order was taken go on counting for their section, so every
+                              ranking computes itself unchanged against the state it was
+                              ranked against. A snapshotted array of keys was refused — it
+                              would be a fourth copy of an ordering three call sites compute.
+                              THE SOLD ROW STAYS EXACTLY WHERE IT IS and is struck, carrying
+                              `join.departed_label`. It may not fold away and it may not SINK:
+                              D132 offers both and a sink is a movement too, so frozen mode
+                              takes neither. `Order is N copies stale · re-rank` is the one
+                              press that reshuffles anything, drawn in the copies list's header
+                              only once the order has gone stale, and its slot is reserved
+                              whether or not it is in it (D118 — this list scrolls inside a
+                              fixed band). A new search takes a new order on its own; an undo
+                              gives its copy's hold back. THE WALK'S OWN FOLD IS FROZEN ONLY
+                              UNDER A QUERY: nothing ranks the `(box, index)` walk, so nothing
+                              about it goes stale, and D132's fold there is what the owner
+                              asked for. D28 is the precedent — "the list stops moving under
+                              it", the same ruling on `#/review`.
 #/graveyard    Graveyard      every departed card, sold or retired or moved (D134) — merged
                               from two sources, a record still standing in a box nobody has
                               deleted and a `buried` history line for one whose box was.
@@ -2009,6 +2036,7 @@ D167 A queue entry is re-resolved where it stands, and the answer reaches the pr
 D168 A typed price is cleared by a press, never by an expiry, and the set it may clear is the set the corpus dates
 D169 The blanket sweep asks the question the verdict answers, and a nested worktree is another checkout
 D170 A widening is safe only while the category fits, and Pokemon's does not
+D-the-order-is-taken-once-and-a-sale-may-not-retake-it The order is taken once, and a sale may not retake it
 ```
 
 **THE GAP THIS LIST CARRIED BETWEEN D116 AND D118 IS CLOSED, AND IT CLOSED THE WAY IT SAID IT
