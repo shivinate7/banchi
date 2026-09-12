@@ -10708,7 +10708,7 @@ That guard is load-bearing, not defensive — D59 records that dropping it takes
 **A marker that a copy actually reached an import file.** D59 names it — one field on `Card`, written by `cmd_emit`'s push loop beside the `sku` stamp. With it, the committed set is READ rather than inferred and this ordering becomes a fallback for records written before it. It is worth more now than when D59 recorded it, because this entry is the second defect to turn on not having it.
 
 **A run over more than one box** (D48). The argument here is about capture time and not about boxes, so it survives — but the fixture that guards it would need a shape where one run spans two sittings.
-## D-wait-names-the-commit — The wait is about the claim commit, and an answer it has not got is never a pass
+## D148 — The wait is about the claim commit, and an answer it has not got is never a pass
 
 **Found 2026-09-11, on two live merges the same evening D140 and D143 landed.** D140 sells one thing for the price of a CI run: *"main never takes a substitution no CI run has seen"*, printed by `scripts/merge-pr.py` in those words as it waits. It then called `gh pr checks <n>`, which asks about a PULL REQUEST rather than about a commit — and concluded from an EMPTY answer as readily as from a green one. Both halves are now the check runs attached to that commit, read until they are complete, non-empty, no smaller than the parent's, and unchanged across two consecutive reads.
 
