@@ -27,7 +27,7 @@ PRICES_NAME = "prices.json"
 RUNS_DIRNAME = "runs"
 
 # WHERE A FETCHED CATALOGUE EXPORT LIVES, AND IT IS HERE BECAUSE BOTH LAYERS READ IT
-# (D-exports-by-game). `server/pipeline_routes.py` WRITES the file and `cli/resolve.py` READS
+# (D166). `server/pipeline_routes.py` WRITES the file and `cli/resolve.py` READS
 # a run's record of one back; the server imports the cli and never the reverse, so the one
 # name they must agree on cannot live in either of them. `inventory/.exports/<game>/`, keyed
 # by game because `exports_for` maps game -> exactly one file and a category id is scalar.

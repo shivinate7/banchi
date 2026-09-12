@@ -2271,7 +2271,7 @@ export type ExportFetched = {
    *  match a TCGplayer set, which is the thing worth seeing. */
   asked: ExportAsked
   /** Whether this answer came off a file already on disk rather than off the wire
-   *  (D-exports-by-game). The export is a property of the GAME now, kept once in
+   *  (D166). The export is a property of the GAME now, kept once in
    *  `inventory/.exports/<game>/`, so a second run over the same game opens no socket at all.
    *
    *  THIS IS THE ONE FIGURE THE REST OF THE RECEIPT CANNOT IMPLY. A reuse and a fetch answer
@@ -2378,7 +2378,7 @@ export type ExportScope = {
    *  per-game now: per-run copies gave every drawer its own unrelated sample. */
   width: ExportWidth | null
   /** The file a press would answer from without asking TCGplayer, if there is one
-   *  (D-exports-by-game). Null means the press opens a socket. */
+   *  (D166). Null means the press opens a socket. */
   reusable: { file: string; age_s: number; window_s: number } | null
 }
 

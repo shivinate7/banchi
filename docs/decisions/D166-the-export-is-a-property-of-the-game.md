@@ -1,4 +1,4 @@
-## D-exports-by-game — The catalogue export is a property of the game, and the box never chose its scope
+## D166 — The catalogue export is a property of the game, and the box never chose its scope
 
 **Built 2026-09-12, from a measurement of the owner's own `runs/` after they re-joined the store.** Seven Riftbound catalogue fetches went out in nine minutes, five of them inside eighteen seconds, and five of the seven downloaded bytes this machine already had.
 

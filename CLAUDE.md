@@ -1264,7 +1264,7 @@ A screen is not finished because it compiles.
   `tcg_export_too_large` names the scope, the cards that widened it and the remedy. A hard
   refusal of a file that parses and joins today was declined on purpose — see the entry.
 
-- **THE CATALOGUE EXPORT IS A PROPERTY OF THE GAME, NOT THE DRAWER** (D-exports-by-game,
+- **THE CATALOGUE EXPORT IS A PROPERTY OF THE GAME, NOT THE DRAWER** (D166,
   2026-09-12). A fetch lands in **`inventory/.exports/<game>/`** — `inventory/.live/`'s shape
   one directory over, kept and never swept — deduped **store-wide by digest**, and a press
   whose game already holds a covering export fetched inside `EXPORT_REUSE_S` (900s)
@@ -1858,7 +1858,7 @@ D162 The name decides a disputed number, and both readings reach the screen
 D163 The cache is keyed by the digest, so the digest is what the press computes first
 D164 The undo stack is the sitting, not the drawer, and the counter counts the sitting
 D165 A run is bound to the drawer's true index, and the run the number stranded is repaired once by hand
-D-exports-by-game The catalogue export is a property of the game, and the box never chose its scope
+D166 The catalogue export is a property of the game, and the box never chose its scope
 ```
 
 **THE GAP THIS LIST CARRIED BETWEEN D116 AND D118 IS CLOSED, AND IT CLOSED THE WAY IT SAID IT

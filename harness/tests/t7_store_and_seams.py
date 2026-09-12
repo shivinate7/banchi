@@ -17890,7 +17890,7 @@ def check_export_fetch(checks: Checks) -> None:
                 whole = write_export(home / "whole.csv")
                 stub["body"] = whole.read_bytes()
 
-                # WHERE A FETCHED EXPORT LIVES SINCE D-exports-by-game: the GAME's own
+                # WHERE A FETCHED EXPORT LIVES SINCE D166: the GAME's own
                 # directory under `inventory/.exports/`, store-wide, not the run's. Every
                 # assertion below that used to read the run directory reads this instead,
                 # which is the move — and `run_local()` is kept beside it so the two
@@ -18433,7 +18433,7 @@ def check_export_fetch(checks: Checks) -> None:
 
                     EVERY CHECK BELOW IS ABOUT THE REQUEST, so it must make one. A press whose
                     game already holds a covering export answers without opening a socket
-                    (D-exports-by-game), and a wide file covers every narrower scope — so
+                    (D166), and a wide file covers every narrower scope — so
                     without `refresh` these would read the LAST request's body, or no body at
                     all, and report it as the scope this run implies. Which is the same class
                     of error as an outcome assertion that cannot see a saving, pointed the
@@ -18621,7 +18621,7 @@ def check_export_fetch(checks: Checks) -> None:
                 )
                 hint_cards(0)
 
-                # ================= THE EXPORT IS A PROPERTY OF THE GAME (D-exports-by-game)
+                # ================= THE EXPORT IS A PROPERTY OF THE GAME (D166)
                 #
                 # EVERY ASSERTION IN THIS SECTION THAT MATTERS COUNTS REQUESTS, AND THAT IS
                 # DELIBERATE. PR A's arm 9 is the lesson: deleting its work-saving gate left

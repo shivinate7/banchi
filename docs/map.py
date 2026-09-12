@@ -531,7 +531,7 @@ COMPONENTS = [
                                    "for every sale of the SKU, and a reading of nothing "
                                    "vouches for exactly the sales it was taken AFTER "
                                    "(D150).",
-                           "governed_by": ["D147", "D145", "D4", "D8", "D10", "D11", "D20", "D21", "D22", "D23", "D24", "D25", "D26", "D33", "D34", "D36", "D49", "D56", "D58", "D59", "D64", "D87", "D115", "D150", "D-exports-by-game"], "tested_by": ["T7"]},
+                           "governed_by": ["D147", "D145", "D4", "D8", "D10", "D11", "D20", "D21", "D22", "D23", "D24", "D25", "D26", "D33", "D34", "D36", "D49", "D56", "D58", "D59", "D64", "D87", "D115", "D150", "D166"], "tested_by": ["T7"]},
             "runs.py": {"does": "run directories and manifest.json", "governed_by": ["D1", "D25", "D49", "D54", "D86"], "tested_by": ["T7"]},
         },
     },
@@ -1117,7 +1117,7 @@ COMPONENTS = [
             "cache.py": {"does": "the `identifications` table — answers already paid for", "governed_by": ["D2", "D21", "D88"]},
             "files.py": {"does": "where the store lives, the lock, and the atomic replace the "
                                  "files still beside the database use (prices.json, codes.jsonl)",
-                         "governed_by": ["D13", "D15", "D43", "D86", "D-exports-by-game"], "tested_by": ["T7"]},
+                         "governed_by": ["D13", "D15", "D43", "D86", "D166"], "tested_by": ["T7"]},
             # D53 still, and D63, because the header now says what the transaction DOES
             # promise where it used to say what five files did not: one commit over every
             # table, history rows included. D53's drain is still a prerequisite for the
@@ -2920,7 +2920,7 @@ COMPONENTS = [
                                 "D36", "D43", "D47", "D48", "D49", "D54", "D56", "D58", "D59",
                                 "D62", "D64", "D65", "D68", "D76", "D78", "D79", "D86", "D87",
                                 "D88", "D100", "D103", "D134", "D147",
-                                "D159", "D165", "D-exports-by-game"],
+                                "D159", "D165", "D166"],
                 "tested_by": ["T7"],
             },
             "shipping_routes.py": {
@@ -3594,7 +3594,7 @@ COMPONENTS = [
                                      "`market: null` and a `why`, because 390 of the owner's "
                                      "2,245 cards on hand have no price and a ranking that "
                                      "dropped 17% of the store would be a silent drop.",
-                             "governed_by": ["D159", "D156", "D142", "D145", "D-exports-by-game",
+                             "governed_by": ["D159", "D156", "D142", "D145", "D166",
                                              "D3", "D4", "D6", "D7", "D8", "D9", "D10", "D11",
                                              "D16", "D20", "D21", "D22", "D23", "D24", "D26",
                                              "D28", "D29", "D30", "D32", "D33", "D34", "D36",
@@ -5661,7 +5661,7 @@ COMPONENTS = [
                 # D1 is the two-phase split the four steps make visible; D3 is the ladder the
                 # join walks; D9 is the pricing answer that gates emit;
                 # D31 is why this is a panel on #/inventory rather than a seventh route.
-                "governed_by": ["D145", "D36", "D1", "D3", "D9", "D13", "D20", "D31", "D32", "D33", "D39", "D48", "D54", "D56", "D64", "D65", "D49", "D76", "D-exports-by-game"],
+                "governed_by": ["D145", "D36", "D1", "D3", "D9", "D13", "D20", "D31", "D32", "D33", "D39", "D48", "D54", "D56", "D64", "D65", "D49", "D76", "D166"],
                 "note": "THE PIPELINE WAS THE LARGEST INSTANCE OF THE ROUTE-IS-NOT-A-FEATURE "
                         "FAILURE AND NOBODY HAD COUNTED IT. The four commands have existed "
                         "since step 4 and have been through a 53-card run and a 544-card run; "

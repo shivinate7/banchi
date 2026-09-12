@@ -5710,7 +5710,7 @@ def do_pipeline_export(name: str, payload: dict) -> dict:
             "reused": reused is not None,
             "age_s": int(age),
             "kept": True,
-            # WHERE THE FILE IS, WHICH IS NO LONGER INSIDE THE RUN (D-exports-by-game). A
+            # WHERE THE FILE IS, WHICH IS NO LONGER INSIDE THE RUN (D166). A
             # client that built a download path out of the run's name would break silently;
             # this says the directory the game's exports live in.
             "store": str(store_dir),

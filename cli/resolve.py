@@ -877,7 +877,7 @@ def games_claimed(export: tcgcsv.Export) -> Tuple[str, ...]:
 def _by_recorded_digest(run: runs.Run, missing: Path) -> Optional[Path]:
     """The file this run recorded, found by its DIGEST under `inventory/.exports/`.
 
-    NEVER A GUESS AND NEVER A SUBSTITUTE (D-exports-by-game). It answers only with a file
+    NEVER A GUESS AND NEVER A SUBSTITUTE (D166). It answers only with a file
     whose FULL sha256 equals the one the manifest recorded for this exact path, so it cannot
     quietly join a run against a newer reading — which is the whole hazard of exports moving
     into a directory several runs share. A run that finds nothing carrying its digest refuses
@@ -962,7 +962,7 @@ def exports_for(
     lines_of: Dict[Path, Tuple[str, ...]] = {}
     for index, path in enumerate(distinct):
         if not path.is_file():
-            # THE DIGEST IS WHAT SURVIVES A MOVE, AND RECORDING IT IS WHY (D-exports-by-game).
+            # THE DIGEST IS WHAT SURVIVES A MOVE, AND RECORDING IT IS WHY (D166).
             # A fetched export lives in `inventory/.exports/<game>/` now rather than inside the
             # run, so the manifest's path is the only link back to it — and a shared directory
             # is exactly where a path CAN change under a run that a run-local copy never
