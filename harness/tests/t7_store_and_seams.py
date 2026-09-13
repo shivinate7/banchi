@@ -7542,6 +7542,257 @@ def check_box_routes_and_search(checks: Checks) -> None:
         )
 
 
+def check_inventory_box_route(checks: Checks) -> None:
+    """D-per-box-read/item 2: `GET /inventory/<box>` reads one box, never the store.
+
+    THE PROOF IS `Rows.loaded_count`, NOT A TIMING. A wall-clock assertion is what
+    docs/specs/store-scaling.md's own `.backup`-copy measurement is for, run by hand against
+    the owner's real store; a harness test needs to be true on every machine and every CI
+    runner, so it asserts what the route BUILT rather than how long it took. `Rows` already
+    tracks this for exactly this reason (D88) — see `check_store_of_record` for the
+    precedent.
+    """
+    checks.note("")
+    checks.note("PER-BOX READ — server/capture_server.py:do_inventory_box (item 2)")
+
+    with isolated_home():
+        for at in range(1, 21):
+            capture_server.do_capture(capture_payload(1, capture_id=f"a{at}", set_hint="sv9"))
+        for at in range(1, 6):
+            capture_server.do_capture(capture_payload(2, capture_id=f"b{at}", set_hint="sv9"))
+
+        payload = capture_server.do_inventory_box(1)
+        checks.equal(
+            set(payload["cards"].keys()),
+            {f"1/{n}" for n in range(1, 21)},
+            "GET /inventory/1 returns exactly box 1's twenty cards",
+        )
+        checks.ok(
+            all(row["box"] == 1 for row in payload["cards"].values()),
+            "and every row decorates as box 1 — none of box 2's five leaked in",
+        )
+
+        after = Store().read()
+        checks.ok(
+            not after.inventory.cards.complete and after.inventory.cards.loaded_count <= 20,
+            f"and it built {after.inventory.cards.loaded_count} card objects reading box 1 "
+            "of a 25-card store, not the store's 25 — a fresh `Store().read()` proves the "
+            "PREVIOUS read's session is gone and this is a clean instrument",
+        )
+
+        # An empty, never-captured box answers with nothing rather than refusing. Done
+        # BEFORE the corruption below, which — once written — takes every box's read down
+        # (see the note on that assertion), including this one.
+        empty = capture_server.do_inventory_box(999)
+        checks.equal(
+            empty["cards"], {}, "box 999, never captured into, answers an empty map"
+        )
+
+        # VERIFIED AGAINST THE TREE, AND THE OPPOSITE OF WHAT THIS ITEM'S PLAYBOOK CLAIMED:
+        # a record ANYWHERE that will not coerce still takes every box's read down, because
+        # `_positions_in`'s own docstring says its refusal fires "ANYWHERE in the store" and
+        # its NULL-column pass is a genuinely unscoped query — the same rule
+        # `next_index`/`allocate_capture` have always had. `records_in`'s row-BUILDING query
+        # (`self.cards.where(box=box)`) is box-scoped; its REFUSAL, inherited from
+        # `_positions_in`, is not. `do_inventory_box`'s own docstring now carries the
+        # correction; `_positions_in` itself is untouched (this item's own "Do not touch"
+        # section), so this is named as an existing, inherited limitation rather than fixed
+        # here. Done last in this check because it leaves the store corrupted.
+        with Store().write() as snapshot:
+            snapshot.inventory.cards["2/1"].box = "not-a-box"  # type: ignore[assignment]
+        caught = checks.raises(
+            master.BadPosition,
+            lambda: capture_server.do_inventory_box(1),
+            "and a record ANYWHERE with a non-coercible box still raises out of THIS route "
+            "too, for every box asked about — `do_inventory` never hits this because it "
+            "never calls `_positions_in`; a future item narrowing that refusal to the box "
+            "asked about is named in the PR rather than attempted here",
+        )
+        checks.ok(
+            caught is None or "2/1" in str(caught),
+            "and the refusal names the corrupt record, exactly as `next_index` already does",
+        )
+
+
+def check_rows_scoped_after_full_load(checks: Checks) -> None:
+    """D-per-box-read/item 2: `where()`/`select()` cost what the index costs, even after this
+    session's own `Rows` has been fully materialised. The mechanism is `rows.py:177`'s own
+    citation in docs/specs/store-scaling.md; this pins it so a later change to `Rows` cannot
+    reopen it silently.
+    """
+    checks.note("")
+    checks.note("ROWS SCOPED AFTER A FULL LOAD — store/rows.py (item 2)")
+
+    with isolated_home():
+        for at in range(1, 11):
+            capture_server.do_capture(capture_payload(1, capture_id=f"a{at}", set_hint="sv9"))
+        for at in range(1, 6):
+            capture_server.do_capture(capture_payload(2, capture_id=f"b{at}", set_hint="sv9"))
+
+        session = Store().read()
+        before = sorted(card.key for card in session.inventory.cards.where(box=1))
+
+        # Force the degrade condition: materialise every row in THIS session, the way
+        # `to_payload()` does for `do_inventory` and the way any other handler that calls
+        # `.values()`/`.items()` on `cards` would.
+        session.inventory.to_payload()
+        checks.ok(
+            session.inventory.cards.complete,
+            "the whole-store call set `_complete`, which is the condition this test exists "
+            "to exercise",
+        )
+
+        after = sorted(card.key for card in session.inventory.cards.where(box=1))
+        checks.equal(
+            after, before,
+            "and a scoped `where(box=1)` on the SAME session still returns exactly box 1's "
+            "cards after a full load — correctness survives the degrade condition",
+        )
+
+        # THE PART THAT PROVES THE FIX, NOT JUST CORRECTNESS: a session that touched nothing
+        # answers a scoped query with an empty `_touched` set, so the fallback's extra pass
+        # costs nothing proportional to the store. A session that HAS written something is
+        # exercised separately below.
+        checks.equal(
+            len(session.inventory.cards._touched), 0,
+            "and this read-only session touched nothing, so `where()`'s post-source pass "
+            "had nothing of the store's own size to scan — the loaded_count above already "
+            "proves the source's index (not a loaded_dict scan) answered the query",
+        )
+        checks.ok(
+            session.inventory.cards.loaded_count == 15,
+            "loaded_count is 15 (all captured cards) because `to_payload()` forced the full "
+            "load ABOVE — this number does not fall after the fix; what changes is that the "
+            "SUBSEQUENT `where()` call above did not have to re-filter it by hand, which "
+            "`_touched` being empty is what proves",
+        )
+
+        # --- a session that WRITES, then queries, must still see its own write -----------
+        # VERIFIED AGAINST THE TREE, CORRECTING THE PLAYBOOK'S OWN SKETCH: `Card.key` is a
+        # COMPUTED PROPERTY of `(box, index)` (`store/master.py:523-525`), so moving "2/1"
+        # into box 1 while keeping its index at 1 makes its `.key` recompute to "1/1" —
+        # colliding with box 1's own real card at index 1, which is why the playbook's
+        # original sketch (assert `"2/1" in moved_in`) can never pass: nothing in `_loaded`
+        # is ever keyed "2/1" once the mutation lands, and a live `move_card` (D83) never
+        # reuses an index for exactly this reason — it always allocates a FRESH one in the
+        # destination. Box 3 holds no card here, so moving into it at the same index (1)
+        # exercises the same `_touched` mechanism with no collision.
+        with Store().write() as snapshot:
+            snapshot.inventory.cards.to_dict()  # force _complete inside the transaction too
+            card = snapshot.inventory.cards["2/1"]
+            card.box = 3  # move it into an EMPTY box's own index space, in memory, uncommitted
+            snapshot.inventory.cards["2/1"] = card
+            moved_in = sorted(c.key for c in snapshot.inventory.cards.where(box=3))
+            checks.ok(
+                "3/1" in moved_in,
+                "and a row this transaction just wrote is found by a scoped query even "
+                "though the source's own index still says box 2 — `_touched` is what "
+                "catches it, not a re-scan of everything loaded",
+            )
+            moved_out = sorted(c.key for c in snapshot.inventory.cards.where(box=2))
+            checks.ok(
+                "3/1" not in moved_out and "2/1" not in moved_out,
+                "and it no longer answers for box 2, which is the same `_touched` re-check "
+                "the other direction",
+            )
+
+        # --- AN IN-PLACE MUTATION THAT NEVER GOES THROUGH `__setitem__` MUST STILL BE SEEN
+        # --- BY A SAME-SESSION SCOPED QUERY, AFTER A FULL LOAD. `_touched` alone cannot prove
+        # this — `store/master.py:set_state`, `record_identification` and
+        # `store/submissions.py:release`/`attach_run` all write by mutating the object's
+        # attributes directly, exactly as `Rows`'s own docstring documents as a supported
+        # write path ("a caller that got an object back and mutated it is writing to the same
+        # object the flush will read"). This is not hypothetical: `release()`'s in-place
+        # `claim.state = STATE_RELEASED` broke a real same-session re-query
+        # (`submission-selftest.py:case_resume_releases_only_its_own`) the first time this
+        # fix was written to trust `_touched` alone, before `where()`/`select()` were
+        # corrected to re-validate every candidate the source query returns against the LIVE
+        # object rather than trusting either the source's stale row or `_touched`'s narrower
+        # bookkeeping.
+        with Store().write() as snapshot:
+            snapshot.inventory.cards.to_dict()  # force _complete inside this transaction too
+            card = snapshot.inventory.cards["1/1"]
+            checks.ok(
+                card.state == master.CAPTURED,
+                "card 1/1 starts CAPTURED, the state `check_state`/`set_state`'s own indexed "
+                "column reads before any mutation",
+            )
+            card.state = master.SOLD  # mutated IN PLACE, never reassigned through __setitem__
+            still_captured = snapshot.inventory.cards.where(state=master.CAPTURED)
+            checks.ok(
+                "1/1" not in {c.key for c in still_captured},
+                "and a same-session `where(state=CAPTURED)` no longer answers for it — the "
+                "in-place mutation is not `_touched`, so this is proven only by re-validating "
+                "the source's own candidates against the live object, not by trusting either "
+                "side blindly",
+            )
+            # THE NAMED, DOCUMENTED GAP, PINNED RATHER THAN LEFT TO BE REDISCOVERED:
+            # `where()`'s own docstring says a row mutated in place INTO a new match is not
+            # found unless the source's own (stale, uncommitted) row already offered it as a
+            # candidate. `state=SOLD` was never true on disk, so the source query for it
+            # never sees "1/1" at all, and nothing here can pull it in. Pinned as a `not`
+            # rather than an `ok` so a future change that fixes this GOES RED here rather
+            # than being an invisible improvement — see that same docstring before removing
+            # this assertion.
+            now_sold = snapshot.inventory.cards.where(state=master.SOLD)
+            checks.ok(
+                "1/1" not in {c.key for c in now_sold},
+                "and it does NOT yet answer for its new state — the documented gap for a "
+                "row mutated in place into a match the source's own index cannot see",
+            )
+
+
+def check_inventory_recent_route(checks: Checks) -> None:
+    """D-per-box-read/item 2: `GET /inventory/recent` — Home's hero deck — is a lean top-K read over
+    `Inventory.newest_captured`/`Rows.top`, in `do_inventory`'s own per-card shape, and it
+    skips exactly what `Home.tsx:deckFromCards` would skip: unidentified, photo-less and
+    departed cards.
+    """
+    checks.note("")
+    checks.note("RECENT DECK ROUTE — server/capture_server.py:do_inventory_recent (item 2)")
+
+    with isolated_home():
+        for at in range(1, 6):
+            capture_server.do_capture(capture_payload(1, capture_id=f"a{at}", set_hint="sv9"))
+        with Store().write() as snapshot:
+            # Name three of the five (identification's own field, never a capture claim) so
+            # the deck has real candidates — `do_capture` alone never sets `name`.
+            for n in (1, 2, 3):
+                card = snapshot.inventory.cards[f"1/{n}"]
+                card.name = f"Card {n}"
+                snapshot.inventory.cards[f"1/{n}"] = card
+
+        payload = capture_server.do_inventory_recent(2)
+        checks.equal(
+            sorted(payload["cards"].keys()), ["1/2", "1/3"],
+            "the two NEWEST named, photographed, on-hand cards — captured in order 1..5, so "
+            "3 and 2 are the newest of the three that were named",
+        )
+        checks.equal(
+            payload["cards"]["1/3"]["name"], "Card 3",
+            "and the full per-card shape rides along — not a narrower DTO — because "
+            "`deckFromCards` reads `name`, `number_display` and the finish claim, none of "
+            "which a `{key, box, index, cid, name}` shape could carry",
+        )
+
+        # A sold card is skipped even though it is otherwise the newest named candidate.
+        capture_server.do_mark_sold(1, 3, {})
+        after_sale = capture_server.do_inventory_recent(2)
+        checks.equal(
+            sorted(after_sale["cards"].keys()), ["1/1", "1/2"],
+            "and a sold card never reaches the deck — `deckFromCards`'s own `gone` filter, "
+            "restated server-side so a sale does not have to be re-filtered by every screen "
+            "that reads this route",
+        )
+
+        empty = capture_server.do_inventory_recent(5)
+        checks.equal(
+            sorted(empty["cards"].keys()), ["1/1", "1/2"],
+            "an unnamed or unidentified capture (1/4, 1/5) never displaces a real card, "
+            "however deep the deck asks",
+        )
+
+
 # -------------------------------------------------------------------------- place block
 
 
@@ -26720,6 +26971,9 @@ def run() -> Result:
     check_capture_claim_chain(checks)
     check_game_and_note_seam(checks)
     check_box_routes_and_search(checks)
+    check_inventory_box_route(checks)
+    check_rows_scoped_after_full_load(checks)
+    check_inventory_recent_route(checks)
     check_box_names(checks)
     check_box_claims(checks)
     check_box_claim_product(checks)

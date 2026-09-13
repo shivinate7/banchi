@@ -68,7 +68,7 @@ where it was has removed nothing.
 | After | Expected allowlist | Change |
 |---|---|---|
 | Phase 0 | 13 (§4 of the spec, twelve sites; `do_inventory` and `to_payload` stay by the owner's word; PLUS `store/master.py:next_box_number`, a real, currently-existing `.distinct("box")` call the hand census in §4 missed — found by item 1's own scanner on its first end-to-end run against the real tree, and permanent for the same reason `do_boxes`/`counts` are) | — |
-| Phase 1 | 12 | item 2 removes `_boxes_named`; item 4 REPLACES `_unsent_ledger`'s `distinct("sku")` with its own one-pass `select`, argued, so it nets zero |
+| Phase 1 | 13 | **corrected 2026-09-12 by item 2**: `_boxes_named`'s only caller is `do_status`, which item 2 does not touch, so it cannot close that row — item 2 removes NOTHING from the allowlist (see `docs/decisions/D-per-box-read.md`). Item 4 REPLACES `_unsent_ledger`'s `distinct("sku")` with its own one-pass `select`, argued, so it nets zero. Count stays at 13 |
 | Phase 2 | 6 | item 7 removes `do_pipeline_value`, `box_views`, `_release_plan`, `_box_names`, `_on_hand_by_run`; item 8 removes `do_search` |
 
 The six that remain — `do_inventory`, `to_payload`, `do_boxes`, `counts`,

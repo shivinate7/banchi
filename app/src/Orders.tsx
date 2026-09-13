@@ -1355,7 +1355,24 @@ export function OrdersHub({ stage }: { readonly stage: Stage }) {
   /* A SEPARATE READ, AND DELIBERATELY NOT FOLDED INTO `reread`. The ledger's answer is what the
      screen is FOR; the store index only widens each line's map. Awaiting them together would let
      a slow or broken `/inventory` hold the orders off the screen, so they race and the map fills
-     in when its half lands. */
+     in when its half lands.
+
+     STILL ON THE FULL WALK, ON PURPOSE (D-per-box-read/item 2 — verified against the tree, correcting the
+     playbook this item was written from). `copiesOf`'s own comment above says the whole of what
+     `indexStore` is for: "EVERY copy the store holds of that card, not only the ones the resolver
+     offered... including the ones in FAR BOXES" — copies sitting in boxes no resolver pick names
+     at all. There is no separate "Walk the boxes" call site to leave behind either: `buildWalk`
+     (below) is built entirely from `answer.lines[].picks`, the resolver's own already-resolved
+     rows off `GET /orders`, and never touches `store`. So the one real question is whether THIS
+     call can be scoped to "the boxes an order's resolver picks name" (Fulfillment's order-
+     resolution case, and this item's own playbook's stated aim for this file) — and it cannot,
+     safely: a SKU's other copies are, by the feature's own design, expected to live in boxes no
+     pick names, and narrowing the fetch to only named boxes would silently hide them from the
+     density map and from Pull, which is a correctness regression and not merely a slower screen.
+     Building a lean "on-hand copies by SKU, store-wide" route is real work `#/pricing`'s D159
+     `?band=` lens and item 6's own `do_orders` rebuild are the closer candidates for, named here
+     as the debt CLAUDE.md's "fix the cause… first ask whether the primitive already exists" rule
+     asks to be named rather than patched around under this item's own budget. */
   const rereadStore = useCallback(async () => {
     try {
       const inventory = await getInventory()

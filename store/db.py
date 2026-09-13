@@ -1117,6 +1117,26 @@ class SqliteSource:
             f"SELECT DISTINCT {column} FROM {self.table}{where}", params
         ).fetchall()]
 
+    def top(
+        self, column: str, limit: int, columns: Sequence[str]
+    ) -> Iterable[Tuple[str, tuple]]:
+        """`(key, column values)` for the `limit` rows with the highest `column`, descending,
+        NULLs excluded (D-per-box-read/item 2 — `Inventory.newest_captured`, Home's hero deck). One
+        indexed-column ORDER BY LIMIT, never a load of every row to sort in Python."""
+        if column not in self.columns:
+            raise KeyError(f"{self.table} has no indexed column {column!r}")
+        for name in columns:
+            if name not in self.columns:
+                raise KeyError(f"{self.table} has no indexed column {name!r}")
+        where, params = self._where({})
+        where = (where + f" AND {column} IS NOT NULL") if where else f" WHERE {column} IS NOT NULL"
+        wanted = ", ".join(columns)
+        rows = self.conn.execute(
+            f"SELECT key, {wanted} FROM {self.table}{where} ORDER BY {column} DESC LIMIT ?",
+            params + [limit],
+        ).fetchall()
+        return [(row[0], tuple(row[1:])) for row in rows]
+
     # ----------------------------------------------------------------- the writes
 
     def upsert(self, key: str, columns: Dict[str, Any], payload: dict) -> None:

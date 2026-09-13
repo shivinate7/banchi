@@ -10,6 +10,7 @@ import type {
   QueueEntryWire,
   QueueSnapshot,
   RemoveResult,
+  SearchCopy,
 } from './types'
 import type { Failure } from './server'
 import {
@@ -18,7 +19,7 @@ import {
   positionLabel,
   getBoxes,
   getQueues,
-  getInventory,
+  getInventoryBox,
   getPricing,
   photoUrl,
   removeCardInPlace,
@@ -113,6 +114,20 @@ function shelfOf(row: Row): Shelf {
   const box = row.card.box
   if (typeof box !== 'number' || Number.isNaN(box)) return 'unplaced'
   return box
+}
+
+/* The same two facts `shelfOf`/`hasDeparted` read off a Row, read off a SearchCopy instead —
+ * for the cross-box search ranking, which no longer has every box's Rows loaded to ask
+ * (D-per-box-read, item 2): the box being browsed fetches only its own cards, so a search that spans
+ * boxes has to rank off the search's OWN result rather than off a store-wide `rows` array. */
+function copyShelf(copy: SearchCopy): Shelf {
+  if (copy.place.located === false) return 'pooled'
+  const box = copy.place.box
+  return typeof box === 'number' && !Number.isNaN(box) ? box : 'unplaced'
+}
+
+function copyDeparted(copy: SearchCopy): boolean {
+  return isDeparted(copy.place)
 }
 
 function shelfLabel(shelf: Shelf): string {
@@ -735,18 +750,23 @@ export function BoxBrowse({
        three in one section outranks one-plus-two across two. Sold copies count for nothing —
        a box full of departed matches is not where the hand goes. With no query this term is
        zero everywhere and the rail is the hand's again. */
+    /* D-per-box-read, item 2: this box's own `rows` no longer stands for every box's cards, so the
+       cross-box tally reads the search's OWN result (`results`) instead — `SearchCopy`
+       carries `place.box`/`place.section`, everything this needed off a `Row`. */
     const liveMatches = new Map<number, number>()
-    if (filtered) {
+    if (filtered && results !== null) {
       const perSection = new Map<string, number>()
-      for (const row of inQuery) {
-        const shelf = shelfOf(row)
-        /* A COPY THAT LEFT SINCE THIS ORDER WAS TAKEN STILL COUNTS (`frozenRank.ts`), so a sale
-           does not re-rank the rail under the hand that made it. */
-        if (typeof shelf !== 'number' || !ranksAsLive(row.key, hasDeparted(row.card), frozen)) continue
-        const key = `${shelf}/${row.card.section ?? '?'}`
-        const n = (perSection.get(key) ?? 0) + 1
-        perSection.set(key, n)
-        liveMatches.set(shelf, Math.max(liveMatches.get(shelf) ?? 0, n))
+      for (const group of results.groups) {
+        for (const copy of group.copies) {
+          const shelf = copyShelf(copy)
+          /* A COPY THAT LEFT SINCE THIS ORDER WAS TAKEN STILL COUNTS (`frozenRank.ts`), so a
+             sale does not re-rank the rail under the hand that made it. */
+          if (typeof shelf !== 'number' || !ranksAsLive(copy.key, copyDeparted(copy), frozen)) continue
+          const key = `${shelf}/${copy.place.section ?? '?'}`
+          const n = (perSection.get(key) ?? 0) + 1
+          perSection.set(key, n)
+          liveMatches.set(shelf, Math.max(liveMatches.get(shelf) ?? 0, n))
+        }
       }
     }
     return (a: number, b: number): number => {
@@ -761,11 +781,26 @@ export function BoxBrowse({
       if (ha !== hb) return hb - ha
       return a - b
     }
-  }, [boxRecords, recency, filtered, inQuery, frozen])
+  }, [boxRecords, recency, filtered, results, frozen])
+
+  /* D-per-box-read, item 2: under a search, which OTHER boxes hold a match comes off the search's own
+     result now — `inQuery` is only this box's matched rows since the fetch became box-scoped,
+     so it can no longer answer "which boxes does this search touch" on its own. */
+  const searchBoxes = useMemo(() => {
+    if (results === null) return []
+    const boxes = new Set<number>()
+    for (const group of results.groups) {
+      for (const copy of group.copies) {
+        const shelf = copyShelf(copy)
+        if (typeof shelf === 'number') boxes.add(shelf)
+      }
+    }
+    return [...boxes]
+  }, [results])
 
   const shelves = useMemo(
-    () => shelvesOf(inQuery, filtered ? [] : boxRecords.map((record) => record.box), order),
-    [inQuery, filtered, boxRecords, order],
+    () => shelvesOf(inQuery, filtered ? searchBoxes : boxRecords.map((record) => record.box), order),
+    [inQuery, filtered, searchBoxes, boxRecords, order],
   )
 
   const onShelf = useMemo(() => {
@@ -802,16 +837,19 @@ export function BoxBrowse({
 
   const sections = useMemo(() => sectionsOf(visible, !hideSold, selected), [visible, hideSold, selected])
 
-  /* How many matches each shelf holds under a query, for the box list. */
+  /* How many matches each shelf holds under a query, for the box list. Off `results` rather
+     than `inQuery` for the same reason `order`/`shelves` are, above (D-per-box-read, item 2). */
   const matchesByShelf = useMemo(() => {
     const out = new Map<Shelf, number>()
-    if (!filtered) return out
-    for (const row of inQuery) {
-      const s = shelfOf(row)
-      out.set(s, (out.get(s) ?? 0) + 1)
+    if (!filtered || results === null) return out
+    for (const group of results.groups) {
+      for (const copy of group.copies) {
+        const s = copyShelf(copy)
+        out.set(s, (out.get(s) ?? 0) + 1)
+      }
     }
     return out
-  }, [inQuery, filtered])
+  }, [filtered, results])
 
   /* Every position with an open question, for the row badges. */
   const queuedKeys = useMemo(() => {
@@ -859,9 +897,16 @@ export function BoxBrowse({
     reader.readAsDataURL(file)
   }
 
+  /* D-per-box-read, item 2: this box's cards, box-scoped from the server rather than filtered
+   * client-side out of a whole-store fetch. Re-runs on a shelf switch (a data fetch now,
+   * not a filter) and on every reload trigger — `reloads`/`reloadToken` bumped by a sale,
+   * a retire, a re-shoot or a box op re-fetch exactly this box, which is the right box
+   * every one of those writes just changed. Waits for the first shelf to resolve (below)
+   * so it never fetches box 0 / NaN on first paint. */
   useEffect(() => {
+    if (typeof shelf !== 'number') return
     let live = true
-    getInventory()
+    getInventoryBox(shelf)
       .then((inventory) => {
         if (!live) return
         const next = rowsOf(inventory.cards)
@@ -884,7 +929,7 @@ export function BoxBrowse({
     return () => {
       live = false
     }
-  }, [reloads, reloadToken, onListings])
+  }, [shelf, reloads, reloadToken, onListings])
 
   /* The box registry, on the same counter and allowed to fail without anybody hearing. */
   useEffect(() => {

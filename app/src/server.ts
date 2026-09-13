@@ -15,6 +15,7 @@ import type {
   GameRegistry,
   GroupAnswerResult,
   Inventory,
+  InventoryCard,
   PhotoReclaimResult,
   Place,
   PlaceNeighbor,
@@ -714,6 +715,25 @@ export async function getStatus(): Promise<ServerStatus> {
 /** The whole card map. Keyed `"<box>/<index>"`. */
 export async function getInventory(): Promise<Inventory> {
   return (await request('/inventory', NO_CACHE)) as Inventory
+}
+
+/** One box's cards, in the same per-card shape as `getInventory()` — same `InventoryCard`
+ *  fields, same decoration. `boxes` is never present (nothing under `app/src` reads
+ *  `Inventory.boxes`; `getBoxes()` is the box registry's one reader) and `listings` is
+ *  narrowed to this box's own SKUs, which is every listing a screen holding one box can
+ *  address (D-per-box-read, item 2 of docs/specs/store-scaling.md). */
+export async function getInventoryBox(box: number): Promise<Inventory> {
+  return (await request(`/inventory/${box}`, NO_CACHE)) as Inventory
+}
+
+/** The newest-captured, identified, on-hand cards, in `getInventory()`'s own per-card shape
+ *  — Home's hero deck (D-per-box-read, item 2), a lean top-K route rather than the whole card map.
+ *  `boxes` and `listings` never ride along here; nothing under `app/src` reads either off
+ *  this response. */
+export async function getRecentCards(limit: number): Promise<{ cards: Record<string, InventoryCard> }> {
+  return (await request(`/inventory/recent?limit=${limit}`, NO_CACHE)) as {
+    cards: Record<string, InventoryCard>
+  }
 }
 
 /**
