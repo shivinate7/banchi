@@ -2402,7 +2402,7 @@ COMPONENTS = [
                 # skips, `AGENTS.md` being the same file as `CLAUDE.md` under another name.
                 # D18 is why it is not in `make check`: it writes.
                 "governed_by": ["D16", "D18", "D42", "D47", "D72", "D80", "D135",
-                                "D140", "D151"],
+                                "D140", "D151", "D160", "D185"],
             },
             "claim-selftest.py": {
                 "does": "scripts/claim-ids.py proved against a throwaway repository in which "
@@ -2435,7 +2435,7 @@ COMPONENTS = [
                 # literally, which is the trade docs-audit.py's own entry records.
                 "governed_by": ["D1", "D2", "D16", "D18", "D80", "D136", "D140", "D141",
                                 "D143", "D148",
-                                "D151"],
+                                "D151", "D185"],
             },
             "docs-audit-allow.txt": {
                 "does": "paths and identifiers the docs name before they exist, one "
