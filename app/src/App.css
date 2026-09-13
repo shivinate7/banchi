@@ -195,7 +195,16 @@
    longer copy anywhere in the product — Home's lede carries the sentence a person reads. */
 
 
-.bn-nav { display: flex; flex-direction: column; gap: var(--bn-1); flex: 1 1 auto; overflow-y: auto; overflow-x: hidden; padding-top: var(--bn-2); }
+/* `min-height: 0` IS WRITTEN RATHER THAN LEFT TO THE DEFAULT (D-the-drawer-scrolls-above-its-foot).
+   A flex item's automatic minimum size only resolves to 0 for an axis where its own overflow is
+   not `visible` — which `overflow-y: auto` here already satisfies per spec, so this line changes
+   no browser's rendering today. It is written anyway because the correctness of every rule below
+   it — `.bn-nav` staying capped at its flex-computed box so `.bn-side-foot`, its sibling, never
+   has to share space with content that refused to shrink — depends on an implicit resolution this
+   file does not otherwise assert anywhere, and a nested scroller inside a `position: fixed`
+   ancestor (`.bn-drawer` is a `.bn-sheet`) is exactly the shape that has a history of getting it
+   wrong across engines. Explicit costs nothing and removes the dependency on the default. */
+.bn-nav { display: flex; flex-direction: column; gap: var(--bn-1); flex: 1 1 auto; min-height: 0; overflow-y: auto; overflow-x: hidden; padding-top: var(--bn-2); }
 .bn-nav-group { display: flex; flex-direction: column; gap: 2px; }
 .bn-nav-group + .bn-nav-group { margin-top: var(--bn-3); }
 .bn-nav-group-label {
@@ -475,9 +484,21 @@
   flex-direction: column;
   padding: var(--bn-4) var(--bn-3);
   padding-top: calc(var(--bn-4) + env(safe-area-inset-top));
+  /* A PROPERTY OF THE FOOT, NOT OF THE NAV (D-the-drawer-scrolls-above-its-foot). Three fixed
+     rows — Cards to pull, the theme toggle, the server line — at the drawer's own 44px, plus
+     the two gaps between them, the head's own top padding and its border. This is NOT a
+     row-count arithmetic the way the two breakpoints below it are: it does not grow or shrink
+     with how many SCREENS the nav lists, only with how many rows the FOOT itself draws, so it
+     never has to be re-derived when a route is added. `.bn-nav` reads it below rather than
+     assuming the two boxes happen to sum to the drawer's height, which is what `flex: 1 1 auto`
+     already guarantees on its own — this is the belt beside that suspender, so a scroll that
+     lands programmatically (a jump key, a focus move) still opens a hair of daylight above the
+     foot instead of landing the last row flush on the boundary. */
+  --bn-drawer-foot-h: calc(44px * 3 + var(--bn-1) * 2 + var(--bn-2) + 1px);
 }
 .bn-drawer .bn-nav-link { height: 44px; font-size: var(--bn-fs-base); }
 .bn-drawer .bn-nav-link .bn-kbd { opacity: 1; }
+.bn-drawer .bn-nav { scroll-padding-bottom: var(--bn-drawer-foot-h); }
 .bn-drawer .bn-side-foot .bn-btn, .bn-drawer .bn-server { height: 44px; }
 /* THE HEAD HOLDS A BLOCK, NOT A ROW. It was a 30px mark beside two lines of type, so
    `align-items: center` was right; the lockup is 128 x 93 and the Close button belongs at the
@@ -865,7 +886,16 @@
    THE CONDITION IS HEIGHT, NOT WIDTH. A 430 x 932 Pro Max is a phone with the room to spare, and
    a short window on a desktop is not a phone at all — but the drawer only exists below 768px
    wide, so this query cannot reach one.
-   ================================================================================ */
+
+   WHAT THE TWO STEPS BELOW BUY IS FEWER ROWS BEHIND A SCROLL, NEVER REACHABILITY
+   (D-the-drawer-scrolls-above-its-foot). Read `754px` and the row counts in the next block's own
+   comment as a COSMETIC arithmetic, not a correctness one: `.bn-nav`'s `overflow-y: auto` plus
+   its explicit `min-height: 0` (above, at the base rule) means the last row of the last group —
+   Codes today, whatever route lands after it tomorrow — is always inside the nav's own scroll
+   range, never under `.bn-side-foot`, regardless of how many rows a future route adds. Nobody
+   has to come back here and re-derive a THIRD step the day an eleventh row makes 40px rows
+   overflow too; the rows just cost one more swipe. `phone.spec.ts`'s drawer-reachability sweep
+   is what actually stands behind that claim now, not this comment. */
 @media (max-width: 767px) and (max-height: 820px) {
   .bn-drawer-head { padding-bottom: var(--bn-2); }
   /* THE HEADING ITSELF IS UNTOUCHED — same 10px, same caps, same 0.1em. What closes is the AIR
