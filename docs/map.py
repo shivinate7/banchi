@@ -419,7 +419,7 @@ COMPONENTS = [
                                     "store's own reading — `Listing.observe_live`, per game, "
                                     "against the file's mtime — and says what it kept, by SKU "
                                     "with both readings (D87 amended). Partitions at the corpus's stored `policy.threshold` (D99).",
-                            "governed_by": ["D3", "D7", "D8", "D9", "D11", "D12", "D16", "D25", "D34", "D36", "D49", "D54", "D58", "D59", "D86", "D87", "D99", "D115", "D137", "D180", "D188"], "tested_by": ["T4", "T7"]},
+                            "governed_by": ["D3", "D7", "D8", "D9", "D11", "D12", "D16", "D25", "D34", "D36", "D49", "D54", "D58", "D59", "D86", "D87", "D88", "D99", "D115", "D137", "D170", "D180", "D188", "D189"], "tested_by": ["T4", "T7"]},
             "cmd_prices.py": {"does": "`pkmnscan prices adopt` folds every run's legacy "
                                       "decisions.json into the corpus — previews unless given "
                                       "--write, newest-wins, and NAMES the holds a later price "

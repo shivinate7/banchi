@@ -29,3 +29,11 @@ That second table earns its place rather than being convenience. A run table tha
 ### What this does not touch
 
 The two-source arbitration rule itself — newest wins by clock, never by a fixed precedence — is D86's own reasoning applied one register over from the pricing corpus to the market reading, and it is unchanged in every particular. `pipeline/pricing.py`, `pipeline/corpus.py` and `inventory/prices.json` are untouched; this is about where a market OBSERVATION is cached, never about what an operator DECIDED to ask for a card.
+
+### Amended 2026-09-12 — the writer runs inside the ordinary write paths
+
+The gap this entry named — *"the table does not self-maintain ... if a session finds that gap costing something real, the fix is to make `join` and `do_live_export` call `readings adopt`'s writer at the end of their own transactions"* — is closed. `cli/cmd_join.py` calls `store.readings.Readings.replace_source()` immediately after writing `pricing.json`, in a `Store().write()` opened for that purpose alone (not folded into the earlier queues/`live` transaction, because `pricing.json` is a sidecar file D88 keeps outside any sqlite transaction, and the readings refresh reads that file's own post-write mtime). `do_live_export` does the same immediately after validating the fetch, reusing the already-parsed export rather than re-reading the file.
+
+Both writers are INCREMENTAL, not a call into `pipeline/readings.py:collect()` — a full recollect would re-parse every run's `pricing.json` (cheap) and the newest live export (the one genuinely expensive file, potentially large at 50,000 listings) on every join, which is exactly the per-request cost this table exists to avoid paying. `store/readings.py:Readings.replace_source()` folds in one source's fresh reading, superseding only that source's own prior rows for an ordinary run (two run directories coexist independently) and every existing `live`-kind row for a live fetch (`_newest_live_reading` credits only the single newest file, so a fresher fetch invalidates every SKU an older one was still carrying).
+
+`pkmnscan readings adopt --write` is unchanged and remains the hand repair for what these two writers cannot see: a run directory removed outside any command this repo runs (there is no run-delete capability), or a clock skew. Nothing about the preview-by-default CLI shape changes.
