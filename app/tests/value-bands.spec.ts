@@ -543,3 +543,94 @@ test('leaving the lens puts the screen back on the worklist', async ({ page }) =
   await expect(page.locator(VIEW)).toHaveCount(0)
   expect(new URL(page.url()).hash).toBe('#/pricing')
 })
+
+test('a mount that outlives its own fetch does not win over a fresher one (w1b)', async ({ page }) => {
+  /* THE PLANNER'S PROBABLE CAUSE, INSTRUMENTED AND NARROWED. The bug report — a cold
+   * navigation to `#/pricing?band=top` shows the tab badge but "Nothing sits in that band" —
+   * was chased by delaying `getValueAggregates()` alone (it shares `getValuePage`'s endpoint
+   * at `limit=0`) under React's StrictMode double-invoke, which DOES double-fire this effect
+   * on every mount (confirmed by instrumenting `ValueBands.tsx` directly): `readAggregates`
+   * runs twice, `liveAgg.current` is armed by the SECOND mount before the FIRST mount's
+   * response lands, and both responses are applied. Under `sealEveryTest`'s mocks — which
+   * answer every duplicate request with IDENTICAL data — this self-corrects: the rows effect
+   * re-runs on every `aggregates` change and lands on the right count regardless of which of
+   * the two identical responses wins. A production build (no StrictMode) never double-mounts
+   * on a single cold `goto` at all, and could not be made to reproduce the reported symptom
+   * either — confirmed by building `app/dist`, serving it, and watching the same
+   * instrumentation log exactly one mount.
+   *
+   * WHAT INSTRUMENTATION DID FIND, and what this case pins down directly: `readAggregates`'s
+   * only guard is `liveAgg.current` — true for "still mounted", with no notion of WHICH
+   * in-flight request started most recently. `getValuePage`'s own rows effect two cursors
+   * down protects against exactly this with a monotonic `generation` ref; the aggregates
+   * fetch has no equivalent. So a mount that is still alive when a SLOW, STALE response lands
+   * will apply it over a FASTER, FRESHER response that already resolved and already drew
+   * rows — the reverse of "latest request wins". This does not need StrictMode: unmounting
+   * the lens before its fetch resolves and re-entering it (the "Worth the least" / "Worth the
+   * most" toggle, or leaving and pressing "Find by value" again) is a real, everyday trigger
+   * for two overlapping requests, and it is deterministic here rather than timing-dependent. */
+  const stale = table({
+    copies: [copy({ index: 1, market: '1.00' })],
+    boxes: [drawer({ cards: 1, valued: 1, at_or_over: 1, under_cutoff: 0, total: '1.00' })],
+    totals: { cards: 1, valued: 1, value: '1.00' },
+  })
+  const fresh = table({
+    copies: Array.from({ length: 100 }, (_, at) => copy({ index: at + 1, market: `${(100 - at).toFixed(2)}` })),
+    boxes: [drawer({ cards: 100, valued: 100, at_or_over: 100, under_cutoff: 0, total: '5050.00' })],
+    totals: { cards: 100, valued: 100, value: '5050.00' },
+  })
+
+  let aggregatesCalls = 0
+  await page.route(/\/pipeline\/value(\?|$)/, async (route) => {
+    const url = new URL(route.request().url())
+    if (url.searchParams.get('limit') === '0') {
+      // THE FIRST aggregates call (mounted, then abandoned before it answers) is SLOW and
+      // STALE. The SECOND (the remount that stays on screen) is FAST and FRESH — the shape a
+      // real "leave, then come straight back" always takes, since the abandoned mount's
+      // request keeps running on the wire even after React has stopped listening.
+      aggregatesCalls += 1
+      const first = aggregatesCalls === 1
+      await new Promise((resolve) => setTimeout(resolve, first ? 400 : 20))
+      const body = valuePageFrom(first ? stale : fresh, url.searchParams)
+      await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(body) })
+      return
+    }
+    // Every ROWS fetch answers instantly, off whichever table is CURRENTLY on screen — a real
+    // server has one current answer, never two.
+    const body = valuePageFrom(aggregatesCalls <= 1 ? stale : fresh, url.searchParams)
+    await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(body) })
+  })
+  await page.route(/\/pipeline\/pricing/, async (route) => {
+    await route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify({ runs: [], skus: [], roster: [], skipped: [], asked: [], written_at: {}, threshold: '0.29', floor: '0.29' }),
+    })
+  })
+  await page.route(/\/pricing$/, async (route) => {
+    await route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify({ version: 1, policy: { threshold: '0.29' }, skus: {} }),
+    })
+  })
+
+  // A SINGLE COLD `goto`. `StrictMode` (`app/src/main.tsx`) double-invokes every mount
+  // effect in dev, so `ValueBands`'s aggregates effect fires twice on this one navigation —
+  // confirmed by instrumenting it directly. Both calls share ONE `liveAgg` ref (StrictMode's
+  // simulated unmount/remount reuses the fiber's hook state, unlike a real unmount), so
+  // whichever of the two responses lands LAST wins, regardless of which was slower or which
+  // request started more recently.
+  await page.goto('/#/pricing?band=top')
+  await expect(page.locator(VIEW)).toBeVisible()
+  await expect(page.locator('.value-row')).toHaveCount(5, { timeout: 5000 })
+
+  // Give the FIRST (stale, slow) response time to land after the fresh one already drew —
+  // the whole point of the case.
+  await page.waitForTimeout(700)
+
+  // THE FRESH READING MUST STILL BE ON SCREEN. A stale response that answers after a fresher
+  // one already resolved must never overwrite it.
+  await expect(page.getByRole('button', { name: /Top 5%/ }).locator('.bn-chip-count')).toHaveText('5')
+  await expect(page.locator('.value-row')).toHaveCount(5)
+})
