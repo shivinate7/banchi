@@ -137,6 +137,37 @@
 .capture-card-rig { animation-delay: 90ms; }
 .capture-card-label { padding: 2px 6px 2px; }
 
+/* The Rig panel's own disclosure — Game, Camera, Rotation and Trigger fold behind this once a
+   box is picked. A plain button rather than `.capture-row` (which reserves a keycap column
+   for a field's own letter; this toggles the whole panel and owns no key of its own). */
+.capture-rig-summary {
+  display: flex;
+  align-items: center;
+  gap: var(--bn-2);
+  width: 100%;
+  min-width: 0;
+  padding: 2px 6px 2px;
+  border: none;
+  background: none;
+  border-radius: var(--bn-r-md);
+  color: inherit;
+  font: inherit;
+  cursor: pointer;
+  transition: background-color var(--bn-t-fast) var(--bn-ease);
+}
+.capture-rig-summary:hover { background: var(--bn-surface-2); }
+.capture-rig-summary-val {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: var(--bn-fs-sm);
+  color: var(--bn-ink-2);
+  text-align: right;
+}
+.capture-rig-summary .capture-chev { flex: none; color: var(--bn-ink-3); }
+
 /* ---- rows: keycap · icon · label · value · chevron ----------------------------------------- */
 .capture-row {
   display: grid;

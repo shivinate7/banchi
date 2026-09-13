@@ -1,5 +1,5 @@
 import { test, expect, type Page } from '@playwright/test'
-import type { GameRegistry } from '../src/types'
+import type { GameRegistry, ResolvedOrder } from '../src/types'
 import { settleFonts } from './fontsReady'
 import { sealEveryTest } from './shell'
 
@@ -711,7 +711,16 @@ function movesOnSale(move: (undo: boolean) => void, answers: SaleStub = SALE): S
  *  and a retired card in section 1 and forty cases in this file walk past them on purpose.
  *  `true` hides them; `null` writes nothing to storage, which is the one way a case reaches
  *  the product's own default and asserts it. */
-type OpenOptions = { route?: string; boxesDelayMs?: number; settle?: string; hideSold?: boolean | null }
+type OpenOptions = {
+  route?: string
+  boxesDelayMs?: number
+  settle?: string
+  hideSold?: boolean | null
+  /** Overrides `GET /orders`'s `resolution.orders` — the default fixture answers "no orders"
+   *  (see the comment beside the route below), which is honest but means no case here ever
+   *  drew the Wanted pill against a real claim. Passing this is how a test does. */
+  ordersResolution?: readonly ResolvedOrder[]
+}
 
 async function open(
   page: Page,
@@ -927,13 +936,14 @@ async function open(
      EMPTY IS THE HONEST ANSWER. D63's ledger is `orders.spec.ts`'s subject; what this file
      needs from it is that no card in the walk carries a claim it would have to draw. */
   await page.route(/\/orders$/, async (route) => {
+    const resolutionOrders = options.ordersResolution ?? []
     await route.fulfill({
       status: 200,
       contentType: 'application/json',
       body: JSON.stringify({
-        summary: 'no orders',
+        summary: resolutionOrders.length === 0 ? 'no orders' : `${resolutionOrders.length} order`,
         orders: [],
-        resolution: { orders: [], counts: {} },
+        resolution: { orders: resolutionOrders, counts: {} },
       }),
     })
   })
@@ -1285,6 +1295,63 @@ test('selecting a card shows every copy of it, each with both doors out of inven
      The Fulfiller's skin is a different branch and keeps its own name at 32px; nothing in
      `fulfillment.spec.ts` reaches this selector, which is scoped to `.card-locations-owner`. */
   await expect(page.locator('.card-locations-owner .card-locations-name')).toHaveCount(0)
+})
+
+test('the Wanted pill links to the order that named this copy, not the hub\'s default view', async ({
+  page,
+}) => {
+  /* The pill used to be a bare `href="#/orders"` — always the hub's default landing, never the
+     order that actually claimed this copy. `Orders.tsx`'s own `groupForOrderKey` reads
+     `?order=<order_key>` (the `source:number` composite, `ResolvedLine.order_key` — never the
+     bare buyer-facing number `ResolvedLine.order`, which is a different string) and resolves it
+     to whichever buyer group holds it; this is the read half of that link's other end. */
+  await open(page, BOXES, STORE, () => PRICING, SALE, {
+    ordersResolution: [
+      {
+        key: 'tcgplayer:90201',
+        number: '90201',
+        complete: false,
+        outstanding: 1,
+        lines: [
+          {
+            order: '90201',
+            order_key: 'tcgplayer:90201',
+            sku: '8937370',
+            reason: 'resolved',
+            wanted: 1,
+            owed: 1,
+            fulfilled: 0,
+            outstanding: 1,
+            on_hand: 1,
+            sold: 0,
+            retired: 0,
+            pooled: 0,
+            line: {} as never,
+            picks: [
+              {
+                box: 2,
+                index: 1,
+                capture_id: null,
+                source: 'card',
+                run: null,
+                card_name: 'Thievul',
+                card_number: null,
+                condition: null,
+                state: 'identified',
+                held_by: null,
+                place: {} as never,
+              },
+            ],
+          },
+        ],
+      },
+    ],
+  })
+
+  await expect(page.locator('.card-locations-owner')).toBeVisible()
+  const claimed = page.locator('.card-locations-owner .card-locations-claim').first()
+  await expect(claimed).toBeVisible()
+  await expect(claimed).toHaveAttribute('href', '#/orders?order=tcgplayer%3A90201')
 })
 
 test('a copy sold here since the reading is drawn beside it, and headroom follows', async ({
@@ -2587,6 +2654,17 @@ test('the census greps to the store, and the identity line says what the box hol
   await expect(censusValue(page, 'Retired')).toHaveText('1')
   await expect(censusValue(page, 'Fill')).toHaveText('7')
   await expect(censusValue(page, 'Next index')).toHaveText('8')
+
+  /* FILL and NEXT INDEX used to be two bare numbers with no visible sentence — a `help` title
+     that only a hover ever reaches said what Fill was, and Next index said nothing at all.
+     Both now carry the same visible-caption slot `Listing-held`'s reading age already draws
+     through (`.boxops-census-note`), so a reader who never hovers still gets the sentence. */
+  await expect(
+    page.locator('.boxops-census-cell', { hasText: 'Fill' }).locator('.boxops-census-note'),
+  ).toHaveText('Never comes down, even after a sale')
+  await expect(
+    page.locator('.boxops-census-cell', { hasText: 'Next index' }).locator('.boxops-census-note'),
+  ).toHaveText('Where the next capture lands')
 
   /* Five, not seven: two of the seven records have left. */
   await expect(page.locator('.boxops-identity-fill')).toHaveText('5 on hand')
