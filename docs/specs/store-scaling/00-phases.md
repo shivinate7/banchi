@@ -71,9 +71,12 @@ where it was has removed nothing.
 | Phase 1 | 12 | item 2 removes `_boxes_named`; item 4 REPLACES `_unsent_ledger`'s `distinct("sku")` with its own one-pass `select`, argued, so it nets zero |
 | Phase 2 | 6 | item 7 removes `do_pipeline_value`, `box_views`, `_release_plan`, `_box_names`, `_on_hand_by_run`; item 8 removes `do_search` |
 
-The five that remain — `do_inventory`, `to_payload`, `do_boxes`, `counts`, and item 4's
-one pass — are named in the allowlist with their reason and are the plan's end state, not
-a residue. Each item's own file has the authoritative "Allowlist entries removed" section;
+The six that remain — `do_inventory`, `to_payload`, `do_boxes`, `counts`,
+`next_box_number`, and item 4's one pass — are named in the allowlist with their reason
+and are the plan's end state, not a residue. `next_box_number` was not in the original
+twelve-site census; item 1's own scanner found it, real and permanent, on its first
+end-to-end run against the tree (see item 1's own file, "Goal and done-when"). Each
+item's own file has the authoritative "Allowlist entries removed" section;
 if it disagrees with this table, the item file wins and this table is corrected in the
 same PR.
 

@@ -15840,8 +15840,18 @@ def self_test() -> int:
 
     print("\nunscoped walk: the row itself, against the two failure shapes item 1's spec names")
 
-    # Arm (d): a site not on the allowlist fails the row (report-level, not just the
-    # matcher).
+    # These three arms call `check_unscoped_walk(report)` ITSELF, with the module globals
+    # it reads patched for the duration — the same save/patch/restore-in-`finally` shape
+    # used above for `MAP`. Driving only `unscoped_walk_sites` (the pure matcher) and the
+    # comparison arithmetic inline, as the first draft of this block did, proved nothing
+    # about the ROW: `check_unscoped_walk` walks the REAL `_UNSCOPED_WALK_ROOTS` regardless
+    # of what a fixture computes, so a mutation that broke the row's own comparison loops
+    # (e.g. `for path, fname, shape in ():` in place of `sorted(allowed)`, or `if False:`
+    # in place of the not-on-the-allowlist test) left every arm below green. Calling the
+    # row function directly is what closes that gap.
+
+    # Arm (d): a site not on the allowlist fails the ROW. `_UNSCOPED_WALK_SINGLE_FILES` is
+    # patched to add one fixture file the real scan would not otherwise see.
     with tempfile.TemporaryDirectory() as tmp:
         fixture = Path(tmp) / "fixture_new_site.py"
         fixture.write_text(
@@ -15850,38 +15860,66 @@ def self_test() -> int:
             "        touch(card)\n",
             encoding="utf-8",
         )
-        # Directly exercise the matcher + the allowlist comparison the check function
-        # does, without needing a Report-shaped end-to-end call — the check function
-        # itself hard-codes the real repo's paths, so drive the comparison logic instead:
-        found = unscoped_walk_sites([fixture])
-        new_site_flagged = any(
-            (rel(fixture), fname, shape) not in UNSCOPED_WALK_ALLOWED
-            for _, _, fname, shape in found
-        )
-        ok(new_site_flagged, "a site absent from UNSCOPED_WALK_ALLOWED is reportable as new")
-
-    # Arm (e): an allowlist entry naming a site the tree no longer has is reportable as
-    # stale — the "removed site not removed from the list" failure item 1's spec text
-    # calls out by name. Synthesize a fixture with NONE of the allowlisted shapes and
-    # confirm every real allowlist entry is absent from what it finds.
-    with tempfile.TemporaryDirectory() as tmp:
-        fixture = Path(tmp) / "fixture_empty.py"
-        fixture.write_text("def do_boxes():\n    return []\n", encoding="utf-8")
-        found = unscoped_walk_sites([fixture])
-        stale = [
-            (path, fname, shape) for path, fname, shape in UNSCOPED_WALK_ALLOWED
-            if (path, fname, shape) not in {(rel(fixture), f, s) for _, _, f, s in found}
-        ]
+        _saved_files = globals()["_UNSCOPED_WALK_SINGLE_FILES"]
+        try:
+            globals()["_UNSCOPED_WALK_SINGLE_FILES"] = _saved_files + (fixture,)
+            report = Report()
+            check_unscoped_walk(report)
+        finally:
+            globals()["_UNSCOPED_WALK_SINGLE_FILES"] = _saved_files
+        by_label = {row.check: row.findings for row in report.checks}
         ok(
-            len(stale) == len(UNSCOPED_WALK_ALLOWED),
-            "every allowlist entry is reportable as stale when the scan does not find it "
-            "(proves the 'removed but not deleted from the list' comparison actually runs)",
-            str(stale[:3]),
+            any("do_something_new" in f.message for f in by_label["unscoped walk"]),
+            "a site absent from UNSCOPED_WALK_ALLOWED fails the row, naming the function",
+            str(by_label["unscoped walk"]),
         )
 
-    # Arm (f): end-to-end proof against the REAL tree — the row itself, not just the
-    # comparison logic, reports clean on a clean checkout. This is Step 5's optional
-    # end-to-end check, folded in as its own arm rather than left as a manual Measure step.
+    # Arm (e): an allowlist entry naming a site the tree no longer has fails the ROW as
+    # stale — the "removed site not removed from the list" failure item 1's spec text
+    # calls out by name. `UNSCOPED_WALK_ALLOWED`/`UNSCOPED_WALK_EXPECTED` are patched
+    # together (adding one entry the real tree does not have, and raising the pinned
+    # count to match, so this arm isolates the stale-entry branch from the count-mismatch
+    # branch below).
+    _saved_allowed = globals()["UNSCOPED_WALK_ALLOWED"]
+    _saved_expected = globals()["UNSCOPED_WALK_EXPECTED"]
+    try:
+        globals()["UNSCOPED_WALK_ALLOWED"] = _saved_allowed | {
+            ("server/capture_server.py", "no_such_function", "values"),
+        }
+        globals()["UNSCOPED_WALK_EXPECTED"] = _saved_expected + 1
+        report = Report()
+        check_unscoped_walk(report)
+    finally:
+        globals()["UNSCOPED_WALK_ALLOWED"] = _saved_allowed
+        globals()["UNSCOPED_WALK_EXPECTED"] = _saved_expected
+    by_label = {row.check: row.findings for row in report.checks}
+    ok(
+        any("no_such_function" in f.message for f in by_label["unscoped walk"]),
+        "an allowlist entry the scan does not find fails the row, naming the function",
+        str(by_label["unscoped walk"]),
+    )
+
+    # Arm (f'): the pinned-count mismatch fails the ROW on its own, with no other change —
+    # `UNSCOPED_WALK_EXPECTED` alone disagreeing with `len(UNSCOPED_WALK_ALLOWED)`.
+    _saved_expected = globals()["UNSCOPED_WALK_EXPECTED"]
+    try:
+        globals()["UNSCOPED_WALK_EXPECTED"] = _saved_expected + 1
+        report = Report()
+        check_unscoped_walk(report)
+    finally:
+        globals()["UNSCOPED_WALK_EXPECTED"] = _saved_expected
+    by_label = {row.check: row.findings for row in report.checks}
+    ok(
+        any("UNSCOPED_WALK_ALLOWED" in f.where and "pinned" in f.message
+            for f in by_label["unscoped walk"]),
+        "UNSCOPED_WALK_EXPECTED disagreeing with the allowlist's length fails the row",
+        str(by_label["unscoped walk"]),
+    )
+
+    # Arm (f): end-to-end proof against the REAL tree, unpatched — the row itself, not
+    # just the comparison logic, reports clean on a clean checkout. This is Step 5's
+    # optional end-to-end check, folded in as its own arm rather than left as a manual
+    # Measure step.
     report = Report()
     check_unscoped_walk(report)
     by_label = {row.check: row.findings for row in report.checks}
