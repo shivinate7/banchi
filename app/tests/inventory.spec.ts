@@ -1210,6 +1210,10 @@ test('a zero-box store renders "No boxes yet" instead of loading forever', async
   await expect(page.getByText('Reading the inventory')).toHaveCount(0)
   await expect(page.getByRole('button', { name: 'Capture a card' })).toBeVisible()
 
+  /* ONE STATEMENT PER FACT: the header's own lede is silent here, so "No boxes yet" is said
+     once, by the empty state's title, and not twice. */
+  await expect(page.locator('.bn-lede')).toHaveCount(0)
+
   /* The loading skeleton is gone too — a stray `.browse-body-loading` here would mean the new
      branch is drawn ALONGSIDE the old one rather than instead of it. */
   await expect(page.locator('.browse-body-loading')).toHaveCount(0)

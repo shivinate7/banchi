@@ -1863,7 +1863,7 @@ export function BoxBrowse({
           rows === null
             ? failure === null
               ? noBoxesYet
-                ? 'No boxes yet.'
+                ? null
                 : 'Reading the inventory…'
               : 'The inventory could not be read.'
             : 'Walk any box card by card. Sell, retire or move a copy from here.'
