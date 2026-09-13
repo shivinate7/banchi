@@ -907,6 +907,16 @@ ORDER_NAME_FIELDS = ("source", "number", "buyer")
 # batching a hand-typed list past it is sending something this route was not built for.
 ORDER_NAMES_LIMIT = 2000
 
+# What `POST /inventory/copies` accepts: a list of SKU strings, and nothing beside them —
+# a caller sending a shape this route does not read is refused by name rather than having
+# the extra field silently ignored.
+INVENTORY_COPIES_FIELDS = ("skus",)
+
+# THE CEILING ON ONE COPIES PRESS. `Orders.tsx` sends every SKU across every open order's
+# lines, which on the owner's real store is well under a hundred; 5000 is headroom over
+# that rather than a number this route expects to be nudged toward.
+INVENTORY_COPIES_LIMIT = 5000
+
 # A fetch names the statuses to detail. The preview answers a handful — the API's own words for
 # an order's state — so a list past this is a client sending something other than what it ticked.
 ORDER_FETCH_STATUS_LIMIT = 50
@@ -3329,6 +3339,106 @@ def do_inventory_recent(limit: int) -> dict:
         if card is None or card.state in master.TERMINAL_STATES:
             continue
         if not card.name or card.photo is None:
+            continue
+        record = asdict(card)
+        record["number_display"] = join.display_number(
+            record.get("number"), record.get("printed_total")
+        )
+        try:
+            place = places.of(record["box"], record["index"])
+        except (KeyError, TypeError, ValueError, master.BadSections):
+            cards[key] = record
+            continue
+        if place["located"]:
+            record.update(_flat_place(place))
+        record["place"] = place
+        cards[key] = record
+    return {"cards": cards}
+
+
+def do_inventory_copies(payload: dict) -> dict:
+    """`POST /inventory/copies` — every on-hand copy of the requested SKUs, store-wide, in
+    `do_inventory`'s own per-card shape (docs/DEBTS.md §27, site 1 — `Orders.tsx:indexStore`).
+
+    THE SITE THIS REPLACES READ THE WHOLE STORE BECAUSE THE RESOLVER'S OWN PICKS ARE NOT THE
+    ANSWER. `pipeline/orders.py:LinePass.line` stops drawing picks the moment a line is
+    filled, so a card fourteen copies deep on this store shows up as two — the resolver
+    answers "can this envelope be filled", never "where does every copy of this sit". The
+    screen's whole argument for reading `GET /inventory` was that this route's answer is a
+    superset it needed and had no narrower way to ask for.
+
+    A BOX-SCOPED VERSION OF THIS ROUTE WAS THE IDEA TO AVOID, NOT THE ONE TO BUILD, and this
+    docstring says so because a naive read of "for_keys exists, so scope to the resolver's
+    boxes" reproduces the exact defect above: a copy in a box no pick names is the ordinary
+    case this feature exists for (a card fourteen copies deep sits in boxes the resolver
+    never had to open), and scoping the SCAN to a guessed box set would silently drop it —
+    `pipeline/orders.py`'s own header is the confirmation.
+
+    WHY THIS IS SAFE WHERE THAT IS NOT: the scan below is store-wide and unfiltered by box —
+    it is `cli/resolve.py:_cards_by_sku`'s own one-pass shape, `Rows.select()` over
+    `("sku", "state", "box", "idx")` — the four columns this route actually reads, narrower
+    than `_cards_by_sku`'s own six because this route needs no timestamp or run name — which
+    builds no `Card` object and writes nothing into `_loaded` — and the box SET handed to `_Places.for_keys` is DERIVED
+    from what that scan actually found, never guessed at from the request. Nothing here is
+    scoped by an assumption about which boxes matter; the store decides that, in one pass,
+    before a single box is named.
+
+    THE SECOND PASS BUILDS A `Card` OBJECT ONLY FOR A MATCHED, ON-HAND ROW — proportional to
+    the answer's size and not the store's, the same asymmetry `_pick_row` already relies on
+    for a resolver's picks.
+
+    NOT-GONE, THE SAME PREDICATE `indexStore`'s `GONE` SET NAMES: a card whose state is
+    `sold`, `retired` or `moved` is excluded here rather than left for the client to filter,
+    so a caller of this route never has to know that vocabulary exists.
+
+    THIS EARNS ITS OWN `unscoped walk` ALLOWLIST ENTRY, a cost named rather than silently paid: a
+    full unfiltered `select()` over every card is exactly the pattern that row's `RECORDED`
+    set exists to catch, and this route is a new full-table pass — argued above as correct
+    for what it computes, and still a cost, never claimed as free.
+    """
+    _reject_unknown(payload, INVENTORY_COPIES_FIELDS)
+    raw = payload.get("skus")
+    if not isinstance(raw, list) or not raw or not all(isinstance(s, str) for s in raw):
+        raise BadRequest(
+            HTTPStatus.BAD_REQUEST,
+            "skus_required",
+            "Send `skus` — a non-empty list of SKU strings. An empty list asks for nothing, "
+            "which is refused rather than answered with an empty map, because those are "
+            "different answers to \"did that work\".",
+        )
+    if len(raw) > INVENTORY_COPIES_LIMIT:
+        raise BadRequest(
+            HTTPStatus.BAD_REQUEST,
+            "too_many_skus",
+            f"{len(raw)} SKUs in one press, and this route takes at most "
+            f"{INVENTORY_COPIES_LIMIT}. Send them in smaller batches.",
+        )
+    wanted = {sku.strip() for sku in raw if sku.strip()}
+
+    inventory = Store().read().inventory
+
+    # ONE UNFILTERED PASS, `_cards_by_sku`'s own shape — no `Card` object built here, and
+    # nothing written into `Rows._loaded`.
+    matched: list = []
+    keys: set = set()
+    for key, (sku, state, box, index) in inventory.cards.select(
+        ("sku", "state", "box", "idx")
+    ):
+        if not sku or str(sku) not in wanted:
+            continue
+        if state in master.TERMINAL_STATES:
+            continue
+        matched.append(key)
+        keys.add((box, index))
+
+    # THE BOX SET IS DERIVED FROM THE SCAN ABOVE, NEVER FROM THE REQUEST — see the
+    # docstring's "why this is safe" paragraph.
+    places = _Places.for_keys(inventory, keys)
+
+    cards: dict = {}
+    for key in matched:
+        card = inventory.cards.get(key)
+        if card is None:
             continue
         record = asdict(card)
         record["number_display"] = join.display_number(
@@ -11798,6 +11908,14 @@ class CaptureHandler(BaseHTTPRequestHandler):
                     int(match.group(1)), int(match.group(2)), self._body()
                 )
                 return self._json(HTTPStatus.OK, body)
+            # `docs/DEBTS.md` §27, site 1: every on-hand copy of a SKU set, store-wide, in
+            # one pass whose box set is derived rather than guessed (`do_inventory_copies`'s
+            # own docstring has the argument). An exact string, matched before every digit
+            # route below it — `/inventory/copies` cannot coerce to a box number, so no
+            # regex here could ever have matched it anyway, but this keeps the same reading
+            # order as the exact-string routes above.
+            if path == "/inventory/copies":
+                return self._json(HTTPStatus.OK, do_inventory_copies(self._body()))
             # D83's third door: one card, to another box. Matched before the batched form
             # one register down, though the two patterns cannot collide — `_MOVE_RE` needs
             # two digit groups before `/move` and `_MOVE_CARDS_RE` needs exactly one.

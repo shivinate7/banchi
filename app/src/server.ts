@@ -769,6 +769,33 @@ export async function getRecentCards(limit: number): Promise<{ cards: Record<str
   }
 }
 
+/** Every on-hand copy of the given SKUs, store-wide, in `getInventory()`'s own per-card
+ *  shape — `docs/DEBTS.md` §27, site 1. `Orders.tsx:indexStore` is the one caller: it needs
+ *  EVERY copy of a card, not only the ones the resolver's own picks name, because a line
+ *  stops drawing picks the moment it is filled while the store may hold many more.
+ *
+ *  A BOX-SCOPED FETCH WAS THE IDEA REJECTED HERE, not merely one considered: the copies this
+ *  screen needs are, by the feature's own design, expected to sit in boxes no resolver pick
+ *  names at all, so there is no set of boxes this client could send that would be safe to
+ *  narrow to. `server/capture_server.py:do_inventory_copies`'s own docstring is the
+ *  argument for why the SERVER's derived box set is sound where a client-guessed one is not.
+ *
+ *  `skus` MAY NOT BE EMPTY — the route refuses `skus_required` on one, so callers gate on a
+ *  non-empty set themselves rather than round-tripping to learn that.
+ *
+ *  WRITE-SHAPED BUT WRITES NOTHING: a POST because the SKU list is too big for a query
+ *  string, exactly `fetchOrders`'s own reason. `do_inventory_copies` opens `Store().read()`,
+ *  never `Store().write()` — no `screen-freshness.mjs` re-read or invalidation is owed. */
+export async function getInventoryCopies(
+  skus: readonly string[],
+): Promise<{ cards: Record<string, InventoryCard> }> {
+  return (await request('/inventory/copies', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ skus }),
+  })) as { cards: Record<string, InventoryCard> }
+}
+
 /**
  * Take a photo into the next position in a box.
  *

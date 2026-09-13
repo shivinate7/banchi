@@ -221,12 +221,19 @@ async function open(
    * `pullCopy` threw; `onPull` re-reads only on its success path, so nothing re-read and the payload
    * never moved. The case failed for a reason unrelated to what it tested, and a write came one
    * refusal from a live store. These stubs reach nothing. */
-  /* THE HUB'S OTHER READ, UNCONDITIONALLY. `OrdersHub` asks `GET /inventory` on mount beside
-     `GET /orders` — it needs the cards to resolve a line to copies — and this file stubbed it
-     only inside the `boot` branch below, so every case that did not ask for a boot header sent
-     that read to the capture port. `sealEveryTest` named it. Registered BEFORE the branch, so
-     the boot variant is the newer handler and still wins where it is asked for. */
-  await page.route(/\/inventory$/, async (route) => {
+  /* THE HUB'S OTHER READ, UNCONDITIONALLY. `OrdersHub` asks `POST /inventory/copies` after
+     every `GET /orders` lands — it needs the cards to resolve a line to copies, scoped to the
+     SKUs the ledger just named (docs/DEBTS.md §27, site 1) — and this file stubbed the old
+     whole-store `GET /inventory` only inside the `boot` branch below, so every case that did
+     not ask for a boot header sent that read to the capture port. `sealEveryTest` named it.
+     Registered BEFORE the branch, so the boot variant is the newer handler and still wins
+     where it is asked for.
+
+     A WRITE-SHAPED ROUTE, REGISTERED BEFORE THE LOOSER READ REGEXES — `/orders$/`'s own rule
+     one register down. `/inventory\/copies$/` is a POST and could not collide with `/orders$/`
+     regardless, but the ordering is kept uniform with every other route in this file rather
+     than argued case by case. */
+  await page.route(/\/inventory\/copies$/, async (route) => {
     await route.fulfill({ status: 200, contentType: 'application/json', body: '{"cards": {}}' })
   })
 
@@ -246,7 +253,7 @@ async function open(
       })
     }
     await page.route(/\/status$/, withBoot(JSON.stringify({ cards: 0, next_index: {} })))
-    await page.route(/\/inventory$/, withBoot(JSON.stringify({ cards: {} })))
+    await page.route(/\/inventory\/copies$/, withBoot(JSON.stringify({ cards: {} })))
   }
 
   /* D113's three writes. Registered BEFORE `/orders$` like every other write-shaped route here,
@@ -1457,7 +1464,7 @@ test('?order= resolves an old link to the buyer group that holds it', async ({ p
     ],
   )
   const wire: Wire[] = []
-  await page.route(/\/inventory$/, async (route) => {
+  await page.route(/\/inventory\/copies$/, async (route) => {
     await route.fulfill({ status: 200, contentType: 'application/json', body: '{"cards": {}}' })
   })
   await page.route(/\/orders$/, async (route) => {
