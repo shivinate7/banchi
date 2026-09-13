@@ -1,4 +1,4 @@
-## D-a-slug-two-branches-both-still-hold-unclaimed — A claim checks whether the slug is already claimed, not only whether the number is free
+## D187 — A claim checks whether the slug is already claimed, not only whether the number is free
 
 `make claim-ids`'s `plan()` allocates `max(ceiling_at(ref)) + 1` for every unclaimed
 `## D-<slug>` heading in the branch's own working tree. That answers "what number is free
