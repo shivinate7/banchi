@@ -71,7 +71,7 @@ import tokenize
 import keyword
 from fnmatch import fnmatch
 from pathlib import Path
-from typing import Dict, Iterable, List, NamedTuple, Optional, Sequence, Set, Tuple
+from typing import Dict, FrozenSet, Iterable, List, NamedTuple, Optional, Sequence, Set, Tuple
 from urllib.parse import urlparse
 
 ROOT = Path(__file__).resolve().parent.parent
@@ -2715,6 +2715,204 @@ def _history_readers() -> List[str]:
                     continue
                 readers.append(f"{rel(path)}:{node.lineno} in {where}")
     return sorted(readers)
+
+
+# The three roots the plan names, in the order they are read. server/ is a FLAT
+# directory (no subpackages as of 2026-09-12 — capture_server.py, pipeline_routes.py,
+# codes_routes.py, order_transport.py, ports.py, shipping_routes.py, tcg_export.py,
+# tcg_import.py), so `_walk(ROOT / "server", (".py",))` is exactly "server/*.py" and
+# never needs to recurse into a package that does not exist yet. `store/master.py` and
+# `cli/resolve.py` are named as single files because the plan is explicit that only
+# `master.py` (the Inventory/Card schema) is in scope inside `store/` — `store/rows.py`,
+# `store/db.py` and `store/queues.py` all touch rows too, but not `inventory.cards`
+# directly, and widening the walk to all of `store/` would flag `Rows` itself defining
+# `.values()`/`.items()` as their OWN implementation, which is not a call site at all.
+_UNSCOPED_WALK_ROOTS: Tuple[Path, ...] = (
+    ROOT / "server",
+)
+_UNSCOPED_WALK_SINGLE_FILES: Tuple[Path, ...] = (
+    ROOT / "store" / "master.py",
+    ROOT / "cli" / "resolve.py",
+)
+
+# The three method names that always materialise every row when called on something
+# ending in `.cards` (`Rows` is a `MutableMapping`; these three take no filter argument
+# under any Rows signature — see store/rows.py:213-266), plus `select`, which only
+# materialises everything when called with NO keyword arguments (a keyword is a filter:
+# `equals` in `Rows.select`).
+_UNSCOPED_METHODS = frozenset({"values", "items", "distinct"})
+
+
+def _enclosing_functions(tree: ast.AST) -> Dict[int, str]:
+    """line number -> the name of the FunctionDef/AsyncFunctionDef that contains it.
+
+    Same shape as `_history_readers`'s own inline dict-building loop above, pulled out
+    here because this scanner needs it twice (once per file) and gains nothing from
+    inlining it a second time.
+    """
+    owner: Dict[int, str] = {}
+    for node in ast.walk(tree):
+        if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)):
+            for inner in ast.walk(node):
+                line = getattr(inner, "lineno", None)
+                if line is not None:
+                    owner.setdefault(line, node.name)
+    return owner
+
+
+def _cards_chain(node: ast.AST) -> bool:
+    """Does this call's receiver end in `.cards`? `inventory.cards`, `self.cards`,
+    `store.read().inventory.cards` — any depth, only the last hop matters."""
+    return isinstance(node, ast.Attribute) and node.attr == "cards"
+
+
+def _inventory_like(node: ast.AST) -> bool:
+    """Does this call's receiver look like an `Inventory` instance? Heuristic, and named
+    as one: matches a bare `inventory` name or a `.inventory` attribute, which is the
+    variable name this repo uses everywhere an `Inventory` is bound (`Store().read().inventory`,
+    `self.inventory`). This is what keeps `to_payload()` from also matching
+    `book.to_payload()` / `entry.to_payload()` elsewhere in the same files, which are a
+    different class's method of the same name."""
+    if isinstance(node, ast.Name):
+        return node.id == "inventory"
+    if isinstance(node, ast.Attribute):
+        return node.attr == "inventory"
+    return False
+
+
+def unscoped_walk_sites(paths: Sequence[Path]) -> List[Tuple[str, int, str, str]]:
+    """Every call in `paths` that materialises the whole `inventory.cards` collection.
+
+    Returns (path relative to ROOT, line number, enclosing function name, shape) tuples,
+    where shape is one of "values", "items", "distinct", "select", "to_payload". Pure —
+    no Report, no filesystem side effects beyond reading `paths` — so `--self-test` can
+    hand it a synthetic fixture file and assert on the return value directly, the same
+    shape `_payload_keys` and `mechanism_refs` are tested in already.
+
+    WHAT THIS CANNOT SEE, and it says so rather than pretending completeness:
+    `store/rows.py:177`'s degradation — a `where()`/`select()` call that LOOKS scoped but
+    answers from a Python-side list because an earlier call in the same request already
+    materialised everything — is invisible here. This function reads one file at a time
+    with no notion of a request's call order, so it cannot tell a `where()` that hits the
+    index from one that is quietly a full scan because of what ran before it in the same
+    handler. Item 2 removes the degradation itself; this row is a static shape reader and
+    will keep reporting a `where()`-only handler as clean before and after that fix,
+    correctly, because the shape on the page never changes — only what it costs at
+    runtime does.
+    """
+    sites: List[Tuple[str, int, str, str]] = []
+    for path in paths:
+        if not exists(path):
+            continue
+        try:
+            tree = ast.parse(read(path))
+        except SyntaxError:
+            continue
+        owner = _enclosing_functions(tree)
+        where = rel(path)
+        for node in ast.walk(tree):
+            if not isinstance(node, ast.Call):
+                continue
+            func = node.func
+            if not isinstance(func, ast.Attribute):
+                continue
+            fname = owner.get(node.lineno, "<module>")
+            if func.attr in _UNSCOPED_METHODS and _cards_chain(func.value):
+                sites.append((where, node.lineno, fname, func.attr))
+            elif func.attr == "select" and _cards_chain(func.value) and not node.keywords:
+                sites.append((where, node.lineno, fname, "select"))
+            elif func.attr == "to_payload" and _inventory_like(func.value):
+                sites.append((where, node.lineno, fname, "to_payload"))
+    return sites
+
+
+def check_unscoped_walk(report: Report) -> None:
+    """Every full-table read of `inventory.cards`, against an allowlist that starts at
+    the 2026-09-12 census and may only shrink.
+
+    docs/specs/store-scaling.md §0: almost every non-capture handler in `server/`
+    materialises the whole `cards` table and then does per-card work over it, and at
+    50,000 cards several of those routes cost seconds rather than milliseconds. §3 item 1
+    is this row: land the guard BEFORE any of the six PRs that remove a full-table read,
+    so each of them is checked against something rather than landing with no reader — the
+    exact shape `docs/GATES.md` step 7's own finding names, one register down.
+
+    THREE KINDS OF DISAGREEMENT, exactly `check_storage_keys`'s shape:
+      - a site this file scans and finds, not on the allowlist: a NEW full-table read.
+      - an allowlist entry naming a (path, function, shape) this scan does not find: a
+        REMOVED site whose allowlist entry was not deleted in the same commit — this is
+        the failure mode item 1's own spec text calls out by name ("a removed site is
+        removed from the list in the same PR or the row reports a stale allowlist entry").
+      - the allowlist's length disagreeing with `UNSCOPED_WALK_EXPECTED`: the same pinned-
+        number discipline `check_rule_enforcement` uses, so a mutation cannot silently
+        drop an entry and leave the printed count claiming coverage it no longer has.
+
+    `do_inventory`'s `to_payload()` call is the one entry that can never be removed: the
+    owner ruled (docs/specs/store-scaling/00-phases.md) that `GET /inventory` stays on the
+    wire, unused, rather than being deleted once item 2 lands a scoped `GET
+    /inventory/<box>`. Nothing in this function treats it specially — it is simply an
+    entry nothing will ever delete, which is why `UNSCOPED_WALK_EXPECTED`'s floor never
+    reaches zero.
+
+    WHAT IT CANNOT SEE: `store/rows.py:177`'s runtime degradation (a call that reads
+    scoped in the source and answers unscoped at runtime because an earlier call in the
+    same request already loaded everything) — see `unscoped_walk_sites`'s own docstring,
+    which item 2 is what actually removes. This row reads Python source shapes, never
+    request traces.
+    """
+    server_files = _walk(_UNSCOPED_WALK_ROOTS[0], (".py",))
+    found = set(unscoped_walk_sites(server_files + list(_UNSCOPED_WALK_SINGLE_FILES)))
+    allowed = UNSCOPED_WALK_ALLOWED
+    findings: List[Finding] = []
+
+    for path, line, fname, shape in sorted(found):
+        if (path, fname, shape) not in allowed:
+            findings.append(Finding(
+                f"{path}:{line}",
+                f"`{fname}` calls `.{shape}(...)` on a collection that ends in "
+                f"`.cards` (or `to_payload()` on an `Inventory`), materialising every "
+                f"row in the store.\n"
+                f"  If this is a genuine new full-table read, either scope it — a "
+                f"`where(...)`/`select(..., **filter)` with an index, or a per-box read "
+                f"through `records_in` — or add `(\"{path}\", \"{fname}\", \"{shape}\") "
+                f"to `UNSCOPED_WALK_ALLOWED` and raise `UNSCOPED_WALK_EXPECTED` by one, "
+                f"with the reason in the commit message. docs/specs/store-scaling.md §0 "
+                f"is why this matters: every one of these costs proportionally more as "
+                f"the store grows, and none of it shows up until it does.",
+            ))
+
+    scanned_keys = {(path, fname, shape) for path, _, fname, shape in found}
+    for path, fname, shape in sorted(allowed):
+        if (path, fname, shape) not in scanned_keys:
+            findings.append(Finding(
+                path,
+                f"the allowlist names `{fname}` (`.{shape}(...)`) and this scan finds no "
+                f"such call there any more.\n"
+                f"  Either the function moved to a shape this reader does not recognise, "
+                f"or a full-table read was genuinely removed and the allowlist entry was "
+                f"not deleted with it. Delete the entry and lower "
+                f"`UNSCOPED_WALK_EXPECTED` in the same commit, or say why the shape "
+                f"changed and update the tuple.",
+            ))
+
+    if len(allowed) != UNSCOPED_WALK_EXPECTED:
+        findings.append(Finding(
+            "scripts/docs-audit.py -> UNSCOPED_WALK_ALLOWED",
+            f"has {len(allowed)} entries where {UNSCOPED_WALK_EXPECTED} are pinned. The "
+            f"count is the plan's progress meter (docs/specs/store-scaling.md §3): raise "
+            f"`UNSCOPED_WALK_EXPECTED` only alongside a NEW site you are deliberately "
+            f"keeping (say why), and lower it in the same commit that deletes a site the "
+            f"tree no longer has.",
+        ))
+
+    report.add(
+        "unscoped walk",
+        MECHANICAL,
+        findings,
+        f"{len(found)} full-table reads of inventory.cards found, "
+        f"{len(allowed)} allowed (pinned at {UNSCOPED_WALK_EXPECTED})",
+        scanned=len(found),
+    )
 
 
 # The two routes that write a claim. D70 gives a card a `product`, D101 says a claim a screen
@@ -13448,6 +13646,53 @@ PROSE_ONLY_EXPECTED = 6
 NOT_MECHANIZED = "**NOT MECHANIZED:**"
 _ARGUMENT_MIN_WORDS = 12
 
+# THE ALLOWLIST IS KEYED BY (path, function, shape) AND NEVER BY LINE NUMBER, because a
+# line number moves the day somebody edits an unrelated docstring above it and the guard
+# would then fail on a site that did not change. `shape` disambiguates a function that
+# makes more than one kind of unscoped call (store/master.py's `to_payload` calls
+# `.items()` on `self.cards`, `self.boxes` AND `self.listings` — only the `cards` one is
+# on this list, matched by `shape="items"` restricted to the `.cards` chain in the
+# matcher itself, never by which `.items()` call comes first in the function body).
+#
+# TAKEN 2026-09-12, docs/specs/store-scaling.md §4, PLUS TWO. `do_inventory`'s
+# `to_payload()` call is kept here PERMANENTLY, on the owner's word recorded in
+# docs/specs/store-scaling/00-phases.md ("do_inventory is kept, unused, on the
+# allowlist") — §4's own table says "Removed by: item 2" for that row and that line is
+# stale; the correction lives here and in 00-phases.md, not in store-scaling.md itself.
+#
+# `store/master.py:next_box_number`'s `.distinct("box")` IS A THIRTEENTH SITE THE
+# PLAYBOOK'S OWN CENSUS MISSED — this scanner found it the first time it ran against the
+# real tree (docs/specs/store-scaling/01-guard.md's "Call sites" table names twelve and
+# §4's table agrees). It is the same shape as `do_boxes`/`counts` right above and below
+# it in this list: one indexed column, read once per box CREATION rather than per load or
+# per press, which is cheaper than either of those two already-permanent entries. Kept
+# here permanently for the same reason they are — the guard names it and moves on — and
+# the count is 13, not 12, because the tree already had this site on 2026-09-12; nothing
+# added it, this row's own scan just found what the hand census did not.
+#
+# THIS COUNT MAY ONLY GO DOWN FROM HERE, same rule as `PROSE_ONLY_EXPECTED` above: an item
+# that removes a full-table read deletes its tuple from UNSCOPED_WALK_ALLOWED and lowers
+# UNSCOPED_WALK_EXPECTED in the SAME commit, or the row reports a stale allowlist entry
+# (site not found) rather than silently shrinking. An item that cannot yet remove its
+# site for some reason must not touch the count.
+UNSCOPED_WALK_ALLOWED: FrozenSet[Tuple[str, str, str]] = frozenset({
+    # (path relative to ROOT, enclosing function name, shape)
+    ("server/capture_server.py", "do_inventory", "to_payload"),   # kept permanently — owner's word
+    ("server/capture_server.py", "_release_plan", "items"),
+    ("server/capture_server.py", "do_search", "values"),
+    ("server/capture_server.py", "_boxes_named", "distinct"),
+    ("server/capture_server.py", "do_boxes", "distinct"),
+    ("server/pipeline_routes.py", "_box_names", "select"),
+    ("server/pipeline_routes.py", "_unsent_ledger", "distinct"),
+    ("server/pipeline_routes.py", "_on_hand_by_run", "select"),
+    ("server/pipeline_routes.py", "do_pipeline_value", "values"),
+    ("store/master.py", "to_payload", "items"),
+    ("store/master.py", "counts", "select"),
+    ("store/master.py", "next_box_number", "distinct"),   # kept permanently — one indexed column, cheap; missed by the hand census
+    ("cli/resolve.py", "box_views", "values"),
+})
+UNSCOPED_WALK_EXPECTED = 13
+
 _ROW_NAME_RE = re.compile(r'report\.add\(\s*\n?\s*"([^"\n]+)"')
 _MECH_PATHS = ("scripts/", "harness/tests/", "app/tests/", "app/eslint.config.js", "ruff.toml",
                ".claude/settings.json", ".codex/hooks.json", ".github/workflows/")
@@ -15540,6 +15785,150 @@ def self_test() -> int:
     ok(not _harness_claim_findings(set()),
        "and an unreadable TESTS yields nothing here — `harness tests` own legs say so instead")
 
+    print("\nunscoped walk: the matcher, against synthetic fixtures")
+    with tempfile.TemporaryDirectory() as tmp:
+        # Arm (a): a NEW unscoped call must be found and reported as not-on-the-allowlist.
+        fixture = Path(tmp) / "fixture_new_site.py"
+        fixture.write_text(
+            "def do_something_new():\n"
+            "    inventory = Store().read().inventory\n"
+            "    for card in inventory.cards.values():\n"
+            "        touch(card)\n",
+            encoding="utf-8",
+        )
+        sites = unscoped_walk_sites([fixture])
+        ok(
+            any(fname == "do_something_new" and shape == "values"
+                for _, _, fname, shape in sites),
+            "a new `.values()` call on `inventory.cards` is found by the scanner",
+            str(sites),
+        )
+
+        # Arm (b): a call the scanner does NOT recognise as unscoped — a filtered
+        # `select(...)` with a keyword — must not appear, proving the keyword check
+        # actually narrows `select` and does not just always fire.
+        fixture2 = Path(tmp) / "fixture_scoped_select.py"
+        fixture2.write_text(
+            "def do_scoped():\n"
+            "    for key, row in inventory.cards.select((\"box\",), box=3):\n"
+            "        touch(row)\n",
+            encoding="utf-8",
+        )
+        sites2 = unscoped_walk_sites([fixture2])
+        ok(
+            not sites2,
+            "a `select(...)` called WITH a filter keyword is never flagged",
+            str(sites2),
+        )
+
+        # Arm (c): `to_payload()` is only flagged on something that looks like an
+        # Inventory — a differently-typed object's `to_payload()` must not match, proving
+        # the guard does not simply grep the method name across the whole file.
+        fixture3 = Path(tmp) / "fixture_other_to_payload.py"
+        fixture3.write_text(
+            "def do_other():\n"
+            "    book = load_corpus()\n"
+            "    return book.to_payload()\n",
+            encoding="utf-8",
+        )
+        sites3 = unscoped_walk_sites([fixture3])
+        ok(
+            not sites3,
+            "`book.to_payload()` (not an Inventory) is never flagged",
+            str(sites3),
+        )
+
+    print("\nunscoped walk: the row itself, against the two failure shapes item 1's spec names")
+
+    # These three arms call `check_unscoped_walk(report)` ITSELF, with the module globals
+    # it reads patched for the duration — the same save/patch/restore-in-`finally` shape
+    # used above for `MAP`. Driving only `unscoped_walk_sites` (the pure matcher) and the
+    # comparison arithmetic inline, as the first draft of this block did, proved nothing
+    # about the ROW: `check_unscoped_walk` walks the REAL `_UNSCOPED_WALK_ROOTS` regardless
+    # of what a fixture computes, so a mutation that broke the row's own comparison loops
+    # (e.g. `for path, fname, shape in ():` in place of `sorted(allowed)`, or `if False:`
+    # in place of the not-on-the-allowlist test) left every arm below green. Calling the
+    # row function directly is what closes that gap.
+
+    # Arm (d): a site not on the allowlist fails the ROW. `_UNSCOPED_WALK_SINGLE_FILES` is
+    # patched to add one fixture file the real scan would not otherwise see.
+    with tempfile.TemporaryDirectory() as tmp:
+        fixture = Path(tmp) / "fixture_new_site.py"
+        fixture.write_text(
+            "def do_something_new():\n"
+            "    for card in inventory.cards.values():\n"
+            "        touch(card)\n",
+            encoding="utf-8",
+        )
+        _saved_files = globals()["_UNSCOPED_WALK_SINGLE_FILES"]
+        try:
+            globals()["_UNSCOPED_WALK_SINGLE_FILES"] = _saved_files + (fixture,)
+            report = Report()
+            check_unscoped_walk(report)
+        finally:
+            globals()["_UNSCOPED_WALK_SINGLE_FILES"] = _saved_files
+        by_label = {row.check: row.findings for row in report.checks}
+        ok(
+            any("do_something_new" in f.message for f in by_label["unscoped walk"]),
+            "a site absent from UNSCOPED_WALK_ALLOWED fails the row, naming the function",
+            str(by_label["unscoped walk"]),
+        )
+
+    # Arm (e): an allowlist entry naming a site the tree no longer has fails the ROW as
+    # stale — the "removed site not removed from the list" failure item 1's spec text
+    # calls out by name. `UNSCOPED_WALK_ALLOWED`/`UNSCOPED_WALK_EXPECTED` are patched
+    # together (adding one entry the real tree does not have, and raising the pinned
+    # count to match, so this arm isolates the stale-entry branch from the count-mismatch
+    # branch below).
+    _saved_allowed = globals()["UNSCOPED_WALK_ALLOWED"]
+    _saved_expected = globals()["UNSCOPED_WALK_EXPECTED"]
+    try:
+        globals()["UNSCOPED_WALK_ALLOWED"] = _saved_allowed | {
+            ("server/capture_server.py", "no_such_function", "values"),
+        }
+        globals()["UNSCOPED_WALK_EXPECTED"] = _saved_expected + 1
+        report = Report()
+        check_unscoped_walk(report)
+    finally:
+        globals()["UNSCOPED_WALK_ALLOWED"] = _saved_allowed
+        globals()["UNSCOPED_WALK_EXPECTED"] = _saved_expected
+    by_label = {row.check: row.findings for row in report.checks}
+    ok(
+        any("no_such_function" in f.message for f in by_label["unscoped walk"]),
+        "an allowlist entry the scan does not find fails the row, naming the function",
+        str(by_label["unscoped walk"]),
+    )
+
+    # Arm (f'): the pinned-count mismatch fails the ROW on its own, with no other change —
+    # `UNSCOPED_WALK_EXPECTED` alone disagreeing with `len(UNSCOPED_WALK_ALLOWED)`.
+    _saved_expected = globals()["UNSCOPED_WALK_EXPECTED"]
+    try:
+        globals()["UNSCOPED_WALK_EXPECTED"] = _saved_expected + 1
+        report = Report()
+        check_unscoped_walk(report)
+    finally:
+        globals()["UNSCOPED_WALK_EXPECTED"] = _saved_expected
+    by_label = {row.check: row.findings for row in report.checks}
+    ok(
+        any("UNSCOPED_WALK_ALLOWED" in f.where and "pinned" in f.message
+            for f in by_label["unscoped walk"]),
+        "UNSCOPED_WALK_EXPECTED disagreeing with the allowlist's length fails the row",
+        str(by_label["unscoped walk"]),
+    )
+
+    # Arm (f): end-to-end proof against the REAL tree, unpatched — the row itself, not
+    # just the comparison logic, reports clean on a clean checkout. This is Step 5's
+    # optional end-to-end check, folded in as its own arm rather than left as a manual
+    # Measure step.
+    report = Report()
+    check_unscoped_walk(report)
+    by_label = {row.check: row.findings for row in report.checks}
+    ok(
+        not by_label["unscoped walk"],
+        "the real tree, scanned end to end, has zero findings on this row",
+        str(by_label["unscoped walk"]),
+    )
+
     report = Report()
     check_dispatch(report)
     by_label = {row.check: row.findings for row in report.checks}
@@ -15651,6 +16040,7 @@ def audit(staged_only: bool) -> Report:
     check_audit_invocation(report)
     check_identifier_spelling(report)
     check_shell_substitution(report)
+    check_unscoped_walk(report)
     check_rule_enforcement(report)
     # Last, and it is the row that says the rows above are all of them. It reconciles this
     # file's check definitions against the calls in this function.
