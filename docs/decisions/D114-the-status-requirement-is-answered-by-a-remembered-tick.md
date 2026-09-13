@@ -132,3 +132,13 @@ already in, this one stops more arriving — and neither is sufficient alone.
 **What retires this:** TCGplayer publishing the status vocabulary. Then a shipped order could be
 recognised rather than merely counted, and the picker could carry a real default instead of the
 window's own list.
+
+**AMENDED 2026-09-13 (`D-the-ledger-names-the-buyer`): the first-press gate this entry built is gone, and the picker is now secondary rather than the door.** The owner's 2026-09-13 rulings
+made the ordinary press "all statuses, skip-known" the default action — a one-time
+`LastTwoYears` backfill, then an append of everything the ledger does not already hold — so
+`if (!using.asked)` no longer stands between a press and a fetch. `StatusPicker` survives as
+"Only these statuses…", reachable from the well rather than blocking the primary button; the
+vocabulary it draws is still read off the live preview, never coded, for exactly the reason
+this entry gives. What is retired is the ASK, not the six things this entry's own numbered
+list argues for `statuses: null` versus `asked`; those still hold for an operator who narrows
+on purpose.

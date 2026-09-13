@@ -237,6 +237,8 @@ const RECORDED = {
     'closeOrders', 'closeLines', 'reopenLines', 'reopenOrders',   // D113, the stand-down and its inverse
     'fillShippingStamps',                                         // order-pipeline.md §3 T2b
     'releaseSubmission',                                          // D174, the stuck claim's way out
+    'nameOrders',                            // D-the-ledger-names-the-buyer, the all-statuses
+                                              // backfill naming a buyer the fetch found unnamed
   ],
   nonMutating: ['preflightRun', 'cropPreview', 'fetchOrders', 'previewOrders'],
   nonRequests: [

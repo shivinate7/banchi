@@ -1084,8 +1084,11 @@ sentence**, and see "the census" below for what enforces that.
                               total is a FLOOR whenever any of its cards is unpriced, and NOTHING
                               ON HAND IS DROPPED: 390 of the owner's 2,245 have no price and each
                               is counted under one of three causes with its own door
-#/orders       Orders         which copies this buyer gets and where they are, ranked by how
-                              many of them sit in one box, pulled one copy at a time
+#/orders       Orders         grouped by BUYER, one walk per person over their open orders —
+                              the ledger names them as of `D-the-ledger-names-the-buyer` — with
+                              an `N orders` pill wherever one person holds more than one, and a
+                              two-year backfill control beside the ordinary all-statuses press.
+                              Pulls one copy at a time, walking the boxes it holds
 #/shipping     Shipping       which envelope an order goes in, out of TCGplayer's own shipping
                               export, in three lanes
 #/inventory    Inventory      the box walk and everything that hangs off it: search, a card's

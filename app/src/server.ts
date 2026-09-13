@@ -62,6 +62,8 @@ import type {
   RunSummary,
   IngestResult,
   OrderIngestOrder,
+  OrderName,
+  NamesResult,
   OrdersFetched,
   OrdersPreview,
   OrdersPayload,
@@ -2906,10 +2908,14 @@ export async function getOrders(): Promise<OrdersPayload> {
  * THIS FUNCTION DOES NOT PROJECT, AND THAT IS THE WHOLE DESIGN. Its argument is ALREADY the
  * projection, minted by `app/src/orderPaste.ts` — so exactly one place in this app decides
  * what leaves the browser about a purchase, and a reviewer asking "where does the buyer's
- * name get dropped" has one file to read. A second module composing an ingest body would be
- * a second door onto the same wire, and the whitelist guarantee would be gone. The server's
- * three allowlist tuples are the backstop, not the boundary: an unprojected paste refuses by
- * name (`field_not_settable`) rather than being stored with the extra fields trimmed.
+ * name get dropped" has one file to read. THE PROJECTION NOW CARRIES THE NAME AND NOTHING
+ * ELSE ABOUT THE PERSON (`D-the-ledger-names-the-buyer`, amending D69): `OrderIngestOrder.buyer`
+ * is the one person-shaped field the whitelist admits, verbatim, and `store/orders.py:
+ * Ledger.ingest` keeps whatever name a record already had where this paste sent none. A
+ * second module composing an ingest body would be a second door onto the same wire, and the
+ * whitelist guarantee would be gone. The server's three allowlist tuples are the backstop,
+ * not the boundary: an unprojected paste refuses by name (`field_not_settable`) rather than
+ * being stored with the extra fields trimmed.
  *
  * A SECOND IDENTICAL PASTE IS A NO-OP DOWN TO THE BYTE and answers `wrote_nothing: true`.
  * Refusals worth branching on: `orders_required` (an empty list, which is not the same
@@ -2957,20 +2963,69 @@ export async function ingestOrders(orders: readonly OrderIngestOrder[]): Promise
  * not one: `PKMNSCAN_TCG_SELLER_KEY` is missing), `order_session_expired` — each carrying a
  * sentence naming what to fix.
  */
-export async function fetchOrders(options: {
-  statuses: readonly string[]
-  skip_known?: boolean
-  range?: string
-}): Promise<OrdersFetched> {
+export async function fetchOrders(
+  options: ({ statuses: readonly string[] } | { all_statuses: true }) & {
+    skip_known?: boolean
+    range?: string
+  },
+): Promise<OrdersFetched> {
+  /* Exactly two shapes on the wire, never both keys at once — `do_order_fetch` refuses
+   * `fields_conflict` if it sees both, and `statuses_required` if it sees neither (D91's
+   * refusal to guess survives `all_statuses`; the caller still has to say "every one" in
+   * words). `'statuses' in options` is the discriminant because the union above has no other
+   * field both arms carry. */
+  const scope = 'statuses' in options ? { statuses: [...options.statuses] } : { all_statuses: true as const }
   return (await request('/orders/fetch', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({
-      statuses: [...options.statuses],
+      ...scope,
       ...(options.skip_known === undefined ? {} : { skip_known: options.skip_known }),
       ...(options.range === undefined ? {} : { range: options.range }),
     }),
   })) as OrdersFetched
+}
+
+/**
+ * Write a buyer's name onto orders the ledger already holds, with no fetch and no detail
+ * call behind it — the cheap half of `D-the-ledger-names-the-buyer`'s backfill.
+ * `fetchOrders`'s own `names[]` is the usual source: every order a fetch matched but skipped
+ * as already known, whose search-page summary carried a name the ledger lacks or spells
+ * differently. `store/orders.py:Ledger.name_buyer` refuses to CREATE a record, so naming an
+ * order this ledger has never ingested counts against `unknown` rather than writing anything.
+ *
+ * CHUNKED AT 500, BECAUSE THE SERVER REFUSES PAST 2000 PER POST (`ORDER_NAMES_LIMIT`) and a
+ * two-year backfill's `names[]` can run past either bound in one page. The counts are summed
+ * across chunks and the summary composed from the total, so a caller sees one answer for
+ * what was, on the wire, several requests.
+ */
+export async function nameOrders(names: readonly OrderName[]): Promise<NamesResult> {
+  const CHUNK = 500
+  let named = 0
+  let unchanged = 0
+  let unknown = 0
+  for (let start = 0; start < names.length; start += CHUNK) {
+    const chunk = names.slice(start, start + CHUNK)
+    const result = (await request('/orders/names', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ names: chunk }),
+    })) as NamesResult
+    named += result.named
+    unchanged += result.unchanged
+    unknown += result.unknown
+  }
+  const total = named + unchanged + unknown
+  return {
+    named,
+    unchanged,
+    unknown,
+    total,
+    summary:
+      total === 0
+        ? 'No names to write.'
+        : `${named} named, ${unchanged} unchanged, ${unknown} unknown of ${total}.`,
+  }
 }
 
 /**

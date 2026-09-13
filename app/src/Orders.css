@@ -157,8 +157,52 @@
 .orders-index-figure b { font-family: var(--bn-font-display); font-size: var(--bn-fs-base); font-weight: 800; color: var(--bn-ink); margin-right: 3px; }
 .orders-index-bar { width: 56px; height: 4px; }
 .orders-index-chev { color: var(--bn-ink-4); transition: transform var(--bn-t) var(--bn-ease); }
+/* `D-the-ledger-names-the-buyer`: the buyer's display name reuses `.orders-index-number`'s
+   spot, so its font stays the mono machine-string face for a number but this needs the UI face
+   for a name — overridden here rather than in the shared rule, which order rows elsewhere in
+   the app still use verbatim. */
+.orders-index-row .orders-index-number { font-family: var(--bn-font-ui); }
+.orders-index-count { flex: none; }
 
 .orders-detail { display: flex; flex-direction: column; gap: var(--bn-4); min-width: 0; }
+
+/* ---- Earlier fold (`D-the-ledger-names-the-buyer`) ------------------------------ */
+.orders-earlier { margin-top: var(--bn-3); }
+.orders-earlier > summary {
+  cursor: pointer;
+  font-size: var(--bn-fs-sm);
+  font-weight: 600;
+  color: var(--bn-ink-3);
+  padding: var(--bn-2) 0;
+}
+.orders-earlier[open] > summary { margin-bottom: var(--bn-2); }
+
+/* ---- a buyer's detail: the per-order chips and the merged walk ------------------ */
+.orders-buyer-detail-head { display: flex; flex-direction: column; gap: var(--bn-2); margin-bottom: var(--bn-3); }
+.orders-buyer-detail-name { font-family: var(--bn-font-display); font-size: var(--bn-fs-xl); font-weight: 800; }
+.orders-buyer-chips { display: flex; flex-wrap: wrap; gap: var(--bn-2); }
+.orders-buyer-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px var(--bn-2);
+  border: 1px solid var(--bn-line);
+  border-radius: var(--bn-r);
+  background: var(--bn-surface);
+  font-size: var(--bn-fs-xs);
+}
+.orders-buyer-chip-number { font-weight: 600; }
+.orders-buyer-chip-bar { width: 44px; height: 4px; }
+.orders-buyer-walk { margin: var(--bn-3) 0; }
+.orders-buyer-byorder { margin-top: var(--bn-3); }
+.orders-buyer-byorder > summary {
+  cursor: pointer;
+  font-size: var(--bn-fs-sm);
+  font-weight: 600;
+  color: var(--bn-ink-3);
+  padding: var(--bn-2) 0;
+}
+.orders-buyer-order + .orders-buyer-order { margin-top: var(--bn-3); }
 
 /* ---- the accordion (under 1024px) --------------------------------------------- */
 .orders-list { display: flex; flex-direction: column; gap: var(--bn-3); list-style: none; }
@@ -931,6 +975,13 @@
   line-height: 1.6;
   color: var(--bn-ink-3);
 }
+.orders-receipt-continuing {
+  display: flex;
+  align-items: center;
+  gap: var(--bn-2);
+  color: var(--bn-ink-3);
+}
+.orders-receipt-continuing .bn-icon { flex: none; }
 .orders-receipt-clause + .orders-receipt-clause::before {
   content: '·';
   margin: 0 var(--bn-2);

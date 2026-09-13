@@ -1300,9 +1300,19 @@ COMPONENTS = [
                                   "invariant, four methods maintain it and `progress_drift` "
                                   "reports any row where it fails. The operator's `kind` lives "
                                   "here rather than on the record for this module's own reason: "
-                                  "ingest replaces that wholesale.",
+                                  "ingest replaces that wholesale. `buyer` IS FEED-OWNED CONTENT "
+                                  "AS OF `D-the-ledger-names-the-buyer` (2026-09-13): a display "
+                                  "name only, folded into `OrderRecord._content` beside `status` "
+                                  "so a changed buyer stamps `changed_at` like any other feed "
+                                  "fact. `ingest` now carries TWO fields across an upsert instead "
+                                  "of one — `first_seen`, the original named exception, and a "
+                                  "`None` buyer, so a paste built from the narrower client "
+                                  "projection cannot erase a name a fetch already wrote. "
+                                  "`Ledger.name_buyer` writes a name alone, for orders the "
+                                  "ledger already knows, and refuses to create a record.",
                           "governed_by": ["D7", "D10", "D13", "D16", "D20", "D21", "D24", "D26",
-                                          "D29", "D36", "D53", "D63", "D88", "D113"],
+                                          "D29", "D36", "D53", "D63", "D69", "D88", "D113",
+                                          "D-the-ledger-names-the-buyer"],
                           "tested_by": ["T7"]},
             "cache.py": {"does": "the `identifications` table — answers already paid for", "governed_by": ["D2", "D21", "D88"]},
             # THE ONLY BINDING IN THIS PIPELINE THAT PROTECTS A DOLLAR, and it replaces a BOX
@@ -2333,7 +2343,8 @@ COMPONENTS = [
                 # (D104) and the seven order-line closers (D113).
                 "governed_by": ["D13", "D14", "D18", "D58", "D62", "D76", "D79", "D83", "D86",
                                 "D87", "D89", "D96", "D100", "D103", "D104", "D106", "D113",
-                                "D134", "D159", "D167", "D168", "D174", "D192"],
+                                "D134", "D159", "D167", "D168", "D174", "D192",
+                                "D-the-ledger-names-the-buyer"],
             },
             "verdict-selftest.py": {"does": "PROVES `app/design-check-reporter.ts` STILL WRITES A "
                                             "VERDICT, BY RUNNING IT. `make docs-audit`'s "
@@ -3368,7 +3379,14 @@ COMPONENTS = [
                         "one-divider-at-a-time `POST /boxes/<box>/sections`, which takes no "
                         "index because the store reads `next_index` inside its own lock; "
                         "and D91's two-bodied `POST /orders/fetch`, whose `{preview: true}` "
-                        "half counts the window by status and details nothing; "
+                        "half counts the window by status and details nothing, now joined by "
+                        "`{all_statuses: true}` (`D-the-ledger-names-the-buyer`) as the "
+                        "explicit every-status body `statuses_required` always allowed in "
+                        "words, and by a `names: [{orderNumber, buyer}]` field on the answer, "
+                        "filtered against the ledger so the steady-state press names nothing; "
+                        "and the new `POST /orders/names`, which writes a display name alone "
+                        "for orders the ledger already knows — no detail call, "
+                        "`ORDER_NAMES_LIMIT = 2000` per press; "
                         "the sidecar identify reads "
                         "back; the photo store; the origin allowlist that stands between a "
                         "stray browser tab and a hard delete; "
@@ -3430,7 +3448,8 @@ COMPONENTS = [
                                 "D77", "D79", "D83", "D86", "D87", "D88", "D89", "D90", "D91",
                                 "D92", "D93", "D96", "D100", "D103", "D104", "D108", "D113",
                                 "D115", "D116", "D132", "D134", "D137", "D138", "D159",
-                                "D168", "D174", "D183", "D172", "D192", "D191"],
+                                "D168", "D174", "D183", "D172", "D192", "D191",
+                                "D-the-ledger-names-the-buyer"],
                 "tested_by": ["T7"],
             },
             "tcg_import.py": {"does": "THE OUTBOUND WRITE to the seller admin, and the only "
@@ -3646,9 +3665,15 @@ COMPONENTS = [
                         "override. TWO CALLS because the search result carries no SKU and only "
                         "the order detail does: products[].skuId is the export's TCGplayer Id "
                         "is store/master.py:Card.sku. Every response is PROJECTED to an "
-                        "allowlist inside this module — buyerName, shippingAddress, "
+                        "allowlist inside this module — shippingAddress, "
                         "paymentType and the transaction breakdown are dropped where they are "
-                        "parsed and are returned by no function here. The body is a PLAIN JSON "
+                        "parsed and are returned by no function here. AS OF "
+                        "`D-the-ledger-names-the-buyer` (2026-09-13), `buyerName` is no longer "
+                        "on that dropped list: `project_summary` and `project_order` both carry "
+                        "it forward as `buyer`, a display name and nothing more, and "
+                        "`FetchResult.names` collects `{orderNumber, buyer}` for every matched "
+                        "entry skipped as already-known — so a names-only pass costs zero "
+                        "detail calls. The body is a PLAIN JSON "
                         "document and NOT D65's Knockout postJson form, which is the one thing "
                         "that genuinely does not transfer between the two hosts. 403 is "
                         "order_seller_key_rejected and NOT order_session_expired, because a "
@@ -3665,11 +3690,16 @@ COMPONENTS = [
                         "COUNTED and returned as `remaining` rather than silently dropped. The "
                         "status string is the API's own word and is never folded — folding it "
                         "would be the first step toward the vocabulary this module refuses to "
-                        "have.",
+                        "have. `{all_statuses: true}` is a THIRD shape, since "
+                        "`D-the-ledger-names-the-buyer`: the explicit \"every one\" "
+                        "`statuses_required` always allowed a caller to spell in words, "
+                        "answering `statuses=None` rather than a guessed list; naming both "
+                        "`statuses` and `all_statuses` in one call is `fields_conflict`.",
                 # D63 is the ledger this feeds; D65 is the body convention it deliberately does
                 # not carry over; D66 is the build order it discharges; D69 is the capture and
                 # the entry. D34 and D53 are cited in its own text.
-                "governed_by": ["D34", "D53", "D63", "D64", "D65", "D66", "D69", "D91"],
+                "governed_by": ["D34", "D53", "D63", "D64", "D65", "D66", "D69", "D91",
+                                "D-the-ledger-names-the-buyer"],
                 "tested_by": ["T7"],
                 "note": "`search` AND `fetch_open_orders` HAVE RUN AUTHENTICATED; `detail` HAS "
                         "NOT. This entry said the authenticated success path was unexercised "
@@ -3681,7 +3711,9 @@ COMPONENTS = [
                         "`fetch_open_orders` ran 2026-09-02 and was refused `order_too_many` "
                         "after paging far enough to count 370 orders, which is the paging "
                         "proven live and the refusal D91 answers. What remains unexercised is "
-                        "`detail`, the half carrying a buyer's name and address, so the PII "
+                        "`detail`, the half carrying a buyer's address (still excluded) and, "
+                        "since `D-the-ledger-names-the-buyer`, the buyer's display name (now "
+                        "kept), so the PII "
                         "projection is proven against T7's fixtures and against nothing off "
                         "the wire. Every refusal stays reachable with no network — the body "
                         "builder and the projections are pure and public for that, and "
@@ -4215,7 +4247,8 @@ COMPONENTS = [
                                               "D89", "D90", "D91", "D92", "D100", "D103",
                                               "D159", "D168",
                                               "D104", "D113", "D116", "D132", "D134", "D172",
-                                              "D174", "D180", "D192"]},
+                                              "D174", "D180", "D192",
+                                              "D-the-ledger-names-the-buyer"]},
             "src/demoFlag.d.ts": {"does": "declares `__BN_DEMO__`, the build-time demo flag "
                                           "`vite.config.ts` substitutes with a boolean "
                                           "literal. It exists because three other forms of "
@@ -4283,7 +4316,8 @@ COMPONENTS = [
                                              "D79", "D83", "D86", "D87", "D89", "D91", "D92",
                                              "D93", "D100", "D103", "D104", "D113", "D115",
                                              "D116", "D132", "D134", "D147",
-                                             "D159", "D172", "D174", "D180"]},
+                                             "D159", "D172", "D174", "D180",
+                                             "D-the-ledger-names-the-buyer"]},
             "src/deviceMemory.ts": {"does": "every `localStorage` key the shell owns — the "
                                             "theme, the rail, which order statuses this "
                                             "device bothers fetching (D114), whether the "
@@ -4301,7 +4335,7 @@ COMPONENTS = [
                                             "else",
                                     "governed_by": ["D13", "D27", "D91", "D94", "D95", "D114", "D132",
                                                     "D142", "D145",
-                                                    "D153"],
+                                                    "D153", "D-the-ledger-names-the-buyer"],
                                     "note": "IT EXISTS BECAUSE OF A LINT RULE, which is the "
                                             "rule working rather than being worked around. "
                                             "`app/eslint.config.js` bans the STORE and not the "
@@ -5633,19 +5667,44 @@ COMPONENTS = [
                                             "machine string rather than as a blank row.",
                                     "governed_by": ["D9", "D16", "D22", "D63", "D69"]},
             "src/orderPaste.ts": {"does": "THE ONE PLACE IN THIS APP THAT DECIDES WHAT LEAVES "
-                                          "THE BROWSER ABOUT A PURCHASE (D69). It reads pasted "
+                                          "THE BROWSER ABOUT A PURCHASE (D69, amended by "
+                                          "`D-the-ledger-names-the-buyer`). It reads pasted "
                                           "order JSON and projects it to "
-                                          "{source, number, placed_at, status, lines[]} by "
-                                          "ALLOWLIST — no buyer, no address, no city, no "
-                                          "postcode, no payment — and NAMES what it dropped so "
-                                          "the operator can tell a working PII boundary from a "
-                                          "broken one before pressing send. The server's three "
-                                          "allowlist tuples are the backstop and not the "
+                                          "{source, number, placed_at, status, buyer, lines[]} "
+                                          "by ALLOWLIST — the buyer's DISPLAY NAME and "
+                                          "nothing else about the person: no address, no "
+                                          "city, no postcode, no email, no payment — and "
+                                          "NAMES what it dropped so the operator can tell a "
+                                          "working PII boundary from a broken one before "
+                                          "pressing send. `buyerName`, the console's own "
+                                          "spelling, is accepted and folded into `buyer` "
+                                          "rather than kept under its own name, and neither "
+                                          "spelling is ever reported as dropped. The server's "
+                                          "three allowlist tuples are the backstop and not the "
                                           "boundary: an unprojected paste refuses by name "
                                           "rather than being stored with fields quietly "
                                           "trimmed. src/server.ts:ingestOrders takes this "
                                           "output verbatim, so there is exactly one door.",
-                                  "governed_by": ["D13", "D63", "D69"]},
+                                  "governed_by": ["D13", "D63", "D69", "D-the-ledger-names-the-buyer"]},
+            "src/orderBuyers.ts": {"does": "GROUPS `GET /orders`' flat rows BY PERSON, "
+                                        "pure and no wire call of its own "
+                                        "(`D-the-ledger-names-the-buyer`). `buyerKeyOf` folds "
+                                        "a buyer's name (trim, collapse whitespace, NFKC, "
+                                        "lowercase) the way `store/orders.py:order_key` folds "
+                                        "its own key, so two spellings of one person merge "
+                                        "into one walk — a cost the header names rather than "
+                                        "hides, since every order inside a merged group stays "
+                                        "individually correct and individually correctable. "
+                                        "An order with no buyer gets a group of one, keyed on "
+                                        "the order itself rather than merged with any other "
+                                        "nameless order. `groupBuyers` splits the result into "
+                                        "`recent` and `earlier` off a caller-supplied clock, "
+                                        "never `Date.now()` read inside the module, so a "
+                                        "screen and its fetch receipt cannot disagree about "
+                                        "what \"today\" means mid-render; `groupForOrderKey` "
+                                        "is the `?order=` deep link's reverse lookup into "
+                                        "whichever group holds it.",
+                                "governed_by": ["D13", "D63", "D69", "D97", "D-the-ledger-names-the-buyer"]},
             "src/csvUpload.ts": {"does": "the one FileReader every CSV upload in this app goes "
                                          "through, lifted out of RunPanel.tsx on 2026-08-30 so "
                                          "#/runs and #/shipping cannot carry two encodings to "
@@ -5655,15 +5714,34 @@ COMPONENTS = [
                                  "governed_by": ["D33", "D61", "D69", "D87"]},
             "src/Orders.tsx": {"does": "THE ORDERS HUB: one screen with two stages (D69), "
                                        "rendered at `#/orders` with the pull stage selected. "
-                                       "Which copies this buyer gets and where they are — one "
-                                       "read of GET /orders answers the order list and the "
-                                       "resolution out of ONE store snapshot, so the two cannot "
-                                       "disagree; each line draws its reason large with the "
-                                       "machine string beneath it, the six-way counts "
-                                       "breakdown, and each pick's place block and held_by. The "
-                                       "backlog can be worked one order at a time or as ONE "
-                                       "WALK through the boxes, which is the second form of "
-                                       "step 11 the order spec records as wanted. The pull is "
+                                       "AS OF `D-the-ledger-names-the-buyer` (2026-09-13) THE "
+                                       "PULL STAGE IS GROUPED BY BUYER, not by order number: "
+                                       "`groupBuyers` (src/orderBuyers.ts) folds `GET /orders`' "
+                                       "one-snapshot answer into buyer groups, `BuyerRow` "
+                                       "replaces the per-order index row and carries an `N "
+                                       "orders` pill wherever a person holds more than one, and "
+                                       "`BuyerDetail` opens ONE MERGED WALK — `buildWalk` over "
+                                       "every open order in the group — with a chip per order "
+                                       "in the header (number, feed status, a mini bar) as the "
+                                       "second more-than-one signal, and a collapsed \"By "
+                                       "order\" fold beneath it so stand-down, close-line, "
+                                       "declare-kind and hand-fill stay reachable per order. "
+                                       "`?order=` is still the deep-link READER, resolved "
+                                       "through `groupForOrderKey`; `?buyer=` is the writer. "
+                                       "THE PRESS IS ONE PRESS AND LOOPED: the default fetch is "
+                                       "all-statuses, skip-known, no preview call, looped while "
+                                       "`remaining > 0` with client-side pacing between "
+                                       "batches and a Stop control — D114's first-press ask is "
+                                       "gone, and `StatusPicker` is a secondary \"Only these "
+                                       "statuses…\" control rather than the gate. A second "
+                                       "well control, \"Fetch two years of history\", sends "
+                                       "`range: 'LastTwoYears'` for the one-time backfill the "
+                                       "owner ruled for; a repeat is free because it is "
+                                       "idempotent by skip-known rather than by a flag. Each "
+                                       "batch also calls `nameOrders` (chunked at 500) over "
+                                       "whatever `names` the fetch answer returned, so the "
+                                       "ledger is named without a second round of detail "
+                                       "calls. The pull is "
                                        "one card and one press, aimed by the row's own "
                                        "capture_id — a mid-box delete, a capture undo or a "
                                        "re-shoot all change which physical card sits at a slot "
@@ -5673,7 +5751,8 @@ COMPONENTS = [
                                        "successful pull unmounts the row it was pressed on, and "
                                        "the receipt is a kit toast for exactly that reason. "
                                        "Orders arrive by paste (projected by "
-                                       "src/orderPaste.ts) or by fetch behind the same control. "
+                                       "src/orderPaste.ts, now carrying `buyer`) or by fetch "
+                                       "behind the same control. "
                                        "The tabs move the HASH rather than local state, so "
                                        "bookmarks, the nav and the `,O`/`,S` chords keep "
                                        "working — and because that unmounts the hub, everything "
@@ -5683,13 +5762,14 @@ COMPONENTS = [
                                        "src/OrdersShipStage.tsx out of a file this stage never "
                                        "sees, and what the two stages share is a client-side "
                                        "join by order number with nothing written across the "
-                                       "seam.",
-                               "governed_by": ["D7", "D10", "D24", "D27", "D28", "D36", "D39", "D51", "D57", "D58", "D61", "D63", "D66", "D69", "D91", "D96", "D113", "D114", "D159", "D192"]},
+                                       "seam — including the buyer's name, which "
+                                       "OrdersShipStage.tsx still does not draw.",
+                               "governed_by": ["D7", "D10", "D24", "D27", "D28", "D36", "D39", "D51", "D57", "D58", "D61", "D63", "D66", "D69", "D91", "D96", "D113", "D114", "D118", "D159", "D192", "D-the-ledger-names-the-buyer"]},
             "src/Orders.css": {"does": "the order screen at owner density: the line, its reason "
                                        "and remedy, and the pick rows under it. A copy already "
                                        "spoken for by another line is drawn as spoken for "
                                        "rather than offered twice.",
-                               "governed_by": ["D5", "D24", "D40", "D41", "D50", "D63", "D69", "D113", "D114", "D117"]},
+                               "governed_by": ["D5", "D24", "D40", "D41", "D50", "D63", "D69", "D113", "D114", "D117", "D-the-ledger-names-the-buyer"]},
             "src/OrdersHubStore.ts": {"does": "THE HUB'S MEMORY ACROSS A STAGE SWITCH. "
                                               "`#/orders` and `#/shipping` are one screen with "
                                               "two stages, and the shell keys its view on the "
@@ -6388,28 +6468,41 @@ COMPONENTS = [
                                              "for, that the pull sends the row's own "
                                              "capture_id, and that the receipt reads the "
                                              "pre-write place rather than the sale's departed "
-                                             "label. FIVE CASES OVER THE FETCH, which is ONE "
-                                             "press (D91 as the owner amended it, D114): a "
-                                             "fetch the cap cut short says how many it left "
-                                             "while an empty one still re-reads the ledger, "
-                                             "which is the bug the early return was; a "
-                                             "remembered tick narrows the send and carries "
-                                             "skip_known; a ticked status the window holds none "
-                                             "of is NAMED on screen rather than dropped; every "
-                                             "status ticked off is refused here rather than by "
-                                             "the wire; and the picker's rows are asserted to be "
-                                             "exactly the preview's, because a row this file did "
-                                             "not put on the wire would be a status vocabulary "
-                                             "somebody coded into app/. THREE MORE OVER THE ASK: "
-                                             "a device nobody has answered is shown the list and "
-                                             "its first press details NOTHING, answering is "
-                                             "remembered so the next press goes straight through, "
-                                             "and a tick counts as an answer without the confirm "
-                                             "being pressed. It "
+                                             "label. AS OF `D-the-ledger-names-the-buyer` "
+                                             "(2026-09-13) THE INDEX IS ASSERTED BY BUYER: a "
+                                             "two-order buyer draws the `N orders` pill and its "
+                                             "detail header enumerates both order numbers with "
+                                             "two bars; a nameless order groups as `No name · "
+                                             "#<n>`; the merged walk's rows are asserted to come "
+                                             "from BOTH orders in a group; `?order=<key>` still "
+                                             "resolves to the right buyer through the reverse "
+                                             "lookup; and a closed order older than seven days "
+                                             "sits under \"Earlier\". THE DEFAULT PRESS IS "
+                                             "ASSERTED AS ONE FETCH, ONE INGEST, ONE NAMES CALL, "
+                                             "NO PREVIEW — `all_statuses` and `skip_known`, D114's "
+                                             "old first-press gate removed — and a `remaining: "
+                                             "2` then `0` answer is asserted to drive TWO fetches "
+                                             "with a receipt naming the batches; a separate case "
+                                             "sends the two-year backfill control and asserts "
+                                             "`range: 'LastTwoYears'` on the wire. D91's older "
+                                             "ticked-status flow survives as the secondary \"Only "
+                                             "these statuses…\" path and keeps its own cases: a "
+                                             "ticked status the window holds none of is NAMED on "
+                                             "screen rather than dropped, every status ticked off "
+                                             "is refused here rather than by the wire, and the "
+                                             "picker's rows are asserted to be exactly the "
+                                             "preview's. `OrdersShipStage.tsx` is re-affirmed to "
+                                             "draw no buyer text, unchanged by any of this. "
+                                             "Mutated per assertion, per this repo's own rule "
+                                             "that a guard must see its subject: removing the "
+                                             "pill, dropping the paste fallback that preserves an "
+                                             "existing buyer, or breaking the loop's remaining "
+                                             "check must each turn a case red. It "
                                              "asserts NOTHING about the order walk; that is "
                                              "app/tests/order-walk.spec.ts. Not a harness test — "
                                              "it starts a browser; `make design-check` runs it.",
-                                     "governed_by": ["D24", "D27", "D28", "D36", "D49", "D58", "D63", "D69", "D73", "D90", "D91", "D96", "D113", "D114", "D118", "D123", "D132"]},
+                                     "governed_by": ["D24", "D27", "D28", "D36", "D49", "D58", "D63", "D69", "D73", "D90", "D91", "D96", "D113", "D114", "D118", "D123", "D132",
+                                                     "D-the-ledger-names-the-buyer"]},
             "tests/shipping.spec.ts": {"does": "the shipping screen in a browser, and its "
                                                "strongest cases are ABSENCES: no buyer name, "
                                                "address, city or postcode appears anywhere on "

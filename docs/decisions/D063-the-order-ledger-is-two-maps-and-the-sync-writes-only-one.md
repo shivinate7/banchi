@@ -31,10 +31,16 @@ them" is verifiable by reading eleven lines; "this merge preserves everything it
 verifiable only by knowing every field that must survive, which is a list that grows. The
 merge is one refactor from being wrong and the split is not.
 
-**`first_seen` is the deliberate exception and is marked as one.** It is preserved across an
+**`first_seen` is a deliberate exception and is marked as one.** It is preserved across an
 ingest, by the same mechanism `Queue.upsert` uses, because losing a date is cosmetic and
-losing a card is not. Naming the exception is what keeps the rule readable: exactly one
-field is carried over, and it is the one whose loss costs nothing.
+losing a card is not.
+
+**AMENDED 2026-09-13 (`D-the-ledger-names-the-buyer`): a second field is now carried over the same way, and "exactly one" below is corrected in place rather than left to contradict it.**
+`buyer` — the display name a fetch already wrote — survives a paste that names no buyer,
+because a paste's narrower shape must not erase a name the ledger already holds. Naming both
+exceptions is what keeps the rule readable: two fields ride across an ingest untouched, and
+each is one whose loss costs something a re-sync cannot recover — a date, or which person a
+drawer walk is for.
 
 ### Ingest writes no card state and no listing count
 
@@ -163,10 +169,14 @@ what one missing filter costs: a field written but not declared is served, persi
 `OrderLine` and `LineProgress` are nested, so filtering only the record lets exactly that
 through one level down.
 
-**No buyer, no address, no email.** The ledger holds a SKU, a quantity and what the feed
-called the card. `inventory/` being gitignored whole is a reason to keep bearer instruments
-out of a commit (`store/files.py`'s code ledger) and not a license to accumulate somebody's
-postal address on this disk.
+**No address, no email — AND, AS OF 2026-09-13, A NAME.** The ledger holds a SKU, a quantity,
+what the feed called the card and, since `D-the-ledger-names-the-buyer`, the buyer's display
+name: an owner ruling that a hand walking drawers per person needs a name to walk by, over a
+session's earlier design that excluded it with the rest. `inventory/` being gitignored whole
+is a reason to keep bearer instruments and postal addresses out of a commit
+(`store/files.py`'s code ledger); it was never a license to keep a name out too, and it still
+is not a license to add anything past a name — address, email, payment and the transaction
+breakdown stay excluded, at the same allowlists, for the same reason.
 
 **It does no i/o and holds no lock.** Like `queues.py` it is a data structure; `session.py`
 reads it and writes it back inside the lock it already holds. `files.exclusive` polls at 50ms

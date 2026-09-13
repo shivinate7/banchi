@@ -29,4 +29,10 @@
 
 **Two presses where there was one, and a table to read between them.** The first press is the price of not guessing at the vocabulary. **The status strings are TCGplayer's, seen once.** The filter and the delta both compare the summary's `orderStatus` against the ledger's stored `status`, which came from the detail; if the two endpoints ever spell one state differently, `skip_known` re-details that order on every press. The preview would show the doubled string, so the operator would see it. **The `Custom` range is still not captured**, so the window is three months or two years and nothing between. **No cooldown**: the budget is the operator's to respect across presses. **And `detail` is still unexercised against the live host** — the summary walk is proven by the very refusal that opened this entry, and the projection of a buyer's name and address is proven against fixtures only. The first filtered fetch the owner presses is the measurement, and the transport's STATUS block says so.
 
+**AMENDED 2026-09-13 (`D-the-ledger-names-the-buyer`): `{all_statuses: true}` is now the explicit "every one" this refusal always allowed for.** `statuses_required` never demanded a
+NARROW list, only that the caller say what it means rather than have the transport guess; a
+one-time two-year backfill means literally every status, and naming that in words is not the
+guess this entry refuses. `do_order_fetch` still refuses a call naming neither `statuses` nor
+`all_statuses`, and now also one naming both.
+
 **What would reopen this: a status spelled two ways between the summary and the detail, `Custom` captured off the wire, or orders arriving faster than a person presses.** The first is the delta re-detailing an order every press; the second gives the window a date and makes the status table smaller; the third is an unattended fetch, which is its own entry with its own argument about a cookie that expires under D53's supervisor with nobody watching the refusal.

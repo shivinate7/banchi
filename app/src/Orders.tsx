@@ -7,6 +7,7 @@ import { ORDER_REASONS, orderReasonLabel, orderReasonRemedy } from './orderReaso
 import { rememberOrderFilter, storedOrderFilter, type OrderFetchFilter } from './deviceMemory'
 import { setHub, touchHub, useHub, type PullFilter, type PullMode, type Stage } from './OrdersHubStore'
 import { PositionLabel } from './PositionLabel'
+import { groupBuyers, groupForOrderKey, type BuyerGroup } from './orderBuyers'
 import {
   closeLines,
   closeOrders,
@@ -17,6 +18,7 @@ import {
   getInventory,
   getOrders,
   ingestOrders,
+  nameOrders,
   previewOrders,
   pullCopy,
   reopenLines,
@@ -30,6 +32,7 @@ import type {
   IngestResult,
   Inventory,
   InventoryCard,
+  NamesResult,
   OrderCloseReason,
   OrderFillReason,
   OrderLineProgress,
@@ -204,6 +207,15 @@ type FetchReceiptData = {
   /** How many orders came back on the wire, and what the ledger did with them. */
   readonly fetched: number
   readonly ingest: IngestResult | null
+  /** How many looped calls this press made — the all-statuses, skip-known backfill
+   *  (`D-the-ledger-names-the-buyer`) can take several while `remaining > 0`. `null` for the
+   *  narrowed (statuses-picked) path, which has always been one call. */
+  readonly batches: number | null
+  /** How many buyer names `/orders/names` actually wrote — never sent on the narrowed path. */
+  readonly named: number | null
+  /** Seconds until the next batch fires on its own, or `null` when nothing is queued — drawn as
+   *  "continuing in Ns" so a loop that paces itself does not read as done between batches. */
+  readonly continuingInS: number | null
 }
 
 /** When something happened, in the words a person would use. */
@@ -237,10 +249,14 @@ function FetchReceipt({
   receipt,
   busy,
   onFetchMore,
+  onStop,
 }: {
   readonly receipt: FetchReceiptData
   readonly busy: boolean
   readonly onFetchMore: () => void
+  /** Cancels a looped all-statuses backfill between batches — `null` where nothing is looping,
+   *  which draws no Stop control at all. */
+  readonly onStop?: () => void
 }) {
   const now = Date.now()
 
@@ -306,6 +322,12 @@ function FetchReceipt({
       ),
     )
   }
+  if (receipt.named !== null && receipt.named > 0) {
+    took.push(<Fig key="named" n={receipt.named} of={plural(receipt.named, 'buyer named', 'buyers named')} />)
+  }
+  if (receipt.batches !== null && receipt.batches > 1) {
+    took.push(<Fig key="batches" n={receipt.batches} of="batches" />)
+  }
   if (receipt.remaining !== null && receipt.remaining > 0) {
     took.push(<Fig key="remaining" n={receipt.remaining} of="remaining" />)
   }
@@ -356,7 +378,19 @@ function FetchReceipt({
             : `Fetched ${(receipt.detailed ?? receipt.fetched).toLocaleString()} ${plural(receipt.detailed ?? receipt.fetched, 'order', 'orders')}`}
         </p>
         {took.length === 0 ? null : <p className="orders-receipt-line">{took}</p>}
-        {receipt.remaining !== null && receipt.remaining > 0 ? (
+        {/* THE LOOP PACES ITSELF, and a batch on its way says so rather than reading as
+            finished mid-backfill: `continuingInS` is set only while another call is queued. */}
+        {receipt.continuingInS !== null ? (
+          <p className="orders-receipt-line orders-receipt-continuing" role="status">
+            <Icon name="clock" size={14} />
+            continuing in {receipt.continuingInS}s
+            {onStop === undefined ? null : (
+              <Button size="sm" icon="x" onClick={onStop}>
+                Stop
+              </Button>
+            )}
+          </p>
+        ) : receipt.remaining !== null && receipt.remaining > 0 ? (
           <div className="orders-receipt-more">
             <Button icon="refresh" onClick={onFetchMore} busy={busy} disabled={busy}>
               {next === null ? 'Fetch the rest' : `Fetch the next ${next.toLocaleString()}`}
@@ -890,22 +924,35 @@ type CloseLineHandler = (order: OrderRow, line: ResolvedLine, reason: OrderClose
 
 /* ---- the selection, mirrored in the hash ----------------------------------------------------- */
 
+/** The old, order-shaped link — `#/orders?order=<order key>`. Kept as a READER only
+ *  (`D-the-ledger-names-the-buyer`): the selection is a BUYER now, so a link naming one order
+ *  is resolved through `groupForOrderKey` to whichever group holds it. Never written again. */
 const ORDER_PARAM = 'order'
+/** The current link — `#/orders?buyer=<group key>` — read and written together. */
+const BUYER_PARAM = 'buyer'
 
-function orderParam(): string | null {
+function hashQuery(): URLSearchParams | null {
   const hash = window.location.hash
   const at = hash.indexOf('?')
   if (at === -1) return null
-  return new URLSearchParams(hash.slice(at + 1)).get(ORDER_PARAM)
+  return new URLSearchParams(hash.slice(at + 1))
 }
 
-/** `#/orders?order=<key>`, written with `replaceState` so stepping through twenty orders leaves
+function orderParam(): string | null {
+  return hashQuery()?.get(ORDER_PARAM) ?? null
+}
+
+function buyerParam(): string | null {
+  return hashQuery()?.get(BUYER_PARAM) ?? null
+}
+
+/** `#/orders?buyer=<key>`, written with `replaceState` so stepping through twenty buyers leaves
  *  one history entry and fires no `hashchange` — the shell's router keys on the path alone. */
-function mirrorOrderParam(key: string): void {
+function mirrorBuyerParam(key: string): void {
   const hash = window.location.hash
   const path = hash.replace(/^#/, '').split('?')[0] ?? ''
   if (path !== '/orders') return
-  const next = `#/orders?${ORDER_PARAM}=${encodeURIComponent(key)}`
+  const next = `#/orders?${BUYER_PARAM}=${encodeURIComponent(key)}`
   if (hash === next) return
   window.history.replaceState(window.history.state, '', next)
 }
@@ -1324,6 +1371,12 @@ export function OrdersHub({ stage }: { readonly stage: Stage }) {
    *  not go looking for — would be an answered press that appears to have done nothing. */
   const pickerBox = useRef<HTMLDivElement>(null)
 
+  /** Set to true by the receipt's Stop control, checked between batches of a looped
+   *  all-statuses backfill. It never interrupts a call in flight — only the pacing wait and
+   *  the next iteration. */
+  const stopLoop = useRef(false)
+  const [continuingInS, setContinuingInS] = useState<number | null>(null)
+
   const live = useRef(true)
   const pasteBox = useRef<HTMLTextAreaElement>(null)
   const phone = useMediaQuery('(max-width: 767px)')
@@ -1429,19 +1482,40 @@ export function OrdersHub({ stage }: { readonly stage: Stage }) {
     })()
   }
 
+  /** A wait between batches that a Stop press can cut short — polled at 250ms rather than a
+   *  single `setTimeout`, so the loop notices `stopLoop` mid-pause instead of firing one more
+   *  call it was already told to abandon. */
+  const paceWait = async (seconds: number) => {
+    const until = Date.now() + seconds * 1000
+    while (Date.now() < until && !stopLoop.current && live.current) {
+      const left = Math.max(0, Math.ceil((until - Date.now()) / 1000))
+      setContinuingInS(left)
+      await new Promise((resolve) => setTimeout(resolve, 250))
+    }
+    setContinuingInS(null)
+  }
+
   /* THE FETCH ENTERS THROUGH THE SAME ONE DOOR THE PASTE DOES: `POST /orders/fetch` answers
      exactly the body the ingest accepts. Free, and it writes nothing by itself.
 
-     ONE PRESS, AND THE RECEIPT SAYS WHAT IT LEFT. The button asks and takes in the same press —
-     there is no status step in front of it — and what the call could not carry is reported
-     afterwards, with the control to take the next batch. */
-  const onFetch = (using: OrderFetchFilter = filter) => {
+     TWO SHAPES, ONE PRESS EACH (`D-the-ledger-names-the-buyer`). A DEVICE THAT HAS NEVER
+     NARROWED THE PICKER (`filter.statuses === null`) SKIPS THE PREVIEW ENTIRELY and asks for
+     `all_statuses` with `skip_known` — the ordinary press, after the owner's ruling that a
+     one-time full backfill (`LastTwoYears`, every status, skip-known) is followed forever after
+     by an all-statuses append. It LOOPS while the wire reports `remaining > 0`, naming buyers
+     the ledger did not already have along the way (`nameOrders`), and paces itself between
+     batches so this account's own rate limit is not what answers next. A device that HAS
+     narrowed the picker keeps the original preview → intersect → fetch shape, one call, exactly
+     as it always has. */
+  const runFetch = (range?: string, using: OrderFetchFilter = filter) => {
+    stopLoop.current = false
     void (async () => {
       setBusy('fetch')
       setFailure(null)
       setPasteNote(null)
       setDropped([])
       setReceipt(null)
+      setContinuingInS(null)
       /* AND THE WALK'S PASS ENDS HERE. Orders arriving off TCGplayer are a new sitting, and it is
          the only boundary the operator actually draws — a stage switch is not one, and neither is
          a toggle (see the mode control). Without this the frozen set would outlive the work it
@@ -1451,18 +1525,80 @@ export function OrdersHub({ stage }: { readonly stage: Stage }) {
          is measured against. */
       const previous = readLastCheck()
       try {
+        if (using.statuses === null) {
+          /* ---- the all-statuses, skip-known backfill: no preview, and it loops ---- */
+          let batches = 0
+          let detailedTotal = 0
+          let skippedKnownTotal = 0
+          let ingestTotal = 0
+          let namedTotal = 0
+          let remaining: number | null = null
+          let at = Date.now()
+          for (;;) {
+            const found = await fetchOrders({
+              all_statuses: true,
+              skip_known: true,
+              ...(range === undefined ? {} : { range }),
+            })
+            if (!live.current) return
+            batches += 1
+            at = Date.now()
+            const counted = found as OrdersFetched & FetchCounts
+            const detailed = wireCount(counted.detailed) ?? found.orders.length
+            detailedTotal += detailed
+            skippedKnownTotal += wireCount(counted.skipped_known) ?? 0
+            const written = found.orders.length === 0 ? null : await ingestOrders(found.orders)
+            if (!live.current) return
+            if (written !== null) ingestTotal += written.added + written.changed
+            if (found.names.length > 0) {
+              const named = await nameOrders(found.names)
+              if (!live.current) return
+              namedTotal += (named as NamesResult).named
+            }
+            remaining = wireCount(counted.remaining)
+            /* A LIVE RECEIPT, DRAWN AFTER EVERY BATCH — not only at the end. The loop can run for
+               several minutes on a real backfill and a receipt that appeared only on completion
+               would look, for that whole time, exactly like a press that had done nothing. */
+            setReceipt({
+              at,
+              previous,
+              windowTotal: null,
+              matched: null,
+              asked: null,
+              absent: [],
+              newSince: null,
+              detailed: detailedTotal,
+              skippedKnown: skippedKnownTotal > 0 ? skippedKnownTotal : null,
+              remaining,
+              fetched: detailedTotal,
+              ingest:
+                ingestTotal > 0
+                  ? { added: ingestTotal, changed: 0, unchanged: 0, total: ingestTotal, wrote_nothing: false, summary: '', keys: [] }
+                  : null,
+              batches,
+              named: namedTotal,
+              continuingInS: null,
+            })
+            if (remaining === null || remaining <= 0 || stopLoop.current) break
+            /* PACED, NOT FREE-WHEELING. The 120/min budget `MAX_ORDERS` argues for is a search-page
+               plus per-order detail cost; the pause is sized off what THIS batch actually cost, so
+               a small batch does not wait as long as a big one and neither ever waits past a
+               minute. */
+            const pace = Math.min(60, Math.ceil((Math.ceil((wireCount(counted.matched) ?? 0) / 25) + detailed) / 2))
+            await paceWait(Math.max(0, pace))
+            if (stopLoop.current || !live.current) break
+          }
+          writeLastCheck({ at, matched: null, statuses: null })
+          await reread()
+          return
+        }
+
+        /* ---- the narrowed path: preview, intersect, one fetch — unchanged from before ---- */
         /* ONE PRESS, TWO CALLS, AND THE SECOND ONE IS NOT A QUESTION. D91 made the wire refuse
            a fetch that names no statuses — `statuses_required` — on the argument that this
            account's window holds hundreds of orders and one press taking all of them is what
            never worked. The owner ruled the two-press flow out: *"why would it ever say 1 of 3
            found"*, and the press asks and takes in the same gesture.
-
-           BOTH SURVIVE, because the thing D91 actually needed was for somebody to NAME the
-           statuses rather than for a human to tick them. The vocabulary is not enumerable on
-           this side — `order_transport.py` says so at length: it was never published, and a
-           guess that drops an order is an envelope that never ships — so the press reads it off
-           the preview, which writes nothing, and sends back exactly what came out. Nothing is
-           guessed and nothing is asked.
 
            The detail cap is unchanged and is not what this works around: a press still details
            at most its limit and reports `remaining`, which the receipt below already draws with
@@ -1476,31 +1612,10 @@ export function OrdersHub({ stage }: { readonly stage: Stage }) {
           setBusy(null)
           return
         }
-        /* THE FIRST PRESS ON THIS DEVICE STOPS HERE AND SHOWS THE LIST. It has cost one free
-           call — the preview details nothing and writes nothing — and it details nothing now
-           either: the panel opens with every status ticked and its own press finishes the
-           errand. Once. `asked` is what makes it once, and it is set by answering rather than
-           by arriving, so a press interrupted here asks again rather than silently defaulting.
-
-           THIS IS NOT D91's TWO-PRESS FLOW. That asked on every press, which is what the owner
-           ruled out. What is being bought is the one thing a default cannot buy: somebody has
-           looked at the actual strings, which is the only place in this product where a status
-           may be judged (D114). */
-        if (!using.asked) {
-          if (!live.current) return
-          setPickerOpen(true)
-          setBusy(null)
-          /* After the paint that opens it. `block: 'nearest'` and no smooth behaviour: this is a
-             correction to where the press left the page, not motion carrying meaning, and the
-             reduced-motion floor should not have to have an opinion about it. */
-          window.requestAnimationFrame(() => pickerBox.current?.scrollIntoView({ block: 'nearest' }))
-          return
-        }
         /* THE OPERATOR'S TICK LIST, INTERSECTED WITH WHAT THIS WINDOW ACTUALLY HOLDS. Asking
            for a status no order carries is not an error on the wire — it matches nothing and
            costs a walk — but it is a fact worth reporting, so what falls out is kept and drawn
-           rather than dropped. `filter.statuses === null` is a device that has never opened the
-           picker, and it takes the whole vocabulary: today's press, unchanged. */
+           rather than dropped. */
         const wanted = using.statuses
         const statuses = (wanted === null ? inWindow : inWindow.filter((one) => wanted.includes(one))).slice(0, 50)
         const absent = wanted === null ? [] : wanted.filter((one) => !inWindow.includes(one))
@@ -1517,40 +1632,47 @@ export function OrdersHub({ stage }: { readonly stage: Stage }) {
           setBusy(null)
           return
         }
-        const found = await fetchOrders({
-          statuses,
-          ...(using.skipKnown ? { skip_known: true } : {}),
-        })
+        const runOne = async (): Promise<void> => {
+          const found = await fetchOrders({
+            statuses,
+            ...(using.skipKnown ? { skip_known: true } : {}),
+          })
+          if (!live.current) return
+          /* The four counts the merge brings on `OrdersFetched` — see `FetchCounts` above. Absent
+             on this branch's wire, and each absence omits its clause rather than drawing a zero. */
+          const counted = found as OrdersFetched & FetchCounts
+          const matched = wireCount(counted.matched)
+          const at = Date.now()
+          const written = found.orders.length === 0 ? null : await ingestOrders(found.orders)
+          if (!live.current) return
+          /* THE COMPARISON IS ONLY DRAWN WHERE THE QUESTION DID NOT CHANGE. Two `matched` figures
+             taken under different status filters are counts of different things, and subtracting
+             them would put a confident "12 new" under a press that merely narrowed. */
+          const comparable = sameScope(previous?.statuses ?? null, wanted)
+          setReceipt({
+            at,
+            previous,
+            windowTotal: wireCount(seen.total),
+            matched,
+            asked: wanted === null ? null : statuses,
+            absent,
+            newSince:
+              comparable && matched !== null && previous?.matched != null
+                ? Math.max(0, matched - previous.matched)
+                : null,
+            detailed: wireCount(counted.detailed),
+            skippedKnown: wireCount(counted.skipped_known),
+            remaining: wireCount(counted.remaining),
+            fetched: found.orders.length,
+            ingest: written,
+            batches: null,
+            named: null,
+            continuingInS: null,
+          })
+          writeLastCheck({ at, matched, statuses: wanted })
+        }
+        await runOne()
         if (!live.current) return
-        /* The four counts the merge brings on `OrdersFetched` — see `FetchCounts` above. Absent
-           on this branch's wire, and each absence omits its clause rather than drawing a zero. */
-        const counted = found as OrdersFetched & FetchCounts
-        const matched = wireCount(counted.matched)
-        const at = Date.now()
-        const written = found.orders.length === 0 ? null : await ingestOrders(found.orders)
-        if (!live.current) return
-        /* THE COMPARISON IS ONLY DRAWN WHERE THE QUESTION DID NOT CHANGE. Two `matched` figures
-           taken under different status filters are counts of different things, and subtracting
-           them would put a confident "12 new" under a press that merely narrowed. */
-        const comparable = sameScope(previous?.statuses ?? null, wanted)
-        setReceipt({
-          at,
-          previous,
-          windowTotal: wireCount(seen.total),
-          matched,
-          asked: wanted === null ? null : statuses,
-          absent,
-          newSince:
-            comparable && matched !== null && previous?.matched != null
-              ? Math.max(0, matched - previous.matched)
-              : null,
-          detailed: wireCount(counted.detailed),
-          skippedKnown: wireCount(counted.skipped_known),
-          remaining: wireCount(counted.remaining),
-          fetched: found.orders.length,
-          ingest: written,
-        })
-        writeLastCheck({ at, matched, statuses: wanted })
         /* RE-READ EITHER WAY. A fetch that brought nothing new still refreshes a ledger another
            device may have moved. */
         await reread()
@@ -1558,10 +1680,23 @@ export function OrdersHub({ stage }: { readonly stage: Stage }) {
         if (!live.current) return
         setFailure(describeFailure(err))
       } finally {
-        if (live.current) setBusy(null)
+        if (live.current) {
+          setBusy(null)
+          setContinuingInS(null)
+        }
       }
     })()
   }
+
+  /** The Stop control on the receipt — cuts the all-statuses loop between batches, never a call
+   *  already in flight. */
+  const onStopFetch = () => {
+    stopLoop.current = true
+  }
+
+  /** The narrowed picker's own confirm and "fetch the next batch" both still call this with no
+   *  range — the backfill's `range` argument is for the two-years control alone. */
+  const onFetch = (range?: string) => runFetch(range)
 
   /* ------------------------------------------------------- the filter's own free read ---- */
 
@@ -1606,14 +1741,14 @@ export function OrdersHub({ stage }: { readonly stage: Stage }) {
     rememberOrderFilter(answered)
   }
 
-  /** The ask's own press: record that this device has been shown the list, and fetch on it. The
-   *  answered filter is passed to `onFetch` rather than left to the next render, because the
+  /** The picker's own press: record that this device has narrowed the list, and fetch on it. The
+   *  answered filter is passed to `runFetch` rather than left to the next render, because the
    *  state has not committed yet and the press must act on what was just agreed. */
   const onConfirmStatuses = () => {
     const answered = { ...filter, asked: true }
     setFilter(answered)
     rememberOrderFilter(answered)
-    onFetch(answered)
+    runFetch(undefined, answered)
   }
 
   /* WHAT THE CONTROL SAYS BEFORE IT IS OPENED. An unchosen device says "All statuses" — which is
@@ -1905,11 +2040,26 @@ export function OrdersHub({ stage }: { readonly stage: Stage }) {
             Fetch from TCGplayer
           </Button>
         ) : null}
+        {/* THE ONE-TIME FULL BACKFILL, AS ITS OWN CONTROL — `D-the-ledger-names-the-buyer`. The
+            ordinary press already asks for every status; this widens the RANGE to TCGplayer's
+            own `LastTwoYears`, which is more than this store has ever existed for. A repeat costs
+            nothing: skip-known means a second press after the first has finished re-checks
+            everything and details nothing new. */}
+        {withFetch ? (
+          <Button icon="clock" onClick={() => onFetch('LastTwoYears')} busy={busy === 'fetch'} disabled={busy !== null}>
+            Fetch two years of history
+          </Button>
+        ) : null}
         {/* THE NARROWING SITS BESIDE THE PRESS, NOT IN FRONT OF IT. D91's two-press flow was
             ruled out — *"why would it ever say 1 of 3 found"* — so this is a control the
             operator may never open, and the press works identically if they do not. */}
         {withFetch ? statusControl : null}
       </div>
+      {withFetch ? (
+        <p className="orders-paste-source">
+          A repeat of either press is free — orders the ledger already holds at that status are skipped.
+        </p>
+      ) : null}
       {withFetch ? statusPanel : null}
       <p className="orders-paste-source">
         Only the SKU, the count and what the feed called the card leave this browser. An order that names no source is
@@ -2052,7 +2202,12 @@ export function OrdersHub({ stage }: { readonly stage: Stage }) {
              with it. */
           receipt={
             receipt === null ? null : (
-              <FetchReceipt receipt={receipt} busy={busy === 'fetch'} onFetchMore={onFetch} />
+              <FetchReceipt
+                receipt={{ ...receipt, continuingInS }}
+                busy={busy === 'fetch'}
+                onFetchMore={() => onFetch()}
+                onStop={continuingInS === null ? undefined : onStopFetch}
+              />
             )
           }
           onPull={onPull}
@@ -2235,49 +2390,93 @@ function PullStage({
     return { open: all.filter((one) => one.open), done: all.filter((one) => !one.open) }
   }, [payload])
 
-  const shown = useMemo(
+  /* GROUPED BY BUYER, NOT BY ORDER NUMBER (`D-the-ledger-names-the-buyer`). `groupBuyers` is
+     pure and takes its own clock, so it is pinned to the render that saw this `payload` rather
+     than re-run on every tick. */
+  const groups = useMemo(() => groupBuyers(payload?.orders ?? [], Date.now()), [payload])
+  const allGroups = useMemo(() => [...groups.recent, ...groups.earlier], [groups])
+
+  /* THE CHIPS FILTER GROUPS, NOT ORDERS. 'all' is every group carrying an open order; a reason
+     chip narrows to groups whose open orders carry a line with that reason; 'done' is every
+     group with nothing open — which is exactly `groups.recent`'s closed members plus the whole
+     of `groups.earlier`, since a group with anything open can never be `earlier` (see
+     `orderBuyers.ts`). */
+  const shownGroups = useMemo(
     () =>
       filter === 'all'
-        ? open
+        ? groups.recent.filter((group) => group.open.length > 0)
         : filter === 'done'
-          ? done
-          : open.filter((one) => (answers.get(one.key)?.lines ?? []).some((line) => line.reason === filter)),
-    [filter, open, done, answers],
+          ? groups.recent.filter((group) => group.open.length === 0)
+          : groups.recent.filter(
+              (group) =>
+                group.open.length > 0 &&
+                group.open.some((order) => (answers.get(order.key)?.lines ?? []).some((line) => line.reason === filter)),
+            ),
+    [filter, groups, answers],
   )
+  /* THE EARLIER FOLD IS DONE-ONLY. A closed buyer older than `RECENT_DAYS` has nothing an 'all'
+     or reason filter would ever show, so it is drawn nowhere but under the "Done" chip. */
+  const earlierGroups = filter === 'done' ? groups.earlier : []
 
-  /* The selection falls back to the first order shown, so a filter that hides the selected one
+  /* The selection falls back to the first group shown, so a filter that hides the selected one
      never leaves the detail blank. */
-  const selectedKey = selected !== null && shown.some((one) => one.key === selected) ? selected : (shown[0]?.key ?? null)
-  const selectedOrder = shown.find((one) => one.key === selectedKey) ?? null
+  const selectedKey =
+    selected !== null && allGroups.some((group) => group.key === selected)
+      ? selected
+      : (shownGroups[0]?.key ?? earlierGroups[0]?.key ?? null)
+  const selectedGroup = allGroups.find((group) => group.key === selectedKey) ?? null
 
-  /* The hash names an order once, on mount; from then on the store leads and the hash follows. */
+  /* THE HASH NAMES A BUYER, OR — FOR AN OLD LINK — AN ORDER RESOLVED TO ITS BUYER, ONCE THE
+     LEDGER HAS ACTUALLY ANSWERED; from then on the store leads and the hash follows. `?buyer=`
+     is read first because it is this screen's own current spelling; `?order=` is kept only so
+     a link written before this change still lands somewhere real.
+     A MOUNT-ONLY EFFECT CANNOT DO THIS: `payload` is still null on the first render, so
+     `groups` is empty and `groupForOrderKey` can never resolve anything — the read has to wait
+     for the read it is reading. `linkHandled` makes it run once in EFFECT, the first time
+     `groups` holds something (or `?buyer=`, which needs no group lookup at all and is applied
+     the moment the effect first runs). */
+  const linkHandled = useRef(false)
   useEffect(() => {
-    const wanted = orderParam()
-    if (wanted !== null) setHub({ selected: wanted })
-  }, [])
+    if (linkHandled.current) return
+    const buyerWanted = buyerParam()
+    if (buyerWanted !== null) {
+      linkHandled.current = true
+      setHub({ selected: buyerWanted })
+      return
+    }
+    const orderWanted = orderParam()
+    if (orderWanted === null) {
+      linkHandled.current = true
+      return
+    }
+    if (allGroups.length === 0) return // wait for the read this link is about
+    linkHandled.current = true
+    const resolved = groupForOrderKey(groups, orderWanted)
+    if (resolved !== null) setHub({ selected: resolved.key })
+  }, [groups, allGroups])
   useEffect(() => {
-    if (mode === 'orders' && selectedKey !== null) mirrorOrderParam(selectedKey)
+    if (mode === 'orders' && selectedKey !== null) mirrorBuyerParam(selectedKey)
   }, [mode, selectedKey])
 
-  /* j / k and the arrows step the list where there is a list beside the detail. Never with a
-     modifier (Cmd-arrow is the shell's, D51) and never out of a field. */
+  /* j / k and the arrows step the list of BUYERS where there is a list beside the detail. Never
+     with a modifier (Cmd-arrow is the shell's, D51) and never out of a field. */
   useEffect(() => {
-    if (!wide || mode !== 'orders' || shown.length === 0) return
+    if (!wide || mode !== 'orders' || shownGroups.length === 0) return
     const onKey = (event: KeyboardEvent) => {
       if (event.metaKey || event.ctrlKey || event.altKey) return
       const target = event.target as HTMLElement | null
       if (target !== null && (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA' || target.tagName === 'SELECT' || target.isContentEditable)) return
       const step = event.key === 'j' || event.key === 'ArrowDown' ? 1 : event.key === 'k' || event.key === 'ArrowUp' ? -1 : 0
       if (step === 0) return
-      const at = shown.findIndex((one) => one.key === selectedKey)
-      const next = shown[Math.min(shown.length - 1, Math.max(0, (at === -1 ? 0 : at) + step))]
+      const at = shownGroups.findIndex((one) => one.key === selectedKey)
+      const next = shownGroups[Math.min(shownGroups.length - 1, Math.max(0, (at === -1 ? 0 : at) + step))]
       if (next === undefined) return
       event.preventDefault()
       setHub({ selected: next.key })
     }
     window.addEventListener('keydown', onKey)
     return () => window.removeEventListener('keydown', onKey)
-  }, [wide, mode, shown, selectedKey])
+  }, [wide, mode, shownGroups, selectedKey])
 
   const walk = useMemo(() => buildWalk(open, answers), [open, answers])
 
@@ -2397,12 +2596,12 @@ function PullStage({
     </div>
   )
 
-  const detailOf = (order: OrderRow, variant: 'panel' | 'inline') => (
-    <OrderDetail
-      key={order.key}
-      order={order}
-      answer={answers.get(order.key) ?? null}
-      lane={lanesByOrder.get(order.number) ?? null}
+  const detailOf = (group: BuyerGroup, variant: 'panel' | 'inline') => (
+    <BuyerDetail
+      key={group.key}
+      group={group}
+      answers={answers}
+      lanesByOrder={lanesByOrder}
       store={store}
       claims={claims}
       busy={busy}
@@ -2445,7 +2644,7 @@ function PullStage({
           value={mode}
           label="How to work the orders"
           options={[
-            { value: 'orders', label: 'By order', icon: 'cart' },
+            { value: 'orders', label: 'By buyer', icon: 'cart' },
             { value: 'walk', label: 'Walk the boxes', icon: 'box' },
           ]}
           /* ENTERING THE WALK FREEZES WHAT IT IS A WALK OVER, and only if no pass is already
@@ -2499,61 +2698,96 @@ function PullStage({
           <WalkView walk={walk} open={open} done={done} walkKeys={hub.walkKeys} busy={busy} onPull={onPull} />
           {why}
         </>
-      ) : shown.length === 0 ? (
+      ) : shownGroups.length === 0 && earlierGroups.length === 0 ? (
         <>
           {nothingShown}
           {why}
         </>
       ) : wide ? (
         <div className="orders-layout">
-          <nav className="orders-index-pane" aria-label="Orders">
+          <nav className="orders-index-pane" aria-label="Buyers">
             <ol className="orders-index bn-stagger">
-              {shown.map((order, at) => (
-                <li key={order.key} style={{ '--i': at } as CSSProperties}>
-                  <OrderSummaryRow
-                    order={order}
-                    answer={answers.get(order.key) ?? null}
-                    lane={lanesByOrder.get(order.number) ?? null}
-                    selected={order.key === selectedKey}
-                    onSelect={() => select(order.key)}
+              {shownGroups.map((group, at) => (
+                <li key={group.key} style={{ '--i': at } as CSSProperties}>
+                  <BuyerRow
+                    group={group}
+                    answers={answers}
+                    selected={group.key === selectedKey}
+                    onSelect={() => select(group.key)}
                   />
                 </li>
               ))}
             </ol>
+            {earlierGroups.length === 0 ? null : (
+              <details className="orders-earlier">
+                <summary>
+                  Earlier · {earlierGroups.length} {plural(earlierGroups.length, 'buyer', 'buyers')}
+                </summary>
+                <ol className="orders-index">
+                  {earlierGroups.map((group) => (
+                    <li key={group.key}>
+                      <BuyerRow
+                        group={group}
+                        answers={answers}
+                        selected={group.key === selectedKey}
+                        onSelect={() => select(group.key)}
+                      />
+                    </li>
+                  ))}
+                </ol>
+              </details>
+            )}
             <p className="orders-index-hint">
               <Kbd>J</Kbd>
-              <Kbd>K</Kbd> step through the orders
+              <Kbd>K</Kbd> step through the buyers
             </p>
           </nav>
           <div className="orders-detail">
-            {selectedOrder === null ? null : detailOf(selectedOrder, 'panel')}
+            {selectedGroup === null ? null : detailOf(selectedGroup, 'panel')}
             {why}
           </div>
         </div>
       ) : (
         <>
           <ol className="orders-list">
-            {shown.map((order, at) => {
-              const opened = order.key === selectedKey
+            {shownGroups.map((group, at) => {
+              const opened = group.key === selectedKey
               return (
                 <li
-                  key={order.key}
+                  key={group.key}
                   className={`bn-panel orders-acc${opened ? ' orders-acc-open' : ''}`}
                   style={{ '--delay': `${Math.min(at, 8) * 40}ms` } as CSSProperties}
                 >
-                  <OrderSummaryRow
-                    order={order}
-                    answer={answers.get(order.key) ?? null}
-                    lane={lanesByOrder.get(order.number) ?? null}
+                  <BuyerRow
+                    group={group}
+                    answers={answers}
                     selected={opened}
                     expanded
-                    onSelect={() => select(order.key)}
+                    onSelect={() => select(group.key)}
                   />
-                  {opened ? <div className="orders-acc-body">{detailOf(order, 'inline')}</div> : null}
+                  {opened ? <div className="orders-acc-body">{detailOf(group, 'inline')}</div> : null}
                 </li>
               )
             })}
           </ol>
+          {earlierGroups.length === 0 ? null : (
+            <details className="orders-earlier">
+              <summary>
+                Earlier · {earlierGroups.length} {plural(earlierGroups.length, 'buyer', 'buyers')}
+              </summary>
+              <ol className="orders-list">
+                {earlierGroups.map((group) => {
+                  const opened = group.key === selectedKey
+                  return (
+                    <li key={group.key} className={`bn-panel orders-acc${opened ? ' orders-acc-open' : ''}`}>
+                      <BuyerRow group={group} answers={answers} selected={opened} expanded onSelect={() => select(group.key)} />
+                      {opened ? <div className="orders-acc-body">{detailOf(group, 'inline')}</div> : null}
+                    </li>
+                  )
+                })}
+              </ol>
+            </details>
+          )}
           {why}
         </>
       )}
@@ -2591,27 +2825,45 @@ function WhyPanel({ counts, openByDefault }: { readonly counts: Record<OrderLine
   )
 }
 
-/* ================================================================== an order, in the list */
+/* ================================================================== a buyer, in the list */
 
-function OrderSummaryRow({
-  order,
-  answer,
-  lane,
+/** Worst-of ordering over a group's open orders — `look` and `unresolved` outrank `short`,
+ *  which outranks `ready`. A group with nothing open is `done`. Used only to pick the ONE dot
+ *  colour a multi-order buyer's row shows; every order's own status still shows on its own
+ *  chip beside it. */
+const STATUS_RANK: Record<Status, number> = { look: 0, unresolved: 1, short: 2, ready: 3, done: 4 }
+
+function worstStatus(group: BuyerGroup, answers: ReadonlyMap<string, ResolvedOrder>): Status {
+  let worst: Status = 'done'
+  for (const order of group.open) {
+    const status = statusOf(order, answers.get(order.key) ?? null)
+    if (STATUS_RANK[status] < STATUS_RANK[worst]) worst = status
+  }
+  return worst
+}
+
+/** The buyer's index row and phone accordion head — replaces `OrderSummaryRow`
+ *  (`D-the-ledger-names-the-buyer`). A nameless buyer draws "No name · #<number>"; a buyer with
+ *  more than one order draws an `N orders` pill and a chip per open order, so a two-order
+ *  buyer is visibly one that needs both counted rather than a single order in disguise. */
+function BuyerRow({
+  group,
+  answers,
   selected,
   expanded,
   onSelect,
 }: {
-  readonly order: OrderRow
-  readonly answer: ResolvedOrder | null
-  readonly lane: ShippingLane | null
+  readonly group: BuyerGroup
+  readonly answers: ReadonlyMap<string, ResolvedOrder>
   readonly selected: boolean
   /** Set where the row is an accordion head rather than a list entry beside a detail. */
   readonly expanded?: boolean
   readonly onSelect: () => void
 }) {
-  const status = statusOf(order, answer)
-  const pill = STATUS_PILL[status]
-  const placed = whenLabel(order.placed_at)
+  const heading = group.name ?? `No name · #${group.number}`
+  const status = worstStatus(group, answers)
+  const placed = whenLabel(group.latest)
+  const pct = group.wanted > 0 ? Math.min(100, Math.round((group.recorded / group.wanted) * 100)) : 0
   const ref = useRef<HTMLButtonElement>(null)
 
   useEffect(() => {
@@ -2626,44 +2878,50 @@ function OrderSummaryRow({
       aria-current={expanded === true ? undefined : selected ? 'true' : undefined}
       aria-expanded={expanded === true ? selected : undefined}
       onClick={onSelect}
-      title={pill.label}
+      title={heading}
     >
       <span className={`orders-index-dot orders-index-dot-${STATUS_DOT[status]}`} aria-hidden="true" />
       <span className="orders-index-main">
-        <span className="orders-index-number">{order.number}</span>
+        <span className="orders-index-number">{heading}</span>
         <span className="orders-index-meta">
-          {placed === null ? null : <time dateTime={order.placed_at ?? undefined}>placed {placed}</time>}
-          {status === 'ready' || status === 'done' ? null : (
-            <Pill size="sm" tone={pill.tone} icon={pill.icon}>
-              {pill.label}
+          {/* THE SECOND >1 SIGNAL LIVES IN THE DETAIL HEADER; THIS ONE IS THE FIRST. Drawn only
+              when there is something to count — a single order's row looks exactly as it always
+              did. */}
+          {group.orders.length > 1 ? (
+            <Pill size="sm" className="orders-index-count">
+              {group.orders.length} orders
             </Pill>
-          )}
-          {lane === null ? null : (
-            <Pill size="sm" tone={LANE_TONE[lane]} icon={LANE_ICON[lane]} outline>
-              {ORDER_LANE_LABEL[lane]}
-            </Pill>
-          )}
+          ) : null}
+          {placed === null ? null : <time>placed {placed}</time>}
+          {group.open.map((order) => {
+            const orderStatus = statusOf(order, answers.get(order.key) ?? null)
+            if (orderStatus === 'ready') return null
+            const pill = STATUS_PILL[orderStatus]
+            return (
+              <Pill key={order.key} size="sm" tone={pill.tone} icon={pill.icon}>
+                {order.number}
+              </Pill>
+            )
+          })}
         </span>
       </span>
       <span className="orders-index-side">
         <span className="orders-index-figure">
-          {order.recorded >= order.wanted ? (
-            'all pulled'
-          ) : (
+          {group.wanted === 0 ? 'nothing open' : group.recorded >= group.wanted ? 'all pulled' : (
             <>
-              <b>{order.wanted - order.recorded}</b> left
+              <b>{group.wanted - group.recorded}</b> left
             </>
           )}
         </span>
         <span
-          className={`bn-progress orders-index-bar${order.recorded >= order.wanted ? ' bn-progress-ok' : ''}`}
+          className={`bn-progress orders-index-bar${group.wanted > 0 && group.recorded >= group.wanted ? ' bn-progress-ok' : ''}`}
           role="progressbar"
-          aria-valuenow={order.recorded}
+          aria-valuenow={group.recorded}
           aria-valuemin={0}
-          aria-valuemax={order.wanted}
+          aria-valuemax={group.wanted}
           aria-label="Copies pulled"
         >
-          <span style={{ width: `${pctOf(order)}%` }} />
+          <span style={{ width: `${pct}%` }} />
         </span>
       </span>
       {expanded === true ? <Icon name="chevronDown" size={16} className="orders-index-chev" /> : null}
@@ -2686,6 +2944,7 @@ function OrderDetail({
   onCloseLine,
   onReread,
   variant,
+  hidePicks,
 }: {
   readonly order: OrderRow
   readonly answer: ResolvedOrder | null
@@ -2701,6 +2960,9 @@ function OrderDetail({
   /** `panel` is the detail beside the list; `inline` is the body under an accordion head, which
    *  already drew the number, the date and the bar. */
   readonly variant: 'panel' | 'inline'
+  /** Set inside a buyer's "By order" fold when a merged walk above it already draws this
+   *  order's pullable copies — never on a standalone `OrderDetail`. */
+  readonly hidePicks?: boolean
 }) {
   const status = statusOf(order, answer)
   const pill = STATUS_PILL[status]
@@ -2754,6 +3016,7 @@ function OrderDetail({
               store={store}
               claims={claims}
               busy={busy}
+              hidePicks={hidePicks}
               onPull={onPull}
               onFill={onFill}
               onDeclareKind={onDeclareKind}
@@ -2826,6 +3089,140 @@ function OrderDetail({
         )}
       </div>
 
+      {body}
+    </article>
+  )
+}
+
+/* ============================================================================ a buyer, opened */
+
+/** The buyer's detail panel — replaces `detailOf`'s direct use of `OrderDetail`
+ *  (`D-the-ledger-names-the-buyer`). Header: the name (or "No name · #<number>") and one chip
+ *  per order, so a two-order buyer's second order is never invisible. Body: ONE merged walk
+ *  over every open order's copies — `buildWalk` already takes a list, so the algorithm is not
+ *  new, only what it is called with — and, below it, a "By order" fold holding each order's own
+ *  `OrderDetail` so stand-down, close-line, declare-kind and hand-fill stay reachable per
+ *  order. A buyer with nothing open draws the fold alone, opened, since there is no walk to
+ *  lead with. */
+function BuyerDetail({
+  group,
+  answers,
+  lanesByOrder,
+  store,
+  claims,
+  busy,
+  onPull,
+  onFill,
+  onDeclareKind,
+  onCloseLine,
+  onReread,
+  variant,
+}: {
+  readonly group: BuyerGroup
+  readonly answers: ReadonlyMap<string, ResolvedOrder>
+  readonly lanesByOrder: ReadonlyMap<string, ShippingLane>
+  readonly store: StoreCopies | null
+  readonly claims: Claims
+  readonly busy: string | null
+  readonly onPull: PullHandler
+  readonly onFill: FillHandler
+  readonly onDeclareKind: KindHandler
+  readonly onCloseLine: CloseLineHandler
+  readonly onReread: () => void
+  readonly variant: 'panel' | 'inline'
+}) {
+  const heading = group.name ?? `No name · #${group.number}`
+  const walk = useMemo(() => buildWalk(group.open, answers as Map<string, ResolvedOrder>), [group, answers])
+  /* WHETHER THE MERGED WALK ACTUALLY DREW SOMETHING — never merely "is anything open". An open
+     order whose only lines are `sku_unseen` or `no_copies_on_hand` has nothing `buildWalk` can
+     aim at, so a buyer in that state gets no walk section at all and the "By order" fold is
+     where the whole answer lives; defaulting it closed there would hide the only controls this
+     buyer has. */
+  const hasWalk = walk.rows.length > 0
+
+  const chips = group.orders.map((order) => {
+    const answer = answers.get(order.key) ?? null
+    const status = statusOf(order, answer)
+    const pill = STATUS_PILL[status]
+    const pct = pctOf(order)
+    return (
+      <span key={order.key} className="orders-buyer-chip">
+        <span className="orders-buyer-chip-number bn-mono">{order.number}</span>
+        <Pill size="sm" tone={pill.tone} icon={pill.icon}>
+          {pill.label}
+        </Pill>
+        {order.recorded === 0 ? null : (
+          <span
+            className="bn-progress orders-buyer-chip-bar"
+            role="progressbar"
+            aria-valuenow={order.recorded}
+            aria-valuemin={0}
+            aria-valuemax={order.wanted}
+            aria-label={`Copies pulled for order ${order.number}`}
+          >
+            <span style={{ width: `${pct}%` }} />
+          </span>
+        )}
+      </span>
+    )
+  })
+
+  const byOrder = (
+    <details className="orders-buyer-byorder" open={!hasWalk}>
+      <summary>By order</summary>
+      {group.orders.map((order) => (
+        <div key={order.key} className="orders-buyer-order">
+          <OrderDetail
+            order={order}
+            answer={answers.get(order.key) ?? null}
+            lane={lanesByOrder.get(order.number) ?? null}
+            store={store}
+            claims={claims}
+            busy={busy}
+            onPull={onPull}
+            onFill={onFill}
+            onDeclareKind={onDeclareKind}
+            onCloseLine={onCloseLine}
+            onReread={onReread}
+            variant="panel"
+            /* THE MERGED WALK IS THE ONE PLACE TO PULL FROM. Drawing the same pick rows again
+               here — the byOrder fold's own reason `buildWalk` and `OrderLineRow` share the same
+               `aimOf`/`copiesOf` machinery — would put two Pull buttons on screen for one copy.
+               Suppressed only when the walk exists to cover it; a buyer with nothing walkable
+               still gets the full per-line breakdown, because it is all there is. */
+            hidePicks={hasWalk}
+          />
+        </div>
+      ))}
+    </details>
+  )
+
+  const body = (
+    <>
+      {hasWalk ? (
+        <section className="orders-buyer-walk" aria-label="This buyer's copies, in one pass">
+          <WalkGroups groups={walk.groups} busy={busy} onPull={onPull} />
+        </section>
+      ) : null}
+      {byOrder}
+    </>
+  )
+
+  if (variant === 'inline') {
+    return (
+      <>
+        <div className="orders-buyer-chips">{chips}</div>
+        {body}
+      </>
+    )
+  }
+
+  return (
+    <article className="bn-panel orders-buyer-detail" aria-label={heading}>
+      <header className="orders-buyer-detail-head">
+        <h2 className="orders-buyer-detail-name">{heading}</h2>
+        <div className="orders-buyer-chips">{chips}</div>
+      </header>
       {body}
     </article>
   )
@@ -3001,6 +3398,7 @@ function OrderLineRow({
   onFill,
   onDeclareKind,
   onCloseLine,
+  hidePicks,
 }: {
   readonly order: OrderRow
   readonly line: ResolvedLine
@@ -3011,6 +3409,9 @@ function OrderLineRow({
   readonly onFill: FillHandler
   readonly onDeclareKind: KindHandler
   readonly onCloseLine: CloseLineHandler
+  /** Suppress the copy map and the pick rows — a buyer's merged walk already draws them. The
+   *  reason banner, the remedy and the stand-down controls still render. */
+  readonly hidePicks?: boolean
 }) {
   const remedy = orderReasonRemedy(line.reason)
   const head = headlineOf(line)
@@ -3032,17 +3433,24 @@ function OrderLineRow({
      only when the store index did not answer, and then the lede stops saying "all". */
   const whole = map.total >= line.on_hand
 
+  /* WHEN A MERGED WALK ALREADY DRAWS THIS LINE'S PULLABLE COPIES, THIS ROW SHOWS ONLY THE REST.
+     `takeable` (see `copiesOf`) is exactly `buildWalk`'s own admission test — aimable and not
+     already held — so filtering it out here is filtering out precisely the rows duplicated
+     above. A copy already spoken for by another line, or one the ledger already holds, is NOT
+     takeable and has nowhere else on screen to be seen, so it stays. */
+  const copies = hidePicks === true ? map.copies.filter((copy) => !copy.takeable) : map.copies
+
   /* The first six in the map's order, PLUS every copy this order was offered wherever it fell —
      the resolver's own choice is never the thing behind the fold. */
   const shown = useMemo(() => {
-    if (unfolded || map.copies.length <= COPIES_SHOWN + 2) return map.copies
-    const keep = new Set(map.copies.slice(0, COPIES_SHOWN).map((copy) => copy.key))
-    for (const copy of map.copies) if (copy.offered) keep.add(copy.key)
-    return map.copies.filter((copy) => keep.has(copy.key))
-  }, [map, unfolded])
-  const folded = map.copies.length - shown.length
+    if (unfolded || copies.length <= COPIES_SHOWN + 2) return copies
+    const keep = new Set(copies.slice(0, COPIES_SHOWN).map((copy) => copy.key))
+    for (const copy of copies) if (copy.offered) keep.add(copy.key)
+    return copies.filter((copy) => keep.has(copy.key))
+  }, [copies, unfolded])
+  const folded = copies.length - shown.length
   /* Where the folded ones are, so the control names a drawer rather than a number alone. */
-  const foldedIn = [...new Set(map.copies.filter((copy) => !shown.includes(copy)).map((copy) => copy.pick.box))]
+  const foldedIn = [...new Set(copies.filter((copy) => !shown.includes(copy)).map((copy) => copy.pick.box))]
 
   return (
     <li className={`orders-line orders-line-${line.reason}`}>
@@ -3095,9 +3503,9 @@ function OrderLineRow({
         </div>
       )}
 
-      {single || map.stops.length === 0 ? null : <CopyMapView map={map} whole={whole} lit={lit} onLight={setLit} />}
+      {hidePicks || single || map.stops.length === 0 ? null : <CopyMapView map={map} whole={whole} lit={lit} onLight={setLit} />}
 
-      {map.copies.length === 0 ? null : (
+      {copies.length === 0 ? null : (
         <ol
           className="orders-picks orders-line-picks"
           /* THE MAP IS THE ROWS' HEADING. Where every copy of this line sits in one box and one
@@ -3138,7 +3546,7 @@ function OrderLineRow({
           ))}
           {/* ONE CONTROL, BOTH WAYS. Collapsed it names how many it holds and which drawer they
               are in; open it says how many are now on screen, so the figure is never lost. */}
-          {map.copies.length <= COPIES_SHOWN + 2 ? null : (
+          {copies.length <= COPIES_SHOWN + 2 ? null : (
             <li className="orders-fold">
               <button
                 type="button"
@@ -3148,7 +3556,7 @@ function OrderLineRow({
               >
                 <Icon name={unfolded ? 'chevronUp' : 'chevronDown'} size={14} />
                 {unfolded ? (
-                  <>Show fewer — all {map.copies.length} are on screen</>
+                  <>Show fewer — all {copies.length} are on screen</>
                 ) : (
                   <>
                     Show the other {folded} {folded === 1 ? 'copy' : 'copies'}
@@ -3619,7 +4027,26 @@ function WalkView({
         )}
       </div>
 
-      {walk.groups.map((group) => (
+      <WalkGroups groups={walk.groups} busy={busy} onPull={onPull} />
+    </div>
+  )
+}
+
+/** The box→section renderer shared by "Walk the boxes" and a buyer's merged walk
+ *  (`D-the-ledger-names-the-buyer`) — extracted so a buyer with several open orders gets the
+ *  same one-pass grouping the whole-store walk draws, rather than a second copy of it. */
+function WalkGroups({
+  groups,
+  busy,
+  onPull,
+}: {
+  readonly groups: readonly WalkGroup[]
+  readonly busy: string | null
+  readonly onPull: PullHandler
+}) {
+  return (
+    <>
+      {groups.map((group) => (
         <section key={group.key} className="bn-panel orders-walk-group" aria-label={group.title}>
           <header className="orders-walk-group-head">
             <span className="orders-walk-group-title">{group.title}</span>
@@ -3645,6 +4072,6 @@ function WalkView({
           </ol>
         </section>
       ))}
-    </div>
+    </>
   )
 }

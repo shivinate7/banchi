@@ -93,11 +93,18 @@ vocabulary here would be two lists nothing reconciles, which is the drift D16 ex
 catch. `None` means the feed declared nothing and reads as the resolver's own default —
 D21's read-side backfill, applied at the read and never written.
 
-NO BUYER, NO ADDRESS, NO EMAIL. The ledger holds what is needed to pick and pack — a SKU, a
-quantity, and what the feed called the card — and nothing that identifies a person.
+A NAME, AND NOTHING ELSE ABOUT A PERSON (D-the-ledger-names-the-buyer). The ledger holds
+what is needed to pick and pack — a SKU, a quantity, what the feed called the card — plus
+one more field: the buyer's DISPLAY NAME, because the owner walks drawers per *person* and
+a number with no name on it cannot be walked that way. This was an exclusion this repo drew
+on its own (D63/D69), never an owner ruling, and the owner's own ruling narrows rather than
+repeals it: address, email, payment and the transaction breakdown stay out, by the same
+allowlist mechanism this file has always used — `server/order_transport.py:project_*`
+projects `buyerName` through and drops everything else exactly as before, and
+`server/capture_server.py`'s three tuples still refuse `buyerName`'s siblings by name.
 `inventory/` is gitignored whole, which is a reason to keep bearer instruments out of a
 commit (`store/files.py`'s code ledger) and not a licence to accumulate somebody's postal
-address on this disk.
+address on this disk — a display name is not a bearer instrument and an address is.
 
 IT DOES NO I/O AND HOLDS NO LOCK. Like `queues.py` it is a data structure; `store/session.py`
 reads it, hands it over, and writes it back inside the lock it already holds. `files.exclusive`
@@ -370,6 +377,13 @@ class OrderRecord:
     # answers the question this ledger actually owns — which orders still owe copies —
     # out of its own two halves rather than out of somebody else's noun.
     status: Optional[str] = None
+    # THE ONE FACT ABOUT A PERSON THIS LEDGER HOLDS (D-the-ledger-names-the-buyer). A
+    # display name, feed-owned exactly like `status` — it lives in `_content`, a change
+    # stamps `changed_at`, and `ingest` replaces it wholesale on every sync. `None` means
+    # the feed said nothing THIS TIME, which a paste routinely does; `Ledger.ingest` carries
+    # the incumbent's name across in that case rather than erasing one the fetch wrote — see
+    # its own docstring for why that carry-over is not the same rule as `first_seen`'s.
+    buyer: Optional[str] = None
     lines: List[OrderLine] = field(default_factory=list)
     # THE ONE FIELD `ingest` PRESERVES rather than replaces, and the header says why it is
     # allowed to be an exception: losing a date is cosmetic. `Queue.upsert` preserves
@@ -408,6 +422,7 @@ class OrderRecord:
             self.number,
             self.placed_at,
             self.status,
+            self.buyer,
             tuple(
                 (
                     line.sku,
@@ -481,6 +496,33 @@ class IngestReport:
         return (
             f"{self.total} order(s): {self.added} new, {self.changed} changed, "
             f"{self.unchanged} unchanged"
+        )
+
+
+@dataclass
+class NameReport:
+    """What one names-only backfill did. `IngestReport`'s shape, one register narrower.
+
+    `named` and `unchanged` between them account for every order this ledger already holds;
+    `unknown` is an order the caller named that this ledger has never ingested — counted
+    rather than silently dropped, and NEVER created (`name_buyer` refuses to). A backfill
+    that raced ahead of an ingest, or a stray number in a hand-typed list, both land here
+    rather than minting a placeholder order with a name and no lines.
+    """
+
+    named: int = 0
+    unchanged: int = 0
+    unknown: int = 0
+
+    @property
+    def total(self) -> int:
+        return self.named + self.unchanged + self.unknown
+
+    @property
+    def summary(self) -> str:
+        return (
+            f"{self.total} name(s): {self.named} named, {self.unchanged} unchanged, "
+            f"{self.unknown} unknown"
         )
 
 
@@ -579,14 +621,26 @@ class Ledger:
         byte, which is what makes pressing sync twice safe by construction rather than by a
         guard.
 
-        `first_seen` is carried across from the incumbent, and `changed_at` is stamped only
-        where the content actually moved.
+        TWO FIELDS ARE CARRIED ACROSS FROM THE INCUMBENT, NOT ONE — this docstring and D63
+        both said exactly one until D-the-ledger-names-the-buyer, and both were wrong the
+        moment `buyer` existed to carry. `first_seen` is carried because losing a date is
+        cosmetic; `buyer` is carried under one narrower condition — only when the INCOMING
+        record says nothing at all (`record.buyer is None`) — because a hand-typed paste
+        routinely omits a name the fetch already wrote, and a paste that erased it would
+        undo the one thing the backfill exists to do. A fetch that DOES carry a name still
+        overwrites, same as `status` or any other feed-owned field: the feed is the
+        authority whenever it speaks.
+
+        `changed_at` is stamped only where the content actually moved.
         """
         report = IngestReport()
         for record in records:
             key = record.key
             existing = self.orders.get(key)
             self._check_lines_unique(record)
+
+            if existing is not None and record.buyer is None:
+                record.buyer = existing.buyer
 
             if existing is None:
                 record.first_seen = record.first_seen or today()
@@ -605,6 +659,58 @@ class Ledger:
             record.changed_at = now()
             self.orders[key] = record
             report.changed += 1
+        return report
+
+    def name_buyer(self, source: str, number: str, buyer: str) -> str:
+        """Attach a buyer's display name to an order this ledger already holds.
+
+        RETURNS ONE OF THREE WORDS RATHER THAN RAISING, because a caller of this method is
+        almost always working a LIST — `POST /orders/names` sends up to
+        `ORDER_NAMES_LIMIT` at once — and a name against an order that shipped last month or
+        was never fetched here is not a defect in the request, it is an ordinary fact about
+        a backfill running against a moving ledger. `"unknown"` says so rather than raising
+        and abandoning the rest of the batch.
+
+        REFUSES TO CREATE AN ORDER, on the same ground `record_pull` and `record_fill`
+        refuse to: an order minted from a name-and-number pair with no lines behind it is a
+        purchase nobody can pick, and it would sit in `self.orders` forever answering
+        `wanted == 0` to every reader that assumes an order has at least one line.
+
+        `"unchanged"` when the stored name already equals what was sent, stripped — the same
+        byte-identical-on-a-repeat promise `ingest` makes, because the steady-state press
+        (D-the-ledger-names-the-buyer's `POST /orders/fetch` `names` list) is built to send
+        exactly the orders that would NOT be unchanged, but a hand-built list or a race with
+        a concurrent fetch can still repeat one, and a repeat must cost nothing.
+
+        A NAME CHANGE STAMPS `changed_at`, because `buyer` is `_content` now and this is the
+        same fact `ingest` would have written had the feed said it first — the two writers
+        share one field and must agree about what moving it means.
+        """
+        try:
+            key = order_key(source, number)
+        except BadOrderKey:
+            return "unknown"
+        record = self.orders.get(key)
+        if record is None:
+            return "unknown"
+        said = str(buyer).strip() or None
+        if record.buyer == said:
+            return "unchanged"
+        record.buyer = said
+        record.changed_at = now()
+        return "named"
+
+    def name_buyers(self, names: Sequence[Tuple[str, str, str]]) -> NameReport:
+        """`name_buyer` over a list, mirroring `ingest`'s one-report-for-the-batch shape."""
+        report = NameReport()
+        for source, number, buyer in names:
+            outcome = self.name_buyer(source, number, buyer)
+            if outcome == "named":
+                report.named += 1
+            elif outcome == "unchanged":
+                report.unchanged += 1
+            else:
+                report.unknown += 1
         return report
 
     @staticmethod

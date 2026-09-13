@@ -856,16 +856,20 @@ BOX_PUT_FIELDS = ("name", "sections", "state", "section_names")
 
 # ----------------------------------------------------------- the order screen, on the wire
 #
-# THESE SIX TUPLES ARE THE PII BACKSTOP AND THAT IS WHY THEY ARE THIS NARROW (D63, D66). An
-# order feed carries a buyer's name and a shipping address, and this repo has no use for
-# either: `server/order_transport.py` projects them away where it parses them, and a paste
-# arriving from a screen has had no such pass made over it. `_reject_unknown` is called FIRST
-# at every level of the ingest body — before a source is read, before an order is looked up —
-# so an unprojected paste REFUSES BY NAME rather than being stored with the buyer's fields
-# quietly trimmed. A trim is silent; a refusal names `buyer` and sends the caller back to
-# project. That difference is the whole argument for an allowlist over a filter.
+# THESE SIX TUPLES ARE THE PII BACKSTOP AND THAT IS WHY THEY ARE THIS NARROW (D63, D66,
+# amended by D-the-ledger-names-the-buyer). An order feed carries a buyer's name AND a
+# shipping address, and this repo now keeps exactly one of the two: `buyer`, the display
+# name, because the owner walks drawers per *person* and a screen naming only an order
+# number has no way to say "these are the same buyer". `server/order_transport.py` still
+# projects everything else away where it parses it, and a paste arriving from a screen has
+# had no such pass made over it. `_reject_unknown` is called FIRST at every level of the
+# ingest body — before a source is read, before an order is looked up — so an unprojected
+# paste REFUSES BY NAME rather than being stored with `shippingAddress` or `email` quietly
+# trimmed. A trim is silent; a refusal names the field and sends the caller back to project.
+# That difference is the whole argument for an allowlist over a filter, and it is unchanged
+# by `buyer` joining the list `_reject_unknown` allows.
 ORDER_INGEST_FIELDS = ("orders",)
-ORDER_INGEST_ORDER_FIELDS = ("source", "number", "placed_at", "status", "lines")
+ORDER_INGEST_ORDER_FIELDS = ("source", "number", "placed_at", "status", "buyer", "lines")
 ORDER_INGEST_LINE_FIELDS = (
     "sku",
     "quantity",
@@ -884,7 +888,24 @@ ORDER_INGEST_LINE_FIELDS = (
 # route that let a client raise either would put this account's request budget in the hands of
 # whatever page was open. `statuses` is the operator's tick list over the strings the preview
 # returned; it is the one filter this route applies, and it is never a vocabulary of its own.
-ORDER_FETCH_FIELDS = ("range", "preview", "statuses", "skip_known")
+# `all_statuses` is the other way to say the filter, spelled as a word rather than as a copy
+# of every string the preview happened to return: the two-year backfill and the ordinary
+# steady-state press both want "every order in the window", and typing that as "send me back
+# the list you just showed me" is a client re-deriving a filter that is really "none".
+ORDER_FETCH_FIELDS = ("range", "preview", "statuses", "skip_known", "all_statuses")
+
+# What `POST /orders/names` accepts: a list of `{source, number, buyer}`, and nothing per
+# entry beyond it — `shippingAddress` or `email` slipped onto a names payload refuses by
+# name exactly as it would on `/orders/ingest`, because this route writes into the same
+# ledger record through the same field.
+ORDER_NAMES_FIELDS = ("names",)
+ORDER_NAME_FIELDS = ("source", "number", "buyer")
+
+# THE CEILING ON ONE NAMES PRESS. `POST /orders/fetch`'s own `names` answer is capped by
+# `MAX_ORDERS`'s search-page walk, which returns at most a few hundred summaries per range,
+# so 2000 is headroom rather than a number this route is expected to nudge — a caller
+# batching a hand-typed list past it is sending something this route was not built for.
+ORDER_NAMES_LIMIT = 2000
 
 # A fetch names the statuses to detail. The preview answers a handful — the API's own words for
 # an order's state — so a list past this is a client sending something other than what it ticked.
@@ -9243,6 +9264,7 @@ def _order_row(
         "number": record.number,
         "placed_at": record.placed_at,
         "status": record.status,
+        "buyer": record.buyer,
         "first_seen": record.first_seen or None,
         "changed_at": record.changed_at,
         "wanted": record.wanted,
@@ -9537,6 +9559,11 @@ def _ingest_record(order_at: int, raw) -> order_store.OrderRecord:
     said = f"Order {order_at} carries a value this route cannot store verbatim."
     placed_at = _order_optional_text(raw, "placed_at", "order_invalid", said)
     status = _order_optional_text(raw, "status", "order_invalid", said)
+    # THE ONE FACT ABOUT A PERSON THIS ROUTE WILL STORE (D-the-ledger-names-the-buyer). Read
+    # through the same optional-text helper as `status` — a display name is feed content,
+    # not an identifier this repo joins on — and `_reject_unknown` above has already refused
+    # `shippingAddress` and `email` by name, so their absence here is not an oversight.
+    buyer = _order_optional_text(raw, "buyer", "order_invalid", said)
 
     lines = raw.get("lines")
     if not isinstance(lines, list) or not lines:
@@ -9563,6 +9590,7 @@ def _ingest_record(order_at: int, raw) -> order_store.OrderRecord:
         number=number,
         placed_at=placed_at,
         status=status,
+        buyer=buyer,
         lines=[_ingest_line(order_at, at, line) for at, line in enumerate(lines, start=1)],
     )
 
@@ -9584,9 +9612,12 @@ def do_order_ingest(payload: dict) -> dict:
     one would move on every press and make the second press write.
 
     EVERY LEVEL IS ALLOWLISTED BEFORE IT IS READ. The three tuples are the PII backstop and
-    their comment has the argument: an unprojected paste carrying `buyer` or
-    `shippingAddress` refuses BY NAME rather than being stored with those fields silently
-    trimmed.
+    their comment has the argument: an unprojected paste carrying `shippingAddress` or
+    `email` refuses BY NAME rather than being stored with those fields silently trimmed.
+    `buyer` is no longer one of them — it is settable, on the owner's ruling
+    (D-the-ledger-names-the-buyer) — and a paste that omits it does not erase a name a fetch
+    already wrote: `Ledger.ingest` carries the incumbent's `buyer` across when the incoming
+    record says `None`.
     """
     _reject_unknown(payload, ORDER_INGEST_FIELDS)
     raw = payload.get("orders")
@@ -9648,6 +9679,26 @@ def _known_orders(ledger: order_store.Ledger) -> Dict[str, str]:
     return known
 
 
+def _known_buyers(ledger: order_store.Ledger) -> Dict[str, Optional[str]]:
+    """`{number: buyer}` for every TCGplayer order the ledger holds, `_known_orders`'s twin.
+
+    WHAT MAKES A NAMES BACKFILL ADDITIVE ONLY. `order_transport.fetch_open_orders` already
+    narrows `FetchResult.names` to orders it did not bother re-detailing; this narrows it a
+    second time, to orders whose STORED name actually differs from the wire's — folded the
+    same way `_known_orders` folds a number, and compared VERBATIM otherwise, because a
+    fold of the name would be the vocabulary this repo has never wanted for a status string,
+    one register over. An order the ledger already spells identically costs the caller
+    nothing to be told about again, so the steady-state press — everything already named,
+    nothing changed — answers `names: []` rather than repeating what a screen already shows.
+    """
+    known: Dict[str, Optional[str]] = {}
+    for record in ledger.orders.values():
+        if str(record.source).strip().casefold() != ORDER_FETCH_SOURCE.casefold():
+            continue
+        known[str(record.number).strip().casefold()] = record.buyer
+    return known
+
+
 def do_order_fetch(payload: dict) -> dict:
     """`POST /orders/fetch` — ask TCGplayer for this account's own orders. FREE. Two bodies.
 
@@ -9664,8 +9715,8 @@ def do_order_fetch(payload: dict) -> dict:
 
         {"preview": true, "range"?}
             -> {range, total, by_status: [{status, count, known}], writes_nothing: true}
-        {"statuses": [...], "skip_known"?, "range"?}
-            -> {orders: [...], matched, skipped_known, detailed, remaining}
+        {"statuses": [...] | "all_statuses": true, "skip_known"?, "range"?}
+            -> {orders: [...], matched, skipped_known, detailed, remaining, names: [...]}
 
     The preview walks the search pages — one request per 25 orders, NO detail call — and
     counts the window by the status STRING the wire returned, verbatim; `known` beside each is
@@ -9675,16 +9726,36 @@ def do_order_fetch(payload: dict) -> dict:
     vocabulary is coded here: the strings on the wire are the strings on the screen, and which
     of them mean "needs picking" is the operator's to say.
 
+    `all_statuses: true` IS THE OTHER SPELLING OF "EVERY STATUS", AND IT NEVER MIXES WITH
+    `statuses` — sending both is `fields_conflict`, because the caller has said "every one" and
+    "these particular ones" in the same breath and this route will not silently pick a
+    winner. It exists for the two-year backfill and for the ordinary steady-state press
+    (D-the-ledger-names-the-buyer): looping this body with `skip_known: true` until
+    `remaining` is zero is a full sync, and repeating it afterward costs one search-page walk
+    per press and no detail calls at all, because everything the ledger already holds stays
+    known.
+
+    `names` IS THE BUYER BACKFILL, AND IT IS FREE. Every entry is `{source, number, buyer}`
+    for a KNOWN order — one this press skipped detailing because nothing about its status
+    changed — that the ledger either has no name for or spells differently than the wire
+    does right now, filtered here by `_known_buyers` against `order_transport`'s own
+    already-narrowed list. An order this press DID detail needs no entry: its `buyer` rides
+    on `orders[]` and an ordinary `POST /orders/ingest` writes it, the same as `status` or
+    `placed_at`. The steady-state press — nothing changed, everything already named —
+    answers `names: []`, which is what makes looping this body safe to repeat: a press that
+    changed nothing costs one round of search pages and writes nothing anywhere.
+
     `orders` IS STILL EXACTLY WHAT `POST /orders/ingest` ACCEPTS. The client forwards that
     array and nothing else — `ingestOrders(found.orders)` — so the counts beside it reach no
     allowlist; they are what the paste note says about the press. A wrapper that forwarded the
     whole answer would meet `field_not_settable` by name, which is the right refusal for it.
 
     THE PROJECTION HAPPENED UPSTREAM AND IS NOT REPEATED HERE. `server/order_transport.py`
-    drops `buyerName`, `shippingAddress`, `paymentType` and the transaction breakdown where
-    it parses them, by allowlist rather than by denylist, so a field TCGplayer adds later
-    does not arrive through this route either. What this function does is rename the four
-    surviving fields into this repo's own spelling.
+    drops `shippingAddress`, `paymentType` and the transaction breakdown where it parses
+    them, by allowlist rather than by denylist, so a field TCGplayer adds later does not
+    arrive through this route either. `buyerName` is the one exception, kept as `buyer` on
+    the owner's ruling. What this function does is rename the five surviving fields into
+    this repo's own spelling.
 
     A REFUSAL IS THE TRANSPORT'S OWN CODE. One `except` at each of the two call sites is the
     whole seam, exactly as `_dispatch` does for `pipeline_routes.PipelineRefusal` — that
@@ -9706,13 +9777,16 @@ def do_order_fetch(payload: dict) -> dict:
     skip_known = _optional_flag(payload, "skip_known", "skip_known_invalid")
     statuses = payload.get("statuses")
 
+    all_statuses = _optional_flag(payload, "all_statuses", "all_statuses_invalid")
+
     if preview:
-        if statuses is not None or "skip_known" in payload:
+        if statuses is not None or "skip_known" in payload or "all_statuses" in payload:
             raise BadRequest(
                 HTTPStatus.BAD_REQUEST,
                 "fields_conflict",
-                "preview: true walks the summaries and details nothing; statuses and "
-                "skip_known belong to the fetch body. Send one body or the other.",
+                "preview: true walks the summaries and details nothing; statuses, "
+                "all_statuses and skip_known all belong to the fetch body. Send one body or "
+                "the other.",
             )
         known = _known_orders(Store().read().ledger)
         try:
@@ -9731,31 +9805,61 @@ def do_order_fetch(payload: dict) -> dict:
         rows = sorted(by_status.values(), key=lambda row: (-row["count"], row["status"]))
         return {"range": wanted, "total": len(found), "by_status": rows, "writes_nothing": True}
 
-    if (
-        not isinstance(statuses, list)
-        or not statuses
-        or not all(isinstance(status, str) and status.strip() for status in statuses)
-    ):
+    if all_statuses and statuses is not None:
         raise BadRequest(
             HTTPStatus.BAD_REQUEST,
-            "statuses_required",
-            "Send statuses: [...] — the strings the preview answered, ticked — or preview: "
-            "true to see them. Since D91 a fetch details only the statuses you asked for: this "
-            "account's window alone holds hundreds of orders, and one press taking all of them "
-            "is what never worked.",
+            "fields_conflict",
+            "all_statuses: true means every order in the window; statuses: [...] means "
+            "these particular ones. Send one or the other, not both.",
         )
-    if len(statuses) > ORDER_FETCH_STATUS_LIMIT:
-        raise BadRequest(
-            HTTPStatus.BAD_REQUEST,
-            "too_many_statuses",
-            f"{len(statuses)} statuses in one fetch; the preview answers far fewer than "
-            f"{ORDER_FETCH_STATUS_LIMIT}. Send the ones you ticked.",
-        )
-    known = _known_orders(Store().read().ledger) if skip_known else None
+    if all_statuses:
+        wanted_statuses = None
+    else:
+        if (
+            not isinstance(statuses, list)
+            or not statuses
+            or not all(isinstance(status, str) and status.strip() for status in statuses)
+        ):
+            raise BadRequest(
+                HTTPStatus.BAD_REQUEST,
+                "statuses_required",
+                "Send statuses: [...] — the strings the preview answered, ticked — or "
+                "all_statuses: true for every order in the window, or preview: true to see "
+                "them first. Since D91 a fetch details only the statuses you asked for: this "
+                "account's window alone holds hundreds of orders, and one press taking all "
+                "of them is what never worked without a cap on the DETAIL calls, which "
+                "all_statuses still respects.",
+            )
+        if len(statuses) > ORDER_FETCH_STATUS_LIMIT:
+            raise BadRequest(
+                HTTPStatus.BAD_REQUEST,
+                "too_many_statuses",
+                f"{len(statuses)} statuses in one fetch; the preview answers far fewer than "
+                f"{ORDER_FETCH_STATUS_LIMIT}. Send the ones you ticked.",
+            )
+        wanted_statuses = statuses
+
+    ledger = Store().read().ledger
+    known = _known_orders(ledger) if skip_known else None
     try:
-        result = order_transport.fetch_open_orders(wanted, statuses=statuses, known=known)
+        result = order_transport.fetch_open_orders(
+            wanted, statuses=wanted_statuses, known=known
+        )
     except order_transport.FetchRefusal as exc:
         raise BadRequest(HTTPStatus.BAD_REQUEST, exc.code, exc.message) from None
+
+    # THE SECOND, NARROWER FILTER (see `_known_buyers`'s docstring). The transport already
+    # excludes an order it is about to detail — that one's `buyer` rides on `orders[]`
+    # instead — so what is left is a KNOWN order whose buyer this ledger either lacks or
+    # spells differently right now. Comparing here rather than in the transport keeps
+    # `order_transport` free of any dependency on `store/orders.py`, which nothing else in
+    # that module needs either.
+    known_buyers = _known_buyers(ledger)
+    names = [
+        entry
+        for entry in result.names
+        if known_buyers.get(str(entry["orderNumber"]).strip().casefold()) != entry["buyer"]
+    ]
 
     return {
         "orders": [
@@ -9764,6 +9868,7 @@ def do_order_fetch(payload: dict) -> dict:
                 "number": order["orderNumber"],
                 "placed_at": order["orderDate"],
                 "status": order["status"],
+                "buyer": order["buyer"],
                 "lines": [
                     {
                         "sku": line["skuId"],
@@ -9780,6 +9885,99 @@ def do_order_fetch(payload: dict) -> dict:
         "skipped_known": result.skipped_known,
         "detailed": result.detailed,
         "remaining": result.remaining,
+        "names": [
+            {"source": ORDER_FETCH_SOURCE, "number": entry["orderNumber"], "buyer": entry["buyer"]}
+            for entry in names
+        ],
+    }
+
+
+def do_order_names(payload: dict) -> dict:
+    """`POST /orders/names` — attach a buyer's display name to orders the ledger already
+    holds. FREE, and it creates nothing (D-the-ledger-names-the-buyer).
+
+    THIS IS NOT `/orders/ingest` WIDENED, AND THE CHOICE IS NAMED RATHER THAN DEFAULTED TO.
+    `POST /orders/fetch`'s own docstring calls itself `writes_nothing` in three places this
+    file's own audit reads, and widening it to write would make that claim false for the one
+    caller that happened to send `names`. `/orders/ingest` was the other candidate and its
+    `lines_required` refusal is load-bearing — an order with no lines is refused as nothing
+    a picker can act on — so a names-only payload would either have to fabricate lines or
+    carry a body shape `_ingest_record` was never asked to read. A third, narrow route
+    keeps both of those guarantees intact rather than teaching either an exception.
+
+    IT REFUSES TO CREATE AN ORDER, on `Ledger.name_buyer`'s own ground: a name with no lines
+    behind it is a purchase nobody can pick, and inventing one here would put a permanent
+    `wanted == 0` row in a ledger every other reader assumes has at least one line. An
+    unknown order is counted rather than raised, because a caller is almost always working a
+    LIST off a summary walk that can race a moving ledger — an order that shipped and fell
+    out of the window, or one this account has simply never fetched, is an ordinary fact
+    about a backfill and not a defect in the request.
+
+    ALLOWLISTED AT BOTH LEVELS, `/orders/ingest`'s own shape: `ORDER_NAMES_FIELDS` refuses an
+    unrecognised top-level key before `names` is read, and `ORDER_NAME_FIELDS` refuses one
+    per entry before a source or number is read — so a caller that pastes a whole order
+    object here, `shippingAddress` and all, is refused BY NAME rather than having the extra
+    fields silently ignored.
+    """
+    _reject_unknown(payload, ORDER_NAMES_FIELDS)
+    raw = payload.get("names")
+    if not isinstance(raw, list) or not raw:
+        raise BadRequest(
+            HTTPStatus.BAD_REQUEST,
+            "names_required",
+            "Send `names` — a non-empty list of {source, number, buyer}. An empty list "
+            "names nothing, which is refused rather than reported as a press that learned "
+            "nothing, because those two are different answers to 'did that work'.",
+        )
+    if len(raw) > ORDER_NAMES_LIMIT:
+        raise BadRequest(
+            HTTPStatus.BAD_REQUEST,
+            "too_many_names",
+            f"{len(raw)} names in one press, and this route takes at most "
+            f"{ORDER_NAMES_LIMIT}. Send them in smaller batches.",
+        )
+
+    entries: List[Tuple[str, str, str]] = []
+    for at, entry in enumerate(raw, start=1):
+        where = f"name {at}"
+        if not isinstance(entry, dict):
+            raise BadRequest(
+                HTTPStatus.BAD_REQUEST,
+                "name_invalid",
+                f"{where.capitalize()} is not an object. Send "
+                f"{{\"source\": …, \"number\": …, \"buyer\": …}}.",
+            )
+        _reject_unknown(entry, ORDER_NAME_FIELDS)
+        source = _order_text(
+            entry,
+            "source",
+            "source_required",
+            f"{where.capitalize()} names no `source` — the marketplace the order came from.",
+        )
+        number = _order_text(
+            entry,
+            "number",
+            "number_required",
+            f"{where.capitalize()} names no `number` — the order's own identifier.",
+        )
+        buyer = _order_text(
+            entry,
+            "buyer",
+            "buyer_required",
+            f"{where.capitalize()} names no `buyer`. A blank name is nothing to attach; send "
+            f"the display name the feed reported.",
+        )
+        entries.append((source, number, buyer))
+
+    with Store().write() as snapshot:
+        report = snapshot.ledger.name_buyers(entries)
+
+    return {
+        "named": report.named,
+        "unchanged": report.unchanged,
+        "unknown": report.unknown,
+        "total": report.total,
+        "summary": report.summary,
     }
 
 
@@ -11602,6 +11800,10 @@ class CaptureHandler(BaseHTTPRequestHandler):
                 return self._json(HTTPStatus.OK, do_order_fetch(self._body()))
             if path == "/orders/ingest":
                 return self._json(HTTPStatus.OK, do_order_ingest(self._body()))
+            # D-the-ledger-names-the-buyer's backfill: attach a display name to an order
+            # this ledger already holds. Writes ONE field, `ingest`'s own tuple beside it.
+            if path == "/orders/names":
+                return self._json(HTTPStatus.OK, do_order_names(self._body()))
             if path == "/orders/pull":
                 return self._json(HTTPStatus.OK, do_order_pull(self._body()))
             # D113's two. `fill` closes a line with no card behind it and sells nothing;
