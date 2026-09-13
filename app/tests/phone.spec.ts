@@ -511,5 +511,65 @@ test('the shutter clears the phone tab bar on first paint, with a real safe-area
         `${Math.round(shutterBottom - tabBarBox.y)}px into the tab bar, which starts at ${tabBarBox.y} — ` +
         'half under the bar on first paint',
     ).toBeLessThanOrEqual(tabBarBox.y)
+
+/* THE DRAWER'S LAST ROW, CONFIRMED RATHER THAN ASSUMED (D-the-drawer-scrolls-above-its-foot).
+ *
+ * The complaint: `.bn-side-foot` — Cards to pull, the theme toggle, the server line — is the
+ * last thing the drawer draws, and it sits on the row Codes renders in, the last row of the
+ * last nav group, so Codes cannot be tapped. `elementFromPoint` at that row's own centre is the
+ * same instrument a finger is: it answers "what is actually under this point," which a rect
+ * comparison alone cannot — two boxes can be adjacent, touching, or one can paint over the other,
+ * and only a hit test tells those apart.
+ *
+ * TWO HEIGHTS, NOT ONE. 390 x 844 is this file's own `PHONE`; 360 x 780 is a narrower, shorter
+ * phone the drawer's own breakpoint comments were tuned against and this file had never opened.
+ * Both heights sit above the drawer's `754px` and `820px` steps, where the nav rows are at their
+ * full 44px — the shortest phone in this pair is still taller than either step, which is the
+ * gap those steps' own comments now name: rows shrinking below the fold is cosmetic, not a
+ * correctness question, and this test is what stands behind that claim.
+ *
+ * EVERY `nav: true` ROUTE, NOT ONLY CODES. The harvest comes off the drawer's own DOM at each
+ * height — `.bn-drawer .bn-nav a.bn-nav-link` — rather than a hand-typed roster, `route
+ * rosters`' own rule, so a route added to `ROUTES` tomorrow is swept here without anyone
+ * touching this file, and a route this sweep cannot reach fails by name instead of by a session
+ * finding it by hand.
+ */
+test('every drawer route is reachable by tap, at two phone heights', async ({ page }) => {
+  for (const size of [{ width: 390, height: 844 }, { width: 360, height: 780 }]) {
+    await page.setViewportSize(size)
+
+    await page.goto('/')
+    await page.getByText('More', { exact: true }).click()
+    await expect(page.locator('.bn-drawer')).toBeVisible()
+    /* HARVESTED DIRECTLY OFF THE DRAWER'S OWN `.bn-nav`, NOT VIA `phoneRoutes()`. That helper
+       also pushes the kit sheet's hash in by hand (it has no drawer row at all, being
+       `OFF_NAV`), which is right for a roster of "screens this file must reach" but wrong here
+       — a hash with no drawer link would make this loop look for an element that cannot exist.
+       This is the roster of rows actually drawn inside `.bn-drawer .bn-nav`, so it needs no
+       hand-typed exclusion list and pins no route by name. */
+    const owned = await page.locator('.bn-drawer .bn-nav a.bn-nav-link').evaluateAll((els) =>
+      els.map((el) => (el as HTMLAnchorElement).getAttribute('href') ?? '').filter((h) => h.length > 0))
+    expect(owned.length, 'the drawer drew no nav rows to sweep').toBeGreaterThan(5)
+
+    for (const hash of owned) {
+      const link = page.locator(`.bn-drawer .bn-nav a.bn-nav-link[href="${hash}"]`)
+      await link.scrollIntoViewIfNeeded()
+      const box = await link.boundingBox()
+      expect(box, `${hash} at ${size.width}x${size.height}: no box for its drawer link`).toBeTruthy()
+      const hit = await page.evaluate(([cx, cy]) => {
+        const el = document.elementFromPoint(cx, cy) as HTMLElement | null
+        return { tag: el?.tagName ?? null, cls: el?.className ?? null, inFoot: !!el?.closest('.bn-side-foot') }
+      }, [box!.x + box!.width / 2, box!.y + box!.height / 2] as const)
+      expect(
+        hit.inFoot,
+        `${hash} at ${size.width}x${size.height}: the drawer's foot (${hit.tag}.${hit.cls}) sits over this row's centre`,
+      ).toBe(false)
+      await link.click()
+      await expect(page).toHaveURL(new RegExp(`${hash}$`))
+      await page.goto('/')
+      await page.getByText('More', { exact: true }).click()
+      await expect(page.locator('.bn-drawer')).toBeVisible()
+    }
+    await page.keyboard.press('Escape')
   }
 })
