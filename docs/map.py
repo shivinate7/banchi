@@ -1675,7 +1675,10 @@ COMPONENTS = [
                 # is borrowed from, one register down from a route that can spend money.
                 "governed_by": ["D18", "D33", "D42", "D72", "D111", "D136", "D139", "D140",
                                 "D141", "D143", "D148",
-                                "D151", "D158", "D176"],
+                                "D151", "D158", "D176",
+                                # Unclaimed at this branch's own claim — the stale_claim
+                                # refusal now names `--unclaim` by its real command.
+                                "D190"],
                 "note": "IT NEVER SETS PKMNSCAN_MAIN AND NO REFUSAL IT PRINTS SUGGESTS IT. D42 "
                         "is explicit that a session reaching for that variable has left the "
                         "amendment behind; this needs no hatch because allow rule 3 already "
@@ -2495,14 +2498,33 @@ COMPONENTS = [
                         "failed twice with nothing asking that question "
                         "(D151). It reports and never repairs, "
                         "for `--stale`'s reason turned around: a substitution made after the "
-                        "merge reaches main's own copy of the entry.",
+                        "merge reaches main's own copy of the entry. "
+                        "AND A FOURTH, THE EXACT INVERSE: `--unclaim <id>` puts an "
+                        "already-claimed id back to slug form — the remedy `--stale`'s own "
+                        "text names and nothing performed until this. Built as the literal "
+                        "inverse of the forward substitution, reusing `apply_to_text`'s own "
+                        "boundary rather than a second implementation. A decision derives its "
+                        "own slug from its entry's filename; a codes id or a build step needs "
+                        "`--to-slug`, because neither keeps its slug anywhere else once "
+                        "claimed. The safety gate compares the claimed HEADING between this "
+                        "tree and `--ref`, not raw presence — refusing a flat presence check "
+                        "would refuse the one case this exists to answer, where this branch's "
+                        "own number collides with an UNRELATED entry `ref` independently "
+                        "claimed. Reproducing that incident also found `stale_claims` reading "
+                        "the flat `docs/DECISIONS.md` stub instead of the corpus directory for "
+                        "the decision namespace — silently blind to every decision collision "
+                        "since D160 split the corpus — fixed alongside it.",
                 # D72 IS THE FAILURE THIS REPLACES and D16 the rule its audit rows answer to.
                 # D80 is cited for the allocator's direction — the culled step 12 is why this
                 # is max+1 rather than lowest-free — and D47/D135 for the symlink the walk
                 # skips, `AGENTS.md` being the same file as `CLAUDE.md` under another name.
-                # D18 is why it is not in `make check`: it writes.
+                # D18 is why it is not in `make check`: it writes. D160 and D182 are the corpus
+                # split `--unclaim` and the fixed `stale_claims` both have to read through; D186
+                # and D188 are the real, landed entries the incident this file's own docstring
+                # narrates is about.
                 "governed_by": ["D16", "D18", "D42", "D47", "D72", "D80", "D135",
-                                "D140", "D151", "D160", "D185"],
+                                "D140", "D151", "D160", "D182", "D185", "D186", "D188",
+                                "D190"],
             },
             "claim-selftest.py": {
                 "does": "scripts/claim-ids.py proved against a throwaway repository in which "
@@ -2524,7 +2546,17 @@ COMPONENTS = [
                         "REAL BUG IN THE UNMUTATED CODE: `\\b` fires between a letter and a "
                         "hyphen, so a slug was being substituted inside a longer slug that "
                         "extended it, leaving a number with a tail on it. In `make check`, "
-                        "never in the git hook — it writes (D18).",
+                        "never in the git hook — it writes (D18). "
+                        "THIRTY-THREE MORE ARMS PROVE `--unclaim`: the round trip is "
+                        "byte-identical across all three namespaces, the safety gate refuses "
+                        "when `ref`'s copy IS this entry and does nothing when it does, the "
+                        "boundary reuse holds on the way back too, and the actual 2026-09-12 "
+                        "incident is rebuilt end to end — two branches independently claiming "
+                        "the same next-free number for two UNRELATED entries, `--stale` "
+                        "catching it (once `stale_claims` was fixed to read the corpus "
+                        "directory rather than the flat stub), `--unclaim` reverting the "
+                        "loser cleanly, and a normal re-plan landing it on a fresh number "
+                        "with zero hand-editing.",
                 # D140 is the ruling; D18 is why it is off the commit path; D16
                 # is the severity rule its subject's rows answer to; D80 is the allocator's
                 # direction, max+1 rather than lowest-free, because a culled id's citations
@@ -2533,9 +2565,13 @@ COMPONENTS = [
                 # entries are composed from integers for exactly this reason, and the two that
                 # survive are in the prose that explains why. The superset rule reads a citation
                 # literally, which is the trade docs-audit.py's own entry records.
+                # D160, D186 and D188 are the same worked example claim-ids.py's own entry
+                # carries — the fixture's directory-corpus arms build a real D160 shape, and
+                # the incident arm's own prose names the two real, landed entries it replays.
                 "governed_by": ["D1", "D2", "D16", "D18", "D80", "D136", "D140", "D141",
                                 "D143", "D148",
-                                "D151", "D185"],
+                                "D151", "D160", "D185", "D186", "D188",
+                                "D190"],
             },
             "docs-audit-allow.txt": {
                 "does": "paths and identifiers the docs name before they exist, one "
