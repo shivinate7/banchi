@@ -369,23 +369,33 @@ export function ValueBands({ end, onEnd, onLeave }: {
   const [gapsNext, setGapsNext] = useState<string | null>(null)
   const [gapsLoadingMore, setGapsLoadingMore] = useState(false)
 
-  const liveAgg = useRef(true)
+  /* A MONOTONIC GENERATION, NOT A "STILL MOUNTED" BOOLEAN (w1b). The old `liveAgg.current`
+   * guard answered one question — has this instance unmounted? — and answered it WRONG the
+   * one place it mattered: React's StrictMode double-invokes every mount effect in dev,
+   * reusing the SAME fiber (and so the same ref) across the simulated unmount/remount, which
+   * means both of the resulting `readAggregates()` calls saw `liveAgg.current === true`
+   * throughout. Whichever response happened to LAND LAST won — not whichever request started
+   * last — so a slow first call landing after a fast second one silently overwrote a correct,
+   * already-rendered answer with a stale one (confirmed: cold-loading `#/pricing?band=…` with
+   * the aggregates request delayed reproduces a badge and row count that regress back to the
+   * first response's numbers seconds after the second, correct one had already drawn). The
+   * rows effect two cursors down already had the right shape for this — a monotonic counter,
+   * captured at call time, checked before the write lands — so the aggregates fetch adopts
+   * the same one rather than inventing a second mechanism. */
+  const aggGeneration = useRef(0)
   const readAggregates = useCallback(async () => {
+    const mine = ++aggGeneration.current
     setFailed(null)
     try {
       const answer = await getValueAggregates()
-      if (liveAgg.current) setAggregates(answer)
+      if (aggGeneration.current === mine) setAggregates(answer)
     } catch (error) {
-      if (liveAgg.current) setFailed(error instanceof Error ? error.message : String(error))
+      if (aggGeneration.current === mine) setFailed(error instanceof Error ? error.message : String(error))
     }
   }, [])
 
   useEffect(() => {
-    liveAgg.current = true
     void readAggregates()
-    return () => {
-      liveAgg.current = false
-    }
   }, [readAggregates])
 
   /* THE PAGE RESETS WHEN THE BAND MOVES. `shown` counts into a list that has just been replaced,

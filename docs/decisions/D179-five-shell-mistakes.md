@@ -227,6 +227,85 @@ a differently-named branch on it — the identical mechanism the incident used
 real, alongside the cases the ordinary first-push, already-matching and fork workflows must
 never trip.
 
+### AMENDED 2026-09-13 — the ordinary first push of a feature branch was refused, and its own printed remedy pushed to main
+
+**The exemption list above did not cover the ordinary case it claimed to.** It reads "no
+configured upstream at all (the ordinary first push of a new branch)". A
+branch made the way this repo's own workflow makes one —
+`git switch -c <name> origin/main` — DOES get an upstream: `branch.<name>.merge` is set to
+`refs/heads/main` at the moment the branch is created, not left empty. So the single most common
+shape in this repository — cut a branch from `origin/main`, then `git push -u origin
+<that-branch-name>` — tracked-vs-named mismatch and all, was refused by the very rule meant to
+protect it, and the refusal's own two-line remedy read:
+
+    git push                              # let git's safety net name the fix
+    git push origin HEAD:main      # push to the branch actually tracked
+
+**Both lines push to `main`.** The second names it outright. A guard built after a coordinator's
+push silently created a stray branch instead of updating the real PR branch was, for the
+ordinary case, telling the operator to do the one thing D42, `scripts/githooks/pre-push`,
+`scripts/githooks/reference-transaction` and GitHub's own branch protection all exist to
+prevent. Other guards would have caught the result — this was never a live incident — but a
+refusal whose remedy is the forbidden act teaches exactly the wrong reflex, which is the same
+standard `no-bandaids` and D171 already hold this repository to.
+
+**The fix exempts only the shape that was never the incident.**
+`pr-h-readings-table-local` tracked `origin/claude/pr-h-readings-table` — a
+DIFFERENT FEATURE BRANCH, not the default — and that is what stays refused.
+`_default_branch(remote, cwd)` answers what this checkout treats as `<remote>`'s default,
+preferring git's own record of it — `refs/remotes/<remote>/HEAD`, the ref a real `git clone` (or
+`git remote set-head <remote> -a`) sets — and falling back, when that ref has never been
+written, to the same rule `scripts/janitor.py:default_branch` already uses for the primary
+checkout: the first of `main`, `master` that exists as a local branch. Nothing here guesses — an
+unreadable remote and an absent local branch both answer `""`, which never equals a real tracked
+name, so that case is refused exactly as it always was. `clause_push` then exempts a mismatch
+only when `tracked == _default_branch(remote, where)`; every other mismatch, including the
+incident's own, reaches the refusal unchanged.
+
+**Why git's own record first, and a documented constant never.**
+`janitor.py:default_branch` already answers this question for the
+primary checkout, so a hardcoded `"main"` here would have been a second, divergent answer to a
+question this tree had already settled once — the "ask whether the primitive exists" rule this
+same file's own opening section restates from CLAUDE.md. But `janitor.py`'s answer is local-only
+and this clause's question is about a specific REMOTE, which matters the moment a fork's default
+differs from `origin`'s — so `refs/remotes/<remote>/HEAD`, git's own per-remote record, is
+asked first and the local guess is what runs only when that ref was never written (this guard's
+own throwaway fixtures, and any `git init`-then-`push` clone that never ran `git clone` or
+`git remote set-head`).
+
+**Reproduced red-first, D179's own standard.** Before this fix, in a real throwaway repo: a
+branch made with `git switch -c feature-x origin/main`, pushing `git push -u origin HEAD`, was
+refused (`exit 2`) with the remedy above naming `HEAD:main`. After the fix the identical command
+sequence exits `0`. `scripts/guard-shell-selftest.sh` poses both directions for real: the fixture
+switches to a branch cut from `origin/main` (asserting the upstream really is
+`refs/heads/main` before trusting the case), asserts the push is never refused with or without
+`-u`, asserts no still-refused case's remedy ever names the default branch, and separately sets
+`refs/remotes/origin/HEAD` by hand — the way a real `git clone` would, which this fixture's own
+`git init`-then-`push` construction never does on its own — so the PRIMARY read is exercised and
+not only its local-branch fallback. The pre-existing incident reproduction and its five
+"must never refuse" cases (a fresh branch with no upstream at all, a matching upstream, a
+different remote, `--all`/`--tags`/`--delete`, a detached HEAD) are unchanged and still pass.
+
+**Mutation-tested, and the count below replaces the stale one.** The original sixth clause's own
+count — six arms over the colon-check and refspec resolution, five caught, one equivalent
+mutant (a colon-bearing refspec can never equal `HEAD` or a bare branch name, so the guard the
+colon check adds is never actually reached) — is untouched, because none of that code moved.
+This amendment's own logic — `_default_branch` and the exemption it feeds — was mutated eight
+more ways and re-run against the full selftest: inverting the equality to `!=` (caught, 14
+failures), deleting the exemption outright (caught, 4 failures — the original bug, reproduced
+again as its own mutant), reading `branch` instead of `tracked` (caught, 4 failures), always
+exempting regardless of the comparison (caught, 10 failures), dropping `main` from the local
+fallback tuple (caught, 3 failures), and refusing to strip the `<remote>/` prefix off a real
+`origin/HEAD` symbolic ref (caught, 1 failure — the arm added specifically to exercise that
+read). **Two survive, and both are equivalent mutants rather than holes.**
+Swapping the local fallback order to `("master", "main")` and corrupting
+the symbolic-ref path's ref name both still land on `"main"`, because every fixture branch in
+this file is named `main` and never `master` — a repo whose local branch and remote default
+genuinely disagreed would tell the two mutants apart, and none built here does.
+**Fourteen arms across both amendments, eleven caught, three equivalent-mutant survivors.**
+That replaces the "six arms, five caught" figure `CLAUDE.md` published for this clause before
+the amendment, which described only the colon-check half.
+
 ### Standing
 
 **BUILT and self-tested**: six clauses, `scripts/guard-shell-selftest.sh` with five

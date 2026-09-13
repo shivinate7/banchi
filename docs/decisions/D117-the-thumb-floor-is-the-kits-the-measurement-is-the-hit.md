@@ -118,6 +118,33 @@ Mutation-tested, four arms, all red: the notice link's own pad deleted (a real 1
 crowding case, the one the probe was built for — and a fixed bottom bar grown to 60% of the
 viewport over content that cannot be scrolled clear of it.
 
+**AMENDED 2026-09-13: A COVERED CENTRE NOW FAILS ON ITS OWN, WHICH CLOSED HALF OF docs/DEBTS.md #22 AND LEFT THE OTHER HALF NAMED.** The capture screen's shutter sat half under
+the phone tab bar on first paint — every one of its four corner probes AND its own centre
+landed inside `.bn-tabbar`, and `owns()`'s `chrome(n)` clause forgave every one of them, exactly
+as it is supposed to for a control legitimately scrolling PAST fixed chrome on its way up a
+route. The shutter was not scrolling past it; it was sitting behind it, on first paint, with no
+scroll at all — and this file could not tell the two apart, because `covered` (the CENTRE
+hit-test) reused the same forgiving `owns()` and its result drove nothing: `fails` read the four
+corner probes' `misses` alone, so a control whose centre AND every probe were all forgiven by
+`chrome()` reported clean. `centreOwns()` is `owns()` with `chrome(n)` dropped — `t.contains(n)`
+and `n.contains(t)` stay, because those cover a legitimate padded wrapper and a control cannot
+be COVERED by its own descendant or its own ancestor in the sense this check is for — and
+`covered` now uses it and now drives `fails` for probe mode. Proved red against the unfixed
+CaptureScreen.css (D205) and green with the fix;
+this file's other three cases — every owner route, the shell's three surfaces, the two sheets —
+still pass with the tightened predicate, so nothing legitimately scrolling under `.bn-topbar` /
+`.bn-tabbar` / `.kit-index` elsewhere in the product got newly flagged.
+
+**THE `n.contains(t)` CLAUSE docs/DEBTS.md #22 ACTUALLY OPENED WITH IS UNCHANGED, RE-MEASURED THE SAME DAY.** `.browse-boxchip` shrunk to 20px against the tightened file: still green. A
+shrunk control's own centre stays inside its own smaller box — nothing is covering it, so
+`centreOwns` correctly finds the control itself there. It is the CORNER probes that land outside
+the shrunk box and onto `.browse-mobilebar`, its ancestor, forgiven by `n.contains(t)` — the
+clause this entry already calls load-bearing for the padded-wrapper case, and narrowing it is
+still the unmeasured, twelve-route change #22 always said it was. Today's amendment closes a
+different clause (`chrome(n)`, at the centre) on a different reproduction (fixed chrome, not an
+ancestor bar); docs/DEBTS.md #22 is updated to record that split rather than marked closed
+outright.
+
 **What is NOT decided here.** D50's three interaction floors are still derived from a mouse:
 `base.css` has no coarse-pointer arm at all, its response floor argues entirely from a hover
 sweep of 315 controls, and its 1px press dip is a mouse-derived number applied to a finger. That

@@ -1,0 +1,12 @@
+{
+  "commit": "8b4e387930ead7be6595b4d4c59b7ba7a3a79f08",
+  "copied": [
+    "cards/en",
+    "sets/en.json",
+    "UPSTREAM-README.md"
+  ],
+  "fetched_at": "2026-09-13T17:39:45Z",
+  "file_count": 176,
+  "source": "https://github.com/PokemonTCG/pokemon-tcg-data",
+  "total_bytes": 26520219
+}

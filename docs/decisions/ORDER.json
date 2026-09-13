@@ -206,6 +206,12 @@
     "D197-one-left-edge.md",
     "D198-home-review-tile-counts-both-queues.md",
     "D199-run-phase-treats-joined-as-identified.md",
-    "D200-heartbeat-is-a-caller.md"
+    "D200-heartbeat-is-a-caller.md",
+    "D201-a-route-change-lands-at-the-top.md",
+    "D202-home-counts-only-open-orders.md",
+    "D203-orders-backlog-reconcile.md",
+    "D204-the-drawer-scrolls-above-its-foot.md",
+    "D205-the-tab-bar-has-one-height.md",
+    "D206-vendor-catalog-snapshot-and-index.md"
   ]
 }

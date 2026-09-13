@@ -78,6 +78,8 @@ import type {
   OrderLineKindResult,
   OrderCloseReason,
   OrderCloseResult,
+  ReconcileBacklogPreview,
+  ReconcileBacklogResult,
   ValueTable,
   ValueCopy,
   SubmissionClaims,
@@ -3238,6 +3240,41 @@ export async function reopenOrders(
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ orders: orders.map((o) => ({ source: o.source, number: o.number })), undo: true }),
   })) as OrderCloseResult
+}
+
+/**
+ * The one-time backlog reconcile (D203): every open order with nothing
+ * recorded against it, placed before `cutoff`, grouped by the feed's own status. FREE and
+ * WRITES NOTHING — `previewOrders`'s own shape, and the same route's other body.
+ *
+ * `cutoff` defaults to today's date on the server when omitted. The breakdown is the whole
+ * safety this route offers: nothing in the predicate can tell a two-year-old order from a live
+ * one that happens to share its age and its zero-recorded shape, so a status this screen has
+ * never proposed closing before draws its own row rather than being folded into one count.
+ */
+export async function previewReconcileBacklog(cutoff?: string): Promise<ReconcileBacklogPreview> {
+  return (await request('/orders/reconcile-backlog', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ preview: true, ...(cutoff === undefined ? {} : { cutoff }) }),
+  })) as ReconcileBacklogPreview
+}
+
+/**
+ * Perform the backlog reconcile `previewReconcileBacklog` describes: close every candidate
+ * order with `shipped_elsewhere`, claiming no copy. `closed` is exactly `reopenOrders`'
+ * argument shape, so the receipt's undo is that existing call and needs no new mechanism.
+ *
+ * NOT A RULE THAT RUNS ON EVERY FETCH — one explicit press, over the cutoff the operator saw
+ * in the preview. A second press over the same cutoff finds nothing left to close (the first
+ * press's orders are no longer open) and reports it rather than re-stamping anything.
+ */
+export async function reconcileBacklog(cutoff?: string): Promise<ReconcileBacklogResult> {
+  return (await request('/orders/reconcile-backlog', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(cutoff === undefined ? {} : { cutoff }),
+  })) as ReconcileBacklogResult
 }
 
 /**

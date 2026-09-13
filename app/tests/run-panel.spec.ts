@@ -1,5 +1,6 @@
 import { test, expect, type Page } from '@playwright/test'
 import { sealEveryTest } from './shell'
+import { runRow } from './routeFixtures'
 
 /* THE PIPELINE IS REACHABLE FROM A SCREEN, ASSERTED WHERE NOTHING ELSE CAN SEE IT.
  *
@@ -113,38 +114,6 @@ function inventoryPayload() {
         run: null,
       },
     },
-  }
-}
-
-function runRow(overrides: Record<string, unknown> = {}) {
-  return {
-    run: '2026-08-24-box9-01',
-    path: '/tmp/runs/2026-08-24-box9-01',
-    capture_dir: '/tmp/captures/cards/box9',
-    scope: { box: 9, whole_box: true, cards: null },
-    /* THE SERVER'S OWN ANSWER TO WHICH BOX, AND WHAT IT IS CALLED (D56). `box` is what
-       `RunPanel` groups and labels on now; `runScope.ts:boxOf` keeps the scope/capture-dir
-       derivation only for a server that predates the field. Box 9 is UNNAMED in this file's
-       registry fixture and this row agrees with it — the two would be a disagreement about the
-       same box otherwise, which is exactly the drift the server-side join exists to prevent. */
-    box: 9,
-    box_name: null,
-    live: false,
-    pid: null,
-    phase: 'join',
-    batch_ids: ['msgbatch_x'],
-    collected: true,
-    joined: false,
-    counts: {},
-    /* A RECORDED RUN, BECAUSE `{}` IS THE DEGENERATE SHAPE AND NOT THE ORDINARY ONE. These are
-       the owner's own 2026-09-11 run — 290,470 in, 3,761 out, $0.154638 at identify/cost.py's
-       rates — which is the run that made the money pill a defect: it drew `Costs money` beside a
-       six-figure token count and no dollar figure at all, four minutes after finishing. A
-       fixture that is a RECORDING is the same argument T9 makes against frames a test drew for
-       itself. `usage: {}` still has a case of its own below; that is what a run written before
-       the field looks like, which is every run on the owner's machine. */
-    usage: { input_tokens: 290470, output_tokens: 3761, cost_usd: 0.154638 },
-    ...overrides,
   }
 }
 

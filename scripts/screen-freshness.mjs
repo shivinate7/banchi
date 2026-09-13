@@ -147,7 +147,9 @@ const ts = (await import(pathToFileURL(TYPESCRIPT).href)).default
  * refuses any entry whose own doc comment does not claim in words that it writes nothing. That
  * is the difference between an allowlist and a suppression — this one cannot be extended by
  * adding a line here, only by adding a line here AND making the source say why. */
-const NON_MUTATING = new Set(['preflightRun', 'cropPreview', 'fetchOrders', 'previewOrders'])
+const NON_MUTATING = new Set([
+  'preflightRun', 'cropPreview', 'fetchOrders', 'previewOrders', 'previewReconcileBacklog',
+])
 const NON_MUTATING_CLAIM = /writes nothing|creates no run directory|creates nothing/i
 
 /* The classification this script was written against, asserted by `--self-test` as SETS and
@@ -239,8 +241,14 @@ const RECORDED = {
     'releaseSubmission',                                          // D174, the stuck claim's way out
     'nameOrders',                            // D193, the all-statuses
                                               // backfill naming a buyer the fetch found unnamed
+    'reconcileBacklog',                      // D203, the one-time
+                                              // stand-down over the historical backlog
   ],
-  nonMutating: ['preflightRun', 'cropPreview', 'fetchOrders', 'previewOrders'],
+  // `previewReconcileBacklog` is the reconcile's press-nothing half and says so in its own
+  // docstring — "FREE and WRITES NOTHING" — which is what earns a place on this list.
+  nonMutating: [
+    'preflightRun', 'cropPreview', 'fetchOrders', 'previewOrders', 'previewReconcileBacklog',
+  ],
   nonRequests: [
     'describeFailure', 'photoUrl', 'positionLabel', 'isDeparted', 'placeParts', 'placeSentence',
     'onServerBoot', 'newCaptureId', 'runFileUrl', 'shippingFileUrl', 'markdownFileUrl',
