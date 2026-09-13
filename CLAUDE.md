@@ -734,8 +734,13 @@ make merge          # merge a PR and move main onto it — BOTH HALVES, on your 
                                    #   manifest's scope block, off the SIDECARS rather than off
                                    #   the capture directory's name — this was the last
                                    #   run-creation path that left a run nothing could bind, so
-                                   #   `refuse_reallocated` had to infer. Two boxes get NO scope
-                                   #   rather than a guessed one (D48).
+                                   #   `refuse_reallocated` had to infer.
+                                   #   IT TAKES ONE SELECTION, NOT ONE DRAWER (D180, superseding
+                                   #   D48's "a run is still one box"): `--state captured` for
+                                   #   every card in the store still owed a reading, `--box 3,5`
+                                   #   for drawers, `--keys` for a tick list, narrowed by `--game`,
+                                   #   `--section` (one box only) or `--since`. One press, one run,
+                                   #   whatever it spans; a box is one of the names, not the unit.
 ./pkmnscan rescue   <run-dir>       # A STRANDED RUN'S CARDS, RE-ADDRESSED TO WHERE THEY ARE NOW.
                                    #   Free, previews, re-runnable. The repair for a run D36
                                    #   refuses: box 1 was deleted and its number reused, so the
@@ -1535,11 +1540,18 @@ A screen is not finished because it compiles.
   server that can cause money to be spent — one route does, it is named for it, and it refuses
   without an explicit `confirm`. Everything else there is free and re-runnable.
 
-  **A run's scope is a box, or cards ticked inside one, and only ONE of those is answered on
-  `#/runs`.** The box has a picker there. The ticked selection has no second mass-select and
+  **A run's scope is a SELECTION, and `#/runs` offers three ways to start one** (D180,
+  2026-09-12, superseding D48's "a run is still one box"): every card in the store that
+  still needs a reading (`state: captured`), one or more drawers, or the cards ticked on
+  `#/inventory` — each narrowable by game, by section (one drawer only) or by a since-date.
+  `app/src/RunsComposer.tsx:selectionOf` is the composer and `pipeline/selection.py` the
+  one grammar the screen, the route and `pkmnscan identify` share. This paragraph said
+  "a box, or cards ticked inside one" until 2026-09-13, and a session quoted it back to
+  the owner as the current rule. The ticked selection still has no second mass-select and
   never will: `#/inventory` keeps the only one and hands it over through
-  `app/src/runHandoff.ts`. Anything that rebuilds a selection on the runs screen has recreated
-  the disagreement D33 named and D39 was built to avoid.
+  `app/src/runHandoff.ts` as a flat list of position keys. Anything that rebuilds a
+  selection on the runs screen has recreated the disagreement D33 named and D39 was built
+  to avoid.
 - **A card's number counts the cards in the box, not the slots** (D58). Sell card 17 and the
   card behind it becomes card 17, on every screen and in every report — the box closes up, and
   the section boundaries move with it so `Section N · Card M` is countable on both axes. **The
@@ -1937,7 +1949,9 @@ apostrophes in names) live in the `tcgplayer-csv` skill. It loads on demand.
   third was alive as text and never exercised — one cart was ever sent, all three legs at one
   reading, and reading the whole 2,535-card store at 900 instead of 1200 saves about **$0.36**.
   Nobody had looked for weeks, and a session that quoted D48 was quoting a conclusion whose
-  premises had gone.
+  premises had gone. **D180 closed it the same day** — a run is one selection now, and the
+  drawer is one of its names — and this paragraph is kept as the worked example, not as an
+  open question: a session read it on 2026-09-13 and told the owner the old rule still stood.
 
   **What to do, in order.** Name the entry and the specific sentence. Say which part of its
   ARGUMENT no longer holds and how you know — measure it if it is measurable, and say
