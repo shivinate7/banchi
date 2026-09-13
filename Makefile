@@ -82,6 +82,9 @@ help:
 	@echo "  make cid-audit    does every card's name still resolve to its photograph? Reads"
 	@echo "                    the whole corpus, so it is NOT in \`check\` — \`make lan-check\`'s"
 	@echo "                    reason. Three verdicts, and the third is \`not known\`."
+	@echo "  make readings-selftest  the cached market-reading table, proved against an"
+	@echo "                    independent reimplementation of its own two-source walk."
+	@echo "                    In \`check\`, never in the hook."
 	@echo "  make janitor-selftest  the sweep, proved against a throwaway clone. In \`check\`, never in the hook."
 	@echo "  make reap-selftest  the kill guard, proved by pointing it at what it must not kill."
 	@echo "  make silent-write-selftest  the silenced-write guard, proved by reproducing the"
@@ -118,7 +121,7 @@ help:
 	@echo "                    lint + vale + typecheck + audit-self-test +"
 	@echo "                    githooks-selftest + merge-selftest + revert-selftest +"
 	@echo "                    claim-selftest + decisions-selftest + submission-selftest +"
-	@echo "                    cid-selftest +"
+	@echo "                    cid-selftest + readings-selftest +"
 	@echo "                    janitor-selftest + reap-selftest + silent-write-selftest +"
 	@echo "                    guard-shell-selftest +"
 	@echo "                    coordinator-selftest + suite-lock-selftest +"
@@ -431,6 +434,7 @@ check:
 	@$(MAKE) --no-print-directory decisions-selftest
 	@$(MAKE) --no-print-directory submission-selftest
 	@$(MAKE) --no-print-directory cid-selftest
+	@$(MAKE) --no-print-directory readings-selftest
 	@$(MAKE) --no-print-directory janitor-selftest
 	@$(MAKE) --no-print-directory reap-selftest
 	@$(MAKE) --no-print-directory silent-write-selftest
@@ -472,6 +476,7 @@ ci-check:
 	@$(MAKE) --no-print-directory decisions-selftest
 	@$(MAKE) --no-print-directory submission-selftest
 	@$(MAKE) --no-print-directory cid-selftest
+	@$(MAKE) --no-print-directory readings-selftest
 	@$(MAKE) --no-print-directory revert-guard
 	@$(MAKE) --no-print-directory janitor-selftest
 	@$(MAKE) --no-print-directory reap-selftest
@@ -783,7 +788,21 @@ cid-selftest:
 cid-audit:
 	@./pkmnscan cards audit
 
-.PHONY: submission-selftest
+# THE MARKET-READING TABLE, PROVED AGAINST AN INDEPENDENT REIMPLEMENTATION OF ITS OWN WALK
+# (D-readings-table). `pipeline/readings.py:collect()` is compared to `golden()` — a second,
+# separately-written transcription of the same two-source rule — over nine fixture shapes:
+# empty, run-only, live-only, a disagreement won each direction by the clock, an unparseable
+# live filename (must lose to everything, never fall back to an older readable file), adopt
+# --write followed by the exact SELECT `_readings()` now performs, two adopts unchanged
+# (idempotent), a new run landing between two adopts, and a run directory deleted between two
+# (its SKU drops out — a cache refresh, never an accumulating ledger).
+#
+# IN `check`, NEVER IN THE GIT HOOK: it writes a temp store under `mktemp -d` (D18). Answers
+# from the tree alone, so it is in `ci-check` too.
+readings-selftest:
+	@$(PYTHON) scripts/readings-selftest.py
+
+.PHONY: submission-selftest readings-selftest
 
 # A GIT WRITE MUST LEAVE A TRACE THE SESSION CAN READ. On 2026-09-12 a coordinator session
 # reported work as landed that had not landed, twice, through `git commit -q -F - >/dev/null

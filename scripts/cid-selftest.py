@@ -353,7 +353,9 @@ def case_the_seeding_names_every_card_from_its_own_bytes() -> None:
               "photograph's path, and the PARTIAL one that makes the heal's probe empty")
     finally:
         conn.close()
-    equal(stamp_of(home), 4, "and the stamp is last, inside the same transaction")
+    from store import db
+    equal(stamp_of(home), db.SCHEMA_VERSION,
+          "and the stamp is last, inside the same transaction")
 
 
 def case_the_four_column_rosters_agree() -> None:
@@ -449,9 +451,11 @@ def case_a_stripped_name_heals_byte_identically() -> None:
     conn.close()
     equal(stripped, 3, "three rows lost their name, with no error and no index complaint — "
                        "SQLite NULLs are never duplicates, so UNIQUE does not object")
-    equal(stamp_of(home), 4, "and the stamp still says the store has been named, which is "
-                             "what makes a bare count of NULLs unable to tell this from a "
-                             "store that was never named at all")
+    from store import db
+    equal(stamp_of(home), db.SCHEMA_VERSION,
+          "and the stamp still says the store has been named, which is "
+          "what makes a bare count of NULLs unable to tell this from a "
+          "store that was never named at all")
 
     receipt = open_store(home)
     if not check(receipt is not None, "the heal leaves a receipt"):
