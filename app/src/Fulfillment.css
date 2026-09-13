@@ -57,6 +57,14 @@
   animation: bn-page-in var(--bn-t-slow) var(--bn-ease-out) backwards;
 }
 .ff-column[data-wide='true'] { max-width: var(--ff-col-wide); }
+/* A phone laid flat, propped for two-handed pulling: short and wide, and the landing list
+   used to keep its narrow --ff-col column centered under it, wasting roughly the width of
+   the column itself in dead margin on each side. This is not the wide-mode two-column
+   layout `data-wide` reaches for above 1100px (nothing here reflows the orders and the
+   boxes side by side) — it is the same content simply given the width it already has. */
+@media (max-height: 430px) and (min-width: 700px) and (orientation: landscape) {
+  .ff-column { max-width: var(--ff-col-wide); }
+}
 /* Under the big photo the page is HIDDEN, not merely covered: nothing under it can be tabbed
    to, and nothing under it counts as a target. The hide waits for the lightbox's own fade, so
    the page never flashes bare before the dark ground arrives; the way back is immediate. */
@@ -441,14 +449,16 @@
    so it is set in the machine face — the one place a machine string reaches this screen. */
 .ff-done-order,
 .ff-receipt-order,
-.ff-card-order b,
-.ff-order-title b {
+.ff-card-order-id,
+.ff-order-id {
   font-family: var(--bn-font-mono);
   font-weight: 600;
   letter-spacing: -0.02em;
   overflow-wrap: anywhere;
 }
-.ff-done-order { color: var(--bn-ink-2); }
+.ff-done-order,
+.ff-card-order-id,
+.ff-order-id { color: var(--bn-ink-2); }
 
 /* ---- Orders to fill: the walk, order by order ------------------------------------------ */
 .ff-order-list { display: flex; flex-direction: column; gap: var(--bn-4); }
@@ -485,7 +495,7 @@
   font-variant-numeric: tabular-nums;
 }
 .ff-order-text { flex: 1 1 auto; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
-.ff-order-title { color: var(--bn-ink-2); line-height: 1.3; }
+.ff-order-title { color: var(--bn-ink-2); line-height: 1.3; overflow-wrap: anywhere; }
 .ff-order-title b { color: var(--bn-ink); }
 .ff-order-count { color: var(--bn-ink-2); line-height: 1.35; }
 .ff-order-cards { padding: var(--bn-3); }
@@ -837,8 +847,20 @@
 .ff-step:active { transform: scale(0.985); }
 
 /* The card panel on a wide screen: photograph left, everything he reads in a column beside it.
-   The side is its own flex column so the button growing never moves the place above it. */
-@media (min-width: 768px) {
+   The side is its own flex column so the button growing never moves the place above it.
+   THE LADDER'S OWN 900, NOT 768 AND NOT 820: at 768 the 380px photo column left only ~300px
+   for the place text, and the 32px-floor position label (docs/DESIGN.md) wrapped to three
+   lines — "Box 3 ·" / "Section 1 ·" / "Card 1" — because that floor cannot itself shrink to
+   fit. 820 was tried first and measured wrong: with a maximal label ("Box 9999 · Section 99
+   · Card 50000" — store-scaling.md's 50,000-card target in one undeclared, one-section box,
+   D10) it STILL wraps to three lines at exactly 820px, which is one of the three widths
+   docs/DESIGN.md's own "Verifying a screen" section names — the two-column layout would have
+   been reintroducing the defect it was built to fix, at the width most likely to be looked
+   at. 900 is the ladder's existing "a two-column body becomes one" step, so no new width
+   joins the register (docs/DESIGN.md's `breakpoints` row), and it clears the maximal label
+   at two lines, never three: measured 819 (single column) at 1, 900 at 2, 1099 at 1. 768-899
+   stays the single mobile column below, where the place gets the page's full width. */
+@media (min-width: 900px) {
   .ff-card {
     display: grid;
     grid-template-columns: minmax(0, 380px) minmax(0, 1fr);
