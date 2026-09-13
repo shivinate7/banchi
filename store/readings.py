@@ -200,3 +200,46 @@ class Readings:
             del self.sources[key]
         for source in sources:
             self.sources[_source_key(source.kind, source.name)] = source
+
+    def replace_source(
+        self,
+        kind: str,
+        name: str,
+        found: Dict[str, Reading],
+        source: Optional[Source],
+        *,
+        supersede: Optional[List[str]] = None,
+    ) -> None:
+        """Fold ONE source's fresh reading into the table without re-running `collect()`
+        over every other source.
+
+        `supersede` names every source-name of this `kind` whose rows must be cleared FIRST
+        — default `(name,)`, the ordinary case where a source only ever displaces its own
+        earlier self (the same run, re-joined; the same live file, re-adopted). A caller
+        whose kind has at most one CURRENT member at a time — `KIND_LIVE`, because
+        `pipeline/readings.py:_newest_live_reading` only ever credits the single newest
+        file — passes every existing source name of that kind, because the moment a fresher
+        live file is fetched, every entry the OLD file was carrying stops being true whether
+        or not the new file happens to reprice the same SKU. `KIND_RUN` never needs this: two
+        run directories coexist and neither's rows expire when a third joins.
+
+        EVERY SKU IN `found` IS WRITTEN UNCONDITIONALLY, not compared against the table's
+        current `at` for that SKU. This is deliberately looser than `collect()`'s own
+        newest-wins comparison and it is still correct: `found` was built with `at` = the
+        moment THIS write just happened (a join's `pricing.json` mtime taken after writing
+        it, or a live fetch's own embedded stamp), and by construction nothing already in the
+        table can be dated later than the write that is happening right now. A full
+        `readings adopt --write` remains the periodic proof that this local reasoning has not
+        drifted from `collect()`'s own arbitration.
+        """
+        for old_name in (supersede if supersede is not None else (name,)):
+            old_key = _source_key(kind, old_name)
+            if old_key in self.sources:
+                del self.sources[old_key]
+            for sku, entry in list(self.entries.items()):
+                if entry.kind == kind and entry.source == old_name:
+                    del self.entries[sku]
+        for sku, reading in found.items():
+            self.entries[str(sku)] = reading
+        if source is not None:
+            self.sources[_source_key(source.kind, source.name)] = source

@@ -244,6 +244,9 @@ from store import db, files, master, photos, queues  # noqa: E402
 # — the resolver computes and stores nothing, this one persists — so it takes an alias
 # rather than shadowing the name half this file's order cases are written against.
 from store import orders as order_store  # noqa: E402
+# `readings` above is already `pipeline.readings` — the walk. This is the store-side
+# table module (`KIND_RUN`/`KIND_LIVE`), aliased for the same reason.
+from store import readings as store_readings  # noqa: E402
 from store.session import Store  # noqa: E402
 from scripts import serve  # noqa: E402
 
@@ -13394,6 +13397,66 @@ def check_readings_adopt_cli(checks: Checks) -> None:
             dict(Store().read().readings.entries),
             adopted,
             "a `show` press is read-only — the table is unchanged by looking at it",
+        )
+
+
+def check_readings_writer_after_join(checks: Checks) -> None:
+    """A join leaves `readings` current with no `readings adopt` press (item 5, D189
+    amended). `check_readings_adopt_cli` proves the CLI surface over the manual press;
+    `check_value_table` proves the two-source arbitration with the table hand-filled. This
+    is the one no existing check makes: that `join` itself keeps the table honest as an
+    ordinary side effect of the write it already makes.
+    """
+    checks.note("")
+    checks.note("READINGS WRITER — a join refreshes the cache with no adopt press")
+
+    with isolated_home():
+        cards = [(1, 1, "Dunsparce", "120", "normal")]
+        run_dir, _ = seam_run(checks, cards, market="9.99")
+
+        # NO `readings adopt` ANYWHERE ABOVE THIS LINE. If item 5's wiring in
+        # `cli/cmd_join.py` were absent or broken, this table would still be empty exactly
+        # as it was the moment PR #333 landed.
+        current = dict(Store().read().readings.entries)
+        checks.ok(
+            len(current) >= 1,
+            "the join that just ran left at least one reading behind with no adopt press",
+            current,
+        )
+        sku = next(iter(current))
+        checks.equal(
+            current[sku].source, run_dir.name,
+            "and it is attributed to the run that was just joined",
+        )
+        checks.equal(
+            current[sku].kind, store_readings.KIND_RUN,
+            "as a run-table reading, not a live one",
+        )
+
+        # THE READ ROUTE AGREES, with no second write. `do_pipeline_value` is the caller
+        # `_readings()` exists for; this is the seam a stale table would actually be felt on.
+        # `card.sku` is stamped by `emit` (D174/D180), never by `join` itself, so an `emit`
+        # is what puts this SKU on a row `do_pipeline_value` can key off of — the readings
+        # table is already fresh before this line; this only exercises the read route that
+        # was the actual complaint the manual press left standing.
+        command(checks, "emit", str(run_dir.directory))
+        payload = pipeline_routes.do_pipeline_value()
+        row = next(r for r in payload["copies"] if r["sku"] == sku)
+        checks.ok(
+            row["market"] is not None,
+            "GET /pipeline/value prices this card without anyone having pressed adopt",
+            row,
+        )
+
+        # RE-JOINING SUPERSEDES ONLY THIS RUN'S OWN PRIOR ROWS. A second join of a
+        # DIFFERENT run must not evict the first run's readings.
+        cards2 = [(2, 1, "Articuno", "161", None)]
+        run_dir2, _ = seam_run(checks, cards2, market="4.50")
+        after = dict(Store().read().readings.entries)
+        checks.ok(
+            sku in after,
+            "the first run's reading survives a second, unrelated run's join",
+            after,
         )
 
 
@@ -26672,6 +26735,7 @@ def run() -> Result:
     check_pricing_authority(checks)
     check_prices_adopt(checks)
     check_readings_adopt_cli(checks)
+    check_readings_writer_after_join(checks)
     check_merged_emit_cap(checks)
     check_merged_emit_uncapped(checks)
     check_unsent_copies_worklist(checks)
