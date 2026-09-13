@@ -4511,8 +4511,10 @@ function UnreachableLine({ at }: { at: Unreachable | null }) {
     )
   const strandedRuns = heldBack(at.reallocated)
   const stranded = strandedRuns.reduce((n, run) => n + (run.cards ?? 0), 0)
-  // THE TOOLTIP NAMES THE WAY OUT, AND CARRIES NO BACKTICKS: a title attribute renders its
-  // text literally, so markdown punctuation in one is just punctuation on screen.
+  // THE TOOLTIP NAMES THE WAY OUT AND NAMES NO COMMAND (D-rescue-is-a-press): rebinding a
+  // stranded run is a press on `#/runs` now — the run's own header, on the row this tooltip
+  // describes — so the sentence points there instead of at a CLI invocation nobody here may
+  // ever draw a backtick around.
   if (strandedRuns.length > 0)
     parts.push(
       <span key="reallocated" title="Drawer number reused since this run — rebind it from the run's row on Runs.">

@@ -2415,21 +2415,30 @@ it — the closure is exactly the shape D192 already argued for and named as fut
 
 ## 28 — `pkmnscan rescue` is reachable from no screen, and the screen that needs it names a command
 
-`#/pricing`'s "over a deleted box" sentence tells the operator, in a tooltip, to run
-`pkmnscan rescue` on the stranded run. That is a CLI press with no route, no client function
-and no control — the shape CLAUDE.md's "a route is not a feature" rule refuses for a server
-capability, one register over. On 2026-09-13 the owner hit the sentence, could not act on it
-from the app, and a session ran the three steps (`rescue`, `--write`, `join`) for them from a
-terminal. PR #347 made the sentence go away once a joined rescue exists; it did not put the
-press on a screen.
+**CLOSED 2026-09-13 (D-rescue-is-a-press).** `#/pricing`'s "over a deleted box" sentence used
+to tell the operator, in a tooltip, to run `pkmnscan rescue` on the stranded run — a CLI press
+with no route, no client function and no control, the shape CLAUDE.md's "a route is not a
+feature" rule refuses for a server capability, one register over. On 2026-09-13 the owner hit
+the sentence, could not act on it from the app, and a session ran the three steps (`rescue`,
+`--write`, `join`) for them from a terminal. PR #347 made the sentence go away once a joined
+rescue exists; it did not put the press on a screen.
 
-**Why it is deferred rather than built.** D165 records that every run on the owner's machine
-that CAN strand predates the `bid` field, and every run since 2026-09-12 binds to the drawer's
-true index and cannot strand. So the press is for a shrinking, legacy set — one run today —
-and a control on `#/runs` beside the run panel is real work for a case that D145 has already
-made rare. It is named here so the next session that widens `#/runs` finds the argument, not
-the tooltip.
+**What closed it.** `POST /pipeline/runs/<name>/rescue` (free, preview by default, `write`
+gated — `do_queue_refresh`'s shape) in `server/pipeline_routes.py`, dispatched in
+`server/capture_server.py` ahead of `_RUN_STEP_RE`; a client function (`rescueRun`) in
+`app/src/server.ts`; and a control on `RunPanel.tsx`'s own run header, drawn only when
+`detail.box_former` is true — the same gate the tooltip used. The tooltip now names the
+screen instead of the command. The owner's same-day ruling that raw machine text may never
+reach a screen meant the route could not simply relay `cmd_rescue`'s stdout the way every
+other free step does; `do_run_rescue` parses it into a structured `RescueResult` instead, and
+the raw report goes to a log file under the run's own directory. See D-rescue-is-a-press for
+the whole argument, and `harness/tests/t7_store_and_seams.py:check_rescue_route` and
+`app/tests/run-panel.spec.ts`'s four rescue cases for what proves it.
 
-**What closes it.** A `POST /pipeline/runs/<name>/rescue` that previews by default and
-writes on `confirm`, a client function in `app/src/server.ts`, and a control on the run's own
-row on `#/runs` drawn only when `box_former` is set — the same gate the sentence uses.
+Original text, kept for the record — **why it was deferred rather than built, at the time**:
+D165 records that every run on the owner's machine that CAN strand predates the `bid` field,
+and every run since 2026-09-12 binds to the drawer's true index and cannot strand. So the
+press was for a shrinking, legacy set — one run at the time — and a control on `#/runs` beside
+the run panel was real work for a case D145 had already made rare. It was named there so the
+next session that widened `#/runs` would find the argument, not the tooltip. That session is
+this one.

@@ -381,7 +381,7 @@ COMPONENTS = [
                                     "2,535 real captures.",
                             "governed_by": ["D1", "D3", "D9", "D21", "D25", "D36", "D48", "D86",
                                             "D87", "D100", "D145", "D172", "D180",
-                                            "D189"],
+                                            "D189", "D-rescue-is-a-press"],
                             "tested_by": ["T7"]},
             "cmd_scan.py": {"does": "read the QR codes off a directory of code-card photos into "
                                     "the ledger. FREE — no model call, no network, no money gate "
@@ -494,7 +494,7 @@ COMPONENTS = [
                                       "recovers is the PRICING surface, not the stock.",
                               "governed_by": ["D7", "D10", "D25", "D36", "D48", "D83", "D86",
                                               "D134", "D145", "D165", "D180", "D183", "D26",
-                                              "D188"],
+                                              "D188", "D-rescue-is-a-press"],
                               "tested_by": ["T7"]},
             "cmd_reprice.py": {"does": "`pkmnscan reprice list` reports which live listings are "
                                         "not selling and writes a WORKLIST with a price already "
@@ -2426,7 +2426,7 @@ COMPONENTS = [
                 "governed_by": ["D13", "D14", "D18", "D58", "D62", "D76", "D79", "D83", "D86",
                                 "D87", "D89", "D96", "D100", "D103", "D104", "D106", "D113",
                                 "D134", "D159", "D167", "D168", "D174", "D192",
-                                "D193", "D203"],
+                                "D193", "D203", "D165", "D-rescue-is-a-press"],
             },
             "verdict-selftest.py": {"does": "PROVES `app/design-check-reporter.ts` STILL WRITES A "
                                             "VERDICT, BY RUNNING IT. `make docs-audit`'s "
@@ -2622,7 +2622,12 @@ COMPONENTS = [
                                 # `do_inventory_copies` entry (docs/DEBTS.md §27, site 1), which
                                 # names D192 as the decision that closed the OTHER `GET
                                 # /inventory` call site this branch's route replaces.
-                                "D192"],
+                                "D192",
+                                # D-rescue-is-a-press: `_CLI_INVOCATION_RE`, the word-list
+                                # widening that catches a backticked `pkmnscan …` invocation —
+                                # unclaimed, so it sorts to the end until `make merge` gives
+                                # it a number.
+                                "D-rescue-is-a-press"],
             },
             "claim-ids.py": {
                 "does": "allocate the numbers this branch's SLUG ids will take, and "
@@ -3634,7 +3639,7 @@ COMPONENTS = [
                                 "D77", "D79", "D83", "D86", "D87", "D88", "D89", "D90", "D91",
                                 "D92", "D93", "D96", "D100", "D103", "D104", "D108", "D113",
                                 "D114", "D115", "D116", "D132", "D134", "D137", "D138", "D159",
-                                "D168", "D174", "D183", "D172", "D192", "D191",
+                                "D165", "D168", "D174", "D183", "D172", "D192", "D191",
                                 "D193", "D203"],
                 "tested_by": ["T7"],
             },
@@ -4447,7 +4452,7 @@ COMPONENTS = [
                                               "D159", "D168",
                                               "D104", "D113", "D116", "D132", "D134", "D172",
                                               "D174", "D180", "D192",
-                                              "D193", "D203", "D-one-poller"]},
+                                              "D193", "D203", "D-one-poller", "D36", "D165"]},
             "src/usePoll.ts": {"does": "ONE POLLING PRIMITIVE, WHERE FIVE HAND-ROLLED TIMERS "
                                        "USED TO STAND (D-one-poller). `RunPanel.tsx` (the run "
                                        "list and, separately, an open run's own detail), "
@@ -4542,7 +4547,7 @@ COMPONENTS = [
                                              "D93", "D100", "D103", "D104", "D113", "D115",
                                              "D116", "D132", "D134", "D147",
                                              "D159", "D172", "D174", "D180",
-                                             "D193"]},
+                                             "D193", "D165"]},
             "src/deviceMemory.ts": {"does": "every `localStorage` key the shell owns — the "
                                             "theme, the rail, which order statuses this "
                                             "device bothers fetching (D114), whether the "
@@ -5348,6 +5353,27 @@ COMPONENTS = [
                                       # `make design-check`, not at turn end, so it is named
                                       # here in prose rather than in `tested_by`.
                                       },
+            "src/RunRescue.tsx": {"does": "D165's repair, offered from `RunPanel.tsx`'s own "
+                                          "header ONLY where `detail.box_former` is true — a "
+                                          "run over a drawer D20 has since handed to another "
+                                          "box. Free, preview by default, `write` gated: the "
+                                          "same shape `QueueRefresh` and `LiveReconcile` use, "
+                                          "for their reason. THE ONE SHEET WITH NO `LogWell` "
+                                          "IN IT (D-rescue-is-a-press, the owner's ruling of "
+                                          "2026-09-13): raw machine text is never visible on "
+                                          "the front end, not even behind a disclosure, so this "
+                                          "reads `RescueResult`'s typed fields — never a "
+                                          "`console` string — and translates the `reason` code "
+                                          "through its own copy table. The write's receipt is "
+                                          "the way back to the run it wrote (D118: a press, "
+                                          "never a route change), and the source run is never "
+                                          "edited.",
+                                  "governed_by": ["D20", "D33", "D36", "D118", "D145",
+                                                  "D165", "D-rescue-is-a-press"]},
+            "src/RunRescue.css": {"does": "the rescue sheet's own layout, `LiveReconcile.css`'s "
+                                          "shape — width, padding, the thumb floor on a coarse "
+                                          "pointer (D117).",
+                                  "governed_by": ["D117", "D165", "D-rescue-is-a-press"]},
             "src/SubmissionClaims.tsx": {"does": "the panel on #/runs saying what a live send "
                                                  "is holding, and the ONE way out of a stuck "
                                                  "claim (D174). It draws "
@@ -5678,7 +5704,7 @@ COMPONENTS = [
                                                 "D49", "D51", "D54", "D56", "D58", "D59",
                                                 "D62", "D78", "D79", "D85", "D86", "D89",
                                                 "D99", "D100", "D103", "D101", "D105", "D107", "D98", "D109", "D115", "D117", "D125", "D38",
-                                                "D118", "D159", "D168", "D172", "D-one-verdict-on-pricing"]},
+                                                "D118", "D159", "D168", "D172", "D-one-verdict-on-pricing", "D-rescue-is-a-press"]},
             "src/ClearPrices.tsx": {"does": "THE MASS-CLEAR, the third sheet off #/pricing's "
                                             "header (D168). The operator's "
                                             "own ask - \"after several emits a lot of pricing "
@@ -6361,7 +6387,7 @@ COMPONENTS = [
                                  # is the shared poll hook the run list and the open run's detail
                                  # both moved onto — the detail poll's `restartKey` is what
                                  # switching between two live runs needs and the hook alone supplies.
-                                 "governed_by": ["D1", "D3", "D9", "D13", "D16", "D28", "D31", "D32", "D33", "D39", "D48", "D49", "D54", "D56", "D64", "D65", "D76", "D86", "D-one-poller"]},
+                                 "governed_by": ["D1", "D3", "D9", "D13", "D16", "D28", "D31", "D32", "D33", "D39", "D48", "D49", "D54", "D56", "D64", "D65", "D76", "D86", "D-one-poller", "D118", "D165"]},
             "src/RunPanel.css": {"does": "the panel at owner density — the 4-16 end of the scale, mono "
                                          "on every number, and exactly one solid accent fill: the "
                                          "button that spends, drawn only once the estimate is on "
@@ -7005,7 +7031,7 @@ COMPONENTS = [
                 # D31 is why this is a panel on #/inventory rather than a seventh route.
                 # D78 is the sunk row the first stage draws; D117 is the thumb floor its phone
                 # case measures.
-                "governed_by": ["D145", "D36", "D1", "D3", "D9", "D13", "D20", "D31", "D32", "D33", "D39", "D48", "D54", "D56", "D64", "D65", "D49", "D76", "D78", "D117", "D166", "D174", "D57", "D118", "D136", "D180", "D43", "D-one-poller"],
+                "governed_by": ["D145", "D36", "D1", "D3", "D9", "D13", "D20", "D31", "D32", "D33", "D39", "D48", "D54", "D56", "D64", "D65", "D49", "D76", "D78", "D117", "D166", "D174", "D57", "D118", "D136", "D180", "D43", "D-one-poller", "D165", "D196", "D-rescue-is-a-press"],
                 "note": "THE PIPELINE WAS THE LARGEST INSTANCE OF THE ROUTE-IS-NOT-A-FEATURE "
                         "FAILURE AND NOBODY HAD COUNTED IT. The four commands have existed "
                         "since step 4 and have been through a 53-card run and a 544-card run; "

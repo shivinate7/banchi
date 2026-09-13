@@ -57,6 +57,7 @@ import type {
   RunSend,
   RunPreflight,
   RunStarted,
+  RescueResult,
   RunStepResult,
   TcgSets,
   RunSummary,
@@ -2809,6 +2810,30 @@ export async function runStep(
       ...quantitiesClaim(options.quantities),
     }),
   })) as RunStepResult
+}
+
+/**
+ * The repair for a run D36 refuses (D165): re-address a stranded run's cards to the drawer
+ * they are actually in now, and write that as a NEW run — the source is never edited.
+ *
+ * FREE, PREVIEW BY DEFAULT — `refreshQueues`'s shape. `{ write: true }` only after a preview
+ * has answered `ok: true` with something to rebind.
+ *
+ * NO `console` FIELD, UNLIKE EVERY OTHER FREE STEP HERE. The owner ruled, 2026-09-13, that raw
+ * machine text is never visible on the front end, not even behind a disclosure — the response
+ * is `RescueResult`, parsed server-side from `cmd_rescue`'s own report, and the sheet composes
+ * its own sentences from it. The command's real stdout lands in a log file under the run's own
+ * directory (`log`, relative to `runs/`) and no screen ever renders it.
+ */
+export async function rescueRun(
+  name: string,
+  options: { write?: boolean } = {},
+): Promise<RescueResult> {
+  return (await request(`/pipeline/runs/${encodeURIComponent(name)}/rescue`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ write: Boolean(options.write) }),
+  })) as RescueResult
 }
 
 /** The `quantities` key for an emit body, or nothing at all when no card was given a figure.
