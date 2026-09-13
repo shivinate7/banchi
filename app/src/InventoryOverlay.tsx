@@ -107,7 +107,7 @@ export function Overlay({
             thumb learns from nothing. So it gets one visible control — which is also the only
             focusable thing inside it, so the focus trap has somewhere to land. */}
         {kind === 'lightbox' ? (
-          <button type="button" className="inv-lightbox-close" aria-label="Close the photograph" onClick={() => close.current()}>
+          <button type="button" className="inv-lightbox-close" aria-label="Close photo" onClick={() => close.current()}>
             <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" aria-hidden="true">
               <path d="M6 6l12 12 M18 6L6 18" />
             </svg>

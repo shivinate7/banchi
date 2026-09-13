@@ -901,7 +901,7 @@ test('a fetch the cap cut short says how many it left, and an empty one still re
      rule about absence — a clause is drawn only where its number is real, because a rendered
      `0 remaining` is a claim this wire cannot always make. */
   await expect(page.locator('.orders-receipt')).toContainText('100 remaining')
-  await expect(page.locator('.orders-receipt')).toContainText('30 already in the ledger')
+  await expect(page.locator('.orders-receipt')).toContainText('30 already known')
   expect(wire.filter((one) => one.path.endsWith('/orders/ingest'))).toHaveLength(0)
   await expect.poll(reads).toBe(mounted + 1)
 })
@@ -1248,7 +1248,7 @@ test('every status ticked off refuses the press here, rather than letting the wi
   await page.locator('main.orders .bn-head-actions').getByRole('button', { name: 'Add orders' }).click()
   await page.locator('.orders-paste').getByRole('button', { name: 'Fetch from TCGplayer' }).click()
 
-  await expect(page.locator('.orders-paste-note')).toContainText('Every status is ticked off')
+  await expect(page.locator('.orders-paste-note')).toContainText('Nothing to fetch')
   /* THE PREVIEW HAPPENED AND THE FETCH DID NOT. One free call, no detail call, nothing ingested. */
   const asked = wire.filter((one) => one.path.endsWith('/orders/fetch'))
   expect(asked).toHaveLength(1)

@@ -1216,7 +1216,25 @@ class and say so — a fourth hand-rolled button is how a design system dies.
 available on hover and in the run log. Enum values are labelled, never printed raw
 (`premium` → `Premium`). Empty states are a real sentence and one action. Danger is red, money
 moments are deliberate and carry the figure in the label, success is green, live is vermilion.
-An icon never appears alone without an accessible name.
+An icon never appears alone without an accessible name. **No user-visible string may name a
+decision, a repository path, or a pipeline-internal noun** — a card, a box, a run, an export
+and a listing are the operator's words and stay; "the pipeline", "the resolver", "the model",
+"the server sent", "the join", "the corpus" and "the ledger" are this codebase's own, not the
+operator's, and `D134` or `inventory/prices.json` is never a sentence a person reads
+(D-no-mechanism-on-screen). Mechanized by `scripts/docs-audit.py`'s `no mechanism on screen`
+row, over `scripts/user-strings.mjs`'s AST walk of `app/src`; `Notice`'s own `code` prop is the
+one exempted channel, for the run-log sentence two lines up.
+
+**The visible word count on every owner screen may only go down** (`D-copy-ratchet`,
+2026-09-13, on the owner's own words — *"less text is always better than more"*). Deliberately
+blind to which words a screen uses, unlike the paragraph above: a session rewording a sentence
+to say the same thing in fewer words is exactly the behaviour this rewards, and a content-aware
+guard would have opinions about the rewrite that this one does not need. `app/tests/copy-budget.spec.ts`
+counts `.bn-view`'s own text — never the sidebar, the phone chrome or the banner — at 1440 on
+every route `routesFromNav` discovers but the Fulfiller's, and asserts it against
+`app/tests/copy-budget.json`'s pinned ceiling, no slack. The only way a ceiling rises is
+`node scripts/copy-budget.mjs --pin`, run by a person choosing to let an addition through, never
+by a passing suite. Run by `make design-check`.
 
 **The mark is generated, and it has two optical cuts** (D102). `Logo` renders
 `docs/specs/logo.md`'s locked set — six variants, `bluesteel` the default — and
@@ -1254,6 +1272,17 @@ written as a rule: see "a press may not move what is around it" after the three:
   tokens they are built from. Measured before it existed: one `Mark sold` collapsed the panel 98px
   and moved 131 elements, and stepping the walk moved 39, 66 or 98px depending on the two cards.
 
+**A fifth thing, beside the four floors rather than inside them: one left edge for every
+screen, and only the WIDTH may vary by route** (`D-one-left-edge`, 2026-09-13). `.bn-page`'s
+`margin` is `0`, never `0 auto` — a screen's own `--bn-page-max` (Pricing and `ValueBands` at
+1120px, Codes/Home/Orders at `--bn-page-w-rows`) narrows the page from the shell's own left
+inset, it does not re-center a shrunken column inside a wider one. The owner found the bug by
+eye: `#/pricing`'s content started roughly 330px right of `#/review`'s at the same window
+width, because a centered cap's gutter grows with the window and differs between routes.
+`app/tests/page-edge.spec.ts` reads every route's `.bn-page` left edge off `routesFromNav`,
+at 1440 and 1920, in both rail states, and asserts it against the first route's within 1px;
+`#/fulfillment` is excluded, having no shell at all (D5).
+
 **Three things follow, and getting any of them wrong is silent:**
 
 **A component's own `transition` REPLACES the floor's, it does not add to it.** Declare one and
@@ -1279,6 +1308,23 @@ clocks, which is what a press reads as janky. Three rules were doing it — `.bn
 `.pull-confirm` and the phone tab bar's icon. A control that legitimately eases a `transform` for
 a HOVER lift keeps it and names its repaints inside the `:active` rule instead, leaving the
 movement out of that list.
+
+**A FIFTH FLOOR SITS BESIDE STABILITY: SAME-ROLE BUTTONS STACKED IN ONE SECTOR SHARE A WIDTH**
+(`D-equal-width-action-stacks`). Like D118 this is a relationship between controls rather than
+any one control's own paint, so `base.css` cannot supply it either — it is asserted in a real
+browser, by `app/tests/button-stack.spec.ts`, run by `make design-check`. The mechanism is one
+CSS Grid trick in two shapes: `.bn-actions-stack` in `kit.css` for buttons sharing a wrapper
+(`display: inline-grid; grid-template-columns: max-content;`, children `justify-self:
+stretch`), and the cross-row form in `CaptureScreen.css`'s `.capture-block-list` for buttons
+that each live in their own list row — a single `max-content` grid column sized by its widest
+child, and every other member of that column told to fill it. The spec DISCOVERS its subjects
+rather than reading a declared class, the same argument `cursor.spec.ts` already makes about
+controls: it sweeps every `.bn-btn`, groups by the nearest sector (`.bn-panel`, `.bn-well`,
+`.bn-sheet`, `.bn-dialog`, `[role=group]`, `section`, `.capture-block`, `.bn-empty`) and by the
+full set of `bn-btn-*` classes each member carries, and asserts equal width within 1px across
+any group of two or more that stack vertically. A primary beside a ghost Cancel, or a
+horizontal row, is a different role or fails the stacking test and is exempt; `.bn-btn-block`
+is already equal by definition.
 
 **Motion is part of the system, not decoration.** Durations and easing curves are tokens; the page
 enters, list rows stagger off `--bn-stagger`, selection changes and receipts and progress

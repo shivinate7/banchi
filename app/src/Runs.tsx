@@ -196,10 +196,9 @@ export function Runs() {
   return (
     <main className="runs bn-page">
       <PageHeader
-        eyebrow="Workflow"
         icon="play"
         title="Runs"
-        lede="Identify, join, emit and reconcile a box. Identify is the one step that spends money; the other three are free and can be run again."
+        lede="Identify, join, emit and reconcile a box. Identify is the only step that spends money."
 
         actions={
           <>

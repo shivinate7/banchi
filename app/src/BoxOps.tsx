@@ -424,7 +424,7 @@ export function BoxOps({
   const boundHelp =
     readAt === null
       ? ''
-      : `Cards whose SKU this store believes TCGplayer is holding. This is what the store last wrote down, not what TCGplayer says right now — and the age is a bound over the whole store, not this box: nothing anywhere in it has gone unread longer than ${readingAgo(readAt)}. Each SKU's own exact age is on the release plan below.`
+      : `Believed live at TCGplayer, store-wide. None older than ${readingAgo(readAt)}; exact age is on the release plan below.`
 
   const scope =
     selection.length > 0
@@ -553,14 +553,14 @@ export function BoxOps({
                   }
                   help={
                     readAt === null
-                      ? 'Cards whose SKU this store believes TCGplayer is holding. Nothing has written a listing figure yet.'
+                      ? 'Cards believed live at TCGplayer. No listing figure written yet.'
                       : boundHelp
                   }
                 />
                 <Census
                   label="Fill"
                   value={known(record.fill)}
-                  help="The highest card index ever captured into this box. It never comes down: a removed card leaves its number behind."
+                  help="Highest index ever captured — never comes down."
                 />
                 <Census label="Next index" value={known(record.next_index)} />
                 {sealed ? <Census label="Sealed at" value={known(record.capacity)} /> : null}
@@ -718,7 +718,7 @@ export function BoxOps({
               onChange={setDraft}
               placeholder="SV commons"
               autoFocus
-              hint="A name is a label for people. The box number is the identifier and nothing here can change it. Clear the field to put the box back to unnamed."
+              hint="The box number is the identifier and can't change here."
             />
             <Trouble failure={trouble} />
             <div className="boxops-actions">
@@ -819,7 +819,7 @@ export function BoxOps({
               placeholder="1, 31, 56"
               mono
               autoFocus
-              hint="The card number each section starts at, so the first is always 1. Leave it blank for one undivided section."
+              hint="Where each section's numbering starts."
             />
             {refused === null ? null : <Notice tone="warn">{refused}</Notice>}
             <Trouble failure={trouble} />
@@ -921,11 +921,10 @@ function Relabel({
       </p>
 
       {from === null ? (
-        <Notice tone="info">This is the layout the box already renders with, so nothing will be relabelled.</Notice>
+        <Notice tone="info">Already the box's layout — nothing changes.</Notice>
       ) : (
         <Notice tone="warn" title="A relabel, not a renumber.">
-          No card moves and no index changes — every card from #{from} on will simply be called
-          something different from now on.{' '}
+          No card moves, no index changes — cards from #{from} on are relabelled only.{' '}
           {hit === null || hit.sections.length === 0
             ? 'How many cards that reaches could not be read from this box.'
             : `That reaches ${hit.sections.length === 1 ? 'section' : 'sections'} ${hit.sections.join(', ')} — ${count(hit.cards, 'card', 'cards')}, counted by whole section.`}
@@ -1497,11 +1496,10 @@ function ReleaseListings({
         <div className="boxops-confirm">
           <p className="boxops-confirm-text">
             {count(record.listed, 'card', 'cards')} in box {box}{' '}
-            {record.listed === 1 ? 'belongs' : 'belong'} to a SKU this store believes TCGplayer is
-            holding. Releasing records that{' '}
-            <strong>you have checked TCGplayer and it is holding none of them</strong> — nothing
-            here can verify that. Every figure below is what this store last wrote down, with
-            the day it wrote it beside it; none of them is a reading of TCGplayer taken now.
+            {record.listed === 1 ? 'belongs' : 'belong'} to a SKU this store believes TCGplayer
+            holds. Release only if{' '}
+            <strong>you've checked TCGplayer and it holds none of them</strong> — nothing here
+            can verify that. Every figure below is last-written, not read now.
           </p>
 
           {loading ? <p className="bn-field-hint">Reading what these SKUs are holding…</p> : null}
@@ -1518,8 +1516,8 @@ function ReleaseListings({
                     {count(plan.still_held.length, 'SKU', 'SKUs')} will keep copies
                     {plan.also_in_boxes.length === 0
                       ? ''
-                      : ` that ${plan.also_in_boxes.map((b) => `box ${b}`).join(', ')} also hold`}
-                    , so the delete will go on refusing.
+                      : ` also held by ${plan.also_in_boxes.map((b) => `box ${b}`).join(', ')}`}
+                    .
                   </>
                 )}
               </Notice>
@@ -1615,8 +1613,7 @@ function ReclaimPhotos({ record, onChanged }: { record: BoxRecord; onChanged: ()
           title={`Reclaimed ${count(receipt.reclaimed, 'photograph', 'photographs')} from box ${receipt.box}, ${megabytes(receipt.bytes)}.`}
           code={receipt.keys.join(' · ')}
         >
-          Every record stays, sold, and each keeps the digest of the photograph it had. There is
-          no undo.
+          Records stay sold; each keeps its photograph's digest. No undo.
           {receipt.already_reclaimed > 0
             ? ` ${count(receipt.already_reclaimed, 'card', 'cards')} had been reclaimed before.`
             : ''}
@@ -1642,9 +1639,9 @@ function ReclaimPhotos({ record, onChanged }: { record: BoxRecord; onChanged: ()
       {!open ? null : (
         <div className="boxops-confirm">
           <p className="boxops-confirm-text">
-            This deletes the <strong>photograph</strong> of every sold card in box {box} and keeps
-            every record — the card stays sold, with the digest of the photograph it had.{' '}
-            <strong>There is no undo:</strong> a capture photograph cannot be regenerated.
+            Deletes the <strong>photograph</strong> of every sold card in box {box}; records
+            stay.{' '}
+            <strong>No undo</strong> — a photograph can't be regenerated.
           </p>
 
           {loading ? <p className="bn-field-hint">Counting what a reclaim would delete…</p> : null}
@@ -1768,18 +1765,18 @@ function DeleteBox({
       {!open ? null : (
         <div className="boxops-confirm">
           <p className="boxops-confirm-text">
-            This deletes <strong>every record, photograph and sidecar</strong> in box {record.box}{' '}
-            — {count(record.cards, 'card', 'cards')} — along with its queue entries, its
-            identification cache and the box itself. <strong>There is no undo.</strong>
+            Deletes <strong>every record, photograph and sidecar</strong> in box {record.box}{' '}
+            — {count(record.cards, 'card', 'cards')}, plus its queue entries, id cache, and the
+            box. <strong>No undo.</strong>
           </p>
           <Notice tone={record.listed === 0 ? 'info' : 'warn'}>
             {record.listed === 0
               ? `${
                   record.sold + record.retired + record.moved === 0
                     ? 'Nothing in this box has departed.'
-                    : `${count(record.sold + record.retired + record.moved, 'departed record', 'departed records')} will be buried in the graveyard, and their photographs deleted.`
-                } There is no undo.`
-              : `This box will be refused: ${count(record.listed, 'card', 'cards')} listed — release the hold above first.${
+                    : `${count(record.sold + record.retired + record.moved, 'departed record', 'departed records')} will be buried, photographs deleted.`
+                } No undo.`
+              : `Refused: ${count(record.listed, 'card', 'cards')} listed — release the hold first.${
                   record.sold + record.retired + record.moved > 0
                     ? ` ${count(record.sold + record.retired + record.moved, 'other departed record', 'other departed records')} will be buried once it goes through.`
                     : ''

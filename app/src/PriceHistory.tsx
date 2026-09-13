@@ -251,8 +251,7 @@ export function PriceHistoryPanel({
       ) : read.payload.never_sold || read.payload.ranges.length === 0 ? (
         <div className="pricehistory-state">
           <Notice tone="info" title="No recorded sales">
-            The product resolved, so this is a card that has not traded rather than one we
-            could not find.
+            Resolved — this card has not traded.
           </Notice>
         </div>
       ) : (
@@ -288,8 +287,7 @@ export function PriceHistoryPanel({
           {read.payload.ranges.length > 1 ? (
             <p className="pricehistory-note">
               <Icon name="info" size={13} />
-              The ranges overlap and are read separately — the wider one includes these same
-              recent days at a coarser width, so they can point opposite ways.
+              Ranges overlap and can point opposite ways.
             </p>
           ) : null}
         </>

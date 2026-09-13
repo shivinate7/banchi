@@ -130,10 +130,9 @@ export function Graveyard() {
   return (
     <main className="graveyard bn-page">
       <PageHeader
-        eyebrow="Library"
         title="Graveyard"
         icon="history"
-        lede="Every card that has left inventory — sold, retired or moved — whether its box still stands or was deleted out from under it (D134). Nothing here can be undone; it is a record, not a control."
+        lede="Every card that's left inventory — sold, retired, or moved. Read-only."
         actions={
           <Button variant="ghost" iconOnly icon="refresh" onClick={() => void load()} disabled={retrying}>
             Reload
@@ -144,7 +143,7 @@ export function Graveyard() {
       {failure !== null && rows !== null ? (
         <div className="graveyard-failure bn-anim-pop">
           <Notice tone="danger" title={failure.message} code={failure.code || undefined}>
-            The screen is showing the ledger as it was last read.
+            As last read.
           </Notice>
           <Button variant="ghost" size="sm" icon="refresh" busy={retrying} disabled={retrying} onClick={() => void retry()}>
             Try again
@@ -182,7 +181,7 @@ export function Graveyard() {
         <EmptyState
           icon="sparkles"
           title="Nothing has left yet"
-          body="Every card sold, retired or moved out of inventory will show up here — and it stays here even after the box it left is deleted."
+          body="Nothing has left inventory yet."
         />
       ) : (
         <>

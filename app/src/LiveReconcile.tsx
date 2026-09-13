@@ -117,10 +117,10 @@ export function LiveReconcile({ open, onClose }: { readonly open: boolean; reado
 
         <div className="livecheck-body">
           <p className="livecheck-says">
-            One live export — TCGplayer&rsquo;s <strong>My Pricing</strong>, all printings — against every
-            SKU in the store, whatever run or box it came from. It reports both directions: copies this
-            pipeline sent that TCGplayer no longer holds, and SKUs it holds that were never sent from
-            here. It moves quantities and marks no card sold.
+            One live export — TCGplayer&rsquo;s <strong>My Pricing</strong>, all printings — checked
+            against every SKU in the store. Reports both directions: copies sent that TCGplayer no
+            longer holds, and SKUs it holds that were never sent from here. Moves quantities; marks no
+            card sold.
           </p>
 
           <p className="livecheck-age">
@@ -190,8 +190,7 @@ export function LiveReconcile({ open, onClose }: { readonly open: boolean; reado
             <>
               {wrote ? (
                 <Notice tone="ok" title="Reconciled">
-                  The live quantities are written, and every one of them is now a reading taken just now.
-                  Nothing was marked sold.
+                  Live quantities written, each dated to this reading. Nothing marked sold.
                 </Notice>
               ) : (
                 <Notice tone="info" title="Preview — nothing written yet">

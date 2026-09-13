@@ -339,9 +339,8 @@ export function ShipStage({ payload }: { readonly payload: OrdersPayload | null 
             ) : null}
           </label>
           <p className="shipping-empty-note">
-            The file is held in the capture server&apos;s memory for half an hour and never written to disk. No
-            buyer&apos;s name or address is drawn on this screen; they cross the wire once, inside the Pirate Ship file
-            you download.
+            Never written to disk, held 30 minutes. No buyer info shown here — only in the file you
+            download.
           </p>
           <div className="shipping-lane-guide" aria-label="The three lanes">
             {SHIP_LANES.map((lane) => (
@@ -368,7 +367,7 @@ export function ShipStage({ payload }: { readonly payload: OrdersPayload | null 
         <div className="bn-panel">
           <EmptyState
             icon="inbox"
-            title="That export has a header and no orders in it"
+            title="Export has no orders"
             body={`${batch.name} was read and accepted. It is simply empty — read the file for a day that has orders.`}
             actions={
               <>
@@ -423,7 +422,7 @@ export function ShipStage({ payload }: { readonly payload: OrdersPayload | null 
             <div className="shipping-file-text">
               <span className="bn-label">Pirate Ship import</span>
               <span className="shipping-file-title">Nothing to download</span>
-              <span className="shipping-file-meta">No order landed in the parcel lane, so there is no file to hand to Pirate Ship.</span>
+              <span className="shipping-file-meta">No orders in the parcel lane.</span>
             </div>
           </section>
         ) : (
@@ -440,20 +439,18 @@ export function ShipStage({ payload }: { readonly payload: OrdersPayload | null 
                 <span className="shipping-file-size">{(batch.file.bytes / 1000).toFixed(1)} kB</span>
               </span>
               <p className="shipping-ship-note">
-                {batch.parcel_count} order{batch.parcel_count === 1 ? '' : 's'} in the parcel lane, and only those, are in this
-                file.{' '}
+                {batch.parcel_count} order{batch.parcel_count === 1 ? '' : 's'} in the parcel lane are in this file.{' '}
                 {stamps === null
-                  ? 'The three Rubber Stamp columns are blank until you fill them from the order ledger — the button below does it, and changes nothing else about the file.'
-                  : `${stamps.stamped} of ${batch.parcel_count} carry a pick location, and ${stamps.unstamped} do not: an order gets all three corners or none, because there is no fourth corner to say "and two more".`}
+                  ? 'Rubber Stamp columns are blank until filled below.'
+                  : `${stamps.stamped} of ${batch.parcel_count} carry a pick location, ${stamps.unstamped} do not — all three corners or none.`}
               </p>
               <details className="shipping-caveats">
                 <summary>
                   <Icon name="info" size={14} /> What this file does not carry
                 </summary>
                 <p>
-                  Package Weight is blank on every row, because nothing here derives a weight from the catalog constant and
-                  under-stated postage is charged back weeks later at the far end. No insurance column is written either,
-                  because that is your per-order choice inside Pirate Ship. This file buys nothing and books nothing.
+                  Package Weight is blank on every row. No insurance column either — that&apos;s your call in Pirate
+                  Ship. This file buys and books nothing.
                 </p>
               </details>
             </div>

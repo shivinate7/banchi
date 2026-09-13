@@ -348,7 +348,7 @@ function OwnerRows({
             <Chip
               icon="refresh"
               className="card-locations-rerank"
-              title="The order was taken before these copies left. Press to rank by the store as it stands now."
+              title="Ranked before these copies left."
               onClick={onRerank}
             >
               {stale} · re-rank
@@ -505,7 +505,7 @@ function OwnerRows({
                     className="bn-pill bn-pill-warn card-locations-claim"
                     href="#/orders"
                     aria-label={`Order ${claim.order} is waiting on this copy`}
-                    title={`Order ${claim.order} is waiting on this copy. It is still yours to sell from here.`}
+                    title="Still yours to sell from here."
                   >
                     <Icon name="cart" size={12} />
                     Wanted

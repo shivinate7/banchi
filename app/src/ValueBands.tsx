@@ -543,9 +543,9 @@ export function ValueBands({ end, onEnd, onLeave }: {
   if (failed !== null) {
     return (
       <main className="bn-page value-page">
-        <PageHeader eyebrow="Workflow · Price · By value" title="What's worth pulling" actions={<Button onClick={onLeave}>Back to pricing</Button>} />
+        <PageHeader title="What's worth pulling" actions={<Button onClick={onLeave}>Back to pricing</Button>} />
         <Notice tone="danger" title="The store could not be read" code={failed}>
-          Nothing was changed. Try again once the capture server is answering.
+          Waiting on the capture server.
         </Notice>
         <div><Button variant="primary" onClick={() => void readAggregates()}>Try again</Button></div>
       </main>
@@ -555,7 +555,7 @@ export function ValueBands({ end, onEnd, onLeave }: {
   if (aggregates === null || counts === null) {
     return (
       <main className="bn-page value-page">
-        <PageHeader eyebrow="Workflow · Price · By value" title="What's worth pulling" actions={<Button onClick={onLeave}>Back to pricing</Button>} />
+        <PageHeader title="What's worth pulling" actions={<Button onClick={onLeave}>Back to pricing</Button>} />
         <p className="value-loading">Reading every card on hand…</p>
         <div className="bn-skeleton value-skeleton" aria-hidden="true" />
       </main>
@@ -574,11 +574,11 @@ export function ValueBands({ end, onEnd, onLeave }: {
   if (aggregates.totals.cards === 0) {
     return (
       <main className="bn-page value-page">
-        <PageHeader eyebrow="Workflow · Price · By value" title="What's worth pulling" actions={<Button onClick={onLeave}>Back to pricing</Button>} />
+        <PageHeader title="What's worth pulling" actions={<Button onClick={onLeave}>Back to pricing</Button>} />
         <EmptyState
           icon="box"
           title="Nothing is in a box yet"
-          body="Capture a box and every card in it gets an address and a price. This is where the most and least valuable ones will be."
+          body="Capture a box to see its most and least valuable cards here."
           actions={<Button variant="primary" onClick={() => { window.location.hash = '#/capture' }}>Capture a box</Button>}
         />
       </main>
@@ -588,7 +588,6 @@ export function ValueBands({ end, onEnd, onLeave }: {
   return (
     <main className="bn-page value-page">
       <PageHeader
-        eyebrow="Workflow · Price · By value"
         title="What's worth pulling"
         lede={`${whole(aggregates.totals.valued)} of ${whole(aggregates.totals.cards)} cards on hand carry a price, ${cash(aggregates.totals.value)} at market.`}
         actions={<Button onClick={onLeave}>Back to pricing</Button>}
@@ -598,20 +597,20 @@ export function ValueBands({ end, onEnd, onLeave }: {
         <EmptyState
           icon="sparkles"
           title="Nothing here has a price yet"
-          body={`You have ${whole(aggregates.totals.cards)} cards in ${whole(aggregates.boxes.length)} drawers and no run has read any of them. A run reads a box and puts a price on every card in it.`}
+          body={`${whole(aggregates.totals.cards)} cards in ${whole(aggregates.boxes.length)} drawers — none priced yet. Run a box to price them.`}
           actions={<Button variant="primary" onClick={() => { window.location.hash = '#/runs' }}>Start a run</Button>}
         />
       ) : (
         <>
           {aggregates.sources.length === 1 ? (
             <Notice tone="info" title="These prices came out of one file">
-              A thin reading makes a thin ranking, not a store with nothing valuable in it.
+              The ranking only covers what's been read.
             </Notice>
           ) : null}
 
           {rowsFailed === null ? null : (
             <Notice tone="danger" title="This band could not be fetched" code={rowsFailed}>
-              Nothing was changed. Try another band, or come back once the capture server is answering.
+              Try another band, or come back later.
             </Notice>
           )}
 
@@ -632,7 +631,7 @@ export function ValueBands({ end, onEnd, onLeave }: {
                   pressed={cut === 'cutoff'}
                   count={counts.cutoff}
                   onClick={() => setCut('cutoff')}
-                  title="Your cut-off is set at the top of the pricing screen"
+                  title="Set at the top of the screen"
                 >
                   {aggregates.threshold === null
                     ? end === 'top' ? 'Over your cut-off' : 'Under your cut-off'
@@ -757,8 +756,7 @@ export function ValueBands({ end, onEnd, onLeave }: {
             <section className="bn-panel value-gaps">
               <h2 className="value-gaps-title">{`${whole(gaps.total)} cards with no price — not ranked`}</h2>
               <p className="value-gaps-says">
-                They are on the shelf and this screen cannot say what they are worth. Each one
-                needs a different thing done to it.
+                On the shelf, unranked — each needs a different fix.
               </p>
               {/* ALL THREE ARE DRAWN, INCLUDING AT ZERO — a true and useful statement, and it is
                   what keeps this panel's height off the state of the store (D118). */}
@@ -766,7 +764,7 @@ export function ValueBands({ end, onEnd, onLeave }: {
                 <li className="value-cause">
                   <span className="value-cause-count">{whole(gaps.never_identified)}</span>
                   <span className="value-cause-says">
-                    <strong>Never identified.</strong> These have a photograph and no run has read them.
+                    <strong>Never identified.</strong> Photographed, not yet run.
                   </span>
                   {gaps.never_identified === 0 ? <span /> : (
                     <Chip onClick={() => { window.location.hash = '#/runs' }}>Start a run</Chip>
@@ -775,7 +773,7 @@ export function ValueBands({ end, onEnd, onLeave }: {
                 <li className="value-cause">
                   <span className="value-cause-count">{whole(gaps.read_nothing)}</span>
                   <span className="value-cause-says">
-                    <strong>Nothing was read off the photograph.</strong> A run looked and came back with no name and no number.
+                    <strong>Nothing was read off the photograph.</strong> No name and no number came back.
                   </span>
                   {gaps.read_nothing === 0 ? <span /> : (
                     <Chip onClick={() => { window.location.hash = '#/inventory' }}>Look at them</Chip>
@@ -784,7 +782,7 @@ export function ValueBands({ end, onEnd, onLeave }: {
                 <li className="value-cause">
                   <span className="value-cause-count">{whole(gaps.no_reading)}</span>
                   <span className="value-cause-says">
-                    <strong>No export prices them.</strong> Read and named, and no catalogue row this machine holds matches.
+                    <strong>No export prices them.</strong> Read and named, but no catalogue row matches.
                   </span>
                   {gaps.no_reading === 0 ? <span /> : (
                     <Chip onClick={() => { window.location.hash = '#/runs' }}>Fetch an export</Chip>

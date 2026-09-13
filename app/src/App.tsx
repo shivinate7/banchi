@@ -339,7 +339,7 @@ class RouteBoundary extends Component<
             This screen stopped.
           </h1>
           <p className="bn-lede" style={{ marginTop: 8 }}>
-            Something in it threw. Reloading the screen usually clears it; if not, the error below says what.
+            Reloading usually fixes it.
           </p>
           <p className="no-such-view-path" style={{ marginTop: 12 }}>
             {this.state.error.message}

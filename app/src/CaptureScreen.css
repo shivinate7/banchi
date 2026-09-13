@@ -38,7 +38,6 @@
   gap: 2px;
   min-width: 0;
 }
-.capture-head-text .bn-eyebrow { display: none; }
 .capture-title {
   display: flex;
   align-items: center;
@@ -163,26 +162,36 @@
 }
 .capture-row-icon { color: var(--bn-ink-3); flex: none; }
 .capture-lab { font-size: var(--bn-fs-md); font-weight: 600; color: var(--bn-ink-2); white-space: nowrap; }
-.capture-right { display: flex; align-items: center; justify-content: flex-end; min-width: 0; }
+/* `.capture-right` is the flex row that holds the value AND its sub-line as siblings — never
+   the sub-line nested inside `.capture-val`. `.capture-val` is itself `overflow: hidden`, so a
+   sub-line placed inside it clips the moment the row is narrower than value + sub, which the
+   stack card's narrow column always is. `min-width: 0` lets `.capture-val` shrink below its
+   content size so `.capture-val-name`'s own ellipsis can engage before `.capture-sub`, which
+   carries `flex: none`, is ever asked to give up a pixel. */
+.capture-right { display: flex; align-items: center; justify-content: flex-end; gap: 6px; min-width: 0; }
 .capture-chev { color: var(--bn-ink-4); }
 .capture-val {
   display: inline-flex;
   align-items: center;
   gap: 6px;
   min-width: 0;
+  flex: 1 1 auto;
   font-size: var(--bn-fs-md);
   font-weight: 500;
   color: var(--bn-ink);
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
+  justify-content: flex-end;
 }
 .capture-val.is-default { color: var(--bn-ink-3); font-weight: 400; }
 .capture-val.is-armed { color: var(--bn-accent); font-weight: 600; }
 .capture-val-alert { color: var(--bn-warn); font-weight: 600; }
 .capture-val-alert .bn-icon { color: var(--bn-warn); }
-/* The value's name yields to the ellipsis; the sub-line beside it never clips, because a
-   figure like 1280×720 cut to 1280×72 reads as a different camera mode. */
+/* `.capture-val` yields to its own ellipsis — a figure like 1280×720 cut to 1280×72 reads as a
+   different camera mode, and `.capture-val-name` is the one element inside it allowed to clip.
+   `.capture-sub` is never a descendant of `.capture-val` (see `.capture-right` above), so it is
+   never inside an overflow-hidden ancestor and can never be clipped by one. */
 .capture-val-name { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
 .capture-sub {
   flex: none;
@@ -366,32 +375,41 @@
 }
 .capture-block-word { color: var(--bn-ink-3); }
 .capture-block-list {
-  display: flex;
-  flex-direction: column;
-  gap: var(--bn-2);
+  /* THE LIST IS THE GRID (D-equal-width-action-stacks): each `<li>` is `display: contents`
+     so its icon, sentence and fix button become direct children of THIS grid, sharing one
+     `max-content` column across every row. A `Button` spanning a flexible track is skipped
+     when the browser sizes a `max-content` track (CSS Grid §12.5), so column 2 is sized by
+     the buttons alone — every fix button in the block takes the widest one's width, and a
+     sentence with no button still spans the full row (cols 2-3). */
+  display: grid;
+  grid-template-columns: auto max-content minmax(0, 1fr);
+  column-gap: var(--bn-2);
+  row-gap: 2px;
   margin: 0;
   padding: 0;
   list-style: none;
-}
-.capture-block-row {
-  display: grid;
-  grid-template-columns: auto minmax(0, 1fr);
-  align-items: start;
-  gap: 2px var(--bn-2);
   font-size: var(--bn-fs-sm);
   line-height: 1.45;
   color: var(--bn-ink-2);
 }
-.capture-block-row + .capture-block-row {
-  padding-top: var(--bn-2);
+.capture-block-row { display: contents; }
+/* A GENERATED FULL-WIDTH ROW, not padding+border on the icon and sentence: those two are
+   also `border-box`, so a `padding-top` on the 14px icon SVG shrank it to 6px. A `::before`
+   is generated on `.capture-block-row` even under `display: contents`, and is still a direct
+   grid item of the list, so it spans every column on its own row rather than touching the
+   icon or the sentence at all. */
+.capture-block-row:not(:first-child)::before {
+  content: '';
+  grid-column: 1 / -1;
   border-top: 1px solid var(--bn-line);
+  margin-top: calc(var(--bn-2) - 2px);
 }
-.capture-block-row > .bn-icon { margin-top: 2px; color: var(--bn-ink-4); }
+.capture-block-row > .bn-icon { grid-column: 1; align-self: start; margin-top: 2px; color: var(--bn-ink-4); }
 /* Warn is for the two a shortcut cannot reach and a run would otherwise waste cards on. */
 .capture-block-row[data-tone='warn'] { color: var(--bn-ink); }
 .capture-block-row[data-tone='warn'] > .bn-icon { color: var(--bn-warn); }
-.capture-block-say { min-width: 0; }
-.capture-block-fix { grid-column: 2; justify-self: start; margin-top: 6px; }
+.capture-block-say { grid-column: 2 / 4; align-self: start; min-width: 0; }
+.capture-block-fix { grid-column: 2; justify-self: stretch; align-self: start; margin-top: 6px; }
 .capture-replayed { font-size: var(--bn-fs-sm); line-height: 1.4; padding: var(--bn-2) var(--bn-3); }
 .capture-section { display: flex; flex-direction: column; gap: 6px; padding-top: 6px; }
 /* The way onward: once the box holds cards, the run card hands it to the pipeline. */
@@ -1027,15 +1045,6 @@
   .capture-ring-fill { animation: none; stroke-dashoffset: 0; }
   .capture-lamp.is-live .bn-icon { animation: none; }
   .capture-undo-row:hover:not(:disabled) { transform: none; }
-}
-
-/* ---- desktop: the eyebrow rides above the title where there is room for a two-line head -----------------------------
-   The two-line head measures 49px, so --cap-head-h is told the truth here rather than left at
-   the one-line 48: the frames are sized against it, and a head a pixel taller than the budget
-   is a page that scrolls. */
-@media (min-width: 1280px) {
-  .capture-head-text .bn-eyebrow { display: block; }
-  .capture.bn-page { --cap-head-h: 52px; }
 }
 
 /* ---- 1280 to 1360: the hero must not be the narrowest column, and the rail must not be the
