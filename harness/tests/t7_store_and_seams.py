@@ -12254,6 +12254,131 @@ def check_rescue_stranded_run(checks: Checks) -> None:
         checks.ok("REFUSING" in said.getvalue(), "printing the refusal", said.getvalue())
 
 
+def check_rescue_discharges_stranded_count(checks: Checks) -> None:
+    """A rescued run stops counting as stranded on `#/pricing`.
+
+    `pkmnscan rescue` (D36's own repair, asserted above) re-addresses a stranded run's cards
+    to a new, joinable run over the drawer they are actually in — the fix `#/pricing`'s own
+    tooltip sends the operator to. It never edits the STRANDED run's manifest or the store's
+    `cards.run` column (`cli/cmd_rescue.py`: a rescue derives a second run rather than
+    changing the record of what was read), so `_on_hand_by_run` went on counting the same
+    cards under the old run's identity forever, and `GET /pipeline/pricing`'s
+    `unreachable.reallocated` kept naming a run the operator had already repaired.
+
+    This asserts `do_pipeline_worklist` subtracts every JOINED rescue's own `rescued_cards`
+    from the stranded figure (summed, since a run can be rescued more than once), names the
+    rescue in `rescued_by`, and — the case that matters as much as the discharge itself —
+    does NOT subtract while the rescue is unjoined, because an unjoined rescue's cards are
+    not on any worklist yet.
+    """
+    checks.note("")
+    checks.note("RESCUE DISCHARGES THE COUNT — a joined rescue drops the stranded figure")
+
+    from cli import cmd_rescue
+
+    with isolated_home():
+        # THE RUN'S OWN NAME IS WHAT `cards.run` MUST MATCH — `runs.create` timestamps it,
+        # so it is captured here rather than assumed, and every card below is stamped with
+        # the name this run actually got.
+        old_run = runs.create("box1")
+        OLD_RUN = old_run.directory.name
+
+        # box 1 — the stranded drawer, five cards, all this run's.
+        with Store().write() as snapshot:
+            inventory = snapshot.inventory
+            old = inventory.ensure_box(1, name="Pokemon shakedown")
+            old.created_at = "2026-08-22T09:00:00+00:00"
+            moved_keys = []
+            for n in range(5):
+                card, _ = inventory.allocate_capture(1, cid=fake_cid(f"stranded-{n}"))
+                card.game, card.run = "pokemon", OLD_RUN
+                moved_keys.append(card.key)
+            old_bid = old.bid
+
+        old_run.set(
+            capture_dir=str(files.home() / "captures/cards/box1"),
+            created_at="2026-08-29T22:37:47+00:00",
+            scope={"box": 1, "whole_box": True, "cards": None, "bid": old_bid},
+            joined=True,
+        )
+
+        # box 3 — the drawer all five cards are ACTUALLY in now (D83: moved, not sold or
+        # retired). `cards.run` still names `OLD_RUN`: a move changes where a card is,
+        # never who read it, which is exactly what makes it stranded rather than gone, and
+        # it is also what frees box 1's number to be reused (`next_box_number` counts a
+        # card's own `box` column, not only the registry).
+        with Store().write() as snapshot:
+            inventory = snapshot.inventory
+            dest = inventory.ensure_box(3, name="RB Epics")
+            dest.created_at = "2026-08-29T14:00:00+00:00"
+            dest_bid = dest.bid
+            for key in moved_keys:
+                inventory.cards.get(key).box = 3
+
+        # THE DELETION AND THE REALLOCATION (D36 — the owner's own store's shape): box 1's
+        # registry entry goes, and its NUMBER — never its identity — comes back for an
+        # unrelated drawer, the whole reason a run's `bid` and not its box number is what
+        # says whether it departed.
+        with Store().write() as snapshot:
+            inventory = snapshot.inventory
+            entry = inventory.boxes.pop("1")
+            inventory._log(
+                "box_deleted", None, box=1, bid=entry.bid, name=entry.name, cards=0, buried=0,
+            )
+            number = inventory.next_box_number()
+            checks.equal(number, 1, "fixture: box 1's number is free again and reused first")
+            reused = inventory.ensure_box(number, name="Someone else's drawer")
+            reused.created_at = "2026-09-01T00:00:00+00:00"
+
+        def reallocated_row(payload: dict) -> dict:
+            return next(
+                r for r in payload["unreachable"]["reallocated"] if r["run"] == old_run.directory.name
+            )
+
+        # (a) BEFORE ANY RESCUE — the full on-hand count, no rescue named.
+        before = pipeline_routes.do_pipeline_worklist([])
+        row = reallocated_row(before)
+        checks.equal(
+            (row["cards"], row.get("rescued"), row.get("rescued_by")),
+            (5, 0, []),
+            "before a rescue exists, the stranded run reports every card it still holds and "
+            "names no rescue",
+        )
+
+        # (b) A RESCUE RUN, over the drawer the cards actually landed in (box 3), JOINED.
+        rescue_run = runs.create("box3-rescue")
+        rescue_run.set(
+            capture_dir=str(files.home() / "captures/cards/box1"),
+            created_at="2026-09-13T00:00:00+00:00",
+            scope={"box": 3, "whole_box": False, "cards": 3, "bid": dest_bid},
+            joined=True,
+            **{cmd_rescue.RESCUED_FROM: old_run.directory.name},
+            rescued_cards=3,
+            rescued_left_behind=2,
+        )
+        after = pipeline_routes.do_pipeline_worklist([])
+        row = reallocated_row(after)
+        checks.equal(
+            (row["cards"], row["rescued"], row["rescued_by"]),
+            (2, 3, [rescue_run.directory.name]),
+            "AFTER A JOINED RESCUE the stranded figure drops by exactly what the rescue "
+            "carried away, and the row names which run took it",
+        )
+
+        # (c) AN UNJOINED RESCUE DOES NOT DISCHARGE ANYTHING — its cards are not on any
+        # worklist yet, so dropping the stranded count here would be the false relief this
+        # fix must not introduce.
+        rescue_run.set(joined=False)
+        still = pipeline_routes.do_pipeline_worklist([])
+        row = reallocated_row(still)
+        checks.equal(
+            (row["cards"], row["rescued"], row["rescued_by"]),
+            (5, 0, []),
+            "an unjoined rescue is invisible to this count — the stranded run reads exactly "
+            "as it did before any rescue existed",
+        )
+
+
 def check_store_backed_join(checks: Checks) -> None:
     """PR G — `join` without a run directory, reading identifications straight off the store.
 
@@ -28235,6 +28360,7 @@ def run() -> Result:
     check_reused_box_refusal(checks)
     check_box_true_index(checks)
     check_rescue_stranded_run(checks)
+    check_rescue_discharges_stranded_count(checks)
     check_store_backed_join(checks)
     check_run_binds_to_bid(checks)
     check_printed_code_profiles(checks)
