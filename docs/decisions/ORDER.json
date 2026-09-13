@@ -206,6 +206,7 @@
     "D197-one-left-edge.md",
     "D198-home-review-tile-counts-both-queues.md",
     "D199-run-phase-treats-joined-as-identified.md",
+    "D200-heartbeat-is-a-caller.md",
     "D201-vendor-catalog-snapshot-and-index.md"
   ]
 }

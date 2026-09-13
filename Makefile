@@ -123,6 +123,9 @@ help:
 	@echo "  make coordinator  the merge queue, READ rather than remembered: main, every open"
 	@echo "                    PR with a SHA-pinned verdict, the worktrees, the live sessions."
 	@echo "                    Reaches the network, so it never gates a commit."
+	@echo "  make heartbeat    docs/GATES.md item 24: calls coordinator.py plus whether main's"
+	@echo "                    own last push is green and janitor's preview. Never a daemon,"
+	@echo "                    never --confirm. Writes .serve/heartbeat/, never gates a commit."
 	@echo "  make check        harness + docs-audit + claim-stale + revert-guard +"
 	@echo "                    port-agreement + set-hint-agreement + screen-freshness +"
 	@echo "                    screen-freshness-selftest + sigil-check + ignore-check +"
@@ -910,6 +913,17 @@ coordinator-selftest:
 	@python3 scripts/coordinator.py --selftest
 
 .PHONY: coordinator coordinator-selftest
+
+# docs/GATES.md item 24, D-heartbeat-is-a-caller. A thin caller of coordinator.py --json (open
+# PRs, id claims, dirty worktrees, live sessions) plus the two bullets that leaves unanswered —
+# whether main's own last push is green, and janitor.py's own preview with --confirm never
+# passed. Writes .serve/heartbeat/latest.json and appends history.jsonl, which is the memory a
+# fresh, context-free run needs. NEVER A DAEMON: one run, one exit — the cadence is whatever
+# scheduled task calls this, never a loop in here. Read-and-report authority only.
+heartbeat:
+	@python3 scripts/heartbeat.py $(ARGS)
+
+.PHONY: heartbeat
 
 # THE SWEEP, WHERE EVERY REPO CAN REACH IT. `~/.claude/settings.json` hooks apply to every
 # session in every project, but the command they name has to exist without this checkout in

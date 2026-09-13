@@ -154,6 +154,52 @@ a marketplace's status string is the guessing `CLAUDE.md` forbids, so `Ledger.un
 answers the question this ledger actually owns — which orders still owe copies — out of its
 own two halves, in the same sequence `pipeline/orders.py:order_sequence` serves them.
 
+**AMENDED 2026-09-13, ON TWO OF THE OWNER'S RULINGS.** A Canceled order is never open, and an
+order the feed reports Shipped or Delivered closes on that word. The paragraph above is
+narrowed rather than reversed. `Ledger.unfulfilled` is still the whole answer to "does this
+order still owe copies", computed from this ledger's own two maps and never from `status` —
+nothing about that changed. What is new is a TERMINAL OVERRIDE that sits on top of it:
+`store/orders.py:is_terminal_status` recognises a short, measured set of feed strings and, where
+one matches, closes the order regardless of what `unfulfilled` would otherwise say — because a
+marketplace reporting a card shipped or an order cancelled has answered a question no pull
+record here can contradict. `server/capture_server.py:do_orders` excludes a terminal order from
+`open_keys` before either the screen's `open` field or the resolution pool sees it, so a
+Canceled or already-shipped order neither reads `open: true` nor competes for a physical copy
+against a live order — the correctness half of D113's own measured bug, applied here rather than
+merely named.
+
+**THIS IS STILL NOT THE GUESSING THE PARAGRAPH ABOVE FORBIDS.** The failure mode runs the
+other way on purpose: `is_terminal_status` answers `False` for `None` and for any string
+outside its set — a status this store has never seen changes nothing, and the order stays
+exactly as open as `unfulfilled` alone would have made it. Recognising too little leaves an
+order visible to a human where it already was; recognising too much closes one that still owes
+a copy. Only the first direction is safe to get wrong, so the vocabulary is deliberately narrow
+and grows only when the owner rules on a new word, never by inference from a substring or a
+prefix.
+
+**THE VOCABULARY IS PUBLISHED HERE, EXACTLY AS CODE SPELLS IT.** And `make docs-audit`'s
+`terminal statuses` row reconciles the two in both directions. This is the `make lan-check`
+shape applied one register down: the honest reconciliation is against the DISTINCT statuses a
+real feed has actually sent, and this audit answers from the tree alone, so it cannot open
+`inventory/store.sqlite` to ask that question. What it CAN do, and does, is refuse a commit
+where `store/orders.py:TERMINAL_STATUSES` and the block below say two different things —
+
+```terminal-statuses
+canceled
+shipped - in transit
+shipped - delivered
+```
+
+Compared CASEFOLDED AND STRIPPED at run time — `order_key`'s own rule, one register over,
+because `Canceled` and `canceled ` are one fact about an order to a person — but the block
+above is compared to the code EXACTLY, because this is two declarations of one set agreeing on
+their own spelling rather than two order statuses referring to the same fact.
+
+**`Completed - Paid` IS DELIBERATELY ABSENT FROM THE SET.** Ruling 3 — that the 513 orders
+sitting at that status on the owner's real store are a one-time backlog — is a RECONCILE this
+predicate does not perform: a cleared payment says nothing about whether a card shipped, so that
+status stays exactly as open as it already was.
+
 **It imports nothing from `pipeline/`, WHICH IS WHY `OrderLine` IS DECLARED TWICE.** The edge
 runs the other way and `docs/map.py` records that `store/` imports nothing from `pipeline/`,
 so reusing the resolver's frozen `OrderLine` would be a cycle. They are not redundant: the
