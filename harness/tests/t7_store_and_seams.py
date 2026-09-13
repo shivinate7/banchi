@@ -24186,6 +24186,201 @@ def check_order_ledger(checks: Checks) -> None:
     )
 
 
+# -------------------------------------------------------- the one-time backlog reconcile
+
+
+def check_order_reconcile_backlog(checks: Checks) -> None:
+    """`POST /orders/reconcile-backlog` — the two-year backlog `is_terminal_status` cannot see
+    (D-orders-backlog-reconcile).
+
+    THE ONE ASSERTION THIS FILE CARES ABOUT MOST: closing a backlog order claims NO physical
+    copy. `store_tables()`'s `cards` table is compared byte-for-byte before and after the
+    press — a stand-down that ever touched inventory would pass every other assertion here
+    and still be the defect D113 exists to prevent one register up.
+
+    THE SECOND: a candidate carrying a status this store has never proposed closing before —
+    "Ready to Ship" beside "Completed - Paid", at the SAME age — draws its OWN row in the
+    breakdown rather than being folded into one count. Nothing in the predicate tells the two
+    apart, on purpose: CLAUDE.md itself refuses a hard-coded status exclusion here, because
+    that reintroduces the exact guess `is_terminal_status`'s own docstring argues against one
+    register down. What this route protects a live order WITH is that live work is recent —
+    the cutoff excludes it without reading a status at all — and what it protects the operator
+    WITH, for the case a status this store has never proposed closing shares the cutoff's age
+    anyway, is visibility before the press rather than after it.
+    """
+    checks.note("")
+    checks.note("ORDER RECONCILE — POST /orders/reconcile-backlog (D-orders-backlog-reconcile)")
+
+    def line(sku, quantity=1, **extra) -> dict:
+        row = {"sku": sku, "quantity": quantity}
+        row.update(extra)
+        return row
+
+    def paste(number, *lines, **extra) -> dict:
+        order = {
+            "source": "TCGplayer",
+            "number": number,
+            "placed_at": extra.pop("placed_at", "2024-01-01T10:00:00.000+00:00"),
+            "status": extra.pop("status", "Completed - Paid"),
+            "lines": list(lines),
+        }
+        order.update(extra)
+        return {"orders": [order]}
+
+    with isolated_home():
+        # A-1: the ordinary candidate — old, Completed - Paid, nothing recorded.
+        capture_server.do_order_ingest(paste("A-1", line("sku-a", 1)))
+        # B-2: LIVE WORK, RECENT — Ready to Ship, placed AFTER the cutoff below, zero
+        # recorded. This is the realistic protective case: live work is recent, so an
+        # honest cutoff on the backlog excludes it without any status ever being read.
+        capture_server.do_order_ingest(
+            paste("B-2", line("sku-b", 1), status="Ready to Ship",
+                  placed_at="2026-09-05T10:00:00.000+00:00")
+        )
+        # C-3: PART-PULLED — old, Completed - Paid, but one copy is already recorded
+        # against it. Live work by the "zero recorded" test alone.
+        capture_server.do_order_ingest(paste("C-3", line("sku-c", 2)))
+        c_key = order_store.order_key("TCGplayer", "C-3")
+        with Store().write() as snapshot:
+            snapshot.ledger.record_fill(c_key, "sku-c", 1, order_store.FILL_OFF_SYSTEM)
+        # D-4: TERMINAL — the feed itself says this order is done. Excluded by `open`
+        # before the reconcile predicate ever runs.
+        capture_server.do_order_ingest(
+            paste("D-4", line("sku-d", 1), status="Shipped - Delivered")
+        )
+        # E-5: TOO RECENT — placed after the cutoff, so `placed_at[:10] >= cutoff` excludes
+        # it regardless of status.
+        capture_server.do_order_ingest(
+            paste("E-5", line("sku-e", 1), placed_at="2026-09-13T10:00:00.000+00:00")
+        )
+        # F-6: NO DATE AT ALL — an order this ledger somehow holds with no `placed_at`.
+        # Never a candidate: there is no date to test against a cutoff.
+        capture_server.do_order_ingest(paste("F-6", line("sku-f", 1), placed_at=None))
+        # G-7: THE CASE THE BREAKDOWN EXISTS FOR. Old, zero recorded, exactly like A-1 —
+        # but "Ready to Ship" rather than "Completed - Paid". Nothing about the predicate
+        # tells these two apart, on purpose: CLAUDE.md's own instruction refuses a
+        # hard-coded status exclusion here, because that reintroduces the exact guess
+        # `is_terminal_status`'s docstring already argues against. The safety this route
+        # offers is that the breakdown shows "Ready to Ship: 1" BEFORE the press, not that
+        # it silently protects a same-aged live order from one — an operator who presses
+        # anyway gets exactly what the breakdown told them they would.
+        capture_server.do_order_ingest(
+            paste("G-7", line("sku-g", 1), status="Ready to Ship")
+        )
+
+        cutoff = "2026-01-01"
+        before = store_tables()["cards"]
+
+        # -------------------------------------------------------------- 1. the preview
+        preview = capture_server.do_order_reconcile({"preview": True, "cutoff": cutoff})
+        checks.equal(
+            preview["writes_nothing"], True,
+            "the preview says of itself that it writes nothing, `do_order_fetch`'s own field",
+        )
+        checks.equal(
+            preview["cutoff"], cutoff,
+            "the cutoff it used rides back on the answer rather than being assumed",
+        )
+        checks.equal(
+            preview["total"], 2,
+            "A-1 and G-7: B-2 and E-5 are not before the cutoff, C-3 is part-pulled, D-4 "
+            "is terminal, and F-6 carries no placed_at to test",
+        )
+        checks.equal(
+            preview["breakdown"],
+            [{"status": "Completed - Paid", "count": 1}, {"status": "Ready to Ship", "count": 1}],
+            "THE WHOLE SAFETY THIS ROUTE OFFERS: the breakdown is BY FEED STATUS, so G-7 — "
+            "same age, same zero-recorded shape as A-1, but 'Ready to Ship' — shows up as "
+            "its OWN row rather than being folded into one count an operator could misread "
+            "as entirely backlog",
+        )
+        checks.equal(
+            store_tables()["cards"], before,
+            "the preview is read-only: the cards table is untouched",
+        )
+
+        # ---------------------------------------------------------------- 2. the press
+        pressed = capture_server.do_order_reconcile({"cutoff": cutoff})
+        checks.equal(
+            (pressed["orders"], pressed["moved"], pressed["lines"]),
+            (2, 2, 2),
+            "A-1 and G-7 close — the breakdown told the operator G-7 was there and the "
+            "press closes exactly what the preview named, never more and never less",
+        )
+        checks.equal(
+            sorted(pressed["closed"], key=lambda row: row["number"]),
+            [{"source": "TCGplayer", "number": "A-1"}, {"source": "TCGplayer", "number": "G-7"}],
+            "the receipt names what closed, by (source, number) — what `reopenOrders` takes",
+        )
+        checks.equal(
+            pressed["reason"], order_store.CLOSE_SHIPPED_ELSEWHERE,
+            "never a configurable reason — this route writes exactly one, D113's own "
+            "'it went out; this store did not track it'",
+        )
+        checks.equal(
+            store_tables()["cards"], before,
+            "THE ASSERTION THIS ROUTE EXISTS TO PASS: closing A-1 and G-7 claimed no "
+            "physical copy. The cards table is byte-identical to before the press — a "
+            "stand-down that ever touched inventory would be the exact defect D113 was "
+            "built to prevent",
+        )
+        a_key = order_store.order_key("TCGplayer", "A-1")
+        ledger_after = Store().read().ledger
+        checks.equal(
+            (ledger_after.fulfilled(a_key, "sku-a"), ledger_after.recorded(a_key, "sku-a").closed),
+            (0, True),
+            "A-1 is closed and STILL owes its copy — `fulfilled` stayed 0. Nothing was filled",
+        )
+        checks.ok(
+            all(r.number not in ("A-1", "G-7") for r in ledger_after.unfulfilled()),
+            "and both have left the open list",
+        )
+        checks.ok(
+            any(r.number == "B-2" for r in ledger_after.unfulfilled())
+            and any(r.number == "C-3" for r in ledger_after.unfulfilled())
+            and any(r.number == "E-5" for r in ledger_after.unfulfilled()),
+            "B-2 (too recent), C-3 (part-pulled) and E-5 (too recent) are all still open — "
+            "none of them was swept",
+        )
+
+        # ------------------------------------------------------ 3. idempotence, said out loud
+        again = capture_server.do_order_reconcile({"cutoff": cutoff})
+        checks.equal(
+            (again["orders"], again["moved"], again["lines"], again["closed"]),
+            (0, 0, 0, []),
+            "a second press over the same cutoff finds A-1 and G-7 already closed and "
+            "therefore no longer open, so the predicate recomputes to nothing rather than "
+            "re-stamping either — the same construction `close_line` gives every other "
+            "write on this screen",
+        )
+        checks.equal(
+            store_tables()["cards"], before,
+            "and still nothing was ever claimed against inventory",
+        )
+
+        # --------------------------------------------------------------------- 4. the undo
+        undone = capture_server.do_order_close({"orders": [{"source": "TCGplayer", "number": "A-1"}], "undo": True})
+        checks.ok(undone["moved"] == 1, "the existing D113 reversal reopens what this route closed")
+        reopened = Store().read().ledger
+        checks.ok(
+            any(r.number == "A-1" for r in reopened.unfulfilled()),
+            "A-1 is open again, and `reopenOrders` needed no new mechanism to do it",
+        )
+
+        # ----------------------------------------------------------------- 5. bad cutoffs
+        checks.raises(
+            capture_server.BadRequest,
+            lambda: capture_server.do_order_reconcile({"cutoff": "not-a-date"}),
+            "a cutoff that is not YYYY-MM-DD refuses rather than being parsed loosely",
+        )
+        checks.raises(
+            capture_server.BadRequest,
+            lambda: capture_server.do_order_reconcile({"reason": "shipped_elsewhere"}),
+            "an unknown field refuses — this route never takes a reason; it writes exactly "
+            "one",
+        )
+
+
 # ---------------------------------------------------------------- the order screen
 
 
@@ -28935,6 +29130,7 @@ def run() -> Result:
     check_copies_out_one_pass_matches_reference(checks)
     check_order_resolver(checks)
     check_order_ledger(checks)
+    check_order_reconcile_backlog(checks)
     check_order_screen(checks)
     check_order_places_scoped(checks)
     check_order_fetch_route(checks)
