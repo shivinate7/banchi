@@ -1167,6 +1167,65 @@ function censusValue(page: Page, label: string) {
    it asserts the banner is absent and that no route boundary is showing its crash page. */
 sealEveryTest()
 
+/* THE ZERO-BOX STORE NEVER LEAVES "Reading the inventory…" (D192, this item). `shelf` is set
+ * only by the effect that runs once `shelves.length > 0`; a store with no boxes at all makes
+ * `shelves` empty forever, so that effect returns on its first line, `shelf` stays `null`, the
+ * box-scoped rows fetch (gated on a numeric shelf) never fires, `rows` stays `null`, and
+ * `failure` is never set either — a fresh store has nothing to refuse. The lede branches only
+ * on `rows`/`failure`, so it drew the loading sentence forever. The fix reads `boxesAnswered`
+ * (the one signal that lands regardless of `shelves`) together with an empty box registry and
+ * swaps the loading branch for a real empty state.
+ *
+ * NOT `open()`: that helper's own postcondition waits for `.browse-sectfold`, which a
+ * zero-box store never renders — waiting for it here would just re-time-out inside the
+ * helper instead of inside the assertion. This registers the same handful of GET routes the
+ * screen fires with no shelf resolved — `/boxes`, `/queues`, `/orders` — and nothing else,
+ * so an unstubbed read the fix accidentally starts would fail loudly through `sealCapture`. */
+test('a zero-box store renders "No boxes yet" instead of loading forever', async ({ page }) => {
+  await page.route(/\/boxes$/, (route) =>
+    route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ boxes: [] }) }),
+  )
+  await page.route(/\/queues$/, (route) =>
+    route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify({ review: [], parked: [] }),
+    }),
+  )
+  await page.route(/\/orders$/, (route) =>
+    route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify({ summary: 'no orders', orders: [], resolution: { orders: [], counts: {} } }),
+    }),
+  )
+
+  await page.goto(VIEW_ROUTE)
+  await settleFonts(page)
+  await expect(page.locator(VIEW)).toBeVisible()
+
+  await expect(page.locator('.bn-empty-title', { hasText: 'No boxes yet' })).toBeVisible({
+    timeout: 4000,
+  })
+  await expect(page.getByText('Reading the inventory')).toHaveCount(0)
+  await expect(page.getByRole('button', { name: 'Capture a card' })).toBeVisible()
+
+  /* The loading skeleton is gone too — a stray `.browse-body-loading` here would mean the new
+     branch is drawn ALONGSIDE the old one rather than instead of it. */
+  await expect(page.locator('.browse-body-loading')).toHaveCount(0)
+})
+
+/* THE ORDINARY CASE, GUARDED BESIDE IT. `BOXES` (the fixture every other test in this file
+ * shares) holds exactly one box, so this is the regression the fix above must not cause: a
+ * store that DOES have a box still auto-selects it and walks straight past the empty state. */
+test('a one-box store still auto-selects its first shelf, not the empty state', async ({ page }) => {
+  await open(page)
+
+  await expect(page.getByText('No boxes yet')).toHaveCount(0)
+  await expect(page.locator('.browse-boxes')).toBeVisible()
+  await expect(page.locator('.browse-list')).toBeVisible()
+})
+
 test('the walk is the screen — there is no mode switch to be on the wrong side of', async ({
   page,
 }) => {

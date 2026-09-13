@@ -1845,6 +1845,15 @@ export function BoxBrowse({
   const open = selectedRow === null ? null : openQuestion(queued, selectedRow)
   const game = selectedRow === null ? null : gameWord(selectedRow.card)
 
+  /* THE ZERO-BOX STORE (D192, this item). `shelf` never leaves `null` here: the shelf
+   * effect above returns the instant `shelves.length === 0`, so the box-scoped rows fetch
+   * that effect gates on a numeric shelf never fires, `rows` never leaves `null`, and
+   * `failure` is never set either — a fresh store had no error to report. The registry read
+   * (`boxesAnswered`) is the one signal that DOES land regardless, so it is what tells "no
+   * boxes exist" apart from "the registry has not answered yet." Read off `boxRecords`
+   * rather than `shelves` so a search with zero matching boxes never falls into this branch. */
+  const noBoxesYet = boxesAnswered && boxRecords.length === 0
+
   return (
     <section className="browse">
       <PageHeader
@@ -1853,7 +1862,9 @@ export function BoxBrowse({
         lede={
           rows === null
             ? failure === null
-              ? 'Reading the inventory…'
+              ? noBoxesYet
+                ? 'No boxes yet.'
+                : 'Reading the inventory…'
               : 'The inventory could not be read.'
             : 'Walk any box card by card. Sell, retire or move a copy from here.'
         }
@@ -1875,7 +1886,7 @@ export function BoxBrowse({
         </Notice>
       )}
 
-      {rows === null && failure === null ? (
+      {rows === null && failure === null && !noBoxesYet ? (
         <div className="browse-body browse-body-loading">
           <div className="browse-map">
             <div className="bn-skeleton browse-skel-search" />
@@ -1899,6 +1910,21 @@ export function BoxBrowse({
               </div>
             </div>
           </div>
+        </div>
+      ) : null}
+
+      {rows === null && failure === null && noBoxesYet ? (
+        <div className="bn-panel">
+          <EmptyState
+            icon="box"
+            title="No boxes yet"
+            body="Capture a card to make one."
+            actions={
+              <Button variant="primary" icon="camera" onClick={() => (window.location.hash = '#/capture')}>
+                Capture a card
+              </Button>
+            }
+          />
         </div>
       ) : null}
 
