@@ -4284,7 +4284,7 @@ COMPONENTS = [
                                      "correctly without one, and a reclaimed photograph (D89) "
                                      "leaves the frame rather than a broken image. Each panel "
                                      "loads on its own, so no figure waits on another.",
-                             "governed_by": ["D156", "D145", "D56", "D5", "D6", "D10", "D13", "D32", "D33", "D52", "D63", "D69", "D86", "D89", "D94", "D95", "D125", "D172", "D192"]},
+                             "governed_by": ["D156", "D145", "D56", "D5", "D6", "D10", "D13", "D32", "D33", "D52", "D63", "D69", "D86", "D89", "D94", "D95", "D125", "D172", "D192", "D-home-counts-only-open-orders"]},
             "src/Home.css": {"does": "the home screen's look: the hero and its deck, the stage "
                                      "spine, the box and run cards. The one screen in the app "
                                      "that draws a display figure above 36px — "
@@ -5917,8 +5917,10 @@ COMPONENTS = [
                                         "reason and the wire type says a reader must render the "
                                         "gap rather than coerce it to zero.",
                                 # D121 is the entry; D69 owns the order ledger the rank-1
-                                # condition is read from; D63 is the two-map ledger behind it.
-                                "governed_by": ["D63", "D69", "D121"]},
+                                # condition is read from; D63 is the two-map ledger behind it;
+                                # D114 is the no-status-vocabulary rule the `open`-keyed join
+                                # obeys instead of reading `status`.
+                                "governed_by": ["D63", "D69", "D114", "D121", "D-home-counts-only-open-orders"]},
             "src/storeHistory.ts": {"does": "THE STORE'S OWN HISTORY — sittings recovered from "
                                             "`captured_at` by a 30-minute gap, and the ribbon "
                                             "geometry Home's foot draws from them. The unit is a "
@@ -6483,6 +6485,22 @@ COMPONENTS = [
                         "number in one expression, every call site in the product sits below "
                         "it, and shipping the display cut into a 32px rail is section 9's own "
                         "measured failure. Observed red under `size < 64` -> `size < 16`.",
+            },
+            "tests/home.spec.ts": {
+                "does": "`#/`'s 'cannot be filled' figure against a mixed ledger: one order "
+                        "still open and short 2 copies, one order the feed already reports "
+                        "Shipped and whose own `open` field reads `false` but whose "
+                        "`resolution.orders` entry still carries an `outstanding` of 5 — the "
+                        "shape a stale or partially-narrowed response would have. Asserts the "
+                        "standing sentence and the Orders stage tile both read 2, never 7 — "
+                        "`standing.ts` and `Home.tsx` join `resolution.orders` against the "
+                        "wire's own `open` field by key rather than trusting the server "
+                        "pre-filtered it. Not a harness test; `make design-check` runs it.",
+                "governed_by": ["D63", "D114", "D121", "D-home-counts-only-open-orders"],
+                "note": "Proved red first: reverting the "
+                        "join in `standing.ts` and `Home.tsx` reads "
+                        "\"Cannot be filled — 7 copies for 1 open order cannot be found.\" and "
+                        "the tile note \"7 not found\" against this fixture.",
             },
             "tests/gallery.spec.ts": {
                 "does": "the four row shapes `CardLocations` draws that no other spec reaches "
