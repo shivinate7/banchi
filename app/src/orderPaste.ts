@@ -5,7 +5,7 @@
  * email, a phone number. This repo needs almost none of them — what it needs is a SKU and a
  * count, `pipeline/orders.py` says so in its own first line, and everything it computes is a
  * position, which is a fact about a drawer rather than about a customer — PLUS ONE MORE
- * THING AS OF `D-the-ledger-names-the-buyer` (amending D69): the buyer's DISPLAY NAME, so the
+ * THING AS OF `D193` (amending D69): the buyer's DISPLAY NAME, so the
  * owner can walk drawers by PERSON rather than by order number. Address, email, payment and
  * every other fact about the person stay excluded. The boundary moved by exactly one word;
  * the mechanism that holds it did not. So the paste is still PROJECTED rather than
@@ -71,7 +71,7 @@ export const DEFAULT_ORDER_SOURCE = 'TCGplayer'
 
 /* THE ORDER-LEVEL WHITELIST. `source`, `number`, `placed_at` and `status` are what the
  * ledger is keyed and sorted by; `lines` is the work; `buyer` is the one fact about the
- * PERSON this whitelist admits (`D-the-ledger-names-the-buyer`). Nothing else crosses.
+ * PERSON this whitelist admits (`D193`). Nothing else crosses.
  * `placed_at` in particular is kept because `pipeline/orders.py:Order` sorts the one-pass
  * resolution by it and records that an order with no timestamp sorts LAST rather than first
  * — dropping it here would silently make every paste timestamp-less and hand stock to

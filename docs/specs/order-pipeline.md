@@ -30,7 +30,7 @@ here (T2b), and a `T6` that collided with the harness's own.
 
 | step | state |
 |---|---|
-| 8 order in | **built, two ways, reachable at `#/orders`.** Paste, projected client-side by `app/src/orderPaste.ts`, and a fetch behind the same control — `POST /orders/fetch`, `server/order_transport.py` (T3). **The fetch is one press since `D-the-ledger-names-the-buyer`'s amendment of D114**, all statuses and skip-known by default, with D91's ticked-status flow reachable as a secondary "Only these statuses…" control and `{all_statuses: true}` the explicit body for "every one". The transport's endpoints, auth kind, body shape and four refusal codes were measured; `search` has run authenticated and returned three real orders, and the summary walk is proven by D91's own refusal. `detail` — the half that carries a buyer's address, still excluded — has not run live; the buyer's DISPLAY NAME alone is now carried into the ledger from both the summary (`POST /orders/names`, zero detail calls) and the detail. Section 6. |
+| 8 order in | **built, two ways, reachable at `#/orders`.** Paste, projected client-side by `app/src/orderPaste.ts`, and a fetch behind the same control — `POST /orders/fetch`, `server/order_transport.py` (T3). **The fetch is one press since `D193`'s amendment of D114**, all statuses and skip-known by default, with D91's ticked-status flow reachable as a secondary "Only these statuses…" control and `{all_statuses: true}` the explicit body for "every one". The transport's endpoints, auth kind, body shape and four refusal codes were measured; `search` has run authenticated and returned three real orders, and the summary walk is proven by D91's own refusal. `detail` — the half that carries a buyer's address, still excluded — has not run live; the buyer's DISPLAY NAME alone is now carried into the ledger from both the summary (`POST /orders/names`, zero detail calls) and the detail. Section 6. |
 | 9 resolve | **built and reachable.** `pipeline/orders.py`, drawn by `GET /orders` out of one store snapshot. |
 | 10 route | **built and reachable at `#/shipping`.** `pipeline/shipping.py` (D61), on its own surface (T2 below). |
 | 11 pull | **built and reachable, in ONE form — the per-copy press.** `POST /orders/pull` writes the ledger and sells in one `Store.write()`, aimed by the row's own `capture_id`, with the undo on a twenty-second receipt. It is pressed a card at a time, from an order's own panel or from the cross-order pass through the drawers (`#/orders`, "Walk the boxes"). **T6's envelope form is deleted, not built** (D96 amended 2026-09-04): main's `POST /orders/fill` and the `#/inventory?order=` walk were reachable from no screen here and are gone, the want they served answered by the walk mode above. |
@@ -493,7 +493,7 @@ variable can move the endpoint but cannot move the credential off this machine.
 D63 makes that true by construction rather than by a guard, because `store/orders.py` holds no
 `Inventory` and imports nothing that can reach one.
 
-**As of `D-the-ledger-names-the-buyer` (2026-09-13), the projection carries the buyer's display
+**As of `D193` (2026-09-13), the projection carries the buyer's display
 name and one route writes it with no detail call.** `project_summary` and `project_order` both
 gain `buyer`, still excluding address, email, payment and the transaction breakdown at the same
 allowlist. `POST /orders/names` writes names for orders the ledger already knows from search
@@ -819,7 +819,7 @@ what leaves the browser about a purchase, and it draws the top-level keys it dro
 dropping them silently; keys inside a LINE are dropped without being listed, and its header says
 why. A silent trim would make a broken projection indistinguishable from a working one forever.
 **The projection is `{source, number, placed_at, status, buyer, lines}` as of
-`D-the-ledger-names-the-buyer` (2026-09-13)** — a display name, and address, email, payment and
+`D193` (2026-09-13)** — a display name, and address, email, payment and
 the transaction breakdown still excluded and still named on refusal.
 
 **Fulfilment is a count, never a list of positions**, and the one identity it holds is a

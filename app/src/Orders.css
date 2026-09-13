@@ -157,7 +157,7 @@
 .orders-index-figure b { font-family: var(--bn-font-display); font-size: var(--bn-fs-base); font-weight: 800; color: var(--bn-ink); margin-right: 3px; }
 .orders-index-bar { width: 56px; height: 4px; }
 .orders-index-chev { color: var(--bn-ink-4); transition: transform var(--bn-t) var(--bn-ease); }
-/* `D-the-ledger-names-the-buyer`: the buyer's display name reuses `.orders-index-number`'s
+/* `D193`: the buyer's display name reuses `.orders-index-number`'s
    spot, so its font stays the mono machine-string face for a number but this needs the UI face
    for a name — overridden here rather than in the shared rule, which order rows elsewhere in
    the app still use verbatim. */
@@ -166,7 +166,7 @@
 
 .orders-detail { display: flex; flex-direction: column; gap: var(--bn-4); min-width: 0; }
 
-/* ---- Earlier fold (`D-the-ledger-names-the-buyer`) ------------------------------ */
+/* ---- Earlier fold (`D193`) ------------------------------ */
 .orders-earlier { margin-top: var(--bn-3); }
 .orders-earlier > summary {
   cursor: pointer;

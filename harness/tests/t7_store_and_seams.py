@@ -24158,7 +24158,7 @@ def check_order_screen(checks: Checks) -> None:
             return Store().read().ledger
 
         held = len(ledger_now().orders)
-        # `buyer` NOW SUCCEEDS, ON THE OWNER'S RULING (D-the-ledger-names-the-buyer) — the
+        # `buyer` NOW SUCCEEDS, ON THE OWNER'S RULING (D193) — the
         # display name is the one fact about a person this ledger keeps, and a paste that
         # carries it stores it exactly as it stores `status` or `placed_at`.
         named_paste = answers(
@@ -26288,7 +26288,7 @@ def check_shipping_routes(checks: Checks) -> None:
             ["buyer", "orderDate", "orderNumber", "products", "status"],
             "THE PROJECTION IS AN ALLOWLIST AND ITS KEY SET IS THE SECURITY BOUNDARY — five "
             "keys now, asserted whole. `buyer` joined it on the owner's ruling "
-            "(D-the-ledger-names-the-buyer); a denylist would return a field TCGplayer adds "
+            "(D193); a denylist would return a field TCGplayer adds "
             "later and nothing would fail",
         )
         checks.equal(
@@ -26992,7 +26992,7 @@ def check_order_fetch_route(checks: Checks) -> None:
                     sorted(fetched),
                     ["detailed", "matched", "names", "orders", "remaining", "skipped_known"],
                     "the fetch's key set, whole: the ingest body, the four counts and the "
-                    "buyer backfill (D-the-ledger-names-the-buyer)",
+                    "buyer backfill (D193)",
                 )
                 checks.equal(
                     (
@@ -27131,7 +27131,7 @@ def check_order_fetch_route(checks: Checks) -> None:
             )
             checks.equal(len(detailed), 10, "ten detail requests and no more")
 
-            # ---- 4b: the buyer backfill (D-the-ledger-names-the-buyer) — all_statuses,
+            # ---- 4b: the buyer backfill (D193) — all_statuses,
             # names, and POST /orders/names, none of it costing a detail call it did not
             # already pay for.
             bare_number = window[0]["orderNumber"]

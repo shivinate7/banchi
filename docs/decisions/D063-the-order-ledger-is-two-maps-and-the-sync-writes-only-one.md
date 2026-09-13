@@ -35,7 +35,7 @@ merge is one refactor from being wrong and the split is not.
 ingest, by the same mechanism `Queue.upsert` uses, because losing a date is cosmetic and
 losing a card is not.
 
-**AMENDED 2026-09-13 (`D-the-ledger-names-the-buyer`): a second field is now carried over the same way, and "exactly one" below is corrected in place rather than left to contradict it.**
+**AMENDED 2026-09-13 (`D193`): a second field is now carried over the same way, and "exactly one" below is corrected in place rather than left to contradict it.**
 `buyer` — the display name a fetch already wrote — survives a paste that names no buyer,
 because a paste's narrower shape must not erase a name the ledger already holds. Naming both
 exceptions is what keeps the rule readable: two fields ride across an ingest untouched, and
@@ -170,7 +170,7 @@ what one missing filter costs: a field written but not declared is served, persi
 through one level down.
 
 **No address, no email — AND, AS OF 2026-09-13, A NAME.** The ledger holds a SKU, a quantity,
-what the feed called the card and, since `D-the-ledger-names-the-buyer`, the buyer's display
+what the feed called the card and, since `D193`, the buyer's display
 name: an owner ruling that a hand walking drawers per person needs a name to walk by, over a
 session's earlier design that excluded it with the rest. `inventory/` being gitignored whole
 is a reason to keep bearer instruments and postal addresses out of a commit

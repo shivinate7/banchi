@@ -208,7 +208,7 @@ type FetchReceiptData = {
   readonly fetched: number
   readonly ingest: IngestResult | null
   /** How many looped calls this press made — the all-statuses, skip-known backfill
-   *  (`D-the-ledger-names-the-buyer`) can take several while `remaining > 0`. `null` for the
+   *  (`D193`) can take several while `remaining > 0`. `null` for the
    *  narrowed (statuses-picked) path, which has always been one call. */
   readonly batches: number | null
   /** How many buyer names `/orders/names` actually wrote — never sent on the narrowed path. */
@@ -925,7 +925,7 @@ type CloseLineHandler = (order: OrderRow, line: ResolvedLine, reason: OrderClose
 /* ---- the selection, mirrored in the hash ----------------------------------------------------- */
 
 /** The old, order-shaped link — `#/orders?order=<order key>`. Kept as a READER only
- *  (`D-the-ledger-names-the-buyer`): the selection is a BUYER now, so a link naming one order
+ *  (`D193`): the selection is a BUYER now, so a link naming one order
  *  is resolved through `groupForOrderKey` to whichever group holds it. Never written again. */
 const ORDER_PARAM = 'order'
 /** The current link — `#/orders?buyer=<group key>` — read and written together. */
@@ -1498,7 +1498,7 @@ export function OrdersHub({ stage }: { readonly stage: Stage }) {
   /* THE FETCH ENTERS THROUGH THE SAME ONE DOOR THE PASTE DOES: `POST /orders/fetch` answers
      exactly the body the ingest accepts. Free, and it writes nothing by itself.
 
-     TWO SHAPES, ONE PRESS EACH (`D-the-ledger-names-the-buyer`). A DEVICE THAT HAS NEVER
+     TWO SHAPES, ONE PRESS EACH (`D193`). A DEVICE THAT HAS NEVER
      NARROWED THE PICKER (`filter.statuses === null`) SKIPS THE PREVIEW ENTIRELY and asks for
      `all_statuses` with `skip_known` — the ordinary press, after the owner's ruling that a
      one-time full backfill (`LastTwoYears`, every status, skip-known) is followed forever after
@@ -2040,7 +2040,7 @@ export function OrdersHub({ stage }: { readonly stage: Stage }) {
             Fetch from TCGplayer
           </Button>
         ) : null}
-        {/* THE ONE-TIME FULL BACKFILL, AS ITS OWN CONTROL — `D-the-ledger-names-the-buyer`. The
+        {/* THE ONE-TIME FULL BACKFILL, AS ITS OWN CONTROL — `D193`. The
             ordinary press already asks for every status; this widens the RANGE to TCGplayer's
             own `LastTwoYears`, which is more than this store has ever existed for. A repeat costs
             nothing: skip-known means a second press after the first has finished re-checks
@@ -2390,7 +2390,7 @@ function PullStage({
     return { open: all.filter((one) => one.open), done: all.filter((one) => !one.open) }
   }, [payload])
 
-  /* GROUPED BY BUYER, NOT BY ORDER NUMBER (`D-the-ledger-names-the-buyer`). `groupBuyers` is
+  /* GROUPED BY BUYER, NOT BY ORDER NUMBER (`D193`). `groupBuyers` is
      pure and takes its own clock, so it is pinned to the render that saw this `payload` rather
      than re-run on every tick. */
   const groups = useMemo(() => groupBuyers(payload?.orders ?? [], Date.now()), [payload])
@@ -2843,7 +2843,7 @@ function worstStatus(group: BuyerGroup, answers: ReadonlyMap<string, ResolvedOrd
 }
 
 /** The buyer's index row and phone accordion head — replaces `OrderSummaryRow`
- *  (`D-the-ledger-names-the-buyer`). A nameless buyer draws "No name · #<number>"; a buyer with
+ *  (`D193`). A nameless buyer draws "No name · #<number>"; a buyer with
  *  more than one order draws an `N orders` pill and a chip per open order, so a two-order
  *  buyer is visibly one that needs both counted rather than a single order in disguise. */
 function BuyerRow({
@@ -3097,7 +3097,7 @@ function OrderDetail({
 /* ============================================================================ a buyer, opened */
 
 /** The buyer's detail panel — replaces `detailOf`'s direct use of `OrderDetail`
- *  (`D-the-ledger-names-the-buyer`). Header: the name (or "No name · #<number>") and one chip
+ *  (`D193`). Header: the name (or "No name · #<number>") and one chip
  *  per order, so a two-order buyer's second order is never invisible. Body: ONE merged walk
  *  over every open order's copies — `buildWalk` already takes a list, so the algorithm is not
  *  new, only what it is called with — and, below it, a "By order" fold holding each order's own
@@ -4033,7 +4033,7 @@ function WalkView({
 }
 
 /** The box→section renderer shared by "Walk the boxes" and a buyer's merged walk
- *  (`D-the-ledger-names-the-buyer`) — extracted so a buyer with several open orders gets the
+ *  (`D193`) — extracted so a buyer with several open orders gets the
  *  same one-pass grouping the whole-store walk draws, rather than a second copy of it. */
 function WalkGroups({
   groups,

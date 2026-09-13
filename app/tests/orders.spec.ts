@@ -142,7 +142,7 @@ function order(over: Partial<OrderRow> = {}): OrderRow {
     status: 'Ready to ship',
     first_seen: '2026-08-30T09:00:00+00:00',
     changed_at: null,
-    /* `D-the-ledger-names-the-buyer` — the ledger's default fixture buyer. Overridden to `null`
+    /* `D193` — the ledger's default fixture buyer. Overridden to `null`
        (a nameless order) or a different spelling where a case is about buyers rather than
        incidentally carrying one. */
     buyer: 'Ada Lovelace',
@@ -200,7 +200,7 @@ async function open(
     pull?: unknown
     preview?: unknown
     fetched?: unknown
-    /* THE ALL-STATUSES, SKIP-KNOWN BODY (`D-the-ledger-names-the-buyer`) — the ordinary press on
+    /* THE ALL-STATUSES, SKIP-KNOWN BODY (`D193`) — the ordinary press on
        a device that has never narrowed the picker. A function so a case can answer differently
        across the loop's batches (`remaining > 0` then `0`); the argument is which call this is,
        0-indexed. Defaults to one batch, nothing left, no names — the steady-state append. */
@@ -228,7 +228,7 @@ async function open(
     })
   })
 
-  /* THE FETCH ROUTE, IN THREE BODIES (D91, and `all_statuses` since `D-the-ledger-names-the-buyer`).
+  /* THE FETCH ROUTE, IN THREE BODIES (D91, and `all_statuses` since `D193`).
      Registered before `/orders$` like every write-shaped route here: the read regex is
      the looser one. A preview body answers the window by status; a `statuses` body answers the
      ingest-shaped orders plus the four counts (the narrowed path); an `all_statuses` body is the
@@ -843,7 +843,7 @@ test('a paste is projected before it is sent, and what was dropped is named', as
   await expect(page.locator('.orders-paste').getByRole('button', { name: 'Fetch from TCGplayer' })).toHaveCount(1)
 
   /* A BUYER, A STREET AND AN EMAIL AT THE TOP LEVEL — the shape a real console copy has.
-     `D-the-ledger-names-the-buyer` moved ONE of the three across the boundary: the display
+     `D193` moved ONE of the three across the boundary: the display
      NAME may cross, verbatim off the console's own `buyerName` spelling; the street and the
      email may not, and the screen has to SAY it dropped THOSE: a silent strip is
      indistinguishable on screen from a feed that never carried the field. */
@@ -903,7 +903,7 @@ test('a paste is projected before it is sent, and what was dropped is named', as
 /* -------------------------------------------------------------------------------------- 9 */
 
 /* THE ORDINARY PRESS IS NOW ALL-STATUSES, SKIP-KNOWN, AND IT LOOPS
- * (`D-the-ledger-names-the-buyer`). A device whose `statuses` filter is `null` — every device
+ * (`D193`). A device whose `statuses` filter is `null` — every device
  * that has never opened "Only these statuses…" — no longer previews at all: the owner's ruling
  * was that a one-time full backfill is followed forever after by an all-statuses append, so
  * `runFetch` asks `POST /orders/fetch {all_statuses: true, skip_known: true}` straight away and
@@ -1379,7 +1379,7 @@ test('the picker is built from the preview alone, and unticking one narrows the 
 
 /* ------------------------------------------------------------------------------------- 16
  *
- * THE UNASKED DEVICE NO LONGER STOPS (`D-the-ledger-names-the-buyer`, amending D114). D114's
+ * THE UNASKED DEVICE NO LONGER STOPS (`D193`, amending D114). D114's
  * measurement stands — 69 of 83 open orders were already shipped and held 31 physical copies —
  * but the owner's later ruling on the backfill (a one-time full history, then an all-statuses
  * append forever after) makes the picker's own ask moot for the ORDINARY press: an unasked
@@ -1456,7 +1456,7 @@ test('a tick IS an answer, so unticking one settles the device without pressing 
 
 /* ------------------------------------------------------------------------------------- 19
  *
- * GROUPED BY BUYER, NOT BY ORDER NUMBER (`D-the-ledger-names-the-buyer`). The index pane and the
+ * GROUPED BY BUYER, NOT BY ORDER NUMBER (`D193`). The index pane and the
  * detail panel both key on the buyer now, and a buyer with more than one open order carries two
  * signals of that fact: the `N orders` pill in the index, and a chip per order in the detail
  * header. `buildWalk` is called with the UNION of the buyer's open orders, so a merged walk

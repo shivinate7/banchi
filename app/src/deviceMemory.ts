@@ -141,7 +141,7 @@ export type OrderFetchFilter = {
   readonly asked: boolean
 }
 
-/** A device that has never been asked. Every status — and, as of `D-the-ledger-names-the-buyer`,
+/** A device that has never been asked. Every status — and, as of `D193`,
  *  skipping what the ledger already holds by default: the ordinary press is an all-statuses,
  *  skip-known append, and a device that never opens the picker gets that press rather than a
  *  slower one nobody chose. The picker still opens from its own "Only these statuses…" control. */
@@ -163,7 +163,7 @@ export function storedOrderFilter(): OrderFetchFilter {
       : null
     return {
       statuses,
-      /* Defaults to true. A stored value written before `D-the-ledger-names-the-buyer` carries
+      /* Defaults to true. A stored value written before `D193` carries
          `skipKnown: false` from the old UNASKED default, and a device that had genuinely opted
          out reads back the same way — the two are indistinguishable on disk, and the ordinary
          press is the safer of the two to default to. */

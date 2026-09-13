@@ -2829,7 +2829,7 @@ export type OrderRow = {
   status: string | null
   first_seen: string
   changed_at: string | null
-  /** The buyer's display name, verbatim off the feed — `D-the-ledger-names-the-buyer`, which
+  /** The buyer's display name, verbatim off the feed — `D193`, which
    *  amends D69. Nothing else about the person: no address, no email, no payment. Feed
    *  content, so it can be `null` where a paste never carried one and a later fetch has not
    *  named it either. */
@@ -2959,7 +2959,7 @@ export type OrdersPayload = {
 /** THE PROJECTION, and NOTHING MAY BE ADDED TO IT BEYOND WHAT IS ARGUED HERE.
  *
  *  These two types are the whole of what may leave this browser about a purchase.
- *  `D-the-ledger-names-the-buyer` (amending D69) moved this boundary by exactly one word: the
+ *  `D193` (amending D69) moved this boundary by exactly one word: the
  *  buyer's DISPLAY NAME may cross it. Nothing else about the person does — no address, no
  *  city, no postcode, no email, no payment, no transaction id — and the mechanism that holds
  *  that line is unchanged: `app/src/orderPaste.ts` mints these from whatever was pasted and
@@ -2985,7 +2985,7 @@ export type OrderIngestOrder = {
   placed_at?: string | null
   status?: string | null
   /** The buyer's display name, verbatim off the feed or the console paste — the one
-   *  person-shaped field this projection carries (`D-the-ledger-names-the-buyer`). `undefined`
+   *  person-shaped field this projection carries (`D193`). `undefined`
    *  where the source said nothing at all (so `store/orders.py:Ledger.ingest` keeps whatever
    *  name it already had rather than erasing it); `null` where the feed explicitly said none. */
   buyer?: string | null
@@ -3052,7 +3052,7 @@ export type OrdersPreview = {
  *  `names` IS A SEPARATE, CHEAPER ANSWER: every order this press matched that was SKIPPED as
  *  already known (so it never got a detail call and is not in `orders`) but whose search-page
  *  summary carried a buyer the ledger does not yet have on file, or spells differently
- *  (`D-the-ledger-names-the-buyer`). `nameOrders` in `app/src/server.ts` is the one place
+ *  (`D193`). `nameOrders` in `app/src/server.ts` is the one place
  *  this array is sent on, to `POST /orders/names` — a names-only backfill this way details
  *  nothing and spends nothing. Empty in the steady state: the second identical press over an
  *  already-named ledger returns no names at all. */

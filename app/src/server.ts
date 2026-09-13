@@ -2909,7 +2909,7 @@ export async function getOrders(): Promise<OrdersPayload> {
  * projection, minted by `app/src/orderPaste.ts` — so exactly one place in this app decides
  * what leaves the browser about a purchase, and a reviewer asking "where does the buyer's
  * name get dropped" has one file to read. THE PROJECTION NOW CARRIES THE NAME AND NOTHING
- * ELSE ABOUT THE PERSON (`D-the-ledger-names-the-buyer`, amending D69): `OrderIngestOrder.buyer`
+ * ELSE ABOUT THE PERSON (`D193`, amending D69): `OrderIngestOrder.buyer`
  * is the one person-shaped field the whitelist admits, verbatim, and `store/orders.py:
  * Ledger.ingest` keeps whatever name a record already had where this paste sent none. A
  * second module composing an ingest body would be a second door onto the same wire, and the
@@ -2988,7 +2988,7 @@ export async function fetchOrders(
 
 /**
  * Write a buyer's name onto orders the ledger already holds, with no fetch and no detail
- * call behind it — the cheap half of `D-the-ledger-names-the-buyer`'s backfill.
+ * call behind it — the cheap half of `D193`'s backfill.
  * `fetchOrders`'s own `names[]` is the usual source: every order a fetch matched but skipped
  * as already known, whose search-page summary carried a name the ledger lacks or spells
  * differently. `store/orders.py:Ledger.name_buyer` refuses to CREATE a record, so naming an

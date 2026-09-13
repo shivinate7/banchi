@@ -93,7 +93,7 @@ vocabulary here would be two lists nothing reconciles, which is the drift D16 ex
 catch. `None` means the feed declared nothing and reads as the resolver's own default —
 D21's read-side backfill, applied at the read and never written.
 
-A NAME, AND NOTHING ELSE ABOUT A PERSON (D-the-ledger-names-the-buyer). The ledger holds
+A NAME, AND NOTHING ELSE ABOUT A PERSON (D193). The ledger holds
 what is needed to pick and pack — a SKU, a quantity, what the feed called the card — plus
 one more field: the buyer's DISPLAY NAME, because the owner walks drawers per *person* and
 a number with no name on it cannot be walked that way. This was an exclusion this repo drew
@@ -377,7 +377,7 @@ class OrderRecord:
     # answers the question this ledger actually owns — which orders still owe copies —
     # out of its own two halves rather than out of somebody else's noun.
     status: Optional[str] = None
-    # THE ONE FACT ABOUT A PERSON THIS LEDGER HOLDS (D-the-ledger-names-the-buyer). A
+    # THE ONE FACT ABOUT A PERSON THIS LEDGER HOLDS (D193). A
     # display name, feed-owned exactly like `status` — it lives in `_content`, a change
     # stamps `changed_at`, and `ingest` replaces it wholesale on every sync. `None` means
     # the feed said nothing THIS TIME, which a paste routinely does; `Ledger.ingest` carries
@@ -622,7 +622,7 @@ class Ledger:
         guard.
 
         TWO FIELDS ARE CARRIED ACROSS FROM THE INCUMBENT, NOT ONE — this docstring and D63
-        both said exactly one until D-the-ledger-names-the-buyer, and both were wrong the
+        both said exactly one until D193, and both were wrong the
         moment `buyer` existed to carry. `first_seen` is carried because losing a date is
         cosmetic; `buyer` is carried under one narrower condition — only when the INCOMING
         record says nothing at all (`record.buyer is None`) — because a hand-typed paste
@@ -678,7 +678,7 @@ class Ledger:
 
         `"unchanged"` when the stored name already equals what was sent, stripped — the same
         byte-identical-on-a-repeat promise `ingest` makes, because the steady-state press
-        (D-the-ledger-names-the-buyer's `POST /orders/fetch` `names` list) is built to send
+        (D193's `POST /orders/fetch` `names` list) is built to send
         exactly the orders that would NOT be unchanged, but a hand-built list or a race with
         a concurrent fetch can still repeat one, and a repeat must cost nothing.
 

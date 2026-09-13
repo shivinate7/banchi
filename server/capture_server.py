@@ -857,7 +857,7 @@ BOX_PUT_FIELDS = ("name", "sections", "state", "section_names")
 # ----------------------------------------------------------- the order screen, on the wire
 #
 # THESE SIX TUPLES ARE THE PII BACKSTOP AND THAT IS WHY THEY ARE THIS NARROW (D63, D66,
-# amended by D-the-ledger-names-the-buyer). An order feed carries a buyer's name AND a
+# amended by D193). An order feed carries a buyer's name AND a
 # shipping address, and this repo now keeps exactly one of the two: `buyer`, the display
 # name, because the owner walks drawers per *person* and a screen naming only an order
 # number has no way to say "these are the same buyer". `server/order_transport.py` still
@@ -9559,7 +9559,7 @@ def _ingest_record(order_at: int, raw) -> order_store.OrderRecord:
     said = f"Order {order_at} carries a value this route cannot store verbatim."
     placed_at = _order_optional_text(raw, "placed_at", "order_invalid", said)
     status = _order_optional_text(raw, "status", "order_invalid", said)
-    # THE ONE FACT ABOUT A PERSON THIS ROUTE WILL STORE (D-the-ledger-names-the-buyer). Read
+    # THE ONE FACT ABOUT A PERSON THIS ROUTE WILL STORE (D193). Read
     # through the same optional-text helper as `status` — a display name is feed content,
     # not an identifier this repo joins on — and `_reject_unknown` above has already refused
     # `shippingAddress` and `email` by name, so their absence here is not an oversight.
@@ -9615,7 +9615,7 @@ def do_order_ingest(payload: dict) -> dict:
     their comment has the argument: an unprojected paste carrying `shippingAddress` or
     `email` refuses BY NAME rather than being stored with those fields silently trimmed.
     `buyer` is no longer one of them — it is settable, on the owner's ruling
-    (D-the-ledger-names-the-buyer) — and a paste that omits it does not erase a name a fetch
+    (D193) — and a paste that omits it does not erase a name a fetch
     already wrote: `Ledger.ingest` carries the incumbent's `buyer` across when the incoming
     record says `None`.
     """
@@ -9730,7 +9730,7 @@ def do_order_fetch(payload: dict) -> dict:
     `statuses` — sending both is `fields_conflict`, because the caller has said "every one" and
     "these particular ones" in the same breath and this route will not silently pick a
     winner. It exists for the two-year backfill and for the ordinary steady-state press
-    (D-the-ledger-names-the-buyer): looping this body with `skip_known: true` until
+    (D193): looping this body with `skip_known: true` until
     `remaining` is zero is a full sync, and repeating it afterward costs one search-page walk
     per press and no detail calls at all, because everything the ledger already holds stays
     known.
@@ -9894,7 +9894,7 @@ def do_order_fetch(payload: dict) -> dict:
 
 def do_order_names(payload: dict) -> dict:
     """`POST /orders/names` — attach a buyer's display name to orders the ledger already
-    holds. FREE, and it creates nothing (D-the-ledger-names-the-buyer).
+    holds. FREE, and it creates nothing (D193).
 
     THIS IS NOT `/orders/ingest` WIDENED, AND THE CHOICE IS NAMED RATHER THAN DEFAULTED TO.
     `POST /orders/fetch`'s own docstring calls itself `writes_nothing` in three places this
@@ -11800,7 +11800,7 @@ class CaptureHandler(BaseHTTPRequestHandler):
                 return self._json(HTTPStatus.OK, do_order_fetch(self._body()))
             if path == "/orders/ingest":
                 return self._json(HTTPStatus.OK, do_order_ingest(self._body()))
-            # D-the-ledger-names-the-buyer's backfill: attach a display name to an order
+            # D193's backfill: attach a display name to an order
             # this ledger already holds. Writes ONE field, `ingest`'s own tuple beside it.
             if path == "/orders/names":
                 return self._json(HTTPStatus.OK, do_order_names(self._body()))

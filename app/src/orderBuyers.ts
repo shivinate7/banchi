@@ -1,4 +1,4 @@
-/* GROUP ORDERS BY PERSON, NOT BY NUMBER — `D-the-ledger-names-the-buyer`.
+/* GROUP ORDERS BY PERSON, NOT BY NUMBER — `D193`.
  *
  * The owner walks drawers per PERSON, and until this module existed `#/orders` had no way to
  * say who two orders belonged to: `GET /orders` returns a flat `OrderRow[]` keyed on

@@ -133,7 +133,7 @@ already in, this one stops more arriving — and neither is sufficient alone.
 recognised rather than merely counted, and the picker could carry a real default instead of the
 window's own list.
 
-**AMENDED 2026-09-13 (`D-the-ledger-names-the-buyer`): the first-press gate this entry built is gone, and the picker is now secondary rather than the door.** The owner's 2026-09-13 rulings
+**AMENDED 2026-09-13 (`D193`): the first-press gate this entry built is gone, and the picker is now secondary rather than the door.** The owner's 2026-09-13 rulings
 made the ordinary press "all statuses, skip-known" the default action — a one-time
 `LastTwoYears` backfill, then an append of everything the ledger does not already hold — so
 `if (!using.asked)` no longer stands between a press and a fetch. `StatusPicker` survives as

@@ -108,7 +108,7 @@ THE PROJECTION IS THE POINT
 The order detail carries `buyerName`, `shippingAddress` (recipient, street, city, postal
 code), `paymentType` and a full transaction breakdown. **Exactly one of those now leaves
 this module: `buyerName`, as `buyer`, a display name and nothing more**
-(D-the-ledger-names-the-buyer). The rest is returned from NO function here — not from
+(D193). The rest is returned from NO function here — not from
 `detail`, not from `search`, not from `fetch_open_orders`. The projection happens the
 moment the response is parsed, so a buyer's ADDRESS exists in this process only as a local
 `dict` inside one call frame and reaches no caller, no route, no screen, no file.
@@ -405,7 +405,7 @@ def project_order(
                       SKU are resolved in (`pipeline/orders.py:order_sequence`).
         status        verbatim, whatever the feed said.
         buyer         the buyer's DISPLAY NAME, and nothing else about who they are
-                      (D-the-ledger-names-the-buyer). The owner walks drawers per *person*,
+                      (D193). The owner walks drawers per *person*,
                       and an order number carries no name a human can group by.
         products      one entry per line: {skuId, quantity, name, unitPrice}.
 
@@ -893,7 +893,7 @@ class FetchResult:
     without a trace, and the next press picks them up because the ledger then knows the ones
     this press detailed.
 
-    `names` IS THE BACKFILL, AND IT COSTS NOTHING (D-the-ledger-names-the-buyer). Every entry
+    `names` IS THE BACKFILL, AND IT COSTS NOTHING (D193). Every entry
     is `{orderNumber, buyer}` for a MATCHED, ALREADY-KNOWN order — one the ledger holds at
     this exact status and so was skipped from `to_detail` — that carries a buyer the summary
     can see. Not `remaining` (uncounted; the next press's detail call will carry its buyer
@@ -981,7 +981,7 @@ def fetch_open_orders(
          "orderDate":   str,  ->  Order.placed_at
          "status":      str,  ->  kept for the screen; nothing here routes on it
          "buyer": str | None, ->  Order.buyer — the display name, and nothing else
-                                   about who they are (D-the-ledger-names-the-buyer)
+                                   about who they are (D193)
          "products": [{"skuId":  str,  ->  OrderLine.sku
                        "quantity": int, ->  OrderLine.quantity
                        "name":   str,   ->  OrderLine.name

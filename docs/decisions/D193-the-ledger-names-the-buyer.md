@@ -1,4 +1,4 @@
-## D-the-ledger-names-the-buyer — The ledger holds the buyer's name, because a hand walks drawers per person
+## D193 — The ledger holds the buyer's name, because a hand walks drawers per person
 
 **The owner walks drawers per PERSON, not per order number, and the ledger has never named one.** D63 built the ledger with two rulings that read as a single PII stance — *"No buyer, no address, no email. The ledger holds a SKU, a quantity and what the feed called the card"* — and D69's paste projection enforces the same shape at the browser. **That was never an owner ruling; it was a session's design, made under D63/D69's own scope, at a moment nobody had asked what the screen should be for.** The owner's outcome, stated 2026-09-13, is a hand working through drawers for one buyer at a time; a list of order numbers with no name on it cannot be walked that way, and D63's own working agreement — *"think in outcomes, not
 processes"* — is what asks whether the exclusion still served anybody once the screen existed.
