@@ -5,7 +5,7 @@ import { sealEveryTest } from './shell'
 
 /* SAME-ROLE BUTTONS THAT STACK IN ONE SECTOR TAKE THE SAME WIDTH — the owner's ruling,
  * 2026-09-13: "Buttons should be the same sizes if they're in the same sort of sector."
- * `D-equal-width-action-stacks` is the entry, `.bn-actions-stack` in `kit.css` and the
+ * `D195` is the entry, `.bn-actions-stack` in `kit.css` and the
  * `.capture-block-list` grid in `CaptureScreen.css` are the two shapes of the one mechanism —
  * a single `max-content` grid column sized by its widest child.
  *

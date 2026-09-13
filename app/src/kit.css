@@ -17,7 +17,7 @@
   /* THE PAGE'S CEILING IS THE SHELL'S, AND A SCREEN MAY SET A LOWER ONE by declaring
      `--bn-page-max` on its own root. See `--bn-page-w` in tokens.css for why a cap rather
      than a breakpoint, and for what `--bn-page-w-rows` is.
-     ONE LEFT EDGE FOR EVERY SCREEN (`D-one-left-edge`): a cap NARROWS the page from the
+     ONE LEFT EDGE FOR EVERY SCREEN (`D197`): a cap NARROWS the page from the
      shell's own left inset, it never CENTERS it there. `margin: 0 auto` on a screen with a
      lower cap put that screen's whole gutter in the middle of the column the shell handed
      it, and the gutter grows with the window — so the left edge moved between routes, up to
@@ -39,7 +39,7 @@
 .bn-row-wrap { display: flex; align-items: center; gap: var(--bn-2); flex-wrap: wrap; }
 .bn-stack { display: flex; flex-direction: column; gap: var(--bn-3); }
 
-/* THE EQUAL-WIDTH ACTION STACK (D-equal-width-action-stacks): buttons of the same role
+/* THE EQUAL-WIDTH ACTION STACK (D195): buttons of the same role
    stacked vertically in one sector take the width of the widest sibling's intrinsic
    (label + padding) width — never the sector's full width, never a hard px. A single
    `max-content` grid column is sized by its widest child, and `justify-self: stretch`

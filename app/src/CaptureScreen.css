@@ -375,7 +375,7 @@
 }
 .capture-block-word { color: var(--bn-ink-3); }
 .capture-block-list {
-  /* THE LIST IS THE GRID (D-equal-width-action-stacks): each `<li>` is `display: contents`
+  /* THE LIST IS THE GRID (D195): each `<li>` is `display: contents`
      so its icon, sentence and fix button become direct children of THIS grid, sharing one
      `max-content` column across every row. A `Button` spanning a flexible track is skipped
      when the browser sizes a `max-content` track (CSS Grid §12.5), so column 2 is sized by

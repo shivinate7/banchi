@@ -1,4 +1,4 @@
-## D-one-left-edge — A page is anchored to the shell's own inset, and only its width may vary by screen
+## D197 — A page is anchored to the shell's own inset, and only its width may vary by screen
 
 **The owner's report, 2026-09-13, with three screenshots:** `#/pricing`'s content started
 roughly 330px further right than `#/review` and `#/inventory` at the same window width. *"how
@@ -45,7 +45,7 @@ disagreeing by roughly the gap the owner's own screenshots showed, and it is gre
 ### What this does not reach
 
 **NOT MECHANIZED:** the guard can only compare `.bn-page` roots that render in the fixture
-state `app/tests/shell.ts` puts the store in, the same limit `D-equal-width-action-stacks`
+state `app/tests/shell.ts` puts the store in, the same limit `D195`
 already names for its own sweep — a sector or a page shape reachable only behind a different
 store shape is unchecked here. And it asserts the LEFT edge only, on purpose: the ruling is
 that width may legitimately vary by screen, so a right-edge or overall-width check would be

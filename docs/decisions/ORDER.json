@@ -199,6 +199,10 @@
     "D190-unclaim-completes-the-remedy.md",
     "D191-history-scoped-to-box.md",
     "D192-per-box-read.md",
-    "D193-the-ledger-names-the-buyer.md"
+    "D193-the-ledger-names-the-buyer.md",
+    "D194-copy-ratchet.md",
+    "D195-equal-width-action-stacks.md",
+    "D196-no-mechanism-on-screen.md",
+    "D197-one-left-edge.md"
   ]
 }

@@ -6,12 +6,12 @@ import { settleFonts } from './fontsReady'
 import { routesFromNav } from './routes'
 import { sealEveryTest } from './shell'
 
-/* THE VISIBLE WORD COUNT ON EVERY OWNER SCREEN MAY ONLY GO DOWN (`D-copy-ratchet`).
+/* THE VISIBLE WORD COUNT ON EVERY OWNER SCREEN MAY ONLY GO DOWN (`D194`).
  *
  * The owner's ruling, 2026-09-13: "less text is always better than more." Several sessions
  * are cutting copy across every screen at once right now, on that word alone — and a rule
- * with no reader is advice, the same failure `D-no-mechanism-on-screen` and
- * `D-equal-width-action-stacks` both name for their own owner's rulings. That row asserts the
+ * with no reader is advice, the same failure `D196` and
+ * `D195` both name for their own owner's rulings. That row asserts the
  * CONTENT of a string (`scripts/user-strings.mjs`'s AST walk plus `NO_MECHANISM_WORDS`); this
  * one is deliberately blind to content and asserts only its VOLUME — the number of visible
  * words a route draws, never which words they are, because a session rewording a sentence to

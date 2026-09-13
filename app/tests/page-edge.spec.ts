@@ -3,7 +3,7 @@ import { routesFromNav } from './routes'
 import { settleFonts } from './fontsReady'
 import { sealEveryTest } from './shell'
 
-/* ONE LEFT EDGE FOR EVERY SCREEN (`D-one-left-edge`). The owner's own three screenshots,
+/* ONE LEFT EDGE FOR EVERY SCREEN (`D197`). The owner's own three screenshots,
  * 2026-09-13: `#/pricing`'s content started roughly 330px further right than `#/review` and
  * `#/inventory` at the SAME window width. The cause was `.bn-page { margin: 0 auto }` — every
  * screen that sets its own `--bn-page-max` (Pricing and ValueBands at 1120px, Codes/Home/Orders

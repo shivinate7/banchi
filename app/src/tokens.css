@@ -199,7 +199,7 @@
      A screen asks for one by setting `--bn-page-max` on its own root; the kit reads it with
      `--bn-page-w` as the fallback. `--bn-page-max` is deliberately NOT declared here — it
      is a screen's word, never the system's, which is why it is not in docs/DESIGN.md.
-     A CAP NARROWS THE PAGE, IT NEVER RECENTERS IT (`D-one-left-edge`). `.bn-page`'s
+     A CAP NARROWS THE PAGE, IT NEVER RECENTERS IT (`D197`). `.bn-page`'s
      `margin` is `0`, not `0 auto` — a lower `--bn-page-max` gives up width on the RIGHT
      only, so every screen's left edge sits against the shell's own inset and only the
      width a screen asks for may differ. Centering a narrower cap inside the wider column

@@ -1,4 +1,4 @@
-## D-equal-width-action-stacks — Same-role buttons stacked in one sector share a width, and a Playwright sweep finds them rather than reading a declared class
+## D195 — Same-role buttons stacked in one sector share a width, and a Playwright sweep finds them rather than reading a declared class
 
 **The owner's ruling, 2026-09-13:** *"Buttons should be the same sizes if they're in the same
 sort of sector — make this a guard and correct any/all instances across the app."* Read beside

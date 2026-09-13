@@ -1,12 +1,12 @@
-## D-copy-ratchet — The visible word count on every owner screen may only go down, and the ceiling is a measurement rather than a guess
+## D194 — The visible word count on every owner screen may only go down, and the ceiling is a measurement rather than a guess
 
 **The owner's ruling, 2026-09-13:** *"less text is always better than more."* Several sessions
 are cutting copy across every screen at the same time, on that instruction alone — which is
 exactly the shape "a rule with no reader is advice" already names for
-`D-no-mechanism-on-screen` and `D-equal-width-action-stacks`: a session under time pressure
+`D196` and `D195`: a session under time pressure
 cuts one screen's copy and leaves the next one exactly as wordy as it was, and nothing says so.
 
-**This is deliberately blind to CONTENT and asserts only VOLUME.** `D-no-mechanism-on-screen`
+**This is deliberately blind to CONTENT and asserts only VOLUME.** `D196`
 already reads every user-visible string for the wrong VOCABULARY — a decision citation, a
 repository path, a pipeline-internal noun. This is not a second pass over the same ground: a
 session that rewords "found no candidate rows for this card" down to "no match" is doing

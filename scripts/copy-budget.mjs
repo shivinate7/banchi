@@ -4,7 +4,7 @@
 //
 // THIS SCRIPT DOES NOT COUNT A SINGLE WORD. The counting rule — split on whitespace, drop a
 // token with no letter — lives once, in `app/tests/copy-budget.spec.ts:countWords`, because a
-// second copy here is a second thing to drift the exact way `D-copy-ratchet`'s own header
+// second copy here is a second thing to drift the exact way `D194`'s own header
 // warns about for the ratchet as a whole. What this does is set `COPY_BUDGET_PIN=1` and run
 // that one spec through Playwright, which is the "write the counts instead of asserting them"
 // branch the spec's own header names — so the pin path and the assert path are one file

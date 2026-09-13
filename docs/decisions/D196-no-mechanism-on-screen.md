@@ -1,4 +1,4 @@
-## D-no-mechanism-on-screen — No user-visible string may name a decision, a repository path, or a pipeline-internal noun
+## D196 — No user-visible string may name a decision, a repository path, or a pipeline-internal noun
 
 **The owner's ruling, 2026-09-13:** the front end has to be minimal and must never explain
 mechanism on screen. Read beside the "hard rules" section's own standing instruction —

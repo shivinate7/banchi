@@ -10420,7 +10420,7 @@ def _render_manifest_findings(
     return findings, rendered
 
 
-# ------------------------------------------------------------ no mechanism on screen (D-no-mechanism-on-screen)
+# ------------------------------------------------------------ no mechanism on screen (D196)
 #
 # The owner's ruling, 2026-09-13: the front end has to be minimal and must never explain
 # mechanism on screen. A person at the rig thinks in cards, boxes, runs, exports and
@@ -10592,7 +10592,7 @@ def _no_mechanism_findings(strings: List[Dict[str, object]]) -> List[Finding]:
 
 def check_no_mechanism_on_screen(report: Report) -> None:
     """No user-visible string in app/src may name a decision, a repository path, or a
-    pipeline-internal noun. See D-no-mechanism-on-screen.
+    pipeline-internal noun. See D196.
 
     THE EXTRACTION IS AN AST WALK, NOT A GREP OVER FILE TEXT — `scripts/user-strings.mjs`,
     over `app/node_modules/typescript`, the compiler this app itself builds with. A regex

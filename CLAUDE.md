@@ -1224,11 +1224,11 @@ decision, a repository path, or a pipeline-internal noun** — a card, a box, a 
 and a listing are the operator's words and stay; "the pipeline", "the resolver", "the model",
 "the server sent", "the join", "the corpus" and "the ledger" are this codebase's own, not the
 operator's, and `D134` or `inventory/prices.json` is never a sentence a person reads
-(D-no-mechanism-on-screen). Mechanized by `scripts/docs-audit.py`'s `no mechanism on screen`
+(D196). Mechanized by `scripts/docs-audit.py`'s `no mechanism on screen`
 row, over `scripts/user-strings.mjs`'s AST walk of `app/src`; `Notice`'s own `code` prop is the
 one exempted channel, for the run-log sentence two lines up.
 
-**The visible word count on every owner screen may only go down** (`D-copy-ratchet`,
+**The visible word count on every owner screen may only go down** (`D194`,
 2026-09-13, on the owner's own words — *"less text is always better than more"*). Deliberately
 blind to which words a screen uses, unlike the paragraph above: a session rewording a sentence
 to say the same thing in fewer words is exactly the behaviour this rewards, and a content-aware
@@ -1276,7 +1276,7 @@ written as a rule: see "a press may not move what is around it" after the three:
   and moved 131 elements, and stepping the walk moved 39, 66 or 98px depending on the two cards.
 
 **A fifth thing, beside the four floors rather than inside them: one left edge for every
-screen, and only the WIDTH may vary by route** (`D-one-left-edge`, 2026-09-13). `.bn-page`'s
+screen, and only the WIDTH may vary by route** (`D197`, 2026-09-13). `.bn-page`'s
 `margin` is `0`, never `0 auto` — a screen's own `--bn-page-max` (Pricing and `ValueBands` at
 1120px, Codes/Home/Orders at `--bn-page-w-rows`) narrows the page from the shell's own left
 inset, it does not re-center a shrunken column inside a wider one. The owner found the bug by
@@ -1313,7 +1313,7 @@ a HOVER lift keeps it and names its repaints inside the `:active` rule instead, 
 movement out of that list.
 
 **A FIFTH FLOOR SITS BESIDE STABILITY: SAME-ROLE BUTTONS STACKED IN ONE SECTOR SHARE A WIDTH**
-(`D-equal-width-action-stacks`). Like D118 this is a relationship between controls rather than
+(`D195`). Like D118 this is a relationship between controls rather than
 any one control's own paint, so `base.css` cannot supply it either — it is asserted in a real
 browser, by `app/tests/button-stack.spec.ts`, run by `make design-check`. The mechanism is one
 CSS Grid trick in two shapes: `.bn-actions-stack` in `kit.css` for buttons sharing a wrapper
@@ -2449,6 +2449,10 @@ D190 The remedy `stale_claims` names is a real command, and `stale_claims` learn
 D191 `Store.history()` gets a box-scoped sibling
 D192 The inventory route reads one box, and `rows.py` stops re-walking what it already loaded
 D193 The ledger holds the buyer's name, because a hand walks drawers per person
+D194 The visible word count on every owner screen may only go down, and the ceiling is a measurement rather than a guess
+D195 Same-role buttons stacked in one sector share a width, and a Playwright sweep finds them rather than reading a declared class
+D196 No user-visible string may name a decision, a repository path, or a pipeline-internal noun
+D197 A page is anchored to the shell's own inset, and only its width may vary by screen
 ```
 
 **THE GAP THIS LIST CARRIED BETWEEN D116 AND D118 IS CLOSED, AND IT CLOSED THE WAY IT SAID IT
