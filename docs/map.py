@@ -689,7 +689,7 @@ COMPONENTS = [
                                 "condition at all, which was invisible while the operator downloaded "
                                 "Near-Mint-only exports by hand and cost D3 rung 2 outright once the "
                                 "fetch started sending every play grade",
-                        "governed_by": ["D2", "D3", "D4", "D7", "D9", "D10", "D11", "D12", "D16", "D20", "D21", "D23", "D24", "D25", "D29", "D30", "D35", "D36", "D41", "D49", "D54", "D55", "D56", "D58", "D59", "D64", "D65", "D67", "D68", "D71", "D76", "D87", "D137",
+                        "governed_by": ["D2", "D3", "D4", "D7", "D9", "D10", "D11", "D12", "D16", "D20", "D21", "D23", "D24", "D25", "D29", "D30", "D35", "D36", "D41", "D49", "D54", "D55", "D56", "D58", "D59", "D63", "D64", "D65", "D67", "D68", "D71", "D76", "D87", "D137",
                                         "D146"], "tested_by": ["T3"]},
             # Rung 0 (a human's answer) sits above the ladder and is applied by join.py, so
             # T3 is what covers it — T4 owns the four rungs that infer.
@@ -1228,6 +1228,15 @@ COMPONENTS = [
                 "behavior, so it carries no tested_by: an unenforced claim is the defect "
                 "docs/DEBTS.md names, not a rounding error.",
         "modules": {
+            "numbers.py": {"does": "a card's number, composed (`join_key`), screen-drawn "
+                                   "(`display_number`) and stripped of a glued set code "
+                                   "(`strip_set_code`) — a LEAF module with no imports beyond the "
+                                   "stdlib (store-scaling item 8, D63): `store/` may not import "
+                                   "`pipeline/`, so these three pure functions moved out of "
+                                   "`pipeline/join.py` to where both `store/master.py` and "
+                                   "`pipeline/join.py` (which imports them back and re-exports "
+                                   "under the same names) can reach them.",
+                           "governed_by": ["D36", "D55", "D63", "D67"], "tested_by": ["T7"]},
             "master.py": {"does": "the cards, boxes and listings tables — cards, positions, SKUs, "
                                   "listing states, `open_section`, which puts one divider in front "
                                   "of the next card at the index only the store can read (D10), and "
@@ -2466,7 +2475,11 @@ COMPONENTS = [
                                 # Appended, in the pre-claim place claim-ids.py's own docstring
                                 # names — the merge resorts it into numeric order once the
                                 # slug below becomes a number.
-                                "D185", "D191"],
+                                "D185", "D191",
+                                # D63, D173: `check_import_layering` (store-scaling item 8) —
+                                # store/ may not import pipeline/, and a rule with no reader
+                                # is advice.
+                                "D63", "D173"],
             },
             "claim-ids.py": {
                 "does": "allocate the numbers this branch's SLUG ids will take, and "

@@ -2925,6 +2925,93 @@ def check_unscoped_walk(report: Report) -> None:
     )
 
 
+def _pipeline_imports(path: Path) -> List[Tuple[int, str]]:
+    """`(line, spelling)` for every `import pipeline...` / `from pipeline...` in one file.
+
+    MODULE-LEVEL OR INSIDE A FUNCTION — a lazy `from pipeline import join` hidden in a
+    function body is the exact shape store-scaling item 8 shipped (`store/db.py:
+    _add_search_index`) and it does not show at the top of the file, so `ast.walk` over
+    the whole tree (not just `tree.body`) is what a grep-the-top-lines reader would miss.
+    A relative import (`from . import x`, `node.level > 0`) is never `pipeline` and is
+    skipped without inspecting `node.module`, which is `None` for a bare `from . import x`.
+    """
+    try:
+        tree = ast.parse(path.read_text(encoding="utf-8"), filename=str(path))
+    except (SyntaxError, UnicodeDecodeError, OSError):
+        return []
+    found: List[Tuple[int, str]] = []
+    for node in ast.walk(tree):
+        if isinstance(node, ast.Import):
+            for alias in node.names:
+                if alias.name == "pipeline" or alias.name.startswith("pipeline."):
+                    found.append((node.lineno, f"import {alias.name}"))
+        elif (
+            isinstance(node, ast.ImportFrom)
+            and node.level == 0
+            and node.module
+            and (node.module == "pipeline" or node.module.startswith("pipeline."))
+        ):
+            names = ", ".join(alias.name for alias in node.names)
+            found.append((node.lineno, f"from {node.module} import {names}"))
+    return found
+
+
+def check_import_layering(report: Report) -> None:
+    """`store/` may not import `pipeline/` (D63): the arrow runs one way only.
+
+    `docs/decisions/D063-…md` and `docs/map.py`'s `pipeline/orders.py` entry both record
+    it in the same words — "store/ imports nothing from pipeline/, so there is no cycle" —
+    because `pipeline/orders.py`, `pipeline/readings.py` and `pipeline/selection.py` all
+    import `store`, and a `store -> pipeline -> store` cycle is exactly the shape that
+    keeps a session from being able to reason about which module can see which.
+
+    NOTHING ENFORCED THIS MECHANICALLY UNTIL NOW, WHICH IS WHY IT WAS BROKEN THE SAME DAY
+    IT WAS WRITTEN DOWN AGAIN. Store-scaling item 8 (search on FTS5) needed
+    `pipeline/join.py`'s `join_key`/`display_number` to populate two new indexed columns
+    and added `store/master.py: from pipeline import join` (module-level) and
+    `store/db.py: from pipeline import join as _join` (inside `_add_search_index`) —
+    `make check` was fully green through both, because nothing read this rule. The fix
+    (this same PR) moved the three pure functions (`join_key`, `display_number`,
+    `strip_set_code`) to a new leaf module, `store/numbers.py` (stdlib only), and
+    `pipeline/join.py` imports them back and re-exports under the same names so every
+    existing caller of `join.join_key` etc. is unaffected — CLAUDE.md's "a rule with no
+    reader is advice" (D173), applied to itself: the fix is not this row alone.
+
+    A LAZY IMPORT INSIDE A FUNCTION IS CAUGHT THE SAME AS A MODULE-LEVEL ONE, because that
+    is exactly the shape the defect took (`store/db.py:_add_search_index`'s
+    `from pipeline import join as _join`, several hundred lines into the file, inside a
+    function body — invisible to a reader who only checks the top of the file).
+
+    WHAT IT CANNOT SEE: an import reached through a third module (`store/x.py` imports
+    `store/y.py`, which imports `pipeline/`) — this row scans only the text of `store/*.py`
+    files for a direct `pipeline` reference, not the transitive closure of what a module
+    ends up able to reach. `store/master.py`/`store/db.py`/`store/numbers.py` are the only
+    modules under `store/` this repo has ever needed `pipeline/` symbols from, so a
+    transitive leak would still show up as a NEW direct import somewhere the day it
+    happens, which this row would catch then.
+    """
+    store_files = _walk(ROOT / "store", (".py",))
+    findings: List[Finding] = []
+    for path in store_files:
+        for lineno, spelling in _pipeline_imports(path):
+            findings.append(Finding(
+                f"{rel(path)}:{lineno}",
+                f"`{spelling}` — store/ may not import pipeline/ (D63: the arrow runs the "
+                f"other way, pipeline/orders.py and friends import store/). Move the "
+                f"symbol(s) needed into a leaf module under store/ (store/numbers.py is "
+                f"the precedent) and have pipeline/ import them back and re-export, or "
+                f"resolve the value in the caller before it reaches store/.",
+            ))
+    report.add(
+        "import layering",
+        MECHANICAL,
+        findings,
+        f"{len(store_files)} store/ files scanned, 0 import pipeline/" if not findings
+        else f"{len(store_files)} store/ files scanned, {len(findings)} import pipeline/",
+        scanned=len(store_files),
+    )
+
+
 # The two routes that write a claim. D70 gives a card a `product`, D101 says a claim a screen
 # names is a claim a screen can fix, and these are the two doors that ruling opened.
 _CLAIM_WRITERS = ("do_put_card", "do_put_box_claims")
@@ -15959,6 +16046,61 @@ def self_test() -> int:
         str(by_label["unscoped walk"]),
     )
 
+    # `import layering` (D63, store-scaling item 8): a lazy `from pipeline import x` inside
+    # a function body must be caught the same as a module-level one — that shape is exactly
+    # how the real defect shipped (`store/db.py:_add_search_index`, several hundred lines
+    # in, invisible to a top-of-file reader).
+    print("\nimport layering: store/ importing pipeline/ is caught, module-level or lazy")
+    with tempfile.TemporaryDirectory() as tmp:
+        fixture = Path(tmp) / "fixture_lazy_import.py"
+        fixture.write_text(
+            "def _add_something(conn):\n"
+            "    from pipeline import join as _join\n"
+            "    return _join.join_key('1', '2')\n",
+            encoding="utf-8",
+        )
+        findings = _pipeline_imports(fixture)
+        ok(
+            any("from pipeline import" in spelling for _, spelling in findings),
+            "a lazy `from pipeline import x` inside a def is found by the scanner",
+            str(findings),
+        )
+
+        clean = Path(tmp) / "fixture_no_pipeline.py"
+        clean.write_text(
+            "from store.numbers import join_key\n\n\ndef f():\n    return join_key('1', '2')\n",
+            encoding="utf-8",
+        )
+        ok(
+            not _pipeline_imports(clean),
+            "a file that imports nothing from pipeline/ is not flagged",
+            str(_pipeline_imports(clean)),
+        )
+
+        report = Report()
+        _saved_walk = globals()["_walk"]
+        try:
+            globals()["_walk"] = lambda root, suffixes: [fixture]
+            check_import_layering(report)
+        finally:
+            globals()["_walk"] = _saved_walk
+        by_label = {row.check: row.findings for row in report.checks}
+        ok(
+            any("pipeline" in f.message and "D63" in f.message
+                for f in by_label["import layering"]),
+            "the row itself fails on a fixture tree, citing D63",
+            str(by_label["import layering"]),
+        )
+
+    report = Report()
+    check_import_layering(report)
+    by_label = {row.check: row.findings for row in report.checks}
+    ok(
+        not by_label["import layering"],
+        "the real store/ tree, scanned end to end, imports nothing from pipeline/",
+        str(by_label["import layering"]),
+    )
+
     report = Report()
     check_dispatch(report)
     by_label = {row.check: row.findings for row in report.checks}
@@ -16071,6 +16213,7 @@ def audit(staged_only: bool) -> Report:
     check_identifier_spelling(report)
     check_shell_substitution(report)
     check_unscoped_walk(report)
+    check_import_layering(report)
     check_rule_enforcement(report)
     # Last, and it is the row that says the rows above are all of them. It reconciles this
     # file's check definitions against the calls in this function.

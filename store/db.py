@@ -943,13 +943,17 @@ def _add_search_index(conn: sqlite3.Connection) -> None:
         if column not in columns:
             conn.execute(f"ALTER TABLE cards ADD COLUMN {column} TEXT")
 
-    # Backfill the two new columns for every existing row, THROUGH `pipeline.join`'s real
-    # functions — never re-derived in SQL. There are at most a few tens of thousands of
-    # cards even at the 50,000-card projection this whole spec is written for, and this
-    # runs once, under the lock, exactly like `_add_card_ids`'s hashing pass. The NEXT
-    # ordinary write to any card (always through `_card_columns`) recomputes these two
-    # columns anyway, so this backfill only has to be right for cards nobody touches again.
-    from pipeline import join as _join
+    # Backfill the two new columns for every existing row, THROUGH `store/numbers.py`'s real
+    # functions — never re-derived in SQL. `pipeline/join.py` is NOT the import here:
+    # `store/` may not import `pipeline/` (D63 — the arrow runs the other way), so
+    # `join_key`/`display_number` live in the leaf module `store/numbers.py` and
+    # `pipeline/join.py` re-exports them under the same names for every other caller. There
+    # are at most a few tens of thousands of cards even at the 50,000-card projection this
+    # whole spec is written for, and this runs once, under the lock, exactly like
+    # `_add_card_ids`'s hashing pass. The NEXT ordinary write to any card (always through
+    # `_card_columns`) recomputes these two columns anyway, so this backfill only has to be
+    # right for cards nobody touches again.
+    from store.numbers import display_number as _display_number, join_key as _join_key
 
     rows = conn.execute("SELECT key, number, payload FROM cards").fetchall()
     for key, number, payload_text_ in rows:
@@ -958,8 +962,8 @@ def _add_search_index(conn: sqlite3.Connection) -> None:
         except (TypeError, ValueError):
             continue
         printed_total = record.get("printed_total")
-        number_key = _join.join_key(number, printed_total) if (number and printed_total) else ""
-        number_display = _join.display_number(number, printed_total) or ""
+        number_key = _join_key(number, printed_total) if (number and printed_total) else ""
+        number_display = _display_number(number, printed_total) or ""
         conn.execute(
             "UPDATE cards SET number_key = ?, number_display = ? WHERE key = ?",
             (number_key, number_display, key),
