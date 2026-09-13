@@ -751,7 +751,7 @@ export function RunPanel({ drawers, openRun, onOpenRun, reloadTick, onIdentify, 
                 icon="play"
                 className="run-empty"
                 title="No runs yet"
-                body="Identify a box to start the first one. It is the one step that spends money."
+                body="Identifying is the only step that spends money."
                 actions={
                   <Button icon="zap" onClick={onIdentify}>
                     Identify a box
@@ -908,12 +908,9 @@ export function RunPanel({ drawers, openRun, onOpenRun, reloadTick, onIdentify, 
               * and a hint that appears only when the machine already agrees is no hint. */}
             {!detail.joined ? null : (
               <p className="runs-note runs-correction">
-                Queued a whole stack you sorted the same way? The rarity claim is rewritten for a
-                whole box from <a href="#/inventory">Inventory</a> → Manage box → Rarity, which
-                fixes the capture sidecars too. Then re-run <strong>Identify</strong> and{' '}
-                <strong>Join</strong> here — the claim is read off this run, not off the box, so
-                correcting the box alone changes nothing. The re-identify is a full cache hit and
-                costs nothing: the claim never goes to the model.
+                Queued a whole stack under the wrong rarity? Fix it on <a href="#/inventory">Inventory</a> → Manage
+                box → Rarity, then press <strong>Identify</strong> and <strong>Join</strong> again here —
+                correcting the box alone changes nothing. It costs nothing.
               </p>
             )}
 
@@ -957,8 +954,7 @@ export function RunPanel({ drawers, openRun, onOpenRun, reloadTick, onIdentify, 
                 </div>
                 {detail.live ? (
                   <p className="runs-step-lede">
-                    <span className="bn-dot bn-dot-live" /> {runningFor(detail)} — it keeps running if you close this
-                    tab, and this panel re-reads it every few seconds.
+                    <span className="bn-dot bn-dot-live" /> {runningFor(detail)} — keeps running if you close this tab.
                   </p>
                 ) : null}
                 {detail.console.trim() === '' ? (
@@ -1082,7 +1078,7 @@ export function RunPanel({ drawers, openRun, onOpenRun, reloadTick, onIdentify, 
                     {/* Two labelled groups, in the same register: what the join queues, and what
                         the fetch asks for. The well used to open on a lone checkbox. */}
                     <div className="runs-optgroup">
-                      <p className="run-scope-head">What the join queues</p>
+                      <p className="run-scope-head">Sent to review</p>
                       <label className="runs-option runs-option-row">
                         <span className="bn-field-label">Send to review at or below</span>
                         <select
@@ -1098,8 +1094,7 @@ export function RunPanel({ drawers, openRun, onOpenRun, reloadTick, onIdentify, 
                         </select>
                       </label>
                       <p className="run-step-fine">
-                        A card the model read with less confidence than this goes to the review queue instead of
-                        straight to a price.
+                        A card read with less confidence than this goes to review instead of straight to a listing.
                       </p>
                     </div>
 

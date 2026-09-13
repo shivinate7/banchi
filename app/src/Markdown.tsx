@@ -561,17 +561,11 @@ export function Markdown({
 
         <div className="markdown-body">
           <p className="markdown-says">
-            One live export — TCGplayer&rsquo;s <strong>My Pricing</strong> — read for the listings
-            TCGplayer says are live, that no copy has sold from here inside the window, and that this
-            store has held for longer than the window. It reports what each would be re-priced to,
-            writes a worklist you can edit, and turns that back into an import CSV you upload.
+            Reads your live <strong>My Pricing</strong> export and proposes a lower price for
+            listings that have not sold.
           </p>
           <p className="markdown-says">
-            <strong>Nothing is ever deleted at TCGplayer to lower a price.</strong> The upload edits
-            the live listing in place, and every row of every file written here carries{' '}
-            <code className="bn-code">Add to Quantity</code> of 0 — so uploading one of them twice
-            changes nothing the second time, which is not true of an import from{' '}
-            <code className="bn-code">emit</code>.
+            <strong>Nothing is deleted at TCGplayer; the upload edits the live listing in place.</strong>
           </p>
 
           {/* THE SUBSTITUTION, NAMED WHERE THE OPERATOR READS IT — and it is a substitution
@@ -712,7 +706,7 @@ export function Markdown({
             </div>
             {fetched === null ? null : (
               <Notice tone="ok" title={`${fetched.live_rows} listings live · ${fetched.live_copies} copies`}>
-                Read from TCGplayer just now, {fetched.rows} rows across every product line.
+                Read just now, across every product line.
                 {/* NO CAVEAT, AND THAT IS A PROPERTY OF THE REQUEST RATHER THAN AN OMISSION.
                     `Export From Live` takes no scope at all, so there is nothing it could have
                     left out — and an answer with no rows is refused by the server rather than
@@ -776,17 +770,13 @@ export function Markdown({
                 </h3>
                 {stamp === null ? (
                   <p className="markdown-says">
-                    The press below writes the rows above into a CSV on this machine. It is uploaded
-                    nowhere and it changes no price anywhere until you say so.
+                    Writes a CSV on this machine — nothing uploads until you press.
                   </p>
                 ) : (
                   <>
                     <Notice tone="ok" title="Written, and uploaded nowhere">
-                      Price them on the pricing screen — the charts, the presets and the holds are
-                      all there — or edit the spreadsheet's{' '}
+                      Price it on the pricing screen, or edit the spreadsheet's{' '}
                       <code className="bn-code">TCG Marketplace Price</code> column and hand it back.
-                      Only the SKU and the price are ever read out of it; every other byte comes from
-                      the export.
                     </Notice>
                     {/* THE DOOR TO THE LENS, AND IT IS THE PRIMARY PRESS (D103). The screen it
                         opens is the thing the owner actually asked for — *"the same pricing sorta
@@ -855,8 +845,8 @@ export function Markdown({
                           the same argument D104 makes for keeping the upload door open beside
                           the fetch. */}
                       <Notice tone="ok" title="Ready to send">
-                        This carries <code className="bn-code">Add to Quantity</code> of 0 on
-                        every row, so it changes prices and cannot move a single copy.
+                        <code className="bn-code">Add to Quantity</code> is 0 on every row —
+                        price-only, no copies move.
                       </Notice>
                       <div className="markdown-row">
                         <a className="bn-btn" href={markdownFileUrl(stamp, IMPORT)} download={IMPORT}>
@@ -876,7 +866,7 @@ export function Markdown({
                         ) : null}
                         <span className="markdown-hint">
                           {pushed === null
-                            ? 'Staged is your own copy of the store — no buyer sees it.'
+                            ? 'Staged is private — no buyer sees it.'
                             : null}
                         </span>
                       </div>
@@ -904,17 +894,15 @@ export function Markdown({
                   {pushed.published_at ? (
                     <Notice tone="ok" title="Live at TCGplayer">
                       {pushed.accepted} price{pushed.accepted === 1 ? '' : 's'} moved live at{' '}
-                      {pushed.published_at}. Read them back with{' '}
-                      <strong>Reconcile the store</strong> on Runs.
+                      {pushed.published_at}. <strong>Reconcile the store</strong> on Runs.
                     </Notice>
                   ) : (
                     <>
                       <Notice tone="warn" title="This changes what buyers pay">
-                        TCGplayer is holding {pushed.accepted} price
-                        {pushed.accepted === 1 ? '' : 's'} in your Staged inventory
-                        {pushed.accepted === pushed.rows ? '' : ` of the ${pushed.rows} sent`}.
-                        Publishing moves those and nothing else. It is the only press in this
-                        app that a buyer can see.
+                        TCGplayer holds {pushed.accepted} price
+                        {pushed.accepted === 1 ? '' : 's'} in Staged
+                        {pushed.accepted === pushed.rows ? '' : ` of ${pushed.rows} sent`}. Publishing
+                        moves those — the only press here a buyer can see.
                       </Notice>
                       {pushed.messages.length === 0 ? null : (
                         <LogWell
@@ -943,8 +931,8 @@ export function Markdown({
                           Discard staged
                         </Button>
                         <span className="markdown-hint">
-                          Discarding takes them back off TCGplayer. Publishing cannot be
-                          undone there — another markdown is how a live price goes back.
+                          Discard removes them from TCGplayer. Publishing can't be undone — a
+                          new markdown is the only way back.
                         </span>
                       </div>
                     </>

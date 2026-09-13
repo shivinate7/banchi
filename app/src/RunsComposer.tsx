@@ -828,7 +828,7 @@ export function RunsComposer({
                       <EmptyState
                         icon="box"
                         title="No drawers yet"
-                        body="Shoot one on the capture screen and it will be here to run."
+                        body="Capture a card to start a run."
                         actions={
                           <Button
                             icon="camera"
@@ -876,7 +876,7 @@ export function RunsComposer({
                     <EmptyState
                       icon="check"
                       title="Nothing was handed over"
-                      body="Tick the cards you want on the inventory screen and it will offer to run them. There is one mass-select in this product and it lives there."
+                      body="Select cards on Inventory to run them."
                       actions={
                         <Button
                           icon="grid"
@@ -929,7 +929,7 @@ export function RunsComposer({
                       <EmptyState
                         icon="history"
                         title="No runs yet"
-                        body="Identify a drawer and its run will be here to read again."
+                        body="Identify a drawer to read its run again."
                       />
                     ) : (
                       <>
@@ -1137,7 +1137,7 @@ export function RunsComposer({
                         would name a different card than the one a hand counting into the drawer
                         reaches, so it draws what it actually has. */}
                     <span className="run-preview-slot">{storeKeyText(preview.sample.box, preview.sample.index)}</span>
-                    <span>this photograph cannot be decoded, so nothing is sent for it.</span>
+                    <span>Can't decode — nothing sent.</span>
                   </p>
                 ) : (
                   <div className="run-preview-card" aria-busy={previewBusy}>
@@ -1219,9 +1219,9 @@ export function RunsComposer({
                           sent at {preview.sample.sent[0]}×{preview.sample.sent[1]}, shown smaller here
                         </span>
                       )}
-                      {preview.sample.method == null && <span>no card found, so the whole photograph goes</span>}
+                      {preview.sample.method == null && <span>No card found — full photo sent.</span>}
                       {preview.sample.crop_refused != null && (
-                        <span>card found but the crop was refused, so the whole photograph goes</span>
+                        <span>Crop refused — full photo sent.</span>
                       )}
                     </p>
                     {preview.sample.crop_refused != null && (
@@ -1299,8 +1299,7 @@ export function RunsComposer({
                    composes it for both refusal sites — and a third spelling here would be a third
                    message to learn. */
                 <Notice tone="warn" title="Some of these cards are already being paid for">
-                  {quote.claimed.sentence}. Two live batches over one card is two invoices for one answer. Watch
-                  that run, or release its claim on this screen if its holder is gone.
+                  {quote.claimed.sentence}. Watch that run, or release its claim if its holder is gone.
                   <div className="bn-notice-code">
                     {plural(quote.claimed.cards, 'card')} ·{' '}
                     {quote.claimed.runs.length > 0 ? quote.claimed.runs.join(', ') : quote.claimed.receipts.join(', ')}
@@ -1308,9 +1307,7 @@ export function RunsComposer({
                 </Notice>
               ) : quote.total.to_send === 0 ? (
                 <Notice tone="ok" title="Nothing to send">
-                  All {plural(quote.total.cards, 'card')} in this selection have already been read, and their
-                  answers are cached — so there is nothing to spend and nothing to wait for. A card is sent to the
-                  model once; after that the answer is free forever.
+                  All {plural(quote.total.cards, 'card')} in this selection are already answered — nothing to spend.
                 </Notice>
               ) : (
                 <>
@@ -1334,10 +1331,7 @@ export function RunsComposer({
                     >
                       {raised === null ? (
                         <div className="runs-spend-row">
-                          <span>
-                            This send is {money(estimate)}. Nothing is blocked and nothing is waiting on this —
-                            the confirm below is the same one press it always is.
-                          </span>
+                          <span>This send is {money(estimate)}.</span>
                           <Button
                             size="sm"
                             variant="quiet"
@@ -1347,10 +1341,7 @@ export function RunsComposer({
                           </Button>
                         </div>
                       ) : (
-                        <span>
-                          This browser remembers it. Change the figure under the button below whenever you want
-                          to be asked sooner.
-                        </span>
+                        <span>Remembered on this browser. Change the figure below to be asked sooner.</span>
                       )}
                     </Notice>
                   ) : null}
@@ -1396,8 +1387,7 @@ export function RunsComposer({
 
               {(quote.total.cache_hits ?? 0) > 0 && (
                 <p className="run-step-fine runs-quote-cache">
-                  Cards already answered keep the answer they were first read with. The reading you chose only
-                  reaches the cards being sent.
+                  Already-answered cards keep their first reading.
                 </p>
               )}
 

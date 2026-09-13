@@ -728,7 +728,7 @@ function CopiesPanel({
             and what can I do with it"; this answers "why is there only one row and no listing
             figures", which is context for the thing above it and reads wrong before it. */}
         <div className="inventory-lone">
-          <Notice tone="info" title="No name and no SKU yet, so there is nothing to group this copy with.">
+          <Notice tone="info" title="No name and no SKU yet.">
             {lone === null ? (
               <>
                 The store sent no position for this record, so there is no copy to draw.{' '}
@@ -737,8 +737,8 @@ function CopiesPanel({
             ) : (
               <>This is one copy at one position, and the panel above is that copy alone.</>
             )}{' '}
-            A SKU is written when <code className="inventory-inline">emit</code> writes the
-            card&rsquo;s row into an import file, and never before.
+            A SKU appears only after <code className="inventory-inline">emit</code> writes
+            it.
           </Notice>
         </div>
       </section>

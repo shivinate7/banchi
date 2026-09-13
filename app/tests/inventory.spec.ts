@@ -3355,7 +3355,7 @@ test('the control that reclaims does not exist until the free count has answered
     /* deliberately never fulfilled */
   })
   await page.getByRole('button', { name: /Reclaim the photographs of 1 sold card in box 2/ }).click()
-  await expect(page.locator('.boxops-confirm')).toContainText('There is no undo')
+  await expect(page.locator('.boxops-confirm')).toContainText('No undo')
   await expect(page.getByRole('button', { name: /permanently$/ })).toHaveCount(0)
   expect(wire.filter((sent) => sent.path.endsWith('/photos/reclaim'))).toHaveLength(0)
 })
@@ -3469,7 +3469,7 @@ test('the plan names what each SKU gives up, what it keeps, and which box holds 
   await page.getByRole('button', { name: /Release the listing hold on 3 cards/ }).click()
 
   const panel = page.locator('.boxops-confirm')
-  await expect(panel).toContainText('you have checked TCGplayer and it is holding none of them')
+  await expect(panel).toContainText("you've checked TCGplayer and it holds none of them")
 
   /* THE BUDGET, VISIBLE. The owner's ruling of 2026-08-24: each SKU gives up at most the
      copies this box holds, so a release reached from box 2 can never give up what only box

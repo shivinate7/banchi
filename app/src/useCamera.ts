@@ -259,7 +259,7 @@ function describeCameraError(cause: unknown): string {
       return 'Another application is holding the camera. Quit it — OBS and the Elgato utilities both take exclusive use — then reopen the camera below.'
     case 'OverconstrainedError':
     case 'ConstraintNotSatisfiedError':
-      return `That camera cannot deliver ${MIN_WIDTH}x${MIN_HEIGHT} or better, which is below what the pipeline needs. Check the camera is in its clean-HDMI output mode, then reopen the camera below.`
+      return `That camera cannot deliver ${MIN_WIDTH}x${MIN_HEIGHT}. Check it is in clean-HDMI output mode, then reopen the camera below.`
     case 'AbortError':
       return 'The camera stopped responding. Unplug the Cam Link, plug it back in, then reopen the camera below.'
     default:
@@ -295,7 +295,7 @@ function describeCameraError(cause: unknown): string {
  * the answer is a frame-content check, not another listener.
  */
 const SIGNAL_MUTED_MESSAGE =
-  'The camera stopped sending video. The capture card is still connected, so the camera itself has slept or lost its HDMI output — wake it and disable auto power off, then reopen the camera below.'
+  'The camera stopped sending video — it may have slept or lost HDMI. Wake it and disable auto power off, then reopen the camera below.'
 
 const SIGNAL_ENDED_MESSAGE =
   'The camera closed while it was open. Check the Cam Link cable and that the camera is awake, then reopen the camera below.'
@@ -303,7 +303,7 @@ const SIGNAL_ENDED_MESSAGE =
 /* Thrown on the capture path rather than shown on the preview, so it names the one fact the
  * operator needs first: nothing was recorded. CaptureScreen turns it into the halt. */
 const SIGNAL_DEAD_CAPTURE_MESSAGE =
-  'The camera has stopped sending frames, so no photo was taken. Wake the camera, then reopen it below before capturing again.'
+  'No photo taken — the camera stopped sending frames. Wake it, then reopen the camera before capturing again.'
 
 /* getUserMedia lives on an insecure origin's navigator as undefined, not as a function
  * that throws. The DOM types do not model that, and it is not hypothetical here:
@@ -311,7 +311,7 @@ const SIGNAL_DEAD_CAPTURE_MESSAGE =
  * device can reach the Mac by address later, and http://192.168.x.x is not a secure
  * context while http://localhost is. */
 const INSECURE_CONTEXT_MESSAGE =
-  'This browser exposes no camera. The camera API needs a secure context — open the app at http://localhost, not at an IP address.'
+  'This browser exposes no camera. Open the app at http://localhost, not an IP address.'
 
 function mediaDevices(): MediaDevices | undefined {
   const media: MediaDevices | undefined = navigator.mediaDevices

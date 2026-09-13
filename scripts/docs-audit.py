@@ -63,6 +63,7 @@ import io
 import json
 import os
 import re
+import shutil
 import subprocess
 from functools import lru_cache
 import sys
@@ -10541,6 +10542,260 @@ def _render_manifest_findings(
     return findings, rendered
 
 
+# ------------------------------------------------------------ no mechanism on screen (D196)
+#
+# The owner's ruling, 2026-09-13: the front end has to be minimal and must never explain
+# mechanism on screen. A person at the rig thinks in cards, boxes, runs, exports and
+# listings — the operator's own words, all over `docs/DESIGN.md`'s Register section and
+# CLAUDE.md's screen table — and never in the vocabulary of THIS REPOSITORY: a decision
+# number is a fact about an argument this codebase settled, a file path is a fact about
+# where bytes sit on this Mac, and "the resolver" or "the corpus" names an internal
+# component rather than an outcome. None of the three belongs in a string a human reads.
+
+USER_STRINGS_SCRIPT = ROOT / "scripts" / "user-strings.mjs"
+APP_TS_COMPILER = ROOT / "app" / "node_modules" / "typescript" / "lib" / "typescript.js"
+
+# THE ONE PLACE THIS LIST LIVES, so a session refining it edits one dictionary rather than
+# a scattered set of regexes. Every entry is machinery this repo is BUILT FROM, and every
+# comment says why it is not something an operator reaches for. `run`, `box`, `export`,
+# `listing` and `TCGplayer` are deliberately NOT here — they are the operator's own words,
+# the ones `docs/DESIGN.md`'s Register section and every screen in CLAUDE.md's table are
+# written in, and banning them would be the opposite defect.
+NO_MECHANISM_WORDS: Dict[str, str] = {
+    "the pipeline": (
+        "D1's two-phase batch process, end to end — an implementation the operator never "
+        "chose and the outcome (a price, a queue entry) is what they read instead"
+    ),
+    "the resolver": (
+        "pipeline/join.py's per-order picker (D174, D181) — an internal component name; "
+        "the operator sees which copies fill an order, never which module chose them"
+    ),
+    "the model": (
+        "the vision call identify/ makes (D2) — naming the model is naming a vendor and a "
+        "technique, not a fact about a card"
+    ),
+    "the server sent": (
+        "server.ts's own phrase for relaying a response — the operator reads a fact about "
+        "their store, never about an HTTP exchange with it"
+    ),
+    "the join": (
+        "pipeline/join.py's join step (D11) — a pipeline stage; the operator sees a listed "
+        "card or a reason it queued, never the step that produced either"
+    ),
+    "the corpus": (
+        "pipeline/corpus.py's one-file pricing store (D86) — a storage detail; the "
+        "operator thinks in prices and holds, never in which file holds them"
+    ),
+    "the ledger": (
+        "the code-card and order ledgers (D24, D63) as STORAGE — codes and orders are the "
+        "operator's own words; that either is kept in one file called a ledger is not"
+    ),
+}
+
+_NO_MECHANISM_RE = re.compile("|".join(re.escape(w) for w in NO_MECHANISM_WORDS), re.I)
+
+# A repository path, never something a person types or reads off a download. Every
+# top-level package `docs/map.py` maps, plus `scripts` (where this row itself lives): any
+# of them followed by `/` is a filesystem fact about this checkout, not a sentence about a
+# card. `docs/decisions/` is covered by the bare `docs` prefix, deliberately — a path INTO
+# it is exactly the citation-by-path `cite-decisions-by-id-not-path` already warns against.
+_REPO_TOP_DIRS = (
+    "inventory", "runs", "captures", "harness", "docs", "app",
+    "server", "pipeline", "store", "identify", "geometry", "codes", "cli", "scripts",
+)
+_REPO_PATH_RE = re.compile(r"\b(?:" + "|".join(_REPO_TOP_DIRS) + r")/[\w./<>-]+")
+
+# A bare filename in a format only this repository's own store speaks. `.csv` is
+# deliberately absent: `Pricing.tsx` links a real download by its own name — `import.csv`
+# — and CLAUDE.md's own `emit` section names that file the same way, which is exactly the
+# "a download's own name" exemption the row was asked to argue. `.sqlite`, `.jsonl` and a
+# bare `.json` are never a download; they are always an internal store.
+_REPO_EXT_RE = re.compile(r"\b[\w-]+\.(?:sqlite|jsonl|json)\b")
+
+# `D134`, `C7`, `(D-<slug>)`. The bare numeric forms require the letter directly against a
+# digit with a word boundary on both sides, so "3D" and "ID" cannot match — measured
+# against every one of the ~2,700 strings this row currently extracts from app/src: zero
+# false positives from this pattern on the tree as it stands.
+_DECISION_CITE_RE = re.compile(r"\bD\d{1,4}\b|\bC\d{1,4}\b|\(D-[A-Za-z0-9][A-Za-z0-9-]*\)")
+
+
+def _run_user_strings(args: List[str]) -> Optional[List[Dict[str, object]]]:
+    """Shell out to scripts/user-strings.mjs; None when the toolchain cannot run it.
+
+    THE SAME SPLIT `scripts/screen-freshness.mjs` ALREADY KEEPS: the AST walk lives in
+    node, over the compiler this app itself builds with (`app/node_modules/typescript`),
+    because a hand-rolled matcher would be a second, worse opinion about what a JSX text
+    node is. Everything that decides whether an extracted string is ALLOWED — the word
+    list above — stays in this file, in one place, because that is the part a session
+    actually edits.
+    """
+    # APP_TS_COMPILER is `app/node_modules/typescript/...` — a real toolchain dependency,
+    # never a tracked path, so it can never be "in the index" and `exists()`'s staged-mode
+    # branch (D16's own rule: read the commit, not the worktree) would report it missing on
+    # every `--staged` run regardless of whether `npm install` had been run. Ask the
+    # filesystem directly, the way `make lint` and `make typecheck` do when they need the
+    # same install. USER_STRINGS_SCRIPT is real repo content, so it keeps the staged check.
+    node = shutil.which("node")
+    if node is None or not APP_TS_COMPILER.exists() or not exists(USER_STRINGS_SCRIPT):
+        return None
+    try:
+        done = subprocess.run(
+            [node, str(USER_STRINGS_SCRIPT), *args],
+            cwd=str(ROOT), capture_output=True, text=True, timeout=60, check=False,
+        )
+    except (OSError, subprocess.SubprocessError):
+        return None
+    if done.returncode != 0:
+        return None
+    try:
+        parsed = json.loads(done.stdout)
+    except (json.JSONDecodeError, ValueError):
+        return None
+    return parsed if isinstance(parsed, list) else None
+
+
+# THE ONE SCREEN EXEMPTED FROM THIS ROW, BY NAME, AND THE ARGUMENT FOR IT — a set of exactly
+# one entry so that widening it is a diff someone has to write and someone else has to read.
+# `#/gallery` is the kit's own component sheet: off the nav by declaration (`OFF_NAV` in
+# `App.tsx`), reached from the palette only, and rendered to nobody the product is FOR — not
+# the owner working the rig, not the Fulfiller. Its job is to document the kit to whoever
+# builds the next screen, so naming `docs/specs/logo.md` (the mark's own source) or a
+# `banchi emit runs/2026-09-02-box6-01` example (illustrating what a run log line looks like)
+# IS its content, not a leak of one — the coordinator's ruling, 2026-09-13.
+#
+# `Fulfillment.tsx` and `PullConfirm.tsx` are deliberately NOT here and never will be by the
+# same argument in reverse: a real person — the Fulfiller — reads those screens while working,
+# so a decision citation or a repository path on either of them is exactly the defect this row
+# exists to catch. `check_no_mechanism_exempt_is_pinned` below is what keeps a second entry
+# from being added quietly.
+NO_MECHANISM_EXEMPT_FILES = frozenset({"Gallery.tsx"})
+
+
+def _no_mechanism_exempt(where_file: str) -> bool:
+    """Matched by basename, not by full path — this file is a leaf name (`Gallery.tsx`),
+    never a directory, so a rename under a different parent still resolves correctly and a
+    self-test fixture rooted anywhere still matches the same way the real `app/src` tree
+    does."""
+    return Path(where_file).name in NO_MECHANISM_EXEMPT_FILES
+
+
+def _no_mechanism_findings(strings: List[Dict[str, object]]) -> List[Finding]:
+    findings: List[Finding] = []
+    for item in strings:
+        file = str(item["file"])
+        if _no_mechanism_exempt(file):
+            continue
+        text = str(item["text"])
+        where = f"{item['file']}:{item['line']}"
+        shown = text if len(text) <= 100 else text[:97] + "..."
+        code_hit = _DECISION_CITE_RE.search(text) or _REPO_PATH_RE.search(text) or _REPO_EXT_RE.search(text)
+        if code_hit is not None:
+            findings.append(
+                Finding(
+                    where,
+                    f"names `{code_hit.group(0)}` where a person reads it: {shown!r}\n"
+                    "  A decision citation or a repository path is a fact about this "
+                    "codebase, never about a card, a box or an order — say the outcome "
+                    "instead of the mechanism that produced it.",
+                )
+            )
+            continue
+        word_hit = _NO_MECHANISM_RE.search(text)
+        if word_hit is not None:
+            why = NO_MECHANISM_WORDS.get(word_hit.group(0).lower(), "")
+            findings.append(
+                Finding(
+                    where,
+                    f"says {word_hit.group(0)!r}: {shown!r}\n  {why}",
+                )
+            )
+    return findings
+
+
+def check_no_mechanism_on_screen(report: Report) -> None:
+    """No user-visible string in app/src may name a decision, a repository path, or a
+    pipeline-internal noun. See D196.
+
+    THE EXTRACTION IS AN AST WALK, NOT A GREP OVER FILE TEXT — `scripts/user-strings.mjs`,
+    over `app/node_modules/typescript`, the compiler this app itself builds with. A regex
+    over raw source cannot tell a code COMMENT arguing about `D134` from a sentence a
+    person reads; this reads the AST, where a comment is trivia and never becomes a
+    `JsxText`, a tracked JSX attribute, or a `toast()` argument, so it cannot leak by
+    construction — it was measured to leak zero comments across app/src's ~2,700 hits.
+
+    WHAT IS EXTRACTED, and nothing else: JSX text nodes; string or template-literal values
+    of the JSX attributes `title`, `aria-label`, `placeholder`, `label`, `alt` and `body`
+    (the last for `EmptyState`'s own text prop, which is not one of the other five); a
+    literal used directly as a JSX child expression through the shapes this tree actually
+    builds one with — a ternary, `??`, `&&`, `+`, parentheses; and `title` / `body` /
+    `action.label` passed to `toast()`. `console.*` arguments, `data-*` attributes, class
+    names and import paths are never JSX text or a tracked attribute, so none of them can
+    be reached by this walk at all — not filtered out, structurally absent.
+
+    WHAT IS NOT: a string returned by an arbitrary helper and interpolated by reference —
+    `{formatLabel(x)}` — because that needs data-flow tracing the AST alone does not carry.
+    So the count this row prints is a FLOOR, the same word `docs/specs/corpus-pruning.md`
+    already uses for its own undercount, and for the identical reason: what is missed
+    understates the defect, never invents one.
+
+    `Notice`'s own `code` prop is deliberately NOT extracted — CLAUDE.md's Register
+    section says outright that "the pipeline's own string stays available on hover and in
+    the run log", which is precisely what that prop is for. A session widening this row's
+    attribute list to catch `code` too would be re-litigating that sentence, not fixing a
+    gap.
+
+    ONE SCREEN IS EXEMPTED BY NAME: `Gallery.tsx`, see `NO_MECHANISM_EXEMPT_FILES` right
+    above `_no_mechanism_findings`. `#/gallery` is the kit's own component sheet — off the
+    nav (`OFF_NAV`), reached from the palette only, rendered to nobody the product is FOR —
+    so naming `docs/specs/logo.md` or a `banchi emit runs/…` example there is the sheet's
+    content, not a leak of one. `Fulfillment.tsx` and `PullConfirm.tsx` stay unexempted: a
+    real person reads those while working. The exempt set is pinned at exactly one entry by
+    a literal equality assertion in `--self-test`, so a second name added there fails
+    `make audit-self-test` until the assertion is deliberately updated to match.
+
+    SEVERITY IS MECHANICAL, ON PURPOSE, matching every other row this file uses the word
+    for: a decision citation, a repository path or one of `NO_MECHANISM_WORDS` either is or
+    is not in an extracted string, which is D16's test — nothing here is asking a question
+    a person has to judge.
+
+    THIS ROW IS EXPECTED RED TODAY. Three sessions are editing `app/src/*.tsx` copy
+    concurrently with the one that built this row, clearing the hits it finds; the count in
+    its summary is a snapshot of the tree at the moment `make docs-audit` ran, not a claim
+    that the front end has already been made to comply.
+
+    Toolchain-missing is reported as a finding rather than a silent `scanned=0`, because
+    `make check` already needs `node` and `app/node_modules/typescript` for `lint` and
+    `typecheck` — a machine that cannot run those cannot honestly claim this row passed
+    either.
+    """
+    strings = _run_user_strings([])
+    if strings is None:
+        report.add(
+            "no mechanism on screen", MECHANICAL,
+            [
+                Finding(
+                    rel(USER_STRINGS_SCRIPT),
+                    "could not run — `node` or `app/node_modules/typescript` is missing. "
+                    "`npm install` in app/ first; this row needs the same toolchain "
+                    "`make lint` and `make typecheck` already require.",
+                )
+            ],
+            "toolchain unavailable, so nothing was read", scanned=0,
+        )
+        return
+    findings = _no_mechanism_findings(strings)
+    report.add(
+        "no mechanism on screen", MECHANICAL, findings,
+        (
+            f"{len(findings)} of {len(strings)} visible strings name a decision, a "
+            "repository path, or pipeline machinery"
+        ) if findings else f"{len(strings)} visible strings carry none of it",
+        scanned=len(strings),
+    )
+
+
+
+
 def check_views_opsec(report: Report) -> None:
     """D24's standing sentence: scripts/views.txt may never name a URL whose render can
     contain a code card. Enforcement existed for the images (captures/ is gitignored, both
@@ -16249,6 +16504,135 @@ def self_test() -> int:
         str(by_label["check dispatch"]),
     )
 
+    print("\nno mechanism on screen: the extractor and the word list, over throwaway fixtures")
+    with tempfile.TemporaryDirectory() as tmp_name:
+        fixture_dir = Path(tmp_name)
+
+        def written(name: str, body: str) -> Path:
+            path = fixture_dir / name
+            path.write_text(body)
+            return path
+
+        written(
+            "Positive.tsx",
+            "export function Positive() {\n"
+            "  return <p>Held back for a reason (D134).</p>\n"
+            "}\n",
+        )
+        written(
+            "Comment.tsx",
+            "// This screen used to cite (D134) here; it does not any more.\n"
+            "/* the same token, (D134), inside a block comment */\n"
+            "export function Comment() {\n"
+            "  return <p>Held back for a reason.</p>\n"
+            "}\n",
+        )
+        written(
+            "DataAttr.tsx",
+            "export function DataAttr() {\n"
+            '  return <div data-decision="D134">Held back for a reason.</div>\n'
+            "}\n",
+        )
+        written(
+            "Jargon.tsx",
+            "export function Jargon() {\n"
+            "  return <p>Waiting on the pipeline to answer.</p>\n"
+            "}\n",
+        )
+        written(
+            "Path.tsx",
+            "export function PathHit() {\n"
+            "  return <p>See inventory/prices.json for the answer.</p>\n"
+            "}\n",
+        )
+        written(
+            "CsvName.tsx",
+            "export function CsvName() {\n"
+            "  return <a download=\"import.csv\">import.csv</a>\n"
+            "}\n",
+        )
+        written(
+            "Toast.tsx",
+            "import { toast } from './kit/toast'\n"
+            "export function fireToast() {\n"
+            "  toast({ kind: 'ok', title: 'Sent to the corpus' })\n"
+            "}\n",
+        )
+        written(
+            "NoticeCode.tsx",
+            "export function NoticeCode() {\n"
+            "  return <Notice code=\"the corpus refused it\">Held back.</Notice>\n"
+            "}\n",
+        )
+        written(
+            "OperatorWords.tsx",
+            "export function OperatorWords() {\n"
+            "  return <p>3 copies across 2 boxes, from this run's export, still listed.</p>\n"
+            "}\n",
+        )
+        written(
+            "Gallery.tsx",
+            "export function Gallery() {\n"
+            "  return <p>Generated by scripts/build-mark.mjs from docs/specs/logo.md — the "
+            "pipeline never touches this file.</p>\n"
+            "}\n",
+        )
+        written(
+            "Fulfillment.tsx",
+            "export function Fulfillment() {\n"
+            "  return <p>Waiting on the pipeline to answer.</p>\n"
+            "}\n",
+        )
+        written(
+            "PullConfirm.tsx",
+            "export function PullConfirm() {\n"
+            "  return <p>Waiting on the pipeline to answer.</p>\n"
+            "}\n",
+        )
+
+        strings = _run_user_strings(["--dir", str(fixture_dir)])
+        ok(strings is not None, "the extractor runs over a throwaway fixture tree",
+           "node or app/node_modules/typescript unavailable — install and re-run")
+        if strings is not None:
+            findings = _no_mechanism_findings(strings)
+            hit_files = {f.where.split(":")[0].split("/")[-1] for f in findings}
+            ok("Positive.tsx" in hit_files,
+               "a decision citation in JSX text is caught")
+            ok("Comment.tsx" not in hit_files,
+               "the same token inside a comment is not — a comment is trivia, never a JsxText node")
+            ok("DataAttr.tsx" not in hit_files,
+               "a decision cite in a `data-*` attribute is not — that attribute name is not tracked")
+            ok("Jargon.tsx" in hit_files,
+               "a forbidden pipeline-internal noun in JSX text is caught")
+            ok("Path.tsx" in hit_files,
+               "a repository path in JSX text is caught")
+            ok("CsvName.tsx" not in hit_files,
+               "a bare `.csv` filename with no directory — a download's own name — is exempt")
+            ok("Toast.tsx" in hit_files,
+               "`toast({ title: … })` carrying a forbidden noun is caught")
+            ok("NoticeCode.tsx" not in hit_files,
+               "`Notice`'s own `code` prop is the one exempted channel (CLAUDE.md's Register "
+               "paragraph) and is never extracted")
+            ok("OperatorWords.tsx" not in hit_files,
+               "run/box/export/listing — the operator's own words — trip nothing")
+            ok("Gallery.tsx" not in hit_files,
+               "the kit sheet is exempt BY NAME — it documents the kit to a builder, not the "
+               "product to an operator")
+            ok("Fulfillment.tsx" in hit_files,
+               "the Fulfiller's own screen is NOT exempt — a real person reads it while working")
+            ok("PullConfirm.tsx" in hit_files,
+               "the pull-confirm screen is NOT exempt, for the same reason")
+
+    # THE PIN. `NO_MECHANISM_EXEMPT_FILES` is a set of exactly one entry, named in the
+    # coordinator's 2026-09-13 ruling and nowhere else — a session widening it to a second
+    # file must edit this literal, which fails `--self-test` (and therefore
+    # `make audit-self-test`, which is in `make check`) until the assertion is updated to
+    # match, on purpose and in a diff a reviewer sees. This is the mechanism, not a comment
+    # promising one: mutate the set to add a second name and this line goes red.
+    ok(frozenset({"Gallery.tsx"}) == NO_MECHANISM_EXEMPT_FILES,
+       "the no-mechanism-on-screen exemption is pinned to exactly one file, `Gallery.tsx`",
+       f"got: {sorted(NO_MECHANISM_EXEMPT_FILES)}")
+
     print("\n" + "=" * 72)
     if failures:
         print(f"{len(failures)} self-test {'failure' if len(failures) == 1 else 'failures'}")
@@ -16346,6 +16730,7 @@ def audit(staged_only: bool) -> Report:
     check_check_registry(report)
     check_commit_path(report)
     check_check_census(report)
+    check_no_mechanism_on_screen(report)
     check_suite_lock(report)
     check_browser_scope(report)
     check_positional_references(report, docs)

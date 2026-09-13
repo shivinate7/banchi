@@ -227,7 +227,7 @@ const SECTIONS: SectionSpec[] = [
     bucket: 'listable',
     title: 'Above the cut-off',
     icon: 'tag',
-    note: (cut) => `Market at or above $${cut}. These are priced by the standing rule.`,
+    note: () => '',
   },
   {
     bucket: 'sub_threshold',
@@ -885,7 +885,7 @@ export function Pricing() {
         type="text"
         inputMode="numeric"
         placeholder="no cap"
-        aria-label="Hold each SKU to at most this many copies live at TCGplayer, counting what is already out"
+        aria-label="Copies to keep live at TCGplayer"
         value={sendCap}
         onChange={(event) => {
           const text = event.currentTarget.value
@@ -1565,7 +1565,7 @@ export function Pricing() {
      emptying the field; this is for the operator who typed twelve and changed their mind. */
   const byHandChip =
     progress.byHand === 0 ? null : (
-      <Chip icon="x" className="pricing-ship-byhand" onClick={clearAsked} title="Clear every typed quantity — put every card back to all the copies that can go">
+      <Chip icon="x" className="pricing-ship-byhand" onClick={clearAsked} title="Clear all typed quantities">
         {progress.byHand} by hand
       </Chip>
     )
@@ -2637,7 +2637,6 @@ export function Pricing() {
   const chrome = (
     <header className="bn-head pricing-head">
       <div className="bn-head-text">
-        <span className="bn-eyebrow">Workflow · Price</span>
         <h1 className="bn-title pricing-title">
           <Icon name="tag" size={22} />
           Pricing
@@ -2660,7 +2659,7 @@ export function Pricing() {
         <span
           className={`bn-pill pricing-save ${saving ? 'bn-pill-accent' : dirty ? 'bn-pill-warn' : 'bn-pill-ok'}`}
           aria-live="polite"
-          title="Every answer is written to inventory/prices.json as you go"
+          title="Autosaves as you type"
         >
           <Icon name={saving ? 'refresh' : dirty ? 'clock' : 'check'} size={12} />
           {saving ? 'Saving…' : dirty ? 'Unsaved' : 'Saved'}
@@ -2676,7 +2675,7 @@ export function Pricing() {
             one below it, and deliberately NOT "Pull by value" — that promises a write this
             lens does not do, and a button here says exactly what happens. It reads the whole
             STORE rather than the worklist, so it is live whether or not anything is joined. */}
-        <Button icon="trendUp" onClick={() => openValue('top')} aria-label="Find the most and least valuable cards">
+        <Button icon="trendUp" onClick={() => openValue('top')} aria-label="Rank inventory by value">
           <span className="pricing-hide-sm">Find by value</span>
           <span className="pricing-only-sm">By value</span>
         </Button>
@@ -2811,7 +2810,7 @@ export function Pricing() {
             title={failure.message}
             body={
               <>
-                Nothing on this screen can be shown until the capture server answers.
+                Waiting on the capture server.
                 {failure.code ? <span className="pricing-machine pricing-empty-code">{failure.code}</span> : null}
               </>
             }
@@ -2828,7 +2827,7 @@ export function Pricing() {
           <EmptyState
             icon="tag"
             title="Nothing live in that export"
-            body="This markdown surveyed no live listings — every row TCGplayer returned was sold out. Fetch a fresh export and read it again."
+            body="Every row TCGplayer returned was sold out."
             actions={
               /* THE DOOR IS HERE NOW (D105). This sent the operator to `#/runs` for a sheet
                  that is no longer on it — a screen naming a destination that cannot perform
@@ -2848,7 +2847,7 @@ export function Pricing() {
           <EmptyState
             icon="tag"
             title="Nothing joined — price what is live instead"
-            body="Read your live TCGplayer listings and price them here: the same worklist, the same charts and presets, over the book you already have up. Or join a box on Runs to price cards you have just photographed."
+            body="Price your live TCGplayer listings here, or join a box on Runs."
             actions={
               <>
                 <Button
@@ -2877,7 +2876,7 @@ export function Pricing() {
           <EmptyState
             icon="filter"
             title="Nothing to price in those runs"
-            body="Every card in the runs you picked already has an answer."
+            body="Every card already has an answer."
             actions={
               <Button variant="primary" icon="x" onClick={clearPicked}>
                 Show everything unsent
@@ -2888,7 +2887,7 @@ export function Pricing() {
           <EmptyState
             icon="check"
             title="Everything is sent"
-            body="Every copy in every joined run is at TCGplayer, held back on purpose, or has left its box. Pick a run to look at it again, or join a box on Runs."
+            body="Every copy is at TCGplayer, held, or has left its box."
             actions={
               <>
                 <Button variant="primary" icon="layers" onClick={() => setRunsOpen(true)}>
@@ -2912,7 +2911,7 @@ export function Pricing() {
 
       <div className="pricing-body" data-trends={trendRun === null ? 'off' : 'on'}>
         {(work?.skipped ?? []).length === 0 ? null : (
-          <Notice tone="warn" title="A run could not be read and is left out of this list" className="pricing-notice">
+          <Notice tone="warn" title="Run unreadable — left out of this list" className="pricing-notice">
             {(work?.skipped ?? []).map((row) => (
               <span className="pricing-machine" key={row.run}>
                 {row.run} · {row.code}
@@ -2967,7 +2966,6 @@ export function Pricing() {
             stranded={stranded}
             runName={run}
             runLabel={scopeName ?? (run === null ? null : run)}
-            runCount={loaded.length}
             onCut={setCut}
             onRunCut={setRunCut}
             onPickRun={() => setRunsOpen(true)}
@@ -3070,7 +3068,7 @@ export function Pricing() {
               <span
                 className={`pricing-rule-says${customBad === null ? '' : ' pricing-rule-bad'}`}
                 data-keep={customOn ? 'true' : undefined}
-                title="A rule fills only the rows you have not set, and becomes the standing rule."
+                title="Fills unset rows and becomes the standing rule."
               >
                 <Icon name={customBad === null ? 'info' : 'alert'} size={13} />
                 {customOn
@@ -3132,8 +3130,8 @@ export function Pricing() {
               busy={trendRun?.reading === true}
               title={
                 source.trends === null
-                  ? 'Trends read one run at a time — pick a single run'
-                  : `Read the shape of the ${rows.length} row${rows.length === 1 ? '' : 's'} on screen off two public mirrors`
+                  ? 'Pick a single run to read trends'
+                  : `Read ${rows.length} row${rows.length === 1 ? '' : 's'} price history`
               }
             >
               {/* THE COUNT IS ON THE BUTTON, because on a lens this press is the one that can be
@@ -3157,7 +3155,7 @@ export function Pricing() {
                   <span style={{ width: `${trendRun.total === 0 ? 100 : Math.round((trendRun.done / trendRun.total) * 100)}%` }} />
                 </div>
                 <span className="pricing-trendbar-says">
-                  Reading {trendRun.done} of {trendRun.total} rows — the strip fills in waves.
+                  Reading {trendRun.done} of {trendRun.total}…
                 </span>
               </>
             ) : (
@@ -3174,7 +3172,7 @@ export function Pricing() {
                 </span>
                 <span
                   className="pricing-trendbar-why"
-                  title="The ranges overlap and are read separately — the wider one includes these same recent days at a coarser width, so they can point opposite ways."
+                  title="Ranges overlap and can point opposite ways."
                 >
                   <Icon name="info" size={13} /> ranges overlap
                 </span>
@@ -3213,7 +3211,7 @@ export function Pricing() {
                     {section.title}
                     <span className="bn-pill pricing-section-count">{section.total} SKU{section.total === 1 ? '' : 's'}</span>
                   </h2>
-                  <p className="pricing-section-note">{section.note(cut)}</p>
+                  {section.note(cut) === '' ? null : <p className="pricing-section-note">{section.note(cut)}</p>}
                 </div>
               </div>
               {section.bucket !== 'sub_threshold' ? null : (
@@ -3225,7 +3223,7 @@ export function Pricing() {
                   className="pricing-section-answer"
                   data-state={cutFrom === 'default' ? 'unset' : cutFrom}
                   onClick={showDeck}
-                  title="The cut-off is set at the top of this screen"
+                  title="Set at the top of the screen"
                 >
                   <span className="pricing-section-answer-figure">${cut}</span>
                   <span className="pricing-section-answer-says">
@@ -3346,7 +3344,7 @@ export function Pricing() {
                             {!sku.over_cap ? null : (
                               <span
                                 className="pricing-span-cap bn-pill bn-pill-warn"
-                                title={`The runs' own tables say ${sku.claimed_add} — written by each join, before any emit spent them. ${sku.add_to_quantity} is what the store says can still go, counted now, and is what the press will write. The tables were read ${ageWords(readAtOf(sku)) ?? 'at an unrecorded time'}.`}
+                                title={`Claimed ${sku.claimed_add} at join; ${sku.add_to_quantity} can go now.`}
                               >
                                 Runs claim {sku.claimed_add} · {sku.add_to_quantity} can go
                               </span>
@@ -3370,7 +3368,7 @@ export function Pricing() {
                           empty field reads as the answer it gives rather than as a gap. A row
                           with nothing to add stays a plain figure: there is nothing to choose. */}
                       {!source.copies ? null : sku.at_cap ? (
-                        <span className="pricing-qty" title={`${sku.add_to_quantity} of the ${sku.copies} copies can still go — ${sku.committed} ${sku.committed === 1 ? 'is' : 'are'} already at TCGplayer or have left the box`}>
+                        <span className="pricing-qty" title={`${sku.add_to_quantity} of ${sku.copies} can go — ${sku.committed} listed or gone`}>
                           <span className="bn-sr">Quantity </span>
                           {sku.add_to_quantity} <span className="pricing-qty-of">of {sku.copies}</span>
                         </span>
@@ -3704,8 +3702,8 @@ export function Pricing() {
                 run` outright — a control the operator could see and could not press. */}
             <span className="pricing-ready pricing-ship-says pricing-hide-sm">
               {sendCap.trim() === ''
-                ? 'A card in three boxes gets one row, and every copy TCGplayer does not already hold goes out.'
-                : 'The cap is spent once across the send, so a card in three boxes gets one row.'}            </span>
+                ? 'A card in three boxes gets one row — every copy TCGplayer does not hold goes out.'
+                : 'The cap is spent once across the send.'}            </span>
           </div>
           <div className="pricing-ship-act">
             <label className="bn-check pricing-ship-only">
@@ -3757,13 +3755,12 @@ export function Pricing() {
                        still standing would send the same copies again on top of what went. */
                     if (result.ok) clearAsked()
                     const imports = (result.files ?? []).filter((file) => file.is_import)
-                    const byHand = Object.keys(asked).length
                     toast(
                       result.ok
                         ? {
                             kind: 'ok',
                             title: `${imports.length} import file${imports.length === 1 ? '' : 's'} written`,
-                            body: `${byHand === 0 ? '' : `${byHand} card${byHand === 1 ? '' : 's'} at the quantity you typed. `}Import to Staged in TCGplayer, then reconcile on Runs.`,
+                            body: 'Import to Staged in TCGplayer, then reconcile on Runs.',
                             action: { label: 'Files', onPress: () => setFilesOpen(true) },
                           }
                         : {
@@ -3810,7 +3807,7 @@ export function Pricing() {
               className="pricing-ship-verdict"
               data-ready={owes.length === 0 ? 'true' : 'false'}
               onClick={showDeck}
-              title="What this means is at the top of the screen"
+              title="See detail at the top"
             >
               <span className={`bn-pill ${owes.length === 0 ? 'bn-pill-ok' : 'bn-pill-warn'}`}>
                 <Icon name={owes.length === 0 ? 'check' : 'alert'} size={12} />
@@ -3891,7 +3888,7 @@ export function Pricing() {
               </>
             ) : emitted && armed ? (
               <>
-                <span className="pricing-ship-key">Writing again sends only what has not been sent yet.</span>
+                <span className="pricing-ship-key">Sends only what's unsent.</span>
                 <Button variant="quiet" onClick={() => setArmed(false)}>
                   Cancel
                 </Button>
@@ -4117,7 +4114,6 @@ function CutoffPanel({
   stranded,
   runName,
   runLabel,
-  runCount,
   onCut,
   onRunCut,
   onPickRun,
@@ -4131,7 +4127,6 @@ function CutoffPanel({
   stranded: string | null
   runName: string | null
   runLabel: string | null
-  runCount: number
   onCut: (figure: string) => void
   onRunCut: (figure: string | undefined) => void
   onPickRun: () => void
@@ -4176,7 +4171,7 @@ function CutoffPanel({
         <BigMoney
           value={cut}
           onCommit={commit}
-          label={overridden ? "This run's cut-off" : "The store's cut-off"}
+          label={overridden ? "This run" : "Store default"}
         />
         <span className="pricing-cheap-caption">
           <span className="pricing-cheap-says">
@@ -4212,8 +4207,7 @@ function CutoffPanel({
            either — or pressing this — writes both keys and ends the disagreement. */
         <Notice tone="warn" title="This store still holds a separate cheap-card price" className="pricing-cheap-stranded">
           <span>
-            Cards under the line are priced at <strong>{stranded}</strong> on disk, not at the cut-off. Emit
-            uses that figure until one of them is written over.
+            Cards under the line are still priced at <strong>{stranded}</strong>, not the cut-off.
           </span>
           <Button size="sm" variant="quiet" icon="check" onClick={() => commit(cut)}>
             Make them both ${cut}
@@ -4239,8 +4233,7 @@ function CutoffPanel({
         </div>
         {runName === null ? (
           <p className="pricing-cheap-run-off">
-            {runCount} runs are loaded, and an override belongs to one lot. Pick a single run to give it
-            a cut-off of its own.
+            Pick a single run to give it its own cut-off.
             <Button size="sm" variant="ghost" icon="layers" onClick={onPickRun}>
               Pick a run
             </Button>
@@ -4263,16 +4256,11 @@ function CutoffPanel({
                 </Button>
               )}
             </div>
-            <p className="pricing-cheap-run-says">
-              {overridden ? (
-                <>
-                  This run splits at <strong>${cut}</strong>, and its cheap cards go out at that. Every
-                  other run keeps the store’s.
-                </>
-              ) : (
-                <>These cards follow the store’s cut-off. Nothing is written against this run.</>
-              )}
-            </p>
+            {overridden ? (
+              <p className="pricing-cheap-run-says">
+                This run splits at <strong>${cut}</strong>. Others keep the store’s.
+              </p>
+            ) : null}
           </>
         )}
       </div>
@@ -4377,17 +4365,14 @@ function MarkdownPanel({
               rows carrying a typed answer and `apply` receives only those. */}
           {typed === 0 ? (
             <>
-              <strong>Nothing typed yet.</strong> Every row here is a listing TCGplayer is holding
-              right now. Type a price on any of them — nothing leaves this machine until you
-              press, and <strong>a box left blank keeps the price it already has</strong>.
+              <strong>Nothing typed yet.</strong> A blank box keeps its current price.
             </>
           ) : (
             <>
               <strong>
                 {typed} price{typed === 1 ? '' : 's'} typed
               </strong>{' '}
-              — a box left blank keeps the price it already has, so the rest go out exactly as
-              they are listed.
+              — blanks keep their current price.
             </>
           )}
         </p>
@@ -4399,10 +4384,9 @@ function MarkdownPanel({
            called a markdown that is the row most worth a second look. */
         <p className="pricing-verdict-says">
           <strong>
-            {raises} row{raises === 1 ? '' : 's'} priced above the live price.
+            {raises} row{raises === 1 ? '' : 's'} priced above the live price
           </strong>{' '}
-          The rule only ever proposes a cut, so these are prices you typed. They will be sent as
-          typed and named as raises on the receipt.
+          — sent as typed, named as raises on the receipt.
         </p>
       )}
 
@@ -4425,8 +4409,7 @@ function MarkdownPanel({
       </ul>
 
       <p className="pricing-verdict-fine">
-        Apply can still refuse for a reason this screen cannot see — a price under your cut-off,
-        a duplicate, or a price that has not moved. A raise is no longer one of them.
+        May still refuse: below cut-off, duplicate, or unmoved price.
       </p>
     </section>
   )
@@ -4482,7 +4465,7 @@ function UnreachableLine({ at }: { at: Unreachable | null }) {
   // text literally, so markdown punctuation in one is just punctuation on screen.
   if (strandedRuns.length > 0)
     parts.push(
-      <span key="reallocated" title="A run over a drawer whose number was deleted and reused since. The cards are still on your shelf — run pkmnscan rescue on that run and it re-binds them to where they are now, as a run that can be joined and sent.">
+      <span key="reallocated" title="Drawer number reused since this run. Run `pkmnscan rescue` to rebind it.">
         {stranded > 0 ? `${stranded} in ` : ''}
         {strandedRuns.length} run{strandedRuns.length === 1 ? '' : 's'} over a deleted box
       </span>,
@@ -4550,10 +4533,10 @@ function ReadyPanel({
     .join(' · ')
   const writesAt =
     ruleRows > 0 && progress.cheap > 0
-      ? `Emit will write the rule rows at the rule’s figure and the cheap ones at ${cheapMoney}.`
+      ? `Rule rows at the rule’s price; cheap ones at ${cheapMoney}.`
       : ruleRows > 0
-        ? 'Emit will write them at the rule’s figure.'
-        : `Emit will write them at ${cheapMoney}.`
+        ? 'Writes at the rule’s price.'
+        : `Writes at ${cheapMoney}.`
   return (
     <section className="bn-panel pricing-verdict" data-ready={ready ? 'true' : 'false'} aria-label="Whether the import files can be written">
       <header className="pricing-deck-head">
@@ -4581,7 +4564,7 @@ function ReadyPanel({
             </>
           ) : (
             <>
-              <strong>Pricing is answered.</strong> Every row carries a price a hand put there.
+              <strong>Pricing is answered.</strong>
             </>
           )}
         </p>
@@ -4652,7 +4635,7 @@ function ReadyPanel({
         <Icon name="send" size={13} />
         <span>
           {progress.outRows === 0 ? (
-            'Nothing would go in the file — every row is held, or at the cap.'
+            'Nothing to write — every row is held or at the cap.'
           ) : (
             <>
               <strong>
@@ -4680,21 +4663,21 @@ function ReadyPanel({
         </div>
         <div>
           <dt>Prices read</dt>
-          <dd title="Every market figure and every live count on this screen was frozen into the run when it was joined.">
+          <dd title="Frozen at join time">
             {readAge ?? 'not recorded'}
           </dd>
         </div>
         {progress.closed === 0 ? null : (
           <div>
             <dt>Nothing to add</dt>
-            <dd title="At the cap, or every copy already listed — this run writes no row for them.">
+            <dd title="At the cap or already fully listed">
               {progress.closed} SKU{progress.closed === 1 ? '' : 's'}
             </dd>
           </div>
         )}
       </dl>
 
-      <p className="pricing-verdict-fine">Emit can still refuse for a reason this screen cannot see.</p>
+      <p className="pricing-verdict-fine">Emit can still refuse.</p>
     </section>
   )
 }
@@ -4727,7 +4710,7 @@ function fieldState(
       if (now > was) {
         return {
           text: 'Above the live price',
-          title: `Listed at $${was.toFixed(2)}. Above it is a raise — the rule never proposes one, so it is sent as typed and named on the receipt (D107).`,
+          title: `Listed at $${was.toFixed(2)}. This is a raise.`,
           tone: 'warn',
         }
       }
@@ -4751,7 +4734,7 @@ function fieldState(
     // landing is offering. Both, in the tone of the thing that stops the files being written.
     return {
       text: `Default $${cut}`,
-      title: `The store default. Nothing is written, so emit refuses — the cut-off is at the top of this screen.`,
+      title: `Default — not written yet.`,
       tone: 'warn',
     }
   }
@@ -4764,7 +4747,7 @@ function fieldState(
   if (custom !== null) {
     return {
       text: `On the rule · ${customShort(custom)}`,
-      title: `${customRuleText(custom)} of ${BASIS_LABEL[custom.basis]} — emit prices this row from the standing rule.`,
+      title: `${customRuleText(custom)} of ${BASIS_LABEL[custom.basis]}`,
       tone: 'quiet',
     }
   }

@@ -1082,7 +1082,7 @@ test('the cache line is drawn only where cards are already answered', async ({ p
      and the max edge are not part of the cache identity, so a box re-read at a different
      reading serves the answers it was first read with and reports them as hits. */
   await expect(page.locator('.runs-quote-cache')).toContainText(
-    'keep the answer they were first read with',
+    'keep their first reading',
   )
 })
 

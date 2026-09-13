@@ -309,7 +309,7 @@ function FetchReceipt({
     took.push(<Fig key="detailed" n={receipt.detailed} of="detailed" />)
   }
   if (receipt.skippedKnown !== null && receipt.skippedKnown > 0) {
-    took.push(<Fig key="known" n={receipt.skippedKnown} of="already in the ledger" />)
+    took.push(<Fig key="known" n={receipt.skippedKnown} of="already known" />)
   }
   if (receipt.ingest !== null) {
     took.push(
@@ -481,8 +481,7 @@ function StatusPicker({
         </div>
       ) : rows.length === 0 && absent.length === 0 ? (
         <div className="orders-statuses-state">
-          <p className="orders-statuses-note">TCGplayer returned no orders in this window, so there is nothing to
-            narrow. The press will say the same.</p>
+          <p className="orders-statuses-note">No orders in this window.</p>
         </div>
       ) : (
         <>
@@ -497,9 +496,7 @@ function StatusPicker({
             <p className="orders-statuses-ask">
               <Icon name="info" size={15} />
               <span>
-                <b>Which of these are worth fetching?</b> An order TCGplayer has already shipped still
-                holds its copies here, so a live order can be told a card is short while it sits in a
-                box. Nothing has been fetched yet, and this is remembered on this device.
+                <b>Which of these are worth fetching?</b> Nothing fetched yet — remembered on this device.
               </span>
             </p>
           )}
@@ -536,7 +533,7 @@ function StatusPicker({
                   <span className="orders-status-name bn-mono">{row.status}</span>
                   <span className="orders-status-count">{row.count.toLocaleString()}</span>
                   {row.known > 0 ? (
-                    <span className="orders-status-known">{row.known.toLocaleString()} in the ledger</span>
+                    <span className="orders-status-known">{row.known.toLocaleString()} already known</span>
                   ) : null}
                 </label>
               </li>
@@ -564,7 +561,7 @@ function StatusPicker({
               checked={filter.skipKnown}
               onChange={(event) => onChange({ ...filter, skipKnown: event.target.checked })}
             />
-            <span className="orders-status-name">Skip orders the ledger already holds at that status</span>
+            <span className="orders-status-name">Skip orders already held at that status</span>
           </label>
           {/* THE CONFIRM EXISTS ONLY WHILE THE DEVICE IS UNANSWERED. Afterwards the panel is a
               setting and the Fetch button beside it is the press; a second primary here would be
@@ -579,8 +576,7 @@ function StatusPicker({
             </div>
           )}
           <p className="orders-statuses-note orders-statuses-foot">
-            The strings are TCGplayer&rsquo;s own, counted by a free call that details nothing. This choice is
-            remembered on this device.
+            Remembered on this device.
           </p>
         </>
       )}
@@ -1626,7 +1622,7 @@ export function OrdersHub({ stage }: { readonly stage: Stage }) {
              a body and a useless one about a choice the operator made on this screen. */
           setPasteNote(
             absent.length === 0
-              ? 'Every status is ticked off, so this press would fetch nothing. Open Statuses and tick at least one.'
+              ? 'Nothing to fetch — every status is unticked. Open Statuses and tick one.'
               : `This window holds no ${absent.join(', ')} orders — the only statuses ticked here. Nothing was fetched.`,
           )
           setBusy(null)
@@ -1781,7 +1777,6 @@ export function OrdersHub({ stage }: { readonly stage: Stage }) {
       className={filter.statuses === null && !filter.skipKnown ? undefined : 'orders-status-btn-on'}
     >
       {statusSummary}
-      {filter.skipKnown ? ' · skipping known' : ''}
     </Button>
   )
 
@@ -2047,7 +2042,7 @@ export function OrdersHub({ stage }: { readonly stage: Stage }) {
             everything and details nothing new. */}
         {withFetch ? (
           <Button icon="clock" onClick={() => onFetch('LastTwoYears')} busy={busy === 'fetch'} disabled={busy !== null}>
-            Fetch two years of history
+            Fetch two years
           </Button>
         ) : null}
         {/* THE NARROWING SITS BESIDE THE PRESS, NOT IN FRONT OF IT. D91's two-press flow was
@@ -2056,9 +2051,7 @@ export function OrdersHub({ stage }: { readonly stage: Stage }) {
         {withFetch ? statusControl : null}
       </div>
       {withFetch ? (
-        <p className="orders-paste-source">
-          A repeat of either press is free — orders the ledger already holds at that status are skipped.
-        </p>
+        <p className="orders-paste-source">A repeat skips known orders.</p>
       ) : null}
       {withFetch ? statusPanel : null}
       <p className="orders-paste-source">
@@ -2075,8 +2068,7 @@ export function OrdersHub({ stage }: { readonly stage: Stage }) {
         <p className="orders-paste-dropped" role="status">
           <Icon name="lock" size={14} />
           <span>
-            Not sent: <span className="bn-mono">{dropped.join(', ')}</span>. Only the SKU, the count and what the feed
-            called the card left this browser.
+            Not sent: <span className="bn-mono">{dropped.join(', ')}</span>. Only the SKU, count and card name left this browser.
           </span>
         </p>
       )}
@@ -2090,7 +2082,7 @@ export function OrdersHub({ stage }: { readonly stage: Stage }) {
       ? populated && counts !== null
         ? summaryOf(open, done, counts)
         : 'Which copies each buyer gets, and where in the boxes they are. One press per copy, with twenty seconds to take it back.'
-      : "TCGplayer's Export Shipping file, sorted into three lanes. The orders it cannot judge are kept apart, for you to decide."
+      : "TCGplayer's shipping export, sorted into three lanes."
 
   /* THE TWO ROUTES ARE TABS, NAMED AS THE NAV NAMES THEM. Each is a real link (the hash is the
      router), and the leader chords ride as hover hints where there is a keyboard. */
@@ -2148,7 +2140,6 @@ export function OrdersHub({ stage }: { readonly stage: Stage }) {
   return (
     <main className={`orders-hub bn-page ${stage === 'pull' ? 'orders' : 'shipping'}`}>
       <PageHeader
-        eyebrow="Sell"
         icon={stage === 'pull' ? 'cart' : 'truck'}
         title={stage === 'pull' ? 'Orders' : 'Shipping'}
         lede={lede}
@@ -2288,14 +2279,11 @@ function BacklogPrompt({
       <p>
         TCGplayer reports {candidates.length === 1 ? 'it' : 'them'} as{' '}
         {joinPhrases(statuses.map((status) => `“${status}”`))}, but this store never recorded which
-        copies went — so {candidates.length === 1 ? 'it is' : 'they are'} still counted as open, and{' '}
-        {candidates.length === 1 ? 'it holds' : 'they hold'} copies away from the orders you still
-        have to pick.
+        copies went — still open here, holding copies back.
       </p>
       <p>
-        Standing them down marks <strong>nothing</strong> sold and claims no copy left the building
-        — it records only that this store is no longer accounting for them. Any card they shipped
-        with is still in its box, and reconciling that is <code>#/inventory</code>&apos;s job.
+        Standing down marks <strong>nothing</strong> sold and claims no copy left. Any card shipped
+        is still in its box — reconcile on <code>#/inventory</code>.
       </p>
       <div className="orders-standdown-row">
         <Button
@@ -2489,7 +2477,7 @@ function PullStage({
         <div className="bn-panel">
           <EmptyState
             icon="alert"
-            title="The ledger did not answer"
+            title="Orders did not answer"
             body={
               <>
                 {failure.message} <code className="bn-mono orders-failure-code">{failure.code}</code>
@@ -2508,7 +2496,7 @@ function PullStage({
 
   if (payload === null || counts === null) {
     return (
-      <div className="orders-stage orders-skeleton" aria-busy="true" aria-label="Reading the ledger">
+      <div className="orders-stage orders-skeleton" aria-busy="true" aria-label="Reading orders">
         <span className="bn-skeleton orders-skel-line" />
         <span className="bn-skeleton orders-skel-chips" />
         <span className="bn-skeleton orders-skel-card" />
@@ -2527,7 +2515,7 @@ function PullStage({
           <EmptyState
             icon="cart"
             title="No orders yet"
-            body="Fetch this account's own orders from TCGplayer, or paste one in. Nothing on this screen spends money; the pull is the only write, and it can be taken back."
+            body="Fetch orders from TCGplayer, or paste one in."
             actions={
               <>
                 <Button variant="primary" size="lg" icon="refresh" onClick={() => onFetch()} busy={busy === 'fetch'} disabled={busy !== null}>
@@ -2670,7 +2658,7 @@ function PullStage({
           }
         />
         {mode === 'walk' ? (
-          <p className="orders-toolbar-note">Every open order&apos;s copies in one pass, in the order the boxes hold them.</p>
+          <p className="orders-toolbar-note">Every open order&apos;s copies, in box order.</p>
         ) : (
           chips
         )}
@@ -2683,8 +2671,7 @@ function PullStage({
         <p className="orders-store-note" role="status">
           <Icon name="info" size={14} />
           <span>
-            The card map did not answer, so each line is showing only the copies this order was offered — not every copy
-            the store holds.
+            Showing only the copies this order was offered — not every copy in the store.
           </span>
           <button type="button" className="orders-fold-btn" onClick={onRereadStore}>
             <Icon name="refresh" size={13} />
@@ -2994,8 +2981,8 @@ function OrderDetail({
       <div className="orders-reason orders-reason-warn">
         <Icon name="clock" size={16} />
         <div>
-          <p className="orders-line-says">This order is outstanding and was not resolved in this read.</p>
-          <p className="orders-line-remedy">Read the ledger again; the resolver answers every open order out of one snapshot.</p>
+          <p className="orders-line-says">Not resolved in this read.</p>
+          <p className="orders-line-remedy">Read again to resolve it.</p>
         </div>
         <Button icon="refresh" onClick={onReread}>
           Try again
@@ -3971,7 +3958,7 @@ function WalkView({
         <EmptyState
           icon="check"
           title="Nothing left to walk"
-          body={open.length === 0 ? 'Every order has its copies.' : 'No open order has a copy this screen can pull from here; each order says why.'}
+          body={open.length === 0 ? 'Every order has its copies.' : 'No open order has a copy to pull here; each order says why.'}
         />
       </div>
     )

@@ -1557,7 +1557,7 @@ export function BoxBrowse({
             ) : (
               <div className="browse-shelfnote">
                 <span className="boxops-identity-num">No box</span>
-                <p>These records reached the store with a box or index that is not a number, so the server sent no position. The server status page lists them.</p>
+                <p>These records have no valid box or index. See the server status page.</p>
               </div>
             )}
             {shelfBox === null ? null : boxPanel}
@@ -1632,7 +1632,7 @@ export function BoxBrowse({
               <EmptyState
                 icon="box"
                 title={`Nothing in box ${shelfBox.box} yet`}
-                body="Capture a card into it, or manage the box above — rename, divide, seal or delete it."
+                body="Capture a card, or manage the box above."
                 actions={
                   <Button size="sm" icon="camera" onClick={() => (window.location.hash = '#/capture')}>
                     Capture into box {shelfBox.box}
@@ -1848,7 +1848,6 @@ export function BoxBrowse({
   return (
     <section className="browse">
       <PageHeader
-        eyebrow="Library"
         title={head ?? 'Inventory'}
         icon="box"
         lede={
@@ -1908,7 +1907,7 @@ export function BoxBrowse({
           <EmptyState
             icon="camera"
             title="No cards captured yet"
-            body="Every card you capture gets an address — a box, a section, a card number — and shows up here."
+            body="Captured cards show up here."
             actions={
               <Button variant="primary" icon="camera" onClick={() => (window.location.hash = '#/capture')}>
                 Capture your first card
@@ -1955,7 +1954,7 @@ export function BoxBrowse({
                     <EmptyState
                       icon="search"
                       title={`Nothing matches “${query.trim()}”`}
-                      body="The search reads the card's name, number, SKU, set hint and note."
+                      body="Searches name, number, SKU, set, note."
                       actions={
                         <Button icon="x" onClick={() => setQuery('')}>
                           Clear the search
@@ -2036,8 +2035,8 @@ export function BoxBrowse({
                         <Notice tone="warn" title={`Waiting in the ${open.queue} queue — ${reasonLabel(open.entry.reason)}.`} code={`${open.entry.reason} · ${open.queue} · candidates ${open.entry.candidates.length}`}>
                           {waitingFor(open.entry.first_seen)}.{' '}
                           {open.entry.candidates.length > 0
-                            ? `${open.entry.candidates.length} candidate row${open.entry.candidates.length === 1 ? '' : 's'} to choose from on the review screen.`
-                            : 'No candidate rows, so it cannot be answered as it stands — re-shoot it, or stand it down from the review screen.'}{' '}
+                            ? `${open.entry.candidates.length} candidate row${open.entry.candidates.length === 1 ? '' : 's'} on Review.`
+                            : 'No candidate rows — cannot be answered as it stands. Re-shoot it, or stand it down on Review.'}{' '}
                           <a href="#/review">Open the review queue</a>
                         </Notice>
                       </div>

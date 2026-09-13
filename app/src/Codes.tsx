@@ -808,10 +808,9 @@ export function Codes() {
   return (
     <main className="codes bn-page">
       <PageHeader
-        eyebrow="Library"
         title="Codes"
         icon="qr"
-        lede="Read a box of code cards for free, keep the premium codes out of the bulk lot, and hand a code to a buyer exactly once."
+        lede="Read, tier, and hand off code cards."
         actions={
           <>
             <Button variant="ghost" iconOnly icon="refresh" onClick={() => void load()} disabled={busy}>
@@ -828,7 +827,7 @@ export function Codes() {
       {loadFailure !== null && ledger !== null ? (
         <div className="codes-failure bn-anim-pop">
           <Notice tone="danger" title={loadFailure.message} code={loadFailure.code || undefined}>
-            The screen is showing the ledger as it was last read.
+            The screen is showing codes as they were last read.
           </Notice>
           <Button variant="ghost" size="sm" icon="refresh" busy={retrying} disabled={retrying} onClick={() => void retry()}>
             Try again
@@ -838,7 +837,7 @@ export function Codes() {
 
       {ledger === null ? (
         loadFailure === null ? (
-          <div className="codes-loading" aria-busy="true" aria-label="Reading the ledger">
+          <div className="codes-loading" aria-busy="true" aria-label="Reading codes">
             <div className="bn-panel codes-pile">
               <div className="codes-pile-main">
                 <div className="codes-pile-head">
@@ -893,11 +892,11 @@ export function Codes() {
           <div className="bn-panel codes-empty codes-unreadable">
             <EmptyState
               icon="alert"
-              title="The ledger could not be read"
+              title="Codes could not be read"
               body={
                 <>
                   <span className="codes-failure-msg">{loadFailure.message}</span>
-                  The capture server did not answer with the ledger, so nothing on this screen can be shown yet.
+                  Codes did not answer — nothing on this screen can be shown yet.
                   {loadFailure.code ? <code className="bn-notice-code codes-failure-code">{loadFailure.code}</code> : null}
                 </>
               }
@@ -915,7 +914,7 @@ export function Codes() {
             <EmptyState
               icon="qr"
               title="No codes on file yet"
-              body="Capture code cards with the Game set to Pokémon code cards, then read the box. Decoding is free — no model call, no network."
+              body="Set Game to Pokémon code cards on Capture, then read the box."
               actions={
                 <>
                   <Button icon="qr" onClick={() => openSheet('scan')}>
@@ -1045,8 +1044,7 @@ export function Codes() {
                 <div className="codes-fix bn-anim-in">
                   <p className="codes-fix-lede">
                     A stack came out of one sealed product, so the box is the unit. Applying writes the claim onto those
-                    cards and then reads the box again — the ledger takes the product from the photographs, so nothing here
-                    changes lane until it has.
+                    cards and reads the box again — nothing changes lane until it has.
                   </p>
                   {unclaimedFix.boxes.length === 0 ? null : (
                     <ul className="codes-fix-list">
@@ -1114,9 +1112,9 @@ export function Codes() {
                   )}
                   {unclaimedFix.adrift === 0 ? null : (
                     <p className="codes-fix-adrift">
-                      {plural(unclaimedFix.adrift, 'code')} on the ledger {unclaimedFix.adrift === 1 ? 'carries' : 'carry'} no
-                      position, so there is no card record to write a claim onto. Read {unclaimedFix.adrift === 1 ? 'its' : 'their'}{' '}
-                      box again, or hand {unclaimedFix.adrift === 1 ? 'it' : 'them'} over by product from the ledger below.
+                      {plural(unclaimedFix.adrift, 'code')} {unclaimedFix.adrift === 1 ? 'carries' : 'carry'} no position, so there is
+                      no card record to write a claim onto. Read {unclaimedFix.adrift === 1 ? 'its' : 'their'}{' '}
+                      box again, or hand {unclaimedFix.adrift === 1 ? 'it' : 'them'} over by product below.
                     </p>
                   )}
                 </div>
@@ -1220,8 +1218,8 @@ export function Codes() {
             <TaskCard
               icon="qr"
               title="Read a box"
-              body="Decode every code-card photograph in one box into the ledger."
-              meta="Free — no model call, no network"
+              body="Decode a box's code-card photographs."
+              meta="Free"
               tone="accent"
               delay={0}
               onOpen={() => openSheet('scan')}
@@ -1229,7 +1227,7 @@ export function Codes() {
             <TaskCard
               icon="hand"
               title="Hand codes to a buyer"
-              body="Reserve one lane's codes to a named order and copy them out."
+              body="Reserve a lane's codes to an order."
               meta={`Premium\u00a0${ledger.lanes.premium.toLocaleString()} · Bulk\u00a0${ledger.lanes.bulk.toLocaleString()}`}
               tone="warn"
               delay={50}
@@ -1266,7 +1264,7 @@ export function Codes() {
                     value={filter}
                     onChange={(e) => setFilter(e.target.value)}
                     placeholder="Find a code, product, set or order"
-                    aria-label="Find in the ledger"
+                    aria-label="Find a code"
                   />
                 </div>
               ) : null}
@@ -1277,7 +1275,7 @@ export function Codes() {
                 <EmptyState
                   icon="package"
                   title="No lots built yet"
-                  body="A lot reserves a whole box of codes at once and writes its listing, packing slip and manifest."
+                  body="A whole box, shipped, with its listing, packing slip and manifest."
                   actions={
                     <Button icon="package" onClick={() => openSheet('lot')}>
                       Build a lot
@@ -1333,7 +1331,7 @@ export function Codes() {
                   <EmptyState
                     icon="search"
                     title="Nothing matches"
-                    body="No code in the ledger matches those filters."
+                    body="No code matches those filters."
                     actions={
                       <Button icon="x" onClick={clearFilters}>
                         Clear filters
@@ -1453,8 +1451,7 @@ export function Codes() {
         <Sheet title="Read a box" icon="qr" onClose={closeSheet}>
           {failureNode}
           <p className="codes-sheet-lede">
-            Decodes every code-card photograph in the box into the ledger. Free — the QR is the code, so nothing is called and
-            nothing is spent.
+            Decodes every code-card photograph in the box. Free — the QR is the code.
           </p>
           <form
             className="codes-form"
@@ -1484,7 +1481,7 @@ export function Codes() {
                   </Pill>
                 ) : (
                   <Pill tone="ok" icon="check">
-                    Written to the ledger
+                    Written
                   </Pill>
                 )}
               </div>
@@ -1575,7 +1572,7 @@ export function Codes() {
                       placeholder="wholesale-2026-09-02"
                       autoFocus
                     />
-                    <span className="bn-field-hint">How you will find this sale on a settlement statement weeks from now.</span>
+                    <span className="bn-field-hint">For matching to a settlement statement later.</span>
                   </label>
                   <Button
                     variant="danger-solid"
@@ -1698,7 +1695,7 @@ export function Codes() {
                     placeholder={`${lotVenue}-${new Date().toISOString().slice(0, 10)}${lotPlan.box === null ? '' : `-box${lotPlan.box}`}`}
                   />
                   <span className="bn-field-hint">
-                    How you will find this sale on a settlement statement weeks later. Leave it blank for a generated one.
+                    For matching to a settlement statement later. Blank generates one.
                   </span>
                 </label>
                 <Button
