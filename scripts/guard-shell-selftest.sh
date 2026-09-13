@@ -250,14 +250,23 @@ for case in \
   fi
 done
 
-# THE SHA-SCOPED FORM IS A WRITE AND NOT A DISCARD, which is the specification's own
-# must-pass: it fetches a KNOWN version into the tree rather than throwing an unknown one
-# away. Run for real first, because a bad sha would make this pass for the wrong reason.
+# A NAMED SOURCE OVER A CLEAN PATH IS GENUINELY SAFE — nothing is at stake, so this stays
+# a pass. Run for real first, because a bad sha would make this pass for the wrong reason.
 sha="$(cd "$tmp/main" && git rev-parse HEAD)"
 if real_command "$tmp/main" "git checkout $sha -- clean.txt"; then
-  allows "\`git checkout <sha> -- <path>\` names a source" "$tmp/main" "git checkout $sha -- work.py"
+  allows "\`git checkout <sha> -- <path>\` over a CLEAN path" "$tmp/main" "git checkout $sha -- clean.txt"
 fi
-allows "\`git restore --source=<sha>\` names a source" "$tmp/main" "git restore --source=$sha work.py"
+
+# A NAMED SOURCE OVER A MODIFIED PATH IS NOT SAFE, AND THE OLD SPEC SAID IT WAS — the exact
+# hole #321's own report named: "true of an arbitrary sha and false of HEAD, which is
+# byte-identical in effect to the refused \`git checkout -- <path>\`." Closed the same
+# session a coordinator ran \`git checkout origin/main -- .\` over a tree that only survived
+# because it happened to be clean at that moment — naming a source changes what gets
+# WRITTEN, never whether an uncommitted change is discarded first.
+refuses "\`git checkout <sha> -- <path>\` over a MODIFIED path — a named source is not a hatch" \
+  "$tmp/main" "git checkout $sha -- work.py"
+refuses "\`git restore --source=<sha>\` over a MODIFIED path — same hole, the modern name" \
+  "$tmp/main" "git restore --source=$sha work.py"
 allows "\`--patch\` asks before it discards"  "$tmp/main" "git checkout -p work.py"
 allows "a path in no tree this guard can read" "$tmp/main" "git checkout nothing-named-this"
 # AN UNTRACKED FILE HAS NOTHING TO LOSE. git refuses it on its own — `did not match any file
