@@ -1,6 +1,16 @@
 # The store at 50,000 cards
 
-**Status: SPECIFIED 2026-09-12, NOT BUILT.** The owner's inventory is 2,535 cards today and
+**Status: BUILT 2026-09-13, all eight items, in three phases** — #337 (item 1), #341 (2,
+D192), #339 (3, D191), #340 (4), #338 (5), #342 (6), #344 (7), #343 (8), merged in that
+phase order on the owner's standing word. The `unscoped walk` meter ended at **9, not 6**:
+item 2 removed nothing (`_boxes_named` is `do_status`'s), item 4 replaced one entry with its
+own one-pass `select`, and item 7 kept a renamed entry each for `GET /pipeline/value`'s
+aggregate and `box_views`'s unbounded branch, because a store-wide ranking is O(cards) by
+nature and reads two indexed columns rather than building a `Card`. Two screens still read
+`GET /inventory` whole and say why (`docs/DEBTS.md` §27). `docs/specs/store-scaling/
+00-phases.md` has the per-phase counts and the schema versions as they were actually taken.
+The paragraphs below are the plan as agreed; §1's table carries the after-figures each PR
+measured. The owner's inventory is 2,535 cards today and
 is expected to reach 50,000 inside two weeks. Every screen but Capture has been getting
 slower. This file is the plan the owner agreed to on 2026-09-12, after an interview over
 four parallel investigations and three reviews of those investigations — the reviews
