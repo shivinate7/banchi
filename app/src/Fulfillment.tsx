@@ -448,7 +448,7 @@ export function Fulfillment() {
 
   /* THIS IS THE FULFILLER'S WHOLE-STORE BROWSE (D5/D6) — every sellable card across every
    * box, for when he has no order in hand to walk instead. It is store-wide by design and
-   * cannot be scoped to "the boxes an order names": there may be no order at all. D-per-box-read/item 2
+   * cannot be scoped to "the boxes an order names": there may be no order at all. D192/item 2
    * gave `#/inventory`, `#/` and the order-resolution paths their own lean, box-scoped or
    * top-K reads, but no cheap replacement exists yet for "every sellable card, lean shape" —
    * building one under this item's own budget would be the band-aid CLAUDE.md's "fix the

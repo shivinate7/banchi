@@ -234,7 +234,7 @@ export function Inventory() {
   /* Walk to a copy — the one thing this screen asks the walk to do. A counter beside the key
    * so the same copy can be asked for twice.
    *
-   * `box` RIDES ALONG SINCE D-per-box-read (store-scaling item 2): `BoxBrowse`'s own `rows`
+   * `box` RIDES ALONG SINCE D192 (store-scaling item 2): `BoxBrowse`'s own `rows`
    * holds only the box already on screen, so it can no longer find an OTHER box's copy by
    * scanning `rows` for the key the way it used to when `rows` held the whole store. This
    * screen's own copies list already knows the target's box (`SearchCopy.place.box`, off

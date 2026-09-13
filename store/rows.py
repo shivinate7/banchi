@@ -115,7 +115,7 @@ class Rows(MutableMapping):
         # mutated after `_remember` loaded it from the source. Bounded by what this request
         # touched, never by the size of a prior full load: this is the set `where()`/
         # `select()` must re-check by hand after `_complete`, because the source's own index
-        # cannot see an uncommitted change (D-per-box-read, item 2's `rows.py:177` fix).
+        # cannot see an uncommitted change (D192, item 2's `rows.py:177` fix).
         self._touched: set = set()
         self._track = track
         for key, obj in (objects or {}).items():
@@ -224,7 +224,7 @@ class Rows(MutableMapping):
         """Every record whose indexed columns equal `equals`, in key order.
 
         A SCOPED CALL COSTS WHAT THE INDEX COSTS, WHATEVER RAN EARLIER IN THIS SESSION
-        (D-per-box-read) — bound-and-complete (a prior `.values()`/`.items()`/`to_payload()`
+        (D192) — bound-and-complete (a prior `.values()`/`.items()`/`to_payload()`
         loaded everything) now ALSO queries the source instead of scanning `self._loaded`,
         which is what degraded to an O(table) Python scan after any full load. Bound-and-
         incomplete is unchanged in substance (still one indexed query plus a pass over what
@@ -284,7 +284,7 @@ class Rows(MutableMapping):
     def select(self, columns: Sequence[str], **equals) -> List[Tuple[str, Tuple[Any, ...]]]:
         """`(key, column values)` for matching rows, WITHOUT building objects for them.
 
-        Same split as `where()` above, for the same reason (D-per-box-read) and the same
+        Same split as `where()` above, for the same reason (D192) and the same
         care: a loaded row the source offers as a candidate is re-validated against the LIVE
         object rather than trusted from the source's own (possibly stale) row, because this
         codebase's mutators routinely change an object's attributes in place without
@@ -336,7 +336,7 @@ class Rows(MutableMapping):
         self, column: str, limit: int, columns: Sequence[str]
     ) -> List[Tuple[str, Tuple[Any, ...]]]:
         """`(key, column values)` for the `limit` rows with the highest `column`, descending
-        — Home's hero deck, off the newest-captured cards (D-per-box-read/item 2). Bound, this is the
+        — Home's hero deck, off the newest-captured cards (D192/item 2). Bound, this is the
         source's own indexed `ORDER BY ... DESC LIMIT`, no object built. Memory-backed
         (`self.source is None`, T7's fixtures, which never carry enough rows to make a Python
         sort a cost) sorts what is loaded instead."""

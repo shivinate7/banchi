@@ -3123,7 +3123,7 @@ def do_inventory() -> dict:
 
 def do_inventory_box(box: int) -> dict:
     """One box's cards, in exactly `do_inventory`'s per-card shape. The per-box twin of
-    `GET /inventory` (D-per-box-read — see docs/specs/store-scaling.md item 2), through
+    `GET /inventory` (D192 — see docs/specs/store-scaling.md item 2), through
     `Inventory.records_in`, which is already scoped and already lazy (D88): it queries the
     indexed `box` column and builds a `Card` object only for rows in this box, never for the
     store.
@@ -3186,7 +3186,7 @@ def do_inventory_box(box: int) -> dict:
 
 def do_inventory_recent(limit: int) -> dict:
     """The newest-captured, identified, on-hand cards, in `do_inventory`'s own per-card
-    shape — for Home's hero deck (D-per-box-read/item 2, `Home.tsx`'s `deckFromCards`).
+    shape — for Home's hero deck (D192/item 2, `Home.tsx`'s `deckFromCards`).
 
     A NARROWER, HAND-BUILT SHAPE WAS THE FIRST DRAFT AND WAS WRONG: `deckFromCards` reads
     `card.name`, `card.number_display`, `card.number` and `card.metadata_finish` (through
@@ -10746,14 +10746,14 @@ class CaptureHandler(BaseHTTPRequestHandler):
                 return self._json(HTTPStatus.OK, do_status())
             if path == "/inventory":
                 return self._json(HTTPStatus.OK, do_inventory())
-            # D-per-box-read's per-box read. Same regex object `do_PUT` already uses for
+            # D192's per-box read. Same regex object `do_PUT` already uses for
             # `do_put_box_claims` — one pattern, one place that says what `/inventory/<n>`
             # means as a path, matched by two different HTTP methods with two different
             # handlers.
             match = _INVENTORY_BOX_RE.match(path)
             if match:
                 return self._json(HTTPStatus.OK, do_inventory_box(int(match.group(1))))
-            # D-per-box-read's lean deck route for Home's hero — an exact string, so `_INVENTORY_BOX_RE`
+            # D192's lean deck route for Home's hero — an exact string, so `_INVENTORY_BOX_RE`
             # above (digits only) can never confuse the two.
             if path == "/inventory/recent":
                 query = parse_qs(parsed.query, keep_blank_values=True).get("limit") or ["3"]

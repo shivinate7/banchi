@@ -111,7 +111,7 @@ async function stub(page: Page, cards: unknown[] = []) {
   }
 
   await page.route(/\/inventory$/, (route) => json(route, { version: 2, cards, boxes: {}, listings: {} }))
-  /* D-per-box-read (store-scaling item 2): Home (`#/`) no longer calls the bare `/inventory`
+  /* D192 (store-scaling item 2): Home (`#/`) no longer calls the bare `/inventory`
    * above — it calls `getRecentCards`, `GET /inventory/recent?limit=N`. Empty, matching this
    * ring's own `cards` default of `[]`: nothing here asserts on the hero deck's contents. */
   await page.route(/\/inventory\/recent(\?|$)/, (route) => json(route, { cards: {} }))
@@ -147,7 +147,7 @@ async function stub(page: Page, cards: unknown[] = []) {
       })),
     }),
   )
-  /* `#/inventory`'s own per-box read (D-per-box-read, item 2), now that `/boxes` above can
+  /* `#/inventory`'s own per-box read (D192, item 2), now that `/boxes` above can
    * resolve to a real shelf: `BoxBrowse` fetches `GET /inventory/<box>` for whichever box
    * that resolves to, keyed by index, in the same per-card shape `GET /inventory` answers
    * with — this ring's `cards` array narrowed to the requested box. */

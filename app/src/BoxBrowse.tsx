@@ -118,7 +118,7 @@ function shelfOf(row: Row): Shelf {
 
 /* The same two facts `shelfOf`/`hasDeparted` read off a Row, read off a SearchCopy instead —
  * for the cross-box search ranking, which no longer has every box's Rows loaded to ask
- * (D-per-box-read, item 2): the box being browsed fetches only its own cards, so a search that spans
+ * (D192, item 2): the box being browsed fetches only its own cards, so a search that spans
  * boxes has to rank off the search's OWN result rather than off a store-wide `rows` array. */
 function copyShelf(copy: SearchCopy): Shelf {
   if (copy.place.located === false) return 'pooled'
@@ -319,7 +319,7 @@ type BoxBrowseProps = {
   reloadToken?: number
 
   /** Walk to one card, by store key. `at` is the request; a request already answered is
-   *  ignored. `box` (D-per-box-read, item 2) is the target's box, when known — `rows` is
+   *  ignored. `box` (D192, item 2) is the target's box, when known — `rows` is
    *  box-scoped now, so a jump to another box can no longer discover it by scanning `rows`
    *  for the key the way it used to when `rows` held the whole store. Null for a pooled
    *  card, which has no box to switch to. */
@@ -648,7 +648,7 @@ export function BoxBrowse({
   onQuery,
 }: BoxBrowseProps) {
   const [rows, setRows] = useState<Row[] | null>(null)
-  /** Which shelf `rows` currently answers for (D-per-box-read, item 2). A ref rather than
+  /** Which shelf `rows` currently answers for (D192, item 2). A ref rather than
    *  state: it exists only so the cross-box jump effect can tell a stale, pre-switch `rows`
    *  from a freshly-landed one for the shelf it just switched to, and reading it never needs
    *  to schedule a render of its own. */
@@ -666,7 +666,7 @@ export function BoxBrowse({
   const [opened, setOpened] = useState<readonly string[]>([])
 
   const [boxRecords, setBoxRecords] = useState<readonly BoxRecord[]>([])
-  /** THE STORE'S TOTAL CARD COUNT (D-per-box-read, item 2) — off `GET /boxes`'s own per-box
+  /** THE STORE'S TOTAL CARD COUNT (D192, item 2) — off `GET /boxes`'s own per-box
    *  `cards` figure, summed, rather than off `rows.length`. `rows` is box-scoped now: before
    *  this item it held every card in the store and `rows.length` WAS the store's total by
    *  construction, which is what both the header's "N cards" census and the "no cards
@@ -773,7 +773,7 @@ export function BoxBrowse({
        three in one section outranks one-plus-two across two. Sold copies count for nothing —
        a box full of departed matches is not where the hand goes. With no query this term is
        zero everywhere and the rail is the hand's again. */
-    /* D-per-box-read, item 2: this box's own `rows` no longer stands for every box's cards, so the
+    /* D192, item 2: this box's own `rows` no longer stands for every box's cards, so the
        cross-box tally reads the search's OWN result (`results`) instead — `SearchCopy`
        carries `place.box`/`place.section`, everything this needed off a `Row`. */
     const liveMatches = new Map<number, number>()
@@ -806,7 +806,7 @@ export function BoxBrowse({
     }
   }, [boxRecords, recency, filtered, results, frozen])
 
-  /* D-per-box-read, item 2: under a search, which OTHER boxes hold a match comes off the search's own
+  /* D192, item 2: under a search, which OTHER boxes hold a match comes off the search's own
      result now — `inQuery` is only this box's matched rows since the fetch became box-scoped,
      so it can no longer answer "which boxes does this search touch" on its own. */
   const searchBoxes = useMemo(() => {
@@ -861,7 +861,7 @@ export function BoxBrowse({
   const sections = useMemo(() => sectionsOf(visible, !hideSold, selected), [visible, hideSold, selected])
 
   /* How many matches each shelf holds under a query, for the box list. Off `results` rather
-     than `inQuery` for the same reason `order`/`shelves` are, above (D-per-box-read, item 2). */
+     than `inQuery` for the same reason `order`/`shelves` are, above (D192, item 2). */
   const matchesByShelf = useMemo(() => {
     const out = new Map<Shelf, number>()
     if (!filtered || results === null) return out
@@ -920,7 +920,7 @@ export function BoxBrowse({
     reader.readAsDataURL(file)
   }
 
-  /* D-per-box-read, item 2: this box's cards, box-scoped from the server rather than filtered
+  /* D192, item 2: this box's cards, box-scoped from the server rather than filtered
    * client-side out of a whole-store fetch. Re-runs on a shelf switch (a data fetch now,
    * not a filter) and on every reload trigger — `reloads`/`reloadToken` bumped by a sale,
    * a retire, a re-shoot or a box op re-fetch exactly this box, which is the right box
@@ -1042,7 +1042,7 @@ export function BoxBrowse({
        otherwise. With nothing live anywhere the old rule stands, so a sold-out card still
        shows where its copies were.
 
-       D-per-box-read (store-scaling item 2): off `results` rather than `inQuery`, for the
+       D192 (store-scaling item 2): off `results` rather than `inQuery`, for the
        same reason `order`'s own tally above is — `inQuery` is this box's own matched rows
        now, and a candidate shelf other than the one on screen would never appear in it, which
        silently made every OTHER box read as holding no live match at all. */
@@ -1177,7 +1177,7 @@ export function BoxBrowse({
   /* A box press changes what the walk is of, scrolls the landing to the top and hands focus
    * to the list, arming the deep keys.
    *
-   * D-per-box-read (item 2): under a search, the landing is computed off `results` — the
+   * D192 (item 2): under a search, the landing is computed off `results` — the
    * search's own cross-box answer — rather than off `inQuery`, which is this box's own
    * matched rows now and can never describe a box being switched TO. `inQuery` still answers
    * for the UNFILTERED case (no query: `next` is always the box already on screen at that
@@ -1328,7 +1328,7 @@ export function BoxBrowse({
   /* Walk to the card something outside asked for: the box, the fold, the mark and the scroll
    * in one batch. A query that hides the target is dropped rather than the jump.
    *
-   * D-per-box-read (store-scaling item 2): `rows` now holds only the CURRENT box's cards, so
+   * D192 (store-scaling item 2): `rows` now holds only the CURRENT box's cards, so
    * a jump to a copy in a DIFFERENT box can no longer find it there by scanning `rows` the way
    * it used to when `rows` held the whole store. `goTo.box` (carried by the caller, which
    * already knows it — `Inventory.tsx`'s `walkTo` reads it off the `SearchCopy` the press
@@ -1918,7 +1918,7 @@ export function BoxBrowse({
         </div>
       ) : null}
 
-      {/* D-per-box-read (item 2): `storeCards`, not `rows.length` — this gates the RAIL as
+      {/* D192 (item 2): `storeCards`, not `rows.length` — this gates the RAIL as
        * well as the current box's own rows, and the rail has to go on showing every box
        * (so the operator can switch away) even when the box landed on happens to hold none.
        * `rows.length === 0` here used to mean "the whole store is empty" back when `rows`

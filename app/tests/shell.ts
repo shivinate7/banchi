@@ -420,7 +420,7 @@ async function stubStore(page: Page): Promise<void> {
      `nav.spec.ts`'s own `CARD`, which is the one fixture in this directory already written to
      that rule. */
   await page.route(/\/inventory$/, (route) => json(route, { version: 2, cards: CARDS, boxes: {}, listings: {} }))
-  /* D-per-box-read (store-scaling item 2): `#/inventory` and Home's hero deck no longer call
+  /* D192 (store-scaling item 2): `#/inventory` and Home's hero deck no longer call
    * the bare `/inventory` above — `getInventoryBox`/`getRecentCards` reach these two instead.
    * `/\/inventory$/` above is anchored and never matches either (a box number or `recent`
    * follows the slash), so both need their own stub or a walk over `#/inventory`/`#/` reaches

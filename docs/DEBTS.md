@@ -2290,7 +2290,7 @@ what was next on 2026-09-11.
 
 ## 27 — Two `GET /inventory` call sites are still store-wide, and no cheap replacement exists yet
 
-**D-per-box-read (store-scaling item 2, PR #341) closed most of `getInventory()`'s callers and
+**D192 (store-scaling item 2, PR #341) closed most of `getInventory()`'s callers and
 named these two rather than patching around them.** `#/inventory` and Home's hero deck moved to
 `GET /inventory/<box>` and `GET /inventory/recent`; `Fulfillment.tsx`'s whole-store sellable
 browse and `Orders.tsx`'s `indexStore` (the per-line copy-map widening) did not, and this is
@@ -2298,7 +2298,7 @@ that debt's own record — referenced from both code comments by number rather t
 
 **The measured cost they still pay.** `GET /inventory` itself is unchanged and still walks the
 whole store: 212 ms at the owner's real size (2,535 cards) and 2,816 ms at a 20x-duplicated
-copy (50,700 cards) — a `.backup`-copy measurement taken for D-per-box-read's own PR. Both call
+copy (50,700 cards) — a `.backup`-copy measurement taken for D192's own PR. Both call
 sites pay this on every load, and `Orders.tsx`'s pays it twice per screen (`reread`/`rereadStore`
 race independently).
 
@@ -2314,7 +2314,7 @@ race independently).
   resolver only returns as many picks as needed to fill demand, so a box holding three spare
   copies of a card that already has enough elsewhere would never be named at all. That is a
   correctness regression (fewer copies drawn than exist), not merely a slower screen, which is
-  why D-per-box-read's own decision entry (`docs/decisions/D-per-box-read.md`) declined to patch
+  why D192's own decision entry (D192) declined to patch
   around it.
 
 **The candidate primitive for each, named rather than built under this item's budget.** A lean

@@ -92,7 +92,7 @@ PHOTOS_RELOCATED = "photos_relocated"
 # `readings_sources` tables are the purest additive step there is (`_add_readings`'s own
 # docstring), exactly `_add_submissions`'s case one version up.
 #
-# SIX, FOR D-per-box-read (store-scaling item 2). `docs/specs/store-scaling/00-phases.md`
+# SIX, FOR D192 (store-scaling item 2). `docs/specs/store-scaling/00-phases.md`
 # reserves 6 for item 8's FTS5 search, "after D189's 5," and says the branch that reaches 6
 # FIRST keeps it while the other renumbers — this item is Phase 1 and item 8 is Phase 2, so
 # by that document's own ordering this is the branch that reaches it first. AN INDEX ALONE IS
@@ -155,7 +155,7 @@ _INTEGER = {
 _INDEXES = (
     ("cards", "box"), ("cards", "sku"), ("cards", "capture_id"), ("cards", "state"),
     ("cards", "idx"),
-    # D-per-box-read (store-scaling item 2): `Rows.top`/`SqliteSource.top`'s
+    # D192 (store-scaling item 2): `Rows.top`/`SqliteSource.top`'s
     # `ORDER BY captured_at DESC LIMIT ?` — Home's hero deck — is an index scan rather than a
     # sort-the-whole-table, or it would be exactly the O(store) cost the item exists to
     # remove. `_ensure_schema` creates it with `CREATE INDEX IF NOT EXISTS` at connect, so an
@@ -863,7 +863,7 @@ def _add_readings(conn: sqlite3.Connection) -> None:
 
 
 def _add_captured_at_index(conn: sqlite3.Connection) -> None:
-    """Schema 6: the `cards_captured_at` index (D-per-box-read, store-scaling item 2).
+    """Schema 6: the `cards_captured_at` index (D192, store-scaling item 2).
 
     `Rows.top`/`SqliteSource.top` power `Inventory.newest_captured` — Home's hero deck — with
     an `ORDER BY captured_at DESC LIMIT ?`, and without an index on that column SQLite has no
@@ -1156,7 +1156,7 @@ class SqliteSource:
         self, column: str, limit: int, columns: Sequence[str]
     ) -> Iterable[Tuple[str, tuple]]:
         """`(key, column values)` for the `limit` rows with the highest `column`, descending,
-        NULLs excluded (D-per-box-read/item 2 — `Inventory.newest_captured`, Home's hero deck). One
+        NULLs excluded (D192/item 2 — `Inventory.newest_captured`, Home's hero deck). One
         indexed-column ORDER BY LIMIT, never a load of every row to sort in Python."""
         if column not in self.columns:
             raise KeyError(f"{self.table} has no indexed column {column!r}")

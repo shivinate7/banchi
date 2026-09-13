@@ -1,4 +1,4 @@
-## D-per-box-read — The inventory route reads one box, and `rows.py` stops re-walking what it already loaded
+## D192 — The inventory route reads one box, and `rows.py` stops re-walking what it already loaded
 
 Item 2 of `docs/specs/store-scaling.md`'s §3 plan. Reopens the refusal at
 `server/capture_server.py`'s old `GET /boxes/<n>` comment — "a per-box read would be a second

@@ -1357,7 +1357,7 @@ export function OrdersHub({ stage }: { readonly stage: Stage }) {
      a slow or broken `/inventory` hold the orders off the screen, so they race and the map fills
      in when its half lands.
 
-     STILL ON THE FULL WALK, ON PURPOSE (D-per-box-read/item 2 — verified against the tree, correcting the
+     STILL ON THE FULL WALK, ON PURPOSE (D192/item 2 — verified against the tree, correcting the
      playbook this item was written from). `copiesOf`'s own comment above says the whole of what
      `indexStore` is for: "EVERY copy the store holds of that card, not only the ones the resolver
      offered... including the ones in FAR BOXES" — copies sitting in boxes no resolver pick names

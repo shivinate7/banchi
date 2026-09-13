@@ -721,13 +721,13 @@ export async function getInventory(): Promise<Inventory> {
  *  fields, same decoration. `boxes` is never present (nothing under `app/src` reads
  *  `Inventory.boxes`; `getBoxes()` is the box registry's one reader) and `listings` is
  *  narrowed to this box's own SKUs, which is every listing a screen holding one box can
- *  address (D-per-box-read, item 2 of docs/specs/store-scaling.md). */
+ *  address (D192, item 2 of docs/specs/store-scaling.md). */
 export async function getInventoryBox(box: number): Promise<Inventory> {
   return (await request(`/inventory/${box}`, NO_CACHE)) as Inventory
 }
 
 /** The newest-captured, identified, on-hand cards, in `getInventory()`'s own per-card shape
- *  — Home's hero deck (D-per-box-read, item 2), a lean top-K route rather than the whole card map.
+ *  — Home's hero deck (D192, item 2), a lean top-K route rather than the whole card map.
  *  `boxes` and `listings` never ride along here; nothing under `app/src` reads either off
  *  this response. */
 export async function getRecentCards(limit: number): Promise<{ cards: Record<string, InventoryCard> }> {

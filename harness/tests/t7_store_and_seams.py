@@ -7661,7 +7661,7 @@ def check_box_routes_and_search(checks: Checks) -> None:
 
 
 def check_inventory_box_route(checks: Checks) -> None:
-    """D-per-box-read/item 2: `GET /inventory/<box>` reads one box, never the store.
+    """D192/item 2: `GET /inventory/<box>` reads one box, never the store.
 
     THE PROOF IS `Rows.loaded_count`, NOT A TIMING. A wall-clock assertion is what
     docs/specs/store-scaling.md's own `.backup`-copy measurement is for, run by hand against
@@ -7733,7 +7733,7 @@ def check_inventory_box_route(checks: Checks) -> None:
 
 
 def check_rows_scoped_after_full_load(checks: Checks) -> None:
-    """D-per-box-read/item 2: `where()`/`select()` cost what the index costs, even after this
+    """D192/item 2: `where()`/`select()` cost what the index costs, even after this
     session's own `Rows` has been fully materialised. The mechanism is `rows.py:177`'s own
     citation in docs/specs/store-scaling.md; this pins it so a later change to `Rows` cannot
     reopen it silently.
@@ -7861,7 +7861,7 @@ def check_rows_scoped_after_full_load(checks: Checks) -> None:
 
 
 def check_inventory_recent_route(checks: Checks) -> None:
-    """D-per-box-read/item 2: `GET /inventory/recent` — Home's hero deck — is a lean top-K read over
+    """D192/item 2: `GET /inventory/recent` — Home's hero deck — is a lean top-K read over
     `Inventory.newest_captured`/`Rows.top`, in `do_inventory`'s own per-card shape, and it
     skips exactly what `Home.tsx:deckFromCards` would skip: unidentified, photo-less and
     departed cards.

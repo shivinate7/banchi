@@ -1534,7 +1534,7 @@ class Inventory:
 
     def newest_captured(self, limit: int) -> List[Tuple[str, int, int, Optional[str]]]:
         """`(key, box, index, cid)` of the `limit` most recently captured cards, newest
-        first, for Home's hero deck (D-per-box-read/item 2). Column values only — no `Card` built —
+        first, for Home's hero deck (D192/item 2). Column values only — no `Card` built —
         because the deck over-fetches and filters (state, name, photo) on the small
         surviving set, never on the full result."""
         rows = self.cards.top("captured_at", limit, ("box", "idx", "cid"))

@@ -857,7 +857,7 @@ async function open(
     })
   })
 
-  /* PUT ONLY — box-level claims apply. D-per-box-read (store-scaling item 2) put a real GET
+  /* PUT ONLY — box-level claims apply. D192 (store-scaling item 2) put a real GET
    * on this same path (`getInventoryBox`, called on every mount of this screen), and this
    * handler answered EITHER method before that route existed, silently returning the claims
    * shape for a card-map read. `route.fallback()` on a non-PUT request lets it cascade to
@@ -957,7 +957,7 @@ async function open(
     })
   })
 
-  /* D-per-box-read (store-scaling item 2): `BoxBrowse.tsx` no longer calls the bare
+  /* D192 (store-scaling item 2): `BoxBrowse.tsx` no longer calls the bare
    * `/inventory` above at all — it calls `getInventoryBox(shelf)` for whichever box is on
    * screen, on every mount and every shelf switch. The `/\/inventory\/\d+$/` PUT stub above
    * (box claims) already falls back for a non-PUT method; this is what it falls back TO. */
@@ -4042,7 +4042,7 @@ test('selling a card moves the landmark on the rows beside it, with no reload', 
   /* COUNTED OFF THE REQUESTS THEMSELVES rather than off `open()`'s wire log, which records the
      writes and the reads it has an opinion about — `GET /inventory/<box>` is stubbed there and
      not recorded, and this case is about exactly that read happening a second time.
-     D-per-box-read (item 2): the walk re-reads its OWN box, `GET /inventory/<box>`, rather
+     D192 (item 2): the walk re-reads its OWN box, `GET /inventory/<box>`, rather
      than the whole-store `GET /inventory` this case originally counted — the box-scoped route
      is what replaced it, and re-reading the box is exactly the "no reload" claim this case
      makes. */

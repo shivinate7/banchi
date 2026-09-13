@@ -40,7 +40,7 @@ this plan may delete it.
 PR.** This paragraph originally claimed three entries closed here
 (`server/capture_server.py:3056 do_inventory`, `:8349 _boxes_named`,
 `store/master.py:1447 to_payload`); all three are verified to stay on the allowlist — see
-"Allowlist entries removed" below and `docs/decisions/D-per-box-read.md` for the full
+"Allowlist entries removed" below and D192 for the full
 argument. The allowlist count is unchanged at 13 after this item.
 
 ## Depends on / conflicts with
@@ -162,7 +162,7 @@ def do_inventory_box(box: int) -> dict:
     `self.cards.where(box=box)` — a healthy store never touches this refusal at all, and that
     is the case T7 exercises; the corruption case is exercised too, asserting the refusal
     rather than the isolation this paragraph originally (and wrongly) claimed. See
-    `docs/decisions/D-per-box-read.md` for the full argument.
+    D192 for the full argument.
 
     `boxes` AND `listings` DO NOT RIDE ALONG, UNLIKE `do_inventory`'s. Nothing under `app/src`
     reads `Inventory.boxes` from a `GET /inventory` response — `GET /boxes` is what every
@@ -323,7 +323,7 @@ def check_inventory_box_route(checks: Checks) -> None:
         # corrupt record in ANOTHER box does NOT take box 1's read down with it. Verified
         # against the tree: it DOES — `_positions_in`'s refusal is store-wide, not box-scoped
         # (see this file's corrected docstring for `do_inventory_box` above, and
-        # `docs/decisions/D-per-box-read.md`). The real, verified assertion is the opposite:
+        # D192). The real, verified assertion is the opposite:
         with Store().write() as snapshot:
             snapshot.inventory.cards["2/1"].box = "not-a-box"  # type: ignore[assignment]
         caught = checks.raises(
@@ -856,7 +856,7 @@ released claim's in-place `state` mutation stayed invisible to a same-session re
 actual fix re-validates every candidate the source's own indexed query returns against the
 LIVE loaded object (never trusting either the source's row or `_touched` alone), and
 `store/submissions.py`'s two mutators were corrected to reassign through `__setitem__` to
-match this codebase's other mutators. See `docs/decisions/D-per-box-read.md` for the full
+match this codebase's other mutators. See D192 for the full
 argument, the one gap this still leaves (a row mutated in place INTO a match the source
 cannot see — verified not to affect `box`/`idx`, which is what this item's own routes read),
 and the T7 case that pins it. The sketch below is kept as a record of the FIRST, wrong
@@ -1310,7 +1310,7 @@ New routes added: `GET /inventory/<box>` (`do_inventory_box`), `GET /inventory/r
 
 **CORRECTED 2026-09-12, VERIFIED AGAINST THE TREE: this item removes NOTHING from the
 allowlist.** This section originally copied `docs/specs/store-scaling.md` §4 as claiming
-three rows closed by this item; all three are wrong, and `docs/decisions/D-per-box-read.md`
+three rows closed by this item; all three are wrong, and D192
 carries the full argument. `docs/specs/store-scaling.md` §4 and `00-phases.md`'s phase table
 are corrected in the same PR that found this.
 

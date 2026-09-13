@@ -401,7 +401,7 @@ export function Home() {
   const orders = useLoad<OrdersPayload>(getOrders)
   const pricing = useLoad<PricingWorklist>(() => getPricingWorklist())
   /* The hero's own newest-captured cards, off a lean top-K route rather than the whole card
-     map (D-per-box-read, item 2) — on its own load so no panel above waits on it, and `deckFromCards`
+     map (D192, item 2) — on its own load so no panel above waits on it, and `deckFromCards`
      below applies exactly the same filter/sort/slice it always has over the smaller result. */
   const shelf = useLoad<Record<string, InventoryCard>>(async () => (await getRecentCards(DECK_DEPTH)).cards)
   const fromBoxes = deckFromBoxes(boxes.state === 'ready' ? boxes.value : null)

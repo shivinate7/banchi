@@ -412,7 +412,7 @@ class Submissions:
         if claim is None:
             return None
         claim.run = str(run)
-        # Reassigned rather than left as an in-place mutation (D-per-box-read): `Rows.where`/
+        # Reassigned rather than left as an in-place mutation (D192): `Rows.where`/
         # `.select` trust the SOURCE's own index for every key this session has not itself
         # written through `__setitem__`, and a claim mutated only in place would keep
         # answering to its STALE `run`/`state` for the rest of this transaction.
@@ -436,7 +436,7 @@ class Submissions:
         claim.state = STATE_RELEASED
         claim.released_at = now()
         claim.released_by = str(by)
-        # Reassigned rather than left as an in-place mutation (D-per-box-read) — see
+        # Reassigned rather than left as an in-place mutation (D192) — see
         # `attach_run`'s comment: `release_run` calls `self.live()` again right after this,
         # in the SAME transaction, and it must see this claim as no longer live.
         self.entries[claim.receipt] = claim

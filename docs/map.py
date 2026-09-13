@@ -1249,7 +1249,7 @@ COMPONENTS = [
                                   "still hands out the lowest free integer (D20) — the number is a "
                                   "label on a drawer and the id is an identity, which is `Place."
                                   "slot` and `Place.index` one register up (D58)",
-                          "governed_by": ["D145", "D3", "D7", "D8", "D10", "D11", "D20", "D21", "D23", "D26", "D34", "D36", "D56", "D58", "D59", "D83", "D87", "D88", "D89", "D100", "D115", "D132", "D167", "D172", "D183", "D-per-box-read"], "tested_by": ["T7"]},
+                          "governed_by": ["D145", "D3", "D7", "D8", "D10", "D11", "D20", "D21", "D23", "D26", "D34", "D36", "D56", "D58", "D59", "D83", "D87", "D88", "D89", "D100", "D115", "D132", "D167", "D172", "D183", "D192"], "tested_by": ["T7"]},
             "queues.py": {"does": "the standing queues — the `queues` table, one mapping per queue "
                                   "name — and the cross-queue release a re-routed position needs",
                           "governed_by": ["D4", "D9", "D22", "D26", "D28", "D37", "D88"], "tested_by": ["T7"]},
@@ -1328,7 +1328,7 @@ COMPONENTS = [
                                        "named way out and leaves a tombstone rather than deleting "
                                        "the row. `counted` publishes the WORK: rows live, cards "
                                        "locked, dead holders",
-                               "governed_by": ["D174", "D7", "D18", "D36", "D48", "D88", "D-per-box-read"],
+                               "governed_by": ["D174", "D7", "D18", "D36", "D48", "D88", "D192"],
                                "note": "PROVED BY `make submission-selftest` AND NOT BY THE "
                                        "HARNESS, which is why `tested_by` is empty: that field "
                                        "names harness tests, and this guard's subject is two "
@@ -1382,7 +1382,7 @@ COMPONENTS = [
                                 "column's matches, or column values with no object built at all. "
                                 "A flush is a diff over what was loaded. NO SQL, NO I/O, NO "
                                 "PACKAGE IMPORT — the one thing master.py is allowed to import",
-                        "governed_by": ["D88", "D-per-box-read"], "tested_by": ["T7"]},
+                        "governed_by": ["D88", "D192"], "tested_by": ["T7"]},
             "db.py": {"does": "the SQLite file: the schema (one payload column per row with a few "
                               "indexed columns derived beside it), `SqliteSource` behind every "
                               "`Rows`, the per-session flush, the events table that is the "
@@ -1392,7 +1392,7 @@ COMPONENTS = [
                               "that same table — no new index, because this repo has no schema "
                               "migration to add one to a store already on disk.",
                       "governed_by": ["D145", "D20", "D26", "D86", "D88", "D134", "D172", "D174",
-                                      "D189", "D-per-box-read"], "tested_by": ["T7"]},
+                                      "D189", "D192"], "tested_by": ["T7"]},
             "photos.py": {"does": "where a card's photograph lives, and the ONLY module permitted "
                                   "to compose that path: `<home>/photos/<aa>/<cid>.jpg`, a pure "
                                   "function of the card's own name. `adopt` is the per-card, "
@@ -2324,7 +2324,7 @@ COMPONENTS = [
                 # (D104) and the seven order-line closers (D113).
                 "governed_by": ["D13", "D14", "D18", "D58", "D62", "D76", "D79", "D83", "D86",
                                 "D87", "D89", "D96", "D100", "D103", "D104", "D106", "D113",
-                                "D134", "D159", "D167", "D168", "D174", "D-per-box-read"],
+                                "D134", "D159", "D167", "D168", "D174", "D192"],
             },
             "verdict-selftest.py": {"does": "PROVES `app/design-check-reporter.ts` STILL WRITES A "
                                             "VERDICT, BY RUNNING IT. `make docs-audit`'s "
@@ -3417,7 +3417,7 @@ COMPONENTS = [
                                 "D77", "D79", "D83", "D86", "D87", "D88", "D89", "D90", "D91",
                                 "D92", "D93", "D96", "D100", "D103", "D104", "D108", "D113",
                                 "D115", "D116", "D132", "D134", "D137", "D138",
-                                "D168", "D174", "D183", "D172", "D-per-box-read", "D191"],
+                                "D168", "D174", "D183", "D172", "D192", "D191"],
                 "tested_by": ["T7"],
             },
             "tcg_import.py": {"does": "THE OUTBOUND WRITE to the seller admin, and the only "
@@ -4172,7 +4172,7 @@ COMPONENTS = [
                                      "correctly without one, and a reclaimed photograph (D89) "
                                      "leaves the frame rather than a broken image. Each panel "
                                      "loads on its own, so no figure waits on another.",
-                             "governed_by": ["D156", "D145", "D56", "D5", "D6", "D10", "D13", "D32", "D33", "D52", "D63", "D69", "D86", "D89", "D94", "D95", "D125", "D172", "D-per-box-read"]},
+                             "governed_by": ["D156", "D145", "D56", "D5", "D6", "D10", "D13", "D32", "D33", "D52", "D63", "D69", "D86", "D89", "D94", "D95", "D125", "D172", "D192"]},
             "src/Home.css": {"does": "the home screen's look: the hero and its deck, the stage "
                                      "spine, the box and run cards. The one screen in the app "
                                      "that draws a display figure above 36px — "
@@ -4202,7 +4202,7 @@ COMPONENTS = [
                                               "D89", "D90", "D91", "D92", "D100", "D103",
                                               "D168",
                                               "D104", "D113", "D116", "D132", "D134", "D172",
-                                              "D174", "D180", "D-per-box-read"]},
+                                              "D174", "D180", "D192"]},
             "src/demoFlag.d.ts": {"does": "declares `__BN_DEMO__`, the build-time demo flag "
                                           "`vite.config.ts` substitutes with a boolean "
                                           "literal. It exists because three other forms of "
@@ -4629,7 +4629,7 @@ COMPONENTS = [
             # D90 is main's order-driven mode, whose two props this file no longer carries; the
             # citation stays so a session reading main's history knows they were removed on
             # purpose rather than lost.
-            "governed_by": ["D6", "D8", "D9", "D10", "D16", "D19", "D20", "D21", "D22", "D23", "D24", "D26", "D27", "D30", "D31", "D33", "D35", "D38", "D39", "D41", "D45", "D46", "D49", "D52", "D58", "D67", "D68", "D89", "D90", "D92", "D118", "D125", "D132", "D119", "D172", "D181", "D-per-box-read"]},
+            "governed_by": ["D6", "D8", "D9", "D10", "D16", "D19", "D20", "D21", "D22", "D23", "D24", "D26", "D27", "D30", "D31", "D33", "D35", "D38", "D39", "D41", "D45", "D46", "D49", "D52", "D58", "D67", "D68", "D89", "D90", "D92", "D118", "D125", "D132", "D119", "D172", "D181", "D192"]},
             "src/BoxBrowse.css": {"does": "its layout, and why no accent appears anywhere in it. Its list keeps an "
                                   "INSET focus ring and says so — it clips its own overflow, which is the "
                                   "case base.css's standing ring cannot serve. D38's band lives here: the "
@@ -4773,7 +4773,7 @@ COMPONENTS = [
                 "governed_by": ["D5", "D6", "D7", "D8", "D10", "D13", "D24", "D26", "D27", "D28",
                                 "D31", "D33", "D36", "D38", "D39", "D41", "D45", "D49", "D57",
                                 "D58", "D68", "D71", "D90", "D93", "D118", "D119", "D125", "D132",
-                                "D172", "D181", "D-per-box-read"],
+                                "D172", "D181", "D192"],
             },
             "src/Inventory.css": {
                 "does": "its layout, at the dense owner-side end of the one system, two "
@@ -4907,7 +4907,7 @@ COMPONENTS = [
                         "order, photo-confirm before each pull, one-tap mark-sold with an undo "
                         "window. No machine string and no server message reaches this screen — "
                         "both are correct for the owner and neither is his.",
-                "governed_by": ["D5", "D6", "D7", "D10", "D13", "D24", "D26", "D69", "D125", "D32", "D172", "D93", "D-per-box-read"],
+                "governed_by": ["D5", "D6", "D7", "D10", "D13", "D24", "D26", "D69", "D125", "D32", "D172", "D93", "D192"],
             },
             "src/Fulfillment.css": {
                 "does": "the generous 24-64 end of the one system, two densities. Every floor "
@@ -5671,7 +5671,7 @@ COMPONENTS = [
                                        "sees, and what the two stages share is a client-side "
                                        "join by order number with nothing written across the "
                                        "seam.",
-                               "governed_by": ["D7", "D10", "D24", "D27", "D28", "D36", "D39", "D51", "D57", "D58", "D61", "D63", "D66", "D69", "D91", "D96", "D113", "D114", "D159", "D-per-box-read"]},
+                               "governed_by": ["D7", "D10", "D24", "D27", "D28", "D36", "D39", "D51", "D57", "D58", "D61", "D63", "D66", "D69", "D91", "D96", "D113", "D114", "D159", "D192"]},
             "src/Orders.css": {"does": "the order screen at owner density: the line, its reason "
                                        "and remedy, and the pick rows under it. A copy already "
                                        "spoken for by another line is drawn as spoken for "
@@ -6328,7 +6328,7 @@ COMPONENTS = [
                         "re-add the link and all 20 brand cases fail naming the URL. Not "
                         "a harness test; it has no test of its own and is "
                         "exercised by every spec that imports it.",
-                "governed_by": ["D16", "D37", "D43", "D46", "D56", "D58", "D63", "D70", "D86", "D124", "D125", "D134", "D174", "D-per-box-read"]},
+                "governed_by": ["D16", "D37", "D43", "D46", "D56", "D58", "D63", "D70", "D86", "D124", "D125", "D134", "D174", "D192"]},
             "tests/fontsReady.ts": {
                 "does": "one helper, `settleFonts`, awaited after every `page.goto` in the seven "
                         "specs that measure type — it said FOUR until 2026-09-06, and the "
@@ -6350,7 +6350,7 @@ COMPONENTS = [
                         "arrow belongs to the screens, a held Cmd in a text field belongs to the "
                         "caret, and a screen outside the ring keeps the browser's key. Not a "
                         "harness test; `make design-check` runs it.",
-                "governed_by": ["D5", "D31", "D39", "D43", "D51", "D69", "D70", "D86", "D100", "D105", "D134", "D174", "D-per-box-read", "D20"],
+                "governed_by": ["D5", "D31", "D39", "D43", "D51", "D69", "D70", "D86", "D100", "D105", "D134", "D174", "D192", "D20"],
                 "note": "ITS RING IS PINNED ON PURPOSE AND RECONCILED AT THE COMMIT. A ring "
                         "derived from App.tsx could not assert the ORDER against anything "
                         "independent, so the copy stays and carries a `ROUTE-ROSTER hotkey` "
@@ -6563,7 +6563,7 @@ COMPONENTS = [
                         "and `product_game` outright — `undefined.find` inside `ClaimEditor`, "
                         "the screen behind its error boundary, and six cases here spending "
                         "thirty seconds each on a switch that had been detached. AND THE HASH'S OWN BOX SINCE 2026-09-05: `#/inventory?box=<n>` was honoured only for a box that already had ROWS, because the shelf list is built from the rows first and the registry second and the ref was consumed on the first list — so every box of code cards, which D24 pools and which therefore has none, was unreachable by the one link that aims at one. Two cases, with `GET /boxes` held back so the ordering is the defect's rather than a race.",
-                "governed_by": ["D5", "D7", "D8", "D9", "D10", "D13", "D20", "D22", "D23", "D24", "D26", "D28", "D30", "D31", "D33", "D34", "D37", "D38", "D40", "D41", "D43", "D45", "D49", "D55", "D57", "D58", "D63", "D67", "D68", "D71", "D83", "D89", "D92", "D101", "D115", "D116", "D118", "D124", "D125", "D119", "D132", "D27", "D134", "D142", "D155", "D117", "D136", "D172", "D181", "D-per-box-read"],
+                "governed_by": ["D5", "D7", "D8", "D9", "D10", "D13", "D20", "D22", "D23", "D24", "D26", "D28", "D30", "D31", "D33", "D34", "D37", "D38", "D40", "D41", "D43", "D45", "D49", "D55", "D57", "D58", "D63", "D67", "D68", "D71", "D83", "D89", "D92", "D101", "D115", "D116", "D118", "D124", "D125", "D119", "D132", "D27", "D134", "D142", "D155", "D117", "D136", "D172", "D181", "D192"],
                 "note": "THE CHECK `CLAUDE.md`'s ROUTE-IS-NOT-A-FEATURE RULE SAYS DOES NOT "
                         "EXIST. That rule was written on 2026-08-23 after three routes shipped "
                         "with full T7 coverage and no client function and no control — green "
