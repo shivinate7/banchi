@@ -1309,7 +1309,15 @@ COMPONENTS = [
                                   "`None` buyer, so a paste built from the narrower client "
                                   "projection cannot erase a name a fetch already wrote. "
                                   "`Ledger.name_buyer` writes a name alone, for orders the "
-                                  "ledger already knows, and refuses to create a record.",
+                                  "ledger already knows, and refuses to create a record. "
+                                  "`TERMINAL_STATUSES`/`is_terminal_status` (D63 amended "
+                                  "2026-09-13) is the ONE place a small, hand-authored set of "
+                                  "feed statuses is spelled — Canceled, Shipped - In Transit, "
+                                  "Shipped - Delivered — as a TERMINAL OVERRIDE the caller "
+                                  "applies on top of `unfulfilled`; an unrecognised status "
+                                  "answers False and changes nothing, the fail-safe direction. "
+                                  "`scripts/docs-audit.py:check_terminal_statuses` reconciles "
+                                  "the set against its own published copy in the D63 entry.",
                           "governed_by": ["D7", "D10", "D13", "D16", "D20", "D21", "D24", "D26",
                                           "D29", "D36", "D53", "D63", "D69", "D88", "D113",
                                           "D193"],
@@ -3490,7 +3498,7 @@ COMPONENTS = [
                                 "D62", "D63", "D64", "D65", "D66", "D67", "D69", "D70", "D76",
                                 "D77", "D79", "D83", "D86", "D87", "D88", "D89", "D90", "D91",
                                 "D92", "D93", "D96", "D100", "D103", "D104", "D108", "D113",
-                                "D115", "D116", "D132", "D134", "D137", "D138", "D159",
+                                "D114", "D115", "D116", "D132", "D134", "D137", "D138", "D159",
                                 "D168", "D174", "D183", "D172", "D192", "D191",
                                 "D193"],
                 "tested_by": ["T7"],
@@ -3658,7 +3666,7 @@ COMPONENTS = [
                                 "D79", "D86", "D87", "D88", "D89", "D100", "D103", "D105",
                                 "D134", "D137", "D145", "D147", "D156", "D159", "D163",
                                 "D165", "D166", "D168", "D170", "D172", "D174", "D180",
-                                "D189"],
+                                "D188", "D189"],
                 "tested_by": ["T7"],
             },
             "shipping_routes.py": {

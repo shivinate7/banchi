@@ -203,6 +203,8 @@
     "D194-copy-ratchet.md",
     "D195-equal-width-action-stacks.md",
     "D196-no-mechanism-on-screen.md",
-    "D197-one-left-edge.md"
+    "D197-one-left-edge.md",
+    "D198-home-review-tile-counts-both-queues.md",
+    "D199-run-phase-treats-joined-as-identified.md"
   ]
 }

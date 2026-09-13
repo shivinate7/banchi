@@ -12615,6 +12615,19 @@ def check_store_backed_join(checks: Checks) -> None:
             "run-directory join does",
         )
 
+        # ------------------------------------------- `_phase` must not read this run as "not
+        # started" (D188 footnote). `collected` is never written on a store-backed join, and
+        # `_phase` used to gate every stage past "ready"/"identify" on `collected` alone, so
+        # this run's badge would read "Not started" beside a real `joined: True` and real
+        # `counts.skus` on disk — the exact "one badge, one set of files, disagreeing" defect.
+        phase = pipeline_routes._phase(new_run.manifest, live=False)
+        checks.ok(
+            phase not in ("ready", "identify"),
+            "a store-backed join's phase is never `ready`/`identify` — `joined` alone is "
+            "sufficient evidence identification happened, by either of D188's two loaders",
+            phase,
+        )
+
         # ------------------------------------------------- rescue refuses this run by name
         caught = checks.raises(
             runs.RunError,
@@ -24091,6 +24104,55 @@ def check_order_ledger(checks: Checks) -> None:
         "malformed order must not take every other order's fulfilment off the screen",
     )
 
+    # ------------------------------------- 12b. the terminal-status vocabulary (D63 amended)
+    #
+    # `is_terminal_status` is the ONE place the vocabulary is spelled, and it is asserted at
+    # the function itself before anything downstream (`do_orders`, `_order_row`) is trusted
+    # to call it correctly. The fail-safe case — an unrecognised word answers False — is the
+    # one this section exists for: the owner's two rulings are useless if getting them wrong
+    # for a THIRD word silently drops an order off the screen.
+    checks.ok(
+        order_store.is_terminal_status("Canceled"),
+        "a Canceled order is recognised as terminal",
+    )
+    checks.ok(
+        order_store.is_terminal_status(" canceled "),
+        "and the comparison folds case and strips, exactly as order_key does",
+    )
+    checks.ok(
+        order_store.is_terminal_status("Shipped - In Transit"),
+        "Shipped - In Transit is recognised as terminal",
+    )
+    checks.ok(
+        order_store.is_terminal_status("Shipped - Delivered"),
+        "and so is Shipped - Delivered",
+    )
+    checks.ok(
+        not order_store.is_terminal_status("Ready to Ship"),
+        "Ready to Ship is NOT terminal — it is the operator's real queue",
+    )
+    checks.ok(
+        not order_store.is_terminal_status("Completed - Paid"),
+        "Completed - Paid is deliberately NOT terminal — ruling 3's one-time reconcile "
+        "handles those 513 orders, not this function; payment clearing says nothing about "
+        "whether a card shipped",
+    )
+    checks.ok(
+        not order_store.is_terminal_status("Quantum Superposition"),
+        "AND AN UNRECOGNISED STATUS ANSWERS FALSE — THE FAIL-SAFE CASE. A closed vocabulary "
+        "compared against an open-ended feed string must never treat 'never seen it' as "
+        "'must be finished', or a marketplace that learns a new word silently vanishes every "
+        "order carrying it",
+    )
+    checks.ok(
+        not order_store.is_terminal_status(None),
+        "and None answers False too — an order with no status yet is never terminal",
+    )
+    checks.ok(
+        not order_store.is_terminal_status(""),
+        "and an empty string answers False rather than matching the empty-key edge case",
+    )
+
     # ------------------------------------ 13. the lock is never held across I/O, checked
     #
     # `files.exclusive` polls at 50ms and gives up at 30s while the feeder captures a card
@@ -24493,6 +24555,123 @@ def check_order_screen(checks: Checks) -> None:
                 "walk, which is the OTHER implementation of D58's counting space. A second "
                 "renderer on this screen would print `Section 1 · Card 300` beside an app "
                 "drawing `Section 4 · Card 48`, with nothing saying which is which",
+            )
+
+    # ------------------------------------- 7b. the terminal override (D63 amended 2026-09-13)
+    #
+    # The owner's two rulings: a Canceled order is never open, and a Shipped-or-Delivered
+    # order closes on the feed's own word — but ONLY those recognised words, and never a
+    # guess. One box holds exactly one copy, so whichever order is NOT excluded from
+    # `open_keys` is the one that gets it; that is what proves the terminal orders are
+    # excluded from the resolution pool and not merely hidden on the summary list.
+    with isolated_home():
+        stock(3, 1, "9191486")
+        answers(
+            checks,
+            lambda: capture_server.do_order_ingest(
+                {
+                    "orders": [
+                        {
+                            "source": "TCGplayer", "number": "CANCELED-1",
+                            "placed_at": "2026-08-20T10:00:00.000+00:00",
+                            "status": "Canceled",
+                            "lines": [line("9191486", 1)],
+                        },
+                        {
+                            "source": "TCGplayer", "number": "TRANSIT-1",
+                            "placed_at": "2026-08-21T10:00:00.000+00:00",
+                            "status": "Shipped - In Transit",
+                            "lines": [line("9191486", 1)],
+                        },
+                        {
+                            "source": "TCGplayer", "number": "DELIVERED-1",
+                            "placed_at": "2026-08-22T10:00:00.000+00:00",
+                            "status": "Shipped - Delivered",
+                            "lines": [line("9191486", 1)],
+                        },
+                        {
+                            "source": "TCGplayer", "number": "READY-1",
+                            "placed_at": "2026-08-23T10:00:00.000+00:00",
+                            "status": "Ready to Ship",
+                            "lines": [line("9191486", 1)],
+                        },
+                        {
+                            "source": "TCGplayer", "number": "PAID-1",
+                            "placed_at": "2026-08-24T10:00:00.000+00:00",
+                            "status": "Completed - Paid",
+                            "lines": [line("9191486", 1)],
+                        },
+                        {
+                            "source": "TCGplayer", "number": "MYSTERY-1",
+                            "placed_at": "2026-08-25T10:00:00.000+00:00",
+                            "status": "Quantum Superposition",
+                            "lines": [line("9191486", 1)],
+                        },
+                    ]
+                }
+            ),
+            "six orders for one SKU, one copy on hand, oldest carrying the terminal statuses",
+        )
+        drawn = answers(
+            checks, capture_server.do_orders,
+            "GET /orders resolves the whole set against the store's one copy",
+        )
+        if drawn is not None:
+            by_number = {row["number"]: row for row in drawn["orders"]}
+            checks.equal(
+                (by_number["CANCELED-1"]["open"], by_number["CANCELED-1"]["terminal"]),
+                (False, True),
+                "a Canceled order is never open, even though it owes a copy nobody has "
+                "pulled — ruling 1",
+            )
+            checks.equal(
+                (by_number["TRANSIT-1"]["open"], by_number["TRANSIT-1"]["terminal"]),
+                (False, True),
+                "Shipped - In Transit closes on the feed's own word — ruling 2",
+            )
+            checks.equal(
+                (by_number["DELIVERED-1"]["open"], by_number["DELIVERED-1"]["terminal"]),
+                (False, True),
+                "and so does Shipped - Delivered",
+            )
+            checks.equal(
+                (by_number["READY-1"]["open"], by_number["READY-1"]["terminal"]),
+                (True, False),
+                "Ready to Ship is unaffected by any of this and stays open — the "
+                "operator's real queue",
+            )
+            checks.equal(
+                (by_number["PAID-1"]["open"], by_number["PAID-1"]["terminal"]),
+                (True, False),
+                "Completed - Paid is UNCHANGED BY THIS PR — ruling 3's one-time reconcile "
+                "handles those 513 orders on the owner's real store, not this predicate",
+            )
+            checks.equal(
+                (by_number["MYSTERY-1"]["open"], by_number["MYSTERY-1"]["terminal"]),
+                (True, False),
+                "AND THE UNRECOGNISED STATUS STAYS OPEN — THE FAIL-SAFE CASE. A word this "
+                "store has never seen must never silently close an order; it falls through "
+                "to the ledger's own `unfulfilled` answer, which still says this order owes "
+                "a copy",
+            )
+            resolved_numbers = {
+                order["number"] for order in drawn["resolution"]["orders"]
+                if order["lines"][0]["reason"] == "resolved"
+            }
+            checks.equal(
+                resolved_numbers,
+                {"READY-1"},
+                "AND THE ONE PHYSICAL COPY WENT TO THE OLDEST NON-TERMINAL ORDER — proving "
+                "the three terminal orders were excluded from the resolution POOL and not "
+                "merely hidden on the summary list, which is the correctness half of D113's "
+                "own measured bug (an already-shipped order, being older, took a copy ahead "
+                "of a live one)",
+            )
+            checks.equal(
+                {order["number"] for order in drawn["resolution"]["orders"]},
+                {"READY-1", "PAID-1", "MYSTERY-1"},
+                "and the resolution answers only for the three orders that are still open "
+                "— CANCELED-1, TRANSIT-1 and DELIVERED-1 do not appear in it at all",
             )
 
     # ------------------------------------------- 8-21. the pull, in both directions
@@ -27386,6 +27565,62 @@ def check_order_fetch_route(checks: Checks) -> None:
                         "the same sixteen are known and the same forty-four are fresh — "
                         "nothing about the DETAIL arithmetic changed, only the names answer",
                     )
+
+            # ---- 4c. the terminal override reads what THIS FEED actually wrote — not a
+            # near-miss. This account's own canned strings are "Shipped" (bare, no " - "
+            # suffix) and "Cancelled" (British double-l); neither is a literal member of
+            # `store/orders.py:TERMINAL_STATUSES` ("shipped - in transit",
+            # "shipped - delivered", "canceled"), so this is the fail-safe proven against
+            # REAL WIRE SPELLINGS rather than an invented word — a substring or prefix match
+            # on "shipped" or "cancel" would wrongly close both, and it does not.
+            # `do_order_fetch` WRITES NOTHING (its own docstring: "not even the ledger"), so
+            # the Cancelled row from `window` is ingested directly here, the same shape a
+            # detail call would have produced, to put a real "Cancelled" status in the
+            # ledger to check.
+            answers(
+                checks,
+                lambda: capture_server.do_order_ingest(
+                    {
+                        "orders": [
+                            {
+                                "source": "TCGplayer",
+                                "number": "T7-BRITISH-CANCEL",
+                                "status": "Cancelled",
+                                "lines": [{"sku": "9191486", "quantity": 1}],
+                            }
+                        ]
+                    }
+                ),
+                "a hand-paste carrying the British 'Cancelled' spelling lands, for 4c below",
+            )
+            drawn = capture_server.do_orders()
+            by_number = {row["number"]: row for row in drawn["orders"]}
+            checks.ok(
+                bare_number in by_number and "T7-BRITISH-CANCEL" in by_number,
+                "the bare-Shipped paste and the British-Cancelled paste are both in the "
+                "ledger to check",
+                f"got numbers {sorted(by_number)!r}",
+            )
+            if bare_number in by_number:
+                checks.equal(
+                    by_number[bare_number]["terminal"],
+                    False,
+                    "BARE 'Shipped' — NO ' - In Transit' OR ' - Delivered' SUFFIX — DOES "
+                    "NOT MATCH. The vocabulary is the exact strings this codebase measured, "
+                    "never a prefix, so a feed spelling it more tersely than the two "
+                    "recognised variants leaves the order open rather than guessed closed",
+                )
+            if "T7-BRITISH-CANCEL" in by_number:
+                checks.equal(
+                    (by_number["T7-BRITISH-CANCEL"]["terminal"],
+                     by_number["T7-BRITISH-CANCEL"]["open"]),
+                    (False, True),
+                    "AND THE BRITISH SPELLING DOES NOT MATCH THE ONE THIS ACCOUNT WAS "
+                    "MEASURED USING ('Canceled', one L) — it stays OPEN. Casefold and strip "
+                    "tolerate case and whitespace, deliberately never a second spelling — "
+                    "recognising one unmeasured near-miss is the first step toward the "
+                    "guess this vocabulary exists to refuse",
+                )
 
             refusal(
                 checks,
