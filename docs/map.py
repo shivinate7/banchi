@@ -267,6 +267,20 @@ SHIPPED = [
               "load-bearing clause is that MAIN CARRIES NO SLUG. MEASURED while it was built: "
               "origin/main took two decision numbers and two build steps mid-session, which is "
               "the race, live."},
+    {"n": 24, "on": "2026-09-13",
+     "title": "A durable scheduled heartbeat that watches repo state across sessions",
+     "note": "D200. scripts/heartbeat.py, a thin caller of what already "
+              "existed (no bandaids: coordinator.py --json already answers open PRs pinned to "
+              "their head SHA, id claims, dirty worktrees and live sessions) plus the two "
+              "bullets it did not cover — whether MAIN'S OWN last push is green, and "
+              "janitor.py's own preview with --confirm never passed. Writes "
+              ".serve/heartbeat/latest.json and appends history.jsonl, which is the durable "
+              "state the item's own two constraints require: never a daemon (one run, one "
+              "exit — the cadence is the scheduler registering it, not a loop in this "
+              "file) and each run a fresh session with no memory of the last one, so anything "
+              "needing that memory (\"has this PR conflict already been surfaced?\") is a diff "
+              "against the previous latest.json rather than a session remembering. "
+              "Read-and-report authority only."},
 ]
 
 OPEN = [
@@ -285,24 +299,6 @@ OPEN = [
               "repo, build the SQLite index (cards join to sets by FILENAME \u2014 printedTotal lives only "
               "in sets/en.json and is half the join key), then fill the image mirror with the "
               "Content-Length dry run first. D15."},
-    {"n": 24,
-     "title": "A durable scheduled heartbeat that watches repo state across sessions",
-     "note": "THE QUESTIONS NO SINGLE SESSION IS POSITIONED TO ASK, because each one sees only its own "
-              "tree and its own branch: open pull requests green and unmerged; a pull request now "
-              "conflicting with a live session that has not been told; worktrees dirty with no session "
-              "in them, and merged branches `make janitor` would take; whether main's last push run is "
-              "green; whether `id claims` is clean (D140 amended — today a person reading PR titles is "
-              "what catches a stale claim). Mostly a CALLER of what exists: make status, make janitor, "
-              "scripts/docs-audit.py --json. TWO CONSTRAINTS, established with the owner and binding. It "
-              "runs only while the desktop app is open, so it is a heartbeat and never a daemon — "
-              "anything whose correctness depends on its having fired is the wrong thing to put here. And "
-              "each run is a FRESH SESSION WITH NO CONVERSATION CONTEXT: it knows nothing about who asked "
-              "for what. Both point one way — READ-AND-REPORT AUTHORITY, NOT MERGE AUTHORITY, because a "
-              "session that cannot remember the last run has no basis for pressing an irreversible button, "
-              "and `make merge` already wants the owner's word for that reason. Anything needing memory of "
-              "who is blocked on whom needs DURABLE STATE IN A FILE rather than in a session; that is the "
-              "part that is real work rather than a wrapper, and it is why this is a step and not a cron "
-              "line. Unranked, as OPEN requires."},
     {"n": 20, "title": "The shipped status and the tracking write-back",
      "note": "Steps 13 and 14 of docs/specs/order-pipeline.md, and the only part of that spec that is "
               "NEITHER built nor merely unproven. Both endpoints were seen on the wire while D69 was "
@@ -1309,7 +1305,15 @@ COMPONENTS = [
                                   "`None` buyer, so a paste built from the narrower client "
                                   "projection cannot erase a name a fetch already wrote. "
                                   "`Ledger.name_buyer` writes a name alone, for orders the "
-                                  "ledger already knows, and refuses to create a record.",
+                                  "ledger already knows, and refuses to create a record. "
+                                  "`TERMINAL_STATUSES`/`is_terminal_status` (D63 amended "
+                                  "2026-09-13) is the ONE place a small, hand-authored set of "
+                                  "feed statuses is spelled — Canceled, Shipped - In Transit, "
+                                  "Shipped - Delivered — as a TERMINAL OVERRIDE the caller "
+                                  "applies on top of `unfulfilled`; an unrecognised status "
+                                  "answers False and changes nothing, the fail-safe direction. "
+                                  "`scripts/docs-audit.py:check_terminal_statuses` reconciles "
+                                  "the set against its own published copy in the D63 entry.",
                           "governed_by": ["D7", "D10", "D13", "D16", "D20", "D21", "D24", "D26",
                                           "D29", "D36", "D53", "D63", "D69", "D88", "D113",
                                           "D193"],
@@ -2293,6 +2297,23 @@ COMPONENTS = [
                 # all; D111 is where the liveness oracle and its argument come from; D141 is
                 # the path-gating that makes a count floor unusable.
                 "governed_by": ["D42", "D43", "D111", "D135", "D140", "D141",
+                                "D171"],
+            },
+            "heartbeat.py": {
+                "does": "`make heartbeat` — docs/GATES.md item 24, built. The durable "
+                        "scheduled heartbeat that watches repo state across sessions: open "
+                        "PRs, `id claims`, dirty worktrees and live sessions by calling "
+                        "coordinator.py --json rather than re-reading any of the four (no "
+                        "bandaids — the primitive already existed); whether MAIN'S OWN last "
+                        "push is green, which coordinator.py's block_main never answers "
+                        "(it compares local main against origin/main, never CI); and "
+                        "janitor.py's own preview, --confirm never passed. Writes "
+                        ".serve/heartbeat/latest.json and appends to history.jsonl — the "
+                        "durable state a fresh, context-free run needs to say what is NEW "
+                        "since the last one, which is the 'a PR conflicting with a live "
+                        "session that has not been told' bullet answered by diffing rather "
+                        "than by memory. Read-and-report authority only.",
+                "governed_by": ["D200", "D42", "D111", "D140", "D148",
                                 "D171"],
             },
             "session-teardown.sh": {
@@ -3502,7 +3523,7 @@ COMPONENTS = [
                                 "D62", "D63", "D64", "D65", "D66", "D67", "D69", "D70", "D76",
                                 "D77", "D79", "D83", "D86", "D87", "D88", "D89", "D90", "D91",
                                 "D92", "D93", "D96", "D100", "D103", "D104", "D108", "D113",
-                                "D115", "D116", "D132", "D134", "D137", "D138", "D159",
+                                "D114", "D115", "D116", "D132", "D134", "D137", "D138", "D159",
                                 "D168", "D174", "D183", "D172", "D192", "D191",
                                 "D193"],
                 "tested_by": ["T7"],
@@ -3670,7 +3691,7 @@ COMPONENTS = [
                                 "D79", "D86", "D87", "D88", "D89", "D100", "D103", "D105",
                                 "D134", "D137", "D145", "D147", "D156", "D159", "D163",
                                 "D165", "D166", "D168", "D170", "D172", "D174", "D180",
-                                "D189"],
+                                "D188", "D189"],
                 "tested_by": ["T7"],
             },
             "shipping_routes.py": {

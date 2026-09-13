@@ -1467,6 +1467,9 @@ land while this section still describes threads.
 
 `scripts/docs-audit.py`'s `entry budget` row reports entries larger than `ENTRY_BUDGET`. It reported
 **21** until 2026-09-05 and reports **10** now, and the difference is not that anything was cut.
+**Re-measured 2026-09-13: the row reports 18**, not 10 — eight more entries crossed the same
+fixed budget as the corpus kept growing, which is the row doing exactly the job this section
+already describes rather than a new defect.
 
 **The constant had stopped tracking the thing it is derived from.** Its own comment defines it as
 twice the median entry, measured at 6,374 on the day it was set. Measured today with
