@@ -74,16 +74,16 @@ where it was has removed nothing.
 |---|---|---|
 | Phase 0 | 13 (§4 of the spec, twelve sites; `do_inventory` and `to_payload` stay by the owner's word; PLUS `store/master.py:next_box_number`, a real, currently-existing `.distinct("box")` call the hand census in §4 missed — found by item 1's own scanner on its first end-to-end run against the real tree, and permanent for the same reason `do_boxes`/`counts` are) | — |
 | Phase 1 | 13 | **corrected 2026-09-12 by item 2**: `_boxes_named`'s only caller is `do_status`, which item 2 does not touch, so it cannot close that row — item 2 removes NOTHING from the allowlist (see D192). Item 4 REPLACES `_unsent_ledger`'s `distinct("sku")` with its own one-pass `select`, argued, so it nets zero. Count stays at 13 |
-| Phase 2 | 6 | item 7 removes `do_pipeline_value`, `box_views`, `_release_plan`, `_box_names`, `_on_hand_by_run`; item 8 removes `do_search` |
+| Phase 2 | 9 | **as landed 2026-09-13**: item 7 (#344) removed `_release_plan`, `_box_names`, `_on_hand_by_run` and RENAMED the entries for `do_pipeline_value` (now `_value_rows`, one `select` of indexed columns — the D159 aggregate is over every on-hand row by the owner's own ruling and cannot be scoped) and `box_views`'s unbounded branch (its one caller ranks every box); item 8 (#343) removed `do_search`. 13 − 3 − 1 = 9 |
 
-The six that remain — `do_inventory`, `to_payload`, `do_boxes`, `counts`,
-`next_box_number`, and item 4's one pass — are named in the allowlist with their reason
-and are the plan's end state, not a residue. `next_box_number` was not in the original
-twelve-site census; item 1's own scanner found it, real and permanent, on its first
-end-to-end run against the tree (see item 1's own file, "Goal and done-when"). Each
-item's own file has the authoritative "Allowlist entries removed" section;
-if it disagrees with this table, the item file wins and this table is corrected in the
-same PR.
+The nine that remain — `do_inventory`, `to_payload`, `do_boxes`, `counts`,
+`next_box_number`, `_boxes_named` (`do_status`'s, one indexed column), item 4's
+`_cards_by_sku`, and item 7's two renamed entries (`_value_rows`, `box_views`) — are named
+in the allowlist with their reason and are the plan's end state, not a residue. The plan
+said six; three of the difference are the two store-wide rankings the owner ruled must be
+computed over every row, and the third is `_boxes_named`, which no item ever owned. Each
+item's own file has the authoritative "Allowlist entries removed" section; if it disagrees
+with this table, the item file wins and this table is corrected in the same PR.
 
 **Every PR also passes the measurement in its own "Measure" section** — the `.backup`-copy
 recipe from the spec's §1, run before and after, with the 20x ratio written into the PR

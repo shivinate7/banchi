@@ -2487,10 +2487,14 @@ was open** — the rule is renumber your own, never another's.
   `localStorage` key once.
 - `docs/specs/store-scaling.md` — the store at 50,000 cards: eight PRs in the owner's order,
   each with its proof, against figures measured on a copy of their real store and again at
-  20x. **SPECIFIED 2026-09-12, NOT BUILT.** Read its §2 before quoting the investigation's
-  original punch list — three reviews reversed two of its six items — and its §5 for the
-  three settled rulings it reopens on the owner's word. §4 is the allowlist the guard starts
-  from, and it may only shrink.
+  20x. **BUILT 2026-09-13, all eight, in three phases** (#337 → #338/#339/#340/#341 →
+  #342/#343/#344). Read its §2 before quoting the investigation's original punch list —
+  three reviews reversed two of its six items — and its §5 for the three settled rulings it
+  reopens on the owner's word. §4 is the allowlist the guard started from; it ended at 9,
+  not 6, and the status paragraph says which three entries stayed and why. Two screens
+  still read `GET /inventory` whole (`docs/DEBTS.md` §27), and `make docs-audit`'s
+  `import layering` row landed with item 8 because that item broke D63's rule and nothing
+  had ever read it.
 - `docs/specs/stable-card-id.md` — a card's name is the first photograph of it: `cards.cid`,
   the sha256 of the photograph the store held when the id was issued, frozen at issue and
   never recomputed (D172). **SPECIFIED 2026-09-12, NOT BUILT.**
