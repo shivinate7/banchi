@@ -138,7 +138,7 @@ CLAUSES = (
            "never poll in a loop — background the work and take its notification"),
     Clause("push", "PKMNSCAN_PUSH",
            "never `git push <remote> HEAD` / `<remote> <branch>` when the tracked upstream "
-           "is a different name"),
+           "is a different, non-default branch"),
 )
 
 HATCH = {clause.name: clause.hatch for clause in CLAUSES}
@@ -1084,6 +1084,33 @@ def _tracked_branch(branch: str, remote: str, cwd: str) -> Optional[str]:
     return tracked
 
 
+def _default_branch(remote: str, cwd: str) -> str:
+    """The branch this checkout treats as the remote's default, or "" if it cannot tell.
+
+    `refs/remotes/<remote>/HEAD` is git's OWN record of it — set by `git clone`, or by
+    `git remote set-head <remote> -a` — and is specific to the remote actually being pushed
+    to, which matters for a fork workflow whose fork defaults to a different branch than
+    `origin`'s. A throwaway repo that has never had that symbolic ref written (this guard's
+    own selftest fixture, most `git init`-then-`push` clones) falls back to the same rule
+    `scripts/janitor.py:default_branch` already uses for the primary checkout: the first of
+    `main`, `master` that exists as a local branch. Nothing here is a guess dressed as a
+    read — an unreadable remote and an absent local branch both return "", and the caller
+    treats that exactly like the pre-2026-09-13 code did: no exemption, still refused.
+    """
+    ok, out = _run(["git", "symbolic-ref", "--quiet", "--short",
+                    "refs/remotes/{0}/HEAD".format(remote)], cwd=cwd)
+    if ok and out.strip():
+        head = out.strip()
+        prefix = remote + "/"
+        return head[len(prefix):] if head.startswith(prefix) else head
+    for name in ("main", "master"):
+        ok, _ = _run(["git", "rev-parse", "--verify", "--quiet",
+                      "refs/heads/" + name], cwd=cwd)
+        if ok:
+            return name
+    return ""
+
+
 def _push_refusal(text: str, remote: str, spec: str, branch: str, tracked: str) -> Refusal:
     return Refusal("push", [
         "  {0}".format(text),
@@ -1146,6 +1173,17 @@ def clause_push(reading: "shell_parse.Reading", cwd: str) -> Verdict:
             tracked = _tracked_branch(branch, remote, where)
             if tracked is None or tracked == branch:
                 continue                   # no upstream on this remote, or it already matches
+            # THE ORDINARY FIRST PUSH OF A FEATURE BRANCH IS EXEMPT, amended 2026-09-13 (D179).
+            # A branch cut with `git switch -c X origin/main` tracks `origin/main` from birth —
+            # that is what "cut from" means — and its first push names its OWN branch, never
+            # `main`. Before this line that push was refused, and the refusal's own remedy told
+            # the operator to push at `main` by name (`git push origin HEAD:main`), which is the
+            # one act D42, both git hooks and GitHub branch protection all exist to prevent. The
+            # incident this clause exists for tracked a DIFFERENT FEATURE branch
+            # (`claude/pr-h-readings-table`, not `main`), so keeping that shape refused needs
+            # nothing here but excluding the default branch from it.
+            if tracked == _default_branch(remote, where):
+                continue
             refusals.append(_push_refusal(
                 shell_parse.short(placed.stage.text), remote, spec, branch, tracked))
             break
