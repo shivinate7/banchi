@@ -195,10 +195,8 @@ export function ClearPrices({
 
         <div className="clearprices-body">
           <p className="clearprices-says">
-            A price you have typed pre-fills its row until you clear it. This removes the{' '}
-            <strong>answer</strong> and not the card: a cleared row goes back to showing what the
-            standing rule suggests, and <strong>nothing at TCGplayer changes</strong> — no file
-            is written and no listing is touched.
+            Removes the <strong>answer</strong>, not the card — a cleared row shows the
+            standing rule again. <strong>Nothing at TCGplayer changes.</strong>
           </p>
 
           <section className="clearprices-step" aria-labelledby="clearprices-scope">
@@ -221,14 +219,11 @@ export function ClearPrices({
             <p className="clearprices-scope-says">
               {scope === 'worklist' ? (
                 <>
-                  Only answers for cards in <strong>{worklistName}</strong> — what this screen is
-                  showing.
+                  Only answers in <strong>{worklistName}</strong>.
                 </>
               ) : (
                 <>
-                  <strong>Every run at once.</strong> The pricing answer is one file for the whole
-                  store, so this reaches cards in runs that are not on this screen and boxes you
-                  are not looking at.
+                  <strong>Every run at once.</strong> Includes runs and boxes not on this screen.
                 </>
               )}
             </p>
@@ -260,8 +255,7 @@ export function ClearPrices({
                 these are the same kind of line when one describes a blast radius and the other
                 describes a policy this feature deliberately does not have. */}
             <p className="clearprices-age-says">
-              Nothing here expires on its own. This is a filter for one press — an answer you do
-              not clear stands until you do.
+              Nothing expires on its own — an answer stands until you clear it.
             </p>
           </section>
 
@@ -271,21 +265,16 @@ export function ClearPrices({
           <Notice tone="info" title="What this never touches" className="clearprices-spares">
             <ul className="clearprices-spare-list">
               <li>
-                <strong>{holds}</strong> held back on purpose. A hold carries a reason, a watch
-                and a note — a judgement you wrote, not a price you typed. Lift one on its own
-                row.
+                <strong>{holds}</strong> held back on purpose. Lift one on its own row.
               </li>
               {unpriced === 0 ? null : (
                 <li>
-                  <strong>{unpriced}</strong> with no catalogue price. Those are the{' '}
-                  <em>absence</em> of an answer, and <code className="bn-code">emit</code> reads
-                  them to refuse a run.
+                  <strong>{unpriced}</strong> with no catalogue price.
                 </li>
               )}
               {undated === 0 ? null : (
                 <li>
-                  <strong>{undated}</strong> in scope carry no date, so an age window cannot
-                  place them. Choose <em>Any age</em> to include them.
+                  <strong>{undated}</strong> carry no date. Choose <em>Any age</em> to include them.
                 </li>
               )}
             </ul>
@@ -293,9 +282,7 @@ export function ClearPrices({
 
           {unsaved ? (
             <Notice tone="warn" title="Save first">
-              This screen has an answer it has not written yet. Clearing now would be undone by
-              the next save — the button comes back the moment the pill at the top says{' '}
-              <strong>Saved</strong>.
+              Clearing now would be undone by the next autosave.
             </Notice>
           ) : null}
 

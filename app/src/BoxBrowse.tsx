@@ -1557,7 +1557,7 @@ export function BoxBrowse({
             ) : (
               <div className="browse-shelfnote">
                 <span className="boxops-identity-num">No box</span>
-                <p>These records reached the store with a box or index that is not a number, so the server sent no position. The server status page lists them.</p>
+                <p>These records have no valid box or index. See the server status page.</p>
               </div>
             )}
             {shelfBox === null ? null : boxPanel}
@@ -1632,7 +1632,7 @@ export function BoxBrowse({
               <EmptyState
                 icon="box"
                 title={`Nothing in box ${shelfBox.box} yet`}
-                body="Capture a card into it, or manage the box above — rename, divide, seal or delete it."
+                body="Capture a card, or manage the box above."
                 actions={
                   <Button size="sm" icon="camera" onClick={() => (window.location.hash = '#/capture')}>
                     Capture into box {shelfBox.box}
@@ -1845,16 +1845,26 @@ export function BoxBrowse({
   const open = selectedRow === null ? null : openQuestion(queued, selectedRow)
   const game = selectedRow === null ? null : gameWord(selectedRow.card)
 
+  /* THE ZERO-BOX STORE (D192, this item). `shelf` never leaves `null` here: the shelf
+   * effect above returns the instant `shelves.length === 0`, so the box-scoped rows fetch
+   * that effect gates on a numeric shelf never fires, `rows` never leaves `null`, and
+   * `failure` is never set either — a fresh store had no error to report. The registry read
+   * (`boxesAnswered`) is the one signal that DOES land regardless, so it is what tells "no
+   * boxes exist" apart from "the registry has not answered yet." Read off `boxRecords`
+   * rather than `shelves` so a search with zero matching boxes never falls into this branch. */
+  const noBoxesYet = boxesAnswered && boxRecords.length === 0
+
   return (
     <section className="browse">
       <PageHeader
-        eyebrow="Library"
         title={head ?? 'Inventory'}
         icon="box"
         lede={
           rows === null
             ? failure === null
-              ? 'Reading the inventory…'
+              ? noBoxesYet
+                ? null
+                : 'Reading the inventory…'
               : 'The inventory could not be read.'
             : 'Walk any box card by card. Sell, retire or move a copy from here.'
         }
@@ -1876,7 +1886,7 @@ export function BoxBrowse({
         </Notice>
       )}
 
-      {rows === null && failure === null ? (
+      {rows === null && failure === null && !noBoxesYet ? (
         <div className="browse-body browse-body-loading">
           <div className="browse-map">
             <div className="bn-skeleton browse-skel-search" />
@@ -1903,12 +1913,27 @@ export function BoxBrowse({
         </div>
       ) : null}
 
+      {rows === null && failure === null && noBoxesYet ? (
+        <div className="bn-panel">
+          <EmptyState
+            icon="box"
+            title="No boxes yet"
+            body="Capture a card to make one."
+            actions={
+              <Button variant="primary" icon="camera" onClick={() => (window.location.hash = '#/capture')}>
+                Capture a card
+              </Button>
+            }
+          />
+        </div>
+      ) : null}
+
       {rows !== null && boxesAnswered && storeCards === 0 ? (
         <div className="bn-panel">
           <EmptyState
             icon="camera"
             title="No cards captured yet"
-            body="Every card you capture gets an address — a box, a section, a card number — and shows up here."
+            body="Captured cards show up here."
             actions={
               <Button variant="primary" icon="camera" onClick={() => (window.location.hash = '#/capture')}>
                 Capture your first card
@@ -1955,7 +1980,7 @@ export function BoxBrowse({
                     <EmptyState
                       icon="search"
                       title={`Nothing matches “${query.trim()}”`}
-                      body="The search reads the card's name, number, SKU, set hint and note."
+                      body="Searches name, number, SKU, set, note."
                       actions={
                         <Button icon="x" onClick={() => setQuery('')}>
                           Clear the search
@@ -2036,8 +2061,8 @@ export function BoxBrowse({
                         <Notice tone="warn" title={`Waiting in the ${open.queue} queue — ${reasonLabel(open.entry.reason)}.`} code={`${open.entry.reason} · ${open.queue} · candidates ${open.entry.candidates.length}`}>
                           {waitingFor(open.entry.first_seen)}.{' '}
                           {open.entry.candidates.length > 0
-                            ? `${open.entry.candidates.length} candidate row${open.entry.candidates.length === 1 ? '' : 's'} to choose from on the review screen.`
-                            : 'No candidate rows, so it cannot be answered as it stands — re-shoot it, or stand it down from the review screen.'}{' '}
+                            ? `${open.entry.candidates.length} candidate row${open.entry.candidates.length === 1 ? '' : 's'} on Review.`
+                            : 'No candidate rows — cannot be answered as it stands. Re-shoot it, or stand it down on Review.'}{' '}
                           <a href="#/review">Open the review queue</a>
                         </Notice>
                       </div>

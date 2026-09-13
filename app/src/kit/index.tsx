@@ -134,14 +134,12 @@ export function Chip({ pressed, icon, count, dot, className, children, type = 'b
 
 /* ---- Page header ------------------------------------------------------------------ */
 export function PageHeader({
-  eyebrow,
   title,
   icon,
   lede,
   actions,
   className,
 }: {
-  readonly eyebrow?: ReactNode
   readonly title: ReactNode
   readonly icon?: IconName
   readonly lede?: ReactNode
@@ -151,7 +149,6 @@ export function PageHeader({
   return (
     <header className={['bn-head', className].filter(Boolean).join(' ')}>
       <div className="bn-head-text">
-        {eyebrow ? <span className="bn-eyebrow">{eyebrow}</span> : null}
         <h1 className="bn-title">
           {icon ? <Icon name={icon} size={22} /> : null}
           {title}

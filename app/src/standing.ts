@@ -74,13 +74,13 @@ const n = (v: number): Say => ({ text: v.toLocaleString(), em: true })
 const t = (text: string): Say => ({ text })
 
 /** A reading that could not be taken, ranked where the answer would have been. */
-function unknown(key: string, what: string, why: string, problem: string | null): Standing {
+function unknown(key: string, message: string, problem: string | null): Standing {
   return {
     key,
     tone: 'warn',
     icon: 'alert',
     lead: 'Cannot tell',
-    say: [t(` — ${what} ${why}`)],
+    say: [t(` — ${message}`)],
     href: null,
     kbd: null,
     behind: [],
@@ -96,7 +96,7 @@ export function standing(input: StandingInput): Standing | null {
      a fresh store from a store whose readers are merely slow, and every branch below reads
      one of the two. */
   if (status === null) return input.statusFailed
-    ? unknown('status-failed', 'the server did not answer,', 'so nothing here can be counted.', null)
+    ? unknown('status-failed', 'the server did not answer.', null)
     : null
 
   const problem = status.problem ?? null
@@ -109,7 +109,7 @@ export function standing(input: StandingInput): Standing | null {
       tone: 'none',
       icon: 'camera',
       lead: 'Nothing yet',
-      say: [t(' — nothing photographed yet. The queue starts at the camera.')],
+      say: [t(' — the queue starts at the camera.')],
       href: null,
       kbd: null,
       behind: [{ figure: null, label: 'Boxes are made as you fill them.' }],
@@ -163,8 +163,7 @@ export function standing(input: StandingInput): Standing | null {
   if (orders === null) {
     return unknown(
       'orders-unknown',
-      input.ordersFailed ? 'the order ledger did not answer,' : 'the order ledger is still loading,',
-      'so what is owed cannot be ranked.',
+      input.ordersFailed ? 'the order ledger did not answer.' : 'the order ledger is still loading.',
       problem,
     )
   }
@@ -196,7 +195,7 @@ export function standing(input: StandingInput): Standing | null {
   /* 3 — the review queue. A refusal to count ranks HERE rather than falling through to a
          cheerful "nothing is owed", which is the whole reason the wire types it nullable. */
   if (review === null) {
-    return unknown('review-unknown', 'the review queue could not be counted,', 'so this may not be everything.', problem)
+    return unknown('review-unknown', 'the review queue could not be counted.', problem)
   }
   if (review > 0) {
     add(owed, 'runs to price', owed !== null && owed > 0)
@@ -219,8 +218,7 @@ export function standing(input: StandingInput): Standing | null {
   if (pricing === null) {
     return unknown(
       'pricing-unknown',
-      input.pricingFailed ? 'the pricing worklist did not answer,' : 'the pricing worklist is still loading,',
-      'so a run may be waiting on a price.',
+      input.pricingFailed ? 'the pricing worklist did not answer.' : 'the pricing worklist is still loading.',
       problem,
     )
   }
@@ -293,8 +291,7 @@ export function standing(input: StandingInput): Standing | null {
   if (runs === null) {
     return unknown(
       'runs-unknown',
-      input.runsFailed ? 'the run list did not answer,' : 'the run list is still loading,',
-      'so a run may be running.',
+      input.runsFailed ? 'the run list did not answer.' : 'the run list is still loading.',
       problem,
     )
   }

@@ -250,9 +250,8 @@ async function open(
   }).toPass({ timeout: 15_000 })
   await page.keyboard.type('3')
   await page.keyboard.press('Enter')
-  /* The camera opens on an explicit press and not on load — the screen says so in the field
-     itself ("Nothing on this screen reaches for it until you ask, so opening the app raises
-     no permission prompt"), so a test that skipped the button would be skipping the design.
+  /* The camera opens on an explicit press and not on load — the field opens with an "Open the
+     camera" button and nothing else, so a test that skipped it would be skipping the design.
      The device list only exists after it. */
   await page.keyboard.press('v')
   /* SCOPED TO THE RIG, because the sentence is on the screen three times now: the stage draws

@@ -2454,10 +2454,43 @@ COMPONENTS = [
                 # runs: node again, so `make check` and never the commit path.
                 "governed_by": ["D18", "D65"],
             },
+            "user-strings.mjs": {
+                "does": "the AST half of the `no mechanism on screen` row — walks every "
+                        "`.tsx` under app/src through app/node_modules/typescript (the "
+                        "compiler the app itself builds with, the same choice "
+                        "screen-freshness.mjs makes and for the same reason) and prints "
+                        "one JSON array of every USER-VISIBLE string: JSX text nodes, the "
+                        "JSX attributes `title`/`aria-label`/`placeholder`/`label`/`alt`/"
+                        "`body`, a literal reached through the ternary/`??`/`&&`/`+`/"
+                        "parenthesis shapes this tree actually builds a sentence with, and "
+                        "`toast()`'s `title`/`body`/`action.label`. A code comment cannot "
+                        "become a JsxText node, so it is structurally unreachable rather "
+                        "than filtered — it was measured to leak zero of the ~2,700 hits "
+                        "on this tree. Extracts only; the FORBIDDEN word list, the path "
+                        "pattern and the decision-citation pattern all live in "
+                        "scripts/docs-audit.py's `NO_MECHANISM_WORDS`, in one place, so a "
+                        "session refining the rule edits one dictionary rather than two "
+                        "files. `--dir <path>` points it at a throwaway fixture tree for "
+                        "the auditor's own self-test rather than trusting app/src to hold "
+                        "a case. Never writes.",
+                "governed_by": ["D134", "D196"],
+            },
             "build-mark.mjs": {"does": "generates the app's mark — app/src/kit/markGeometry.ts, markPalettes.ts and app/public/favicon.svg — by READING docs/specs/logo/sheets/small-cut.html and evaluating the drawing routine out of it, so there is exactly one implementation of the geometry in this repo. Asserts on what it extracted (the tile is 221 points, the display bracket is an outlined polygon, the small bracket is a stroked path) before writing 25KB of path data into app/. D18: a generator may write and nothing that writes may gate a commit — this is run by hand, never on the commit path.",
                                 "governed_by": ["D18", "D94", "D102"]},
             "build-lockup.mjs": {"does": "generates the LOCKUP — app/src/kit/lockupGeometry.ts — by reading docs/specs/logo.md section 13's settled table and running docs/specs/logo/sheets/lockup-core.js in a real browser. It reads the table rather than re-declaring it, unlike build-mark.mjs, because the lockup's eleven parameters ARE in a machine-readable table and the mark's are not; a third copy would be a third thing to drift. It needs a browser where build-mark.mjs needs only `new Function`, because `frame()` solves the roman's tracking with document.createRange() and that solve is what gets baked. IT OUTLINES THE TYPE: 番地 in IBM Plex Sans JP 400 and BANCHI in Manrope 700, both OFL and both devDependencies read at build time and never committed, so no font ships and a blocked CDN cannot draw a fallback CJK face at letter-spacing solved for Plex. Asserts what build-mark.mjs cannot: it renders the generated outlines against the live text they replace and refuses to write when more than 8% of inked pixels differ — the measured residual is 6.2%, which is hinting. D18: run by hand, never on the commit path.",
                                  "governed_by": ["D18", "D102"]},
+            "copy-budget.mjs": {"does": "`node scripts/copy-budget.mjs --pin` re-measures the "
+                                        "visible word count `app/tests/copy-budget.spec.ts` "
+                                        "asserts on every owner route and rewrites "
+                                        "`app/tests/copy-budget.json`. CONTAINS NO COUNTING "
+                                        "LOGIC OF ITS OWN — it sets `COPY_BUDGET_PIN=1` and "
+                                        "runs that one spec through Playwright directly (not "
+                                        "`make design-check`: it is a generator, D18, and does "
+                                        "not take the suite lock), so the pin path and the "
+                                        "assert path are one file exercising one measurement "
+                                        "and cannot drift apart. Written exactly, no slack — "
+                                        "slack is how a ratchet leaks.",
+                                "governed_by": ["D18", "D194"]},
             "docs-audit.py": {
                 "does": "D16's layers 1 and 2: every mechanical check, plus the coupling "
                         "question under `--staged`. `--json` is the machine surface "
@@ -2539,7 +2572,17 @@ COMPONENTS = [
                                 # D63, D173: `check_import_layering` (store-scaling item 8) —
                                 # store/ may not import pipeline/, and a rule with no reader
                                 # is advice.
-                                "D63", "D173"],
+                                "D63", "D173",
+                                # D1, D11, D86, D134, D174, D181: named inside
+                                # `NO_MECHANISM_WORDS`' comments, which say which real
+                                # decision each forbidden noun names — D1 the pipeline itself,
+                                # D11 the join, D86 the corpus, D174/D181 the resolver, D134
+                                # a worked illustration of a citation.
+                                "D1", "D11", "D86", "D134", "D174", "D181",
+                                # D196: the `no mechanism on screen` row,
+                                # shelling out to scripts/user-strings.mjs below — unclaimed,
+                                # so it sorts to the end until `make merge` gives it a number.
+                                "D196"],
             },
             "claim-ids.py": {
                 "does": "allocate the numbers this branch's SLUG ids will take, and "
@@ -3718,7 +3761,7 @@ COMPONENTS = [
                                 "D79", "D86", "D87", "D88", "D89", "D100", "D103", "D105",
                                 "D134", "D137", "D145", "D147", "D156", "D159", "D163",
                                 "D165", "D166", "D168", "D170", "D172", "D174", "D180",
-                                "D189"],
+                                "D188", "D189"],
                 "tested_by": ["T7"],
             },
             "shipping_routes.py": {
@@ -4044,7 +4087,8 @@ COMPONENTS = [
                                        "raises the three control heights to a thumb's 40-46px — the "
                                        "POINTER decides, not the width, because an iPad in portrait "
                                        "is 820px wide and all thumb.",
-                               "governed_by": ["D5", "D13", "D18", "D32", "D50", "D94", "D110"],
+                               "governed_by": ["D5", "D13", "D18", "D32", "D50", "D94", "D110",
+                                               "D197"],
                                "note": "`scripts/docs-audit.py`'s `design tokens` row reads "
                                        "docs/DESIGN.md's fenced block as hexes, three typefaces, a "
                                        "spacing row and one radius, and merges every `:root` in this "
@@ -4124,7 +4168,8 @@ COMPONENTS = [
                                     "containing block for fixed descendants. `forwards` is right in "
                                     "exactly one place, `[data-leaving]`, where the node is about to "
                                     "unmount.",
-                            "governed_by": ["D5", "D13", "D32", "D50", "D94", "D117", "D125", "D26"]},
+                            "governed_by": ["D5", "D13", "D32", "D50", "D94", "D117", "D125", "D26",
+                                            "D195", "D197"]},
             "src/kit/markGeometry.ts": {"does": "the Banchi mark's two optical cuts as static path data, GENERATED by scripts/build-mark.mjs out of docs/specs/logo/sheets/small-cut.html. Never hand-edited: the sheet is the one implementation of the drawing, so the app cannot drift from the spec by being edited. Two cuts because a 1.7 stroke is a scratch at 32px and absent at 16px (logo.md section 3, swept in section 11) — `SMALL` is what ships, since every surface in this product is below 64px, and `DISPLAY` is what #/gallery shows. The geometry does not vary across the six marks; all six generate byte-identical paths.",
                                           "governed_by": ["D94", "D102"]},
             "src/kit/lockupGeometry.ts": {"does": "the lockup as static path data — 番地 and BANCHI OUTLINED, the bracket's arm and its two end discs, the block's dimensions and section 13's eleven settled parameters. GENERATED by scripts/build-lockup.mjs and never hand-edited. Every number is a ratio of the kanji size and the paths are drawn in a 319 x 233 box at kanji 100, so ONE geometry serves every size through a viewBox — which is not only smaller than per-size data but more correct, since a vector scaled by a viewBox cannot re-layout and live text could, and did: the width match had to be SOLVED per size. Carries no `fill`: the component's own <g> supplies it by inheritance so a stylesheet can switch section 16's dark metal, which a fill attribute on the child would make unreachable.",
@@ -4629,7 +4674,7 @@ COMPONENTS = [
             "governed_by": ["D3", "D10", "D13", "D19", "D20", "D21", "D22", "D23", "D27", "D28",
                             "D34", "D41", "D56", "D58", "D65", "D81", "D92", "D118", "D121",
                             "D128", "D130", "D131", "D132", "D142", "D145", "D36",
-                            "D153", "D164", "D172", "D52"]},
+                            "D153", "D164", "D170", "D172", "D52"]},
             # D3 earns its place on a stylesheet: the no-claim finish chip is drawn dashed
             # because rung 1 distinguishes "no metadata recorded" from a recorded claim, and
             # that distinction is carried here in a border style rather than in any logic.
@@ -4645,7 +4690,7 @@ COMPONENTS = [
                                       # move what is around it when a drawer changes.
                                       "governed_by": ["D3", "D5", "D27", "D41", "D50", "D65", "D117",
                                                       "D118", "D130", "D142",
-                                                      "D164"]},
+                                                      "D164", "D195"]},
             "src/PositionLabel.tsx": {
                 "does": "ONE rendering of `pipeline/join.py:Position.label` for every OWNER site "
                         "(D41, amended 2026-08-29). Recomposes `Box N \u00b7 Section N \u00b7 Card N` into a "
@@ -6361,6 +6406,78 @@ COMPONENTS = [
                         "`.orders-backlog p` inking 950px and six `.kit-spec-note` runs up to "
                         "1254px, none of which carried a measure at all. D118.",
                 "governed_by": ["D27", "D50", "D95", "D123"]},
+            "tests/button-stack.spec.ts": {
+                "does": "same-role buttons stacked in one sector share a width "
+                        "(`D195`), asserted the way `cursor.spec.ts` "
+                        "asserts a pointer: DISCOVERED, never read off a declared class. It "
+                        "sweeps every rendered `.bn-btn`, groups by the nearest sector ancestor "
+                        "(`.bn-panel`, `.bn-well`, `.bn-sheet`, `.bn-dialog`, `[role=group]`, "
+                        "`section`, `.capture-block`, `.bn-empty`) and by the FULL set of "
+                        "`bn-btn-*` classes each carries, keeps groups of 2+ whose members are "
+                        "vertically stacked with left edges within 1px, and asserts every "
+                        "member's width equals the group's widest within 1px. `block` buttons "
+                        "are excluded — already equal by definition. Run by `make design-check`, "
+                        "over every route `routesFromNav` discovers off the sidebar.",
+                "governed_by": ["D50", "D195"],
+                "note": "THE ROLE KEY WAS A HAND-TYPED LIST FOR ONE RUN, and it repeated the "
+                        "exact defect its own header warns about: `bn-btn-quiet` was missing "
+                        "from it, which folded a quiet Close beside a plain Reload on #/gallery "
+                        "into one group and failed on a pair that was never meant to be "
+                        "compared. Reading every `bn-btn-*` class the element carries fixed it "
+                        "the same run it was found. Mutation-tested: a `.bak` copy of "
+                        "`kit.css` with `.bn-actions-stack`'s `justify-self: stretch` deleted, "
+                        "and of `CaptureScreen.css` with `.capture-block-fix`'s `justify-self` "
+                        "reverted to `start`, turned the capture block's own two fix buttons "
+                        "red — \"Open the camera\" 147.3px against \"Pick a box\" 107.0px — and "
+                        "restoring both files turned it green again.",
+            },
+            "tests/page-edge.spec.ts": {
+                "does": "one left edge for every screen (`D197`): `.bn-page`'s "
+                        "`margin: 0 auto` centered a screen with a lower `--bn-page-max` "
+                        "inside the shell's own column instead of anchoring it, so the gutter "
+                        "grew with the window and differed between routes — `#/pricing`'s "
+                        "content sat roughly 330px right of `#/review`'s at the same width, "
+                        "the owner's own report. Discovers its routes off `routesFromNav`, "
+                        "excludes `#/fulfillment` (no shell at all, D5), and at 1440 and 1920 "
+                        "in both rail states reads every route's `.bn-page` "
+                        "`getBoundingClientRect().left` and asserts it against the first "
+                        "route's within 1px — relative rather than a hard-coded pixel, so it "
+                        "stays right as long as one screen is. Run by `make design-check`.",
+                "governed_by": ["D5", "D197"],
+                "note": "FAILED AGAINST THE TREE BEFORE THE FIX, on the exact shape the owner "
+                        "reported: Pricing off by 42-112px depending on width, and — a wider "
+                        "finding than the report named — every screen using the 1600px default "
+                        "cap disagreeing with Home's own `--bn-page-w-rows` cap by 128px at "
+                        "1920, because Home also centers a narrower cap. `margin: 0` on "
+                        "`.bn-page` turned it green.",
+            },
+            "tests/copy-budget.spec.ts": {
+                "does": "the visible word count on every owner screen may only go down "
+                        "(`D194`), blind to WHICH words a screen uses and asserting "
+                        "only their volume — the complement to `no mechanism on screen`'s "
+                        "content check rather than a second pass over it. Discovers its routes "
+                        "off `routesFromNav`, excludes `#/fulfillment`, renders each at 1440 in "
+                        "the small store `wide.spec.ts`/`phone.spec.ts` already use, waits for "
+                        "`.bn-view`'s own text to stop changing (two reads 150ms apart "
+                        "agreeing) rather than trusting the instant `<main>` appears, counts "
+                        "words (splits on whitespace, drops a token with no letter), and "
+                        "asserts each route's count against `copy-budget.json`'s pinned "
+                        "ceiling — no slack, since the only way a ceiling rises is "
+                        "`scripts/copy-budget.mjs --pin`, run by a person on purpose. "
+                        "`COPY_BUDGET_MUTATE=<hash>` injects a 30-plus-word sentence into one "
+                        "route via `page.evaluate` for the mutation proof, never by editing "
+                        "`app/src`. Run by `make design-check`.",
+                "governed_by": ["D194", "D196",
+                                "D195"],
+                "note": "THE FIRST BUILD MEASURED `#/inventory` AT EITHER 156 OR 158 WORDS "
+                        "ACROSS RUNS, because `await expect(main).toBeVisible()` passes the "
+                        "instant the shell paints \"Reading the inventory…\" — a real `<main>`, "
+                        "well before the mocked store read resolves. The stabilized-text wait "
+                        "fixed it: 8 of 8 runs agreed at 158 afterward. Mutation-tested: "
+                        "`COPY_BUDGET_MUTATE='#/pricing'` failed naming exactly that route (91 "
+                        "words against a ceiling of 46) with every other route still under its "
+                        "own ceiling; unset, the suite passed clean again.",
+            },
             "tests/cursor.spec.ts": {
                 "does": "what every control says to the pointer, in two cases that cover "
                         "different things. A live sweep walks EVERY registered route — the "

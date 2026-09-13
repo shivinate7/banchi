@@ -273,6 +273,13 @@ vanished state until it does.
   and focus returns to the control that opened it. `InventoryOverlay.tsx` does this for the
   inventory screen's four kinds and `runsOverlay.ts` for the two runs overlays. That there
   are two of them is a debt, written down in `docs/map.py`: it wants to be one kit `Dialog`.
+- **Same-role buttons stacked in one sector share a width** (`D195`):
+  the widest sibling's own intrinsic width, left-aligned, never the sector's full width and
+  never a hard-coded pixel. `.bn-actions-stack` in `kit.css` is the wrapper form; the capture
+  block's `.capture-block-list` is the cross-row form for buttons that each live in their own
+  list row. Asserted in a real browser by `app/tests/button-stack.spec.ts`, which discovers
+  its subjects rather than reading a declared class — the same argument the cursor floor
+  already makes.
 
 ## Layout, density, and the widths this was drawn at
 
@@ -292,6 +299,13 @@ the actions pinned to the TITLE row by a 19px offset so the primary button lands
 y whether the lede is zero, one or two lines. The half of the old rule that survives is the
 half that paid: **the title, the counts and the controls share one line**, and a screen that
 stacks a title block above a control bar has invented 45px of chrome nobody argued for.
+
+**Every screen shares one left edge, and only its width may vary** (`D197`).
+`.bn-page`'s `margin` is `0`, never `0 auto`: a screen's own `--bn-page-max` narrows the page
+from the shell's own left inset, it does not re-center a shrunken column inside a wider one.
+A lower cap used to move a screen's whole gutter toward the middle of the space the shell
+handed it, which put `#/pricing`'s content some 330px right of `#/review`'s at the same
+window width — asserted now by `app/tests/page-edge.spec.ts`.
 
 **Retiring those numbers is a real loss and it is recorded rather than argued away.** They
 were written after the Inventory screen was measured spending 240px — 27% of a 1440x900
@@ -1125,3 +1139,12 @@ orders and cards, not SKUs and rows. Errors say what happened and what to do nex
 The owner's screens are the exception and only the exception: there, the pipeline's own
 reason strings are shown verbatim beneath their labels, because being able to grep what you
 saw is worth more to the person debugging a run than a consistent register is.
+
+Mechanized past the reason-string exception: `scripts/docs-audit.py`'s `no mechanism on
+screen` row (D196) refuses a decision citation, a repository path, or a
+pipeline-internal noun in any other user-visible string in `app/src`.
+
+Less text is always better than more, and it is a ratchet rather than an opinion: a route's
+visible word count may only go down. Mechanized by `app/tests/copy-budget.spec.ts`
+(D194), run by `make design-check`, against the ceilings pinned in
+`app/tests/copy-budget.json`.

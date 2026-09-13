@@ -456,7 +456,7 @@ test('the parcel file is offered as a download, and the caption says what it doe
      made inside Pirate Ship against a value only the owner can see. Both blanks are deliberate
      and the caption is the only place either is said. */
   await expect(caveats).toContainText('Package Weight is blank on every row')
-  await expect(caveats).toContainText('No insurance column is written')
+  await expect(caveats).toContainText('No insurance column')
 })
 
 /* -------------------------------------------------------------------------------------- 7 */

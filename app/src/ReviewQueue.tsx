@@ -128,7 +128,7 @@ function sentence(entry: QueueEntryWire): Segment[] {
    * sentence this screen deleted on purpose. */
   if (isRetiredReason(entry.reason)) {
     return [
-      say('This screen no longer asks this question — the answer was the same row either way. The card was queued before it was dropped, so it is still here: the rows below are the ones the pipeline found, and answering one lists it.'),
+      say('This screen no longer asks this question — the answer was the same row either way. The card was queued before it was dropped: the rows below are the ones that matched, and answering one lists it.'),
     ]
   }
 
@@ -178,13 +178,13 @@ function sentence(entry: QueueEntryWire): Segment[] {
     }
 
     case 'ambiguous_no_signal':
-      return [say('No finish was recorded for this stack and the photograph did not settle it, so every row below is still possible.')]
+      return [say('No finish recorded, and the photograph didn\'t settle it — every row below is possible.')]
 
     case 'duplicate_condition': {
       const duplicate = duplicatedCondition(entry.candidates)
       return duplicate === null
-        ? [say('Two rows in the export claim the same condition for this number, so nothing can choose between them.')]
-        : [say('Two rows in the export claim '), claim(duplicate), say(' for this number, so nothing can choose between them.')]
+        ? [say('Two export rows claim the same condition for this number — nothing can choose between them.')]
+        : [say('Two export rows claim '), claim(duplicate), say(' for this number — nothing can choose between them.')]
     }
 
     case 'low_confidence': {
@@ -198,7 +198,7 @@ function sentence(entry: QueueEntryWire): Segment[] {
     }
 
     case 'no_position':
-      return [say('This card has no box and index recorded, so nothing on this screen can say where it physically is.')]
+      return [say('This card has no box or index recorded — this screen can\'t say where it is.')]
 
     case 'identification_failed':
       return [say('Identification returned nothing at all for this photograph.')]
@@ -213,10 +213,10 @@ function sentence(entry: QueueEntryWire): Segment[] {
     }
 
     case 'card_not_detected':
-      return [say('No card was found in this photograph, so there was no number corner to crop and read.')]
+      return [say('No card found in this photograph — no number corner to crop or read.')]
 
     case 'no_market_data':
-      return [say('The row this matched carries no market price, so nothing prices it automatically — a missing price is an unknown price, not a low one.')]
+      return [say('This row carries no market price — a missing price is unknown, not low.')]
 
     /* D23's job (a): the only reason that can mean the rows themselves are the wrong card.
      *
@@ -243,7 +243,7 @@ function sentence(entry: QueueEntryWire): Segment[] {
             : [say('The rarities claimed at capture match none of the rows '), value(number), say(' found. ')]
       return [
         ...head,
-        say('That is what a misread number looks like when the misreading is confident: the number found real rows, but they may belong to a different card entirely. Check them against the photograph before answering.'),
+        say('A confident misread number can land on real rows for a different card. Check against the photograph before answering.'),
       ]
     }
 
@@ -273,7 +273,7 @@ function sentence(entry: QueueEntryWire): Segment[] {
               ]
       return [
         ...head,
-        say('The number and the name came off the same card and they disagree, so one of them was misread. A confident wrong number lands on a real row for another card, and this is the only signal that catches it.'),
+        say('The number and the name came off the same card and they disagree — one was misread. Check against the photograph before answering.'),
         /* BOTH READINGS ARE ON THE LIST SINCE 2026-09-12, so the sentence says which is
          * which. Only where the name actually found something: a card whose name matched no
          * row still offers the number's row alone, and promising a second reading that is
@@ -287,7 +287,7 @@ function sentence(entry: QueueEntryWire): Segment[] {
     }
 
     default:
-      return [say('The pipeline sent this card here for a reason this screen has no sentence for. The code beneath the label is the whole of what it said.')]
+      return [say('No sentence written for this reason. The code below is what it said.')]
   }
 }
 
@@ -545,7 +545,7 @@ const CLOSE_CHOICES: { choice: CloseChoice; label: string; machine: string; note
   { choice: { kind: 'stand_down', reason: 'cannot_settle' }, label: 'Cannot settle it', machine: 'cannot_settle', note: 'The photograph will not decide this, and it is not worth re-shooting.' },
   { choice: { kind: 'stand_down', reason: 'not_listing' }, label: 'Not listing it', machine: 'not_listing', note: 'A real card you have decided not to list. It keeps its slot.' },
   { choice: { kind: 'retire', reason: 'pulled' }, label: 'Pulled', machine: 'pulled', note: 'Taken out of the box by hand.' },
-  { choice: { kind: 'retire', reason: 'damaged' }, label: 'Damaged', machine: 'damaged', note: 'Not sellable at the condition this pipeline lists.' },
+  { choice: { kind: 'retire', reason: 'damaged' }, label: 'Damaged', machine: 'damaged', note: 'Not sellable at the condition listed.' },
   { choice: { kind: 'retire', reason: 'lost' }, label: 'Lost', machine: 'lost', note: 'Gone, and not sold.' },
   { choice: { kind: 'retire', reason: 'given_away' }, label: 'Given away', machine: 'given_away', note: 'It left without a sale.' },
 ]
@@ -1318,7 +1318,6 @@ export function ReviewQueue() {
   return (
     <main className="review bn-page" data-queue-open={queueOpen ? 'true' : undefined} data-lens={lens ? 'true' : undefined}>
       <PageHeader
-        eyebrow="Workflow"
         icon="inbox"
         title="Review"
         className={lens ? 'review-pagehead has-lens' : 'review-pagehead'}
@@ -1676,7 +1675,7 @@ function GroupConfirm({
           </p>
         </div>
         <p className="review-sentence">
-          Every card below offers exactly one row, for the same reason. One press answers each card with its own row — the finish each was sorted and photographed as, and <span className="review-claim">Near Mint</span> throughout, which is the only grade this catalogue carries.
+          Each card offers one row, for the same reason. One press answers each with its own row — the finish it was sorted and photographed as, all <span className="review-claim">Near Mint</span>, the catalogue's only grade.
         </p>
         {/* WHAT THE PRESS IS NOT ANSWERING FOR. The group is a cluster rather than the whole
             worklist, so the operator has to be told the rest is still theirs — an unstated
@@ -1830,7 +1829,7 @@ function Card({
           </h2>
           <p className="review-question-sub">
             {reasonLabel(entry.reason)}
-            <span className="review-code" title="The pipeline's reason code">
+            <span className="review-code" title="Reason code">
               {entry.reason}
             </span>
             {row.shadow === undefined ? null : <Pill tone="warn">also {row.shadow}</Pill>}
@@ -1893,7 +1892,7 @@ function Card({
               disabled={busy}
               aria-expanded={looking}
             >
-              {looking ? (phone ? 'Back to rows' : 'Back to the pipeline rows') : phone ? 'Search export' : 'Search the export'}
+              {looking ? 'Back to rows' : phone ? 'Search export' : 'Search the export'}
             </Button>
           )}
           <Button
@@ -2130,10 +2129,10 @@ function ClosePanel({ onChoice, onClose, disabled }: { onChoice: (choice: CloseC
           Cancel
         </Button>
       </div>
-      <p className="review-close-lede">Neither identifies the card. Both stop the queue asking about it, for good — and both can be undone.</p>
+      <p className="review-close-lede">Stops the queue asking about it. Can be undone.</p>
       {group('stand_down', 'Stand down', 'the card stays where it is')}
       {group('retire', 'Retire', 'the card leaves inventory, its slot stays empty')}
-      <p className="review-close-foot">Deleting the capture is on Inventory. It renumbers every card behind this one and cannot be undone.</p>
+      <p className="review-close-foot">Delete the capture on Inventory — renumbers cards behind it, cannot be undone.</p>
     </div>
   )
 }
@@ -2162,10 +2161,10 @@ function CatalogPanel({ lookup, failed, typed, onTyped, onSearch, onChoose, over
           <Icon name="search" size={14} />
           {overruling ? (
             <>
-              Rows from the export, matched by name — the pipeline's rows are behind this. <Kbd>Esc</Kbd> goes back.
+              Rows from the export, matched by name. <Kbd>Esc</Kbd> goes back.
             </>
           ) : (
-            <>The pipeline found no row for this card. These are rows from the export, matched on what the model read.</>
+            <>No matching row. These are export rows matched on what was read.</>
           )}
         </span>
         <form
@@ -2558,7 +2557,7 @@ function QueueRefresh({
           toast({
             kind: 'ok',
             title: 'The queues were re-checked',
-            body: 'Every waiting card the pipeline could answer has left the queue.',
+            body: 'Every card that could be answered has left the queue.',
           })
           onWrote()
         }
@@ -2627,12 +2626,10 @@ function QueueRefresh({
 
         <div className="review-recheck-body">
           <p className="review-recheck-says">
-            Every card still waiting in these two queues, in every box, put back through the
-            pipeline as it stands now — against the same export its run was joined against. A
-            card the pipeline can place on its own is listed and leaves the queue; a card it
-            still cannot place stays here, usually with a better sentence on it.{' '}
-            <strong>Nothing is uploaded and nothing is identified</strong>, so this costs no
-            money and can be run again.
+            Re-resolves every waiting card against the current export. A card it can place
+            leaves the queue; the rest stay, often with a better reason.{' '}
+            <strong>Nothing is uploaded and nothing is identified</strong> — free, and safe to
+            run again.
           </p>
 
           {/* WHAT IT WILL NOT DO, said before the press rather than in the receipt. The
@@ -2641,16 +2638,15 @@ function QueueRefresh({
           <p className="review-recheck-safe">
             <Icon name="lock" size={14} />
             <span>
-              A card you have already answered is never put back in the queue — not by this, not
-              by anything. The <strong>Undo</strong> beside the answer stays the only way back
-              out of one.
+              An already-answered card never returns to the queue. Only <strong>Undo</strong>
+              reverses an answer.
             </span>
           </p>
 
           {!busy ? null : (
             <p className="review-recheck-status" role="status">
               <span className="bn-dot bn-dot-accent" />
-              {report === null ? 'Reading what the pipeline would do…' : 'Re-checking every waiting card…'}
+              {report === null ? 'Reading what would change…' : 'Re-checking every waiting card…'}
             </p>
           )}
 
@@ -2680,13 +2676,11 @@ function QueueRefresh({
             <>
               {refused !== null ? (
                 <Notice tone="danger" title="The re-check refused" code={`exit ${refused}`}>
-                  It ran and stopped on its own. What it printed is below, and it is the whole of
-                  what it said.
+                  Stopped on its own. Output is below.
                 </Notice>
               ) : wrote ? (
                 <Notice tone="ok" title="Re-checked">
-                  The queues are written and this screen has re-read them. No answer of yours was
-                  touched.
+                  Queues written and re-read. Your answers are untouched.
                 </Notice>
               ) : (
                 <Notice tone="info" title="Preview — nothing written yet">
