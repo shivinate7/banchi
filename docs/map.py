@@ -418,7 +418,7 @@ COMPONENTS = [
                                     "store's own reading — `Listing.observe_live`, per game, "
                                     "against the file's mtime — and says what it kept, by SKU "
                                     "with both readings (D87 amended). Partitions at the corpus's stored `policy.threshold` (D99).",
-                            "governed_by": ["D3", "D7", "D8", "D9", "D11", "D12", "D16", "D25", "D34", "D36", "D49", "D54", "D58", "D59", "D86", "D87", "D99", "D115", "D137", "D180", "D186"], "tested_by": ["T4", "T7"]},
+                            "governed_by": ["D3", "D7", "D8", "D9", "D11", "D12", "D16", "D25", "D34", "D36", "D49", "D54", "D58", "D59", "D86", "D87", "D99", "D115", "D137", "D180", "D188"], "tested_by": ["T4", "T7"]},
             "cmd_prices.py": {"does": "`pkmnscan prices adopt` folds every run's legacy "
                                       "decisions.json into the corpus — previews unless given "
                                       "--write, newest-wins, and NAMES the holds a later price "
@@ -471,7 +471,7 @@ COMPONENTS = [
                                       "recovers is the PRICING surface, not the stock.",
                               "governed_by": ["D7", "D10", "D25", "D36", "D48", "D83", "D86",
                                               "D134", "D145", "D165", "D180", "D183", "D26",
-                                              "D186"],
+                                              "D188"],
                               "tested_by": ["T7"]},
             "cmd_reprice.py": {"does": "`pkmnscan reprice list` reports which live listings are "
                                         "not selling and writes a WORKLIST with a price already "
@@ -595,7 +595,7 @@ COMPONENTS = [
                                    "for every sale of the SKU, and a reading of nothing "
                                    "vouches for exactly the sales it was taken AFTER "
                                    "(D150).",
-                           "governed_by": ["D147", "D145", "D4", "D8", "D10", "D11", "D20", "D21", "D22", "D23", "D24", "D25", "D26", "D33", "D34", "D36", "D49", "D56", "D58", "D59", "D64", "D87", "D89", "D115", "D150", "D166", "D180", "D183", "D186"], "tested_by": ["T7"]},
+                           "governed_by": ["D147", "D145", "D4", "D8", "D10", "D11", "D20", "D21", "D22", "D23", "D24", "D25", "D26", "D33", "D34", "D36", "D49", "D56", "D58", "D59", "D64", "D87", "D89", "D115", "D150", "D166", "D180", "D183", "D188"], "tested_by": ["T7"]},
             "runs.py": {"does": "run directories and manifest.json", "governed_by": ["D1", "D25", "D49", "D54", "D86"], "tested_by": ["T7"]},
         },
     },
@@ -2193,7 +2193,7 @@ COMPONENTS = [
                                         "and never in the git hook (D18) — it asks about local "
                                         "provisioning, so a fresh clone would fail a commit over "
                                         "nothing.",
-                                "governed_by": ["D18", "D47"]},
+                                "governed_by": ["D18", "D47", "D172"]},
             "screen-freshness.mjs": {
                 "does": "proves every server WRITE in app/src has a way back — a re-read, an "
                         "invalidation signal, or a reason in the code why none is owed. Twelve "

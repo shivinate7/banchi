@@ -204,7 +204,7 @@ def _sort_key(position: str) -> Tuple[int, int]:
 
 def run(args, say) -> int:
     source = runs.open_run(args.run_dir)
-    # THE REPLAY BRANCH (D186). `realign` and this whole command
+    # THE REPLAY BRANCH (D188). `realign` and this whole command
     # exist to repair a FROZEN snapshot's stale positions (D36), and only `pkmnscan identify`
     # ever writes one — every identify run, single-drawer or store-wide (D180), ends by writing
     # `identifications.json` unconditionally. `pkmnscan join` with no run directory

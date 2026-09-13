@@ -765,7 +765,7 @@ def _needed_games(
     """game -> position labels, for every card in `cards` that will reach a catalog.
 
     THE HALF OF `_games_needed` THAT DOES NOT NEED A RUN, split out for `exports_for_store`
-    (D186): a store-backed join has no `identifications.json` to read and no
+    (D188): a store-backed join has no `identifications.json` to read and no
     reallocation to check — its `cards` mapping is `store_payload`'s own output, built from
     the CURRENT store, so a foreign box's cards can never be in it by construction. `_games_needed`
     below is now the thin wrapper that reads a run's file and clears D36's reallocation
