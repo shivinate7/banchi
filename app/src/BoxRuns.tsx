@@ -1,10 +1,11 @@
-import { useEffect, useState } from 'react'
+import { useState } from 'react'
 
 import { getRuns } from './server'
 import type { RunSummary } from './types'
 import { runningFor } from './RunPanel'
 import { boxOf } from './runScope'
 import { cardKey, carryScope, clearCarriedScope } from './runHandoff'
+import { usePoll } from './usePoll'
 import { Icon } from './kit'
 import './BoxRuns.css'
 
@@ -14,7 +15,8 @@ import './BoxRuns.css'
  * standing on. Deliberately not a second run panel: no step, no console, no control that spends. */
 
 /** Live runs are re-read on this cadence, idle ones on the slower one — the same pair
- *  `RunPanel` uses. */
+ *  `RunPanel` uses, and now the same HOOK (D-one-poller) rather than a copy of its constants
+ *  kept in step by comment alone. */
 const LIVE_MS = 4000
 const IDLE_MS = 20000
 
@@ -29,27 +31,15 @@ export function BoxRuns({ box, indices }: BoxRunsProps) {
   const [runs, setRuns] = useState<readonly RunSummary[]>([])
 
   /* No failure panel: a pipeline route being down says nothing about the walk. A failed read
-     leaves the line reading `nothing running`; `#/runs` draws the refusal in full. */
-  useEffect(() => {
-    let live = true
-    let timer: number | undefined
-    const tick = async () => {
-      try {
-        const rows = await getRuns()
-        if (!live) return
-        setRuns(rows)
-        timer = window.setTimeout(() => void tick(), rows.some((row) => row.live) ? LIVE_MS : IDLE_MS)
-      } catch {
-        if (!live) return
-        timer = window.setTimeout(() => void tick(), IDLE_MS)
-      }
-    }
-    void tick()
-    return () => {
-      live = false
-      if (timer !== undefined) window.clearTimeout(timer)
-    }
-  }, [])
+     leaves the line reading `nothing running`; `#/runs` draws the refusal in full — so this
+     poll has no `onError` at all, exactly as it never reported one before the hook existed. */
+  usePoll<RunSummary[]>({
+    fn: getRuns,
+    onData: setRuns,
+    isLive: (rows) => rows.some((row) => row.live),
+    liveMs: LIVE_MS,
+    idleMs: IDLE_MS,
+  })
 
   /* Runs over this box, by the one derivation (`runScope.ts:boxOf`). */
   const here = box === null ? [] : runs.filter((row) => row.live && boxOf(row) === box)

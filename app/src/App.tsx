@@ -3,6 +3,7 @@ import type { ComponentType, ErrorInfo, KeyboardEvent as ReactKeyboardEvent, Rea
 import { isEditableTarget } from './keys'
 import { rememberRail, storedRail, storedTheme } from './deviceMemory'
 import { getStatus, onServerBoot, onServerReachable } from './server'
+import { usePoll } from './usePoll'
 import { Button, Icon, Kbd, Lockup,
   Logo,
   applyTheme, readTheme, useLeave, type IconName, type Theme } from './kit'
@@ -225,50 +226,48 @@ function useRouteStep(enabled: boolean, path: string): void {
 /* ---- server presence ----------------------------------------------------------------- */
 type ServerState = 'unknown' | 'online' | 'offline'
 
+/** The shell's own poll, on `usePoll` (D-one-poller) rather than a hand-rolled interval — the
+ *  15s cadence and the window-focus refresh are `liveMs`/`idleMs` (there is no live/idle
+ *  distinction here, so both carry the same figure) and `refreshOnFocus` respectively.
+ *  `useServerPresence` still owns two things `usePoll` cannot: the ONLINE/OFFLINE verdict a
+ *  failed request draws no distinction on, and the boot toast, which fires the poll's own
+ *  `refresh()` rather than re-implementing a check. */
 function useServerPresence(enabled: boolean): { state: ServerState; cards: number | null; retry: () => void } {
   const [state, setState] = useState<ServerState>('unknown')
   const [cards, setCards] = useState<number | null>(null)
-  const check = useCallback(async () => {
-    try {
-      const status = await getStatus()
+  const { refresh } = usePoll({
+    enabled,
+    fn: getStatus,
+    onData: (status) => {
       setState('online')
       setCards(status.cards)
-    } catch {
-      setState('offline')
-    }
-  }, [])
-  useEffect(() => {
-    if (!enabled) return
-    void check()
-    const timer = window.setInterval(() => void check(), 15000)
-    const onFocus = () => void check()
-    window.addEventListener('focus', onFocus)
-    return () => {
-      window.clearInterval(timer)
-      window.removeEventListener('focus', onFocus)
-    }
-  }, [enabled, check])
+    },
+    onError: () => setState('offline'),
+    liveMs: 15000,
+    idleMs: 15000,
+    refreshOnFocus: true,
+  })
   useEffect(() => {
     if (!enabled) return
     return onServerBoot(() => {
       toast({ kind: 'status', icon: 'refresh', title: 'Server restarted', body: 'Banchi is running your latest code.' })
-      void check()
+      refresh()
     })
-  }, [enabled, check])
+  }, [enabled, refresh])
   /* D-one-poller: THE FOOT LEARNS FROM EVERY REQUEST IN THE APP, NOT JUST ITS OWN POLL.
    * `server.ts:request()` is the one seam every call funnels through, and it now reports
    * reachability there — so a poll failing on `#/runs` while this screen sits on `#/pricing`
    * flips this dot within that ONE request rather than waiting up to 15s for the next
-   * `/status` tick. A recovering request re-runs `check()` to pick the cards figure back up;
-   * a failing one sets `offline` directly, with no round trip of its own. */
+   * `/status` tick. A recovering request re-runs the poll to pick the cards figure back up; a
+   * failing one sets `offline` directly, with no round trip of its own. */
   useEffect(() => {
     if (!enabled) return
     return onServerReachable((ok) => {
-      if (ok) void check()
+      if (ok) refresh()
       else setState('offline')
     })
-  }, [enabled, check])
-  return { state, cards, retry: () => void check() }
+  }, [enabled, refresh])
+  return { state, cards, retry: refresh }
 }
 
 /* ---- theme ---------------------------------------------------------------------------- */
