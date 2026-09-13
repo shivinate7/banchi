@@ -91,7 +91,19 @@ PHOTOS_RELOCATED = "photos_relocated"
 # never folded into an `if` another branch is also writing. D189's `readings` and
 # `readings_sources` tables are the purest additive step there is (`_add_readings`'s own
 # docstring), exactly `_add_submissions`'s case one version up.
-SCHEMA_VERSION = 5
+#
+# SIX, FOR D192 (store-scaling item 2). `docs/specs/store-scaling/00-phases.md`
+# reserves 6 for item 8's FTS5 search, "after D189's 5," and says the branch that reaches 6
+# FIRST keeps it while the other renumbers — this item is Phase 1 and item 8 is Phase 2, so
+# by that document's own ordering this is the branch that reaches it first. AN INDEX ALONE IS
+# NOT A FREE ADDITION ON AN EXISTING STORE: adding a tuple to `_INDEXES` only reaches
+# `_ensure_schema`'s NEW-STORE branch — a store already stamped at `SCHEMA_VERSION` takes the
+# `_repair` branch and returns before that loop ever runs, so the index would silently never
+# exist on any store that predates this change, including the owner's real one. Measured:
+# `EXPLAIN QUERY PLAN` on `Rows.top`'s query, before this step, against a store re-opened at
+# the CURRENT schema version, reads `SCAN cards` / `USE TEMP B-TREE FOR ORDER BY` — the exact
+# O(table) sort this item's own `Rows.top` exists to avoid.
+SCHEMA_VERSION = 6
 
 # The six files a legacy store is made of, and the one that is a log rather than a document.
 LEGACY_INVENTORY = "inventory.json"
@@ -143,6 +155,12 @@ _INTEGER = {
 _INDEXES = (
     ("cards", "box"), ("cards", "sku"), ("cards", "capture_id"), ("cards", "state"),
     ("cards", "idx"),
+    # D192 (store-scaling item 2): `Rows.top`/`SqliteSource.top`'s
+    # `ORDER BY captured_at DESC LIMIT ?` — Home's hero deck — is an index scan rather than a
+    # sort-the-whole-table, or it would be exactly the O(store) cost the item exists to
+    # remove. `_ensure_schema` creates it with `CREATE INDEX IF NOT EXISTS` at connect, so an
+    # existing store gets it with no migration and no schema version bump.
+    ("cards", "captured_at"),
     ("queues", "box"),
     ("events", "position"),
     ("boxes", "bid"),
@@ -344,6 +362,8 @@ def _upgrade(
                 card_receipt = _add_card_ids(conn, prehashed, directory)
             if stored < 5:
                 _add_readings(conn)
+            if stored < 6:
+                _add_captured_at_index(conn)
             conn.execute(
                 "INSERT OR REPLACE INTO meta (key, value) VALUES ('schema', ?)",
                 (str(SCHEMA_VERSION),),
@@ -842,6 +862,21 @@ def _add_readings(conn: sqlite3.Connection) -> None:
     conn.execute(_ddl("readings_sources", TABLES["readings_sources"]))
 
 
+def _add_captured_at_index(conn: sqlite3.Connection) -> None:
+    """Schema 6: the `cards_captured_at` index (D192, store-scaling item 2).
+
+    `Rows.top`/`SqliteSource.top` power `Inventory.newest_captured` — Home's hero deck — with
+    an `ORDER BY captured_at DESC LIMIT ?`, and without an index on that column SQLite has no
+    choice but to scan the whole table and sort it in a temp B-tree, which is exactly the
+    O(store) cost that route exists to avoid. `_INDEXES` alone only reaches a BRAND NEW
+    store's `_ensure_schema` branch; every store already stamped at a schema version takes the
+    `_repair` path and never runs that loop, so an existing store — the owner's real one
+    included — needs this step to ever get the index at all. `CREATE INDEX IF NOT EXISTS`
+    makes a re-run of this step (a crash between it and the stamp) a no-op.
+    """
+    conn.execute("CREATE INDEX IF NOT EXISTS cards_captured_at ON cards(captured_at)")
+
+
 def _add_box_ids(conn: sqlite3.Connection) -> dict:
     """Schema 1 -> 2: give every box in an existing store its true index (D145).
 
@@ -1116,6 +1151,26 @@ class SqliteSource:
         return [row[0] for row in self.conn.execute(
             f"SELECT DISTINCT {column} FROM {self.table}{where}", params
         ).fetchall()]
+
+    def top(
+        self, column: str, limit: int, columns: Sequence[str]
+    ) -> Iterable[Tuple[str, tuple]]:
+        """`(key, column values)` for the `limit` rows with the highest `column`, descending,
+        NULLs excluded (D192/item 2 — `Inventory.newest_captured`, Home's hero deck). One
+        indexed-column ORDER BY LIMIT, never a load of every row to sort in Python."""
+        if column not in self.columns:
+            raise KeyError(f"{self.table} has no indexed column {column!r}")
+        for name in columns:
+            if name not in self.columns:
+                raise KeyError(f"{self.table} has no indexed column {name!r}")
+        where, params = self._where({})
+        where = (where + f" AND {column} IS NOT NULL") if where else f" WHERE {column} IS NOT NULL"
+        wanted = ", ".join(columns)
+        rows = self.conn.execute(
+            f"SELECT key, {wanted} FROM {self.table}{where} ORDER BY {column} DESC LIMIT ?",
+            params + [limit],
+        ).fetchall()
+        return [(row[0], tuple(row[1:])) for row in rows]
 
     # ----------------------------------------------------------------- the writes
 

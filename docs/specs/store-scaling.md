@@ -234,7 +234,7 @@ Taken 2026-09-12. Per-press means a write handler; per-load means a screen openi
 | `server/capture_server.py:3056` `do_inventory` | `to_payload()` | per-load, four screens; per-press on Inventory — until item 2, after which nothing calls it | stays — kept on the owner's word, no caller; the guard names it |
 | `server/capture_server.py:4549` `_release_plan` | `.items()` | per-press (release preflight) | item 7 |
 | `server/capture_server.py:7970` `do_search` | `.values()` | per-keystroke | item 8 |
-| `server/capture_server.py:8349` `_boxes_named` | `select(("box",))` | per-load | item 2 |
+| `server/capture_server.py:8349` `_boxes_named` | `select(("box",))` | per-load | **stays — verified 2026-09-12 by item 2: its only caller is `do_status`, untouched by item 2, so it cannot close this row; a future item scoping `do_status` removes it** |
 | `server/capture_server.py:8388` `do_boxes` | `distinct("box")` | per-load | stays — one column, cheap; the guard names it |
 | `server/pipeline_routes.py:838` `_box_names` | `select(("box","run"))` | per-load | item 7 |
 | `server/pipeline_routes.py:2370` `_unsent_ledger` | `distinct("sku")` | per-load | item 4 |

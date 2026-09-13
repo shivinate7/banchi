@@ -36,11 +36,12 @@ this plan may delete it.
    `check_store_of_record`-style assertion (reusing `Rows.loaded_count`/`Rows.complete`,
    already used at `harness/tests/t7_store_and_seams.py:1084-1089`) proves it.
 
-`make docs-audit`'s `unscoped walk` row (item 1, already landed) drops three entries in the
-same PR this item lands in: `server/capture_server.py:3056 do_inventory`,
-`server/capture_server.py:8349 _boxes_named`, `store/master.py:1447 to_payload`. See
-"Allowlist entries removed" below — read that section before touching `docs/specs/store-scaling.md`'s
-own allowlist table, because it is copied verbatim from §4 there and must not drift.
+**CORRECTED 2026-09-12: `make docs-audit`'s `unscoped walk` row drops NOTHING in this item's
+PR.** This paragraph originally claimed three entries closed here
+(`server/capture_server.py:3056 do_inventory`, `:8349 _boxes_named`,
+`store/master.py:1447 to_payload`); all three are verified to stay on the allowlist — see
+"Allowlist entries removed" below and D192 for the full
+argument. The allowlist count is unchanged at 13 after this item.
 
 ## Depends on / conflicts with
 
@@ -144,17 +145,24 @@ def do_inventory_box(box: int) -> dict:
     indexed `box` column and builds a `Card` object only for rows in this box, never for the
     store.
 
-    THE SAME DECORATION, THE SAME DEGRADE RULE, NARROWED TO ONE BOX. `do_inventory`'s
-    docstring is the one to read for why a record that will not coerce is left undecorated
-    rather than dropped or given a placeholder label — that rule is unchanged here. What DOES
-    change, and is a real behavior difference from the store-wide route: a corrupt record in
-    ANOTHER box can no longer cost this box its denominator. `_Places.view`'s docstring says
-    the denominator scan is whole-store because `next_index`'s allocator coerces every record
-    in the STORE before filtering by box — but `records_in` above refuses only on a record
-    IN THIS BOX (`_positions_in(box)` is itself box-scoped), so a bad row in box 9 no longer
-    denies box 3 its "40 of 250". This is strictly better and is not asserted against by any
-    existing T7 case, because no existing case could tell the two routes apart — name it in
-    the PR description rather than leaving it to be found later.
+    THE SAME DECORATION, THE SAME DEGRADE RULE, NARROWED TO ONE BOX — WITH A CLAIM HERE THAT
+    WAS WRONG AND IS CORRECTED. This paragraph originally claimed a corrupt record in ANOTHER
+    box could no longer cost this box its denominator, reasoning that `records_in`'s call to
+    `_positions_in(box)` is box-scoped. **Verified against the tree: it is not.**
+    `_positions_in`'s own docstring says its refusal fires "ANYWHERE in the store," and its
+    second pass (`self.cards.select(("box", "idx"), box=None)` / `idx=None`) is a genuinely
+    unscoped query for any record whose box or index will not coerce, store-wide — the same
+    rule `next_index`/`allocate_capture` have always had. So a single record ANYWHERE with a
+    non-coercible box or index still raises `BadPosition` out of THIS route too, for every
+    box, which is a real regression against `do_inventory`'s own per-record
+    `continue`-and-keep-going (it never calls `_positions_in` at all). Fixing that is
+    `_positions_in`'s own job, named as a follow-up rather than folded into this diff — see
+    "Do not touch" below, which is unchanged and correct. What IS box-scoped, and is what this
+    route's O(cards-in-box) claim actually rests on, is the row-building query below it,
+    `self.cards.where(box=box)` — a healthy store never touches this refusal at all, and that
+    is the case T7 exercises; the corruption case is exercised too, asserting the refusal
+    rather than the isolation this paragraph originally (and wrongly) claimed. See
+    D192 for the full argument.
 
     `boxes` AND `listings` DO NOT RIDE ALONG, UNLIKE `do_inventory`'s. Nothing under `app/src`
     reads `Inventory.boxes` from a `GET /inventory` response — `GET /boxes` is what every
@@ -304,23 +312,27 @@ def check_inventory_box_route(checks: Checks) -> None:
             "PREVIOUS read's session is gone and this is a clean instrument",
         )
 
-        # A record in box 2 that will not coerce must not cost box 1 anything: the
-        # store-wide route's denominator scan is whole-store (`_Places.view`'s docstring);
-        # the per-box route's refusal in `_positions_in` is scoped to the box it is asked
-        # about, and this is the behavior difference the new route's docstring names.
-        with Store().write() as snapshot:
-            snapshot.inventory.cards["2/1"].box = "not-a-box"  # type: ignore[assignment]
-        still_fine = capture_server.do_inventory_box(1)
-        checks.equal(
-            len(still_fine["cards"]), 20,
-            "and a corrupt record in ANOTHER box does not take box 1's read down with it — "
-            "the store-wide route's denominator scan would have; this one is scoped",
-        )
-
-        # An empty, never-captured box answers with nothing rather than refusing.
+        # An empty, never-captured box answers with nothing rather than refusing. Done BEFORE
+        # the corruption case below, which leaves the store corrupted for every box.
         empty = capture_server.do_inventory_box(999)
         checks.equal(
             empty["cards"], {}, "box 999, never captured into, answers an empty map"
+        )
+
+        # CORRECTED 2026-09-12: the sketch this playbook originally gave here asserted that a
+        # corrupt record in ANOTHER box does NOT take box 1's read down with it. Verified
+        # against the tree: it DOES — `_positions_in`'s refusal is store-wide, not box-scoped
+        # (see this file's corrected docstring for `do_inventory_box` above, and
+        # D192). The real, verified assertion is the opposite:
+        with Store().write() as snapshot:
+            snapshot.inventory.cards["2/1"].box = "not-a-box"  # type: ignore[assignment]
+        caught = checks.raises(
+            master.BadPosition,
+            lambda: capture_server.do_inventory_box(1),
+            "and a record ANYWHERE with a non-coercible box still raises out of THIS route "
+            "too, for every box asked about — `do_inventory` never hits this because it "
+            "never calls `_positions_in`; narrowing that refusal to the box asked about is a "
+            "separate item, not this one",
         )
 ```
 
@@ -832,6 +844,25 @@ scope gap honestly.
 
 ### Step 10 — `store/rows.py`: a `where()`/`select()` after a full load answers from SQL
 
+**CORRECTED 2026-09-12, AFTER LANDING: the `_touched`-based design this section originally
+sketched below is WRONG for this codebase and was replaced.** It tracked keys written through
+`Rows.__setitem__` and trusted the source's own index for every other row — but `Rows`'s own
+docstring documents that mutating an object's attributes directly, without reassigning
+through `__setitem__`, is a SUPPORTED write path, and it is the one `store/master.py:
+set_state`, `record_identification` and `store/submissions.py:release`/`attach_run` all
+actually use. The `_touched`-only design broke `submission-selftest.py`'s real
+`case_resume_releases_only_its_own` for real, in production code this item never touches: a
+released claim's in-place `state` mutation stayed invisible to a same-session re-query. The
+actual fix re-validates every candidate the source's own indexed query returns against the
+LIVE loaded object (never trusting either the source's row or `_touched` alone), and
+`store/submissions.py`'s two mutators were corrected to reassign through `__setitem__` to
+match this codebase's other mutators. See D192 for the full
+argument, the one gap this still leaves (a row mutated in place INTO a match the source
+cannot see — verified not to affect `box`/`idx`, which is what this item's own routes read),
+and the T7 case that pins it. The sketch below is kept as a record of the FIRST, wrong
+attempt — read the decision entry and the actual `store/rows.py` before trusting any of the
+code in this section.
+
 This is the load-bearing fix in item 2 (`docs/specs/store-scaling.md` §0: "`store/rows.py:177`
 … a handler that materialises first and filters second gets no benefit from the index at
 all"). Without it, `do_inventory_box` is scoped on its OWN first call, but any handler that
@@ -1277,30 +1308,28 @@ New routes added: `GET /inventory/<box>` (`do_inventory_box`), `GET /inventory/r
 
 ## Allowlist entries removed
 
-Copied from `docs/specs/store-scaling.md` §4, the three rows this item closes — update that
-table in the SAME PR, and update `make docs-audit`'s `unscoped walk` allowlist file (wherever
-item 1 put it — find it via `make docs-audit ARGS=--json` or by grepping for the string
-`"do_inventory"` outside this markdown file) in lockstep, or the guard will report a resolved
-allowlist entry as if the site still existed, per item 1's own stated rule ("a removed site is
-removed from the list in the same PR or the row reports an allowlist entry that resolves to
-nothing"):
+**CORRECTED 2026-09-12, VERIFIED AGAINST THE TREE: this item removes NOTHING from the
+allowlist.** This section originally copied `docs/specs/store-scaling.md` §4 as claiming
+three rows closed by this item; all three are wrong, and D192
+carries the full argument. `docs/specs/store-scaling.md` §4 and `00-phases.md`'s phase table
+are corrected in the same PR that found this.
 
-| Site | Shape | Removed by |
+| Site | Shape | Actually removed by |
 |---|---|---|
-| `server/capture_server.py:3056` `do_inventory` | `to_payload()` | this item |
-| `server/capture_server.py:8349` `_boxes_named` | `select(("box",))` | this item |
-| `store/master.py:1447` `to_payload` | `.items()` | this item (called only by `do_inventory`, which is called only by the route this item stops any screen from reaching) |
+| `server/capture_server.py:3056` `do_inventory` | `to_payload()` | **stays permanently** — `GET /inventory` is kept, unused, on the owner's word (`00-phases.md`'s own "Where each item's decisions came from" section already said this; §4's table had not been updated to match) |
+| `server/capture_server.py:8349` `_boxes_named` | `select(("box",))` | **stays** — its only caller is `do_status` (the health endpoint), which this item does not touch at all; a future item scoping `do_status` removes it |
+| `store/master.py:1447` `to_payload` | `.items()` | **stays with `do_inventory`** — `do_inventory` calling it is a real, still-reachable code path (the route is kept), so the function inside it that walks the whole store cannot be "removed" without deleting the route itself, which this item explicitly does not do |
 
-`_boxes_named` (`:8349`) needs its own read before assuming it is closed by this item — it is
-listed in the plan's §4 as "removed by item 2" but this playbook has not traced its callers.
-**Before checking this row off, grep every caller of `_boxes_named` and confirm each one is
-either (a) a route this item's client changes stop calling, or (b) already scoped elsewhere.**
-If a caller survives that this item does not touch, leave the row on the allowlist and say so
-in the PR rather than silently removing a row the guard would then have to re-add.
+**`_boxes_named`'s callers were traced, per this section's own original instruction to do so
+before checking the row off.** `grep -rn "_boxes_named" server/ store/ cli/ app/src/` finds
+exactly one call site: `do_status` (`server/capture_server.py:2783`), computing `next_index`
+for every box on the health endpoint. Nothing this item touches (`do_inventory_box`,
+`BoxBrowse.tsx`, `Home.tsx`, `Fulfillment.tsx`, `Orders.tsx`) calls `do_status` or
+`_boxes_named`. The row stays.
 
-Two rows on the plan's §4 table are explicitly NOT removed by this item — do not touch them:
-`server/capture_server.py:8388 do_boxes` (`distinct("box")`, stays, cheap) and
-`store/master.py:2378 counts` (stays, cheap) — both already marked "stays" in the source plan.
+The two rows the plan's §4 table already marked "stays" are unaffected by any of this:
+`server/capture_server.py:8388 do_boxes` (`distinct("box")`, cheap) and
+`store/master.py:2378 counts` (cheap).
 
 ## Do not touch
 

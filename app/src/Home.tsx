@@ -1,9 +1,9 @@
 import { useEffect, useMemo, useState, type CSSProperties } from 'react'
 import {
   getBoxes,
-  getInventory,
   getOrders,
   getPricingWorklist,
+  getRecentCards,
   getRuns,
   getStatus,
   photoUrl,
@@ -400,9 +400,10 @@ export function Home() {
   const runs = useLoad<RunSummary[]>(getRuns)
   const orders = useLoad<OrdersPayload>(getOrders)
   const pricing = useLoad<PricingWorklist>(() => getPricingWorklist())
-  /* The card map, for the hero only, on its own load so no panel above waits on it. 160 ms
-     warm; the deck is already on screen from `boxes` before it lands. */
-  const shelf = useLoad<Record<string, InventoryCard>>(async () => (await getInventory()).cards)
+  /* The hero's own newest-captured cards, off a lean top-K route rather than the whole card
+     map (D192, item 2) — on its own load so no panel above waits on it, and `deckFromCards`
+     below applies exactly the same filter/sort/slice it always has over the smaller result. */
+  const shelf = useLoad<Record<string, InventoryCard>>(async () => (await getRecentCards(DECK_DEPTH)).cards)
   const fromBoxes = deckFromBoxes(boxes.state === 'ready' ? boxes.value : null)
   const fromCards = deckFromCards(shelf.state === 'ready' ? shelf.value : null)
   /* The box-derived pass is a placeholder for the moment before the card map lands, so it

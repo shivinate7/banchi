@@ -201,6 +201,9 @@ const RECORDED = {
     // The claims panel's free count (D174): what a live send is holding.
     // It is the step that comes BEFORE the release below, which is why it is a read at all.
     'getSubmissions',
+    // D192 (store-scaling item 2): the per-box read replacing the whole-store
+    // `getInventory` on `#/inventory`, and the lean top-K deck read for Home's hero.
+    'getInventoryBox', 'getRecentCards',
   ],
   writes: [
     'capture', 'updateCard', 'undoCapture', 'reshootPhoto', 'answerReview', 'standDown',

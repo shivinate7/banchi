@@ -10,6 +10,7 @@ import type {
   QueueEntryWire,
   QueueSnapshot,
   RemoveResult,
+  SearchCopy,
 } from './types'
 import type { Failure } from './server'
 import {
@@ -18,7 +19,7 @@ import {
   positionLabel,
   getBoxes,
   getQueues,
-  getInventory,
+  getInventoryBox,
   getPricing,
   photoUrl,
   removeCardInPlace,
@@ -113,6 +114,20 @@ function shelfOf(row: Row): Shelf {
   const box = row.card.box
   if (typeof box !== 'number' || Number.isNaN(box)) return 'unplaced'
   return box
+}
+
+/* The same two facts `shelfOf`/`hasDeparted` read off a Row, read off a SearchCopy instead —
+ * for the cross-box search ranking, which no longer has every box's Rows loaded to ask
+ * (D192, item 2): the box being browsed fetches only its own cards, so a search that spans
+ * boxes has to rank off the search's OWN result rather than off a store-wide `rows` array. */
+function copyShelf(copy: SearchCopy): Shelf {
+  if (copy.place.located === false) return 'pooled'
+  const box = copy.place.box
+  return typeof box === 'number' && !Number.isNaN(box) ? box : 'unplaced'
+}
+
+function copyDeparted(copy: SearchCopy): boolean {
+  return isDeparted(copy.place)
 }
 
 function shelfLabel(shelf: Shelf): string {
@@ -304,8 +319,11 @@ type BoxBrowseProps = {
   reloadToken?: number
 
   /** Walk to one card, by store key. `at` is the request; a request already answered is
-   *  ignored. */
-  goTo?: { key: string; at: number } | null
+   *  ignored. `box` (D192, item 2) is the target's box, when known — `rows` is
+   *  box-scoped now, so a jump to another box can no longer discover it by scanning `rows`
+   *  for the key the way it used to when `rows` held the whole store. Null for a pooled
+   *  card, which has no box to switch to. */
+  goTo?: { key: string; at: number; box: number | null } | null
 
   /** What a run would be scoped to: the box being walked, and the ticked cards inside it. */
   onScope?: (scope: { box: number | null; indices: readonly number[] }) => void
@@ -630,6 +648,11 @@ export function BoxBrowse({
   onQuery,
 }: BoxBrowseProps) {
   const [rows, setRows] = useState<Row[] | null>(null)
+  /** Which shelf `rows` currently answers for (D192, item 2). A ref rather than
+   *  state: it exists only so the cross-box jump effect can tell a stale, pre-switch `rows`
+   *  from a freshly-landed one for the shelf it just switched to, and reading it never needs
+   *  to schedule a render of its own. */
+  const rowsShelf = useRef<number | null>(null)
   const [failure, setFailure] = useState<Failure | null>(null)
   const [selected, setSelected] = useState<string | null>(null)
 
@@ -643,6 +666,21 @@ export function BoxBrowse({
   const [opened, setOpened] = useState<readonly string[]>([])
 
   const [boxRecords, setBoxRecords] = useState<readonly BoxRecord[]>([])
+  /** THE STORE'S TOTAL CARD COUNT (D192, item 2) — off `GET /boxes`'s own per-box
+   *  `cards` figure, summed, rather than off `rows.length`. `rows` is box-scoped now: before
+   *  this item it held every card in the store and `rows.length` WAS the store's total by
+   *  construction, which is what both the header's "N cards" census and the "no cards
+   *  captured yet" empty state below were built against. Landing on an empty box (a
+   *  never-captured one, or one a search or the recency rule picked with nothing in it) made
+   *  `rows.length === 0` true for a store that plainly has cards elsewhere — the whole-store
+   *  empty state and a "0 cards" census on a four-box store, both real regressions caught
+   *  by this item's own browser suite rather than by any server-side guard. `GET /boxes`
+   *  (`do_boxes`) is unaffected by this item — it stays on the `unscoped walk` allowlist as
+   *  cheap, one indexed column — so this is free. */
+  const storeCards = useMemo(
+    () => boxRecords.reduce((sum, record) => sum + record.cards, 0),
+    [boxRecords],
+  )
   /* Whether the registry read above has come back, either way. `boxRecords` cannot answer this
      itself — `[]` is both "not yet" and "no boxes" — and the shelf effect needs to tell those
      apart to know whether a box the hash asked for is genuinely absent or merely not here yet. */
@@ -735,18 +773,23 @@ export function BoxBrowse({
        three in one section outranks one-plus-two across two. Sold copies count for nothing —
        a box full of departed matches is not where the hand goes. With no query this term is
        zero everywhere and the rail is the hand's again. */
+    /* D192, item 2: this box's own `rows` no longer stands for every box's cards, so the
+       cross-box tally reads the search's OWN result (`results`) instead — `SearchCopy`
+       carries `place.box`/`place.section`, everything this needed off a `Row`. */
     const liveMatches = new Map<number, number>()
-    if (filtered) {
+    if (filtered && results !== null) {
       const perSection = new Map<string, number>()
-      for (const row of inQuery) {
-        const shelf = shelfOf(row)
-        /* A COPY THAT LEFT SINCE THIS ORDER WAS TAKEN STILL COUNTS (`frozenRank.ts`), so a sale
-           does not re-rank the rail under the hand that made it. */
-        if (typeof shelf !== 'number' || !ranksAsLive(row.key, hasDeparted(row.card), frozen)) continue
-        const key = `${shelf}/${row.card.section ?? '?'}`
-        const n = (perSection.get(key) ?? 0) + 1
-        perSection.set(key, n)
-        liveMatches.set(shelf, Math.max(liveMatches.get(shelf) ?? 0, n))
+      for (const group of results.groups) {
+        for (const copy of group.copies) {
+          const shelf = copyShelf(copy)
+          /* A COPY THAT LEFT SINCE THIS ORDER WAS TAKEN STILL COUNTS (`frozenRank.ts`), so a
+             sale does not re-rank the rail under the hand that made it. */
+          if (typeof shelf !== 'number' || !ranksAsLive(copy.key, copyDeparted(copy), frozen)) continue
+          const key = `${shelf}/${copy.place.section ?? '?'}`
+          const n = (perSection.get(key) ?? 0) + 1
+          perSection.set(key, n)
+          liveMatches.set(shelf, Math.max(liveMatches.get(shelf) ?? 0, n))
+        }
       }
     }
     return (a: number, b: number): number => {
@@ -761,11 +804,26 @@ export function BoxBrowse({
       if (ha !== hb) return hb - ha
       return a - b
     }
-  }, [boxRecords, recency, filtered, inQuery, frozen])
+  }, [boxRecords, recency, filtered, results, frozen])
+
+  /* D192, item 2: under a search, which OTHER boxes hold a match comes off the search's own
+     result now — `inQuery` is only this box's matched rows since the fetch became box-scoped,
+     so it can no longer answer "which boxes does this search touch" on its own. */
+  const searchBoxes = useMemo(() => {
+    if (results === null) return []
+    const boxes = new Set<number>()
+    for (const group of results.groups) {
+      for (const copy of group.copies) {
+        const shelf = copyShelf(copy)
+        if (typeof shelf === 'number') boxes.add(shelf)
+      }
+    }
+    return [...boxes]
+  }, [results])
 
   const shelves = useMemo(
-    () => shelvesOf(inQuery, filtered ? [] : boxRecords.map((record) => record.box), order),
-    [inQuery, filtered, boxRecords, order],
+    () => shelvesOf(inQuery, filtered ? searchBoxes : boxRecords.map((record) => record.box), order),
+    [inQuery, filtered, searchBoxes, boxRecords, order],
   )
 
   const onShelf = useMemo(() => {
@@ -802,16 +860,19 @@ export function BoxBrowse({
 
   const sections = useMemo(() => sectionsOf(visible, !hideSold, selected), [visible, hideSold, selected])
 
-  /* How many matches each shelf holds under a query, for the box list. */
+  /* How many matches each shelf holds under a query, for the box list. Off `results` rather
+     than `inQuery` for the same reason `order`/`shelves` are, above (D192, item 2). */
   const matchesByShelf = useMemo(() => {
     const out = new Map<Shelf, number>()
-    if (!filtered) return out
-    for (const row of inQuery) {
-      const s = shelfOf(row)
-      out.set(s, (out.get(s) ?? 0) + 1)
+    if (!filtered || results === null) return out
+    for (const group of results.groups) {
+      for (const copy of group.copies) {
+        const s = copyShelf(copy)
+        out.set(s, (out.get(s) ?? 0) + 1)
+      }
     }
     return out
-  }, [inQuery, filtered])
+  }, [filtered, results])
 
   /* Every position with an open question, for the row badges. */
   const queuedKeys = useMemo(() => {
@@ -859,13 +920,27 @@ export function BoxBrowse({
     reader.readAsDataURL(file)
   }
 
+  /* D192, item 2: this box's cards, box-scoped from the server rather than filtered
+   * client-side out of a whole-store fetch. Re-runs on a shelf switch (a data fetch now,
+   * not a filter) and on every reload trigger — `reloads`/`reloadToken` bumped by a sale,
+   * a retire, a re-shoot or a box op re-fetch exactly this box, which is the right box
+   * every one of those writes just changed. Waits for the first shelf to resolve (below)
+   * so it never fetches box 0 / NaN on first paint. */
   useEffect(() => {
+    if (typeof shelf !== 'number') return
     let live = true
-    getInventory()
+    getInventoryBox(shelf)
       .then((inventory) => {
         if (!live) return
         const next = rowsOf(inventory.cards)
         setRows(next)
+        /* WHICH SHELF `rows` NOW ANSWERS FOR, so the cross-box jump effect below can tell
+         * "this box's own rows just landed and truly lack the target" from "the fetch for a
+         * NEW shelf has not landed yet, so `rows` is still the OLD box's stale data" —
+         * without this, a jump that just switched shelves reads the stale `rows` on the very
+         * next render (`shelf` alone changing re-runs that effect too) and gives up before
+         * the new box's cards ever arrive. */
+        rowsShelf.current = shelf
         const held = inventory.listings ?? NO_LISTINGS
         setListings(held)
         onListings?.(held)
@@ -884,7 +959,7 @@ export function BoxBrowse({
     return () => {
       live = false
     }
-  }, [reloads, reloadToken, onListings])
+  }, [shelf, reloads, reloadToken, onListings])
 
   /* The box registry, on the same counter and allowed to fail without anybody hearing. */
   useEffect(() => {
@@ -965,12 +1040,19 @@ export function BoxBrowse({
        only match has departed is a box the hand does not go to. The box the walk was on keeps
        the walk only by that test, and the first box in rail order with a live match takes it
        otherwise. With nothing live anywhere the old rule stands, so a sold-out card still
-       shows where its copies were. */
+       shows where its copies were.
+
+       D192 (store-scaling item 2): off `results` rather than `inQuery`, for the
+       same reason `order`'s own tally above is — `inQuery` is this box's own matched rows
+       now, and a candidate shelf other than the one on screen would never appear in it, which
+       silently made every OTHER box read as holding no live match at all. */
     const holdsLive = (candidate: Shelf) =>
       !filtered ||
-      inQuery.some(
-        (row) =>
-          shelfOf(row) === candidate && ranksAsLive(row.key, hasDeparted(row.card), frozen),
+      results === null ||
+      results.groups.some((group) =>
+        group.copies.some(
+          (copy) => copyShelf(copy) === candidate && ranksAsLive(copy.key, copyDeparted(copy), frozen),
+        ),
       )
     const live = shelves.filter(holdsLive)
     const pool = live.length > 0 ? live : shelves
@@ -986,7 +1068,7 @@ export function BoxBrowse({
       if (!fresh && prev !== null && pool.includes(prev)) return prev
       return pool[0] ?? null
     })
-  }, [shelves, boxesAnswered, filtered, inQuery, results, frozen])
+  }, [shelves, boxesAnswered, filtered, results, frozen])
 
   /* The selection follows the filter. When nothing matches it is left alone.
      A NEW ANSWER LANDS IN THE FULLEST SECTION (D132 amended): the query's answer is drawn by
@@ -1093,15 +1175,50 @@ export function BoxBrowse({
   }
 
   /* A box press changes what the walk is of, scrolls the landing to the top and hands focus
-   * to the list, arming the deep keys. The landing comes off `inQuery`, not `visible`. */
+   * to the list, arming the deep keys.
+   *
+   * D192 (item 2): under a search, the landing is computed off `results` — the
+   * search's own cross-box answer — rather than off `inQuery`, which is this box's own
+   * matched rows now and can never describe a box being switched TO. `inQuery` still answers
+   * for the UNFILTERED case (no query: `next` is always the box already on screen at that
+   * point, so `inQuery` — this box's own rows, unfiltered — is exactly right for it). Once
+   * the target box's OWN rows land (the box-scoped fetch effect), the "selection follows the
+   * filter" effect below re-derives the same answer from `visible` and confirms it — this is
+   * what lets the row highlight and the copies list update the instant the press lands,
+   * without waiting for that fetch first. */
   const selectShelf = (next: Shelf) => {
     setShelf(next)
     if (typeof next === 'number') setRecency(touchBox(next))
-    const rowsThere = inQuery.filter((row) => shelfOf(row) === next)
-    const landing = filtered ? landingInFullest(rowsThere) : landingOf(rowsThere)
-    if (landing !== undefined) {
-      jumpRef.current = landing.key
-      setSelected(landing.key)
+    let landingKey: string | undefined
+    if (filtered && results !== null) {
+      const counts = new Map<string, number>()
+      const keyOf = (copy: SearchCopy) => `${copy.place.box}/${copy.place.section ?? '?'}`
+      const candidates: SearchCopy[] = []
+      for (const group of results.groups) {
+        for (const copy of group.copies) {
+          if (copyShelf(copy) !== next) continue
+          candidates.push(copy)
+          if (!copyDeparted(copy)) counts.set(keyOf(copy), (counts.get(keyOf(copy)) ?? 0) + 1)
+        }
+      }
+      let best: SearchCopy | undefined
+      let most = 0
+      for (const copy of candidates) {
+        if (copyDeparted(copy)) continue
+        const n = counts.get(keyOf(copy)) ?? 0
+        if (n > most) {
+          most = n
+          best = copy
+        }
+      }
+      landingKey = (best ?? candidates.find((copy) => !copyDeparted(copy)) ?? candidates[0])?.key
+    } else {
+      const rowsThere = inQuery.filter((row) => shelfOf(row) === next)
+      landingKey = landingOf(rowsThere)?.key
+    }
+    if (landingKey !== undefined) {
+      jumpRef.current = landingKey
+      setSelected(landingKey)
     }
     listRef.current?.focus(FOCUS)
   }
@@ -1195,21 +1312,45 @@ export function BoxBrowse({
     setOpened(holding === undefined ? [] : [holding.key])
   }, [filtered])
 
-  /* A jump is accepted here and landed below. */
+  /* A jump is accepted here and landed below. `jumpBox` rides beside `jump` in a ref rather
+   * than in state: it is read once, synchronously, the moment the jump effect below needs to
+   * switch shelves, and giving it its own state would be a second trigger for the same
+   * effect to chase. */
+  const jumpBox = useRef<number | null>(null)
   useEffect(() => {
     if (goTo === undefined || goTo === null) return
     if (askedAt.current === goTo.at) return
     askedAt.current = goTo.at
+    jumpBox.current = goTo.box
     setJump(goTo.key)
   }, [goTo])
 
   /* Walk to the card something outside asked for: the box, the fold, the mark and the scroll
-   * in one batch. A query that hides the target is dropped rather than the jump. */
+   * in one batch. A query that hides the target is dropped rather than the jump.
+   *
+   * D192 (store-scaling item 2): `rows` now holds only the CURRENT box's cards, so
+   * a jump to a copy in a DIFFERENT box can no longer find it there by scanning `rows` the way
+   * it used to when `rows` held the whole store. `goTo.box` (carried by the caller, which
+   * already knows it — `Inventory.tsx`'s `walkTo` reads it off the `SearchCopy` the press
+   * came from) is switched to FIRST when the target is not on the current shelf; `jump` is
+   * left set, so the next run of this effect, once that box's `rows` has landed and really
+   * contains the target, finishes the section-opening/selection/scroll work below. */
   useEffect(() => {
     if (jump === null) return
     if (rows === null) return
     const row = rows.find((candidate) => candidate.key === jump)
     if (row === undefined) {
+      const landing = jumpBox.current
+      if (typeof landing === 'number' && landing !== shelf) {
+        setShelf(landing)
+        return
+      }
+      /* `rows` MUST ACTUALLY BE THIS SHELF'S OWN BEFORE GIVING UP. `shelf` alone catching up
+       * to `landing` re-runs this effect on the very next render, while `rows` is still the
+       * PREVIOUS shelf's stale data — the fetch for the new shelf has not landed yet. Without
+       * this check the jump was abandoned right there, before the box it just switched to had
+       * any chance to answer. */
+      if (rowsShelf.current !== shelf) return
       setJump(null)
       return
     }
@@ -1231,7 +1372,7 @@ export function BoxBrowse({
     setSelected(jump)
     listRef.current?.focus(FOCUS)
     setJump(null)
-  }, [jump, rows, inQuery, searching, setQuery])
+  }, [jump, rows, inQuery, searching, setQuery, shelf])
 
   useEffect(() => {
     onSelect?.(selectedRow)
@@ -1720,7 +1861,7 @@ export function BoxBrowse({
         actions={
           rows === null ? null : (
             <Pill mono className="browse-census">
-              {rows.length.toLocaleString()} {rows.length === 1 ? 'card' : 'cards'} · {boxRecords.length}{' '}
+              {storeCards.toLocaleString()} {storeCards === 1 ? 'card' : 'cards'} · {boxRecords.length}{' '}
               {boxRecords.length === 1 ? 'box' : 'boxes'}
             </Pill>
           )
@@ -1762,7 +1903,7 @@ export function BoxBrowse({
         </div>
       ) : null}
 
-      {rows !== null && rows.length === 0 ? (
+      {rows !== null && boxesAnswered && storeCards === 0 ? (
         <div className="bn-panel">
           <EmptyState
             icon="camera"
@@ -1777,7 +1918,13 @@ export function BoxBrowse({
         </div>
       ) : null}
 
-      {rows !== null && rows.length > 0 ? (
+      {/* D192 (item 2): `storeCards`, not `rows.length` — this gates the RAIL as
+       * well as the current box's own rows, and the rail has to go on showing every box
+       * (so the operator can switch away) even when the box landed on happens to hold none.
+       * `rows.length === 0` here used to mean "the whole store is empty" back when `rows`
+       * held the whole store; now it just as often means "this one box is empty," which is
+       * `.browse-empty`'s own case inside the panel below, not a reason to hide the rail. */}
+      {rows !== null && storeCards > 0 ? (
         <>
           {phone ? (
             <div className="browse-mobilebar">

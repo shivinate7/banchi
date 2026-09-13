@@ -420,6 +420,34 @@ async function stubStore(page: Page): Promise<void> {
      `nav.spec.ts`'s own `CARD`, which is the one fixture in this directory already written to
      that rule. */
   await page.route(/\/inventory$/, (route) => json(route, { version: 2, cards: CARDS, boxes: {}, listings: {} }))
+  /* D192 (store-scaling item 2): `#/inventory` and Home's hero deck no longer call
+   * the bare `/inventory` above — `getInventoryBox`/`getRecentCards` reach these two instead.
+   * `/\/inventory$/` above is anchored and never matches either (a box number or `recent`
+   * follows the slash), so both need their own stub or a walk over `#/inventory`/`#/` reaches
+   * the real capture server and `sealOutside` refuses it. Same per-card shape as `GET
+   * /inventory`, narrowed the way the real routes narrow it: `do_inventory_box` carries no
+   * `boxes` key and only the requested box's own cards and listings; `do_inventory_recent`
+   * carries only `cards`, filtered to on-hand/named/photographed. */
+  await page.route(/\/inventory\/(\d+)$/, (route) => {
+    const match = /\/inventory\/(\d+)$/.exec(route.request().url())
+    const box = match ? Number(match[1]) : NaN
+    const cards = Object.fromEntries(
+      Object.entries(CARDS).filter(([, c]) => (c as { box: number }).box === box),
+    )
+    return json(route, { version: 2, cards, listings: {} })
+  })
+  await page.route(/\/inventory\/recent(\?|$)/, (route) => {
+    const gone = new Set(['sold', 'retired', 'moved'])
+    const cards = Object.fromEntries(
+      Object.entries(CARDS).filter(
+        ([, c]) =>
+          !gone.has((c as { state: string }).state) &&
+          (c as { name: string | null }).name !== null &&
+          (c as { photo: string | null }).photo !== null,
+      ),
+    )
+    return json(route, { cards })
+  })
   await page.route(/\/search\?/, (route) => json(route, { query: '', groups: [] }))
 
   /* THE QUEUES, THE RUNS, THE WORKLIST, THE LEDGER AND THE ORDERS, each empty and each with

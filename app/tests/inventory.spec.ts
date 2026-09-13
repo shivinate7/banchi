@@ -857,8 +857,14 @@ async function open(
     })
   })
 
+  /* PUT ONLY — box-level claims apply. D192 (store-scaling item 2) put a real GET
+   * on this same path (`getInventoryBox`, called on every mount of this screen), and this
+   * handler answered EITHER method before that route existed, silently returning the claims
+   * shape for a card-map read. `route.fallback()` on a non-PUT request lets it cascade to
+   * `shell.ts`'s box-scoped GET stub, registered earlier in the chain. */
   await page.route(/\/inventory\/\d+$/, async (route) => {
     const request = route.request()
+    if (request.method() !== 'PUT') return route.fallback()
     record(request.method(), request.url(), request.postDataJSON())
     await route.fulfill({
       status: 200,
@@ -948,6 +954,24 @@ async function open(
       status: 200,
       contentType: 'application/json',
       body: JSON.stringify({ version: 2, cards: store.cards, boxes: {}, listings: {} }),
+    })
+  })
+
+  /* D192 (store-scaling item 2): `BoxBrowse.tsx` no longer calls the bare
+   * `/inventory` above at all — it calls `getInventoryBox(shelf)` for whichever box is on
+   * screen, on every mount and every shelf switch. The `/\/inventory\/\d+$/` PUT stub above
+   * (box claims) already falls back for a non-PUT method; this is what it falls back TO. */
+  await page.route(/\/inventory\/\d+$/, async (route) => {
+    if (route.request().method() !== 'GET') return route.fallback()
+    const match = /\/inventory\/(\d+)$/.exec(route.request().url())
+    const box = match ? Number(match[1]) : NaN
+    const cards = Object.fromEntries(
+      Object.entries(store.cards).filter(([, c]) => (c as { box: number }).box === box),
+    )
+    await route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify({ version: 2, cards, listings: {} }),
     })
   })
 
@@ -4016,12 +4040,16 @@ test('selling a card moves the landmark on the rows beside it, with no reload', 
   const sale = movesOnSale(() => sell('2/3'))
 
   /* COUNTED OFF THE REQUESTS THEMSELVES rather than off `open()`'s wire log, which records the
-     writes and the reads it has an opinion about — `GET /inventory` is stubbed there and not
-     recorded, and this case is about exactly that read happening a second time. */
+     writes and the reads it has an opinion about — `GET /inventory/<box>` is stubbed there and
+     not recorded, and this case is about exactly that read happening a second time.
+     D192 (item 2): the walk re-reads its OWN box, `GET /inventory/<box>`, rather
+     than the whole-store `GET /inventory` this case originally counted — the box-scoped route
+     is what replaced it, and re-reading the box is exactly the "no reload" claim this case
+     makes. */
   const walkReads: string[] = []
   page.on('request', (request) => {
     const path = new URL(request.url()).pathname
-    if (request.method() === 'GET' && path === '/inventory') walkReads.push(path)
+    if (request.method() === 'GET' && /^\/inventory\/\d+$/.test(path)) walkReads.push(path)
   })
 
   await open(page, BOXES, store, () => PRICING, sale)

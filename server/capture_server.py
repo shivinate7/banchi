@@ -3121,6 +3121,115 @@ def do_inventory() -> dict:
     return payload
 
 
+def do_inventory_box(box: int) -> dict:
+    """One box's cards, in exactly `do_inventory`'s per-card shape. The per-box twin of
+    `GET /inventory` (D192 — see docs/specs/store-scaling.md item 2), through
+    `Inventory.records_in`, which is already scoped and already lazy (D88): it queries the
+    indexed `box` column and builds a `Card` object only for rows in this box, never for the
+    store.
+
+    THE SAME DECORATION, THE SAME DEGRADE RULE, NARROWED TO ONE BOX — WITH ONE VERIFIED
+    DIFFERENCE THAT IS WORSE, NOT BETTER, AND IS NAMED HERE RATHER THAN CLAIMED AWAY. An
+    earlier draft of this docstring claimed a corrupt record in ANOTHER box could no longer
+    cost this box its denominator, reasoning that `records_in`'s call to `_positions_in(box)`
+    is box-scoped. Measured against the tree, it is not: `_positions_in`'s own docstring
+    says its refusal fires "ANYWHERE in the store," and its second pass
+    (`self.cards.select(("box", "idx"), box=None)` / `idx=None`) is a genuinely unscoped
+    query for any record whose box or index will not coerce, store-wide — the same rule
+    `next_index`/`allocate_capture` have always had. So a single record ANYWHERE with a
+    non-coercible box or index still raises `BadPosition` out of THIS route too, for every
+    box, which is a real regression against `do_inventory`'s own per-record
+    `continue`-and-keep-going (it never calls `_positions_in` at all). Fixing that is
+    `_positions_in`'s own job, named as a follow-up rather than folded into this diff — see
+    `docs/specs/store-scaling/02-per-box-read.md`'s "Do not touch" section, which is explicit
+    that `records_in`/`_positions_in`/`_Places` are not refactored here. What IS box-scoped,
+    and is what this route's O(cards-in-box) claim actually rests on, is the row-building
+    query below it, `self.cards.where(box=box)` — a healthy store never touches this refusal
+    at all, and that is the case T7 exercises.
+
+    `boxes` AND `listings` DO NOT RIDE ALONG, UNLIKE `do_inventory`'s. Nothing under `app/src`
+    reads `Inventory.boxes` from a `GET /inventory` response — `GET /boxes` is what every
+    screen actually reads for the box registry — so serving it here would cost a walk for a
+    field with no client. `listings` DOES ride along, narrowed to the SKUs this box's own
+    cards carry: `BoxBrowse.tsx` reads `inventory.listings[sku]?.live_as_of` for exactly one
+    card at a time (the one selected), and a screen holding one box's worth of SKUs already
+    has every listing it can address.
+    """
+    inventory = Store().read().inventory
+    rows = inventory.records_in(box)
+    places = _Places(inventory)
+    cards: dict = {}
+    skus: set = set()
+    for _index, key, card in rows:
+        record = asdict(card)
+        record["number_display"] = join.display_number(
+            record.get("number"), record.get("printed_total")
+        )
+        try:
+            place = places.of(record["box"], record["index"])
+        except (KeyError, TypeError, ValueError, master.BadSections):
+            cards[key] = record
+            continue
+        if place["located"]:
+            record.update(_flat_place(place))
+        record["place"] = place
+        cards[key] = record
+        if card.sku:
+            skus.add(str(card.sku).strip())
+    listings = {
+        sku: asdict(inventory.listings[sku])
+        for sku in skus
+        if sku in inventory.listings
+    }
+    return {"version": master.VERSION, "cards": cards, "listings": listings}
+
+
+def do_inventory_recent(limit: int) -> dict:
+    """The newest-captured, identified, on-hand cards, in `do_inventory`'s own per-card
+    shape — for Home's hero deck (D192/item 2, `Home.tsx`'s `deckFromCards`).
+
+    A NARROWER, HAND-BUILT SHAPE WAS THE FIRST DRAFT AND WAS WRONG: `deckFromCards` reads
+    `card.name`, `card.number_display`, `card.number` and `card.metadata_finish` (through
+    `finishOf`), which a `{key, box, index, cid, name}` DTO cannot carry — a second,
+    narrower renderer of the same object is exactly the mistake `do_inventory`'s own
+    docstring warns against. So this reuses `records_in`'s decoration verbatim, on the
+    handful of candidates that survive the filter below, rather than inventing a smaller
+    shape for one screen.
+
+    OVER-FETCHES 3x (OR AT LEAST 12 OVER) `limit`, because a captured-but-unidentified or
+    photo-less card is skipped by the screen — `deckFromCards`'s own filter, re-stated here
+    so a stale, unidentified capture never displaces a real card from the hero. `cid`/`name`/
+    `photo` absence is exactly what `Inventory.newest_captured`'s docstring names as the
+    reason to over-fetch.
+    """
+    inventory = Store().read().inventory
+    candidates = inventory.newest_captured(max(limit * 3, limit + 12))
+    places = _Places(inventory)
+    cards: dict = {}
+    for key, _box, _index, _cid in candidates:
+        if len(cards) >= limit:
+            break
+        card = inventory.cards.get(key)
+        if card is None or card.state in master.TERMINAL_STATES:
+            continue
+        if not card.name or card.photo is None:
+            continue
+        record = asdict(card)
+        record["number_display"] = join.display_number(
+            record.get("number"), record.get("printed_total")
+        )
+        try:
+            place = places.of(record["box"], record["index"])
+        except (KeyError, TypeError, ValueError, master.BadSections):
+            cards[key] = record
+            continue
+        if place["located"]:
+            record.update(_flat_place(place))
+        record["place"] = place
+        cards[key] = record
+    return {"cards": cards}
+
+
 def do_put_card(box: int, index: int, payload: dict) -> dict:
     """Correct a capture claim on one card that already exists: set hint, variant, game, rarity claim, note.
 
@@ -10622,7 +10731,7 @@ class CaptureHandler(BaseHTTPRequestHandler):
         self._send(HTTPStatus.NO_CONTENT, b"", "text/plain")
 
     def do_GET(self) -> None:  # noqa: N802
-        """The reads. `/search` is the only route in this server with a query string.
+        """The reads. `/search` and `/inventory/recent` are the routes with a query string.
 
         `parse_qs` RATHER THAN A SPLIT ON `=`, for the reason `CLAUDE.md` gives about CSV:
         a card called `Billy & O'Nare` is a real row in a real fixture, and its name reaches
@@ -10637,6 +10746,30 @@ class CaptureHandler(BaseHTTPRequestHandler):
                 return self._json(HTTPStatus.OK, do_status())
             if path == "/inventory":
                 return self._json(HTTPStatus.OK, do_inventory())
+            # D192's per-box read. Same regex object `do_PUT` already uses for
+            # `do_put_box_claims` — one pattern, one place that says what `/inventory/<n>`
+            # means as a path, matched by two different HTTP methods with two different
+            # handlers.
+            match = _INVENTORY_BOX_RE.match(path)
+            if match:
+                return self._json(HTTPStatus.OK, do_inventory_box(int(match.group(1))))
+            # D192's lean deck route for Home's hero — an exact string, so `_INVENTORY_BOX_RE`
+            # above (digits only) can never confuse the two.
+            if path == "/inventory/recent":
+                query = parse_qs(parsed.query, keep_blank_values=True).get("limit") or ["3"]
+                try:
+                    limit = int(query[0])
+                except ValueError:
+                    raise BadRequest(
+                        HTTPStatus.BAD_REQUEST, "limit_invalid",
+                        f"limit must be an integer, not {query[0]!r}.",
+                    ) from None
+                if limit < 1:
+                    raise BadRequest(
+                        HTTPStatus.BAD_REQUEST, "limit_invalid",
+                        "limit must be at least 1.",
+                    )
+                return self._json(HTTPStatus.OK, do_inventory_recent(limit))
             if path == "/queues":
                 return self._json(HTTPStatus.OK, do_queues())
             if path == "/boxes":

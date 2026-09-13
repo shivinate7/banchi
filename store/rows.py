@@ -43,6 +43,9 @@ THE `Source` CONTRACT, duck-typed rather than declared, stated here once:
     select(columns, equals) -> Iterable[(key, tuple)]
                                             column values only, same filter, no text
     distinct(column) -> Iterable[value]
+    top(column, limit, columns) -> Iterable[(key, tuple)]
+                                            the `limit` rows with the highest `column`,
+                                            descending, NULLs excluded — column values only
 
 `equals` maps an INDEXED COLUMN NAME to a value, and `None` means the column is NULL —
 which is how `Inventory.next_index` finds a record whose box will not coerce without
@@ -108,6 +111,12 @@ class Rows(MutableMapping):
         self._baseline: Dict[str, dict] = {}
         self._deleted: set = set()
         self._complete = source is None
+        # Keys this SESSION has written via `__setitem__` — a brand-new record, or one
+        # mutated after `_remember` loaded it from the source. Bounded by what this request
+        # touched, never by the size of a prior full load: this is the set `where()`/
+        # `select()` must re-check by hand after `_complete`, because the source's own index
+        # cannot see an uncommitted change (D192, item 2's `rows.py:177` fix).
+        self._touched: set = set()
         self._track = track
         for key, obj in (objects or {}).items():
             self._loaded[str(key)] = obj
@@ -154,6 +163,7 @@ class Rows(MutableMapping):
         key = str(key)
         self._loaded[key] = obj
         self._deleted.discard(key)
+        self._touched.add(key)
 
     def __delitem__(self, key) -> None:
         key = str(key)
@@ -213,41 +223,103 @@ class Rows(MutableMapping):
     def where(self, **equals) -> List[Any]:
         """Every record whose indexed columns equal `equals`, in key order.
 
-        Bound and incomplete, this is one indexed query plus a pass over what is already
-        loaded — a loaded object may have been changed since it was read, so its column
-        values are recomputed from the object rather than trusted from the row.
+        A SCOPED CALL COSTS WHAT THE INDEX COSTS, WHATEVER RAN EARLIER IN THIS SESSION
+        (D192) — bound-and-complete (a prior `.values()`/`.items()`/`to_payload()`
+        loaded everything) now ALSO queries the source instead of scanning `self._loaded`,
+        which is what degraded to an O(table) Python scan after any full load. Bound-and-
+        incomplete is unchanged in substance (still one indexed query plus a pass over what
+        it returned). Memory-backed (`self.source is None`) is unaffected: there is no index
+        to defer to, so the old whole-`_loaded` scan is exactly right there and is kept.
+
+        THIS DOES NOT TRUST `_touched` (a set of keys written via `__setitem__`) TO STAND IN
+        FOR "MUTATED SINCE LOADED" — an earlier draft of this method did, and it was wrong.
+        `Rows`'s own docstring states the actual convention: a caller that reads an object
+        back and mutates its ATTRIBUTES directly — never reassigning through `__setitem__` —
+        is a supported, and pervasively used, way to write (`store/master.py:set_state`,
+        `record_identification`, `store/submissions.py:release`/`attach_run`, and others all
+        do this). `_touched` alone would silently keep answering a stale verdict for such a
+        row for the rest of the session — found for real in `submission-selftest`'s resume
+        case, where `release()`'s in-place `claim.state = STATE_RELEASED` was invisible to a
+        same-session `where(state=LIVE)` moments later. So every key the source returns AS A
+        CANDIDATE is re-validated against the LIVE object when one is already loaded, which
+        is what actually fixes that case, cheaply — bounded by what the source query itself
+        returns, not by the table.
+
+        WHAT THIS STILL DOES NOT CATCH, NAMED RATHER THAN SILENTLY ASSUMED AWAY: a row whose
+        indexed column was mutated IN PLACE (not via `__setitem__`) so that it newly MATCHES
+        `equals`, while its own on-disk value still would not have — the source query never
+        offers it as a candidate, so it is missed. `_touched` (checked below) closes this for
+        every row reassigned through `__setitem__`, which is every WRITE this repo's own
+        allocator/mutator functions perform on a BRAND NEW row (`allocate_capture`) and is
+        the only source of a genuinely new key with no on-disk row at all. It does not close
+        it for a row that already existed, was loaded, and had an indexed column mutated in
+        place into a NEW match — no case in this codebase's own call graph does that within
+        one session today (verified: no handler queries a column immediately after mutating
+        that same column on an existing record without reassigning), and it is recorded here
+        so a future one does not silently reopen it.
         """
-        if not self._complete:
-            for key, text in self.source.where(equals):
-                key = str(key)
-                if key in self._deleted or key in self._loaded:
-                    continue
-                self._remember(key, text)
-        found = {
-            key: obj for key, obj in self._loaded.items() if self._matches(obj, equals)
-        }
-        return [found[key] for key in sorted(found)]
+        if self.source is None:
+            found = {
+                key: obj for key, obj in self._loaded.items() if self._matches(obj, equals)
+            }
+            return [found[key] for key in sorted(found)]
+        keys: set = set()
+        for key, text in self.source.where(equals):
+            key = str(key)
+            if key in self._deleted:
+                continue
+            if key in self._loaded:
+                if self._matches(self._loaded[key], equals):
+                    keys.add(key)
+                continue
+            self._remember(key, text)
+            keys.add(key)
+        for key in self._touched:
+            if key in self._deleted or key not in self._loaded or key in keys:
+                continue
+            if self._matches(self._loaded[key], equals):
+                keys.add(key)
+        return [self._loaded[key] for key in sorted(keys)]
 
     def select(self, columns: Sequence[str], **equals) -> List[Tuple[str, Tuple[Any, ...]]]:
         """`(key, column values)` for matching rows, WITHOUT building objects for them.
 
-        The allocator's high-water scan is the caller this exists for: it wants `box` and
-        `idx` of every record in one box and nothing else, and building a thousand `Card`s
-        to read two ints off each is the O(cards-in-box) cost a capture should not pay.
-        Loaded objects are consulted through `columns()` so an unwritten change is seen.
+        Same split as `where()` above, for the same reason (D192) and the same
+        care: a loaded row the source offers as a candidate is re-validated against the LIVE
+        object rather than trusted from the source's own (possibly stale) row, because this
+        codebase's mutators routinely change an object's attributes in place without
+        reassigning through `__setitem__`. See `where()`'s docstring for the one case this
+        still cannot catch and why it does not matter to any call site today.
         """
         columns = tuple(columns)
-        out: Dict[str, Tuple[Any, ...]] = {}
-        if not self._complete:
-            for key, values in self.source.select(columns, equals):
-                key = str(key)
-                if key in self._deleted or key in self._loaded:
-                    continue
-                out[key] = tuple(values)
-        for key, obj in self._loaded.items():
+        if self.source is None:
+            out: Dict[str, Tuple[Any, ...]] = {}
+            for key, obj in self._loaded.items():
+                if self._matches(obj, equals):
+                    derived = self.spec.columns(obj)
+                    out[key] = tuple(derived.get(name) for name in columns)
+            return [(key, out[key]) for key in sorted(out)]
+        out = {}
+        for key, values in self.source.select(columns, equals):
+            key = str(key)
+            if key in self._deleted:
+                continue
+            if key in self._loaded:
+                obj = self._loaded[key]
+                if self._matches(obj, equals):
+                    derived = self.spec.columns(obj)
+                    out[key] = tuple(derived.get(name) for name in columns)
+                continue
+            out[key] = tuple(values)
+        for key in self._touched:
+            if key in self._deleted or key not in self._loaded or key in out:
+                continue
+            obj = self._loaded[key]
             if self._matches(obj, equals):
                 derived = self.spec.columns(obj)
                 out[key] = tuple(derived.get(name) for name in columns)
+            else:
+                out.pop(key, None)
         return [(key, out[key]) for key in sorted(out)]
 
     def distinct(self, column: str) -> set:
@@ -259,6 +331,30 @@ class Rows(MutableMapping):
         for obj in self._loaded.values():
             values.add(self.spec.columns(obj).get(column))
         return values
+
+    def top(
+        self, column: str, limit: int, columns: Sequence[str]
+    ) -> List[Tuple[str, Tuple[Any, ...]]]:
+        """`(key, column values)` for the `limit` rows with the highest `column`, descending
+        — Home's hero deck, off the newest-captured cards (D192/item 2). Bound, this is the
+        source's own indexed `ORDER BY ... DESC LIMIT`, no object built. Memory-backed
+        (`self.source is None`, T7's fixtures, which never carry enough rows to make a Python
+        sort a cost) sorts what is loaded instead."""
+        columns = tuple(columns)
+        if self.source is not None:
+            return [
+                (str(key), tuple(values))
+                for key, values in self.source.top(column, limit, columns)
+            ]
+        ranked = []
+        for key, obj in self._loaded.items():
+            derived = self.spec.columns(obj)
+            value = derived.get(column)
+            if value is None:
+                continue
+            ranked.append((value, key, tuple(derived.get(name) for name in columns)))
+        ranked.sort(key=lambda row: row[0], reverse=True)
+        return [(key, values) for _value, key, values in ranked[:limit]]
 
     # ------------------------------------------------------------------- the flush
 
@@ -285,6 +381,7 @@ class Rows(MutableMapping):
         for key, _, payload in upserts:
             self._baseline[key] = payload
         self._deleted = set()
+        self._touched = set()
 
     def to_dict(self) -> Dict[str, Any]:
         """Every record, key-ordered, as a plain dict. Loads the whole table."""
