@@ -345,6 +345,51 @@ def build(tmp: Path) -> Path:
     return work
 
 
+def build_split(tmp: Path) -> Path:
+    """Like `build`, but the decision corpus is a DIRECTORY with a manifest — the shape this
+    repo actually has since D160, and the only shape `--unclaim` can act on for a decision id:
+    it is the entry's own FILENAME that survives a claim once the heading is overwritten with
+    a number (`find_decision_file`), and a flat `docs/DECISIONS.md` has no filename per entry
+    to read that back from.
+    """
+    origin = tmp / "origin.git"
+    work = tmp / "work"
+    seed = tmp / "seed"
+    seed.mkdir()
+    git(seed, "init", "-q", ".")
+    write(seed, "docs/decisions/_preamble.md", "# Fixture\n")
+    write(seed, "docs/decisions/D001-first.md", f"## {D(1)} — First\n\nbody\n")
+    write(seed, "docs/decisions/D002-second.md", f"## {D(2)} — Second\n\nbody\n")
+    write(seed, "docs/decisions/ORDER.json", json.dumps({
+        "source": "docs/DECISIONS.md",
+        "order": ["_preamble.md", "D001-first.md", "D002-second.md"],
+    }, indent=2) + "\n")
+    write(seed, "docs/DECISIONS.md", "# Stub\n\nThe entries are in `docs/decisions/`.\n")
+    write(seed, "docs/CODES-DECISIONS.md", CODES_MAIN)
+    write(seed, "docs/GATES.md", GATES_MAIN)
+    write(seed, "docs/map.py", MAP_MAIN)
+    write(seed, "CLAUDE.md", f"# Fixture\n\nmain cites {D(2)} and step 2 and {C(1)}.\n")
+    git(seed, "add", "-A")
+    git(seed, "commit", "-qm", "seed")
+    git(seed, "branch", "-M", "main")
+    subprocess.run(["git", "clone", "-q", "--bare", str(seed), str(origin)],
+                   stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, check=False)
+    subprocess.run(["git", "clone", "-q", str(origin), str(work)],
+                   stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, check=False)
+    return work
+
+
+def snapshot(root: Path) -> dict:
+    """Every tracked-looking file's bytes, keyed by relative path — for a byte-identical
+    round-trip assertion that does not care which files moved, only whether the CONTENT did.
+    """
+    out = {}
+    for path in root.rglob("*"):
+        if path.is_file() and ".git" not in path.parts:
+            out[str(path.relative_to(root))] = path.read_bytes()
+    return out
+
+
 def main() -> int:
     print("claim self-test — scripts/claim-ids.py against a throwaway repository\n")
     with tempfile.TemporaryDirectory() as raw:
@@ -1092,6 +1137,268 @@ def main() -> int:
            "the HEADING inside it is the number, not the slug", body.split("\n")[0])
         ok(entry not in (split / "CLAUDE.md").read_text(encoding="utf-8"),
            "and every citation of the slug elsewhere was substituted too")
+
+        # --------------------------------------------------------------------------------
+        # `--unclaim`: THE EXACT INVERSE, WHICH `stale_claims` NAMED AND NOTHING PERFORMED.
+        #
+        # Its own refusal text says "put the id back to the slug form and let the merge
+        # allocate it again" — and until this, that sentence had no command behind it: a
+        # human had to hand-rename the file, hand-edit the heading, and hand-find every
+        # citation, which is exactly the error surface D140 exists to delete from the FORWARD
+        # direction. It bit for real on 2026-09-12: a coordinating session hit this refusal
+        # mid conflict-resolution and, with nothing to reach for, hand-picked new numbers
+        # instead — one guess collided too, before landing on D188 — reproduced below as the
+        # third arm.
+        print("\n  -- --unclaim: the round trip is byte-identical --")
+        rt = tmp / "roundtrip"
+        rt.mkdir()
+        trip = build_split(rt)
+        with_claimer(trip)
+        git(trip, "add", "-A")
+        git(trip, "commit", "-qm", "the checkout carries the claimer")
+        git(trip, "checkout", "-q", "-b", "feature")
+        rt_entry = "D-" + "round-trip-thing"
+        write(trip, f"docs/decisions/{rt_entry}.md",
+              f"## {rt_entry} — A round trip thing\n\nbody\n")
+        write(trip, "docs/CODES-DECISIONS.md", CODES_MAIN + f"\n## {SC} — Another\n\nbody\n")
+        write(trip, "docs/GATES.md", GATES_MAIN + f"0. `step {SS}` **Third step** — done.\n")
+        write(trip, "docs/map.py",
+              MAP_MAIN.replace("]\n", '    {"n": "' + SS + '", "title": "Third"},\n]\n'))
+        write(trip, "CLAUDE.md",
+              f"# Fixture\n\nmain cites {D(2)} and step 2 and {C(1)}.\n"
+              f"the branch cites {rt_entry}, {SC} and step {SS}.\n")
+        git(trip, "add", "-A")
+        git(trip, "commit", "-qm", "the branch writes a decision, a code and a step slug")
+
+        before = snapshot(trip)
+        claim(trip, "--root", str(trip), "--write")
+        after_claim = snapshot(trip)
+        ok(before != after_claim, "the forward claim actually changed the tree", "")
+
+        # Read the allocated numbers back off the rewritten tree rather than re-deriving them,
+        # so this arm does not silently start testing its own arithmetic.
+        decision_file = next((trip / "docs/decisions").glob("D*-round-trip-thing.md"))
+        d_number = decision_file.stem.split("-", 1)[0]              # zero-padded, e.g. D003
+        d_number_bare = "D" + str(int(d_number[1:]))                # unpadded, as cited
+        # NAMED BY ITS OWN TITLE, not "the first heading" — `docs/CODES-DECISIONS.md` already
+        # carries C1 from the fixture seed, and a bare `(C\d+)` match would silently grab that
+        # instead of the entry this arm just claimed.
+        codes_match = re.search(r"^##\s+(C\d+)\s+—\s+Another$",
+                                 (trip / "docs/CODES-DECISIONS.md").read_text(), re.M)
+        step_match = re.search(r"^(\d+)\.\s+\*\*Third step\*\*", (trip / "docs/GATES.md").read_text(),
+                                re.M)
+        c_number = codes_match.group(1) if codes_match else None
+        s_number = step_match.group(1) if step_match else None
+        ok(c_number is not None and s_number is not None,
+           "the codes and step ids landed and are readable back off the tree",
+           f"c={c_number} s={s_number}")
+
+        _, rc = claim_rc(trip, "--unclaim", d_number_bare, "--ref", "origin/main", "--write")
+        ok(rc == 0, "unclaiming the decision succeeds")
+        _, rc = claim_rc(trip, "--unclaim", "C" + c_number[1:], "--to-slug", "second-code",
+                         "--ref", "origin/main", "--write")
+        ok(rc == 0, "unclaiming the codes id succeeds, given --to-slug")
+        _, rc = claim_rc(trip, "--unclaim", f"step {s_number}", "--to-slug", SS,
+                         "--ref", "origin/main", "--write")
+        ok(rc == 0, "unclaiming the step succeeds, given --to-slug")
+
+        after_unclaim = snapshot(trip)
+        ok(after_unclaim == before,
+           "THE TREE IS BYTE-IDENTICAL TO BEFORE THE CLAIM — file renamed back, heading "
+           "restored, every citation restored, ORDER.json no longer lists it as a numbered "
+           "entry",
+           "\n".join(sorted(set(before) ^ set(after_unclaim))) or
+           "\n".join(f"{k}:\nBEFORE={before.get(k)!r}\nAFTER={after_unclaim.get(k)!r}"
+                     for k in before if before.get(k) != after_unclaim.get(k)))
+
+        again = claim(trip, "--root", str(trip), "--porcelain")
+        ok(f"{rt_entry}\t{d_number_bare}" in again,
+           "and a fresh plan re-offers the SAME number, since nothing on main has moved",
+           again)
+
+        print("\n  -- --unclaim: refuses when `ref`'s copy IS this entry --")
+        # `claim a slug, simulate it landing on origin/main ... then attempt --unclaim on that
+        # SAME number from a DIFFERENT branch that also happens to reference it — must REFUSE`.
+        land = tmp / "landed_same"
+        land.mkdir()
+        landed_work = build_split(land)
+        with_claimer(landed_work)
+        git(landed_work, "add", "-A")
+        git(landed_work, "commit", "-qm", "the checkout carries the claimer")
+        git(landed_work, "push", "-q", "origin", "main")
+        git(landed_work, "checkout", "-q", "-b", "lander")
+        landed_entry = "D-" + "landed-thing"
+        write(landed_work, f"docs/decisions/{landed_entry}.md",
+              f"## {landed_entry} — A landed thing\n\nbody\n")
+        git(landed_work, "add", "-A")
+        git(landed_work, "commit", "-qm", "a branch writes the entry")
+        claim(landed_work, "--root", str(landed_work), "--write")
+        git(landed_work, "add", "-A")
+        git(landed_work, "commit", "-qm", "claim it")
+        git(landed_work, "push", "-q", "origin", "lander")
+        # fast-forward main onto it, exactly as `make merge`'s local half would
+        git(landed_work, "checkout", "-q", "main")
+        git(landed_work, "merge", "-q", "--ff-only", "lander")
+        git(landed_work, "push", "-q", "origin", "main")
+        landed_number = next((landed_work / "docs/decisions").glob("D*-landed-thing.md")).stem.split("-", 1)[0]
+        landed_bare = "D" + str(int(landed_number[1:]))
+
+        # a DIFFERENT branch, cut from main AFTER the merge, so its own copy of this entry is
+        # byte-identical to main's — this is the tree a person confused about which number to
+        # unclaim would actually be standing in.
+        other_branch = tmp / "other_branch"
+        subprocess.run(["git", "clone", "-q", str(land / "origin.git"), str(other_branch)],
+                       stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, check=False)
+        git(other_branch, "checkout", "-q", "-b", "confused")
+
+        before_refuse = snapshot(other_branch)
+        out, rc = claim_rc(other_branch, "--unclaim", landed_bare, "--ref", "origin/main")
+        ok(rc == 3 and "REFUSED" in out and "IS this entry" in out,
+           "REFUSES rather than reverting an id `ref` genuinely already carries as this "
+           "entry — unclaiming it would corrupt the citation main's own copy depends on",
+           out)
+        out, rc = claim_rc(other_branch, "--unclaim", landed_bare, "--ref", "origin/main",
+                           "--write")
+        ok(rc == 3, "and `--write` refuses too, not only the preview", out)
+        ok(snapshot(other_branch) == before_refuse,
+           "and NOTHING WAS TOUCHED — a refusal that half-writes would leave the tree worse "
+           "than the collision it was asked to fix")
+
+        print("\n  -- --unclaim: the actual 2026-09-12 shape D186 landed over, end to end --")
+        # Two branches, cut from the SAME commit, each honestly claiming its OWN unrelated
+        # slug as the next free number — and losing a race for that number to each other,
+        # the shape D186's own merge collided with. The remedy is --unclaim on the branch
+        # that merges second, followed by an ordinary re-plan: zero hand-editing.
+        inc = tmp / "incident"
+        inc.mkdir()
+        inc_a = tmp / "incident_a"
+        inc_b = tmp / "incident_b"
+        base_inc = build_split(inc)
+        with_claimer(base_inc)
+        git(base_inc, "add", "-A")
+        git(base_inc, "commit", "-qm", "the checkout carries the claimer")
+        git(base_inc, "push", "-q", "origin", "main")
+        subprocess.run(["git", "clone", "-q", str(inc / "origin.git"), str(inc_a)],
+                       stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, check=False)
+        subprocess.run(["git", "clone", "-q", str(inc / "origin.git"), str(inc_b)],
+                       stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, check=False)
+
+        slug_a = "D-" + "first-racer"
+        slug_b = "D-" + "second-racer"
+
+        git(inc_a, "checkout", "-q", "-b", "branch-a")
+        write(inc_a, f"docs/decisions/{slug_a}.md", f"## {slug_a} — First racer\n\nbody\n")
+        git(inc_a, "add", "-A")
+        git(inc_a, "commit", "-qm", "branch A writes its own slug")
+        claim(inc_a, "--root", str(inc_a), "--write")
+        git(inc_a, "add", "-A")
+        git(inc_a, "commit", "-qm", "branch A claims it")
+        git(inc_a, "push", "-q", "origin", "branch-a")
+        git(base_inc, "fetch", "-q", "origin", "branch-a")
+        git(base_inc, "merge", "-q", "--ff-only", "origin/branch-a")
+        git(base_inc, "push", "-q", "origin", "main")
+
+        # branch B was cut BEFORE branch A merged, so its own claim is honest at the time —
+        # both branches allocate the SAME next-free number for two UNRELATED entries.
+        git(inc_b, "checkout", "-q", "-b", "branch-b")
+        write(inc_b, f"docs/decisions/{slug_b}.md", f"## {slug_b} — Second racer\n\nbody\n")
+        git(inc_b, "add", "-A")
+        git(inc_b, "commit", "-qm", "branch B writes its own, unrelated slug")
+        claim(inc_b, "--root", str(inc_b), "--write")
+        git(inc_b, "add", "-A")
+        git(inc_b, "commit", "-qm", "branch B claims it, honestly, before seeing A merge")
+
+        git(inc_b, "fetch", "-q", "origin", "main")
+        out, rc = claim_rc(inc_b, "--stale")
+        b_number_path = next((inc_b / "docs/decisions").glob("D*-second-racer.md"))
+        b_bare = "D" + str(int(b_number_path.stem.split("-", 1)[0][1:]))
+        ok(rc == 3 and "REFUSED" in out and b_bare in out,
+           "`--stale` catches the real collision — TWO UNRELATED entries independently "
+           "claimed the same number, the shape D186's own merge landed over, and this is "
+           "the CHEAP early warning `stale_claim()` reads before a merge is even attempted",
+           out)
+
+        before_incident = snapshot(inc_b)
+        _, rc = claim_rc(inc_b, "--unclaim", b_bare, "--ref", "origin/main")
+        ok(rc == 0, "--unclaim on the branch that lost the race PREVIEWS cleanly")
+        ok(snapshot(inc_b) == before_incident, "and the preview wrote nothing")
+        out, rc = claim_rc(inc_b, "--unclaim", b_bare, "--ref", "origin/main", "--write")
+        ok(rc == 0 and "DIFFERENT entry" in out,
+           "and --write PERFORMS it, naming the collision as the reason it is safe rather "
+           "than a reason to refuse", out)
+
+        replanned = claim(inc_b, "--root", str(inc_b), "--porcelain")
+        fresh_match = re.search(re.escape(slug_b) + r"\t(D[0-9]+)", replanned)
+        ok(fresh_match is not None and fresh_match.group(1) != b_bare,
+           "a normal re-plan allocates a FRESH number against main as it stands — zero "
+           "hand-editing, which is the whole point", replanned)
+        claim(inc_b, "--root", str(inc_b), "--write")
+        out, rc = claim_rc(inc_b, "--stale")
+        ok(rc == 0, "and the branch is clean again", out)
+
+        print("\n  -- --unclaim: the citation substitution is the FORWARD grammar, reversed --")
+        # Reuses `apply_to_text`'s own `(?<![-\w])...(?![-\w])` boundary rather than a second
+        # implementation — proved the same way the forward direction's own boundary bug was
+        # found: a shorter token that is a PREFIX of a longer, unrelated one.
+        bnd = tmp / "boundary"
+        bnd.mkdir()
+        edge = build_split(bnd)
+        with_claimer(edge)
+        git(edge, "add", "-A")
+        git(edge, "commit", "-qm", "the checkout carries the claimer")
+        git(edge, "checkout", "-q", "-b", "feature")
+        edge_entry = "D-" + "edge-thing"
+        write(edge, f"docs/decisions/{edge_entry}.md",
+              f"## {edge_entry} — An edge thing\n\nbody\n")
+        look_alike_30 = "D" + "30"
+        look_alike_300 = "D" + "300"
+        write(edge, "CLAUDE.md",
+              f"# Fixture\n\ncites {edge_entry} in prose, `{edge_entry}` in a code span, and "
+              f"the unrelated {look_alike_30} and {look_alike_300}.\n\n"
+              f"```\n{D(1):<4} First\n{D(2):<4} Second\n```\n")
+        git(edge, "add", "-A")
+        git(edge, "commit", "-qm", "a slug beside look-alike numbers, in prose and a code span")
+
+        claim(edge, "--root", str(edge), "--write")
+        claimed_claude = (edge / "CLAUDE.md").read_text(encoding="utf-8")
+        edge_number_path = next((edge / "docs/decisions").glob("D*-edge-thing.md"))
+        edge_bare = "D" + str(int(edge_number_path.stem.split("-", 1)[0][1:]))
+        ok(look_alike_30 in claimed_claude and look_alike_300 in claimed_claude,
+           "claiming the slug does not disturb an unrelated look-alike NUMBER beside it",
+           claimed_claude)
+
+        claim_rc(edge, "--unclaim", edge_bare, "--ref", "origin/main", "--write")
+        unclaimed_claude = (edge / "CLAUDE.md").read_text(encoding="utf-8")
+        ok(look_alike_30 in unclaimed_claude and look_alike_300 in unclaimed_claude,
+           "AND UNCLAIMING IT DOES NOT EITHER — the exact `\\b`-boundary bug this repo was "
+           "burned by once already, reused rather than re-derived on the way back",
+           unclaimed_claude)
+        ok(edge_entry in unclaimed_claude,
+           "the slug is restored in BOTH the prose citation and the code span", unclaimed_claude)
+        ok(f"`{edge_entry}`" in unclaimed_claude,
+           "the code span's own backticks survive untouched around it", unclaimed_claude)
+        ok(D(1) in unclaimed_claude and D(2) in unclaimed_claude,
+           "and reverting one id never touches an UNRELATED already-numbered id's own "
+           "citations", unclaimed_claude)
+
+        print("\n  -- --unclaim: refuses cleanly on a bad ident or a step/codes id with no "
+              "--to-slug --")
+        bad = tmp / "bad_idents"
+        bad.mkdir()
+        badwork = build_split(bad)
+        out, rc = claim_rc(badwork, "--unclaim", "D-" + "some-slug", "--ref", "origin/main")
+        ok(rc == 2 and "REFUSED" in out and "never a slug" in out,
+           "a SLUG is refused — there is nothing to unclaim from a slug", out)
+        out, rc = claim_rc(badwork, "--unclaim", "D" + "999", "--ref", "origin/main")
+        ok(rc == 2 and "REFUSED" in out,
+           "a number nothing here claimed is refused rather than silently doing nothing", out)
+        out, rc = claim_rc(badwork, "--unclaim", "C1", "--ref", "origin/main")
+        ok(rc == 2 and "REFUSED" in out and "--to-slug" in out,
+           "a codes id with no --to-slug is refused, naming the flag it needs — a codes "
+           "entry keeps its slug NOWHERE once claimed, unlike a decision's own filename", out)
+        out, rc = claim_rc(badwork, "--unclaim", "step 1", "--ref", "origin/main")
+        ok(rc == 2 and "REFUSED" in out and "--to-slug" in out,
+           "and so is a build step, for the same reason", out)
 
     print("\nclaim self-test: {0} passed{1}".format(
         PASS, ", {0} FAILED".format(FAIL) if FAIL else ""))
