@@ -4858,7 +4858,7 @@ COMPONENTS = [
             # D90 is main's order-driven mode, whose two props this file no longer carries; the
             # citation stays so a session reading main's history knows they were removed on
             # purpose rather than lost.
-            "governed_by": ["D6", "D8", "D9", "D10", "D16", "D19", "D20", "D21", "D22", "D23", "D24", "D26", "D27", "D30", "D31", "D33", "D35", "D38", "D39", "D41", "D45", "D46", "D49", "D52", "D58", "D67", "D68", "D89", "D90", "D92", "D118", "D125", "D132", "D119", "D172", "D181", "D192"]},
+            "governed_by": ["D6", "D8", "D9", "D10", "D16", "D19", "D20", "D21", "D22", "D23", "D24", "D26", "D27", "D30", "D31", "D33", "D35", "D38", "D39", "D41", "D45", "D46", "D49", "D52", "D58", "D67", "D68", "D89", "D90", "D92", "D118", "D125", "D132", "D119", "D172", "D181", "D192", "D194", "D196"]},
             "src/BoxBrowse.css": {"does": "its layout, and why no accent appears anywhere in it. Its list keeps an "
                                   "INSET focus ring and says so — it clips its own overflow, which is the "
                                   "case base.css's standing ring cannot serve. D38's band lives here: the "
@@ -5128,8 +5128,13 @@ COMPONENTS = [
                 "does": "a smaller sheet than a working screen's, because this one has no "
                         "form and no write: a toolbar, a `.bn-table` that becomes a stacked "
                         "card at 639px on the same idiom `Codes.css` established, and a "
-                        "loading skeleton. Every color is a `--bn-*` token.",
-                "governed_by": ["D50", "D94", "D134"],
+                        "loading skeleton. Every color is a `--bn-*` token. THE FILTER ROW "
+                        "SCROLLS SIDEWAYS ON A PHONE, ON THE SAME COARSE-POINTER ARM D117 "
+                        "ALREADY MAKES FOR A THUMB (Orders' own chip row): five filters with "
+                        "counts were sized to their own content inside a flex column and bled "
+                        "the whole page wider than the viewport rather than either wrapping or "
+                        "scrolling.",
+                "governed_by": ["D50", "D94", "D117", "D134"],
             },
             "src/Fulfillment.tsx": {
                 "does": "D5's second persona's entire product: cards to pull in box-walk "

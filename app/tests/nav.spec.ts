@@ -677,3 +677,45 @@ test('the Review tile never says nothing waiting while a card is parked', async 
   await expect(tile.locator('.home-stage-figure')).not.toHaveText('0')
   await expect(tile).not.toHaveClass(/home-stage-ok/)
 })
+
+/* THE TAB TITLE CARRIES THE SCREEN NAME AND THE BRAND TOGETHER, UNCONDITIONALLY, NOW.
+ *
+ * It used to ALTERNATE between the bare, lowercase screen name and the brand on a timer, so a
+ * tab sampled at any single instant — a bookmark, a history entry, a screenshot, or simply
+ * glancing at a strip of tabs — had even odds of showing a bare lowercase word with no product
+ * name anywhere on it. `prefers-reduced-motion` already did the right, static thing; this
+ * proves every owner route gets that behaviour always, motion preference or not. */
+test('the tab title names the screen and the brand together, on every owner route', async ({
+  page,
+}) => {
+  await open(page, '#/inventory')
+  await expect.poll(() => page.title()).toBe('Inventory · 番地 banchi')
+
+  await open(page, '#/codes')
+  await expect.poll(() => page.title()).toBe('Codes · 番地 banchi')
+
+  /* Home and the Fulfiller keep their own single, static strings — there is nothing for
+     either of them to alternate with. */
+  await open(page, '#/')
+  await expect.poll(() => page.title()).toBe('番地 banchi')
+})
+
+/* AN UNKNOWN HASH GETS THE OWNER'S SHELL, NOT NONE.
+ *
+ * `NoSuchView` used to draw chromeless — no sidebar, no nav, no way back but its own three
+ * doors, one of which sent the OWNER to the FULFILLER's screen. A fat-fingered URL cost the
+ * owner their whole nav, and the one spare door crossed personas for no reason. */
+test('an unknown route keeps the owner’s shell, and offers no door to the Fulfiller', async ({
+  page,
+}) => {
+  await stub(page)
+  await page.goto('/#/no-such-screen')
+
+  /* The sidebar is still on screen — this is the owner's shell, not a chromeless orphan. */
+  await expect(page.locator(NAV)).toBeVisible()
+  await expect(page.locator('.no-such-view')).toBeVisible()
+
+  await expect(page.locator('.no-such-view-door[href="#/fulfillment"]')).toHaveCount(0)
+  await expect(page.locator('.no-such-view-door[href="#/"]')).toBeVisible()
+  await expect(page.locator('.no-such-view-door[href="#/inventory"]')).toBeVisible()
+})

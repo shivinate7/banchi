@@ -121,8 +121,13 @@ const CHROME_FREE: ReadonlySet<Persona> = new Set<Persona>(['fulfiller'])
 const LEADER = ','
 const CHORD_MS = 1000
 
+/* An unknown hash gets the OWNER's shell, not none. `NoSuchView` used to draw chromeless — no
+   sidebar, no nav, no way back but its own three doors — which meant a fat-fingered URL cost the
+   owner their whole nav, a strictly worse outcome than landing on any real owner screen. There is
+   no persona to consult for a route that does not exist, so the default is the owner's, exactly
+   as `route.view` would be inside the shell for any other route. */
 function hasChrome(route: Route | undefined): boolean {
-  return route !== undefined && !CHROME_FREE.has(route.persona)
+  return route === undefined || !CHROME_FREE.has(route.persona)
 }
 
 /* ---- hash routing ------------------------------------------------------------ */
@@ -370,15 +375,16 @@ function NoSuchView({ path }: { path: string }) {
         <p className="bn-lede" style={{ marginTop: 8 }}>
           Banchi has no screen called <span className="no-such-view-path">#{path}</span>. Try one of these.
         </p>
+        {/* No door to #/fulfillment here: this is the OWNER's dead end, and the Fulfiller's
+            screen is a different persona's view, not a spare exit — the owner already has
+            Home and Inventory, and D95's "the Fulfiller's crash has no door out" is about
+            HIS crash page, never a reason to hand him as an escape hatch from someone else's. */}
         <div className="no-such-view-doors">
           <a className="no-such-view-door" href="#/">
             <Icon name="home" /> Home <Icon name="arrowRight" />
           </a>
           <a className="no-such-view-door" href="#/inventory">
             <Icon name="box" /> Inventory <Icon name="arrowRight" />
-          </a>
-          <a className="no-such-view-door" href="#/fulfillment" target="_blank" rel="noopener">
-            <Icon name="hand" /> Cards to pull <Icon name="external" />
           </a>
         </div>
       </div>
@@ -772,9 +778,44 @@ function Caps({ row }: { row: Binding }) {
   )
 }
 
-function KeysSheet({ open, onClose }: { open: boolean; onClose: () => void }) {
+/** A row survives a query if the query hits its own text or its group's title — a group
+ *  title match keeps every row in it, so typing "capture" shows the whole Capture group
+ *  rather than only the one row that happens to say the word. */
+function rowMatches(group: KeyGroup, row: Binding, q: string): boolean {
+  if (group.title.toLowerCase().includes(q)) return true
+  if (row.does.toLowerCase().includes(q)) return true
+  return row.keys.some((k) => k.toLowerCase().includes(q))
+}
+
+function KeysSheet({ open, onClose, path }: { open: boolean; onClose: () => void; path: string }) {
   const panel = useRef<HTMLDivElement>(null)
+  const search = useRef<HTMLInputElement>(null)
   const leave = useLeave(open)
+  const [query, setQuery] = useState('')
+  const [showAll, setShowAll] = useState(false)
+
+  /* Reset to the default view every time the sheet opens, rather than carrying the last
+     session's search or expansion forward — a filter left on from last time is a sheet that
+     looks broken the next time it opens. */
+  useEffect(() => {
+    if (open) { setQuery(''); setShowAll(false) }
+  }, [open])
+
+  const q = query.trim().toLowerCase()
+  /* DEFAULT VIEW: Anywhere, Jump to a screen, and whichever group belongs to the screen
+     already open — 78 entries across ten groups is a wall of text nobody reads top to bottom.
+     "Jump to a screen" stays in the default alongside Anywhere (never gated behind `at`, and
+     never behind a screen): the letters it lists are global navigation, not one screen's own
+     keys, so it belongs with Anywhere rather than behind "Show every screen". Typing a query,
+     or pressing "Show every screen", overrides all of it. */
+  const groups = q === ''
+    ? (showAll
+        ? SHORTCUTS
+        : SHORTCUTS.filter((group) => group.id === 'anywhere' || group.id === 'jump' || group.at === path))
+    : SHORTCUTS.map((group) => ({ ...group, rows: group.rows.filter((row) => rowMatches(group, row, q)) })).filter(
+        (group) => group.rows.length > 0,
+      )
+  const hiddenGroupCount = SHORTCUTS.length - groups.length
 
   /* Focus comes back to whatever the operator was on. Keyed on `open` alone, so the restore
      fires the moment it closes rather than after the leave animation. */
@@ -792,10 +833,15 @@ function KeysSheet({ open, onClose }: { open: boolean; onClose: () => void }) {
   /* And focus goes INTO the sheet — on `leave.mounted` as well as `open`, because `useLeave`
      raises `mounted` from an effect: on the first render after the press the dialog is not in
      the document yet and the ref is still null. Focusing on `open` alone silently did nothing
-     and left the operator's focus on the page behind the scrim. Tab then cycles inside. */
+     and left the operator's focus on the page behind the scrim. Tab then cycles inside.
+     THE SEARCH FIELD IS THE LANDING SPOT, not the panel — the sheet exists to be typed into
+     now, and a fallback to the panel itself covers the one render where the input ref is not
+     attached yet. */
   useEffect(() => {
     if (!open || !leave.mounted) return
-    const frame = window.requestAnimationFrame(() => panel.current?.focus({ preventScroll: true }))
+    const frame = window.requestAnimationFrame(() =>
+      (search.current ?? panel.current)?.focus({ preventScroll: true }),
+    )
     return () => window.cancelAnimationFrame(frame)
   }, [open, leave.mounted])
 
@@ -848,10 +894,31 @@ function KeysSheet({ open, onClose }: { open: boolean; onClose: () => void }) {
             — a row that shows several caps is a run of keys, not one. A screen’s own keys work only while that screen
             is open.
           </p>
+          <div className="app-keys-search">
+            <Icon name="search" size={14} />
+            <input
+              ref={search}
+              type="search"
+              className="app-keys-search-input"
+              placeholder="Search shortcuts…"
+              value={query}
+              onChange={(event) => setQuery(event.target.value)}
+              aria-label="Search shortcuts"
+            />
+          </div>
         </header>
 
         <div className="app-keys-body">
-          {SHORTCUTS.map((group) => (
+          {q === '' && !showAll && hiddenGroupCount > 0 ? (
+            <p className="app-keys-more">
+              Showing Anywhere, Jump to a screen{groups.length > 2 ? ', and this screen’s own keys' : ''}.{' '}
+              <button type="button" className="app-keys-show-all" onClick={() => setShowAll(true)}>
+                Show every screen’s shortcuts
+              </button>
+            </p>
+          ) : null}
+          {groups.length === 0 ? <p className="app-keys-none">No shortcut matches “{query}”.</p> : null}
+          {groups.map((group) => (
             <section key={group.id} className="app-keys-group">
               <h3 className="app-keys-group-title">
                 <Icon name={group.icon} size={15} />
@@ -926,26 +993,6 @@ function NavLink({ route, current, onNavigate }: { route: Route; current: boolea
 /* What the browser tab says. `app/index.html`'s <title> is the same string, for the frame
    before React runs; there is no way to share a constant with static HTML. */
 const BROWSER_TITLE = '番地 banchi'
-
-/* HOW LONG EACH HALF OF THE TAB TITLE HOLDS. Asymmetric, and slower than it started.
-   A second each was the owner's first ask and read as too frequent in use. THE ONE-SECOND FLIP IS
-   THE NOTIFICATION-FLASH TEMPO — the pattern that alternates a title to nag you back to a tab —
-   and every implementation of it in the wild sits at 1000-2000ms because it is MEANT to be hard
-   to ignore. This is not that: it is wayfinding, and it should be calm.
-   THE SCREEN DWELLS LONGER THAN THE NAME, which is a choice worth stating because the owner
-   floated the reverse. The name is confirmation you already have — you know which app you opened.
-   The screen is the news, so it holds longer; weighted the other way you would glance at a strip
-   of tabs and mostly see `番地 banchi`, having to wait to learn which page it is. Swapping the two
-   numbers is the whole change if that judgement is wrong.
-   THE RATIO SOFTENED WHEN THE PAIR SLOWED. It began 4000/2000 — the screen twice the name — and
-   the owner set 6000/4000, which is 1.5x. A longer floor matters more than the ratio here: at
-   four seconds the name is comfortably readable on its own, so the shorter half no longer needs
-   to be short to stay out of the way.
-   WCAG 2.2.2 asks that content auto-updating for more than five seconds can be paused, stopped or
-   hidden. A tab title is browser chrome rather than page content, so the criterion is arguably not
-   engaged — but the spirit is, and `prefers-reduced-motion` is the mechanism: it stops this dead
-   and shows both halves at once. */
-const TITLE_DWELL = { screen: 6000, name: 4000 } as const
 
 const SIDEBAR_KANJI = 40
 const RAIL_MARK = 32
@@ -1109,10 +1156,9 @@ function Sidebar({
 /* ---- phone chrome ------------------------------------------------------------------------------- */
 /* Every owner screen draws its own h1 directly under this bar, so the bar carries the
    wordmark rather than repeating (or, on Codes, contradicting) the screen's name.
-   IT SAID `Not found` FOR AN UNKNOWN HASH, AND THAT BRANCH COULD NOT RUN. `hasChrome` is false
-   when `route` is undefined, so the shell — this bar included — is never rendered for one;
-   `NoSuchView` draws standing alone. The ternary was dead when it was written and `route` was
-   the prop that fed it, so both are gone rather than carried.
+   AN UNKNOWN HASH GETS THIS BAR TOO, NOW. `hasChrome` treats `route === undefined` as the
+   owner's shell rather than none, so `NoSuchView` draws inside it exactly like any other owner
+   screen — a fat-fingered URL costs no nav.
    THE MARK HERE IS THE EMPTY SLOT, NOT THE TILE (logo.md section 19). This bar is the rail's
    own case one breakpoint down — 52px of height against the rail's 64px width — and the lockup
    is refused by both for the same arithmetic: its floor is kanji 32, which is a 102 x 75 block
@@ -1252,62 +1298,26 @@ export function App() {
   const [keysOpen, setKeysOpen] = useState(false)
   const { state: server, cards, retry } = useServerPresence(chrome)
 
-  /* THE BROWSER HEADER READS `番地 banchi`, AND ON A NAMED SCREEN IT ALTERNATES WITH THE SCREEN.
+  /* THE BROWSER HEADER READS `${label} · 番地 banchi` ON EVERY OWNER ROUTE, UNCONDITIONALLY.
      The tab's own vocabulary and nothing on screen: the sidebar draws the lockup, the phone bar
      and the drawer keep their own wordmark, and the Fulfiller's tab still says what he is doing
      rather than whose product it is. `app/index.html` carries the plain string for the moment
      before React boots.
 
-     WHY ALTERNATE RATHER THAN CONCATENATE. `Inventory · 番地 banchi` is 20 characters and a
-     browser tab shows perhaps a dozen, so the concatenation truncates and the half that survives
-     is whichever came first. Alternating shows each in full, in turn — the owner's call, at the
-     one-second cadence they asked for.
-
-     TWO THINGS IT COSTS, and neither is hypothetical:
-     · A screen reader may announce the document title when it changes, so this can become a
-       repeating announcement. `prefers-reduced-motion` is the opt-out and falls back to the
-       concatenation — the standard signal for "stop moving things", and the same one `base.css`
-       already honours everywhere else in this product.
-     · Anything that samples the title once — a bookmark, a history entry, a screenshot — catches
-       whichever phase was showing. There is no way around that; it is what alternating means.
-
-     AND IT IS SUBJECT TO THE BROWSER'S BACKGROUND THROTTLING, which is exactly the case this is
-     for: a tab you are not looking at is the one whose strip you read. Chrome throttles timers in
-     hidden tabs, and harder still after some minutes hidden without interaction, so the cadence
-     there is the browser's to decide rather than ours. NOT MEASURED — the harness could not
-     reproduce a genuinely hidden tab, so this is a documented behaviour rather than one this repo
-     has observed, and it is written here as the first thing to check if the alternation ever
-     looks wrong in a background tab. */
-  const stillTitle = useMedia('(prefers-reduced-motion: reduce)')
-
+     THIS USED TO ALTERNATE BETWEEN THE SCREEN NAME AND THE BRAND, ON A TIMER, AND THAT WAS THE
+     DEFECT — a tab sampled at any single instant (a bookmark, a history entry, a screenshot, or
+     simply someone glancing at a strip of tabs) had even odds of reading a bare, lowercase screen
+     name with no product name anywhere on it, which is what the walkthrough caught. The
+     `prefers-reduced-motion` branch already did the right thing — one static, concatenated
+     string — and is now the ONLY behaviour: every owner route gets it, unconditionally, motion
+     preference or not. Home and the Fulfiller's screen keep their own single, static strings,
+     because there is nothing for either of them to alternate with. */
   useEffect(() => {
-    /* LOWERCASED HERE AND NOWHERE ELSE. The tab reads `inventory`, the nav still reads
-       `Inventory` — `route.label` is the nav's string and the sidebar, the palette and the
-       keyboard sheet all draw it. Lowercasing the label itself would rewrite every one of them;
-       this is the tab's own voice, applied where the tab's title is composed.
-       `toLowerCase` rather than `toLocaleLowerCase`: the labels are ASCII English and the locale
-       form has a Turkish dotted-i behaviour nobody here wants. */
-    const name = (route?.label ?? 'Not found').toLowerCase()
-    // The Fulfiller's tab names his task, and Home has nothing to alternate WITH — the screen and
-    // the product are the same word there. Both are one title and no timer.
-    if (route?.persona === 'fulfiller') { document.title = 'cards to pull'; return }
+    const name = route?.label ?? 'Not found'
+    if (route?.persona === 'fulfiller') { document.title = 'Cards to pull'; return }
     if (route?.path === '/') { document.title = BROWSER_TITLE; return }
-    if (stillTitle) { document.title = `${name} · ${BROWSER_TITLE}`; return }
-
-    /* the screen first: it is the half you are looking for when you scan a strip of tabs.
-       A chained timeout rather than an interval, because the two halves hold for different
-       lengths and one interval cannot express that. */
-    let showName = true
-    let timer = 0
-    document.title = name
-    const flip = () => {
-      showName = !showName
-      document.title = showName ? name : BROWSER_TITLE
-      timer = window.setTimeout(flip, showName ? TITLE_DWELL.screen : TITLE_DWELL.name)
-    }
-    timer = window.setTimeout(flip, TITLE_DWELL.screen)
-    return () => window.clearTimeout(timer)
-  }, [route, stillTitle])
+    document.title = `${name} · ${BROWSER_TITLE}`
+  }, [route])
 
   useEffect(() => {
     setDrawer(false)
@@ -1428,7 +1438,7 @@ export function App() {
       <TabBar path={path} onMore={() => setDrawer(true)} />
       <Drawer open={drawer} path={path} onClose={() => setDrawer(false)} theme={theme} onToggleTheme={toggleTheme} server={server} cards={cards} />
       <CommandPalette open={palette} onClose={() => setPalette(false)} commands={commands} />
-      <KeysSheet open={keysOpen} onClose={() => setKeysOpen(false)} />
+      <KeysSheet open={keysOpen} onClose={() => setKeysOpen(false)} path={path} />
       <WhichKey armed={arm !== null} />
       <Toaster />
     </div>
