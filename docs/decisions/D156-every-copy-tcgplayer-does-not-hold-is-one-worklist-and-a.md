@@ -54,3 +54,7 @@ The five runs the old rule had closed: `2026-08-24-box2-01` holding 148 unsent c
 ### What would reopen this
 
 A marker that a copy reached an import file (D59, D147) — the committed set would then be READ and the ledger would stop inferring it. A `sku` index on `store/rows.py:Rows` — the 2.8s. A seventeenth open run. And realigning on the route, if the one-copy residual ever becomes a sentence somebody reads.
+
+### Amendment, `D-one-verdict-on-pricing` (2026-09-13)
+
+The per-run box/run span shown on an ordinary row is disclosure-gated behind a per-table Compare toggle as of this date; a row whose copies are over the cap keeps its warning regardless of the toggle, because that is the "what cannot go is named on the deck, with a door each" case this entry already promises stays named. Nothing about the counts above changes — the ledger, the figures and what the worklist offers are untouched — only whether the per-row provenance text is always drawn.
