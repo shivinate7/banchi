@@ -451,6 +451,31 @@ CHECKS = (
         "governed_by": ("D18", "D26", "D83", "D88", "D89", "D172"),
     },
     {
+        "target": "readings-selftest",
+        "runs": "python3 scripts/readings-selftest.py",
+        "asserts": "the cached market-reading table (store/readings.py) and the two-source "
+                   "walk that fills it (pipeline/readings.py), by comparing `collect()` "
+                   "against an INDEPENDENT reimplementation of the same rule over a "
+                   "throwaway store — an empty store, a store with only run tables, a store "
+                   "with only a live export, a run and a live export disagreeing on one SKU "
+                   "in both directions of which is newer, the newest-by-name live export "
+                   "carrying an unparseable filename (must lose to everything and never fall "
+                   "back to an older readable file), `readings adopt --write` followed by "
+                   "the exact SELECT `_readings()` now performs, two adopts in a row over "
+                   "unchanged files (idempotent, no duplicate rows), a new run landing "
+                   "between two adopts, and a run directory deleted between two adopts (its "
+                   "SKU drops out of the table — a cache refresh, never an accumulating "
+                   "ledger).",
+        "needs": ("python3",),
+        "writes": "one sqlite store per case, under `mktemp -d`. `PKMNSCAN_HOME` is "
+                  "repointed for the whole run, so the operator's own store is never opened.",
+        "commit_path": False,
+        "why_off_commit_path": "D18 — it writes a temp store. Same standing as "
+                               "submission-selftest and cid-selftest.",
+        "gates": True,
+        "governed_by": ("D189", "D18", "D86", "D88"),
+    },
+    {
         "target": "janitor-selftest",
         "runs": "bash scripts/janitor-selftest.sh",
         "asserts": "scripts/janitor.py, against a throwaway clone with real worktrees, a fake "

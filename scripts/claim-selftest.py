@@ -1400,6 +1400,81 @@ def main() -> int:
         ok(rc == 2 and "REFUSED" in out and "--to-slug" in out,
            "and so is a build step, for the same reason", out)
 
+        # ------------------------------------------------------------------------------
+        # A SLUG BOTH SIDES CLAIM, UNDER TWO NUMBERS — the incident this file's own
+        # session hit on 2026-09-12. #329 claimed a stranded slug as D185; #330 — cut
+        # earlier from the same unclaimed file and never merged forward — ran `make
+        # merge` and claimed the IDENTICAL file as the very next number of its own accord, because
+        # `plan()` only asks what number is free on `ref`, never whether `ref` has
+        # already resolved this exact slug under a different one. `stale_claims` cannot
+        # see it either: no number #330 added was ever taken on `ref` — the number it picked was free —
+        # so the collision surfaced only as a GitHub rename/rename merge conflict, after
+        # the claim commit had already been pushed.
+        print("\n  -- a slug both sides still hold unclaimed, claimed under two numbers --")
+        shared = tmp / "shared-origin.git"
+        seed2 = tmp / "seed2"
+        seed2.mkdir()
+        git(seed2, "init", "-q", ".")
+        write(seed2, "docs/decisions/_preamble.md", "# Fixture\n")
+        write(seed2, "docs/decisions/D001-first.md", f"## {D(1)} — First\n\nbody\n")
+        stranded = "D-" + "a-shared-stranded-slug"
+        write(seed2, f"docs/decisions/{stranded}.md",
+              f"## {stranded} — Something nobody has claimed yet\n\nbody\n")
+        write(seed2, "docs/decisions/ORDER.json", json.dumps({
+            "source": "docs/DECISIONS.md",
+            "order": ["_preamble.md", "D001-first.md"],
+        }, indent=2) + "\n")
+        write(seed2, "docs/DECISIONS.md", "# Stub\n\nThe entries are in `docs/decisions/`.\n")
+        write(seed2, "CLAUDE.md", f"# Fixture\n\n```\n{D(1):<4} First\n```\n")
+        git(seed2, "add", "-A")
+        git(seed2, "commit", "-qm", "a shared unclaimed slug, on main")
+        git(seed2, "branch", "-M", "main")
+        subprocess.run(["git", "clone", "-q", "--bare", str(seed2), str(shared)],
+                       stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, check=False)
+
+        first = tmp / "first-branch"
+        second = tmp / "second-branch"
+        subprocess.run(["git", "clone", "-q", str(shared), str(first)],
+                       stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, check=False)
+        subprocess.run(["git", "clone", "-q", str(shared), str(second)],
+                       stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, check=False)
+        with_claimer(first)
+        with_claimer(second)
+        git(first, "checkout", "-q", "-b", "claims-it-first")
+        git(second, "checkout", "-q", "-b", "never-merges-forward")
+
+        # `first` claims the stranded slug and pushes straight to `main` — standing in for
+        # #329's repair PR landing.
+        claim(first, "--root", str(first), "--write")
+        landed = sorted(p.name for p in (first / "docs/decisions").glob("D[0-9]*-a-shared*.md"))
+        ok(len(landed) == 1, "the first branch claims the slug", str(landed))
+        git(first, "add", "-A")
+        git(first, "commit", "-qm", "the branch claims its slug")
+        git(first, "checkout", "-q", "main")
+        git(first, "merge", "-q", "--no-edit", "claims-it-first")
+        git(first, "push", "-q", "origin", "main")
+
+        # `second` never fetches that push. It still carries the ORIGINAL unclaimed file,
+        # exactly as #330 did, and asks what IT would claim against `origin/main` — which
+        # now HAS a claimed twin of the identical slug under a different number.
+        git(second, "fetch", "-q", "origin", "main")
+        out, code = claim_rc(second, "--stale")
+        ok(code == 3, "`--stale` refuses rather than reporting clean", f"exit={code}\n{out}")
+        ok("REFUSED" in out and stranded in out,
+           "the stray unclaimed slug is named, not silently allocated a fresh number", out)
+        ok(landed[0].split("-")[0] in out,
+           "and the number it was ALREADY claimed under on origin/main is named", out)
+
+        before = sorted(p.name for p in (second / "docs/decisions").glob("*.md"))
+        out, code = claim_rc(second, "--write")
+        ok(code == 3 and "REFUSED" in out,
+           "`--write` refuses the same way — the duplicate is caught before anything is "
+           "renamed, not after", out)
+        after = sorted(p.name for p in (second / "docs/decisions").glob("*.md"))
+        ok(before == after,
+           "and nothing was renamed — no second number was minted for the same content",
+           f"before={before}\nafter={after}")
+
     print("\nclaim self-test: {0} passed{1}".format(
         PASS, ", {0} FAILED".format(FAIL) if FAIL else ""))
     return 1 if FAIL else 0

@@ -36,6 +36,17 @@ RUNS_DIRNAME = "runs"
 # the reading a run was joined against, and a run's manifest names it by path and digest.
 EXPORTS_DIRNAME = ".exports"
 
+# WHERE A FETCHED LIVE EXPORT IS KEPT, AND HERE FOR `EXPORTS_DIRNAME`'S OWN REASON
+# (D189). `server/pipeline_routes.py:do_live_export` WRITES the file and
+# `pipeline/readings.py:collect` READS every fetch under it to arbitrate a market reading —
+# the server imports the pipeline and never the reverse, so the one name they must agree on
+# cannot live in either of them. Derived, per checkout, and never swept: the file is the
+# evidence for the reading the store wrote off it.
+LIVE_DIRNAME = ".live"
+# What a fetched file is named, and the prefix a reader requires. A name that could be
+# anything is a file-read primitive behind an origin header.
+LIVE_PREFIX = "live-tcgplayer-"
+
 LOCK_NAME = ".lock"
 
 # The code ledger (docs/CODES-DECISIONS.md C8): one line per code card, the transcribed

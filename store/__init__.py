@@ -93,6 +93,7 @@ from store.master import (  # noqa: F401
     Listing,
 )
 from store.queues import Queue, QueueEntry  # noqa: F401
+from store.readings import Reading, Readings, Source as ReadingSource  # noqa: F401
 from store.submissions import (  # noqa: F401
     STATE_LIVE,
     STATE_RELEASED,
