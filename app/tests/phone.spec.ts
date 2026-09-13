@@ -140,6 +140,20 @@ const auditSource = (mode: Mode) => `(() => {
        not fix it. Recorded in docs/DEBTS.md rather than repaired here: this clause is what lets
        a 22px tick answer at 46 through a wrapper, and narrowing it wants its own measurement. */
     const owns = (n) => n !== null && (t.contains(n) || n.contains(t) || chrome(n))
+    /* A CONTROL WHOSE OWN CENTRE PAINTS UNDER FIXED CHROME IS NOT BRUSHING PAST IT, IT IS SITTING
+       BEHIND IT (docs/DEBTS.md #22, closed 2026-09-13). owns() forgives chrome(n) so a probe
+       that lands on .bn-topbar / .bn-tabbar / .kit-index while a control scrolls PAST one of
+       them is not read as crowded — D117's own case, measured on #/inventory at every whole-pixel
+       offset. That forgiveness is right for a CORNER probe brushing an edge and wrong for the
+       CENTRE: nothing in this product is ever supposed to rest with its centre under fixed chrome
+       — .bn-shell-main pads its scrollable content by exactly that chrome's height so nothing
+       ever needs to. A centre that IS under one anyway is not passing through, it is covered, and
+       chrome() forgiving that is what let the shutter sit half under the phone tab bar on first
+       paint (CaptureScreen.css's stage budget undercounted the bar's real height by the
+       safe-area inset — this file's own shutter case, below) with every probe AND the centre
+       landing inside .bn-tabbar, all forgiven, misses staying 0. covered was already computed
+       for exactly this and never asked: it fed a message string and nothing else. */
+    const centreOwns = (n) => n !== null && (t.contains(n) || n.contains(t))
     const inClip = (x, y) => clipBox === null || (x >= clipBox.left && x <= clipBox.right && y >= clipBox.top && y <= clipBox.bottom)
     const probeNames = [['left', -r, 0], ['right', r, 0], ['top', 0, -r], ['bottom', 0, r]]
     const hitDetail = probeNames
@@ -151,8 +165,11 @@ const auditSource = (mode: Mode) => `(() => {
     const misses = hitDetail.filter((h) => !h.owns).length
     // rounded, because a 39.6px control reports 40 and a floor nobody can see is a floor nobody fixes
     const small = Math.round(box.width) < FLOOR || Math.round(box.height) < FLOOR
-    const covered = !owns(document.elementFromPoint(cx, cy))
-    let fails = mode === 'box' ? small : misses > 0
+    const covered = !centreOwns(document.elementFromPoint(cx, cy))
+    // A COVERED CENTRE IS A FAILURE ON ITS OWN NOW, not only descriptive text (DEBTS #22). Before
+    // this it drove nothing — fails read misses alone, so a control whose every probe and
+    // whose centre all landed on forgiven chrome reported clean.
+    let fails = mode === 'box' ? small : (misses > 0 || covered)
     /* A BAR THE CONTENT SCROLLS UNDER IS NOT A NEIGHBOUR CROWDING THE CONTROL, and only one of
        those two is a floor violation. D117 states the property this sweep is for in as many
        words — the ship bar left Pick a run "visible, and impossible to press at any scroll
@@ -390,4 +407,75 @@ test('the sheets and menus a phone opens hold the floor too', async ({ page }) =
   }
 
   expect(failures, failures.join('\n')).toEqual([])
+})
+
+/* THE SHUTTER SAT HALF UNDER THE TAB BAR ON FIRST PAINT, AND PLAYWRIGHT'S DEFAULT COULD NEVER
+ * HAVE SHOWN IT. `CaptureScreen.css` sized `.capture-stage` off a hand-written 356px budget
+ * whose comment counted the tab bar as a flat 64px; the bar itself is
+ * `calc(64px + env(safe-area-inset-bottom))` (`App.css`, beside `.bn-tabbar`) — 64px only on a
+ * phone with NO home indicator. Every real phone this product runs on has one, worth
+ * ~34px, and Chromium's own `env(safe-area-inset-bottom)` answers 0px unless something
+ * overrides it — so a spec that never touches the override is testing the one phone shape
+ * nobody owns.
+ *
+ * THE OVERRIDE IS A REAL DEVTOOLS CAPABILITY, NOT A STYLE INJECTION. CDP's
+ * `Emulation.setSafeAreaInsetsOverride` (Chromium 128+; this repo's pinned browser has it)
+ * changes what `env(safe-area-inset-*)` itself resolves to, across navigations — a `<style>`
+ * override cannot touch an environment variable at all. 34px is the iPhone value this budget's
+ * own comment names ("~98px on every phone with a home indicator", CLAUDE.md's `#/capture`
+ * entry — 98 - 64 = 34).
+ *
+ * THE THREE HEIGHTS ARE THE ONES THE OLD COMMENT CLAIMED TO CLEAR ("so the shutter clears the
+ * bar at 667, 740 and 844") — at a zero inset it did; the point of this case is that the same
+ * claim has to hold at the inset every one of those phones actually reports. */
+test('the shutter clears the phone tab bar on first paint, with a real safe-area inset', async ({ page }) => {
+  await page.setViewportSize(PHONE)
+  // TAKEN OFF THE DRAWER'S OWN ROSTER, NOT TYPED — `route rosters` refuses three or more
+  // hand-typed hashes in one spec (see phoneRoutes()'s own header). The capture screen is
+  // the one this case is about; every other route in this file is reached the same way.
+  const capture = (await phoneRoutes(page)).find((h) => h.endsWith('/capture'))
+  expect(capture, 'no route ending /capture in the drawer\'s own roster').toBeDefined()
+
+  const cdp = await page.context().newCDPSession(page)
+  await cdp.send('Emulation.setSafeAreaInsetsOverride', {
+    insets: {
+      top: 0, topMax: 0, left: 0, leftMax: 0, right: 0, rightMax: 0,
+      bottom: 34, bottomMax: 34,
+    },
+  })
+
+  for (const height of [667, 740, 844]) {
+    await page.setViewportSize({ width: 390, height })
+    await page.goto(capture as string)
+    // First paint, not a settled one: no interaction, just long enough for the shell and the
+    // stage to lay out.
+    await page.waitForTimeout(400)
+
+    const insetPx = await page.evaluate(() => {
+      const probe = document.createElement('div')
+      probe.style.cssText = 'position:fixed;height:env(safe-area-inset-bottom,0px);width:0;visibility:hidden'
+      document.body.appendChild(probe)
+      const h = getComputedStyle(probe).height
+      probe.remove()
+      return h
+    })
+    expect(insetPx, 'the CDP override did not reach env(safe-area-inset-bottom) — this case is not testing what it claims to').toBe('34px')
+
+    const shutter = page.locator('.capture-shutter')
+    await expect(shutter, `${capture} at ${height}px drew no shutter at all`).toBeVisible()
+    const tabBar = page.locator('.bn-tabbar')
+    await expect(tabBar, `${capture} at ${height}px drew no tab bar`).toBeVisible()
+
+    const shutterBox = await shutter.boundingBox()
+    const tabBarBox = await tabBar.boundingBox()
+    if (shutterBox === null || tabBarBox === null) throw new Error('boundingBox() returned null for a visible element')
+
+    const shutterBottom = shutterBox.y + shutterBox.height
+    expect(
+      shutterBottom,
+      `at ${height}px with a 34px safe-area inset: the shutter's bottom (${shutterBottom}) reaches ` +
+        `${Math.round(shutterBottom - tabBarBox.y)}px into the tab bar, which starts at ${tabBarBox.y} — ` +
+        'half under the bar on first paint',
+    ).toBeLessThanOrEqual(tabBarBox.y)
+  }
 })
