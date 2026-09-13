@@ -572,6 +572,31 @@ function noteBoot(response: Response): void {
   for (const listener of bootListeners) listener(seen)
 }
 
+/* D-one-poller: THE SAME SHAPE AS `onServerBoot` ABOVE, ONE REGISTER DOWN. `useServerPresence`
+ * used to learn the server was gone only from its OWN `GET /status` poll — 15s and on window
+ * focus — so any OTHER request in the app could fail without the foot ever hearing about it.
+ * `request()` is the one seam every call in this module passes through, exactly like `noteBoot`
+ * argues, so reachability is observed here rather than re-derived per screen.
+ *
+ * FIRES ONLY ON A CHANGE, never on every request — a healthy app makes dozens of successful
+ * requests a minute and a listener re-running on each would be noise with no reader. */
+type ReachableListener = (ok: boolean) => void
+const reachableListeners = new Set<ReachableListener>()
+let lastReachable: boolean | null = null
+
+export function onServerReachable(listener: ReachableListener): () => void {
+  reachableListeners.add(listener)
+  return () => {
+    reachableListeners.delete(listener)
+  }
+}
+
+function noteReachable(ok: boolean): void {
+  if (lastReachable === ok) return
+  lastReachable = ok
+  for (const listener of reachableListeners) listener(ok)
+}
+
 /* Is the server up at all? Deliberately RAW `fetch` rather than `request()` — this is called
  * from inside `request()`'s own failure path, and routing it back through would recurse. No
  * headers and no init: anything else (a `Content-Type`, a cache directive) would make it a
@@ -608,6 +633,7 @@ async function request(path: string, init?: RequestInit): Promise<unknown> {
   try {
     response = await fetch(url, init)
     noteBoot(response)
+    noteReachable(true)
   } catch {
     /* INVENTED MESSAGE #1. `fetch` rejects without detail for a dead server, a wrong
      * address and a CORS refusal alike — the browser withholds which on purpose — so this
@@ -636,6 +662,7 @@ async function request(path: string, init?: RequestInit): Promise<unknown> {
      * is down. The app was contradicting itself at the moment it was least able to explain. */
     const answering = await serverAnswersReads()
     if (answering) {
+      noteReachable(true)
       throw new ServerError(
         'origin_blocked',
         `The capture server at ${base} is running, but it will not accept changes from ` +
@@ -645,6 +672,7 @@ async function request(path: string, init?: RequestInit): Promise<unknown> {
         0,
       )
     }
+    noteReachable(false)
     throw new ServerError(
       'unreachable',
       `No answer from the capture server at ${base}. It may not be running — ` +

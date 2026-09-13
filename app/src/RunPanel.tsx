@@ -11,6 +11,7 @@ import {
   type Failure,
 } from './server'
 import type { ExportAsked, ExportFetched, ExportScope, RunDetail, RunSummary } from './types'
+import { usePoll } from './usePoll'
 import { readUpload } from './csvUpload'
 import { Button, EmptyState, Icon, Notice, Pill, Segmented, Stat } from './kit'
 import { toast } from './kit/toast'
@@ -345,33 +346,26 @@ export function RunPanel({ drawers, openRun, onOpenRun, reloadTick, onIdentify, 
     }
   }, [])
 
-  /* Re-read while on screen: fast while something is live, slow otherwise. Chained timeouts
-     so a slow answer never stacks; the first failure is reported and later ones swallowed. */
-  useEffect(() => {
-    let canceled = false
-    let timer = 0
-    let announced = false
-    const tick = async () => {
-      let anyLive = false
-      try {
-        const rows = await getRuns()
-        if (canceled) return
-        setRuns(rows)
-        setLoaded(true)
-        anyLive = rows.some((row) => row.live)
-      } catch (err) {
-        if (!canceled && !announced) setTrouble({ key: 'poll', failure: describeFailure(err) })
-        announced = true
-        setLoaded(true)
-      }
-      if (!canceled) timer = window.setTimeout(() => void tick(), anyLive ? POLL_MS : IDLE_POLL_MS)
-    }
-    void tick()
-    return () => {
-      canceled = true
-      window.clearTimeout(timer)
-    }
-  }, [])
+  /* Re-read while on screen: fast while something is live, slow otherwise — `usePoll`'s own
+     live/idle pair (D-one-poller). The first failure is reported and later ones swallowed,
+     which `announced` still decides; what the shared hook adds is the pause while this tab
+     is hidden and the backoff a run of failures gets, neither of which this poll had before. */
+  const announced = useRef(false)
+  usePoll<RunSummary[]>({
+    fn: getRuns,
+    onData: (rows) => {
+      setRuns(rows)
+      setLoaded(true)
+    },
+    onError: (err) => {
+      if (!announced.current) setTrouble({ key: 'poll', failure: describeFailure(err) })
+      announced.current = true
+      setLoaded(true)
+    },
+    isLive: (rows) => rows.some((row) => row.live),
+    liveMs: POLL_MS,
+    idleMs: IDLE_POLL_MS,
+  })
 
   const firstReload = useRef(true)
   useEffect(() => {
@@ -391,31 +385,27 @@ export function RunPanel({ drawers, openRun, onOpenRun, reloadTick, onIdentify, 
     setTrouble((held) => (held !== null && held.key === 'poll' ? held : null))
   }, [openRun])
 
-  /* The detail poll runs only while the open run is live. */
+  /* The detail poll runs only while a run is open, restarts on the spot when a DIFFERENT run
+     is opened (`restartKey`, rather than waiting out whatever was left of the old run's
+     timer), and stops the moment an answer reads not-live — the one-shot `loadRuns()` behind
+     it is what used to be the poll's own `else` branch. */
   useEffect(() => {
-    if (openRun === null) {
-      setDetail(null)
-      return
-    }
-    let canceled = false
-    let timer = 0
-    const tick = async () => {
-      try {
-        const next = await getRun(openRun)
-        if (canceled) return
-        setDetail(next)
-        if (next.live) timer = window.setTimeout(() => void tick(), POLL_MS)
-        else void loadRuns()
-      } catch (err) {
-        if (!canceled) setTrouble({ key: 'detail', failure: describeFailure(err) })
-      }
-    }
-    void tick()
-    return () => {
-      canceled = true
-      window.clearTimeout(timer)
-    }
-  }, [openRun, loadRuns])
+    if (openRun === null) setDetail(null)
+  }, [openRun])
+  usePoll<RunDetail>({
+    enabled: openRun !== null,
+    restartKey: openRun,
+    fn: () => getRun(openRun as string),
+    onData: (next) => {
+      setDetail(next)
+      if (!next.live) void loadRuns()
+    },
+    onError: (err) => setTrouble({ key: 'detail', failure: describeFailure(err) }),
+    isLive: (next) => next.live,
+    stopWhenNotLive: true,
+    liveMs: POLL_MS,
+    idleMs: POLL_MS,
+  })
 
   /* The open step follows the run: a new run opens on the step it is waiting for, and a run
      whose phase moves under a poll follows it — unless a step's own answer is on screen. */

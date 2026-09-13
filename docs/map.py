@@ -1553,7 +1553,7 @@ COMPONENTS = [
                 "decision-context hook, `make status`, the SessionStart worktree guard "
                 "and the launch-config writer it calls, the screenshot runner and its "
                 "manifest, and audit-history — diagnostic, never gating, per D18.",
-        "governed_by": ["D14", "D16", "D17", "D18", "D42"],
+        "governed_by": ["D14", "D16", "D17", "D18", "D42", "D-one-poller"],
         # What the orphan rule covers here, and the one hole no declaration can close.
         # Declaring the key is also what makes the scan recursive, which is the only way
         # scripts/githooks/ is reached at all.
@@ -4298,7 +4298,11 @@ COMPONENTS = [
                                     "to, and raises a `status` toast; it still SUBSCRIBES and "
                                     "never polls for the boot fact, and the 15s `/status` poll "
                                     "beside it is the online/offline banner rather than the "
-                                    "reload. An error boundary wraps each route, so one screen "
+                                    "reload. THAT POLL IS `usePoll` NOW (D-one-poller), and it "
+                                    "also subscribes to `onServerReachable` — a request "
+                                    "failing on ANY screen, not only this one's own `/status` "
+                                    "tick, flips the foot within that one request. An error "
+                                    "boundary wraps each route, so one screen "
                                     "throwing leaves the nav standing. "
                                     "`hasChrome` is unchanged in intent and now covers far "
                                     "more: sidebar, rail, app bar, tab bar, palette, which-key, "
@@ -4327,7 +4331,7 @@ COMPONENTS = [
                                             "D28", "D31", "D33", "D39", "D49", "D51", "D53",
                                             "D57", "D61", "D63", "D66", "D69", "D70", "D94",
                                             "D95", "D100", "D105", "D109", "D120", "D134",
-                                            "D159"]},
+                                            "D159", "D-one-poller"]},
             "src/Codes.tsx": {"does": "the code-card screen: read a box's QRs into the ledger, "
                                       "see the two lanes C11 tiers the pile into, and hand a "
                                       "lane's codes to a buyer against a named order. The "
@@ -4419,7 +4423,13 @@ COMPONENTS = [
                                       "server's own messages verbatim, and holds the two "
                                       "readers every screen shares: a thrown thing as an "
                                       "owner-side screen draws it, and the position label as "
-                                      "the server rendered it.",
+                                      "the server rendered it. `request()` IS THE ONE SEAM "
+                                      "(D-one-poller): every call funnels through it, so it is "
+                                      "also where reachability is observed — `noteReachable`/"
+                                      "`onServerReachable`, the same shape as `noteBoot`/"
+                                      "`onServerBoot` beside it, firing on both the success and "
+                                      "the failure path of every fetch and only when the "
+                                      "state actually changes.",
                               "governed_by": ["D3", "D4", "D5", "D6", "D7", "D8", "D10", "D13",
                                               "D19", "D21", "D22", "D23", "D24", "D26", "D28",
                                               "D29", "D30", "D32", "D33", "D34", "D37", "D43",
@@ -4430,7 +4440,33 @@ COMPONENTS = [
                                               "D159", "D168",
                                               "D104", "D113", "D116", "D132", "D134", "D172",
                                               "D174", "D180", "D192",
-                                              "D193", "D203"]},
+                                              "D193", "D203", "D-one-poller"]},
+            "src/usePoll.ts": {"does": "ONE POLLING PRIMITIVE, WHERE FIVE HAND-ROLLED TIMERS "
+                                       "USED TO STAND (D-one-poller). `RunPanel.tsx` (the run "
+                                       "list and, separately, an open run's own detail), "
+                                       "`BoxRuns.tsx` (which used to copy the run list's "
+                                       "constants BY COMMENT), `SubmissionClaims.tsx` and "
+                                       "`App.tsx`'s `/status` poll all migrated onto it in one "
+                                       "change, which is the whole of how it was verified — "
+                                       "their existing specs staying green rather than a new "
+                                       "spec asserting the hook alone. Owns a live/idle cadence "
+                                       "pair, a pause while `document.hidden` (with an "
+                                       "immediate tick on becoming visible again), a backoff "
+                                       "that lengthens the idle cadence on a run of consecutive "
+                                       "failures, and ONE MODULE-LEVEL COUNTER every caller "
+                                       "shares so the app never has more requests in flight "
+                                       "against the capture server than "
+                                       "`server/capture_server.py:REQUEST_SLOTS` (4) allows — "
+                                       "the accounting `docs/DEBTS.md` §11 measured was missing "
+                                       "from every poller in the app. `stopWhenNotLive` is the "
+                                       "detail poll's and the claims panel's shape (stop asking "
+                                       "once the last answer is not live); `restartKey` is the "
+                                       "detail poll's alone (ask again at once when a DIFFERENT "
+                                       "run opens, rather than waiting out the old run's "
+                                       "timer); `refreshOnFocus` and the returned `refresh()` "
+                                       "are the shell's (a boot toast wants an immediate ask, "
+                                       "not a wait for the next tick).",
+                               "governed_by": ["D-one-poller", "D16"]},
             "src/demoFlag.d.ts": {"does": "declares `__BN_DEMO__`, the build-time demo flag "
                                           "`vite.config.ts` substitutes with a boolean "
                                           "literal. It exists because three other forms of "
@@ -5319,9 +5355,15 @@ COMPONENTS = [
                                                  "for an action that exists and cannot be used "
                                                  "now. The poll stops when nothing is held, and "
                                                  "a dropped poll holds the last list rather than "
-                                                 "letting a live claim vanish off the screen",
+                                                 "letting a live claim vanish off the screen. "
+                                                 "ON `usePoll` NOW (D-one-poller): "
+                                                 "`stopWhenNotLive` is this panel's own shape "
+                                                 "exactly — one unconditional read on mount, no "
+                                                 "more requests at all once the answer holds no "
+                                                 "claims.",
                                          "governed_by": ["D174", "D33", "D39",
-                                                         "D50", "D57", "D89", "D94", "D118"]},
+                                                         "D50", "D57", "D89", "D94", "D118",
+                                                         "D-one-poller"]},
             "src/SubmissionClaims.css": {"does": "that panel's own styles: the row's two columns "
                                                  "and nothing else — the kit supplies the panel, "
                                                  "the list, the pills and the buttons. The action "
@@ -6109,12 +6151,17 @@ COMPONENTS = [
                                         "SPENDS — D33's money gate is two presses that must both "
                                         "happen where the estimate is on screen. Polls GET "
                                         "/pipeline/runs on the panel's own 4s/20s cadence, "
-                                        "because a run started in a terminal begins live.",
+                                        "because a run started in a terminal begins live. THE "
+                                        "CADENCE IS THE SAME PAIR AND THE POLL IS `usePoll` NOW "
+                                        "(D-one-poller) — this file used to copy `RunPanel`'s "
+                                        "constants by comment alone, which is exactly the drift "
+                                        "the shared hook exists to close.",
                                 # D39 is why it exists at all; D33 is the gate it must not
                                 # become a second door to; D7 is the fungible-copy model the
                                 # ticked selection writes against; D13 is one truth on one Mac,
                                 # which is why a run this tab did not start still shows here.
-                                "governed_by": ["D5", "D7", "D13", "D33", "D39", "D56"]},
+                                "governed_by": ["D5", "D7", "D13", "D33", "D39", "D56",
+                                                 "D-one-poller"]},
             "src/BoxRuns.css": {"does": "one row, and the rule that it must stay one — the whole "
                                         "argument for the panel leaving this screen was its "
                                         "625-1143px height in a column whose question is 'where "
@@ -6296,8 +6343,11 @@ COMPONENTS = [
                                  # is why it WAS a panel on #/inventory rather than a route; D39 is
                                  # the owner overruling that, and this file is unchanged by it — the
                                  # scope arrives as a prop either way. D32 is the crop and the
-                                 # max-edge, both of which the composer now presses.
-                                 "governed_by": ["D1", "D3", "D9", "D13", "D16", "D28", "D31", "D32", "D33", "D39", "D48", "D49", "D54", "D56", "D64", "D65", "D76", "D86"]},
+                                 # max-edge, both of which the composer now presses. D-one-poller
+                                 # is the shared poll hook the run list and the open run's detail
+                                 # both moved onto — the detail poll's `restartKey` is what
+                                 # switching between two live runs needs and the hook alone supplies.
+                                 "governed_by": ["D1", "D3", "D9", "D13", "D16", "D28", "D31", "D32", "D33", "D39", "D48", "D49", "D54", "D56", "D64", "D65", "D76", "D86", "D-one-poller"]},
             "src/RunPanel.css": {"does": "the panel at owner density — the 4-16 end of the scale, mono "
                                          "on every number, and exactly one solid accent fill: the "
                                          "button that spends, drawn only once the estimate is on "
@@ -6940,7 +6990,7 @@ COMPONENTS = [
                 # D31 is why this is a panel on #/inventory rather than a seventh route.
                 # D78 is the sunk row the first stage draws; D117 is the thumb floor its phone
                 # case measures.
-                "governed_by": ["D145", "D36", "D1", "D3", "D9", "D13", "D20", "D31", "D32", "D33", "D39", "D48", "D54", "D56", "D64", "D65", "D49", "D76", "D78", "D117", "D166", "D174", "D57", "D118", "D136", "D180"],
+                "governed_by": ["D145", "D36", "D1", "D3", "D9", "D13", "D20", "D31", "D32", "D33", "D39", "D48", "D54", "D56", "D64", "D65", "D49", "D76", "D78", "D117", "D166", "D174", "D57", "D118", "D136", "D180", "D43", "D-one-poller"],
                 "note": "THE PIPELINE WAS THE LARGEST INSTANCE OF THE ROUTE-IS-NOT-A-FEATURE "
                         "FAILURE AND NOBODY HAD COUNTED IT. The four commands have existed "
                         "since step 4 and have been through a 53-card run and a 544-card run; "
