@@ -977,7 +977,7 @@ test('the two-years control sends the LastTwoYears range', async ({ page }) => {
     allStatuses: { orders: [], matched: 0, skipped_known: 0, detailed: 0, remaining: 0, names: [] },
   })
   await page.locator('main.orders .bn-head-actions').getByRole('button', { name: 'Add orders' }).click()
-  await page.locator('.orders-paste').getByRole('button', { name: 'Fetch full history' }).click()
+  await page.locator('.orders-paste').getByRole('button', { name: 'Fetch two years' }).click()
 
   await expect.poll(() => wire.filter((one) => one.path.endsWith('/orders/fetch')).length).toBe(1)
   const sent = wire.find((one) => one.path.endsWith('/orders/fetch'))?.body as { range?: string }

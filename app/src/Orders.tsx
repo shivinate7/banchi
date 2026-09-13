@@ -2042,7 +2042,7 @@ export function OrdersHub({ stage }: { readonly stage: Stage }) {
             everything and details nothing new. */}
         {withFetch ? (
           <Button icon="clock" onClick={() => onFetch('LastTwoYears')} busy={busy === 'fetch'} disabled={busy !== null}>
-            Fetch full history
+            Fetch two years
           </Button>
         ) : null}
         {/* THE NARROWING SITS BESIDE THE PRESS, NOT IN FRONT OF IT. D91's two-press flow was
