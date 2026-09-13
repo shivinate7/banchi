@@ -1,26 +1,40 @@
 /* THE PII BOUNDARY. THIS IS THE ONLY PLACE IN THE APP THAT CONSTRUCTS AN INGEST BODY, AND
- * ITS WHOLE JOB IS TO KEEP THE BUYER OUT OF IT.
+ * ITS WHOLE JOB IS TO KEEP EVERYTHING ABOUT THE BUYER OUT OF IT EXCEPT THEIR NAME.
  *
  * An order as a marketplace hands it over carries a person: a name, a shipping address, an
- * email, a phone number. This repo needs none of them. What it needs is a SKU and a count —
- * `pipeline/orders.py` says so in its own first line, and everything it computes is a
- * position, which is a fact about a drawer rather than about a customer. So the paste is
- * PROJECTED rather than validated: a fixed list of keys is copied across and everything
- * else is left behind, which is the only shape that stays safe when the feed grows a field
- * nobody here has read.
+ * email, a phone number. This repo needs almost none of them — what it needs is a SKU and a
+ * count, `pipeline/orders.py` says so in its own first line, and everything it computes is a
+ * position, which is a fact about a drawer rather than about a customer — PLUS ONE MORE
+ * THING AS OF `D193` (amending D69): the buyer's DISPLAY NAME, so the
+ * owner can walk drawers by PERSON rather than by order number. Address, email, payment and
+ * every other fact about the person stay excluded. The boundary moved by exactly one word;
+ * the mechanism that holds it did not. So the paste is still PROJECTED rather than
+ * validated: a fixed list of keys is copied across and everything else is left behind, which
+ * is the only shape that stays safe when the feed grows a field nobody here has read.
  *
  * A WHITELIST AND NOT A BLACKLIST, and the difference is the whole design. A blacklist of
- * `buyer`, `email`, `address` is correct until TCGplayer adds `recipient` or a screenshot
+ * `email`, `address` is correct until TCGplayer adds `recipient` or a screenshot
  * of a console shows `shippingAddress` in camelCase, and then it is silently wrong — the
  * body still posts, the server still answers, and the personal data is on the wire with
  * nothing reporting it. The projection below cannot fail that way: a key nobody named is a
- * key nobody sends.
+ * key nobody sends. `buyer` is admitted BY NAME, the same way every other kept field is —
+ * it is not an exception to the whitelist, it is one more entry in it.
+ *
+ * THE CONSOLE'S OWN SPELLING IS `buyerName`, camelCase, because that is the field name on
+ * TCGplayer's own order-search JSON — and it folds into `order.buyer` rather than being kept
+ * under its own name, so the ingest body this module mints always carries the snake_case
+ * `buyer` regardless of which spelling the paste used. Neither `buyer` nor `buyerName` is
+ * ever reported as dropped: one is kept outright, the other is read and renamed. Only a
+ * STRING crosses — an object or array under either key becomes `undefined`, the same PII
+ * rule `optionalText` already applies to every other field, because a nested object under a
+ * name field is exactly where a buyer's other details would hide.
  *
  * WHAT IS DROPPED IS NAMED, and that is what makes this honest rather than merely quiet.
  * Every top-level key the projection refuses is collected into `dropped`, so the screen can
  * say "these are not being sent" before the press. A silent strip is indistinguishable on
  * screen from a feed that never carried the field, and the owner would have no way to tell
- * a working PII boundary from a broken one.
+ * a working PII boundary from a broken one. `shippingAddress`, `email` and everything else
+ * about the person still land in that list.
  *
  * WHAT IS NOT NAMED, said plainly so nobody reads more into `dropped` than it holds: keys
  * inside a LINE are dropped without being listed, because a feed with an odd extra field on
@@ -56,16 +70,23 @@ export type PasteReading =
 export const DEFAULT_ORDER_SOURCE = 'TCGplayer'
 
 /* THE ORDER-LEVEL WHITELIST. `source`, `number`, `placed_at` and `status` are what the
- * ledger is keyed and sorted by; `lines` is the work. Nothing else crosses. `placed_at` in
- * particular is kept because `pipeline/orders.py:Order` sorts the one-pass resolution by it
- * and records that an order with no timestamp sorts LAST rather than first — dropping it
- * here would silently make every paste timestamp-less and hand stock to whichever order the
- * paste happened to list first. */
+ * ledger is keyed and sorted by; `lines` is the work; `buyer` is the one fact about the
+ * PERSON this whitelist admits (`D193`). Nothing else crosses.
+ * `placed_at` in particular is kept because `pipeline/orders.py:Order` sorts the one-pass
+ * resolution by it and records that an order with no timestamp sorts LAST rather than first
+ * — dropping it here would silently make every paste timestamp-less and hand stock to
+ * whichever order the paste happened to list first.
+ *
+ * `buyerName` IS DELIBERATELY NOT IN THIS SET. It is TCGplayer's own console spelling and it
+ * is accepted, but it is read and folded into `buyer` below rather than kept under its own
+ * name — a second name for the same fact is exactly the drift a whitelist exists to refuse.
+ * `readOrder` excludes it from `dropped` by name, the one key treated that way. */
 const ORDER_KEEP: ReadonlySet<string> = new Set([
   'source',
   'number',
   'placed_at',
   'status',
+  'buyer',
   'lines',
 ])
 
@@ -167,8 +188,12 @@ function readOrder(entry: unknown, position: number, dropped: Set<string>): Orde
   }
 
   /* THE PROJECTION'S RECEIPT, taken before anything is read, so a refusal further down does
-   * not decide whether the owner gets told what was in the paste. */
+   * not decide whether the owner gets told what was in the paste. `buyerName` is excluded
+   * here by name — it is accepted, just under `buyer`'s spelling rather than its own, so
+   * reporting it as dropped would tell the operator a name is being thrown away at the exact
+   * moment it is being kept. */
   for (const key of Object.keys(entry)) {
+    if (key === 'buyerName') continue
     if (!ORDER_KEEP.has(key)) dropped.add(key)
   }
 
@@ -202,6 +227,12 @@ function readOrder(entry: unknown, position: number, dropped: Set<string>): Orde
   if (placedAt !== undefined) order.placed_at = placedAt
   const status = optionalText(entry['status'])
   if (status !== undefined) order.status = status
+  /* `buyer` wins over `buyerName` where a paste somehow carried both — the spelling this
+   * project's own wire uses is authoritative over the console's. `optionalText` is the same
+   * PII gate every other field goes through: an object or array becomes `undefined` rather
+   * than being stringified, so a nested address hiding under either key never crosses. */
+  const buyer = entry['buyer'] !== undefined ? optionalText(entry['buyer']) : optionalText(entry['buyerName'])
+  if (buyer !== undefined) order.buyer = buyer
 
   return { ok: true, order }
 }

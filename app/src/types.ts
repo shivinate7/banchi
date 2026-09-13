@@ -2841,6 +2841,11 @@ export type OrderRow = {
   status: string | null
   first_seen: string
   changed_at: string | null
+  /** The buyer's display name, verbatim off the feed — `D193`, which
+   *  amends D69. Nothing else about the person: no address, no email, no payment. Feed
+   *  content, so it can be `null` where a paste never carried one and a later fetch has not
+   *  named it either. */
+  buyer: string | null
   wanted: number
   recorded: number
   open: boolean
@@ -2963,14 +2968,17 @@ export type OrdersPayload = {
   resolution: { orders: ResolvedOrder[]; counts: Record<OrderLineReason, number> }
 }
 
-/** THE PROJECTION, and NOTHING MAY BE ADDED TO IT.
+/** THE PROJECTION, and NOTHING MAY BE ADDED TO IT BEYOND WHAT IS ARGUED HERE.
  *
- *  These two types are the whole of what may leave this browser about a purchase. No buyer,
- *  no address, no city, no postcode, no payment. `app/src/orderPaste.ts` mints them from
- *  whatever was pasted and NAMES what it dropped; `server/capture_server.py`'s three
- *  allowlist tuples are the backstop, so an unprojected paste refuses BY NAME rather than
- *  being stored with those fields quietly trimmed. A field added here is a field that leaves
- *  the machine, and it has to be argued for in D69's entry before it is typed here. */
+ *  These two types are the whole of what may leave this browser about a purchase.
+ *  `D193` (amending D69) moved this boundary by exactly one word: the
+ *  buyer's DISPLAY NAME may cross it. Nothing else about the person does — no address, no
+ *  city, no postcode, no email, no payment, no transaction id — and the mechanism that holds
+ *  that line is unchanged: `app/src/orderPaste.ts` mints these from whatever was pasted and
+ *  NAMES what it dropped; `server/capture_server.py`'s three allowlist tuples are the
+ *  backstop, so an unprojected paste refuses BY NAME rather than being stored with those
+ *  fields quietly trimmed. A field added here is a field that leaves the machine, and it has
+ *  to be argued for in a decision entry before it is typed here. */
 export type OrderIngestLine = {
   sku: string
   quantity: number
@@ -2988,7 +2996,39 @@ export type OrderIngestOrder = {
   number: string
   placed_at?: string | null
   status?: string | null
+  /** The buyer's display name, verbatim off the feed or the console paste — the one
+   *  person-shaped field this projection carries (`D193`). `undefined`
+   *  where the source said nothing at all (so `store/orders.py:Ledger.ingest` keeps whatever
+   *  name it already had rather than erasing it); `null` where the feed explicitly said none. */
+  buyer?: string | null
   lines: OrderIngestLine[]
+}
+
+/** One order the ledger already knows, matched by a fetch that named it rather than detailed
+ *  it (`POST /orders/fetch`'s `names[]`) or by a direct `POST /orders/names` call. Carries
+ *  enough to find the record — `source` and `number`, never the ledger's opaque `key` — and
+ *  the name to write onto it. Nothing else: this is the SAME one-field boundary as
+ *  `OrderIngestOrder.buyer`, spelled out as its own type because `/orders/names` writes
+ *  nothing else about the order. */
+export type OrderName = {
+  source: string
+  number: string
+  buyer: string
+}
+
+/** What `POST /orders/names` did — `store/orders.py:Ledger.name_buyer` run once per entry.
+ *  `named` actually changed a stored name; `unchanged` already carried that exact spelling;
+ *  `unknown` named an order this ledger has never ingested, so there was nothing to write
+ *  onto. `total` is `named + unchanged + unknown`, always. This route is free and re-runnable
+ *  — it never fetches and never spends the identify budget — and it exists so a names-only
+ *  backfill (every summary a fetch already read) never has to pay for a detail call it does
+ *  not otherwise need. */
+export type NamesResult = {
+  named: number
+  unchanged: number
+  unknown: number
+  total: number
+  summary: string
 }
 
 /** What `POST /orders/ingest` did. `wrote_nothing` is the honest answer to "did that work"
@@ -3015,17 +3055,26 @@ export type OrdersPreview = {
   writes_nothing: true
 }
 
-/** What `POST /orders/fetch {statuses: [...]}` answered. `orders` is EXACTLY the body
- *  `POST /orders/ingest` accepts and is the only part sent on — `ingestOrders(found.orders)` —
- *  so the counts beside it reach no allowlist; they are what the paste note says about the
- *  press. `remaining` is what the transport's detail cap left for the next press (D91): seen
- *  and counted, never dropped without a trace. */
+/** What `POST /orders/fetch {statuses: [...]}` or `{all_statuses: true}` answered. `orders`
+ *  is EXACTLY the body `POST /orders/ingest` accepts and is the only part sent on —
+ *  `ingestOrders(found.orders)` — so the counts beside it reach no allowlist; they are what
+ *  the paste note says about the press. `remaining` is what the transport's detail cap left
+ *  for the next press (D91): seen and counted, never dropped without a trace.
+ *
+ *  `names` IS A SEPARATE, CHEAPER ANSWER: every order this press matched that was SKIPPED as
+ *  already known (so it never got a detail call and is not in `orders`) but whose search-page
+ *  summary carried a buyer the ledger does not yet have on file, or spells differently
+ *  (`D193`). `nameOrders` in `app/src/server.ts` is the one place
+ *  this array is sent on, to `POST /orders/names` — a names-only backfill this way details
+ *  nothing and spends nothing. Empty in the steady state: the second identical press over an
+ *  already-named ledger returns no names at all. */
 export type OrdersFetched = {
   orders: OrderIngestOrder[]
   matched: number
   skipped_known: number
   detailed: number
   remaining: number
+  names: OrderName[]
 }
 
 /** One copy coming out of a box. All three are required in both directions.

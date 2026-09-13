@@ -32,9 +32,10 @@ else is open.
 7. **A run badged "Not started" shows 42 joined SKUs and populated output files.** The badge
    describes one step; nothing says which. — major
 8. **Order rows are only the TCGplayer order id and a date.** Nothing to recognise an order by.
-   The fix is the first card name in the row, not the buyer: buyer identity is deliberately never
-   drawn (D69, D90), and the walker's "no buyer name" half is `SETTLED`. — blocker as filed,
-   major after the ruling
+   The walker's "no buyer name" half is resolved: `D193` reopened D63/D69 and Orders now lists
+   buyers by name, with a merged per-buyer walk. The id still repeats on Inventory's "Wanted"
+   pill and on the Fulfiller's screen, and that half is still open. — blocker as filed, resolved
+   for the buyer-name half by `D193`
 9. **"Add orders" offers a hand-typed JSON textarea as a primary path.** — blocker as filed; the
    route exists for the harness and demos, so the fix is demotion behind a disclosure, not
    removal
@@ -72,8 +73,9 @@ else is open.
 
 ### Identity and naming
 
-- Order rows (top 8); the same id repeats on Inventory's "Wanted" pill, which does not link to
-  the order, and across the Fulfiller's screen, where it also wraps mid-string at 390. — major
+- Order rows (top 8) — resolved by `D193`, which put buyer names on Orders. The id still
+  repeats on Inventory's "Wanted" pill, which does not link to the order, and across the
+  Fulfiller's screen, where it also wraps mid-string at 390 — still open. — major
 - Box names: "WB1 R3", "ME01 C/UC", "UNL BBOX C/UC 1" read as product-line shorthand on Home,
   the rail and the Fulfiller's list. These are the owner's own labels and must match the sticker
   on the drawer, so the debt is the absence of a nudge at creation, not the names. — minor
