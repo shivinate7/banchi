@@ -24191,7 +24191,7 @@ def check_order_ledger(checks: Checks) -> None:
 
 def check_order_reconcile_backlog(checks: Checks) -> None:
     """`POST /orders/reconcile-backlog` — the two-year backlog `is_terminal_status` cannot see
-    (D-orders-backlog-reconcile).
+    (D203).
 
     THE ONE ASSERTION THIS FILE CARES ABOUT MOST: closing a backlog order claims NO physical
     copy. `store_tables()`'s `cards` table is compared byte-for-byte before and after the
@@ -24209,7 +24209,7 @@ def check_order_reconcile_backlog(checks: Checks) -> None:
     anyway, is visibility before the press rather than after it.
     """
     checks.note("")
-    checks.note("ORDER RECONCILE — POST /orders/reconcile-backlog (D-orders-backlog-reconcile)")
+    checks.note("ORDER RECONCILE — POST /orders/reconcile-backlog (D203)")
 
     def line(sku, quantity=1, **extra) -> dict:
         row = {"sku": sku, "quantity": quantity}

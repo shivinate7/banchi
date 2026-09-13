@@ -1,4 +1,4 @@
-## D-vendor-catalog-snapshot-and-index — Build-order step 9's first two pieces landed; the mirror stays dry-run
+## D206 — Build-order step 9's first two pieces landed; the mirror stays dry-run
 
 **Step 9 (D15) names three pieces in order: snapshot the catalog, build the SQLite index, fill the image mirror.** This entry records that the first two are BUILT and the third is RECORDED but deliberately NOT FILLED — the working agreement's own vocabulary, applied to a step rather than to a screen.
 

@@ -195,7 +195,7 @@
    longer copy anywhere in the product — Home's lede carries the sentence a person reads. */
 
 
-/* `min-height: 0` IS WRITTEN RATHER THAN LEFT TO THE DEFAULT (D-the-drawer-scrolls-above-its-foot).
+/* `min-height: 0` IS WRITTEN RATHER THAN LEFT TO THE DEFAULT (D204).
    A flex item's automatic minimum size only resolves to 0 for an axis where its own overflow is
    not `visible` — which `overflow-y: auto` here already satisfies per spec, so this line changes
    no browser's rendering today. It is written anyway because the correctness of every rule below
@@ -484,7 +484,7 @@
   flex-direction: column;
   padding: var(--bn-4) var(--bn-3);
   padding-top: calc(var(--bn-4) + env(safe-area-inset-top));
-  /* A PROPERTY OF THE FOOT, NOT OF THE NAV (D-the-drawer-scrolls-above-its-foot). Three fixed
+  /* A PROPERTY OF THE FOOT, NOT OF THE NAV (D204). Three fixed
      rows — Cards to pull, the theme toggle, the server line — at the drawer's own 44px, plus
      the two gaps between them, the head's own top padding and its border. This is NOT a
      row-count arithmetic the way the two breakpoints below it are: it does not grow or shrink
@@ -656,7 +656,7 @@
 /* ---- bottom tab bar (phones) --------------------------------------------------------- */
 .bn-tabbar { display: none; }
 @media (max-width: 767px) {
-  /* THE BAR HAS ONE HEIGHT, DECLARED ONCE, HERE, WHERE IT IS DRAWN (D-the-tab-bar-has-one-height).
+  /* THE BAR HAS ONE HEIGHT, DECLARED ONCE, HERE, WHERE IT IS DRAWN (D205).
      `calc(64px + env(safe-area-inset-bottom))` used to be written twice in this file and a third
      time as a plain `356px` budget in CaptureScreen.css that assumed the bar was 64px flat — on
      every phone with a home indicator the real bar is ~98px, and the shutter sat under it. A
@@ -895,7 +895,7 @@
    wide, so this query cannot reach one.
 
    WHAT THE TWO STEPS BELOW BUY IS FEWER ROWS BEHIND A SCROLL, NEVER REACHABILITY
-   (D-the-drawer-scrolls-above-its-foot). Read `754px` and the row counts in the next block's own
+   (D204). Read `754px` and the row counts in the next block's own
    comment as a COSMETIC arithmetic, not a correctness one: `.bn-nav`'s `overflow-y: auto` plus
    its explicit `min-height: 0` (above, at the base rule) means the last row of the last group —
    Codes today, whatever route lands after it tomorrow — is always inside the nav's own scroll

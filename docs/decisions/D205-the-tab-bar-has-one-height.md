@@ -1,4 +1,4 @@
-## D-the-tab-bar-has-one-height — The phone tab bar has one height, and every layout that leaves room for it reads the same name
+## D205 — The phone tab bar has one height, and every layout that leaves room for it reads the same name
 
 **Measured 2026-09-13, closing plan item 3 of the wave-1 bug batch.** The capture screen's
 shutter sat half under the phone tab bar on first paint at 390 wide. `CaptureScreen.css`

@@ -2528,6 +2528,12 @@ D197 A page is anchored to the shell's own inset, and only its width may vary by
 D198 Home's Review tile reads the same total `#/review` draws, never `review` alone
 D199 `_phase` reads `joined` as sufficient evidence identification happened
 D200 The repo-state heartbeat is a thin caller of what already exists, and it remembers across runs in a file
+D201 A route change lands at the top, and a same-path query change does not
+D202 Home's "cannot be filled" figure counts only orders that read `open`
+D203 The two-year backlog is stood down by one press over a cutoff the operator sees, never by a rule that runs on every fetch
+D204 The phone drawer's nav scrolls in the space above its foot, for any row count, and the CSS says so explicitly rather than relying on it
+D205 The phone tab bar has one height, and every layout that leaves room for it reads the same name
+D206 Build-order step 9's first two pieces landed; the mirror stays dry-run
 ```
 
 **THE GAP THIS LIST CARRIED BETWEEN D116 AND D118 IS CLOSED, AND IT CLOSED THE WAY IT SAID IT

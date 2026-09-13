@@ -130,7 +130,7 @@ corner probes' `misses` alone, so a control whose centre AND every probe were al
 and `n.contains(t)` stay, because those cover a legitimate padded wrapper and a control cannot
 be COVERED by its own descendant or its own ancestor in the sense this check is for — and
 `covered` now uses it and now drives `fails` for probe mode. Proved red against the unfixed
-CaptureScreen.css (`docs/decisions/D-the-tab-bar-has-one-height.md`) and green with the fix;
+CaptureScreen.css (D205) and green with the fix;
 this file's other three cases — every owner route, the shell's three surfaces, the two sheets —
 still pass with the tightened predicate, so nothing legitimately scrolling under `.bn-topbar` /
 `.bn-tabbar` / `.kit-index` elsewhere in the product got newly flagged.

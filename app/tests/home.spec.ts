@@ -5,7 +5,7 @@ import type { OrderRow, OrdersPayload, ResolvedLine, ResolvedOrder } from '../sr
 
 /* HOME'S "CANNOT BE FILLED" FIGURE, PINNED AGAINST A MIXED LEDGER.
  *
- * `## D-home-counts-only-open-orders`. `app/src/standing.ts` and `app/src/Home.tsx` both once
+ * `## D202`. `app/src/standing.ts` and `app/src/Home.tsx` both once
  * summed `ResolvedOrder.outstanding` across EVERY row `GET /orders`' `resolution.orders`
  * carried, unconditionally — so an order the feed itself has already closed (Shipped,
  * Delivered, Canceled — `store/orders.py:is_terminal_status`, D63 amended 2026-09-13) still

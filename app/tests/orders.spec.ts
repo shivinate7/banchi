@@ -90,7 +90,7 @@ async function open(
     /* THE CAPTURE SERVER'S BOOT ID, for the one case that is about a restart. A function so a case
        can change it between reads. See the route below for why it has to be every GET. */
     boot?: () => string
-    /* `POST /orders/reconcile-backlog` (D-orders-backlog-reconcile), `{preview: true}` half.
+    /* `POST /orders/reconcile-backlog` (D203), `{preview: true}` half.
        Defaults to nothing to reconcile, so every case that does not ask for this stays exactly
        as it was before the route existed. */
     reconcilePreview?: unknown
@@ -266,7 +266,7 @@ async function open(
     })
   }
 
-  /* D-orders-backlog-reconcile: registered BEFORE `/orders$`, `/orders/fetch$`'s own rule —
+  /* D203: registered BEFORE `/orders$`, `/orders/fetch$`'s own rule —
      the read regex is the looser one. Defaults to nothing to reconcile so `ReconcileBacklogPanel`
      draws nothing, keeping every case that does not ask for this one exactly as it was. */
   await page.route(/\/orders\/reconcile-backlog$/, async (route) => {
@@ -1659,7 +1659,7 @@ test('the device document round-trips and survives a reload', async ({ page }) =
   await expect(page.locator('.orders-sort').getByRole('button', { name: 'Oldest' })).toHaveAttribute('aria-pressed', 'true')
 })
 
-/* ============================================== D-orders-backlog-reconcile ==== */
+/* ============================================== D203 ==== */
 
 /* THE PANEL COMPUTES ITS OWN CANDIDATES FROM `GET /orders`'S OWN ANSWER — `open`, `recorded`
    and `placed_at` are already on every `OrderRow`, so it asks the wire for nothing beyond what

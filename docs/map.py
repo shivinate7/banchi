@@ -306,7 +306,7 @@ OPEN = [
               "extrapolated from a 200-image HEAD sample, close to D15's own ~16.7 GB estimate. "
               "Filling it is the owner's disk to spend, not a default any target reaches for, so "
               "step 9 stays here rather than moving to SHIPPED. See "
-              "D-vendor-catalog-snapshot-and-index for the full account, including "
+              "D206 for the full account, including "
               "what was deliberately left undone in harness/eval/fixtures.py's own retry/backoff "
               "scaffolding."},
     {"n": 20, "title": "The shipped status and the tracking write-back",
@@ -1538,7 +1538,7 @@ COMPONENTS = [
         # one of these files.
         "note": "Narrower than the whole upstream tree on purpose: decks/ (83 files, 688 KB) "
                 "and the v1-conversion script are NOT vendored, because nothing downstream of "
-                "this step reads a decklist — see the D-vendor-catalog-snapshot-and-index "
+                "this step reads a decklist — see the D206 "
                 "decision entry. The image mirror piece is documented at "
                 "scripts/catalog-image-mirror.py; its own destination "
                 "(PKMNSCAN_IMAGE_MIRROR, default harness/images/) is outside this directory.",
@@ -2426,7 +2426,7 @@ COMPONENTS = [
                 "governed_by": ["D13", "D14", "D18", "D58", "D62", "D76", "D79", "D83", "D86",
                                 "D87", "D89", "D96", "D100", "D103", "D104", "D106", "D113",
                                 "D134", "D159", "D167", "D168", "D174", "D192",
-                                "D193", "D-orders-backlog-reconcile"],
+                                "D193", "D203"],
             },
             "verdict-selftest.py": {"does": "PROVES `app/design-check-reporter.ts` STILL WRITES A "
                                             "VERDICT, BY RUNNING IT. `make docs-audit`'s "
@@ -2715,7 +2715,7 @@ COMPONENTS = [
                         "exists, and that a card file naming an absent set is refused rather "
                         "than skipped. Every case here failed before those two files existed. "
                         "`make catalog-index-selftest` — NOT wired into `make check`'s own "
-                        "numbered list as shipped; see the D-vendor-catalog-snapshot-and-index "
+                        "numbered list as shipped; see the D206 "
                         "decision entry for why that reconciliation is left to a session "
                         "arguing for it on purpose.",
                 "governed_by": ["D15", "D18"],
@@ -3628,7 +3628,7 @@ COMPONENTS = [
                                 "D92", "D93", "D96", "D100", "D103", "D104", "D108", "D113",
                                 "D114", "D115", "D116", "D132", "D134", "D137", "D138", "D159",
                                 "D168", "D174", "D183", "D172", "D192", "D191",
-                                "D193", "D-orders-backlog-reconcile"],
+                                "D193", "D203"],
                 "tested_by": ["T7"],
             },
             "tcg_import.py": {"does": "THE OUTBOUND WRITE to the seller admin, and the only "
@@ -4371,7 +4371,7 @@ COMPONENTS = [
                                     "armed.",
                             "governed_by": ["D5", "D10", "D13", "D31", "D41", "D49", "D50", "D51", "D94",
                                              "D95", "D110", "D117", "D118", "D134",
-                                             "D152", "D-the-drawer-scrolls-above-its-foot", "D-the-tab-bar-has-one-height"]},
+                                             "D152", "D204", "D205"]},
             # THE TWO `ServerReloaded` FILES ARE GONE AND THE NOTICE IS NOT (Banchi, 2026-09-03).
             # D53's rule is that the boot header is SUBSCRIBED to and never polled, and that the
             # notice demands nothing; neither needed a component of its own once the shell had a
@@ -4399,7 +4399,7 @@ COMPONENTS = [
                                      "correctly without one, and a reclaimed photograph (D89) "
                                      "leaves the frame rather than a broken image. Each panel "
                                      "loads on its own, so no figure waits on another.",
-                             "governed_by": ["D156", "D145", "D56", "D5", "D6", "D10", "D13", "D32", "D33", "D52", "D63", "D69", "D86", "D89", "D94", "D95", "D125", "D172", "D192", "D-home-counts-only-open-orders"]},
+                             "governed_by": ["D156", "D145", "D56", "D5", "D6", "D10", "D13", "D32", "D33", "D52", "D63", "D69", "D86", "D89", "D94", "D95", "D125", "D172", "D192", "D202"]},
             "src/Home.css": {"does": "the home screen's look: the hero and its deck, the stage "
                                      "spine, the box and run cards. The one screen in the app "
                                      "that draws a display figure above 36px — "
@@ -4430,7 +4430,7 @@ COMPONENTS = [
                                               "D159", "D168",
                                               "D104", "D113", "D116", "D132", "D134", "D172",
                                               "D174", "D180", "D192",
-                                              "D193", "D-orders-backlog-reconcile"]},
+                                              "D193", "D203"]},
             "src/demoFlag.d.ts": {"does": "declares `__BN_DEMO__`, the build-time demo flag "
                                           "`vite.config.ts` substitutes with a boolean "
                                           "literal. It exists because three other forms of "
@@ -4724,7 +4724,7 @@ COMPONENTS = [
                                       # move what is around it when a drawer changes.
                                       "governed_by": ["D3", "D5", "D27", "D41", "D50", "D65", "D117",
                                                       "D118", "D130", "D142",
-                                                      "D164", "D195", "D-the-tab-bar-has-one-height"]},
+                                                      "D164", "D195", "D205"]},
             "src/PositionLabel.tsx": {
                 "does": "ONE rendering of `pipeline/join.py:Position.label` for every OWNER site "
                         "(D41, amended 2026-08-29). Recomposes `Box N \u00b7 Section N \u00b7 Card N` into a "
@@ -5965,12 +5965,12 @@ COMPONENTS = [
                                        "join by order number with nothing written across the "
                                        "seam — including the buyer's name, which "
                                        "OrdersShipStage.tsx still does not draw.",
-                               "governed_by": ["D7", "D10", "D24", "D27", "D28", "D36", "D39", "D51", "D57", "D58", "D61", "D63", "D66", "D69", "D91", "D96", "D103", "D113", "D114", "D118", "D159", "D181", "D192", "D193", "D-orders-sort-filter", "D-orders-backlog-reconcile"]},
+                               "governed_by": ["D7", "D10", "D24", "D27", "D28", "D36", "D39", "D51", "D57", "D58", "D61", "D63", "D66", "D69", "D91", "D96", "D103", "D113", "D114", "D118", "D159", "D181", "D192", "D193", "D203", "D-orders-sort-filter"]},
             "src/Orders.css": {"does": "the order screen at owner density: the line, its reason "
                                        "and remedy, and the pick rows under it. A copy already "
                                        "spoken for by another line is drawn as spoken for "
                                        "rather than offered twice.",
-                               "governed_by": ["D5", "D24", "D40", "D41", "D50", "D63", "D69", "D113", "D114", "D117", "D193", "D-orders-backlog-reconcile"]},
+                               "governed_by": ["D5", "D24", "D40", "D41", "D50", "D63", "D69", "D113", "D114", "D117", "D193", "D203"]},
             "src/OrdersHubStore.ts": {"does": "THE HUB'S MEMORY ACROSS A STAGE SWITCH. "
                                               "`#/orders` and `#/shipping` are one screen with "
                                               "two stages, and the shell keys its view on the "
@@ -6054,7 +6054,7 @@ COMPONENTS = [
                                 # condition is read from; D63 is the two-map ledger behind it;
                                 # D114 is the no-status-vocabulary rule the `open`-keyed join
                                 # obeys instead of reading `status`.
-                                "governed_by": ["D63", "D69", "D114", "D121", "D-home-counts-only-open-orders"]},
+                                "governed_by": ["D63", "D69", "D114", "D121", "D202"]},
             "src/storeHistory.ts": {"does": "THE STORE'S OWN HISTORY — sittings recovered from "
                                             "`captured_at` by a 30-minute gap, and the ribbon "
                                             "geometry Home's foot draws from them. The unit is a "
@@ -6582,7 +6582,7 @@ COMPONENTS = [
                         "floor. The roster comes off the drawer's own nav links rather than a "
                         "typed list of hashes, plus `#/gallery`, which the nav deliberately does "
                         "not hold.",
-                "governed_by": ["D50", "D95", "D117", "D-the-drawer-scrolls-above-its-foot"],
+                "governed_by": ["D50", "D95", "D117", "D204"],
                 "note": "THE OWNER-SIDE SHELL HAD NO TEST AT ANY WIDTH. `nav.spec.ts` scopes "
                         "itself to `.bn-side` on purpose; `cursor.spec.ts` harvests its routes "
                         "from `.bn-side a.bn-nav-link`, which is `display: none` below 768, so "
@@ -6630,7 +6630,7 @@ COMPONENTS = [
                         "`standing.ts` and `Home.tsx` join `resolution.orders` against the "
                         "wire's own `open` field by key rather than trusting the server "
                         "pre-filtered it. Not a harness test; `make design-check` runs it.",
-                "governed_by": ["D63", "D114", "D121", "D-home-counts-only-open-orders"],
+                "governed_by": ["D63", "D114", "D121", "D202"],
                 "note": "Proved red first: reverting the "
                         "join in `standing.ts` and `Home.tsx` reads "
                         "\"Cannot be filled — 7 copies for 1 open order cannot be found.\" and "
@@ -6825,7 +6825,7 @@ COMPONENTS = [
                                              "app/tests/order-walk.spec.ts. Not a harness test — "
                                              "it starts a browser; `make design-check` runs it.",
                                      "governed_by": ["D24", "D27", "D28", "D36", "D49", "D58", "D63", "D69", "D73", "D90", "D91", "D96", "D103", "D113", "D114", "D118", "D123", "D132",
-                                                     "D181", "D193", "D194", "D-orders-sort-filter", "D-orders-backlog-reconcile"]},
+                                                     "D181", "D193", "D194", "D203", "D-orders-sort-filter"]},
             "tests/shipping.spec.ts": {"does": "the shipping screen in a browser, and its "
                                                "strongest cases are ABSENCES: no buyer name, "
                                                "address, city or postcode appears anywhere on "

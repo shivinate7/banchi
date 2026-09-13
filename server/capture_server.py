@@ -943,7 +943,7 @@ ORDER_CLOSE_LINE_UNDO_FIELDS = ("lines", "undo")
 ORDER_CLOSE_LIMIT = 200
 
 # `POST /orders/reconcile-backlog` — the two-year backlog `is_terminal_status` cannot see
-# (D-orders-backlog-reconcile). `preview` is the only field a preview body carries beside this
+# (D203). `preview` is the only field a preview body carries beside this
 # one; a press body carries only `cutoff`, which is optional on both.
 ORDER_RECONCILE_FIELDS = ("cutoff", "preview")
 
@@ -10722,7 +10722,7 @@ def _reconcile_cutoff(payload: dict) -> str:
 def _reconcile_candidates(
     ledger: order_store.Ledger, cutoff: str
 ) -> List[order_store.OrderRecord]:
-    """Every order `do_order_reconcile` would stand down at this cutoff. D-orders-backlog-reconcile.
+    """Every order `do_order_reconcile` would stand down at this cutoff. D203.
 
     THREE TESTS, ALL THREE LOAD-BEARING:
 
@@ -10782,7 +10782,7 @@ def _reconcile_breakdown(candidates: Sequence[order_store.OrderRecord]) -> List[
 
 def do_order_reconcile(payload: dict) -> dict:
     """`POST /orders/reconcile-backlog` — the two-year backlog, stood down in one press.
-    D-orders-backlog-reconcile.
+    D203.
 
     THE GAP `is_terminal_status` LEAVES ON PURPOSE. That function's own docstring says
     `Completed - Paid` is deliberately not terminal — a marketplace's payment clearing is not
@@ -12032,7 +12032,7 @@ class CaptureHandler(BaseHTTPRequestHandler):
                 return self._json(HTTPStatus.OK, do_order_line_kind(self._body()))
             if path == "/orders/close":
                 return self._json(HTTPStatus.OK, do_order_close(self._body()))
-            # The one-time backlog reconcile (D-orders-backlog-reconcile): a two-bodied route,
+            # The one-time backlog reconcile (D203): a two-bodied route,
             # `do_order_fetch`'s own shape, over the orders `is_terminal_status` cannot see.
             if path == "/orders/reconcile-backlog":
                 return self._json(HTTPStatus.OK, do_order_reconcile(self._body()))

@@ -1108,7 +1108,7 @@
      air below it.
      THE TAB BAR IS `var(--bn-tabbar-h)`, NEVER A LITERAL, because it is not a constant: it is
      `calc(64px + env(safe-area-inset-bottom))`, declared once in App.css beside `.bn-tabbar`
-     itself (D-the-tab-bar-has-one-height). The literal `64px` this budget used to hard-code
+     itself (D205). The literal `64px` this budget used to hard-code
      in its place was the bar with no home-indicator inset added — correct on a phone with
      none, ~34px short on every phone that has one, which put the shutter half under the bar
      on first paint.
