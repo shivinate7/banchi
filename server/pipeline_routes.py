@@ -3699,87 +3699,35 @@ def do_queue_refresh(payload: dict) -> dict:
 
 # ------------------------------------------------------------------------ the rescue, D165
 
-# `cmd_rescue.run`'s own `say()` lines, matched by shape rather than by full sentence — the
-# WORDS after each label are prose and may be reworded; the LABEL and the number beside it are
-# the part every reader (this one, and a human at the terminal) actually depends on.
-_RESCUE_RECORDS_RE = re.compile(r"^\s*records\s+(\d+)\s*$", re.M)
-_RESCUE_NO_DIGEST_RE = re.compile(r"^\s*no digest\s+(\d+) record", re.M)
-_RESCUE_FOUND_RE = re.compile(
-    r"^\s*found\s+(\d+) card\(s\), all in box (\d+)(?: \((.+?)\))?\s*$", re.M
-)
-_RESCUE_NOT_ON_SHELF_RE = re.compile(r"^\s*not on shelf\s+(\d+) record", re.M)
-_RESCUE_ALREADY_RE = re.compile(r"already rescued: (\S+) holds exactly these (\d+) card")
-_RESCUE_WROTE_RE = re.compile(r"^\s*wrote\s+(.+?)\s*$", re.M)
-_RESCUE_PREVIEW_RE = re.compile(
-    r"--write would create a run over box (\d+) holding (\d+) card\(s\)"
-)
-_RESCUE_AMBIGUOUS_DISK_RE = re.compile(
-    r"REFUSING: (\d+) record\(s\) match a digest that is on two photographs on disk"
-)
-_RESCUE_AMBIGUOUS_RUN_RE = re.compile(
-    r"REFUSING: (\d+) photograph digest\(s\) in this run are carried by more than one record"
-)
+def _extract_rescue_report(text: str) -> Optional[dict]:
+    """`cmd_rescue.run --json`'s own report line, read out of its stdout.
 
-
-def _parse_rescue_console(text: str) -> dict:
-    """`cmd_rescue.run`'s stdout, read into the fields the sheet actually needs.
-
-    THIS EXISTS BECAUSE THE OWNER RULED, 2026-09-13, THAT RAW MACHINE TEXT IS NEVER VISIBLE ON
-    THE FRONT END — not stdout, not JSON, not a CLI string, not even behind a disclosure. Every
-    other free step on this server returns `console` verbatim (D33) and a screen renders it in
-    a `LogWell`; `cmd_rescue`'s own sentences carry backticked `pkmnscan …` invocations and
-    decision numbers, which is exactly the class `no mechanism on screen` refuses, so this one
-    route does not get to make that choice. The command's own report is still the one source of
-    truth for what happened — this reads it into a small structured shape and nothing more, and
-    the sheet composes its own sentences from these fields.
+    THIS USED TO BE A SUBSTRING PARSER OVER THE COMMAND'S ENGLISH PROSE, AND THE COORDINATOR
+    NAMED WHY THAT WAS THE WRONG FIX: only one of its six reason branches (`not_stranded`) was
+    ever exercised by a real run through the real command, so reword a sentence in
+    `cli/cmd_rescue.py` and five reasons silently become the wrong code or none at all, with
+    every check still green — a guard that cannot see its subject. The cause was that the
+    command had no machine-readable output; the fix is that it does now.
+    `cli/cmd_rescue.py --json` prints exactly one line of compact JSON (`_report_line`) on
+    every path — every refusal, the already-rescued no-op, the preview, and the write — and
+    this function is the whole of what reads it: scan lines from the end (the report line is
+    always the last thing printed, ahead only of a raised `RunError`'s own prose reaching
+    stdout through `cli/__main__.py`'s exception handler) and return the first one that parses
+    as a JSON object. `None` means the command crashed before reaching any of `run`'s own
+    return or raise statements — `_open_run` above already guards the one case that would
+    (a missing run directory), so this is the honest "I don't know" rather than a guess.
     """
-    reason: Optional[str] = None
-    ambiguous = 0
-    if "is not stranded" in text:
-        reason = "not_stranded"
-    elif "identifications.json" in text and "has no " in text:
-        reason = "no_identifications"
-    elif "matches a photograph in any live drawer" in text:
-        reason = "none_on_shelf"
-    elif "cards are spread across boxes" in text:
-        reason = "spread_across_boxes"
-    match = _RESCUE_AMBIGUOUS_DISK_RE.search(text)
-    if match:
-        reason = reason or "digest_ambiguous_on_disk"
-        ambiguous = int(match.group(1))
-    match = _RESCUE_AMBIGUOUS_RUN_RE.search(text)
-    if match:
-        reason = reason or "digest_twice_in_run"
-        ambiguous = int(match.group(1))
-
-    destination: Optional[dict] = None
-    match = _RESCUE_FOUND_RE.search(text)
-    rebound = 0
-    if match:
-        rebound = int(match.group(1))
-        destination = {"box": int(match.group(2)), "box_name": match.group(3)}
-    else:
-        match = _RESCUE_PREVIEW_RE.search(text)
-        if match:
-            destination = {"box": int(match.group(1)), "box_name": None}
-
-    records_match = _RESCUE_RECORDS_RE.search(text)
-    no_digest_match = _RESCUE_NO_DIGEST_RE.search(text)
-    not_on_shelf_match = _RESCUE_NOT_ON_SHELF_RE.search(text)
-    already_match = _RESCUE_ALREADY_RE.search(text)
-    wrote_match = _RESCUE_WROTE_RE.search(text)
-
-    return {
-        "reason": reason,
-        "records": int(records_match.group(1)) if records_match else None,
-        "no_digest": int(no_digest_match.group(1)) if no_digest_match else 0,
-        "rebound": rebound,
-        "not_on_shelf": int(not_on_shelf_match.group(1)) if not_on_shelf_match else 0,
-        "ambiguous": ambiguous,
-        "destination": destination,
-        "already_rescued": already_match.group(1) if already_match else None,
-        "new_run": Path(wrote_match.group(1)).name if wrote_match else None,
-    }
+    for line in reversed(text.splitlines()):
+        line = line.strip()
+        if not line.startswith("{") or not line.endswith("}"):
+            continue
+        try:
+            parsed = json.loads(line)
+        except (json.JSONDecodeError, ValueError):
+            continue
+        if isinstance(parsed, dict) and "reason" in parsed and "counts" in parsed:
+            return parsed
+    return None
 
 
 def do_run_rescue(name: str, payload: dict) -> dict:
@@ -3797,14 +3745,15 @@ def do_run_rescue(name: str, payload: dict) -> dict:
     `/export` is — `[a-z]+` would otherwise swallow `rescue` as a step that does not exist.
 
     THE RESPONSE IS STRUCTURED, NOT `console`, ON THE OWNER'S 2026-09-13 RULING that raw
-    machine text is never visible on the front end, not even behind a disclosure. Every field
-    below is read out of `cmd_rescue`'s own stdout by `_parse_rescue_console`; the stdout
-    itself is written to `runs/<name>/logs/rescue-<stamp>.log` and never returned — a person at
-    the machine can open it, and no screen ever will.
+    machine text is never visible on the front end, not even behind a disclosure. `--json`
+    asks `cmd_rescue.run` for its own machine-readable line (`_extract_rescue_report`) instead
+    of matching substrings out of its prose; the full stdout — prose AND that line — is written
+    to `runs/<name>/logs/rescue-<stamp>.log` and never returned on the wire, for a person at
+    the machine to read and for no screen ever to.
     """
     directory = _open_run(name)
     write = bool(payload.get("write"))
-    argv = [str(PKMNSCAN), "rescue", str(directory)]
+    argv = [str(PKMNSCAN), "rescue", str(directory), "--json"]
     if write:
         argv.append("--write")
     code, console = _run_sync(argv, STEP_TIMEOUT_S)
@@ -3815,23 +3764,30 @@ def do_run_rescue(name: str, payload: dict) -> dict:
     log_path = log_dir / f"rescue-{stamp}.log"
     log_path.write_text(console, encoding="utf-8")
 
-    parsed = _parse_rescue_console(console)
+    parsed = _extract_rescue_report(console) or {
+        "reason": None,
+        "counts": {"records": None, "no_digest": 0, "rebound": 0, "not_on_shelf": 0, "ambiguous": 0},
+        "destination": None,
+        "already_rescued": None,
+        "new_run": None,
+    }
     ok = code == 0
+    counts = parsed.get("counts") or {}
     return {
         "ok": ok,
         "exit_code": code,
-        "wrote": write and ok and parsed["new_run"] is not None,
+        "wrote": write and ok and parsed.get("new_run") is not None,
         "run": directory.name,
-        "reason": None if ok else parsed["reason"],
+        "reason": None if ok else parsed.get("reason"),
         "counts": {
-            "records": parsed["records"],
-            "rebound": parsed["rebound"],
-            "not_on_shelf": parsed["not_on_shelf"],
-            "ambiguous": parsed["ambiguous"],
+            "records": counts.get("records"),
+            "rebound": counts.get("rebound", 0),
+            "not_on_shelf": counts.get("not_on_shelf", 0),
+            "ambiguous": counts.get("ambiguous", 0),
         },
-        "destination": parsed["destination"],
-        "already_rescued": parsed["already_rescued"],
-        "new_run": parsed["new_run"],
+        "destination": parsed.get("destination"),
+        "already_rescued": parsed.get("already_rescued"),
+        "new_run": parsed.get("new_run"),
         "log": str(log_path.relative_to(files.runs_dir())),
     }
 

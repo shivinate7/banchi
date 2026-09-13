@@ -381,7 +381,7 @@ COMPONENTS = [
                                     "2,535 real captures.",
                             "governed_by": ["D1", "D3", "D9", "D21", "D25", "D36", "D48", "D86",
                                             "D87", "D100", "D145", "D172", "D180",
-                                            "D189"],
+                                            "D189", "D-rescue-is-a-press"],
                             "tested_by": ["T7"]},
             "cmd_scan.py": {"does": "read the QR codes off a directory of code-card photos into "
                                     "the ledger. FREE — no model call, no network, no money gate "
@@ -494,7 +494,7 @@ COMPONENTS = [
                                       "recovers is the PRICING surface, not the stock.",
                               "governed_by": ["D7", "D10", "D25", "D36", "D48", "D83", "D86",
                                               "D134", "D145", "D165", "D180", "D183", "D26",
-                                              "D188"],
+                                              "D188", "D-rescue-is-a-press"],
                               "tested_by": ["T7"]},
             "cmd_reprice.py": {"does": "`pkmnscan reprice list` reports which live listings are "
                                         "not selling and writes a WORKLIST with a price already "

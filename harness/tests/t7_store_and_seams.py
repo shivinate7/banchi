@@ -12530,6 +12530,178 @@ def check_rescue_route(checks: Checks) -> None:
         )
 
 
+def check_rescue_json_reasons(checks: Checks) -> None:
+    """Every reason `cmd_rescue.run --json` can return, pinned against the REAL condition.
+
+    THE COORDINATOR'S OWN FINDING: `_parse_rescue_console` (the substring parser this PR
+    replaced) had six branches and only `not_stranded` was ever exercised by anything —
+    reword a sentence in `cli/cmd_rescue.py` tomorrow and five reasons silently become the
+    wrong code or none at all, with every check green. `--json` (D-rescue-is-a-press) makes
+    the command say its own answer rather than have a route guess at it from prose, and this
+    is where each of the six codes gets proven against the actual condition that produces it
+    — a healthy run, a run whose cards have all left, cards split across two drawers, a
+    digest on two photographs, a digest on two records, and a store-backed join's own output
+    directory — never a fixture that hands the parser a string.
+
+    EVERY CASE GOES THROUGH `entry.main`, THE REAL CLI ENTRY POINT — never `cmd_rescue.run`
+    called directly — so the reason travels through the same argparse `--json` flag a
+    terminal or `server/pipeline_routes.py:do_run_rescue` would use.
+    """
+    checks.note("")
+    checks.note("RESCUE --json — every reason code, pinned against the real condition")
+
+    from cli import __main__ as entry
+
+    def photo(home, box: int, index: int, body: bytes) -> str:
+        directory = home / "captures" / "cards" / f"box{box}"
+        directory.mkdir(parents=True, exist_ok=True)
+        (directory / f"{index:04d}.jpg").write_bytes(body)
+        return hashlib.sha256(body).hexdigest()
+
+    def stranded_payload(digests: dict) -> dict:
+        cards = {}
+        for i, (name, number) in {1: ("Dunsparce", "120"), 2: ("Articuno", "145")}.items():
+            cards[f"1/{i}"] = {
+                "box": 1,
+                "index": i,
+                "photo": f"captures/cards/box1/{i:04d}.jpg",
+                "photo_sha256": digests[i],
+                "game": "pokemon",
+                "identification": {
+                    "name": name,
+                    "number": number,
+                    "printed_total": "159",
+                    "confidence": "high",
+                    "finish": None,
+                },
+            }
+        return {"prompt_fingerprint": "t7-rescue-json", "cards": cards}
+
+    def reuse_box_one(snapshot) -> None:
+        snapshot.inventory.ensure_box(1)
+        card, _ = snapshot.inventory.allocate_capture(
+            1, capture_id="reason-foreign", cid=fake_cid("reason-foreign")
+        )
+        snapshot.inventory.record_identification(
+            card.key, name="Moonfall", number="198/219",
+            printed_total="219", confidence="high", run="2026-09-11-box1-01",
+        )
+
+    def rescue_json(run_dir) -> dict:
+        """Run the real CLI, real `--write`, real `--json`, and return the one parsed line."""
+        with quiet() as said:
+            code = entry.main(["rescue", str(run_dir), "--write", "--json"])
+        lines = [line for line in said.getvalue().splitlines() if line.strip().startswith("{")]
+        checks.ok(len(lines) == 1, f"exactly one JSON line printed (exit {code})", said.getvalue())
+        return json.loads(lines[-1]) if lines else {}
+
+    # ------------------------------------------------------------ not_stranded
+    with isolated_home() as home:
+        healthy = runs.create("box3")
+        healthy.set(created_at="2026-08-29T22:37:47+00:00")
+        healthy.write_identifications(stranded_payload(
+            {1: hashlib.sha256(b"healthy-1").hexdigest(), 2: hashlib.sha256(b"healthy-2").hexdigest()}
+        ))
+        # The run says box 1, and box 1 is a live drawer the store still reads as this run's
+        # own — no `box_disowns_run` sentence, so nothing is stranded.
+        with Store().write() as snapshot:
+            snapshot.inventory.ensure_box(1)
+        report = rescue_json(healthy.directory)
+        checks.equal(report.get("reason"), "not_stranded", "a healthy run reports not_stranded")
+
+    # ------------------------------------------------------------ none_on_shelf
+    with isolated_home() as home:
+        digests = {
+            1: hashlib.sha256(b"gone-json-a").hexdigest(),
+            2: hashlib.sha256(b"gone-json-b").hexdigest(),
+        }
+        run = runs.create("box1")
+        run.set(created_at="2026-08-22T22:40:24+00:00")
+        run.write_identifications(stranded_payload(digests))
+        with Store().write() as snapshot:
+            reuse_box_one(snapshot)
+        report = rescue_json(run.directory)
+        checks.equal(report.get("reason"), "none_on_shelf", "cards that have all left the store report none_on_shelf")
+        checks.equal(report.get("counts", {}).get("rebound"), 0, "and rebound is 0")
+
+    # ------------------------------------------------------------ spread_across_boxes
+    with isolated_home() as home:
+        digests = {1: photo(home, 3, 2, b"split-json-a"), 2: photo(home, 4, 20, b"split-json-b")}
+        run = runs.create("box1")
+        run.set(created_at="2026-08-29T22:37:47+00:00")
+        run.write_identifications(stranded_payload(digests))
+        with Store().write() as snapshot:
+            snapshot.inventory.ensure_box(3)
+            snapshot.inventory.ensure_box(4)
+            reuse_box_one(snapshot)
+        report = rescue_json(run.directory)
+        checks.equal(report.get("reason"), "spread_across_boxes", "cards split across two drawers report spread_across_boxes")
+
+    # ------------------------------------------------------------ digest_ambiguous_on_disk
+    with isolated_home() as home:
+        body = b"rescue-json-ambiguous"
+        digests = {1: photo(home, 3, 2, body), 2: photo(home, 3, 4, b"rescue-json-unique")}
+        photo(home, 3, 3, body)
+        run = runs.create("box1")
+        run.set(created_at="2026-08-29T22:37:47+00:00")
+        run.write_identifications(stranded_payload(digests))
+        with Store().write() as snapshot:
+            snapshot.inventory.ensure_box(3)
+            reuse_box_one(snapshot)
+        report = rescue_json(run.directory)
+        checks.equal(
+            report.get("reason"), "digest_ambiguous_on_disk",
+            "a digest on two photographs on disk reports digest_ambiguous_on_disk",
+        )
+        checks.equal(report.get("counts", {}).get("ambiguous"), 1, "naming the one record it touches")
+
+    # ------------------------------------------------------------ digest_twice_in_run
+    with isolated_home() as home:
+        one = hashlib.sha256(b"rescue-json-same-record").hexdigest()
+        photo(home, 3, 2, b"rescue-json-same-record")
+        run = runs.create("box1")
+        run.set(created_at="2026-08-29T22:37:47+00:00")
+        run.write_identifications(stranded_payload({1: one, 2: one}))
+        with Store().write() as snapshot:
+            snapshot.inventory.ensure_box(3)
+            reuse_box_one(snapshot)
+        report = rescue_json(run.directory)
+        checks.equal(
+            report.get("reason"), "digest_twice_in_run",
+            "one digest carried by two records in the RUN itself reports digest_twice_in_run",
+        )
+        checks.equal(report.get("counts", {}).get("ambiguous"), 1, "naming the one digest")
+
+    # ------------------------------------------------------------ no_identifications
+    with isolated_home() as home:
+        # THE REACHABLE CONDITION: a store-backed join's own output directory (D188) —
+        # `pkmnscan join --keys` writes a run with a report and a pricing table but never
+        # `identifications.json`, because there was no frozen snapshot to write one from.
+        box, index = 5, 1
+        while Store().read().inventory.next_index(box) <= index:
+            capture_server.do_capture(capture_payload(box))
+        key = master.position_key(box, index)
+        with Store().write() as snapshot:
+            snapshot.inventory.record_capture(
+                master.Card(box=box, index=index, photo=str(photo_of(box, index)))
+            )
+            snapshot.inventory.record_identification(
+                key, name="Dunsparce", number="120", printed_total="159",
+                confidence="high", run="an-earlier-run",
+            )
+        export = write_export(home / "export.csv")
+        with quiet():
+            code = entry.main(["join", "--keys", key, "--export", str(export)])
+        checks.equal(code, 0, "the store-backed join itself exits 0")
+        created = [d for d in files.runs_dir().iterdir() if d.is_dir()]
+        checks.equal(len(created), 1, "and creates exactly one run directory")
+        report = rescue_json(created[0])
+        checks.equal(
+            report.get("reason"), "no_identifications",
+            "a store-backed join's own output directory reports no_identifications",
+        )
+
+
 def check_store_backed_join(checks: Checks) -> None:
     """PR G — `join` without a run directory, reading identifications straight off the store.
 
@@ -29273,6 +29445,7 @@ def run() -> Result:
     check_rescue_stranded_run(checks)
     check_rescue_discharges_stranded_count(checks)
     check_rescue_route(checks)
+    check_rescue_json_reasons(checks)
     check_store_backed_join(checks)
     check_run_binds_to_bid(checks)
     check_printed_code_profiles(checks)
