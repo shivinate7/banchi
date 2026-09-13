@@ -4,7 +4,7 @@
 # the project would be built on top of — `make check` green means every check ran.
 
 .DEFAULT_GOAL := help
-.PHONY: help status map explain harness check cid-selftest cid-audit ignore-check docs-audit vale audit-self-test verdict-selftest githooks-selftest merge merge-selftest revert-guard revert-selftest claim-ids claim-stale claim-selftest decisions-selftest port-agreement set-hint-agreement screen-freshness screen-freshness-selftest sigil-check suite-lock-selftest icloud-sweep audit-history dev server screenshot design-check design-check-quiet lint typecheck venv launch-config worktree-setup hooks up down launch-agent demo demo-photos demo-seed demo-record demo-static demo-preview demo-freshness
+.PHONY: help status map explain harness check cid-selftest cid-audit ignore-check docs-audit vale audit-self-test verdict-selftest githooks-selftest merge merge-selftest revert-guard revert-selftest claim-ids claim-stale claim-selftest decisions-selftest port-agreement set-hint-agreement screen-freshness screen-freshness-selftest sigil-check suite-lock-selftest icloud-sweep audit-history dev server screenshot design-check design-check-quiet lint typecheck venv launch-config worktree-setup hooks up down launch-agent demo demo-photos demo-seed demo-record demo-static demo-preview demo-freshness catalog-refresh catalog-index catalog-index-selftest catalog-mirror
 
 # Prefer the venv if it exists, so `make harness` works without anyone remembering to
 # activate anything. Falls back to system python3, which still runs T2-T5 — T1 needs the
@@ -71,6 +71,14 @@ help:
 	@echo "                    since? Reports and never repairs (D140, amended). Writes nothing."
 	@echo "  make claim-selftest   the claimer, proved with main moving underneath the branch."
 	@echo "  make decisions-selftest  docs/decisions/ is complete and still round-trips."
+	@echo "  make catalog-refresh  re-clone pokemon-tcg-data and refresh vendor/pokemon-tcg-data/"
+	@echo "                    (D15). Writes; never gates. ARGS=--dry-run to preview the diff."
+	@echo "  make catalog-index  build vendor/pokemon-tcg-data/catalog.sqlite from the snapshot."
+	@echo "  make catalog-index-selftest  that builder and pipeline/catalog.py, proved on a"
+	@echo "                    throwaway fixture. In \`check\`, never in the hook."
+	@echo "  make catalog-mirror  fill the pokemontcg.io image mirror. ARGS=--dry-run samples up"
+	@echo "                    to 200 images over HTTP HEAD and reports the byte total; writes"
+	@echo "                    nothing. Bare form fills it for real — not run by any target here."
 	@echo "  make submission-selftest  the identify claim table, proved by racing two presses"
 	@echo "                    over one card. In \`check\`, never in the hook."
 	@echo "  make cid-selftest  the card's stable name and the photograph store, proved by"
@@ -633,6 +641,38 @@ claim-selftest:
 # one-time claim that the SPLIT itself lost nothing is `--verify` against the pre-split file.
 decisions-selftest:
 	@python3 scripts/split-decisions.py --selftest
+
+# BUILD-ORDER STEP 9, PIECE 1 (D15): re-clone `PokemonTCG/pokemon-tcg-data` and refresh the
+# committed snapshot at `vendor/pokemon-tcg-data/`, recording the upstream commit SHA in
+# `SNAPSHOT.json`. WRITES, so it never gates a commit (D18) — run on the owner's word,
+# monthly per D15's own cadence. `ARGS=--dry-run` clones and reports the diff without touching
+# the tracked copy.
+catalog-refresh:
+	@python3 scripts/catalog-refresh.py $(ARGS)
+
+# BUILD-ORDER STEP 9, PIECE 2: build `vendor/pokemon-tcg-data/catalog.sqlite` from the vendored
+# snapshot — cards join to sets BY FILENAME, because `printedTotal` lives only in
+# `sets/en.json`. A generator, gitignored output, never on the commit path (D18).
+# `pipeline/catalog.py` is the read-only reader over what this writes.
+catalog-index:
+	@python3 scripts/catalog-index.py $(ARGS)
+
+# THAT BUILDER AND `pipeline/catalog.py`, PROVED AGAINST A THROWAWAY TWO-SET FIXTURE — never
+# the real 26 MB snapshot, so this is fast enough for `make check`. Every case failed before
+# `scripts/catalog-index.py` and `pipeline/catalog.py` existed: no index to build, no reader
+# to open one. Writes only a temp directory, so it gates like any other selftest.
+catalog-index-selftest:
+	@python3 scripts/catalog-index-selftest.py
+
+# BUILD-ORDER STEP 9, PIECE 3, DRY RUN ONLY AS SHIPPED: the manifest is derived from the
+# vendored snapshot (no network) and the downloader is resumable and rate-limited, but
+# nothing here has ever filled the mirror for real on this checkout — see the decision entry
+# this step wrote. `ARGS=--dry-run` HEAD-samples up to 200 images and prints the manifest's
+# file count and the byte total extrapolated from the sample, writing nothing under the
+# mirror destination (`PKMNSCAN_IMAGE_MIRROR`, default `harness/images/`, D15). Bare
+# `make catalog-mirror` fills it for real, for whenever that becomes the owner's call.
+catalog-mirror:
+	@python3 scripts/catalog-image-mirror.py $(ARGS)
 
 # HERE BECAUSE TWO LANGUAGES HOLD ONE ALGORITHM AND NEITHER CAN IMPORT THE OTHER (D43).
 # Python serves the capture port, TypeScript addresses it, and a disagreement is silent and

@@ -308,6 +308,42 @@ make demo-freshness # whether the bundle still matches the wire it recorded. ON 
                     #   `.env.example` carries that prefix, so a public build cannot leak
                     #   one — a property of a naming convention, which is why CI asserts it
                     #   over the built artefact rather than trusting it.
+make catalog-refresh  # BUILD-ORDER STEP 9, PIECE 1 (D15). Re-clones `PokemonTCG/pokemon-tcg-data`
+                    #   and refreshes the committed snapshot at `vendor/pokemon-tcg-data/`
+                    #   (`cards/en/*.json` + `sets/en.json`, ~26 MB), recording the upstream
+                    #   commit SHA in `SNAPSHOT.json`. WRITES, so — like `make demo-seed` — it
+                    #   never gates a commit (D18) and runs on the owner's word.
+                    #   `ARGS=--dry-run` clones and reports the diff without touching the
+                    #   tracked copy. `decks/` and the v1-conversion script are deliberately
+                    #   NOT vendored — nothing downstream reads a decklist.
+make catalog-index  # BUILD-ORDER STEP 9, PIECE 2. Builds
+                    #   `vendor/pokemon-tcg-data/catalog.sqlite` from the snapshot — cards
+                    #   join to sets BY FILENAME, because `printedTotal` lives only in
+                    #   `sets/en.json`. A generator; gitignored output; never on the commit
+                    #   path. `pipeline/catalog.py` is the read-only reader over what this
+                    #   writes, and it composes the same `join_key` as
+                    #   `pipeline.join.number_index_key` by IMPORTING that function rather
+                    #   than reimplementing the fold.
+make catalog-index-selftest  # that builder and `pipeline/catalog.py`, proved against a
+                    #   throwaway two-set fixture — never the real snapshot, so it is fast
+                    #   enough to run on every `make check`. Every case failed before those
+                    #   two files existed. NOT wired into `make check`'s own list as shipped —
+                    #   see the decision entry this step wrote for why the wiring is left to
+                    #   a session that reopens the `check census` reconciliation on purpose.
+make catalog-mirror # BUILD-ORDER STEP 9, PIECE 3, DRY RUN ONLY AS SHIPPED. The manifest is
+                    #   derived from the vendored snapshot (no network to build it) and the
+                    #   downloader is resumable (a non-empty destination file is skipped
+                    #   without a request) and rate-limited (`MIN_INTERVAL_S` between
+                    #   requests). `ARGS=--dry-run` HEAD-samples up to 200 images and prints
+                    #   the manifest's file count and the byte total extrapolated from the
+                    #   sample — measured 2026-09-13: 20,444 files, ~14.2 GB extrapolated from
+                    #   200 samples, against D15's own ~16.7 GB estimate from a smaller
+                    #   sample. WRITES NOTHING under the mirror destination. Destination is
+                    #   `PKMNSCAN_IMAGE_MIRROR` (D15's knob, read the same way
+                    #   `harness/eval/fixtures.py` reads it), default `harness/images/`. The
+                    #   bare form fills it for real and HAS NEVER BEEN RUN ON THIS
+                    #   CHECKOUT — filling ~14-17 GB is the owner's call on their own disk,
+                    #   not a default any target here reaches for.
 make lint           # eslint over app/ (guards a bug earned, see app/eslint.config.js) plus ruff over
                     #   the Python packages, scoped to a slice measured against this tree (D82) —
                     #   never ruff's own defaults, never --fix. Config: ruff.toml.
@@ -2493,6 +2529,7 @@ D198 Home's Review tile reads the same total `#/review` draws, never `review` al
 D199 `_phase` reads `joined` as sufficient evidence identification happened
 D200 The repo-state heartbeat is a thin caller of what already exists, and it remembers across runs in a file
 D201 A route change lands at the top, and a same-path query change does not
+D202 Build-order step 9's first two pieces landed; the mirror stays dry-run
 ```
 
 **THE GAP THIS LIST CARRIED BETWEEN D116 AND D118 IS CLOSED, AND IT CLOSED THE WAY IT SAID IT

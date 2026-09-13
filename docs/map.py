@@ -295,10 +295,20 @@ OPEN = [
               "passed, docs/GATES.md is a record of runs rather than a schedule, and no step may be "
               "blocked behind a gate any more because none is open. So the blocker was removed by the "
               "gates ceasing to be a schedule, NOT by Gate C being cleared out of this step's way. "
-              "There is deliberately no Gate D. Nothing waits on this but the doing of it: snapshot the "
-              "repo, build the SQLite index (cards join to sets by FILENAME \u2014 printedTotal lives only "
-              "in sets/en.json and is half the join key), then fill the image mirror with the "
-              "Content-Length dry run first. D15."},
+              "There is deliberately no Gate D. D15. "
+              "TWO OF THREE PIECES ARE BUILT: the snapshot (vendor/pokemon-tcg-data/, "
+              "176 files, 26,520,219 bytes, upstream commit 8b4e387930ead7be6595b4d4c59b7ba7a3a79f08) "
+              "and the SQLite index (vendor/pokemon-tcg-data/catalog.sqlite, cards joined to sets BY "
+              "FILENAME, 174 sets / 20,444 cards, built by scripts/catalog-index.py and read by "
+              "pipeline/catalog.py). THE THIRD REMAINS OPEN ON PURPOSE: the image mirror's manifest "
+              "and resumable, rate-limited downloader exist (scripts/catalog-image-mirror.py) but only "
+              "its --dry-run mode has ever run on this checkout \u2014 20,444 files, ~14.18 GB "
+              "extrapolated from a 200-image HEAD sample, close to D15's own ~16.7 GB estimate. "
+              "Filling it is the owner's disk to spend, not a default any target reaches for, so "
+              "step 9 stays here rather than moving to SHIPPED. See "
+              "D202 for the full account, including "
+              "what was deliberately left undone in harness/eval/fixtures.py's own retry/backoff "
+              "scaffolding."},
     {"n": 20, "title": "The shipped status and the tracking write-back",
      "note": "Steps 13 and 14 of docs/specs/order-pipeline.md, and the only part of that spec that is "
               "NEITHER built nor merely unproven. Both endpoints were seen on the wire while D69 was "
@@ -709,6 +719,21 @@ COMPONENTS = [
                                     "a <=4-character abbreviation; ambiguity answers None and both "
                                     "callers widen rather than guess.",
                             "governed_by": ["D2", "D3", "D22", "D65"], "tested_by": ["T3"]},
+            "catalog.py": {"does": "build-order step 9, piece 2's READER: opens "
+                                   "vendor/pokemon-tcg-data/catalog.sqlite (built by "
+                                   "scripts/catalog-index.py) and answers cards_by_join_key, "
+                                   "cards_by_name, card_by_id and set_by_id. CatalogIndex.open "
+                                   "refuses CatalogNotBuilt rather than building the index "
+                                   "implicitly. SUPPLIES DATA, NOT A NEW MATCHING RULE: "
+                                   "pipeline/join.py's own docstring names "
+                                   "harness/eval/fixtures.py as the vendored catalog's only "
+                                   "caller, and that stays true here — nothing in this file is "
+                                   "imported by join.py, and no run's listing changes because "
+                                   "this module exists. Folds a lookup key through the same "
+                                   "`number_index_key` the runtime join uses, imported rather "
+                                   "than reimplemented, for a caller D46 names as the standing "
+                                   "candidate and that remains unbuilt.",
+                           "governed_by": ["D15", "D18", "D46"]},
             "pricing.py": {"does": "rules, rounding, floor clamp, threshold, no_market_data "
                                    "refusal. THRESHOLD is the DEFAULT and not the answer "
                                    "(D99): the cut-off in force is pipeline/corpus.py's "
@@ -1493,6 +1518,30 @@ COMPONENTS = [
                 "orphan rule does not scan it — the same arrangement `fixtures/` uses, for "
                 "the same reason. A sixth trace is added by copying it in, never by editing "
                 "one of these.",
+    },
+    {
+        "path": "vendor/pokemon-tcg-data/",
+        "status": "built",
+        "does": "build-order step 9, piece 1 (D15): a committed snapshot of "
+                "PokemonTCG/pokemon-tcg-data — cards/en/*.json (one file per set) and "
+                "sets/en.json, the only place printedTotal lives. SNAPSHOT.json records the "
+                "upstream commit SHA and the fetch time; `make catalog-refresh` "
+                "(scripts/catalog-refresh.py) rewrites all three. catalog.sqlite and "
+                "image-manifest.json are GENERATED from this snapshot by "
+                "scripts/catalog-index.py and scripts/catalog-image-mirror.py and are "
+                "gitignored — this component's own tracked contents are the vendored JSON "
+                "and its metadata, nothing derived.",
+        "governed_by": ["D15", "D18"],
+        # No per-file entries, for `harness/traces/`'s own reason: this is 176 vendored data
+        # files (26.5 MB) with no source suffix the orphan rule should scan, and a new set
+        # released upstream arrives by running `make catalog-refresh` — never by hand-editing
+        # one of these files.
+        "note": "Narrower than the whole upstream tree on purpose: decks/ (83 files, 688 KB) "
+                "and the v1-conversion script are NOT vendored, because nothing downstream of "
+                "this step reads a decklist — see the D202 "
+                "decision entry. The image mirror piece is documented at "
+                "scripts/catalog-image-mirror.py; its own destination "
+                "(PKMNSCAN_IMAGE_MIRROR, default harness/images/) is outside this directory.",
     },
     {
         "path": "scripts/",
@@ -2630,6 +2679,60 @@ COMPONENTS = [
                 "governed_by": ["D16", "D18", "D42", "D47", "D72", "D80", "D135",
                                 "D140", "D151", "D160", "D182", "D185", "D186", "D188",
                                 "D190"],
+            },
+            "catalog-refresh.py": {
+                "does": "build-order step 9, piece 1 (D15): shallow-clone "
+                        "PokemonTCG/pokemon-tcg-data, diff it against the committed "
+                        "vendor/pokemon-tcg-data/ snapshot, and — unless `--dry-run` — "
+                        "replace it and record the upstream commit SHA in SNAPSHOT.json. "
+                        "Copies only cards/en/ and sets/en.json (plus the upstream README, "
+                        "renamed) — decks/ and the v1-conversion script are deliberately not "
+                        "vendored, since nothing downstream reads a decklist. WRITES, so it "
+                        "never gates a commit and is not in `make check` — `make "
+                        "catalog-refresh`, on the owner's word, D15's own monthly cadence.",
+                "governed_by": ["D15", "D18"],
+            },
+            "catalog-index.py": {
+                "does": "build-order step 9, piece 2: build "
+                        "vendor/pokemon-tcg-data/catalog.sqlite from the vendored snapshot — "
+                        "cards join to sets BY FILENAME, because printedTotal lives only in "
+                        "sets/en.json. `join_key` on every card row is composed the way "
+                        "pipeline/join.py's own docstring composes the human-read form, then "
+                        "folded through `pipeline.join.number_index_key` — IMPORTED rather "
+                        "than reimplemented, so this index and the runtime join can never "
+                        "independently drift the way that function's own docstring records "
+                        "them once doing. Refuses on a card file naming a set absent from "
+                        "sets/en.json rather than silently skipping it. A generator; "
+                        "gitignored output; never on the commit path (D18).",
+                "governed_by": ["D15", "D18"],
+            },
+            "catalog-index-selftest.py": {
+                "does": "scripts/catalog-index.py and pipeline/catalog.py, proved against a "
+                        "throwaway two-set fixture rather than the real 26 MB snapshot, so it "
+                        "is fast enough for `make check`. Asserts the composed join_key "
+                        "matches `number_index_key` applied by hand to an unpadded lookup, "
+                        "that CatalogIndex.open refuses CatalogNotBuilt before a build "
+                        "exists, and that a card file naming an absent set is refused rather "
+                        "than skipped. Every case here failed before those two files existed. "
+                        "`make catalog-index-selftest` — NOT wired into `make check`'s own "
+                        "numbered list as shipped; see the D202 "
+                        "decision entry for why that reconciliation is left to a session "
+                        "arguing for it on purpose.",
+                "governed_by": ["D15", "D18"],
+            },
+            "catalog-image-mirror.py": {
+                "does": "build-order step 9, piece 3: derive the image-mirror manifest from "
+                        "the vendored snapshot (no network) and fill it — resumable (a "
+                        "non-empty destination file is skipped without a request) and "
+                        "rate-limited. `--dry-run` HEAD-samples up to 200 images and prints "
+                        "the manifest's file count and the byte total extrapolated from the "
+                        "sample, writing nothing under the mirror destination "
+                        "(PKMNSCAN_IMAGE_MIRROR, D15's own knob, read the same way "
+                        "harness/eval/fixtures.py reads it; default harness/images/). Measured "
+                        "2026-09-13: 20,444 files, ~14.18 GB extrapolated. THE BARE FORM HAS "
+                        "NEVER BEEN RUN ON THIS CHECKOUT — filling a double-digit-gigabyte "
+                        "mirror is the owner's call, not a default any target reaches for.",
+                "governed_by": ["D15"],
             },
             "claim-selftest.py": {
                 "does": "scripts/claim-ids.py proved against a throwaway repository in which "
