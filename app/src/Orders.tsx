@@ -36,6 +36,7 @@ import {
   nameOrders,
   previewOrders,
   pullCopy,
+  reconcileBacklog,
   reopenLines,
   reopenOrders,
   undoFill,
@@ -1964,6 +1965,51 @@ export function OrdersHub({ stage }: { readonly stage: Stage }) {
     })()
   }
 
+  /* -------------------------------------------------------- the one-time backlog reconcile */
+
+  /* D-orders-backlog-reconcile. A SECOND backlog `is_terminal_status` cannot see: orders
+     TCGplayer settled to `Completed - Paid` two years before this screen existed, carrying
+     zero recorded copies. `ReconcileBacklogPanel` computes WHICH ones from what this screen
+     already read; the press sends only the cutoff, and the store recomputes the candidate set
+     itself at that moment, closes every line of every match with `shipped_elsewhere`, and
+     claims no copy. */
+  const onReconcileBacklog = (cutoff: string) => {
+    void (async () => {
+      setBusy('reconcile')
+      setFailure(null)
+      try {
+        const done = await reconcileBacklog(cutoff)
+        if (!live.current) return
+        toast({
+          kind: 'receipt',
+          icon: 'check',
+          title: `Stood down ${done.moved} ${plural(done.moved, 'order', 'orders')}`,
+          body: `${done.still_open} still open · nothing was marked sold`,
+          ttlMs: UNDO_WINDOW_MS,
+          action: {
+            label: 'Undo',
+            onPress: () => {
+              void (async () => {
+                try {
+                  await reopenOrders(done.closed)
+                  touchHub()
+                } catch (err) {
+                  toast({ kind: 'refusal', icon: 'alert', title: describeFailure(err).message })
+                }
+              })()
+            },
+          },
+        })
+        await reread()
+      } catch (err) {
+        if (!live.current) return
+        setFailure(describeFailure(err))
+      } finally {
+        if (live.current) setBusy(null)
+      }
+    })()
+  }
+
   /* D113. A line that is not shipping at all — refunded, cancelled, or the copy retired damaged
      and the buyer refunded. IT IS LINE-SHAPED, so one refunded line on a three-line order never
      takes the other two with it. The first build sent the order-shaped call and drew the button
@@ -2220,6 +2266,7 @@ export function OrdersHub({ stage }: { readonly stage: Stage }) {
           onFill={onFill}
           onDeclareKind={onDeclareKind}
           onStandDown={onStandDown}
+          onReconcileBacklog={onReconcileBacklog}
           onCloseLine={onCloseLine}
           onFetch={onFetch}
           onReread={() => void reread()}
@@ -2315,6 +2362,79 @@ function BacklogPrompt({
   )
 }
 
+/** The one-time backlog reconcile (D-orders-backlog-reconcile): every open order carrying
+ *  NOTHING RECORDED, placed before a cutoff, closed with `shipped_elsewhere`. UNLIKE
+ *  `BacklogPrompt` above, the predicate here is never a status word — age and "nothing
+ *  recorded" alone — so the breakdown is what tells a live order sharing that shape apart from
+ *  real backlog, drawn before the count ever moves.
+ *
+ *  IT ASKS THE WIRE FOR NOTHING BEYOND WHAT THIS SCREEN ALREADY READ. `GET /orders`'s own
+ *  answer carries `open`, `recorded` and `placed_at` for every order in the store — exactly
+ *  what `POST /orders/reconcile-backlog {preview: true}` would compute server-side — so a
+ *  second network call to preview it would duplicate a primitive this screen already holds
+ *  (`no-bandaids`'s own question, asked and answered). Only the PRESS reaches the wire, and
+ *  the server recomputes the candidate set from its own store at that moment regardless of
+ *  what this panel displayed, exactly as `BacklogPrompt`'s stand-down already works. */
+function ReconcileBacklogPanel({
+  orders,
+  busy,
+  onPress,
+}: {
+  readonly orders: readonly OrderRow[]
+  readonly busy: string | null
+  readonly onPress: (cutoff: string) => void
+}) {
+  /* TODAY, PLAIN. The server's own default (`store/orders.py:today()`) is the same UTC date;
+     the one edge this can disagree with it on is an order placed in the last few hours of UTC
+     yesterday read from a browser already into local today, which moves a single order's
+     candidacy by at most one day and is corrected the moment the operator presses — the write
+     always recomputes server-side. */
+  const cutoff = useMemo(() => new Date().toISOString().slice(0, 10), [])
+  const candidates = useMemo(
+    () =>
+      orders.filter(
+        (row) =>
+          row.open && row.recorded === 0 && row.placed_at !== null && row.placed_at.slice(0, 10) < cutoff,
+      ),
+    [orders, cutoff],
+  )
+  const breakdown = useMemo(() => {
+    const counts = new Map<string, number>()
+    for (const row of candidates) {
+      const status = row.status ?? 'no status'
+      counts.set(status, (counts.get(status) ?? 0) + 1)
+    }
+    return [...counts.entries()].sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]))
+  }, [candidates])
+
+  if (candidates.length === 0) return null
+  const busyHere = busy === 'reconcile'
+
+  return (
+    <Notice
+      className="orders-reconcile"
+      tone="warn"
+      title={`${candidates.length} open ${plural(candidates.length, 'order carries', 'orders carry')} nothing recorded, before ${cutoff}`}
+    >
+      <p>
+        {joinPhrases(breakdown.map(([status, count]) => `${count} “${status}”`))}. Standing them down marks{' '}
+        <strong>nothing</strong> sold and claims no copy left.
+      </p>
+      <div className="orders-standdown-row">
+        <Button
+          variant="primary"
+          icon="check"
+          busy={busyHere}
+          disabled={busy !== null}
+          onClick={() => onPress(cutoff)}
+        >
+          Stand down {candidates.length} {plural(candidates.length, 'order', 'orders')}
+        </Button>
+      </div>
+    </Notice>
+  )
+}
+
 function PullStage({
   payload,
   store,
@@ -2334,6 +2454,7 @@ function PullStage({
   onFill,
   onDeclareKind,
   onStandDown,
+  onReconcileBacklog,
   onCloseLine,
   onFetch,
   statusControl,
@@ -2361,6 +2482,7 @@ function PullStage({
   readonly onFill: FillHandler
   readonly onDeclareKind: KindHandler
   readonly onStandDown: StandDownHandler
+  readonly onReconcileBacklog: (cutoff: string) => void
   readonly onCloseLine: CloseLineHandler
   readonly onFetch: () => void
   readonly statusControl: ReactNode
@@ -2699,6 +2821,11 @@ function PullStage({
           needs picking, so a prompt tucked below the rows would be advice arriving after the
           walk it should have changed. It draws nothing when there is nothing to propose. */}
       <BacklogPrompt open={open} busy={busy} onStandDown={onStandDown} />
+
+      {/* D-orders-backlog-reconcile. Below the status-driven prompt above and still ahead of
+          the toolbar: this is the OTHER backlog, the one `is_terminal_status` cannot see —
+          `Completed - Paid` orders TCGplayer settled two years before this screen existed. */}
+      <ReconcileBacklogPanel orders={open} busy={busy} onPress={onReconcileBacklog} />
 
       <div className="orders-toolbar">
         <Segmented<PullMode>

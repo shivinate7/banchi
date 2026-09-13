@@ -1104,13 +1104,25 @@
   .capture-odo-rule { height: 22px; }
   .capture-shell { display: flex; flex-direction: column; gap: var(--bn-3); }
   /* Sized by what is left above the tab bar, not by a ratio: top bar 52 + page pad 12 + head
-     38 + gap 12 above it, and gap 12 + run card head 92 + shutter 52 + tab bar 64 + 12 of air
-     below it — 356 in all — so the shutter clears the bar at 667, 740 and 844. A halt above
-     the stage takes its own height out of the same budget, so a stopped run changes the
-     size of something on screen rather than only pushing the shutter down. */
+     38 + gap 12 above it, and gap 12 + run card head 92 + shutter 52 + THE TAB BAR + 12 of
+     air below it.
+     THE TAB BAR IS `var(--bn-tabbar-h)`, NEVER A LITERAL, because it is not a constant: it is
+     `calc(64px + env(safe-area-inset-bottom))`, declared once in App.css beside `.bn-tabbar`
+     itself (D-the-tab-bar-has-one-height). The literal `64px` this budget used to hard-code
+     in its place was the bar with no home-indicator inset added — correct on a phone with
+     none, ~34px short on every phone that has one, which put the shutter half under the bar
+     on first paint.
+     298px IS THE REST OF THE BUDGET, MEASURED, NOT THE COMMENT'S OWN ARITHMETIC. Subtracting
+     the old flat 64px from the old 356px literal gives 292, and 292 undershoots by several
+     pixels against a real render (`app/tests/phone.spec.ts`'s shutter case, at 390x667 with a
+     34px safe-area inset) — the 356px this budget used to hard-code already carried a few
+     pixels nobody had measured to the pixel. 298 is that gap closed plus a 1px margin for
+     subpixel rounding, confirmed clear at 667, 740 and 844. A halt above the stage takes its
+     own height out of the same budget, so a stopped run changes the size of something on
+     screen rather than only pushing the shutter down. */
   .capture-stage {
     order: 1;
-    height: clamp(260px, calc(100dvh - 356px - var(--cap-halt-h, 0px)), 560px);
+    height: clamp(260px, calc(100dvh - 298px - var(--bn-tabbar-h) - var(--cap-halt-h, 0px)), 560px);
     max-height: none;
     align-self: stretch;
   }

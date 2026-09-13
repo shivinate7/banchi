@@ -682,6 +682,49 @@ allows "…and with \`-u\`, which is how this repo's own workflow spells it" \
 allows "an upstream whose name already matches its branch's own" \
   "$tmp/main" "git push origin HEAD"
 
+# THE ORDINARY FIRST PUSH OF A BRANCH CUT *FROM* THE DEFAULT BRANCH — amended 2026-09-13
+# (D179). `git switch -c X origin/main` (or `git checkout -b X origin/main`) is how this repo's
+# own workflow starts a feature branch, and it DOES configure an upstream — `origin/main` — from
+# birth, unlike `fresh-pr-branch` above. Before this amendment that upstream's mismatch with the
+# branch's own name refused the push, and the refusal's own remedy told the operator to push at
+# `main` by name (`git push origin HEAD:main`) — the one act D42, both git hooks and branch
+# protection exist to prevent. `$tmp/origin.git` already carries `main` (line ~614's own push),
+# so `origin/main` resolves here exactly as it would for a real `git switch -c X origin/main`.
+(cd "$tmp/main" && git switch -q -c cut-from-main origin/main 2>/dev/null)
+if [ "$(cd "$tmp/main" && git config --get branch.cut-from-main.merge)" = "refs/heads/main" ]; then
+  ok "the fixture reproduces the ordinary case: a branch tracking the DEFAULT branch from birth"
+else
+  bad "cut-from-main does not track origin/main — this arm cannot be posed"
+fi
+allows "the ordinary first push of a branch cut from the default branch — must never refuse" \
+  "$tmp/main" "git push origin HEAD"
+allows "…and with \`-u\`, the same shape this repo's own workflow types" \
+  "$tmp/main" "git push -u origin HEAD"
+
+judge "$tmp/main" "git push origin HEAD"
+case "$out" in
+  *"HEAD:main"*|*"branch --unset-upstream"*)
+    bad "a still-refused case's remedy must never name the default branch, and this one did" ;;
+  *) ok "no remedy naming the default branch appears (there is no refusal at all)" ;;
+esac
+
+# THE PRIMARY PATH, NOT ONLY THE FALLBACK. `refs/remotes/<remote>/HEAD` is what a real
+# `git clone` sets, and it is what `_default_branch` reads FIRST — but this fixture is built by
+# `git init` + `remote add` + `push`, never a `clone`, so nothing above has exercised that read
+# at all; every "cut-from-main" case so far passed off the local `main`/`master` fallback alone.
+# Set the symbolic ref by hand, the way `git remote set-head origin -a` would, so the
+# symbolic-ref branch and its `origin/` prefix-stripping are actually proven rather than merely
+# unreached.
+(cd "$tmp/main" && git symbolic-ref refs/remotes/origin/HEAD refs/remotes/origin/main)
+if [ "$(cd "$tmp/main" && git symbolic-ref --quiet --short refs/remotes/origin/HEAD)" = "origin/main" ]; then
+  ok "the fixture now carries a real \`origin/HEAD\` symbolic ref, unstripped, as git writes it"
+else
+  bad "refs/remotes/origin/HEAD did not take — the primary-path arm cannot be posed"
+fi
+allows "the primary default-branch path (a real \`origin/HEAD\`) exempts the same push" \
+  "$tmp/main" "git push origin HEAD"
+(cd "$tmp/main" && git symbolic-ref --delete refs/remotes/origin/HEAD 2>/dev/null)
+
 # A DIFFERENT REMOTE THAN THE ONE TRACKED — a fork workflow, untouched by this clause: the
 # mismatch this clause reads is specific to the remote the command is about to push to.
 (cd "$tmp/main" && git remote add fork "$tmp/origin.git" 2>/dev/null)

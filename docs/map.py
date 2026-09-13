@@ -295,10 +295,20 @@ OPEN = [
               "passed, docs/GATES.md is a record of runs rather than a schedule, and no step may be "
               "blocked behind a gate any more because none is open. So the blocker was removed by the "
               "gates ceasing to be a schedule, NOT by Gate C being cleared out of this step's way. "
-              "There is deliberately no Gate D. Nothing waits on this but the doing of it: snapshot the "
-              "repo, build the SQLite index (cards join to sets by FILENAME \u2014 printedTotal lives only "
-              "in sets/en.json and is half the join key), then fill the image mirror with the "
-              "Content-Length dry run first. D15."},
+              "There is deliberately no Gate D. D15. "
+              "TWO OF THREE PIECES ARE BUILT: the snapshot (vendor/pokemon-tcg-data/, "
+              "176 files, 26,520,219 bytes, upstream commit 8b4e387930ead7be6595b4d4c59b7ba7a3a79f08) "
+              "and the SQLite index (vendor/pokemon-tcg-data/catalog.sqlite, cards joined to sets BY "
+              "FILENAME, 174 sets / 20,444 cards, built by scripts/catalog-index.py and read by "
+              "pipeline/catalog.py). THE THIRD REMAINS OPEN ON PURPOSE: the image mirror's manifest "
+              "and resumable, rate-limited downloader exist (scripts/catalog-image-mirror.py) but only "
+              "its --dry-run mode has ever run on this checkout \u2014 20,444 files, ~14.18 GB "
+              "extrapolated from a 200-image HEAD sample, close to D15's own ~16.7 GB estimate. "
+              "Filling it is the owner's disk to spend, not a default any target reaches for, so "
+              "step 9 stays here rather than moving to SHIPPED. See "
+              "D-vendor-catalog-snapshot-and-index for the full account, including "
+              "what was deliberately left undone in harness/eval/fixtures.py's own retry/backoff "
+              "scaffolding."},
     {"n": 20, "title": "The shipped status and the tracking write-back",
      "note": "Steps 13 and 14 of docs/specs/order-pipeline.md, and the only part of that spec that is "
               "NEITHER built nor merely unproven. Both endpoints were seen on the wire while D69 was "
@@ -709,6 +719,21 @@ COMPONENTS = [
                                     "a <=4-character abbreviation; ambiguity answers None and both "
                                     "callers widen rather than guess.",
                             "governed_by": ["D2", "D3", "D22", "D65"], "tested_by": ["T3"]},
+            "catalog.py": {"does": "build-order step 9, piece 2's READER: opens "
+                                   "vendor/pokemon-tcg-data/catalog.sqlite (built by "
+                                   "scripts/catalog-index.py) and answers cards_by_join_key, "
+                                   "cards_by_name, card_by_id and set_by_id. CatalogIndex.open "
+                                   "refuses CatalogNotBuilt rather than building the index "
+                                   "implicitly. SUPPLIES DATA, NOT A NEW MATCHING RULE: "
+                                   "pipeline/join.py's own docstring names "
+                                   "harness/eval/fixtures.py as the vendored catalog's only "
+                                   "caller, and that stays true here — nothing in this file is "
+                                   "imported by join.py, and no run's listing changes because "
+                                   "this module exists. Folds a lookup key through the same "
+                                   "`number_index_key` the runtime join uses, imported rather "
+                                   "than reimplemented, for a caller D46 names as the standing "
+                                   "candidate and that remains unbuilt.",
+                           "governed_by": ["D15", "D18", "D46"]},
             "pricing.py": {"does": "rules, rounding, floor clamp, threshold, no_market_data "
                                    "refusal. THRESHOLD is the DEFAULT and not the answer "
                                    "(D99): the cut-off in force is pipeline/corpus.py's "
@@ -1495,6 +1520,30 @@ COMPONENTS = [
                 "one of these.",
     },
     {
+        "path": "vendor/pokemon-tcg-data/",
+        "status": "built",
+        "does": "build-order step 9, piece 1 (D15): a committed snapshot of "
+                "PokemonTCG/pokemon-tcg-data — cards/en/*.json (one file per set) and "
+                "sets/en.json, the only place printedTotal lives. SNAPSHOT.json records the "
+                "upstream commit SHA and the fetch time; `make catalog-refresh` "
+                "(scripts/catalog-refresh.py) rewrites all three. catalog.sqlite and "
+                "image-manifest.json are GENERATED from this snapshot by "
+                "scripts/catalog-index.py and scripts/catalog-image-mirror.py and are "
+                "gitignored — this component's own tracked contents are the vendored JSON "
+                "and its metadata, nothing derived.",
+        "governed_by": ["D15", "D18"],
+        # No per-file entries, for `harness/traces/`'s own reason: this is 176 vendored data
+        # files (26.5 MB) with no source suffix the orphan rule should scan, and a new set
+        # released upstream arrives by running `make catalog-refresh` — never by hand-editing
+        # one of these files.
+        "note": "Narrower than the whole upstream tree on purpose: decks/ (83 files, 688 KB) "
+                "and the v1-conversion script are NOT vendored, because nothing downstream of "
+                "this step reads a decklist — see the D-vendor-catalog-snapshot-and-index "
+                "decision entry. The image mirror piece is documented at "
+                "scripts/catalog-image-mirror.py; its own destination "
+                "(PKMNSCAN_IMAGE_MIRROR, default harness/images/) is outside this directory.",
+    },
+    {
         "path": "scripts/",
         "status": "built",
         "does": "the gate machinery and the tools around it: the pre-commit hook, the docs "
@@ -2212,9 +2261,15 @@ COMPONENTS = [
                         "not the process, and a backgrounded driver that ran 119 rounds over "
                         "3h58m across a compaction); and `git push <remote> HEAD` (or the "
                         "current branch's own literal name) when the tracked upstream is a "
-                        "different name (a coordinator's push silently created a stray "
-                        "`pr-h-readings-table-local` on origin instead of updating the real PR "
-                        "branch, `origin/claude/pr-h-readings-table`, on 2026-09-12). IT "
+                        "different, NON-DEFAULT branch (a coordinator's push silently created "
+                        "a stray `pr-h-readings-table-local` on origin instead of updating the "
+                        "real PR branch, `origin/claude/pr-h-readings-table`, on 2026-09-12). "
+                        "A tracked upstream that IS the default branch — the ordinary state of "
+                        "a branch cut with `git switch -c X origin/main` — passes, amended "
+                        "2026-09-13 (D179) after that exact shape was refused with a remedy "
+                        "that named `main` outright; `_default_branch` reads "
+                        "`refs/remotes/<remote>/HEAD` first and falls back to the first of "
+                        "`main`/`master` that exists locally. IT "
                         "RESOLVES RATHER THAN MATCHES TEXT, "
                         "which is reap.py's standard and the only way these have answers: "
                         "`git status --porcelain` decides whether an operand is a modified "
@@ -2253,7 +2308,11 @@ COMPONENTS = [
                         "path, `--staged`, a named source, `-sfn`, `--method GET`, `graphql`, "
                         "a pid wait, a bounded retry, a foreground loop, a backgrounded "
                         "`make design-check ARGS=--wait`, the ordinary first push of a new "
-                        "branch, an upstream already matching its own name, and every "
+                        "branch, an upstream already matching its own name, the ordinary first "
+                        "push of a branch cut FROM the default branch (its upstream IS the "
+                        "default, set at birth — the case refused until the 2026-09-13 "
+                        "amendment), the same case read off a real `origin/HEAD` symbolic ref "
+                        "rather than the local-branch fallback, and every "
                         "`git`/`gh`/`ln` line swept "
                         "out of this repo's own tooling. It also asserts the platform fact the "
                         "refusal declines to assume — BSD `pgrep` excludes its own ancestors "
@@ -2262,8 +2321,10 @@ COMPONENTS = [
                         "caught, for the original five clauses; the survivor removes half of "
                         "the `.bak` advice, the other "
                         "half still satisfies the assertion, and an arm removing BOTH goes "
-                        "red. The push clause adds six more arms of its own, five caught and "
-                        "the survivor an equivalent mutant.",
+                        "red. The push clause carries fourteen arms of its own as of the "
+                        "2026-09-13 default-branch amendment — six over the original "
+                        "colon-check and refspec resolution, eight over `_default_branch` and "
+                        "the exemption it feeds — eleven caught and three equivalent mutants.",
                 "governed_by": ["D179", "D18", "D43", "D127", "D171", "D173"],
             },
             "coordinator.py": {
@@ -2365,7 +2426,7 @@ COMPONENTS = [
                 "governed_by": ["D13", "D14", "D18", "D58", "D62", "D76", "D79", "D83", "D86",
                                 "D87", "D89", "D96", "D100", "D103", "D104", "D106", "D113",
                                 "D134", "D159", "D167", "D168", "D174", "D192",
-                                "D193"],
+                                "D193", "D-orders-backlog-reconcile"],
             },
             "verdict-selftest.py": {"does": "PROVES `app/design-check-reporter.ts` STILL WRITES A "
                                             "VERDICT, BY RUNNING IT. `make docs-audit`'s "
@@ -2618,6 +2679,60 @@ COMPONENTS = [
                 "governed_by": ["D16", "D18", "D42", "D47", "D72", "D80", "D135",
                                 "D140", "D151", "D160", "D182", "D185", "D186", "D188",
                                 "D190"],
+            },
+            "catalog-refresh.py": {
+                "does": "build-order step 9, piece 1 (D15): shallow-clone "
+                        "PokemonTCG/pokemon-tcg-data, diff it against the committed "
+                        "vendor/pokemon-tcg-data/ snapshot, and — unless `--dry-run` — "
+                        "replace it and record the upstream commit SHA in SNAPSHOT.json. "
+                        "Copies only cards/en/ and sets/en.json (plus the upstream README, "
+                        "renamed) — decks/ and the v1-conversion script are deliberately not "
+                        "vendored, since nothing downstream reads a decklist. WRITES, so it "
+                        "never gates a commit and is not in `make check` — `make "
+                        "catalog-refresh`, on the owner's word, D15's own monthly cadence.",
+                "governed_by": ["D15", "D18"],
+            },
+            "catalog-index.py": {
+                "does": "build-order step 9, piece 2: build "
+                        "vendor/pokemon-tcg-data/catalog.sqlite from the vendored snapshot — "
+                        "cards join to sets BY FILENAME, because printedTotal lives only in "
+                        "sets/en.json. `join_key` on every card row is composed the way "
+                        "pipeline/join.py's own docstring composes the human-read form, then "
+                        "folded through `pipeline.join.number_index_key` — IMPORTED rather "
+                        "than reimplemented, so this index and the runtime join can never "
+                        "independently drift the way that function's own docstring records "
+                        "them once doing. Refuses on a card file naming a set absent from "
+                        "sets/en.json rather than silently skipping it. A generator; "
+                        "gitignored output; never on the commit path (D18).",
+                "governed_by": ["D15", "D18"],
+            },
+            "catalog-index-selftest.py": {
+                "does": "scripts/catalog-index.py and pipeline/catalog.py, proved against a "
+                        "throwaway two-set fixture rather than the real 26 MB snapshot, so it "
+                        "is fast enough for `make check`. Asserts the composed join_key "
+                        "matches `number_index_key` applied by hand to an unpadded lookup, "
+                        "that CatalogIndex.open refuses CatalogNotBuilt before a build "
+                        "exists, and that a card file naming an absent set is refused rather "
+                        "than skipped. Every case here failed before those two files existed. "
+                        "`make catalog-index-selftest` — NOT wired into `make check`'s own "
+                        "numbered list as shipped; see the D-vendor-catalog-snapshot-and-index "
+                        "decision entry for why that reconciliation is left to a session "
+                        "arguing for it on purpose.",
+                "governed_by": ["D15", "D18"],
+            },
+            "catalog-image-mirror.py": {
+                "does": "build-order step 9, piece 3: derive the image-mirror manifest from "
+                        "the vendored snapshot (no network) and fill it — resumable (a "
+                        "non-empty destination file is skipped without a request) and "
+                        "rate-limited. `--dry-run` HEAD-samples up to 200 images and prints "
+                        "the manifest's file count and the byte total extrapolated from the "
+                        "sample, writing nothing under the mirror destination "
+                        "(PKMNSCAN_IMAGE_MIRROR, D15's own knob, read the same way "
+                        "harness/eval/fixtures.py reads it; default harness/images/). Measured "
+                        "2026-09-13: 20,444 files, ~14.18 GB extrapolated. THE BARE FORM HAS "
+                        "NEVER BEEN RUN ON THIS CHECKOUT — filling a double-digit-gigabyte "
+                        "mirror is the owner's call, not a default any target reaches for.",
+                "governed_by": ["D15"],
             },
             "claim-selftest.py": {
                 "does": "scripts/claim-ids.py proved against a throwaway repository in which "
@@ -3513,7 +3628,7 @@ COMPONENTS = [
                                 "D92", "D93", "D96", "D100", "D103", "D104", "D108", "D113",
                                 "D114", "D115", "D116", "D132", "D134", "D137", "D138", "D159",
                                 "D168", "D174", "D183", "D172", "D192", "D191",
-                                "D193"],
+                                "D193", "D-orders-backlog-reconcile"],
                 "tested_by": ["T7"],
             },
             "tcg_import.py": {"does": "THE OUTBOUND WRITE to the seller admin, and the only "
@@ -4211,7 +4326,8 @@ COMPONENTS = [
                             "governed_by": ["D5", "D10", "D13", "D14", "D16", "D20", "D27",
                                             "D28", "D31", "D33", "D39", "D49", "D51", "D53",
                                             "D57", "D61", "D63", "D66", "D69", "D70", "D94",
-                                            "D95", "D100", "D105", "D120", "D134"]},
+                                            "D95", "D100", "D105", "D109", "D120", "D134",
+                                            "D159"]},
             "src/Codes.tsx": {"does": "the code-card screen: read a box's QRs into the ledger, "
                                       "see the two lanes C11 tiers the pile into, and hand a "
                                       "lane's codes to a buyer against a named order. The "
@@ -4255,7 +4371,7 @@ COMPONENTS = [
                                     "armed.",
                             "governed_by": ["D5", "D10", "D13", "D31", "D41", "D49", "D50", "D51", "D94",
                                              "D95", "D110", "D117", "D118", "D134",
-                                             "D152"]},
+                                             "D152", "D-the-drawer-scrolls-above-its-foot", "D-the-tab-bar-has-one-height"]},
             # THE TWO `ServerReloaded` FILES ARE GONE AND THE NOTICE IS NOT (Banchi, 2026-09-03).
             # D53's rule is that the boot header is SUBSCRIBED to and never polled, and that the
             # notice demands nothing; neither needed a component of its own once the shell had a
@@ -4283,7 +4399,7 @@ COMPONENTS = [
                                      "correctly without one, and a reclaimed photograph (D89) "
                                      "leaves the frame rather than a broken image. Each panel "
                                      "loads on its own, so no figure waits on another.",
-                             "governed_by": ["D156", "D145", "D56", "D5", "D6", "D10", "D13", "D32", "D33", "D52", "D63", "D69", "D86", "D89", "D94", "D95", "D125", "D172", "D192"]},
+                             "governed_by": ["D156", "D145", "D56", "D5", "D6", "D10", "D13", "D32", "D33", "D52", "D63", "D69", "D86", "D89", "D94", "D95", "D125", "D172", "D192", "D-home-counts-only-open-orders"]},
             "src/Home.css": {"does": "the home screen's look: the hero and its deck, the stage "
                                      "spine, the box and run cards. The one screen in the app "
                                      "that draws a display figure above 36px — "
@@ -4314,7 +4430,7 @@ COMPONENTS = [
                                               "D159", "D168",
                                               "D104", "D113", "D116", "D132", "D134", "D172",
                                               "D174", "D180", "D192",
-                                              "D193"]},
+                                              "D193", "D-orders-backlog-reconcile"]},
             "src/demoFlag.d.ts": {"does": "declares `__BN_DEMO__`, the build-time demo flag "
                                           "`vite.config.ts` substitutes with a boolean "
                                           "literal. It exists because three other forms of "
@@ -4608,7 +4724,7 @@ COMPONENTS = [
                                       # move what is around it when a drawer changes.
                                       "governed_by": ["D3", "D5", "D27", "D41", "D50", "D65", "D117",
                                                       "D118", "D130", "D142",
-                                                      "D164", "D195"]},
+                                                      "D164", "D195", "D-the-tab-bar-has-one-height"]},
             "src/PositionLabel.tsx": {
                 "does": "ONE rendering of `pipeline/join.py:Position.label` for every OWNER site "
                         "(D41, amended 2026-08-29). Recomposes `Box N \u00b7 Section N \u00b7 Card N` into a "
@@ -5849,12 +5965,12 @@ COMPONENTS = [
                                        "join by order number with nothing written across the "
                                        "seam — including the buyer's name, which "
                                        "OrdersShipStage.tsx still does not draw.",
-                               "governed_by": ["D7", "D10", "D24", "D27", "D28", "D36", "D39", "D51", "D57", "D58", "D61", "D63", "D66", "D69", "D91", "D96", "D103", "D113", "D114", "D118", "D159", "D181", "D192", "D193", "D-orders-sort-filter"]},
+                               "governed_by": ["D7", "D10", "D24", "D27", "D28", "D36", "D39", "D51", "D57", "D58", "D61", "D63", "D66", "D69", "D91", "D96", "D103", "D113", "D114", "D118", "D159", "D181", "D192", "D193", "D-orders-sort-filter", "D-orders-backlog-reconcile"]},
             "src/Orders.css": {"does": "the order screen at owner density: the line, its reason "
                                        "and remedy, and the pick rows under it. A copy already "
                                        "spoken for by another line is drawn as spoken for "
                                        "rather than offered twice.",
-                               "governed_by": ["D5", "D24", "D40", "D41", "D50", "D63", "D69", "D113", "D114", "D117", "D193"]},
+                               "governed_by": ["D5", "D24", "D40", "D41", "D50", "D63", "D69", "D113", "D114", "D117", "D193", "D-orders-backlog-reconcile"]},
             "src/OrdersHubStore.ts": {"does": "THE HUB'S MEMORY ACROSS A STAGE SWITCH. "
                                               "`#/orders` and `#/shipping` are one screen with "
                                               "two stages, and the shell keys its view on the "
@@ -5935,8 +6051,10 @@ COMPONENTS = [
                                         "reason and the wire type says a reader must render the "
                                         "gap rather than coerce it to zero.",
                                 # D121 is the entry; D69 owns the order ledger the rank-1
-                                # condition is read from; D63 is the two-map ledger behind it.
-                                "governed_by": ["D63", "D69", "D121"]},
+                                # condition is read from; D63 is the two-map ledger behind it;
+                                # D114 is the no-status-vocabulary rule the `open`-keyed join
+                                # obeys instead of reading `status`.
+                                "governed_by": ["D63", "D69", "D114", "D121", "D-home-counts-only-open-orders"]},
             "src/storeHistory.ts": {"does": "THE STORE'S OWN HISTORY — sittings recovered from "
                                             "`captured_at` by a 30-minute gap, and the ribbon "
                                             "geometry Home's foot draws from them. The unit is a "
@@ -6464,7 +6582,7 @@ COMPONENTS = [
                         "floor. The roster comes off the drawer's own nav links rather than a "
                         "typed list of hashes, plus `#/gallery`, which the nav deliberately does "
                         "not hold.",
-                "governed_by": ["D50", "D95", "D117"],
+                "governed_by": ["D50", "D95", "D117", "D-the-drawer-scrolls-above-its-foot"],
                 "note": "THE OWNER-SIDE SHELL HAD NO TEST AT ANY WIDTH. `nav.spec.ts` scopes "
                         "itself to `.bn-side` on purpose; `cursor.spec.ts` harvests its routes "
                         "from `.bn-side a.bn-nav-link`, which is `display: none` below 768, so "
@@ -6501,6 +6619,22 @@ COMPONENTS = [
                         "number in one expression, every call site in the product sits below "
                         "it, and shipping the display cut into a 32px rail is section 9's own "
                         "measured failure. Observed red under `size < 64` -> `size < 16`.",
+            },
+            "tests/home.spec.ts": {
+                "does": "`#/`'s 'cannot be filled' figure against a mixed ledger: one order "
+                        "still open and short 2 copies, one order the feed already reports "
+                        "Shipped and whose own `open` field reads `false` but whose "
+                        "`resolution.orders` entry still carries an `outstanding` of 5 — the "
+                        "shape a stale or partially-narrowed response would have. Asserts the "
+                        "standing sentence and the Orders stage tile both read 2, never 7 — "
+                        "`standing.ts` and `Home.tsx` join `resolution.orders` against the "
+                        "wire's own `open` field by key rather than trusting the server "
+                        "pre-filtered it. Not a harness test; `make design-check` runs it.",
+                "governed_by": ["D63", "D114", "D121", "D-home-counts-only-open-orders"],
+                "note": "Proved red first: reverting the "
+                        "join in `standing.ts` and `Home.tsx` reads "
+                        "\"Cannot be filled — 7 copies for 1 open order cannot be found.\" and "
+                        "the tile note \"7 not found\" against this fixture.",
             },
             "tests/gallery.spec.ts": {
                 "does": "the four row shapes `CardLocations` draws that no other spec reaches "
@@ -6600,7 +6734,7 @@ COMPONENTS = [
                         "arrow belongs to the screens, a held Cmd in a text field belongs to the "
                         "caret, and a screen outside the ring keeps the browser's key. Not a "
                         "harness test; `make design-check` runs it.",
-                "governed_by": ["D5", "D31", "D39", "D43", "D51", "D69", "D70", "D86", "D100", "D105", "D134", "D174", "D192", "D20"],
+                "governed_by": ["D5", "D31", "D39", "D43", "D51", "D69", "D70", "D86", "D100", "D105", "D109", "D134", "D174", "D192", "D20"],
                 "note": "ITS RING IS PINNED ON PURPOSE AND RECONCILED AT THE COMMIT. A ring "
                         "derived from App.tsx could not assert the ORDER against anything "
                         "independent, so the copy stays and carries a `ROUTE-ROSTER hotkey` "
@@ -6618,6 +6752,38 @@ COMPONENTS = [
                         "row. It cannot see whether the BROWSER honours preventDefault: "
                         "Playwright presses keys through the debugging protocol, which never "
                         "fires a browser shortcut at all.",
+            },
+            "tests/routeFixtures.ts": {
+                "does": "the fixture BUILDERS `run-panel.spec.ts`, `orders.spec.ts` and "
+                        "`shipping.spec.ts` already wrote — `runRow`, `place`/`pick`/`line`/"
+                        "`order`/`payloadOf`, `shippingRow`/`batchOf` — moved here so a fourth "
+                        "file could reuse the same proven shapes instead of a competing copy, "
+                        "plus two fresh ones (`codeEntry`/`codeLedgerOf`, `departedCard`) for "
+                        "`#/codes` and `#/graveyard`, which no existing spec seeded at all. The "
+                        "three specs above now import from here rather than defining their own "
+                        "(unchanged behaviour — all 112 of their cases still pass). Also exports "
+                        "one `seedPopulated*` function per one of D194's five under-fixtured "
+                        "routes (`#/runs`, `#/orders`, `#/shipping`, `#/codes`, `#/graveyard`): "
+                        "each registers a `page.route` stub with several real-shaped rows, "
+                        "registered AFTER `shell.ts:stubStore`'s own empty answer for the same "
+                        "path so the richer one wins (Playwright matches newest-first). Read "
+                        "only by `copy-budget.spec.ts`, which is where the gap these seeds close "
+                        "is argued at length.",
+                "governed_by": ["D20", "D83", "D134", "D194"],
+                "note": "CLOSES D194'S OWN NAMED GAP: its ceilings on the five routes above were "
+                        "pinned against `stubStore`'s empty-ish answer — no run, no order, no "
+                        "export, no code, no departed record — so a sentence added to any of the "
+                        "five could grow in its POPULATED state without the ratchet ever seeing "
+                        "it. `#/runs`'s ceiling fell (68 to 63: a populated list is real rows, "
+                        "not empty-state prose) while the other four rose (`#/orders` 82 to 84, "
+                        "`#/shipping` 80 to 135, `#/codes` 35 to 139, `#/graveyard` 21 to 66) — "
+                        "every rise is a real screen drawing real content, not copy creep, and "
+                        "`git log` on `app/tests/copy-budget.json` is the receipt. The owner's "
+                        "own alternative — pin against the live `:8000` store instead of a "
+                        "checked-in fixture — was rejected: order numbers, buyer names and run "
+                        "ids change daily on a real store, so a live-pinned ceiling would not "
+                        "reproduce in CI and a later `--pin` would silently ratchet to whatever "
+                        "that day's store happened to hold, which is the opposite of a ratchet.",
             },
             "tests/orders.spec.ts": {"does": "the order screen in a browser: that the six-way "
                                              "counts render including the zeros, that a pick "
@@ -6659,7 +6825,7 @@ COMPONENTS = [
                                              "app/tests/order-walk.spec.ts. Not a harness test — "
                                              "it starts a browser; `make design-check` runs it.",
                                      "governed_by": ["D24", "D27", "D28", "D36", "D49", "D58", "D63", "D69", "D73", "D90", "D91", "D96", "D103", "D113", "D114", "D118", "D123", "D132",
-                                                     "D181", "D193", "D-orders-sort-filter"]},
+                                                     "D181", "D193", "D194", "D-orders-sort-filter", "D-orders-backlog-reconcile"]},
             "tests/shipping.spec.ts": {"does": "the shipping screen in a browser, and its "
                                                "strongest cases are ABSENCES: no buyer name, "
                                                "address, city or postcode appears anywhere on "
@@ -6671,7 +6837,7 @@ COMPONENTS = [
                                                "second projection would arrive unnoticed. Not a "
                                                "harness test — it starts a browser; "
                                                "`make design-check` runs it.",
-                                       "governed_by": ["D16", "D61", "D63", "D66", "D69"]},
+                                       "governed_by": ["D16", "D61", "D63", "D66", "D69", "D194"]},
             "tests/value-bands.spec.ts": {"does": "the value lens "
                                                   "(D159), in its own "
                                                   "file so `pricing.spec.ts` stays the unedited "

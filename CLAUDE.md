@@ -308,6 +308,42 @@ make demo-freshness # whether the bundle still matches the wire it recorded. ON 
                     #   `.env.example` carries that prefix, so a public build cannot leak
                     #   one — a property of a naming convention, which is why CI asserts it
                     #   over the built artefact rather than trusting it.
+make catalog-refresh  # BUILD-ORDER STEP 9, PIECE 1 (D15). Re-clones `PokemonTCG/pokemon-tcg-data`
+                    #   and refreshes the committed snapshot at `vendor/pokemon-tcg-data/`
+                    #   (`cards/en/*.json` + `sets/en.json`, ~26 MB), recording the upstream
+                    #   commit SHA in `SNAPSHOT.json`. WRITES, so — like `make demo-seed` — it
+                    #   never gates a commit (D18) and runs on the owner's word.
+                    #   `ARGS=--dry-run` clones and reports the diff without touching the
+                    #   tracked copy. `decks/` and the v1-conversion script are deliberately
+                    #   NOT vendored — nothing downstream reads a decklist.
+make catalog-index  # BUILD-ORDER STEP 9, PIECE 2. Builds
+                    #   `vendor/pokemon-tcg-data/catalog.sqlite` from the snapshot — cards
+                    #   join to sets BY FILENAME, because `printedTotal` lives only in
+                    #   `sets/en.json`. A generator; gitignored output; never on the commit
+                    #   path. `pipeline/catalog.py` is the read-only reader over what this
+                    #   writes, and it composes the same `join_key` as
+                    #   `pipeline.join.number_index_key` by IMPORTING that function rather
+                    #   than reimplementing the fold.
+make catalog-index-selftest  # that builder and `pipeline/catalog.py`, proved against a
+                    #   throwaway two-set fixture — never the real snapshot, so it is fast
+                    #   enough to run on every `make check`. Every case failed before those
+                    #   two files existed. NOT wired into `make check`'s own list as shipped —
+                    #   see the decision entry this step wrote for why the wiring is left to
+                    #   a session that reopens the `check census` reconciliation on purpose.
+make catalog-mirror # BUILD-ORDER STEP 9, PIECE 3, DRY RUN ONLY AS SHIPPED. The manifest is
+                    #   derived from the vendored snapshot (no network to build it) and the
+                    #   downloader is resumable (a non-empty destination file is skipped
+                    #   without a request) and rate-limited (`MIN_INTERVAL_S` between
+                    #   requests). `ARGS=--dry-run` HEAD-samples up to 200 images and prints
+                    #   the manifest's file count and the byte total extrapolated from the
+                    #   sample — measured 2026-09-13: 20,444 files, ~14.2 GB extrapolated from
+                    #   200 samples, against D15's own ~16.7 GB estimate from a smaller
+                    #   sample. WRITES NOTHING under the mirror destination. Destination is
+                    #   `PKMNSCAN_IMAGE_MIRROR` (D15's knob, read the same way
+                    #   `harness/eval/fixtures.py` reads it), default `harness/images/`. The
+                    #   bare form fills it for real and HAS NEVER BEEN RUN ON THIS
+                    #   CHECKOUT — filling ~14-17 GB is the owner's call on their own disk,
+                    #   not a default any target here reaches for.
 make lint           # eslint over app/ (guards a bug earned, see app/eslint.config.js) plus ruff over
                     #   the Python packages, scoped to a slice measured against this tree (D82) —
                     #   never ruff's own defaults, never --fix. Config: ruff.toml.
@@ -510,6 +546,14 @@ make silent-write-selftest  # that guard, proved by REPRODUCING the incident: a 
                     #   first push of a new branch), a name that already matches, an explicit
                     #   `HEAD:<branch>` naming the real destination, a different remote than
                     #   the one tracked, and `--all`/`--mirror`/`--tags`/`--delete` all pass.
+                    #   AND A TRACKED UPSTREAM THAT IS THE DEFAULT BRANCH PASSES TOO, amended
+                    #   2026-09-13 (D179) — `git switch -c X origin/main` sets an upstream from
+                    #   birth, so this was refusing the ordinary first push of a feature branch
+                    #   and printing a remedy that named `main` outright
+                    #   (`git push origin HEAD:main`). `_default_branch` reads
+                    #   `refs/remotes/<remote>/HEAD` first, falling back to the first of
+                    #   `main`/`master` that exists locally. The incident's own shape — a
+                    #   DIFFERENT feature branch tracked, never the default — stays refused.
                     #   `PKMNSCAN_PUSH=off`.
                     #   SIX HATCHES AND NOT ONE, so disarming the symlink clause cannot disarm
                     #   the one that guards uncommitted work. Each is honoured in the
@@ -526,10 +570,13 @@ make guard-shell-selftest  # that guard, proved by COMMITTING its six mistakes i
                     #   pinned as passing and the git ones are RUN in the fixture first. In
                     #   `check`, never in the git hook (D18 — it writes a temp repo).
                     #   Mutation-tested — twenty-six arms, twenty-five caught, for the original
-                    #   five clauses; the push clause adds six of its own, five caught and the
-                    #   survivor an equivalent mutant (a colon-bearing refspec can never equal
-                    #   `HEAD` or a bare branch name, git's own ref grammar forbidding `:` in
-                    #   one, so the guard the colon check adds is never actually reached).
+                    #   five clauses; the push clause carries FOURTEEN of its own as of the
+                    #   2026-09-13 default-branch amendment (six over the colon-check and
+                    #   refspec resolution, eight over `_default_branch` and the exemption it
+                    #   feeds), eleven caught and three equivalent mutants — a colon-bearing
+                    #   refspec can never equal `HEAD` or a bare branch name, and two more that
+                    #   survive only because this fixture's local branch and remote default are
+                    #   both always named `main`, never `master`.
 make coordinator    # THE MERGE QUEUE, READ RATHER THAN REMEMBERED. The other half of
                     #   2026-09-12: a session relayed `#300 GREEN — merging` for several turns
                     #   while nothing merged, because the line came from a driver's stdout and
