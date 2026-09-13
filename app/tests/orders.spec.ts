@@ -142,6 +142,10 @@ function order(over: Partial<OrderRow> = {}): OrderRow {
     status: 'Ready to ship',
     first_seen: '2026-08-30T09:00:00+00:00',
     changed_at: null,
+    /* `D193` — the ledger's default fixture buyer. Overridden to `null`
+       (a nameless order) or a different spelling where a case is about buyers rather than
+       incidentally carrying one. */
+    buyer: 'Ada Lovelace',
     wanted: 1,
     recorded: 0,
     open: true,
@@ -196,6 +200,14 @@ async function open(
     pull?: unknown
     preview?: unknown
     fetched?: unknown
+    /* THE ALL-STATUSES, SKIP-KNOWN BODY (`D193`) — the ordinary press on
+       a device that has never narrowed the picker. A function so a case can answer differently
+       across the loop's batches (`remaining > 0` then `0`); the argument is which call this is,
+       0-indexed. Defaults to one batch, nothing left, no names — the steady-state append. */
+    allStatuses?: unknown | ((call: number) => unknown)
+    /* `POST /orders/names` — never sent by the narrowed path, only by the all-statuses loop when
+       a batch's `names` is non-empty. */
+    names?: unknown
     /* THE CAPTURE SERVER'S BOOT ID, for the one case that is about a restart. A function so a case
        can change it between reads. See the route below for why it has to be every GET. */
     boot?: () => string
@@ -216,29 +228,33 @@ async function open(
     })
   })
 
-  /* THE FETCH ROUTE, IN BOTH BODIES (D91). Registered before `/orders$` like every write-shaped
-     route here: the read regex is the looser one. A preview body answers the window by status; a
-     statuses body answers the ingest-shaped orders plus the four counts. Recorded, not performed
-     — nothing here reaches TCGplayer, and nothing may: this file runs against whatever real
-     server is listening on this checkout's port. */
+  /* THE FETCH ROUTE, IN THREE BODIES (D91, and `all_statuses` since `D193`).
+     Registered before `/orders$` like every write-shaped route here: the read regex is
+     the looser one. A preview body answers the window by status; a `statuses` body answers the
+     ingest-shaped orders plus the four counts (the narrowed path); an `all_statuses` body is the
+     ordinary press's own loop and answers the same shape plus `names`. Recorded, not performed —
+     nothing here reaches TCGplayer, and nothing may: this file runs against whatever real server
+     is listening on this checkout's port. */
+  let allStatusesCalls = 0
   await page.route(/\/orders\/fetch$/, async (route) => {
-    const body = route.request().postDataJSON() as { preview?: boolean }
+    const body = route.request().postDataJSON() as { preview?: boolean; all_statuses?: boolean }
     wire.push({ method: route.request().method(), path: new URL(route.request().url()).pathname, body })
-    await route.fulfill({
-      status: 200,
-      contentType: 'application/json',
-      body: JSON.stringify(
-        body.preview === true
-          ? (options.preview ?? {
-              range: 'LastThreeMonths',
-              total: 370,
-              by_status: [
-                { status: 'Shipped', count: 280, known: 0 },
-                { status: 'Cancelled', count: 88, known: 0 },
-                { status: 'Ready to Ship', count: 2, known: 0 },
-              ],
-              writes_nothing: true,
-            })
+    const answer =
+      body.preview === true
+        ? (options.preview ?? {
+            range: 'LastThreeMonths',
+            total: 370,
+            by_status: [
+              { status: 'Shipped', count: 280, known: 0 },
+              { status: 'Cancelled', count: 88, known: 0 },
+              { status: 'Ready to Ship', count: 2, known: 0 },
+            ],
+            writes_nothing: true,
+          })
+        : body.all_statuses === true
+          ? (typeof options.allStatuses === 'function'
+              ? (options.allStatuses as (call: number) => unknown)(allStatusesCalls++)
+              : (options.allStatuses ?? { orders: [], matched: 0, skipped_known: 0, detailed: 0, remaining: 0, names: [] }))
           : (options.fetched ?? {
               orders: [
                 {
@@ -253,7 +269,28 @@ async function open(
               skipped_known: 0,
               detailed: 2,
               remaining: 0,
-            }),
+            })
+    await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(answer) })
+  })
+
+  await page.route(/\/orders\/names$/, async (route) => {
+    wire.push({
+      method: route.request().method(),
+      path: new URL(route.request().url()).pathname,
+      body: route.request().postDataJSON(),
+    })
+    const body = route.request().postDataJSON() as { names?: unknown[] }
+    await route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify(
+        options.names ?? {
+          named: body.names?.length ?? 0,
+          unchanged: 0,
+          unknown: 0,
+          total: body.names?.length ?? 0,
+          summary: '',
+        },
       ),
     })
   })
@@ -805,10 +842,11 @@ test('a paste is projected before it is sent, and what was dropped is named', as
      screen has one way in and two sources rather than two ways in. */
   await expect(page.locator('.orders-paste').getByRole('button', { name: 'Fetch from TCGplayer' })).toHaveCount(1)
 
-  /* A BUYER, A STREET AND AN EMAIL AT THE TOP LEVEL — the shape a real console copy has. None
-     of the three may reach the wire, and the screen has to SAY it dropped them: a silent strip
-     is indistinguishable on screen from a feed that never carried the field, so the operator
-     could not tell a working PII boundary from a broken one. */
+  /* A BUYER, A STREET AND AN EMAIL AT THE TOP LEVEL — the shape a real console copy has.
+     `D193` moved ONE of the three across the boundary: the display
+     NAME may cross, verbatim off the console's own `buyerName` spelling; the street and the
+     email may not, and the screen has to SAY it dropped THOSE: a silent strip is
+     indistinguishable on screen from a feed that never carried the field. */
   await page.locator('textarea.orders-paste-box').fill(
     JSON.stringify({
       source: 'TCGplayer',
@@ -830,13 +868,15 @@ test('a paste is projected before it is sent, and what was dropped is named', as
       {
         source: 'TCGplayer',
         number: ORDER_NUMBER,
+        buyer: 'Ada Lovelace',
         lines: [{ sku: SKU, quantity: 1, name: 'Volcanion' }],
       },
     ],
   })
 
+  /* THE NAME IS NOT DROPPED — ONLY THE STREET AND THE EMAIL ARE. */
   const dropped = page.locator('.orders-paste-dropped')
-  await expect(dropped).toContainText('buyerName')
+  await expect(dropped).not.toContainText('buyerName')
   await expect(dropped).toContainText('shippingAddress')
   await expect(dropped).toContainText('email')
 })
@@ -862,48 +902,86 @@ test('a paste is projected before it is sent, and what was dropped is named', as
 
 /* -------------------------------------------------------------------------------------- 9 */
 
-test('a fetch the cap cut short says how many it left, and an empty one still re-reads', async ({
+/* THE ORDINARY PRESS IS NOW ALL-STATUSES, SKIP-KNOWN, AND IT LOOPS
+ * (`D193`). A device whose `statuses` filter is `null` — every device
+ * that has never opened "Only these statuses…" — no longer previews at all: the owner's ruling
+ * was that a one-time full backfill is followed forever after by an all-statuses append, so
+ * `runFetch` asks `POST /orders/fetch {all_statuses: true, skip_known: true}` straight away and
+ * repeats it while the wire reports `remaining > 0`. */
+
+test('the ordinary press is one fetch, one ingest and one names call, with no preview', async ({
   page,
 }) => {
-  /* SETTLED, BECAUSE THIS CASE IS ABOUT THE CAP AND NOT ABOUT THE ASK. `statuses: null` is
-     "every status the window holds", which is what this press has always sent; what changed on
-     2026-09-06 is that a device nobody has ASKED stops to show the list first (D114). The two
-     are separate facts and this case pins the first one. */
-  await remember(page, null)
   const wire = await open(page, {
-    fetched: { orders: [], matched: 130, skipped_known: 30, detailed: 0, remaining: 100 },
+    allStatuses: {
+      orders: [{ source: 'TCGplayer', number: ORDER_NUMBER, placed_at: '2026-08-30', status: 'Ready to Ship', buyer: 'Ada Lovelace', lines: [{ sku: SKU, quantity: 1, name: 'Volcanion', unit_price: '11.88' }] }],
+      matched: 1,
+      skipped_known: 0,
+      detailed: 1,
+      remaining: 0,
+      names: [{ source: 'TCGplayer', number: ORDER_NUMBER, buyer: 'Ada Lovelace' }],
+    },
+  })
+  await page.locator('main.orders .bn-head-actions').getByRole('button', { name: 'Add orders' }).click()
+  await page.locator('.orders-paste').getByRole('button', { name: 'Fetch from TCGplayer' }).click()
+
+  await expect.poll(() => wire.filter((one) => one.path.endsWith('/orders/fetch')).length).toBe(1)
+  const sent = wire.find((one) => one.path.endsWith('/orders/fetch'))?.body as {
+    all_statuses?: boolean
+    skip_known?: boolean
+    preview?: boolean
+  }
+  expect(sent.all_statuses).toBe(true)
+  expect(sent.skip_known).toBe(true)
+  expect(sent.preview).toBeUndefined()
+
+  await expect.poll(() => wire.filter((one) => one.path.endsWith('/orders/ingest')).length).toBe(1)
+  await expect.poll(() => wire.filter((one) => one.path.endsWith('/orders/names')).length).toBe(1)
+  expect(wire.find((one) => one.path.endsWith('/orders/names'))?.body).toEqual({
+    names: [{ source: 'TCGplayer', number: ORDER_NUMBER, buyer: 'Ada Lovelace' }],
+  })
+})
+
+test('a fetch the cap cut short loops, and the receipt names the batches and what is left', async ({
+  page,
+}) => {
+  /* TWO BATCHES: the first reports `remaining: 2`, the second `remaining: 0` — the loop must
+     fire a second call on its own rather than stopping at the first cap. */
+  const wire = await open(page, {
+    allStatuses: (call: number) =>
+      call === 0
+        ? { orders: [], matched: 25, skipped_known: 30, detailed: 0, remaining: 2, names: [] }
+        : { orders: [], matched: 25, skipped_known: 30, detailed: 0, remaining: 0, names: [] },
   })
   const reads = () => wire.filter((one) => one.path.endsWith('/orders') && one.method === 'GET').length
   const mounted = reads()
-  /* The way in is the header's control, as every other case on this screen opens it. */
   await page.locator('main.orders .bn-head-actions').getByRole('button', { name: 'Add orders' }).click()
-  /* ONE PRESS, DRIVEN AS ONE. Main reached this state through a status step — check, tick, fetch
-     — and the owner ruled that step out. What the press does underneath is still two calls, and
-     the assertion below is what keeps the second one honest: the statuses it sends are the ones
-     the preview answered, never a list this screen composed. */
   await page.locator('.orders-paste').getByRole('button', { name: 'Fetch from TCGplayer' }).click()
 
-  await expect
-    .poll(() => wire.filter((one) => one.path.endsWith('/orders/fetch')).length)
-    .toBe(2)
-  const asked = wire.filter((one) => one.path.endsWith('/orders/fetch'))
-  expect((asked[0]?.body as { preview?: boolean }).preview).toBe(true)
-  expect((asked[1]?.body as { statuses?: string[] }).statuses).toEqual([
-    'Shipped',
-    'Cancelled',
-    'Ready to Ship',
-  ])
+  await expect.poll(() => wire.filter((one) => one.path.endsWith('/orders/fetch')).length).toBe(2)
+  for (const call of wire.filter((one) => one.path.endsWith('/orders/fetch'))) {
+    expect((call.body as { all_statuses?: boolean }).all_statuses).toBe(true)
+  }
 
-  /* NOTHING TO INGEST IS NOT NOTHING TO SAY. The note names the cap's leftover as a number and
-     tells the operator the next press picks it up; and the screen re-reads the ledger anyway,
-     because "nothing new for me" and "nothing moved" are different facts. */
-  /* THE COUNTS MOVED OUT OF THE PASTE NOTE AND INTO A RECEIPT OF THEIR OWN. Same figures, same
-     rule about absence — a clause is drawn only where its number is real, because a rendered
-     `0 remaining` is a claim this wire cannot always make. */
-  await expect(page.locator('.orders-receipt')).toContainText('100 remaining')
-  await expect(page.locator('.orders-receipt')).toContainText('30 already in the ledger')
+  /* THE RECEIPT NAMES THE BATCHES, AND SETTLES AT 0 REMAINING. */
+  await expect(page.locator('.orders-receipt')).toContainText('2 batches')
+  /* CUMULATIVE ACROSS BOTH BATCHES, like `detailed` and `named` — each batch skipped 30 already-
+     known orders, so the receipt's running total is 60. */
+  await expect(page.locator('.orders-receipt')).toContainText('60 already in the ledger')
   expect(wire.filter((one) => one.path.endsWith('/orders/ingest'))).toHaveLength(0)
   await expect.poll(reads).toBe(mounted + 1)
+})
+
+test('the two-years control sends the LastTwoYears range', async ({ page }) => {
+  const wire = await open(page, {
+    allStatuses: { orders: [], matched: 0, skipped_known: 0, detailed: 0, remaining: 0, names: [] },
+  })
+  await page.locator('main.orders .bn-head-actions').getByRole('button', { name: 'Add orders' }).click()
+  await page.locator('.orders-paste').getByRole('button', { name: 'Fetch two years of history' }).click()
+
+  await expect.poll(() => wire.filter((one) => one.path.endsWith('/orders/fetch')).length).toBe(1)
+  const sent = wire.find((one) => one.path.endsWith('/orders/fetch'))?.body as { range?: string }
+  expect(sent.range).toBe('LastTwoYears')
 })
 
 /* -------------------------------------------------------------------------------------- 10
@@ -999,7 +1077,7 @@ test('the walk counts the orders it was started over, and the figure moves as on
      by construction, which is the same shape as the defect this whole case is about. Measured
      before the pass was held: the pill was GONE after this round trip. `By order` is a reachable
      press, not a hypothetical: it is on the toolbar, and `Orders.tsx`'s own order rows use it. */
-  await page.locator('main.orders').getByRole('button', { name: 'By order' }).click()
+  await page.locator('main.orders').getByRole('button', { name: 'By buyer' }).click()
   await page.locator('main.orders').getByRole('button', { name: 'Walk the boxes' }).click()
   await expect(page.locator('.orders-walk-figure .bn-pill')).toHaveText('1 order complete in this pass')
 })
@@ -1133,7 +1211,7 @@ test('a capture server restart ends the walk pass, so the figure stops describin
      is not merely absent: the next walk freezes a fresh set over what is open NOW, and the first
      order finished inside it reads one. Without this the case proves a figure can vanish and says
      nothing about the operator getting a working one back. */
-  await page.locator('main.orders').getByRole('button', { name: 'By order' }).click()
+  await page.locator('main.orders').getByRole('button', { name: 'By buyer' }).click()
   await page.locator('main.orders').getByRole('button', { name: 'Walk the boxes' }).click()
   await expect(page.locator('.orders-walk button.orders-pull').first()).toBeVisible()
   served = threeDone
@@ -1301,60 +1379,54 @@ test('the picker is built from the preview alone, and unticking one narrows the 
 
 /* ------------------------------------------------------------------------------------- 16
  *
- * THE FIRST PRESS ON A DEVICE NOBODY HAS ASKED. The owner decided this on 2026-09-06 against a
- * measurement taken on their own store: 69 of the 83 open orders were ones TCGplayer had already
- * shipped, and because `pipeline/orders.py:resolve_all` serves oldest-first out of one shared
- * pool those orders held 31 physical copies — three Ready-to-Ship lines read `short` while the
- * cards sat in boxes. A default of "everything" reproduces that on every device where nobody
- * opens the panel; a default of "everything except the shipped ones" needs a status vocabulary
- * `server/order_transport.py` refuses to have and would swallow a `Refunded` added later.
- *
- * SO THE FIRST PRESS SHOWS THE LIST AND DETAILS NOTHING, and answering it is what makes it the
- * last one. That is bounded by the two cases here: nothing is detailed before the answer, and
- * nothing is asked after it. */
+ * THE UNASKED DEVICE NO LONGER STOPS (`D193`, amending D114). D114's
+ * measurement stands — 69 of 83 open orders were already shipped and held 31 physical copies —
+ * but the owner's later ruling on the backfill (a one-time full history, then an all-statuses
+ * append forever after) makes the picker's own ask moot for the ORDINARY press: an unasked
+ * device gets exactly the same all-statuses, skip-known fetch an asked one gets, and the picker
+ * is reached only by choice, from its own "Only these statuses…" control. */
 
-test('a device nobody has asked is shown the list, and the first press details nothing', async ({
-  page,
-}) => {
-  const wire = await open(page)
+test('an unasked device is never shown the picker on the ordinary press', async ({ page }) => {
+  const wire = await open(page, {
+    allStatuses: { orders: [], matched: 0, skipped_known: 0, detailed: 0, remaining: 0, names: [] },
+  })
   await page.locator('main.orders .bn-head-actions').getByRole('button', { name: 'Add orders' }).click()
   await page.locator('.orders-paste').getByRole('button', { name: 'Fetch from TCGplayer' }).click()
 
-  /* THE PANEL OPENED BY ITSELF and says why. Nothing on this screen had to be found first. */
-  await expect(page.locator('.orders-statuses-ask')).toContainText('Which of these are worth fetching?')
-  await expect(page.locator('.orders-statuses-list .orders-status')).toHaveCount(3)
-
-  /* ONE CALL, AND IT IS THE FREE ONE. The preview walks search pages and details nothing; the
-     press that costs detail calls has not happened, and neither has an ingest. */
-  const asked = wire.filter((one) => one.path.endsWith('/orders/fetch'))
-  expect(asked).toHaveLength(1)
-  expect((asked[0]?.body as { preview?: boolean }).preview).toBe(true)
-  expect(wire.filter((one) => one.path.endsWith('/orders/ingest'))).toHaveLength(0)
-
-  /* THE ANSWER IS THE PRESS. Everything is ticked, so the figure is the whole window — this is
-     the person whose answer is "all of them, yes", and the point is that they SAID it. */
-  await page.locator('.orders-statuses-confirm').getByRole('button', { name: /Fetch these 370 orders/ }).click()
-
-  await expect.poll(() => wire.filter((one) => one.path.endsWith('/orders/fetch')).length).toBe(3)
-  const calls = wire.filter((one) => one.path.endsWith('/orders/fetch'))
-  const sent = calls[2]?.body as { statuses?: string[] }
-  expect(sent.statuses).toEqual(['Shipped', 'Cancelled', 'Ready to Ship'])
+  /* NO PANEL, NO PREVIEW. The picker is reached only by choosing to narrow, never by pressing
+     the ordinary Fetch. */
+  await expect(page.locator('.orders-statuses-ask')).toHaveCount(0)
+  await expect.poll(() => wire.filter((one) => one.path.endsWith('/orders/fetch')).length).toBe(1)
+  const sent = wire.find((one) => one.path.endsWith('/orders/fetch'))?.body as { preview?: boolean; all_statuses?: boolean }
+  expect(sent.preview).toBeUndefined()
+  expect(sent.all_statuses).toBe(true)
 })
 
 /* ------------------------------------------------------------------------------------- 17 */
 
-test('answering is remembered, so the next press fetches without asking again', async ({ page }) => {
-  /* NOT D91's TWO-PRESS FLOW, which the owner ruled out — that asked on every press. The ask is
-     spent once per device, and this is the case that says so: a device carrying an answer goes
-     straight through, and the panel it would have opened is not on screen. */
-  await remember(page, null)
+test('the narrowing picker opens from its own control, and the ask is shown once', async ({ page }) => {
   const wire = await open(page)
   await page.locator('main.orders .bn-head-actions').getByRole('button', { name: 'Add orders' }).click()
-  await page.locator('.orders-paste').getByRole('button', { name: 'Fetch from TCGplayer' }).click()
+
+  /* THE PICKER'S OWN CONTROL — separate from either fetch button. */
+  const control = page.locator('.orders-paste').getByRole('button', { name: /statuses/i })
+  await control.click()
+
+  await expect(page.locator('.orders-statuses-ask')).toContainText('Which of these are worth fetching?')
+  await expect(page.locator('.orders-statuses-list .orders-status')).toHaveCount(3)
+  /* OPENING IT DID NOT FETCH ANYTHING — it is `previewOrders`, the free, write-nothing call. */
+  expect(wire.filter((one) => one.path.endsWith('/orders/ingest'))).toHaveLength(0)
+
+  /* THE ANSWER IS THE PRESS. Nothing was unticked, so `filter.statuses` is still `null` — the
+     confirm only records that this device has been SHOWN the list (`asked: true`) — and the
+     ordinary all-statuses press underneath fires exactly as it would have without ever opening
+     the picker. */
+  await page.locator('.orders-statuses-confirm').getByRole('button', { name: /Fetch these 370 orders/ }).click()
 
   await expect.poll(() => wire.filter((one) => one.path.endsWith('/orders/fetch')).length).toBe(2)
-  const sent = wire.filter((one) => one.path.endsWith('/orders/fetch'))[1]?.body as { statuses?: string[] }
-  expect(sent.statuses).toEqual(['Shipped', 'Cancelled', 'Ready to Ship'])
+  const sent = wire.filter((one) => one.path.endsWith('/orders/fetch'))[1]?.body as { all_statuses?: boolean }
+  expect(sent.all_statuses).toBe(true)
+  /* AND THE NEXT ORDINARY PRESS DOES NOT REOPEN THE ASK — answering settles the device. */
   await expect(page.locator('.orders-statuses-ask')).toHaveCount(0)
 })
 
@@ -1368,7 +1440,7 @@ test('a tick IS an answer, so unticking one settles the device without pressing 
      time would be the recurring step that was ruled out. */
   const wire = await open(page)
   await page.locator('main.orders .bn-head-actions').getByRole('button', { name: 'Add orders' }).click()
-  await page.locator('.orders-paste').getByRole('button', { name: 'Fetch from TCGplayer' }).click()
+  await page.locator('.orders-paste').getByRole('button', { name: /statuses/i }).click()
   await expect(page.locator('.orders-statuses-ask')).toBeVisible()
 
   await page.locator('.orders-statuses-list .orders-status').first().locator('input[type=checkbox]').uncheck()
@@ -1380,4 +1452,131 @@ test('a tick IS an answer, so unticking one settles the device without pressing 
   await expect.poll(() => wire.filter((one) => one.path.endsWith('/orders/fetch')).length).toBe(3)
   const sent = wire.filter((one) => one.path.endsWith('/orders/fetch'))[2]?.body as { statuses?: string[] }
   expect(sent.statuses).toEqual(['Cancelled', 'Ready to Ship'])
+})
+
+/* ------------------------------------------------------------------------------------- 19
+ *
+ * GROUPED BY BUYER, NOT BY ORDER NUMBER (`D193`). The index pane and the
+ * detail panel both key on the buyer now, and a buyer with more than one open order carries two
+ * signals of that fact: the `N orders` pill in the index, and a chip per order in the detail
+ * header. `buildWalk` is called with the UNION of the buyer's open orders, so a merged walk
+ * shows rows from both. */
+
+const SECOND_ORDER = 'B58DDD-24C44'
+const secondOrderKey = `TCGplayer:${SECOND_ORDER}`
+
+test('the index lists buyers, and a two-order buyer carries the N-orders pill and two bars', async ({
+  page,
+}) => {
+  const secondLine = () =>
+    line({
+      order: SECOND_ORDER,
+      order_key: secondOrderKey,
+      sku: '9197754',
+      picks: [pick({ index: 30, capture_id: 'cap-second', card_name: 'Sunrise', card_number: '030' })],
+      line: { ...line().line, sku: '9197754', name: 'Sunrise', number: '030' },
+    })
+  const both = payloadOf(
+    [order(), order({ key: secondOrderKey, number: SECOND_ORDER })],
+    [
+      { key: `TCGplayer:${ORDER_NUMBER}`, number: ORDER_NUMBER, complete: false, outstanding: 1, lines: [line()] },
+      { key: secondOrderKey, number: SECOND_ORDER, complete: false, outstanding: 1, lines: [secondLine()] },
+    ],
+  )
+  await open(page, { orders: both })
+
+  /* ONE ROW FOR THE BUYER, NOT TWO — both orders carry the default fixture buyer. */
+  const rows = page.locator('.orders-index-row')
+  await expect(rows).toHaveCount(1)
+  await expect(rows.first()).toContainText('Ada Lovelace')
+  await expect(rows.first().locator('.orders-index-count')).toContainText('2 orders')
+
+  await expect(rows.first()).toBeVisible()
+  await rows.first().click()
+
+  /* THE DETAIL HEADER ENUMERATES BOTH ORDERS, each with its own progress bar. */
+  const chips = page.locator('.orders-buyer-chip')
+  await expect(chips).toHaveCount(2)
+  await expect(chips.nth(0)).toContainText(ORDER_NUMBER)
+  await expect(chips.nth(1)).toContainText(SECOND_ORDER)
+})
+
+test('a nameless order groups on its own, as No name and the order number', async ({ page }) => {
+  const nameless = order({ buyer: null })
+  await open(page, { orders: payloadOf([nameless], [{ key: `TCGplayer:${ORDER_NUMBER}`, number: ORDER_NUMBER, complete: false, outstanding: 1, lines: [line()] }]) })
+
+  await expect(page.locator('.orders-index-row').first()).toContainText(`No name · #${ORDER_NUMBER}`)
+})
+
+test('a buyer with two open orders draws one merged walk carrying rows from both', async ({ page }) => {
+  const secondLine = () =>
+    line({
+      order: SECOND_ORDER,
+      order_key: secondOrderKey,
+      sku: '9197754',
+      picks: [pick({ index: 30, capture_id: 'cap-second', card_name: 'Sunrise', card_number: '030' })],
+      line: { ...line().line, sku: '9197754', name: 'Sunrise', number: '030' },
+    })
+  const both = payloadOf(
+    [order(), order({ key: secondOrderKey, number: SECOND_ORDER })],
+    [
+      { key: `TCGplayer:${ORDER_NUMBER}`, number: ORDER_NUMBER, complete: false, outstanding: 1, lines: [line()] },
+      { key: secondOrderKey, number: SECOND_ORDER, complete: false, outstanding: 1, lines: [secondLine()] },
+    ],
+  )
+  await open(page, { orders: both })
+  await page.locator('.orders-index-row').first().click()
+
+  /* BOTH CARDS ARE PULLABLE FROM ONE MERGED LIST — the walk built from the union of the buyer's
+     open orders, not from either order alone. */
+  const picks = page.locator('.orders-buyer-walk .orders-pick')
+  await expect(picks).toHaveCount(2)
+  await expect(page.locator('.orders-buyer-walk')).toContainText('Volcanion')
+  await expect(page.locator('.orders-buyer-walk')).toContainText('Sunrise')
+
+  /* AND THE BY-ORDER FOLD STILL HOLDS EACH ORDER SEPARATELY, so a per-order press (stand-down,
+     close-line, declare-kind, hand-fill) stays reachable. */
+  await expect(page.locator('.orders-buyer-byorder')).toContainText(ORDER_NUMBER)
+  await expect(page.locator('.orders-buyer-byorder')).toContainText(SECOND_ORDER)
+})
+
+test('?order= resolves an old link to the buyer group that holds it', async ({ page }) => {
+  const secondLine = () =>
+    line({ order: SECOND_ORDER, order_key: secondOrderKey, sku: '9197754', picks: [pick({ index: 30, capture_id: 'cap-second' })] })
+  const both = payloadOf(
+    [order({ buyer: 'Ada Lovelace' }), order({ key: secondOrderKey, number: SECOND_ORDER, buyer: 'Someone Else' })],
+    [
+      { key: `TCGplayer:${ORDER_NUMBER}`, number: ORDER_NUMBER, complete: false, outstanding: 1, lines: [line()] },
+      { key: secondOrderKey, number: SECOND_ORDER, complete: false, outstanding: 1, lines: [secondLine()] },
+    ],
+  )
+  const wire: Wire[] = []
+  await page.route(/\/inventory$/, async (route) => {
+    await route.fulfill({ status: 200, contentType: 'application/json', body: '{"cards": {}}' })
+  })
+  await page.route(/\/orders$/, async (route) => {
+    wire.push({ method: route.request().method(), path: new URL(route.request().url()).pathname, body: null })
+    await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(both) })
+  })
+  await page.goto(`${VIEW_ROUTE}?order=${encodeURIComponent(secondOrderKey)}`)
+  await expect(page.locator(VIEW)).toBeVisible()
+
+  /* THE SECOND BUYER'S GROUP IS SELECTED, resolved through the order key the old link named. */
+  await expect(page.locator('.orders-buyer-detail')).toContainText('Someone Else')
+})
+
+test('a buyer with nothing open and closed long ago sits under the Earlier fold', async ({ page }) => {
+  const stale = order({
+    buyer: 'Grace Hopper',
+    open: false,
+    recorded: 1,
+    placed_at: '2020-01-01T00:00:00+00:00',
+    progress: [{ sku: SKU, wanted: 1, recorded: 1, outstanding: 0, over: 0, copies: [], pulled: [], at: null, by_hand: 0, reason: null, declared_kind: null, closed_at: null, closed_reason: null }],
+  })
+  await open(page, { orders: payloadOf([order(), stale], [{ key: `TCGplayer:${ORDER_NUMBER}`, number: ORDER_NUMBER, complete: false, outstanding: 1, lines: [line()] }]) })
+
+  await page.locator('main.orders').getByRole('button', { name: 'Done' }).click()
+  const earlier = page.locator('.orders-earlier')
+  await expect(earlier).toBeVisible()
+  await expect(earlier).toContainText('Grace Hopper')
 })

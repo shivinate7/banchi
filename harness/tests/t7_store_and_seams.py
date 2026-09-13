@@ -23444,6 +23444,107 @@ def check_order_ledger(checks: Checks) -> None:
             "the file on every sync",
         )
 
+        # --------------------------- 2b. buyer: content, carry-over, `name_buyer` (D-the-
+        # ledger-names-the-buyer)
+        a2_key = order_store.order_key("TCGplayer", "A-2")
+        with store.write() as snapshot:
+            named = snapshot.ledger.ingest(
+                [record("A-2", line("9191486", 1, name="Moonfall"))]
+            )
+        checks.equal(named.added, 1, "a second order, with no buyer, ingests as ordinary "
+                     "content — `None` means the feed said nothing")
+        checks.equal(
+            store.read().ledger.get(a2_key).buyer,
+            None,
+            "and nothing is invented in its place",
+        )
+
+        with store.write() as snapshot:
+            outcome = snapshot.ledger.name_buyer("TCGplayer", "A-2", "Ada Lovelace")
+        checks.equal(
+            outcome, "named",
+            "`name_buyer` attaches a display name to an order the ledger already holds",
+        )
+        checks.equal(
+            store.read().ledger.get(a2_key).buyer, "Ada Lovelace", "and it is stored",
+        )
+
+        before_changed = store.read().ledger.get(a2_key).changed_at
+        with store.write() as snapshot:
+            repeat = snapshot.ledger.name_buyer("TCGplayer", "A-2", "Ada Lovelace")
+        checks.equal(
+            repeat, "unchanged",
+            "naming the SAME buyer again is a no-op down to the word, the ingest "
+            "byte-identical-on-a-repeat promise one field over",
+        )
+        checks.equal(
+            store.read().ledger.get(a2_key).changed_at, before_changed,
+            "and `changed_at` does not move on a repeat",
+        )
+
+        with store.write() as snapshot:
+            missing = snapshot.ledger.name_buyer("TCGplayer", "NOT-REAL-ORDER", "Nobody")
+        checks.equal(
+            missing, "unknown",
+            "an order this ledger has never ingested is REPORTED, never created",
+        )
+        checks.ok(
+            store.read().ledger.get(order_store.order_key("TCGplayer", "NOT-REAL-ORDER"))
+            is None,
+            "and nothing was minted from a name and a number alone",
+        )
+
+        with store.write() as snapshot:
+            batch = snapshot.ledger.name_buyers(
+                [
+                    ("TCGplayer", "A-2", "Ada Lovelace"),
+                    ("TCGplayer", "NOT-REAL-ORDER", "Nobody"),
+                ]
+            )
+        checks.equal(
+            (batch.named, batch.unchanged, batch.unknown, batch.total),
+            (0, 1, 1, 2),
+            "`name_buyers` is the same three verdicts over a list, `ingest`'s own shape",
+        )
+
+        # a paste WITHOUT a buyer preserves the one already recorded
+        with store.write() as snapshot:
+            carried = snapshot.ledger.ingest(
+                [record("A-2", line("9191486", 1, name="Moonfall"))]
+            )
+        checks.equal(
+            (carried.changed, carried.unchanged),
+            (0, 1),
+            "A HAND-PASTE CARRYING NO BUYER DOES NOT ERASE ONE THE FETCH ALREADY WROTE — "
+            "the incoming record says nothing, `ingest` carries the incumbent's name "
+            "across, and the content then compares equal",
+        )
+        checks.equal(
+            store.read().ledger.get(a2_key).buyer, "Ada Lovelace",
+            "the buyer survived a paste that said nothing about it",
+        )
+
+        # a paste WITH a different buyer overwrites, same as any other feed-owned field
+        before_changed2 = store.read().ledger.get(a2_key).changed_at
+        with store.write() as snapshot:
+            overwritten = snapshot.ledger.ingest(
+                [record(
+                    "A-2", line("9191486", 1, name="Moonfall"), buyer="Grace Hopper",
+                )]
+            )
+        checks.equal(overwritten.changed, 1, "a feed-supplied buyer overwrites the stored one")
+        after2 = store.read().ledger.get(a2_key)
+        checks.equal(after2.buyer, "Grace Hopper", "the new name is stored verbatim")
+        checks.ok(
+            after2.changed_at != before_changed2,
+            "and `changed_at` MOVES — `buyer` is `_content` now, same as `status`",
+        )
+        # A-2 is scratch for this sub-section alone. Closed out here — a hand-fill, not a
+        # deletion this module refuses to offer — so the fixed `unfulfilled` roster later
+        # in this block stays exactly the three orders it has always named.
+        with store.write() as snapshot:
+            snapshot.ledger.record_fill(a2_key, "9191486", 1, "t7 buyer scratch, closed out")
+
         # --------------------------------------- 3. IDEMPOTENCE, AS BYTES AND NOT A COUNT
         before_tables = store_tables()
 
@@ -24182,21 +24283,58 @@ def check_order_screen(checks: Checks) -> None:
             return Store().read().ledger
 
         held = len(ledger_now().orders)
-        at_order = _refusal_text(
+        # `buyer` NOW SUCCEEDS, ON THE OWNER'S RULING (D193) — the
+        # display name is the one fact about a person this ledger keeps, and a paste that
+        # carries it stores it exactly as it stores `status` or `placed_at`.
+        named_paste = answers(
+            checks,
             lambda: capture_server.do_order_ingest(
                 paste("B-2", line("9191486", 1), buyer="Buyer001 Placeholder")
+            ),
+            "AN ORDER CARRYING `buyer` NOW INGESTS — the owner's ruling narrowed the "
+            "allowlist rather than widening a refusal",
+        )
+        if named_paste is not None:
+            checks.equal(named_paste["added"], 1, "one order added, with a name on it")
+        checks.equal(
+            ledger_now().get(order_store.order_key("TCGplayer", "B-2")).buyer,
+            "Buyer001 Placeholder",
+            "and the ledger holds the name verbatim",
+        )
+        checks.equal(
+            next(row["buyer"] for row in capture_server.do_orders()["orders"]
+                 if row["number"] == "B-2"),
+            "Buyer001 Placeholder",
+            "and GET /orders draws it",
+        )
+        at_address = _refusal_text(
+            lambda: capture_server.do_order_ingest(
+                paste(
+                    "B-3", line("9191486", 1),
+                    shippingAddress={"line1": "101 Example St"},
+                )
             )
         )
         checks.ok(
-            at_order is not None
-            and at_order[0] == "field_not_settable"
-            and "buyer" in at_order[1],
-            "AN ORDER CARRYING `buyer` REFUSES BY NAME rather than being stored with the "
-            "buyer's field quietly trimmed. `_reject_unknown` runs FIRST, before a source is "
-            "read, and the difference is the whole argument for an allowlist over a filter: "
-            "a trim is silent, and a refusal that names the field sends the caller back to "
-            "project it away upstream",
-            f"got {at_order!r}",
+            at_address is not None
+            and at_address[0] == "field_not_settable"
+            and "shippingAddress" in at_address[1],
+            "BUT `shippingAddress` STILL REFUSES BY NAME. The owner's ruling narrowed what "
+            "was excluded; it did not widen what is kept — address, email, payment and the "
+            "transaction breakdown stay out by the same allowlist mechanism",
+            f"got {at_address!r}",
+        )
+        at_email = _refusal_text(
+            lambda: capture_server.do_order_ingest(
+                paste("B-4", line("9191486", 1), email="buyer@example.com")
+            )
+        )
+        checks.ok(
+            at_email is not None
+            and at_email[0] == "field_not_settable"
+            and "email" in at_email[1],
+            "and `email` refuses the same way",
+            f"got {at_email!r}",
         )
         at_line = _refusal_text(
             lambda: capture_server.do_order_ingest(
@@ -24213,9 +24351,10 @@ def check_order_screen(checks: Checks) -> None:
         )
         checks.equal(
             len(ledger_now().orders),
-            held,
-            "and NOTHING WAS WRITTEN by either — the paste is validated whole before the "
-            "store lock is taken, so a body carrying one bad field stores no part of itself",
+            held + 1,
+            "and NOTHING WAS WRITTEN BY ANY OF THE THREE REFUSALS — only `B-2`'s named paste "
+            "landed. The paste is validated whole before the store lock is taken, so a body "
+            "carrying one bad field stores no part of itself",
         )
 
         sealed = answers(
@@ -26271,18 +26410,29 @@ def check_shipping_routes(checks: Checks) -> None:
         )
         checks.equal(
             sorted(projected),
-            ["orderDate", "orderNumber", "products", "status"],
-            "THE PROJECTION IS AN ALLOWLIST AND ITS KEY SET IS THE SECURITY BOUNDARY — four "
-            "keys, asserted whole. A denylist would return a field TCGplayer adds later and "
-            "nothing would fail",
+            ["buyer", "orderDate", "orderNumber", "products", "status"],
+            "THE PROJECTION IS AN ALLOWLIST AND ITS KEY SET IS THE SECURITY BOUNDARY — five "
+            "keys now, asserted whole. `buyer` joined it on the owner's ruling "
+            "(D193); a denylist would return a field TCGplayer adds "
+            "later and nothing would fail",
+        )
+        checks.equal(
+            projected["buyer"],
+            "Buyer001 Placeholder",
+            "the display name is the one fact about a person that survives the projection",
+        )
+        serialized = json.dumps(projected)
+        checks.equal(
+            serialized.count("Buyer001 Placeholder"),
+            1,
+            "AND IT SURVIVES EXACTLY ONCE. The fixture repeats the name on a product line "
+            "too (`products[].buyerName`), and that copy stays dropped — a projection that "
+            "let the name back in via `products[]` would still pass a naive 'is buyer "
+            "present' check while doubling the PII surface",
         )
         checks.ok(
-            "Buyer001" not in json.dumps(projected)
-            and "101 Example St" not in json.dumps(projected)
-            and "Visa" not in json.dumps(projected),
-            "and `buyerName`, `shippingAddress` and `paymentType` are DROPPED WHERE THEY ARE "
-            "PARSED — including the buyer's name repeated on a line, which a projection that "
-            "only cleaned the top level would carry straight through",
+            "101 Example St" not in serialized and "Visa" not in serialized,
+            "and `shippingAddress` and `paymentType` are DROPPED WHERE THEY ARE PARSED",
         )
         checks.equal(
             projected["products"],
@@ -26298,10 +26448,10 @@ def check_shipping_routes(checks: Checks) -> None:
                 {"orderNumber": "X-1", "orderDate": "2026-05-30",
                  "orderStatus": "Processing", "buyerName": "Buyer001 Placeholder"}
             )),
-            ["orderDate", "orderNumber", "status"],
+            ["buyer", "orderDate", "orderNumber", "status"],
             "and the SEARCH result is projected too, which is not belt-and-braces: the list "
-            "endpoint carries `buyerName`, and nobody thinks of a list endpoint as carrying "
-            "an address",
+            "endpoint carries `buyerName` beside `shippingAddress`, and `buyer` is the one "
+            "of those two that survives — the same allowlist, one call earlier",
         )
 
         body = order_transport.search_body("LastThreeMonths", 25, 0, "a2ffc195")
@@ -26965,8 +27115,9 @@ def check_order_fetch_route(checks: Checks) -> None:
             if fetched is not None:
                 checks.equal(
                     sorted(fetched),
-                    ["detailed", "matched", "orders", "remaining", "skipped_known"],
-                    "the fetch's key set, whole: the ingest body and the four counts",
+                    ["detailed", "matched", "names", "orders", "remaining", "skipped_known"],
+                    "the fetch's key set, whole: the ingest body, the four counts and the "
+                    "buyer backfill (D193)",
                 )
                 checks.equal(
                     (
@@ -26987,8 +27138,21 @@ def check_order_fetch_route(checks: Checks) -> None:
                 )
                 checks.equal(
                     sorted(fetched["orders"][0]),
-                    ["lines", "number", "placed_at", "source", "status"],
-                    "each order is the ingest's shape, key set whole",
+                    ["buyer", "lines", "number", "placed_at", "source", "status"],
+                    "each order is the ingest's shape, key set whole — five fields now, "
+                    "`buyer` among them",
+                )
+                checks.equal(
+                    fetched["orders"][0]["buyer"],
+                    "Buyer Placeholder",
+                    "the display name rides the ordinary detail path, same as status or date",
+                )
+                checks.equal(
+                    fetched["names"],
+                    [],
+                    "AND NAMES IS EMPTY HERE — every one of these fifteen was DETAILED, so "
+                    "its buyer already rides on `orders[]`. The backfill is for orders this "
+                    "press skips, not the ones it just fetched",
                 )
                 checks.equal(
                     fetched["orders"][0]["lines"],
@@ -27030,6 +27194,13 @@ def check_order_fetch_route(checks: Checks) -> None:
                     (15, 15, 0, 0, []),
                     "THE LEDGER IS THE DELTA: all fifteen are held at this status, so the second "
                     "press details nothing and pays three search pages",
+                )
+                checks.equal(
+                    again["names"],
+                    [],
+                    "AND THE STEADY STATE NAMES NOTHING EITHER: the ingest just recorded "
+                    "these fifteen buyers verbatim, so `_known_buyers` agrees with the wire "
+                    "and there is nothing to backfill",
                 )
                 checks.equal(len(canned.requests), 3, "three requests, all search pages")
             preview_after = answers(
@@ -27084,6 +27255,165 @@ def check_order_fetch_route(checks: Checks) -> None:
                 "picks the thirty up because the ledger will then know these ten",
             )
             checks.equal(len(detailed), 10, "ten detail requests and no more")
+
+            # ---- 4b: the buyer backfill (D193) — all_statuses,
+            # names, and POST /orders/names, none of it costing a detail call it did not
+            # already pay for.
+            bare_number = window[0]["orderNumber"]
+            ingested_bare = answers(
+                checks,
+                lambda: capture_server.do_order_ingest(
+                    {
+                        "orders": [
+                            {
+                                "source": "TCGplayer",
+                                "number": bare_number,
+                                "status": "Shipped",
+                                "lines": [{"sku": "9191486", "quantity": 1}],
+                            }
+                        ]
+                    }
+                ),
+                "a hand-paste with NO buyer field lands one Shipped order with buyer=None",
+            )
+            if ingested_bare is not None:
+                checks.equal(ingested_bare["added"], 1, "one order added, unnamed")
+
+            del canned.requests[:]
+            del detailed[:]
+            all_fetch = answers(
+                checks,
+                lambda: capture_server.do_order_fetch(
+                    {"all_statuses": True, "skip_known": True}
+                ),
+                "all_statuses: true details every status in one body",
+            )
+            if all_fetch is not None:
+                checks.equal(
+                    (all_fetch["matched"], all_fetch["skipped_known"], all_fetch["detailed"],
+                     all_fetch["remaining"]),
+                    (60, 16, 44, 0),
+                    "sixteen are known at their current status — the fifteen ingested "
+                    "Ready-to-Ship orders and the one bare Shipped paste — so forty-four "
+                    "(39 Shipped + 5 Cancelled) are fresh and all fit under the cap",
+                )
+                checks.equal(
+                    len(canned.requests),
+                    3 + 44,
+                    "three search pages plus exactly forty-four detail requests — NAMING "
+                    "COSTS NOTHING BEYOND THAT: the sixteen known orders' buyers come off "
+                    "summaries this walk already paid for",
+                )
+                checks.equal(
+                    all_fetch["names"],
+                    [{"source": "TCGplayer", "number": bare_number, "buyer": "Buyer Placeholder"}],
+                    "AND NAMES LISTS EXACTLY THE KNOWN-NAMELESS ORDER. The fifteen "
+                    "Ready-to-Ship orders are known too, but this ledger already spells "
+                    "their buyer identically to the wire, so `_known_buyers` drops them — "
+                    "only the bare paste, which the ledger holds with no name at all, is "
+                    "worth reporting",
+                )
+
+                named = answers(
+                    checks,
+                    lambda: capture_server.do_order_names({"names": all_fetch["names"]}),
+                    "POST /orders/names attaches the backfilled name",
+                )
+                if named is not None:
+                    checks.equal(
+                        (named["named"], named["unchanged"], named["unknown"], named["total"]),
+                        (1, 0, 0, 1),
+                        "one order named, nothing unchanged, nothing unknown",
+                    )
+                checks.equal(
+                    next(
+                        row["buyer"] for row in capture_server.do_orders()["orders"]
+                        if row["number"] == bare_number
+                    ),
+                    "Buyer Placeholder",
+                    "and GET /orders now shows the name on the order the paste left bare",
+                )
+
+                repeat_named = answers(
+                    checks,
+                    lambda: capture_server.do_order_names({"names": all_fetch["names"]}),
+                    "naming the same order again",
+                )
+                if repeat_named is not None:
+                    checks.equal(
+                        (repeat_named["named"], repeat_named["unchanged"], repeat_named["unknown"]),
+                        (0, 1, 0),
+                        "A REPEAT NAMES NOTHING NEW: the stored name already equals what was "
+                        "sent, so this is `unchanged` rather than a second `named` — the same "
+                        "byte-identical-on-a-repeat promise `ingest` makes one field over",
+                    )
+                unknown_named = answers(
+                    checks,
+                    lambda: capture_server.do_order_names(
+                        {"names": [{"source": "TCGplayer", "number": "NOT-A-REAL-ORDER",
+                                     "buyer": "Nobody"}]}
+                    ),
+                    "naming an order this ledger has never ingested",
+                )
+                if unknown_named is not None:
+                    checks.equal(
+                        (unknown_named["named"], unknown_named["unchanged"], unknown_named["unknown"]),
+                        (0, 0, 1),
+                        "COUNTED, NEVER CREATED. `name_buyer` refuses to mint an order from a "
+                        "name and a number alone — that would be a permanent `wanted == 0` "
+                        "row no other reader expects",
+                    )
+
+                del canned.requests[:]
+                del detailed[:]
+                again_all = answers(
+                    checks,
+                    lambda: capture_server.do_order_fetch(
+                        {"all_statuses": True, "skip_known": True}
+                    ),
+                    "a second identical all_statuses press",
+                )
+                if again_all is not None:
+                    checks.equal(
+                        again_all["names"],
+                        [],
+                        "AND NOW NAMES IS EMPTY: the backfill just wrote the one name this "
+                        "ledger was missing, so the steady-state press sends none",
+                    )
+                    checks.equal(
+                        (again_all["matched"], again_all["skipped_known"], again_all["detailed"]),
+                        (60, 16, 44),
+                        "the same sixteen are known and the same forty-four are fresh — "
+                        "nothing about the DETAIL arithmetic changed, only the names answer",
+                    )
+
+            refusal(
+                checks,
+                lambda: capture_server.do_order_fetch(
+                    {"statuses": ["Shipped"], "all_statuses": True}
+                ),
+                "fields_conflict",
+                "statuses and all_statuses do not mix — 'these particular ones' and 'every "
+                "one' cannot both be the caller's word",
+            )
+            refusal(
+                checks,
+                lambda: capture_server.do_order_names(
+                    {"names": [{"source": "TCGplayer", "number": bare_number, "buyer": "X",
+                                 "email": "buyer@example.com"}]}
+                ),
+                "field_not_settable",
+                "AN EMAIL ON A NAMES PAYLOAD REFUSES BY NAME, exactly as it would on "
+                "/orders/ingest — this route writes into the same ledger record through the "
+                "same allowlisted field and no other",
+            )
+            refusal(
+                checks,
+                lambda: capture_server.do_order_names({"names": []}),
+                "names_required",
+                "an empty list names nothing and is refused rather than reported as a press "
+                "that learned nothing",
+            )
 
             # ---- 5. the refusals
             refusal(

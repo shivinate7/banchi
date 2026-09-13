@@ -106,16 +106,27 @@ THE PROJECTION IS THE POINT
 --------------------------------------------------------------------------------------------
 
 The order detail carries `buyerName`, `shippingAddress` (recipient, street, city, postal
-code), `paymentType` and a full transaction breakdown. **None of it is returned from this
-module, and none of it is returned from ANY function here** — not from `detail`, not from
-`search`, not from `fetch_open_orders`. The projection happens the moment the response is
-parsed, so a buyer's address exists in this process only as a local `dict` inside one call
-frame and reaches no caller, no route, no screen, no file.
+code), `paymentType` and a full transaction breakdown. **Exactly one of those now leaves
+this module: `buyerName`, as `buyer`, a display name and nothing more**
+(D193). The rest is returned from NO function here — not from
+`detail`, not from `search`, not from `fetch_open_orders`. The projection happens the
+moment the response is parsed, so a buyer's ADDRESS exists in this process only as a local
+`dict` inside one call frame and reaches no caller, no route, no screen, no file.
 
-It is an ALLOWLIST and not a denylist, which is the whole difference. A denylist grows a hole
-every time the vendor adds a field, and it grows it silently: the day TCGplayer adds
-`buyerEmail`, a denylist starts returning it and nothing anywhere fails. An allowlist stops
-returning a field it has never heard of, which is the direction an accident should fall in.
+`buyerName` joining the allowlist is an OWNER'S RULING, not a session's judgement call: the
+owner walks drawers per *person*, and a screen that can only say "order A2FFC195" has no way
+to say "these three are the same buyer" — which is the whole reason `#/orders` groups by
+buyer rather than by number. Everything else stays excluded for the reason it always was:
+none of it is needed to pick a card off a shelf and put it in an envelope, and this repo has
+no use for a bearer instrument it does not need.
+
+It is an ALLOWLIST and not a denylist, which is the whole difference, and that mechanism is
+UNCHANGED by `buyerName` joining it. A denylist grows a hole every time the vendor adds a
+field, and it grows it silently: the day TCGplayer adds `buyerEmail`, a denylist starts
+returning it and nothing anywhere fails. An allowlist stops returning a field it has never
+heard of, which is the direction an accident should fall in — and it stops just as hard on a
+field this module already knows the NAME of. `buyerEmail` is not `buyerName`; nothing here
+reads it, and nothing granted `buyerName` a general licence to widen further.
 
 Nothing here is a substitute for the seller portal. If a human needs the buyer's address to
 put on an envelope, they read it in TCGplayer's own UI, and this repo's shipping path
@@ -143,7 +154,7 @@ import sys
 import urllib.error
 import urllib.request
 from pathlib import Path
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import Any, Dict, List, Optional, Sequence, Tuple
 from urllib.parse import quote, urlparse
 
@@ -385,7 +396,7 @@ def search_body(
 def project_order(
     detail: Any, summary: Optional[Dict[str, Any]] = None
 ) -> Dict[str, Any]:
-    """One order detail, reduced to the four things this repo is allowed to hold.
+    """One order detail, reduced to the five things this repo is allowed to hold.
 
     THE ALLOWLIST IS THE SECURITY BOUNDARY and it is short on purpose:
 
@@ -393,17 +404,22 @@ def project_order(
         orderDate     when it was placed. Decides the sequence two orders competing for one
                       SKU are resolved in (`pipeline/orders.py:order_sequence`).
         status        verbatim, whatever the feed said.
+        buyer         the buyer's DISPLAY NAME, and nothing else about who they are
+                      (D193). The owner walks drawers per *person*,
+                      and an order number carries no name a human can group by.
         products      one entry per line: {skuId, quantity, name, unitPrice}.
 
-    Everything else is dropped where it was parsed: `buyerName`, `shippingAddress`,
-    `sellerName`, `paymentType`, `transaction`, `refunds`, `trackingNumbers`, `allowedActions`
-    and any field TCGplayer adds after this was written. The last clause is why it is an
-    allowlist — a denylist would return the new field and nothing would fail.
+    Everything else is dropped where it was parsed: `shippingAddress`, `sellerName`,
+    `paymentType`, `transaction`, `refunds`, `trackingNumbers`, `allowedActions` and any
+    field TCGplayer adds after this was written. The last clause is why it is an allowlist —
+    a denylist would return the new field and nothing would fail.
 
     THE DETAIL AND THE SUMMARY DISAGREE ABOUT TWO NAMES, which is a fact about the API and not
     a defect: the detail says `createdAt` and `status`, the search result says `orderDate` and
     `orderStatus`. The detail wins where it has an answer, and the summary fills in where it
     does not, so an order is not left dateless because one endpoint spells it differently.
+    `buyer` follows the same rule — the detail's own `buyerName` wins, and the (already
+    projected) summary's `buyer` fills in where the detail carries none.
 
     A LINE IS NEVER SILENTLY DROPPED. A line with no readable SKU or no readable quantity
     refuses, naming the order — `CLAUDE.md`'s rule is that ambiguity faces a human, and a
@@ -485,21 +501,33 @@ def project_order(
 
     date = detail.get("createdAt") or fallback.get("orderDate")
     status = detail.get("status") or fallback.get("orderStatus")
+    # THE ONE FIELD THAT LEAVES THIS FUNCTION AND IS ABOUT A PERSON. `buyerName` is read here
+    # and nowhere lower — `_ingest_line`, `_line_answer`, every function that touches a
+    # `products[]` entry never sees it, because it never went into `entry` in the first
+    # place. The detail's own name wins; the summary's already-projected `buyer` (itself
+    # `buyerName`, one call earlier) fills in where the detail said nothing, the same
+    # fallback `orderDate`/`orderStatus` use two lines up.
+    buyer = str(detail.get("buyerName") or "").strip() or fallback.get("buyer")
     return {
         "orderNumber": number,
         "orderDate": str(date) if date is not None else None,
         "status": str(status) if status is not None else None,
+        "buyer": buyer or None,
         "products": lines,
     }
 
 
 def project_summary(entry: Any) -> Dict[str, Any]:
-    """One search result, reduced to the three non-personal fields.
+    """One search result, reduced to the four fields this repo is allowed to hold.
 
     THE SUMMARY IS PROJECTED TOO, AND THAT IS NOT BELT-AND-BRACES. The search result carries
-    `buyerName`. A public `search` that handed back raw summaries would be the same leak as an
-    unprojected `detail`, one call earlier, and it would be the easier one to miss because
-    nobody thinks of a list endpoint as carrying an address.
+    `buyerName` beside `shippingAddress` and the rest, and a public `search` that handed back
+    raw summaries would be the same leak as an unprojected `detail`, one call earlier — and
+    the easier one to miss, because nobody thinks of a list endpoint as carrying an address.
+    `buyer` is the one field that survives the projection now, for `project_order`'s reason:
+    the owner walks drawers by person, and this is where that name is FIRST available — a
+    names-only backfill (`FetchResult.names`) reads it off exactly this function, at zero
+    detail calls, because the summary already carries the one fact it needs.
     """
     if not isinstance(entry, dict):
         raise FetchRefusal(
@@ -515,10 +543,12 @@ def project_summary(entry: Any) -> Dict[str, Any]:
         )
     date = entry.get("orderDate")
     status = entry.get("orderStatus")
+    buyer = str(entry.get("buyerName") or "").strip() or None
     return {
         "orderNumber": number,
         "orderDate": str(date) if date is not None else None,
         "status": str(status) if status is not None else None,
+        "buyer": buyer,
     }
 
 
@@ -808,10 +838,11 @@ def search(
     page_size: int = DEFAULT_PAGE_SIZE,
     frm: int = 0,
 ) -> List[Dict[str, Any]]:
-    """One page of orders as `{orderNumber, orderDate, status}`. NO SKUs — see `detail`.
+    """One page of orders as `{orderNumber, orderDate, status, buyer}`. NO SKUs — see `detail`.
 
     Public because a caller may legitimately want the numbers without paying for a detail
-    request each. Projected, so `buyerName` does not come back out of here either.
+    request each. Projected, so everything but the display name stays out — see
+    `project_summary`.
     """
     return _search_page(range_, page_size, frm, _cookie())[1]
 
@@ -861,6 +892,15 @@ class FetchResult:
     the detailing: the summaries past it were SEEN and are named as a number rather than dropped
     without a trace, and the next press picks them up because the ledger then knows the ones
     this press detailed.
+
+    `names` IS THE BACKFILL, AND IT COSTS NOTHING (D193). Every entry
+    is `{orderNumber, buyer}` for a MATCHED, ALREADY-KNOWN order — one the ledger holds at
+    this exact status and so was skipped from `to_detail` — that carries a buyer the summary
+    can see. Not `remaining` (uncounted; the next press's detail call will carry its buyer
+    same as any other), not `to_detail` (its `orders[]` already carries the name, off the
+    detail). This is the set the caller could otherwise never learn a name for: an order this
+    press will not detail because nothing about it changed, and so a names-only pass over it
+    is the entire cost — one field read off a summary this fetch already paid for.
     """
 
     orders: List[Dict[str, Any]]
@@ -869,6 +909,7 @@ class FetchResult:
     skipped_known: int
     detailed: int
     remaining: int
+    names: List[Dict[str, Any]] = field(default_factory=list)
 
 
 def _summaries(
@@ -912,12 +953,14 @@ def _summaries(
 def summaries(
     range_: str = DEFAULT_RANGE, *, page_size: int = DEFAULT_PAGE_SIZE
 ) -> List[Dict[str, Any]]:
-    """Every order in `range_` as `{orderNumber, orderDate, status}`, and NOT ONE DETAIL CALL.
+    """Every order in `range_` as `{orderNumber, orderDate, status, buyer}`, NOT ONE DETAIL
+    CALL.
 
     Public because `POST /orders/fetch {preview: true}` answers from this alone: the statuses
     the window holds, counted by the STRING the wire returned, so the operator can tick the ones
-    worth a detail request each (D91). Projected, so `buyerName` does not come out of here
-    either.
+    worth a detail request each (D91). Projected, so everything but the display name stays out
+    — see `project_summary`. This is also the whole of a names-only backfill's cost: a caller
+    that wants buyers for orders it will not detail reads `buyer` off exactly these rows.
     """
     return _summaries(range_, page_size, _cookie())[1]
 
@@ -937,6 +980,8 @@ def fetch_open_orders(
         {"orderNumber": str,  ->  Order.number
          "orderDate":   str,  ->  Order.placed_at
          "status":      str,  ->  kept for the screen; nothing here routes on it
+         "buyer": str | None, ->  Order.buyer — the display name, and nothing else
+                                   about who they are (D193)
          "products": [{"skuId":  str,  ->  OrderLine.sku
                        "quantity": int, ->  OrderLine.quantity
                        "name":   str,   ->  OrderLine.name
@@ -1023,6 +1068,29 @@ def fetch_open_orders(
     # differently, and an order left dateless sorts LAST in `order_sequence` — which would hand
     # stock to a newer order over an older one.
     orders = [_detail(entry["orderNumber"], cookie, entry) for entry in to_detail]
+
+    # THE BACKFILL, AND IT IS `matched MINUS fresh` — never `matched minus to_detail`. `fresh`
+    # is already the entries whose status DISAGREES with what the ledger holds, so `matched
+    # minus fresh` is every summary the ledger already holds at this EXACT status: the ones a
+    # detail call would be spent on for nothing, `known_at` having already agreed with the
+    # wire. An entry that is fresh but past the detail ceiling belongs to `remaining` and
+    # NOT to `names` — its status changed, its buyer may have too, and the honest place for
+    # it is the next press's detail call, not a guess read off a summary this press did not
+    # trust enough to skip.
+    #
+    # Their names are otherwise invisible to a caller that skips known orders on every press:
+    # this account's window holds far more than `MAX_ORDERS` lets it detail per press, so the
+    # steady state is "matched but not fresh" for almost everything, and a names backfill that
+    # only read `orders[]` would only ever learn a name for the handful of orders that
+    # happened to change status today.
+    fresh_numbers = {str(entry["orderNumber"]).strip().casefold() for entry in fresh}
+    names = [
+        {"orderNumber": entry["orderNumber"], "buyer": entry["buyer"]}
+        for entry in matched
+        if str(entry["orderNumber"]).strip().casefold() not in fresh_numbers
+        and entry.get("buyer")
+    ]
+
     return FetchResult(
         orders=orders,
         total=total,
@@ -1030,4 +1098,5 @@ def fetch_open_orders(
         skipped_known=len(matched) - len(fresh),
         detailed=len(to_detail),
         remaining=len(fresh) - len(to_detail),
+        names=names,
     )
