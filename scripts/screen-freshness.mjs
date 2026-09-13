@@ -252,6 +252,9 @@ const RECORDED = {
   nonRequests: [
     'describeFailure', 'photoUrl', 'positionLabel', 'isDeparted', 'placeParts', 'placeSentence',
     'onServerBoot', 'newCaptureId', 'runFileUrl', 'shippingFileUrl', 'markdownFileUrl',
+    // D-one-poller: listener-shaped exactly like `onServerBoot` above — it registers a
+    // callback and returns an unsubscribe function, and makes no request of its own.
+    'onServerReachable',
   ],
 }
 

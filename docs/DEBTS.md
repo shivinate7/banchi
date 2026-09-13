@@ -1163,9 +1163,17 @@ a moving target — and that is a design question, not a fix.
 argument, and `mode` already survives an Orders → Shipping → Orders detour under it, so `walkKeys` does
 too. A tab left open overnight keeps a figure describing a sitting that ended, and nothing on screen
 says so. `onFetch` clears it, which is the boundary the operator actually draws — but only if they
-press it. **The fix that would close this is a clock, and this repo does not put one in the client**
-(`store/orders.py` records the one deliberate exception and argues it at length), so the honest
-alternatives are an explicit *end this pass* control nobody has asked for, or leaving it here.
+press it. **The fix that would close this is WALL-CLOCK ELAPSED TIME USED AS A SEMANTIC INPUT —
+expiring a pass after N minutes have passed — and this repo does not put THAT kind of clock in the
+client** (`store/orders.py`'s `now()`/`changed_at` is the one deliberate exception, a server-side
+timestamp rather than a client timer, and it argues the distinction at length), so the honest
+alternatives are an explicit *end this pass* control nobody has asked for, or leaving it here. THIS
+IS NOT A CLAIM THAT THE CLIENT CARRIES NO REPEATING TIMER — it carries five, all of them polls
+re-asking a question on a cadence rather than a wall clock deciding an answer has gone stale by
+itself, and `D-one-poller` gives them one shared primitive rather than a sixth hand-rolled one. The
+sentence above was read as the opposite once and corrected here rather than reopened: a poll and an
+expiry are different mechanisms, and this repo has built the first kind five times and the second
+kind never.
 
 **A capture-server restart DOES end it now, closed 2026-09-05.** `onServerBoot` clears `walkKeys`
 beside the shipping batch: a server that restarted may have taken orders since, so a figure counted
