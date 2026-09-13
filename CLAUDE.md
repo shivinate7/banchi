@@ -317,7 +317,8 @@ make check          # harness + docs-audit + claim-stale + revert-guard +
                     #   lint + vale + typecheck + audit-self-test +
                     #   githooks-selftest + merge-selftest + revert-selftest +
                     #   claim-selftest + decisions-selftest + submission-selftest +
-                    #   cid-selftest + janitor-selftest + reap-selftest + silent-write-selftest +
+                    #   cid-selftest + readings-selftest +
+                    #   janitor-selftest + reap-selftest + silent-write-selftest +
                     #   guard-shell-selftest +
                     #   coordinator-selftest + suite-lock-selftest +
                     #   serve-selftest + sync-selftest + verdict-selftest.
@@ -845,6 +846,25 @@ make merge          # merge a PR and move main onto it — BOTH HALVES, on your 
 ./pkmnscan prices   show [--held]   # what the corpus holds. `--held` is the cross-run view of
                                    #   what is held back — D49 named its absence, D62 repeated
                                    #   it, and it is one line now that the answers are one file.
+./pkmnscan readings adopt [--write] # THE MARKET READING IS A TABLE NOW, NOT A LIVE
+                                   #   RECOMPUTATION (D189). `server/
+                                   #   pipeline_routes.py:_readings()` used to walk every run's
+                                   #   pricing.json and the newest live export on every
+                                   #   `GET /pipeline/value`; that walk is `pipeline/readings.py:
+                                   #   collect()` now, run once by this press and cached in the
+                                   #   `readings`/`readings_sources` tables. `_readings()` is a
+                                   #   plain SELECT from there on.
+                                   #   Previews by default, on `prices adopt`'s own shape —
+                                   #   though nothing here overrides an operator's judgement:
+                                   #   this walk is purely mechanical newest-wins, so a re-run
+                                   #   over unchanged files is a no-op rather than a decision.
+                                   #   `--write` is a FULL REPLACE of both tables: a SKU whose
+                                   #   only source has since been retired (a run directory
+                                   #   deleted, a live export removed by hand) disappears from
+                                   #   the table exactly as it would have dropped out of the old
+                                   #   live walk on its next request.
+./pkmnscan readings show           # what the table holds, and which files it last credited.
+                                   #   Read-only.
 ./pkmnscan queue    refresh [--export <file.csv>] [--write]
                                    # RE-RESOLVE EVERY OPEN QUEUE ENTRY, STORE-WIDE. Free,
                                    #   re-runnable, previews by default. `store/queues.py:upsert`
@@ -2361,6 +2381,7 @@ D185 A row declares how many subjects it had, an empty one is pinned by name wit
 D186 A per-card price is divided by the cards actually submitted, and a reading is chosen on a metric the reading can move
 D187 A claim checks whether the slug is already claimed, not only whether the number is free
 D188 A join reads the store directly when there is no run directory to replay
+D189 The market reading is a table, and the walk that fills it is a press
 ```
 
 **THE GAP THIS LIST CARRIED BETWEEN D116 AND D118 IS CLOSED, AND IT CLOSED THE WAY IT SAID IT
