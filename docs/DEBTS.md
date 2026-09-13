@@ -2331,3 +2331,24 @@ scoped to the order-resolution path rather than to the wider copy-map widening.
 `server/*.py` and `store/master.py` for a full-table walk server-side; neither of these two
 sites is server-side — they are client `fetch` calls in `app/src`, which that guard's own scope
 does not reach. Nothing currently fails a commit that leaves them as they are.
+
+## 28 — `pkmnscan rescue` is reachable from no screen, and the screen that needs it names a command
+
+`#/pricing`'s "over a deleted box" sentence tells the operator, in a tooltip, to run
+`pkmnscan rescue` on the stranded run. That is a CLI press with no route, no client function
+and no control — the shape CLAUDE.md's "a route is not a feature" rule refuses for a server
+capability, one register over. On 2026-09-13 the owner hit the sentence, could not act on it
+from the app, and a session ran the three steps (`rescue`, `--write`, `join`) for them from a
+terminal. PR #347 made the sentence go away once a joined rescue exists; it did not put the
+press on a screen.
+
+**Why it is deferred rather than built.** D165 records that every run on the owner's machine
+that CAN strand predates the `bid` field, and every run since 2026-09-12 binds to the drawer's
+true index and cannot strand. So the press is for a shrinking, legacy set — one run today —
+and a control on `#/runs` beside the run panel is real work for a case that D145 has already
+made rare. It is named here so the next session that widens `#/runs` finds the argument, not
+the tooltip.
+
+**What closes it.** A `POST /pipeline/runs/<name>/rescue` that previews by default and
+writes on `confirm`, a client function in `app/src/server.ts`, and a control on the run's own
+row on `#/runs` drawn only when `box_former` is set — the same gate the sentence uses.
