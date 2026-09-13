@@ -510,6 +510,14 @@ make silent-write-selftest  # that guard, proved by REPRODUCING the incident: a 
                     #   first push of a new branch), a name that already matches, an explicit
                     #   `HEAD:<branch>` naming the real destination, a different remote than
                     #   the one tracked, and `--all`/`--mirror`/`--tags`/`--delete` all pass.
+                    #   AND A TRACKED UPSTREAM THAT IS THE DEFAULT BRANCH PASSES TOO, amended
+                    #   2026-09-13 (D179) — `git switch -c X origin/main` sets an upstream from
+                    #   birth, so this was refusing the ordinary first push of a feature branch
+                    #   and printing a remedy that named `main` outright
+                    #   (`git push origin HEAD:main`). `_default_branch` reads
+                    #   `refs/remotes/<remote>/HEAD` first, falling back to the first of
+                    #   `main`/`master` that exists locally. The incident's own shape — a
+                    #   DIFFERENT feature branch tracked, never the default — stays refused.
                     #   `PKMNSCAN_PUSH=off`.
                     #   SIX HATCHES AND NOT ONE, so disarming the symlink clause cannot disarm
                     #   the one that guards uncommitted work. Each is honoured in the
@@ -526,10 +534,13 @@ make guard-shell-selftest  # that guard, proved by COMMITTING its six mistakes i
                     #   pinned as passing and the git ones are RUN in the fixture first. In
                     #   `check`, never in the git hook (D18 — it writes a temp repo).
                     #   Mutation-tested — twenty-six arms, twenty-five caught, for the original
-                    #   five clauses; the push clause adds six of its own, five caught and the
-                    #   survivor an equivalent mutant (a colon-bearing refspec can never equal
-                    #   `HEAD` or a bare branch name, git's own ref grammar forbidding `:` in
-                    #   one, so the guard the colon check adds is never actually reached).
+                    #   five clauses; the push clause carries FOURTEEN of its own as of the
+                    #   2026-09-13 default-branch amendment (six over the colon-check and
+                    #   refspec resolution, eight over `_default_branch` and the exemption it
+                    #   feeds), eleven caught and three equivalent mutants — a colon-bearing
+                    #   refspec can never equal `HEAD` or a bare branch name, and two more that
+                    #   survive only because this fixture's local branch and remote default are
+                    #   both always named `main`, never `master`.
 make coordinator    # THE MERGE QUEUE, READ RATHER THAN REMEMBERED. The other half of
                     #   2026-09-12: a session relayed `#300 GREEN — merging` for several turns
                     #   while nothing merged, because the line came from a driver's stdout and
