@@ -51,3 +51,15 @@ One existing, unrelated constraint in `rescue` was left alone on purpose: it ref
 **A caller that wants `join --box 3` or `join --state identified` directly**, rather than resolving keys by hand or through a script and passing `--keys`. The measurement to take first is how often an operator's actual want is "everything identified, across drawers, that has never been joined" rather than "these specific keys" — `--run <name>` (an existing `identify` selection term) already answers a related but narrower question for a single past run's cards, unaffected by this entry.
 
 **`emit` gaining the same two loaders.** The natural shape is `resolve.load`/`resolve.load_from_store` staying exactly as they are and `cli/cmd_emit.py` growing the identical `run_dir is None` branch `cmd_join.py` has — `Resolved` already carries everything `emit` reads (`matches`, `photos`) regardless of which loader built it.
+
+### Footnote, added by `D-run-phase-treats-joined-as-identified`
+
+`server/pipeline_routes.py:_phase` was never updated to know this path exists: it gated every
+stage past `"ready"`/`"identify"` on `manifest.get("collected")` alone, and a store-backed join
+never writes `collected` — so a run that had gone all the way through `join`, with real
+`counts.skus` and `pricing.json` on disk, still read `"Not started"` on `#/runs`, disagreeing
+with `RunPanel.tsx`'s own SKU stats on the same manifest. `_phase` now treats `joined` as
+sufficient evidence identification happened, by either loader this entry names — `collected or
+joined` gates the first branch rather than `collected` alone. `harness/tests/
+t7_store_and_seams.py:check_store_backed_join` asserts it directly on the store-backed run's own
+manifest.
