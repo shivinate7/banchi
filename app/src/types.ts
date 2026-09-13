@@ -2954,6 +2954,31 @@ export type OrderCloseResult = {
   still_open: number
 }
 
+/** `POST /orders/reconcile-backlog` preview (`{preview: true}`) — `writes_nothing`, exactly as
+ *  `POST /orders/fetch`'s own preview carries it. `breakdown` is grouped by the feed's own
+ *  status string, largest first — the whole safety this route offers, since the predicate
+ *  itself cannot tell a two-year-old order from a live one sharing its cutoff and its
+ *  zero-recorded shape. */
+export type ReconcileBacklogPreview = {
+  cutoff: string
+  total: number
+  breakdown: { status: string | null; count: number }[]
+  writes_nothing: true
+}
+
+/** `POST /orders/reconcile-backlog` press. `closed` is exactly what `reopenOrders` takes, so
+ *  the receipt's undo needs no new mechanism. `reason` is always `shipped_elsewhere` — this
+ *  route never asks for one. */
+export type ReconcileBacklogResult = {
+  cutoff: string
+  orders: number
+  moved: number
+  lines: number
+  closed: { source: string; number: string }[]
+  reason: OrderCloseReason
+  still_open: number
+}
+
 /** `GET /orders`, out of ONE store snapshot so the list and the resolution cannot disagree.
  *
  *  Only `Ledger.unfulfilled()` orders are resolved, so `resolution.orders` is a subset of

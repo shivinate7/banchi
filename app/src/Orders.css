@@ -390,6 +390,11 @@
 .orders-backlog p { max-width: 72ch; }
 .orders-backlog .orders-standdown-row { margin-top: var(--bn-3); }
 
+/* ---- the one-time backlog reconcile: a second backlog `is_terminal_status` cannot see
+   (D203) — the same shape as the notice above, for the same reason. */
+.orders-reconcile p { max-width: 72ch; }
+.orders-reconcile .orders-standdown-row { margin-top: var(--bn-3); }
+
 /* ---- the stand-down: the presses for a line no pull can reach (D113) -------------------- */
 /* A HAIRLINE ABOVE IT AND NOTHING ELSE. It sits inside the reason banner, which already carries
    the tint, the icon and the padding — a second surface here would draw a panel inside a panel

@@ -942,6 +942,18 @@ ORDER_CLOSE_LINE_UNDO_FIELDS = ("lines", "undo")
 # one that admits a whole exported history would take the store lock for the length of it.
 ORDER_CLOSE_LIMIT = 200
 
+# `POST /orders/reconcile-backlog` — the two-year backlog `is_terminal_status` cannot see
+# (D203). `preview` is the only field a preview body carries beside this
+# one; a press body carries only `cutoff`, which is optional on both.
+ORDER_RECONCILE_FIELDS = ("cutoff", "preview")
+
+# A separate ceiling from `ORDER_CLOSE_LIMIT` above, ON PURPOSE: that one bounds a screen
+# control pressed order by order, sized to the 69-order backlog it was built for. This route is
+# the ONE-TIME press over the WHOLE two-year backlog — measured at 513 `Completed - Paid` plus
+# 14 `Ready to Ship` the day it was built — so a limit sized to the other control's history
+# would refuse this one's own first press.
+ORDER_RECONCILE_LIMIT = 5000
+
 # One press is one line's shortfall. A hand-fill has no `capture_id` to collide, so nothing
 # below it can catch a runaway count but `OverFulfilled` and this — and `OverFulfilled` is
 # bounded by the ORDER, which a fat-fingered paste could legitimately be under.
@@ -10686,6 +10698,175 @@ def do_order_close(payload: dict) -> dict:
         }
 
 
+_CUTOFF_RE = re.compile(r"^\d{4}-\d{2}-\d{2}$")
+
+
+def _reconcile_cutoff(payload: dict) -> str:
+    """A plain date, `YYYY-MM-DD`, or the refusal saying so. Defaults to today's UTC date.
+
+    A DATE ALONE, NEVER A TIMESTAMP — compared against the first ten characters of
+    `placed_at`, which is `store/orders.py:now`'s own format and always starts with one.
+    """
+    raw = payload.get("cutoff")
+    if raw is None:
+        return order_store.today()
+    if not isinstance(raw, str) or not _CUTOFF_RE.match(raw.strip()):
+        raise BadRequest(
+            HTTPStatus.BAD_REQUEST,
+            "cutoff_invalid",
+            f"cutoff was {raw!r}; send a date as YYYY-MM-DD, or omit it for today.",
+        )
+    return raw.strip()
+
+
+def _reconcile_candidates(
+    ledger: order_store.Ledger, cutoff: str
+) -> List[order_store.OrderRecord]:
+    """Every order `do_order_reconcile` would stand down at this cutoff. D203.
+
+    THREE TESTS, ALL THREE LOAD-BEARING:
+
+      OPEN            `Ledger.unfulfilled()` with the same terminal override `do_orders` and
+                      `do_order_close` apply — a Canceled or already-Shipped order is never a
+                      candidate, because it is not open to begin with.
+      NOTHING RECORDED  Summed across every line of the ORDER, not read line by line. One line
+                      carrying so much as one recorded copy — pulled or hand-filled — takes the
+                      whole order out of the candidate set: a part-pulled order is live work,
+                      never backlog.
+      BEFORE THE CUTOFF  `placed_at`'s first ten characters compared against `cutoff` as plain
+                      strings, which is exactly right for two ISO-8601 dates. An order with no
+                      `placed_at` is never a candidate — there is no date to test, and the safe
+                      answer to an unknown one is no.
+
+    SORTED, so two callers computing the same predicate over the same ledger see candidates in
+    the same order — the same discipline `do_orders`'s own `sequence` keeps.
+    """
+    open_keys = {
+        record.key
+        for record in ledger.unfulfilled()
+        if not order_store.is_terminal_status(record.status)
+    }
+    out: List[order_store.OrderRecord] = []
+    for key, record in sorted(ledger.orders.items()):
+        if key not in open_keys:
+            continue
+        placed = record.placed_at
+        if not placed or placed[:10] >= cutoff:
+            continue
+        recorded_total = sum(ledger.fulfilled(key, line.sku) for line in record.lines)
+        if recorded_total != 0:
+            continue
+        out.append(record)
+    return out
+
+
+def _reconcile_breakdown(candidates: Sequence[order_store.OrderRecord]) -> List[dict]:
+    """Candidates grouped by the FEED'S OWN status string, largest first.
+
+    THE WHOLE SAFETY THIS ROUTE OFFERS. The predicate above cannot tell a two-year-old
+    `Completed - Paid` order from a live `Ready to Ship` one — both carry zero recorded copies
+    and both are open — so the one thing standing between a bulk press and the operator's own
+    open work is this breakdown, drawn BEFORE the press rather than discovered after it. No
+    status is special-cased here: a status this store has never seen gets its own row exactly
+    like every other one, because the operator reading the breakdown is the guard and not a
+    list this route hard-codes.
+    """
+    counts: Dict[str, int] = {}
+    for record in candidates:
+        status = str(record.status or "").strip()
+        counts[status] = counts.get(status, 0) + 1
+    rows = [{"status": (status or None), "count": count} for status, count in counts.items()]
+    rows.sort(key=lambda row: (-row["count"], row["status"] or ""))
+    return rows
+
+
+def do_order_reconcile(payload: dict) -> dict:
+    """`POST /orders/reconcile-backlog` — the two-year backlog, stood down in one press.
+    D203.
+
+    THE GAP `is_terminal_status` LEAVES ON PURPOSE. That function's own docstring says
+    `Completed - Paid` is deliberately not terminal — a marketplace's payment clearing is not
+    proof a card shipped — so treating it as terminal on an ongoing basis would close a live
+    order the moment TCGplayer marks it paid, before anything has gone out. Measured after
+    D63's amendment: 527 orders remain open, 513 of them `Completed - Paid` and two years old
+    — fulfilled through the box screen before this one existed — and 14 `Ready to Ship`, live
+    work. This is a ONE-TIME reconcile the operator presses explicitly, never a rule this
+    route or any other runs on every fetch.
+
+    TWO BODIES, `do_order_fetch`'s OWN SHAPE:
+
+        {"preview": true, "cutoff"?}
+            -> {cutoff, total, breakdown: [{status, count}], writes_nothing: true}
+        {"cutoff"?}
+            -> {cutoff, orders, lines, moved, closed: [{source, number}], reason, still_open}
+
+    NOT `record_fill`, AND NOT `record_pull`. `Ledger.close_line` with
+    `order_store.CLOSE_SHIPPED_ELSEWHERE` and nothing else: this store never tracked which
+    physical copies these orders spent, and many shipped using copies still sitting in the
+    boxes as `identified`. A fill would claim a copy left while it is still on a shelf, offered
+    to the next buyer — the store would read right and be wrong. See `store/orders.py`'s own
+    comment beside that constant, and `do_order_close`'s docstring, which makes the identical
+    argument for the per-order control this route's press is built out of.
+
+    IDEMPOTENT BY THE SAME CONSTRUCTION `close_line` ALREADY GIVES EVERY OTHER WRITE HERE.
+    Standing an order down removes it from `Ledger.unfulfilled()` — a closed line owes nothing
+    — so a second press over the same cutoff recomputes the identical predicate against a
+    ledger that no longer counts those orders as open, finds none, and reports `orders: 0,
+    moved: 0` rather than re-stamping anything.
+
+    ONE `Store().write()` FOR THE WHOLE PRESS, candidates recomputed INSIDE the lock so the
+    close never acts on a stale reading of what was open. `ORDER_RECONCILE_LIMIT` is sized to
+    the whole backlog this route exists to move in one press, not to a screen control pressed
+    order by order — see its own comment.
+    """
+    _reject_unknown(payload, ORDER_RECONCILE_FIELDS)
+    preview = _optional_flag(payload, "preview", "preview_invalid")
+    cutoff = _reconcile_cutoff(payload)
+
+    if preview:
+        ledger = Store().read().ledger
+        candidates = _reconcile_candidates(ledger, cutoff)
+        return {
+            "cutoff": cutoff,
+            "total": len(candidates),
+            "breakdown": _reconcile_breakdown(candidates),
+            "writes_nothing": True,
+        }
+
+    with Store().write() as snapshot:
+        ledger = snapshot.ledger
+        candidates = _reconcile_candidates(ledger, cutoff)
+        if len(candidates) > ORDER_RECONCILE_LIMIT:
+            raise BadRequest(
+                HTTPStatus.BAD_REQUEST,
+                "too_many_orders",
+                f"{len(candidates)} candidates before {cutoff}, and this route takes at most "
+                f"{ORDER_RECONCILE_LIMIT} in one press. Narrow the cutoff.",
+            )
+        moved = 0
+        lines = 0
+        closed: List[dict] = []
+        for record in candidates:
+            touched = False
+            for line in record.lines:
+                if ledger.close_line(record.key, line.sku, order_store.CLOSE_SHIPPED_ELSEWHERE):
+                    lines += 1
+                    touched = True
+            if touched:
+                moved += 1
+                closed.append({"source": record.source, "number": record.number})
+
+        return {
+            "cutoff": cutoff,
+            "orders": len(candidates),
+            "moved": moved,
+            "lines": lines,
+            "closed": closed,
+            "reason": order_store.CLOSE_SHIPPED_ELSEWHERE,
+            "still_open": len(ledger.unfulfilled()),
+        }
+
+
 def do_order_line_kind(payload: dict) -> dict:
     """`POST /orders/line-kind` — record what the operator says a line IS. D113.
 
@@ -11851,6 +12032,10 @@ class CaptureHandler(BaseHTTPRequestHandler):
                 return self._json(HTTPStatus.OK, do_order_line_kind(self._body()))
             if path == "/orders/close":
                 return self._json(HTTPStatus.OK, do_order_close(self._body()))
+            # The one-time backlog reconcile (D203): a two-bodied route,
+            # `do_order_fetch`'s own shape, over the orders `is_terminal_status` cannot see.
+            if path == "/orders/reconcile-backlog":
+                return self._json(HTTPStatus.OK, do_order_reconcile(self._body()))
             # D61's Export Shipping read. Free, re-runnable, and it spends nothing — what
             # it costs is memory holding buyer addresses, which the DELETE below is the way
             # back from.

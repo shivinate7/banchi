@@ -124,8 +124,18 @@ export function standing(input: StandingInput): Standing | null {
   const parked = status.queues.parked
   const open = orders === null ? null : orders.orders.filter((o) => o.open)
   const toPull = open === null ? null : open.reduce((sum, o) => sum + Math.max(0, o.wanted - o.recorded), 0)
+  /* `resolution.orders` is a SUBSET of `orders` keyed on the ledger's own `open_keys`
+     (`server/capture_server.py:do_orders`, D63 amended) — a Canceled or already-shipped
+     order is excluded from it before this ever runs. This still joins by KEY against `open`
+     rather than trusting that shape blind: `open` is the one field this module is allowed to
+     read (D114 — no status vocabulary in `app/`), so a resolution row is counted only where
+     its own order reads `open: true` on the wire, never derived from `status` text and never
+     assumed pre-filtered. See `## D202`. */
+  const openKeys = open === null ? null : new Set(open.map((o) => o.key))
   const unfindable =
-    orders === null ? null : orders.resolution.orders.reduce((sum, o) => sum + (o.outstanding ?? 0), 0)
+    orders === null || openKeys === null
+      ? null
+      : orders.resolution.orders.reduce((sum, o) => sum + (openKeys.has(o.key) ? (o.outstanding ?? 0) : 0), 0)
   const owed = pricing === null ? null : pricing.roster.filter((r) => r.open && r.owes.length > 0).length
   const live = runs === null ? null : runs.filter((r) => r.live)
 

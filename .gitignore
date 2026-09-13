@@ -154,3 +154,12 @@ app/demo
 app/public/demo
 # ignore-check: bare on purpose, see the note at the top of this file
 dist-demo
+
+# D15, build-order step 9. `vendor/pokemon-tcg-data/` is a committed snapshot (cards + sets
+# JSON, ~26 MB) — but these two files are GENERATED from that snapshot by
+# `scripts/catalog-index.py` and `scripts/catalog-image-mirror.py`, `harness/.cache`-shaped:
+# deleting either costs one `make catalog-index` or one manifest rebuild, never a network
+# fetch of the vendored JSON itself, so committing them would be a second copy of data
+# already in the tree rather than ground truth of its own.
+vendor/pokemon-tcg-data/catalog.sqlite
+vendor/pokemon-tcg-data/image-manifest.json

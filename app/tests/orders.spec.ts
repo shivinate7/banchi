@@ -1,14 +1,8 @@
 import { test, expect, type Page, type Route } from '@playwright/test'
 import { sealEveryTest } from './shell'
+import { line, order, payloadOf, pick, place } from './routeFixtures'
 
-import type {
-  OrderRow,
-  OrdersPayload,
-  PickRow,
-  Place,
-  ResolvedLine,
-  ResolvedOrder,
-} from '../src/types'
+import type { OrdersPayload } from '../src/types'
 
 /* THE ORDER SCREEN, ASSERTED WHERE NOTHING ELSE CAN SEE IT.
  *
@@ -60,125 +54,10 @@ const SKU = '9191486'
 
 type Wire = { method: string; path: string; body: unknown }
 
-/** A position block with every field the server sends. A partial fixture does not fail
- *  partially here — a missing `label` renders the pooled branch and the case reads as though the
- *  screen were broken, which is exactly the confusion `shipping.spec.ts` records paying for. */
-function place(over: Partial<Place> = {}): Place {
-  const base: Place = {
-    label: 'Box 3 · Section 2 · Card 17',
-    located: true,
-    box: 3,
-    index: 21,
-    slot: 17,
-    section: 2,
-    card: 17,
-    box_name: 'RB Epics',
-    section_start: 12,
-    section_end: null,
-    box_total: 133,
-    box_closed: false,
-    fraction: 0.13,
-    neighbors: null,
-    section_gaps: 0,
-  }
-  return { ...base, ...over }
-}
-
-/** One copy the resolver offered. `capture_id` is the identity everything on this screen aims
- *  by, so it is the field every case varies. */
-function pick(over: Partial<PickRow> = {}): PickRow {
-  const base: PickRow = {
-    box: 3,
-    index: 21,
-    capture_id: 'cap-a',
-    source: 'card',
-    run: null,
-    card_name: 'Volcanion',
-    card_number: '025',
-    condition: 'Near Mint',
-    state: 'listed',
-    held_by: null,
-    place: place(),
-  }
-  return { ...base, ...over }
-}
-
-function line(over: Partial<ResolvedLine> = {}): ResolvedLine {
-  const base: ResolvedLine = {
-    order: ORDER_NUMBER,
-    order_key: `TCGplayer:${ORDER_NUMBER}`,
-    sku: SKU,
-    reason: 'resolved',
-    wanted: 1,
-    owed: 1,
-    fulfilled: 1,
-    outstanding: 0,
-    on_hand: 1,
-    sold: 0,
-    retired: 0,
-    pooled: 0,
-    line: {
-      sku: SKU,
-      quantity: 1,
-      name: 'Volcanion',
-      number: '025',
-      printing: 'Normal',
-      condition: 'Near Mint',
-      rarity: 'Rare',
-      unit_price: '1.24',
-      kind: 'single',
-    },
-    picks: [pick()],
-  }
-  return { ...base, ...over }
-}
-
-function order(over: Partial<OrderRow> = {}): OrderRow {
-  const base: OrderRow = {
-    key: `TCGplayer:${ORDER_NUMBER}`,
-    source: 'TCGplayer',
-    number: ORDER_NUMBER,
-    placed_at: '2026-08-29T10:00:00+00:00',
-    status: 'Ready to ship',
-    first_seen: '2026-08-30T09:00:00+00:00',
-    changed_at: null,
-    /* `D193` — the ledger's default fixture buyer. Overridden to `null`
-       (a nameless order) or a different spelling where a case is about buyers rather than
-       incidentally carrying one. */
-    buyer: 'Ada Lovelace',
-    wanted: 1,
-    recorded: 0,
-    open: true,
-    lines: [line().line],
-    progress: [
-      { sku: SKU, wanted: 1, recorded: 0, outstanding: 1, over: 0, copies: [], pulled: [], at: null, by_hand: 0, reason: null, declared_kind: null, closed_at: null, closed_reason: null },
-    ],
-  }
-  return { ...base, ...over }
-}
-
-/** The whole payload, with the counts derived from the lines rather than restated beside them —
- *  a fixture whose tally disagrees with its own list can make a broken breakdown look right. */
-function payloadOf(orders: OrderRow[], resolved: ResolvedOrder[]): OrdersPayload {
-  const all = resolved.flatMap((one) => one.lines)
-  const tally = (reason: ResolvedLine['reason']) =>
-    all.filter((one) => one.reason === reason).length
-  return {
-    summary: `${orders.length} order${orders.length === 1 ? '' : 's'}`,
-    orders,
-    resolution: {
-      orders: resolved,
-      counts: {
-        resolved: tally('resolved'),
-        short: tally('short'),
-        no_copies_on_hand: tally('no_copies_on_hand'),
-        sku_unknown: tally('sku_unknown'),
-        sku_unseen: tally('sku_unseen'),
-        not_a_single: tally('not_a_single'),
-      },
-    },
-  }
-}
+/* `place`, `pick`, `line`, `order` and `payloadOf` moved to `./routeFixtures` (D194's copy-
+ * ratchet fixtures) so `copy-budget.spec.ts` can build the same `#/orders` shapes without a
+ * second, drifting copy. `ORDER_NUMBER`/`SKU` above still match the values baked into those
+ * builders' defaults, which is what keeps every case below reading exactly as it did. */
 
 /** The default world: one open order, one resolved line, one copy in box 3. */
 function oneOpenOrder(): OrdersPayload {
@@ -211,6 +90,12 @@ async function open(
     /* THE CAPTURE SERVER'S BOOT ID, for the one case that is about a restart. A function so a case
        can change it between reads. See the route below for why it has to be every GET. */
     boot?: () => string
+    /* `POST /orders/reconcile-backlog` (D203), `{preview: true}` half.
+       Defaults to nothing to reconcile, so every case that does not ask for this stays exactly
+       as it was before the route existed. */
+    reconcilePreview?: unknown
+    /* The same route's press half. */
+    reconcile?: unknown
   } = {},
 ): Promise<Wire[]> {
   const wire: Wire[] = []
@@ -380,6 +265,27 @@ async function open(
       await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(answer) })
     })
   }
+
+  /* D203: registered BEFORE `/orders$`, `/orders/fetch$`'s own rule —
+     the read regex is the looser one. Defaults to nothing to reconcile so `ReconcileBacklogPanel`
+     draws nothing, keeping every case that does not ask for this one exactly as it was. */
+  await page.route(/\/orders\/reconcile-backlog$/, async (route) => {
+    const body = route.request().postDataJSON() as { preview?: boolean; cutoff?: string }
+    wire.push({ method: route.request().method(), path: new URL(route.request().url()).pathname, body })
+    const answer =
+      body.preview === true
+        ? (options.reconcilePreview ?? { cutoff: '2026-01-01', total: 0, breakdown: [], writes_nothing: true })
+        : (options.reconcile ?? {
+            cutoff: '2026-01-01',
+            orders: 0,
+            moved: 0,
+            lines: 0,
+            closed: [],
+            reason: 'shipped_elsewhere',
+            still_open: 0,
+          })
+    await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(answer) })
+  })
 
   await page.route(/\/orders$/, async (route) => {
     wire.push({ method: route.request().method(), path: new URL(route.request().url()).pathname, body: null })
@@ -1579,4 +1485,111 @@ test('a buyer with nothing open and closed long ago sits under the Earlier fold'
   const earlier = page.locator('.orders-earlier')
   await expect(earlier).toBeVisible()
   await expect(earlier).toContainText('Grace Hopper')
+})
+
+/* ============================================== D203 ==== */
+
+/* THE PANEL COMPUTES ITS OWN CANDIDATES FROM `GET /orders`'S OWN ANSWER — `open`, `recorded`
+   and `placed_at` are already on every `OrderRow`, so it asks the wire for nothing beyond what
+   this screen already read. Only the PRESS reaches `/orders/reconcile-backlog`, so these cases
+   drive the panel through the fixture's ORDER FIELDS rather than a canned preview body. */
+
+test('the reconcile control is absent with nothing to reconcile', async ({ page }) => {
+  /* PART-PULLED — `recorded: 1` on `oneOpenOrder()`'s own shape — is live work by the same
+     test the route itself applies, so the screen is populated (one open order) and the panel
+     still draws nothing. */
+  const wire = await open(page, {
+    orders: payloadOf(
+      [order({ recorded: 1 })],
+      [{ key: `TCGplayer:${ORDER_NUMBER}`, number: ORDER_NUMBER, complete: false, outstanding: 1, lines: [line()] }],
+    ),
+  })
+  await expect(page.locator('.orders-reconcile')).toHaveCount(0)
+  /* AND NOTHING WAS EVER ASKED OF THE ROUTE — the whole point of computing this client-side. */
+  expect(wire.filter((one) => one.path === '/orders/reconcile-backlog')).toEqual([])
+})
+
+test('the reconcile preview draws a breakdown by feed status, with the count in the button label', async ({
+  page,
+}) => {
+  const OLD = '2020-01-01T00:00:00+00:00'
+  const both = payloadOf(
+    [
+      order({ key: 'TCGplayer:A-1', number: 'A-1', status: 'Completed - Paid', recorded: 0, placed_at: OLD }),
+      order({ key: 'TCGplayer:A-2', number: 'A-2', status: 'Ready to Ship', recorded: 0, placed_at: OLD }),
+    ],
+    [
+      { key: 'TCGplayer:A-1', number: 'A-1', complete: false, outstanding: 1, lines: [line()] },
+      { key: 'TCGplayer:A-2', number: 'A-2', complete: false, outstanding: 1, lines: [line()] },
+    ],
+  )
+  const wire = await open(page, { orders: both })
+
+  const panel = page.locator('.orders-reconcile')
+  await expect(panel).toBeVisible()
+  /* BOTH STATUSES DRAW, each with its own count — the whole safety this route offers is that a
+     status this screen has never proposed closing before does not vanish into one figure. */
+  await expect(panel).toContainText('Completed - Paid')
+  await expect(panel).toContainText('Ready to Ship')
+
+  /* THE COUNT IS IN THE BUTTON'S OWN LABEL — CLAUDE.md's money-moment register: danger is red,
+     money moments are deliberate and carry the figure in the label. */
+  await expect(panel.getByRole('button', { name: /Stand down 2 orders/ })).toBeVisible()
+
+  /* AND STILL NOTHING WAS ASKED OF THE ROUTE — the breakdown above is computed, not fetched. */
+  expect(wire.filter((one) => one.path === '/orders/reconcile-backlog')).toEqual([])
+})
+
+test('the reconcile press sends the cutoff shown on screen, and the receipt carries an undo', async ({ page }) => {
+  const OLD = '2020-01-01T00:00:00+00:00'
+  const both = payloadOf(
+    [
+      order({ key: 'TCGplayer:A-1', number: 'A-1', status: 'Completed - Paid', recorded: 0, placed_at: OLD }),
+      order({ key: 'TCGplayer:A-2', number: 'A-2', status: 'Completed - Paid', recorded: 0, placed_at: OLD }),
+    ],
+    [
+      { key: 'TCGplayer:A-1', number: 'A-1', complete: false, outstanding: 1, lines: [line()] },
+      { key: 'TCGplayer:A-2', number: 'A-2', complete: false, outstanding: 1, lines: [line()] },
+    ],
+  )
+  const wire = await open(page, {
+    orders: both,
+    reconcile: {
+      cutoff: '2026-01-01',
+      orders: 2,
+      moved: 2,
+      lines: 2,
+      closed: [
+        { source: 'TCGplayer', number: 'A-1' },
+        { source: 'TCGplayer', number: 'A-2' },
+      ],
+      reason: 'shipped_elsewhere',
+      still_open: 1,
+    },
+  })
+
+  const panel = page.locator('.orders-reconcile')
+  await panel.getByRole('button', { name: /Stand down 2 orders/ }).click()
+
+  await expect.poll(() => wire.filter((one) => one.path === '/orders/reconcile-backlog').length).toBe(1)
+  const press = wire.find((one) => one.path === '/orders/reconcile-backlog')
+  /* THE ONLY FIELD SENT IS `cutoff` — the server recomputes the whole candidate set itself
+     rather than trusting whatever this screen displayed a moment before the press. */
+  expect(Object.keys(press?.body as object)).toEqual(['cutoff'])
+
+  /* THE RECEIPT, AND ITS UNDO. `reconcileBacklog`'s `closed` rides straight into `reopenOrders`
+     — the existing D113 reversal, which needed no new mechanism to put this route's writes
+     back. */
+  const receipt = page.locator('.bn-toast-receipt')
+  await expect(receipt).toContainText('Stood down 2 orders')
+  await expect(receipt.locator('button.bn-toast-action')).toHaveText('Undo')
+  await receipt.locator('button.bn-toast-action').click()
+  await expect.poll(() => wire.filter((one) => one.path === '/orders/close').length).toBe(1)
+  expect(wire.find((one) => one.path === '/orders/close')?.body).toEqual({
+    orders: [
+      { source: 'TCGplayer', number: 'A-1' },
+      { source: 'TCGplayer', number: 'A-2' },
+    ],
+    undo: true,
+  })
 })

@@ -1,7 +1,8 @@
 import { test, expect, type Page } from '@playwright/test'
 import { sealEveryTest } from './shell'
+import { batchOf, shippingRow as row } from './routeFixtures'
 
-import type { ShippingBatch, ShippingRow } from '../src/types'
+import type { ShippingBatch } from '../src/types'
 
 /* NOTHING HERE MAY REACH THE CAPTURE SERVER, AND THE SHELL'S OWN READ IS NOT THIS SCREEN'S.
    `app/tests/shell.ts` carries the argument; the call has to sit above every hook and every
@@ -59,54 +60,10 @@ const CSV = 'Order #,FirstName\nA2FFC195-0000F4-006AC,Ada\n'
 
 type Wire = { method: string; path: string; body: unknown }
 
-/** One order in the shape `pipeline/shipping.py:Routing` is serialised in. Every field, not the
- *  handful a given case reads: a partial fixture does not fail partially here — a row missing
- *  `reason` indexes the reason table with `undefined` and takes the screen down, which reads
- *  exactly like an unregistered route. */
-function row(over: Partial<ShippingRow> = {}): ShippingRow {
-  const base: ShippingRow = {
-    order: 'A2FFC195-0000F4-006AC',
-    lane: 'parcel',
-    reason: 'value_at_threshold',
-    certain: true,
-    value: '1750.00',
-    weight_per_item_oz: null,
-    item_count: 1,
-    stamp: null,
-  }
-  return { ...base, ...over }
-}
-
-/** The batch, with the tallies computed from the rows rather than restated beside them — a
- *  fixture whose counts disagree with its own list is a fixture that can make a broken chip
- *  look right. `parcel_count` and `shipments` come from the same place for the same reason. */
-function batchOf(rows: ShippingRow[], over: Partial<ShippingBatch> = {}): ShippingBatch {
-  const count = (lane: ShippingRow['lane']) => rows.filter((one) => one.lane === lane).length
-  const base: ShippingBatch = {
-    batch: BATCH,
-    name: 'TCGplayer_ShippingExport_20260830.csv',
-    expires_in: 1800,
-    shipments: rows.length,
-    rows,
-    lane_counts: {
-      envelope: count('envelope'),
-      parcel: count('parcel'),
-      unjudged: count('unjudged'),
-    },
-    reason_counts: {
-      value_at_threshold: rows.filter((one) => one.reason === 'value_at_threshold').length,
-      non_card_signal: rows.filter((one) => one.reason === 'non_card_signal').length,
-      cards_only: rows.filter((one) => one.reason === 'cards_only').length,
-      no_weight_data: rows.filter((one) => one.reason === 'no_weight_data').length,
-      no_value_data: rows.filter((one) => one.reason === 'no_value_data').length,
-      sub_single_weight: rows.filter((one) => one.reason === 'sub_single_weight').length,
-    },
-    parcel_count: count('parcel'),
-    file: { name: 'pirateship-import.csv', bytes: 2048 },
-    stamps: null,
-  }
-  return { ...base, ...over }
-}
+/* `row` and `batchOf` moved to `./routeFixtures` (D194's copy-ratchet fixtures) so
+ * `copy-budget.spec.ts` can build the same `#/shipping` shapes without a second, drifting
+ * copy. `routeFixtures.ts:batchOf`'s default `batch` id is this file's own `BATCH` constant,
+ * kept in step deliberately — see that file's comment. */
 
 /**
  * Land on the screen with every route it can reach intercepted, and return the log of what it
