@@ -432,6 +432,69 @@ def report_stale(stale: Sequence[Stale], ref: str) -> None:
         "  previews what it would take against main as it stands now.")
 
 
+# ------------------------------------------- an unclaimed file main has already claimed once
+
+# `stale_claims` ANSWERS "A NUMBER THIS BRANCH TOOK, TAKEN AGAIN" — it needs the branch to have
+# claimed first. This answers a different question: a slug this branch has NOT claimed yet,
+# that `ref` has already claimed under some OTHER number, via a branch that never passed
+# through here at all. `plan()` cannot see it either — it only asks what number is FREE on
+# `ref`, never whether `ref` has already resolved this exact slug under a different one.
+#
+# THE CORPUS IS A DIRECTORY (D160), so a claim is a RENAME: `docs/decisions/D-<slug>.md`
+# becomes `docs/decisions/D<n>-<slug>.md`. Two branches that both still carry the unclaimed
+# file — because neither had merged the other's claim back in yet — can each rename it under
+# a DIFFERENT number without either one's `plan()` ever looking at the other's tree. This is
+# exactly what happened on 2026-09-12: #329 claimed a stranded slug as D185, and #330 — cut
+# earlier and never merged forward — claimed the identical unclaimed file as the very next number in a `make
+# merge` run of its own, producing a rename/rename collision `stale_claims` cannot see (no
+# number this branch added was ever taken on `ref`; the number it picked was free) and that
+# surfaced only as a
+# GitHub merge conflict after the claim commit had already been pushed.
+#
+# MATCHED BY THE SLUG TEXT, NOT THE PATH: the unclaimed file and its claimed twin differ only
+# in the leading `D` vs `D<n>`, so stripping that prefix and comparing what remains is the
+# whole test. `ref`'s tree is read with `git ls-tree`, never a fetch — this runs on the same
+# local ref every other reader here does.
+
+
+def duplicate_pending(root: Path, ref: str, cwd: Optional[str] = None) -> List[Tuple[str, str]]:
+    """(pending slug, the number `ref` already claimed it under) for every decision slug this
+    branch still carries unclaimed that `ref` has already resolved under a different number.
+
+    DECISIONS ONLY. `codes` and `step` slugs are headings inside one shared file apiece, never
+    a filename of their own — the rename ambiguity this function exists for cannot arise for
+    either, and `decision index`/`id claims` already watch the shared-file kinds for the
+    ordinary two-number collision.
+    """
+    out: List[Tuple[str, str]] = []
+    listing = git("ls-tree", "-r", "--name-only", ref, "--", DECISIONS_DIR, cwd=cwd)
+    claimed_text = {}
+    for name in listing.splitlines():
+        m = re.match(r"^D(\d+)-(.+)\.md$", Path(name).name)
+        if m:
+            claimed_text[m.group(2)] = m.group(1)
+    for slug in pending(root)["decision"]:
+        text = slug[len("D-"):] if slug.startswith("D-") else slug
+        if text in claimed_text:
+            out.append((slug, f"D{claimed_text[text]}"))
+    return out
+
+
+def report_duplicate(dupes: Sequence[Tuple[str, str]], ref: str) -> None:
+    """Name every already-claimed slug this branch is still carrying as unclaimed."""
+    say(f"REFUSED: {len(dupes)} pending slug(s) this branch carries are already claimed on "
+        f"`{ref}`, under a different number.", "")
+    for slug, number in dupes:
+        say(f"  `{slug}` is already `{number}` on {ref} — some other branch claimed the",
+            "      identical file first, and this branch never merged that claim back in.")
+    say("",
+        "  THIS IS NOT A NEW ENTRY TO CLAIM. Merge `origin/main`, take its numbered file for",
+        "  this slug, and drop this branch's own unclaimed copy — `git rm` it and, on",
+        "  conflict, `git checkout --theirs` the numbered path. Minting a fresh number for it",
+        "  here would duplicate content main already carries, under a second number nothing",
+        "  else on main has ever heard of.")
+
+
 # ------------------------------------------------- what a commit CARRIES, after it is landed
 
 # THE INVARIANT IS `MAIN CARRIES NO SLUG`, AND NOTHING ASKED THE COMMIT ITSELF.
@@ -766,10 +829,14 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
             "  report every id main already holds as a collision.")
         return 2
     stale = stale_claims(root, args.ref, base, cwd=str(root))
+    dupes = duplicate_pending(root, args.ref, cwd=str(root))
 
     if args.stale:
         say(f"PKMNSCAN — ids this branch adds, checked against {args.ref}")
         say("=" * 72, "")
+        if dupes:
+            report_duplicate(dupes, args.ref)
+            return 3
         if not stale:
             say("  every id this branch adds is still free — nothing has gone stale.")
             return 0
@@ -782,6 +849,9 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
     # CHECKED BEFORE ANYTHING IS WRITTEN. A tree carrying a collision is one no merge may
     # proceed on, and performing the claim beside it would commit a fresh number and a stale
     # one together — leaving the branch worse off than the run that refused.
+    if dupes:
+        report_duplicate(dupes, args.ref)
+        return 3
     if stale:
         report_stale(stale, args.ref)
         return 3

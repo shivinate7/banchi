@@ -22,14 +22,35 @@ from __future__ import annotations
 
 import json
 from collections import Counter
+from typing import Optional, Tuple
 
 from cli import resolve, runs
 from pipeline import corpus, decisions, join, pricing, routing, worklist
+from pipeline import selection as selection_mod
 from store import master, queues
 from store import files
 from store.session import Store
 
 STALE_EXPORT_DAYS = 7
+
+
+def _keys_from(raw) -> Optional[Tuple[str, ...]]:
+    """`--keys 3/1,3/2` and `--keys 3/1 --keys 3/2` are the same list — `identify`'s own
+    comma-or-repeat rule (`cli/cmd_identify.py:_numbers`), reused here rather than restated.
+
+    VALIDATED THROUGH `pipeline/selection.py:_keys_of`, the SAME reader `identify`'s `--keys`
+    and the wire's `keys` term already go through: the `box/index` shape, the dedup, the
+    `MAX_KEYS` bound and the sort order are one rule rather than a second copy of it.
+    """
+    if not raw:
+        return None
+    flat = [
+        part.strip()
+        for chunk in raw
+        for part in str(chunk).split(",")
+        if part.strip()
+    ]
+    return selection_mod._keys_of(flat) if flat else None
 
 
 def _reason_counts(resolved: resolve.Resolved) -> Counter:
@@ -163,7 +184,7 @@ def _pricing_table(run_dir, resolved, choice, snapshot):
     }
 
 
-def _preview(args, run_dir, plan, resolved, say) -> int:
+def _preview(args, run_dir, plan, resolved, say, *, keys=None) -> int:
     """`--dry-run`: everything the join would compute, and nothing it would write.
 
     ONE walk of the ladder, counted by reason code off the same function the write reads.
@@ -171,6 +192,10 @@ def _preview(args, run_dir, plan, resolved, say) -> int:
     diffing the two queues so the operator could see what `--bypass` would buy — and the
     second walk went with the cross-check it was measuring (D3, amended). What is left is
     the preview: the queue this join would write, before it writes it.
+
+    NO MANIFEST MEANS NO MANIFEST, STORE-BACKED OR NOT. `run()` never calls `runs.create` on
+    this path — `run_dir` is built in memory only, so the sentence below stays true of a
+    store-backed dry run exactly as it always was of a run directory's.
     """
     mine = _reason_counts(resolved)
     say("")
@@ -179,32 +204,86 @@ def _preview(args, run_dir, plan, resolved, say) -> int:
     say(f"would queue      {sum(mine.values())} card(s)")
     _counts_block(say, mine)
     say("")
-    say(f"next: pkmnscan join {run_dir.directory} --export <file>  (to write it)")
+    if keys is not None:
+        say(f"next: pkmnscan join --keys {','.join(keys)} --export <file>  (to write it)")
+    else:
+        say(f"next: pkmnscan join {run_dir.directory} --export <file>  (to write it)")
     return 0
 
 
 def run(args, say) -> int:
-    run_dir = runs.open_run(args.run_dir)
+    # ------------------------------------------------------------ store-backed, or a run dir
+    #
+    # THE ARGUMENT IS OPTIONAL, AS OF PR G. `identify` stopped requiring one path per press
+    # under D180 — a selection names the cards and a run is created to hold the answers.
+    # `join` gets the same shape for the cards it reads: a run directory (the FILE path,
+    # replayed and reconciled against the store, D36) or `--keys` (the STORE path, read fresh
+    # at press time, no run directory required to have produced them). Exactly one of the two
+    # names the cards; naming both, or neither, is refused rather than guessed at.
+    try:
+        keys = _keys_from(getattr(args, "keys", None))
+    except selection_mod.SelectionError as exc:
+        say(f"refused: {exc}")
+        return 1
+    if args.run_dir and keys:
+        say("refused: a run directory and --keys both name the cards to join. Pass one.")
+        return 1
+    if not args.run_dir and not keys:
+        say("refused: name a run directory from `identify`, or the position keys to join "
+            "straight from the store with --keys.")
+        return 1
+
+    run_dir = runs.open_run(args.run_dir) if args.run_dir else None
+
     # A LEGACY ANSWER FILE REFUSES HERE, BEFORE ANYTHING IS READ OR WRITTEN (D86, amended
     # 2026-09-02). `runs/<n>/decisions.json` is never read as a fallback — that would put the
     # per-run duplication back on the first re-join of an old run — and the refusal used to
     # sit AFTER the store write, gated on the corpus being EMPTY, so on the owner's store eight
     # such files were silently ignored while the docs described a refusal. Unconditional now,
     # and before the export plan, so "Nothing was joined" is true where it is printed.
-    legacy = run_dir.path(runs.DECISIONS)
-    if legacy.is_file():
-        say(f"{legacy} is a legacy pricing file; run `pkmnscan prices adopt --write` to "
-            f"fold and retire it. Nothing was joined.")
-        return 1
+    # A STORE-BACKED JOIN HAS NO RUN YET TO CARRY ONE — it is created a few lines down, only
+    # once the selection and its export are both known good, so there is nothing to check here.
+    if run_dir is not None:
+        legacy = run_dir.path(runs.DECISIONS)
+        if legacy.is_file():
+            say(f"{legacy} is a legacy pricing file; run `pkmnscan prices adopt --write` to "
+                f"fold and retire it. Nothing was joined.")
+            return 1
     # The file->game mapping, read off each file's own Product Line cells, and every
     # refusal it can raise — two files claiming one game, a game in the run with no
     # export, a file naming no registered game — fires HERE, before the store is opened,
     # before any catalog is built, before anything is written or queued.
     try:
-        plan = resolve.exports_for(run_dir, args.export)
+        plan = (
+            resolve.exports_for(run_dir, args.export)
+            if run_dir is not None
+            else resolve.exports_for_store(keys, args.export)
+        )
     except join.EmptyCatalog as refusal:
         say(str(refusal))
         return 1
+
+    if run_dir is None:
+        # THE RUN IS CREATED ONLY NOW, exactly as `identify` waits until its own selection and
+        # claim are settled before `runs.create` (D180): a request that will refuse over its
+        # export or its keys has not yet left a directory in `runs/` to clean up. This run
+        # holds THIS join's own outputs — `report.txt`, `pricing.json`, the manifest below —
+        # never a frozen `identifications.json`, because a store-backed join reads the store
+        # directly and has no snapshot to freeze (see `cli/resolve.py:load_from_store`).
+        #
+        # A DRY RUN WRITES NEITHER, INCLUDING NO DIRECTORY. `_preview` prints "no manifest",
+        # and `runs.create` would `mkdir` one and write a manifest into it before that line is
+        # even said — the same reason a run directory's OWN dry run never becomes a second
+        # `runs.create`. `resolve.load_from_store` still needs a `Run` to carry the label, so
+        # one is built in memory and never saved.
+        run_dir = (
+            runs.Run(directory=files.runs_dir() / (args.label or "store"), manifest={})
+            if args.dry_run
+            else runs.create(args.label or "store")
+        )
+        run_dir.manifest["selection"] = {"keys": list(keys)}
+        if not args.dry_run:
+            run_dir.set(selection=run_dir.manifest["selection"])
 
     # ------------------------------------------------- the corpus, BEFORE the ladder walks
     #
@@ -258,20 +337,38 @@ def run(args, say) -> int:
             f"moved live: " + ", ".join(f"{e.sku} x{e.staged}" for e in stale[:8])
         )
 
+    # THE TWO LOADERS AGREE ON EVERY ARGUMENT EXCEPT WHERE THE CARDS COME FROM. `load` replays
+    # a run directory's frozen `identifications.json` and reconciles it against the store
+    # (D36's `realign`); `load_from_store` reads the store directly, at this instant, for the
+    # keys named — no frozen snapshot, so nothing to reconcile. Everything below this line
+    # reads `resolved`, never which loader built it.
     try:
-        resolved = resolve.load(
-            run_dir,
-            plan.by_game,
-            rule=args.rule,
-            basis=args.basis,
-            review_below=args.review_below_confidence,
-            threshold=threshold,
-            # NO CAP AT JOIN TIME, BECAUSE THERE IS NO STANDING ONE TO READ (D7, amended
-            # 2026-09-08). `join` reports what the shelf holds; a cap is named at `emit --cap`
-            # and belongs to that press. This used to read `policy.live_cap` so the two agreed
-            # — with the key deleted there is nothing to agree with, and `resolve.load`
-            # defaults to no cap. It also deletes a second `Corpus.read()`: the command reads
-            # `book` once already, which is what its own header claims.
+        resolved = (
+            resolve.load(
+                run_dir,
+                plan.by_game,
+                rule=args.rule,
+                basis=args.basis,
+                review_below=args.review_below_confidence,
+                threshold=threshold,
+                # NO CAP AT JOIN TIME, BECAUSE THERE IS NO STANDING ONE TO READ (D7, amended
+                # 2026-09-08). `join` reports what the shelf holds; a cap is named at
+                # `emit --cap` and belongs to that press. This used to read `policy.live_cap`
+                # so the two agreed — with the key deleted there is nothing to agree with, and
+                # `resolve.load`/`resolve.load_from_store` default to no cap. It also deletes a
+                # second `Corpus.read()`: the command reads `book` once already, which is what
+                # its own header claims.
+            )
+            if keys is None
+            else resolve.load_from_store(
+                run_dir,
+                keys,
+                plan.by_game,
+                rule=args.rule,
+                basis=args.basis,
+                review_below=args.review_below_confidence,
+                threshold=threshold,
+            )
         )
     except join.EmptyCatalog as refusal:
         say(str(refusal))
@@ -388,7 +485,7 @@ def run(args, say) -> int:
     # makes this useful: a preview that skipped the report would preview nothing, and one
     # that ran after the queues were written would not be a preview.
     if args.dry_run:
-        return _preview(args, run_dir, plan, resolved, say)
+        return _preview(args, run_dir, plan, resolved, say, keys=keys)
 
     # --------------------------------------------------------------- write the queues
     main, parked = resolve.entries_for(resolved)
