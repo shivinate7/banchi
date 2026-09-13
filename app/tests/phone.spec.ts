@@ -409,40 +409,6 @@ test('the sheets and menus a phone opens hold the floor too', async ({ page }) =
   expect(failures, failures.join('\n')).toEqual([])
 })
 
-/* A ROUTE CHANGE LANDS AT THE TOP. `.bn-shell-main` carries no `overflow` rule (App.css), so
-   the window is what scrolls at every width — and nothing reset it: `.bn-view` remounts keyed
-   on the query-stripped path, but the browser keeps the old scrollY across that remount, so the
-   leader's `,I` landed on Inventory already scrolled down by whatever Capture had been.
-   INVENTORY IS THE DESTINATION ON PURPOSE, NOT RUNS: the fixture this file seals with is
-   `{ store: true, cards: 122 }` (above), and 122 rows is the one route here guaranteed taller
-   than the viewport plus the scroll this case leaves behind — Runs draws no run under this
-   fixture and is short enough that the browser's own scroll-clamp reads 0 regardless of
-   whether anything reset it, which is a passing case that proves nothing. */
-test('leaving a scrolled screen lands the next one at the top', async ({ page }) => {
-  await page.setViewportSize(PHONE)
-  /* THE ROUTE COMES OFF THE DRAWER, NOT A TYPED HASH — the same argument `phoneRoutes` above
-     carries: a pinned list goes stale silently. `docs-audit`'s `route rosters` row catches a
-     THIRD hand-typed `#/…` literal in this file; deriving it here keeps this case at zero. */
-  const routes = await phoneRoutes(page)
-  const capture = routes.find((h) => h.endsWith('/capture'))
-  expect(capture, 'no /capture route in the drawer').toBeDefined()
-  await page.goto(capture as string)
-  await expect(page.locator('main.capture')).toBeVisible()
-  await page.evaluate(() => window.scrollTo(0, 300))
-  await expect
-    .poll(() => page.evaluate(() => window.scrollY), {
-      message: 'the capture screen never scrolled at all at 390 — the fixture, not the fix, is short',
-    })
-    .toBeGreaterThan(0)
-
-  await page.keyboard.press(',')
-  await page.keyboard.press('i')
-  await expect(page.locator('main.inventory')).toBeVisible()
-  await page.waitForTimeout(400)
-  const tall = await page.evaluate(() => document.documentElement.scrollHeight > window.innerHeight + 300)
-  expect(tall, 'Inventory rendered too short to prove anything — the 122-card fixture is not drawing rows').toBe(true)
-  expect(await page.evaluate(() => window.scrollY)).toBe(0)
-
 /* THE SHUTTER SAT HALF UNDER THE TAB BAR ON FIRST PAINT, AND PLAYWRIGHT'S DEFAULT COULD NEVER
  * HAVE SHOWN IT. `CaptureScreen.css` sized `.capture-stage` off a hand-written 356px budget
  * whose comment counted the tab bar as a flat 64px; the bar itself is
@@ -511,6 +477,43 @@ test('the shutter clears the phone tab bar on first paint, with a real safe-area
         `${Math.round(shutterBottom - tabBarBox.y)}px into the tab bar, which starts at ${tabBarBox.y} — ` +
         'half under the bar on first paint',
     ).toBeLessThanOrEqual(tabBarBox.y)
+  }
+})
+
+/* A ROUTE CHANGE LANDS AT THE TOP. `.bn-shell-main` carries no `overflow` rule (App.css), so
+   the window is what scrolls at every width — and nothing reset it: `.bn-view` remounts keyed
+   on the query-stripped path, but the browser keeps the old scrollY across that remount, so the
+   leader's `,I` landed on Inventory already scrolled down by whatever Capture had been.
+   INVENTORY IS THE DESTINATION ON PURPOSE, NOT RUNS: the fixture this file seals with is
+   `{ store: true, cards: 122 }` (above), and 122 rows is the one route here guaranteed taller
+   than the viewport plus the scroll this case leaves behind — Runs draws no run under this
+   fixture and is short enough that the browser's own scroll-clamp reads 0 regardless of
+   whether anything reset it, which is a passing case that proves nothing. */
+test('leaving a scrolled screen lands the next one at the top', async ({ page }) => {
+  await page.setViewportSize(PHONE)
+  /* THE ROUTE COMES OFF THE DRAWER, NOT A TYPED HASH — the same argument `phoneRoutes` above
+     carries: a pinned list goes stale silently. `docs-audit`'s `route rosters` row catches a
+     THIRD hand-typed `#/…` literal in this file; deriving it here keeps this case at zero. */
+  const routes = await phoneRoutes(page)
+  const capture = routes.find((h) => h.endsWith('/capture'))
+  expect(capture, 'no /capture route in the drawer').toBeDefined()
+  await page.goto(capture as string)
+  await expect(page.locator('main.capture')).toBeVisible()
+  await page.evaluate(() => window.scrollTo(0, 300))
+  await expect
+    .poll(() => page.evaluate(() => window.scrollY), {
+      message: 'the capture screen never scrolled at all at 390 — the fixture, not the fix, is short',
+    })
+    .toBeGreaterThan(0)
+
+  await page.keyboard.press(',')
+  await page.keyboard.press('i')
+  await expect(page.locator('main.inventory')).toBeVisible()
+  await page.waitForTimeout(400)
+  const tall = await page.evaluate(() => document.documentElement.scrollHeight > window.innerHeight + 300)
+  expect(tall, 'Inventory rendered too short to prove anything — the 122-card fixture is not drawing rows').toBe(true)
+  expect(await page.evaluate(() => window.scrollY)).toBe(0)
+})
 
 /* THE DRAWER'S LAST ROW, CONFIRMED RATHER THAN ASSUMED (D-the-drawer-scrolls-above-its-foot).
  *

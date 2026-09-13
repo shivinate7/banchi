@@ -306,7 +306,7 @@ OPEN = [
               "extrapolated from a 200-image HEAD sample, close to D15's own ~16.7 GB estimate. "
               "Filling it is the owner's disk to spend, not a default any target reaches for, so "
               "step 9 stays here rather than moving to SHIPPED. See "
-              "D202 for the full account, including "
+              "D-vendor-catalog-snapshot-and-index for the full account, including "
               "what was deliberately left undone in harness/eval/fixtures.py's own retry/backoff "
               "scaffolding."},
     {"n": 20, "title": "The shipped status and the tracking write-back",
@@ -1538,7 +1538,7 @@ COMPONENTS = [
         # one of these files.
         "note": "Narrower than the whole upstream tree on purpose: decks/ (83 files, 688 KB) "
                 "and the v1-conversion script are NOT vendored, because nothing downstream of "
-                "this step reads a decklist — see the D202 "
+                "this step reads a decklist — see the D-vendor-catalog-snapshot-and-index "
                 "decision entry. The image mirror piece is documented at "
                 "scripts/catalog-image-mirror.py; its own destination "
                 "(PKMNSCAN_IMAGE_MIRROR, default harness/images/) is outside this directory.",
@@ -2715,7 +2715,7 @@ COMPONENTS = [
                         "exists, and that a card file naming an absent set is refused rather "
                         "than skipped. Every case here failed before those two files existed. "
                         "`make catalog-index-selftest` — NOT wired into `make check`'s own "
-                        "numbered list as shipped; see the D202 "
+                        "numbered list as shipped; see the D-vendor-catalog-snapshot-and-index "
                         "decision entry for why that reconciliation is left to a session "
                         "arguing for it on purpose.",
                 "governed_by": ["D15", "D18"],

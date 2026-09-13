@@ -1,4 +1,4 @@
-## D201 — A route change lands at the top, and a same-path query change does not
+## D-a-route-change-lands-at-the-top — A route change lands at the top, and a same-path query change does not
 
 **The bug, found live on the phone shell.** Nothing in `App.tsx` or `App.css` ever called
 `scrollTo` or set `scrollTop`. `.bn-shell-main` carries no `overflow` rule, so the window is

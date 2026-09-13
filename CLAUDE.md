@@ -2528,8 +2528,6 @@ D197 A page is anchored to the shell's own inset, and only its width may vary by
 D198 Home's Review tile reads the same total `#/review` draws, never `review` alone
 D199 `_phase` reads `joined` as sufficient evidence identification happened
 D200 The repo-state heartbeat is a thin caller of what already exists, and it remembers across runs in a file
-D201 A route change lands at the top, and a same-path query change does not
-D202 Build-order step 9's first two pieces landed; the mirror stays dry-run
 ```
 
 **THE GAP THIS LIST CARRIED BETWEEN D116 AND D118 IS CLOSED, AND IT CLOSED THE WAY IT SAID IT
