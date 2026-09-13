@@ -4256,7 +4256,7 @@ COMPONENTS = [
                                     "armed.",
                             "governed_by": ["D5", "D10", "D13", "D31", "D41", "D49", "D50", "D51", "D94",
                                              "D95", "D110", "D117", "D118", "D134",
-                                             "D152"]},
+                                             "D152", "D-the-tab-bar-has-one-height"]},
             # THE TWO `ServerReloaded` FILES ARE GONE AND THE NOTICE IS NOT (Banchi, 2026-09-03).
             # D53's rule is that the boot header is SUBSCRIBED to and never polled, and that the
             # notice demands nothing; neither needed a component of its own once the shell had a
@@ -4609,7 +4609,7 @@ COMPONENTS = [
                                       # move what is around it when a drawer changes.
                                       "governed_by": ["D3", "D5", "D27", "D41", "D50", "D65", "D117",
                                                       "D118", "D130", "D142",
-                                                      "D164", "D195"]},
+                                                      "D164", "D195", "D-the-tab-bar-has-one-height"]},
             "src/PositionLabel.tsx": {
                 "does": "ONE rendering of `pipeline/join.py:Position.label` for every OWNER site "
                         "(D41, amended 2026-08-29). Recomposes `Box N \u00b7 Section N \u00b7 Card N` into a "

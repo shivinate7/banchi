@@ -635,7 +635,14 @@
 /* ---- bottom tab bar (phones) --------------------------------------------------------- */
 .bn-tabbar { display: none; }
 @media (max-width: 767px) {
-  .bn-shell-main { padding-bottom: calc(64px + env(safe-area-inset-bottom)); }
+  /* THE BAR HAS ONE HEIGHT, DECLARED ONCE, HERE, WHERE IT IS DRAWN (D-the-tab-bar-has-one-height).
+     `calc(64px + env(safe-area-inset-bottom))` used to be written twice in this file and a third
+     time as a plain `356px` budget in CaptureScreen.css that assumed the bar was 64px flat — on
+     every phone with a home indicator the real bar is ~98px, and the shutter sat under it. A
+     property is one name a second stylesheet can read; two hand-written copies of a calc are two
+     chances for one of them to go stale. */
+  :root { --bn-tabbar-h: calc(64px + env(safe-area-inset-bottom)); }
+  .bn-shell-main { padding-bottom: var(--bn-tabbar-h); }
   .bn-tabbar {
     position: fixed;
     z-index: 30;
@@ -644,7 +651,7 @@
     bottom: 0;
     display: grid;
     grid-template-columns: repeat(5, 1fr);
-    height: calc(64px + env(safe-area-inset-bottom));
+    height: var(--bn-tabbar-h);
     padding-bottom: env(safe-area-inset-bottom);
     background: var(--bn-surface-glass);
     backdrop-filter: saturate(1.4) blur(14px);
