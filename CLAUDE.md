@@ -553,6 +553,23 @@ make coordinator    # THE MERGE QUEUE, READ RATHER THAN REMEMBERED. The other ha
 make coordinator-selftest  # that report's verdict rules, against synthetic check-run payloads.
                     #   Every case is a payload a reader looking at conclusions ALONE would call
                     #   clean. No network, so it is in `check`.
+make heartbeat      # docs/GATES.md item 24, BUILT (`D200`). THE REPO-STATE
+                    #   HEARTBEAT, and never the browser tab's — it answers "open PRs green and
+                    #   unmerged, a dirty worktree with no session in it, whether `id claims` is
+                    #   clean, whether main's own last push is green, what `make janitor` would
+                    #   take", never anything about a capture server's own reachability.
+                    #   A THIN CALLER, not a fourth reader of the same facts: `coordinator.py
+                    #   --json` already answers four of those; this adds only main's own CI
+                    #   verdict (coordinator's `block_main` compares local main against
+                    #   origin/main, never CI) and janitor's preview, `--confirm` never passed.
+                    #   NEVER A DAEMON: one run, one exit — the cadence is whatever schedules
+                    #   it, never a loop in this file. EACH RUN IS A FRESH SESSION WITH NO
+                    #   MEMORY OF THE LAST ONE, so `.serve/heartbeat/latest.json` and
+                    #   `history.jsonl` are the durable state a diff against the previous run
+                    #   needs — that diff is the "a PR conflict nobody has been told about yet"
+                    #   bullet, answered by comparing files rather than remembering.
+                    #   Read-and-report authority only. `ARGS=--json` for the object;
+                    #   `ARGS=--no-network` for the janitor/docs-audit half alone.
 make janitor        # WHAT A FINISHED SESSION LEFT BEHIND, and what is safe to reap (D111).
                     #   Previews; `ARGS=--confirm` presses. TIER 1 goes without asking because
                     #   it cannot be live — a process whose own script has been deleted, a
@@ -2463,6 +2480,7 @@ D196 No user-visible string may name a decision, a repository path, or a pipelin
 D197 A page is anchored to the shell's own inset, and only its width may vary by screen
 D198 Home's Review tile reads the same total `#/review` draws, never `review` alone
 D199 `_phase` reads `joined` as sufficient evidence identification happened
+D200 The repo-state heartbeat is a thin caller of what already exists, and it remembers across runs in a file
 D201 A route change lands at the top, and a same-path query change does not
 ```
 
