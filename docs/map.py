@@ -4556,11 +4556,13 @@ COMPONENTS = [
                                             "index since 2026-09-12 "
                                             "(D153), which is a field "
                                             "in that document rather than a seventh key and is "
-                                            "the one value here no screen draws — and nothing "
-                                            "else",
+                                            "the one value here no screen draws, and which "
+                                            "`#/pricing` worklist sections this browser has "
+                                            "asked Compare on for (D-one-verdict-on-pricing) "
+                                            "— and nothing else",
                                     "governed_by": ["D13", "D27", "D91", "D94", "D95", "D114", "D132",
                                                     "D142", "D145",
-                                                    "D153", "D193"],
+                                                    "D153", "D193", "D-one-verdict-on-pricing"],
                                     "note": "IT EXISTS BECAUSE OF A LINT RULE, which is the "
                                             "rule working rather than being worked around. "
                                             "`app/eslint.config.js` bans the STORE and not the "
@@ -5676,7 +5678,7 @@ COMPONENTS = [
                                                 "D49", "D51", "D54", "D56", "D58", "D59",
                                                 "D62", "D78", "D79", "D85", "D86", "D89",
                                                 "D99", "D100", "D103", "D101", "D105", "D107", "D98", "D109", "D115", "D117", "D125", "D38",
-                                                "D118", "D159", "D168", "D172"]},
+                                                "D118", "D159", "D168", "D172", "D-one-verdict-on-pricing"]},
             "src/ClearPrices.tsx": {"does": "THE MASS-CLEAR, the third sheet off #/pricing's "
                                             "header (D168). The operator's "
                                             "own ask - \"after several emits a lot of pricing "
@@ -5741,7 +5743,7 @@ COMPONENTS = [
                                         "control and nothing has to win a stacking order.",
                                 "governed_by": ["D5", "D9", "D28", "D38", "D41", "D49", "D50",
                                                 "D54", "D56", "D62", "D78", "D79", "D85",
-                                                "D86", "D103", "D105", "D117", "D125"]},
+                                                "D86", "D103", "D105", "D117", "D125", "D-one-verdict-on-pricing"]},
             # D62 is the screen half of pipeline/pricehistory.py. D8 governs it because that
             # entry names the export as the pricing source: this draws a reading BESIDE that
             # figure and writes nothing, and the day it prices anything is a change to D8.
@@ -6960,7 +6962,7 @@ COMPONENTS = [
                                               "fallback. Named by `app/tests/shell.ts`'s seal; "
                                               "all seventy-one pass against the cropped render.",
                                       "governed_by": ["D156", "D8", "D9", "D20", "D28", "D33", "D48", "D49", "D51", "D54", "D56", "D57", "D58", "D59", "D62", "D68", "D78", "D79", "D85", "D86", "D98", "D99", "D103", "D115", "D117", "D118",
-                                                      "D168"]},
+                                                      "D168", "D-one-verdict-on-pricing"]},
             "tests/live-reconcile.spec.ts": {
                 "does": "the store-wide reconcile in a browser (D87): that it is reachable from "
                         "#/runs at all, that the preview asks for no write, and that the settle "

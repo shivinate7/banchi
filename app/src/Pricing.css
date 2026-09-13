@@ -43,6 +43,9 @@
 .pricing-scope > span:not(:last-child)::after { content: '·'; margin-left: var(--bn-2); color: var(--bn-ink-4); }
 .pricing-scope-run { font-size: var(--bn-fs-sm); }
 .pricing-scope-progress { color: var(--bn-ink-2); font-variant-numeric: tabular-nums; }
+/* THE LEGEND BEHIND "typed · held · on the rule · cheap" (plan 3 Group J #23): the figures
+   were hover-only before this, readable only to a mouse. Visible, small, once. */
+.pricing-scope-legend { font-size: var(--bn-fs-xs); color: var(--bn-ink-3); margin: 2px 0 0; }
 .pricing-head-progress { height: 4px; width: min(100%, 420px); margin-top: var(--bn-2); }
 .pricing-save { transition: background-color var(--bn-t) var(--bn-ease), color var(--bn-t) var(--bn-ease); }
 /* an icon-only button carrying a keycap is wider than the kit's square — a kit gap. The kit's own
@@ -271,6 +274,26 @@
 .pricing-section-answer-says { font-size: var(--bn-fs-sm); font-weight: 500; }
 .pricing-section-answer[data-state='unset'] { background: var(--bn-warn-tint); color: var(--bn-warn); }
 .pricing-section-answer[data-state='unset'] .pricing-section-answer-figure { color: var(--bn-warn); }
+
+/* ONE TOGGLE PER SECTION (Ruling B). Off by default — matches `aria-pressed`'s own state so
+   the pressed look and the disclosure state never disagree. */
+.pricing-compare-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--bn-2);
+  height: 34px;
+  padding: 0 var(--bn-3);
+  margin-left: auto;
+  border-radius: var(--bn-r-full);
+  background: var(--bn-surface-2);
+  color: var(--bn-ink-3);
+  font-size: var(--bn-fs-sm);
+  font-weight: 500;
+  white-space: nowrap;
+  transition: background-color var(--bn-t-fast) var(--bn-ease), color var(--bn-t-fast) var(--bn-ease);
+}
+.pricing-compare-toggle:hover { color: var(--bn-ink); }
+.pricing-compare-toggle[aria-pressed='true'] { background: var(--bn-accent-tint); color: var(--bn-accent); }
 .pricing-section-answer[data-state='run'] { background: var(--bn-accent-tint); color: var(--bn-accent); }
 .pricing-section-answer[data-state='run'] .pricing-section-answer-figure { color: var(--bn-accent); }
 
@@ -450,45 +473,11 @@
 .pricing-verdict-warn { display: flex; align-items: flex-start; gap: 6px; font-size: var(--bn-fs-sm); line-height: 1.45; color: var(--bn-warn); }
 .pricing-verdict-warn .bn-icon { flex: none; margin-top: 1px; }
 .pricing-verdict-warn a { color: inherit; text-decoration: underline; text-underline-offset: 2px; }
-/* where the answers stand — one bar, three parts, and a held row is its own colour because it
-   writes nothing rather than being a shade of done */
-.pricing-meter { display: flex; flex-direction: column; gap: var(--bn-2); }
-.pricing-meter-bar {
-  display: flex;
-  height: 8px;
-  border-radius: var(--bn-r-full);
-  overflow: hidden;
-  background: var(--bn-surface-2);
-}
-.pricing-meter-bar > span {
-  flex-basis: 0;
-  min-width: 0;
-  transition: flex-grow var(--bn-t-slow) var(--bn-ease);
-  animation: pricing-meter-in var(--bn-t-draw) var(--bn-ease-out) both;
-}
-@keyframes pricing-meter-in { from { transform: scaleX(0); transform-origin: left; } to { transform: none; } }
-.pricing-meter-bar > [data-part='typed'] { background: var(--bn-ok); }
-.pricing-meter-bar > [data-part='held'] { background: var(--bn-warn); }
-/* "on the rule" is not a decision, so it is not a solid: it is hatched, the way an estimate is.
-   The cheap rows are hatched too — nobody typed them either — but they go out at the store's
-   own figure rather than the rule's, so they are their own segment in the accent, and the
-   legend names the money. Two hatches rather than one lie. */
-.pricing-meter-bar > [data-part='rule'] {
-  background-color: color-mix(in srgb, var(--bn-ink-4) 20%, transparent);
-  background-image: repeating-linear-gradient(
-    135deg,
-    color-mix(in srgb, var(--bn-ink-4) 55%, transparent) 0 3px,
-    transparent 3px 7px
-  );
-}
-.pricing-meter-bar > [data-part='cheap'] {
-  background-color: color-mix(in srgb, var(--bn-accent) 16%, transparent);
-  background-image: repeating-linear-gradient(
-    135deg,
-    color-mix(in srgb, var(--bn-accent) 62%, transparent) 0 3px,
-    transparent 3px 7px
-  );
-}
+/* THE PROPORTIONAL BAR IS GONE (Ruling A, D-one-verdict-on-pricing): `.pricing-meter` and
+   `.pricing-meter-bar` drew a second accounting of the figures `.pricing-verdict-says`
+   already states once. `.pricing-meter-keys`/`.pricing-meter-dot` below stay — the live
+   inventory verdict's own three-part key strip (`LiveVerdict`, not `ReadyPanel`) still
+   draws them, without a bar beside it. */
 .pricing-meter-keys { display: flex; gap: var(--bn-3); flex-wrap: wrap; list-style: none; }
 .pricing-meter-keys li {
   display: inline-flex;
@@ -588,11 +577,16 @@
 .pricing-live {
   display: inline-flex;
   align-items: center;
+  flex-wrap: wrap;
   gap: 5px;
   font-size: var(--bn-fs-sm);
   font-weight: 600;
   color: var(--bn-live);
-  white-space: nowrap;
+  /* NEVER `nowrap`: an un-wrapping "· 3 live · read 1 day ago · 5 when read, 2 sold since"
+     was the whole page's own horizontal scrollbar (mobile finding #6) — 8px past a 390px
+     phone, 265px past a 768px tablet. It wraps inside the row instead of setting the
+     page's scrollable width. */
+  white-space: normal;
   cursor: help;
 }
 .pricing-live[data-none='true'] { color: var(--bn-ink-3); font-weight: 500; }
@@ -1021,21 +1015,11 @@
   animation: bn-receipt-in var(--bn-t-slow) var(--bn-ease-spring) both;
 }
 .pricing-ship-status { display: flex; align-items: center; gap: var(--bn-3); flex: 1 1 260px; min-width: 0; flex-wrap: wrap; }
-/* the bar carries the verdict and the press; the account of the verdict is on the deck, and
-   this walks back to it rather than restating it under the operator's hands */
-.pricing-ship-verdict {
-  display: inline-flex;
-  align-items: center;
-  gap: var(--bn-2);
-  min-width: 0;
-  padding: 4px var(--bn-2) 4px 4px;
-  border-radius: var(--bn-r-full);
-  color: var(--bn-ink-2);
-  transition: background-color var(--bn-t-fast) var(--bn-ease);
-}
-.pricing-ship-verdict:hover { background: var(--bn-surface-2); }
-/* the 1px dip comes from base.css's press floor now. */
-.pricing-ship-verdict > .bn-icon:last-child { flex: none; color: var(--bn-ink-4); }
+/* `.pricing-ship-verdict` IS GONE (Ruling A, D-one-verdict-on-pricing): the single-run ship
+   bar used to carry a second Ready/Not-yet pill and a walk-back-to-deck button, restating
+   the account the deck already gives once at the top of the screen. `.pricing-ready`/
+   `.pricing-ship-says` stay — the merged and lens bars still use them for their own
+   mechanism-only sentences (what the merge dedupes, what a markdown write does). */
 .pricing-ready { display: inline; font-size: var(--bn-fs-md); line-height: 1.4; color: var(--bn-ink-2); min-width: 0; }
 .pricing-ready .bn-icon { display: inline-block; vertical-align: -2px; margin-right: 4px; }
 .pricing-ready strong { color: var(--bn-ink); font-weight: 600; }
@@ -1342,9 +1326,31 @@ body:has(.pricing-ship) .bn-toasts { bottom: calc(var(--pricing-ship-h, 0px) + v
     padding: var(--bn-3);
     gap: var(--bn-2) var(--bn-3);
   }
+  /* `.pricing-ship-status` NOW HOLDS NOTHING ON A SINGLE-RUN BAR AT THIS WIDTH (Ruling A):
+     `.pricing-keys` inside it is already `display:none` under 1023px, so an empty header
+     row no longer reserves space here — `:empty` catches it without branching the markup
+     per bar shape (the merged/lens bars' own `.pricing-ship-says` sentence is
+     `pricing-hide-sm`/`pricing-hide-sm`-scoped already, so it also collapses to nothing at
+     this width and the rule reaches every bar the same way). */
   .pricing-ship-status { flex-basis: 100%; }
   .pricing-ship-act { width: 100%; margin-left: 0; }
   .pricing-ship-act .pricing-emit { flex: 1 1 auto; }
+  /* THE SINGLE-RUN BAR'S CONTROLS STACK, FULL WIDTH, RATHER THAN WRAP (mobile finding #1 —
+     the bar floated over content and clipped its own controls at 390). `.pricing-keys` is
+     unique to that bar (Ruling A deleted its `.pricing-ship-status` wrapper entirely — there
+     is no status row left to be empty, only `.pricing-keys` as a direct sibling of
+     `.pricing-ship-act`), so this selector reaches exactly that bar and leaves the merged and
+     lens bars' existing compact wrap alone — they still carry a status sentence and are
+     measured against a real height bound (`the ship bar leaves the phone a screen to work
+     on`) that a full stack would blow past for no defect it names. `flex-wrap: wrap` let each
+     control wrap unpredictably by label length on the single-run bar; a fixed column order
+     there reads as a form instead of a jumble: the cut-off split checkbox, the cap field,
+     then the primary Write button last, full width. */
+  .pricing-keys + .pricing-ship-act {
+    flex-direction: column;
+    align-items: stretch;
+  }
+  .pricing-keys + .pricing-ship-act .pricing-emit { width: 100%; order: 99; }
   .pricing-head .bn-head-actions { position: relative; }
   .pricing-runs-anchor { position: static; }
   /* the picker is a bottom sheet over the tab bar, the way the hold panel is — anchored under the
@@ -1409,10 +1415,6 @@ body:has(.pricing-ship) .bn-toasts { bottom: calc(var(--pricing-ship-h, 0px) + v
     height: auto;
     min-height: var(--bn-control-h-sm);
     padding: var(--bn-2) var(--bn-3);
-  }
-  .pricing-ship-verdict {
-    min-height: var(--bn-control-h-sm);
-    padding: var(--bn-2) var(--bn-3) var(--bn-2) var(--bn-2);
   }
 }
 

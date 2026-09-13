@@ -76,6 +76,7 @@ import { useCardCropWhenSeen } from './cardCrop'
 import { Button, Chip, cropStyle, EmptyState, Icon, Kbd, Notice, Segmented } from './kit'
 import { toast } from './kit/toast'
 import { ValueBands, type ValueEnd } from './ValueBands'
+import { rememberPricingCompare, storedPricingCompare } from './deviceMemory'
 import './Pricing.css'
 
 /* #/pricing — THE HAND-PRICING WORKLIST (D49, D86).
@@ -989,6 +990,30 @@ export function Pricing() {
   const trendWalk = useRef(0)
   const [note, setNote] = useState<{ sku: string; text: string } | null>(null)
   const [filterHeld, setFilterHeld] = useState(false)
+  /* PROGRESSIVE DISCLOSURE ON THE WORKLIST (Ruling B, D-one-verdict-on-pricing). One toggle
+     per SECTION — keyed by `section.bucket` — not per row: 400+ rows would each carry their
+     own toggle state otherwise. Off by default: Low / +Ship / Direct and the plain box/run-
+     span badge are hidden until the operator asks for them; an over-cap warning is never
+     gated by this, because D156's "what cannot go is named on the deck, with a door each"
+     already promises that badge stays visible regardless.
+
+     PERSISTED PER BROWSER, NOT PER SESSION (the coordinator's catch on the first build): this
+     is the same kind of fact as `banchi.inventory.hide-sold` — how THIS browser is dressed,
+     never anything about a card or a price — and an operator pricing hundreds of rows in one
+     sitting should not have to press Compare again on every reload. The lazy initializer reads
+     `localStorage` once, on mount; every toggle both updates the state (for the re-render) and
+     writes the full set back (`deviceMemory.ts`'s own shape: a whole set, so a clear or a
+     renamed bucket cannot leave a stale entry behind). */
+  const [compareOn, setCompareOn] = useState<Record<string, boolean>>(() =>
+    Object.fromEntries([...storedPricingCompare()].map((bucket) => [bucket, true])),
+  )
+  const setCompare = useCallback((bucket: string, on: boolean) => {
+    setCompareOn((prior) => {
+      const next = { ...prior, [bucket]: on }
+      rememberPricingCompare(new Set(Object.keys(next).filter((key) => next[key])))
+      return next
+    })
+  }, [])
   /** WHICH LIVE LISTINGS ARE ON SCREEN (D103). `all` is the default and that is the owner's
    *  ruling — staleness is a filter they apply, not a gate applied before the data arrives.
    *  The alternative was measured and is why: against their own export the seven-day window
@@ -2205,6 +2230,17 @@ export function Pricing() {
       const lower = key.toLowerCase()
       const found = SNAPS.find((row) => row.key === lower)
       if (found) {
+        /* `m` STAYS LIVE ALWAYS; `l`/`s`/`d` ACT ONLY WHILE THEIR COLUMN IS ON SCREEN
+           (Ruling B, option (b)). D118 forbids a press moving what's around it, and a key
+           reaching a figure the operator cannot currently see is the same defect one
+           register down — D49's whole argument for a closed keyboard alphabet is that "a
+           letter is unambiguously a command," which a hidden column's key breaks even
+           though it never touches D49's own prohibition. Gated per section, off by
+           default, matching the Compare toggle's own default. */
+        if (found.field !== 'market' && !(compareOn[sku.bucket] ?? false)) {
+          event.preventDefault()
+          return
+        }
         event.preventDefault()
         snap(sku, found.field)
         return
@@ -2235,7 +2271,7 @@ export function Pricing() {
         snap(sku, 'now')
       }
     },
-    [answerFor, commit, move, snap, suggestionFor, toggleHold, undoLast, openPhoto],
+    [answerFor, commit, move, snap, suggestionFor, toggleHold, undoLast, openPhoto, compareOn],
   )
 
   const photoSku = useMemo(() => (photoFor === null ? null : rows.find((row) => row.sku === photoFor.sku) ?? null), [photoFor, rows])
@@ -2574,16 +2610,30 @@ export function Pricing() {
   /* The progress figure lives in the lede: "decided" counts what a hand typed or held, and the
      rows on a standing answer are named beside it so the ship bar's verdict and this line agree. */
   const pct = progress.total === 0 ? 0 : Math.round((progress.answered / progress.total) * 100)
+  /* THE FOUR WORDS BEHIND THIS FIGURE HAD NO VISIBLE LEGEND (plan 3 Group J #23): the
+     `title` attribute is hover-only, so "typed"/"held"/"on the rule"/"cheap" read as
+     jargon to a first-time reader with no mouse over the strip. The figures and their
+     split are unchanged — `app/tests/pricing.spec.ts` asserts these exact numbers —
+     only a visible caption is added, reached by `aria-describedby` rather than a hover. */
+  const progressLegendId = 'pricing-scope-legend'
   const progressLine =
     progress.total === 0 ? null : (
       <span
         className="pricing-scope-progress"
+        aria-describedby={progressLegendId}
         title={`${progress.typed} typed · ${progress.held} held · ${ruleRows} on the rule · ${progress.cheap} cheap at ${cheapMoney}`}
       >
         {progress.answered} of {progress.total} decided
         {standingSays === '' ? '' : ` · ${standingSays}`}
         {progress.closed > 0 ? ` · ${progress.closed} nothing to add` : ''}
       </span>
+    )
+  const progressLegend =
+    progress.total === 0 ? null : (
+      <p className="pricing-scope-legend" id={progressLegendId}>
+        typed = you set a price · held = held back on purpose · on the rule = following the
+        standing rule · cheap = under the cut-off
+      </p>
     )
 
   const scopeLine =
@@ -2604,7 +2654,14 @@ export function Pricing() {
         )}
       </>
     ) : loaded.length === 0 ? (
-      <span>Nothing loaded.</span>
+      /* A COMPLETED, EMPTY ANSWER IS NOT THE SAME THING AS A REQUEST STILL IN FLIGHT.
+         `loading` is true and `SkeletonRows` is on screen below while a fetch is still
+         running, and "Nothing loaded." used to render through that — asserting a
+         negative the fetch had not yet answered. Say nothing until it has: the skeleton
+         already carries the "loading" meaning, matching D156's own caption branches
+         (scopeName/run/box), which return `null` rather than a placeholder string when
+         a fact isn't known yet. */
+      loading ? null : <span>Nothing loaded.</span>
     ) : run !== null ? (
       <>
         {scopeName === null ? null : <span>{scopeName}</span>}
@@ -2642,6 +2699,7 @@ export function Pricing() {
           Pricing
         </h1>
         <p className="bn-lede pricing-scope">{scopeLine}</p>
+        {progressLegend}
         {progress.total === 0 ? null : (
           <div
             className="bn-progress pricing-head-progress"
@@ -3236,6 +3294,20 @@ export function Pricing() {
                   <Icon name="chevronUp" size={13} />
                 </button>
               )}
+              {/* ONE TOGGLE PER SECTION, NOT PER ROW (Ruling B). Off by default: Low,
+                  +Ship, Direct and the plain box/run-span badge stay behind it, and
+                  `l`/`s`/`d` act only while it is on for this section. Persisted per
+                  browser (`deviceMemory.ts:rememberPricingCompare`), so the choice
+                  survives a reload. */}
+              <button
+                type="button"
+                className="pricing-compare-toggle"
+                aria-pressed={compareOn[section.bucket] ?? false}
+                onClick={() => setCompare(section.bucket, !(compareOn[section.bucket] ?? false))}
+              >
+                <Icon name="columns" size={13} />
+                Compare
+              </button>
             </header>
 
             <div className="pricing-caption" aria-hidden="true">
@@ -3247,7 +3319,7 @@ export function Pricing() {
                   <span key={range}>{RANGE_LABEL[range] ?? range}</span>
                 ))}
               </span>
-              {SNAPS.map((column) => (
+              {SNAPS.filter((column) => column.field === 'market' || (compareOn[section.bucket] ?? false)).map((column) => (
                 <span key={column.key} className={`pricing-caption-ref pricing-caption-${column.field}`}>
                   {column.label} <Kbd>{column.key.toUpperCase()}</Kbd>
                 </span>
@@ -3267,6 +3339,7 @@ export function Pricing() {
                   )
                 }
                 const sku = item.sku
+                const compare = compareOn[section.bucket] ?? false
                 const standing = answerFor(sku)
                 const withheld = isWithheld(standing)
                 const suggestion = suggestionFor(sku)
@@ -3333,14 +3406,21 @@ export function Pricing() {
                             />
                           </span>
                         )}
-                        {sku.in.length < 2 && !sku.over_cap ? null : (
+                        {/* THE ORDINARY BOX/RUN-SPAN IS DISCLOSURE-GATED BEHIND COMPARE
+                            (Ruling B, D156 amended); AN OVER-CAP WARNING NEVER IS — D156's
+                            own "what cannot go is named on the deck, with a door each"
+                            promise already covers this exact case, so the toggle cannot
+                            hide it. */}
+                        {!sku.over_cap && (!compare || sku.in.length < 2) ? null : (
                           <span className="pricing-row-span">
                             <span className="pricing-meta-sep">·</span>
-                            <span className="pricing-span-where">
-                              {boxes.length === 0
-                                ? `${sku.in.length} run${sku.in.length === 1 ? '' : 's'}`
-                                : `${boxes.length === 1 ? 'Box' : 'Boxes'} ${boxes.join(', ')} · ${sku.in.length} run${sku.in.length === 1 ? '' : 's'}`}
-                            </span>
+                            {!compare ? null : (
+                              <span className="pricing-span-where">
+                                {boxes.length === 0
+                                  ? `${sku.in.length} run${sku.in.length === 1 ? '' : 's'}`
+                                  : `${boxes.length === 1 ? 'Box' : 'Boxes'} ${boxes.join(', ')} · ${sku.in.length} run${sku.in.length === 1 ? '' : 's'}`}
+                              </span>
+                            )}
                             {!sku.over_cap ? null : (
                               <span
                                 className="pricing-span-cap bn-pill bn-pill-warn"
@@ -3410,7 +3490,7 @@ export function Pricing() {
 
                       <TrendCell read={trends[sku.sku]} />
 
-                      {SNAPS.map((column) => (
+                      {SNAPS.filter((column) => column.field === 'market' || compare).map((column) => (
                         <span
                           key={column.key}
                           className={`pricing-ref pricing-ref-${column.field}${column.field === 'market' ? ' pricing-ref-market' : ''}`}
@@ -3798,41 +3878,11 @@ export function Pricing() {
 
       {run === null ? null : (
         <aside className="pricing-ship" ref={measureShip} role="region" aria-label="Ship this run" data-ready={owes.length === 0 ? 'true' : 'false'}>
-          {/* THE VERDICT IS A PRESS, AND THE ACCOUNT OF IT IS ON THE DECK. The bar carries the
-              answer and the button; the sentence that says what is still owed lives at the top
-              of the screen, where a person lands. This walks them back to it. */}
-          <div className="pricing-ship-status">
-            <button
-              type="button"
-              className="pricing-ship-verdict"
-              data-ready={owes.length === 0 ? 'true' : 'false'}
-              onClick={showDeck}
-              title="See detail at the top"
-            >
-              <span className={`bn-pill ${owes.length === 0 ? 'bn-pill-ok' : 'bn-pill-warn'}`}>
-                <Icon name={owes.length === 0 ? 'check' : 'alert'} size={12} />
-                {owes.length === 0 ? 'Ready' : 'Not yet'}
-              </span>
-              <span className="pricing-ready">
-                {owes.length === 0 ? (
-                  progress.rule > 0 ? (
-                    <>
-                      <strong>{standingSays}</strong>
-                      {progress.answered === 0 ? ' · nothing typed or held' : ` · ${progress.answered} typed or held`}
-                    </>
-                  ) : (
-                    <strong>Pricing is answered</strong>
-                  )
-                ) : (
-                  <>
-                    <strong>Emit will refuse</strong> · {owes.length} thing{owes.length === 1 ? '' : 's'} owed
-                  </>
-                )}
-              </span>
-              <Icon name="chevronUp" size={13} />
-            </button>
-          </div>
-
+          {/* THE VERDICT IS STATED ONCE, ON THE DECK ABOVE (Ruling A, D-one-verdict-on-pricing):
+              this bar used to restate readiness as a second pill and sentence, walking back to
+              the same account the deck already gives at the top of the screen. That restatement
+              — and the button that carried it — is gone; the bar is the press and its two
+              controls. */}
           <div className="pricing-keys" aria-hidden="true">
             <span>
               <Kbd>↵</Kbd> next
@@ -4465,7 +4515,7 @@ function UnreachableLine({ at }: { at: Unreachable | null }) {
   // text literally, so markdown punctuation in one is just punctuation on screen.
   if (strandedRuns.length > 0)
     parts.push(
-      <span key="reallocated" title="Drawer number reused since this run. Run `pkmnscan rescue` to rebind it.">
+      <span key="reallocated" title="Drawer number reused since this run — rebind it from the run's row on Runs.">
         {stranded > 0 ? `${stranded} in ` : ''}
         {strandedRuns.length} run{strandedRuns.length === 1 ? '' : 's'} over a deleted box
       </span>,
@@ -4599,37 +4649,10 @@ function ReadyPanel({
 
       <UnreachableLine at={unreachable} />
 
-      {/* WHERE THE ANSWERS STAND, as one bar rather than three figures in a sentence. A held
-          row writes nothing, so it is a third colour and not a shade of "done". */}
-      {progress.total === 0 ? null : (
-        <div className="pricing-meter">
-          <div
-            className="pricing-meter-bar"
-            role="img"
-            aria-label={`${progress.typed} typed, ${progress.held} held, ${ruleRows} on the rule, ${progress.cheap} cheap at ${cheapMoney}`}
-          >
-            <span data-part="typed" style={{ flexGrow: progress.typed }} />
-            <span data-part="held" style={{ flexGrow: progress.held }} />
-            <span data-part="rule" style={{ flexGrow: ruleRows }} />
-            <span data-part="cheap" style={{ flexGrow: progress.cheap }} />
-          </div>
-          <ul className="pricing-meter-keys">
-            {(
-              [
-                ['typed', progress.typed, 'typed'],
-                ['held', progress.held, 'held back'],
-                ['rule', ruleRows, 'on the rule'],
-                ['cheap', progress.cheap, `cheap at ${cheapMoney}`],
-              ] as const
-            ).map(([part, count, says]) => (
-              <li key={part} data-part={part} data-zero={count === 0 ? 'true' : undefined}>
-                <span className="pricing-meter-dot" aria-hidden="true" />
-                {count} {says}
-              </li>
-            ))}
-          </ul>
-        </div>
-      )}
+      {/* THE FOUR COUNT CHIPS ARE GONE (Ruling A, D-one-verdict-on-pricing): this bar
+          restated typed/held/rule/cheap as a second accounting of the same figures the
+          sentence above already states once, in `.pricing-verdict-says`. One verdict,
+          stated once — the headline sentence keeps every figure the chips carried. */}
 
       <p className="pricing-verdict-out">
         <Icon name="send" size={13} />
