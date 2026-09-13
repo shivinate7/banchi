@@ -1980,7 +1980,7 @@ close it. The clause is older than both.
 
 **ONE OF THE TWO FORGIVING CLAUSES IS CLOSED, 2026-09-13, ON A DIFFERENT REPRODUCTION THAN THE
 ONE ABOVE** (an amendment to D117, out of
-`docs/decisions/D-the-tab-bar-has-one-height.md`). The capture screen's shutter sat
+D205). The capture screen's shutter sat
 half under the phone tab bar on first paint — `.capture-shutter`'s every corner probe AND its
 own centre landed inside `.bn-tabbar`, and `chrome(n)` forgave all of them, so `misses` stayed 0
 and this file reported the route clean. That is the THIRD clause, `chrome(n)`, not the

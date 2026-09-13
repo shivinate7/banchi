@@ -515,7 +515,7 @@ test('leaving a scrolled screen lands the next one at the top', async ({ page })
   expect(await page.evaluate(() => window.scrollY)).toBe(0)
 })
 
-/* THE DRAWER'S LAST ROW, CONFIRMED RATHER THAN ASSUMED (D-the-drawer-scrolls-above-its-foot).
+/* THE DRAWER'S LAST ROW, CONFIRMED RATHER THAN ASSUMED (D204).
  *
  * The complaint: `.bn-side-foot` — Cards to pull, the theme toggle, the server line — is the
  * last thing the drawer draws, and it sits on the row Codes renders in, the last row of the

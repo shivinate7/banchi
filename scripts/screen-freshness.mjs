@@ -241,7 +241,7 @@ const RECORDED = {
     'releaseSubmission',                                          // D174, the stuck claim's way out
     'nameOrders',                            // D193, the all-statuses
                                               // backfill naming a buyer the fetch found unnamed
-    'reconcileBacklog',                      // D-orders-backlog-reconcile, the one-time
+    'reconcileBacklog',                      // D203, the one-time
                                               // stand-down over the historical backlog
   ],
   // `previewReconcileBacklog` is the reconcile's press-nothing half and says so in its own

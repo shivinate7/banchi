@@ -442,7 +442,7 @@ export function Home() {
   /* Same join `standing.ts` makes, for the same reason: `resolution.orders` is already a
      subset of the open orders (`do_orders`'s own `open_keys`, D63 amended), and this counts
      a resolved line only where ITS order reads `open: true` here too, rather than trusting
-     that upstream shape blind. See `## D-home-counts-only-open-orders`. */
+     that upstream shape blind. See `## D202`. */
   const openKeys = openRows === null ? null : new Set(openRows.map((o) => o.key))
   const unfindable =
     orders.state === 'ready' && openKeys !== null

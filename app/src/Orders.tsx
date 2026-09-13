@@ -1952,7 +1952,7 @@ export function OrdersHub({ stage }: { readonly stage: Stage }) {
 
   /* -------------------------------------------------------- the one-time backlog reconcile */
 
-  /* D-orders-backlog-reconcile. A SECOND backlog `is_terminal_status` cannot see: orders
+  /* D203. A SECOND backlog `is_terminal_status` cannot see: orders
      TCGplayer settled to `Completed - Paid` two years before this screen existed, carrying
      zero recorded copies. `ReconcileBacklogPanel` computes WHICH ones from what this screen
      already read; the press sends only the cutoff, and the store recomputes the candidate set
@@ -2347,7 +2347,7 @@ function BacklogPrompt({
   )
 }
 
-/** The one-time backlog reconcile (D-orders-backlog-reconcile): every open order carrying
+/** The one-time backlog reconcile (D203): every open order carrying
  *  NOTHING RECORDED, placed before a cutoff, closed with `shipped_elsewhere`. UNLIKE
  *  `BacklogPrompt` above, the predicate here is never a status word — age and "nothing
  *  recorded" alone — so the breakdown is what tells a live order sharing that shape apart from
@@ -2745,7 +2745,7 @@ function PullStage({
           walk it should have changed. It draws nothing when there is nothing to propose. */}
       <BacklogPrompt open={open} busy={busy} onStandDown={onStandDown} />
 
-      {/* D-orders-backlog-reconcile. Below the status-driven prompt above and still ahead of
+      {/* D203. Below the status-driven prompt above and still ahead of
           the toolbar: this is the OTHER backlog, the one `is_terminal_status` cannot see —
           `Completed - Paid` orders TCGplayer settled two years before this screen existed. */}
       <ReconcileBacklogPanel orders={open} busy={busy} onPress={onReconcileBacklog} />

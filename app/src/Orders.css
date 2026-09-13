@@ -391,7 +391,7 @@
 .orders-backlog .orders-standdown-row { margin-top: var(--bn-3); }
 
 /* ---- the one-time backlog reconcile: a second backlog `is_terminal_status` cannot see
-   (D-orders-backlog-reconcile) — the same shape as the notice above, for the same reason. */
+   (D203) — the same shape as the notice above, for the same reason. */
 .orders-reconcile p { max-width: 72ch; }
 .orders-reconcile .orders-standdown-row { margin-top: var(--bn-3); }
 

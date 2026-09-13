@@ -1,4 +1,4 @@
-## D-orders-backlog-reconcile — The two-year backlog is stood down by one press over a cutoff the operator sees, never by a rule that runs on every fetch
+## D203 — The two-year backlog is stood down by one press over a cutoff the operator sees, never by a rule that runs on every fetch
 
 **The owner's ruling, 2026-09-13:** a ONE-TIME reconcile that marks today's stale open orders
 fulfilled. A single explicit press with a preview and the count in its label — not a rule that

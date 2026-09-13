@@ -130,7 +130,7 @@ export function standing(input: StandingInput): Standing | null {
      rather than trusting that shape blind: `open` is the one field this module is allowed to
      read (D114 — no status vocabulary in `app/`), so a resolution row is counted only where
      its own order reads `open: true` on the wire, never derived from `status` text and never
-     assumed pre-filtered. See `## D-home-counts-only-open-orders`. */
+     assumed pre-filtered. See `## D202`. */
   const openKeys = open === null ? null : new Set(open.map((o) => o.key))
   const unfindable =
     orders === null || openKeys === null
