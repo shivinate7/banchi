@@ -2191,6 +2191,14 @@ apostrophes in names) live in the `tcgplayer-csv` skill. It loads on demand.
   `--admin` takes the two required checks down with it, which is the same argument this file
   already makes about `core.hooksPath` and the three opsec rules.
 
+  **AN ORCHESTRATING SESSION CARRIES A STANDING GRANT AS OF 2026-09-13, RECORDED IN D42** (D42
+  amended): the owner named the act once for a whole batch rather than once per PR — *"You are
+  the orchestrator -- you have my explicit permission to do merges"* — and it reaches only that
+  session, only for PRs whose plans it put to the owner and whose diffs it reviewed, only through
+  `make merge ARGS="<n> --confirm"` on the PR's own branch with CI green and never `--admin`.
+  Workers and peer sessions still never merge, and a later session re-asks — see D42 for the
+  scope in full.
+
 ## Working agreement
 
 - Run `make harness` before you tell me something works. Show me the output, not a claim.
