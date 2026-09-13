@@ -5,6 +5,7 @@ import { fileURLToPath } from 'node:url'
 import { settleFonts } from './fontsReady'
 import { routesFromNav } from './routes'
 import { sealEveryTest } from './shell'
+import { POPULATED_ROUTE_SEEDS, SHIPPING_EXPORT_CSV } from './routeFixtures'
 
 /* THE VISIBLE WORD COUNT ON EVERY OWNER SCREEN MAY ONLY GO DOWN (`D194`).
  *
@@ -42,15 +43,24 @@ import { sealEveryTest } from './shell'
  * THE FIXTURE IS `sealEveryTest({ store: true, cards: 122 })` — `wide.spec.ts` and
  * `phone.spec.ts`'s own choice for a cross-route sweep, and the same small populated store
  * `cursor.spec.ts` reads to sweep every route, owner and Fulfiller alike, without a screen
- * rendering an empty state it would otherwise never draw a control in. It is NOT a bespoke
- * fixture per route — `#/runs`, `#/orders`, `#/shipping`, `#/codes` and `#/graveyard` see no
- * run, no order, no export and no departed record of their own, so their pinned ceilings are
- * ceilings on an EMPTY-ISH state for those screens rather than the busiest one a real store
- * would draw. That is a real gap and it is named in the wrap-up rather than argued away here:
- * closing it needs the same per-screen fixtures `cursor.spec.ts`'s own header already asks
- * for, and a route whose ceiling is pinned too low from an empty state will need a wider one
- * the day a fixture gives it real rows — which is `--pin`'s job, not a reason to leave this
- * unbuilt.
+ * rendering an empty state it would otherwise never draw a control in.
+ *
+ * FIVE ROUTES GET A SECOND, RICHER SEED ON TOP OF IT, closing the gap this paragraph used to
+ * carry as an open one: `#/runs`, `#/orders`, `#/shipping`, `#/codes` and `#/graveyard` draw
+ * nothing off `stubStore` alone — no run, no order, no export, no code, no departed record —
+ * so a ceiling pinned only against that state bounds an EMPTY-ISH screen rather than the
+ * busiest one a real store draws, and a sentence added to any of the five could grow past
+ * empty without the ratchet ever seeing it in populated form. `./routeFixtures.ts` is where
+ * that second seed comes from — the exact shapes `run-panel.spec.ts`, `orders.spec.ts` and
+ * `shipping.spec.ts` already prove render correctly, moved to one shared module rather than
+ * copied a fourth time, plus two fresh ones for the two screens no existing spec seeds at all
+ * (`#/codes`, `#/graveyard`). `POPULATED_SEEDS` below registers each one's stub AFTER
+ * `stubStore`'s own empty answer for the same route, so the richer response wins (Playwright
+ * matches newest-first) — every OTHER route `#/runs`/`#/orders`/`#/codes`/`#/graveyard` reads
+ * (`/boxes`, `/games`, `/search`, `/inventory`, `/pipeline/submissions`) is still the small
+ * store's answer, unchanged. `#/shipping` fetches nothing on mount (`shipping.spec.ts`'s own
+ * header), so its populated state additionally needs the CSV drop-zone driven once the route's
+ * stub is in place — see the loop below.
  *
  * TWO ENV VARS, BOTH READ HERE AND NOWHERE ELSE, SO THE TWO PATHS CANNOT DRIFT:
  *
@@ -132,9 +142,26 @@ test('the visible word count on every owner screen may only go down', async ({ p
   const counts: Record<string, number> = {}
 
   for (const route of routes) {
+    const populate = POPULATED_ROUTE_SEEDS[route]
+    if (populate !== undefined) await populate(page)
+
     await page.goto(`/${route}`)
     await settleFonts(page)
     await expect(page.locator('main').first(), `${route}: drew no <main>`).toBeVisible()
+
+    /* `#/shipping` FETCHES NOTHING ON MOUNT (`shipping.spec.ts`'s own header) — the stub above
+       answers `POST /shipping/batches`, but nothing calls it until a file reaches the drop
+       zone. Hand it one the way `shipping.spec.ts:readExport` does, so the populated state
+       this route is measured in is the one the batch actually draws rather than the pre-read
+       empty state every other route's word count would be measuring by comparison. */
+    if (route === '#/shipping') {
+      await page.getByLabel('Read an export').setInputFiles({
+        name: 'TCGplayer_ShippingExport_20260830.csv',
+        mimeType: 'text/csv',
+        buffer: Buffer.from(SHIPPING_EXPORT_CSV),
+      })
+      await expect(page.locator('a.shipping-file'), `${route}: the populated batch never drew`).toHaveCount(1)
+    }
 
     if (MUTATE_ROUTE !== '' && MUTATE_ROUTE === route) {
       await page.evaluate(() => {
