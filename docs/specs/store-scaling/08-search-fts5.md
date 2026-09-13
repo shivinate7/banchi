@@ -59,22 +59,25 @@ store — real, fixture, demo-seeded, or CI's throwaway ones — is ever without
   `server/capture_server.py` above line 7929, re-verify the line numbers this playbook
   cites before editing.
 - **Item 3 (`history()` scoped).** No overlap — different table, different file region.
-- **Item 5 (the `readings` writer, after PR #333).** THE SCHEMA VERSION IS A SHARED
-  COUNTER AND THIS IS THE REAL CONFLICT. As of this worktree, `store/db.py:95` reads
-  `SCHEMA_VERSION = 4`. `docs/specs/store-scaling.md` §2 says PR #333 (the `readings` table)
-  takes version 5 and is being merged by the owner's orchestrator. **Before writing this
-  migration's version number, re-read `store/db.py:95` on top of current `main`.** If it
-  still says 4, PR #333 has not merged and this migration is `stored < 5`, bumping
-  `SCHEMA_VERSION` to 5. If it says 5, PR #333 has merged and this migration is
-  `stored < 6`, bumping to 6. **Never assume; grep it.** If a second branch is *also*
-  proposing "the next version" concurrently (the same shape D174's own comment at
-  `store/db.py:88-93` records — "Two concurrent 2→3 steps in `_upgrade` is a conflict in
-  the one function where taking either side silently loses a migration... THE RESOLUTION
-  WAS TO ADD A STEP, NEVER TO TAKE A SIDE") — resolve it the same way: both `if stored < N`
-  arms stay, the higher number is the true `SCHEMA_VERSION`, and a comment beside the bump
-  says which PR took which number and why, exactly as the `store/db.py:88-94` comment
-  already does for schema 4. Do not silently overwrite `SCHEMA_VERSION`'s value with a
-  number that drops someone else's merged step.
+- **Item 5 (the `readings` writer, after PR #333) AND ITEM 2 (the `cards_captured_at`
+  index).** THE SCHEMA VERSION IS A SHARED COUNTER, AND THIS SECTION'S OWN NUMBERS WERE
+  WRONG BY THE TIME THIS ITEM WAS BUILT — CORRECTED HERE RATHER THAN LEFT MISLEADING. It
+  originally reasoned about a race between item 5 and item 8 for version 5/6. By the time
+  item 8 actually landed, BOTH had already resolved on `origin/main`: PR #333 (D189, the
+  `readings` table) took **5**, and item 2 (D192, the `cards_captured_at` index) took **6**
+  — `docs/specs/store-scaling/00-phases.md` reserved 6 for item 8 and records that item 2
+  reached it first, so item 8 renumbers its own, the same D140 rule this section already
+  describes for decision ids. **Item 8 is `stored < 7`, `SCHEMA_VERSION = 7`.** Before
+  writing a migration's version number on ANY future item, `grep -n "SCHEMA_VERSION = " store/db.py`
+  on top of current `main` rather than trusting this file's own account of a race that may
+  since have settled. If a second branch is *also* proposing "the next version" concurrently
+  (the same shape D174's own comment at `store/db.py:88-93` records — "Two concurrent 2→3
+  steps in `_upgrade` is a conflict in the one function where taking either side silently
+  loses a migration... THE RESOLUTION WAS TO ADD A STEP, NEVER TO TAKE A SIDE") — resolve it
+  the same way: both `if stored < N` arms stay, the higher number is the true
+  `SCHEMA_VERSION`, and a comment beside the bump says which PR took which number and why.
+  Do not silently overwrite `SCHEMA_VERSION`'s value with a number that drops someone else's
+  merged step.
 - **Items 6/7 (`do_orders`, `_release_plan`, `box_views`, `do_pipeline_value`).** No
   overlap with `do_search` or the `cards` table's FTS shadow. Independent.
 
@@ -210,21 +213,24 @@ of "one fold, both sides" holding for a fourth reader.
 
 ### 3. The migration: schema version, DDL, triggers, rebuild
 
-`store/db.py:95` — bump `SCHEMA_VERSION`. **Read the "Depends on" section above first** —
-the exact number depends on whether PR #333 has merged. The example below assumes it has
-(so this is `stored < 6`, `SCHEMA_VERSION = 6`); substitute 5/`stored < 5` if it has not,
-and add a comment in the same style as the existing one at `store/db.py:88-94` explaining
-which PR took which number.
+`store/db.py:95` (line number drifted; grep it) — bump `SCHEMA_VERSION`. **CORRECTED: by
+the time this item was actually built, both PR #333 (readings, took 5) and item 2
+(`cards_captured_at`, took 6 — see "Depends on" above) had already merged to `origin/main`,
+so this migration is `stored < 7`, `SCHEMA_VERSION = 7`**, not 6 as this section originally
+assumed. Add a comment in the same style as the existing one at `store/db.py:88-94`
+explaining which PR took which number.
 
 ```python
-# FIVE, THEN SIX: #333's `readings` table took 5 (docs/specs/store-scaling.md item 5); this
-# is the search index, landed after it. Read `store/db.py:88-94`'s account of the 3->4
-# collision before assuming a bare bump is safe — two branches claiming "the next version"
-# at once is the same shape and the resolution is the same: add a step, never take a side.
-SCHEMA_VERSION = 6
+# SEVEN, FOR STORE-SCALING ITEM 8. Item 2 (D192) reached the 6 this file had reserved for
+# search first — see store/db.py's own comment beside SCHEMA_VERSION = 6 — so this item
+# renumbers its own, the D140 rule for decision ids applied to schema versions. Read
+# `store/db.py:88-94`'s account of the 3->4 collision before assuming a bare bump is safe —
+# two branches claiming "the next version" at once is the same shape and the resolution is
+# the same: add a step, never take a side.
+SCHEMA_VERSION = 7
 ```
 
-`store/db.py:285` (`_upgrade`) — add one `if stored < 6:` arm, following `_add_submissions`'s
+`store/db.py:_upgrade` — add one `if stored < 7:` arm, following `_add_submissions`'s
 shape (the purest precedent: no backfill decision, just "create the additive thing"):
 
 ```python
@@ -241,6 +247,8 @@ shape (the purest precedent: no backfill decision, just "create the additive thi
             if stored < 5:
                 _add_readings(conn)          # PR #333 — already landed if you are reading this
             if stored < 6:
+                _add_captured_at_index(conn) # item 2 (D192) — already landed if you are reading this
+            if stored < 7:
                 _add_search_index(conn)      # ITEM 8
             conn.execute(
                 "INSERT OR REPLACE INTO meta (key, value) VALUES ('schema', ?)",
@@ -248,6 +256,16 @@ shape (the purest precedent: no backfill decision, just "create the additive thi
             )
             conn.execute("COMMIT")
 ```
+
+**ALSO CALL `_add_search_index` FROM `_ensure_schema`'S FRESH-STORE BRANCH, NOT ONLY FROM
+`_upgrade` — THIS WAS MISSING FROM THE ORIGINAL PLAYBOOK AND IS LOAD-BEARING.** A brand
+NEW store (every worktree, the demo seed, every harness test) never runs `_upgrade` at
+all — `_ensure_schema` stamps `SCHEMA_VERSION` directly on that path — so without an
+explicit call there, `cards_fts` would exist on no fresh store and `do_search` would raise
+`no such table: cards_fts` on its very first query. `_CID_INDEXES`' own two
+`CREATE INDEX` statements are the existing precedent for exactly this shape. Calling
+`_add_search_index` unconditionally on both paths is safe and cheap: on a fresh store it
+runs over zero rows.
 
 New function, modelled on `_add_submissions` (`store/db.py:798-812`) plus the two new
 columns from Step 2 (modelled on `_add_card_ids`'s `ALTER TABLE ... ADD COLUMN` idiom at
@@ -321,13 +339,24 @@ def _add_search_index(conn: sqlite3.Connection) -> None:
         "content='cards', content_rowid='rowid', "
         f"tokenize=\"{_FTS_TOKENIZE}\")"
     )
-    # THE THREE STANDARD EXTERNAL-CONTENT SYNC TRIGGERS. `note` is not an indexed column of
-    # `cards` today (store/db.py:117-119's TABLES list has no `note`), so these triggers read
-    # it out of `new.payload`/`old.payload` via `json_extract` rather than off a column —
-    # the one place this migration reads the payload from a trigger rather than from a
-    # dedicated column, because promoting `note` to an indexed column of `cards` is new
-    # surface area this item does not need (nothing else in the app filters on it).
-    conn.executescript(
+    # THE THREE STANDARD EXTERNAL-CONTENT SYNC TRIGGERS, AS THREE SEPARATE `conn.execute()`
+    # CALLS — NOT `conn.executescript()`, WHICH THIS PLAYBOOK ORIGINALLY SPECIFIED AND WAS
+    # WRONG. Python's `sqlite3` module documents — and this migration hit — that
+    # `executescript()` COMMITS ANY PENDING TRANSACTION before it runs the script. This
+    # whole migration runs inside `_upgrade`'s own `BEGIN IMMEDIATE`, so an `executescript`
+    # call here silently closes that transaction; `_upgrade`'s own `conn.execute("COMMIT")`
+    # then raises `cannot commit - no transaction is active`. Measured directly:
+    # `conn.in_transaction` reads `True` immediately before this call and `False`
+    # immediately after, on a store carrying real cards. Three plain `execute()` calls run
+    # inside the caller's transaction like every other statement in this function.
+    #
+    # `note` is not an indexed column of `cards` today (store/db.py's `TABLES` has no
+    # `note`), so these triggers read it out of `new.payload`/`old.payload` via
+    # `json_extract` rather than off a column — the one place this migration reads the
+    # payload from a trigger rather than from a dedicated column, because promoting `note`
+    # to an indexed column of `cards` is new surface area this item does not need (nothing
+    # else in the app filters on it).
+    conn.execute(
         """
         CREATE TRIGGER IF NOT EXISTS cards_fts_ai AFTER INSERT ON cards BEGIN
           INSERT INTO cards_fts(rowid, name, number, sku, set_hint, note, number_key, number_display)
@@ -335,14 +364,22 @@ def _add_search_index(conn: sqlite3.Connection) -> None:
             new.rowid, new.name, new.number, new.sku, new.set_hint,
             json_extract(new.payload, '$.note'), new.number_key, new.number_display
           );
-        END;
+        END
+        """
+    )
+    conn.execute(
+        """
         CREATE TRIGGER IF NOT EXISTS cards_fts_ad AFTER DELETE ON cards BEGIN
           INSERT INTO cards_fts(cards_fts, rowid, name, number, sku, set_hint, note, number_key, number_display)
           VALUES (
             'delete', old.rowid, old.name, old.number, old.sku, old.set_hint,
             json_extract(old.payload, '$.note'), old.number_key, old.number_display
           );
-        END;
+        END
+        """
+    )
+    conn.execute(
+        """
         CREATE TRIGGER IF NOT EXISTS cards_fts_au AFTER UPDATE ON cards BEGIN
           INSERT INTO cards_fts(cards_fts, rowid, name, number, sku, set_hint, note, number_key, number_display)
           VALUES (
@@ -354,23 +391,42 @@ def _add_search_index(conn: sqlite3.Connection) -> None:
             new.rowid, new.name, new.number, new.sku, new.set_hint,
             json_extract(new.payload, '$.note'), new.number_key, new.number_display
           );
-        END;
+        END
         """
     )
-    # REBUILD AFTER THE TRIGGERS EXIST, on purpose: `INSERT INTO cards_fts(cards_fts)
-    # VALUES('rebuild')` re-derives the index from every row `cards` holds RIGHT NOW,
-    # independent of trigger history — so it is what seeds the index for every row that
-    # existed before this migration ran, and the triggers above are what keep it correct
-    # for every row from this moment on. Running it before the backfill loop above would
-    # index the OLD (empty) `number_key`/`number_display` values; the ordering in this
-    # function — backfill, then create table+triggers, then rebuild — is load-bearing.
-    conn.execute("INSERT INTO cards_fts(cards_fts) VALUES('rebuild')")
+    # SEEDED BY 'delete-all' + AN EXPLICIT INSERT-SELECT, NOT BY 'rebuild' — THE OTHER PLACE
+    # THIS PLAYBOOK WAS WRONG. `INSERT INTO cards_fts(cards_fts) VALUES('rebuild')`
+    # re-populates an external-content FTS5 table by running, internally,
+    # `SELECT rowid, <col1>, <col2>, ... FROM cards`, matching each `cards_fts` column to a
+    # COLUMN OF THE SAME NAME on `cards` — and `note` is not a column of `cards`. Measured:
+    # `rebuild` raises `sqlite3.OperationalError: no such column: T.note` the moment
+    # `cards_fts`'s DDL names a virtual column the content table does not have — not a
+    # corner case, it fires on the very first migration run. The fix is `delete-all`
+    # (which, unlike `rebuild`, does not read back from the content table) followed by an
+    # ordinary INSERT...SELECT that computes `note` the same way the triggers do:
+    conn.execute("INSERT INTO cards_fts(cards_fts) VALUES('delete-all')")
+    conn.execute(
+        "INSERT INTO cards_fts(rowid, name, number, sku, set_hint, note, number_key, number_display) "
+        "SELECT rowid, name, number, sku, set_hint, json_extract(payload, '$.note'), "
+        "number_key, number_display FROM cards"
+    )
 ```
 
+**A PLAIN `SELECT` AGAINST `cards_fts` WITH NO `MATCH` FAILS THE SAME WAY, AND IT IS WORTH
+KNOWING BEFORE YOU WRITE A TEST OR A DEBUGGING QUERY AGAINST IT.** Any bare scan —
+`SELECT * FROM cards_fts`, `SELECT rowid FROM cards_fts`, even `SELECT count(*) FROM
+cards_fts` — raises the identical `no such column: T.note`, because with no `MATCH`
+constraint SQLite falls back to a full-table scan that reads every declared column's text
+back from the content table. A query WITH a `MATCH` constraint (what `do_search` always
+uses) takes a different internal path — the FTS index itself — and never hits this. Where a
+test needs a row count against `cards_fts`, count `cards_fts_docsize` instead: a REAL table
+(one row per indexed document, keyed by rowid), not the virtual table, so it carries none of
+this restriction.
+
 **`-9` safety.** Everything above runs inside the `BEGIN IMMEDIATE ... COMMIT` `_upgrade`
-already wraps every step in (`store/db.py:325-345`). A kill mid-migration rolls the whole
-transaction back — no ALTER, no trigger, no rebuild survives partially — and the next open
-re-reads `stored < 6` as true and runs the whole thing again from a clean slate. This is
+already wraps every step in. A kill mid-migration rolls the whole transaction back — no
+ALTER, no trigger, no seed survives partially — and the next open re-reads `stored < 7` as
+true and runs the whole thing again from a clean slate. This is
 the same guarantee `_add_card_ids`/`_add_box_ids` already rely on and needs no new
 mechanism; it is worth stating explicitly per this playbook's "Read first" instruction, and
 worth adding one T-level case for (see Tests) because a virtual table's `CREATE` is DDL
@@ -458,15 +514,30 @@ def do_search(query: str) -> dict:
         # `_match_rank` still decides the RANK of each candidate (which used to be free
         # because it ran inside the same walk). This is cheap: hits are a small fraction of
         # the store, exactly like `_copies_out`'s post-index-probe arithmetic in item 4.
+        # PER TERM, NOT PER PHRASE — A CORRECTION AGAINST THE ORIGINAL PLAYBOOK, WHICH
+        # CALLED `_match_rank(card, needle)` WITH THE WHOLE QUERY STRING AND WAS WRONG for
+        # exactly the feature this item exists to add. `_match_rank` was written for a
+        # single-term walk and tests one field for the WHOLE needle as a substring; a query
+        # like "eiscue 044" has no field anywhere that contains the literal substring
+        # "eiscue 044", so calling it with the whole phrase returns `None` for every FTS
+        # candidate and MULTI-WORD SEARCH FINDS NOTHING. Measured: `do_search("eiscue
+        # 044")` returned zero groups against the T7 fixture with the naive call above.
+        # Each whitespace term (`_fts_query`'s own splitting rule) is checked separately and
+        # the BEST (lowest) rank among the terms that match wins — order-independent, which
+        # is what "eiscue 044" and "044 eiscue" both need to return the identical list. A
+        # single-term query degrades to exactly the naive call (`terms == [needle]`).
+        terms = [term.lower() for term in text.split()]
         seen_keys: set = set()
         for key, sku in hits:
             key = str(key)
             if key in seen_keys:
                 continue
             seen_keys.add(key)
-            card = inventory.cards[key]
-            rank = _match_rank(card, needle)
-            if rank is None:
+            card = inventory.cards.get(key)
+            if card is None:
+                continue
+            term_ranks = [r for r in (_match_rank(card, t) for t in terms) if r is not None]
+            if not term_ranks:
                 # FTS5's tokenizer can match text `_match_rank` would not — e.g. a prefix
                 # match inside `note`'s free prose that the substring pass would also have
                 # caught, so this should be rare-to-never; kept as a filter rather than an
@@ -477,6 +548,7 @@ def do_search(query: str) -> dict:
                 # substring check would not, or vice versa for a token FTS5 does not split
                 # the way `_match_rank`'s `in` check would).
                 continue
+            rank = min(term_ranks)
             sku = str(sku).strip() if sku else ""
             if not sku:
                 loose.append(card)
@@ -620,16 +692,37 @@ assertions already do this structurally — see Tests).
    OLD schema version (rollback undid everything) and a second open completes cleanly.
 
 **Mutation arm, spelled out per this playbook's own instruction to be explicit about what
-must go red:**
+must go red — CORRECTED AGAINST THE ORIGINAL PLAYBOOK, WHICH ATTRIBUTED THE RENAME CASE TO
+THE WRONG TRIGGER.**
 
-- Comment out the `cards_fts_au` (UPDATE) trigger's body. Case 3 above (the rename sub-case
-  specifically) must fail: the index still finds the OLD name after a rename, because
-  nothing removed the stale row. If case 3 does not fail with this trigger disabled, case 3
-  is not exercising the sync property it claims to.
-- Comment out the `cards_fts_ad` (DELETE) trigger's body. A case that deletes a card
-  (retire-and-purge, or the fixture's own teardown) must leave a ghost hit in
-  `cards_fts` — assert a search for the deleted card's exact name AFTER deletion returns
-  nothing, and confirm this specific case goes red with the trigger disabled.
+- **`cards_fts_ad` (DELETE), not `cards_fts_au`, is what the rename sub-case depends on.**
+  `store/db.py:flush_rows` clears every touched key with a real SQL `DELETE` before it
+  re-inserts it — for a reason that has nothing to do with search (the `cards_cid` UNIQUE
+  index needs the transient collision room) — so an ordinary rename through
+  `Store().write()` is `DELETE` then `INSERT`, never an `UPDATE`, and SQLite hands the
+  `INSERT` a fresh rowid. Measured: renaming a card in a three-row table moved it from
+  rowid 2 to rowid 4. Comment out `cards_fts_ad`'s body and a rename against a
+  SINGLE-CARD store (so the freed rowid is deterministically reused by the very next
+  insert) leaves the OLD name still matching after the rename — the plain "is the new name
+  findable" assertion does NOT catch this (an orphaned row pointing at a rowid `cards` no
+  longer has is silently dropped by `do_search`'s own `JOIN`, until the rowid is reused);
+  only a direct `cards_fts MATCH` for the old name, or a `cards`/`cards_fts_docsize` row-count
+  comparison, does.
+- **`cards_fts_au` is reached ONLY by a genuine raw SQL `UPDATE` that is not preceded by a
+  delete** — never by anything through `Store().write()`. `_add_search_index`'s own backfill
+  loop is one such caller (though it runs before `cards_fts` exists, so it does not prove
+  the trigger works); `scripts/cid-selftest.py`'s `_unname`/`_add_card_ids` raw
+  manipulations are another. Prove it directly: on an already-migrated store, run
+  `UPDATE cards SET name = ? WHERE key = ?` through a raw connection (bypassing the ORM
+  entirely), then assert the old name is gone from `cards_fts` and the new one is present.
+  Comment out `cards_fts_au`'s body and this specific case goes red; the ordinary
+  capture/sell/rename sequence above does NOT go red, because it never reaches this trigger.
+- Comment out the `cards_fts_ai` (INSERT) trigger's body. This is not merely a soft
+  assertion failure: the very next `flush_rows` DELETE against a row `cards_fts` was never
+  told about raised `sqlite3.DatabaseError: database disk image is malformed` in testing —
+  the AD trigger's `'delete'` special command against a docid the index never received an
+  `'insert'` for corrupts the shadow tables outright. Any write after the first capture
+  reproduces this.
 
 **`app/tests/inventory.spec.ts`.** No stub needs updating for shape (verified: the fixture's
 `searchAnswer` function at `app/tests/inventory.spec.ts:564` is a hand-rolled TypeScript

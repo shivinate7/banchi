@@ -166,6 +166,30 @@ jobs:
           git config --global user.email "check@example.com"
           git config --global user.name "check"
 
+      # STORE-SCALING ITEM 8: `store/db.py:_add_search_index` needs FTS5, and the rig's own
+      # SQLite (3.54.0, macOS) having it says nothing about THIS runner's — a different Python
+      # build with its own bundled or system-linked SQLite. Failing loud HERE, before a single
+      # test runs, beats letting `_add_search_index` raise an opaque
+      # `sqlite3.OperationalError: no such module: fts5` three functions deep inside a schema
+      # migration on the first store open — every `make ci-check`/`make check` test that opens
+      # a store hits this the moment `actions/setup-python@v5`'s pinned 3.11 build ever changes.
+      - name: FTS5 is compiled into this runner's SQLite
+        run: |
+          python3 -c "
+          import sqlite3
+          print('sqlite3 module version:', sqlite3.version)
+          print('SQLite library version:', sqlite3.sqlite_version)
+          conn = sqlite3.connect(':memory:')
+          try:
+              conn.execute(\"CREATE VIRTUAL TABLE t USING fts5(x)\")
+          except sqlite3.OperationalError as exc:
+              raise SystemExit(
+                  f'FTS5 is not compiled into this Python\'s SQLite (sqlite3 {sqlite3.sqlite_version}): {exc}. '
+                  'do_search (store/db.py:_add_search_index) cannot run without it.'
+              )
+          print('FTS5 is available.')
+          "
+
       - name: make ci-check
         run: make ci-check
 

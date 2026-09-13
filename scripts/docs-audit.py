@@ -13704,7 +13704,6 @@ UNSCOPED_WALK_ALLOWED: FrozenSet[Tuple[str, str, str]] = frozenset({
     # (path relative to ROOT, enclosing function name, shape)
     ("server/capture_server.py", "do_inventory", "to_payload"),   # kept permanently — owner's word
     ("server/capture_server.py", "_release_plan", "items"),
-    ("server/capture_server.py", "do_search", "values"),
     ("server/capture_server.py", "_boxes_named", "distinct"),
     ("server/capture_server.py", "do_boxes", "distinct"),
     ("server/pipeline_routes.py", "_box_names", "select"),
@@ -13716,7 +13715,13 @@ UNSCOPED_WALK_ALLOWED: FrozenSet[Tuple[str, str, str]] = frozenset({
     ("cli/resolve.py", "box_views", "values"),
     ("cli/resolve.py", "_cards_by_sku", "select"),   # store-scaling item 4 — one pass, replaces per-SKU `_copies_out`/`_committed_keys`/`_unsent_ledger` reads; the `_unsent_ledger` distinct scan above is deleted, not merely moved
 })
-UNSCOPED_WALK_EXPECTED = 13
+# STORE-SCALING ITEM 8 REMOVED `do_search`'s ROW: the O(cards) walk over
+# `inventory.cards.values()` is deleted, replaced by an FTS5 `MATCH` query
+# (`store/db.py:_add_search_index`) that narrows the candidate set before `_match_rank` ever
+# runs. 13 -> 12. NOTE FOR THE MERGE: item 7 (phase 2, disjoint functions) lowers this same
+# constant by five in the same window — the two branches will conflict on this literal at
+# merge time, and the fix is to SUM the reductions (13 - 1 - 5 = 7), never to take one side.
+UNSCOPED_WALK_EXPECTED = 12
 
 _ROW_NAME_RE = re.compile(r'report\.add\(\s*\n?\s*"([^"\n]+)"')
 _MECH_PATHS = ("scripts/", "harness/tests/", "app/tests/", "app/eslint.config.js", "ruff.toml",

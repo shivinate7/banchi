@@ -77,6 +77,14 @@ from typing import Dict, Iterable, List, Optional, Sequence, Tuple, Union
 # (D88). The table specs at the bottom of `Inventory` are the other half of that contract.
 from store.rows import Rows, TableSpec, int_or_none
 
+# THE ONE CROSS-PACKAGE IMPORT (store-scaling item 8). `pipeline/join.py` imports nothing
+# from `store/` (verified: `grep -n "^from store\|^import store" pipeline/join.py` returns
+# nothing), so this direction is safe. `_card_columns` reuses `join.join_key`/
+# `join.display_number` rather than re-deriving the zfill/set-code-strip rules a third time
+# — CLAUDE.md's "one fold, both sides" (D55/D67) applies to a fourth reader the same as the
+# first three.
+from pipeline import join
+
 VERSION = 2
 
 CAPTURED = "captured"
@@ -1316,6 +1324,17 @@ def _card_columns(card: "Card") -> Dict[str, object]:
         # missing name is a programming error in a caller rather than a data condition; a
         # NULL that reaches disk anyway is HEALED and reported by `store/db.py:_repair`.
         "cid": card.cid,
+        # STORE-SCALING ITEM 8: the two forms `server/capture_server.py`'s `_card_number_key`
+        # and `_number_display` compose, stored so the FTS5 search index (and any other
+        # reader) can see them without re-running `pipeline/join.py`'s rules a second time.
+        # "" rather than NULL when there is no number, matching every other text column
+        # here — FTS5's external-content triggers read these as ordinary column values, and
+        # NULL/"" both index as nothing, but "" keeps `PRAGMA table_info` and a `sqlite3`
+        # CLI session boring.
+        "number_key": join.join_key(card.number, card.printed_total) if (
+            card.number and card.printed_total
+        ) else "",
+        "number_display": join.display_number(card.number, card.printed_total) or "",
     }
 
 
@@ -2493,6 +2512,7 @@ class Inventory:
         column_names=(
             "box", "idx", "state", "sku", "condition", "capture_id", "name", "number",
             "game", "set_hint", "run", "captured_at", "state_at", "cid",
+            "number_key", "number_display",
         ),
     )
     BOXES = TableSpec(

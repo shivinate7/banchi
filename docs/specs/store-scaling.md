@@ -210,7 +210,10 @@ same transaction as every write (D88's invariant, with no Python hook to forget)
 compiled into the rig's SQLite (3.54.0, probed); `cards` has a TEXT key and a stable
 implicit rowid because `upsert` is `ON CONFLICT DO UPDATE` (`db.py:1092`), so
 `content_rowid='rowid'` holds. Tokenizer `unicode61` with `tokenchars '/-'`, so `039/236`
-and `OP15-079` stay one token. It takes schema version 6 (D189 took 5; item 3 takes none).
+and `OP15-079` stay one token. **It takes schema version 7** (D189 took 5; item 2's
+`cards_captured_at` index reached the 6 this section originally reserved for search first —
+D192 — so item 8 renumbers its own, the D140 rule applied to schema versions; item 3 takes
+none).
 **`scripts/cid-selftest.py:table_bytes` byte-compares every table off `sqlite_master`**
 and FTS5's shadow tables are not byte-stable across rebuilds — the playbook carves
 `cards_fts*` out of that comparison. **The walk is deleted, not kept as a fallback** — the migration builds the index on first open,
@@ -233,7 +236,7 @@ Taken 2026-09-12. Per-press means a write handler; per-load means a screen openi
 |---|---|---|---|
 | `server/capture_server.py:3056` `do_inventory` | `to_payload()` | per-load, four screens; per-press on Inventory — until item 2, after which nothing calls it | stays — kept on the owner's word, no caller; the guard names it |
 | `server/capture_server.py:4549` `_release_plan` | `.items()` | per-press (release preflight) | item 7 |
-| `server/capture_server.py:7970` `do_search` | `.values()` | per-keystroke | item 8 |
+| ~~`server/capture_server.py:7970` `do_search`~~ | ~~`.values()`~~ | ~~per-keystroke~~ | **CLOSED by item 8 — `do_search` reads an FTS5 index (`store/db.py:_add_search_index`); row removed from `scripts/docs-audit.py`'s `UNSCOPED_WALK_ALLOWED`, `UNSCOPED_WALK_EXPECTED` 13 -> 12** |
 | `server/capture_server.py:8349` `_boxes_named` | `select(("box",))` | per-load | **stays — verified 2026-09-12 by item 2: its only caller is `do_status`, untouched by item 2, so it cannot close this row; a future item scoping `do_status` removes it** |
 | `server/capture_server.py:8388` `do_boxes` | `distinct("box")` | per-load | stays — one column, cheap; the guard names it |
 | `server/pipeline_routes.py:838` `_box_names` | `select(("box","run"))` | per-load | item 7 |

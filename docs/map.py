@@ -1249,7 +1249,7 @@ COMPONENTS = [
                                   "still hands out the lowest free integer (D20) — the number is a "
                                   "label on a drawer and the id is an identity, which is `Place."
                                   "slot` and `Place.index` one register up (D58)",
-                          "governed_by": ["D145", "D3", "D7", "D8", "D10", "D11", "D20", "D21", "D23", "D26", "D34", "D36", "D56", "D58", "D59", "D83", "D87", "D88", "D89", "D100", "D115", "D132", "D167", "D172", "D183", "D192"], "tested_by": ["T7"]},
+                          "governed_by": ["D145", "D3", "D7", "D8", "D10", "D11", "D20", "D21", "D23", "D26", "D34", "D36", "D55", "D56", "D58", "D59", "D67", "D83", "D87", "D88", "D89", "D100", "D115", "D132", "D167", "D172", "D183", "D192"], "tested_by": ["T7"]},
             "queues.py": {"does": "the standing queues — the `queues` table, one mapping per queue "
                                   "name — and the cross-queue release a re-routed position needs",
                           "governed_by": ["D4", "D9", "D22", "D26", "D28", "D37", "D88"], "tested_by": ["T7"]},
@@ -1391,8 +1391,8 @@ COMPONENTS = [
                               "`events_named` (D134) is an unindexed `WHERE event = ?` scan over "
                               "that same table — no new index, because this repo has no schema "
                               "migration to add one to a store already on disk.",
-                      "governed_by": ["D145", "D20", "D26", "D86", "D88", "D134", "D172", "D174",
-                                      "D189", "D192"], "tested_by": ["T7"]},
+                      "governed_by": ["D145", "D20", "D26", "D86", "D88", "D134", "D140", "D172",
+                                      "D174", "D189", "D192"], "tested_by": ["T7"]},
             "photos.py": {"does": "where a card's photograph lives, and the ONLY module permitted "
                                   "to compose that path: `<home>/photos/<aa>/<cid>.jpg`, a pure "
                                   "function of the card's own name. `adopt` is the per-card, "
