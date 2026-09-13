@@ -28,7 +28,7 @@ from dataclasses import dataclass, field
 from decimal import Decimal
 from pathlib import Path, PurePosixPath
 from typing import (
-    Any, Dict, List, Mapping, NamedTuple, Optional, Sequence, Tuple, Union,
+    Any, Dict, Iterable, List, Mapping, NamedTuple, Optional, Sequence, Tuple, Union,
 )
 
 from cli import runs
@@ -369,7 +369,9 @@ def _rarity_claim(raw) -> Optional[Tuple[str, ...]]:
     return cleaned or None
 
 
-def box_views(inventory: master.Inventory) -> Dict[int, join.BoxView]:
+def box_views(
+    inventory: master.Inventory, boxes: Optional[Iterable[int]] = None
+) -> Dict[int, join.BoxView]:
     """Every box's D58 label coordinates, read off the live store in one pass.
 
     THE REPORT AND THE SCREEN HAVE TO SPELL ONE ADDRESS. A card's number counts the cards on
@@ -389,29 +391,106 @@ def box_views(inventory: master.Inventory) -> Dict[int, join.BoxView]:
     the other has left it. A record that will not coerce degrades its whole box to index
     space rather than being skipped past, because a card nobody can place might be one of
     the cards being counted.
+
+    `boxes=None` (the default, and every existing caller's behavior before store-scaling
+    item 7) WALKS EVERY CARD IN THE STORE, exactly as before — needed by `do_pipeline_value`
+    and `do_pipeline_value_page`, which rank across every box there is. `boxes={...}` BOUNDS
+    THE WALK to exactly those box numbers, through the SAME indexed `select(box=n)` the
+    unbounded branch already uses — needed by a caller whose positions already name a
+    bounded set of boxes (a run's own `pricing.json` positions, a cross-run worklist's
+    merged positions), where walking the whole store to answer a question about five boxes
+    is the exact defect item 7 exists to remove.
+
+    THIS DELIBERATELY DOES NOT CALL `Inventory.records_in`, WHICH AN EARLIER DRAFT OF THIS
+    FUNCTION DID. `records_in` opens with `self._positions_in(box)` — "the refusal, before
+    anything is built" — and `_positions_in` runs a STORE-WIDE orphan scan (every record
+    whose `box` or `idx` column reads NULL, `store/master.py:_positions_in`, unconditionally,
+    regardless of which box was asked about) before it ever looks at the requested box. That
+    scan is `next_index`'s own invariant and is right where `next_index` uses it — an index
+    must never collide with a record anywhere the allocator cannot see — but it makes
+    `records_in` itself O(store) on every call, which would have made the "bounded" branch
+    here pay a full-store cost per box, silently defeating item 7's own point. Measured while
+    writing this: a single corrupt record in box 3 made `records_in(1)` ALSO raise
+    `BadPosition`, because the orphan scan it runs first is not scoped to box 1 at all — the
+    exact cross-box coupling the docstring below promises never happens.
+
+    THE TWO BRANCHES DEGRADE DIFFERENTLY, AND BOTH ARE DELIBERATE. The unbounded branch
+    degrades the WHOLE result to `{}` the instant any record's position will not coerce —
+    unchanged from today, because a caller asking about the whole store has no way to know
+    in advance which boxes are "the good ones", so a partial answer would be indistinguishable
+    from a complete one that happened to have fewer boxes. The bounded branch degrades ONE
+    box at a time for a record already correctly bucketed under it — a `boxes={3, 7, 12}`
+    caller whose box 7 holds a record with an unreadable INDEX still gets correct views for
+    3 and 12, because the caller already knows exactly which boxes it is asking about and a
+    corrupt index in box 7 does not render its knowledge of box 3 any less true. A box
+    `boxes` names that holds no on-hand card at all (never created, or every card departed or
+    pooled) is simply absent from the result — the same rule the unbounded branch already
+    follows for a box no located record names.
+
+    A NAMED, NARROW GAP: a record whose own `box` COLUMN is itself unreadable is invisible to
+    every `select(box=n)` query, bounded or not, because that is what "unreadable" means for
+    an indexed column — there is no number to compare it against. The unbounded branch still
+    catches this (its single unfiltered pass sees the record's raw value directly and
+    degrades everything, which is safe precisely because it is drastic), but the bounded
+    branch cannot attribute such a record to any one of the boxes it was asked about without
+    re-introducing the store-wide scan this item removes. This is narrower than it sounds:
+    every write path this repo exercises allocates `box` through `next_index`/`allocate_
+    capture`, so a `box` column that will not coerce back to an int can only arise from a
+    record hand-edited outside those paths — the store-wide degrade above stays the backstop
+    for that case wherever a caller has no bound to offer.
     """
-    grouped: Dict[int, List[Tuple[int, bool]]] = {}
-    broken: set = set()
-    for card in inventory.cards.values():
-        try:
-            at = (int(card.box), int(card.index))
-        except (TypeError, ValueError):
-            # Which box it belonged to is exactly what could not be read, so every box
-            # loses its count — `_walk`'s own store-wide degrade, for its reason.
-            return {}
-        game = str(getattr(card, "game", None) or games.DEFAULT_GAME)
-        try:
-            if not games.get(game)["located"]:
+    if boxes is not None:
+        grouped: Dict[int, List[Tuple[int, bool]]] = {}
+        for number in boxes:
+            try:
+                n = int(number)
+            except (TypeError, ValueError):
                 continue
-        except games.UnknownGame:
-            pass  # unregistered reads as located, exactly as `join.is_located` answers
-        grouped.setdefault(at[0], []).append(
-            (at[1], card.state not in master.TERMINAL_STATES)
-        )
+            found_any = False
+            broken = False
+            rows: List[Tuple[int, bool]] = []
+            for _key, (idx_raw, game_raw, state) in inventory.cards.select(
+                ("idx", "game", "state"), box=n
+            ):
+                found_any = True
+                try:
+                    index = int(idx_raw)
+                except (TypeError, ValueError):
+                    broken = True
+                    break  # this one box degrades; the others in `boxes` do not
+                game = str(game_raw or games.DEFAULT_GAME)
+                try:
+                    if not games.get(game)["located"]:
+                        continue
+                except games.UnknownGame:
+                    pass
+                rows.append((index, state not in master.TERMINAL_STATES))
+            if broken or not found_any:
+                continue
+            grouped[n] = rows
+    else:
+        grouped = {}
+        for _key, (box_raw, idx_raw, game_raw, state) in inventory.cards.select(
+            ("box", "idx", "game", "state")
+        ):
+            try:
+                at = (int(box_raw), int(idx_raw))
+            except (TypeError, ValueError):
+                # Which box it belonged to is exactly what could not be read, so every box
+                # loses its count — `_walk`'s own store-wide degrade, for its reason.
+                return {}
+            game = str(game_raw or games.DEFAULT_GAME)
+            try:
+                if not games.get(game)["located"]:
+                    continue
+            except games.UnknownGame:
+                pass  # unregistered reads as located, exactly as `join.is_located` answers
+            grouped.setdefault(at[0], []).append(
+                (at[1], state not in master.TERMINAL_STATES)
+            )
+
     views: Dict[int, join.BoxView] = {}
     for number, rows in grouped.items():
-        if number in broken:
-            continue
         try:
             sections = inventory.sections_for(number)
         except master.BadSections:
@@ -869,8 +948,17 @@ def _needed_games(
     """
     held_cards = inventory.cards
     # The same coordinates `load` renders in, off the same store, so a refusal names cards
-    # by the numbers the operator will see on the screen they go looking on (D58).
-    views = box_views(inventory)
+    # by the numbers the operator will see on the screen they go looking on (D58). Bounded
+    # to exactly the boxes THIS caller's own `cards` names (store-scaling item 7) — a run's
+    # positions in the common case, or every box the store holds when `cards` is a
+    # store-backed join's full `store_payload` (D188), where the bound simply names every
+    # box that exists and costs nothing extra.
+    boxes_needed = {
+        record.get("box")
+        for record in cards.values()
+        if record.get("box") is not None
+    }
+    views = box_views(inventory, boxes=boxes_needed)
     needed: "OrderedDict[str, List[str]]" = OrderedDict()
     for key, record in sorted(cards.items()):
         box, index = record.get("box"), record.get("index")
@@ -2012,7 +2100,15 @@ def _resolve(
     committed_keys = _committed_keys(snapshot.inventory, copies_out, by_sku=by_sku)
     # D58's label coordinates, off the same snapshot for the same reason — one read, and
     # every position this run renders counted against the box as it stands right now.
-    views = box_views(snapshot.inventory)
+    # Bounded to exactly the boxes THIS RUN'S OWN positions name (store-scaling item 7) —
+    # a join is always over one run's payload, never the whole store, so walking every box
+    # to label a handful of them is the exact defect item 7 exists to remove.
+    run_boxes = {
+        record.get("box")
+        for record in (payload.get("cards") or {}).values()
+        if record.get("box") is not None
+    }
+    views = box_views(snapshot.inventory, boxes=run_boxes)
 
     # Grouped by game as they are built: each game's cards walk their own catalog and
     # nobody else's, which is the partition D25 asks for. Within a game the payload's

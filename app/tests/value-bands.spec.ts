@@ -63,7 +63,13 @@ function drawer(over: Partial<ValueBox> = {}): ValueBox {
   }
 }
 
-function table(over: Partial<ValueTable> = {}): ValueTable {
+/* `totals` alone accepts a PARTIAL override — `under_cutoff`/`at_or_over` (store-scaling item
+ * 7) default to 0 so none of this file's existing `totals: {...}` fixtures need updating; a
+ * case that cares about either figure sets it explicitly, same as any other field here. */
+type TableOverride = Omit<Partial<ValueTable>, 'totals'> & { totals?: Partial<ValueTable['totals']> }
+
+function table(over: TableOverride = {}): ValueTable {
+  const { totals: totalsOver, ...rest } = over
   return {
     at: '2026-09-12T00:00:00.000+00:00',
     basis: 'market',
@@ -75,8 +81,116 @@ function table(over: Partial<ValueTable> = {}): ValueTable {
     copies: [],
     boxes: [],
     unrankable: { total: 0, never_identified: 0, read_nothing: 0, no_reading: 0, by_box: {} },
-    totals: { cards: 0, valued: 0, value: '0.00' },
-    ...over,
+    totals: { cards: 0, valued: 0, value: '0.00', under_cutoff: 0, at_or_over: 0, ...totalsOver },
+    ...rest,
+  } as ValueTable
+}
+
+/** A row's position in the SAME sort order the server's `_value_sort_key` produces — a literal
+ *  TypeScript port of `server/pipeline_routes.py:_value_sort_key`/`_value_sort_key_reversed`,
+ *  kept deliberately separate from the Python rather than shared with it (the file header's own
+ *  rule for `valuePageFrom` below). */
+function sortKey(row: ValueCopy, reversed: boolean): [boolean, number, number, number] {
+  const market = Number(row.market ?? 0)
+  const present = row.market !== null
+  return reversed ? [!present, market, row.box, row.index] : [!present, -market, row.box, row.index]
+}
+
+function compareKeys(a: readonly number[] | readonly [boolean, number, number, number], b: typeof a): number {
+  for (let i = 0; i < a.length; i += 1) {
+    const av = a[i] as number | boolean
+    const bv = b[i] as number | boolean
+    const an = typeof av === 'boolean' ? (av ? 1 : 0) : av
+    const bn = typeof bv === 'boolean' ? (bv ? 1 : 0) : bv
+    if (an !== bn) return an - bn
+  }
+  return 0
+}
+
+type CursorRow = { market: string | null; box: number; index: number }
+
+function encodeCursor(row: CursorRow | undefined): string | null {
+  if (row === undefined) return null
+  return Buffer.from(JSON.stringify({ market: row.market, box: row.box, index: row.index }), 'utf-8').toString(
+    'base64url',
+  )
+}
+
+function decodeCursor(token: string | null): CursorRow | null {
+  if (token === null || token === '') return null
+  try {
+    return JSON.parse(Buffer.from(token, 'base64url').toString('utf-8')) as CursorRow
+  } catch {
+    return null
+  }
+}
+
+/** `GET /pipeline/value?band=...` reshaped out of the SAME `table: ValueTable` fixture every
+ *  existing test already builds — a literal TypeScript port of `do_pipeline_value_page`'s
+ *  shape, not shared code with the Python (per this file's own rule below `open`). Every
+ *  aggregate field (`boxes`, `unrankable`, `totals`, `sources`, `threshold`) is copied through
+ *  UNCHANGED regardless of `band`/`box`, matching the real route: the aggregates are computed
+ *  over the whole store and never over what one page could see. */
+function valuePageFrom(answer: ValueTable, params: URLSearchParams): Record<string, unknown> {
+  const band = params.get('band')
+  const boxRaw = params.get('box')
+  const box = boxRaw === null || boxRaw === '' ? null : Number(boxRaw)
+  const limitRaw = params.get('limit')
+  const limit = limitRaw === null || limitRaw === '' ? 200 : Number(limitRaw)
+  const after = decodeCursor(params.get('after'))
+
+  const scopedCopies = answer.copies.filter((row) => box === null || row.box === box)
+  let scoped: ValueCopy[]
+  let reversed = false
+  if (band === 'gaps') {
+    scoped = scopedCopies
+      .filter((row) => row.market === null)
+      .sort((a, b) => a.box - b.box || a.index - b.index)
+  } else {
+    reversed = band === 'bottom'
+    const priced = scopedCopies.filter((row) => row.market !== null)
+    /* STACK FIELDS, over this box-scoped priced set, exactly as `do_pipeline_value_page` adds
+       them — needed because `ValueRow` no longer groups by SKU itself. */
+    const totals = new Map<string, number>()
+    for (const row of priced) {
+      if (row.sku !== null) totals.set(row.sku, (totals.get(row.sku) ?? 0) + 1)
+    }
+    const seen = new Map<string, number>()
+    const withStacks = priced.map((row) => {
+      if (row.sku === null) return { ...row, stack_index: null, stack_of: null }
+      const next = (seen.get(row.sku) ?? 0) + 1
+      seen.set(row.sku, next)
+      return { ...row, stack_index: next, stack_of: totals.get(row.sku) ?? 1 }
+    })
+    scoped = withStacks.sort((a, b) => compareKeys(sortKey(a, reversed), sortKey(b, reversed)))
+  }
+
+  let start = 0
+  if (after !== null) {
+    const markerKey = band === 'gaps' ? [after.box, after.index] : sortKey(after as ValueCopy, reversed)
+    start = scoped.length
+    for (let i = 0; i < scoped.length; i += 1) {
+      const rowKey = band === 'gaps' ? [scoped[i]!.box, scoped[i]!.index] : sortKey(scoped[i]!, reversed)
+      if (compareKeys(rowKey, markerKey) > 0) {
+        start = i
+        break
+      }
+    }
+  }
+  const page = scoped.slice(start, start + limit)
+  const next = page.length > 0 && start + limit < scoped.length ? encodeCursor(page[page.length - 1]) : null
+
+  return {
+    at: answer.at,
+    basis: answer.basis,
+    threshold: answer.threshold,
+    sources: answer.sources,
+    rows: page,
+    next,
+    total: scoped.length,
+    boxes: answer.boxes,
+    unrankable: answer.unrankable,
+    totals: answer.totals,
   }
 }
 
@@ -94,9 +208,21 @@ async function settled(page: Page): Promise<void> {
 
 async function open(page: Page, answer: ValueTable, end: 'top' | 'bottom' = 'top'): Promise<string[]> {
   const asked: string[] = []
-  await page.route(/\/pipeline\/value$/, async (route) => {
+  /* `(\?|$)` RATHER THAN `$` ALONE — store-scaling item 7 adds a query string
+     (`?band=top&limit=200`) to every fetch this screen makes, and the old `$`-anchored regex
+     stops matching the instant one is appended, breaking every test in this file before any
+     assertion runs. */
+  await page.route(/\/pipeline\/value(\?|$)/, async (route) => {
     asked.push(route.request().method())
-    await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(answer) })
+    const url = new URL(route.request().url())
+    const band = url.searchParams.get('band')
+    /* BUILD THE PAGE/AGGREGATES SHAPE OUT OF THE SAME `answer: ValueTable` FIXTURE EVERY
+       EXISTING TEST ALREADY PASSES, so no test has to be rewritten to construct two different
+       fixture shapes — one helper does the reshaping once. `band === null` never actually
+       fires from this client any more (it always asks for a band), kept only because
+       `do_pipeline_value()`'s own no-args shape is what `answer` already is. */
+    const body = band === null ? answer : valuePageFrom(answer, url.searchParams)
+    await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(body) })
   })
   /* THE WORKLIST ANSWERS NOTHING, ON PURPOSE. The lens reads the whole STORE, so every case
      here runs on a machine with no joined run — which is the state D109's defect was found in
@@ -141,7 +267,7 @@ test('one SKU in three slots draws three rows, and each says which copy it is', 
     table({
       copies: [copy({ index: 61 }), copy({ index: 102 }), copy({ index: 163 })],
       boxes: [drawer()],
-      totals: { cards: 3, valued: 3, value: '142.71' },
+      totals: { cards: 3, valued: 3, value: '142.71', at_or_over: 3 },
     }),
   )
 
@@ -300,7 +426,7 @@ test('a listed card is in the band with no distinction, and the count is a fact 
     table({
       copies: [copy({ live: 3 }), copy({ index: 2, live: 0, market: '20.00' })],
       boxes: [drawer({ cards: 2, valued: 2, total: '67.57', per_card: '33.79' })],
-      totals: { cards: 2, valued: 2, value: '67.57' },
+      totals: { cards: 2, valued: 2, value: '67.57', at_or_over: 2 },
     }),
   )
   await everyCard(page)

@@ -2462,7 +2462,7 @@ COMPONENTS = [
                                 "D110", "D111", "D113",
                                 "D119", "D122", "D127", "D132", "D135", "D136",
                                 "D140", "D141", "D142", "D143", "D144", "D149", "D155",
-                                "D161", "D44", "D160", "D178", "D182",
+                                "D159", "D161", "D44", "D160", "D178", "D182",
                                 # Appended, in the pre-claim place claim-ids.py's own docstring
                                 # names — the merge resorts it into numeric order once the
                                 # slug below becomes a number.
@@ -3416,7 +3416,7 @@ COMPONENTS = [
                                 "D62", "D63", "D64", "D65", "D66", "D67", "D69", "D70", "D76",
                                 "D77", "D79", "D83", "D86", "D87", "D88", "D89", "D90", "D91",
                                 "D92", "D93", "D96", "D100", "D103", "D104", "D108", "D113",
-                                "D115", "D116", "D132", "D134", "D137", "D138",
+                                "D115", "D116", "D132", "D134", "D137", "D138", "D159",
                                 "D168", "D174", "D183", "D172", "D192", "D191"],
                 "tested_by": ["T7"],
             },
@@ -4200,7 +4200,7 @@ COMPONENTS = [
                                               "D61", "D62", "D63", "D64", "D65", "D68", "D69",
                                               "D70", "D73", "D76", "D79", "D83", "D86", "D87",
                                               "D89", "D90", "D91", "D92", "D100", "D103",
-                                              "D168",
+                                              "D159", "D168",
                                               "D104", "D113", "D116", "D132", "D134", "D172",
                                               "D174", "D180", "D192"]},
             "src/demoFlag.d.ts": {"does": "declares `__BN_DEMO__`, the build-time demo flag "
