@@ -13685,6 +13685,21 @@ _ARGUMENT_MIN_WORDS = 12
 # UNSCOPED_WALK_EXPECTED in the SAME commit, or the row reports a stale allowlist entry
 # (site not found) rather than silently shrinking. An item that cannot yet remove its
 # site for some reason must not touch the count.
+#
+# STORE-SCALING ITEM 4 REPLACED ONE ENTRY WITH ANOTHER RATHER THAN REMOVING ONE. `_copies_
+# out` and `_committed_keys` (`cli/resolve.py`) used to each call `Inventory.positions_for_
+# sku`/`copies_not_sold`/`sales_before`/`copies_on_hand` once PER SKU — none of those are
+# `.select()`/`.distinct()` on `.cards` directly (they are `Rows.where(sku=sku)` calls one
+# level down in `store/master.py`, invisible to this scanner, which is exactly the cost
+# `docs/specs/store-scaling/04-copies-out.md` names: the guard sees shapes on the page, not
+# runtime cost). The fix is `cli/resolve.py:_cards_by_sku`, ONE deliberate `.select()` with
+# no keyword filter — genuinely unscoped by this scanner's own rule, and genuinely cheap for
+# the same reason `store/master.py:counts` is: one pass, once per request, never once per
+# listing. `server/pipeline_routes.py:_unsent_ledger` also used to run its own `distinct
+# ("sku")` scan (the removed entry below) to find SKUs no run's table names; it now shares
+# the SAME `_cards_by_sku` dict instead of scanning `cards` a second time, so that site is
+# gone rather than merely rewritten. One new site, one old site removed: the count nets to
+# zero and stays 13.
 UNSCOPED_WALK_ALLOWED: FrozenSet[Tuple[str, str, str]] = frozenset({
     # (path relative to ROOT, enclosing function name, shape)
     ("server/capture_server.py", "do_inventory", "to_payload"),   # kept permanently — owner's word
@@ -13693,13 +13708,13 @@ UNSCOPED_WALK_ALLOWED: FrozenSet[Tuple[str, str, str]] = frozenset({
     ("server/capture_server.py", "_boxes_named", "distinct"),
     ("server/capture_server.py", "do_boxes", "distinct"),
     ("server/pipeline_routes.py", "_box_names", "select"),
-    ("server/pipeline_routes.py", "_unsent_ledger", "distinct"),
     ("server/pipeline_routes.py", "_on_hand_by_run", "select"),
     ("server/pipeline_routes.py", "do_pipeline_value", "values"),
     ("store/master.py", "to_payload", "items"),
     ("store/master.py", "counts", "select"),
     ("store/master.py", "next_box_number", "distinct"),   # kept permanently — one indexed column, cheap; missed by the hand census
     ("cli/resolve.py", "box_views", "values"),
+    ("cli/resolve.py", "_cards_by_sku", "select"),   # store-scaling item 4 — one pass, replaces per-SKU `_copies_out`/`_committed_keys`/`_unsent_ledger` reads; the `_unsent_ledger` distinct scan above is deleted, not merely moved
 })
 UNSCOPED_WALK_EXPECTED = 13
 
