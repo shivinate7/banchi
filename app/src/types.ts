@@ -1968,8 +1968,20 @@ export type Unreachable = {
   /** `cards` is how many of the run's cards this store still HOLDS — not how many it read.
    *  A run over a reallocated drawer withholding nothing and one withholding 99 sellable
    *  cards were the same sentence until this field existed. `null` means the server could
-   *  not open the store, which is not the same claim as zero. */
-  reallocated: { run: string; box: number | null; cards: number | null }[]
+   *  not open the store, which is not the same claim as zero.
+   *
+   *  A RESCUE ALREADY DISCHARGES PART OF THIS COUNT (`pkmnscan rescue`, D36's own repair):
+   *  `cards` is the on-hand figure minus every JOINED rescue's own `rescued_cards`, summed —
+   *  an unjoined rescue has not put its cards on any worklist yet and does not subtract.
+   *  `rescued` is that sum and `rescued_by` names the rescue run(s); both are absent from a
+   *  server older than this field, which a reader treats as zero/none. */
+  reallocated: {
+    run: string
+    box: number | null
+    cards: number | null
+    rescued?: number
+    rescued_by?: string[]
+  }[]
 }
 
 /** One card's answer as the corpus stores it — D49's shapes, with provenance beside them. */

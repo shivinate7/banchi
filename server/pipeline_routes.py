@@ -126,6 +126,7 @@ REPO_ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(REPO_ROOT))
 
 from cli import cmd_reprice  # noqa: E402
+from cli import cmd_rescue  # noqa: E402
 from cli import resolve as run_resolve  # noqa: E402
 from cli import runs as run_files  # noqa: E402
 from pipeline import corpus, decisions, games as game_registry, join, reprice, tcgcsv  # noqa: E402
@@ -2504,6 +2505,16 @@ def _unreachable(inventory: master.Inventory, review_count: int, root: Path) -> 
     no join can reach and which is left out of the union above for exactly that reason —
     counted here, it would offer the NEW drawer's cards under the OLD run's identities.
 
+    A REALLOCATED RUN'S COUNT IS DISCHARGED BY ITS OWN RESCUE. `pkmnscan rescue` (D36's own
+    repair) re-addresses a stranded run's cards to a new, joinable run over the drawer they
+    are actually in — the fix this row's tooltip sends the operator to — but it never edits
+    the stranded run's manifest or the store's `cards.run` column, so a naive on-hand count
+    would go on reporting the same cards forever. The caller subtracts every JOINED rescue's
+    `rescued_cards` from the stranded run's on-hand figure (summed, because a run can be
+    rescued more than once) and names the rescue(s) in `rescued_by`. An UNJOINED rescue does
+    not subtract: its cards are not on any worklist yet, so the stranded count must not drop
+    until the rescue itself has joined.
+
     EVERY ROW CARRIES A CARD COUNT, BECAUSE A RUN IS NOT A QUANTITY. Both lists were drawn
     as a number of RUNS, so `2 runs over a deleted box` read identically whether the store
     was withholding nothing or was withholding a hundred sellable cards — and on the
@@ -2625,6 +2636,13 @@ def do_pipeline_worklist(wanted: Sequence[str]) -> dict:
     # discovering every run that exists in the store through a filter-less scan.
     manifests_by_entry: Dict[Path, dict] = {}
     joined_names: List[str] = []
+    # A STRANDED RUN'S CARDS, RE-ADDRESSED — keyed by the run `pkmnscan rescue` was RUN
+    # AGAINST, never by the rescue's own name. `rescue` never edits the stranded run's
+    # manifest or the store's `cards.run` column (it derives a SECOND run, D36's own repair),
+    # so nothing else here can see a rescue happened; this is the one place that collects it.
+    # ONLY A JOINED RESCUE DISCHARGES THE COUNT: an unjoined rescue has not put its cards on
+    # any worklist yet, so the stranded figure must not drop until it has.
+    rescues_by_stranded: Dict[str, List[dict]] = {}
     for entry in sorted(root.iterdir()):
         if not entry.is_dir() or not (entry / run_files.MANIFEST).is_file():
             continue
@@ -2632,6 +2650,11 @@ def do_pipeline_worklist(wanted: Sequence[str]) -> dict:
         manifests_by_entry[entry] = manifest
         if manifest.get("joined"):
             joined_names.append(entry.name)
+            stranded = manifest.get(cmd_rescue.RESCUED_FROM)
+            if stranded:
+                rescues_by_stranded.setdefault(str(stranded), []).append(
+                    {"run": entry.name, "cards": int(manifest.get("rescued_cards") or 0)}
+                )
 
     on_hand = (
         None if snapshot is None else _on_hand_by_run(snapshot.inventory, joined_names)
@@ -2682,11 +2705,22 @@ def do_pipeline_worklist(wanted: Sequence[str]) -> dict:
             # THE COUNT IS WHAT MAKES THIS ROW READABLE (see `_unreachable`). None where
             # the store would not open — unknown is not zero, and a warning that silently
             # became "nothing to see" on an unreadable store would be the worst of the two.
+            #
+            # A RESCUE DISCHARGES THIS COUNT (`pkmnscan rescue`, D36's own repair): it never
+            # edits THIS run's manifest or the store's `cards.run` column, so `on_hand` still
+            # counts every card this run ever named — the rescue's own JOINED run is where
+            # they now count instead. Subtract what every joined rescue already carried away.
+            rescues = rescues_by_stranded.get(entry.name, [])
+            rescued_total = sum(rescue["cards"] for rescue in rescues)
+            raw_cards = None if on_hand is None else on_hand.get(entry.name, 0)
+            cards = raw_cards if raw_cards is None else max(0, raw_cards - rescued_total)
             reallocated.append(
                 {
                     "run": entry.name,
                     "box": summary.get("box"),
-                    "cards": None if on_hand is None else on_hand.get(entry.name, 0),
+                    "cards": cards,
+                    "rescued": rescued_total,
+                    "rescued_by": [rescue["run"] for rescue in rescues],
                 }
             )
             roster.append({**summary, "owes": [], "open": False, "unsent": 0})
