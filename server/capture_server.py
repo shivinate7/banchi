@@ -8192,7 +8192,6 @@ def do_search(query: str) -> dict:
     reader and the arithmetic there is unchanged.
     """
     text = _require_query(query)
-    needle = text.lower()
 
     inventory = Store().read().inventory
     places = _Places(inventory)

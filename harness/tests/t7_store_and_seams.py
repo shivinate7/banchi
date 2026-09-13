@@ -7796,7 +7796,7 @@ def check_search_fts5(checks: Checks) -> None:
         checks.ok(bool(fresh), "and the post-rename name does")
 
     # --- the migration seeds the index for rows that predate it -----------------------
-    with isolated_home() as home:
+    with isolated_home():
         capture_server.do_capture(capture_payload(5))
         with Store().write() as snapshot:
             card = snapshot.inventory.cards["5/1"]
