@@ -3500,7 +3500,7 @@ COMPONENTS = [
                                 "D92", "D93", "D96", "D100", "D103", "D104", "D108", "D113",
                                 "D114", "D115", "D116", "D132", "D134", "D137", "D138", "D159",
                                 "D168", "D174", "D183", "D172", "D192", "D191",
-                                "D193"],
+                                "D193", "D-orders-backlog-reconcile"],
                 "tested_by": ["T7"],
             },
             "tcg_import.py": {"does": "THE OUTBOUND WRITE to the seller admin, and the only "
@@ -4301,7 +4301,7 @@ COMPONENTS = [
                                               "D159", "D168",
                                               "D104", "D113", "D116", "D132", "D134", "D172",
                                               "D174", "D180", "D192",
-                                              "D193"]},
+                                              "D193", "D-orders-backlog-reconcile"]},
             "src/demoFlag.d.ts": {"does": "declares `__BN_DEMO__`, the build-time demo flag "
                                           "`vite.config.ts` substitutes with a boolean "
                                           "literal. It exists because three other forms of "
@@ -5817,12 +5817,12 @@ COMPONENTS = [
                                        "join by order number with nothing written across the "
                                        "seam — including the buyer's name, which "
                                        "OrdersShipStage.tsx still does not draw.",
-                               "governed_by": ["D7", "D10", "D24", "D27", "D28", "D36", "D39", "D51", "D57", "D58", "D61", "D63", "D66", "D69", "D91", "D96", "D113", "D114", "D118", "D159", "D192", "D193"]},
+                               "governed_by": ["D7", "D10", "D24", "D27", "D28", "D36", "D39", "D51", "D57", "D58", "D61", "D63", "D66", "D69", "D91", "D96", "D113", "D114", "D118", "D159", "D192", "D193", "D-orders-backlog-reconcile"]},
             "src/Orders.css": {"does": "the order screen at owner density: the line, its reason "
                                        "and remedy, and the pick rows under it. A copy already "
                                        "spoken for by another line is drawn as spoken for "
                                        "rather than offered twice.",
-                               "governed_by": ["D5", "D24", "D40", "D41", "D50", "D63", "D69", "D113", "D114", "D117", "D193"]},
+                               "governed_by": ["D5", "D24", "D40", "D41", "D50", "D63", "D69", "D113", "D114", "D117", "D193", "D-orders-backlog-reconcile"]},
             "src/OrdersHubStore.ts": {"does": "THE HUB'S MEMORY ACROSS A STAGE SWITCH. "
                                               "`#/orders` and `#/shipping` are one screen with "
                                               "two stages, and the shell keys its view on the "
@@ -6627,7 +6627,7 @@ COMPONENTS = [
                                              "app/tests/order-walk.spec.ts. Not a harness test — "
                                              "it starts a browser; `make design-check` runs it.",
                                      "governed_by": ["D24", "D27", "D28", "D36", "D49", "D58", "D63", "D69", "D73", "D90", "D91", "D96", "D113", "D114", "D118", "D123", "D132",
-                                                     "D193"]},
+                                                     "D193", "D-orders-backlog-reconcile"]},
             "tests/shipping.spec.ts": {"does": "the shipping screen in a browser, and its "
                                                "strongest cases are ABSENCES: no buyer name, "
                                                "address, city or postcode appears anywhere on "
