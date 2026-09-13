@@ -196,6 +196,19 @@ class Store:
         finally:
             conn.close()
 
+    def history_at(self, key: str):
+        """The events that could bear on one position, oldest first. `history()`'s scoped
+        sibling (D-history-scoped-to-box): the reversal readers each want one card's own
+        lines plus its box's `renumbered` markers, not a full-table load filtered in
+        Python. See `db.events_at`'s docstring for why the scope is the box and not the
+        bare position.
+        """
+        conn = db.connect(self.directory)
+        try:
+            return db.events_at(conn, key)
+        finally:
+            conn.close()
+
     def named_events(self, event: str):
         """Every event of one kind, newest first. `buried()`'s general form.
 

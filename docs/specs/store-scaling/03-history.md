@@ -1,5 +1,26 @@
 # Item 3 — history() scoped to the key
 
+**CORRECTION, from the implementing session (branch `claude/scaling-03-history`): "Done
+when" item 4 and the "second, cheaper win" it describes are WRONG, and were NOT built.**
+The claim was that `_sell`'s and `do_retire`'s `else` branches (`undo=False`) "never read
+`previous` or `origin_unknown`" — checked by reading only lines 7256-7283 / the retire
+equivalent, which is the body of the `if undo: / else:` block. Both routes build their
+response dict AFTER that block (`server/capture_server.py`, `_sell`'s `body = {...}` and
+`do_retire`'s equivalent), and both unconditionally include `"restores_to": None if undo
+else previous` — so a PLAIN sale or retirement's response DOES read `previous`, to tell the
+caller what an undo would restore to before they tap it (the comment right there: "null on
+a sale means the undo control should not be offered, which is worth knowing at the moment
+of the sale rather than at the tap that fails"). Skipping the read on `undo=False` breaks
+`restores_to` on every plain sale and retirement — confirmed by running `make harness`:
+`check_mark_sold` and `check_retire` both failed with `restores_to` reading `None` instead
+of the prior state. **This was caught by the harness, not merely reasoned about — the
+skip was implemented, T7 was run, it failed, and the skip was reverted.** Steps 4 and 5
+below are not built; `_sale_origin`/`_retirement_origin` are called unconditionally, same
+as before this item, just against the new box-scoped `history_at(key)` (steps 1-3, which
+stand and are the actual fix — a full-table scan on every sale/retire becomes an
+indexed range scan bounded by box size). Test section C (the mock-spy skip proof) is
+likewise not applicable and was not added.
+
 ## Goal and done-when
 
 `Store.history()` (`store/db.py:1208-1225`) is `SELECT id, payload FROM events ORDER BY id`
@@ -12,7 +33,12 @@ hottest reversal paths in the product: `_answer_origin` (line 5461), `_reverse_s
 `_sale_origin` and `_retirement_origin`). Two of those four logical callers —
 `_sale_origin`, read from `_sell` at line 7232, and `_retirement_origin`, read from
 `do_retire` at line 7508 — are invoked **unconditionally**, including on a plain sale or a
-plain retirement (`undo=False`), where the result is computed and never read.
+plain retirement (`undo=False`). **This paragraph originally claimed the result is "computed
+and never read" on a plain sale/retirement — that is WRONG, see the correction at the top of
+this file: both routes' response bodies read `previous` unconditionally, via
+`"restores_to": None if undo else previous`, to tell the caller what an undo would restore to
+before they ask for one.** The read is genuinely unconditional and cannot be skipped; what
+this item fixes is its SCOPE, not its frequency.
 
 Every one of these readers wants the events of **one box**, not the whole store: each scans
 backwards for lines whose `position` equals one key, plus (four of them: `_answer_before`,
@@ -32,9 +58,11 @@ backwards for lines whose `position` equals one key, plus (four of them: `_answe
 3. All three call sites in `server/capture_server.py` (`_answer_origin`,
    `_reverse_stand_down`, `_origin`) call `store.history_at(key)` instead of
    `store.history()`.
-4. `_sell` (line ~7232) and `do_retire` (line ~7508) skip the `_sale_origin` /
-   `_retirement_origin` read entirely when `undo` is `False` — the second, cheaper win the
-   umbrella task calls out by name.
+4. ~~`_sell` (line ~7232) and `do_retire` (line ~7508) skip the `_sale_origin` /
+   `_retirement_origin` read entirely when `undo` is `False`~~ — **NOT BUILT, see the
+   correction at the top of this file: both routes' responses read `previous`
+   unconditionally to populate `restores_to`, so the read cannot be skipped without
+   breaking that field on every plain sale/retirement.**
 5. `make harness` T7 is green, including a new assertion that the scoped read returns
    exactly the box-scoped subset of `Store().history()` (functional correctness) and a new
    assertion that the SQL it runs uses the index rather than a table scan (the performance
