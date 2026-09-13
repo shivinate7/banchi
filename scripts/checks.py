@@ -451,6 +451,31 @@ CHECKS = (
         "governed_by": ("D18", "D26", "D83", "D88", "D89", "D172"),
     },
     {
+        "target": "readings-selftest",
+        "runs": "python3 scripts/readings-selftest.py",
+        "asserts": "the cached market-reading table (store/readings.py) and the two-source "
+                   "walk that fills it (pipeline/readings.py), by comparing `collect()` "
+                   "against an INDEPENDENT reimplementation of the same rule over a "
+                   "throwaway store — an empty store, a store with only run tables, a store "
+                   "with only a live export, a run and a live export disagreeing on one SKU "
+                   "in both directions of which is newer, the newest-by-name live export "
+                   "carrying an unparseable filename (must lose to everything and never fall "
+                   "back to an older readable file), `readings adopt --write` followed by "
+                   "the exact SELECT `_readings()` now performs, two adopts in a row over "
+                   "unchanged files (idempotent, no duplicate rows), a new run landing "
+                   "between two adopts, and a run directory deleted between two adopts (its "
+                   "SKU drops out of the table — a cache refresh, never an accumulating "
+                   "ledger).",
+        "needs": ("python3",),
+        "writes": "one sqlite store per case, under `mktemp -d`. `PKMNSCAN_HOME` is "
+                  "repointed for the whole run, so the operator's own store is never opened.",
+        "commit_path": False,
+        "why_off_commit_path": "D18 — it writes a temp store. Same standing as "
+                               "submission-selftest and cid-selftest.",
+        "gates": True,
+        "governed_by": ("D189", "D18", "D86", "D88"),
+    },
+    {
         "target": "janitor-selftest",
         "runs": "bash scripts/janitor-selftest.sh",
         "asserts": "scripts/janitor.py, against a throwaway clone with real worktrees, a fake "
@@ -517,20 +542,25 @@ CHECKS = (
     {
         "target": "guard-shell-selftest",
         "runs": "bash scripts/guard-shell-selftest.sh",
-        "asserts": "scripts/guard-shell.py, the PreToolUse hook that refuses five shell "
+        "asserts": "scripts/guard-shell.py, the PreToolUse hook that refuses six shell "
                    "mistakes this repo has already paid for: `git checkout` over a modified "
                    "file, a write outside this checkout, `gh api -f` with no method, `ln -s` "
-                   "at an existing path, and a polling loop. FOUR OF THE FIVE INCIDENTS ARE "
+                   "at an existing path, a polling loop, and `git push <remote> HEAD` (or the "
+                   "branch's own literal name) when the tracked upstream is a different name. "
+                   "FIVE OF THE SIX INCIDENTS ARE "
                    "PERFORMED rather than asserted about — 240 lines really destroyed by a "
                    "real `git checkout`, a real worktree whose root differs from its main "
-                   "checkout's, a real `harness/images/images` created by a real `ln -s`, and "
-                   "`pgrep -f` really matching a process that merely NAMES its pattern. The "
+                   "checkout's, a real `harness/images/images` created by a real `ln -s`, "
+                   "`pgrep -f` really matching a process that merely NAMES its pattern, and a "
+                   "real local branch made to track a differently-named remote branch. The "
                    "half that decides whether the guard survives is the false positives, and "
                    "the git ones are RUN in the fixture before they are scored: a branch, a "
                    "clean path, `--staged`, a named source, `-sfn`, `--method GET`, `graphql`, "
-                   "a pid wait, a bounded retry, and every `git`/`gh`/`ln` line swept out of "
-                   "this repo's own tooling. Each of the five hatches is scored in both of "
-                   "its forms, and the clause table is READ rather than retyped, so a sixth "
+                   "a pid wait, a bounded retry, the ordinary first push of a new branch, an "
+                   "upstream already matching its own name, and every `git`/`gh`/`ln` line "
+                   "swept out of "
+                   "this repo's own tooling. Each of the six hatches is scored in both of "
+                   "its forms, and the clause table is READ rather than retyped, so a seventh "
                    "clause with no hatch fails here instead of shipping unescapable.",
         "needs": ("python3", "bash", "git"),
         "writes": "a git repository, a linked worktree, two commits, a symlink and one "

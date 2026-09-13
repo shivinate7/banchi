@@ -317,7 +317,8 @@ make check          # harness + docs-audit + claim-stale + revert-guard +
                     #   lint + vale + typecheck + audit-self-test +
                     #   githooks-selftest + merge-selftest + revert-selftest +
                     #   claim-selftest + decisions-selftest + submission-selftest +
-                    #   cid-selftest + janitor-selftest + reap-selftest + silent-write-selftest +
+                    #   cid-selftest + readings-selftest +
+                    #   janitor-selftest + reap-selftest + silent-write-selftest +
                     #   guard-shell-selftest +
                     #   coordinator-selftest + suite-lock-selftest +
                     #   serve-selftest + sync-selftest + verdict-selftest.
@@ -451,12 +452,12 @@ make silent-write-selftest  # that guard, proved by REPRODUCING the incident: a 
                     #   a temp repo). Mutation-tested — twenty-one arms, nineteen caught, and the
                     #   two survivors are one requirement covered twice, proved by a twenty-first
                     #   arm that removes both and goes red.
-                    # FIVE SHELL MISTAKES ARE REFUSED BEFORE THEY RUN, AND THERE IS NO
+                    # SIX SHELL MISTAKES ARE REFUSED BEFORE THEY RUN, AND THERE IS NO
                     #   TARGET FOR THAT EITHER — `scripts/guard-shell.py --hook` is a
                     #   PreToolUse hook on Bash AND on Write|Edit, armed in both rosters
                     #   (D135). Every clause has an incident behind it, and every one of those
                     #   incidents broke a rule that was already written down, which is D171's
-                    #   ruling about what a rule is applied five more times:
+                    #   ruling about what a rule is applied six more times:
                     #   `git checkout <path>` / `git restore <path>` OVER A MODIFIED FILE is
                     #   refused, and the refusal names the `.bak` copy — on 2026-09-06 one
                     #   `git checkout cli/cmd_reprice.py` put a mutation back and destroyed
@@ -492,21 +493,43 @@ make silent-write-selftest  # that guard, proved by REPRODUCING the incident: a 
                     #   loop, a pid wait, a `curl -m` probe, a counter and any FOREGROUND loop
                     #   pass; so does backgrounding `make design-check ARGS=--wait`, which this
                     #   file tells you to do. `PKMNSCAN_WAIT=off`.
-                    #   FIVE HATCHES AND NOT ONE, so disarming the symlink clause cannot disarm
+                    #   `git push <remote> HEAD` (OR THE CURRENT BRANCH'S OWN LITERAL NAME) IS
+                    #   REFUSED WHEN THE TRACKED UPSTREAM IS A DIFFERENT NAME — on 2026-09-12 a
+                    #   coordinator stood on a local branch (`pr-h-readings-table-local`) whose
+                    #   configured upstream was actually `origin/claude/pr-h-readings-table`, a
+                    #   background agent having pushed its squashed commit to the real PR
+                    #   branch under a different name than the one it kept locally. `git push
+                    #   origin HEAD` reported success — `[new branch] HEAD ->
+                    #   pr-h-readings-table-local` — and had created a stray branch on origin
+                    #   while leaving the real PR branch untouched. Git's OWN `push.default=
+                    #   simple` already refuses a BARE `git push` shaped like this and prints
+                    #   the fix, but naming a refspec — even the unqualified `HEAD` its own
+                    #   fix offers — is git's signal that the caller knows what they want, and
+                    #   that signal was wrong. `branch.<name>.remote` / `.merge` are read the
+                    #   same way git reads them; NO CONFIGURED UPSTREAM AT ALL (the ordinary
+                    #   first push of a new branch), a name that already matches, an explicit
+                    #   `HEAD:<branch>` naming the real destination, a different remote than
+                    #   the one tracked, and `--all`/`--mirror`/`--tags`/`--delete` all pass.
+                    #   `PKMNSCAN_PUSH=off`.
+                    #   SIX HATCHES AND NOT ONE, so disarming the symlink clause cannot disarm
                     #   the one that guards uncommitted work. Each is honoured in the
                     #   environment and inline, and printed in its own refusal. Fails OPEN on
                     #   its own bugs, including a missing `scripts/shell_parse.py` — the
                     #   tokenizer it shares with `silent-write-guard.py`.
-make guard-shell-selftest  # that guard, proved by COMMITTING its five mistakes in a throwaway
+make guard-shell-selftest  # that guard, proved by COMMITTING its six mistakes in a throwaway
                     #   repository: 240 lines really destroyed by a real `git checkout`, a real
                     #   worktree whose root differs from its main checkout's, a real nested
-                    #   symlink nested inside `harness/images`, and `pgrep -f` really
-                    #   matching a process that merely NAMES its pattern. Every false positive above is
+                    #   symlink nested inside `harness/images`, `pgrep -f` really
+                    #   matching a process that merely NAMES its pattern, and a real local
+                    #   branch made to track a differently-named remote branch, the exact way a
+                    #   background agent's push created one. Every false positive above is
                     #   pinned as passing and the git ones are RUN in the fixture first. In
                     #   `check`, never in the git hook (D18 — it writes a temp repo).
-                    #   Mutation-tested — twenty-six arms, twenty-five caught; the one survivor
-                    #   removes half of the `.bak` advice and the other half still satisfies
-                    #   the assertion, which an arm removing BOTH proves by going red.
+                    #   Mutation-tested — twenty-six arms, twenty-five caught, for the original
+                    #   five clauses; the push clause adds six of its own, five caught and the
+                    #   survivor an equivalent mutant (a colon-bearing refspec can never equal
+                    #   `HEAD` or a bare branch name, git's own ref grammar forbidding `:` in
+                    #   one, so the guard the colon check adds is never actually reached).
 make coordinator    # THE MERGE QUEUE, READ RATHER THAN REMEMBERED. The other half of
                     #   2026-09-12: a session relayed `#300 GREEN — merging` for several turns
                     #   while nothing merged, because the line came from a driver's stdout and
@@ -823,6 +846,25 @@ make merge          # merge a PR and move main onto it — BOTH HALVES, on your 
 ./pkmnscan prices   show [--held]   # what the corpus holds. `--held` is the cross-run view of
                                    #   what is held back — D49 named its absence, D62 repeated
                                    #   it, and it is one line now that the answers are one file.
+./pkmnscan readings adopt [--write] # THE MARKET READING IS A TABLE NOW, NOT A LIVE
+                                   #   RECOMPUTATION (D189). `server/
+                                   #   pipeline_routes.py:_readings()` used to walk every run's
+                                   #   pricing.json and the newest live export on every
+                                   #   `GET /pipeline/value`; that walk is `pipeline/readings.py:
+                                   #   collect()` now, run once by this press and cached in the
+                                   #   `readings`/`readings_sources` tables. `_readings()` is a
+                                   #   plain SELECT from there on.
+                                   #   Previews by default, on `prices adopt`'s own shape —
+                                   #   though nothing here overrides an operator's judgement:
+                                   #   this walk is purely mechanical newest-wins, so a re-run
+                                   #   over unchanged files is a no-op rather than a decision.
+                                   #   `--write` is a FULL REPLACE of both tables: a SKU whose
+                                   #   only source has since been retired (a run directory
+                                   #   deleted, a live export removed by hand) disappears from
+                                   #   the table exactly as it would have dropped out of the old
+                                   #   live walk on its next request.
+./pkmnscan readings show           # what the table holds, and which files it last credited.
+                                   #   Read-only.
 ./pkmnscan queue    refresh [--export <file.csv>] [--write]
                                    # RE-RESOLVE EVERY OPEN QUEUE ENTRY, STORE-WIDE. Free,
                                    #   re-runnable, previews by default. `store/queues.py:upsert`
@@ -2339,6 +2381,8 @@ D185 A row declares how many subjects it had, an empty one is pinned by name wit
 D186 A per-card price is divided by the cards actually submitted, and a reading is chosen on a metric the reading can move
 D187 A claim checks whether the slug is already claimed, not only whether the number is free
 D188 A join reads the store directly when there is no run directory to replay
+D189 The market reading is a table, and the walk that fills it is a press
+D190 The remedy `stale_claims` names is a real command, and `stale_claims` learns to see the directory it moved into
 ```
 
 **THE GAP THIS LIST CARRIED BETWEEN D116 AND D118 IS CLOSED, AND IT CLOSED THE WAY IT SAID IT

@@ -374,7 +374,8 @@ COMPONENTS = [
                                     "that were wearing one name, and the fill has fired on 0 of "
                                     "2,535 real captures.",
                             "governed_by": ["D1", "D3", "D9", "D21", "D25", "D36", "D48", "D86",
-                                            "D87", "D100", "D145", "D172", "D180"],
+                                            "D87", "D100", "D145", "D172", "D180",
+                                            "D189"],
                             "tested_by": ["T7"]},
             "cmd_scan.py": {"does": "read the QR codes off a directory of code-card photos into "
                                     "the ledger. FREE — no model call, no network, no money gate "
@@ -432,6 +433,22 @@ COMPONENTS = [
                                       "named as missing and D62 repeated.",
                               "governed_by": ["D9", "D49", "D62", "D86"],
                               "tested_by": ["T7"]},
+            # THE ARBITRATION LIVES ONE LAYER DOWN NOW (D189). This module is
+            # argument parsing and the preview/--write/show split; the two-source walk itself
+            # is `pipeline/readings.py:collect`, proved independently by
+            # `make readings-selftest`.
+            "cmd_readings.py": {"does": "`pkmnscan readings adopt` runs `pipeline/readings.py"
+                                        ":collect` and folds the result into the `readings` "
+                                        "table with `Readings.replace()` — a full clear-then"
+                                        "-reinsert, on `--write`. Previews by default, on "
+                                        "`prices adopt`'s own shape, though nothing here "
+                                        "overrides an operator's judgement the way that "
+                                        "command's newest-wins fold can: this walk is purely "
+                                        "mechanical, so a re-run over unchanged files is a "
+                                        "no-op rather than a decision. `readings show` reads "
+                                        "the table and writes nothing.",
+                                "governed_by": ["D189", "D86"],
+                                "tested_by": ["T7"]},
             "cmd_cards.py": {"does": "`pkmnscan cards <name|audit|photos>` — the card's "
                                      "stable name (D172). `name` previews what the naming "
                                      "sees and would do, `audit` asks whether every card's "
@@ -858,6 +875,33 @@ COMPONENTS = [
                           "governed_by": ["D7", "D8", "D9", "D43", "D48", "D49", "D62", "D86",
                                           "D99", "D100", "D103"],
                           "tested_by": ["T7"]},
+            # THE WALK `server/pipeline_routes.py:_readings()` USED TO RUN ON EVERY REQUEST,
+            # MOVED HERE UNCHANGED (D189). `pipeline/` sits below `server/` in this
+            # repo's layering, so this is where the two-source arbitration has to live for
+            # `pkmnscan readings adopt` — a CLI command with no server in sight — to reach it.
+            "readings.py": {"does": "`collect()` — every run's pricing.json and the newest "
+                                    "live export, compared on a clock, newest wins. The "
+                                    "identical rule `_readings()` always ran, extracted "
+                                    "rather than rewritten: MEASURED, on the owner's store, "
+                                    "run tables alone priced 81.2% of cards on hand, the "
+                                    "newest live export alone 70.6%, both together 82.6%. "
+                                    "`live_export_at` reads the UNIX second a live fetch was "
+                                    "taken out of its own filename — the only honest clock, "
+                                    "since a copied or restored file's mtime is not when the "
+                                    "reading was taken — and answers `None` for a name it "
+                                    "cannot read, which puts that file behind every run table "
+                                    "rather than in front of them; a reading whose age is "
+                                    "unknown must never win.",
+                            "governed_by": ["D189", "D86", "D87"],
+                            "note": "PROVED BY `make readings-selftest`, against an "
+                                    "INDEPENDENT reimplementation of this same walk rather "
+                                    "than a golden file — 31 assertions across an empty "
+                                    "store, run-only, live-only, both directions of a "
+                                    "disagreement, an unparseable live filename, and two "
+                                    "adopts in a row. No harness test calls `collect()` "
+                                    "directly, so `tested_by` is empty rather than a "
+                                    "citation nothing backs — `check_readings_adopt_cli` in "
+                                    "T7 exercises it only through the CLI dispatch."},
             "livecheck.py": {"does": "the whole store against one live TCGplayer export "
                                      "(My Pricing), both directions. D87: `cli/cmd_reconcile.py` "
                                      "scopes its diff to one run's emitted_skus while "
@@ -1289,9 +1333,33 @@ COMPONENTS = [
                                        "has been "
                                        "written by a real identify press, so nothing here has "
                                        "yet prevented an invoice."},
+            # THE MARKET READING, CACHED (D189). `server/pipeline_routes.py:
+            # _readings()` used to walk every run's `pricing.json` and the newest live export
+            # on every request; that walk moved to `pipeline/readings.py:collect`, run once by
+            # `pkmnscan readings adopt --write`, and this module is the two tables it fills.
+            "readings.py": {"does": "the `readings` table (sku -> the newest market reading, "
+                                    "one row per SKU) and `readings_sources` beside it (one "
+                                    "row per file `collect` read, and how many SKUs it "
+                                    "offered BEFORE arbitration — not recoverable from "
+                                    "`readings` alone once two sources have collided on a "
+                                    "SKU). `Readings.replace()` is a FULL REPLACE of both "
+                                    "tables: a SKU whose only source has since been retired "
+                                    "must disappear exactly as it would have dropped out of "
+                                    "the old live walk. `Rows`'s baseline diff means an "
+                                    "unchanged reading writes nothing even through a full "
+                                    "clear-then-reinsert.",
+                            "governed_by": ["D189", "D7", "D86", "D87", "D88"],
+                            "note": "PROVED BY `make readings-selftest`, submissions.py's own "
+                                    "reason: it is a table filled by a CLI press over a "
+                                    "throwaway store, and against an INDEPENDENT "
+                                    "reimplementation of the walk rather than a golden file — "
+                                    "31 assertions, all caught. No harness test exercises it, "
+                                    "so `tested_by` is empty rather than a citation nothing "
+                                    "backs."},
             "files.py": {"does": "where the store lives, the lock, and the atomic replace the "
                                  "files still beside the database use (prices.json, codes.jsonl)",
-                         "governed_by": ["D13", "D15", "D43", "D86", "D166"], "tested_by": ["T7"]},
+                         "governed_by": ["D13", "D15", "D43", "D86", "D166", "D189"],
+                         "tested_by": ["T7"]},
             # D53 still, and D63, because the header now says what the transaction DOES
             # promise where it used to say what five files did not: one commit over every
             # table, history rows included. D53's drain is still a prerequisite for the
@@ -1302,7 +1370,8 @@ COMPONENTS = [
                                    "loads only the rows a caller names. `buried()` (D134) is "
                                    "`history()`'s narrower sibling: the `buried` events alone, "
                                    "for `#/graveyard`'s read.",
-                           "governed_by": ["D145", "D13", "D53", "D63", "D88", "D134", "D174"], "tested_by": ["T7"]},
+                           "governed_by": ["D145", "D13", "D53", "D63", "D88", "D134", "D174",
+                                           "D189"], "tested_by": ["T7"]},
             "rows.py": {"does": "`Rows`: a keyed mapping of records that is a dict to every "
                                 "caller and, bound to a `Source`, loads one row, one indexed "
                                 "column's matches, or column values with no object built at all. "
@@ -1317,7 +1386,8 @@ COMPONENTS = [
                               "`events_named` (D134) is an unindexed `WHERE event = ?` scan over "
                               "that same table — no new index, because this repo has no schema "
                               "migration to add one to a store already on disk.",
-                      "governed_by": ["D145", "D20", "D26", "D86", "D88", "D134", "D172", "D174"], "tested_by": ["T7"]},
+                      "governed_by": ["D145", "D20", "D26", "D86", "D88", "D134", "D172", "D174",
+                                      "D189"], "tested_by": ["T7"]},
             "photos.py": {"does": "where a card's photograph lives, and the ONLY module permitted "
                                   "to compose that path: `<home>/photos/<aa>/<cid>.jpg`, a pure "
                                   "function of the card's own name. `adopt` is the per-card, "
@@ -1605,7 +1675,10 @@ COMPONENTS = [
                 # is borrowed from, one register down from a route that can spend money.
                 "governed_by": ["D18", "D33", "D42", "D72", "D111", "D136", "D139", "D140",
                                 "D141", "D143", "D148",
-                                "D151", "D158", "D176"],
+                                "D151", "D158", "D176",
+                                # Unclaimed at this branch's own claim — the stale_claim
+                                # refusal now names `--unclaim` by its real command.
+                                "D190"],
                 "note": "IT NEVER SETS PKMNSCAN_MAIN AND NO REFUSAL IT PRINTS SUGGESTS IT. D42 "
                         "is explicit that a session reaching for that variable has left the "
                         "amendment behind; this needs no hatch because allow rule 3 already "
@@ -1994,6 +2067,22 @@ COMPONENTS = [
                         "suite's own passing for the wrong reason.",
                 "governed_by": ["D174", "D7", "D18", "D48", "D88", "D136"],
             },
+            "readings-selftest.py": {
+                "does": "proves store/readings.py and pipeline/readings.py against a "
+                        "throwaway store (D189). `golden()` is an INDEPENDENT "
+                        "reimplementation of the two-source walk — not sharing a line with "
+                        "`collect()` — so a bug introduced into one is caught by comparison "
+                        "rather than reproduced in both. Nine fixture shapes: empty, "
+                        "run-only, live-only, a disagreement won each direction by the "
+                        "clock, an unparseable live filename (must lose to everything and "
+                        "never fall back to an older readable file), adopt --write followed "
+                        "by the exact SELECT `_readings()` now performs, two adopts in a row "
+                        "unchanged (idempotent, no duplicate rows), a new run landing "
+                        "between two adopts, and a run directory deleted between two adopts "
+                        "(its SKU drops out — a cache refresh, never an accumulating "
+                        "ledger). Thirty-one assertions, all passing.",
+                "governed_by": ["D189", "D18", "D86", "D88"],
+            },
             "reap-selftest.sh": {
                 "does": "proves reap.py by pointing it at processes it must not kill. A "
                         "throwaway checkout, a throwaway sibling standing in for "
@@ -2082,7 +2171,7 @@ COMPONENTS = [
                 "governed_by": ["D18", "D127", "D171", "D173"],
             },
             "guard-shell.py": {
-                "does": "the PreToolUse hook on Bash AND Write|Edit that refuses five shell "
+                "does": "the PreToolUse hook on Bash AND Write|Edit that refuses six shell "
                         "mistakes this repo has already paid for, each with a measured "
                         "incident: `git checkout`/`git restore` over a MODIFIED path (240 "
                         "lines destroyed 2026-09-06, and the same command typed again over "
@@ -2091,15 +2180,22 @@ COMPONENTS = [
                         "live capture server); `gh api -f` with no method (a field implies a "
                         "body, so a GET was POSTed and hung past a tool timeout); `ln -s` at "
                         "an existing path (`harness/images/images`, and 133 MB renamed away "
-                        "by iCloud); and a polling loop (a `pgrep` waiter whose pattern is "
+                        "by iCloud); a polling loop (a `pgrep` waiter whose pattern is "
                         "not the process, and a backgrounded driver that ran 119 rounds over "
-                        "3h58m across a compaction). IT RESOLVES RATHER THAN MATCHES TEXT, "
+                        "3h58m across a compaction); and `git push <remote> HEAD` (or the "
+                        "current branch's own literal name) when the tracked upstream is a "
+                        "different name (a coordinator's push silently created a stray "
+                        "`pr-h-readings-table-local` on origin instead of updating the real PR "
+                        "branch, `origin/claude/pr-h-readings-table`, on 2026-09-12). IT "
+                        "RESOLVES RATHER THAN MATCHES TEXT, "
                         "which is reap.py's standard and the only way these have answers: "
                         "`git status --porcelain` decides whether an operand is a modified "
                         "path, `os.path.lexists` decides whether a link destination is there, "
-                        "and a backgrounded command's loop is READ out of the shell script it "
-                        "names. The Write|Edit half parses nothing at all, so no shell form "
-                        "skirts it. FIVE HATCHES AND NOT ONE, so the symlink clause cannot be "
+                        "a backgrounded command's loop is READ out of the shell script it "
+                        "names, and `branch.<name>.remote`/`.merge` are read exactly as git "
+                        "itself reads them. The Write|Edit half parses nothing at all, so no "
+                        "shell form "
+                        "skirts it. SIX HATCHES AND NOT ONE, so the symlink clause cannot be "
                         "disarmed by the switch that guards uncommitted work. Fails OPEN on "
                         "its own bugs, including a missing `shell_parse.py`, and an operand it "
                         "cannot resolve is REPORTED rather than passed silently.",
@@ -2111,28 +2207,35 @@ COMPONENTS = [
                                 "D171", "D173", "D175"],
             },
             "guard-shell-selftest.sh": {
-                "does": "proves guard-shell.py by COMMITTING its five mistakes in a throwaway "
-                        "repository with a linked worktree. Four of the five incidents are "
+                "does": "proves guard-shell.py by COMMITTING its six mistakes in a throwaway "
+                        "repository with a linked worktree. Five of the six incidents are "
                         "PERFORMED before the guard is asked about them: 240 uncommitted lines "
                         "really destroyed by a real `git checkout`, a worktree whose root "
                         "really differs from its main checkout's, a real "
                         "`harness/images/images` created by a real `ln -s` at an existing "
-                        "directory, and `pgrep -f` really reporting a process that merely "
-                        "NAMES its pattern. The fifth is asserted about rather than "
+                        "directory, `pgrep -f` really reporting a process that merely "
+                        "NAMES its pattern, and a real local branch made to track a "
+                        "differently-named remote branch — the exact mechanism a background "
+                        "agent's push created one by (`git push -u origin <local>:<remote>`). "
+                        "The sixth (the `gh api` field/method one) is asserted about rather than "
                         "reproduced, because posing it would spend somebody's rate limit — so "
                         "`gh api --help` is read instead, and the arm fails if `-f` or "
                         "`--method` stop being gh's flags. THE FALSE POSITIVES ARE THE OTHER "
                         "HALF and the git ones are RUN in the fixture first: a branch, a clean "
                         "path, `--staged`, a named source, `-sfn`, `--method GET`, `graphql`, "
                         "a pid wait, a bounded retry, a foreground loop, a backgrounded "
-                        "`make design-check ARGS=--wait`, and every `git`/`gh`/`ln` line swept "
+                        "`make design-check ARGS=--wait`, the ordinary first push of a new "
+                        "branch, an upstream already matching its own name, and every "
+                        "`git`/`gh`/`ln` line swept "
                         "out of this repo's own tooling. It also asserts the platform fact the "
                         "refusal declines to assume — BSD `pgrep` excludes its own ancestors "
                         "unless `-a` — and scores every hatch in both forms off the guard's "
                         "own clause table. Mutation-tested: twenty-six arms, twenty-five "
-                        "caught; the survivor removes half of the `.bak` advice, the other "
+                        "caught, for the original five clauses; the survivor removes half of "
+                        "the `.bak` advice, the other "
                         "half still satisfies the assertion, and an arm removing BOTH goes "
-                        "red.",
+                        "red. The push clause adds six more arms of its own, five caught and "
+                        "the survivor an equivalent mutant.",
                 "governed_by": ["D179", "D18", "D43", "D127", "D171", "D173"],
             },
             "coordinator.py": {
@@ -2395,14 +2498,33 @@ COMPONENTS = [
                         "failed twice with nothing asking that question "
                         "(D151). It reports and never repairs, "
                         "for `--stale`'s reason turned around: a substitution made after the "
-                        "merge reaches main's own copy of the entry.",
+                        "merge reaches main's own copy of the entry. "
+                        "AND A FOURTH, THE EXACT INVERSE: `--unclaim <id>` puts an "
+                        "already-claimed id back to slug form — the remedy `--stale`'s own "
+                        "text names and nothing performed until this. Built as the literal "
+                        "inverse of the forward substitution, reusing `apply_to_text`'s own "
+                        "boundary rather than a second implementation. A decision derives its "
+                        "own slug from its entry's filename; a codes id or a build step needs "
+                        "`--to-slug`, because neither keeps its slug anywhere else once "
+                        "claimed. The safety gate compares the claimed HEADING between this "
+                        "tree and `--ref`, not raw presence — refusing a flat presence check "
+                        "would refuse the one case this exists to answer, where this branch's "
+                        "own number collides with an UNRELATED entry `ref` independently "
+                        "claimed. Reproducing that incident also found `stale_claims` reading "
+                        "the flat `docs/DECISIONS.md` stub instead of the corpus directory for "
+                        "the decision namespace — silently blind to every decision collision "
+                        "since D160 split the corpus — fixed alongside it.",
                 # D72 IS THE FAILURE THIS REPLACES and D16 the rule its audit rows answer to.
                 # D80 is cited for the allocator's direction — the culled step 12 is why this
                 # is max+1 rather than lowest-free — and D47/D135 for the symlink the walk
                 # skips, `AGENTS.md` being the same file as `CLAUDE.md` under another name.
-                # D18 is why it is not in `make check`: it writes.
+                # D18 is why it is not in `make check`: it writes. D160 and D182 are the corpus
+                # split `--unclaim` and the fixed `stale_claims` both have to read through; D186
+                # and D188 are the real, landed entries the incident this file's own docstring
+                # narrates is about.
                 "governed_by": ["D16", "D18", "D42", "D47", "D72", "D80", "D135",
-                                "D140", "D151", "D160", "D185"],
+                                "D140", "D151", "D160", "D182", "D185", "D186", "D188",
+                                "D190"],
             },
             "claim-selftest.py": {
                 "does": "scripts/claim-ids.py proved against a throwaway repository in which "
@@ -2424,7 +2546,17 @@ COMPONENTS = [
                         "REAL BUG IN THE UNMUTATED CODE: `\\b` fires between a letter and a "
                         "hyphen, so a slug was being substituted inside a longer slug that "
                         "extended it, leaving a number with a tail on it. In `make check`, "
-                        "never in the git hook — it writes (D18).",
+                        "never in the git hook — it writes (D18). "
+                        "THIRTY-THREE MORE ARMS PROVE `--unclaim`: the round trip is "
+                        "byte-identical across all three namespaces, the safety gate refuses "
+                        "when `ref`'s copy IS this entry and does nothing when it does, the "
+                        "boundary reuse holds on the way back too, and the actual 2026-09-12 "
+                        "incident is rebuilt end to end — two branches independently claiming "
+                        "the same next-free number for two UNRELATED entries, `--stale` "
+                        "catching it (once `stale_claims` was fixed to read the corpus "
+                        "directory rather than the flat stub), `--unclaim` reverting the "
+                        "loser cleanly, and a normal re-plan landing it on a fresh number "
+                        "with zero hand-editing.",
                 # D140 is the ruling; D18 is why it is off the commit path; D16
                 # is the severity rule its subject's rows answer to; D80 is the allocator's
                 # direction, max+1 rather than lowest-free, because a culled id's citations
@@ -2433,9 +2565,13 @@ COMPONENTS = [
                 # entries are composed from integers for exactly this reason, and the two that
                 # survive are in the prose that explains why. The superset rule reads a citation
                 # literally, which is the trade docs-audit.py's own entry records.
+                # D160, D186 and D188 are the same worked example claim-ids.py's own entry
+                # carries — the fixture's directory-corpus arms build a real D160 shape, and
+                # the incident arm's own prose names the two real, landed entries it replays.
                 "governed_by": ["D1", "D2", "D16", "D18", "D80", "D136", "D140", "D141",
                                 "D143", "D148",
-                                "D151", "D185"],
+                                "D151", "D160", "D185", "D186", "D188",
+                                "D190"],
             },
             "docs-audit-allow.txt": {
                 "does": "paths and identifiers the docs name before they exist, one "
@@ -2844,9 +2980,9 @@ COMPONENTS = [
                 # which is exactly what `governed_by` is for — so they are listed rather than
                 # allowlisted away.
                 "governed_by": ["D7", "D16", "D17", "D18", "D26", "D42", "D43", "D44", "D47", "D48", "D53",
-                                "D58", "D60", "D65", "D68", "D74", "D76", "D80", "D82", "D83", "D88", "D89",
-                                "D92", "D111", "D122", "D127", "D129", "D133", "D138", "D139", "D140", "D141",
-                                "D158", "D160", "D171", "D172", "D173", "D176"],
+                                "D58", "D60", "D65", "D68", "D74", "D76", "D80", "D82", "D83", "D86", "D88",
+                                "D89", "D92", "D111", "D122", "D127", "D129", "D133", "D138", "D139", "D140",
+                                "D141", "D158", "D160", "D171", "D172", "D173", "D176", "D189"],
                 "note": "IT DECLARES THE SUITE AND DELIBERATELY DOES NOT DRIVE IT, which is "
                         "the whole shape. A registry that drove `make check` could not "
                         "disagree with the recipe — and could silently stop running a check, "
@@ -3441,7 +3577,8 @@ COMPONENTS = [
                                 "D58", "D59", "D62", "D64", "D65", "D68", "D76", "D78",
                                 "D79", "D86", "D87", "D88", "D89", "D100", "D103", "D105",
                                 "D134", "D137", "D145", "D147", "D156", "D159", "D163",
-                                "D165", "D166", "D168", "D170", "D172", "D174", "D180"],
+                                "D165", "D166", "D168", "D170", "D172", "D174", "D180",
+                                "D189"],
                 "tested_by": ["T7"],
             },
             "shipping_routes.py": {

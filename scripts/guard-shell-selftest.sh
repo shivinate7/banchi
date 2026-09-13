@@ -1,18 +1,20 @@
 #!/usr/bin/env bash
-# `make guard-shell-selftest` — scripts/guard-shell.py, proved by committing its five mistakes.
+# `make guard-shell-selftest` — scripts/guard-shell.py, proved by committing its six mistakes.
 #
 # WHY IT IS NOT A TABLE OF ASSERTIONS. Every clause in that guard claims a command does
 # something a session did not intend, and this repo's standard for that kind of claim is
 # reproduction: `reap-selftest.sh` reproduces both 2026-09-10 kill incidents with real
 # processes and a real socket, `revert-selftest.sh` rebuilds PR #218 and #221, and
 # `silent-write-selftest.sh` reproduces the refused commit whose refusal went to /dev/null. So
-# four of the five incidents are PERFORMED here first, in a throwaway repository, and only then
+# five of the six incidents are PERFORMED here first, in a throwaway repository, and only then
 # is the guard asked about them:
 #
 #   1. a file is modified, `git checkout <it>` is run for real, and the work is gone
 #   2. a worktree is made, and its root is a different directory from the main checkout's
 #   4. `ln -s` at an existing directory creates the nested link instead of failing
 #   5. `pgrep -f <tag>` matches the shell whose own command line carries that tag
+#   6. a local branch is really made to track a differently-named remote branch — the exact
+#      way a background agent's push created one — and `git push origin HEAD` is asked about
 #
 # The fifth reproduction is the one that earns its place: rank 19's rule was written correctly
 # and in full, and then broken four days later by a session that had read it, because the
@@ -595,6 +597,124 @@ if [ $? -eq 0 ]; then ok "a backgrounded \`make check\` passes"
 else bad "a backgrounded make check was refused"; fi
 
 echo ""
+echo "  6. a push to the wrong branch name, reproduced"
+
+# ------------------------------------------------- 6a. the incident, performed in the fixture
+#
+# A REAL BARE ORIGIN, because what this clause reads is git CONFIG —
+# `branch.<name>.remote` / `.merge` — and the honest way to arm it is the way a background
+# agent actually created it: `git push -u origin <local>:<remote>` sets exactly that pair,
+# under a DIFFERENT name on each side. A file this section writes is its own
+# (`pr-work.txt`), never `work.py`, so nothing here disturbs the dirty state clause 1's own
+# cases still depend on.
+git init -q --bare "$tmp/origin.git" 2>/dev/null
+(
+  cd "$tmp/main" || exit 1
+  git remote add origin "$tmp/origin.git" 2>/dev/null
+  git push -q origin main 2>/dev/null
+  git checkout -q -b pr-h-readings-table-local
+  echo "the squashed PR work" > pr-work.txt
+  git add pr-work.txt
+  git commit -q -m "squashed PR work"
+  git push -q -u origin pr-h-readings-table-local:claude/pr-h-readings-table 2>/dev/null
+) || true
+
+if [ "$(cd "$tmp/main" && git rev-parse --abbrev-ref HEAD)" = "pr-h-readings-table-local" ] &&
+   [ "$(cd "$tmp/main" && git config --get branch.pr-h-readings-table-local.merge)" = \
+     "refs/heads/claude/pr-h-readings-table" ]; then
+  ok "the fixture reproduces the incident: a local branch tracking a DIFFERENTLY named upstream"
+else
+  bad "the push fixture did not arm — the incident cannot be posed"
+fi
+
+echo ""
+echo "  the guard refuses it, exactly as it happened"
+
+refuses "the 2026-09-12 command — a coordinator's \`git push origin HEAD\`" \
+  "$tmp/main" "git push origin HEAD"
+refuses "naming the LOCAL branch literally is the identical trap" \
+  "$tmp/main" "git push origin pr-h-readings-table-local"
+refuses "\`-u\` does not launder it — it would re-point the tracking AFTER the wrong push" \
+  "$tmp/main" "git push -u origin HEAD"
+refuses "\`--force\` does not launder it either" \
+  "$tmp/main" "git push --force origin HEAD"
+refuses "an env prefix does not launder it" \
+  "$tmp/main" "PKMNSCAN_MAIN=off git push origin HEAD"
+
+judge "$tmp/main" "git push origin HEAD"
+case "$out" in *"pr-h-readings-table-local"*) ok "the refusal names the current branch" ;;
+  *) bad "the refusal does not name the current branch" ;; esac
+case "$out" in *"claude/pr-h-readings-table"*) ok "the refusal names the tracked upstream" ;;
+  *) bad "the refusal does not name the tracked upstream" ;; esac
+case "$out" in *"PKMNSCAN_PUSH=off"*) ok "the refusal prints its escape hatch" ;;
+  *) bad "the refusal does not name PKMNSCAN_PUSH=off" ;; esac
+case "$out" in *"git push origin HEAD:claude/pr-h-readings-table"*) \
+  ok "the refusal prints the explicit fix — git's own second form" ;;
+  *) bad "the refusal does not print the explicit, correctly-targeted form" ;; esac
+case "$out" in *"safety net name the fix"*) \
+  ok "the refusal also names the bare \`git push\` form, which lets git print the fix itself" ;;
+  *) bad "the refusal does not mention the bare-\`git push\` alternative" ;; esac
+
+echo ""
+echo "  what clause 6 must NEVER refuse"
+
+allows "the explicit, correctly-targeted form — this IS the fix" \
+  "$tmp/main" "git push origin HEAD:claude/pr-h-readings-table"
+allows "an explicit form to somewhere else entirely — not this clause's business" \
+  "$tmp/main" "git push origin HEAD:some-other-branch"
+allows "a bare \`git push\` — git's OWN safety net owns this shape" \
+  "$tmp/main" "git push"
+allows "\`git push origin\` with no refspec — same shape, still git's own net" \
+  "$tmp/main" "git push origin"
+
+# THE ORDINARY "OPEN A NEW PR" FLOW — no upstream configured at all, the single most common
+# case in this repo's own workflow (D42: "a session pushes the branch, `gh pr create` opens
+# the PR"). This must never be refused.
+(cd "$tmp/main" && git checkout -q -b fresh-pr-branch)
+allows "a brand-new branch with no upstream yet — the ordinary first push" \
+  "$tmp/main" "git push origin HEAD"
+allows "…and with \`-u\`, which is how this repo's own workflow spells it" \
+  "$tmp/main" "git push -u origin HEAD"
+
+# AN UPSTREAM THAT ALREADY MATCHES ITS OWN NAME is the safe, ordinary case D42 documents —
+# the state every branch here is in the moment after that first push lands.
+(cd "$tmp/main" && git push -q -u origin fresh-pr-branch:fresh-pr-branch 2>/dev/null)
+allows "an upstream whose name already matches its branch's own" \
+  "$tmp/main" "git push origin HEAD"
+
+# A DIFFERENT REMOTE THAN THE ONE TRACKED — a fork workflow, untouched by this clause: the
+# mismatch this clause reads is specific to the remote the command is about to push to.
+(cd "$tmp/main" && git remote add fork "$tmp/origin.git" 2>/dev/null)
+allows "a push to a remote this branch does not track — a fork workflow" \
+  "$tmp/main" "git push fork HEAD"
+
+(cd "$tmp/main" && git checkout -q pr-h-readings-table-local)
+# THE SAME FORK CHECK, AGAINST THE ACTUALLY-MISMATCHED BRANCH — the discriminating version.
+# `fresh-pr-branch`'s tracked name matched its own, so a guard that forgot to compare the
+# REMOTE at all could still pass that case by coincidence, off the name check alone. This
+# branch's tracked name genuinely differs, so only a real remote comparison keeps it a pass.
+allows "the mismatch is REMOTE-specific — a different remote sees no upstream at all" \
+  "$tmp/main" "git push fork HEAD"
+allows "an entirely unrelated branch name — not HEAD-shaped at all" \
+  "$tmp/main" "git push origin some-other-branch-entirely"
+allows "\`--all\` pushes something other than \"this branch\"" \
+  "$tmp/main" "git push origin --all"
+allows "\`--tags\`, the same reason" \
+  "$tmp/main" "git push origin --tags"
+# NAMES THE CURRENT BRANCH ITSELF, on purpose — deleting a remote ref by that name is not
+# "pushing this branch under its own name", and a mutation that stopped recognising `--delete`
+# as special would refuse this one for the wrong reason (it would read the deleted name as a
+# HEAD-shaped refspec and find the same mismatch clause 6 exists for).
+allows "\`--delete\`, the same reason — even naming the branch itself" \
+  "$tmp/main" "git push origin --delete pr-h-readings-table-local"
+
+(cd "$tmp/main" && git checkout -q --detach 2>/dev/null)
+allows "a detached HEAD — nothing this clause can name as \"the current branch\"" \
+  "$tmp/main" "git push origin HEAD"
+
+(cd "$tmp/main" && git checkout -q main 2>/dev/null)
+
+echo ""
 echo "  the repo's own lines, swept and pinned"
 
 # EVERY `git`, `gh` AND `ln` LINE THIS REPO'S OWN TOOLING TYPES. The sweep that produced this
@@ -635,6 +755,12 @@ allows "link, inline"     "$tmp/main" "PKMNSCAN_LINK=off ln -s /x work.py"
 allows "wait, inline"     "$tmp/main" "PKMNSCAN_WAIT=off until ! pgrep -f x; do sleep 5; done"
 allows "tree, inline"     "$WT" "PKMNSCAN_TREE=off cat > $tmp/main/work.py"
 
+# THE PUSH HATCH IS TESTED AGAINST THE MISMATCHED BRANCH, not against `main` — `main` never
+# had a tracked upstream configured in this fixture, so the command would pass with or
+# without the hatch and the test would prove nothing about the hatch itself.
+(cd "$tmp/main" && git checkout -q pr-h-readings-table-local 2>/dev/null)
+allows "push, inline"    "$tmp/main" "PKMNSCAN_PUSH=off git push origin HEAD"
+
 hatch_env() {   # hatch_env <name> <cwd> <command>
   out="$(printf '%s' "$3" \
         | CWD="$2" python3 -c 'import json,os,sys; print(json.dumps({"cwd":os.environ["CWD"],"tool_input":{"command":sys.stdin.read()}}))' \
@@ -645,16 +771,18 @@ hatch_env PKMNSCAN_CHECKOUT "$tmp/main" "git checkout work.py"
 hatch_env PKMNSCAN_GH       "$tmp/main" "gh api repos/o/r -f a=1"
 hatch_env PKMNSCAN_LINK     "$tmp/main" "ln -s /x work.py"
 hatch_env PKMNSCAN_WAIT     "$tmp/main" "until ! pgrep -f x; do sleep 5; done"
+hatch_env PKMNSCAN_PUSH     "$tmp/main" "git push origin HEAD"
+(cd "$tmp/main" && git checkout -q main 2>/dev/null)
 
 out="$(CWD="$WT" TARGET="$tmp/main/work.py" python3 -c 'import json,os; print(json.dumps({"cwd":os.environ["CWD"],"tool_input":{"file_path":os.environ["TARGET"]}}))' \
       | env PKMNSCAN_TREE=off python3 "$GUARD" --hook 2>&1)"
 if [ $? -eq 0 ]; then ok "PKMNSCAN_TREE=off in the environment"; else bad "PKMNSCAN_TREE=off in the environment did not disarm it"; fi
 
 # EVERY CLAUSE HAS A HATCH AND EVERY HATCH IS PRINTED. The table is read rather than retyped,
-# so a sixth clause added without one fails here instead of shipping unescapable.
+# so a seventh clause added without one fails here instead of shipping unescapable.
 count="$(python3 "$GUARD" --clauses | wc -l | tr -d ' ')"
-if [ "$count" = "5" ]; then ok "five clauses, five hatches, read from the guard's own table"
-else bad "the clause table has $count rows; this file scores five"; fi
+if [ "$count" = "6" ]; then ok "six clauses, six hatches, read from the guard's own table"
+else bad "the clause table has $count rows; this file scores six"; fi
 if python3 "$GUARD" --clauses | grep -qv "PKMNSCAN_.*=off"; then
   bad "a clause in the table names no escape hatch"
 else

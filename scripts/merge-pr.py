@@ -778,9 +778,12 @@ def claim_half(root: str, number: int, branch: str, confirm: bool) -> int:
             "once main is merged in, a substitution on that token reaches main's own copy of",
             "the entry too.",
             "",
-            "Put the id back to its slug form on the branch, push, and run this again. The",
-            "claim half then allocates it against main as it stands, which is the whole",
-            "bargain D140 makes.")
+            "`python3 {0} --unclaim <id> --write` is that un-claim — the exact inverse of the".format(CLAIMER),
+            "claim above, run for each id named above. A decision derives its own slug from",
+            "its entry's filename; a codes id or a build step needs `--to-slug <slug>` beside",
+            "it, because neither keeps its slug anywhere else once claimed. Push the result,",
+            "and run this again — the claim half then allocates a fresh number against main",
+            "as it stands, which is the whole bargain D140 makes.")
 
     pending = claims_pending(root)
     if not pending:
