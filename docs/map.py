@@ -419,7 +419,7 @@ COMPONENTS = [
                                     "store's own reading — `Listing.observe_live`, per game, "
                                     "against the file's mtime — and says what it kept, by SKU "
                                     "with both readings (D87 amended). Partitions at the corpus's stored `policy.threshold` (D99).",
-                            "governed_by": ["D3", "D7", "D8", "D9", "D11", "D12", "D16", "D25", "D34", "D36", "D49", "D54", "D58", "D59", "D86", "D87", "D99", "D115", "D137", "D180", "D188"], "tested_by": ["T4", "T7"]},
+                            "governed_by": ["D3", "D7", "D8", "D9", "D11", "D12", "D16", "D25", "D34", "D36", "D49", "D54", "D58", "D59", "D86", "D87", "D88", "D99", "D115", "D137", "D170", "D180", "D188", "D189"], "tested_by": ["T4", "T7"]},
             "cmd_prices.py": {"does": "`pkmnscan prices adopt` folds every run's legacy "
                                       "decisions.json into the corpus — previews unless given "
                                       "--write, newest-wins, and NAMES the holds a later price "
@@ -1376,7 +1376,7 @@ COMPONENTS = [
                                    "`history()`'s narrower sibling: the `buried` events alone, "
                                    "for `#/graveyard`'s read.",
                            "governed_by": ["D145", "D13", "D53", "D63", "D88", "D134", "D174",
-                                           "D189"], "tested_by": ["T7"]},
+                                           "D189", "D191"], "tested_by": ["T7"]},
             "rows.py": {"does": "`Rows`: a keyed mapping of records that is a dict to every "
                                 "caller and, bound to a `Source`, loads one row, one indexed "
                                 "column's matches, or column values with no object built at all. "
@@ -2466,7 +2466,7 @@ COMPONENTS = [
                                 # Appended, in the pre-claim place claim-ids.py's own docstring
                                 # names — the merge resorts it into numeric order once the
                                 # slug below becomes a number.
-                                "D185"],
+                                "D185", "D191"],
             },
             "claim-ids.py": {
                 "does": "allocate the numbers this branch's SLUG ids will take, and "
@@ -3417,7 +3417,7 @@ COMPONENTS = [
                                 "D77", "D79", "D83", "D86", "D87", "D88", "D89", "D90", "D91",
                                 "D92", "D93", "D96", "D100", "D103", "D104", "D108", "D113",
                                 "D115", "D116", "D132", "D134", "D137", "D138",
-                                "D168", "D174", "D183", "D172"],
+                                "D168", "D174", "D183", "D172", "D191"],
                 "tested_by": ["T7"],
             },
             "tcg_import.py": {"does": "THE OUTBOUND WRITE to the seller admin, and the only "

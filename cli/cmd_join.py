@@ -26,9 +26,11 @@ from typing import Optional, Tuple
 
 from cli import resolve, runs
 from pipeline import corpus, decisions, join, pricing, routing, worklist
+from pipeline import readings as readings_walk
 from pipeline import selection as selection_mod
 from store import master, queues
 from store import files
+from store import readings as readings_store
 from store.session import Store
 
 STALE_EXPORT_DAYS = 7
@@ -682,11 +684,30 @@ def run(args, say) -> int:
     # exactly the counts this table reports — and a screen drawing `pushed 2 staged 0` from
     # the wrong side of a join is a screen that disagrees with `emit` about what TCGplayer
     # holds. Lock-free, because every write in this store is an atomic replace.
-    pricing_path.write_text(
-        json.dumps(_pricing_table(run_dir, resolved, choice, store.read()), indent=2) + "\n",
-        encoding="utf-8",
-    )
+    table = _pricing_table(run_dir, resolved, choice, store.read())
+    pricing_path.write_text(json.dumps(table, indent=2) + "\n", encoding="utf-8")
     say(f"pricing table    {len(resolved.matches)} SKU(s) -> {pricing_path}")
+
+    # -------------------------------------------------------------- readings cache (D189)
+    # COLLECTED OUTSIDE THE LOCK, REPLACED INSIDE ONE (D88's ordering: everything not in the
+    # transaction is a file, and the file — `pricing_path` — was just written above, outside
+    # any lock, exactly like every other write this command already makes to it). `at` is the
+    # file's own mtime, taken AFTER the write, so a `readings adopt --write` run any time
+    # after this join computes the identical `at` this line just did — the incremental path
+    # and the full-recollect path can never disagree about which second this run's reading
+    # was taken.
+    #
+    # ONE SMALL FILE, NEVER THE WHOLE `runs/` DIRECTORY AND NEVER THE LIVE EXPORT. This run's
+    # `pricing.json` is already fully built in `table` — no second parse — and nothing here
+    # touches any OTHER run's file or the newest live export, which is what keeps a join's
+    # own cost from growing with the store: `pipeline/readings.py:collect()`'s expensive half
+    # is the live CSV (up to the scale D170 measured for a comparable per-store export at
+    # 50,000 cards), and a join never reads that file at all.
+    run_found, run_source = readings_walk.reading_from_table(
+        table, at=int(pricing_path.stat().st_mtime), source=run_dir.name,
+    )
+    with store.write() as writable:
+        writable.readings.replace_source(readings_store.KIND_RUN, run_dir.name, run_found, run_source)
 
     # ------------------------------------------------------------------------ persist
     # `exports` is the recorded shape: {game: source}, the mapping VERIFIED off the

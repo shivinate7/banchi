@@ -984,7 +984,9 @@ UNDOABLE_STATES = (master.CAPTURED,)
 # only reader of `history.jsonl` in this repo" until 2026-09-05, and it was wrong twice over:
 # the twin scanner arrived with D26 and `_state_before_sale` does not read the history at all,
 # it is handed a sequence. The readers are `_answer_origin`, `_origin` and
-# `_reverse_stand_down`. The invariant is unchanged; what was wrong was the count a later
+# `_reverse_stand_down`, and since D191 none of them reads the whole table
+# any more — each calls `Store.history_at(key)`, scoped to the position's own box
+# (`store/db.py:events_at`). The invariant is unchanged; what was wrong was the count a later
 # session would have reasoned from. A name that collided would restore a reversed sale to
 # `corrected`. T7 asserts the two sets are disjoint rather than leaving that to whoever adds
 # the next event — WHICH IS WHY THE ROSTER IS NOT COUNTED IN PROSE ANY MORE. The ordinals
@@ -5458,7 +5460,7 @@ def _answer_origin(store: Store, key: str) -> Tuple[Optional[dict], Optional[str
     on this store with no session between them.
     """
     try:
-        events = store.history()
+        events = store.history_at(key)
     except (files.StoreError, OSError, ValueError) as exc:
         # Broad on purpose, as at `_sale_origin`: a bad line, an unreadable file and non-UTF-8
         # bytes are one condition to this route — history cannot say — and the operator needs
@@ -6475,7 +6477,7 @@ def _reverse_stand_down(box: int, index: int) -> dict:
         # same reason too — a bad line, an unreadable file and non-UTF-8 bytes are one
         # condition here ("the log cannot say") with one remedy.
         try:
-            event = _clearing_event(store.history(), key)
+            event = _clearing_event(store.history_at(key), key)
         except (files.StoreError, OSError, ValueError):
             event = None
         if event is None:
@@ -7182,7 +7184,7 @@ def _retirement_origin(store: Store, key: str) -> Tuple[Optional[str], Optional[
 def _origin(store: Store, key: str, reader) -> Tuple[Optional[str], Optional[str]]:
     """The shared body of the two origin readers. Never raises — the arguments are theirs."""
     try:
-        events = store.history()
+        events = store.history_at(key)
     except (files.StoreError, OSError, ValueError) as exc:
         # Broad on purpose: a bad line, an unreadable file and non-UTF-8 bytes are one
         # condition to this route — history cannot say — and each of them must leave the

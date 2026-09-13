@@ -227,9 +227,12 @@ def main() -> int:
 
             # -------------------------------------------------- run tables only
             print("\n  -- a store with only run tables --")
-            write_run(runs_dir, "2026-01-01-box1-01",
-                      [run_row("111", "1.23", "Card A"), run_row("222", "4.56", "Card B")],
-                      mtime=1_700_000_000)
+            run_only_table = write_run(
+                runs_dir, "2026-01-01-box1-01",
+                [run_row("111", "1.23", "Card A"), run_row("222", "4.56", "Card B")],
+                mtime=1_700_000_000,
+            )
+            run_only_dir = run_only_table.parent
             assert_matches_golden(runs_dir, live_dir, "run-only store")
             found, sources = readings_walk.collect()
             ok(set(found) == {"111", "222"}, "both SKUs from the one run are present",
@@ -237,15 +240,56 @@ def main() -> int:
             ok(all(r.kind == KIND_RUN for r in found.values()),
                "every reading is kind=run with nothing else on disk")
 
+            # -- item 5: the extracted per-source readers agree with the whole-directory walk
+            # they were pulled out of, on the SAME fixture above — proving `reading_from_table`
+            # (which `cli/cmd_join.py` now calls on an in-memory table it just built) cannot
+            # silently drift from the private loop that used to inline it.
+            print("\n  -- reading_from_table matches the whole-directory walk it was pulled from --")
+            parsed = json.loads((run_only_table).read_text("utf-8"))
+            at = int(run_only_table.stat().st_mtime)
+            direct_found, direct_source = readings_walk.reading_from_table(
+                parsed, at=at, source=run_only_dir.name,
+            )
+            whole_found, whole_sources = readings_walk._run_readings(run_only_dir.parent)
+            ok(direct_found == whole_found,
+               "reading_from_table matches the whole-directory walk for one run",
+               f"got  {direct_found}\nwant {whole_found}")
+            want_source = [direct_source] if direct_source else []
+            got_source = [s for s in whole_sources if s.name == run_only_dir.name]
+            ok(got_source == want_source, "and its Source row matches too",
+               f"got  {got_source}\nwant {want_source}")
+
             # -------------------------------------------------- live export only
             print("\n  -- a store with only a live export (run directory removed) --")
             shutil.rmtree(runs_dir)
-            write_live(live_dir, "20260101-000000", [live_row("333", "2.00", "Card C")])
+            live_only_path = write_live(
+                live_dir, "20260101-000000", [live_row("333", "2.00", "Card C")]
+            )
             assert_matches_golden(runs_dir, live_dir, "live-only store")
             found, sources = readings_walk.collect()
             ok(set(found) == {"333"}, "the live SKU is present with no run on disk",
                str(sorted(found)))
             ok(found["333"].kind == KIND_LIVE, "and its kind is live")
+
+            # -- item 5: the extracted `reading_from_export` agrees with the whole-export walk
+            # it was pulled out of, on the SAME live fixture above — `do_live_export` calls it
+            # on the `tcgcsv.Export` object it already parsed to validate the fetch, and this
+            # proves that shortcut cannot silently drift from the private loop that used to
+            # inline it.
+            print("\n  -- reading_from_export matches the whole-export walk it was pulled from --")
+            live_at = readings_walk.live_export_at(live_only_path.name)
+            live_export = tcgcsv.read_export(live_only_path)
+            direct_live_found, direct_live_source = readings_walk.reading_from_export(
+                live_export, at=live_at, source=live_only_path.name,
+            )
+            whole_live_found, whole_live_sources = readings_walk._newest_live_reading(live_dir)
+            ok(direct_live_found == whole_live_found,
+               "reading_from_export matches the whole-export walk for one live file",
+               f"got  {direct_live_found}\nwant {whole_live_found}")
+            want_live_source = [direct_live_source] if direct_live_source else []
+            got_live_source = [s for s in whole_live_sources if s.name == live_only_path.name]
+            ok(got_live_source == want_live_source, "and its Source row matches too",
+               f"got  {got_live_source}\nwant {want_live_source}")
 
             # -------------------------------------------------- disagreement: newest wins
             print("\n  -- a run and a live export disagree on one SKU --")
