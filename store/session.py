@@ -198,7 +198,7 @@ class Store:
 
     def history_at(self, key: str):
         """The events that could bear on one position, oldest first. `history()`'s scoped
-        sibling (D-history-scoped-to-box): the reversal readers each want one card's own
+        sibling (D191): the reversal readers each want one card's own
         lines plus its box's `renumbered` markers, not a full-table load filtered in
         Python. See `db.events_at`'s docstring for why the scope is the box and not the
         bare position.

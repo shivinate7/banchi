@@ -1,4 +1,4 @@
-## D-history-scoped-to-box — `Store.history()` gets a box-scoped sibling
+## D191 — `Store.history()` gets a box-scoped sibling
 
 **The problem, measured in `docs/specs/store-scaling.md` §1.** `Store.history()` is `SELECT
 id, payload FROM events ORDER BY id`, unconditionally, on every call: 16.5 ms at 12,654

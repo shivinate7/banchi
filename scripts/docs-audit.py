@@ -202,7 +202,7 @@ EXPECTED_EMPTY: Dict[str, Tuple[str, str]] = {
     "sole reader": (
         "always",
         "its subject is every zero-argument `Store.history()` call in production code, and "
-        "D-history-scoped-to-box repointed all three (`_answer_origin`, `_reverse_stand_down`, "
+        "D191 repointed all three (`_answer_origin`, `_reverse_stand_down`, "
         "`_origin`) to `Store.history_at(key)` — a call WITH an argument. `_history_readers()` "
         "only counts the zero-argument form on purpose (it is what makes a claim like 'the "
         "only reader' meaningful at all), so it now finds none and stays none: a future "

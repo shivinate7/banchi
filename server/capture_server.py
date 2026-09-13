@@ -984,7 +984,7 @@ UNDOABLE_STATES = (master.CAPTURED,)
 # only reader of `history.jsonl` in this repo" until 2026-09-05, and it was wrong twice over:
 # the twin scanner arrived with D26 and `_state_before_sale` does not read the history at all,
 # it is handed a sequence. The readers are `_answer_origin`, `_origin` and
-# `_reverse_stand_down`, and since D-history-scoped-to-box none of them reads the whole table
+# `_reverse_stand_down`, and since D191 none of them reads the whole table
 # any more — each calls `Store.history_at(key)`, scoped to the position's own box
 # (`store/db.py:events_at`). The invariant is unchanged; what was wrong was the count a later
 # session would have reasoned from. A name that collided would restore a reversed sale to
