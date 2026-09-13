@@ -1938,6 +1938,25 @@ _Boxmates = Tuple[
 ]
 
 
+def _location_of(claim: Optional[str]) -> bool:
+    """Whether a bare `game` column value is a LOCATED game (D24), the module-level twin of
+    `_Places._game_of` for a caller that has a raw claim and not a `Card`.
+
+    `_Places.for_keys` is that caller: `Inventory.occupied_indices` (`store/master.py`)
+    hands back `(index, game)` pairs rather than filtering pooled records itself, because
+    `store/` imports nothing from `pipeline/` (D63) and so cannot resolve the registry's
+    `located` flag. The rule mirrors `_game_of` exactly — an unregistered or absent claim is
+    read as `games.DEFAULT_GAME` and is located; `UnknownGame` also reads as located, the
+    same treatment `_walk` gives a `None` lookup — so the two are one rule read from two
+    directions and cannot drift apart silently.
+    """
+    try:
+        entry = games.get(str(claim) if claim else games.DEFAULT_GAME)
+    except games.UnknownGame:
+        return True
+    return bool(entry["located"])
+
+
 class _Places:
     """Every `place` block in this server, and one box lookup per box rather than per card.
 
@@ -2050,6 +2069,58 @@ class _Places:
         # not one per box.
         self._degraded = False
         self._boxmates: Dict[int, _Boxmates] = {}
+        # False for the ordinary constructor, always. `for_keys` flips it on the instance it
+        # builds, and `_company` reads it to short-circuit D30's decoration for that instance
+        # alone — see `for_keys`'s own docstring for why.
+        self._sparse = False
+
+    @classmethod
+    def for_keys(
+        cls, inventory: "master.Inventory", keys: Iterable[Tuple[int, int]]
+    ) -> "_Places":
+        """A `_Places` scoped to exactly the boxes `keys` touches, for `Place.slot` and
+        everything derived from it — NOT for D30's neighbor/gap decoration, which needs
+        every card's NAME and is exactly the cost this constructor exists to avoid.
+
+        `do_orders` is the one caller today. An order's picks can span most of the store's
+        boxes, and the ordinary constructor's `_walk` (`records_in`, full `Card` hydration
+        per row) turns that into "every box, once" — effectively the whole store, on the
+        route the Orders and Shipping screens poll. `Inventory.occupied_indices` answers the
+        same `Position.occupied` input from two indexed integer columns instead, at the cost
+        of a third column (`game`) this class filters here: `store/` cannot resolve D24's
+        `located` flag (it does not import `pipeline.games`, D63), so the raw claim travels
+        up and is filtered where `games` is already imported — the same rule `_walk` applies
+        to a full `Card`, applied here to the bare column value.
+
+        `neighbors`/`section_gaps` answer null for every position built through this
+        constructor, which is the SAME null the ordinary path already answers when `_walk`
+        degrades (a record whose position will not read) — an existing, typed, degraded state
+        (`PlaceBlock.neighbors?`, `app/src/types.ts`), not a new one. `Orders.tsx` reads
+        neither field.
+
+        A BAD RECORD DEGRADES ONE BOX HERE, NEVER THE INSTANCE — unlike `_walk`, which sets
+        `self._degraded` once for every box because a single scan (`records_in`) can meet a
+        bad record anywhere in the store on ANY box's first call. `occupied_indices` raises
+        the SAME way (`BadPosition`, the same global null check `_positions_in` runs), so
+        this loop catches it per box rather than letting one bad record blow up every pick
+        this response renders — the ordinary constructor pays that same global-trigger cost
+        it just pays it as a stored flag rather than a per-call catch, since `_walk` runs
+        many times over the SAME instance and this loop runs once per box, up front.
+        """
+        self = cls(inventory)
+        self._sparse = True
+        for number in {int(box) for box, _ in keys}:
+            entry = inventory.box(number)
+            layout = inventory.sections_for(number)
+            try:
+                raw = inventory.occupied_indices(number)
+            except master.BadPosition:
+                occupied = None
+            else:
+                occupied = tuple(idx for idx, claim in raw if _location_of(claim))
+            total = len(occupied) if occupied is not None else 0
+            self._cache[number] = (entry, layout, int(total), occupied)
+        return self
 
     def view(self, box) -> Tuple[Optional[master.Box], Tuple[int, ...], int, Optional[Tuple[int, ...]]]:
         """`(registry entry or None, validated layout, denominator, on-hand indices)`.
@@ -2226,7 +2297,19 @@ class _Places:
         section with no end (the block's own fallback found no fill), and then the count
         runs to the top of the box, which is the same claim the block makes by answering
         `section_end: null`.
+
+        SPARSE INSTANCES (`for_keys`) ANSWER NULL WITHOUT WALKING, ALWAYS. This is the one
+        line that makes that constructor actually cheap: without it, `.of()` would still
+        reach here and call `self._walk(box)` — the exact full-`records_in` hydration
+        `for_keys` exists to avoid, since a sparse instance's `_boxmates` was never
+        populated by it. A future edit to `.of()` that adds a second path into `_walk`/
+        `_boxmates` outside this method would reintroduce the same defeat silently, which is
+        why this check is here and not, say, memoised by `for_keys` leaving `_boxmates`
+        pre-filled with `None`s (that would look identical on the wire and cost the same as
+        the bug it is meant to prevent).
         """
+        if self._sparse:
+            return None, None
         mates = self._walk(box)
         if mates is None:
             return None, None
@@ -9273,10 +9356,27 @@ def do_orders() -> dict:
     behind = {id(order): record for order, record in zip(asked, open_records)}
     resolution = order_engine.resolve_all(snapshot.inventory, asked)
 
-    # ONE `_Places` FOR THE WHOLE RESPONSE. It walks the entire store per instantiation, and
-    # its own docstring measures what a per-card one costs; the instance never outlives this
-    # request, so it cannot serve a stale denominator to the next one.
-    places = _Places(snapshot.inventory)
+    # ONE `_Places` FOR THE WHOLE RESPONSE, SCOPED TO THE PICKS THE RESOLUTION ACTUALLY
+    # RETURNED. It does NOT walk the entire store per instantiation, and never did — the
+    # ordinary constructor is lazy per box (D88) but still hydrates a full `Card` per record
+    # in every box a pick touches (`_walk`, D30's neighbor decoration), and an order's picks
+    # routinely span most of the store's boxes: with five boxes, that is effectively the
+    # whole store, once, on the route Orders and Shipping poll (measured 185 ms -> 3,465 ms
+    # at 20x the store, `docs/specs/store-scaling.md` §1). Neither screen draws `neighbors`
+    # or `section_gaps` (`app/src/Orders.tsx`, `OrdersShipStage.tsx`), so `_Places.for_keys`
+    # answers `Place.slot` and everything derived from it — `label`, `section`, `card`,
+    # `fraction`, `box_total` — from two indexed columns per box
+    # (`Inventory.occupied_indices`) instead of a whole-box hydration, and answers those two
+    # decoration fields null, which is an existing degraded state and not a new one. The
+    # instance never outlives this request, so it cannot serve a stale denominator to the
+    # next one.
+    keys = {
+        (pick.box, pick.index)
+        for answer in resolution.orders
+        for line in answer.lines
+        for pick in line.picks
+    }
+    places = _Places.for_keys(snapshot.inventory, keys)
 
     # The reverse index behind `held_by`, built in this request and NEVER stored. A stored
     # position-keyed index is the fourth thing no renumber path remaps — `pipeline/orders.py`

@@ -24595,6 +24595,182 @@ def check_order_screen(checks: Checks) -> None:
         )
 
 
+def check_order_places_scoped(checks: Checks) -> None:
+    """Store-scaling item 6: `do_orders` scopes its `_Places` build to the boxes its picks
+    actually touch, never to the whole store.
+
+    `_Places.of()` has always been lazy PER BOX (D88) — the ordinary constructor does no
+    eager scan — but the cost that survived that fix is what "per box" means once it runs:
+    `_walk` hydrates a full `Card` for every record in a touched box (`records_in`), to
+    answer `slot`/`label`/`section`/`fraction`, fields two indexed integer columns already
+    answer, because the SAME walk also builds D30's neighbor/gap decoration, which
+    genuinely needs every card's name. An order's picks routinely span most of the store's
+    boxes, so five boxes cost a fifth of a full read, five times — measured 185 ms ->
+    3,465 ms at 20x the store (`docs/specs/store-scaling.md` §1).
+
+    `Orders.tsx`/`OrdersShipStage.tsx` read neither `neighbors` nor `section_gaps`, so
+    `_Places.for_keys` answers everything else — `Inventory.occupied_indices`, two columns
+    per box — and those two fields null, the SAME null the ordinary constructor already
+    answers when `_walk` degrades. This is an existing, typed, degraded state and not a
+    new one.
+
+    THE RISK IS SILENT DEFEAT: a bug that calls `_walk` anyway (forgetting `_sparse` in
+    `_company`, or a future `.of()` refactor that opens a second path into `_walk`/
+    `_boxmates`) produces an IDENTICAL response at the OLD cost. A response that "looks
+    right" cannot catch that — only a loaded-object count can, which is Assertion 1.
+
+    A MIXED BOX IS ALREADY IN THIS FILE'S OWN FIXTURES AND IS NOT INVENTED HERE:
+    `check_order_screen`'s pull block sets `cards["3/5"].game = "pokemon_code"` beside four
+    ordinary cards and its assertions on `pooled`/`picks` already exercise the ordinary
+    `_Places` over that box — `check_order_places_scoped` exercises the SAME shape through
+    `for_keys`, because `Inventory.occupied_indices` cannot itself decide D24's `located`
+    flag (`store/` imports nothing from `pipeline/`, D63) and the filter that decides it
+    lives in `_Places.for_keys`/`_location_of` instead. A parity break there would silently
+    put a pooled card back into D58's counting space for every OTHER card in a mixed box.
+    """
+    checks.note("")
+    checks.note("PLACES SCOPED TO PICKS — do_orders, store-scaling item 6")
+
+    with isolated_home():
+        # Five 20-card boxes, mirroring §0's own shape ("five boxes, an order's picks span
+        # most of them") — one SKU resolved only in box 3, a divider opened after it so
+        # `section`/`section_start`/`section_end` are exercised for real rather than off
+        # the `(1,)` fallback, and a pooled code card sitting beside the picked cards so
+        # the occupied-space filter is exercised on the box the picks actually land in.
+        for box in (1, 2, 3, 4, 5):
+            for at in range(1, 21):
+                capture_server.do_capture(
+                    capture_payload(box, capture_id=f"b{box}c{at}", set_hint="sv9")
+                )
+        with Store().write() as snapshot:
+            for at in range(1, 4):
+                snapshot.inventory.record_identification(
+                    f"3/{at}", name="Moonfall", number="198/219",
+                    printed_total="219", confidence="high",
+                )
+                snapshot.inventory.cards[f"3/{at}"].sku = "9191486"
+            # D24's pooled copy, mixed into the same box as the picks. It must consume no
+            # slot in box 3's counting space, exactly as it must not in the ordinary
+            # `_Places` path `check_order_screen` already covers.
+            snapshot.inventory.cards["3/20"].game = "pokemon_code"
+        capture_server.do_open_section(3, {})
+
+        answers(
+            checks,
+            lambda: capture_server.do_order_ingest(
+                {"orders": [{
+                    "source": "TCGplayer", "number": "A-1",
+                    "placed_at": "2026-08-27T10:00:00.000+00:00",
+                    "lines": [{"sku": "9191486", "quantity": 3, "name": "Moonfall"}],
+                }]}
+            ),
+            "an order for the box-3 SKU ingests",
+        )
+
+        # ---------------------------------------- Assertion 1 — the sparse build's own cost
+        #
+        # `do_orders` opens its OWN `Store().read()` internally, so `loaded_count` has to be
+        # read from INSIDE that call's snapshot and not from a separate read — the existing
+        # idiom (`check_inventory_box_route`) is to call the pieces `do_orders` calls,
+        # directly, against one fresh session, rather than monkeypatching `Store.read`.
+        snapshot = Store().read()
+        ledger = snapshot.ledger
+        sequence = sorted(
+            ledger.orders.values(),
+            key=lambda record: (
+                record.placed_at is None, record.placed_at or "", record.key
+            ),
+        )
+        open_keys = {record.key for record in ledger.unfulfilled()}
+        open_records = [record for record in sequence if record.key in open_keys]
+        asked = [capture_server._engine_order(record, ledger) for record in open_records]
+        resolution = orders.resolve_all(snapshot.inventory, asked)
+        before_loaded = snapshot.inventory.cards.loaded_count
+
+        keys = {
+            (pick.box, pick.index)
+            for answer in resolution.orders
+            for line in answer.lines
+            for pick in line.picks
+        }
+        checks.ok(bool(keys), "the fixture resolved at least one pick to scope against")
+
+        places = capture_server._Places.for_keys(snapshot.inventory, keys)
+        # Force one `.of()` per pick, exactly as `_pick_row` does inside `do_orders`.
+        for answer in resolution.orders:
+            for line in answer.lines:
+                for pick in line.picks:
+                    places.of(pick.box, pick.index)
+
+        after_loaded = snapshot.inventory.cards.loaded_count
+        checks.equal(
+            after_loaded - before_loaded,
+            0,
+            "ZERO card objects to place three picks in a 20-card box. `_Places.of()` is "
+            "lazy PER BOX already (D88), so the ordinary constructor would ALSO touch only "
+            "this one box — the saving this item makes is not 'the other four boxes', it "
+            "is that the touched box's `_walk` (`records_in`) hydrates every one of its "
+            "records to answer `slot`, where `occupied_indices` answers the same three "
+            "picks' slots from two indexed columns and builds nothing. Measured by hand "
+            "against the OLD `_Places(inventory)` over this identical fixture: 17 — the "
+            "box's other 17 records, on top of the 3 the resolver's own `where(sku=…)` "
+            "already loaded before `_Places` runs at all",
+        )
+        checks.ok(
+            not snapshot.inventory.cards.complete,
+            "and the whole-store table was never fully loaded either",
+        )
+
+        # ------------------------------ Assertion 2 — parity with the ordinary constructor
+        ordinary = capture_server._Places(snapshot.inventory)
+        for answer in resolution.orders:
+            for line in answer.lines:
+                for pick in line.picks:
+                    sparse_block = dict(places.of(pick.box, pick.index))
+                    ordinary_block = dict(ordinary.of(pick.box, pick.index))
+                    for field in ("neighbors", "section_gaps"):
+                        checks.equal(
+                            sparse_block.pop(field, "missing"), None,
+                            f"the sparse build answers `{field}` null for {pick.box}/"
+                            f"{pick.index}, the same null the ordinary path answers on a "
+                            "degraded walk — an existing typed state, not a new one",
+                        )
+                        ordinary_block.pop(field, None)
+                    checks.equal(
+                        sparse_block, ordinary_block,
+                        f"the sparse and whole-box builds agree on everything but D30's "
+                        f"decoration for {pick.box}/{pick.index} — slot, label, section, "
+                        "card, fraction, box_total, box_name and box_closed all included",
+                    )
+
+        # AND SLOT EQUALITY AGAINST `do_inventory`'s OWN `_Places`, over the SAME cards — a
+        # second, independent path to the same number. `do_inventory` opens its own
+        # snapshot, so this is a genuinely different `_Places` instance built the ordinary
+        # way, not a re-read of `ordinary` above.
+        inventory_rows = capture_server.do_inventory()["cards"]
+        for answer in resolution.orders:
+            for line in answer.lines:
+                for pick in line.picks:
+                    key = master.position_key(pick.box, pick.index)
+                    checks.equal(
+                        places.of(pick.box, pick.index)["slot"],
+                        inventory_rows[key]["place"]["slot"],
+                        f"the sparse slot for {key} agrees with `GET /inventory`'s own "
+                        "`_Places`, a second independent renderer of D58's counting space",
+                    )
+
+        # -------------------------------------------------- Assertion 3 — empty resolution
+        empty_places = capture_server._Places.for_keys(snapshot.inventory, set())
+        checks.equal(
+            empty_places._cache, {},
+            "`_Places.for_keys` over an empty key set caches no box — an order with no "
+            "open lines with picks must build nothing",
+        )
+        # The existing empty-store case (`check_order_screen`'s first block) already
+        # exercises `GET /orders` through this same path with zero orders at all; this is
+        # its unit-level companion for the classmethod alone.
+
+
 def check_price_history(checks: Checks) -> None:
     """`pipeline/pricehistory.py` — the sku -> productId walk, and the readings over it.
 
@@ -27749,6 +27925,7 @@ def run() -> Result:
     check_order_resolver(checks)
     check_order_ledger(checks)
     check_order_screen(checks)
+    check_order_places_scoped(checks)
     check_order_fetch_route(checks)
     check_request_slots(checks)
     check_connection_close(checks)

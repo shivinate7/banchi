@@ -3,6 +3,40 @@
 Source: `docs/specs/store-scaling.md` §3 item 6 and its §1 `GET /orders` paragraph and §4
 allowlist. This file is the implementation playbook; it does not itself change code.
 
+**IMPLEMENTATION NOTES, ADDED BY THE PR THAT BUILT THIS ITEM.** Every `file:line` below
+predates item 2's merge and has drifted; the corrected anchors are `store/master.py:1492`
+(`_positions_in`, unchanged) / `:1522` (`occupied_indices`, new), `server/capture_server.py:1960`
+(`class _Places`), `:2078` (`for_keys`), `:8945` (`_order_stamps`), `:9221` (`do_orders`).
+Re-read the tree rather than trusting a line number in the sections below.
+
+**ONE THING IN THIS FILE'S DESIGN WAS INCOMPLETE, AND IT IS LOAD-BEARING.** Item 2's merge
+moved `_walk`'s occupied-index computation INTO `view()` itself (`server/capture_server.py`
+— "ONE WALK, BOTH RENDERERS"), and `_walk` excludes a D24 pooled (code-card) record from
+D58's counting space before this item was ever designed. `Inventory.occupied_indices` as
+sketched here (Step 1) does not filter on the game claim at all, so `_Places.for_keys` over
+a box mixing a pooled card with located ones would silently disagree with the ordinary
+constructor on `slot`/`box_total`/`fraction` for every OTHER card in that box — verified
+against the tree and against this file's own `check_order_screen` fixture (`3/5` set to
+`pokemon_code`). `store/` cannot resolve D24's `located` flag itself (D63: it imports
+nothing from `pipeline/`), so the shipped `occupied_indices` returns `(index, game)` pairs
+and the filter (`_location_of`, mirroring `_Places._game_of`) lives in `_Places.for_keys`,
+which already imports `pipeline.games`. See the PR description for the measured mismatch
+(`box_total` 20 vs 19, `fraction` 0.0 vs 0.05263…) with the filter removed.
+
+**`_order_stamps` IS DELIBERATELY NOT TOUCHED IN THIS PR**, and not for the "time budget"
+reason this file names below. `_order_stamps`'s per-pick loop catches `BadPosition` /
+`BadSections` from `places.of(...)` PER PICK, so one box with an unreadable divider layout
+today only empties THAT box's picks' labels — other orders' stamps still render.
+`_Places.for_keys` resolves `sections_for` for every touched box EAGERLY, in one loop,
+before any pick is rendered; wiring it into `_order_stamps` the way `do_orders` uses it
+would turn one bad box's `BadSections` into an uncaught exception that kills the WHOLE
+`POST /shipping/batches/<batch>/stamps` response — a real behavior change, not a missed
+optimization. `do_orders` has no such per-pick catch today (`_pick_row` lets both
+exceptions propagate), so the same eager-vs-lazy timing shift is not observable there. A
+future fix for `_order_stamps` needs `for_keys` to degrade per box on `BadSections` too,
+matching the per-pick catch it already has — left as the named, unfixed twin this file
+itself anticipated.
+
 ## Goal and done-when
 
 `do_orders` (`server/capture_server.py:9027-9122`) measured 185 ms at 2,535 cards and

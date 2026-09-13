@@ -1538,6 +1538,57 @@ class Inventory:
                 _as_position_int(card.index, f"index of card {key}")
         return out
 
+    def occupied_indices(self, box: int) -> Tuple[Tuple[int, Optional[str]], ...]:
+        """`(index, game claim)` for every ON-HAND (non-terminal) record in `box`, ascending
+        by index — D58's `occupied` input for a caller that needs `Position.slot`/`label`/
+        `section`/`card`/`fraction` and NOTHING ELSE: no name, no photo path, no D30 neighbor
+        walk. `_positions_in`'s own docstring is the precedent: two indexed columns read as
+        three `select` queries, never a walk that hydrates a `Card` per row.
+
+        `_Places.for_keys` (`server/capture_server.py`) is the one caller. An order's picks
+        can span most of the store's boxes, and hydrating a full `Card` — JSON payload, name,
+        photo fields — per row, for every record in every touched box, to answer a question
+        that only needs an index and a state, is exactly the O(cards) cost D88 already fixed
+        once for the capture allocator's high-water scan.
+
+        THE GAME CLAIM TRAVELS RAW, UNINTERPRETED. Whether a record counts toward D58's
+        occupied space at all depends on D24 too — a pooled (code-card) record has no slot
+        and must not consume one in this count, exactly as `_Places._walk` already excludes
+        it from `occupants` — but `store/` imports nothing from `pipeline/` (D63), so the
+        registry's `located` flag cannot be resolved here. The caller, which already imports
+        `pipeline.games`, applies that filter to the claim this method hands back verbatim.
+
+        Refuses on the same records `_positions_in` refuses on — a box/idx column that will
+        not coerce, anywhere in the store — for the same reason: `next_index`'s rule that an
+        unparsable record stops the read rather than being silently skipped past.
+        """
+        box = _as_position_int(box, "box")
+        live: List[Tuple[int, Optional[str]]] = []
+        seen = set()
+        for key, (raw_index, state, game) in self.cards.select(
+            ("idx", "state", "game"), box=box
+        ):
+            seen.add(key)
+            if raw_index is None:
+                card = self.cards[key]
+                _as_position_int(card.box, f"box of card {key}")
+                _as_position_int(card.index, f"index of card {key}")
+                raw_index = card.index
+                state = card.state
+                game = card.game
+            if state not in TERMINAL_STATES:
+                live.append((int(raw_index), game))
+        for equals in ({"box": None}, {"idx": None}):
+            for key, _ in self.cards.select(("box", "idx"), **equals):
+                if key in seen:
+                    continue
+                seen.add(key)
+                card = self.cards[key]
+                _as_position_int(card.box, f"box of card {key}")
+                _as_position_int(card.index, f"index of card {key}")
+        live.sort(key=lambda row: row[0])
+        return tuple(live)
+
     def records_in(self, box) -> List[Tuple[int, str, Card]]:
         """`(index, key, card)` for every record in `box`, ascending, coerced the way
         `next_index` coerces and refusing the same way. What the box-scoped routes walk

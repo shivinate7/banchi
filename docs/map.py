@@ -1249,7 +1249,7 @@ COMPONENTS = [
                                   "still hands out the lowest free integer (D20) — the number is a "
                                   "label on a drawer and the id is an identity, which is `Place."
                                   "slot` and `Place.index` one register up (D58)",
-                          "governed_by": ["D145", "D3", "D7", "D8", "D10", "D11", "D20", "D21", "D23", "D26", "D34", "D36", "D55", "D56", "D58", "D59", "D67", "D83", "D87", "D88", "D89", "D100", "D115", "D132", "D167", "D172", "D183", "D192"], "tested_by": ["T7"]},
+                          "governed_by": ["D145", "D3", "D7", "D8", "D10", "D11", "D20", "D21", "D23", "D24", "D26", "D30", "D34", "D36", "D55", "D56", "D58", "D59", "D63", "D67", "D83", "D87", "D88", "D89", "D100", "D115", "D132", "D167", "D172", "D183", "D192"], "tested_by": ["T7"]},
             "queues.py": {"does": "the standing queues — the `queues` table, one mapping per queue "
                                   "name — and the cross-queue release a re-routed position needs",
                           "governed_by": ["D4", "D9", "D22", "D26", "D28", "D37", "D88"], "tested_by": ["T7"]},
