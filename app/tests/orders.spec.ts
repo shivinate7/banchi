@@ -967,7 +967,7 @@ test('a fetch the cap cut short loops, and the receipt names the batches and wha
   await expect(page.locator('.orders-receipt')).toContainText('2 batches')
   /* CUMULATIVE ACROSS BOTH BATCHES, like `detailed` and `named` — each batch skipped 30 already-
      known orders, so the receipt's running total is 60. */
-  await expect(page.locator('.orders-receipt')).toContainText('60 already in the ledger')
+  await expect(page.locator('.orders-receipt')).toContainText('60 already known')
   expect(wire.filter((one) => one.path.endsWith('/orders/ingest'))).toHaveLength(0)
   await expect.poll(reads).toBe(mounted + 1)
 })
