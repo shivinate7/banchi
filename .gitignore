@@ -17,6 +17,7 @@
 # So the rule is about the PATH and not about today's provisioning: if a worktree can put
 # something at this name, the pattern may not care what kind of thing it is. The precision a
 # trailing slash buys is worth nothing here — nothing else in this tree is called `.venv`.
+# ignore-check: bare on purpose, see the note at the top of this file
 node_modules
 dist/
 
@@ -24,6 +25,7 @@ dist/
 # is a path a worktree can create, so the pattern may not care what kind of thing is at it.
 # Per-checkout by construction — it lives inside the checkout, so a worktree's supervisor
 # state dies with the worktree, which is the same property that makes the ports safe (D43).
+# ignore-check: bare on purpose, see the note at the top of this file
 .serve
 .claude/settings.local.json
 
@@ -45,11 +47,20 @@ output/
 
 # opsec: never track raw captures or UI renders
 captures/
+# ignore-check: bare on purpose, see the note at the top of this file
 harness/images
+
+# D172: the content-addressed photo store, sibling of captures/ runs/ inventory/.
+# Bare, no trailing slash, on purpose (see the note at the top of this file) --
+# a worktree can put a symlink at this name rather than a real directory.
+# ignore-check: bare on purpose, see the note at the top of this file
+photos
 
 # Derived, reproducible from a public API. The artefact worth committing is the score in
 # harness/results/, not the images that produced it or the raw model responses.
+# ignore-check: bare on purpose, see the note at the top of this file
 harness/.cache
+# ignore-check: bare on purpose, see the note at the top of this file
 .venv
 
 # Batch script v2 state. `runs/` is derived — deleting one costs nothing, which is the
@@ -82,6 +93,7 @@ app/playwright-report/
 #
 # Bare, no trailing slash, per the rule at the top of this file. The neighbours above predate
 # that lesson and are left alone rather than swept into this change.
+# ignore-check: bare on purpose, see the note at the top of this file
 test-results
 
 # `.claude/launch.json` names a dev port and D43 made the port per checkout, so a tracked
@@ -113,6 +125,7 @@ styles/*
 # ANCHORED, and bare. The leading slash keeps it to the repo root so it cannot silently
 # swallow `harness/.cache` — which has its own line above and its own reason. No trailing
 # slash, per the rule at the top of this file: a worktree can put a link at this name.
+# ignore-check: bare on purpose, see the note at the top of this file
 /.cache
 
 # Built lots. Every one holds a manifest of LIVE CODES — bearer instruments — plus a packing
@@ -133,7 +146,11 @@ lots/
 # recording a committed copy would eventually become.
 #
 # Bare names, no trailing slash, per the rule at the top of this file.
+# ignore-check: bare on purpose, see the note at the top of this file
 demo
+# ignore-check: bare on purpose, see the note at the top of this file
 app/demo
+# ignore-check: bare on purpose, see the note at the top of this file
 app/public/demo
+# ignore-check: bare on purpose, see the note at the top of this file
 dist-demo
