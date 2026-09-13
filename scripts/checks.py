@@ -473,7 +473,7 @@ CHECKS = (
         "why_off_commit_path": "D18 — it writes a temp store. Same standing as "
                                "submission-selftest and cid-selftest.",
         "gates": True,
-        "governed_by": ("D-readings-table", "D18", "D86", "D88"),
+        "governed_by": ("D189", "D18", "D86", "D88"),
     },
     {
         "target": "janitor-selftest",

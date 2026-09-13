@@ -37,7 +37,7 @@ RUNS_DIRNAME = "runs"
 EXPORTS_DIRNAME = ".exports"
 
 # WHERE A FETCHED LIVE EXPORT IS KEPT, AND HERE FOR `EXPORTS_DIRNAME`'S OWN REASON
-# (D-readings-table). `server/pipeline_routes.py:do_live_export` WRITES the file and
+# (D189). `server/pipeline_routes.py:do_live_export` WRITES the file and
 # `pipeline/readings.py:collect` READS every fetch under it to arbitrate a market reading —
 # the server imports the pipeline and never the reverse, so the one name they must agree on
 # cannot live in either of them. Derived, per checkout, and never swept: the file is the

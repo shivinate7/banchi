@@ -1,4 +1,4 @@
-"""The two-source market-reading walk `pkmnscan readings adopt` runs (D-readings-table).
+"""The two-source market-reading walk `pkmnscan readings adopt` runs (D189).
 
 THIS IS THE ARBITRATION `server/pipeline_routes.py:_readings()` USED TO RUN ON EVERY
 `GET /pipeline/value`, MOVED HERE UNCHANGED. Two sources, compared on a clock rather than on

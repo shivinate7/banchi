@@ -72,7 +72,7 @@ class Snapshot:
     # decides what is being bought, and D88 is what makes that one transaction.
     submissions: Submissions
     # THE MARKET READING `pkmnscan readings adopt --write` LAST CACHED, PER SKU
-    # (D-readings-table). Bound like every other table so a `Store.write()` from `readings
+    # (D189). Bound like every other table so a `Store.write()` from `readings
     # adopt` commits it atomically with everything else D88 already protects; every other
     # writer in this package leaves it untouched.
     readings: Readings

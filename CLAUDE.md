@@ -825,7 +825,7 @@ make merge          # merge a PR and move main onto it — BOTH HALVES, on your 
                                    #   what is held back — D49 named its absence, D62 repeated
                                    #   it, and it is one line now that the answers are one file.
 ./pkmnscan readings adopt [--write] # THE MARKET READING IS A TABLE NOW, NOT A LIVE
-                                   #   RECOMPUTATION (D-readings-table). `server/
+                                   #   RECOMPUTATION (D189). `server/
                                    #   pipeline_routes.py:_readings()` used to walk every run's
                                    #   pricing.json and the newest live export on every
                                    #   `GET /pipeline/value`; that walk is `pipeline/readings.py:
@@ -2359,6 +2359,7 @@ D185 A row declares how many subjects it had, an empty one is pinned by name wit
 D186 A per-card price is divided by the cards actually submitted, and a reading is chosen on a metric the reading can move
 D187 A claim checks whether the slug is already claimed, not only whether the number is free
 D188 A join reads the store directly when there is no run directory to replay
+D189 The market reading is a table, and the walk that fills it is a press
 ```
 
 **THE GAP THIS LIST CARRIED BETWEEN D116 AND D118 IS CLOSED, AND IT CLOSED THE WAY IT SAID IT

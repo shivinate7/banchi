@@ -88,7 +88,7 @@ PHOTOS_RELOCATED = "photos_relocated"
 # FIVE, FOR THE SAME REASON FOUR WAS. `docs/specs/stable-card-id.md` §5's warning about a
 # concurrent step landing under one number applies to every schema bump since, not only the
 # one it was written about — so this one is claimed the same way: added as its own step,
-# never folded into an `if` another branch is also writing. D-readings-table's `readings` and
+# never folded into an `if` another branch is also writing. D189's `readings` and
 # `readings_sources` tables are the purest additive step there is (`_add_readings`'s own
 # docstring), exactly `_add_submissions`'s case one version up.
 SCHEMA_VERSION = 5
@@ -127,7 +127,7 @@ TABLES: Dict[str, Tuple[str, ...]] = {
     # value; the intersection is computed in Python over the handful of live rows, which is
     # what `Submissions.live` keeps small by filtering on the `state` column first.
     "submissions": ("pid", "state", "started_at", "run"),
-    # D-readings-table: the market reading `pkmnscan readings adopt --write` last read for
+    # D189: the market reading `pkmnscan readings adopt --write` last read for
     # each SKU, one row per SKU. `store/readings.py` is the module; `pipeline/readings.py`
     # is the two-source walk that fills it.
     "readings": ("market", "at", "source", "kind"),
@@ -823,7 +823,7 @@ def _add_submissions(conn: sqlite3.Connection) -> None:
 
 
 def _add_readings(conn: sqlite3.Connection) -> None:
-    """Schema 5: the `readings` and `readings_sources` tables (D-readings-table).
+    """Schema 5: the `readings` and `readings_sources` tables (D189).
 
     `_add_submissions`'s case one version up — two tables nothing older has, so there is
     nothing to backfill and nothing to read wrong. No receipt file, for the same reason

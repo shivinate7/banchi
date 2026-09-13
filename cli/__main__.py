@@ -445,7 +445,7 @@ def build_parser() -> argparse.ArgumentParser:
 
     # ----------------------------------------------------------------------- readings
     #
-    # THE CACHED MARKET-READING TABLE, AND THE WALK THAT FILLS IT (D-readings-table).
+    # THE CACHED MARKET-READING TABLE, AND THE WALK THAT FILLS IT (D189).
     # `_readings()` in server/pipeline_routes.py used to walk every run's `pricing.json` and
     # the newest live export on every `GET /pipeline/value`; `adopt` runs that same walk once
     # and writes what it found into `readings`, which is a plain SELECT from there on. It

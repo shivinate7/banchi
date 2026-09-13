@@ -12393,7 +12393,7 @@ def check_cli_refusals(checks: Checks) -> None:
     # thing in this dispatch that moves 4.45 GB that cannot be re-taken, previewing by
     # default and verifying every file against a digest before its old copy is removed.
     #
-    # `readings` IS THE ELEVENTH, AND IT ARRIVED WITH D-readings-table. `readings adopt`
+    # `readings` IS THE ELEVENTH, AND IT ARRIVED WITH D189. `readings adopt`
     # writes the cached market-reading table on `--write` and nowhere else, and `readings
     # show` only reads. Unlike every other writer in this list it holds no operator
     # judgement at all — it is a mechanical newest-wins fold of two files already on disk —
@@ -13333,7 +13333,7 @@ def check_prices_adopt(checks: Checks) -> None:
 
 def check_readings_adopt_cli(checks: Checks) -> None:
     """`pkmnscan readings adopt` and `readings show`, through the real argparse dispatch
-    (D-readings-table).
+    (D189).
 
     THE WALK ITSELF IS PROVED BY `make readings-selftest` — an independent reimplementation
     compared against `pipeline/readings.py:collect()` across nine fixture shapes, mutation
@@ -26532,7 +26532,7 @@ def check_value_table(checks: Checks) -> None:
         book.answers[RICH] = corpus.Answer(value="44.00")
         book.write()
 
-        # `_readings()` IS A SELECT NOW (D-readings-table): the run tables and the live
+        # `_readings()` IS A SELECT NOW (D189): the run tables and the live
         # export just written to disk answer nothing until a `readings adopt --write` folds
         # them into the `readings` table, exactly as `pkmnscan readings adopt --write` does.
         # `pipeline.readings.collect()` is the identical two-source walk the old live

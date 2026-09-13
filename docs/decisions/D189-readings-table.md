@@ -1,4 +1,4 @@
-## D-readings-table — The market reading is a table, and the walk that fills it is a press
+## D189 — The market reading is a table, and the walk that fills it is a press
 
 **A LIVE RECOMPUTATION BECAME A CACHE, AND THE ARBITRATION IT RAN DID NOT CHANGE.** `server/pipeline_routes.py:_readings()` used to walk every run's `runs/<n>/pricing.json` and the newest file under `inventory/.live` on every single `GET /pipeline/value`, comparing the two sources on a clock and returning `sku -> the newest market price this machine has read for it`. That walk is unchanged in substance — `pipeline/readings.py:collect()` runs the identical newest-wins comparison, over the identical two sources, and nothing about WHICH reading wins moved. What moved is WHEN: from every request, to one explicit press, `pkmnscan readings adopt --write`, which folds the result into a new `readings` table in `inventory/store.sqlite` (D88). `_readings()` is now a plain `SELECT` against it.
 

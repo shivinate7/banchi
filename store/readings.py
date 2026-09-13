@@ -1,4 +1,4 @@
-"""`readings` and `readings_sources` — the market prices this machine has read, cached (D-readings-table).
+"""`readings` and `readings_sources` — the market prices this machine has read, cached (D189).
 
 WHAT USED TO BE A LIVE RECOMPUTATION IS NOW TWO TABLES A PRESS FILLS. Before this, every
 `GET /pipeline/value` walked every run's `runs/<n>/pricing.json` and the newest file under

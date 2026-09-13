@@ -2949,7 +2949,7 @@ _Reading = store_readings.Reading
 def _readings() -> Tuple[Dict[str, _Reading], List[dict]]:
     """`sku -> the NEWEST market price this machine has read for it`, and where each came from.
 
-    A SELECT AGAINST `readings`, AND NOTHING ELSE (D-readings-table). This function used to
+    A SELECT AGAINST `readings`, AND NOTHING ELSE (D189). This function used to
     walk every run's `pricing.json` and the newest live export on every call, comparing two
     sources on a clock and reporting which files answered — the two-source arbitration
     `pipeline/readings.py:collect` still does, word for word, but only when
@@ -2964,7 +2964,7 @@ def _readings() -> Tuple[Dict[str, _Reading], List[dict]]:
     /pipeline/value` before this, and only on an explicit `readings adopt` press now. A
     caller reading `_readings()` between two adopts sees the table as of the last one, not
     the filesystem as of this instant — the read-once/write-many trade this table exists to
-    make, argued in D-readings-table.
+    make, argued in D189.
 
     IT NEVER RAISES, exactly as before: an unreadable store answers with an empty reading
     rather than a 500, because `do_pipeline_value` already refuses loudly on the read one
@@ -3503,7 +3503,7 @@ def _positive(value, field: str) -> int:
 
 
 #: Where a fetched live export is kept, and what it is named. MOVED TO `store/files.py`
-#: (D-readings-table), because `pipeline/readings.py:collect` now reads this same directory
+#: (D189), because `pipeline/readings.py:collect` now reads this same directory
 #: to arbitrate a market reading and `pipeline/` cannot import `server/` — the layering runs
 #: the other way. Aliased here, under their original names, because this module still WRITES
 #: into it (`do_live_export`) and `harness/tests/t7_store_and_seams.py` still spells them

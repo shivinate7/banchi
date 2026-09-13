@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""`store/readings.py` and `pipeline/readings.py` proved against a throwaway store (D-readings-table).
+"""`store/readings.py` and `pipeline/readings.py` proved against a throwaway store (D189).
 
 WHAT THIS PROVES AND WHY IT IS SEPARATE FROM A GOLDEN REIMPLEMENTATION. `_readings()` in
 `server/pipeline_routes.py` used to walk every run's `pricing.json` and the newest live
