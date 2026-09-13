@@ -2749,3 +2749,64 @@ test('the release names its receipt and confirms, and the page does not move und
     ['/pipeline/submissions/sub-dead-1/release', { confirm: true }],
   ])
 })
+
+/* THE FOOT LIES FOR UP TO FIFTEEN SECONDS, AND THE FIX IS NOT IN THE FOOT (D-one-poller).
+ *
+ * `useServerPresence` used to learn the server was gone ONLY from its own `GET /status` —
+ * on mount, on a 15s interval, on window focus. Every other request in the app could fail
+ * without touching that state, so the sidebar went on drawing `Server online` while a poll
+ * elsewhere on the very same screen was failing outright. This is the six-second case from
+ * one instance: the run detail poll fails while `/status` keeps answering, and the foot must
+ * flip within ONE REQUEST rather than wait out the interval.
+ *
+ * RED, BEFORE THE FIX: this case failed with
+ *   Error: Timed out 5000ms waiting for expect(locator).toHaveAttribute(expected)
+ *   Locator: locator('.bn-server')
+ *   Expected string: "offline"
+ *   Received string: "online"
+ * — because nothing but `/status` could tell the shell the server had gone, and the fake
+ * clock had advanced only 4.5s of the 15s the shell was willing to wait. */
+test('a failed poll elsewhere flips the server foot before the next status check', async ({ page }) => {
+  await page.clock.install()
+  await open(page, { live: true })
+  await openRun(page)
+  await expect(page.locator('.bn-server')).toHaveAttribute('data-state', 'online')
+
+  /* Overrides the routes `open()` and `sealEveryTest()` registered — Playwright matches the
+     LAST route added, so these win for every request from here on. BOTH have to go dark:
+     the detail poll, which is the ordinary request that is actually failing, and `/status`,
+     because `server.ts:request()` probes it on any fetch failure to tell "this address is
+     refused" apart from "the server is gone" (D43) — a `/status` that still answered would
+     correctly read as the FORMER, not the latter, and this case is about the latter. */
+  await page.route(/\/pipeline\/runs\/[^/]+$/, (route) => route.abort('addressunreachable'))
+  await page.route(/\/status$/, (route) => route.abort('addressunreachable'))
+
+  // The detail poll's own cadence (`RunPanel.tsx`'s `POLL_MS`) — well under the 15s the
+  // shell's own `/status` interval waits before it would notice on its own.
+  await page.clock.fastForward(4500)
+
+  await expect(page.locator('.bn-server')).toHaveAttribute('data-state', 'offline')
+
+  /* Bring `/status` back before the case ends — `sealEveryTest`'s own teardown refuses a
+     screen left showing the offline banner, which is the correct floor for every OTHER case
+     in this file and would otherwise turn this one legitimate reproduction into a permanent
+     red. The interval this restores is the shell's own 15s poll, which the fix does not
+     touch and does not need to for the assertion above to have already held. */
+  await page.route(/\/status$/, (route) =>
+    route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify({
+        captures_root: 'captures',
+        store: 'inventory/store.sqlite',
+        store_exists: true,
+        cards: 0,
+        states: {},
+        queues: { review: 0, parked: 0 },
+        next_index: {},
+      }),
+    }),
+  )
+  await page.clock.fastForward(15500)
+  await expect(page.locator('.bn-server')).toHaveAttribute('data-state', 'online')
+})

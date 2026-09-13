@@ -2,7 +2,7 @@ import { Component, useCallback, useEffect, useMemo, useRef, useState } from 're
 import type { ComponentType, ErrorInfo, KeyboardEvent as ReactKeyboardEvent, ReactNode } from 'react'
 import { isEditableTarget } from './keys'
 import { rememberRail, storedRail, storedTheme } from './deviceMemory'
-import { getStatus, onServerBoot } from './server'
+import { getStatus, onServerBoot, onServerReachable } from './server'
 import { Button, Icon, Kbd, Lockup,
   Logo,
   applyTheme, readTheme, useLeave, type IconName, type Theme } from './kit'
@@ -253,6 +253,19 @@ function useServerPresence(enabled: boolean): { state: ServerState; cards: numbe
     return onServerBoot(() => {
       toast({ kind: 'status', icon: 'refresh', title: 'Server restarted', body: 'Banchi is running your latest code.' })
       void check()
+    })
+  }, [enabled, check])
+  /* D-one-poller: THE FOOT LEARNS FROM EVERY REQUEST IN THE APP, NOT JUST ITS OWN POLL.
+   * `server.ts:request()` is the one seam every call funnels through, and it now reports
+   * reachability there — so a poll failing on `#/runs` while this screen sits on `#/pricing`
+   * flips this dot within that ONE request rather than waiting up to 15s for the next
+   * `/status` tick. A recovering request re-runs `check()` to pick the cards figure back up;
+   * a failing one sets `offline` directly, with no round trip of its own. */
+  useEffect(() => {
+    if (!enabled) return
+    return onServerReachable((ok) => {
+      if (ok) void check()
+      else setState('offline')
     })
   }, [enabled, check])
   return { state, cards, retry: () => void check() }
