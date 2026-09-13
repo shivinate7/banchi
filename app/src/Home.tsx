@@ -439,7 +439,15 @@ export function Home() {
   const openRows = orders.state === 'ready' ? orders.value.orders.filter((o) => o.open) : null
   const openOrders = openRows === null ? null : openRows.length
   const toPull = openRows === null ? null : openRows.reduce((n, o) => n + Math.max(0, o.wanted - o.recorded), 0)
-  const unfindable = orders.state === 'ready' ? orders.value.resolution.orders.reduce((n, o) => n + (o.outstanding ?? 0), 0) : 0
+  /* Same join `standing.ts` makes, for the same reason: `resolution.orders` is already a
+     subset of the open orders (`do_orders`'s own `open_keys`, D63 amended), and this counts
+     a resolved line only where ITS order reads `open: true` here too, rather than trusting
+     that upstream shape blind. See `## D-home-counts-only-open-orders`. */
+  const openKeys = openRows === null ? null : new Set(openRows.map((o) => o.key))
+  const unfindable =
+    orders.state === 'ready' && openKeys !== null
+      ? orders.value.resolution.orders.reduce((n, o) => n + (openKeys.has(o.key) ? (o.outstanding ?? 0) : 0), 0)
+      : 0
 
   /* Pricing: the runs the worklist says still owe an answer — `owes` is emit's own reason. */
   const runsToPrice = pricing.state === 'ready' ? pricing.value.roster.filter((r) => r.open && r.owes.length > 0).length : null
