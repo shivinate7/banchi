@@ -3531,7 +3531,8 @@ def do_pipeline_value_page(
     # comment above promises ("comparing by VALUE") and T7's stale-cursor case exercises it
     # against exactly this tie.
     if band == "gaps":
-        key_of = lambda row: (row["box"], row["index"])
+        def key_of(row):
+            return (row["box"], row["index"])
     elif band == "top":
         key_of = _value_sort_key
     else:
