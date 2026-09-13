@@ -1,4 +1,4 @@
-## D186 — A row declares how many subjects it had, an empty one is pinned by name with a reason, and eleven published claims get the reader they were already cited as having
+## D185 — A row declares how many subjects it had, an empty one is pinned by name with a reason, and eleven published claims get the reader they were already cited as having
 
 **`Report.render` printed `ok` for any row whose findings list was empty, so a row that examined 2,964 references and a row that examined NONE were the same word.** This is the repo's signature defect stated exactly: a guard that cannot tell *nothing is wrong* from *nothing is known yet*. Measured inside a green `make check` on main: `paths 0 references resolve`, the make-target row's `0 references, 57 targets`, and `env vars 0 documented, all real`. A session then quoted that run as verification.
 
