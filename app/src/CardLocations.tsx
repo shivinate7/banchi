@@ -58,8 +58,11 @@ export function ReadingAge({ at, className }: { readonly at?: string | null; rea
 }
 
 /** An open order that has named one copy, keyed by the copy's store key. Structural, so the
- *  screen's own richer `Wanted` fits without a second import of it. */
-export type CopyClaim = { readonly order: string }
+ *  screen's own richer `Wanted` fits without a second import of it. `key` is the order's
+ *  `source:number` composite (`ResolvedLine.order_key`) — what `Orders.tsx`'s
+ *  `groupForOrderKey` actually matches on, and not the same string as `order`, which is the
+ *  buyer-facing number alone. The pill links with `key` for exactly that reason. */
+export type CopyClaim = { readonly order: string; readonly key?: string }
 
 /** What the Fulfiller is told about a copy — two sentences, never the raw state word. */
 function saidState(state: string): string {
@@ -503,7 +506,7 @@ function OwnerRows({
                 {claim === null ? null : (
                   <a
                     className="bn-pill bn-pill-warn card-locations-claim"
-                    href="#/orders"
+                    href={`#/orders?order=${encodeURIComponent(claim.key ?? claim.order)}`}
                     aria-label={`Order ${claim.order} is waiting on this copy`}
                     title="Still yours to sell from here."
                   >

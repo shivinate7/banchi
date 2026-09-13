@@ -557,12 +557,24 @@ export function BoxOps({
                       : boundHelp
                   }
                 />
+                {/* FILL and NEXT INDEX used to be the two bare labelled numbers on this sheet
+                    — every other control here already "says what it will do before it does
+                    it" (Seal, Edit dividers), and a hover-only `help` title said this without
+                    ever being read, since nothing on a touch device or a keyboard walk ever
+                    triggers one. `note` is the same visible-caption slot `Listing-held`
+                    already draws its reading age through, so this reaches for an existing
+                    mechanism rather than inventing new markup. */}
                 <Census
                   label="Fill"
                   value={known(record.fill)}
                   help="Highest index ever captured — never comes down."
+                  note="Never comes down, even after a sale"
                 />
-                <Census label="Next index" value={known(record.next_index)} />
+                <Census
+                  label="Next index"
+                  value={known(record.next_index)}
+                  note="Where the next capture lands"
+                />
                 {sealed ? <Census label="Sealed at" value={known(record.capacity)} /> : null}
               </dl>
             </section>

@@ -487,6 +487,10 @@ type FieldId =
   | 'rotation'
   | 'trigger'
 
+/** The four fields the Rig panel's own disclosure folds away — used to keep the panel open
+ *  while one of them is being edited, regardless of the disclosure's own state. */
+const RIG_FIELDS: ReadonlySet<FieldId> = new Set(['game', 'camera', 'rotation', 'trigger'])
+
 /* The field letters, none of which may be `c`, `u` or `s` — those are the run's own keys and
  * stay reserved (see CAPTURE_KEY). `v` for the camera because `c` is taken, `o` for rotation
  * because `r` is, and `h` for the set hint because `s` is: the mnemonic bends before an act
@@ -858,7 +862,23 @@ export function CaptureScreen() {
    * deliberately not persisted: an open picker is a moment, not a claim. */
   const [openField, setOpenField] = useState<FieldId | null>(null)
 
-  
+  /* THE RIG PANEL'S OWN DISCLOSURE — Game, Camera, Rotation and Trigger folded away once a box
+   * is picked, because those four are set once when the rig is set up and read afterward
+   * ("the rig, set once ... then read"), and re-showing all four every sitting is the same
+   * "explain twice" cost the box list and the sections editor already avoid. `restored.box`
+   * is the SAME `banchi.capture.setup` document D142 already reads (no new key, per the
+   * owner's framing) — a browser that remembers a box from a prior sitting starts folded, and
+   * a browser that has never chosen one starts open, because the fields have to be visible to
+   * choose the first time. Once a box is picked THIS sitting, the panel folds on its own
+   * unless the operator has already touched the disclosure by hand — `rigTouched` is what
+   * keeps a manual re-open from being immediately re-closed the next render. */
+  const [rigOpen, setRigOpen] = useState(restored.box === null)
+  const rigTouched = useRef(false)
+  useEffect(() => {
+    if (rigTouched.current) return
+    if (box !== null) setRigOpen(false)
+  }, [box])
+
   const [boxEntry, setBoxEntry] = useState('')
 
   
@@ -3269,6 +3289,18 @@ export function CaptureScreen() {
                   ? `${boxMatchTotal} boxes match; ${boxRows.length} shown. Narrow it, or press Enter to take the top row.`
                   : 'Enter takes the top row. Anything new is created by name.'}
               </p>
+              {/* THE NAME NUDGE, AT THE MOMENT A BRAND-NEW BOX IS BEING OFFERED — the walkthrough's
+                  gap: nothing told the operator, typing a name in a hurry, that this exact string
+                  is what every other screen (Home, the rail, the Fulfiller's list) shows verbatim
+                  forever. `boxOffer.name !== null` is the by-name creation branch only (D20's
+                  amended rule — a bare number never creates one on its own); a name that already
+                  matches an existing box takes the `boxExact` branch above and never reaches
+                  `boxOffer` at all, so this never shows beside a box that already exists. */}
+              {boxOffer === null || boxOffer.name === null ? null : (
+                <p className="capture-opennote capture-box-name-nudge">
+                  This is what every screen calls this box — match the label on the drawer.
+                </p>
+              )}
               {boxNote === null ? null : <p className="capture-refused">{boxNote}</p>}
               {restoreNote === null ? null : (
                 <p className="capture-refused">
@@ -3775,8 +3807,42 @@ export function CaptureScreen() {
 
         {/* ============ THE RIG: set once when the rig is set up, then read ============ */}
         <section className="capture-card capture-card-rig" aria-label="Rig">
-          <p className="bn-label capture-card-label">Rig</p>
+          {/* THE RIG'S OWN DISCLOSURE (see the state's own comment above). A field being
+              edited always wins over the fold, so a keyboard shortcut fired while the panel
+              reads closed still opens its picker rather than opening it into a hidden
+              section. */}
+          {(() => {
+            const rigVisible = rigOpen || (openField !== null && RIG_FIELDS.has(openField))
+            return (
+              <button
+                type="button"
+                className="capture-rig-summary"
+                aria-expanded={rigVisible}
+                onClick={() => {
+                  rigTouched.current = true
+                  setRigOpen((was) => !was)
+                }}
+              >
+                <span className="bn-label capture-card-label">Rig</span>
+                {rigVisible ? null : (
+                  <span className="capture-rig-summary-val">
+                    {gameEntry === null ? gameSentence : gameEntry.display}
+                    {' · '}
+                    {camera.rotation}°{' · '}
+                    {triggerMode === 'manual' ? 'Key' : 'Motion'}
+                  </span>
+                )}
+                <Icon
+                  name={rigVisible ? 'chevronUp' : 'chevronDown'}
+                  size={14}
+                  className="capture-chev"
+                />
+              </button>
+            )
+          })()}
 
+          {!(rigOpen || (openField !== null && RIG_FIELDS.has(openField))) ? null : (
+            <>
           {openField === 'game' ? (
             <OpenField k="G" label="Game" icon="layers" meta="Pick one" onClose={closeField}>
               <div className="capture-opts">
@@ -4018,6 +4084,8 @@ export function CaptureScreen() {
               }
               onToggle={() => toggleField('trigger')}
             />
+          )}
+            </>
           )}
 
           {/* THE CLEAR, AT THE FOOT OF THE LAST PANEL IN THE RAIL (D142).
