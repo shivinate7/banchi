@@ -2327,7 +2327,14 @@ def _unsent_ledger(
     join therefore counts the card now standing at the slid key, and the send, which does
     realign, corrects it. NO CAP IS SPENT HERE. This previews the worklist; `--cap` and a
     row's own quantity are asked for at the press and spent there (D7).
+
+    ONE `_cards_by_sku` READ FOR THE WHOLE FUNCTION (store-scaling item 4). Every per-SKU
+    walk below — the orphan scan that used to be `distinct("sku")` plus a `copies_on_hand`
+    loop, the on-screen fold-through's own `copies_on_hand` loop, and `_copies_out`'s and
+    `_committed_keys`' own internal per-SKU reads — shares the SAME one-pass dict, built once
+    here and handed down, rather than each re-walking `cards` on its own.
     """
+    by_sku = run_resolve._cards_by_sku(inventory)
     positions: Dict[str, "OrderedDict[str, None]"] = OrderedDict()
     per_run: Dict[str, Dict[str, set]] = {}
     readings: Dict[str, "run_resolve.LiveReading"] = {}
@@ -2363,23 +2370,18 @@ def _unsent_ledger(
     # SKUs carried one no table names** and were invisible. Three runs held them —
     # `2026-08-29-box1-01` 18, `2026-09-01-box5-01` 9, `2026-09-11-box1-01` 4.
     #
-    # `distinct` IS ONE INDEXED PASS AND `copies_on_hand` IS ANOTHER, which is why this is
-    # affordable at all: `cards.sku` is indexed and `cards.run` is not, so asking "every SKU
-    # any card carries" and subtracting the tables' is two index reads, where asking each
-    # run for its cards would be a full table scan per leg. The orphan set is tiny by
-    # construction — it is the answers a join has not seen yet.
-    orphans: List[str] = []
-    for value in inventory.cards.distinct("sku"):
-        sku = str(value or "")
-        if not sku or sku in positions:
-            continue
-        orphans.append(sku)
-    for sku in sorted(orphans):
-        for card in inventory.copies_on_hand(sku):
-            if card.run not in on_screen:
+    # `by_sku` IS ALREADY ONE FULL PASS OVER `cards` (store-scaling item 4), so "every SKU
+    # any card carries" is just its key set — no second `distinct("sku")` scan, and no
+    # `copies_on_hand` call per orphan SKU either, since `by_sku` already carries every row
+    # (state, box, index, run) that call would have re-read from the store. The orphan set
+    # is tiny by construction — it is the answers a join has not seen yet.
+    orphans: List[str] = sorted(sku for sku in by_sku if sku not in positions)
+    for sku in orphans:
+        for row in by_sku.get(sku, ()):
+            if row.state in master.TERMINAL_STATES or row.run not in on_screen:
                 continue
-            positions.setdefault(sku, OrderedDict())[card.key] = None
-            per_run[card.run].setdefault(sku, set()).add(card.key)
+            positions.setdefault(sku, OrderedDict())[row.key] = None
+            per_run[row.run].setdefault(sku, set()).add(row.key)
     # ------------------------------------------------------------------------------------
 
     # THIS LEG'S READING FOR THIS LEG'S OWN SKUS, AFTER THE ORPHANS ARE IN. Narrowed before
@@ -2399,13 +2401,15 @@ def _unsent_ledger(
                 readings[sku] = reading
 
     for sku in list(positions):
-        for card in inventory.copies_on_hand(sku):
-            if card.run in on_screen and card.key not in positions[sku]:
-                positions[sku][card.key] = None
-                per_run[card.run].setdefault(sku, set()).add(card.key)
+        for row in by_sku.get(sku, ()):
+            if row.state in master.TERMINAL_STATES:
+                continue
+            if row.run in on_screen and row.key not in positions[sku]:
+                positions[sku][row.key] = None
+                per_run[row.run].setdefault(sku, set()).add(row.key)
 
-    held_out, live_out = run_resolve._copies_out(inventory, readings)
-    committed = run_resolve._committed_keys(inventory, held_out)
+    held_out, live_out = run_resolve._copies_out(inventory, readings, by_sku=by_sku)
+    committed = run_resolve._committed_keys(inventory, held_out, by_sku=by_sku)
     unsent: Dict[str, List[str]] = {}
     for sku, keys in positions.items():
         free: List[str] = []

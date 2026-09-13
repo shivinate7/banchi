@@ -2383,6 +2383,7 @@ D187 A claim checks whether the slug is already claimed, not only whether the nu
 D188 A join reads the store directly when there is no run directory to replay
 D189 The market reading is a table, and the walk that fills it is a press
 D190 The remedy `stale_claims` names is a real command, and `stale_claims` learns to see the directory it moved into
+D191 `Store.history()` gets a box-scoped sibling
 ```
 
 **THE GAP THIS LIST CARRIED BETWEEN D116 AND D118 IS CLOSED, AND IT CLOSED THE WAY IT SAID IT

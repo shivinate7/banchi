@@ -411,15 +411,23 @@ def append_history(events) -> None:
         conn.close()
 
 
-def corrupt_history() -> None:
+def corrupt_history(position: Optional[str] = None) -> None:
     """One history row whose payload is not JSON — the hand-edit `_sale_origin` degrades
-    on. It used to be a `{not json` line appended to `history.jsonl`."""
+    on. It used to be a `{not json` line appended to `history.jsonl`.
+
+    `position` defaults to `None` — a corrupt row this store cannot even say which box it
+    was about, the worst case. Since `db.events_at` scopes by the `position` column (this
+    item's own fix), a `None`-position row is invisible to a box-scoped read: `WHERE
+    position GLOB '<box>/*'` cannot match a NULL. A caller proving that a box-scoped
+    reversal still refuses on a corrupt log must corrupt a row THAT SAME BOX would see —
+    pass this box's own key (or any string sharing its box prefix).
+    """
     conn = db.connect(files.inventory_dir())
     try:
         conn.execute("BEGIN IMMEDIATE")
         conn.execute(
             "INSERT INTO events (at, event, position, payload) VALUES (?, ?, ?, ?)",
-            (master.now(), None, None, "{not json"),
+            (master.now(), None, position, "{not json"),
         )
         conn.execute("COMMIT")
     finally:
@@ -4616,7 +4624,10 @@ def check_review_answer(checks: Checks) -> None:
         # A LOG THAT WILL NOT PARSE COSTS THE REVERSAL AND NOTHING ELSE — the answer
         # direction never reads history, only appends to it, which is the asymmetry
         # `_answer_origin`'s docstring claims and this pair of cases holds it to.
-        corrupt_history()
+        # Corrupted IN BOX 3, the box the reversal below reads from: `_answer_origin` now
+        # scopes its read to that box (`Store.history_at`), so a corrupt row filed under a
+        # different box would be invisible to it and this case would prove nothing.
+        corrupt_history(position="3/1")
         blind = answers(
             checks,
             lambda: capture_server.do_review_answer(
@@ -5390,7 +5401,9 @@ def check_mark_sold(checks: Checks) -> None:
         # `store_unavailable` and left a card he had physically sold recorded as unsold.
         # Measured that way before `_sale_origin` existed. A sale is the one event here that
         # has already happened in the world: unlisted is fine, unrecorded is not (CLAUDE.md).
-        corrupt_history()
+        # Corrupted IN BOX 3, the box the sale below reads from — `_sale_origin` now scopes
+        # its read to that box (`Store.history_at`), so this has to land where it can see it.
+        corrupt_history(position="3/3")
         degraded = answers(
             checks,
             lambda: capture_server.do_mark_sold(3, 3, {}),
@@ -6679,6 +6692,108 @@ def check_history(checks: Checks) -> None:
             capture_server.do_mark_sold(5, 1, {"undo": True})["state"],
             master.IDENTIFIED,
             "and the reversal actually puts that state back, past the withdrawn answer",
+        )
+
+
+def check_history_scoped_read(checks: Checks) -> None:
+    """`db.events_at` is a scope, not a rewrite: at any key, it must equal the box-filtered
+    slice of the full log a reversal reader already gets today, one row at a time, filtered
+    in Python. The one thing worth proving on purpose is the `renumbered` case (D10 ruling
+    1) — the line that sits at the DELETED card's key, not any mover's, and that a
+    box-narrower scope (bare `position = key`) would have dropped silently.
+    """
+    checks.note("")
+    checks.note("HISTORY — events_at is scoped to the box, not the position")
+
+    with isolated_home():
+        for _ in range(3):
+            capture_server.do_capture(capture_payload(3))
+        for _ in range(2):
+            capture_server.do_capture(capture_payload(7))  # a second box, for cross-box isolation
+
+        # A correction and an answer at 3/1, so the box has more than one event kind.
+        capture_server.do_put_card(3, 1, {"variant": "reverse_holo"})
+
+        # A mid-box delete of 3/1 renumbers 3/2 and 3/3 down by one and logs `renumbered` at
+        # position "3/1" — the DELETED key, per server/capture_server.py:do_remove_card.
+        # `capture_id` is required by that route (an aim check against a replayed request);
+        # none of the captures above sent one, so the stored record's own is None.
+        capture_server.do_remove_card(3, 1, {"capture_id": None})
+
+        full = Store().history()
+
+        conn = db.connect(files.inventory_dir())
+        try:
+            scoped = db.events_at(conn, master.position_key(3, 1))
+        finally:
+            conn.close()
+
+        expected = [
+            e for e in full
+            if str(e.get("position", "")).split("/", 1)[0] == "3"
+        ]
+        checks.equal(
+            scoped, expected,
+            "events_at(3/1) equals the box-3 slice of the full history, byte for byte",
+        )
+
+        renumbered = [e for e in scoped if e.get("event") == capture_server.RENUMBERED]
+        checks.ok(
+            len(renumbered) == 1,
+            "and the renumbered marker — filed at the DELETED key, not any mover's — is "
+            "still visible: a position-only scope would have dropped it",
+            f"scoped renumbered events: {renumbered!r}",
+        )
+
+        cross_box = [e for e in scoped if str(e.get("position", "")).split("/", 1)[0] == "7"]
+        checks.equal(
+            cross_box, [],
+            "and box 7's events are absent: the scope is one box, never the whole store",
+        )
+
+        # The reversal itself still works end to end through the new path.
+        conn = db.connect(files.inventory_dir())
+        try:
+            scoped_32 = db.events_at(conn, "3/2")
+        finally:
+            conn.close()
+        checks.equal(
+            capture_server._state_before_sale(scoped_32, "3/2"),
+            capture_server._state_before_sale(Store().history(), "3/2"),
+            "and the reader that actually decides an undo agrees, scoped or not",
+        )
+
+
+def check_history_scoped_uses_index(checks: Checks) -> None:
+    """`events_at`'s scope is provable in code, but a session six months from now could
+    "simplify" the WHERE clause back into a full scan and every functional test above would
+    still pass — the box-3 slice of an unscoped read is still the box-3 slice. This is the
+    row that would catch that: it asserts the query plan, not the query's output.
+    """
+    checks.note("")
+    checks.note("HISTORY — events_at reads the index, not the table")
+
+    with isolated_home():
+        capture_server.do_capture(capture_payload(3))
+        conn = db.connect(files.inventory_dir())
+        try:
+            plan = conn.execute(
+                "EXPLAIN QUERY PLAN SELECT id, payload FROM events WHERE position GLOB ? "
+                "ORDER BY id",
+                ("3/*",),
+            ).fetchall()
+        finally:
+            conn.close()
+        plan_text = " | ".join(str(row) for row in plan)
+        checks.ok(
+            "USING INDEX events_position" in plan_text,
+            "the scoped query plan names the events_position index",
+            plan_text,
+        )
+        checks.ok(
+            "SCAN events" not in plan_text,
+            "and never falls back to a full table scan",
+            plan_text,
         )
 
 
@@ -17249,6 +17364,119 @@ def check_committed_copies_are_the_oldest(checks: Checks) -> None:
         )
 
 
+def _copies_out_reference(
+    inventory: master.Inventory, live_by_sku: dict
+) -> Tuple[dict, dict]:
+    """THE OLD PER-LISTING IMPLEMENTATION, KEPT HERE ONLY, as the equivalence oracle for
+    `check_copies_out_one_pass_matches_reference` below. Never import this into `cli/`; it
+    exists so a future edit to `_copies_out`'s one-pass body can be checked against the
+    arithmetic it must never silently drift from. Copied verbatim from `cli/resolve.py`
+    before store-scaling item 4's rewrite (docs/specs/store-scaling/04-copies-out.md).
+    """
+    out: dict = {}
+    live_now: dict = {}
+    for sku in set(live_by_sku) | set(inventory.listings):
+        listing_entry = inventory.listings.get(sku)
+        reading = live_by_sku.get(sku)
+        offered = reading.quantity if reading else None
+        as_of = reading.as_of if reading else None
+        read = (
+            listing_entry.live_reading(offered, as_of)
+            if listing_entry is not None
+            else (reading.quantity if reading else 0)
+        )
+        read = max(0, int(read))
+        live = max(
+            0,
+            read - (listing_entry.sales_pending(as_of) if listing_entry is not None else 0),
+        )
+        live_now[sku] = live
+        claim = listing_entry.held if listing_entry is not None else 0
+        if read <= 0 and claim <= 0:
+            continue
+        read_at = (
+            listing_entry.reading_taken_at(offered, as_of)
+            if listing_entry is not None
+            else as_of
+        )
+        sold = (
+            len(inventory.positions_for_sku(sku)) - len(inventory.copies_not_sold(sku))
+            if read > 0
+            else inventory.sales_before(sku, read_at)
+        )
+        out[sku] = max(live, claim - sold)
+    return out, live_now
+
+
+def check_copies_out_one_pass_matches_reference(checks: Checks) -> None:
+    """`resolve._copies_out`'s one-pass rewrite (store-scaling item 4,
+    docs/specs/store-scaling/04-copies-out.md) must equal the per-listing arithmetic it
+    replaced, on a store exercising every branch: `read > 0` with a sale, `read <= 0` with a
+    sale before AND after `read_at`, a SKU only in `live_by_sku`, a SKU only in
+    `inventory.listings`, and a SKU whose two copies are one SOLD and one RETIRED — the case
+    that tells `SOLD` alone from `TERMINAL_STATES` (D26), which `copies_not_sold` warns
+    against conflating and which the mutation arm for this check flips.
+    """
+    checks.note("")
+    checks.note("COPIES OUT — one pass equals the old per-listing arithmetic")
+
+    with isolated_home():
+        # SKU A: read > 0, one sold, one not — exercises the `read > 0` branch.
+        for box, idx in ((1, 1), (1, 2)):
+            while Store().read().inventory.next_index(box) <= idx:
+                capture_server.do_capture(capture_payload(box))
+        with Store().write() as writable:
+            writable.inventory.get(master.position_key(1, 1)).sku = "SKU-A"
+            writable.inventory.get(master.position_key(1, 2)).sku = "SKU-A"
+        capture_server.do_mark_sold(1, 1, {})
+
+        # SKU B: read <= 0, one sale before `read_at`, one after — exercises both arms of
+        # the `read <= 0` branch. `state_at` ordering is what `sales_before` reads.
+        for box, idx in ((2, 1), (2, 2)):
+            while Store().read().inventory.next_index(box) <= idx:
+                capture_server.do_capture(capture_payload(box))
+        with Store().write() as writable:
+            writable.inventory.get(master.position_key(2, 1)).sku = "SKU-B"
+            writable.inventory.get(master.position_key(2, 2)).sku = "SKU-B"
+        capture_server.do_mark_sold(2, 1, {})  # before
+        read_at = master.now()
+        capture_server.do_mark_sold(2, 2, {})  # after
+
+        # SKU D: read > 0, one SOLD and one RETIRED — the mutation arm's own case (a
+        # naive "how many of this SKU's copies have left the box" would count both).
+        for box, idx in ((4, 1), (4, 2)):
+            while Store().read().inventory.next_index(box) <= idx:
+                capture_server.do_capture(capture_payload(box))
+        with Store().write() as writable:
+            writable.inventory.get(master.position_key(4, 1)).sku = "SKU-D"
+            writable.inventory.get(master.position_key(4, 2)).sku = "SKU-D"
+        capture_server.do_mark_sold(4, 1, {})
+        capture_server.do_retire(4, 2, {"reason": "pulled"})
+        # A large `held` claim so `claim - sold` (99 correct, 98 under the mutation) is what
+        # `max(live, claim - sold)` actually returns rather than `live` masking the difference.
+        with Store().write() as writable:
+            writable.inventory.listing("SKU-D").bump(master.PUSHED, 100)
+            # SKU C: only in `inventory.listings` (no export row at all this run).
+            writable.inventory.listing("SKU-ONLY-LISTED").bump(master.PUSHED)  # by=1 default
+
+        inventory = Store().read().inventory
+        live_by_sku = {
+            "SKU-A": resolve.LiveReading(quantity=1, as_of=master.now()),
+            "SKU-B": resolve.LiveReading(quantity=0, as_of=read_at),
+            "SKU-D": resolve.LiveReading(quantity=6, as_of=master.now()),
+            "SKU-ONLY-LIVE": resolve.LiveReading(quantity=2, as_of=master.now()),
+        }
+
+        one_pass = resolve._copies_out(inventory, live_by_sku)
+        reference = _copies_out_reference(inventory, live_by_sku)
+        checks.equal(
+            one_pass, reference,
+            "the one-pass rewrite and the old per-listing arithmetic agree on every SKU, "
+            "across both `copies_out` and `live_now` — including SKU-D, whose retired copy "
+            "must NOT be counted alongside the sold one",
+        )
+
+
 def check_listing_commands(checks: Checks) -> None:
     """`emit`, `reconcile` and `join` moving SKU QUANTITIES rather than card states (D7).
 
@@ -27190,6 +27418,8 @@ def run() -> Result:
     check_retire(checks)
     check_reshoot(checks)
     check_history(checks)
+    check_history_scoped_read(checks)
+    check_history_scoped_uses_index(checks)
     check_sidecar_seam(checks)
     check_capture_claim_chain(checks)
     check_game_and_note_seam(checks)
@@ -27223,6 +27453,7 @@ def run() -> Result:
     check_cli_refusals(checks)
     check_listing_commands(checks)
     check_committed_copies_are_the_oldest(checks)
+    check_copies_out_one_pass_matches_reference(checks)
     check_order_resolver(checks)
     check_order_ledger(checks)
     check_order_screen(checks)

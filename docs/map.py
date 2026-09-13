@@ -611,8 +611,13 @@ COMPONENTS = [
                                    "and not one: a reading that reports copies live vouches "
                                    "for every sale of the SKU, and a reading of nothing "
                                    "vouches for exactly the sales it was taken AFTER "
-                                   "(D150).",
-                           "governed_by": ["D147", "D145", "D4", "D8", "D10", "D11", "D20", "D21", "D22", "D23", "D24", "D25", "D26", "D33", "D34", "D36", "D49", "D56", "D58", "D59", "D64", "D87", "D89", "D115", "D150", "D166", "D180", "D183", "D188"], "tested_by": ["T7"]},
+                                   "(D150). `_cards_by_sku` reads every card's SKU, state and "
+                                   "position in ONE `Rows.select()` (store-scaling item 4), so "
+                                   "`_copies_out` and `_committed_keys` read a shared in-memory "
+                                   "dict instead of one `Rows.where(sku=sku)` per listing — "
+                                   "measured at 0.9s over 492 listings before the rewrite "
+                                   "(D156).",
+                           "governed_by": ["D147", "D145", "D4", "D8", "D10", "D11", "D20", "D21", "D22", "D23", "D24", "D25", "D26", "D33", "D34", "D36", "D49", "D56", "D58", "D59", "D64", "D87", "D89", "D115", "D150", "D156", "D166", "D180", "D183", "D188"], "tested_by": ["T7"]},
             "runs.py": {"does": "run directories and manifest.json", "governed_by": ["D1", "D25", "D49", "D54", "D86"], "tested_by": ["T7"]},
         },
     },
@@ -1371,7 +1376,7 @@ COMPONENTS = [
                                    "`history()`'s narrower sibling: the `buried` events alone, "
                                    "for `#/graveyard`'s read.",
                            "governed_by": ["D145", "D13", "D53", "D63", "D88", "D134", "D174",
-                                           "D189"], "tested_by": ["T7"]},
+                                           "D189", "D191"], "tested_by": ["T7"]},
             "rows.py": {"does": "`Rows`: a keyed mapping of records that is a dict to every "
                                 "caller and, bound to a `Source`, loads one row, one indexed "
                                 "column's matches, or column values with no object built at all. "
@@ -2461,7 +2466,7 @@ COMPONENTS = [
                                 # Appended, in the pre-claim place claim-ids.py's own docstring
                                 # names — the merge resorts it into numeric order once the
                                 # slug below becomes a number.
-                                "D185"],
+                                "D185", "D191"],
             },
             "claim-ids.py": {
                 "does": "allocate the numbers this branch's SLUG ids will take, and "
@@ -3412,7 +3417,7 @@ COMPONENTS = [
                                 "D77", "D79", "D83", "D86", "D87", "D88", "D89", "D90", "D91",
                                 "D92", "D93", "D96", "D100", "D103", "D104", "D108", "D113",
                                 "D115", "D116", "D132", "D134", "D137", "D138",
-                                "D168", "D174", "D183", "D172", "D-per-box-read"],
+                                "D168", "D174", "D183", "D172", "D-per-box-read", "D191"],
                 "tested_by": ["T7"],
             },
             "tcg_import.py": {"does": "THE OUTBOUND WRITE to the seller admin, and the only "

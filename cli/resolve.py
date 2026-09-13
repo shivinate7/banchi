@@ -484,8 +484,65 @@ def _live_by_sku(
     return out
 
 
+class _SkuCardRow(NamedTuple):
+    """The handful of a card's indexed columns `_copies_out` and `_committed_keys` need,
+    read without building a `Card` object at all (`Rows.select`, `store/rows.py:231-250`).
+
+    `run` is carried even though `_copies_out`/`_committed_keys` themselves do not read it,
+    because `server/pipeline_routes.py:_unsent_ledger` shares this same dict for its own
+    per-SKU walk (see that function's own docstring after this item's rewrite) and needs
+    `run` to decide which run a copy belongs to. Carrying one extra column the two `cli/
+    resolve.py` callers do not read costs nothing extra: `select()` reads it off the same
+    row in the same query.
+    """
+
+    key: str
+    state: str
+    box: object
+    index: object
+    captured_at: Optional[str]
+    state_at: Optional[str]
+    run: Optional[str]
+
+
+def _cards_by_sku(inventory: master.Inventory) -> Dict[str, List[_SkuCardRow]]:
+    """Every card's SKU, state and position, in ONE pass, grouped by SKU.
+
+    THIS REPLACES O(listings) REPEATED `Inventory.positions_for_sku` CALLS WITH ONE
+    `Rows.select()`. `_copies_out` used to call `positions_for_sku`/`copies_not_sold`/
+    `sales_before` — each a `Rows.where(sku=sku)` — 2 to 3 times per listing; measured at
+    0.9s over 492 listings (D156). The SQL half of each call was already an indexed lookup
+    (`cards_sku`, `store/db.py:135`) and always has been — the cost is `Rows.where`'s own
+    closing filter (`store/rows.py:213-229`), which re-scans the ENTIRE `_loaded` cache on
+    every call regardless of whether the SQL half found the row via the index, and `_loaded`
+    grows with every SKU this loop has already visited. One `select()` with no filter
+    touches the underlying table exactly once and — unlike `where()` — never writes into
+    `_loaded` at all (`store/rows.py:231-250` builds no `Card` objects), so its own cost is
+    a single SQL scan plus one Python pass over the result, O(cards), done once rather than
+    once per listing.
+
+    A CARD WITH NO SKU IS EXCLUDED, matching every caller this replaces: `positions_for_sku`
+    filters on `sku=sku` and a query for `sku=None` (never issued by any caller here, which
+    only ever asks about real SKUs) would not reach these rows anyway; the check here keeps
+    the returned dict's keys exactly the set of real, non-empty SKUs the store holds.
+    """
+    grouped: Dict[str, List[_SkuCardRow]] = {}
+    for key, (sku, state, box, index, captured_at, state_at, run) in inventory.cards.select(
+        ("sku", "state", "box", "idx", "captured_at", "state_at", "run")
+    ):
+        if not sku:
+            continue
+        grouped.setdefault(str(sku), []).append(
+            _SkuCardRow(key, state, box, index, captured_at, state_at, run)
+        )
+    return grouped
+
+
 def _copies_out(
-    inventory: master.Inventory, live_by_sku: Mapping[str, LiveReading]
+    inventory: master.Inventory,
+    live_by_sku: Mapping[str, LiveReading],
+    *,
+    by_sku: Optional[Mapping[str, Sequence[_SkuCardRow]]] = None,
 ) -> Tuple[Dict[str, int], Dict[str, int]]:
     """Per SKU: how many copies TCGplayer is holding right now, live AND pending (D59) —
     and, beside it, the `live` figure that answer was computed from.
@@ -522,6 +579,7 @@ def _copies_out(
     `Listing.held` rather than `pushed + staged` spelled out again. That property is the
     closest thing this pipeline has to a spec for this arithmetic and it had no caller.
     """
+    by_sku = _cards_by_sku(inventory) if by_sku is None else by_sku
     out: Dict[str, int] = {}
     live_now: Dict[str, int] = {}
     for sku in set(live_by_sku) | set(inventory.listings):
@@ -639,16 +697,27 @@ def _copies_out(
         # halves of one arbitration come apart. `Listing.reading_taken_at` is the same three
         # branches, so they cannot.
         read_at = entry.reading_taken_at(offered, as_of) if entry is not None else as_of
-        sold = (
-            len(inventory.positions_for_sku(sku)) - len(inventory.copies_not_sold(sku))
-            if read > 0
-            else inventory.sales_before(sku, read_at)
-        )
+        # THE SAME TWO ARMS `positions_for_sku`/`copies_not_sold`/`sales_before` COMPUTED,
+        # over the shared one-pass dict (`_cards_by_sku`) instead of three separate per-SKU
+        # store reads each time this loop visits a SKU.
+        rows = by_sku.get(sku, ())
+        if read > 0:
+            # `len(positions_for_sku(sku)) - len(copies_not_sold(sku))` — every row of this
+            # SKU that is SOLD, without building either list twice.
+            sold = sum(1 for row in rows if row.state == master.SOLD)
+        else:
+            # `sales_before(sku, read_at)` exactly: SOLD, and strictly before the reading.
+            sold = sum(
+                1
+                for row in rows
+                if row.state == master.SOLD
+                and master.newer_stamp(read_at, row.state_at) is True
+            )
         out[sku] = max(live, claim - sold)
     return out, live_now
 
 
-def _oldest_first(copies: Sequence[master.Card]) -> List[master.Card]:
+def _oldest_first(copies: Sequence[_SkuCardRow]) -> List[_SkuCardRow]:
     """This SKU's copies in the order they were CAPTURED, oldest first.
 
     `Inventory.copies_on_hand` answers in box-walk order and keeps it: `pipeline/orders.py`
@@ -669,11 +738,21 @@ def _oldest_first(copies: Sequence[master.Card]) -> List[master.Card]:
     makes this function identical to the box-walk slice on a store where NO record carries a
     stamp — the empty string ties every key and `(box, index)` decides — so a store written
     before the field existed behaves exactly as it did.
+
+    OPERATES ON `_SkuCardRow`, NOT `master.Card`, since store-scaling item 4's rewrite: the
+    caller below (`_committed_keys`) reads the same one-pass `_cards_by_sku` dict `_copies_out`
+    reads rather than calling `Inventory.copies_on_hand` per SKU, and `_SkuCardRow` carries the
+    same three fields (`captured_at`, `box`, `index`) this sort has always kept.
     """
     return sorted(copies, key=lambda c: (c.captured_at or "", c.box, c.index))
 
 
-def _committed_keys(inventory: master.Inventory, copies_out: Mapping[str, int]) -> set:
+def _committed_keys(
+    inventory: master.Inventory,
+    copies_out: Mapping[str, int],
+    *,
+    by_sku: Optional[Mapping[str, Sequence[_SkuCardRow]]] = None,
+) -> set:
     """Positions the join must treat as copies TCGplayer already holds or has pending.
 
     `SkuMatch.committed_positions` is per-position and the store's counts are per-SKU, so
@@ -724,11 +803,20 @@ def _committed_keys(inventory: master.Inventory, copies_out: Mapping[str, int]) 
     Measured on the owner's store, one `reconcile` away: 83 rows across 64 SKUs.
 
     `live` is counted ONCE now, inside `_copies_out`, and this spends that same number.
+
+    REWRITTEN ONTO THE SAME ONE-PASS DICT `_copies_out` READS (store-scaling item 4):
+    `Inventory.copies_on_hand(sku)` per SKU was the identical `Rows.where(sku=sku)`
+    `_loaded`-accumulation cost `_copies_out` used to pay (see `_cards_by_sku`'s docstring),
+    called once per SKU in `copies_out` rather than once per listing — the same shape,
+    one register down. `TERMINAL_STATES` (not `SOLD` alone) is `copies_on_hand`'s own filter
+    and is reproduced here exactly, over `_SkuCardRow.state` instead of `Card.state`.
     """
+    by_sku = _cards_by_sku(inventory) if by_sku is None else by_sku
     keys = set()
     for sku, out in copies_out.items():
-        for card in _oldest_first(inventory.copies_on_hand(sku))[:out]:
-            keys.add(card.key)
+        on_hand = [row for row in by_sku.get(sku, ()) if row.state not in master.TERMINAL_STATES]
+        for row in _oldest_first(on_hand)[:out]:
+            keys.add(row.key)
     return keys
 
 
@@ -1913,11 +2001,15 @@ def _resolve(
             sources[_path] = runs.describe_source(_path)
 
     held_cards = snapshot.inventory.cards
+    # Read the store's SKU-grouped columns ONCE (store-scaling item 4) and hand the same
+    # dict to both `_copies_out` and `_committed_keys`, rather than each rebuilding it.
+    by_sku = _cards_by_sku(snapshot.inventory)
     copies_out, live_now = _copies_out(
         snapshot.inventory,
         _live_by_sku(parsed, {p: str(src["mtime"]) for p, src in sources.items()}),
+        by_sku=by_sku,
     )
-    committed_keys = _committed_keys(snapshot.inventory, copies_out)
+    committed_keys = _committed_keys(snapshot.inventory, copies_out, by_sku=by_sku)
     # D58's label coordinates, off the same snapshot for the same reason — one read, and
     # every position this run renders counted against the box as it stands right now.
     views = box_views(snapshot.inventory)
