@@ -189,9 +189,47 @@ cases (a modified path with an explicit source, both `git checkout <sha> --` and
 genuinely-safe path is still proven separately from the fixed one. 167 cases pass, up from
 165 (2 rewritten, 1 added), 0 failed.
 
+### AMENDED 2026-09-12 — a sixth clause, because a named refspec sits outside git's own net
+
+**Git already refuses the bare form of this exact mistake, which is precisely why it survives.**
+`push.default=simple` — git's own modern default — refuses a bare `git push` whose tracked
+upstream branch name differs from the current branch's own, and even prints the fix. But the
+refusal is keyed to the ABSENCE of a refspec, not to the mismatch itself: the moment a caller
+names one — even the unqualified `HEAD`, one of the two spellings the refusal's own printed fix
+offers — git reads that as the caller's informed choice and pushes to a branch of that literal
+name, creating one on the remote if none exists, silently.
+
+**That is exactly what happened.** A coordinating session resolving a merge conflict stood on
+a local branch a background agent had named `pr-h-readings-table-local`; the agent had pushed
+its finished, squashed commit to the real PR branch under a different name, so the local
+branch's configured upstream was `origin/claude/pr-h-readings-table`, never
+`origin/pr-h-readings-table-local`. Intending to update the real PR branch, the session ran
+`git push origin HEAD`. Git did exactly what that means — `[new branch] HEAD ->
+pr-h-readings-table-local`, on origin, the actual PR branch untouched. No error, no refusal;
+it was caught only because the next command's output looked wrong.
+
+**The sixth clause, `clause_push`, resolves the identical fact git's own safety net already holds.**
+`git rev-parse --abbrev-ref HEAD` is the current branch; `branch.<name>.remote` and
+`branch.<name>.merge` are the tracked pair, read exactly as git itself reads them rather than
+re-derived from the command's own text. A push whose remote matches `branch.<name>.remote` and
+whose lone refspec is an unqualified `HEAD` or the branch's own literal name, where the tracked
+branch name differs, is refused. Everything else passes exactly as before: no configured
+upstream at all (the ordinary first push of a new branch), a name that already matches its own
+upstream, an explicit `HEAD:<branch>` naming the real destination, a push to a remote this
+branch does not track (a fork workflow), and `--all`/`--mirror`/`--tags`/`--delete`, which push
+something other than "this branch under its own name". `PKMNSCAN_PUSH=off` is its hatch,
+honoured in both forms like the other five.
+
+**Reproduced rather than argued, D179's own standard.** `scripts/guard-shell-selftest.sh`
+builds a real bare origin, pushes a branch under one name while its tracking is configured to
+a differently-named branch on it — the identical mechanism the incident used
+(`git push -u origin <local>:<remote>`) — and asks the guard about the resulting mismatch for
+real, alongside the cases the ordinary first-push, already-matching and fork workflows must
+never trip.
+
 ### Standing
 
-**BUILT and self-tested**: five clauses, `scripts/guard-shell-selftest.sh` with the four
+**BUILT and self-tested**: six clauses, `scripts/guard-shell-selftest.sh` with five
 reproductions, the swept allow list, every hatch in both forms, and the fail-open floor.
 **RECORDED**: this entry, `docs/map.py`, CLAUDE.md, `scripts/checks.py` and both hook rosters.
 **NEITHER**: nothing. What is unproven is what every hook here shares and
