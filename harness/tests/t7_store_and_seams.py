@@ -25473,6 +25473,131 @@ def check_order_places_scoped(checks: Checks) -> None:
         # its unit-level companion for the classmethod alone.
 
 
+def check_inventory_copies_route(checks: Checks) -> None:
+    """`docs/DEBTS.md` §27, site 1: `POST /inventory/copies` — every on-hand copy of a SKU
+    set, store-wide, in `do_inventory`'s own per-card shape.
+
+    THE WHOLE POINT IS THAT A COPY THE RESOLVER NEVER PICKED STILL COMES BACK. A box-scoped
+    implementation — narrowing the initial scan, or the `_Places` build, to the boxes an
+    order's own resolved picks happen to name — passes a test that only checks the picked
+    copies and silently drops every other one, which is exactly the defect
+    `Orders.tsx:indexStore`'s own header describes: a line stops drawing picks once it is
+    filled, so a card fourteen copies deep across five boxes shows up as two. This fixture
+    puts the SAME SKU in two boxes an order for ONE unit of it would never need to open, and
+    asserts both come back.
+
+    Assertions, each pinned to a fixture fact the response could get wrong in its own way:
+      1. every on-hand copy of the requested SKU, from EVERY box it sits in, not only the
+         box(es) an order's own resolved picks would touch
+      2. a SKU never asked about is never in the response, however many copies it has
+      3. a GONE copy (sold) of a requested SKU is excluded
+      4. the place block on each returned card equals what `_Places` renders for that same
+         position independently — the two must agree on `slot`/`label`/`section`/`card`
+    """
+    checks.note("")
+    checks.note("POST /inventory/copies — docs/DEBTS.md §27, site 1")
+
+    with isolated_home():
+        # Box 1 and box 3 both hold a copy of the SAME SKU — the shape a box-scoped
+        # implementation cannot see past. Box 2 holds an unrelated SKU, which must never
+        # appear in a response asking only about the shared one. Box 1's second copy is
+        # later marked sold, to prove a GONE state is excluded rather than merely unlisted.
+        for box, count in ((1, 2), (2, 1), (3, 1)):
+            for at in range(1, count + 1):
+                capture_server.do_capture(
+                    capture_payload(box, capture_id=f"b{box}c{at}", set_hint="sv9")
+                )
+        with Store().write() as snapshot:
+            snapshot.inventory.record_identification(
+                "1/1", name="Moonfall", number="198/219",
+                printed_total="219", confidence="high",
+            )
+            snapshot.inventory.cards["1/1"].sku = "9191486"
+            snapshot.inventory.record_identification(
+                "1/2", name="Moonfall", number="198/219",
+                printed_total="219", confidence="high",
+            )
+            snapshot.inventory.cards["1/2"].sku = "9191486"
+            snapshot.inventory.record_identification(
+                "3/1", name="Moonfall", number="198/219",
+                printed_total="219", confidence="high",
+            )
+            snapshot.inventory.cards["3/1"].sku = "9191486"
+            snapshot.inventory.record_identification(
+                "2/1", name="Different Card", number="1/100",
+                printed_total="100", confidence="high",
+            )
+            snapshot.inventory.cards["2/1"].sku = "9191999"
+        # box 1's second copy is now sold — a GONE copy, requested-SKU or not.
+        capture_server.do_mark_sold(1, 2, {})
+
+        # ------------------------------------------------------------- Assertion 1 and 2
+        answer = answers(
+            checks,
+            lambda: capture_server.do_inventory_copies({"skus": ["9191486"]}),
+            "POST /inventory/copies over the shared SKU answers",
+        )
+        cards = answer["cards"]
+        checks.equal(
+            sorted(cards.keys()), ["1/1", "3/1"],
+            "both on-hand copies of the SKU come back, from BOTH boxes it sits in — a "
+            "box-scoped scan (narrowed to whatever boxes an order's own resolved picks "
+            "would touch) would answer only one of these two",
+        )
+        checks.ok(
+            "2/1" not in cards,
+            "the OTHER SKU's copy, sitting in its own box, is not in a response that never "
+            "asked about it",
+        )
+
+        # ------------------------------------------------------------------- Assertion 3
+        checks.ok(
+            "1/2" not in cards,
+            "the SOLD copy of the requested SKU is excluded — GONE is GONE regardless of "
+            "which SKU it carries",
+        )
+
+        # ------------------------------------------------------------------- Assertion 4
+        #
+        # GUARDED BY `in cards` RATHER THAN INDEXED BLIND: assertion 1 above already fails
+        # by name on a missing key, and a box-scoped mutation that drops one must not also
+        # crash this assertion with a bare `KeyError` — a failure this test cannot render is
+        # no better than one it never made.
+        inventory = Store().read().inventory
+        reference = capture_server._Places.for_keys(inventory, {(1, 1), (3, 1)})
+        for box, index in ((1, 1), (3, 1)):
+            key = master.position_key(box, index)
+            if key not in cards:
+                checks.ok(False, f"{key} missing from the response — see Assertion 1 above")
+                continue
+            checks.equal(
+                cards[key]["place"], reference.of(box, index),
+                f"the place block {key} carries agrees with an independently built "
+                "`_Places.for_keys` over the same position",
+            )
+
+        # --------------------------------------------------------------- refusals
+        refusal(
+            checks,
+            lambda: capture_server.do_inventory_copies({"skus": []}),
+            "skus_required",
+            "an empty SKU list asks for nothing and is refused rather than answered with "
+            "an empty map",
+        )
+        refusal(
+            checks,
+            lambda: capture_server.do_inventory_copies({}),
+            "skus_required",
+            "and a body with no `skus` key at all refuses the same way",
+        )
+        refusal(
+            checks,
+            lambda: capture_server.do_inventory_copies({"skus": ["9191486"], "extra": 1}),
+            "field_not_settable",
+            "an unrecognised field is refused by name",
+        )
+
+
 def check_price_history(checks: Checks) -> None:
     """`pipeline/pricehistory.py` — the sku -> productId walk, and the readings over it.
 
@@ -29133,6 +29258,7 @@ def run() -> Result:
     check_order_reconcile_backlog(checks)
     check_order_screen(checks)
     check_order_places_scoped(checks)
+    check_inventory_copies_route(checks)
     check_order_fetch_route(checks)
     check_request_slots(checks)
     check_connection_close(checks)

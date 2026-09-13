@@ -5,7 +5,7 @@ import { toast } from './kit/toast'
 import { readPaste, DEFAULT_ORDER_SOURCE } from './orderPaste'
 import { ORDER_REASONS, orderReasonLabel, orderReasonRemedy } from './orderReasons'
 import { rememberOrderFilter, storedOrderFilter, type OrderFetchFilter } from './deviceMemory'
-import { setHub, touchHub, useHub, type PullFilter, type PullMode, type Stage } from './OrdersHubStore'
+import { hubState, setHub, touchHub, useHub, type PullFilter, type PullMode, type Stage } from './OrdersHubStore'
 import { PositionLabel } from './PositionLabel'
 import { groupBuyers, groupForOrderKey, type BuyerGroup } from './orderBuyers'
 import {
@@ -15,7 +15,7 @@ import {
   describeFailure,
   fetchOrders,
   fillLine,
-  getInventory,
+  getInventoryCopies,
   getOrders,
   ingestOrders,
   nameOrders,
@@ -651,7 +651,7 @@ function pickOfCard(card: InventoryCard, place: Place): PickRow {
   }
 }
 
-function indexStore(inventory: Inventory): StoreCopies {
+function indexStore(inventory: Pick<Inventory, 'cards'>): StoreCopies {
   const out = new Map<string, PickRow[]>()
   for (const card of Object.values(inventory.cards)) {
     const sku = card.sku
@@ -668,6 +668,17 @@ function indexStore(inventory: Inventory): StoreCopies {
     else rows.push(pickOfCard(card, place))
   }
   return out
+}
+
+/** Every SKU any open order's line names, deduped — the set `POST /inventory/copies` is asked
+ *  about. `resolution.orders` is already in hand off `GET /orders`; nothing here re-derives it
+ *  from a walk or a claim. */
+function skusOf(payload: OrdersPayload | null): string[] {
+  const out = new Set<string>()
+  for (const order of payload?.resolution.orders ?? []) {
+    for (const line of order.lines) out.add(line.sku)
+  }
+  return [...out]
 }
 
 /** Which open order was offered which copy, across the WHOLE resolution — this client's read of
@@ -1402,32 +1413,40 @@ export function OrdersHub({ stage }: { readonly stage: Stage }) {
     }
   }, [])
 
-  /* A SEPARATE READ, AND DELIBERATELY NOT FOLDED INTO `reread`. The ledger's answer is what the
-     screen is FOR; the store index only widens each line's map. Awaiting them together would let
-     a slow or broken `/inventory` hold the orders off the screen, so they race and the map fills
-     in when its half lands.
+  /* NO LONGER THE WHOLE STORE (docs/DEBTS.md §27, site 1, closed). This used to call
+     `getInventory()` — the whole card map — for the reason `copiesOf`'s comment above still
+     gives: a line stops drawing picks once it is filled, so the resolver's own picks are not
+     the answer, and this screen needs EVERY on-hand copy of a card, including the ones sitting
+     in boxes no pick names at all.
 
-     STILL ON THE FULL WALK, ON PURPOSE (D192/item 2 — verified against the tree, correcting the
-     playbook this item was written from). `copiesOf`'s own comment above says the whole of what
-     `indexStore` is for: "EVERY copy the store holds of that card, not only the ones the resolver
-     offered... including the ones in FAR BOXES" — copies sitting in boxes no resolver pick names
-     at all. There is no separate "Walk the boxes" call site to leave behind either: `buildWalk`
-     (below) is built entirely from `answer.lines[].picks`, the resolver's own already-resolved
-     rows off `GET /orders`, and never touches `store`. So the one real question is whether THIS
-     call can be scoped to "the boxes an order's resolver picks name" (Fulfillment's order-
-     resolution case, and this item's own playbook's stated aim for this file) — and it cannot,
-     safely: a SKU's other copies are, by the feature's own design, expected to live in boxes no
-     pick names, and narrowing the fetch to only named boxes would silently hide them from the
-     density map and from Pull, which is a correctness regression and not merely a slower screen.
-     Building a lean "on-hand copies by SKU, store-wide" route is real work `#/pricing`'s D159
-     `?band=` lens and item 6's own `do_orders` rebuild are the closer candidates for, named here
-     as the debt CLAUDE.md's "fix the cause… first ask whether the primitive already exists" rule
-     asks to be named rather than patched around under this item's own budget.
-     `docs/DEBTS.md` §27 is the named debt: the measured cost, why this cannot be box-scoped,
-     and the candidate primitive. */
+     `POST /inventory/copies` is the primitive that debt named and this branch builds: one
+     unfiltered store-wide scan (no box guessed at, no box assumed) that DERIVES its own box
+     set from what it actually finds, then decorates only those. `server/capture_server.py:
+     do_inventory_copies` has the full argument for why that is sound where scoping the WALK
+     to "the boxes an order's resolver picks name" is not — a copy in a box no pick names is
+     the ordinary case this feature exists for, and that idea is exactly what was rejected.
+
+     SEQUENCED AFTER `reread`, NOT RACED WITH IT, which is the one thing that changed about the
+     shape of this call rather than what it fetches. The old whole-store fetch needed nothing
+     from the ledger and so raced it; this one needs the SKUs `reread` just found, off
+     `hubState().payload` rather than this render's own `payload` — reading the module's
+     state directly rather than a closure lets every call site below, run from inside a
+     `void (async () => ...)` body that has already `await`ed a fresh `reread()`, see that
+     fresh answer regardless of whether React has re-rendered this component yet. */
   const rereadStore = useCallback(async () => {
+    const skus = skusOf(hubState().payload)
+    if (skus.length === 0) {
+      /* Nothing open owes a copy, so there is nothing to widen — an empty map draws exactly
+         what the resolver's own picks would have drawn alone, same as a failed fetch below
+         except that this is not a failure. */
+      if (live.current) {
+        setStore(indexStore({ cards: {} }))
+        setStoreFailed(false)
+      }
+      return
+    }
     try {
-      const inventory = await getInventory()
+      const inventory = await getInventoryCopies(skus)
       if (!live.current) return
       setStore(indexStore(inventory))
       setStoreFailed(false)
@@ -1442,8 +1461,14 @@ export function OrdersHub({ stage }: { readonly stage: Stage }) {
   }, [])
 
   useEffect(() => {
-    void reread()
-    void rereadStore()
+    void (async () => {
+      /* SEQUENCED: `rereadStore` reads its SKUs off the ledger `reread` just fetched, so it
+         must run after — see `rereadStore`'s own comment. On the very first mount there is no
+         payload yet at all, and racing them (the old shape) would have sent this call with an
+         empty SKU set every time. */
+      await reread()
+      await rereadStore()
+    })()
   }, [reread, rereadStore, hub.version])
 
   /* ---------------------------------------------------------------------- orders arrive */
@@ -1470,6 +1495,9 @@ export function OrdersHub({ stage }: { readonly stage: Stage }) {
         /* `wrote_nothing` is the honest answer to "did that work" for a second identical paste. */
         setPasteNote(done.summary)
         await reread()
+        /* A pasted order can name a SKU this SKU set has never asked the store about — see
+           `rereadStore`'s own comment for why this must run AFTER `reread`, not beside it. */
+        await rereadStore()
       } catch (err) {
         if (!live.current) return
         setFailure(describeFailure(err))
@@ -1587,6 +1615,9 @@ export function OrdersHub({ stage }: { readonly stage: Stage }) {
           }
           writeLastCheck({ at, matched: null, statuses: null })
           await reread()
+          /* A fetched batch can bring an order naming a SKU never asked about before — see
+             `rereadStore`'s own comment. */
+          await rereadStore()
           return
         }
 
@@ -1673,6 +1704,7 @@ export function OrdersHub({ stage }: { readonly stage: Stage }) {
         /* RE-READ EITHER WAY. A fetch that brought nothing new still refreshes a ledger another
            device may have moved. */
         await reread()
+        await rereadStore()
       } catch (err) {
         if (!live.current) return
         setFailure(describeFailure(err))
