@@ -10,7 +10,7 @@
 
 ### The cost model was got wrong in public first
 
-**And it was got wrong a second time, in the same direction, on 2026-09-12** — see D-a-cache-hit-is-not-a-divisor, which has the arithmetic. The frontier table below is unaffected: it is priced per box from 20 real frames, not per card from a run.
+**And it was got wrong a second time, in the same direction, on 2026-09-12** — see D186, which has the arithmetic. The frontier table below is unaffected: it is priced per box from 20 real frames, not per card from a run.
 
 The first estimate reasoned from the card's AREA in the frame — 53%, therefore a ~40% saving. That is wrong, because `MAX_EDGE` normalizes the LONG EDGE rather than the area. The frames are 2160x3840 (aspect 0.56) and a card is aspect 0.72 — fatter — so at an unchanged 1568 cap the crop sends *more* pixels: measured, **+26% cost**. Cropping buys resolution by default and only buys money if `--max-edge` comes down with it. Recorded because the arithmetic looks obvious in the wrong direction and a later session will re-derive it the same way.
 

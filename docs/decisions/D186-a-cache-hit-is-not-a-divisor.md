@@ -1,4 +1,4 @@
-## D-a-cache-hit-is-not-a-divisor — A per-card price is divided by the cards actually submitted, and a reading is chosen on a metric the reading can move
+## D186 — A per-card price is divided by the cards actually submitted, and a reading is chosen on a metric the reading can move
 
 **A per-card cost is total tokens over the cards ACTUALLY SUBMITTED, never over the cards in the run, because a cache hit is billed nothing and a run that served a third of itself from cache reports a per-card price a third too low.**
 
