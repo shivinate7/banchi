@@ -2399,12 +2399,9 @@ function ReconcileBacklogPanel({
     <Notice
       className="orders-reconcile"
       tone="warn"
-      title={`${candidates.length} open ${plural(candidates.length, 'order carries', 'orders carry')} nothing recorded, before ${cutoff}`}
+      title={`${candidates.length} ${plural(candidates.length, 'order', 'orders')}, nothing recorded`}
     >
-      <p>
-        {joinPhrases(breakdown.map(([status, count]) => `${count} “${status}”`))}. Standing them down marks{' '}
-        <strong>nothing</strong> sold and claims no copy left.
-      </p>
+      <p>{joinPhrases(breakdown.map(([status, count]) => `${count} “${status}”`))}. Nothing sold, nothing claimed.</p>
       <div className="orders-standdown-row">
         <Button
           variant="primary"
