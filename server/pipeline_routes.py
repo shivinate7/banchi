@@ -1803,7 +1803,16 @@ def _phase(manifest: dict, live: bool) -> str:
     """
     if live:
         return "identifying"
-    if not manifest.get("collected"):
+    # `joined=True` IS STRICTLY STRONGER EVIDENCE THAT IDENTIFICATION HAPPENED THAN `collected`
+    # WAS EVER MEANT TO GATE ON (D188). `collected` is written only by the ordinary
+    # camera->batch->collect path (`cli/cmd_identify.py`); D188 gave `join` a second entry
+    # point, `resolve.load_from_store`, that resolves cards straight off the live store with
+    # no `identify` run and so never writes `collected` at all. A `Resolved` — by either
+    # loader D188 names — cannot exist without identifications having happened, whether frozen
+    # (`identifications.json`) or live (the store's own `Card` rows), so `joined` is checked
+    # first: a run that reached `join` skipped `collected` legitimately and must not be read
+    # as "not started".
+    if not (manifest.get("collected") or manifest.get("joined")):
         return "identify" if manifest.get("batch_ids") else "ready"
     if not manifest.get("joined"):
         return "join"

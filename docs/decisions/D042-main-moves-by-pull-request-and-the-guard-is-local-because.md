@@ -146,6 +146,12 @@ At `prepared` the hook asks `git merge-base --is-ancestor "$new" refs/remotes/or
 
 **Why this is safe to grant and was not safe to assume.** What was missing was never the owner's consent — they had it either time. It was any record that consent was required, and any mechanism that noticed its absence. Both now exist, so an explicit instruction is a decision rather than a default.
 
+### A standing grant to the orchestrating session (amended 2026-09-13)
+
+**"The word" above is still per-PR by default. This is the one exception, and it is scoped rather than a repeal.** After being asked twice to name the act for PR #349, the owner said to the orchestrating session: *"You are the orchestrator -- you have my explicit permission to do merges."* That names the act once for a whole batch instead of once per PR in it.
+
+**The grant is to the ORCHESTRATING session, and only for PRs it stood behind.** It covers a PR only when that session put the PR's plan to the owner and reviewed its diff — never a worker or a peer session merging a PR of its own, which still needs the word exactly as above. It is exercised only through `make merge ARGS="<n> --confirm"`, from a checkout standing on the PR's own branch, only once CI is green, and never with `--admin`. A later session — a new orchestrator, or the same one returned to a fresh batch — re-asks; the grant does not carry forward on its own.
+
 ### The escape hatch and the evidence
 
 **`PKMNSCAN_MAIN=off`**, spelled the way `PKMNSCAN_GATE=off` and `PKMNSCAN_DOCS=off` already are. One variable, printed in every refusal, because a guard with no visible way past it gets disarmed at the config instead — and a disarmed `core.hooksPath` takes the three opsec rules with it, the trade D16 already refused for the docs audit.

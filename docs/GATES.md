@@ -1546,6 +1546,23 @@ named lives in `docs/DECISIONS.md` and is that file's to open or close.
     allocated yet** — markdown has no ordered-list marker that can hold a slug, so the
     claim rewrites the marker and the token together.
 
+24. ~~**A durable scheduled heartbeat that watches repo state across
+    sessions**~~ — **done 2026-09-13.** `D200`. `scripts/heartbeat.py` —
+    a thin caller of what already existed rather than a fourth reader of the same facts:
+    `scripts/coordinator.py --json` for open PRs pinned to their head SHA, `id claims`, dirty
+    worktrees and live sessions, plus two things coordinator does not answer — whether MAIN'S
+    OWN last push is green (coordinator's `block_main` only compares local main against
+    origin/main, never CI) and `make janitor`'s own preview, `--confirm` never passed. Writes
+    `.serve/heartbeat/latest.json` and appends `.serve/heartbeat/history.jsonl` — the durable
+    state a fresh, context-free run needs, since the two binding constraints from this item's
+    own note (never a daemon; each run remembers nothing on its own) mean anything needing
+    memory of a PREVIOUS run has to live in a file. `new_since_last_run` diffs this run's open
+    PRs and worktrees against the previous `latest.json`, which is the "a pull request now
+    conflicting with a live session that has not been told" bullet answered mechanically:
+    whether it has been told is exactly whether it was already in the last report.
+    Read-and-report authority only, never merge — the underlying `janitor.py` and
+    `coordinator.py` calls carry nothing that presses anything.
+
 ## What is open
 
 **Three things, and they are not ranked.** There is no `next` here and no `blocked`: all three
@@ -1574,32 +1591,6 @@ are unblocked, and which one matters more is the owner's to say on the day. `doc
     were deliberately left alone: writing a tracking number back is the first thing this
     project would do that a **buyer** sees, and D69 ruled that the screen comes before the
     transport. Nothing blocks it but the doing of it.
-
-24. **A durable scheduled heartbeat that watches repo state across
-    sessions** — the questions no single session is positioned to ask, because each one sees
-    only its own tree and its own branch. Mostly a caller of what already exists: `make status`,
-    `make janitor`, and `python3 scripts/docs-audit.py --json`. What it would report:
-
-    - open pull requests that are green and unmerged, waiting on nobody
-    - a pull request now conflicting with a live session that has not been told
-    - worktrees dirty with no session standing in them, and merged branches `make janitor`
-      would take
-    - whether main's last push run is green
-    - whether `id claims` is clean — a number a branch claimed that main has since taken
-      (D140 amended), which today is caught by a person reading PR titles
-
-    **Two design constraints, established with the owner and binding on whoever builds it.**
-    It runs only while the desktop app is open, so it is a heartbeat and never a daemon — it
-    cannot be relied on to fire, and anything whose correctness depends on having fired is the
-    wrong thing to put here. And **each run is a fresh session with no conversation context**:
-    it knows nothing about who asked for what or who is blocked on whom. Both point the same
-    way — it gets **read-and-report authority, not merge authority.** A session that cannot
-    remember the last run has no basis for pressing an irreversible button, and `make merge`
-    already requires the owner's word for exactly that reason.
-
-    **Anything needing memory of who is blocked on whom needs durable state in a file**, not in
-    a session. That is the part that is real work rather than a wrapper, and it is why this is a
-    step and not a cron line: the report is easy and the state is not.
 
 **Nothing in this list is blocked on a third-party benchmark.** A sub-floor T1 is worked
 directly — see the T1 section above. The TCGplayer Scan & Identify comparison was removed

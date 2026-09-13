@@ -12615,6 +12615,19 @@ def check_store_backed_join(checks: Checks) -> None:
             "run-directory join does",
         )
 
+        # ------------------------------------------- `_phase` must not read this run as "not
+        # started" (D188 footnote). `collected` is never written on a store-backed join, and
+        # `_phase` used to gate every stage past "ready"/"identify" on `collected` alone, so
+        # this run's badge would read "Not started" beside a real `joined: True` and real
+        # `counts.skus` on disk — the exact "one badge, one set of files, disagreeing" defect.
+        phase = pipeline_routes._phase(new_run.manifest, live=False)
+        checks.ok(
+            phase not in ("ready", "identify"),
+            "a store-backed join's phase is never `ready`/`identify` — `joined` alone is "
+            "sufficient evidence identification happened, by either of D188's two loaders",
+            phase,
+        )
+
         # ------------------------------------------------- rescue refuses this run by name
         caught = checks.raises(
             runs.RunError,

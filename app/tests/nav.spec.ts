@@ -621,3 +621,43 @@ test('the armed leader is disarmed by arriving somewhere', async ({ page }) => {
       'spent on arriving at all, it expired on its own clock.',
   ).toBeLessThan(CHORD_MS / 2)
 })
+
+/* HOME'S REVIEW TILE MUST NOT SAY "NOTHING WAITING" WHILE A CARD SITS PARKED.
+ *
+ * `#/review`'s own headline counts both queues — `everyone.length + done`, where `everyone` is
+ * `review` and `parked` merged by position (`ReviewQueue.tsx:rowsOf`/`oneCardPerPosition`) —
+ * and draws `counts.parked` beside it whenever it is nonzero, unconditionally. Home's tile used
+ * to gate its whole sentence on `review === 0` alone, so a parked-only queue (nothing in the
+ * main queue, one card parked) painted green and said "nothing waiting" while `#/review` itself
+ * offered that same card for an answer. This is CLAUDE.md's own rule — "every figure on Home is
+ * the one that stage's own screen draws, read from the same source" — applied to the Review
+ * tile specifically. */
+test('the Review tile never says nothing waiting while a card is parked', async ({ page }) => {
+  await stub(page)
+  /* Registered AFTER `stub`'s own `/status` handler — Playwright takes the newest match, the
+     same mechanism the pricing stub comment above documents — so this is the one `/status`
+     the page actually receives. */
+  await page.route(/\/status$/, (route) =>
+    route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify({
+        captures_root: 'captures',
+        store: 'inventory/store.sqlite',
+        store_exists: true,
+        cards: 0,
+        states: {},
+        queues: { review: 0, parked: 1 },
+        next_index: {},
+      }),
+    }),
+  )
+  await page.goto('/#/')
+  await expect(page.locator(VIEW['#/'])).toBeVisible()
+
+  const tile = page.locator('a.home-stage[href="#/review"]')
+  await expect(tile).toBeVisible()
+  await expect(tile).not.toContainText('nothing waiting')
+  await expect(tile.locator('.home-stage-figure')).not.toHaveText('0')
+  await expect(tile).not.toHaveClass(/home-stage-ok/)
+})
