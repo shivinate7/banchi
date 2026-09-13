@@ -399,10 +399,7 @@ function pooledText(card: InventoryCard, key: string): string {
  * `node` is drawn instead of `value` where the fact is a figure PLUS something quieter beside
  * it — a live count and how old the reading is. `value` stays required so every fact has a
  * plain-text form for the title attribute and for anything that reads the row as a string. */
-/** `hint`, when present, is a `title` attribute on the label — a tooltip, never visible text,
- *  so it can clarify a one-word label (D194's ratchet counts only what renders) without
- *  spending a word the ratchet will not give back. */
-type Detail = { label: string; value: string; kind?: 'mono' | 'money'; node?: ReactNode; hint?: string }
+type Detail = { label: string; value: string; kind?: 'mono' | 'money'; node?: ReactNode }
 
 /** An enum value drawn as a word: `reverse_holofoil` → `Reverse Holofoil`. Only the first
  * letter of each word moves, so a value that already carries its own casing keeps it. */
@@ -551,12 +548,7 @@ function factGroupsOf(
       facts: [
         { label: 'State', value: stateLabel(card.state) },
         { label: 'Captured', value: capturedText(card.captured_at) },
-        /* THE VISIBLE LABEL STAYS "Run" — D194's ratchet on #/inventory's own word count is
-           at its ceiling and ONE word could not be added without cutting one somewhere else.
-           `hint` carries the clarification instead: this is a run DIRECTORY's own name (the
-           pipeline's own vocabulary, D196's owner-side exception for it deliberate), not a
-           count of cards, which is the ambiguity the bare word left. */
-        { label: 'Run', hint: 'This run’s own directory id, not a count of cards', value: card.run ?? 'not identified yet', kind: 'mono' },
+        { label: 'Run', value: card.run ?? 'not identified yet', kind: 'mono' },
         { label: 'Confidence', value: card.confidence === null ? 'none recorded' : titleCase(card.confidence) },
         marketFact(card, market),
         listingFact(card, listings),
@@ -2128,7 +2120,7 @@ export function BoxBrowse({
                           <dl className="browse-facts">
                             {group.facts.map((fact) => (
                               <div className="browse-fact" key={fact.label}>
-                                <dt title={fact.hint}>{fact.label}</dt>
+                                <dt>{fact.label}</dt>
                                 <dd className={fact.kind === 'mono' ? 'is-util' : fact.kind === 'money' ? 'is-money' : undefined}>
                                   {fact.node ?? fact.value}
                                 </dd>
