@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties, type ReactNode } from 'react'
 
-import { Button, EmptyState, Icon, Kbd, Notice, PageHeader, Pill, Segmented, type IconName, type PillTone } from './kit'
+import { Button, Chip, EmptyState, Icon, Kbd, Notice, PageHeader, Pill, Segmented, type IconName, type PillTone } from './kit'
 import { toast } from './kit/toast'
 import { readPaste, DEFAULT_ORDER_SOURCE } from './orderPaste'
 import { ORDER_REASONS, orderReasonLabel, orderReasonRemedy } from './orderReasons'
@@ -8,6 +8,21 @@ import { rememberOrderFilter, storedOrderFilter, type OrderFetchFilter } from '.
 import { setHub, touchHub, useHub, type PullFilter, type PullMode, type Stage } from './OrdersHubStore'
 import { PositionLabel } from './PositionLabel'
 import { groupBuyers, groupForOrderKey, type BuyerGroup } from './orderBuyers'
+import {
+  applyTake,
+  DEFAULT_ORDER_VIEW,
+  orderStalenessSentence,
+  passesHideUnknown,
+  passesStatus,
+  sortGroups,
+  staleCount,
+  statusVocabulary,
+  takeOrder,
+  TAKE_IS_CURRENT,
+  type OrderSort,
+  type OrderTake,
+  type OrderView,
+} from './orderView'
 import {
   closeLines,
   closeOrders,
@@ -2355,6 +2370,23 @@ function PullStage({
   const hub = useHub()
   const counts = payload?.resolution.counts ?? null
 
+  /* ------------------------------------------------------------- the buyer list's own view */
+
+  /** Status / sort / hide-unknown, read from `banchi.orders.fetch-filter`'s own document
+   *  (`app/src/deviceMemory.ts`) — not a new key. Read once on mount, the same habit as the
+   *  fetch filter above it. */
+  const [view, setViewState] = useState<OrderView>(() => storedOrderFilter().view ?? DEFAULT_ORDER_VIEW)
+  const setView = (next: OrderView) => {
+    setViewState(next)
+    rememberOrderFilter({ ...storedOrderFilter(), view: next })
+  }
+
+  /* THE ORDER TAKEN, AND HELD UNTIL SOMEBODY ASKS FOR A NEW ONE (D181, on `frozenRank.ts`'s
+   *  own ruling — a press may reorder, nothing else may). Empty is "current": nothing is
+   *  frozen and the list draws whatever a fresh sort produces, which is both the opening
+   *  state and what an explicit re-sort restores. */
+  const [take, setTake] = useState<OrderTake>(TAKE_IS_CURRENT)
+
   /** The resolution, keyed so a row can find its own. */
   const answers = useMemo(() => {
     const out = new Map<string, ResolvedOrder>()
@@ -2388,10 +2420,15 @@ function PullStage({
      chip narrows to groups whose open orders carry a line with that reason; 'done' is every
      group with nothing open — which is exactly `groups.recent`'s closed members plus the whole
      of `groups.earlier`, since a group with anything open can never be `earlier` (see
-     `orderBuyers.ts`). */
-  const shownGroups = useMemo(
+     `orderBuyers.ts`).
+
+     THE STATUS SELECT AND "HIDE UNKNOWN SKUS" COMPOSE WITH IT (`orderView.ts`) — an AND over
+     everything above, never a second gate. Both default to "show everything"
+     (`status: null`, `hideUnknown: false`), so a device that has never touched either control
+     drops nothing here: the anti-hiding floor D103 already set for staleness. */
+  const filteredGroups = useMemo(
     () =>
-      filter === 'all'
+      (filter === 'all'
         ? groups.recent.filter((group) => group.open.length > 0)
         : filter === 'done'
           ? groups.recent.filter((group) => group.open.length === 0)
@@ -2399,12 +2436,49 @@ function PullStage({
               (group) =>
                 group.open.length > 0 &&
                 group.open.some((order) => (answers.get(order.key)?.lines ?? []).some((line) => line.reason === filter)),
-            ),
-    [filter, groups, answers],
+            )
+      ).filter((group) => passesStatus(group, view.status) && passesHideUnknown(group, view.hideUnknown, answers)),
+    [filter, groups, answers, view.status, view.hideUnknown],
   )
   /* THE EARLIER FOLD IS DONE-ONLY. A closed buyer older than `RECENT_DAYS` has nothing an 'all'
      or reason filter would ever show, so it is drawn nowhere but under the "Done" chip. */
-  const earlierGroups = filter === 'done' ? groups.earlier : []
+  const earlierGroups = useMemo(
+    () =>
+      filter === 'done'
+        ? groups.earlier.filter((group) => passesStatus(group, view.status) && passesHideUnknown(group, view.hideUnknown, answers))
+        : [],
+    [filter, groups, answers, view.status, view.hideUnknown],
+  )
+
+  /* THE DEFAULT ORDER: Ready to Ship leads, newest first within a group, read as an ORDERING
+     rather than a hiding — the owner's ruling, verbatim in intent. `liveSorted` is what a
+     fresh take would produce RIGHT NOW; `shownGroups` is what is actually drawn, which keeps
+     every known group at the position `take` gave it and appends anything new after them
+     (D181). */
+  const liveSorted = useMemo(() => sortGroups(filteredGroups, view.sort), [filteredGroups, view.sort])
+  const shownGroups = useMemo(() => applyTake(liveSorted, take), [liveSorted, take])
+  const staleGroups = staleCount(liveSorted, take)
+  const staleSentence = orderStalenessSentence(staleGroups)
+
+  const statusOptions = useMemo(() => statusVocabulary(payload?.orders ?? []), [payload])
+
+  /** A control narrowed the shown set: retake immediately (D181 — "a changed filter is an
+   *  explicit retake"). */
+  const onStatusChange = (status: string | null) => {
+    setView({ ...view, status })
+    setTake(TAKE_IS_CURRENT)
+  }
+  const onHideUnknownChange = (hideUnknown: boolean) => {
+    setView({ ...view, hideUnknown })
+    setTake(TAKE_IS_CURRENT)
+  }
+  /** A change of SORT never reorders on its own (D181): whatever is on screen right now is
+   *  frozen exactly where it sits, and the new direction is offered as a re-sort. */
+  const onSortChange = (sort: OrderSort) => {
+    setTake(takeOrder(shownGroups))
+    setView({ ...view, sort })
+  }
+  const onReSort = () => setTake(TAKE_IS_CURRENT)
 
   /* The selection falls back to the first group shown, so a filter that hides the selected one
      never leaves the detail blank. */
@@ -2660,7 +2734,57 @@ function PullStage({
         {mode === 'walk' ? (
           <p className="orders-toolbar-note">Every open order&apos;s copies, in box order.</p>
         ) : (
-          chips
+          <>
+            {chips}
+            {/* STATUS / SORT / HIDE-UNKNOWN — the owner's ruling read as an ORDERING, never a
+                hiding: Ready to Ship leads by default, newest first within a group, everything
+                else stays reachable behind the status select rather than dropped (D103's shape).
+                They compose with the reason chips above; sort applies last (`orderView.ts`). */}
+            <div className="orders-view-controls" role="group" aria-label="Sort and narrow the buyer list">
+              <select
+                className="bn-select orders-status-select"
+                aria-label="Filter by status"
+                value={view.status ?? ''}
+                onChange={(event) => onStatusChange(event.target.value === '' ? null : event.target.value)}
+              >
+                <option value="">All</option>
+                {statusOptions.map((option) => (
+                  <option key={option.status} value={option.status}>
+                    {option.status} ({option.count})
+                  </option>
+                ))}
+              </select>
+              <Segmented<OrderSort>
+                className="orders-sort"
+                value={view.sort}
+                label="Sort"
+                options={[
+                  { value: 'newest', label: 'Newest' },
+                  { value: 'oldest', label: 'Oldest' },
+                ]}
+                onChange={onSortChange}
+              />
+              <label className="orders-hide-unknown">
+                <input
+                  type="checkbox"
+                  checked={view.hideUnknown}
+                  onChange={(event) => onHideUnknownChange(event.target.checked)}
+                />
+                Hide unknown SKUs
+              </label>
+              {/* THE SLOT IS ALWAYS RENDERED (D118) — a control that appears on a press is a
+                  row of this strip that did not exist a frame ago, and the list beneath it
+                  would move by its height at the moment sort changed underneath the operator's
+                  hand. */}
+              <span className="orders-resort-slot">
+                {staleSentence === null ? null : (
+                  <Chip icon="refresh" className="orders-resort" title="Sorted before this changed." onClick={onReSort}>
+                    {staleSentence} · re-sort
+                  </Chip>
+                )}
+              </span>
+            </div>
+          </>
         )}
       </div>
 
