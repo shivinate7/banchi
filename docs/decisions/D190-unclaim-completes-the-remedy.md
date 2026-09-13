@@ -1,4 +1,4 @@
-## D-unclaim-completes-the-remedy — The remedy `stale_claims` names is a real command, and `stale_claims` learns to see the directory it moved into
+## D190 — The remedy `stale_claims` names is a real command, and `stale_claims` learns to see the directory it moved into
 
 **A documented remedy with no command behind it is not a remedy.** D140's amendment gave
 `scripts/claim-ids.py --stale` a refusal for a claimed id that has gone stale — main

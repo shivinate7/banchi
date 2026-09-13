@@ -1678,7 +1678,7 @@ COMPONENTS = [
                                 "D151", "D158", "D176",
                                 # Unclaimed at this branch's own claim — the stale_claim
                                 # refusal now names `--unclaim` by its real command.
-                                "D-unclaim-completes-the-remedy"],
+                                "D190"],
                 "note": "IT NEVER SETS PKMNSCAN_MAIN AND NO REFUSAL IT PRINTS SUGGESTS IT. D42 "
                         "is explicit that a session reaching for that variable has left the "
                         "amendment behind; this needs no hatch because allow rule 3 already "
@@ -2510,7 +2510,7 @@ COMPONENTS = [
                 # narrates is about.
                 "governed_by": ["D16", "D18", "D42", "D47", "D72", "D80", "D135",
                                 "D140", "D151", "D160", "D182", "D185", "D186", "D188",
-                                "D-unclaim-completes-the-remedy"],
+                                "D190"],
             },
             "claim-selftest.py": {
                 "does": "scripts/claim-ids.py proved against a throwaway repository in which "
@@ -2557,7 +2557,7 @@ COMPONENTS = [
                 "governed_by": ["D1", "D2", "D16", "D18", "D80", "D136", "D140", "D141",
                                 "D143", "D148",
                                 "D151", "D160", "D185", "D186", "D188",
-                                "D-unclaim-completes-the-remedy"],
+                                "D190"],
             },
             "docs-audit-allow.txt": {
                 "does": "paths and identifiers the docs name before they exist, one "
