@@ -1,4 +1,4 @@
-## D-heartbeat-is-a-caller — The repo-state heartbeat is a thin caller of what already exists, and it remembers across runs in a file
+## D200 — The repo-state heartbeat is a thin caller of what already exists, and it remembers across runs in a file
 
 **docs/GATES.md item 24 ("A durable scheduled heartbeat that watches repo state across sessions") is BUILT.** `scripts/heartbeat.py`, added 2026-09-13.
 

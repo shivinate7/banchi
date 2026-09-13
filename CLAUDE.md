@@ -553,7 +553,7 @@ make coordinator    # THE MERGE QUEUE, READ RATHER THAN REMEMBERED. The other ha
 make coordinator-selftest  # that report's verdict rules, against synthetic check-run payloads.
                     #   Every case is a payload a reader looking at conclusions ALONE would call
                     #   clean. No network, so it is in `check`.
-make heartbeat      # docs/GATES.md item 24, BUILT (`D-heartbeat-is-a-caller`). THE REPO-STATE
+make heartbeat      # docs/GATES.md item 24, BUILT (`D200`). THE REPO-STATE
                     #   HEARTBEAT, and never the browser tab's — it answers "open PRs green and
                     #   unmerged, a dirty worktree with no session in it, whether `id claims` is
                     #   clean, whether main's own last push is green, what `make janitor` would
@@ -2472,6 +2472,7 @@ D196 No user-visible string may name a decision, a repository path, or a pipelin
 D197 A page is anchored to the shell's own inset, and only its width may vary by screen
 D198 Home's Review tile reads the same total `#/review` draws, never `review` alone
 D199 `_phase` reads `joined` as sufficient evidence identification happened
+D200 The repo-state heartbeat is a thin caller of what already exists, and it remembers across runs in a file
 ```
 
 **THE GAP THIS LIST CARRIED BETWEEN D116 AND D118 IS CLOSED, AND IT CLOSED THE WAY IT SAID IT

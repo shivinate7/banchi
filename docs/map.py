@@ -269,7 +269,7 @@ SHIPPED = [
               "the race, live."},
     {"n": 24, "on": "2026-09-13",
      "title": "A durable scheduled heartbeat that watches repo state across sessions",
-     "note": "D-heartbeat-is-a-caller. scripts/heartbeat.py, a thin caller of what already "
+     "note": "D200. scripts/heartbeat.py, a thin caller of what already "
               "existed (no bandaids: coordinator.py --json already answers open PRs pinned to "
               "their head SHA, id claims, dirty worktrees and live sessions) plus the two "
               "bullets it did not cover — whether MAIN'S OWN last push is green, and "
@@ -2293,7 +2293,7 @@ COMPONENTS = [
                         "since the last one, which is the 'a PR conflicting with a live "
                         "session that has not been told' bullet answered by diffing rather "
                         "than by memory. Read-and-report authority only.",
-                "governed_by": ["D-heartbeat-is-a-caller", "D42", "D111", "D140", "D148",
+                "governed_by": ["D200", "D42", "D111", "D140", "D148",
                                 "D171"],
             },
             "session-teardown.sh": {
