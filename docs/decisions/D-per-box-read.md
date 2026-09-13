@@ -89,8 +89,21 @@ sketch for `GET /inventory/recent` returned `{key, box, index, cid, name}` — t
 the "second renderer" mistake this item's own goal text warns against, so
 `do_inventory_recent` reuses `do_inventory`/`do_inventory_box`'s own decoration verbatim over
 the handful of candidates that survive the filter, off a new
-`Inventory.newest_captured`/`Rows.top`/`SqliteSource.top` — one indexed
-`ORDER BY captured_at DESC LIMIT` — rather than sorting the whole table in Python.
+`Inventory.newest_captured`/`Rows.top`/`SqliteSource.top`.
+
+**AND THAT QUERY WAS NOT ACTUALLY INDEXED UNTIL A SECOND FIX, CAUGHT ON REVIEW.** The first
+`SqliteSource.top` ran `ORDER BY captured_at DESC LIMIT ?` while `captured_at` was absent from
+`_INDEXES` — `EXPLAIN QUERY PLAN` on it read `SCAN cards` / `USE TEMP B-TREE FOR ORDER BY`,
+the exact O(store) cost this route exists to avoid. Adding the column to `_INDEXES` alone does
+not fix an EXISTING store: `_ensure_schema` only runs that loop on a brand-new store's own
+branch, and every store already stamped at a schema version takes the `_repair` path and
+returns before reaching it — so the index would never have existed on any store that predates
+this change, the owner's real one included. The real fix is a schema bump to **6** — reserved
+for item 8 by `docs/specs/store-scaling/00-phases.md`, whose own text says the branch that
+reaches it FIRST keeps it and the other renumbers; this item is Phase 1 and item 8 is Phase 2,
+so by that ordering this item is first. `_add_captured_at_index` is the upgrade step
+(`store/db.py`), additive and idempotent like every step beside it. Re-verified after the fix:
+`EXPLAIN QUERY PLAN` now reads `SEARCH cards USING INDEX cards_captured_at (captured_at>?)`.
 
 **Fulfillment.tsx and Orders.tsx: one call site each, and neither matches the playbook.** It
 described Fulfillment.tsx as having two uses of `getInventory()` — an order-resolution use and

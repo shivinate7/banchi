@@ -111,7 +111,56 @@ async function stub(page: Page, cards: unknown[] = []) {
   }
 
   await page.route(/\/inventory$/, (route) => json(route, { version: 2, cards, boxes: {}, listings: {} }))
-  await page.route(/\/boxes$/, (route) => json(route, { boxes: [] }))
+  /* D-per-box-read (store-scaling item 2): Home (`#/`) no longer calls the bare `/inventory`
+   * above — it calls `getRecentCards`, `GET /inventory/recent?limit=N`. Empty, matching this
+   * ring's own `cards` default of `[]`: nothing here asserts on the hero deck's contents. */
+  await page.route(/\/inventory\/recent(\?|$)/, (route) => json(route, { cards: {} }))
+  /* `GET /boxes` IS THE UNION OF THE REGISTRY AND WHATEVER `cards` NAMES (D20's own rule —
+   * "a box existed only because a card named one" — is what `do_boxes` answers with in
+   * production). This fixture's registry is always empty, so deriving the boxes list from
+   * `cards` here is what stands in for that union: `#/inventory`'s box-scoped fetch (D-per-
+   * box-read, item 2) needs `shelves` to resolve to at least one box before it can fetch
+   * anything at all, and with an empty `/boxes` AND no rows loaded yet (the fetch needs a
+   * shelf to run), an empty registry over a non-empty `cards` argument left `#/inventory`
+   * waiting on a shelf that would never come — the whole screen stuck on its loading
+   * skeleton, which is what timed out the one case here that opens it with a card. */
+  const boxNumbers = [
+    ...new Set(cards.map((card) => (card as { box?: unknown }).box).filter((box): box is number => typeof box === 'number')),
+  ]
+  await page.route(/\/boxes$/, (route) =>
+    json(route, {
+      boxes: boxNumbers.map((box) => ({
+        box,
+        name: null,
+        sections: [],
+        state: 'open',
+        capacity: null,
+        fill: cards.length,
+        next_index: cards.length + 1,
+        cards: cards.length,
+        on_hand: cards.length,
+        sold: 0,
+        retired: 0,
+        moved: 0,
+        listed: 0,
+        sections_detail: [],
+      })),
+    }),
+  )
+  /* `#/inventory`'s own per-box read (D-per-box-read, item 2), now that `/boxes` above can
+   * resolve to a real shelf: `BoxBrowse` fetches `GET /inventory/<box>` for whichever box
+   * that resolves to, keyed by index, in the same per-card shape `GET /inventory` answers
+   * with — this ring's `cards` array narrowed to the requested box. */
+  await page.route(/\/inventory\/(\d+)$/, (route) => {
+    const match = /\/inventory\/(\d+)$/.exec(route.request().url())
+    const box = match ? Number(match[1]) : NaN
+    const forBox: Record<string, unknown> = {}
+    for (const card of cards) {
+      const c = card as { box?: unknown; index?: unknown }
+      if (c.box === box) forBox[`${c.box}/${c.index}`] = card
+    }
+    return json(route, { version: 2, cards: forBox, listings: {} })
+  })
   await page.route(/\/queues$/, (route) => json(route, { review: [], parked: [] }))
   await page.route(/\/search\?/, (route) => json(route, { query: '', groups: [] }))
   await page.route(/\/games$/, (route) => json(route, { games: [] }))

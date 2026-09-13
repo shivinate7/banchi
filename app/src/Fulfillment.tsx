@@ -454,7 +454,9 @@ export function Fulfillment() {
    * building one under this item's own budget would be the band-aid CLAUDE.md's "fix the
    * cause" rule refuses. Order resolution itself never touched `getInventory()` here: `GET
    * /orders` already resolves every open order's lines to picks carrying their own place and
-   * capture id (`orderGroups`, above), so this is the ONE call site left on the full walk. */
+   * capture id (`orderGroups`, above), so this is the ONE call site left on the full walk.
+   * `docs/DEBTS.md` §27 is the named debt: the measured cost, why this cannot be box-scoped,
+   * and the candidate primitive. */
   useEffect(() => {
     let livePage = true
     getInventory()

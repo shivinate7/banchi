@@ -1372,7 +1372,9 @@ export function OrdersHub({ stage }: { readonly stage: Stage }) {
      Building a lean "on-hand copies by SKU, store-wide" route is real work `#/pricing`'s D159
      `?band=` lens and item 6's own `do_orders` rebuild are the closer candidates for, named here
      as the debt CLAUDE.md's "fix the cause… first ask whether the primitive already exists" rule
-     asks to be named rather than patched around under this item's own budget. */
+     asks to be named rather than patched around under this item's own budget.
+     `docs/DEBTS.md` §27 is the named debt: the measured cost, why this cannot be box-scoped,
+     and the candidate primitive. */
   const rereadStore = useCallback(async () => {
     try {
       const inventory = await getInventory()

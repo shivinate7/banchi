@@ -2287,3 +2287,47 @@ today. Nothing else here is blocked on anything.
 when PR #282 took that number while this branch was open — the rule working rather than a
 collision, and the same one `docs/DECISIONS.md` keeps: renumber your own, never another's. 26 is
 what was next on 2026-09-11.
+
+## 27 — Two `GET /inventory` call sites are still store-wide, and no cheap replacement exists yet
+
+**D-per-box-read (store-scaling item 2, PR #341) closed most of `getInventory()`'s callers and
+named these two rather than patching around them.** `#/inventory` and Home's hero deck moved to
+`GET /inventory/<box>` and `GET /inventory/recent`; `Fulfillment.tsx`'s whole-store sellable
+browse and `Orders.tsx`'s `indexStore` (the per-line copy-map widening) did not, and this is
+that debt's own record — referenced from both code comments by number rather than argued twice.
+
+**The measured cost they still pay.** `GET /inventory` itself is unchanged and still walks the
+whole store: 212 ms at the owner's real size (2,535 cards) and 2,816 ms at a 20x-duplicated
+copy (50,700 cards) — a `.backup`-copy measurement taken for D-per-box-read's own PR. Both call
+sites pay this on every load, and `Orders.tsx`'s pays it twice per screen (`reread`/`rereadStore`
+race independently).
+
+**Why neither can be box-scoped the way `#/inventory` was.**
+
+- **`Fulfillment.tsx`'s browse** (D5/D6's "no order in hand" fallback) lists every sellable card
+  across every box, precisely because there may be no order to name a box from at all. There is
+  no set of boxes to scope the fetch to — the whole point of this view is that none is known.
+- **`Orders.tsx`'s `indexStore`** widens each order line's copy map to "every on-hand copy of
+  that SKU the store holds, including copies in far boxes no resolver pick names" (`copiesOf`'s
+  own comment in that file). Scoping the fetch to "the boxes an order's resolver picks name"
+  would silently hide copies of the same SKU sitting in boxes no pick ever mentions — the
+  resolver only returns as many picks as needed to fill demand, so a box holding three spare
+  copies of a card that already has enough elsewhere would never be named at all. That is a
+  correctness regression (fewer copies drawn than exist), not merely a slower screen, which is
+  why D-per-box-read's own decision entry (`docs/decisions/D-per-box-read.md`) declined to patch
+  around it.
+
+**The candidate primitive for each, named rather than built under this item's budget.** A lean
+"on-hand copies by SKU, store-wide" route — column-only, `Rows.select`/`Rows.where` over the
+`sku` index rather than a whole-object walk — would answer `Orders.tsx`'s actual question
+directly instead of building it client-side from a full card map; it is the more general fix
+and would likely serve `Fulfillment.tsx`'s browse too, filtered to sellable states. The nearer,
+narrower alternative for `Orders.tsx` alone is item 6's own `do_orders` rebuild
+(`docs/specs/store-scaling.md` §3), which the plan already describes as building `_Places` only
+"for the boxes those copies sit in, never for a box no line touches" — the same shape of fix,
+scoped to the order-resolution path rather than to the wider copy-map widening.
+
+**Not mechanically enforced, and named as such.** The `unscoped walk` guard (item 1) watches
+`server/*.py` and `store/master.py` for a full-table walk server-side; neither of these two
+sites is server-side — they are client `fetch` calls in `app/src`, which that guard's own scope
+does not reach. Nothing currently fails a commit that leaves them as they are.
