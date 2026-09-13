@@ -182,6 +182,28 @@ A spec pins it against `Cancelled`, `Pending`, `Awaiting Payment`, `ready to shi
 orders never arrive — and it is separate work; a door filter cannot retroactively clear a
 backlog, and a stand-down cannot stop the next import.
 
+**AMENDED 2026-09-13 (`D63`): A FOURTH THING LANDED.** And it is not a fourth way to close a
+line — the table three sections up is unchanged. A line still closes only by `record_pull`,
+`record_fill` or `close_line`, and only two of those claim a copy went. `store/orders.py:
+is_terminal_status` does not touch `fulfilled`, `copies`, `by_hand` or `closed_at` at all: it is
+read in `server/capture_server.py:do_orders`, ahead of the ledger, to decide whether an order
+belongs in `open_keys` in the first place. A Canceled or already-Shipped-or-Delivered order is
+simply never presented as open and never enters the resolution pool — closer to the door filter
+this entry names above as separate work than to a fourth member of the table, and it is exactly
+that filter's RETROACTIVE half: it reaches orders already in the ledger, which a filter on the
+fetch cannot.
+
+**AND IT IS DELIBERATELY NARROWER THAN `BacklogPrompt`'s OWN RULE ABOVE.** That is not a
+disagreement: `BacklogPrompt` matches `startsWith('shipped')` on the folded string, because it
+is proposing a stand-down for a human to press — false-closed there is recoverable by leaving it
+unticked. `is_terminal_status` is a server-side predicate that removes an order from the
+resolution pool outright, so it recognises only the exact strings D63 published and measured —
+`shipped - in transit`, `shipped - delivered`, `canceled` — and answers `False` for a bare
+`Shipped` or any status it has never seen, the same fail-safe direction this entry's own
+`BacklogPrompt` fix already argued for one register up. `Completed - Paid` is deliberately
+outside both: ruling 3's backlog is a one-time reconcile of the owner's 513 orders at that
+status, not an ongoing predicate either mechanism performs.
+
 ### What is reachable
 
 `POST /orders/fill`, `POST /orders/line-kind` and `POST /orders/close`, each with a client

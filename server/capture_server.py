@@ -9136,7 +9136,15 @@ def _order_stamps(numbers: Sequence[str]) -> Tuple[int, Dict[str, Tuple[str, ...
         ledger.orders.values(),
         key=lambda record: (record.placed_at is None, record.placed_at or "", record.key),
     )
-    open_keys = {record.key for record in ledger.unfulfilled()}
+    # THE TERMINAL OVERRIDE, exactly as `do_orders` applies it and for the same reason: this
+    # docstring already requires the two resolutions to agree, and a Canceled or
+    # already-Shipped order left in this pool would compete for a copy a live order needs —
+    # D113's own measured bug, one register down. See `store/orders.py:is_terminal_status`.
+    open_keys = {
+        record.key
+        for record in ledger.unfulfilled()
+        if not order_store.is_terminal_status(record.status)
+    }
     open_records = [record for record in sequence if record.key in open_keys]
     asked = [_engine_order(record, ledger) for record in open_records]
     behind = {id(order): record for order, record in zip(asked, open_records)}
@@ -9251,11 +9259,26 @@ def _order_row(
 ) -> dict:
     """One order as the feed said it, with our own progress beside it.
 
-    `open` IS THE LEDGER'S ANSWER AND NEVER THE FEED'S `status` STRING. The status is stored
-    verbatim and unvalidated on purpose (`store/orders.py` argues why a closed vocabulary
-    there would refuse a marketplace that learned a new word), so nothing may branch on it.
-    Whether an order still owes copies is a question this store owns, and
-    `Ledger.unfulfilled` computes it from its own two maps.
+    `open` IS THE LEDGER'S ANSWER, `unfulfilled`, WITH A TERMINAL OVERRIDE ON TOP OF IT
+    (D63 amended 2026-09-13, on the owner's two rulings — a Canceled order is never open, and
+    a Shipped-or-Delivered order closes on the feed's own word). Whether an order still owes
+    copies is still a question this store owns and never the feed's, exactly as this
+    docstring said until this amendment: `Ledger.unfulfilled` computes it from its own two
+    maps and is UNCHANGED by any of this. What is new is that a status this store RECOGNISES
+    as terminal — `store/orders.py:is_terminal_status`, the one place that vocabulary is
+    spelled — closes the order regardless of what `unfulfilled` would otherwise answer,
+    because the caller already excluded it from `open_keys` before this function ever runs
+    (see `do_orders`). `is_terminal_status` itself is the fail-safe: an unrecognised status
+    answers `False` and changes nothing, so a marketplace word this store has never seen
+    leaves the order exactly as open as it already was, in front of a human, rather than
+    silently dropping off the screen — which is the guessing `store/orders.py`'s header still
+    forbids and the reason a closed vocabulary here is a lookup table and not a guess.
+
+    `terminal` RIDES THE WIRE BESIDE `open` FOR THE SAME REASON D114 GIVES: *"there is no
+    status vocabulary anywhere in `app/`"*. A screen that wants to know whether the
+    marketplace itself considers this order finished reads this field rather than growing its
+    own copy of `TERMINAL_STATUSES` or branching on `status` — either of which is the second
+    declaration of one vocabulary that D16 exists to catch.
     """
     progress = _order_progress(ledger, record, inventory)
     return {
@@ -9270,6 +9293,7 @@ def _order_row(
         "wanted": record.wanted,
         "recorded": sum(row["recorded"] for row in progress),
         "open": bool(is_open),
+        "terminal": order_store.is_terminal_status(record.status),
         "lines": [asdict(line) for line in record.lines],
         "progress": progress,
     }
@@ -9378,7 +9402,19 @@ def do_orders() -> dict:
         ledger.orders.values(),
         key=lambda record: (record.placed_at is None, record.placed_at or "", record.key),
     )
-    open_keys = {record.key for record in ledger.unfulfilled()}
+    # THE TERMINAL OVERRIDE (D63 amended 2026-09-13). `unfulfilled` is still the ledger's own
+    # answer to "does this order still owe copies"; a status this store RECOGNISES as
+    # terminal removes it from `open_keys` regardless, so a Canceled or already-Shipped order
+    # neither draws `open: true` on the screen NOR competes for a physical copy in the
+    # resolution below — which is the correctness bug D113 measured (a shipped order, being
+    # older, took a copy ahead of a live one). An unrecognised status changes nothing here:
+    # `is_terminal_status` answers `False` for it, so the order stays exactly as open as
+    # `unfulfilled` alone would have made it.
+    open_keys = {
+        record.key
+        for record in ledger.unfulfilled()
+        if not order_store.is_terminal_status(record.status)
+    }
     open_records = [record for record in sequence if record.key in open_keys]
 
     asked = [_engine_order(record, ledger) for record in open_records]

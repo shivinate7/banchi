@@ -174,6 +174,61 @@ CLOSE_SHIPPED_ELSEWHERE = "shipped_elsewhere"  # it went out; this store did not
 CLOSE_NOT_SHIPPING = "not_shipping"            # refunded, cancelled — nothing will go
 CLOSE_REASONS = (CLOSE_SHIPPED_ELSEWHERE, CLOSE_NOT_SHIPPING)
 
+# THE TERMINAL-STATUS VOCABULARY, D63 amended 2026-09-13 on the owner's two rulings: a
+# Canceled order is never open, and an order the feed reports Shipped or Delivered closes on
+# that word. HAND-AUTHORED AND CLOSED, exactly like `FILL_REASONS` and `CLOSE_REASONS` above
+# — see `scripts/docs-audit.py:check_terminal_statuses`, which pins this set against its own
+# claim in `docs/decisions/D063-…md`, in both directions, because `make docs-audit` answers
+# from the tree alone (`make lan-check`'s reasoning: no live store is ever read by it) and so
+# cannot compare this against the DISTINCT strings a real feed has actually sent.
+#
+# CASEFOLDED AND STRIPPED TO COMPARE — `order_key`'s own rule, one register over, because
+# `Canceled` and `canceled ` are one fact about an order to a person. This is NOT
+# `order_transport.fetch_open_orders`' comparison, which is deliberately VERBATIM: that
+# function filters on a string the OPERATOR ticked off a specific request's own summaries, so
+# preserving it exactly is preserving their literal choice. This set is a vocabulary this
+# codebase declares once or not at all, so tolerating a feed's harmless case or whitespace
+# drift costs nothing, while a genuinely new word — "Cancelled" spelled the British way, or a
+# status this pipeline has never seen — still falls through untouched.
+TERMINAL_STATUSES = frozenset(
+    {
+        "canceled",
+        "shipped - in transit",
+        "shipped - delivered",
+    }
+)
+
+
+def is_terminal_status(status: Optional[str]) -> bool:
+    """Whether the feed's own word says this order is finished — a TERMINAL OVERRIDE.
+
+    `Ledger.unfulfilled` REMAINS THE ANSWER to "does this order still owe copies", computed
+    from this ledger's own two maps and never from `status` — that is D63's original ruling
+    and it is unchanged. What this function adds sits ON TOP of it: a status this store
+    RECOGNISES as terminal closes the order regardless of what `unfulfilled` would otherwise
+    say, because a marketplace that reports a card shipped or an order cancelled has answered
+    a question no pull record here can contradict.
+
+    `None` AND ANY UNRECOGNISED STRING ANSWER `False`. This is the fail-safe the two rulings
+    above would defeat if it read as a guess instead of a lookup: `store/orders.py`'s header
+    already argues at length that a closed vocabulary compared against an open-ended feed
+    string refuses a marketplace that learns a new word, and D113's own history is exactly
+    that mistake made once — `BacklogPrompt` shipped as `status !== 'Ready to Ship'`, which
+    would have swept a live order into a bulk close on sight of any string it had never seen.
+    Recognising a SHORT, MEASURED set and falling through on everything else means an
+    unrecognised status leaves the order OPEN — visible to a human, exactly where it already
+    was — rather than silently vanishing from the screen the operator is reading.
+
+    Ruling 3 — `Completed - Paid` — IS DELIBERATELY NOT IN THIS SET. That status is not
+    terminal by this function's own reasoning: TCGplayer's payment having cleared says
+    nothing about whether the card has shipped, so an order sitting at `Completed - Paid`
+    stays open exactly as it did before this function existed. The owner's ruling that those
+    513 orders are a one-time backlog is a RECONCILE, not a status this pipeline can read as
+    closed on an ongoing basis, and that is separate work this function does not do.
+    """
+    return str(status or "").strip().casefold() in TERMINAL_STATUSES
+
+
 # The separator between the feed and the order's own number. The KEY is
 # `{source}:{order_number}`, split on the FIRST colon, which is why `source` may not
 # contain one and `order_number` may: without that asymmetry a source `a:b` with order `c`

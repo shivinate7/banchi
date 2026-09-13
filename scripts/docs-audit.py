@@ -6915,6 +6915,128 @@ def check_order_reasons(report: Report) -> None:
     )
 
 
+def check_terminal_statuses(report: Report) -> None:
+    """The terminal-status vocabulary, reconciled between the code and its own published claim.
+
+    D63 amended 2026-09-13 on the owner's two rulings — a Canceled order is never open, and
+    an order the feed reports Shipped or Delivered closes on that word — and
+    `store/orders.py:is_terminal_status` is where the vocabulary that answers both lives,
+    exactly once, in `TERMINAL_STATUSES`. That set is hand-authored in D22's sense: it is not
+    derivable from anything else in the tree, so a typo or a dropped entry is invisible to
+    every other check here.
+
+    THIS ROW ANSWERS FROM THE TREE ALONE, DELIBERATELY, WHICH IS `make lan-check`'s ARGUMENT
+    APPLIED HERE. The honest reconciliation for a vocabulary like this is against the
+    DISTINCT statuses a real feed has actually sent — `make docs-audit` cannot do that
+    because it never opens `inventory/store.sqlite` and never will (that is what would make
+    it `make lan-check`'s problem instead: a live-store dependency this audit's other ninety
+    rows deliberately do not carry). So the second declaration this row reconciles against is
+    not a store, it is the fenced `terminal-statuses` block inside
+    `docs/decisions/D063-…md` itself — the decision entry's own published claim of what the
+    set contains, written in a shape this function can parse directly. That fenced block is not decoration: a session amending `TERMINAL_STATUSES` in
+    code without moving the block, or the reverse, fails this row rather than silently
+    drifting apart, which is the whole of what D16 asks a hand-authored vocabulary to do.
+
+    BLOCKING, for `check_withhold_reasons`' reason and it applies verbatim: whether the
+    mechanism is any GOOD (whether the strings are the right ones to treat as terminal) is a
+    judgement call the owner already made; whether the code and its own decision entry still
+    agree about what was decided is arithmetic.
+
+    THE COMPARISON IS EXACT-STRING, NEVER CASE-FOLDED, on purpose — this row is checking that
+    two DECLARATIONS spell the same set the same way, which is a stricter question than
+    whether two ORDER STATUSES refer to the same fact (that folding lives in
+    `is_terminal_status` itself, at RUN time, and is unrelated to this comparison).
+    """
+    findings: List[Finding] = []
+    python_path = ROOT / "store" / "orders.py"
+    doc_path = ROOT / "docs" / "decisions" / "D063-the-order-ledger-is-two-maps-and-the-sync-writes-only-one.md"
+
+    tree = ast.parse(read(python_path))
+    authored: Optional[Set[str]] = None
+    for node in ast.walk(tree):
+        if not isinstance(node, ast.Assign):
+            continue
+        if not any(isinstance(t, ast.Name) and t.id == "TERMINAL_STATUSES" for t in node.targets):
+            continue
+        value = node.value
+        # `frozenset({...})` — the call's first argument is the literal set this audit reads.
+        if (
+            isinstance(value, ast.Call)
+            and isinstance(value.func, ast.Name)
+            and value.func.id == "frozenset"
+            and value.args
+        ):
+            value = value.args[0]
+        try:
+            authored = set(ast.literal_eval(value))
+        except (ValueError, SyntaxError):
+            findings.append(
+                Finding(
+                    "store/orders.py",
+                    "TERMINAL_STATUSES is not a literal this audit can read. It is a "
+                    "hand-authored vocabulary in D22's sense and has to stay one.",
+                )
+            )
+
+    if authored is None:
+        findings.append(
+            Finding("store/orders.py", "TERMINAL_STATUSES is missing.")
+        )
+        authored = set()
+    elif not authored:
+        findings.append(
+            Finding("store/orders.py", "TERMINAL_STATUSES is empty.")
+        )
+
+    if not exists(doc_path):
+        findings.append(
+            Finding(str(doc_path.relative_to(ROOT)), "does not exist — D63's amendment "
+                    "cannot be checked against code that has moved past it.")
+        )
+        published: Set[str] = set()
+    else:
+        match = re.search(r"```terminal-statuses\n(.*?)```", read(doc_path), re.S)
+        if match is None:
+            findings.append(
+                Finding(
+                    str(doc_path.relative_to(ROOT)),
+                    "carries no fenced `terminal-statuses` block — the decision entry has "
+                    "to publish the set it settled on in a shape this script can parse, or "
+                    "there is nothing here to reconcile the code against.",
+                )
+            )
+            published = set()
+        else:
+            published = {line.strip() for line in match.group(1).splitlines() if line.strip()}
+
+    for status in sorted(authored - published):
+        findings.append(
+            Finding(
+                "store/orders.py",
+                f"{status!r} is in TERMINAL_STATUSES and not in D63's published "
+                f"`terminal-statuses` block — the code recognises a status the decision "
+                f"entry never says it does.",
+            )
+        )
+    for status in sorted(published - authored):
+        findings.append(
+            Finding(
+                str(doc_path.relative_to(ROOT)),
+                f"{status!r} is published in the `terminal-statuses` block and is not in "
+                f"store/orders.py:TERMINAL_STATUSES — the decision entry claims a status "
+                f"closes an order and the code does not recognise it.",
+            )
+        )
+
+    report.add(
+        "terminal statuses",
+        MECHANICAL,
+        findings,
+        f"{len(authored)} authored, published in D63, none unreachable",
+        scanned=len(authored),
+    )
+
+
 def check_pricing_presets(report: Report) -> None:
     """The three pricing presets, reconciled between the tuple that prices them and the
     table that writes them.
@@ -16202,6 +16324,7 @@ def audit(staged_only: bool) -> Report:
     check_lockup_bracket(report)
     check_withhold_reasons(report)
     check_order_reasons(report)
+    check_terminal_statuses(report)
     check_pricing_presets(report)
     check_export_request(report)
     check_transport_promise(report)
