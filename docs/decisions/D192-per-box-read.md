@@ -135,3 +135,13 @@ debts above); `GET /inventory/<box>` flat across both copies, matching `records_
 measured ~4 ms; `Rows.where()` after a forced full load drops from an O(table) Python scan to
 the indexed query's own cost. Exact figures are in the PR body rather than this entry, since
 the `.backup`-copy recipe's numbers are perishable and this entry is not.
+
+**Amendment: the zero-box store was a gap this item left, not a reversal of it.**
+`BoxBrowse.tsx`'s shelf-selecting effect returns the instant `shelves.length === 0`, so on a
+store with no boxes at all `shelf` never leaves `null`, the box-scoped fetch this item made
+(`getInventoryBox`) — gated on a numeric shelf — never fires, and `rows`/`failure` both stay
+`null` forever. The screen's lede branches only on those two, so it drew "Reading the
+inventory…" with nothing left to answer it. This item never gave that case a path because the
+owner's own store already held boxes; the fix reads `boxesAnswered` (the one registry signal
+that lands regardless of `shelves`) together with an empty box registry and swaps the loading
+branch for a real empty state once both are true.

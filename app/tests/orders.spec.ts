@@ -967,7 +967,7 @@ test('a fetch the cap cut short loops, and the receipt names the batches and wha
   await expect(page.locator('.orders-receipt')).toContainText('2 batches')
   /* CUMULATIVE ACROSS BOTH BATCHES, like `detailed` and `named` — each batch skipped 30 already-
      known orders, so the receipt's running total is 60. */
-  await expect(page.locator('.orders-receipt')).toContainText('60 already in the ledger')
+  await expect(page.locator('.orders-receipt')).toContainText('60 already known')
   expect(wire.filter((one) => one.path.endsWith('/orders/ingest'))).toHaveLength(0)
   await expect.poll(reads).toBe(mounted + 1)
 })
@@ -977,7 +977,7 @@ test('the two-years control sends the LastTwoYears range', async ({ page }) => {
     allStatuses: { orders: [], matched: 0, skipped_known: 0, detailed: 0, remaining: 0, names: [] },
   })
   await page.locator('main.orders .bn-head-actions').getByRole('button', { name: 'Add orders' }).click()
-  await page.locator('.orders-paste').getByRole('button', { name: 'Fetch two years of history' }).click()
+  await page.locator('.orders-paste').getByRole('button', { name: 'Fetch two years' }).click()
 
   await expect.poll(() => wire.filter((one) => one.path.endsWith('/orders/fetch')).length).toBe(1)
   const sent = wire.find((one) => one.path.endsWith('/orders/fetch'))?.body as { range?: string }
@@ -1326,7 +1326,7 @@ test('every status ticked off refuses the press here, rather than letting the wi
   await page.locator('main.orders .bn-head-actions').getByRole('button', { name: 'Add orders' }).click()
   await page.locator('.orders-paste').getByRole('button', { name: 'Fetch from TCGplayer' }).click()
 
-  await expect(page.locator('.orders-paste-note')).toContainText('Every status is ticked off')
+  await expect(page.locator('.orders-paste-note')).toContainText('Nothing to fetch')
   /* THE PREVIEW HAPPENED AND THE FETCH DID NOT. One free call, no detail call, nothing ingested. */
   const asked = wire.filter((one) => one.path.endsWith('/orders/fetch'))
   expect(asked).toHaveLength(1)

@@ -423,6 +423,13 @@ export function Home() {
   const sold = boxes.state === 'ready' ? boxes.value.reduce((n, b) => n + b.sold, 0) : null
   const review = status.state === 'ready' ? status.value.queues.review : null
   const parked = status.state === 'ready' ? status.value.queues.parked : null
+  /* The tile's headline is #/review's own headline: `review + parked`, the same total
+     `ReviewQueue.tsx`'s `total = everyone.length + done` reaches in steady state, where
+     `apply_run` (`store/queues.py`) keeps a position out of both files at once. The transient
+     overlap `oneCardPerPosition` guards against is not observable from `/status` alone and is
+     not worth a second `/queues` fetch here just to dedupe a state that is already rare —
+     a named, accepted imprecision rather than a silent mismatch. */
+  const reviewTotal = review === null || parked === null ? null : review + parked
   const lastBox = boxes.state === 'ready' ? [...boxes.value].sort((a, b) => b.box - a.box)[0] : undefined
   const liveRuns = runs.state === 'ready' ? runs.value.filter((r) => r.live).length : null
 
@@ -477,9 +484,14 @@ export function Home() {
       path: '/review',
       icon: 'inbox',
       label: 'Review',
-      figure: review === null ? '—' : String(review),
-      note: review === 0 ? 'nothing waiting' : parked ? `to answer · ${parked} parked` : 'to answer',
-      tone: review ? 'warn' : review === 0 ? 'ok' : undefined,
+      figure: reviewTotal === null ? '—' : String(reviewTotal),
+      note:
+        review === 0 && parked === 0
+          ? 'nothing waiting'
+          : parked !== null && parked > 0
+            ? `${review} to answer · ${parked} parked`
+            : 'to answer',
+      tone: review === 0 && parked === 0 ? 'ok' : reviewTotal !== null && reviewTotal > 0 ? 'warn' : undefined,
     },
     {
       path: '/pricing',

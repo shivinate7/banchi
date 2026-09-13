@@ -161,7 +161,7 @@ export function SearchField({
           <button
             type="button"
             className="search-field-clear"
-            aria-label="Clear the search"
+            aria-label="Clear search"
             onClick={() => {
               handle('')
               input.current?.focus()

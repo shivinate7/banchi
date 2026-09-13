@@ -198,7 +198,13 @@
      1280px of content is that row's fixed tracks plus ~44ch for the name.
      A screen asks for one by setting `--bn-page-max` on its own root; the kit reads it with
      `--bn-page-w` as the fallback. `--bn-page-max` is deliberately NOT declared here — it
-     is a screen's word, never the system's, which is why it is not in docs/DESIGN.md. */
+     is a screen's word, never the system's, which is why it is not in docs/DESIGN.md.
+     A CAP NARROWS THE PAGE, IT NEVER RECENTERS IT (`D197`). `.bn-page`'s
+     `margin` is `0`, not `0 auto` — a lower `--bn-page-max` gives up width on the RIGHT
+     only, so every screen's left edge sits against the shell's own inset and only the
+     width a screen asks for may differ. Centering a narrower cap inside the wider column
+     the shell handed every OTHER screen is what moved the left edge between routes by up
+     to 330px on the owner's own rig; `app/tests/page-edge.spec.ts` asserts the anchor. */
   --bn-page-w: 1600px;
   --bn-page-w-rows: 1344px;
 

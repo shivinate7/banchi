@@ -1001,7 +1001,7 @@ test('the sub-threshold policy is answered from the start, and the floor press w
      the incoherence of a hardcoded "$0.40 floor" sitting beside an answer of $0.24.
      `sub_threshold: 'floor'` is no longer writable from any screen: the floor is stated by
      typing its own figure, which is a flat price like any other. */
-  const cheap = page.getByLabel("The store's cut-off")
+  const cheap = page.getByLabel("Store default")
   await cheap.fill('0.40')
   await cheap.press('Enter')
   await expect.poll(() => wire.filter((r) => r.method === 'PUT').length).toBe(1)
@@ -2262,7 +2262,7 @@ test('both ranges are drawn, and the panel says they overlap', async ({ page }) 
   await expect(panel).toContainText('rising')
   await expect(panel).toContainText('-33.9%')
   await expect(panel).toContainText('falling')
-  await expect(panel).toContainText(/ranges overlap/)
+  await expect(panel).toContainText(/[Rr]anges overlap/)
   await page.keyboard.up('t')
 })
 
@@ -2454,13 +2454,13 @@ test('the spans and the overlap caveat are stated once, above the list', async (
   await expect(page.locator('.pricing-trendbar-why')).toContainText('ranges overlap')
   await expect(page.locator('.pricing-trendbar-why')).toHaveAttribute(
     'title',
-    /The ranges overlap and are read separately/,
+    /Ranges overlap and can point opposite ways/,
   )
   /* AND EXACTLY ONCE. A span drawn per row is the failure this case exists to catch. */
   await expect(page.locator('.pricing-trendbar-span')).toHaveCount(2)
 
   await hold(page)
-  await expect(panelOf(page)).toContainText('The ranges overlap and are read separately')
+  await expect(panelOf(page)).toContainText('Ranges overlap and can point opposite ways')
   await page.keyboard.up('t')
 })
 
@@ -2965,7 +2965,7 @@ test('a figure typed into the cap rides the send, and the bar names what it now 
 }) => {
   const wire = await open(page, { worklist: SPAN })
 
-  await page.getByLabel('Hold each SKU to at most this many copies live at TCGplayer, counting what is already out').fill('2')
+  await page.getByLabel('Copies to keep live at TCGplayer').fill('2')
   /* THE SENTENCE FOLLOWS THE FIELD, before anything is pressed — the operator learns what the
      figure MEANS at the moment they type it rather than from a receipt afterwards. */
   await expect(page.locator('.pricing-ship-says')).toContainText('spent once across the send')
@@ -2987,7 +2987,7 @@ test('a send of ONE carries the cap too, which is the asymmetry the route refuse
   const wire = await open(page, { skus: [sku()] })
   await expect(page.getByRole('region', { name: 'Ship this run' })).toHaveCount(1)
 
-  await page.getByLabel('Hold each SKU to at most this many copies live at TCGplayer, counting what is already out').fill('3')
+  await page.getByLabel('Copies to keep live at TCGplayer').fill('3')
   await page.getByRole('button', { name: 'Write the import file' }).click()
 
   const emits = () => wire.filter((r) => r.method === 'POST' && r.path.endsWith('/emit'))
@@ -3006,7 +3006,7 @@ test('typing in the cap does not reach the row keys, which own bare letters here
      the cap would write an answer the operator never gave. */
   const wire = await open(page, { worklist: SPAN })
 
-  const cap = page.getByLabel('Hold each SKU to at most this many copies live at TCGplayer, counting what is already out')
+  const cap = page.getByLabel('Copies to keep live at TCGplayer')
   await cap.focus()
   await page.keyboard.type('h4u')
   await expect(cap).toHaveValue('4')
@@ -3025,7 +3025,7 @@ test('the cap field takes digits and nothing else, so a send cannot carry a word
      number this screen composes into a request. It reaches a child process's argv — the route
      integer-checks it for exactly that reason — and a control that accepted `2; rm` would be
      leaning on the far side of the wire to be the only reader. */
-  const cap = page.getByLabel('Hold each SKU to at most this many copies live at TCGplayer, counting what is already out')
+  const cap = page.getByLabel('Copies to keep live at TCGplayer')
   await cap.fill('2')
   await cap.pressSequentially('x9')
   await expect(cap).toHaveValue('29')
@@ -3065,7 +3065,7 @@ test('the standing policy is on the multi-run landing, and one press writes it o
      floor's own number. What the case is FOR is unchanged and is the reason it survived the
      rewrite: the store's policy must be reachable on the landing the screen opens on, which is
      every open run and not a single picked one. */
-  const cut = page.getByLabel("The store's cut-off")
+  const cut = page.getByLabel("Store default")
   await expect(cut).toBeVisible()
   await cut.fill('0.40')
   await cut.press('Enter')
@@ -3138,7 +3138,7 @@ test('typing a cut-off moves rows across the sections, at the figure emit will u
     ],
   })
 
-  const cut = page.getByLabel("The store's cut-off")
+  const cut = page.getByLabel("Store default")
   await expect(cut).toHaveValue('0.40')
   await expect(page.locator('.pricing-cheap-count')).toContainText('2 under · 1 above')
 
@@ -3173,7 +3173,7 @@ test('the cut-off panel is drawn even when nothing is under the line', async ({ 
      empty the lower section would take its own control off the screen with it, and there would
      be no way back to the number that had just been moved. */
   await expect(page.locator('.pricing-cheap')).toBeVisible()
-  await expect(page.getByLabel("The store's cut-off")).toBeVisible()
+  await expect(page.getByLabel("Store default")).toBeVisible()
   await expect(page.locator('.pricing-cheap-count')).toContainText('0 under · 1 above')
 })
 

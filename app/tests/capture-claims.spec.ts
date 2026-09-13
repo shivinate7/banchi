@@ -1408,10 +1408,75 @@ test('a game whose export needs a set hint says so, in all three states of the f
      where a hint is set after the fact, and it is on the screen this sentence names. */
   await expect(hintNote(page)).toContainText('Manage box')
 
+  /* THE RESTING ROW SAYS `Needed`, NEVER `None`. `None` beside a sub-line reading "needed
+     for this game" read at a glance as "none needed for this game" — the opposite of what
+     the row means — and the owner's screenshot showed exactly that, clipped mid-word by the
+     chevron on top of it. The value now states the requirement directly and carries no
+     sub-line for this state at all. */
   await page.keyboard.press('Escape')
   const row = page.locator('.capture-row').filter({ hasText: /Set hint/ })
-  await expect(row).toContainText('None')
-  await expect(row.locator('.capture-sub')).toHaveText(/needed for this game/i)
+  await expect(row).not.toContainText('None')
+  await expect(row.locator('.capture-val')).toHaveText('Needed')
+  await expect(row.locator('.capture-sub')).toHaveCount(0)
+})
+
+/* ------------------------------------------------------------------------------------------
+ * NO SUB-LINE IN A CAPTURE ROW MAY EVER BE CLIPPED BY ITS CONTAINER
+ *
+ * `.capture-sub` used to live INSIDE `.capture-val`, which is `overflow: hidden`. The stack
+ * card sits in a narrow column, so any row combining a value with a sub-line — the typed
+ * hint beside "names no set" here, the resolution beside "under target" on the camera row —
+ * clipped the sub-line the instant the row was narrower than value + sub, which on a real
+ * rig it always is. The fix moved the sub-line out to be a sibling of the value inside
+ * `.capture-right`, so only `.capture-val-name` is ever allowed to clip.
+ *
+ * THIS IS THE MUTATION-TESTED HALF: reverting the CSS fix alone (see the entry's own report)
+ * turns this red while every other case in this file stays green, because nothing else here
+ * measures a bounding box.
+ */
+test('a set hint that names no set never clips its sub-line, at every width this app is verified at', async ({
+  page,
+}) => {
+  await routeSets(page, RIFTBOUND_SETS)
+  await open(page, { box: 3, bid: 23 }, NEEDS_HINT, HAND_BOXES)
+  await page.keyboard.press('h')
+
+  const hint = page.getByLabel('Set hint')
+  await hint.fill('Spiritfoged')
+  await expect(hintMeta(page)).toHaveText(/names no set/i)
+
+  await page.keyboard.press('Escape')
+  const row = page.locator('.capture-row').filter({ hasText: /Set hint/ })
+  await expect(row).toContainText('Spiritfoged')
+  const sub = row.locator('.capture-sub')
+  await expect(sub).toHaveText(/names no set/i)
+  const value = row.locator('.capture-val')
+
+  for (const width of [1440, 820, 390]) {
+    await page.setViewportSize({ width, height: 900 })
+    await expect(row).toContainText('Spiritfoged')
+    await expect(sub).toHaveText(/names no set/i)
+
+    const rowBox = await row.boundingBox()
+    expect(rowBox).not.toBeNull()
+
+    for (const el of [value, sub]) {
+      const elBox = await el.boundingBox()
+      expect(elBox).not.toBeNull()
+      // Fully inside the row's own box, on both edges — a clipped element still reports its
+      // full un-clipped bounding box in the accessibility tree, but not once its content has
+      // actually overflowed a hidden ancestor, which is the next check.
+      expect(elBox!.x).toBeGreaterThanOrEqual(rowBox!.x - 0.5)
+      expect(elBox!.x + elBox!.width).toBeLessThanOrEqual(rowBox!.x + rowBox!.width + 0.5)
+      expect(elBox!.y).toBeGreaterThanOrEqual(rowBox!.y - 0.5)
+      expect(elBox!.y + elBox!.height).toBeLessThanOrEqual(rowBox!.y + rowBox!.height + 0.5)
+
+      // And its own content is not overflowing ITS box — the direct symptom of being nested
+      // inside an `overflow: hidden` ancestor narrower than it needs.
+      const overflow = await el.evaluate((node) => node.scrollWidth - node.clientWidth)
+      expect(overflow).toBeLessThanOrEqual(1)
+    }
+  }
 })
 
 test('the same blank field on a game that needs no hint reads Optional, and is not flagged', async ({

@@ -190,9 +190,8 @@ export function SubmissionClaims() {
       </header>
 
       <p className="claims-lede">
-        A send holds the cards it is paying to read until its answers are banked, so a second
-        press over the same card is refused rather than billed twice. These clear themselves
-        when the run finishes.
+        A send holds its cards until answers are banked — avoids billing twice. Clears when
+        the run finishes.
       </p>
 
       {staleDrawn.length > 0 ? (
@@ -200,9 +199,8 @@ export function SubmissionClaims() {
           {staleDrawn.length === 1
             ? 'One of these sends is'
             : `${staleDrawn.length} of these sends are`}{' '}
-          no longer running. Its cards stay held on purpose: a send that was killed after it
-          submitted has already been billed, and the answers keep for 29 days. Watch that run
-          first — releasing it lets another press buy those cards again.
+          no longer running but stay held — already been billed, answers keep 29 days. Watch
+          that run, or releasing it risks buying those cards again.
         </Notice>
       ) : null}
 
