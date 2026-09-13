@@ -848,11 +848,19 @@
 
 /* The card panel on a wide screen: photograph left, everything he reads in a column beside it.
    The side is its own flex column so the button growing never moves the place above it.
-   820PX, NOT 768: at 768 the 380px photo column left only ~300px for the place text, and the
-   32px-floor position label (docs/DESIGN.md) wrapped to three lines — "Box 3 ·" / "Section 1
-   ·" / "Card 1" — because that floor cannot itself shrink to fit. 768-819px stays the single
-   mobile column below, where the place gets the page's full width and wraps to at most two. */
-@media (min-width: 820px) {
+   THE LADDER'S OWN 900, NOT 768 AND NOT 820: at 768 the 380px photo column left only ~300px
+   for the place text, and the 32px-floor position label (docs/DESIGN.md) wrapped to three
+   lines — "Box 3 ·" / "Section 1 ·" / "Card 1" — because that floor cannot itself shrink to
+   fit. 820 was tried first and measured wrong: with a maximal label ("Box 9999 · Section 99
+   · Card 50000" — store-scaling.md's 50,000-card target in one undeclared, one-section box,
+   D10) it STILL wraps to three lines at exactly 820px, which is one of the three widths
+   docs/DESIGN.md's own "Verifying a screen" section names — the two-column layout would have
+   been reintroducing the defect it was built to fix, at the width most likely to be looked
+   at. 900 is the ladder's existing "a two-column body becomes one" step, so no new width
+   joins the register (docs/DESIGN.md's `breakpoints` row), and it clears the maximal label
+   at two lines, never three: measured 819 (single column) at 1, 900 at 2, 1099 at 1. 768-899
+   stays the single mobile column below, where the place gets the page's full width. */
+@media (min-width: 900px) {
   .ff-card {
     display: grid;
     grid-template-columns: minmax(0, 380px) minmax(0, 1fr);

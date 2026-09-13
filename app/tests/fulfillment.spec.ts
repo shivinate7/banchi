@@ -1539,13 +1539,17 @@ test('the search hint names a real card from this store, not a fixed example', a
 })
 
 /* fulfiller.md finding 4 / the plan's item 3: two counters read "Card N of M" for two
- * unrelated numbers on one screen. The walk counter -- his progress across every order today
- * -- now says "Pull", leaving "Card N of M" to the one counter left that means a card: his
- * position inside the box (`PositionBar`, untouched here). */
-test('the walk counter reads "Pull N of M today", not "Card N of M"', async ({ page }) => {
+ * unrelated numbers on one screen. The walk counter -- his progress across every OPEN
+ * ORDER'S cards, not a day's work -- now says "Pull", leaving "Card N of M" to the one
+ * counter left that means a card: his position inside the box (`PositionBar`, untouched
+ * here). NOT "Pull N of M today": the walk is every open order's cards, which is not
+ * bounded to a day, and "today" claimed a scope the number does not carry. */
+test('the walk counter reads "Pull N of M", not "Card N of M" and not "today"', async ({
+  page,
+}) => {
   await openList(page, [], { orders: ONE_OPEN_ORDER })
   await view(page).getByRole('button', { name: 'Charizard ex' }).click()
-  await expect(view(page).locator('.ff-card-step')).toHaveText('Pull 1 of 1 today')
+  await expect(view(page).locator('.ff-card-step')).toHaveText('Pull 1 of 1')
 })
 
 test(`every text node is at least ${BODY_FLOOR}px, on the list and on the card`, async ({
@@ -1664,9 +1668,9 @@ test(`every position label is at least ${PLACE_FLOOR}px and set in tabular figur
  * 380px photo column priority and left the 32px-floor position label ("Box 3 · Section 1 ·
  * Card 7") only ~300px to draw in, wrapping it to three cramped lines. NEITHER `WIDTHS` entry
  * above is 768 -- 1280 and 375 both miss it -- so this is a viewport this suite never took
- * before. The fix pushed the two-column breakpoint to 820px; 768-819 now draws the place at
- * the page's full width, the same single-column layout the phone already uses, where it wraps
- * to at most two lines. */
+ * before. The fix moved the two-column breakpoint to 900px (the ladder's own step, not a new
+ * one); 768-899 now draws the place at the page's full width, the same single-column layout
+ * the phone already uses. */
 test('the position label does not wrap to three lines at 768px', async ({ page }) => {
   await page.setViewportSize({ width: 768, height: 1024 })
   await openList(page, [], { orders: ONE_OPEN_ORDER })
@@ -1679,6 +1683,48 @@ test('the position label does not wrap to three lines at 768px', async ({ page }
     return Math.round(node.getBoundingClientRect().height / lineHeight)
   })
   expect(lines, 'position label line count at 768px').toBeLessThanOrEqual(2)
+})
+
+/* THE COORDINATOR'S OWN CHECK ON THIS FIX: 820px is one of the three widths docs/DESIGN.md's
+ * "Verifying a screen" section names, and a first attempt at this fix moved the breakpoint to
+ * exactly 820px -- which measured fine on the store's ORDINARY labels and still wrapped to
+ * three lines on the longest one the store can emit ("Box 9999 · Section 99 · Card 50000":
+ * docs/specs/store-scaling.md's 50,000-card target, in one undeclared box with no dividers,
+ * D10 -- so a single section holding that many cards is a real shape and not a fabricated
+ * string). The breakpoint moved again, to 900 -- the ladder's own "a two-column body becomes
+ * one" step -- specifically because 900 clears this label at two lines where 820 did not. */
+test('the longest label the store can emit does not wrap to three lines at 820px', async ({
+  page,
+}) => {
+  const MAX_LABEL = 'Box 9999 · Section 99 · Card 50000'
+  const maxLabelOrder = {
+    ...ONE_OPEN_ORDER,
+    resolution: {
+      ...ONE_OPEN_ORDER.resolution,
+      orders: [
+        {
+          ...ONE_OPEN_ORDER.resolution.orders[0]!,
+          lines: [
+            {
+              ...ONE_OPEN_ORDER.resolution.orders[0]!.lines[0]!,
+              picks: [{ ...ORDER_PICK, place: { ...ORDER_PICK.place, label: MAX_LABEL } }],
+            },
+          ],
+        },
+      ],
+    },
+  }
+  await page.setViewportSize({ width: 820, height: 1024 })
+  await openList(page, [], { orders: maxLabelOrder })
+  await view(page).getByRole('button', { name: 'Charizard ex' }).click()
+  const place = view(page).locator('.fulfillment-place-large')
+  await expect(place).toHaveText(MAX_LABEL)
+  const lines = await place.evaluate((node) => {
+    const style = window.getComputedStyle(node)
+    const lineHeight = parseFloat(style.lineHeight)
+    return Math.round(node.getBoundingClientRect().height / lineHeight)
+  })
+  expect(lines, 'maximal position label line count at 820px').toBeLessThanOrEqual(2)
 })
 
 /* mobile.md finding 3: a phone laid flat (844x390) kept the landing list at its narrow

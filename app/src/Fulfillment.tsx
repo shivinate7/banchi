@@ -996,7 +996,7 @@ export function Fulfillment() {
             {forOrder === null || walkAt < 0 ? null : (
               <p className="fulfillment-say ff-card-eyebrow">
                 <span className="ff-card-step">
-                  Pull {walkAt + 1} of {walk.length} today
+                  Pull {walkAt + 1} of {walk.length}
                 </span>
                 <span className="ff-card-eyebrow-sep" aria-hidden="true">
                   {' '}
