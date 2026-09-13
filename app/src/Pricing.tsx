@@ -76,6 +76,7 @@ import { useCardCropWhenSeen } from './cardCrop'
 import { Button, Chip, cropStyle, EmptyState, Icon, Kbd, Notice, Segmented } from './kit'
 import { toast } from './kit/toast'
 import { ValueBands, type ValueEnd } from './ValueBands'
+import { rememberPricingCompare, storedPricingCompare } from './deviceMemory'
 import './Pricing.css'
 
 /* #/pricing — THE HAND-PRICING WORKLIST (D49, D86).
@@ -994,8 +995,25 @@ export function Pricing() {
      own toggle state otherwise. Off by default: Low / +Ship / Direct and the plain box/run-
      span badge are hidden until the operator asks for them; an over-cap warning is never
      gated by this, because D156's "what cannot go is named on the deck, with a door each"
-     already promises that badge stays visible regardless. */
-  const [compareOn, setCompareOn] = useState<Record<string, boolean>>({})
+     already promises that badge stays visible regardless.
+
+     PERSISTED PER BROWSER, NOT PER SESSION (the coordinator's catch on the first build): this
+     is the same kind of fact as `banchi.inventory.hide-sold` — how THIS browser is dressed,
+     never anything about a card or a price — and an operator pricing hundreds of rows in one
+     sitting should not have to press Compare again on every reload. The lazy initializer reads
+     `localStorage` once, on mount; every toggle both updates the state (for the re-render) and
+     writes the full set back (`deviceMemory.ts`'s own shape: a whole set, so a clear or a
+     renamed bucket cannot leave a stale entry behind). */
+  const [compareOn, setCompareOn] = useState<Record<string, boolean>>(() =>
+    Object.fromEntries([...storedPricingCompare()].map((bucket) => [bucket, true])),
+  )
+  const setCompare = useCallback((bucket: string, on: boolean) => {
+    setCompareOn((prior) => {
+      const next = { ...prior, [bucket]: on }
+      rememberPricingCompare(new Set(Object.keys(next).filter((key) => next[key])))
+      return next
+    })
+  }, [])
   /** WHICH LIVE LISTINGS ARE ON SCREEN (D103). `all` is the default and that is the owner's
    *  ruling — staleness is a filter they apply, not a gate applied before the data arrives.
    *  The alternative was measured and is why: against their own export the seven-day window
@@ -3278,14 +3296,14 @@ export function Pricing() {
               )}
               {/* ONE TOGGLE PER SECTION, NOT PER ROW (Ruling B). Off by default: Low,
                   +Ship, Direct and the plain box/run-span badge stay behind it, and
-                  `l`/`s`/`d` act only while it is on for this section. */}
+                  `l`/`s`/`d` act only while it is on for this section. Persisted per
+                  browser (`deviceMemory.ts:rememberPricingCompare`), so the choice
+                  survives a reload. */}
               <button
                 type="button"
                 className="pricing-compare-toggle"
                 aria-pressed={compareOn[section.bucket] ?? false}
-                onClick={() =>
-                  setCompareOn((prior) => ({ ...prior, [section.bucket]: !(prior[section.bucket] ?? false) }))
-                }
+                onClick={() => setCompare(section.bucket, !(compareOn[section.bucket] ?? false))}
               >
                 <Icon name="columns" size={13} />
                 Compare

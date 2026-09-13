@@ -2971,6 +2971,34 @@ test('Compare toggle is one control per section, off by default', async ({ page 
   await expect(page.locator('.pricing-row').first().locator('.pricing-ref-low')).toBeVisible()
 })
 
+test('Compare survives a reload, per browser, on the device-local key', async ({ page }) => {
+  /* RED-FIRST AGAINST THE FIRST BUILD: Compare was `useState`, forgotten on every reload — an
+     operator pricing hundreds of rows in one sitting had to re-press it per section every time
+     they opened the screen. `deviceMemory.ts:rememberPricingCompare` persists the on/off set
+     to `banchi.pricing.compare`, the same kind of fact as `banchi.inventory.hide-sold`: how
+     THIS browser is dressed, never a card. */
+  await open(page, { worklist: SPAN })
+
+  const toggle = page.getByRole('button', { name: 'Compare' }).first()
+  await expect(toggle).toHaveAttribute('aria-pressed', 'false')
+  await expect(page.locator('.pricing-caption-low')).toHaveCount(0)
+
+  await toggle.click()
+  await expect(toggle).toHaveAttribute('aria-pressed', 'true')
+  await expect(page.locator('.pricing-caption-low')).toBeVisible()
+
+  await page.reload()
+  await settleFonts(page)
+  await expect(page.locator(VIEW)).toBeVisible()
+
+  /* THE RULING'S DEFAULT IS UNCHANGED ON A FRESH BROWSER — this is the SAME browser, having
+     asked once, so the columns come back on without a second press. */
+  const toggleAfterReload = page.getByRole('button', { name: 'Compare' }).first()
+  await expect(toggleAfterReload).toHaveAttribute('aria-pressed', 'true')
+  await expect(page.locator('.pricing-caption-low')).toBeVisible()
+  await expect(page.locator('.pricing-row').first().locator('.pricing-ref-low')).toBeVisible()
+})
+
 test('l/s/d snap keys act only while Compare is on; m always works', async ({ page }) => {
   const wire = await open(page, { worklist: SPAN })
 

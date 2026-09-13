@@ -4513,11 +4513,13 @@ COMPONENTS = [
                                             "index since 2026-09-12 "
                                             "(D153), which is a field "
                                             "in that document rather than a seventh key and is "
-                                            "the one value here no screen draws — and nothing "
-                                            "else",
+                                            "the one value here no screen draws, and which "
+                                            "`#/pricing` worklist sections this browser has "
+                                            "asked Compare on for (D-one-verdict-on-pricing) "
+                                            "— and nothing else",
                                     "governed_by": ["D13", "D27", "D91", "D94", "D95", "D114", "D132",
                                                     "D142", "D145",
-                                                    "D153", "D193"],
+                                                    "D153", "D193", "D-one-verdict-on-pricing"],
                                     "note": "IT EXISTS BECAUSE OF A LINT RULE, which is the "
                                             "rule working rather than being worked around. "
                                             "`app/eslint.config.js` bans the STORE and not the "
