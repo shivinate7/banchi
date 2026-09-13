@@ -1,4 +1,4 @@
-## D-run-phase-treats-joined-as-identified — `_phase` reads `joined` as sufficient evidence identification happened
+## D199 — `_phase` reads `joined` as sufficient evidence identification happened
 
 **The report, 2026-09-13:** a run panel badged "Not started" beside 42 SKUs already joined and
 `pricing.json` on disk — one badge, one set of files, disagreeing inside a single panel.

@@ -1,4 +1,4 @@
-## D-home-review-tile-counts-both-queues — Home's Review tile reads the same total `#/review` draws, never `review` alone
+## D198 — Home's Review tile reads the same total `#/review` draws, never `review` alone
 
 **The report, 2026-09-13:** Home's Review stage tile said "0 · nothing waiting" and painted
 green while `#/review` itself showed "Card 1 of 1 · 1 parked" — the same store, two screens

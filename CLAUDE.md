@@ -2453,6 +2453,8 @@ D194 The visible word count on every owner screen may only go down, and the ceil
 D195 Same-role buttons stacked in one sector share a width, and a Playwright sweep finds them rather than reading a declared class
 D196 No user-visible string may name a decision, a repository path, or a pipeline-internal noun
 D197 A page is anchored to the shell's own inset, and only its width may vary by screen
+D198 Home's Review tile reads the same total `#/review` draws, never `review` alone
+D199 `_phase` reads `joined` as sufficient evidence identification happened
 ```
 
 **THE GAP THIS LIST CARRIED BETWEEN D116 AND D118 IS CLOSED, AND IT CLOSED THE WAY IT SAID IT

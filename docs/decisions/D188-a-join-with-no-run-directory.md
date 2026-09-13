@@ -52,7 +52,7 @@ One existing, unrelated constraint in `rescue` was left alone on purpose: it ref
 
 **`emit` gaining the same two loaders.** The natural shape is `resolve.load`/`resolve.load_from_store` staying exactly as they are and `cli/cmd_emit.py` growing the identical `run_dir is None` branch `cmd_join.py` has — `Resolved` already carries everything `emit` reads (`matches`, `photos`) regardless of which loader built it.
 
-### Footnote, added by `D-run-phase-treats-joined-as-identified`
+### Footnote, added by `D199`
 
 `server/pipeline_routes.py:_phase` was never updated to know this path exists: it gated every
 stage past `"ready"`/`"identify"` on `manifest.get("collected")` alone, and a store-backed join
