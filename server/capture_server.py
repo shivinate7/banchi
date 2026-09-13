@@ -282,7 +282,7 @@ from codes import products  # noqa: E402
 from pipeline import games, join, tcgcsv  # noqa: E402
 from pipeline import orders as order_engine  # noqa: E402
 from cli import runs as cli_runs  # noqa: E402
-from store import Store, files, master, photos, queues  # noqa: E402
+from store import Store, db, files, master, photos, queues  # noqa: E402
 from store import orders as order_store  # noqa: E402
 
 # The pipeline seam, in its own module because it is the one part of this server that can
@@ -8060,6 +8060,36 @@ def _match_rank(card: master.Card, query: str) -> Optional[int]:
     return None
 
 
+def _fts_query(text: str) -> str:
+    """Turn a typed search string into an FTS5 MATCH expression (store-scaling item 8).
+
+    ONE TERM PER WHITESPACE-SEPARATED WORD, EACH QUOTED, EACH A PREFIX. Quoting
+    (`"word"*`) escapes FTS5's own operators (`-`, `"`, `*`, `OR`, `NOT`, `AND`) so a query
+    containing them is treated as literal text rather than as FTS5 syntax — a search for
+    `note: japanese` must not become a column filter. `*` after the closing quote is FTS5's
+    prefix operator and is legal directly after a quoted phrase.
+
+    EVERY TERM IS A PREFIX, NOT ONLY THE LAST ONE. `do_search`'s existing rank order treats
+    a full-word prefix as better than a mid-string substring (`_RANK_NAME_PREFIX` above
+    `_RANK_SUBSTRING`), and a person typing `char ex` mid-query (both words incomplete) is
+    the ordinary case while they are still typing, not an edge case — `useSearch.ts`'s
+    debounce means a fast typist's query is live before either word is finished. Prefixing
+    only the last term would make `char ex` (before the second word completes) match
+    nothing until the 'x' of "ex" lands, which reads as the search being broken for the
+    length of one keystroke.
+
+    BARE WHITESPACE SPLIT, MATCHING `_require_query`'s OWN NOTION OF "there is text here" —
+    no attempt to tokenize the way FTS5 itself would (e.g. `4/102` splitting is FTS5's
+    tokenizer's job, not this function's); this function's only job is turning a sentence
+    into an AND of prefix terms.
+    """
+    terms = text.split()
+    if not terms:
+        return ""
+    escaped = ('"' + term.replace('"', '""') + '"*' for term in terms)
+    return " ".join(escaped)
+
+
 def _distinct(values: Iterable) -> List[str]:
     """Non-empty values, deduplicated, first-seen order kept."""
     out: List[str] = []
@@ -8141,10 +8171,18 @@ def do_search(query: str) -> dict:
     existed since the store did and nothing served them to a screen — so the question "where
     are my four Eiscues" was answerable only by reading `inventory.json`.
 
-    THE SCAN IS ONE PASS AND THE COPIES COME FROM THE STORE'S OWN ACCESSORS. Matching walks
-    every card once to find which SKUs answered; each surviving SKU is then rendered whole by
-    `positions_for_sku`, in box-walk order, with `copies_on_hand` for the count. Building the
-    copy list out of the matched cards instead would be a second scan AND a wrong answer: a
+    THE SCAN IS AN FTS5 QUERY AS OF STORE-SCALING ITEM 8, NOT A WALK. At 2,535 cards a
+    single Python pass over every card was the honest answer; at 50,000 it is not, and the
+    cost was never the text match, it was building 50,000 card objects to get at it.
+    `cards_fts` is maintained inside `Store.write()`'s own transaction by three sync
+    triggers (`store/db.py:_add_search_index`), so this function never has to keep it in
+    sync itself — it only ever reads. Ranking is `bm25(cards_fts)`, which narrows the
+    CANDIDATE SET (which cards are even considered — the part that used to cost O(cards));
+    `_match_rank` still decides the RANK of each candidate (exact number, name prefix, or
+    substring), exactly as it always has, so the FINAL sort order below is unchanged. And
+    the copies still come from the store's own accessors: each surviving SKU is rendered
+    whole by `positions_for_sku`, in box-walk order, with `copies_on_hand` for the count.
+    Building the copy list out of the matched cards instead would be a wrong answer: a
     query that matches on `set_hint` matches only the copies from that stack, and a group
     that showed three of five copies because two were captured with a different hint is worse
     than no search at all.
@@ -8166,26 +8204,77 @@ def do_search(query: str) -> dict:
     reader and the arithmetic there is unchanged.
     """
     text = _require_query(query)
-    needle = text.lower()
 
     inventory = Store().read().inventory
     places = _Places(inventory)
 
+    match = _fts_query(text)
     ranked: Dict[str, int] = {}
     loose: List[master.Card] = []
-    for card in inventory.cards.values():
-        rank = _match_rank(card, needle)
-        if rank is None:
-            continue
-        sku = str(card.sku).strip() if card.sku else ""
-        if not sku:
-            loose.append(card)
-            continue
-        # The BEST rank any copy achieved. Copies of one SKU differ in `set_hint` and can
-        # differ in `name` (a re-identify writes what the model read that time), so one copy
-        # can match on a prefix while another matches on a substring — and the group is as
-        # good as its best member.
-        ranked[sku] = min(rank, ranked.get(sku, rank))
+    if match:
+        conn = db.connect(files.inventory_dir())
+        try:
+            hits = conn.execute(
+                "SELECT cards.key, cards.sku FROM cards_fts "
+                "JOIN cards ON cards.rowid = cards_fts.rowid "
+                "WHERE cards_fts MATCH ? ORDER BY bm25(cards_fts)",
+                (match,),
+            ).fetchall()
+        finally:
+            conn.close()
+        # RANK IS STILL COMPUTED BY `_match_rank`, NOT READ OFF `bm25`. bm25 orders which
+        # SKU is the best match; it says nothing about whether a hit is an EXACT NUMBER
+        # match, a NAME PREFIX, or a bare SUBSTRING — the three-tier rank the existing sort
+        # key relies on. So FTS narrows the CANDIDATE SET and `_match_rank` still decides
+        # the RANK of each candidate — cheap, since hits are a small fraction of the store.
+        #
+        # PER TERM, NOT PER PHRASE — A CORRECTION AGAINST THE ORIGINAL PLAYBOOK, WHICH
+        # CALLED `_match_rank(card, needle)` WITH THE WHOLE QUERY STRING AND WAS WRONG for
+        # exactly the feature this item exists to add. `_match_rank` was written for a
+        # single-term walk and tests one field for the WHOLE needle as a substring; a query
+        # like "eiscue 044" has no field anywhere that contains the literal substring
+        # "eiscue 044", so calling it with the whole phrase returns `None` for every FTS
+        # candidate and MULTI-WORD SEARCH FINDS NOTHING — measured: `do_search("eiscue
+        # 044")` returned zero groups against this exact fixture before this fix. Each
+        # WHITESPACE TERM is checked separately (`_fts_query`'s own splitting rule) and the
+        # BEST (lowest) rank among the terms that match wins — order-independent, which is
+        # what "eiscue 044" and "044 eiscue" both need to return the identical list. A
+        # single-term query degrades to exactly the old call (`terms == [needle]`).
+        terms = [term.lower() for term in text.split()]
+        seen_keys: set = set()
+        for key, sku in hits:
+            key = str(key)
+            if key in seen_keys:
+                continue
+            seen_keys.add(key)
+            card = inventory.cards.get(key)
+            if card is None:
+                # The FTS row and the live snapshot disagree — a card deleted between the
+                # index read and this snapshot's own read, or (defensively) a sync gap the
+                # triggers should make impossible. Either way, a candidate this snapshot
+                # cannot see is not a result this snapshot can render.
+                continue
+            term_ranks = [r for r in (_match_rank(card, term) for term in terms) if r is not None]
+            if not term_ranks:
+                # FTS5's tokenizer can match text `_match_rank` would not — e.g. a prefix
+                # match inside `note`'s free prose that the substring pass would also have
+                # caught, so this should be rare-to-never; kept as a filter rather than an
+                # assumption, because trusting bm25's candidate set unconditionally would
+                # silently drop `_match_rank`'s own exact-vs-prefix-vs-substring distinction
+                # the day the two tokenizers disagree about a corner case.
+                continue
+            rank = min(term_ranks)
+            sku = str(sku).strip() if sku else ""
+            if not sku:
+                loose.append(card)
+                continue
+            # The BEST rank any copy achieved. Copies of one SKU differ in `set_hint` and can
+            # differ in `name` (a re-identify writes what the model read that time), so one copy
+            # can match on a prefix while another matches on a substring — and the group is as
+            # good as its best member. `min()` makes this ORDER-INDEPENDENT, which is what lets
+            # bm25's candidate order replace the old box-walk order with no other assertion
+            # changing: whichever copy of a tied SKU the query returns first, the lower rank wins.
+            ranked[sku] = min(rank, ranked.get(sku, rank))
 
     groups: List[dict] = []
     for sku, rank in ranked.items():

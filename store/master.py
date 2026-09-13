@@ -77,6 +77,16 @@ from typing import Dict, Iterable, List, Optional, Sequence, Tuple, Union
 # (D88). The table specs at the bottom of `Inventory` are the other half of that contract.
 from store.rows import Rows, TableSpec, int_or_none
 
+# `store/numbers.py`, NOT `pipeline/join.py` — CORRECTED: `store/` MAY NOT IMPORT
+# `pipeline/` (D63: "store/ imports nothing from pipeline/, so there is no cycle"; the
+# arrow runs the other way — `pipeline/orders.py`, `readings.py` and `selection.py` all
+# import `store`). A module-level `from pipeline import join` here would be exactly the
+# cycle that rule forbids. `store/numbers.py` is the leaf `join_key`/`display_number` moved
+# to, with no imports beyond the stdlib, and `pipeline/join.py` imports them back and
+# re-exports under the same names — so `_card_columns` reuses one fold (D55/D67) the same
+# as every other reader, without `store/` crossing the one edge it may not cross.
+from store.numbers import display_number, join_key
+
 VERSION = 2
 
 CAPTURED = "captured"
@@ -1316,6 +1326,17 @@ def _card_columns(card: "Card") -> Dict[str, object]:
         # missing name is a programming error in a caller rather than a data condition; a
         # NULL that reaches disk anyway is HEALED and reported by `store/db.py:_repair`.
         "cid": card.cid,
+        # STORE-SCALING ITEM 8: the two forms `server/capture_server.py`'s `_card_number_key`
+        # and `_number_display` compose, stored so the FTS5 search index (and any other
+        # reader) can see them without re-running `store/numbers.py`'s rules a second time.
+        # "" rather than NULL when there is no number, matching every other text column
+        # here — FTS5's external-content triggers read these as ordinary column values, and
+        # NULL/"" both index as nothing, but "" keeps `PRAGMA table_info` and a `sqlite3`
+        # CLI session boring.
+        "number_key": join_key(card.number, card.printed_total) if (
+            card.number and card.printed_total
+        ) else "",
+        "number_display": display_number(card.number, card.printed_total) or "",
     }
 
 
@@ -2544,6 +2565,7 @@ class Inventory:
         column_names=(
             "box", "idx", "state", "sku", "condition", "capture_id", "name", "number",
             "game", "set_hint", "run", "captured_at", "state_at", "cid",
+            "number_key", "number_display",
         ),
     )
     BOXES = TableSpec(

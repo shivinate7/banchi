@@ -163,12 +163,30 @@ def names(home: Path) -> Dict[str, Optional[str]]:
 
 
 def table_bytes(home: Path) -> Dict[str, List[tuple]]:
-    """Every table's rows, for a byte-exact comparison across a reverse."""
+    """Every table's rows, for a byte-exact comparison across a reverse.
+
+    `cards_fts*` IS CARVED OUT (store-scaling item 8), for two independent reasons and
+    either alone would be enough. First, a plain `SELECT * FROM cards_fts` cannot even run:
+    `note` is a virtual column of the FTS5 table with no matching column on `cards` (the
+    external content table), and external-content mode resolves a column's TEXT by reading
+    it back from the content table on demand — so `SELECT * FROM cards_fts` raises
+    `sqlite3.OperationalError: no such column: T.note` regardless of what data is in it.
+    Second, even for a table that could be selected, FTS5's shadow tables
+    (`cards_fts_data`, `cards_fts_idx`, `cards_fts_docsize`, `cards_fts_config`) store
+    compressed b-tree segment blobs whose internal layout depends on insertion order and
+    page-split history, not only on logical content — so an index built once and a
+    logically-identical index rebuilt independently are not guaranteed byte-identical, and
+    `case_the_reverse_restores_every_table_byte_identically`'s comparison would fail on them
+    even when the two stores mean the same thing. `check_index_stays_in_sync_...` (T7, and
+    the raw-SQL parity check in the reverse case below) is the semantic check that stands in
+    for the byte-exact one on this table.
+    """
     conn = raw(home)
     try:
         tables = sorted(
             r[0] for r in conn.execute(
-                "SELECT name FROM sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%'"
+                "SELECT name FROM sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%' "
+                "AND name NOT LIKE 'cards_fts%'"
             )
         )
         return {name: conn.execute(f"SELECT * FROM {name}").fetchall() for name in tables}
@@ -394,9 +412,15 @@ def case_the_four_column_rosters_agree() -> None:
           "`db.TABLES['cards']` and `Inventory.CARDS.column_names` name the same columns")
     equal(sorted(spec ^ built), [],
           "and `_card_columns` builds exactly those keys")
-    equal(sorted(built - set(master.Card.__annotations__)), ["idx"],
-          "and every one of them is a declared field on `Card`, with `idx` the one named "
-          "alias — for `index`, which is a Python builtin's name in every other context")
+    equal(sorted(built - set(master.Card.__annotations__)),
+          ["idx", "number_display", "number_key"],
+          "and every other one of them is a declared field on `Card` — `idx` is the one "
+          "named alias, for `index`, which is a Python builtin's name in every other "
+          "context, and `number_key`/`number_display` (store-scaling item 8) are the two "
+          "DERIVED columns `_card_columns` composes from `number`/`printed_total` through "
+          "`pipeline/join.py` rather than reading off a `Card` field of their own name — "
+          "there is no `Card.number_key`, on purpose, because the composed form has no "
+          "reason to round-trip through `Inventory.parse` as its own attribute")
     check("cid" in declared and "cid" in spec and "cid" in built,
           "and the card's name is in all three")
 
@@ -691,6 +715,33 @@ def case_the_reverse_restores_every_table_byte_identically() -> None:
     equal([name for name, same in identical if not same], [],
           f"all {len(identical)} tables are byte-identical after the reverse, reproducing "
           "`payload_text`'s exact serialization")
+
+    # `cards_fts*` GETS A SEMANTIC CHECK IN PLACE OF THE BYTE-EXACT ONE ABOVE
+    # (store-scaling item 8) — the forward migration's raw UPDATE loop, the manual reverse
+    # above (also a raw UPDATE), and `_add_search_index`'s own seed all touch `cards_fts`'s
+    # shadow tables, whose page layout is not guaranteed byte-stable across an equivalent
+    # rebuild even when the logical index is unchanged. What the byte comparison stood in
+    # for on every other table — "the reverse didn't corrupt anything" — is a row-count
+    # parity check here: every `cards` row has exactly one matching `cards_fts` row, neither
+    # more (a stale entry the reverse's raw UPDATE should have retired via the AU trigger)
+    # nor fewer (a row the triggers failed to index at all).
+    # COUNTED THROUGH THE SHADOW TABLE, NOT THROUGH `cards_fts` ITSELF — a bare
+    # `SELECT count(*) FROM cards_fts` fails for the SAME reason a bare `SELECT * FROM
+    # cards_fts` does (see `table_bytes`'s docstring): with no `MATCH` constraint SQLite
+    # falls back to a full scan that reads every declared column's text back from the
+    # content table, and `note` has none there. `cards_fts_docsize` is a REAL table (one row
+    # per indexed document, keyed by rowid) rather than the virtual table, so counting it
+    # carries none of that restriction.
+    conn = raw(home)
+    try:
+        cards_count = conn.execute("SELECT COUNT(*) FROM cards").fetchone()[0]
+        fts_count = conn.execute("SELECT COUNT(*) FROM cards_fts_docsize").fetchone()[0]
+    finally:
+        conn.close()
+    equal(fts_count, cards_count,
+          "and `cards_fts` holds exactly one row per card after the reverse — the sync "
+          "triggers kept the index in step with a raw SQL UPDATE, not only with the ORM's "
+          "own write path")
 
 
 def case_the_forward_version_guard_refuses_a_newer_store() -> None:

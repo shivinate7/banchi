@@ -103,7 +103,13 @@ PHOTOS_RELOCATED = "photos_relocated"
 # `EXPLAIN QUERY PLAN` on `Rows.top`'s query, before this step, against a store re-opened at
 # the CURRENT schema version, reads `SCAN cards` / `USE TEMP B-TREE FOR ORDER BY` — the exact
 # O(table) sort this item's own `Rows.top` exists to avoid.
-SCHEMA_VERSION = 6
+#
+# SEVEN, FOR STORE-SCALING ITEM 8. `docs/specs/store-scaling/00-phases.md` reserved 6 for
+# this item and item 2 reached it first (see the paragraph above and D192), so this item
+# renumbers its own — the D140 rule for decision ids, applied to schema versions, and the
+# same shape `store/db.py`'s own 3->4 comment already names as precedent. `_add_search_index`
+# builds the FTS5 index that replaces `do_search`'s O(cards) walk.
+SCHEMA_VERSION = 7
 
 # The six files a legacy store is made of, and the one that is a log rather than a document.
 LEGACY_INVENTORY = "inventory.json"
@@ -127,6 +133,11 @@ TABLES: Dict[str, Tuple[str, ...]] = {
     "cards": (
         "box", "idx", "state", "sku", "condition", "capture_id", "name", "number", "game",
         "set_hint", "run", "captured_at", "state_at", "cid",
+        # STORE-SCALING ITEM 8: the composition and screen forms of the card's number,
+        # reused rather than re-derived so the FTS5 index (and any other reader) sees
+        # exactly what `pipeline/join.py:join_key`/`display_number` compose — see
+        # `store/master.py:_card_columns`.
+        "number_key", "number_display",
     ),
     "boxes": ("box", "bid", "name", "state"),
     "listings": ("condition", "pushed", "staged", "live"),
@@ -303,6 +314,15 @@ def _ensure_schema(
     # and no partial index for `_repair` to probe.
     for statement in _CID_INDEXES:
         conn.execute(statement)
+    # THE FRESH PATH BUILDS THE SEARCH INDEX TOO, FOR THE SAME REASON THE TWO STATEMENTS
+    # ABOVE DO (store-scaling item 8). `_upgrade`'s `ALTER`/`CREATE VIRTUAL TABLE` steps never
+    # run here — this branch stamps `SCHEMA_VERSION` directly — so without this call
+    # `cards_fts` would not exist on any newly created store: every worktree, the demo seed,
+    # and every harness test that starts from an empty store, and `do_search` would raise
+    # `no such table: cards_fts` on its first query. Cheap here: the table has no rows yet,
+    # so `_add_search_index`'s backfill loop and its `rebuild` are both no-ops — only the DDL
+    # (the table and its three triggers) actually does anything.
+    _add_search_index(conn)
     conn.execute(
         "INSERT OR IGNORE INTO meta (key, value) VALUES ('schema', ?)", (str(SCHEMA_VERSION),)
     )
@@ -364,6 +384,8 @@ def _upgrade(
                 _add_readings(conn)
             if stored < 6:
                 _add_captured_at_index(conn)
+            if stored < 7:
+                _add_search_index(conn)      # STORE-SCALING ITEM 8
             conn.execute(
                 "INSERT OR REPLACE INTO meta (key, value) VALUES ('schema', ?)",
                 (str(SCHEMA_VERSION),),
@@ -875,6 +897,164 @@ def _add_captured_at_index(conn: sqlite3.Connection) -> None:
     makes a re-run of this step (a crash between it and the stamp) a no-op.
     """
     conn.execute("CREATE INDEX IF NOT EXISTS cards_captured_at ON cards(captured_at)")
+
+
+_FTS_TOKENIZE = "unicode61 remove_diacritics 2 tokenchars '/-'"
+
+
+def _add_search_index(conn: sqlite3.Connection) -> None:
+    """Schema 7: FTS5 over the six fields `do_search` has always matched on (item 8).
+
+    ADDITIVE LIKE `_add_submissions`: nothing here can be wrong about an existing row,
+    because nothing existing is read to decide what to write — every card's own row is what
+    seeds the index, via the rebuild command below, and a rebuild is idempotent by
+    definition. The two new columns are backfilled by the ALTER's default (NULL) followed by
+    an UPDATE that recomputes them from each row's own stored `number`/`printed_total` —
+    there is no ambiguity to resolve, unlike `_add_card_ids`'s photograph hashing.
+
+    ALSO CALLED FROM THE FRESH-STORE BRANCH OF `_ensure_schema`, not only from `_upgrade` —
+    `_CID_INDEXES`' own precedent: a step that only ever ran through `if stored < N` would
+    never reach a store created new at the current `SCHEMA_VERSION`, which is every
+    worktree, the demo seed, and every harness test. Idempotent either way: `ALTER ... ADD
+    COLUMN` is guarded by `PRAGMA table_info`, `CREATE VIRTUAL TABLE`/`CREATE TRIGGER` are
+    `IF NOT EXISTS`, and the backfill loop and the rebuild are no-ops over zero rows.
+
+    TOKENCHARS INCLUDES `/` AND `-` so a collector number (`039/236`) and a One Piece
+    identifier (`OP15-079`) stay one token each rather than being split into three; without
+    it `unicode61`'s default word-boundary rule tokenizes `039/236` as two tokens and a
+    query for the whole string would still work (FTS5 ANDs bare terms) but a query for just
+    `/236` — which nobody types, but which a prefix match on a lone `/` would otherwise
+    treat as a wildcard over every row — would not mean what a person expects.
+
+    EXTERNAL CONTENT (`content='cards'`), NOT A COPY. `cards.key` is `TEXT PRIMARY KEY`
+    (`_ddl`: `body = f"key TEXT PRIMARY KEY, {typed}, "`), which does NOT alias SQLite's
+    rowid — only an `INTEGER PRIMARY KEY` column does that — so `cards` still carries its
+    own implicit, stable rowid, and `content_rowid='rowid'` is exactly right. The rowid
+    stays stable across a card's whole life because `SqliteSource.upsert` writes
+    `ON CONFLICT (key) DO UPDATE`, not `INSERT OR REPLACE` — an UPDATE never changes a row's
+    rowid; a REPLACE (delete+insert) would have, which would leave the sync triggers'
+    `old.rowid`/`new.rowid` bookkeeping wrong on every ordinary write. D172 fixed exactly
+    this defect for a different constraint (`cards_cid`) by naming the conflict target — the
+    same property this item leans on was fixed for a different reason two schema versions
+    ago.
+    """
+    columns = {row[1] for row in conn.execute("PRAGMA table_info(cards)").fetchall()}
+    for column in ("number_key", "number_display"):
+        if column not in columns:
+            conn.execute(f"ALTER TABLE cards ADD COLUMN {column} TEXT")
+
+    # Backfill the two new columns for every existing row, THROUGH `store/numbers.py`'s real
+    # functions — never re-derived in SQL. `pipeline/join.py` is NOT the import here:
+    # `store/` may not import `pipeline/` (D63 — the arrow runs the other way), so
+    # `join_key`/`display_number` live in the leaf module `store/numbers.py` and
+    # `pipeline/join.py` re-exports them under the same names for every other caller. There
+    # are at most a few tens of thousands of cards even at the 50,000-card projection this
+    # whole spec is written for, and this runs once, under the lock, exactly like
+    # `_add_card_ids`'s hashing pass. The NEXT ordinary write to any card (always through
+    # `_card_columns`) recomputes these two columns anyway, so this backfill only has to be
+    # right for cards nobody touches again.
+    from store.numbers import display_number as _display_number, join_key as _join_key
+
+    rows = conn.execute("SELECT key, number, payload FROM cards").fetchall()
+    for key, number, payload_text_ in rows:
+        try:
+            record = json.loads(payload_text_)
+        except (TypeError, ValueError):
+            continue
+        printed_total = record.get("printed_total")
+        number_key = _join_key(number, printed_total) if (number and printed_total) else ""
+        number_display = _display_number(number, printed_total) or ""
+        conn.execute(
+            "UPDATE cards SET number_key = ?, number_display = ? WHERE key = ?",
+            (number_key, number_display, key),
+        )
+
+    conn.execute(
+        "CREATE VIRTUAL TABLE IF NOT EXISTS cards_fts USING fts5("
+        "name, number, sku, set_hint, note, number_key, number_display, "
+        "content='cards', content_rowid='rowid', "
+        f"tokenize=\"{_FTS_TOKENIZE}\")"
+    )
+    # THE THREE STANDARD EXTERNAL-CONTENT SYNC TRIGGERS. `note` is not an indexed column of
+    # `cards` today (`TABLES["cards"]` has no `note`), so these triggers read it out of
+    # `new.payload`/`old.payload` via `json_extract` rather than off a column — the one
+    # place this migration reads the payload from a trigger rather than from a dedicated
+    # column, because promoting `note` to an indexed column of `cards` is new surface area
+    # this item does not need (nothing else in the app filters on it).
+    #
+    # THREE SEPARATE `conn.execute()` CALLS, NOT ONE `conn.executescript()` — A CORRECTION
+    # AGAINST THE ORIGINAL PLAYBOOK, WHICH USED `executescript` AND WAS WRONG. Python's
+    # `sqlite3` module documents (and this migration hit) that `executescript()` "commits
+    # any pending transaction" before it runs the script — so the `BEGIN IMMEDIATE` this
+    # whole migration runs under (`_upgrade`'s own transaction) was silently closed here,
+    # and the `COMMIT` at the end of `_upgrade` then raised `cannot commit - no transaction
+    # is active`. Measured: reproduced on a store carrying real cards, `conn.in_transaction`
+    # reads `True` immediately before this call and `False` immediately after. Three plain
+    # `execute()` calls run inside the caller's transaction exactly like every other
+    # statement in this function.
+    conn.execute(
+        """
+        CREATE TRIGGER IF NOT EXISTS cards_fts_ai AFTER INSERT ON cards BEGIN
+          INSERT INTO cards_fts(rowid, name, number, sku, set_hint, note, number_key, number_display)
+          VALUES (
+            new.rowid, new.name, new.number, new.sku, new.set_hint,
+            json_extract(new.payload, '$.note'), new.number_key, new.number_display
+          );
+        END
+        """
+    )
+    conn.execute(
+        """
+        CREATE TRIGGER IF NOT EXISTS cards_fts_ad AFTER DELETE ON cards BEGIN
+          INSERT INTO cards_fts(cards_fts, rowid, name, number, sku, set_hint, note, number_key, number_display)
+          VALUES (
+            'delete', old.rowid, old.name, old.number, old.sku, old.set_hint,
+            json_extract(old.payload, '$.note'), old.number_key, old.number_display
+          );
+        END
+        """
+    )
+    conn.execute(
+        """
+        CREATE TRIGGER IF NOT EXISTS cards_fts_au AFTER UPDATE ON cards BEGIN
+          INSERT INTO cards_fts(cards_fts, rowid, name, number, sku, set_hint, note, number_key, number_display)
+          VALUES (
+            'delete', old.rowid, old.name, old.number, old.sku, old.set_hint,
+            json_extract(old.payload, '$.note'), old.number_key, old.number_display
+          );
+          INSERT INTO cards_fts(rowid, name, number, sku, set_hint, note, number_key, number_display)
+          VALUES (
+            new.rowid, new.name, new.number, new.sku, new.set_hint,
+            json_extract(new.payload, '$.note'), new.number_key, new.number_display
+          );
+        END
+        """
+    )
+    # SEEDED BY AN EXPLICIT DELETE-ALL + INSERT-SELECT, NOT BY THE 'rebuild' COMMAND — THIS
+    # IS A CORRECTION AGAINST THE ORIGINAL PLAYBOOK, WHICH SPECIFIED 'rebuild' AND WAS WRONG.
+    # `INSERT INTO cards_fts(cards_fts) VALUES('rebuild')` re-populates an external-content
+    # FTS5 table by running `SELECT rowid, <col1>, <col2>, ... FROM cards` internally,
+    # matching each `cards_fts` column to a COLUMN OF THE SAME NAME on `cards` — and `note`
+    # is not a column of `cards` (Step 3's own comment says why: it lives in `payload`,
+    # read through `json_extract` in the triggers). Measured on this Mac's SQLite (3.54.0):
+    # `rebuild` raises `sqlite3.OperationalError: no such column: T.note` the moment
+    # `cards_fts`'s DDL names a virtual column the content table does not have — this is not
+    # a corner case, it fires on the very first migration run. `delete-all` (which, unlike
+    # `rebuild`, does not read back from the content table) followed by an ordinary
+    # INSERT...SELECT that computes `note` the same way the triggers do is what the
+    # triggers already prove works, so this seeds the index with the identical statement
+    # shape rather than inventing a second one. A plain `SELECT note FROM cards_fts`
+    # afterwards would ALSO fail for the same reason (external-content mode reads a
+    # column's text back from the content table on demand, and `cards` has none named
+    # `note`) — irrelevant here, because `do_search` only ever reads `cards_fts.rowid` via
+    # `MATCH`/`bm25()`, both of which are answered from the index's own internal structures
+    # and never re-fetch column text from the content table.
+    conn.execute("INSERT INTO cards_fts(cards_fts) VALUES('delete-all')")
+    conn.execute(
+        "INSERT INTO cards_fts(rowid, name, number, sku, set_hint, note, number_key, number_display) "
+        "SELECT rowid, name, number, sku, set_hint, json_extract(payload, '$.note'), "
+        "number_key, number_display FROM cards"
+    )
 
 
 def _add_box_ids(conn: sqlite3.Connection) -> dict:

@@ -180,6 +180,7 @@ import itertools
 import os
 import shutil
 import socket
+import sqlite3
 # THE TWO TESTS IN THIS HARNESS THAT START A CHILD PROCESS, each arguing it at its own site.
 # `check_pipeline_routes` poses a detached child nobody waited on, which no fixture can stand in
 # for; its child reads a pipe this process holds, so it cannot outlive the harness.
@@ -7658,6 +7659,296 @@ def check_box_routes_and_search(checks: Checks) -> None:
             "an empty `printed_total` is an ABSENT denominator and not half of one: no "
             "trailing separator, on the game that never prints one",
         )
+
+
+def check_search_fts5(checks: Checks) -> None:
+    """Store-scaling item 8: `do_search` reads an FTS5 index, and the walk is deleted.
+
+    THE PROPERTY UNDER TEST IS THE SAME ONE `check_box_routes_and_search` ALREADY PROVES —
+    every existing assertion there (`eiscue`, `japanese`, `044/167`, the D67 mixed-number
+    case) passes unmodified against this rewrite, which is what proves the CANDIDATE SET
+    changed and the ANSWER did not. This function proves the three properties that are new:
+    multi-word any-order matching, prefix matching from a word's start (and the accepted
+    loss of mid-word matching), and that the index tracks every write shape the ordinary
+    application makes, plus the migration that seeds it for a store that predates it.
+
+    ORDINARY WRITES EXERCISE `cards_fts_ad` THEN `cards_fts_ai`, NEVER `cards_fts_au` —
+    THIS WAS NOT WHAT store/db.py's OWN COMMENT NEXT TO THE THIRD TRIGGER PREDICTS, AND IT
+    IS WORTH RECORDING HERE SO A FUTURE SESSION DOES NOT "FIX" THE MISSING COVERAGE BY
+    DELETING THE TRIGGER. `store/db.py:flush_rows` clears every touched key with a real
+    `DELETE` before it re-inserts it (its own docstring: "the first pass clears every key
+    the second pass will write"), for a reason that has nothing to do with search — the
+    UNIQUE `cards_cid` index needs the transient collision room. So a rename through
+    `Store().write()` is a real SQL DELETE followed by a real SQL INSERT, never an UPDATE,
+    and SQLite allocates the INSERT a fresh rowid. Measured directly: renaming a card left
+    its own rowid 2 for a table of three and the row came back at rowid 4. The three-trigger
+    shape is still correct SQLite practice (a genuine `UPDATE` — which this migration's own
+    backfill loop and `scripts/cid-selftest.py`'s raw-SQL manipulations both perform — needs
+    `cards_fts_au`, and an external-content table with only two of the three triggers is a
+    documented way to corrupt the shadow index), so all three stay; this comment is the
+    record of WHERE each one is actually reached, because "AU fires on every rename" was
+    the wrong prediction to build a mutation arm on.
+    """
+    checks.note("")
+    checks.note("SEARCH — server/capture_server.py:do_search, store/db.py:_add_search_index")
+
+    with isolated_home():
+        # --- multi-word, any order --------------------------------------------------
+        capture_server.do_capture(capture_payload(1))
+        with Store().write() as snapshot:
+            card = snapshot.inventory.cards["1/1"]
+            card.name = "Charizard"
+            card.set_hint = "Base Set"
+
+        forward = [g["sku"] for g in capture_server.do_search("base charizard")["groups"]]
+        backward = [g["sku"] for g in capture_server.do_search("charizard base")["groups"]]
+        checks.ok(
+            forward and forward == backward,
+            "multi-word search finds the same group regardless of word order — the "
+            "property the owner chose FTS5 over LIKE for",
+            f"forward={forward!r} backward={backward!r}",
+        )
+
+        # --- prefix from a word's start, and the accepted loss of mid-word matching ---
+        prefix = [g["sku"] for g in capture_server.do_search("chariz")["groups"]]
+        midword = [g["sku"] for g in capture_server.do_search("izard")["groups"]]
+        checks.ok(
+            bool(prefix),
+            "a partial word typed from its start still hits ('chariz' finds Charizard)",
+        )
+        checks.equal(
+            midword, [],
+            "and a mid-word fragment does NOT ('izard' does not find Charizard) — the "
+            "owner was told mid-word matching is the cost of FTS5 over LIKE and took it "
+            "explicitly (docs/specs/store-scaling/08-search-fts5.md); a future session "
+            "'fixing' this is reopening a settled trade-off, not closing a bug",
+        )
+
+        # --- the index tracks capture, sale, box moves and rename -----------------------
+        capture_server.do_capture(capture_payload(2))
+        with Store().write() as snapshot:
+            card = snapshot.inventory.cards["2/1"]
+            card.name = "Blastoise"
+            card.sku = "9001"
+        checks.equal(
+            [g["sku"] for g in capture_server.do_search("blastoise")["groups"]],
+            ["9001"],
+            "a freshly captured, freshly named card is findable — the AI trigger fired",
+        )
+
+        with Store().write() as snapshot:
+            snapshot.inventory.set_state("2/1", master.SOLD)
+        checks.equal(
+            [g["sku"] for g in capture_server.do_search("blastoise")["groups"]],
+            ["9001"],
+            "and STILL findable once sold — `do_search` does not filter on state, matching "
+            "the walk's own behavior, and the delete-then-reinsert `flush_rows` performs "
+            "for the state change did not lose the row",
+        )
+
+        with Store().write() as snapshot:
+            snapshot.inventory.cards["2/1"].name = "Blastoise EX"
+        renamed = capture_server.do_search("blastoise")["groups"]
+        checks.equal(
+            [g["sku"] for g in renamed], ["9001"],
+            "a renamed card is still found by the word it shares with its old name",
+        )
+        checks.ok(
+            renamed and renamed[0]["names"] == ["Blastoise EX"],
+            "and the group's own name is the NEW one, not a stale copy of the old",
+            f"names={renamed[0]['names'] if renamed else None!r}",
+        )
+
+    # --- a dedicated, deterministic proof that `cards_fts_ad` is load-bearing -----------
+    #
+    # THE PLAIN SKU/NAME ASSERTIONS ABOVE CANNOT SEE A DISABLED `cards_fts_ad`, AND THIS
+    # WAS MEASURED RATHER THAN ASSUMED — the original draft of this function asserted
+    # exactly those two things and both stayed GREEN with the trigger's body commented
+    # out. `do_search`'s `JOIN cards ON cards.rowid = cards_fts.rowid` silently drops an
+    # orphaned `cards_fts` row whose rowid `cards` no longer has, which is the ordinary
+    # case right after a rename (SQLite hands the re-inserted row a FRESH rowid — see this
+    # function's own docstring). The defect only becomes VISIBLE once that freed rowid is
+    # reused, at which point the orphan's stale tokens and the new row's tokens are BOTH
+    # indexed under one docid — measured directly: a single-card store's rename reused
+    # rowid 1 for the new row, and with `cards_fts_ad` disabled a search for the CARD'S OLD
+    # NAME matched it. So this sub-case pins down the one condition (a store with exactly
+    # one card, so the freed rowid is deterministically the very next one issued) where the
+    # defect is guaranteed to surface, rather than depending on incidental rowid reuse.
+    with isolated_home():
+        capture_server.do_capture(capture_payload(9))
+        with Store().write() as snapshot:
+            snapshot.inventory.cards["9/1"].name = "Gyarados"
+
+        with Store().write() as snapshot:
+            snapshot.inventory.cards["9/1"].name = "Magikarp"
+
+        conn = sqlite3.connect(str(files.inventory_dir() / "store.sqlite"))
+        try:
+            stale = conn.execute(
+                "SELECT rowid FROM cards_fts WHERE cards_fts MATCH '\"gyarados\"*'"
+            ).fetchall()
+            fresh = conn.execute(
+                "SELECT rowid FROM cards_fts WHERE cards_fts MATCH '\"magikarp\"*'"
+            ).fetchall()
+        finally:
+            conn.close()
+        checks.equal(stale, [], "the pre-rename name no longer matches anything at all")
+        checks.ok(bool(fresh), "and the post-rename name does")
+
+    # --- the migration seeds the index for rows that predate it -----------------------
+    with isolated_home():
+        capture_server.do_capture(capture_payload(5))
+        with Store().write() as snapshot:
+            card = snapshot.inventory.cards["5/1"]
+            card.name = "Venusaur"
+            card.number = "003"
+            card.printed_total = "102"
+            card.sku = "7777"
+
+        # Roll the physical store back to looking like it predates item 8: drop the FTS
+        # table and its triggers, blank the two derived columns, and re-stamp schema 6 —
+        # the state `_ensure_schema`'s NEW-STORE branch would never have produced without
+        # this item, and the state every real store on disk was in before this migration
+        # ran on it.
+        store_path = str(files.inventory_dir() / "store.sqlite")
+        conn = sqlite3.connect(store_path, isolation_level=None)
+        try:
+            conn.execute("DROP TRIGGER IF EXISTS cards_fts_ai")
+            conn.execute("DROP TRIGGER IF EXISTS cards_fts_ad")
+            conn.execute("DROP TRIGGER IF EXISTS cards_fts_au")
+            conn.execute("DROP TABLE IF EXISTS cards_fts")
+            for shadow in ("cards_fts_data", "cards_fts_idx", "cards_fts_docsize", "cards_fts_config"):
+                conn.execute(f"DROP TABLE IF EXISTS {shadow}")
+            conn.execute("UPDATE cards SET number_key = NULL, number_display = NULL")
+            conn.execute("INSERT OR REPLACE INTO meta (key, value) VALUES ('schema', '6')")
+        finally:
+            conn.close()
+
+        # PROVE THE SETUP ITSELF, BEFORE ASKING `do_search` ANYTHING — a raw read, not
+        # through the application. `do_search`'s OWN FIRST LINE (`Store().read()`) opens a
+        # `db.connect()` that runs `_ensure_schema`/`_upgrade` transparently, so by the time
+        # `do_search` could answer at all, the migration has already run; there is no
+        # observable "before" through the application API, and asserting `do_search` finds
+        # nothing here would be asserting an artifact of call order, not of the migration.
+        conn = sqlite3.connect(store_path)
+        try:
+            pre_stamp = conn.execute("SELECT value FROM meta WHERE key = 'schema'").fetchone()
+            pre_fts = conn.execute(
+                "SELECT name FROM sqlite_master WHERE type='table' AND name = 'cards_fts'"
+            ).fetchone()
+        finally:
+            conn.close()
+        checks.equal(pre_stamp, ("6",), "the store really is stamped as predating item 8")
+        checks.ok(pre_fts is None, "and really has no search index yet")
+
+        # The next open runs `_upgrade`, which is what `do_search` itself triggers via
+        # `Store().read()` -> `db.connect`. No explicit migration call: this is the same
+        # path an operator's ordinary next request takes after a `git pull`.
+        checks.equal(
+            [g["sku"] for g in capture_server.do_search("venusaur")["groups"]],
+            ["7777"],
+            "and after the migration seeds it (triggered by the very next read), the "
+            "pre-existing card is findable by name",
+        )
+        checks.equal(
+            [g["sku"] for g in capture_server.do_search("003/102")["groups"]],
+            ["7777"],
+            "and by its composed number key, backfilled from `number`/`printed_total` "
+            "through `pipeline/join.py` rather than left null",
+        )
+
+    # --- `cards_fts_au` is reached by a raw SQL UPDATE, not by the ordinary write path --
+    #
+    # NO ORDINARY APPLICATION WRITE EVER FIRES `cards_fts_au` — MEASURED, NOT ASSUMED. This
+    # function's own docstring explains why (`flush_rows` deletes before every upsert), and
+    # every OTHER sub-case above genuinely goes through `Store().write()`, so none of them
+    # exercises this trigger. What DOES perform a genuine `UPDATE cards ... WHERE key = ?`
+    # with no preceding delete: `store/db.py:_add_search_index`'s own backfill loop (which
+    # runs before `cards_fts` exists, so it cannot be what proves this trigger works either)
+    # and `scripts/cid-selftest.py`'s raw-SQL manipulations (`_unname`, `_add_card_ids`).
+    # Reproduced here directly, the same way: a raw `UPDATE cards SET name = ?` on an
+    # ALREADY-migrated store, bypassing the ORM entirely.
+    with isolated_home():
+        capture_server.do_capture(capture_payload(10))
+        with Store().write() as snapshot:
+            snapshot.inventory.cards["10/1"].name = "Gyarados"
+        conn = sqlite3.connect(str(files.inventory_dir() / "store.sqlite"), isolation_level=None)
+        try:
+            conn.execute("UPDATE cards SET name = ? WHERE key = ?", ("Magikarp", "10/1"))
+        finally:
+            conn.close()
+        conn = sqlite3.connect(str(files.inventory_dir() / "store.sqlite"))
+        try:
+            stale = conn.execute(
+                "SELECT rowid FROM cards_fts WHERE cards_fts MATCH '\"gyarados\"*'"
+            ).fetchall()
+            fresh = conn.execute(
+                "SELECT rowid FROM cards_fts WHERE cards_fts MATCH '\"magikarp\"*'"
+            ).fetchall()
+        finally:
+            conn.close()
+        checks.equal(
+            stale, [],
+            "a raw SQL UPDATE (never touching `Store().write()`) still retires the old "
+            "name from the index — `cards_fts_au` fired, which nothing else here exercises",
+        )
+        checks.ok(fresh, "and the new name is indexed")
+
+    # --- the migration survives a kill mid-way -----------------------------------------
+    with isolated_home():
+        capture_server.do_capture(capture_payload(6))
+        store_path = str(files.inventory_dir() / "store.sqlite")
+        conn = sqlite3.connect(store_path, isolation_level=None)
+        try:
+            conn.execute("INSERT OR REPLACE INTO meta (key, value) VALUES ('schema', '6')")
+            conn.execute("DROP TRIGGER IF EXISTS cards_fts_ai")
+            conn.execute("DROP TRIGGER IF EXISTS cards_fts_ad")
+            conn.execute("DROP TRIGGER IF EXISTS cards_fts_au")
+            conn.execute("DROP TABLE IF EXISTS cards_fts")
+            for shadow in ("cards_fts_data", "cards_fts_idx", "cards_fts_docsize", "cards_fts_config"):
+                conn.execute(f"DROP TABLE IF EXISTS {shadow}")
+        finally:
+            conn.close()
+
+        conn = sqlite3.connect(store_path, isolation_level=None)
+        raised = False
+        try:
+            conn.execute("BEGIN IMMEDIATE")
+            conn.execute("ALTER TABLE cards ADD COLUMN cids8_probe TEXT")
+            raise RuntimeError("simulated -9 mid-migration")
+        except RuntimeError:
+            raised = True
+            with contextlib.suppress(Exception):
+                conn.execute("ROLLBACK")
+        finally:
+            conn.close()
+        checks.ok(raised, "the simulated kill actually interrupted the migration")
+
+        conn = sqlite3.connect(store_path)
+        try:
+            stamp = conn.execute("SELECT value FROM meta WHERE key = 'schema'").fetchone()
+            columns = {r[1] for r in conn.execute("PRAGMA table_info(cards)").fetchall()}
+        finally:
+            conn.close()
+        checks.equal(stamp, ("6",), "the schema stamp is untouched by the rolled-back attempt")
+        checks.ok(
+            "cids8_probe" not in columns,
+            "and the ALTER did not survive either — the whole step is one transaction",
+        )
+
+        # The next open completes cleanly, exactly like every other numbered step here —
+        # `do_search` itself is what triggers it, via `Store().read()` -> `db.connect`.
+        capture_server.do_search("nothing in particular")
+        conn = sqlite3.connect(store_path)
+        try:
+            stamp = conn.execute("SELECT value FROM meta WHERE key = 'schema'").fetchone()
+            has_fts = conn.execute(
+                "SELECT name FROM sqlite_master WHERE type='table' AND name = 'cards_fts'"
+            ).fetchone()
+        finally:
+            conn.close()
+        checks.equal(stamp, (str(db.SCHEMA_VERSION),), "and lands on the current schema")
+        checks.ok(has_fts is not None, "with the search index built")
 
 
 def check_inventory_box_route(checks: Checks) -> None:
@@ -27920,6 +28211,7 @@ def run() -> Result:
     check_capture_claim_chain(checks)
     check_game_and_note_seam(checks)
     check_box_routes_and_search(checks)
+    check_search_fts5(checks)
     check_inventory_box_route(checks)
     check_rows_scoped_after_full_load(checks)
     check_inventory_recent_route(checks)
