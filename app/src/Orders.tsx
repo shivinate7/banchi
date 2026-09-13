@@ -1777,7 +1777,6 @@ export function OrdersHub({ stage }: { readonly stage: Stage }) {
       className={filter.statuses === null && !filter.skipKnown ? undefined : 'orders-status-btn-on'}
     >
       {statusSummary}
-      {filter.skipKnown ? ' · skipping known' : ''}
     </Button>
   )
 
@@ -2043,7 +2042,7 @@ export function OrdersHub({ stage }: { readonly stage: Stage }) {
             everything and details nothing new. */}
         {withFetch ? (
           <Button icon="clock" onClick={() => onFetch('LastTwoYears')} busy={busy === 'fetch'} disabled={busy !== null}>
-            Fetch two years of history
+            Fetch full history
           </Button>
         ) : null}
         {/* THE NARROWING SITS BESIDE THE PRESS, NOT IN FRONT OF IT. D91's two-press flow was
@@ -2052,9 +2051,7 @@ export function OrdersHub({ stage }: { readonly stage: Stage }) {
         {withFetch ? statusControl : null}
       </div>
       {withFetch ? (
-        <p className="orders-paste-source">
-          A repeat of either press is free — orders already held at that status are skipped.
-        </p>
+        <p className="orders-paste-source">A repeat skips known orders.</p>
       ) : null}
       {withFetch ? statusPanel : null}
       <p className="orders-paste-source">
