@@ -2338,6 +2338,7 @@ D184 A gain step is the baseline times one number, a card is not, and the machin
 D185 A row declares how many subjects it had, an empty one is pinned by name with a reason, and eleven published claims get the reader they were already cited as having
 D186 A per-card price is divided by the cards actually submitted, and a reading is chosen on a metric the reading can move
 D187 A claim checks whether the slug is already claimed, not only whether the number is free
+D188 A join reads the store directly when there is no run directory to replay
 ```
 
 **THE GAP THIS LIST CARRIED BETWEEN D116 AND D118 IS CLOSED, AND IT CLOSED THE WAY IT SAID IT
