@@ -2491,6 +2491,7 @@ D196 No user-visible string may name a decision, a repository path, or a pipelin
 D197 A page is anchored to the shell's own inset, and only its width may vary by screen
 D198 Home's Review tile reads the same total `#/review` draws, never `review` alone
 D199 `_phase` reads `joined` as sufficient evidence identification happened
+D201 Build-order step 9's first two pieces landed; the mirror stays dry-run
 ```
 
 **THE GAP THIS LIST CARRIED BETWEEN D116 AND D118 IS CLOSED, AND IT CLOSED THE WAY IT SAID IT

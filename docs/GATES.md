@@ -1591,7 +1591,7 @@ are unblocked, and which one matters more is the owner's to say on the day. `doc
     swapping its source needs its own measurement that the vendored 150-card selection matches
     what was banked, or the fingerprint check silently starts comparing against a different
     population. Left open rather than done quietly; see
-    `docs/decisions/D-vendor-catalog-snapshot-and-index.md`.
+    D201.
 
 20. **The shipped status and the tracking write-back** — steps 13 and 14 of
     `docs/specs/order-pipeline.md`, and the only part of that spec that is neither built nor
