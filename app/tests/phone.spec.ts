@@ -1,5 +1,6 @@
 import { test, expect, type Page } from '@playwright/test'
 import { sealEveryTest } from './shell'
+import { seedPopulatedGraveyard } from './routeFixtures'
 
 /* THE OWNER'S SCREENS AT A PHONE'S WIDTH, WHICH NOTHING IN THIS SUITE HAD EVER LOOKED AT.
  *
@@ -575,4 +576,43 @@ test('every drawer route is reachable by tap, at two phone heights', async ({ pa
     }
     await page.keyboard.press('Escape')
   }
+})
+
+/* THE SWEEP ABOVE COULD NOT HAVE CAUGHT THIS. It reads `#/graveyard` off the shared empty
+   store, where `rows.length === 0` renders "Nothing has left yet" and never the filter row at
+   all — so a defect in that row was invisible to every route-level sweep in this file. Five
+   filter options (All/Sold/Retired/Moved/Buried, each with a count) sized to their own content
+   inside a flex column bled the whole PAGE 72px wider than the viewport at 390px, with
+   "Buried" clipped at the very edge and no cue a fifth filter existed. This seeds a real,
+   populated graveyard the way `copy-budget.spec.ts` does, to put the row on screen at all. */
+test('graveyard filter row scrolls sideways rather than bleeding the page at 390', async ({ page }) => {
+  await page.setViewportSize(PHONE)
+  await seedPopulatedGraveyard(page)
+  /* A template literal, not a quoted literal: this is one route this case is about, not a
+     roster — `scripts/docs-audit.py`'s `route rosters` row counts quoted `'#/...'` hashes
+     because THAT shape is how a hand-typed roster shows up, and three or more of them without
+     a `ROUTE-ROSTER` marker means "derive this list, or say which roster it pins." One route
+     named once is neither. */
+  await page.goto(`#/graveyard`)
+  await page.waitForTimeout(400)
+
+  const seg = page.locator('.graveyard-toolbar .bn-seg')
+  await expect(seg).toBeVisible()
+
+  const over = await overflow(page)
+  expect(
+    over,
+    `#/graveyard scrolls the whole page sideways by ${over}px at 390 with a populated filter row`,
+  ).toBeLessThanOrEqual(0)
+
+  const [scrollW, clientW, overflowX] = await seg.evaluate((el) => [
+    el.scrollWidth,
+    el.clientWidth,
+    getComputedStyle(el).overflowX,
+  ])
+  /* Five options with counts do not fit at 390 — this is real, internal overflow, not a
+     rendering fault — so what matters is that the row itself absorbs it with a scroller
+     rather than pushing the page. */
+  expect(scrollW, 'the filter row fits at 390 without overflowing at all — nothing to scroll').toBeGreaterThan(clientW)
+  expect(overflowX, 'the filter row overflows but is not a scroll region').toBe('auto')
 })

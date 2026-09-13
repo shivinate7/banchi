@@ -12,10 +12,44 @@
 @media (max-width: 767px) {
   .graveyard-toolbar { flex-direction: column; align-items: stretch; }
   .graveyard-toolbar .bn-spacer { display: none; }
+  /* THE FILTER ROW IS A REAL HORIZONTAL SCROLLER NOW, MATCHING ORDERS' OWN CHIP ROW —
+     it was neither wrapping nor scrolling: `.bn-seg` is `inline-flex` with no `flex-wrap`, so
+     five options (All/Sold/Retired/Moved/Buried, each with a count) sized to their own content
+     and bled the whole PAGE 72px wider than the viewport at 390px, with "Buried" clipped at the
+     very edge and no cue that a fifth filter existed at all. `min-width: 0` is load-bearing on
+     the flex column above: without it the child's intrinsic width still wins and nothing here
+     gets a chance to constrain it. */
+  .graveyard-toolbar { min-width: 0; }
+  .graveyard-toolbar .bn-seg {
+    display: flex;
+    flex-wrap: nowrap;
+    overflow-x: auto;
+    scrollbar-width: none;
+    max-width: 100%;
+    margin: 0 calc(-1 * var(--bn-4));
+    padding: 3px var(--bn-4);
+  }
+  .graveyard-toolbar .bn-seg::-webkit-scrollbar { display: none; }
+  .graveyard-toolbar .bn-seg-item { flex: none; }
 }
 
 .graveyard-search { min-width: 220px; max-width: 320px; }
 @media (max-width: 767px) { .graveyard-search { max-width: none; } }
+
+/* THE SAME SCROLL-PROGRESS EDGE FADE AS ORDERS' CHIP ROW (D117) — a mask driven by the row's
+   own scroll timeline, so a short row that does not actually overflow gets no fade at all
+   rather than a decorative one nothing backs. See Orders.css for the full reasoning; this is
+   the identical mechanism, scoped to Graveyard's filter row. */
+@supports (animation-timeline: scroll()) {
+  @keyframes graveyard-seg-edgefade {
+    from { mask-image: linear-gradient(90deg, black 0, black calc(100% - 24px), transparent 100%); }
+    50% { mask-image: linear-gradient(90deg, transparent 0, black 24px, black calc(100% - 24px), transparent 100%); }
+    to { mask-image: linear-gradient(90deg, transparent 0, black 24px, black 100%); }
+  }
+  @media (max-width: 767px) {
+    .graveyard-toolbar .bn-seg { animation: graveyard-seg-edgefade linear both; animation-timeline: scroll(self inline); }
+  }
+}
 
 .graveyard-failure {
   display: flex;

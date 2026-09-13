@@ -121,8 +121,13 @@ const CHROME_FREE: ReadonlySet<Persona> = new Set<Persona>(['fulfiller'])
 const LEADER = ','
 const CHORD_MS = 1000
 
+/* An unknown hash gets the OWNER's shell, not none. `NoSuchView` used to draw chromeless — no
+   sidebar, no nav, no way back but its own three doors — which meant a fat-fingered URL cost the
+   owner their whole nav, a strictly worse outcome than landing on any real owner screen. There is
+   no persona to consult for a route that does not exist, so the default is the owner's, exactly
+   as `route.view` would be inside the shell for any other route. */
 function hasChrome(route: Route | undefined): boolean {
-  return route !== undefined && !CHROME_FREE.has(route.persona)
+  return route === undefined || !CHROME_FREE.has(route.persona)
 }
 
 /* ---- hash routing ------------------------------------------------------------ */
@@ -370,15 +375,16 @@ function NoSuchView({ path }: { path: string }) {
         <p className="bn-lede" style={{ marginTop: 8 }}>
           Banchi has no screen called <span className="no-such-view-path">#{path}</span>. Try one of these.
         </p>
+        {/* No door to #/fulfillment here: this is the OWNER's dead end, and the Fulfiller's
+            screen is a different persona's view, not a spare exit — the owner already has
+            Home and Inventory, and D95's "the Fulfiller's crash has no door out" is about
+            HIS crash page, never a reason to hand him as an escape hatch from someone else's. */}
         <div className="no-such-view-doors">
           <a className="no-such-view-door" href="#/">
             <Icon name="home" /> Home <Icon name="arrowRight" />
           </a>
           <a className="no-such-view-door" href="#/inventory">
             <Icon name="box" /> Inventory <Icon name="arrowRight" />
-          </a>
-          <a className="no-such-view-door" href="#/fulfillment" target="_blank" rel="noopener">
-            <Icon name="hand" /> Cards to pull <Icon name="external" />
           </a>
         </div>
       </div>
@@ -772,9 +778,44 @@ function Caps({ row }: { row: Binding }) {
   )
 }
 
-function KeysSheet({ open, onClose }: { open: boolean; onClose: () => void }) {
+/** A row survives a query if the query hits its own text or its group's title — a group
+ *  title match keeps every row in it, so typing "capture" shows the whole Capture group
+ *  rather than only the one row that happens to say the word. */
+function rowMatches(group: KeyGroup, row: Binding, q: string): boolean {
+  if (group.title.toLowerCase().includes(q)) return true
+  if (row.does.toLowerCase().includes(q)) return true
+  return row.keys.some((k) => k.toLowerCase().includes(q))
+}
+
+function KeysSheet({ open, onClose, path }: { open: boolean; onClose: () => void; path: string }) {
   const panel = useRef<HTMLDivElement>(null)
+  const search = useRef<HTMLInputElement>(null)
   const leave = useLeave(open)
+  const [query, setQuery] = useState('')
+  const [showAll, setShowAll] = useState(false)
+
+  /* Reset to the default view every time the sheet opens, rather than carrying the last
+     session's search or expansion forward — a filter left on from last time is a sheet that
+     looks broken the next time it opens. */
+  useEffect(() => {
+    if (open) { setQuery(''); setShowAll(false) }
+  }, [open])
+
+  const q = query.trim().toLowerCase()
+  /* DEFAULT VIEW: Anywhere, Jump to a screen, and whichever group belongs to the screen
+     already open — 78 entries across ten groups is a wall of text nobody reads top to bottom.
+     "Jump to a screen" stays in the default alongside Anywhere (never gated behind `at`, and
+     never behind a screen): the letters it lists are global navigation, not one screen's own
+     keys, so it belongs with Anywhere rather than behind "Show every screen". Typing a query,
+     or pressing "Show every screen", overrides all of it. */
+  const groups = q === ''
+    ? (showAll
+        ? SHORTCUTS
+        : SHORTCUTS.filter((group) => group.id === 'anywhere' || group.id === 'jump' || group.at === path))
+    : SHORTCUTS.map((group) => ({ ...group, rows: group.rows.filter((row) => rowMatches(group, row, q)) })).filter(
+        (group) => group.rows.length > 0,
+      )
+  const hiddenGroupCount = SHORTCUTS.length - groups.length
 
   /* Focus comes back to whatever the operator was on. Keyed on `open` alone, so the restore
      fires the moment it closes rather than after the leave animation. */
@@ -792,10 +833,15 @@ function KeysSheet({ open, onClose }: { open: boolean; onClose: () => void }) {
   /* And focus goes INTO the sheet — on `leave.mounted` as well as `open`, because `useLeave`
      raises `mounted` from an effect: on the first render after the press the dialog is not in
      the document yet and the ref is still null. Focusing on `open` alone silently did nothing
-     and left the operator's focus on the page behind the scrim. Tab then cycles inside. */
+     and left the operator's focus on the page behind the scrim. Tab then cycles inside.
+     THE SEARCH FIELD IS THE LANDING SPOT, not the panel — the sheet exists to be typed into
+     now, and a fallback to the panel itself covers the one render where the input ref is not
+     attached yet. */
   useEffect(() => {
     if (!open || !leave.mounted) return
-    const frame = window.requestAnimationFrame(() => panel.current?.focus({ preventScroll: true }))
+    const frame = window.requestAnimationFrame(() =>
+      (search.current ?? panel.current)?.focus({ preventScroll: true }),
+    )
     return () => window.cancelAnimationFrame(frame)
   }, [open, leave.mounted])
 
@@ -848,10 +894,31 @@ function KeysSheet({ open, onClose }: { open: boolean; onClose: () => void }) {
             — a row that shows several caps is a run of keys, not one. A screen’s own keys work only while that screen
             is open.
           </p>
+          <div className="app-keys-search">
+            <Icon name="search" size={14} />
+            <input
+              ref={search}
+              type="search"
+              className="app-keys-search-input"
+              placeholder="Search shortcuts…"
+              value={query}
+              onChange={(event) => setQuery(event.target.value)}
+              aria-label="Search shortcuts"
+            />
+          </div>
         </header>
 
         <div className="app-keys-body">
-          {SHORTCUTS.map((group) => (
+          {q === '' && !showAll && hiddenGroupCount > 0 ? (
+            <p className="app-keys-more">
+              Showing Anywhere, Jump to a screen{groups.length > 2 ? ', and this screen’s own keys' : ''}.{' '}
+              <button type="button" className="app-keys-show-all" onClick={() => setShowAll(true)}>
+                Show every screen’s shortcuts
+              </button>
+            </p>
+          ) : null}
+          {groups.length === 0 ? <p className="app-keys-none">No shortcut matches “{query}”.</p> : null}
+          {groups.map((group) => (
             <section key={group.id} className="app-keys-group">
               <h3 className="app-keys-group-title">
                 <Icon name={group.icon} size={15} />
@@ -1109,10 +1176,9 @@ function Sidebar({
 /* ---- phone chrome ------------------------------------------------------------------------------- */
 /* Every owner screen draws its own h1 directly under this bar, so the bar carries the
    wordmark rather than repeating (or, on Codes, contradicting) the screen's name.
-   IT SAID `Not found` FOR AN UNKNOWN HASH, AND THAT BRANCH COULD NOT RUN. `hasChrome` is false
-   when `route` is undefined, so the shell — this bar included — is never rendered for one;
-   `NoSuchView` draws standing alone. The ternary was dead when it was written and `route` was
-   the prop that fed it, so both are gone rather than carried.
+   AN UNKNOWN HASH GETS THIS BAR TOO, NOW. `hasChrome` treats `route === undefined` as the
+   owner's shell rather than none, so `NoSuchView` draws inside it exactly like any other owner
+   screen — a fat-fingered URL costs no nav.
    THE MARK HERE IS THE EMPTY SLOT, NOT THE TILE (logo.md section 19). This bar is the rail's
    own case one breakpoint down — 52px of height against the rail's 64px width — and the lockup
    is refused by both for the same arithmetic: its floor is kanji 32, which is a 102 x 75 block
@@ -1428,7 +1494,7 @@ export function App() {
       <TabBar path={path} onMore={() => setDrawer(true)} />
       <Drawer open={drawer} path={path} onClose={() => setDrawer(false)} theme={theme} onToggleTheme={toggleTheme} server={server} cards={cards} />
       <CommandPalette open={palette} onClose={() => setPalette(false)} commands={commands} />
-      <KeysSheet open={keysOpen} onClose={() => setKeysOpen(false)} />
+      <KeysSheet open={keysOpen} onClose={() => setKeysOpen(false)} path={path} />
       <WhichKey armed={arm !== null} />
       <Toaster />
     </div>

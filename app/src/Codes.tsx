@@ -914,16 +914,16 @@ export function Codes() {
             <EmptyState
               icon="qr"
               title="No codes on file yet"
-              body="Set Game to Pokémon code cards on Capture, then read the box."
+              /* No second "Read a box" button here — the header's own (always present,
+                 regardless of ledger state) already does exactly this, and drawing a
+                 second one directly below it put two identical controls on screen at
+                 once. "Go to capture" stays: it is the OTHER thing this state can send
+                 you to do, and it is not duplicated anywhere else on this screen. */
+              body="Set Game to Pokémon code cards on Capture, then read the box above."
               actions={
-                <>
-                  <Button icon="qr" onClick={() => openSheet('scan')}>
-                    Read a box
-                  </Button>
-                  <Button icon="camera" onClick={() => (window.location.hash = '#/capture')}>
-                    Go to capture
-                  </Button>
-                </>
+                <Button icon="camera" onClick={() => (window.location.hash = '#/capture')}>
+                  Go to capture
+                </Button>
               }
             />
           </div>
