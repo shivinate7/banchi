@@ -475,6 +475,8 @@ const ORDER_LINE = {
   kind: 'single',
 }
 
+const ORDER_BUYER = 'Maria Lopez'
+
 const ONE_OPEN_ORDER = {
   summary: '1 order',
   orders: [
@@ -482,6 +484,7 @@ const ONE_OPEN_ORDER = {
       key: ORDER_KEY,
       source: 'TCGplayer',
       number: ORDER_NUMBER,
+      buyer: ORDER_BUYER,
       placed_at: '2026-08-29T10:00:00+00:00',
       status: 'Ready to ship',
       first_seen: '2026-08-30T09:00:00+00:00',
@@ -529,6 +532,49 @@ const ONE_OPEN_ORDER = {
       sku_unseen: 0,
       not_a_single: 0,
     },
+  },
+}
+
+/** The same order, plus a second line the boxes cannot fill at all (no picks) — the
+ *  `group.elsewhere` count fulfiller.md's finding 5 named as "a dead end". */
+const ELSEWHERE_SKU = '9191487'
+const ORDER_WITH_ELSEWHERE = {
+  ...ONE_OPEN_ORDER,
+  orders: [
+    {
+      ...ONE_OPEN_ORDER.orders[0]!,
+      lines: [ORDER_LINE, { ...ORDER_LINE, sku: ELSEWHERE_SKU, quantity: 8 }],
+      progress: [
+        ...ONE_OPEN_ORDER.orders[0]!.progress,
+        { sku: ELSEWHERE_SKU, wanted: 8, recorded: 0, outstanding: 8, over: 0, copies: [], at: null },
+      ],
+    },
+  ],
+  resolution: {
+    ...ONE_OPEN_ORDER.resolution,
+    orders: [
+      {
+        ...ONE_OPEN_ORDER.resolution.orders[0]!,
+        lines: [
+          ...ONE_OPEN_ORDER.resolution.orders[0]!.lines,
+          {
+            order: ORDER_NUMBER,
+            order_key: ORDER_KEY,
+            sku: ELSEWHERE_SKU,
+            reason: 'no_copies_on_hand',
+            wanted: 8,
+            fulfilled: 0,
+            outstanding: 8,
+            on_hand: 0,
+            sold: 0,
+            retired: 0,
+            pooled: 0,
+            line: { ...ORDER_LINE, sku: ELSEWHERE_SKU, quantity: 8 },
+            picks: [],
+          },
+        ],
+      },
+    ],
   },
 }
 
@@ -1439,15 +1485,71 @@ test('a card an order is waiting for is drawn under that order, and the floors h
 
   /* The copy is on screen WITHOUT opening a box: an order's cards are the list, and the boxes
      below it are the other way in. */
-  const order = view(page).locator('.ff-order', { hasText: ORDER_NUMBER })
+  const order = view(page).locator('.ff-order', { hasText: ORDER_BUYER })
   await expect(order.locator('.fulfillment-place')).toHaveText(['Box 3 · Section 1 · Card 7'])
+  // D193: the buyer's name leads, and the raw order id never stands alone -- it is present,
+  // but only ever paired with the name that made this one findable.
+  await expect(order.locator('.ff-order-title')).toContainText(ORDER_BUYER)
+  await expect(order.locator('.ff-order-id')).toContainText(ORDER_NUMBER)
   await battery(page, 'orders to fill')
 
   // And the card he opens from it says which order is waiting, so he can match the slip.
   await order.getByRole('button', { name: 'Charizard ex' }).click()
-  await expect(view(page)).toContainText(`For order ${ORDER_NUMBER}`)
+  await expect(view(page)).toContainText(`For ${ORDER_BUYER}`)
+  await expect(view(page).locator('.ff-card-order-id')).toContainText(ORDER_NUMBER)
   await expect(view(page).locator('.fulfillment-photo')).toBeVisible()
   await battery(page, 'card for an order')
+})
+
+test('an order with no buyer name reads "No name", never the raw id alone', async ({ page }) => {
+  const noBuyerOrder = {
+    ...ONE_OPEN_ORDER,
+    orders: [{ ...ONE_OPEN_ORDER.orders[0], buyer: null }],
+  }
+  await openList(page, [], { orders: noBuyerOrder })
+  const order = view(page).locator('.ff-order')
+  await expect(order.locator('.ff-order-title')).toContainText('No name')
+  await expect(order.locator('.ff-order-id')).toContainText(ORDER_NUMBER)
+  await battery(page, 'orders to fill, no buyer name')
+})
+
+/* fulfiller.md finding 5: "8 things on this order are not in the boxes" named a real gap
+ * and answered nothing. The sentence now ends in a concrete instruction rather than a
+ * question, and it stays a sentence -- `noWayOut` inside `battery` still asserts nothing
+ * here routes him off this screen. */
+test('a line the boxes cannot fill gets an instruction, not a dead end', async ({ page }) => {
+  await openList(page, [], { orders: ORDER_WITH_ELSEWHERE })
+  await expect(view(page)).toContainText(
+    '8 things on this order are not in the boxes yet — tell the owner before you seal this one',
+  )
+  await battery(page, 'order with an unfilled line')
+})
+
+/* fulfiller.md finding 2: "Charizard" names a game (Pokemon) that may hold none of this
+ * store's cards -- D21 makes game a per-card claim, not a fixed catalog, and this store's
+ * fixture is Iono/Eiscue/Pidgeot ex/Charizard ex on purpose so no one name can stand for the
+ * whole thing. The placeholder now has to be drawn from `cards`, in box-walk order, rather
+ * than a name typed into the component. */
+test('the search hint names a real card from this store, not a fixed example', async ({ page }) => {
+  await openList(page)
+  await expect(page.getByPlaceholder(/^For example, /)).toHaveAttribute(
+    'placeholder',
+    'For example, Iono',
+  )
+})
+
+/* fulfiller.md finding 4 / the plan's item 3: two counters read "Card N of M" for two
+ * unrelated numbers on one screen. The walk counter -- his progress across every OPEN
+ * ORDER'S cards, not a day's work -- now says "Pull", leaving "Card N of M" to the one
+ * counter left that means a card: his position inside the box (`PositionBar`, untouched
+ * here). NOT "Pull N of M today": the walk is every open order's cards, which is not
+ * bounded to a day, and "today" claimed a scope the number does not carry. */
+test('the walk counter reads "Pull N of M", not "Card N of M" and not "today"', async ({
+  page,
+}) => {
+  await openList(page, [], { orders: ONE_OPEN_ORDER })
+  await view(page).getByRole('button', { name: 'Charizard ex' }).click()
+  await expect(view(page).locator('.ff-card-step')).toHaveText('Pull 1 of 1')
 })
 
 test(`every text node is at least ${BODY_FLOOR}px, on the list and on the card`, async ({
@@ -1560,6 +1662,84 @@ test(`every position label is at least ${PLACE_FLOOR}px and set in tabular figur
   await bigTabularPlaces(page, 'list')
   await openCard(page, 'Charizard ex')
   await bigTabularPlaces(page, 'card')
+})
+
+/* fulfiller.md finding 6 / the plan's item 8: at exactly 768px the two-column layout gave the
+ * 380px photo column priority and left the 32px-floor position label ("Box 3 · Section 1 ·
+ * Card 7") only ~300px to draw in, wrapping it to three cramped lines. NEITHER `WIDTHS` entry
+ * above is 768 -- 1280 and 375 both miss it -- so this is a viewport this suite never took
+ * before. The fix moved the two-column breakpoint to 900px (the ladder's own step, not a new
+ * one); 768-899 now draws the place at the page's full width, the same single-column layout
+ * the phone already uses. */
+test('the position label does not wrap to three lines at 768px', async ({ page }) => {
+  await page.setViewportSize({ width: 768, height: 1024 })
+  await openList(page, [], { orders: ONE_OPEN_ORDER })
+  await view(page).getByRole('button', { name: 'Charizard ex' }).click()
+  const place = view(page).locator('.fulfillment-place-large')
+  await expect(place).toBeVisible()
+  const lines = await place.evaluate((node) => {
+    const style = window.getComputedStyle(node)
+    const lineHeight = parseFloat(style.lineHeight)
+    return Math.round(node.getBoundingClientRect().height / lineHeight)
+  })
+  expect(lines, 'position label line count at 768px').toBeLessThanOrEqual(2)
+})
+
+/* THE COORDINATOR'S OWN CHECK ON THIS FIX: 820px is one of the three widths docs/DESIGN.md's
+ * "Verifying a screen" section names, and a first attempt at this fix moved the breakpoint to
+ * exactly 820px -- which measured fine on the store's ORDINARY labels and still wrapped to
+ * three lines on the longest one the store can emit ("Box 9999 · Section 99 · Card 50000":
+ * docs/specs/store-scaling.md's 50,000-card target, in one undeclared box with no dividers,
+ * D10 -- so a single section holding that many cards is a real shape and not a fabricated
+ * string). The breakpoint moved again, to 900 -- the ladder's own "a two-column body becomes
+ * one" step -- specifically because 900 clears this label at two lines where 820 did not. */
+test('the longest label the store can emit does not wrap to three lines at 820px', async ({
+  page,
+}) => {
+  const MAX_LABEL = 'Box 9999 · Section 99 · Card 50000'
+  const maxLabelOrder = {
+    ...ONE_OPEN_ORDER,
+    resolution: {
+      ...ONE_OPEN_ORDER.resolution,
+      orders: [
+        {
+          ...ONE_OPEN_ORDER.resolution.orders[0]!,
+          lines: [
+            {
+              ...ONE_OPEN_ORDER.resolution.orders[0]!.lines[0]!,
+              picks: [{ ...ORDER_PICK, place: { ...ORDER_PICK.place, label: MAX_LABEL } }],
+            },
+          ],
+        },
+      ],
+    },
+  }
+  await page.setViewportSize({ width: 820, height: 1024 })
+  await openList(page, [], { orders: maxLabelOrder })
+  await view(page).getByRole('button', { name: 'Charizard ex' }).click()
+  const place = view(page).locator('.fulfillment-place-large')
+  await expect(place).toHaveText(MAX_LABEL)
+  const lines = await place.evaluate((node) => {
+    const style = window.getComputedStyle(node)
+    const lineHeight = parseFloat(style.lineHeight)
+    return Math.round(node.getBoundingClientRect().height / lineHeight)
+  })
+  expect(lines, 'maximal position label line count at 820px').toBeLessThanOrEqual(2)
+})
+
+/* mobile.md finding 3: a phone laid flat (844x390) kept the landing list at its narrow
+ * `--ff-col` (720px) centered under an 844px-wide, 390px-tall viewport -- the width he has
+ * the most of on the orientation where he has the least height to scroll through. This does
+ * not claim the whole scroll problem is gone (a real side-by-side reflow is a larger change
+ * than this batch), only that the column stops wasting the width it already has. */
+test('the landing column widens in short landscape rather than staying at the narrow column width', async ({
+  page,
+}) => {
+  await page.setViewportSize({ width: 844, height: 390 })
+  await openList(page)
+  const column = view(page).locator('.ff-column')
+  const width = await column.evaluate((node) => node.getBoundingClientRect().width)
+  expect(width, 'landing column width at 844x390').toBeGreaterThan(720)
 })
 
 /* Measured at two widths, and the narrow one is not padding on the test.

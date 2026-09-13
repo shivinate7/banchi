@@ -350,6 +350,9 @@ LADDER          the shared vocabulary. Any sheet may use these.
 
 REFINEMENTS     a width ONE screen reflows at for a reason of its own, named with the sheet
                 that owns it. A refinement no sheet uses is a number nobody chose.
+  700           Fulfillment — paired with a landscape/short-height query: the landing
+                column widens past `--ff-col` on a phone laid flat, rather than staying
+                centered under dead margin on both sides
   1100          Codes — the board loses its third column · Fulfillment — the wide column
   1200          ReviewQueue — the card's photo column steps down
   1320          ReviewQueue — the queue rail becomes a sheet, beside the RAIL
