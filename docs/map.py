@@ -2615,7 +2615,14 @@ COMPONENTS = [
                                 # D196: the `no mechanism on screen` row,
                                 # shelling out to scripts/user-strings.mjs below — unclaimed,
                                 # so it sorts to the end until `make merge` gives it a number.
-                                "D196"],
+                                "D196",
+                                # D192: `UNSCOPED_WALK_ALLOWED`'s comments cite it twice — once
+                                # for the permanent `do_inventory`/`to_payload` entry the item's
+                                # own playbook argued for, and again for the new
+                                # `do_inventory_copies` entry (docs/DEBTS.md §27, site 1), which
+                                # names D192 as the decision that closed the OTHER `GET
+                                # /inventory` call site this branch's route replaces.
+                                "D192"],
             },
             "claim-ids.py": {
                 "does": "allocate the numbers this branch's SLUG ids will take, and "
