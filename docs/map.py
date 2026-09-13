@@ -2192,7 +2192,7 @@ COMPONENTS = [
                                         "and never in the git hook (D18) — it asks about local "
                                         "provisioning, so a fresh clone would fail a commit over "
                                         "nothing.",
-                                "governed_by": ["D18", "D47"]},
+                                "governed_by": ["D18", "D47", "D172"]},
             "screen-freshness.mjs": {
                 "does": "proves every server WRITE in app/src has a way back — a re-read, an "
                         "invalidation signal, or a reason in the code why none is owed. Twelve "
