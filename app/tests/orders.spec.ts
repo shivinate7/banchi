@@ -2,7 +2,7 @@ import { test, expect, type Page, type Route } from '@playwright/test'
 import { sealEveryTest } from './shell'
 import { line, order, payloadOf, pick, place } from './routeFixtures'
 
-import type { OrdersPayload } from '../src/types'
+import type { OrderRow, OrdersPayload, ResolvedLine, ResolvedOrder } from '../src/types'
 
 /* THE ORDER SCREEN, ASSERTED WHERE NOTHING ELSE CAN SEE IT.
  *
@@ -1485,6 +1485,178 @@ test('a buyer with nothing open and closed long ago sits under the Earlier fold'
   const earlier = page.locator('.orders-earlier')
   await expect(earlier).toBeVisible()
   await expect(earlier).toContainText('Grace Hopper')
+})
+
+/* ------------------------------------------------------------------------------------- 20
+ *
+ * SORT AND FILTER (`D-orders-sort-filter`). Ready to Ship leads, newest first within a group,
+ * everything else stays reachable behind the status select — an ORDERING and never a hiding.
+ *
+ * THREE BUYERS, ONE FIXTURE. Alice (Ready to Ship, oldest), Carol (Ready to Ship, newest),
+ * Bob (a status this file never hardcodes, in the middle). Default order is therefore
+ * Carol, Alice, Bob — both Ready-to-Ship groups lead, newest of the two first, then Bob.
+ * Carol's own line answers `sku_unseen`, which is what "Hide unknown SKUs" narrows on.
+ */
+
+function seededOrder(seed: {
+  number: string
+  buyer: string
+  status: string
+  placedAt: string
+  reason: ResolvedLine['reason']
+}): { row: OrderRow; resolved: ResolvedOrder } {
+  const key = `TCGplayer:${seed.number}`
+  const sku = `SKU-${seed.number}`
+  const theLine = line({
+    order: seed.number,
+    order_key: key,
+    sku,
+    reason: seed.reason,
+    picks: seed.reason === 'resolved' ? [pick({ capture_id: `cap-${seed.number}`, card_name: seed.buyer })] : [],
+    line: { ...line().line, sku },
+  })
+  const row = order({
+    key,
+    number: seed.number,
+    buyer: seed.buyer,
+    status: seed.status,
+    placed_at: seed.placedAt,
+    lines: [theLine.line],
+    progress: [
+      {
+        sku,
+        wanted: 1,
+        recorded: 0,
+        outstanding: 1,
+        over: 0,
+        copies: [],
+        pulled: [],
+        at: null,
+        by_hand: 0,
+        reason: null,
+        declared_kind: null,
+        closed_at: null,
+        closed_reason: null,
+      },
+    ],
+  })
+  const resolved: ResolvedOrder = { key, number: seed.number, complete: false, outstanding: 1, lines: [theLine] }
+  return { row, resolved }
+}
+
+const ALICE = seededOrder({ number: 'A0001', buyer: 'Alice', status: 'Ready to Ship', placedAt: '2026-08-01T00:00:00+00:00', reason: 'resolved' })
+const BOB = seededOrder({ number: 'B0002', buyer: 'Bob', status: 'Zorbo Pending', placedAt: '2026-08-15T00:00:00+00:00', reason: 'short' })
+const CAROL = seededOrder({ number: 'C0003', buyer: 'Carol', status: 'Ready to Ship', placedAt: '2026-08-20T00:00:00+00:00', reason: 'sku_unseen' })
+
+function threeBuyerPayload(): OrdersPayload {
+  return payloadOf([ALICE.row, BOB.row, CAROL.row], [ALICE.resolved, BOB.resolved, CAROL.resolved])
+}
+
+/** Buyer names in the index pane, top to bottom. */
+async function buyerOrder(page: Page): Promise<string[]> {
+  return page.locator('.orders-index-row').allTextContents().then((rows) =>
+    rows.map((text) => (text.includes('Alice') ? 'Alice' : text.includes('Bob') ? 'Bob' : text.includes('Carol') ? 'Carol' : text)),
+  )
+}
+
+test('no row is unreachable at the default: every buyer is reachable with no control touched', async ({ page }) => {
+  await open(page, { orders: threeBuyerPayload() })
+  await expect(page.locator('main.orders')).toContainText('Alice')
+  await expect(page.locator('main.orders')).toContainText('Bob')
+  await expect(page.locator('main.orders')).toContainText('Carol')
+})
+
+test('the default ordering puts Ready to Ship first, newest within', async ({ page }) => {
+  await open(page, { orders: threeBuyerPayload() })
+  await expect(page.locator('.orders-index-row')).toHaveCount(3)
+  expect(await buyerOrder(page)).toEqual(['Carol', 'Alice', 'Bob'])
+})
+
+test('the status options are built from the payload, with counts, including a status this file never hardcodes', async ({ page }) => {
+  await open(page, { orders: threeBuyerPayload() })
+  const options = page.locator('.orders-status-select option')
+  await expect(options).toContainText(['All', 'Ready to Ship (2)', 'Zorbo Pending (1)'])
+})
+
+test('each control narrows; they compose', async ({ page }) => {
+  await open(page, { orders: threeBuyerPayload() })
+  const select = page.locator('.orders-status-select')
+
+  /* STATUS ALONE. */
+  await select.selectOption('Zorbo Pending')
+  await expect(page.locator('.orders-index-row')).toHaveCount(1)
+  await expect(page.locator('.orders-index-row')).toContainText('Bob')
+
+  /* BACK TO ALL, THEN HIDE UNKNOWN SKUS — Carol's line is `sku_unseen`. */
+  await select.selectOption('')
+  await page.locator('.orders-hide-unknown input').check()
+  await expect(page.locator('.orders-index-row')).toHaveCount(2)
+  await expect(page.locator('main.orders')).not.toContainText('Carol')
+
+  /* COMPOSED: Ready to Ship AND hide-unknown leaves only Alice (Carol is Ready to Ship too,
+     but her line is unknown; Bob is not Ready to Ship at all). */
+  await select.selectOption('Ready to Ship')
+  await expect(page.locator('.orders-index-row')).toHaveCount(1)
+  await expect(page.locator('.orders-index-row')).toContainText('Alice')
+})
+
+test('a changed filter reorders immediately', async ({ page }) => {
+  await open(page, { orders: threeBuyerPayload() })
+  expect(await buyerOrder(page)).toEqual(['Carol', 'Alice', 'Bob'])
+
+  await page.locator('.orders-status-select').selectOption('Ready to Ship')
+  /* Filtering is an explicit retake (D181): the two remaining rows land in current live
+     order with no staleness offered. */
+  await expect(page.locator('.orders-resort-slot .orders-resort')).toHaveCount(0)
+  expect(await buyerOrder(page)).toEqual(['Carol', 'Alice'])
+})
+
+test('a re-sort mid-walk raises the stale count and does NOT reorder until pressed; the press reorders', async ({
+  page,
+}) => {
+  await open(page, { orders: threeBuyerPayload() })
+  expect(await buyerOrder(page)).toEqual(['Carol', 'Alice', 'Bob'])
+
+  /* SORT NEVER REORDERS BY ITSELF (D181) — flip to Oldest and the rows must not move yet. */
+  await page.locator('.orders-sort').getByRole('button', { name: 'Oldest' }).click()
+  expect(await buyerOrder(page)).toEqual(['Carol', 'Alice', 'Bob'])
+
+  const resort = page.locator('.orders-resort-slot .orders-resort')
+  await expect(resort).toBeVisible()
+  await expect(resort).toContainText('stale')
+  await expect(resort).toContainText('re-sort')
+
+  /* THE PRESS REORDERS. Ready-to-Ship still leads; oldest first within it is Alice then Carol. */
+  await resort.click()
+  await expect(page.locator('.orders-resort-slot .orders-resort')).toHaveCount(0)
+  expect(await buyerOrder(page)).toEqual(['Alice', 'Carol', 'Bob'])
+})
+
+test('the device document round-trips and survives a reload', async ({ page }) => {
+  await open(page, { orders: threeBuyerPayload() })
+
+  await page.locator('.orders-status-select').selectOption('Ready to Ship')
+  await page.locator('.orders-hide-unknown input').check()
+  await page.locator('.orders-sort').getByRole('button', { name: 'Oldest' }).click()
+
+  /* READING BACK THE VERY KEY UNDER TEST, the same exemption `remember()` above carries:
+     asserting how this key round-trips means reading it, and going through the UI to confirm
+     a write landed would be testing the panel's layout on the way past rather than the
+     document itself. */
+  const stored = await page.evaluate(
+    // eslint-disable-next-line no-restricted-syntax -- see above
+    (key) => window.localStorage.getItem(key),
+    FILTER_KEY,
+  )
+  expect(stored).not.toBeNull()
+  const parsed = JSON.parse(stored ?? '{}') as { view?: { status?: string; sort?: string; hideUnknown?: boolean } }
+  expect(parsed.view).toEqual({ status: 'Ready to Ship', sort: 'oldest', hideUnknown: true })
+
+  await page.reload()
+  await expect(page.locator(VIEW)).toBeVisible()
+  await expect(page.locator('.orders-status-select')).toHaveValue('Ready to Ship')
+  await expect(page.locator('.orders-hide-unknown input')).toBeChecked()
+  await expect(page.locator('.orders-sort').getByRole('button', { name: 'Oldest' })).toHaveAttribute('aria-pressed', 'true')
 })
 
 /* ============================================== D203 ==== */

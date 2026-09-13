@@ -5887,6 +5887,25 @@ COMPONENTS = [
                                         "is the `?order=` deep link's reverse lookup into "
                                         "whichever group holds it.",
                                 "governed_by": ["D13", "D63", "D69", "D97", "D193"]},
+            "src/orderView.ts": {"does": "HOW THE BUYER LIST IS SORTED AND FILTERED "
+                                        "(`D-orders-sort-filter`): Ready to Ship leads, newest "
+                                        "first within a group, everything else stays reachable "
+                                        "behind a status select rather than dropped — an "
+                                        "ORDERING and never a hiding, D103's shape carried over. "
+                                        "`statusVocabulary` builds the status options from the "
+                                        "distinct strings the feed itself sent, with counts, "
+                                        "never a hardcoded list (D114). `passesStatus` / "
+                                        "`passesHideUnknown` are the two narrowing predicates "
+                                        "the toolbar composes with the existing reason chips. "
+                                        "`OrderTake` / `takeOrder` / `applyTake` / `staleCount` "
+                                        "are `frozenRank.ts`'s ruling (D181, D118) carried over "
+                                        "to a total order with insertions rather than "
+                                        "respelled: a position snapshot rather than a per-row "
+                                        "boolean, because the buyer list has one call site and "
+                                        "not three. A re-sort or an arrival that would reorder "
+                                        "only OFFERS to, via a reserved chip; a changed status "
+                                        "or hide-unknown toggle retakes immediately.",
+                                 "governed_by": ["D103", "D114", "D118", "D181", "D-orders-sort-filter"]},
             "src/csvUpload.ts": {"does": "the one FileReader every CSV upload in this app goes "
                                          "through, lifted out of RunPanel.tsx on 2026-08-30 so "
                                          "#/runs and #/shipping cannot carry two encodings to "
@@ -5946,7 +5965,7 @@ COMPONENTS = [
                                        "join by order number with nothing written across the "
                                        "seam — including the buyer's name, which "
                                        "OrdersShipStage.tsx still does not draw.",
-                               "governed_by": ["D7", "D10", "D24", "D27", "D28", "D36", "D39", "D51", "D57", "D58", "D61", "D63", "D66", "D69", "D91", "D96", "D113", "D114", "D118", "D159", "D192", "D193", "D203"]},
+                               "governed_by": ["D7", "D10", "D24", "D27", "D28", "D36", "D39", "D51", "D57", "D58", "D61", "D63", "D66", "D69", "D91", "D96", "D103", "D113", "D114", "D118", "D159", "D181", "D192", "D193", "D203", "D-orders-sort-filter"]},
             "src/Orders.css": {"does": "the order screen at owner density: the line, its reason "
                                        "and remedy, and the pick rows under it. A copy already "
                                        "spoken for by another line is drawn as spoken for "
@@ -6805,8 +6824,8 @@ COMPONENTS = [
                                              "asserts NOTHING about the order walk; that is "
                                              "app/tests/order-walk.spec.ts. Not a harness test — "
                                              "it starts a browser; `make design-check` runs it.",
-                                     "governed_by": ["D24", "D27", "D28", "D36", "D49", "D58", "D63", "D69", "D73", "D90", "D91", "D96", "D113", "D114", "D118", "D123", "D132",
-                                                     "D193", "D194", "D203"]},
+                                     "governed_by": ["D24", "D27", "D28", "D36", "D49", "D58", "D63", "D69", "D73", "D90", "D91", "D96", "D103", "D113", "D114", "D118", "D123", "D132",
+                                                     "D181", "D193", "D194", "D203", "D-orders-sort-filter"]},
             "tests/shipping.spec.ts": {"does": "the shipping screen in a browser, and its "
                                                "strongest cases are ABSENCES: no buyer name, "
                                                "address, city or postcode appears anywhere on "
