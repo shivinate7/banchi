@@ -4342,6 +4342,14 @@ test('the box and the runs survive a query that selects no card', async ({ page 
   await page.locator('.search-field-input').fill('zzzz-no-such-card')
   await expect(page.locator('.browse-detail')).toHaveCount(0)
 
+  /* EXACTLY ONE "no matches" MESSAGE, NOT TWO. A status-bar sentence
+     (`nothing matches "…"`) and a full `EmptyState` ("Nothing matches here") used to render
+     at the same time for the same empty result — two independent strings stacked vertically
+     for one condition. The status-bar line is gone when this box's own matches are zero; the
+     `EmptyState` carries the message (and a "Clear the search" way out) alone now. */
+  await expect(page.locator('.browse-status-text', { hasText: 'nothing matches' })).toHaveCount(0)
+  await expect(page.locator('.browse-empty', { hasText: 'Nothing matches here' })).toHaveCount(1)
+
   await expect(page.locator('.boxruns')).toBeVisible()
   await expect(page.locator('.browse-map .boxops-identity')).toHaveCount(1)
   await expect(page.locator('.browse-map').getByRole('button', { name: 'Manage' })).toBeVisible()

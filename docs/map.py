@@ -5171,8 +5171,13 @@ COMPONENTS = [
                 "does": "a smaller sheet than a working screen's, because this one has no "
                         "form and no write: a toolbar, a `.bn-table` that becomes a stacked "
                         "card at 639px on the same idiom `Codes.css` established, and a "
-                        "loading skeleton. Every color is a `--bn-*` token.",
-                "governed_by": ["D50", "D94", "D134"],
+                        "loading skeleton. Every color is a `--bn-*` token. THE FILTER ROW "
+                        "SCROLLS SIDEWAYS ON A PHONE, ON THE SAME COARSE-POINTER ARM D117 "
+                        "ALREADY MAKES FOR A THUMB (Orders' own chip row): five filters with "
+                        "counts were sized to their own content inside a flex column and bled "
+                        "the whole page wider than the viewport rather than either wrapping or "
+                        "scrolling.",
+                "governed_by": ["D50", "D94", "D117", "D134"],
             },
             "src/Fulfillment.tsx": {
                 "does": "D5's second persona's entire product: cards to pull in box-walk "

@@ -1598,11 +1598,15 @@ export function BoxBrowse({
             )}
 
             {searching && loading ? <span className="browse-status-text">Looking…</span> : null}
-            {searching && !loading && results !== null ? (
+            {/* No "nothing matches" line here when this box's own matches are zero — that
+                condition always coincides with `visible.length === 0 && filtered` below,
+                which draws the `EmptyState` with the same message and a way to clear the
+                search besides. Two "no matches" strings stacked for one empty result was
+                the actual defect; the count line stays for the case this box DOES have
+                matches, which the EmptyState never covers. */}
+            {searching && !loading && results !== null && inQuery.length > 0 ? (
               <span className="browse-status-text">
-                {inQuery.length === 0
-                  ? `nothing matches “${results.query}”`
-                  : `${visible.length} here · ${inQuery.length} of ${rows?.length ?? 0} match`}
+                {`${visible.length} here · ${inQuery.length} of ${rows?.length ?? 0} match`}
               </span>
             ) : null}
 
