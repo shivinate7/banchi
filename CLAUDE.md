@@ -1538,16 +1538,19 @@ A screen is not finished because it compiles.
   about a card or the inventory in `localStorage`. Inventory state is server-side, in the
   store; the camera uses a device picker. Two devices share one truth.
 
-  **Ten keys are stored on the device, and each is a fact about THIS machine rather than
+  **Eleven keys are stored on the device, and each is a fact about THIS machine rather than
   about a card**: `banchi.capture.deviceId` and `banchi.capture.rotation`
   (`app/src/useCamera.ts` — which camera and which way up, meaningless on another machine),
   `banchi.theme`, `banchi.rail`, `banchi.orders.fetch-filter`, `banchi.inventory.hide-sold`,
-  `banchi.box-recency`, `banchi.capture.setup` and `banchi.runs.spend-notice`
+  `banchi.box-recency`, `banchi.capture.setup`, `banchi.runs.spend-notice` and
+  `banchi.pricing.compare`
   (`app/src/deviceMemory.ts` — how this
   browser is dressed, which order statuses this device bothers fetching (D114), whether the
   inventory walk folds sold rows away, when THIS browser last reached for each box, the
-  setup the operator last worked at, and the figure above which THIS browser draws a louder
-  confirm on the identify press), and `banchi.orders.last-check` (`app/src/Orders.tsx` —
+  setup the operator last worked at, the figure above which THIS browser draws a louder
+  confirm on the identify press, and which `#/pricing` worklist sections THIS browser has
+  asked to see the Low/+Ship/Direct reference columns on), and `banchi.orders.last-check`
+  (`app/src/Orders.tsx` —
   when THIS device last checked TCGplayer, so a fetch receipt can say what is new since; the
   owner ruled it belongs there on 2026-09-03). None of them is a card, a position or an order.
 
