@@ -1,4 +1,4 @@
-## D-a-join-with-no-run-directory — A join reads the store directly when there is no run directory to replay
+## D186 — A join reads the store directly when there is no run directory to replay
 
 **`pkmnscan join` no longer requires a run directory.** `pkmnscan join --keys 3/1,3/2,3/3 --export <file>` resolves those three cards straight off the store's own `Card` records — no `identify` run, no `identifications.json`, no frozen snapshot to reconcile. A run directory still works exactly as it always has (`pkmnscan join <run-dir> --export <file>`); the two paths are siblings, chosen by which argument is given, and everything downstream of "here is a `Resolved`" — the report, the standing queues, `inventory/prices.json`, `pricing.json` — reads identically off either one. Built 2026-09-12, as PR G of the coordinated selection generalization D180 began.
 

@@ -2336,7 +2336,7 @@ D182 An unclaimed slug is not required in the shared index it will replace itsel
 D183 A number a person reads is never a key a machine uses, so the photograph is stored under the card's name and the address is derived
 D184 A gain step is the baseline times one number, a card is not, and the machine re-baselines only on that proof
 D185 A row declares how many subjects it had, an empty one is pinned by name with a reason, and eleven published claims get the reader they were already cited as having
-D-a-join-with-no-run-directory A join reads the store directly when there is no run directory to replay
+D186 A join reads the store directly when there is no run directory to replay
 ```
 
 **THE GAP THIS LIST CARRIED BETWEEN D116 AND D118 IS CLOSED, AND IT CLOSED THE WAY IT SAID IT
