@@ -96,7 +96,14 @@ pull-confirm  http://localhost:5173/#/gallery  .gallery,.kit-icons,.pull-confirm
 # here and the render now says so out loud rather than drawing blank background. `.home-spine`
 # is the six-stage strip below it, which is what a lost element looks like when the page is
 # taller than the fold.
-capture       http://localhost:5173/#/  .home,.home-deck-card-1,.home-spine
+#
+# THIS LINE WAS NAMED `capture` UNTIL 2026-09-12 AND RENDERED `#/`, which is Home. Home took
+# the root hash when the shell was rebuilt and the NAME never moved with the URL, so a session
+# rendering `captures/ui/capture.png` to check the capture screen was looking at the front
+# page — and `make screenshot` exited 0, which makes a wrong image with a right filename
+# quotable as verification. `make docs-audit`'s `views opsec` row reconciles every line's name
+# against ROUTES now, by slug or by label.
+home          http://localhost:5173/#/  .home,.home-deck-card-1,.home-spine
 
 # 7b's three screens, routed 2026-08-13. The review queue is the one to actually look at:
 # docs/DESIGN.md specifies its shape in more detail than any other screen in the product and
@@ -201,3 +208,27 @@ shipping      http://localhost:5173/#/shipping  .shipping,.orders-tabs
 # not what enforces it — it is what lets a person see the view the assertions describe, at the
 # 1280px viewport `scripts/screenshot.sh` fixes. The spec measures it at 375px too.
 fulfillment   http://localhost:5173/#/fulfillment  .ff,.ff-title
+
+# ---------------------------------------------------------------------------------------
+# THE ROUTES THIS MANIFEST DELIBERATELY DOES NOT RENDER, each with the reason beside it.
+#
+# `make docs-audit`'s `views opsec` row reads these lines — they are comments, so
+# `make screenshot` skips them, which is the same arrangement `OFF_NAV` has in `App.tsx`:
+# the declaration sits beside the thing it is about rather than inside a checker. A
+# THIRTEENTH route arriving with neither a line above nor a line here fails the commit.
+#
+# The row does NOT demand a line per route, and two of these four are why: pointing
+# `make screenshot` at either of the first two re-arms an opsec leak the owner closed by
+# ruling. The argument for each is in the paragraphs above, at length; these are the
+# one-line versions a reader needs before they go looking.
+#
+# OFF_RENDER #/inventory — draws a pooled card's photograph on purpose (D24/D31), so the
+#   render went and the photograph stayed. The owner's ruling, 2026-09-05; docs/DEBTS.md
+#   section 14 has the trace. Verify it by hand at 1440, 820 and 390 in both themes.
+# OFF_RENDER #/codes — the code-card screen. A code is a bearer instrument and a render of
+#   it is the leak itself, not a risk of one.
+# OFF_RENDER #/capture — needs a camera. A headless render draws the permission path, which
+#   is a real state and not the screen; the layout is verified at the rig.
+# OFF_RENDER #/graveyard — read-only, and every row on it is a departed card whose
+#   photograph the walk can draw. Nothing here can be undone and nothing here prices, so
+#   there is no layout question a render would settle that `#/inventory`'s does not.

@@ -124,10 +124,7 @@ against the filesystem, and sharing the parse is not sharing the judgement.
   targets and `tee` operands; those five have positional destinations mixed in with patterns
   and flags, and a clause that guessed would refuse an ordinary copy. The Write|Edit half is
   the one that cannot be skirted.
-- **`git checkout HEAD -- <path>`.** A named source is allowed, on the ground that it WRITES a
-  known version rather than discarding an unknown one — which is the audit's own must-pass. The
-  one spelling where that reasoning is thin is `HEAD` itself, whose content is the discard. It
-  is allowed today and the hatch is not needed for it.
+- **`git checkout HEAD -- <path>` — CLOSED 2026-09-12, amended below.**
 - **A loop's bound is judged syntactically.** A counter, a deadline, a `break`, a `for` over a
   word list or a wait on a pid all read as bounded, and a `break` that can never be reached
   reads as bounded too. The clause is aimed at a loop with nothing at all to end it.
@@ -150,6 +147,47 @@ against the filesystem, and sharing the parse is not sharing the judgement.
   **A green check proves its own platform, not "anywhere"** — already a memory in this
   repository, and now a measurement inside the thing that exists to make rules mechanical. The fixture names its own
   branch, asserts it, and refuses to score a case git itself rejected.
+
+
+### AMENDED 2026-09-12 — a named source is not a hatch, measured rather than argued
+
+The sentence this repeals, verbatim: *"A named source is allowed, on the ground that it WRITES
+a known version rather than discarding an unknown one — which is the audit's own must-pass.
+The one spelling where that reasoning is thin is `HEAD` itself... It is allowed today and the
+hatch is not needed for it."*
+
+**What no longer holds, and how it was found rather than argued.**
+
+The coordinator running this session's own merge queue ran `git checkout origin/main -- .` to
+inspect a stray file on another ref, in a worktree whose tracked files happened to be clean at
+that instant. It passed — the clause's own design, unchanged since D179. Had that tree carried
+a single uncommitted edit, the command would have discarded it with no refusal and no
+diffstat, for exactly the reason the "thin" note above already flagged for `HEAD` and never
+checked for any other source.
+
+**A named source changes what is WRITTEN, never whether a change is discarded first.** The
+original argument treated "known replacement" and "safe to overwrite" as the same fact. They
+are not — a known replacement can still destroy an unknown loss.
+
+**What protected the owner's work that day was luck — a clean tree — not the guard.** That is
+the same shape D179's own opening section names for why a hook exists at all: *"a rule
+enforced by memory is a rule that gets bypassed under exactly the conditions it exists for."*
+
+**The fix.** `_read_restore` no longer treats a named source as an automatic pass. It resolves
+the path operands the same way the no-source form does, and `clause_checkout` runs the
+existing `_modified` check regardless of whether a source was named — refusing a checkout over
+a modified path whether the replacement is `HEAD`, a branch, or any other ref, with a message
+that names the source and says plainly that naming it did not make the overwrite safe. A
+checkout over a genuinely clean path is unaffected — nothing is lost there and nothing
+changes.
+
+**Proved by reproducing the near-miss, not only by a synthetic case.** The self-test's two
+existing "names a source" cases were themselves instances of the bug — both ran against
+`work.py`, modified earlier in the same fixture, and asserted `allows`. They are now `refuses`
+cases (a modified path with an explicit source, both `git checkout <sha> --` and `git restore
+--source=`), and a new `allows` case takes their old name against `clean.txt`, so the
+genuinely-safe path is still proven separately from the fixed one. 167 cases pass, up from
+165 (2 rewritten, 1 added), 0 failed.
 
 ### Standing
 

@@ -136,6 +136,72 @@ class Finding(NamedTuple):
     message: str
 
 
+class Row(NamedTuple):
+    """One check's verdict, and HOW MANY SUBJECTS IT HAD.
+
+    `scanned` is the whole point of this type existing. Before it, `render` printed `ok`
+    for any row whose findings list was empty, so "examined 2,964 references, all
+    resolve" and "examined none" were the same word — the repo's signature defect, stated
+    exactly: a guard that cannot tell "nothing is wrong" from "nothing is known yet".
+    Measured on main: `paths 0 references resolve`, `make targets 0 references, 57
+    targets` and `env vars 0 documented, all real` all printed green inside a `make
+    check` that a session then quoted as verification.
+
+    `None` is not "zero" and not "fine": it is a row that declared no subject count at
+    all, which the `subject counts` row below reports as a mechanical failure. Every row
+    that can print clean passes one.
+    """
+
+    check: str
+    severity: str
+    findings: List[Finding]
+    summary: str
+    scanned: Optional[int] = None
+
+
+# Rows whose subject may legitimately be empty, and the reason beside each name. A
+# BLANKET exemption is how a rule stops being one, so this is per-row and per-mode:
+#
+#   "always"  the row's subject can be empty on a clean tree in any mode
+#   "staged"  the row reads the MARKDOWN SET, which `--staged` narrows to the staged
+#             files — so a code-only commit legitimately hands it nothing. In FULL mode
+#             the same row over zero documents is a broken walk and still fails.
+#
+# Every other row scanning zero is a mechanical failure: a walk root that moved, a
+# renamed directory, an edited suffix list, an emptied corpus. Those are the four ways
+# this file has gone quietly vacuous, and `corpus_is_empty` already exists because two
+# docs rows reported `0 entries` in green over an unreadable docs/decisions/.
+EXPECTED_EMPTY: Dict[str, Tuple[str, str]] = {
+    # --- NARROWED BY --staged, and a broken walk in full mode -------------------------
+    # Each of these counts something it read OUT OF THE MARKDOWN, so `--staged` over a
+    # code-only commit hands it nothing. Every other doc row counts a CODE-side roster
+    # instead and cannot reach zero without a real defect, so none of those is pinned:
+    # `harness tests` at zero means TESTS is empty, `pkmnscan commands` at zero means
+    # COMMANDS is, and `decision ids` at zero means the corpus is unreadable.
+    "paths": ("staged", "counts the references it resolved out of the staged documents"),
+    "make targets": ("staged", "counts the `make` references it found in the staged documents"),
+    "env vars": ("staged", "counts the variables the staged documents name"),
+    "doc hygiene": ("staged", "its subject IS the staged markdown list"),
+    "check numbering": ("staged", "its subject IS the staged markdown list"),
+    "coupling": ("staged", "runs in --staged only, over the source groups this commit touched"),
+    # --- LEGITIMATELY EMPTY ON A CLEAN TREE, in every mode ----------------------------
+    "allowlist": (
+        "always",
+        "an empty docs-audit-allow.txt is the ideal state, not a broken reader",
+    ),
+    "evidence freshness": (
+        "always",
+        "its subject is the STAGED score sources; in a full run there is no staged set "
+        "at all, which is the row's own declared scope",
+    ),
+    "id claims": (
+        "always",
+        "its subject is the unclaimed slugs this branch carries, and main carries none "
+        "BY THE INVARIANT the row asserts — so on main it examines nothing, every time",
+    ),
+}
+
+
 class Report:
     """Collects every finding, never stops at the first.
 
@@ -144,7 +210,7 @@ class Report:
     """
 
     def __init__(self) -> None:
-        self.checks: List[Tuple[str, str, List[Finding], str]] = []
+        self.checks: List[Row] = []
 
     def add(
         self,
@@ -152,29 +218,46 @@ class Report:
         severity: str,
         findings: List[Finding],
         summary: str = "",
+        scanned: Optional[int] = None,
     ) -> None:
-        self.checks.append((check, severity, findings, summary))
+        self.checks.append(Row(check, severity, findings, summary, scanned))
 
     def counts(self) -> Tuple[int, int]:
-        mech = sum(len(f) for _, sev, f, _ in self.checks if sev == MECHANICAL and f)
-        adv = sum(len(f) for _, sev, f, _ in self.checks if sev == ADVISORY and f)
+        mech = sum(len(r.findings) for r in self.checks if r.severity == MECHANICAL)
+        adv = sum(len(r.findings) for r in self.checks if r.severity == ADVISORY)
         return mech, adv
 
     def as_json(self, exit_code: int) -> str:
         # The machine surface: nothing downstream parses the human render (spec §7 — three
         # parser bugs in one planning session came from regexing it).
+        #
+        # `scanned` is here because `python3 scripts/docs-audit.py --json` is what a
+        # session greps instead of reading ~100 rows, so the distinction between "examined
+        # everything" and "examined nothing" has to be an integer on this surface and not
+        # a word in the render.
         rows = [
-            {"label": check, "severity": severity, "summary": summary,
-             "findings": [finding._asdict() for finding in findings]}
-            for check, severity, findings, summary in self.checks
+            {"label": row.check, "severity": row.severity, "summary": row.summary,
+             "scanned": row.scanned, "vacuous": row.scanned == 0,
+             "findings": [finding._asdict() for finding in row.findings]}
+            for row in self.checks
         ]
         return json.dumps({"rows": rows, "exit": exit_code}, indent=2)
 
     def render(self) -> str:
         lines = ["PKMNSCAN docs audit — docs/DECISIONS.md D16", "=" * 72, ""]
-        for check, severity, findings, summary in self.checks:
+        for row in self.checks:
+            check, severity, findings, summary = row.check, row.severity, row.findings, row.summary
             if not findings:
-                lines.append(f"  ok   {check:<22} {summary}")
+                if row.scanned is None:
+                    # Not a pass and not a failure — a verdict over a subject nobody
+                    # counted. `subject counts` fails the commit on it.
+                    lines.append(f"  bare {check:<22} {summary}  [no subject count declared]")
+                elif row.scanned == 0:
+                    pin = EXPECTED_EMPTY.get(check)
+                    why = pin[1] if pin else "NOT pinned as expected-empty — this row examined nothing"
+                    lines.append(f"  none {check:<22} examined nothing — {why}")
+                else:
+                    lines.append(f"  ok   {check:<22} {summary}")
                 continue
             tag = "FAIL" if severity == MECHANICAL else "ask "
             noun = "problem" if len(findings) == 1 else "problems"
@@ -752,7 +835,8 @@ def check_paths(report: Report, docs: List[Path], allowed: Dict[str, str]) -> No
                 f"with a reason if it is named before it is built.",
             )
         )
-    report.add("paths", MECHANICAL, findings, f"{checked} references resolve")
+    report.add("paths", MECHANICAL, findings, f"{checked} references resolve",
+               scanned=checked)
 
 
 # ---------------------------------------------------------------------- the allowlist
@@ -810,7 +894,8 @@ def check_allowlist(report: Report, allowed: Dict[str, str]) -> None:
                     f"It was allowed because: {reason or '(no reason recorded)'}",
                 )
             )
-    report.add("allowlist", MECHANICAL, findings, f"{len(allowed)} entries, none stale")
+    report.add("allowlist", MECHANICAL, findings, f"{len(allowed)} entries, none stale",
+               scanned=len(allowed))
 
 
 # ----------------------------------------------------------------------- make targets
@@ -946,7 +1031,8 @@ def check_make_targets(report: Report, docs: List[Path]) -> None:
                 f"`.PHONY` names `{name}`, which is not a target in this Makefile.",
             )
         )
-    report.add("make targets", MECHANICAL, findings, f"{referenced} references, {len(targets)} targets")
+    report.add("make targets", MECHANICAL, findings,
+               f"{referenced} references, {len(targets)} targets", scanned=referenced)
 
 
 # ----------------------------------------------------------- ./pkmnscan subcommands
@@ -1025,6 +1111,7 @@ def check_pkmnscan_commands(report: Report, docs: List[Path], all_docs: List[Pat
         MECHANICAL,
         findings,
         f"{len(registered)} registered, all documented",
+        scanned=len(registered),
     )
 
 
@@ -1114,12 +1201,84 @@ def registered_tests() -> List[Tuple[str, Path]]:
     return out
 
 
+# EVERY PUBLISHED COUNT OF THE HARNESS, against `harness/run.py:TESTS`. Written the way
+# `route census` writes its claims — as the sentence reads, with the number as a word to
+# resolve — and anchored on the words either side, because the file that DEFINES the list
+# also carries deliberate RANGE and HISTORICAL claims that must be left alone: "T1-T4 are
+# the original contract", "T5 (pricing) and T6 (geometry) arrived with batch script v2",
+# "T8 (code cards) arrived with C9-C11", and CLAUDE.md's "It said seven until 2026-08-31".
+#
+# THE DEFENDANT IS THE RUNNER'S OWN DOCSTRING. `TESTS` held nine and the file above it said
+# eight three times — the title "Harness runner — T1-T8", "exits 0 only when all eight tests
+# pass", and "All eight tests always run" — while the `harness tests` row printed "9
+# registered and documented", because its other side was the markdown and never this file.
+# CLAUDE.md's own harness block carries the instruction "RECOUNT from harness/run.py's TESTS
+# list", which is prose where the identical shape (route counts) has had a reader since D39.
+_HARNESS_CLAIMS: Tuple[Tuple[str, str], ...] = (
+    # (pattern as the sentence reads, the quantity the captured word must equal)
+    (r"Harness runner — T1-T(\d+)", "highest"),
+    (r"exits 0 only when all ([A-Za-z]+) tests pass", "registered"),
+    (r"All ([A-Za-z]+) tests always run", "registered"),
+    (r"all ([A-Za-z]+) verification tests", "registered"),
+)
+
+# The files that publish one. `harness/run.py` is NOT markdown and is deliberately in this
+# list: a count inside the file that decides the list is the one most worth reading, and the
+# one nothing read.
+_HARNESS_CLAIM_FILES: Tuple[str, ...] = ("harness/run.py", "CLAUDE.md")
+
+
+def _harness_claim_findings(names: Set[str]) -> List[Finding]:
+    """Every published harness count against the registered set, both directions."""
+    if not names:
+        return []
+    numbers = [int(name[1:]) for name in names if name[1:].isdigit()]
+    quantities = {
+        "registered": len(names),
+        "highest": max(numbers) if numbers else 0,
+    }
+    findings: List[Finding] = []
+    hits: Dict[str, int] = {}
+    for name in _HARNESS_CLAIM_FILES:
+        target = ROOT / name
+        if not exists(target):
+            findings.append(Finding(name, "does not exist, and it publishes a harness count."))
+            continue
+        text = read(target)
+        for pattern, kind in _HARNESS_CLAIMS:
+            for match in re.finditer(pattern.replace(" ", r"\s+"), text):
+                word = match.group(1)
+                value = int(word) if word.isdigit() else _NUMBER_WORDS.get(word.lower())
+                if value is None:
+                    continue
+                hits[pattern] = hits.get(pattern, 0) + 1
+                if value != quantities[kind]:
+                    line = text[: match.start()].count("\n") + 1
+                    findings.append(Finding(
+                        f"{name}:{line}",
+                        f"says {word.lower()} where harness/run.py's TESTS registers "
+                        f"{quantities[kind]} ({kind}). The list is the count; recount off it "
+                        f"rather than incrementing this sentence.",
+                    ))
+    for pattern, _kind in _HARNESS_CLAIMS:
+        if not hits.get(pattern):
+            findings.append(Finding(
+                rel(SELF),
+                f"the harness claim {pattern!r} matched nothing in "
+                f"{', '.join(_HARNESS_CLAIM_FILES)}. It covered a published count that has "
+                f"since been reworded or deleted, so the sentence it was watching is now "
+                f"unwatched. Re-point the pattern, or drop it and say which sentence went — "
+                f"a claim reworded into the PAST is still a claim this row has to have seen.",
+            ))
+    return findings
+
+
 def check_harness_tests(report: Report, docs: List[Path], allowed: Dict[str, str]) -> None:
     tests = registered_tests()
     names = {name for name, _ in tests}
     sections = gates_sections()
 
-    findings: List[Finding] = []
+    findings: List[Finding] = _harness_claim_findings(names)
     for name, path in tests:
         if not exists(path):
             findings.append(
@@ -1151,7 +1310,8 @@ def check_harness_tests(report: Report, docs: List[Path], allowed: Dict[str, str
                             f"harness/run.py:TESTS ({', '.join(sorted(names))}).",
                         )
                     )
-    report.add("harness tests", MECHANICAL, findings, f"{len(names)} registered and documented")
+    report.add("harness tests", MECHANICAL, findings,
+               f"{len(names)} registered and documented", scanned=len(names))
 
 
 def normalize(text: str) -> str:
@@ -1275,6 +1435,13 @@ def check_pass_criteria(report: Report) -> None:
     sections = gates_sections()
     mechanical: List[Finding] = []
     wording: List[Finding] = []
+    # Two subject counts, because these are two rows. `read_criteria` is the tests whose
+    # PASS_CRITERIA string this row managed to read — the wording row's subject — and
+    # `compared` is the subset that also had a `### <name>` section in docs/GATES.md to
+    # compare against, which is the threshold row's. Either reaching zero means the row
+    # judged nothing, and before `scanned` existed both printed the same `ok` either way.
+    read_criteria = 0
+    compared = 0
     for name, path in registered_tests():
         if not exists(path):
             continue
@@ -1285,6 +1452,7 @@ def check_pass_criteria(report: Report) -> None:
                 Finding(rel(path), "no module-level PASS_CRITERIA string to read.")
             )
             continue
+        read_criteria += 1
         claim = docstring_pass_claim(source)
         if claim is not None and normalize(criteria) not in normalize(claim):
             wording.append(
@@ -1304,6 +1472,7 @@ def check_pass_criteria(report: Report) -> None:
         section = sections.get(name)
         if section is None:
             continue
+        compared += 1
         # THE COMPARISON IS AGAINST THE PUBLISHED LINE, BY EQUALITY, and the two legs it
         # replaces were both substring tests against the whole section. That is not a
         # tightening for its own sake — measured on 2026-09-05, lowering T1's
@@ -1356,8 +1525,10 @@ def check_pass_criteria(report: Report) -> None:
                     f"the doc.",
                 )
             )
-    report.add("pass criteria", MECHANICAL, mechanical, "every threshold matches GATES.md")
-    report.add("criteria wording", MECHANICAL, wording, "every criterion is published verbatim")
+    report.add("pass criteria", MECHANICAL, mechanical, "every threshold matches GATES.md",
+               scanned=compared)
+    report.add("criteria wording", MECHANICAL, wording,
+               "every criterion is published verbatim", scanned=read_criteria)
 
 
 # ------------------------------------------------------ the evidence behind a criterion
@@ -1373,6 +1544,12 @@ EVIDENCE_SOURCES = (
     "harness/eval/fixtures.py",
     "identify/prompt.py",
 )
+
+# The comparison inside a PASS_CRITERIA sentence — `holdout_accuracy >= 0.95`. Only `>=`
+# and `>`: a criterion written the other way round is not this shape and is reported as
+# unreadable rather than guessed at, which is the same disposition `pass criteria` takes
+# after equality replaced its two substring tests.
+_CRITERION_BAR = re.compile(r"(>=|>)\s*([0-9]*\.?[0-9]+)")
 
 
 def check_criteria_evidence(report: Report) -> None:
@@ -1391,6 +1568,25 @@ def check_criteria_evidence(report: Report) -> None:
 
     Zero score files is itself a finding. A criterion with no recorded run behind it is not
     a passing measurement, it is an unmeasured claim.
+
+    **AND THE VALUE IS READ, NOT THE PROSE — three changes, 2026-09-12.** This row tested
+    whether the string `holdout_accuracy` occurred inside PASS_CRITERIA's own sentence and
+    never opened `payload[field]` at all. So a run recording `holdout_accuracy: null` — or
+    0.40 — printed `ok criteria evidence 1 scored run, gate field published`, over the one
+    number that decides whether it is safe to spend money on a Batch submission.
+
+    The identical mistake was already measured ONE ROW OVER: `check_pass_criteria` was green
+    while a lowered `>= 0.9` sat inside the published `0.95`, and the fix on 2026-09-05 was
+    to compare by equality. The lesson did not travel the twenty lines to here.
+
+      1. `payload[field]` is read. Absent or null is `unmeasured`; a number is compared
+         against the threshold lifted out of PASS_CRITERIA's own comparison.
+      2. A score file naming a test `registered_tests()` does not carry was a silent
+         `continue`. It is a finding now, and its remedy is deleting the stale score rather
+         than editing a criterion — a retired test's score answers for nothing.
+      3. `unmeasured` and `below floor` stay DIFFERENT findings. Conflating them is what
+         teaches a reader to skim the row: one is a run that did not happen, the other is a
+         run that failed, and they have opposite remedies.
     """
     criteria = {
         name: string_assign(read(path), "PASS_CRITERIA")
@@ -1422,8 +1618,22 @@ def check_criteria_evidence(report: Report) -> None:
                 )
             )
             continue
-        text = criteria.get(payload.get("test", "T1"))
+        named = str(payload.get("test", "T1"))
+        text = criteria.get(named)
         if text is None:
+            # WAS A SILENT `continue`. A score file for a test nothing registers is a file
+            # whose criterion nobody compared, and the row counted it as a scored run.
+            findings.append(
+                Finding(
+                    rel(score),
+                    f"names test `{named}`, which harness/run.py's TESTS does not register, "
+                    f"so nothing compared its criterion.\n"
+                    f"  registered: {', '.join(sorted(criteria)) or '(none)'}\n"
+                    f"  Delete the stale score. A retired test's result answers for nothing, "
+                    f"and editing a live criterion to make this row quiet would be the "
+                    f"wrong repair.",
+                )
+            )
             continue
         field = gated + "_accuracy"
         if field not in text:
@@ -1437,8 +1647,58 @@ def check_criteria_evidence(report: Report) -> None:
                     f"split — never edit the score file to agree.",
                 )
             )
+            continue
+
+        # THE VALUE, AND THE THRESHOLD THE CRITERION PUBLISHES FOR IT. Lifted from the
+        # criterion's own comparison rather than from the score file's `accuracy_floor`:
+        # that key is the run's copy of the same number, so comparing one to the other
+        # asks a file whether it agrees with itself.
+        measured = payload.get(field)
+        bar = _CRITERION_BAR.search(text or "")
+        if not isinstance(measured, (int, float)) or isinstance(measured, bool):
+            findings.append(
+                Finding(
+                    rel(score),
+                    f"gated on `{field}` and recorded no measurement for it "
+                    f"({measured!r}).\n"
+                    f"  criterion:  {text}\n"
+                    f"  This is UNMEASURED, not failing — the run did not produce the number "
+                    f"the gate reads. Re-run `make harness` and commit the score; do not "
+                    f"read a missing value as a passing one, which is what this row did "
+                    f"until 2026-09-12.",
+                )
+            )
+        elif bar is None:
+            findings.append(
+                Finding(
+                    rel(score),
+                    f"gated on `{field}` and PASS_CRITERIA publishes no comparison this row "
+                    f"can read for it.\n"
+                    f"  criterion:  {text}\n"
+                    f"  It has to say `{field} >= <number>` for the recorded value to be "
+                    f"checked against anything. Without one the score is a number beside a "
+                    f"sentence, which is the state this row exists to end.",
+                )
+            )
+        else:
+            floor = float(bar.group(2))
+            operator = bar.group(1)
+            passes = measured > floor if operator == ">" else measured >= floor
+            if not passes:
+                findings.append(
+                    Finding(
+                        rel(score),
+                        f"records `{field}` at {measured} against a published floor of "
+                        f"{operator} {floor}.\n"
+                        f"  criterion:  {text}\n"
+                        f"  BELOW FLOOR, and this is the number that decides whether it is "
+                        f"safe to spend money on a Batch submission. Fix the measurement or "
+                        f"argue the floor down in docs/GATES.md — never both in silence.",
+                    )
+                )
     report.add(
-        "criteria evidence", MECHANICAL, findings, f"{len(scores)} scored run, gate field published"
+        "criteria evidence", MECHANICAL, findings,
+        f"{len(scores)} scored run, gate field published", scanned=len(scores)
     )
 
 
@@ -1481,7 +1741,13 @@ def check_evidence_freshness(report: Report, staged_only: bool) -> None:
                 )
             )
     report.add(
-        "evidence freshness", ADVISORY, findings, "staged score sources bring their result"
+        "evidence freshness",
+        ADVISORY,
+        findings,
+        "staged score sources bring their result",
+        # Its subject is the STAGED set. In full mode there is no staged set, so the
+        # row prints `none` rather than a green it did not earn.
+        scanned=len(EVIDENCE_SOURCES) if staged_only else 0,
     )
 
 
@@ -1776,7 +2042,6 @@ def check_decision_ids(report: Report, docs: List[Path]) -> None:
 
     scan(docs, in_docs)
     in_code: List[Finding] = []
-    scan(python_files(), in_code)
     # THE APP WAS NOT SCANNED AT ALL UNTIL 2026-08-30 (D72). `python_files()` is every `.py`
     # in the tree, and the row below said "citations in .py all resolve" — accurately, and
     # over half the citations. `app/` holds hundreds more in `.ts`, `.tsx` and `.css`
@@ -1790,13 +2055,21 @@ def check_decision_ids(report: Report, docs: List[Path]) -> None:
     # branch found by hand the day `scripts/claim-ids.py` landed: that file was outside the
     # CLAIMER's suffix set too, so a SLUG written there survived the merge and became a
     # citation of an entry that had just been given a number. Both sets gained `.js` together.
-    scan(_walk(ROOT, (".ts", ".tsx", ".css", ".js")), in_code)
+    #
+    # ONE HAYSTACK, BUILT BEFORE THE SCAN, so the row can declare how many files it read.
+    # It was two `scan()` calls with the count nowhere, which is the shape that let this
+    # file print `ok` over a walk that had found nothing.
+    code_haystack = python_files() + _walk(ROOT, (".ts", ".tsx", ".css", ".js"))
+    scan(code_haystack, in_code)
 
-    report.add("decision ids", MECHANICAL, in_docs, f"{len(singles)} D + {len(codes)} C headings")
+    report.add("decision ids", MECHANICAL, in_docs,
+               f"{len(singles)} D + {len(codes)} C headings",
+               scanned=len(singles) + len(codes))
     # Code is advisory: `C1` or `D2` could plausibly be a variable one day, and a false
     # positive that blocks a commit is worse than one that prints a line.
     report.add("decision ids in code", ADVISORY, in_code,
-               "citations in .py, .ts, .tsx, .css and .js all resolve")
+               "citations in .py, .ts, .tsx, .css and .js all resolve",
+               scanned=len(code_haystack))
 
 
 # ------------------------------------------------------------------ ids are claimed at merge
@@ -1938,7 +2211,8 @@ def check_id_claims(report: Report) -> None:
 
     where = "main" if on_main() else "this branch"
     report.add("id claims", MECHANICAL, findings,
-               "{0} unclaimed id(s) on {1}{2}".format(
+               scanned=len(unclaimed),
+               summary="{0} unclaimed id(s) on {1}{2}".format(
                    len(unclaimed), where,
                    ", claimed at the merge" if unclaimed and not on_main() else ""))
 
@@ -1976,7 +2250,10 @@ def check_claim_vocabulary(report: Report) -> None:
             "`_ID_SLUG` is not `_STEP_SLUG` with the separating hyphen in front of it: "
             "{0!r} against {1!r}.".format(_ID_SLUG, _STEP_SLUG)))
     report.add("claim vocabulary", MECHANICAL, findings,
-               "one slug grammar, declared in the auditor and in the claimer")
+               "one slug grammar, declared in the auditor and in the claimer",
+               # Two declarations, and the row exists because they can disagree: the
+               # claimer's SLUG and this file's _STEP_SLUG / _ID_SLUG pair.
+               scanned=2)
 
 
 # ------------------------------------------------------------------------- env vars
@@ -2079,7 +2356,8 @@ def check_decision_structure(report: Report) -> None:
                 for target in decision_files() for f in guard.check_structure(target)]
     entries = [e for target in decision_files() for e in guard.entries(read(target))]
     report.add("decision structure", MECHANICAL, findings,
-               f"{len(entries)} entries, every heading and bold reaches the hook")
+               f"{len(entries)} entries, every heading and bold reaches the hook",
+               scanned=len(entries))
 
 
 _ID_UNCLAIMED_RE = re.compile(r"^D" + _ID_SLUG + r"$")
@@ -2209,7 +2487,8 @@ def check_decision_index(report: Report) -> None:
 
     findings = _decision_index_findings(want, got)
     report.add("decision index", MECHANICAL, findings,
-               f"{len(got)} indexed, matching {len(want)} headings")
+               f"{len(got)} indexed, matching {len(want)} headings",
+               scanned=len(want))
 
 
 def check_entry_budget(report: Report) -> None:
@@ -2233,9 +2512,11 @@ def check_entry_budget(report: Report) -> None:
     findings = [Finding(f.where, f.message)
                 for target in decision_files()
                 for f in guard.check_budget(target, ENTRY_BUDGET)]
-    total = sum(len(e.body) for target in decision_files() for e in guard.entries(read(target)))
+    sized = [e for target in decision_files() for e in guard.entries(read(target))]
+    total = sum(len(e.body) for e in sized)
     report.add("entry budget", ADVISORY, findings,
-               f"{total:,} bytes of entries, {len(findings)} over {ENTRY_BUDGET:,}")
+               f"{total:,} bytes of entries, {len(findings)} over {ENTRY_BUDGET:,}",
+               scanned=len(sized))
 
 
 def check_debts_headings(report: Report) -> None:
@@ -2290,7 +2571,8 @@ def check_debts_headings(report: Report) -> None:
         seen[number] = lineno
 
     report.add("debts headings", MECHANICAL, findings,
-               f"{total} headings, every one addressable by `_debts_section`")
+               f"{total} headings, every one addressable by `_debts_section`",
+               scanned=total)
 
 
 def _debts_section(number: int) -> Optional[str]:
@@ -2519,6 +2801,7 @@ def check_claim_decode(report: Report) -> None:
         findings,
         f"{len(_CLAIM_WRITERS)} claim writers, one vocabulary "
         f"({len(tables.get(_CLAIM_WRITERS[0], ())) } keys)",
+        scanned=len(_CLAIM_WRITERS),
     )
 
 
@@ -2619,6 +2902,7 @@ def check_claim_clients(report: Report) -> None:
         MECHANICAL,
         findings,
         f"{checked} client writers send exactly what their route decodes",
+        scanned=checked,
     )
 
 
@@ -2728,6 +3012,7 @@ def check_detector_standing(report: Report) -> None:
         MECHANICAL,
         findings,
         f"{checked} published figures against harness/results/detect.json",
+        scanned=checked,
     )
 
 
@@ -2781,6 +3066,7 @@ def check_sole_reader(report: Report) -> None:
         MECHANICAL,
         findings,
         f"{len(readers)} history readers, every claim about them counts right",
+        scanned=len(readers),
     )
 
 
@@ -2810,10 +3096,32 @@ def check_server_concurrency(report: Report) -> None:
 
     Nothing here judges whether the concurrency is right. It judges whether the document and the
     code agree about what it IS, which is the only half a checker can hold honestly (D16).
+
+    **TWO PUBLICATIONS, AS OF THIS ROW'S SECOND WIDENING. Only `docs/DEBTS.md` §11 had a
+    reader, and CLAUDE.md publishes the same four attributed literals** — `class
+    CaptureServer(ThreadingHTTPServer)`, `request_queue_size = 128`, `CaptureHandler.timeout
+    = 15`, `REQUEST_SLOTS = 4` — in the file every session loads before it touches the server
+    whose collapse at 150 connections is measured. A retune that fails this row via §11 while
+    CLAUDE.md goes on saying 4 is a document that is wrong in the more-read of the two places.
+    Both are compared now, and a finding names WHICH file it is about.
+
+    **The fifth fact stays scoped to §11 on purpose**, and this is a narrowing of the
+    proposal that asked for it: the fifth is the METHOD NAME that sends `Connection: close`,
+    and CLAUDE.md deliberately publishes the header without naming the method — §11 is where
+    the mechanism is argued. Demanding the name in both would have failed on an unchanged
+    tree, which is not a defect it found, only prose it wanted. Nothing is uncovered by the
+    narrowing: §11 is the only file that makes the claim, so it is the only file that can go
+    stale on it.
+
+    The bare integers are safe from both anchors for the reason the comment below records:
+    CLAUDE.md:1121's "sized this at 12" and "80 Playwright browsers, 969 threads" are
+    measurements, and an ATTRIBUTED anchor can neither be satisfied nor tripped by a loose
+    number.
     """
     source = read(ROOT / "server" / "capture_server.py")
     section = _debts_section(11)
     findings: List[Finding] = []
+    compared = 0
 
     if section is None:
         report.add(
@@ -2830,6 +3138,25 @@ def check_server_concurrency(report: Report) -> None:
             "",
         )
         return
+
+    # The two publications of these facts, in reading order. `where` is what a finding
+    # names and `called` is what the sentence calls itself, so a message reads the same
+    # whichever file is wrong.
+    publications: List[Tuple[str, str, str]] = [
+        ("docs/DEBTS.md", "section 11", section),
+    ]
+    claude_md = ROOT / "CLAUDE.md"
+    claude_text = read(claude_md) if exists(claude_md) else None
+    if claude_text is None:
+        findings.append(
+            Finding(
+                "CLAUDE.md",
+                "is not there, and it publishes this server's concurrency facts to every "
+                "session that loads it. Nothing else reconciles that copy.",
+            )
+        )
+    else:
+        publications.append(("CLAUDE.md", "the capture-server bullet", claude_text))
 
     for what, pattern, shape, anchor, published in _CONCURRENCY_FACTS:
         found = pattern.search(source)
@@ -2864,32 +3191,35 @@ def check_server_concurrency(report: Report) -> None:
         # So the section must publish the figure in a form that ATTRIBUTES it to this fact —
         # `REQUEST_SLOTS = 4`, not a 4 in a table of slot counts — and the value it attributes
         # is what gets compared. Coincidence cannot satisfy that; only agreement can.
-        said = anchor.search(section)
-        if said is None:
-            findings.append(
-                Finding(
-                    "docs/DEBTS.md",
-                    f"section 11 never attributes a value to {what}. It has to publish one as "
-                    f"`{published}` for this row to tell agreement from coincidence — a bare "
-                    f"`{value}` somewhere in the section is not a claim about {what}, and this "
-                    f"row used to accept one.",
+        for where, called, text in publications:
+            compared += 1
+            said = anchor.search(text)
+            if said is None:
+                findings.append(
+                    Finding(
+                        where,
+                        f"{called} never attributes a value to {what}. It has to publish one as "
+                        f"`{published}` for this row to tell agreement from coincidence — a bare "
+                        f"`{value}` somewhere in it is not a claim about {what}, and this "
+                        f"row used to accept one.",
+                    )
                 )
-            )
-        elif said.group(1) != value:
-            findings.append(
-                Finding(
-                    "docs/DEBTS.md",
-                    f"section 11 publishes {what} as `{published.replace('<n>', said.group(1)).replace('<seconds>', said.group(1)).replace('<base>', said.group(1))}` "
-                    f"and `server/capture_server.py` says `{value}`. The code is the authority; "
-                    f"the section is the published account of this server's concurrency, and it "
-                    f"is now describing one that is gone.",
+            elif said.group(1) != value:
+                findings.append(
+                    Finding(
+                        where,
+                        f"{called} publishes {what} as `{published.replace('<n>', said.group(1)).replace('<seconds>', said.group(1)).replace('<base>', said.group(1))}` "
+                        f"and `server/capture_server.py` says `{value}`. The code is the authority; "
+                        f"the document is the published account of this server's concurrency, and it "
+                        f"is now describing one that is gone.",
+                    )
                 )
-            )
 
     # The fifth fact, and the only one that is a NAME rather than a literal. Section 11 already
     # names `Connection: close`; what it did not name is where the header is sent from, and
     # that is the half the pool's safety actually rests on.
     owner = _close_header_owner()
+    compared += 1
     if owner is None:
         findings.append(
             Finding(
@@ -2915,7 +3245,8 @@ def check_server_concurrency(report: Report) -> None:
         "server concurrency",
         MECHANICAL,
         findings,
-        "5 published facts against server/capture_server.py",
+        f"{compared} published facts against server/capture_server.py",
+        scanned=compared,
     )
 
 
@@ -2971,6 +3302,183 @@ def _pirateship_column_count() -> Optional[int]:
                 total = named + stamps
 
     return total
+
+
+_ESTIMATE_READER = ROOT / "server" / "pipeline_routes.py"
+_ESTIMATE_WRITER = ROOT / "cli" / "cmd_identify.py"
+_ESTIMATE_PATTERN_NAME = "_ESTIMATE"
+_ESTIMATE_PRODUCER = "_estimate"
+#: What a rendered figure looks like when the sample is built. Any decimal would do; this
+#: one is two places, which is what `_estimate` quantizes to.
+_ESTIMATE_SAMPLE = "1.23"
+
+
+def _compiled_assign(tree: ast.AST, name: str) -> Optional[Tuple[str, int]]:
+    """(pattern, flags) of a module-level `NAME = re.compile(r"...", FLAG)`, or None.
+
+    Read out of the source and compiled here, never imported: the rule this whole file is
+    built on. Only `re.M` / `re.MULTILINE` is resolved, because that is the flag this pair
+    turns on and a flag nobody can read is reported rather than guessed.
+    """
+    for node in ast.walk(tree):
+        if not isinstance(node, ast.Assign):
+            continue
+        if not any(isinstance(t, ast.Name) and t.id == name for t in node.targets):
+            continue
+        call = node.value
+        if not isinstance(call, ast.Call) or not call.args:
+            return None
+        first = call.args[0]
+        if not isinstance(first, ast.Constant) or not isinstance(first.value, str):
+            return None
+        flags = 0
+        for extra in call.args[1:]:
+            text = ast.unparse(extra) if hasattr(ast, "unparse") else ""
+            if "M" in text or "MULTILINE" in text:
+                flags |= re.M
+        return first.value, flags
+    return None
+
+
+def _rendered_say(tree: ast.AST, producer: str) -> Optional[str]:
+    """The line a `say(f"...")` whose f-string CALLS `producer` would print.
+
+    ANCHORED ON THE CALL AND NEVER ON THE WORDING, which is the whole point: the defect is
+    somebody rewording the sentence, so a reader that finds the site BY its wording cannot
+    see the change it exists to catch. The producing call is the invariant.
+    """
+    for node in ast.walk(tree):
+        if not isinstance(node, ast.Call):
+            continue
+        func = node.func
+        if not (isinstance(func, ast.Name) and func.id == "say") or len(node.args) != 1:
+            continue
+        joined = node.args[0]
+        if not isinstance(joined, ast.JoinedStr):
+            continue
+        calls = {
+            inner.func.id
+            for inner in ast.walk(joined)
+            if isinstance(inner, ast.Call) and isinstance(inner.func, ast.Name)
+        }
+        if producer not in calls:
+            continue
+        out: List[str] = []
+        for part in joined.values:
+            if isinstance(part, ast.Constant) and isinstance(part.value, str):
+                out.append(part.value)
+            else:
+                out.append(_ESTIMATE_SAMPLE)
+        return "".join(out)
+    return None
+
+
+def check_estimate_wire(report: Report) -> None:
+    """The money button's figure, against the string that produces it.
+
+    **THE ONE PRESS IN THIS PRODUCT THAT SPENDS MONEY CARRIES ITS FIGURE IN THE LABEL
+    (D33), AND THE FIGURE TRAVELS AS TEXT.** `cli/cmd_identify.py` prints `estimated cost
+    $1.23` in its preflight; `server/pipeline_routes.py` scrapes that line with `_ESTIMATE`
+    and serves the number as `estimate_usd`, which is what `#/runs` draws on the button.
+    Two declarations of one fact, in two languages, with a regex as the seam.
+
+    Reword that `say` line and `estimate_usd` goes null. Nothing fails: the estimate is not
+    an outcome any test asserts, so the money gate loses its figure and every suite stays
+    green. `grep -c "estimated cost\\|_ESTIMATE" scripts/docs-audit.py` returned **0**
+    before this row — no check reconciled the pair.
+
+    **THE SAMPLE IS BUILT AND MATCHED, rather than the two strings being compared.** The
+    row renders what that `say` would print, with the interpolation standing in for a
+    figure, and requires the regex to match it AND to capture the number. That is the
+    question the wire actually asks; comparing the literal against the pattern's source
+    text would be comparing two spellings of an intent.
+
+    **ANCHORED ON THE PRODUCING CALL, never on the wording.** The site is the `say(f"...")`
+    whose f-string calls `_estimate` — so a rewording is exactly what the row sees, which a
+    reader that FOUND the site by its wording could not. It also keeps the second cost line
+    out of it by construction: `cmd_identify` writes an actual invoice too, deliberately not
+    anchored at `^estimated cost` (see the comment above it), and that one calls `cost.usd`.
+
+    **Two absences, two findings.** A missing pattern and a missing producer are different
+    repairs — one is the server's reader gone, one is the CLI's line gone — and reporting
+    either as the other sends a session to the wrong file.
+    """
+    findings: List[Finding] = []
+    compared = 0
+
+    reader_tree = None
+    if not exists(_ESTIMATE_READER):
+        findings.append(Finding(rel(_ESTIMATE_READER), "does not exist."))
+    else:
+        try:
+            reader_tree = ast.parse(read(_ESTIMATE_READER))
+        except SyntaxError as exc:
+            findings.append(Finding(rel(_ESTIMATE_READER), f"does not parse.\n{exc}"))
+
+    writer_tree = None
+    if not exists(_ESTIMATE_WRITER):
+        findings.append(Finding(rel(_ESTIMATE_WRITER), "does not exist."))
+    else:
+        try:
+            writer_tree = ast.parse(read(_ESTIMATE_WRITER))
+        except SyntaxError as exc:
+            findings.append(Finding(rel(_ESTIMATE_WRITER), f"does not parse.\n{exc}"))
+
+    pattern = _compiled_assign(reader_tree, _ESTIMATE_PATTERN_NAME) if reader_tree else None
+    rendered = _rendered_say(writer_tree, _ESTIMATE_PRODUCER) if writer_tree else None
+
+    if reader_tree is not None and pattern is None:
+        findings.append(Finding(
+            rel(_ESTIMATE_READER),
+            f"no module-level `{_ESTIMATE_PATTERN_NAME} = re.compile(r\"...\")` this row can "
+            f"read.\n"
+            f"  It is the seam the money button's figure travels through — the route scrapes "
+            f"the CLI's preflight line with it and serves the number as `estimate_usd`. "
+            f"Renamed or restructured, and nothing reconciles the pair while it is "
+            f"unreadable.",
+        ))
+    if writer_tree is not None and rendered is None:
+        findings.append(Finding(
+            rel(_ESTIMATE_WRITER),
+            f"no `say(f\"...\")` whose f-string calls `{_ESTIMATE_PRODUCER}()`.\n"
+            f"  That line is what produces the figure `#/runs` puts on the press that spends "
+            f"money. Either the print moved, or it stopped going through "
+            f"`{_ESTIMATE_PRODUCER}` — and this row is anchored on the CALL precisely so a "
+            f"reworded sentence is visible rather than invisible.",
+        ))
+
+    if pattern is not None and rendered is not None:
+        compared = 1
+        source, flags = pattern
+        try:
+            compiled = re.compile(source, flags)
+        except re.error as exc:
+            findings.append(Finding(
+                rel(_ESTIMATE_READER),
+                f"`{_ESTIMATE_PATTERN_NAME}` does not compile: {exc}",
+            ))
+        else:
+            match = compiled.search(rendered)
+            if match is None or not match.groups() or match.group(1) != _ESTIMATE_SAMPLE:
+                findings.append(Finding(
+                    rel(_ESTIMATE_WRITER),
+                    "the line this prints is not the line the route can read.\n"
+                    f"  prints:  {rendered!r}\n"
+                    f"  pattern: {source!r}\n"
+                    f"  captured: "
+                    f"{(match.group(1) if match and match.groups() else None)!r}\n"
+                    "  `estimate_usd` would be null, `#/runs` would draw a money button with "
+                    "no figure on it, and every test would stay green — the estimate is not "
+                    "an outcome any of them assert. Move both sides together.",
+                ))
+
+    report.add(
+        "estimate wire",
+        MECHANICAL,
+        findings,
+        "the preflight's cost line is the line `estimate_usd` reads",
+        scanned=compared,
+    )
 
 
 def check_shipping_columns(report: Report) -> None:
@@ -3044,6 +3552,7 @@ def check_shipping_columns(report: Report) -> None:
         MECHANICAL,
         findings,
         f"{len(_SHIPPING_COLUMN_CLAIMS)} published counts against pipeline/pirateship.py ({total})",
+        scanned=len(_SHIPPING_COLUMN_CLAIMS),
     )
 
 
@@ -3174,6 +3683,7 @@ def check_work_item_standing(report: Report) -> None:
         findings,
         f"{len(claims)} claims in {_WORK_ITEM_READER.name} against "
         f"{len(declared)} work items declared in §3",
+        scanned=len(claims),
     )
 
 # The spec's own sentence, and the two literals harness T7 asserts. The harness is the
@@ -3283,6 +3793,7 @@ def check_router_certainty(report: Report) -> None:
         findings,
         f"{len(_CERTAINTY_SPEC_CLAIMS)} published splits against harness T7 "
         f"({certain} of {total})",
+        scanned=len(_CERTAINTY_SPEC_CLAIMS),
     )
 
 
@@ -3390,6 +3901,7 @@ def check_not_built_endpoints(report: Report) -> None:
         findings,
         f"{len(declared)} declared in {_NOT_BUILT_MODULE.name}, {len(quoted)} quoted in "
         f"{_NOT_BUILT_SPEC.name}",
+        scanned=len(declared),
     )
 
 
@@ -3499,6 +4011,7 @@ def check_transport_standing(report: Report) -> None:
         findings,
         f"{len(proven)} proven and {len(unproven)} unexercised calls against "
         f"{len(_TRANSPORT_READERS)} readers",
+        scanned=len(proven) + len(unproven),
     )
 
 
@@ -3533,7 +4046,8 @@ def check_env_vars(report: Report, docs: List[Path], allowed: Dict[str, str]) ->
                             f"is named before it is built.",
                         )
                     )
-    report.add("env vars", MECHANICAL, findings, f"{len(seen)} documented, all real")
+    report.add("env vars", MECHANICAL, findings, f"{len(seen)} documented, all real",
+               scanned=len(seen))
 
 
 # Every file that is not markdown and can name an environment variable, WITH the extensionless
@@ -3613,6 +4127,7 @@ def check_env_names(report: Report) -> None:
         MECHANICAL,
         findings,
         f"{len(sites)} named in code, all documented",
+        scanned=len(sites),
     )
 
 
@@ -3803,6 +4318,93 @@ def cited_decisions(path: Path) -> Set[str]:
         return set()
     lines = (without_noqa(line) for line in read(path).splitlines())
     return {"D" + digits for line in lines for digits in _DECISION_RE.findall(line)}
+
+
+#: The shape of a hatch's VALUE. Every one of them is `<NAME>=off`, printed in the refusal
+#: it lifts, so "set to something" is not the question — "set to off" is.
+_HATCH_OFF = "off"
+
+
+def check_hatch_state(report: Report) -> None:
+    """A guard that has been switched off says so where a session already looks.
+
+    **THE PUREST FORM OF THE DEFECT THIS FILE IS ABOUT.** `PKMNSCAN_DOCS=off` exported in a
+    shell profile, a launchd plist, a wrapper or a CI environment kills one of the only two
+    checks on the commit path in every session, forever — and every refusal message it
+    would have printed is never printed, because no refusal ever happens. Every row in this
+    file is void in that state, and nothing in the tree could report it. Same for
+    `PKMNSCAN_SIGIL`, whose guard runs in the same hook, and for `PKMNSCAN_MAIN`, which is
+    the local half of D42.
+
+    **IT REPORTS AND REFUSES NOTHING.** A one-shot hatch typed on the command line for a
+    legitimate reason is exactly what those variables are for, and the guard that stands
+    down prints its own name while doing it — so the only thing this can surface that the
+    session did not already know is a STANDING one, inherited from an environment nobody
+    typed it into this turn. ADVISORY for that reason and no other: the finding is a
+    question about where the variable came from, which is not something a script can judge.
+
+    **TWO READS.** This one, and the environment `.claude/settings.json` hands every session
+    in this project: that file carries no `env` block today, which is exactly when to assert
+    it — an `env` key setting a hatch there would disarm the guard for every session in the
+    repo, silently, with the disarming committed to git.
+
+    The roster is the one `check_env_names` already builds by reading the code, so a hatch
+    invented tomorrow is watched the day it is written and nothing here is hand-kept. A
+    roster of zero is a finding: it means the name reader broke, and this row would then be
+    reporting "no hatch is set" having looked at no names.
+    """
+    findings: List[Finding] = []
+    roster = sorted(_env_sites())
+    if not roster:
+        findings.append(Finding(
+            rel(SELF),
+            "`_env_sites()` found no environment variable named anywhere in the code, so "
+            "this row iterated nothing and would report `no hatch set` whatever the "
+            "environment holds. The name reader is broken, not the environment.",
+        ))
+
+    for name in roster:
+        value = os.environ.get(name)
+        if value is None or value.strip().lower() != _HATCH_OFF:
+            continue
+        findings.append(Finding(
+            f"environment -> {name}",
+            f"`{name}={value}` is set in the environment this audit is running in.\n"
+            "  If you typed it for this one command, this line is the receipt and there is "
+            "nothing to do. If you did NOT, it is standing — a shell profile, a launchd "
+            "plist, a wrapper, a CI env — and the guard it lifts has been refusing nothing "
+            "and printing nothing in every session since. Check `env | grep PKMNSCAN`.",
+        ))
+
+    settings = ROOT / ".claude" / "settings.json"
+    if exists(settings):
+        try:
+            declared = json.loads(read(settings))
+        except ValueError as exc:
+            findings.append(Finding(".claude/settings.json", f"does not parse as JSON: {exc}"))
+        else:
+            block = declared.get("env")
+            if isinstance(block, dict):
+                for name, value in sorted(block.items()):
+                    if name in roster and str(value).strip().lower() == _HATCH_OFF:
+                        findings.append(Finding(
+                            ".claude/settings.json",
+                            f"its `env` block sets `{name}={value}` for every session in this "
+                            f"project.\n"
+                            "  That is a guard disarmed in git, for everybody, with no "
+                            "refusal ever printed to say so. A hatch is a thing a person "
+                            "types once; a committed one is a deleted check wearing an "
+                            "environment variable.",
+                        ))
+
+    report.add(
+        "hatch state",
+        ADVISORY,
+        findings,
+        f"{len(roster)} hatches in the roster, none set in this environment or in "
+        f".claude/settings.json",
+        scanned=len(roster),
+    )
 
 
 def check_map(report: Report, allowed: Dict[str, str]) -> None:
@@ -3996,7 +4598,8 @@ def check_map(report: Report, allowed: Dict[str, str]) -> None:
     # could not have told a shipped step from an open one, which is now half the claim. The
     # replacement reads the two headings and reconciles each separately, in both directions.
 
-    report.add("repo map", MECHANICAL, findings, f"{claimed} entries match the tree")
+    report.add("repo map", MECHANICAL, findings, f"{claimed} entries match the tree",
+               scanned=claimed)
 
 
 # ------------------------------------------------------------------- the game registry
@@ -4491,6 +5094,7 @@ def check_hook_roster(report: Report) -> None:
         MECHANICAL,
         findings,
         f"{len(on_disk)} hooks, all in docs/map.py",
+        scanned=len(on_disk),
     )
 
 
@@ -4661,6 +5265,7 @@ def check_codex_hooks(report: Report) -> None:
         findings,
         f"{len(claude_triples)} hooks in .claude/settings.json, all mirrored in "
         f".codex/hooks.json",
+        scanned=len(claude_triples),
     )
 
 
@@ -4739,7 +5344,8 @@ def check_map_sections(report: Report) -> None:
 
     covered = sum(1 for name in sections if readers[name])
     report.add("map sections", MECHANICAL, findings,
-               f"{covered} of {len(sections)} sections have a reader, consumer list agrees")
+               f"{covered} of {len(sections)} sections have a reader, consumer list agrees",
+               scanned=len(sections))
 
 
 # ------------------------------------------------- the build order against its own source
@@ -4821,7 +5427,8 @@ def check_build_order_mirror(report: Report) -> None:
             ))
 
     report.add("build order mirror", MECHANICAL, findings,
-               f"{total} steps, the same ids in both files, in the same two lists")
+               f"{total} steps, the same ids in both files, in the same two lists",
+               scanned=total)
 
 
 
@@ -5229,6 +5836,7 @@ def check_game_vocabulary(report: Report) -> None:
         MECHANICAL,
         findings,
         f"{len(entries)} games, {checked} export rarities accounted for",
+        scanned=len(entries),
     )
 
 
@@ -5327,6 +5935,7 @@ def check_game_coverage(report: Report) -> None:
         ADVISORY,
         findings,
         f"{committed} committed exports, {len(sources) - committed} opt-in",
+        scanned=len(sources),
     )
 
 
@@ -5394,6 +6003,7 @@ def check_matrix_superset(report: Report) -> None:
         MECHANICAL,
         findings,
         f"{checked} observed rarity/finish pairs, all allowed",
+        scanned=checked,
     )
 
 
@@ -5473,6 +6083,7 @@ def check_join_key_shape(report: Report) -> None:
         MECHANICAL,
         findings,
         f"{checked} composed-key games checked against export Number cells",
+        scanned=checked,
     )
 
 
@@ -5704,6 +6315,7 @@ def check_motion_params(report: Report) -> None:
         MECHANICAL,
         findings,
         f"{len(MOTION_MIRROR)} mirrored constants agree, {len(MOTION_UNMIRRORED)} accounted for",
+        scanned=len(MOTION_MIRROR),
     )
 
 
@@ -5773,6 +6385,7 @@ def check_supervisor_self_watch(report: Report) -> None:
         MECHANICAL,
         findings,
         f"{len(declared)} self-files, every module-scope import accounted for",
+        scanned=len(declared),
     )
 
 
@@ -5861,6 +6474,7 @@ def check_withhold_reasons(report: Report) -> None:
         MECHANICAL,
         findings,
         f"{len(authored)} authored, offered by the screen, none unreachable",
+        scanned=len(authored),
     )
 
 
@@ -5993,6 +6607,7 @@ def check_order_reasons(report: Report) -> None:
         MECHANICAL,
         findings,
         f"{len(authored)} authored, offered by the screen, none unreachable",
+        scanned=len(authored),
     )
 
 
@@ -6148,6 +6763,7 @@ def check_pricing_presets(report: Report) -> None:
         MECHANICAL,
         findings,
         f"{len(authored)} priced, written by the screen, key rule and basis agree",
+        scanned=len(authored),
     )
 
 
@@ -6400,6 +7016,7 @@ def check_hint_reasons(report: Report) -> None:
         findings,
         f"{len(reachable)} refusals reachable from {HINT_REASON_ROOT}(), "
         f"{len(named)} labeled by the screen",
+        scanned=len(reachable),
     )
 
 
@@ -6560,6 +7177,7 @@ def check_transport_promise(report: Report) -> None:
         findings,
         f"{len(hosts)} host, {len({m for m, _ in reachable})} methods, {len(reachable)} routes, "
         f"as promised and as called",
+        scanned=len(reachable),
     )
 
 
@@ -6676,6 +7294,7 @@ def check_export_request(report: Report) -> None:
         findings,
         f"{len(EXPORT_STANDING)} catalogue filters and {len(LIVE_QUERY_EXPECTED)} live query "
         f"parameters, each at its measured value",
+        scanned=len(EXPORT_STANDING) + len(LIVE_QUERY_EXPECTED),
     )
 
 
@@ -6932,6 +7551,7 @@ def check_reason_emissions(report: Report) -> None:
         findings,
         f"{len(published)} published reasons, {len(published) - len(UNEMITTED_REASONS)} with "
         f"a producer and {len(UNEMITTED_REASONS)} argued",
+        scanned=len(published),
     )
 
 
@@ -7044,6 +7664,7 @@ def check_reason_codes(report: Report) -> None:
         MECHANICAL,
         findings,
         f"{len(documented)} enumerated, {len(labels)} labeled, all defined",
+        scanned=len(documented),
     )
 
 
@@ -7291,6 +7912,7 @@ def check_tested_by_reach(report: Report) -> None:
         MECHANICAL,
         findings,
         f"{claims} claims, every cited test reaches what it names",
+        scanned=claims,
     )
 
 
@@ -7394,7 +8016,8 @@ def check_status_sources(report: Report) -> None:
                     if req not in payload:
                         findings.append(Finding(spot, f"`{name}` has no `{req}` key."))
 
-    report.add("status sources", MECHANICAL, findings, f"{checked} declared, all resolve")
+    report.add("status sources", MECHANICAL, findings, f"{checked} declared, all resolve",
+               scanned=checked)
 
 
 # ------------------------------------------------ the palette the app actually renders from
@@ -7872,6 +8495,7 @@ def check_design_tokens(report: Report) -> None:
         token_findings(claims, light, dark, every),
         f"{len(every)} declared tokens, every one named by the block; "
         f"{len(claims.hexes)} hexes compared across both themes",
+        scanned=len(every),
     )
 
 
@@ -7929,12 +8553,20 @@ def check_raw_color(report: Report) -> None:
     already records that nothing audits the values inside them.
     """
     if not exists(APP_STYLES):
+        # A ROW, NOT A RETURN. A silent return deletes the row from the render entirely,
+        # and nothing in this file notices a row that is absent rather than green — the
+        # same blind spot `check dispatch`'s own comment records about itself. With a
+        # subject count of 0 the render says `none` and `subject counts` fails the commit.
+        report.add("raw color", MECHANICAL, [],
+                   f"{rel(APP_STYLES)} is not there, so no stylesheet was read", scanned=0)
         return
 
     findings: List[Finding] = []
+    sheets = 0
     for path in sorted(APP_STYLES.glob("*.css")):
         if path == TOKENS_CSS:
             continue
+        sheets += 1
         for number, line in enumerate(strip_css_comments(read(path)).splitlines(), start=1):
             for literal in _RAW_COLOR_RE.findall(line):
                 findings.append(
@@ -7946,8 +8578,10 @@ def check_raw_color(report: Report) -> None:
                     )
                 )
 
-    report.add("raw color", MECHANICAL, findings, f"{len(findings)} literals outside tokens.css"
-               if findings else "every color comes from a token")
+    report.add("raw color", MECHANICAL, findings,
+               f"{len(findings)} literals outside tokens.css" if findings
+               else f"every color in {sheets} sheets comes from a token",
+               scanned=sheets)
 
 
 
@@ -8221,7 +8855,7 @@ def check_breakpoints(report: Report) -> None:
     report.add("breakpoints", MECHANICAL, findings, (
         f"{blocks} blocks over {len(widths)} media widths in "
         f"{sum(1 for f in sheets.values() if f.blocks)} sheets, all on the ladder; "
-        f"{len(declared)} named containers, each with a reader"))
+        f"{len(declared)} named containers, each with a reader"), scanned=blocks)
 
 
 def check_breakpoint_columns(report: Report) -> None:
@@ -8276,7 +8910,8 @@ def check_breakpoint_columns(report: Report) -> None:
                 f"longer opens a regime at or above {COLUMN_FLOOR}px. Drop the line: the reason "
                 f"it carries — {why} — is an argument nobody is making.")))
     report.add("breakpoint columns", ADVISORY, findings,
-               f"{len(sheets)} sheets, {len(ladder.blind)} named column-blind")
+               f"{len(sheets)} sheets, {len(ladder.blind)} named column-blind",
+               scanned=len(sheets))
 
 
 # ------------------------------------------------------------------ the mark (D102)
@@ -8335,6 +8970,10 @@ def check_logo_parity(report: Report) -> None:
     Provably wrong when it fires and no judgement to defer — both sides are literals.
     """
     if not exists(LOGO_SPEC) or not exists(MARK_PALETTES):
+        # A ROW, NOT A RETURN — see `raw color`. A silent return deletes the row from
+        # the render, and an absent row is the one state nothing in this file reads.
+        report.add("logo parity", MECHANICAL, [],
+                   "the spec or the generated palettes are not there", scanned=0)
         return
 
     spec = read(LOGO_SPEC)
@@ -8418,7 +9057,7 @@ def check_logo_parity(report: Report) -> None:
                     f"re-run `node scripts/build-mark.mjs`, or move section 9 first.",
                 ))
 
-    report.add("logo parity", MECHANICAL, findings,
+    report.add("logo parity", MECHANICAL, findings, scanned=len(published), summary=
                f"{len(published)} locked marks, every prism, ground, bracket and base "
                f"against section 9 ({sum(len(m['prism']) + len(m['ground']) + len(m['bracket']) + 1 for m in published.values())} hexes)"
                if not findings else f"{len(findings)} disagreements with section 9")
@@ -8543,7 +9182,7 @@ def check_mac_icon_grid(report: Report) -> None:
                 f"Re-run `node scripts/build-mark.mjs --icons`.",
             ))
 
-    report.add("mac icon grid", MECHANICAL, findings,
+    report.add("mac icon grid", MECHANICAL, findings, scanned=len(declared), summary=
                (f"{published.group(1)}/{published.group(2)} in section 17 and in build-mark.mjs, "
                 f"over {len(declared)} inset icons"
                 if published and const and not findings
@@ -8572,6 +9211,10 @@ def check_lockup_bracket(report: Report) -> None:
     an `.html`. Provably wrong when it fires — both sides are literals.
     """
     if not exists(SIDEBAR_MORPH) or not exists(MARK_PALETTES):
+        # A ROW, NOT A RETURN — see `raw color`. A silent return deletes the row from
+        # the render, and an absent row is the one state nothing in this file reads.
+        report.add("lockup bracket", MECHANICAL, [],
+                   "the lockup sheet or the generated palettes are not there", scanned=0)
         return
     sheet, gen = read(SIDEBAR_MORPH), read(MARK_PALETTES)
     # the component reads the palette rather than naming hexes; if it ever stops, say so here
@@ -8606,7 +9249,8 @@ def check_lockup_bracket(report: Report) -> None:
             f"are one object; a sheet that drifts from the palette makes them two.",
         ))
     report.add("lockup bracket", MECHANICAL, problems,
-               f"{len(want)} stops against `bluesteel`'s locked bracket")
+               f"{len(want)} stops against `bluesteel`'s locked bracket",
+               scanned=len(want))
 
 
 def check_rail_mark(report: Report) -> None:
@@ -8622,8 +9266,15 @@ def check_rail_mark(report: Report) -> None:
     wrong when it fires: both sides are literals.
     """
     if not exists(SIDEBAR_MORPH) or not exists(MARK_GEOMETRY):
+        # A ROW, NOT A RETURN — see `raw color`. A silent return deletes the row from
+        # the render, and an absent row is the one state nothing in this file reads.
+        report.add("rail mark", MECHANICAL, [],
+                   "the sidebar mockup or the generated mark is not there", scanned=0)
         return
     sheet, gen = read(SIDEBAR_MORPH), read(MARK_GEOMETRY)
+    # How many comparisons this row actually made. Two of them are the copied
+    # constants and the rest are the tab's, which only exist if the favicon does.
+    compared = 0
     want_path = re.search(r"SMALL_BRACKET = '([^']+)'", gen)
     want_stroke = re.search(r"SMALL_STROKE = ([\d.]+)", gen)
     got_path = re.search(r"MARK_SMALL_BRACKET = '([^']+)'", sheet)
@@ -8636,6 +9287,7 @@ def check_rail_mark(report: Report) -> None:
         )], "")
         return
     problems = []
+    compared += 2  # the bracket path and the stroke, both copied out of the generated mark
     if not got_path or got_path.group(1) != want_path.group(1):
         problems.append(Finding(
             rel(SIDEBAR_MORPH),
@@ -8691,6 +9343,7 @@ def check_rail_mark(report: Report) -> None:
     # the bracket pair contains none.
     if exists(FAVICON):
         fav = read(FAVICON)
+        compared += 3  # the rect, the settled paint, and the gradient
         if "<rect" in fav:
             problems.append(Finding(
                 rel(FAVICON),
@@ -8727,7 +9380,8 @@ def check_rail_mark(report: Report) -> None:
                 "noise. Every other surface keeps its metal; this one traded it for legibility.",
             ))
     report.add("rail mark", MECHANICAL, problems,
-               "the rail bracket is the shipped mark — in the sheet, at both ends of the morph, and on the tab")
+               "the rail bracket is the shipped mark — in the sheet, at both ends of the "
+               "morph, and on the tab", scanned=compared)
 
 
 def check_lockup_params(report: Report) -> None:
@@ -8746,6 +9400,10 @@ def check_lockup_params(report: Report) -> None:
     Provably wrong when it fires — both sides are literals.
     """
     if not exists(LOGO_SPEC) or not exists(LOCKUP_ROUND):
+        # A ROW, NOT A RETURN — see `raw color`. A silent return deletes the row from
+        # the render, and an absent row is the one state nothing in this file reads.
+        report.add("lockup params", MECHANICAL, [],
+                   "the spec or the round lockup sheet is not there", scanned=0)
         return
 
     spec_section = read(LOGO_SPEC)
@@ -8835,7 +9493,7 @@ def check_lockup_params(report: Report) -> None:
                     f"ignore.",
                 ))
 
-    report.add("lockup params", MECHANICAL, findings,
+    report.add("lockup params", MECHANICAL, findings, scanned=len(published), summary=
                f"{len(published)} settled values against the sheet's holds"
                + (" and the generated geometry" if exists(LOCKUP_GEOMETRY) else "")
                + (f", `{sweeping}` under test" if sweeping in published else "")
@@ -9019,6 +9677,11 @@ INDEX_HTML = ROOT / "app" / "index.html"
 # spelling because renaming a live key silently discards what sits under the old one (D94).
 _STORAGE_KEY_RE = re.compile(r"""['"]((?:banchi|pkmnscan)\.[A-Za-z0-9._-]+)['"]""")
 
+# The same key as a DOCUMENT writes it — bare, inside a fenced block, with no quotes to
+# anchor on. D27's session roster is written that way, and reading it with the code regex
+# above found nothing at all, which is a broken reader that reads like a broken entry.
+_FENCED_STORAGE_KEY_RE = re.compile(r"\b((?:banchi|pkmnscan)\.[A-Za-z0-9._-]+)")
+
 # Which store a file touches. Member access only — `window.localStorage`, a bare
 # `localStorage`, and the `window["localStorage"]` spelling the lint rule also has to cover.
 _STORAGE_USE_RE = re.compile(r"""\b(local|session)Storage\b|['"](local|session)Storage['"]""")
@@ -9085,6 +9748,89 @@ def _storage_sites() -> Tuple[Dict[str, Dict[str, List[str]]], List[Finding]]:
         for key in keys:
             by_store[store].setdefault(key, []).append(rel(path))
     return by_store, findings
+
+
+def _decision_entry(number: int) -> Optional[Tuple[str, str]]:
+    """(repo-relative path, text) of the entry whose heading is `## D<n> — …`, or None.
+
+    FOUND BY HEADING AND NEVER BY FILENAME. A claim renames the file (D140), so a path
+    typed here would go stale at the next merge while still pointing at a real document.
+    """
+    pattern = re.compile(rf"^##\s+D{number}\s+—", re.M)
+    for path in decision_files():
+        text = read(path)
+        if pattern.search(text):
+            return rel(path), text
+    return None
+
+
+def _session_fence_findings(session: Dict[str, List[str]]) -> List[Finding]:
+    """D27's fenced session roster against what the app writes, in both directions.
+
+    THE NARROWER PERMISSION HAD THE WEAKER READER. `localStorage` is reconciled against
+    CLAUDE.md's count, roster and files in both directions; `sessionStorage` was held only
+    to "named in some markdown", so D27's own fenced block could sit stale with the row
+    green — and did. Measured 2026-09-12: the fence publishes EIGHT keys and the app writes
+    TWO, because D142 moved six capture settings into `deviceMemory.ts`'s
+    `banchi.capture.setup` on the operator's report that a shift ends when they stop
+    feeding cards, which is neither a new tab nor a closed browser. The entry's next
+    sentence still said `SESSION_KEYS` "declares the first seven"; it declares one.
+
+    CLAUDE.md had already been corrected and dated for exactly this. The decision entry had
+    not, and nothing could say so — which is the same defect this row was built for on the
+    other store, where the sentence said FOUR and listed five for three days.
+
+    **THE FENCE ONLY, NEVER THE SURROUNDING ARGUMENT.** D27 legitimately discusses the
+    retired `pkmnscan.*` spellings, the six keys that left, and what each one cost, all in
+    prose. Reading the whole entry backwards would fail the commit over every abandoned key
+    the entry exists to explain.
+    """
+    found = _decision_entry(27)
+    if found is None:
+        return [Finding(
+            "docs/decisions/",
+            "no entry headed `## D27 — …`, and it is what publishes the `sessionStorage` "
+            "carve-out's roster. Renumbered, renamed past the heading grammar, or gone — "
+            "either way this leg is reconciling nothing.",
+        )]
+    where, text = found
+    fence = re.search(r"^```\n(.*?)^```", text, flags=re.M | re.S)
+    if fence is None:
+        return [Finding(
+            where,
+            "carries no fenced key block, and its roster is what this row reconciles "
+            "against `app/src`.\n"
+            "  Restore the fence, or say in the entry that the roster lives elsewhere — a "
+            "leg with no subject prints green over whatever the app happens to write.",
+        )]
+    # BARE, not quoted. `_STORAGE_KEY_RE` reads a key literal out of CODE, where it wears
+    # quotes; inside a fenced block a key is written as the app spells it and nothing else,
+    # so the same regex found none and this leg printed a finding that read like a broken
+    # entry rather than a broken reader.
+    published = set(_FENCED_STORAGE_KEY_RE.findall(fence.group(1)))
+    findings: List[Finding] = []
+    if not published:
+        return [Finding(
+            where, "its fenced key block yields no key this row can read."
+        )]
+    for key in sorted(published - set(session)):
+        findings.append(Finding(
+            where,
+            f"publishes `{key}` in its session roster and no file in `app/src` writes it to "
+            "`sessionStorage`.\n"
+            "  A key in the fence that the app does not write is a roster describing a "
+            "product that has moved. Amend the entry with what happened to it — the fence "
+            "is read, the argument around it is not.",
+        ))
+    for key in sorted(set(session) - published):
+        findings.append(Finding(
+            session[key][0],
+            f"`{key}` is written to `sessionStorage` and D27's fenced roster does not name "
+            "it.\n"
+            "  That carve-out is the NARROWER permission: a key is in it because somebody "
+            "argued the session scope is right for that value. Add it to the fence.",
+        ))
+    return findings
 
 
 def check_storage_keys(report: Report) -> None:
@@ -9242,13 +9988,131 @@ def check_storage_keys(report: Report) -> None:
                     "search finds.",
                 )
             )
+
+    # ---- and D27's own fence, BOTH DIRECTIONS ------------------------------------------
+    findings.extend(_session_fence_findings(session))
+
     report.add(
         "storage keys",
         MECHANICAL,
         findings,
         f"{len(local)} device-local keys against CLAUDE.md's roster, "
         f"{len(session)} session keys all named in markdown",
+        scanned=len(local) + len(session),
     )
+
+
+#: `# OFF_RENDER #/inventory — <reason>` in scripts/views.txt. A comment, so
+#: `make screenshot` skips it and this row reads it — the same arrangement `OFF_NAV` has in
+#: `App.tsx`, where the declaration lives beside the thing it is about rather than in a
+#: checker. Either dash spelling, because a session writing this line will reach for both.
+_OFF_RENDER_RE = re.compile(r"^#\s*OFF_RENDER\s+#?(\S+)\s*[—-]\s*(.+)$")
+
+
+def _route_names() -> Dict[str, str]:
+    """Every name a manifest line could legitimately use for a route -> that route's path.
+
+    A route's SLUG (`/review` -> `review`) and its LABEL lowercased (`Home` -> `/`), both
+    read out of the ROUTES table. The label is what makes `/` reachable by name at all: it
+    has no slug, and `home` is what the render is called.
+    """
+    if not exists(APP_TSX):
+        return {}
+    names: Dict[str, str] = {}
+    for path, label in re.findall(
+        r"path:\s*'([^']*)'\s*,\s*label:\s*'([^']*)'", read(APP_TSX)
+    ):
+        slug = path.strip("/")
+        if slug:
+            names[slug] = path or "/"
+        names[label.lower()] = path or "/"
+    return names
+
+
+def _render_manifest_findings(
+    entries: List[Tuple[int, str, str]], off_render: Dict[str, str]
+) -> Tuple[List[Finding], Set[str]]:
+    """A render's filename names the screen it renders, and every absence says why.
+
+    **A WRONG IMAGE WITH A RIGHT FILENAME IS WORSE THAN A MISSING ONE, because it is
+    quotable as verification.** `capture http://localhost:5173/#/` sat in this manifest:
+    a session rendering `captures/ui/capture.png` to check the capture screen was looking
+    at the HOME page, and `make screenshot` exited 0. Home took the root hash when the
+    shell was rebuilt and the line's NAME was never moved with its URL.
+
+    **Clause one: a manifest name that names a route must point at that route.** Matched
+    against the route's slug or its lowercased label, both read from ROUTES. A name that
+    matches neither is left alone on purpose — `pull-confirm` is a kit specimen rendered
+    off `#/gallery`, which is a deliberate arrangement and not a mislabelled screen.
+
+    **Clause two: a route with no render says so, by name, with a reason.** It does NOT
+    demand a line per route, which would re-arm an opsec leak the owner closed by ruling:
+    `#/inventory` was removed from this manifest on 2026-09-05 because it draws a pooled
+    card's photograph on purpose, and `#/codes` is the code-card screen. `OFF_RENDER` is
+    where that argument lives, so a THIRTEENTH route cannot arrive unrendered and unargued
+    — which is how `captures/ui/inventory.png` came to sit in the main checkout dated
+    2026-08-29 while `app/src/Inventory.tsx` had moved on 2026-09-11, with no manifest line
+    that would ever refresh it.
+    """
+    findings: List[Finding] = []
+    names = _route_names()
+    routes = _routes_table() or {}
+    rendered: Set[str] = set()
+
+    if not names or not routes:
+        findings.append(Finding(
+            rel(APP_TSX),
+            "the ROUTES table yields no route name this row can read, so no render's "
+            "filename is reconciled against the screen it draws and no absence is argued.",
+        ))
+        return findings, rendered
+
+    for number, name, url in entries:
+        route = (urlparse(url).fragment or "/").rstrip("/") or "/"
+        rendered.add(route)
+        wanted = names.get(name.lower())
+        if wanted is None or wanted == route:
+            continue
+        findings.append(Finding(
+            f"{rel(VIEWS_MANIFEST)}:{number}",
+            f"is named `{name}`, which is the screen at `#{wanted}`, and renders "
+            f"`#{route}`.\n"
+            f"  The render lands at captures/ui/{name}.png, so a session opening it to "
+            f"check `#{wanted}` is looking at a different screen and `make screenshot` "
+            f"exits 0 — a wrong image with a right filename, quotable as verification.\n"
+            f"  Point the URL at `#{wanted}`, or rename the line after the screen it "
+            f"actually draws.",
+        ))
+
+    for route in sorted(routes):
+        key = route.rstrip("/") or "/"
+        if key in rendered or key in off_render:
+            continue
+        findings.append(Finding(
+            rel(VIEWS_MANIFEST),
+            f"`#{key}` is a registered route with no render and no reason given.\n"
+            f"  Add a line for it, or declare the absence: "
+            f"`# OFF_RENDER #{key} — <why>`. Four routes are deliberately unrendered and "
+            f"each says why; a fifth arriving silently is a screen nothing has ever drawn, "
+            f"which is how an image of one goes three weeks stale with nothing to refresh "
+            f"it.",
+        ))
+
+    for route, reason in sorted(off_render.items()):
+        if route in rendered:
+            findings.append(Finding(
+                rel(VIEWS_MANIFEST),
+                f"declares `#{route}` OFF_RENDER ({reason}) and also renders it. One of the "
+                f"two is stale, and a declaration that outlives its reason is how the list "
+                f"stops being read.",
+            ))
+        elif route.rstrip("/") not in {r.rstrip("/") or "/" for r in routes}:
+            findings.append(Finding(
+                rel(VIEWS_MANIFEST),
+                f"declares `#{route}` OFF_RENDER and no such route is registered. The "
+                f"screen went; the declaration exempts nothing.",
+            ))
+    return findings, rendered
 
 
 def check_views_opsec(report: Report) -> None:
@@ -9311,10 +10175,17 @@ def check_views_opsec(report: Report) -> None:
             )
         )
 
+    manifest_text = read(VIEWS_MANIFEST)
     entries: List[Tuple[int, str, str]] = []
-    for number, line in enumerate(read(VIEWS_MANIFEST).splitlines(), start=1):
+    off_render: Dict[str, str] = {}
+    for number, line in enumerate(manifest_text.splitlines(), start=1):
         stripped = line.strip()
-        if not stripped or stripped.startswith("#"):
+        if not stripped:
+            continue
+        if stripped.startswith("#"):
+            declared = _OFF_RENDER_RE.match(stripped)
+            if declared is not None:
+                off_render[declared.group(1).rstrip("/") or "/"] = declared.group(2).strip()
             continue
         parts = stripped.split()
         if len(parts) < 2:
@@ -9325,7 +10196,39 @@ def check_views_opsec(report: Report) -> None:
                 )
             )
             continue
+        # THE THIRD FIELD IS NOT OPTIONAL, as of 2026-09-12. This file's own header says a
+        # line MAY name the elements its render must prove it drew, and `screenshot.mjs`
+        # defaults `require` to the empty string — so a ninth view added with a URL and no
+        # selectors silently gets the pre-2026-09-07 behaviour back: a valid,
+        # plausible-looking PNG that proves nothing, and `make screenshot` exits 0. A
+        # capability whose activation is optional is a guard the next line opts out of with
+        # no diff anybody reads. All eight lines already carry one.
+        if len(parts) < 3 or not [s for s in parts[2].split(",") if s.strip()]:
+            blocking.append(
+                Finding(
+                    f"{rel(VIEWS_MANIFEST)}:{number}",
+                    f"`{parts[0]}` names no element its render must prove it drew.\n"
+                    "  Without a third field `scripts/screenshot.mjs` asserts nothing about "
+                    "the page: it writes a valid PNG and exits 0, which is exactly the "
+                    "defect the column was added to end on 2026-09-07 — a session looked at "
+                    "an incomplete render and called the screen fine.\n"
+                    "  Name a screen root and its title at minimum, and read this file's "
+                    "header first: a selector has to hold in every state (server up, down, "
+                    "and up over an empty store).",
+                )
+            )
+            continue
         entries.append((number, parts[0], parts[1]))
+
+    if not entries:
+        blocking.append(
+            Finding(
+                rel(VIEWS_MANIFEST),
+                "yields no view this row can parse, and `make screenshot` reads it.\n"
+                "  A manifest nothing can read renders nothing and this row would print ok "
+                "over it — say so instead.",
+            )
+        )
 
     from urllib.parse import urlsplit
 
@@ -9397,11 +10300,16 @@ def check_views_opsec(report: Report) -> None:
             )
         )
 
+    render_findings, rendered_routes = _render_manifest_findings(entries, off_render)
+    blocking.extend(render_findings)
+
     report.add(
         "views opsec",
         MECHANICAL,
         blocking,
-        f"{checked} of {len(entries)} views resolve in ROUTES, none address the photo service",
+        f"{checked} of {len(entries)} views resolve in ROUTES, none address the photo "
+        f"service; {len(rendered_routes)} routes rendered, {len(off_render)} declared off",
+        scanned=len(entries),
     )
     report.add(
         "views exposure",
@@ -9410,6 +10318,7 @@ def check_views_opsec(report: Report) -> None:
         ("no pooled game in the registry — a stored photo is not a bearer instrument today"
          if not pooled
          else "no manifest view can draw a stored photo"),
+        scanned=len(entries),
     )
 
 
@@ -9535,6 +10444,7 @@ def check_doc_hygiene(report: Report, docs: List[Path]) -> None:
         ADVISORY,
         findings,
         f"{len(docs)} markdown files well-formed as documents",
+        scanned=len(docs),
     )
 
 
@@ -9814,6 +10724,7 @@ def check_route_rosters(report: Report) -> None:
         findings,
         f"{marked} declared roster{'' if marked == 1 else 's'} against "
         f"{len(expected.get('all', []))} registered routes",
+        scanned=marked,
     )
 
 # ------------------------------------------------------ deletions a decision records
@@ -9835,27 +10746,171 @@ def check_route_rosters(report: Report) -> None:
 # session says a deletion is meant to stay one. A symbol that is meant to come back is removed
 # from the table in the same commit that restores it, with the entry amended to say so.
 
+# THE SCAN ROOTS. `app/src` alone until 2026-09-12, which is why the row printed `ok` over
+# a resurrection in the OTHER language for a quarter: four of this quarter's five recorded
+# deletions took code out of `server/`, `cli/` and `harness/`, and the scan could not look
+# at any of them. A deletion is not an app-only kind of ruling.
+DELETION_ROOTS: Tuple[str, ...] = (
+    "app/src", "server", "store", "pipeline", "cli", "harness",
+)
+DELETION_SUFFIXES: Tuple[str, ...] = (".ts", ".tsx", ".css", ".py")
+
+# NAMES THAT CAME BACK ON PURPOSE, AND MAY NOT BE NEEDLES. Recorded here rather than left
+# out silently, because "not in the table" and "deliberately not in the table" are the same
+# absence to a reader, and the next session to widen this row would add them straight back.
+#
+#   `do_order_fill`, `POST /orders/fill`   D96 deleted D90's envelope fill; D113 REBUILT a
+#       route and a handler under both names for a different job — closing copies of a line
+#       with no card behind them. Both exist today (server/capture_server.py, app/src/
+#       server.ts, app/src/types.ts) and both are correct. A name is not a capability.
+#   D110's three dark-only hover overrides   `.bn-nav-link`, `.capture-row` and
+#       `.capture-opt` are LIVE classes; what D110 deleted is a declaration inside a
+#       `[data-theme='dark']` block. A substring needle for that is either the class name —
+#       red on every run — or a string that appears nowhere, which is a needle that can
+#       never fire, i.e. the vacuous green this row is about. It wants a CSS-structural
+#       reader, not this one.
+
 RECORDED_DELETIONS: Tuple[Tuple[str, str, Tuple[str, ...]], ...] = (
-    # (decision, what it deleted, the strings whose presence under app/src contradicts it)
+    # (decision, what it deleted, the strings whose presence in the scanned code contradicts it)
     ("D119", "the `#/inventory` location card", ("LocationCard", "inventory-location")),
+    ("D96", "D90's envelope fill — the walk, its banner and its harness case",
+     ("orderWalk", "OrderWalkBanner", "check_order_fill")),
+    ("D132", "`PositionLabel`'s `indexNote`", ("indexNote",)),
+    ("D155", "the segment reader that computed edges from card counts", ("lensOf",)),
+    # `cadence.ts` is the needle that keeps the prose classifier LIVE: it appears today in
+    # exactly one place, a block comment in `app/src/motion.ts` narrating the retirement, so
+    # every run exercises the comment/code split rather than leaving it to the self-test
+    # alone. A classifier nothing routes through is the vacuous green one register down.
+    ("D144", "the beat-locked cadence trigger, its module and its period pin",
+     ("cadenceTrigger", "CadenceMachine", "DEFAULT_CADENCE", "periodPin", "pinPeriod",
+      "cadence.ts")),
 )
 
 
+def _prose_blanked(path: Path, text: str) -> str:
+    """`text` with comments — and, in Python, docstrings — replaced by spaces.
+
+    OFFSETS AND LINE NUMBERS SURVIVE, so a hit found here reports the line it is really on.
+
+    WHY THIS EXISTS: `server/capture_server.py`'s docstring NARRATES one of these
+    deletions — "`/orders/fill`, which D96 deleted rather than wired up" — and reading that
+    as the symbol existing would make the row red for the prose that is doing its job.
+    Prose about a deletion is the record of it; executable code is the contradiction.
+
+    Python docstrings only, never every string literal. Blanking all of them would turn a
+    real code hit like `if name == "orderWalk"` into prose, which is the wrong direction to
+    be wrong in for a row whose whole subject is a resurrection.
+    """
+    out = list(text)
+
+    def blank(start: int, end: int) -> None:
+        for i in range(max(0, start), min(len(out), end)):
+            if out[i] != "\n":
+                out[i] = " "
+
+    if path.suffix == ".py":
+        try:
+            for token in tokenize.generate_tokens(io.StringIO(text).readline):
+                if token.type == tokenize.COMMENT:
+                    blank(_offset(text, token.start), _offset(text, token.end))
+        except (tokenize.TokenError, IndentationError, SyntaxError):
+            pass  # fails open: an unparseable file is scanned raw
+        try:
+            tree = ast.parse(text)
+        except SyntaxError:
+            tree = None
+        if tree is not None:
+            for node in ast.walk(tree):
+                for child in ast.iter_child_nodes(node):
+                    if (
+                        isinstance(child, ast.Expr)
+                        and isinstance(child.value, ast.Constant)
+                        and isinstance(child.value.value, str)
+                    ):
+                        blank(
+                            _offset(text, (child.lineno, child.col_offset)),
+                            _offset(text, (child.end_lineno or child.lineno,
+                                           child.end_col_offset or 0)),
+                        )
+    else:
+        for found in TS_COMMENT.finditer(text):
+            blank(found.start(), found.end())
+    return "".join(out)
+
+
+def _offset(text: str, position: Tuple[int, int]) -> int:
+    """(1-based line, 0-based column) -> character offset."""
+    line, column = position
+    offset = 0
+    for _ in range(line - 1):
+        found = text.find("\n", offset)
+        if found == -1:
+            return len(text)
+        offset = found + 1
+    return min(len(text), offset + column)
+
+
 def check_recorded_deletions(report: Report) -> None:
-    """A symbol a decision records as deleted does not exist under app/src.
+    """A symbol a decision records as deleted does not exist in the code.
 
     MECHANICAL: the entry says the thing is gone, and a grep says whether it is. See the banner
     above for the merge that made this row necessary — and for why the guard cannot live in
     the files the deletion touched.
+
+    **SIX ROOTS, NOT ONE.** The scan walked `app/src` and nothing else, so it could not see
+    four of the five deletions recorded this quarter — `do_order_fill` and its dispatcher in
+    `server/`, harness T7's `check_order_fill`, the cadence module's Python mirror. A row
+    whose subject is "does this symbol exist" has to look everywhere the symbol could be.
+
+    **PROSE IS NOT A RESURRECTION.** A hit inside a comment or a docstring is the deletion
+    being narrated and is counted in the summary rather than raised: `capture_server.py`
+    carries exactly such a sentence about D96. The count is printed so a needle that lives
+    only in prose can be told from one with no hits at all — and it is deliberately NOT an
+    advisory finding, because `exit 2` in this repo already stands permanently lit and one
+    more standing question would teach the next reader to skip the code entirely.
+
+    **ITS OWN DENOMINATORS ARE PUBLISHED.** The roster is hand-kept, so its size is the
+    thing most likely to be wrong about this row, and a scan that enumerated zero roots or
+    zero needles is a finding rather than an `ok` — the shape a bare `scanned` count cannot
+    see, since the row would still have walked hundreds of files to compare nothing.
     """
     findings: List[Finding] = []
-    for decision, what, needles in RECORDED_DELETIONS:
-        for path in sorted(_walk(APP_SRC, (".ts", ".tsx", ".css")), key=rel):
-            text = read(path)
+    needle_count = sum(len(needles) for _, _, needles in RECORDED_DELETIONS)
+
+    roots = [ROOT / root for root in DELETION_ROOTS if exists(ROOT / root)]
+    if not roots:
+        findings.append(
+            Finding(
+                "scripts/docs-audit.py -> DELETION_ROOTS",
+                f"names {len(DELETION_ROOTS)} roots and none of them is on disk, so this row "
+                f"compared nothing. Re-point the list: a scan with no root reports no "
+                f"resurrection however many there are.",
+            )
+        )
+    if not needle_count:
+        findings.append(
+            Finding(
+                "scripts/docs-audit.py -> RECORDED_DELETIONS",
+                "holds no needle, so the row is watching nothing. An emptied roster and a "
+                "tree with no resurrection in it print the same word otherwise.",
+            )
+        )
+
+    paths = sorted({path for root in roots for path in _walk(root, DELETION_SUFFIXES)}, key=rel)
+    narrated = 0
+    for path in paths:
+        text = read(path)
+        code = None
+        for decision, what, needles in RECORDED_DELETIONS:
             for needle in needles:
                 if needle not in text:
                     continue
-                line = text.count("\n", 0, text.index(needle)) + 1
+                if code is None:
+                    code = _prose_blanked(path, text)
+                if needle not in code:
+                    narrated += 1
+                    continue
+                line = code.count("\n", 0, code.index(needle)) + 1
                 findings.append(
                     Finding(
                         f"{rel(path)}:{line}",
@@ -9866,12 +10921,15 @@ def check_recorded_deletions(report: Report) -> None:
                         "happened the first time.",
                     )
                 )
+
     report.add(
         "recorded deletions",
         MECHANICAL,
         findings,
-        f"{len(RECORDED_DELETIONS)} recorded deletion{'' if len(RECORDED_DELETIONS) == 1 else 's'} "
-        "still absent from app/src",
+        f"{len(RECORDED_DELETIONS)} recorded deletion{'' if len(RECORDED_DELETIONS) == 1 else 's'}, "
+        f"{needle_count} needles over {len(roots)} roots and {len(paths)} files"
+        + (f"; {narrated} narrated in prose" if narrated else ""),
+        scanned=needle_count * len(roots),
     )
 
 
@@ -10083,6 +11141,7 @@ def check_design_check_verdict(report: Report) -> None:
         MECHANICAL,
         findings,
         f"{where} agreed by the reporter, the config, {len(_VERDICT_RECIPES)} recipes and the prose",
+        scanned=sum(1 for text in (reporter, config, makefile, published) if text),
     )
 
 
@@ -10131,6 +11190,7 @@ def check_spec_seal(report: Report) -> None:
         MECHANICAL,
         findings,
         f"{sealed} spec{'' if sealed == 1 else 's'} sealed against the capture port",
+        scanned=sealed,
     )
 
 # ------------------------------------------------------------------------ the route census
@@ -10359,7 +11419,7 @@ def check_route_census(report: Report) -> None:
     summary = f"{checked} published counts against {total} routes ({owner} owner)"
     if manifest_owner is not None:
         summary += f", {manifest_owner} owner renders in the manifest"
-    report.add("route census", MECHANICAL, findings, summary)
+    report.add("route census", MECHANICAL, findings, summary, scanned=checked)
 
 
 def check_positional_references(report: Report, docs: List[Path]) -> None:
@@ -10405,12 +11465,15 @@ def check_positional_references(report: Report, docs: List[Path]) -> None:
                     )
         return found
 
-    report.add("check numbering", MECHANICAL, positional(docs), "no check named by position")
+    report.add("check numbering", MECHANICAL, positional(docs),
+               "no check named by position", scanned=len(docs))
+    in_code = python_files() + [ALLOWLIST]
     report.add(
         "numbering in code",
         ADVISORY,
-        positional(python_files() + [ALLOWLIST]),
+        positional(in_code),
         "comments name checks by label",
+        scanned=len(in_code),
     )
 
 
@@ -10451,15 +11514,42 @@ CHECK_ENTRY_KEYS = (
 )
 
 
-def _check_recipe() -> Optional[List[str]]:
-    """The targets `make check` runs, in recipe order, or None if the block cannot be read."""
+def _recipe_targets(rule: str) -> Optional[List[str]]:
+    """The targets one `$(MAKE)`-dispatching rule runs, in recipe order, or None."""
     makefile = ROOT / "Makefile"
     if not exists(makefile):
         return None
-    block = re.search(r"^check:\n((?:\t.*\n)+)", read(makefile), flags=re.M)
+    block = re.search(rf"^{re.escape(rule)}:\n((?:\t.*\n)+)", read(makefile), flags=re.M)
     if block is None:
         return None
     return _CHECK_RECIPE_RE.findall(block.group(1))
+
+
+def _check_recipe() -> Optional[List[str]]:
+    """The targets `make check` runs, in recipe order, or None if the block cannot be read."""
+    return _recipe_targets("check")
+
+
+def _ci_check_recipe() -> Optional[List[str]]:
+    """The targets `make ci-check` runs — the gate `.github/workflows/check.yml` invokes.
+
+    RECONCILED AGAINST NOTHING UNTIL 2026-09-12, while `check registry`, `check census` and
+    `commit path` all read the `check:` recipe alone. The Makefile's own header states the
+    hazard in capitals — "IT IS A SUBSET AND CAN DRIFT FROM `check`" — and a target dropped
+    from this one stops gating every pull request and every push in silence, which is the
+    armed-hook defect with a runner in front of it.
+
+    Membership only, deliberately, and never order: `check registry` owns the order of the
+    `check:` recipe, and `ci-check` is ordered differently on purpose.
+    """
+    return _recipe_targets("ci-check")
+
+
+# The marker a non-gating target's recipe has to print, so a reader of a green `make check`
+# is not counting a slot that cannot fail among the ones that can (`gates: False` in
+# scripts/checks.py). Paired in BOTH directions: a marker in a gating target's recipe is as
+# wrong as a missing one in `vale`'s.
+_NOT_A_GATE_MARKER = "NOT A GATE:"
 
 
 def _checks_registry() -> Optional[Tuple[List[dict], dict]]:
@@ -10489,8 +11579,31 @@ def check_check_registry(report: Report) -> None:
     ORDER IS CHECKED, not just membership. The file says its entries are in recipe order and
     `make explain` prints them that way, so a reader takes the order as the running order; a
     claim being read is a claim worth verifying, and it costs one comparison.
+
+    **`ci-check` IS RECONCILED HERE TOO, AS OF 2026-09-12, and it had no reader at all.**
+    `grep -c ci-check scripts/docs-audit.py` returned 0: three rows read the `check:` recipe
+    and none read the gate `.github/workflows/check.yml` actually invokes on every pull
+    request and every push. The Makefile's own header says "IT IS A SUBSET AND CAN DRIFT
+    FROM `check`", which is a hazard written down and watched by nobody.
+
+    The difference is DECLARED, not tolerated: a target in `check` and not in `ci-check`
+    needs a `why_off_ci` sentence on its entry, and a target carrying that sentence while
+    sitting in `ci-check` is as wrong as a missing one — the same pairing discipline
+    `commit_path` / `why_off_commit_path` already keeps. Membership only, never order.
+    Today the sole difference is `vale`, which the Makefile header already argues, so the
+    extension starts green.
+
+    **AND A SLOT THAT CANNOT FAIL SAYS SO AT RUN TIME.** `gates: False` was read by nothing:
+    the field was declared honestly and the disclosure never reached the run a session
+    reads. `vale` swallows its status with `--no-exit` and, with no binary, prints and exits
+    0 — so a reader of a green `make check` counts 25 passing rows where 24 are gates. The
+    entry's recipe has to print `NOT A GATE:`, in both directions, so `make explain`, the
+    run and the reader agree. A GATING target is never forced to print anything; the point
+    is disclosure, not removal, and the owner has ruled prose style worth running and not
+    worth gating (D74).
     """
     recipe = _check_recipe()
+    ci_recipe = _ci_check_recipe()
     loaded = _checks_registry()
     if recipe is None:
         report.add("check registry", MECHANICAL, [Finding(
@@ -10550,8 +11663,76 @@ def check_check_registry(report: Report) -> None:
             "NEEDS defines `{0}` and no check needs it. Delete it or use it (D80)."
         ).format(token)))
 
+    # ---- the OTHER gate: `make ci-check`, which every PR and push runs ------------------
+    if ci_recipe is None:
+        findings.append(Finding("Makefile", (
+            "the `ci-check:` recipe could not be read, and `.github/workflows/check.yml` "
+            "invokes it on every pull request and every push.\n"
+            "  A subset nothing reconciles is a gate that can lose a target in silence.")))
+    else:
+        by_target = {str(entry.get("target", "")): entry for entry in entries}
+        for name in ci_recipe:
+            if name not in recipe:
+                findings.append(Finding("Makefile", (
+                    "`make ci-check` runs `{0}` and `make check` does not.\n"
+                    "  ci-check is a SUBSET of check by the Makefile's own header. A target "
+                    "only CI runs is one a session cannot reproduce before pushing."
+                ).format(name)))
+        for name in recipe:
+            if name in ci_recipe:
+                continue
+            entry = by_target.get(name)
+            reason = str((entry or {}).get("why_off_ci") or "").strip()
+            if not reason:
+                findings.append(Finding(
+                    "{0} — {1}".format(rel(CHECKS_REGISTRY), name),
+                    "`make check` runs it and `make ci-check` does not, and the entry says "
+                    "nothing about why.\n"
+                    "  Either add it to the ci-check recipe, or give the entry a "
+                    "`why_off_ci` sentence. A target silently absent from the gate that "
+                    "runs on every PR has stopped gating anything, and the run is green "
+                    "because it never happened.",
+                ))
+        for name, entry in sorted(by_target.items()):
+            if str(entry.get("why_off_ci") or "").strip() and name in ci_recipe:
+                findings.append(Finding(
+                    "{0} — {1}".format(rel(CHECKS_REGISTRY), name),
+                    "carries `why_off_ci` and `make ci-check` runs it. The sentence explains "
+                    "an absence that is over; delete it, or the next reader believes CI does "
+                    "not run this.",
+                ))
+
+    # ---- a slot in `make check` that cannot fail says so where the run is read ----------
+    makefile_text = read(ROOT / "Makefile") if exists(ROOT / "Makefile") else ""
+    for entry in entries:
+        name = str(entry.get("target", ""))
+        if "gates" not in entry:
+            continue
+        body = _make_recipe(makefile_text, name)
+        if body is None:
+            continue  # `check registry`'s membership legs above already name a missing rule
+        printed = any(_NOT_A_GATE_MARKER in line for line in body)
+        if not entry["gates"] and not printed:
+            findings.append(Finding(
+                "Makefile — {0}".format(name),
+                "is declared `gates: False` and its recipe never says so.\n"
+                "  It occupies a slot in `make check` that cannot fail, and a reader of a "
+                "green run counts it among the ones that can. Print `{0}` in the recipe — "
+                "the disclosure is the point, not removing the target.".format(
+                    _NOT_A_GATE_MARKER),
+            ))
+        elif entry["gates"] and printed:
+            findings.append(Finding(
+                "Makefile — {0}".format(name),
+                "prints `{0}` and its entry declares `gates: True`. One of the two is "
+                "wrong, and the recipe is what a session reads.".format(_NOT_A_GATE_MARKER),
+            ))
+
+    ungated = sum(1 for entry in entries if entry.get("gates") is False)
     report.add("check registry", MECHANICAL, findings,
-               "{0} checks, in recipe order".format(len(recipe)))
+               "{0} checks in recipe order, {1} in ci-check, {2} declared non-gating".format(
+                   len(recipe), len(ci_recipe or ()), ungated),
+               scanned=len(recipe))
 
 
 def check_commit_path(report: Report) -> None:
@@ -10634,7 +11815,8 @@ def check_commit_path(report: Report) -> None:
                 "  the field that stops one being moved back on to the path by tidiness.")))
 
     report.add("commit path", MECHANICAL, findings,
-               "{0} of {1} on the commit path, none of them writing".format(on_path, len(entries)))
+               "{0} of {1} on the commit path, none of them writing".format(on_path, len(entries)),
+               scanned=len(entries))
 
 
 # The published claims about what `make check` runs, as the sentence reads. The anchor is
@@ -10801,7 +11983,8 @@ def check_suite_lock(report: Report) -> None:
 
     report.add("suite lock", MECHANICAL, findings,
                "{0} fleet script{1} behind the lock, {2} serial renderers still serial".format(
-                   len(fleets), "" if len(fleets) == 1 else "s", len(FLEET_RUNNER_SCRIPTS)))
+                   len(fleets), "" if len(fleets) == 1 else "s", len(FLEET_RUNNER_SCRIPTS)),
+               scanned=len(fleets) + len(FLEET_RUNNER_SCRIPTS))
 
 
 # ------------------------------------------------------------ the browser matrix's scope
@@ -11108,7 +12291,8 @@ def check_browser_scope(report: Report) -> None:
         findings.append(Finding(where, message))
 
     report.add("browser scope", MECHANICAL, findings,
-               f"{len(scope)} entries cover {len(seen)} derived dependencies, read fail-open")
+               f"{len(scope)} entries cover {len(seen)} derived dependencies, read fail-open",
+               scanned=len(scope))
 
 
 def check_check_census(report: Report) -> None:
@@ -11126,6 +12310,24 @@ def check_check_census(report: Report) -> None:
     IT REFUSES TO GO QUIET, which is `route census`'s hard-won half: an anchor that matches
     nothing in a watched file is reported as an unwatched claim. A check that silently stops
     covering prose is the failure it exists to end, and rewording is how that happens.
+
+    **ORDER, AS OF 2026-09-12, AND THE ROW HAD ALREADY BEEN CITED AS PROOF OF IT.** Both
+    claims were parsed into an ORDERED list and then compared as SETS. Commit a6287cb
+    reordered the `check:` recipe and `scripts/checks.py` — the product first, the guards'
+    selftests last, which is the entire content of D161 — and left both publications in the
+    pre-reorder order. Its own message cited this row's "2 lists of 23" as verification. The
+    row was green through it and stayed green afterwards, because every member was still
+    present.
+
+    The order is what a reader takes from the list: a session reading either publication
+    learns which check runs first and therefore which failure hides the rest. `check
+    registry` has compared the registry's sequence against the recipe since it was written;
+    this is the same comparison one publication further out, and it costs nothing.
+
+    **THE RECIPE IS THE AUTHORITY, not `scripts/checks.py`.** The row's own message has
+    always said "recount from the `check:` recipe", and the registry is a parallel
+    declaration that can itself be wrong — `check registry` is what holds it honest. If the
+    recipe cannot be read at all, the registry stands in and the summary says which.
     """
     loaded = _checks_registry()
     if loaded is None:
@@ -11133,7 +12335,9 @@ def check_check_census(report: Report) -> None:
             rel(CHECKS_REGISTRY), "CHECKS could not be read; see the `check registry` row.")])
         return
     entries, _ = loaded
-    expected = [str(entry.get("target", "")) for entry in entries]
+    recipe = _check_recipe()
+    expected = recipe if recipe else [str(entry.get("target", "")) for entry in entries]
+    authority = "the `check:` recipe" if recipe else "scripts/checks.py"
 
     findings: List[Finding] = []
     checked = 0
@@ -11170,9 +12374,29 @@ def check_check_census(report: Report) -> None:
                 findings.append(Finding("{0}:{1}".format(name, line), (
                     "this list names `{0}`, which `make check` does not run."
                 ).format(extra)))
+            # ORDER, once membership agrees. Reported separately and only then, so a missing
+            # target is never also reported as a re-ordering — one defect, one finding.
+            if sorted(claimed) == sorted(expected) and claimed != expected:
+                first = next(
+                    (i for i, (got, want) in enumerate(zip(claimed, expected)) if got != want),
+                    0,
+                )
+                findings.append(Finding("{0}:{1}".format(name, line), (
+                    "names every check `make check` runs and NOT IN THE ORDER IT RUNS THEM.\n"
+                    "  first disagreement at position {0}: this list says `{1}`, {2} runs `{3}`.\n"
+                    "  published: {4}\n"
+                    "  running:   {5}\n"
+                    "  The order is what a reader takes from the list — which check runs first\n"
+                    "  is which failure hides the rest. Recount from {2}."
+                ).format(
+                    first + 1, claimed[first], authority, expected[first],
+                    " + ".join(claimed), " + ".join(expected),
+                )))
 
     report.add("check census", MECHANICAL, findings,
-               "{0} published lists, {1} checks each".format(checked, len(expected)))
+               "{0} published lists, {1} checks each, in {2}'s order".format(
+                   checked, len(expected), authority),
+               scanned=checked)
 
 
 # -------------------------------------------------------------- how callers invoke this
@@ -11300,6 +12524,7 @@ def check_audit_invocation(report: Report) -> None:
         findings,
         f"{len(INVOKERS)} callers, flags all declared, usage {EXIT_USAGE} clear of advisory "
         f"{advisory_code}",
+        scanned=len(INVOKERS),
     )
 
 
@@ -11504,7 +12729,121 @@ def check_dispatch(report: Report, source: Path = SELF) -> None:
             )
 
     report.add(
-        "check dispatch", MECHANICAL, findings, "every check defined here is called by audit()"
+        "check dispatch", MECHANICAL, findings,
+        "every check defined here is called by audit()", scanned=len(checks)
+    )
+
+
+def check_subject_counts(report: Report, staged_only: bool = False) -> None:
+    """Every row above declared how many subjects it had, and an empty one is pinned.
+
+    THE ROW THAT MAKES THE OTHER ROWS HONEST. `Report.render` printed `ok` for any row
+    whose findings list was empty, so a row that examined 2,964 references and a row that
+    examined NONE were the same word. Measured on main inside a green `make check`:
+    `paths 0 references resolve`, `make targets 0 references, 57 targets`, `env vars 0
+    documented, all real`. The four ways a row goes quietly vacuous are all of them
+    invisible that way — a walk root that moved, a renamed directory, an edited suffix
+    list, and a corpus that cannot be read.
+
+    Three findings, three different defects, kept apart on purpose:
+
+      no count      the row printed a verdict over a subject nobody counted. Every row
+                    that can print clean passes `scanned=`; a new one that does not is
+                    stopped here rather than joining the vacuous set.
+      unpinned zero the row examined nothing and `EXPECTED_EMPTY` does not say that is
+                    legitimate. This is the failure the whole exercise is for.
+      stale pin     `EXPECTED_EMPTY` names a row this file no longer emits. A permission
+                    that outlives its row is how an exemption stops being read — the same
+                    discipline `UNDISPATCHED` and the allowlist are held to.
+
+    **A `staged` pin is a permission in ONE MODE.** The eight rows whose whole subject is
+    the markdown set are legitimately empty when `--staged` narrows that set to nothing;
+    the same zero in FULL mode is a broken walk and still fails. Pinning them
+    unconditionally would have blinded the exact three rows the defect was observed on.
+
+    **MECHANICAL, against the proposal that asked for informational.** A tag nothing can
+    fail on is the state this row exists to end: `exit 2` in this repo has 23 standing
+    findings and a measured session pushed past three stale citations because of it. The
+    pin is what keeps that honest — a row that should be empty says so in one line with a
+    reason, and everything else is a defect.
+
+    It cannot itself be vacuous while `audit()` exists: its subject is the other rows, and
+    `check dispatch` already refuses an `audit()` that names none of the checks.
+    """
+    findings: List[Finding] = []
+    emitted = {row.check for row in report.checks}
+
+    for row in report.checks:
+        if row.check == "subject counts":
+            continue
+        # A ROW THAT PRINTED A PROBLEM IS NOT THIS ROW'S SUBJECT. The defect is the
+        # vacuous `ok`, and a row rendering FAIL or ask is not rendering it — so a
+        # findings-bearing row is judged on its findings and nothing else. It also keeps
+        # the error paths honest-looking: `make targets` with no Makefile adds a finding
+        # and no count, and "declared no subject count" beside it would be noise pointing
+        # at the wrong thing. A row whose CLEAN path declares no count is caught the first
+        # time that path is taken, which is the first time it could mislead anybody.
+        if row.findings:
+            continue
+        if row.scanned is None:
+            findings.append(
+                Finding(
+                    f"scripts/docs-audit.py -> {row.check}",
+                    "declared no subject count, so nothing can tell a row that examined "
+                    "everything from one that examined nothing. Pass `scanned=<n>` at that "
+                    "row's `report.add` — the count it already prints in prose is usually "
+                    "the number.",
+                )
+            )
+            continue
+        if row.scanned:
+            continue
+        pin = EXPECTED_EMPTY.get(row.check)
+        if pin is None:
+            findings.append(
+                Finding(
+                    f"scripts/docs-audit.py -> {row.check}",
+                    "examined NOTHING and printed no problem. Either its subject moved — a "
+                    "walk root, a renamed directory, an edited suffix list, an unreadable "
+                    "corpus — or an empty subject is legitimate here, in which case pin the "
+                    "row by name in `EXPECTED_EMPTY` with the reason beside it. A blanket "
+                    "exemption is how a rule stops being one.",
+                )
+            )
+            continue
+        when, why = pin
+        if when == "staged" and not staged_only:
+            findings.append(
+                Finding(
+                    f"scripts/docs-audit.py -> {row.check}",
+                    f"examined nothing in a FULL run. Its pin is `staged` only — {why} — so "
+                    f"a zero here is a broken walk rather than a narrowed one.",
+                )
+            )
+
+    for name, (when, why) in sorted(EXPECTED_EMPTY.items()):
+        if when == "staged" and not staged_only and name not in emitted:
+            # `coupling` is the case: a staged-only ROW is legitimately absent from a full
+            # run, so its pin cannot be judged stale here. In staged mode it can.
+            continue
+        if name not in emitted:
+            findings.append(
+                Finding(
+                    "scripts/docs-audit.py -> EXPECTED_EMPTY",
+                    f"pins `{name}` ({when}: {why}), and no row by that name was emitted. "
+                    f"Renamed or deleted; either way the pin now permits nothing, and the "
+                    f"row it was written for — if it still exists — is unpinned.",
+                )
+            )
+
+    empty = sum(1 for row in report.checks if row.scanned == 0)
+    report.add(
+        "subject counts",
+        MECHANICAL,
+        findings,
+        f"{len(report.checks)} rows, every one declaring its subject; "
+        f"{empty} examined nothing, all pinned",
+        scanned=len(report.checks),
     )
 
 
@@ -11558,12 +12897,18 @@ def staged_changes() -> Dict[str, int]:
 def check_coupling(report: Report) -> None:
     changes = staged_changes()
     findings: List[Finding] = []
+    # The subject is the source GROUPS this commit actually touched, not the size of
+    # COUPLING — a commit under none of them asks no question, and the row now says so
+    # rather than printing the same `ok` a fully-checked commit gets.
+    groups = 0
     for sources, coupled_docs in COUPLING:
         touched = {
             path: count
             for path, count in changes.items()
             if any(path == s or path.startswith(s) for s in sources)
         }
+        if touched:
+            groups += 1
         if not touched:
             continue
         total = sum(touched.values())
@@ -11582,7 +12927,8 @@ def check_coupling(report: Report) -> None:
                 f"  Still accurate? Not blocking — run /docs-audit to check the prose.",
             )
         )
-    report.add("coupling", ADVISORY, findings, "staged code and its docs move together")
+    report.add("coupling", ADVISORY, findings, "staged code and its docs move together",
+               scanned=groups)
 
 
 # ---------------------------------------------------------- identifier spelling (D60)
@@ -12055,6 +13401,7 @@ def check_shell_substitution(report: Report) -> None:
         findings,
         f"{len(findings)} unescaped backtick(s) in a double-quoted shell string" if findings
         else f"no double-quoted shell string in {scanned} files runs a command by accident",
+        scanned=scanned,
     )
 
 
@@ -12310,6 +13657,7 @@ def check_rule_enforcement(report: Report) -> None:
         findings,
         f"{len(blocks)} hard rules: {len(blocks) - len(prose_only)} name a mechanism that "
         f"resolves, {len(prose_only)} argue why none can (pinned at {PROSE_ONLY_EXPECTED})",
+        scanned=len(blocks),
     )
 
 
@@ -12345,6 +13693,7 @@ def check_identifier_spelling(report: Report) -> None:
         findings,
         f"{len(findings)} British identifiers" if findings
         else f"every identifier in {scanned} files is spelled American",
+        scanned=scanned,
     )
 
 
@@ -12771,13 +14120,13 @@ def self_test() -> int:
         doc.write_text("see `harness/no_such_file.py` for details\n", encoding="utf-8")
         report = Report()
         check_paths(report, [doc], {})
-        _, _, findings, _ = report.checks[0]
+        findings = report.checks[0].findings
         ok(len(findings) == 1, "one finding for one dangling path", str(findings))
 
         doc.write_text("see `harness/run.py` for details\n", encoding="utf-8")
         report = Report()
         check_paths(report, [doc], {})
-        _, _, findings, _ = report.checks[0]
+        findings = report.checks[0].findings
         ok(not findings, "no finding for a path that resolves", str(findings))
 
     print("\nignored_paths answers a candidate git refuses to walk past a symlink")
@@ -12845,23 +14194,23 @@ def self_test() -> int:
         doc.write_text("`pipeline/variant.resolve` is used unchanged.\n", encoding="utf-8")
         report = Report()
         check_paths(report, [doc], {})
-        _, _, findings, _ = report.checks[0]
+        findings = report.checks[0].findings
         ok(not findings, "a real module.function resolves", str(findings))
 
         doc.write_text("`pipeline/variant.no_such_function` does the work.\n", encoding="utf-8")
         report = Report()
         check_paths(report, [doc], {})
-        _, _, findings, _ = report.checks[0]
+        findings = report.checks[0].findings
         ok(len(findings) == 1, "a function that is not defined is reported", str(findings))
 
     print("\nallowlist is self-cleaning")
     report = Report()
     check_allowlist(report, {"harness/run.py": "pretend this is planned"})
-    _, _, findings, _ = report.checks[0]
+    findings = report.checks[0].findings
     ok(len(findings) == 1, "existing path in the allowlist is reported stale", str(findings))
     report = Report()
     check_allowlist(report, {"harness/not_yet.py": "genuinely planned"})
-    _, _, findings, _ = report.checks[0]
+    findings = report.checks[0].findings
     ok(not findings, "absent path in the allowlist is fine", str(findings))
 
     print("\nast readers handle the real files")
@@ -12903,7 +14252,7 @@ def self_test() -> int:
         doc.write_text(f"the orphan rule is check {10} here\n", encoding="utf-8")
         report = Report()
         check_positional_references(report, [doc])
-        rows = {check: (severity, findings) for check, severity, findings, _ in report.checks}
+        rows = {row.check: (row.severity, row.findings) for row in report.checks}
         ok(
             len(rows.get("check numbering", ("", []))[1]) == 1,
             "a positional reference in a doc is reported",
@@ -12912,7 +14261,7 @@ def self_test() -> int:
         ok(
             rows.get("numbering in code", ("", []))[0] == ADVISORY,
             "the code row is advisory, and the doc row is not",
-            str([(check, severity) for check, severity, _, _ in report.checks]),
+            str([(row.check, row.severity) for row in report.checks]),
         )
 
         doc.write_text("the repo-map check owns the orphan rule\n", encoding="utf-8")
@@ -12922,7 +14271,7 @@ def self_test() -> int:
         # a check identified by its position — the exact pattern D17 bans in the docs and
         # this row exists to enforce. It read `[1]` until the count row above it was
         # deleted, at which point it silently retargeted and still passed.
-        by_label = {check: findings for check, _, findings, _ in report.checks}
+        by_label = {row.check: row.findings for row in report.checks}
         findings = by_label["check numbering"]
         ok(not findings, "naming the check by its label is fine", str(findings))
 
@@ -13212,7 +14561,7 @@ def self_test() -> int:
 
     report = Report()
     check_tested_by_reach(report)
-    by_label = {check: findings for check, _, findings, _ in report.checks}
+    by_label = {row.check: row.findings for row in report.checks}
     ok(
         not by_label.get("tested_by reach"),
         "every tested_by claim in this repo's own map reaches what it names",
@@ -13376,7 +14725,7 @@ def self_test() -> int:
         )
     report = Report()
     check_design_tokens(report)
-    by_label = {check: findings for check, _, findings, _ in report.checks}
+    by_label = {row.check: row.findings for row in report.checks}
     ok(
         not by_label["design tokens"],
         "this repo's own tokens.css agrees with docs/DESIGN.md",
@@ -13436,7 +14785,7 @@ def self_test() -> int:
     )
     report = Report()
     check_breakpoints(report)
-    by_label = {check: findings for check, _, findings, _ in report.checks}
+    by_label = {row.check: row.findings for row in report.checks}
     ok(
         not by_label["breakpoints"],
         "this repo's own stylesheets agree with the register",
@@ -13461,7 +14810,7 @@ def self_test() -> int:
     )
     report = Report()
     check_raw_color(report)
-    by_label = {check: findings for check, _, findings, _ in report.checks}
+    by_label = {row.check: row.findings for row in report.checks}
     ok(
         not by_label["raw color"],
         "this repo's own stylesheets read every color from a token",
@@ -13544,7 +14893,7 @@ def self_test() -> int:
     check_identifier_spelling(report)
     check_shell_substitution(report)
     check_rule_enforcement(report)
-    by_label = {check: findings for check, _, findings, _ in report.checks}
+    by_label = {row.check: row.findings for row in report.checks}
     ok(
         not by_label["identifier spelling"],
         "every identifier in this tree is spelled American",
@@ -13582,7 +14931,7 @@ def self_test() -> int:
     )
     report = Report()
     check_storage_keys(report)
-    by_label = {check: findings for check, _, findings, _ in report.checks}
+    by_label = {row.check: row.findings for row in report.checks}
     ok(
         not by_label["storage keys"],
         "every storage key the app writes is published where the docs promise it is",
@@ -13663,7 +15012,7 @@ def self_test() -> int:
     # asserting a rule this tree does not follow.
     report = Report()
     check_codex_hooks(report)
-    by_label = {check: findings for check, _, findings, _ in report.checks}
+    by_label = {row.check: row.findings for row in report.checks}
     ok(
         not by_label["codex hooks"],
         ".codex/hooks.json and .claude/settings.json name the same hooks in this tree",
@@ -13745,7 +15094,7 @@ def self_test() -> int:
     ok(code == EXIT_USAGE, f"an unknown flag exits {EXIT_USAGE}, never 2", f"exited {code}")
     report = Report()
     check_audit_invocation(report)
-    by_label = {check: findings for check, _, findings, _ in report.checks}
+    by_label = {row.check: row.findings for row in report.checks}
     ok(not by_label["audit invocation"], "every caller's flags are declared", str(by_label))
 
     # The reason this check asks argparse instead of reading a list out of it: argparse
@@ -13758,7 +15107,7 @@ def self_test() -> int:
         try:
             report = Report()
             check_audit_invocation(report)
-            rows = {check: findings for check, _, findings, _ in report.checks}
+            rows = {row.check: row.findings for row in report.checks}
             ok(
                 not rows["audit invocation"],
                 "an abbreviation argparse accepts is not a finding",
@@ -13767,7 +15116,7 @@ def self_test() -> int:
             caller.write_text("python3 scripts/docs-audit.py --stagx\n", encoding="utf-8")
             report = Report()
             check_audit_invocation(report)
-            rows = {check: findings for check, _, findings, _ in report.checks}
+            rows = {row.check: row.findings for row in report.checks}
             ok(
                 len(rows["audit invocation"]) == 1,
                 "a flag argparse rejects is",
@@ -13847,7 +15196,7 @@ def self_test() -> int:
             try:
                 report = Report()
                 check_dispatch(report, fixture)
-                return {check: found for check, _, found, _ in report.checks}["check dispatch"]
+                return {row.check: row.findings for row in report.checks}["check dispatch"]
             finally:
                 UNDISPATCHED.clear()
                 UNDISPATCHED.update(saved_exempt)
@@ -14074,10 +15423,111 @@ def self_test() -> int:
        "an empty index is still refused outright, corpus present or not")
     ok(not _is_unclaimed("D42") and _is_unclaimed(_slug_1),
        "the exemption test itself: a number is claimed, a slug is not — ids carry their `D`")
+    # A ROW THAT EXAMINED NOTHING IS NOT A ROW THAT PASSED. Driven over a synthetic report,
+    # because the thing under test is the REPORTING LAYER and a real run cannot pose a row
+    # with no subject without breaking a walk. Every arm here is a state the file printed
+    # `ok` for before 2026-09-12.
+    print("\na row that examined nothing does not print the word a row that examined everything does")
+
+    # ROWS BUILT AS `Row`, NEVER THROUGH `report.add`. `defined_checks` marks any
+    # module-level function that emits a row AS A CHECK, deliberately and by union — so a
+    # `report.add` anywhere in `self_test` makes `check dispatch` report `self_test` as an
+    # undispatched check. Measured, one edit after that row was extended. Appending the
+    # tuple is also the more honest fixture: it poses the report a check would leave.
+    def _subject(rows, staged=False, drop=""):
+        report = Report()
+        posed = {check for check, _, _ in rows}
+        # Every pinned name present, so the stale-pin leg is satisfied and the arm under
+        # test is the only thing being read. `drop` omits one, which is how the stale-pin
+        # arm is posed.
+        for name in EXPECTED_EMPTY:
+            if name not in posed and name != drop:
+                report.checks.append(Row(name, MECHANICAL, [], "", 1))
+        for check, findings, scanned in rows:
+            report.checks.append(Row(check, MECHANICAL, findings, "", scanned))
+        check_subject_counts(report, staged)
+        return {row.check: row.findings for row in report.checks}["subject counts"]
+
+    _pinned = next(n for n, (when, _) in EXPECTED_EMPTY.items() if when == "always")
+    _staged_pin = next(n for n, (when, _) in EXPECTED_EMPTY.items() if when == "staged")
+    ok(not _subject([("paths", [], 2964)]), "a row with subjects and no findings is clean")
+    ok(any("declared no subject count" in m for _, m in _subject([("paths", [], None)])),
+       "a row that declared no subject count is a finding, not an ok")
+    ok(any("examined NOTHING" in m for _, m in _subject([("unpinned row", [], 0)])),
+       "an UNPINNED row that examined nothing is a finding")
+    ok(not _subject([(_pinned, [], 0)]),
+       f"a row pinned expected-empty ({_pinned}) may examine nothing")
+    ok(any("examined nothing in a FULL run" in m
+           for _, m in _subject([(_staged_pin, [], 0)], staged=False))
+       and not _subject([(_staged_pin, [], 0)], staged=True),
+       "a `staged` pin permits zero under --staged and refuses it in a full run")
+    ok(any("no row by that name was emitted" in m
+           for _, m in _subject([(_pinned + "-renamed", [], 1)], drop=_pinned)),
+       "a pin naming a row the file no longer emits is reported stale")
+    ok(not _subject([("with findings", [Finding("x", "y")], 0)]),
+       "a row WITH findings is judged on the findings, never on an empty subject")
+    _rendered = Report()
+    _rendered.checks.append(Row("zero", MECHANICAL, [], "a summary", 0))
+    _rendered.checks.append(Row("some", MECHANICAL, [], "a summary", 7))
+    _rendered.checks.append(Row("bare", MECHANICAL, [], "a summary", None))
+    ok("none zero" in re.sub(r"\s+", " ", _rendered.render()),
+       "the render prints `none` for an empty subject")
+    ok("ok   some" in _rendered.render(), "and `ok` where there was one")
+    ok("bare bare" in re.sub(r"\s+", " ", _rendered.render()),
+       "and `bare` where no count was declared")
+    ok(json.loads(_rendered.as_json(0))["rows"][0]["vacuous"] is True
+       and json.loads(_rendered.as_json(0))["rows"][1]["vacuous"] is False,
+       "--json carries the integer and the flag, so nothing parses the render")
+
+    # A DELETION NARRATED IN PROSE IS NOT A RESURRECTION, and `capture_server.py` narrates
+    # one. The classifier is what keeps the row off it, so it is exercised here directly.
+    print("\na deleted symbol in a comment is the record of the deletion; in code it is the defect")
+    _py = 'def f():\n    """Mentions Ghost in a docstring."""\n    # Ghost in a comment\n    return 1\n'
+    ok("Ghost" not in _prose_blanked(Path("x.py"), _py),
+       "a Python docstring and a comment are both blanked")
+    ok("Ghost" in _prose_blanked(Path("x.py"), 'Ghost = 1\n# Ghost\n'),
+       "and an assignment to the same name survives")
+    ok(_prose_blanked(Path("x.py"), _py).count("\n") == _py.count("\n"),
+       "offsets survive, so a reported line number is the real one")
+    ok("Ghost" not in _prose_blanked(Path("x.ts"), "/* Ghost */\nconst a = 1\n"),
+       "a TypeScript block comment is blanked too")
+    ok("Ghost" in _prose_blanked(Path("x.ts"), "const Ghost = 1 /* gone */\n"),
+       "and a declaration beside one survives")
+
+    # THE MONEY BUTTON'S FIGURE, over source strings rather than the tree, so the two
+    # readers are proved before the row is trusted to compare with them.
+    print("\nthe money button's figure is read from the call, never from the wording")
+    _reader = ast.parse('import re\n_E = re.compile(r"^cost\\s+\\$([0-9.]+)\\s*$", re.M)\n')
+    ok(_compiled_assign(_reader, "_E") == ("^cost\\s+\\$([0-9.]+)\\s*$", re.M),
+       "a module-level re.compile is read with its multiline flag")
+    ok(_compiled_assign(_reader, "_MISSING") is None, "and a name that is not there is None")
+    _writer = ast.parse('say(f"cost  ${_estimate(x)}")\nsay(f"other  ${bill(x)}")\n')
+    ok(_rendered_say(_writer, "_estimate") == f"cost  ${_ESTIMATE_SAMPLE}",
+       "the line a say() whose f-string calls the producer would print is rendered")
+    ok(_rendered_say(_writer, "bill") == f"other  ${_ESTIMATE_SAMPLE}",
+       "and the sibling line is a different subject, not the same one")
+    ok(_rendered_say(ast.parse('say("cost  $0.00")\n'), "_estimate") is None,
+       "a line that no longer calls the producer is reported absent rather than matched")
+
+    print("\na published gate threshold is compared as a number")
+    ok(_CRITERION_BAR.search("holdout_accuracy >= 0.95").group(2) == "0.95",
+       "the floor is lifted out of the criterion's own comparison")
+    ok(_CRITERION_BAR.search("holdout_accuracy > 0.9").group(1) == ">",
+       "and the operator with it, so `>` is not read as `>=`")
+    ok(_CRITERION_BAR.search("holdout_accuracy is high") is None,
+       "a criterion with no comparison is unreadable rather than guessed at")
+
+    print("\nevery published harness count is the length of TESTS")
+    ok(not _harness_claim_findings({f"T{n}" for n in range(1, 10)}),
+       "nine registered against a tree that publishes nine")
+    ok(any("registers 10" in m for _, m in _harness_claim_findings({f"T{n}" for n in range(1, 11)})),
+       "ten registered is a finding against every one of the published counts")
+    ok(not _harness_claim_findings(set()),
+       "and an unreadable TESTS yields nothing here — `harness tests` own legs say so instead")
 
     report = Report()
     check_dispatch(report)
-    by_label = {check: findings for check, _, findings, _ in report.checks}
+    by_label = {row.check: row.findings for row in report.checks}
     ok(
         not by_label["check dispatch"],
         "this file's own checks are every one of them called by audit()",
@@ -14127,11 +15577,13 @@ def audit(staged_only: bool) -> Report:
     check_debts_headings(report)
     check_env_vars(report, docs, allowed)
     check_env_names(report)
+    check_hatch_state(report)
     check_claim_decode(report)
     check_claim_clients(report)
     check_detector_standing(report)
     check_sole_reader(report)
     check_server_concurrency(report)
+    check_estimate_wire(report)
     check_shipping_columns(report)
     check_router_certainty(report)
     check_work_item_standing(report)
@@ -14203,6 +15655,10 @@ def audit(staged_only: bool) -> Report:
     check_dispatch(report)
     if staged_only:
         check_coupling(report)
+    # AFTER EVERYTHING, because its subject is the other rows' subject counts — including
+    # `coupling`, which only exists in staged mode. It is the one row that must see the
+    # whole report, so it is the one row that cannot be anywhere but here.
+    check_subject_counts(report, staged_only)
     return report
 
 

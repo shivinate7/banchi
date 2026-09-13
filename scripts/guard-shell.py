@@ -356,21 +356,23 @@ def _read_restore(verb: str, rest: Sequence[str], cwd: str) -> Restoring:
     else:
         paths = operands
 
-    if source:
-        return Restoring(paths, source,
-                         "a source is named, so this WRITES a known version rather than "
-                         "discarding an unknown one", [])
-
     resolved: List[str] = []
     unresolved: List[str] = []
     for token in paths:
         if token in (".", "./") or os.path.lexists(os.path.join(cwd, token)):
             resolved.append(token)
+        elif source:
+            # A path operand after an explicit source is unambiguous by git's own grammar —
+            # never a second ref — so there is no "is this actually a branch" question to
+            # ask here the way there is for the no-source form below. A path git would refuse
+            # to resolve is still worth passing through so the modified-file check downstream
+            # can decide, rather than silently dropping it.
+            resolved.append(token)
         elif _run(["git", "rev-parse", "--verify", "--quiet", token + "^{commit}"], cwd=cwd)[0]:
             continue                      # a branch or a commit: nothing on disk is touched
         else:
             unresolved.append(token)
-    return Restoring(resolved, "", "", unresolved)
+    return Restoring(resolved, source, "", unresolved)
 
 
 def _modified(paths: Sequence[str], cwd: str) -> List[Tuple[str, str]]:
@@ -456,8 +458,14 @@ def clause_checkout(reading: "shell_parse.Reading", cwd: str) -> Verdict:
                 path, _porcelain(status), " ({0} lines)".format(stat) if stat else ""))
         if len(changed) > 8:
             lines.append("      and {0} more".format(len(changed) - 8))
-        lines.append("      Nothing names a source, so this restores from the index and "
-                     "those changes are gone.")
+        if read.source_named:
+            lines.append("      `{0}` is named as the source, but that only means the "
+                         "REPLACEMENT is known — the file it overwrites still had "
+                         "uncommitted changes, and those are gone exactly the same way."
+                         .format(read.source_named))
+        else:
+            lines.append("      Nothing names a source, so this restores from the index and "
+                         "those changes are gone.")
         lines.extend([
             "",
             "  On 2026-09-06 `git checkout cli/cmd_reprice.py` put one mutation back and took",
@@ -465,10 +473,18 @@ def clause_checkout(reading: "shell_parse.Reading", cwd: str) -> Verdict:
             "survived,",
             "  which made it look at first like a smaller problem than it was.",
             "",
+            "  A later session repeated the same shape with an explicit source —",
+            "  `git checkout origin/main -- .` — over a tree that happened to be clean at",
+            "  that moment, which is the only reason nothing was lost. Naming a source",
+            "  changes what gets written; it does not change whether something existing is",
+            "  discarded first.",
+            "",
             "  Put a mutation back with a COPY, which cannot reach anything you did not copy:",
             "      sed -i.bak 's/OLD/NEW/' path/to/file.py     # run the check",
             "      mv path/to/file.py.bak path/to/file.py",
             "  and where sed cannot express the edit, `cp file file.bak` … `cp file.bak file`.",
+            "  To look at another ref's content without touching the working tree at all:",
+            "      git show <ref>:<path>",
             "  Committing first is the better fix: work in this repo lands in long "
             "uncommitted",
             "  stretches, so a checkout over a working file is almost always destroying "
