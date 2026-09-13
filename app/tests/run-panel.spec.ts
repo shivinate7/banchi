@@ -2718,3 +2718,139 @@ test('the release names its receipt and confirms, and the page does not move und
     ['/pipeline/submissions/sub-dead-1/release', { confirm: true }],
   ])
 })
+
+// ------------------------------------------------------------------------- D165's rescue
+
+/* THE REPAIR, REACHED FROM THE ROW IT STRANDS (D-rescue-is-a-press). `box_former` is the same
+ * flag `runBoxLabel` already draws `Box 1 (deleted)` off — this asserts the control that sits
+ * beside that label, and the sheet it opens.
+ *
+ * NO RAW MACHINE TEXT ANYWHERE IN THIS FILE'S ASSERTIONS, on the owner's 2026-09-13 ruling:
+ * `rescueRun`'s response carries no `console` field, and every sentence the sheet draws is
+ * asserted by its OWN words, never by a substring of a stub's `log`/`reason` value.
+ */
+
+function rescueStub(page: Page, wire: Wire[], answers: unknown[]) {
+  let call = 0
+  return page.route(/\/pipeline\/runs\/[^/]+\/rescue$/, async (route) => {
+    const body = route.request().postDataJSON()
+    wire.push({ method: 'POST', path: new URL(route.request().url()).pathname, body })
+    const answer = answers[Math.min(call, answers.length - 1)]
+    call += 1
+    await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(answer) })
+  })
+}
+
+test('the rebind control appears only on a run over a deleted drawer', async ({ page }) => {
+  await open(page, { detail: { box_former: false } })
+  await openRun(page)
+  await expect(page.getByRole('button', { name: 'Rebind' })).toHaveCount(0)
+})
+
+test('rebind: the sheet previews on open, and Apply is absent until it answers', async ({ page }) => {
+  const wire: Wire[] = []
+  await open(page, { detail: { box_former: true, box_bid: 1 } })
+  await rescueStub(page, wire, [
+    {
+      ok: true,
+      exit_code: 0,
+      wrote: false,
+      run: '2026-08-24-box9-01',
+      reason: null,
+      counts: { records: 2, rebound: 2, not_on_shelf: 0, ambiguous: 0 },
+      destination: { box: 3, box_name: 'RB Epics' },
+      already_rescued: null,
+      new_run: null,
+      log: '2026-08-24-box9-01/logs/rescue-20260913-000000.log',
+    },
+  ])
+  await openRun(page)
+
+  await page.getByRole('button', { name: 'Rebind' }).click()
+  const sheet = page.locator('.rescue-sheet')
+  await expect(sheet).toBeVisible()
+
+  /* NO APPLY UNTIL THE PREVIEW HAS ANSWERED — the same rule `QueueRefresh`'s `applyable`
+     encodes, asserted here rather than assumed because a sheet that opens with the write
+     button already drawn is one press from spending nothing on a stale reading. */
+  await expect(sheet.getByRole('button', { name: 'Rebind these cards' })).toBeVisible()
+  await expect(sheet).toContainText('Box 3 · RB Epics')
+  await expect(sheet).toContainText('2')
+
+  /* NOTHING ON SCREEN NAMES A COMMAND, A PATH OR A DECISION NUMBER (D196/no mechanism on
+     screen) — the owner's 2026-09-13 ruling widened to this sheet specifically. */
+  const text = (await sheet.innerText()).toLowerCase()
+  expect(text).not.toContain('pkmnscan')
+  expect(text).not.toContain('d165')
+  expect(text).not.toContain('/logs/')
+
+  expect(wire.filter((call) => call.path.endsWith('/rescue'))).toHaveLength(1)
+})
+
+test('rebind: the write lands a receipt with a way back to the new run, never console', async ({ page }) => {
+  const wire: Wire[] = []
+  await open(page, { detail: { box_former: true, box_bid: 1 } })
+  await rescueStub(page, wire, [
+    {
+      ok: true,
+      exit_code: 0,
+      wrote: false,
+      run: '2026-08-24-box9-01',
+      reason: null,
+      counts: { records: 2, rebound: 2, not_on_shelf: 0, ambiguous: 0 },
+      destination: { box: 3, box_name: 'RB Epics' },
+      already_rescued: null,
+      new_run: null,
+      log: '2026-08-24-box9-01/logs/rescue-20260913-000000.log',
+    },
+    {
+      ok: true,
+      exit_code: 0,
+      wrote: true,
+      run: '2026-08-24-box9-01',
+      reason: null,
+      counts: { records: 2, rebound: 2, not_on_shelf: 0, ambiguous: 0 },
+      destination: { box: 3, box_name: 'RB Epics' },
+      already_rescued: null,
+      new_run: 'box3-rescue-01',
+      log: '2026-08-24-box9-01/logs/rescue-20260913-000000.log',
+    },
+  ])
+  await openRun(page)
+  await page.getByRole('button', { name: 'Rebind' }).click()
+
+  const sheet = page.locator('.rescue-sheet')
+  await sheet.getByRole('button', { name: 'Rebind these cards' }).click()
+  await expect(sheet.getByText(/rebound into/)).toBeVisible()
+  await expect(sheet.getByRole('button', { name: 'Open the new run' })).toBeVisible()
+
+  const writes = wire.filter((call) => call.path.endsWith('/rescue'))
+  expect(writes.map((call) => call.body)).toEqual([{ write: false }, { write: true }])
+})
+
+test('rebind: a refusal draws a sentence, never the CLI reason code', async ({ page }) => {
+  const wire: Wire[] = []
+  await open(page, { detail: { box_former: true, box_bid: 1 } })
+  await rescueStub(page, wire, [
+    {
+      ok: false,
+      exit_code: 1,
+      wrote: false,
+      run: '2026-08-24-box9-01',
+      reason: 'none_on_shelf',
+      counts: { records: 2, rebound: 0, not_on_shelf: 2, ambiguous: 0 },
+      destination: null,
+      already_rescued: null,
+      new_run: null,
+      log: '2026-08-24-box9-01/logs/rescue-20260913-000000.log',
+    },
+  ])
+  await openRun(page)
+  await page.getByRole('button', { name: 'Rebind' }).click()
+
+  const sheet = page.locator('.rescue-sheet')
+  await expect(sheet).toContainText('already left the store')
+  const text = (await sheet.innerText()).toLowerCase()
+  expect(text).not.toContain('none_on_shelf')
+  expect(sheet.getByRole('button', { name: 'Rebind these cards' })).toHaveCount(0)
+})

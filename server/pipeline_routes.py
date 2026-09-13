@@ -3697,6 +3697,145 @@ def do_queue_refresh(payload: dict) -> dict:
     }
 
 
+# ------------------------------------------------------------------------ the rescue, D165
+
+# `cmd_rescue.run`'s own `say()` lines, matched by shape rather than by full sentence — the
+# WORDS after each label are prose and may be reworded; the LABEL and the number beside it are
+# the part every reader (this one, and a human at the terminal) actually depends on.
+_RESCUE_RECORDS_RE = re.compile(r"^\s*records\s+(\d+)\s*$", re.M)
+_RESCUE_NO_DIGEST_RE = re.compile(r"^\s*no digest\s+(\d+) record", re.M)
+_RESCUE_FOUND_RE = re.compile(
+    r"^\s*found\s+(\d+) card\(s\), all in box (\d+)(?: \((.+?)\))?\s*$", re.M
+)
+_RESCUE_NOT_ON_SHELF_RE = re.compile(r"^\s*not on shelf\s+(\d+) record", re.M)
+_RESCUE_ALREADY_RE = re.compile(r"already rescued: (\S+) holds exactly these (\d+) card")
+_RESCUE_WROTE_RE = re.compile(r"^\s*wrote\s+(.+?)\s*$", re.M)
+_RESCUE_PREVIEW_RE = re.compile(
+    r"--write would create a run over box (\d+) holding (\d+) card\(s\)"
+)
+_RESCUE_AMBIGUOUS_DISK_RE = re.compile(
+    r"REFUSING: (\d+) record\(s\) match a digest that is on two photographs on disk"
+)
+_RESCUE_AMBIGUOUS_RUN_RE = re.compile(
+    r"REFUSING: (\d+) photograph digest\(s\) in this run are carried by more than one record"
+)
+
+
+def _parse_rescue_console(text: str) -> dict:
+    """`cmd_rescue.run`'s stdout, read into the fields the sheet actually needs.
+
+    THIS EXISTS BECAUSE THE OWNER RULED, 2026-09-13, THAT RAW MACHINE TEXT IS NEVER VISIBLE ON
+    THE FRONT END — not stdout, not JSON, not a CLI string, not even behind a disclosure. Every
+    other free step on this server returns `console` verbatim (D33) and a screen renders it in
+    a `LogWell`; `cmd_rescue`'s own sentences carry backticked `pkmnscan …` invocations and
+    decision numbers, which is exactly the class `no mechanism on screen` refuses, so this one
+    route does not get to make that choice. The command's own report is still the one source of
+    truth for what happened — this reads it into a small structured shape and nothing more, and
+    the sheet composes its own sentences from these fields.
+    """
+    reason: Optional[str] = None
+    ambiguous = 0
+    if "is not stranded" in text:
+        reason = "not_stranded"
+    elif "identifications.json" in text and "has no " in text:
+        reason = "no_identifications"
+    elif "matches a photograph in any live drawer" in text:
+        reason = "none_on_shelf"
+    elif "cards are spread across boxes" in text:
+        reason = "spread_across_boxes"
+    match = _RESCUE_AMBIGUOUS_DISK_RE.search(text)
+    if match:
+        reason = reason or "digest_ambiguous_on_disk"
+        ambiguous = int(match.group(1))
+    match = _RESCUE_AMBIGUOUS_RUN_RE.search(text)
+    if match:
+        reason = reason or "digest_twice_in_run"
+        ambiguous = int(match.group(1))
+
+    destination: Optional[dict] = None
+    match = _RESCUE_FOUND_RE.search(text)
+    rebound = 0
+    if match:
+        rebound = int(match.group(1))
+        destination = {"box": int(match.group(2)), "box_name": match.group(3)}
+    else:
+        match = _RESCUE_PREVIEW_RE.search(text)
+        if match:
+            destination = {"box": int(match.group(1)), "box_name": None}
+
+    records_match = _RESCUE_RECORDS_RE.search(text)
+    no_digest_match = _RESCUE_NO_DIGEST_RE.search(text)
+    not_on_shelf_match = _RESCUE_NOT_ON_SHELF_RE.search(text)
+    already_match = _RESCUE_ALREADY_RE.search(text)
+    wrote_match = _RESCUE_WROTE_RE.search(text)
+
+    return {
+        "reason": reason,
+        "records": int(records_match.group(1)) if records_match else None,
+        "no_digest": int(no_digest_match.group(1)) if no_digest_match else 0,
+        "rebound": rebound,
+        "not_on_shelf": int(not_on_shelf_match.group(1)) if not_on_shelf_match else 0,
+        "ambiguous": ambiguous,
+        "destination": destination,
+        "already_rescued": already_match.group(1) if already_match else None,
+        "new_run": Path(wrote_match.group(1)).name if wrote_match else None,
+    }
+
+
+def do_run_rescue(name: str, payload: dict) -> dict:
+    """`POST /pipeline/runs/<name>/rescue` — D165's repair, offered from the run it strands.
+
+    FREE, PREVIEW BY DEFAULT, `write` GATED — `do_queue_refresh`'s shape, for the same reason:
+    a rescue re-addresses every one of a stranded run's records at once, and a write nobody
+    watched is how a wrong destination becomes the new positions. `cmd_rescue.run` itself
+    refuses a run that is not stranded, so this route adds no policy of its own; it is the
+    command, reached from a screen instead of a terminal (the standing rule that a route with
+    no client half is not "done").
+
+    NOT IN `FREE_STEPS`, deliberately: it is not one of `join`/`emit`/`reconcile` and needs its
+    own dispatch, matched ahead of `_RUN_STEP_RE` in `capture_server.py` for the same reason
+    `/export` is — `[a-z]+` would otherwise swallow `rescue` as a step that does not exist.
+
+    THE RESPONSE IS STRUCTURED, NOT `console`, ON THE OWNER'S 2026-09-13 RULING that raw
+    machine text is never visible on the front end, not even behind a disclosure. Every field
+    below is read out of `cmd_rescue`'s own stdout by `_parse_rescue_console`; the stdout
+    itself is written to `runs/<name>/logs/rescue-<stamp>.log` and never returned — a person at
+    the machine can open it, and no screen ever will.
+    """
+    directory = _open_run(name)
+    write = bool(payload.get("write"))
+    argv = [str(PKMNSCAN), "rescue", str(directory)]
+    if write:
+        argv.append("--write")
+    code, console = _run_sync(argv, STEP_TIMEOUT_S)
+
+    log_dir = directory / "logs"
+    log_dir.mkdir(parents=True, exist_ok=True)
+    stamp = time.strftime("%Y%m%d-%H%M%S", time.gmtime())
+    log_path = log_dir / f"rescue-{stamp}.log"
+    log_path.write_text(console, encoding="utf-8")
+
+    parsed = _parse_rescue_console(console)
+    ok = code == 0
+    return {
+        "ok": ok,
+        "exit_code": code,
+        "wrote": write and ok and parsed["new_run"] is not None,
+        "run": directory.name,
+        "reason": None if ok else parsed["reason"],
+        "counts": {
+            "records": parsed["records"],
+            "rebound": parsed["rebound"],
+            "not_on_shelf": parsed["not_on_shelf"],
+            "ambiguous": parsed["ambiguous"],
+        },
+        "destination": parsed["destination"],
+        "already_rescued": parsed["already_rescued"],
+        "new_run": parsed["new_run"],
+        "log": str(log_path.relative_to(files.runs_dir())),
+    }
+
+
 # ------------------------------------------------------------- the stale-listing markdown
 
 

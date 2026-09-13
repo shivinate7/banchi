@@ -2449,6 +2449,56 @@ export type RunStepResult = {
   summary: RunSummary
 }
 
+/** `POST /pipeline/runs/<name>/rescue` (D165) — a stranded run's cards, re-addressed to where
+ *  they are now.
+ *
+ *  DELIBERATELY NOT `RunStepResult`'S SHAPE, AND THAT IS THE WHOLE POINT: there is no
+ *  `console` field. The owner ruled, 2026-09-13, that raw machine text — stdout, JSON, a CLI
+ *  string, a path — is never visible on the front end, not even behind a disclosure, and
+ *  `cmd_rescue`'s own report carries backticked `pkmnscan …` invocations and decision numbers.
+ *  The server parses that report into the fields below and writes the raw text to a log file
+ *  under the run's own directory instead; `log` names it for a person at the machine, and no
+ *  screen ever reads it. */
+export type RescueResult = {
+  ok: boolean
+  exit_code: number
+  /** True only once a NEW run exists on disk — never merely that `write` was asked for. */
+  wrote: boolean
+  /** The source run this rescue was asked about. */
+  run: string
+  /** Why it refused, as a code the sheet's own copy table translates — never the CLI's
+   *  sentence. Null when `ok` is true. */
+  reason:
+    | 'not_stranded'
+    | 'no_identifications'
+    | 'none_on_shelf'
+    | 'spread_across_boxes'
+    | 'digest_ambiguous_on_disk'
+    | 'digest_twice_in_run'
+    | null
+  counts: {
+    /** Records the source run holds, or null where the line could not be read (a refusal
+     *  before the count was printed). */
+    records: number | null
+    /** Cards found on a shelf and re-addressed — the receipt's headline figure. */
+    rebound: number
+    /** Records left behind: the cards this run named that have since left the store. */
+    not_on_shelf: number
+    /** A digest that names two records or two photographs — a question, never a slot. */
+    ambiguous: number
+  }
+  /** Where the rebound cards are now, or null before anything has been found. */
+  destination: { box: number; box_name: string | null } | null
+  /** An existing rescue already holding these exact cards — `wrote` is false and nothing new
+   *  was created. */
+  already_rescued: string | null
+  /** The new run's name, once `wrote` is true — the sheet's way back in. */
+  new_run: string | null
+  /** Where the raw report was written, relative to `runs/` — for a person at the machine,
+   *  never for a screen to render. */
+  log: string
+}
+
 /** An uploaded CSV. Uploaded rather than named by path: a screen cannot know what is on
  *  the server's disk, and a route that opened any absolute path a request named would be a
  *  file-read primitive guarded by an origin header. */
