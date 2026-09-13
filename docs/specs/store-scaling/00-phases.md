@@ -37,9 +37,13 @@ them opens — otherwise a PR that adds a walk while removing one is invisible.
 
 Two things to know inside the phase:
 
-- **No schema version is claimed in phase 1.** Item 3 needs none. Item 8 (phase 2) takes
-  6, after D189's 5. If some other branch on `origin/main` takes 6 first, item 8 renumbers
-  its own — the D140 rule for decision ids, applied to schema versions.
+- **Item 2 took schema version 6, which this file had reserved for item 8.** This file
+  said phase 1 claimed none; item 3 indeed needs none, but item 2's `cards_captured_at`
+  index needs an upgrade step, because `_ensure_schema` returns after `_repair` on a store
+  already stamped at `SCHEMA_VERSION` and never reaches the `_INDEXES` loop — so a tuple
+  entry alone would never have indexed the owner's real store. **Item 8 therefore takes 7.**
+  If some other branch on `origin/main` takes 7 first, item 8 renumbers its own — the D140
+  rule for decision ids, applied to schema versions.
 - **Items 2 and 4 both edit `rows.py`'s consumers' behavior without editing the same
   lines** — item 2 changes `Rows.where`/`select`; item 4 stops calling them per SKU. Item
   4's one-pass `select` is correct whether or not item 2 has merged, which is why they can
@@ -49,7 +53,8 @@ Two things to know inside the phase:
 **Phase 2 is three PRs in parallel worktrees, after every phase-1 PR has merged.** Item 6
 edits `_Places` again (item 2 must be on main first). Item 7 edits `cli/resolve.py`
 beside item 4's function and `pipeline_routes.py` beside item 5's wiring (both on main
-first). Item 8 edits `do_search` in `capture_server.py` and takes schema version 6. Within
+first). Item 8 edits `do_search` in `capture_server.py` and takes schema version 7 (item 2
+took 6 — see above). Within
 the phase they are disjoint:
 
 | Item | `server/capture_server.py` | `server/pipeline_routes.py` | `store/` | `cli/` | `app/src` + `app/tests` |
