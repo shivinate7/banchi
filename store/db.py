@@ -1282,6 +1282,55 @@ def events_named(conn: sqlite3.Connection, event: str) -> List[dict]:
     return out
 
 
+def events_at(conn: sqlite3.Connection, key: str) -> List[dict]:
+    """Every event that could bear on one position, oldest first. `history()`'s scoped
+    sibling for the reversal readers (`_answer_before`, `_clearing_event`,
+    `_state_before_sale`, `_state_before_retirement`), which today load the whole table and
+    filter it in Python.
+
+    SCOPED TO THE BOX, NEVER TO THE BARE POSITION, and that is not a wider margin chosen for
+    safety — it is what correctness requires. A `renumbered` line's `position` is the
+    DELETED card's own key, not any mover's (`server/capture_server.py:_history`, called
+    from the mid-box delete), so a mover's own reversal has to see a line filed under a
+    DIFFERENT position in the same box to learn a shift happened above it (D10 ruling 1).
+    `position` is always `f"{box}/{index}"` (`store/master.py:position_key`), so every
+    event that could matter to a reversal at `key` shares its box's prefix, and that is
+    exactly the set `_answer_before`, `_clearing_event`, `_state_before_sale` and
+    `_state_before_retirement` scan for today after loading everything ever written.
+
+    GLOB, NOT LIKE. GLOB does a byte comparison and SQLite's optimiser turns a literal-prefix
+    GLOB into a range scan on the `events_position` index regardless of
+    `case_sensitive_like` — measured on this schema: `EXPLAIN QUERY PLAN` for
+    `... WHERE position GLOB '3/*'` reports `SEARCH events USING INDEX events_position
+    (position>? AND position<?)`, the same index `history()`'s unindexed full scan never
+    touches. No new column and no migration: `position` has been a plain, indexed column
+    since this table's DDL, unconditionally, for every schema version this store has ever
+    carried.
+
+    A `key` that is not `box/index` cannot be box-scoped, and this never guesses at one: it
+    falls back to the full, slow, correct read rather than silently returning an empty or
+    wrong-scoped list to a caller whose answer feeds a refusal message.
+
+    Same one-bad-row refusal as `history()` and `events_named()`, for the identical reason.
+    """
+    box = str(key).split("/", 1)[0]
+    if not box.isdigit():
+        return history(conn)
+    rows = conn.execute(
+        "SELECT id, payload FROM events WHERE position GLOB ? ORDER BY id",
+        (f"{box}/*",),
+    ).fetchall()
+    out = []
+    for row_id, text in rows:
+        try:
+            out.append(json.loads(text))
+        except ValueError as exc:
+            raise files.StoreError(
+                f"history event {row_id} in {DB_NAME} is not valid JSON: {exc}"
+            ) from exc
+    return out
+
+
 def dump_tables(conn: sqlite3.Connection) -> Dict[str, List[tuple]]:
     """Every table's rows, ordered. What T7 compares where it used to compare file bytes."""
     out: Dict[str, List[tuple]] = {}

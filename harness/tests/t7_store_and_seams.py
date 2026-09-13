@@ -411,15 +411,23 @@ def append_history(events) -> None:
         conn.close()
 
 
-def corrupt_history() -> None:
+def corrupt_history(position: Optional[str] = None) -> None:
     """One history row whose payload is not JSON — the hand-edit `_sale_origin` degrades
-    on. It used to be a `{not json` line appended to `history.jsonl`."""
+    on. It used to be a `{not json` line appended to `history.jsonl`.
+
+    `position` defaults to `None` — a corrupt row this store cannot even say which box it
+    was about, the worst case. Since `db.events_at` scopes by the `position` column (this
+    item's own fix), a `None`-position row is invisible to a box-scoped read: `WHERE
+    position GLOB '<box>/*'` cannot match a NULL. A caller proving that a box-scoped
+    reversal still refuses on a corrupt log must corrupt a row THAT SAME BOX would see —
+    pass this box's own key (or any string sharing its box prefix).
+    """
     conn = db.connect(files.inventory_dir())
     try:
         conn.execute("BEGIN IMMEDIATE")
         conn.execute(
             "INSERT INTO events (at, event, position, payload) VALUES (?, ?, ?, ?)",
-            (master.now(), None, None, "{not json"),
+            (master.now(), None, position, "{not json"),
         )
         conn.execute("COMMIT")
     finally:
@@ -4616,7 +4624,10 @@ def check_review_answer(checks: Checks) -> None:
         # A LOG THAT WILL NOT PARSE COSTS THE REVERSAL AND NOTHING ELSE — the answer
         # direction never reads history, only appends to it, which is the asymmetry
         # `_answer_origin`'s docstring claims and this pair of cases holds it to.
-        corrupt_history()
+        # Corrupted IN BOX 3, the box the reversal below reads from: `_answer_origin` now
+        # scopes its read to that box (`Store.history_at`), so a corrupt row filed under a
+        # different box would be invisible to it and this case would prove nothing.
+        corrupt_history(position="3/1")
         blind = answers(
             checks,
             lambda: capture_server.do_review_answer(
@@ -5390,7 +5401,9 @@ def check_mark_sold(checks: Checks) -> None:
         # `store_unavailable` and left a card he had physically sold recorded as unsold.
         # Measured that way before `_sale_origin` existed. A sale is the one event here that
         # has already happened in the world: unlisted is fine, unrecorded is not (CLAUDE.md).
-        corrupt_history()
+        # Corrupted IN BOX 3, the box the sale below reads from — `_sale_origin` now scopes
+        # its read to that box (`Store.history_at`), so this has to land where it can see it.
+        corrupt_history(position="3/3")
         degraded = answers(
             checks,
             lambda: capture_server.do_mark_sold(3, 3, {}),
@@ -6679,6 +6692,108 @@ def check_history(checks: Checks) -> None:
             capture_server.do_mark_sold(5, 1, {"undo": True})["state"],
             master.IDENTIFIED,
             "and the reversal actually puts that state back, past the withdrawn answer",
+        )
+
+
+def check_history_scoped_read(checks: Checks) -> None:
+    """`db.events_at` is a scope, not a rewrite: at any key, it must equal the box-filtered
+    slice of the full log a reversal reader already gets today, one row at a time, filtered
+    in Python. The one thing worth proving on purpose is the `renumbered` case (D10 ruling
+    1) — the line that sits at the DELETED card's key, not any mover's, and that a
+    box-narrower scope (bare `position = key`) would have dropped silently.
+    """
+    checks.note("")
+    checks.note("HISTORY — events_at is scoped to the box, not the position")
+
+    with isolated_home():
+        for _ in range(3):
+            capture_server.do_capture(capture_payload(3))
+        for _ in range(2):
+            capture_server.do_capture(capture_payload(7))  # a second box, for cross-box isolation
+
+        # A correction and an answer at 3/1, so the box has more than one event kind.
+        capture_server.do_put_card(3, 1, {"variant": "reverse_holo"})
+
+        # A mid-box delete of 3/1 renumbers 3/2 and 3/3 down by one and logs `renumbered` at
+        # position "3/1" — the DELETED key, per server/capture_server.py:do_remove_card.
+        # `capture_id` is required by that route (an aim check against a replayed request);
+        # none of the captures above sent one, so the stored record's own is None.
+        capture_server.do_remove_card(3, 1, {"capture_id": None})
+
+        full = Store().history()
+
+        conn = db.connect(files.inventory_dir())
+        try:
+            scoped = db.events_at(conn, master.position_key(3, 1))
+        finally:
+            conn.close()
+
+        expected = [
+            e for e in full
+            if str(e.get("position", "")).split("/", 1)[0] == "3"
+        ]
+        checks.equal(
+            scoped, expected,
+            "events_at(3/1) equals the box-3 slice of the full history, byte for byte",
+        )
+
+        renumbered = [e for e in scoped if e.get("event") == capture_server.RENUMBERED]
+        checks.ok(
+            len(renumbered) == 1,
+            "and the renumbered marker — filed at the DELETED key, not any mover's — is "
+            "still visible: a position-only scope would have dropped it",
+            f"scoped renumbered events: {renumbered!r}",
+        )
+
+        cross_box = [e for e in scoped if str(e.get("position", "")).split("/", 1)[0] == "7"]
+        checks.equal(
+            cross_box, [],
+            "and box 7's events are absent: the scope is one box, never the whole store",
+        )
+
+        # The reversal itself still works end to end through the new path.
+        conn = db.connect(files.inventory_dir())
+        try:
+            scoped_32 = db.events_at(conn, "3/2")
+        finally:
+            conn.close()
+        checks.equal(
+            capture_server._state_before_sale(scoped_32, "3/2"),
+            capture_server._state_before_sale(Store().history(), "3/2"),
+            "and the reader that actually decides an undo agrees, scoped or not",
+        )
+
+
+def check_history_scoped_uses_index(checks: Checks) -> None:
+    """`events_at`'s scope is provable in code, but a session six months from now could
+    "simplify" the WHERE clause back into a full scan and every functional test above would
+    still pass — the box-3 slice of an unscoped read is still the box-3 slice. This is the
+    row that would catch that: it asserts the query plan, not the query's output.
+    """
+    checks.note("")
+    checks.note("HISTORY — events_at reads the index, not the table")
+
+    with isolated_home():
+        capture_server.do_capture(capture_payload(3))
+        conn = db.connect(files.inventory_dir())
+        try:
+            plan = conn.execute(
+                "EXPLAIN QUERY PLAN SELECT id, payload FROM events WHERE position GLOB ? "
+                "ORDER BY id",
+                ("3/*",),
+            ).fetchall()
+        finally:
+            conn.close()
+        plan_text = " | ".join(str(row) for row in plan)
+        checks.ok(
+            "USING INDEX events_position" in plan_text,
+            "the scoped query plan names the events_position index",
+            plan_text,
+        )
+        checks.ok(
+            "SCAN events" not in plan_text,
+            "and never falls back to a full table scan",
+            plan_text,
         )
 
 
@@ -26939,6 +27054,8 @@ def run() -> Result:
     check_retire(checks)
     check_reshoot(checks)
     check_history(checks)
+    check_history_scoped_read(checks)
+    check_history_scoped_uses_index(checks)
     check_sidecar_seam(checks)
     check_capture_claim_chain(checks)
     check_game_and_note_seam(checks)
