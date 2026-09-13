@@ -2483,6 +2483,12 @@ was open** — the rule is renumber your own, never another's.
   folds into `up`. SPECIFIED 2026-09-11, NOT BUILT. Three PRs in its §9;
   read its §5 before the reinstall, because the port change resets the camera grant and every
   `localStorage` key once.
+- `docs/specs/store-scaling.md` — the store at 50,000 cards: eight PRs in the owner's order,
+  each with its proof, against figures measured on a copy of their real store and again at
+  20x. **SPECIFIED 2026-09-12, NOT BUILT.** Read its §2 before quoting the investigation's
+  original punch list — three reviews reversed two of its six items — and its §5 for the
+  three settled rulings it reopens on the owner's word. §4 is the allowlist the guard starts
+  from, and it may only shrink.
 - `docs/specs/stable-card-id.md` — a card's name is the first photograph of it: `cards.cid`,
   the sha256 of the photograph the store held when the id was issued, frozen at issue and
   never recomputed (D172). **SPECIFIED 2026-09-12, NOT BUILT.**

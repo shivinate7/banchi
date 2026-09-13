@@ -497,6 +497,14 @@ _PLACEHOLDER = re.compile(r"[<>*?{}]")
 # FAILING when an entry comes true, and `pipeline/identify` is a file that can never come
 # true, so the entry would sit there forever being no evidence of anything.
 _ROUTE = re.compile(r"\b(?:GET|POST|PUT|DELETE|PATCH|HEAD)\s+(/[A-Za-z0-9_./<>-]*)")
+# A QUOTED STRING THAT BEGINS WITH A SLASH IS A ROUTE TOO, since 2026-09-12. The method
+# rule above covers prose; code in a fenced block spells the same route the way the
+# dispatcher does — `if path == "/pipeline/value":` at capture_server.py:10748, a JS
+# template `` `/pipeline/value?${q}` `` in server.ts — and a playbook that mirrors the
+# code was blocked for describing it correctly. No repo path is ever spelled with a
+# leading slash inside quotes: every reference this check exists for is relative
+# (`store/db.py`), and an absolute `/Users/...` never resolves to a top-level name anyway.
+_QUOTED_ROUTE = re.compile(r"""(["'`])/[A-Za-z0-9_./<>?$={}()&-]*\1""")
 
 
 # Suffixes that mean "this is a file". Anything else after the final dot is read as an
@@ -556,6 +564,7 @@ def path_candidates(line: str) -> List[str]:
     # route, and this script has nothing to say about whether one exists. The path check
     # cannot tell a route from a module by shape alone — see `_ROUTE`.
     line = _ROUTE.sub(" ", line)
+    line = _QUOTED_ROUTE.sub(" ", line)
     if _PLACEHOLDER.search(line):
         line = _PLACEHOLDER.sub(" ", line)
     for match in _CANDIDATE_RE.finditer(line):
@@ -13722,6 +13731,12 @@ NON_PATHS = [
     "`GET /pipeline/runs/<name>/file` — one artefact's bytes, for download",
     "`GET /pipeline/pricing` — one worklist over several runs",
     "`DELETE /inventory/<box>/<index>` — D10's hard delete of a record",
+    # THE SAME ROUTES AS CODE SPELLS THEM, 2026-09-12: a quoted string beginning with a
+    # slash, in a fenced block that mirrors the dispatcher. `_QUOTED_ROUTE` is what drops
+    # them; the module of the same name unquoted is still found (REAL_PATHS below).
+    'if path == "/pipeline/value":',
+    "  return (await request(`/pipeline/value?${query.toString()}`, NO_CACHE)) as ValuePage",
+    "  page.route('/pipeline/pricing', handler)",
     "Refill on later imports as `Add to Quantity = min(cap - live, backstock)`",
     "The repo sits under `~/Library/Mobile Documents/com~apple~CloudDocs/`",
     "Free at https://dev.pokemontcg.io and sent to api.pokemontcg.io only",
