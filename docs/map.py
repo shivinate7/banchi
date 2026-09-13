@@ -4190,7 +4190,8 @@ COMPONENTS = [
                             "governed_by": ["D5", "D10", "D13", "D14", "D16", "D20", "D27",
                                             "D28", "D31", "D33", "D39", "D49", "D51", "D53",
                                             "D57", "D61", "D63", "D66", "D69", "D70", "D94",
-                                            "D95", "D100", "D105", "D120", "D134"]},
+                                            "D95", "D100", "D105", "D109", "D120", "D134",
+                                            "D159"]},
             "src/Codes.tsx": {"does": "the code-card screen: read a box's QRs into the ledger, "
                                       "see the two lanes C11 tiers the pile into, and hand a "
                                       "lane's codes to a buyer against a named order. The "
@@ -6560,7 +6561,7 @@ COMPONENTS = [
                         "arrow belongs to the screens, a held Cmd in a text field belongs to the "
                         "caret, and a screen outside the ring keeps the browser's key. Not a "
                         "harness test; `make design-check` runs it.",
-                "governed_by": ["D5", "D31", "D39", "D43", "D51", "D69", "D70", "D86", "D100", "D105", "D134", "D174", "D192", "D20"],
+                "governed_by": ["D5", "D31", "D39", "D43", "D51", "D69", "D70", "D86", "D100", "D105", "D109", "D134", "D174", "D192", "D20"],
                 "note": "ITS RING IS PINNED ON PURPOSE AND RECONCILED AT THE COMMIT. A ring "
                         "derived from App.tsx could not assert the ORDER against anything "
                         "independent, so the copy stays and carries a `ROUTE-ROSTER hotkey` "

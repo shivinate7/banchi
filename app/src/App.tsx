@@ -389,6 +389,22 @@ function NoSuchView({ path }: { path: string }) {
 /* ---- command palette -------------------------------------------------------------------- */
 type Command = { readonly id: string; readonly group: string; readonly label: string; readonly icon: IconName; readonly hint?: string; readonly keywords?: string; readonly run: () => void }
 
+/** Where a query hits, ranked so a match on the LABEL — the word a person actually typed for
+ *  the screen — outranks one buried in a keyword list, null when the query hits nowhere at all.
+ *  Runs's own `keywords` carries "my pricing" for D109's one-press door into the live book, and
+ *  Runs is declared before Pricing — so a plain substring filter over the whole joined string
+ *  left Runs sitting above Pricing for "pricing" on declaration order alone, never on relevance.
+ *  `Array.prototype.sort` has been stable since ES2019, so two commands tied on rank keep the
+ *  order `commands` already draws them in and need no second key. */
+function rankMatch(c: Command, q: string): number | null {
+  const label = c.label.toLowerCase()
+  if (label === q) return 0
+  if (label.startsWith(q)) return 1
+  if (label.includes(q)) return 2
+  if (`${c.group} ${c.hint ?? ''} ${c.keywords ?? ''}`.toLowerCase().includes(q)) return 3
+  return null
+}
+
 function CommandPalette({ open, onClose, commands }: { open: boolean; onClose: () => void; commands: readonly Command[] }) {
   const [query, setQuery] = useState('')
   const [cursor, setCursor] = useState(0)
@@ -403,7 +419,11 @@ function CommandPalette({ open, onClose, commands }: { open: boolean; onClose: (
   const matches = useMemo(() => {
     const q = query.trim().toLowerCase()
     if (q === '') return commands
-    return commands.filter((c) => `${c.group} ${c.label} ${c.hint ?? ''} ${c.keywords ?? ''}`.toLowerCase().includes(q))
+    return commands
+      .map((c) => ({ c, rank: rankMatch(c, q) }))
+      .filter((scored): scored is { c: Command; rank: number } => scored.rank !== null)
+      .sort((a, b) => a.rank - b.rank)
+      .map((scored) => scored.c)
   }, [commands, query])
   useEffect(() => {
     setCursor((c) => Math.min(c, Math.max(0, matches.length - 1)))
@@ -1293,6 +1313,16 @@ export function App() {
     setDrawer(false)
     setPalette(false)
     setKeysOpen(false)
+  }, [path])
+
+  /* A ROUTE CHANGE LANDS AT THE TOP. `path` is query-stripped (`currentPath`, above), so a
+     same-path query change — `#/pricing` -> `#/pricing?band=top` — does not re-fire this and the
+     scroll position a click left behind is kept, which is D159's own rule: staleness is a filter,
+     never a jump. `.bn-shell-main` carries no `overflow` rule (App.css), so the document — the
+     window — is what scrolls at every width this shell is verified at; there is no second
+     scroller to reset. */
+  useEffect(() => {
+    window.scrollTo(0, 0)
   }, [path])
 
   const tabletRail = useMedia(TABLET_RAIL)

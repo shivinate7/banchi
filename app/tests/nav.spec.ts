@@ -621,3 +621,19 @@ test('the armed leader is disarmed by arriving somewhere', async ({ page }) => {
       'spent on arriving at all, it expired on its own clock.',
   ).toBeLessThan(CHORD_MS / 2)
 })
+
+test('the palette ranks a label hit above a keyword hit', async ({ page }) => {
+  /* Runs's own `keywords` carries "my pricing" (D109's one-press door into the live book), and
+     Runs is declared before Pricing in ROUTES — so a plain substring filter over the whole
+     joined string left Runs sitting above Pricing for "pricing" on declaration order alone. */
+  await open(page, RING[0])
+  await page.keyboard.press('Meta+k')
+  const palette = page.locator('.bn-cmdk[role="dialog"]')
+  await expect(palette).toBeVisible()
+
+  await palette.locator('input').fill('pricing')
+  await expect(palette.locator('.bn-cmdk-item').first()).toHaveText(/Pricing/)
+
+  await palette.locator('input').fill('runs')
+  await expect(palette.locator('.bn-cmdk-item').first()).toHaveText(/Runs/)
+})
