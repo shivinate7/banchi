@@ -4737,19 +4737,31 @@ def _release_plan(inventory: master.Inventory, box: int) -> Tuple[List[dict], di
     is counted against `live` where there is a record to count it against (D7, D115), and a departed card is not one of the copies a
     remaining commitment could be backed by. It is also what the operator counts when they
     look in the box, which is the number they will check this screen against.
+
+    TWO INDEXED PASSES, NEVER A FULL-TABLE WALK (store-scaling item 7): the first reads only
+    this box's own SKUs (`select(("sku", "state"), box=box)`), and the second reads, per
+    distinct SKU this box holds, every OTHER copy of it store-wide
+    (`select(("box", "state"), sku=sku)`) — bounded by `O(cards in box) + O(distinct SKUs in
+    box x copies of each SKU store-wide)` rather than `O(all cards in the store)`. `sku` is
+    an indexed column exactly as `box` is, so the second pass is a real indexed query and
+    never a scoped-looking full scan.
     """
+    box = int(box)
     copies_here: Dict[str, int] = {}
+    for _key, (sku_raw, state) in inventory.cards.select(("sku", "state"), box=box):
+        if not sku_raw or state in master.TERMINAL_STATES:
+            continue
+        sku = str(sku_raw)
+        copies_here[sku] = copies_here.get(sku, 0) + 1
+
     elsewhere: Dict[str, Dict[int, int]] = {}
-    for card_key, card in inventory.cards.items():
-        if not card.sku:
-            continue
-        at_box = _position_int(card.box, f"box of card {card_key}")
-        if card.state in master.TERMINAL_STATES:
-            continue
-        sku = str(card.sku)
-        if at_box == int(box):
-            copies_here[sku] = copies_here.get(sku, 0) + 1
-        else:
+    for sku in copies_here:
+        for _key, (at_box_raw, state) in inventory.cards.select(("box", "state"), sku=sku):
+            if state in master.TERMINAL_STATES:
+                continue
+            at_box = _position_int(at_box_raw, f"box of a copy of {sku}")
+            if at_box == box:
+                continue  # this box's copies are already in `copies_here`
             elsewhere.setdefault(sku, {})
             elsewhere[sku][at_box] = elsewhere[sku].get(at_box, 0) + 1
 
@@ -10984,10 +10996,37 @@ class CaptureHandler(BaseHTTPRequestHandler):
                 # EVERY CARD ON HAND, RANKED BY WHAT IT IS WORTH. A read, free, and it presses
                 # nothing — the store-wide sibling of the worklist one branch up: that one
                 # answers what a run owes a price, this one answers what is in the drawers and
-                # which end of the money it sits at. No band, no filter and no percentile in
-                # the query string: every one of those is a slice of the one ranked list this
-                # answers with, and the screen takes the slice (see `do_pipeline_value`).
-                return self._json(HTTPStatus.OK, pipeline_routes.do_pipeline_value())
+                # which end of the money it sits at.
+                #
+                # WITH NO `band` IN THE QUERY STRING, this is the whole ranked list in one
+                # response — `do_pipeline_value`'s original shape, kept unchanged for T7 and
+                # any other direct caller. WITH A `band`, the ROW LIST pages by a value
+                # cursor (store-scaling item 7, the owner's 2026-09-12 ruling): a concurrent
+                # sale or capture cannot skip or repeat a row, because the cursor names a
+                # row by its VALUE rather than by an offset into a list that may have
+                # shifted between two fetches. The aggregates (`boxes`, `unrankable`,
+                # `totals`, `sources`) are computed over EVERY on-hand row regardless of
+                # which page is open — D159's "nothing on hand is omitted" never shrinks to
+                # "what this page could see".
+                query = parse_qs(parsed.query, keep_blank_values=True)
+                band = (query.get("band") or [None])[0]
+                if band is None:
+                    return self._json(HTTPStatus.OK, pipeline_routes.do_pipeline_value())
+                box_raw = (query.get("box") or [None])[0]
+                box = int(box_raw) if box_raw not in (None, "") else None
+                after = (query.get("after") or [None])[0]
+                limit_raw = (query.get("limit") or [None])[0]
+                limit = (
+                    int(limit_raw)
+                    if limit_raw not in (None, "")
+                    else pipeline_routes._VALUE_PAGE_DEFAULT
+                )
+                return self._json(
+                    HTTPStatus.OK,
+                    pipeline_routes.do_pipeline_value_page(
+                        band=band, box=box, after=after, limit=limit
+                    ),
+                )
             if path == "/pipeline/submissions":
                 # WHAT IS CLAIMED RIGHT NOW (D174). Free, reads the store and
                 # holds nothing — the count that has to be on screen before the control that
