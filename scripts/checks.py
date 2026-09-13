@@ -517,20 +517,25 @@ CHECKS = (
     {
         "target": "guard-shell-selftest",
         "runs": "bash scripts/guard-shell-selftest.sh",
-        "asserts": "scripts/guard-shell.py, the PreToolUse hook that refuses five shell "
+        "asserts": "scripts/guard-shell.py, the PreToolUse hook that refuses six shell "
                    "mistakes this repo has already paid for: `git checkout` over a modified "
                    "file, a write outside this checkout, `gh api -f` with no method, `ln -s` "
-                   "at an existing path, and a polling loop. FOUR OF THE FIVE INCIDENTS ARE "
+                   "at an existing path, a polling loop, and `git push <remote> HEAD` (or the "
+                   "branch's own literal name) when the tracked upstream is a different name. "
+                   "FIVE OF THE SIX INCIDENTS ARE "
                    "PERFORMED rather than asserted about — 240 lines really destroyed by a "
                    "real `git checkout`, a real worktree whose root differs from its main "
-                   "checkout's, a real `harness/images/images` created by a real `ln -s`, and "
-                   "`pgrep -f` really matching a process that merely NAMES its pattern. The "
+                   "checkout's, a real `harness/images/images` created by a real `ln -s`, "
+                   "`pgrep -f` really matching a process that merely NAMES its pattern, and a "
+                   "real local branch made to track a differently-named remote branch. The "
                    "half that decides whether the guard survives is the false positives, and "
                    "the git ones are RUN in the fixture before they are scored: a branch, a "
                    "clean path, `--staged`, a named source, `-sfn`, `--method GET`, `graphql`, "
-                   "a pid wait, a bounded retry, and every `git`/`gh`/`ln` line swept out of "
-                   "this repo's own tooling. Each of the five hatches is scored in both of "
-                   "its forms, and the clause table is READ rather than retyped, so a sixth "
+                   "a pid wait, a bounded retry, the ordinary first push of a new branch, an "
+                   "upstream already matching its own name, and every `git`/`gh`/`ln` line "
+                   "swept out of "
+                   "this repo's own tooling. Each of the six hatches is scored in both of "
+                   "its forms, and the clause table is READ rather than retyped, so a seventh "
                    "clause with no hatch fails here instead of shipping unescapable.",
         "needs": ("python3", "bash", "git"),
         "writes": "a git repository, a linked worktree, two commits, a symlink and one "
