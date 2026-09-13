@@ -6619,6 +6619,38 @@ COMPONENTS = [
                         "Playwright presses keys through the debugging protocol, which never "
                         "fires a browser shortcut at all.",
             },
+            "tests/routeFixtures.ts": {
+                "does": "the fixture BUILDERS `run-panel.spec.ts`, `orders.spec.ts` and "
+                        "`shipping.spec.ts` already wrote — `runRow`, `place`/`pick`/`line`/"
+                        "`order`/`payloadOf`, `shippingRow`/`batchOf` — moved here so a fourth "
+                        "file could reuse the same proven shapes instead of a competing copy, "
+                        "plus two fresh ones (`codeEntry`/`codeLedgerOf`, `departedCard`) for "
+                        "`#/codes` and `#/graveyard`, which no existing spec seeded at all. The "
+                        "three specs above now import from here rather than defining their own "
+                        "(unchanged behaviour — all 112 of their cases still pass). Also exports "
+                        "one `seedPopulated*` function per one of D194's five under-fixtured "
+                        "routes (`#/runs`, `#/orders`, `#/shipping`, `#/codes`, `#/graveyard`): "
+                        "each registers a `page.route` stub with several real-shaped rows, "
+                        "registered AFTER `shell.ts:stubStore`'s own empty answer for the same "
+                        "path so the richer one wins (Playwright matches newest-first). Read "
+                        "only by `copy-budget.spec.ts`, which is where the gap these seeds close "
+                        "is argued at length.",
+                "governed_by": ["D20", "D83", "D134", "D194"],
+                "note": "CLOSES D194'S OWN NAMED GAP: its ceilings on the five routes above were "
+                        "pinned against `stubStore`'s empty-ish answer — no run, no order, no "
+                        "export, no code, no departed record — so a sentence added to any of the "
+                        "five could grow in its POPULATED state without the ratchet ever seeing "
+                        "it. `#/runs`'s ceiling fell (68 to 63: a populated list is real rows, "
+                        "not empty-state prose) while the other four rose (`#/orders` 82 to 84, "
+                        "`#/shipping` 80 to 135, `#/codes` 35 to 139, `#/graveyard` 21 to 66) — "
+                        "every rise is a real screen drawing real content, not copy creep, and "
+                        "`git log` on `app/tests/copy-budget.json` is the receipt. The owner's "
+                        "own alternative — pin against the live `:8000` store instead of a "
+                        "checked-in fixture — was rejected: order numbers, buyer names and run "
+                        "ids change daily on a real store, so a live-pinned ceiling would not "
+                        "reproduce in CI and a later `--pin` would silently ratchet to whatever "
+                        "that day's store happened to hold, which is the opposite of a ratchet.",
+            },
             "tests/orders.spec.ts": {"does": "the order screen in a browser: that the six-way "
                                              "counts render including the zeros, that a pick "
                                              "already held by another line is drawn as spoken "
@@ -6659,7 +6691,7 @@ COMPONENTS = [
                                              "app/tests/order-walk.spec.ts. Not a harness test — "
                                              "it starts a browser; `make design-check` runs it.",
                                      "governed_by": ["D24", "D27", "D28", "D36", "D49", "D58", "D63", "D69", "D73", "D90", "D91", "D96", "D113", "D114", "D118", "D123", "D132",
-                                                     "D193"]},
+                                                     "D193", "D194"]},
             "tests/shipping.spec.ts": {"does": "the shipping screen in a browser, and its "
                                                "strongest cases are ABSENCES: no buyer name, "
                                                "address, city or postcode appears anywhere on "
@@ -6671,7 +6703,7 @@ COMPONENTS = [
                                                "second projection would arrive unnoticed. Not a "
                                                "harness test — it starts a browser; "
                                                "`make design-check` runs it.",
-                                       "governed_by": ["D16", "D61", "D63", "D66", "D69"]},
+                                       "governed_by": ["D16", "D61", "D63", "D66", "D69", "D194"]},
             "tests/value-bands.spec.ts": {"does": "the value lens "
                                                   "(D159), in its own "
                                                   "file so `pricing.spec.ts` stays the unedited "

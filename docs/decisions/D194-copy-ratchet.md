@@ -75,3 +75,42 @@ ceilings on a near-empty state for those five screens rather than the busiest on
 would draw. A route whose ceiling was pinned this way will need `--pin` again the day a fixture
 gives it real rows to draw, and that is a known gap rather than a claim this file makes about
 those five screens' real ceilings.
+
+### Amended 2026-09-13 — the five under-fixtured routes get a checked-in populated seed
+
+**The gap above is closed, not merely re-stated.** `app/tests/routeFixtures.ts` is a new,
+shared module holding the fixture BUILDERS `run-panel.spec.ts`, `orders.spec.ts` and
+`shipping.spec.ts` already had inline (`runRow`; `place`/`pick`/`line`/`order`/`payloadOf`;
+`shippingRow`/`batchOf`) — moved rather than copied, so the shapes `copy-budget.spec.ts` renders
+are the exact ones those three specs already prove correct — plus two fresh builders
+(`codeEntry`/`codeLedgerOf`, `departedCard`) for `#/codes` and `#/graveyard`, which no existing
+spec had seeded at all. Five `seedPopulated*` functions each register a `page.route` stub
+carrying several real-shaped rows for one of the five routes, registered in the test body
+AFTER `shell.ts:stubStore`'s own empty answer for the same path — Playwright matches
+newest-first, so the richer response wins and every OTHER route those five screens read
+(`/boxes`, `/games`, `/search`, `/inventory`, `/pipeline/submissions`) is still the small
+store's ordinary answer, unchanged. `#/shipping` additionally needs the CSV drop zone driven
+once, because that screen fetches nothing on mount (`shipping.spec.ts`'s own header) — a stub
+alone does not populate it.
+
+**The owner's own alternative was put and rejected.** The owner offered pinning the five
+ceilings against the live `:8000` capture server's real store instead of building fixtures for
+it. That was refused for one reason: a live number is not reproducible in CI — order numbers,
+buyer names and run ids on the owner's real store change daily, so a ceiling pinned against it
+would be a moving target no CI run could re-measure the same way twice, and the next `--pin`
+would silently ratchet the ceiling to whatever that day's store happened to hold. That is the
+opposite of a ratchet: D194's whole design is that the only way a ceiling rises is a person
+choosing to run `--pin` on purpose, not the store's own drift. A CHECKED-IN fixture is
+deterministic across every machine and every run, which is what a ratchet requires of the
+thing it measures.
+
+**Re-pinning once moved four ceilings up and one down, and every move is named here.** Left to
+a diff alone it would just be numbers: `#/runs` fell from 68 to 63 — its populated list of real
+run rows reads as fewer words than the empty-state prose it replaced. The other four rose
+because a populated screen draws real content an empty one cannot: `#/orders` 82 to 84 (three
+real orders, one short, one nameless), `#/shipping` 80 to 135 (a read export across all three
+lanes), `#/codes` 35 to 139 (a tier table with real codes and one delivered lane), `#/graveyard`
+21 to 66 (four departed rows across the three doors D83 names, one of them buried). None of the
+four is copy creep — nothing under `app/src` changed — and `COPY_BUDGET_MUTATE='#/pricing'`
+still fails naming exactly that route (91 words against a ceiling of 46) with every other
+route, populated or not, staying under its own ceiling.
