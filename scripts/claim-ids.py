@@ -398,14 +398,34 @@ def stale_claims(root: Path, ref: str, base: str, cwd: Optional[str] = None) -> 
     `becomes` IS ADVISORY AND NOTHING WRITES IT. It is what the id would be allocated if it
     went back to a slug and were claimed alone; a branch carrying pending slugs as well
     interleaves with them, and the claim at merge time is what actually decides.
+
+    A DECISION READS THE CORPUS, NEVER THE STUB, matching `ceiling_at` and `pending` rather
+    than introducing a third answer about where a decision's ids live. `docs/DECISIONS.md` is
+    `docs/decisions/`'s pointer since D160 and carries no `## D<id>` heading at all, so reading
+    it directly — which this function did until it was found here — sees an empty set on
+    every side of every comparison and reports every decision collision as clean. That is not
+    a theoretical gap: found while reproducing the 2026-09-12 incident this file's `--unclaim`
+    exists to answer — a branch's own claimed number colliding with an unrelated entry
+    (D186's own merge landed over this exact race) — where this function's own CHEAP early
+    warning had silently stopped firing for the one namespace the incident was in —
+    `decision index`'s loud, late backstop, and a person reading PR titles, were the only
+    things left to catch it. `corpus_text`/`corpus_text_at` fall back to the flat file when
+    there is no manifest, so this is backward-compatible with a pre-split tree and changes
+    nothing there.
     """
     out: List[Stale] = []
     ceiling = ceiling_at(ref, cwd=cwd)
     for kind, path, pattern, shape in KINDS:
-        here = read(root / path) if (root / path).exists() else ""
-        added = allocated_ids(here, pattern) - allocated_ids(
-            git("show", f"{base}:{path}", cwd=cwd), pattern)
-        taken = allocated_ids(git("show", f"{ref}:{path}", cwd=cwd), pattern)
+        if kind == "decision":
+            here = corpus_text(root)
+            was = corpus_text_at(base, cwd=cwd)
+            now = corpus_text_at(ref, cwd=cwd)
+        else:
+            here = read(root / path) if (root / path).exists() else ""
+            was = git("show", f"{base}:{path}", cwd=cwd)
+            now = git("show", f"{ref}:{path}", cwd=cwd)
+        added = allocated_ids(here, pattern) - allocated_ids(was, pattern)
+        taken = allocated_ids(now, pattern)
         nxt = ceiling[kind]
         for number in sorted(added & taken):
             nxt += 1
@@ -426,10 +446,20 @@ def report_stale(stale: Sequence[Stale], ref: str) -> None:
         "  happen BEFORE the merge and never after, because once main is merged in a",
         "  substitution on that token reaches main's own copy of the entry too.",
         "",
-        "  Put the id back to the slug form and let the merge allocate it again — a heading",
-        f"  `## {'D-' + 'two-lowercase-segments'}` for an entry, a `0.` list marker carrying",
-        f"  `{'step ' + 'two-lowercase-segments'}` for a build step — then `make claim-ids`",
-        "  previews what it would take against main as it stands now.")
+        "  Put it back to slug form and let a fresh plan allocate it again:",
+        "")
+    for item in stale:
+        if item.kind == "decision":
+            say(f"    python3 scripts/claim-ids.py --unclaim {item.taken} --write")
+        else:
+            say(f"    python3 scripts/claim-ids.py --unclaim '{item.taken}' "
+                "--to-slug <the-original-slug> --write",
+                f"      (the slug {item.kind} used before it was claimed — a codes id or a "
+                "step keeps it nowhere once claimed, unlike a decision's own filename)")
+    say("",
+        "  Then `python3 scripts/claim-ids.py --ref {0}` previews what it would take against"
+        .format(ref),
+        "  main as it stands now.")
 
 
 # ------------------------------------------- an unclaimed file main has already claimed once
@@ -742,6 +772,447 @@ def settle_corpus(root: Path, write: bool) -> List[str]:
     return moved
 
 
+# ------------------------------------------------------------------- the exact inverse claim
+
+# THE REMEDY `stale_claims` NAMES AND NOTHING BUILT. `report_stale`'s own text says "put the
+# id back to the slug form and let the merge allocate it again" — and until this, that was a
+# sentence with no command behind it: a human (or a session) had to hand-rename the file,
+# hand-edit the heading, and hand-find every citation, which is exactly the error surface D140
+# exists to delete from the FORWARD direction. It bit for real on 2026-09-12: a coordinating
+# session hit `stale_claim`'s refusal mid conflict-resolution and, with no un-claim command to
+# reach for, hand-picked new numbers instead — one guess collided too, before landing on D188
+# — the hand-guessing this whole file exists to replace, one direction over.
+#
+# BUILT AS THE LITERAL INVERSE OF THE FORWARD SUBSTITUTION, REUSING ITS OWN GRAMMAR, NOT A
+# SECOND ONE. `apply_to_text`'s docstring records the `\b`-boundary bug this repo was burned by
+# once already: a bound built from `\b` alone matches a shorter slug INSIDE a longer one that
+# extends it, because a hyphen is a non-word character. A hand-rolled reverse substitution would
+# have to remember that bug independently; this one cannot forget it, because it is the same
+# `(?<![-\w])...(?![-\w])` pattern, run with the token and the replacement swapped.
+#
+# A DECISION KEEPS ITS SLUG SOMEWHERE; A CODE-CARD ID AND A BUILD STEP DO NOT. That asymmetry
+# is not a shortcut taken here — it is already true of the forward direction. A decision's
+# entry is a FILE, and `rename_claimed_entries` renames it rather than deleting it, so the
+# slug survives in the filename after the heading itself has been overwritten with a number.
+# `docs/CODES-DECISIONS.md` is one file for the whole codes corpus and `docs/GATES.md`'s build
+# order is one file for every step; neither gets a rename, so the substitution that turns
+# `C-<slug>` or `step <slug>` into a number is TOTAL — nothing anywhere in the tree still spells
+# the slug once it commits. So a decision's slug is derived automatically from its own file;
+# a codes id or a step needs `--to-slug`, supplied by whoever still remembers what they wrote
+# (their own commit that introduced the entry names it, in the heading, before the claim ran).
+#
+# THE SAFETY CHECK IS `stale_claims`' OWN ARGUMENT, READ BACKWARDS. That entry's docstring says
+# an un-claim "has to happen BEFORE the merge and never after, because once main is merged in a
+# substitution on that token reaches main's own copy of the entry too." So before touching
+# anything, this asks the same question `stale_claims` asks per id — is it on `ref` yet — and
+# refuses outright when the answer is yes: an id already on main is not this branch's to give
+# back, however this branch came to hold it.
+
+
+class Unclaim(NamedTuple):
+    kind: str        # "decision" | "codes" | "step"
+    number: int       # the bare integer: 188, 4, 12
+    token: str        # the literal claimed form, as it is cited in prose: "D188", "C4", "step 12"
+    becomes: str      # the literal slug form citations revert to: "D-...", "C-...", "step ..."
+    slug: str         # the BARE slug, no letter and no `step ` prefix — what `--to-slug` takes
+    old_name: str = ""  # decisions only: the D<n>-<slug>.md file this checkout holds right now
+    new_name: str = ""  # decisions only: the D-<slug>.md file it reverts to
+
+
+_UNCLAIM_DECISION = re.compile(r"^D([1-9][0-9]{0,2})$")
+_UNCLAIM_CODES = re.compile(r"^C([1-9][0-9]{0,2})$")
+_UNCLAIM_STEP = re.compile(r"^step\s+([1-9][0-9]*)$")
+
+
+def parse_claimed_ident(ident: str) -> Tuple[str, int]:
+    """(kind, number) for a CLAIMED id's own spelling, or raises ValueError.
+
+    A CLAIMED ID, NEVER A SLUG — there is nothing to unclaim from a slug, because a slug is
+    already the form this command puts things back into. Rejecting one here is the same
+    refusal-over-guessing this whole file is built on, one function along.
+    """
+    match = _UNCLAIM_DECISION.match(ident)
+    if match:
+        return "decision", int(match.group(1))
+    match = _UNCLAIM_CODES.match(ident)
+    if match:
+        return "codes", int(match.group(1))
+    match = _UNCLAIM_STEP.match(ident)
+    if match:
+        return "step", int(match.group(1))
+    raise ValueError(
+        f"{ident!r} is not a claimed id's own spelling. A claimed id is a bare number in one "
+        f"of the three namespaces this file allocates: `D188`, `C4`, `step 12` — never a "
+        f"slug, since a slug is already unclaimed.")
+
+
+def find_decision_file(root: Path, number: int) -> Tuple[Optional[Path], str]:
+    """The claimed entry's own file, and the slug tail its filename still carries.
+
+    THE FILENAME IS THE ONE SURVIVING RECORD. `rename_claimed_entries` renames the slug-named
+    file to `D<n>-<tail>.md` rather than deleting it, so the tail after the number is exactly
+    the descriptive half of the original slug — no guessing, the same fact `plan_unclaim`'s
+    docstring above spells out. `None` when there is not exactly one match: zero is "not
+    claimed here", and more than one is refused rather than picked from.
+    """
+    prefix = f"D{number:03d}-"
+    matches = sorted((root / DECISIONS_DIR).glob(prefix + "*.md"))
+    if len(matches) != 1:
+        return None, ""
+    path = matches[0]
+    return path, path.stem[len(prefix):]
+
+
+def plan_unclaim(root: Path, ident: str, to_slug: Optional[str]) -> Unclaim:
+    """The single reverse claim for an already-claimed id. Raises ValueError to refuse."""
+    kind, number = parse_claimed_ident(ident)
+
+    if kind == "decision":
+        path, tail = find_decision_file(root, number)
+        if path is None:
+            raise ValueError(
+                f"no single {DECISIONS_DIR}/D{number:03d}-*.md file in this tree — `{ident}` "
+                f"is not a claimed decision this checkout holds.")
+        heading = read(path).split("\n", 1)[0]
+        if not re.match(r"^##\s+D" + str(number) + r"\b", heading):
+            raise ValueError(
+                f"{path.relative_to(root)}: heading is {heading!r}, which does not start "
+                f"`## D{number}` — refusing to guess which entry this is.")
+        bare = to_slug if to_slug else tail
+        if not re.fullmatch(SLUG, bare):
+            raise ValueError(
+                f"{bare!r} is not a slug — two or more lowercase hyphenated segments.")
+        slug = "D-" + bare
+        return Unclaim("decision", number, f"D{number}", slug, bare,
+                       old_name=path.name, new_name=slug + ".md")
+
+    if kind == "codes":
+        if not to_slug:
+            raise ValueError(
+                "a code-card id keeps its slug NOWHERE once claimed. "
+                f"{CODES_DECISIONS} is one file for the whole corpus, not a directory with "
+                "one file per entry — a decision's slug survives in its entry's own "
+                "FILENAME (see find_decision_file); a codes entry has no such file, so the "
+                "substitution that turned `C-<slug>` into this id left nothing behind to "
+                "read it back from. Pass --to-slug <the-original-slug> — the slug the "
+                "commit that first introduced this entry used in its heading.")
+        if not re.fullmatch(SLUG, to_slug):
+            raise ValueError(
+                f"{to_slug!r} is not a slug — two or more lowercase hyphenated segments.")
+        path = root / CODES_DECISIONS
+        if not path.exists():
+            raise ValueError(f"{CODES_DECISIONS} does not exist in this tree.")
+        heading_re = re.compile(r"^##\s+C" + str(number) + r"\b", re.M)
+        if not heading_re.search(read(path)):
+            raise ValueError(
+                f"no `## C{number}` heading in {CODES_DECISIONS} — `{ident}` is not a "
+                f"claimed entry this checkout holds.")
+        return Unclaim("codes", number, f"C{number}", "C-" + to_slug, to_slug)
+
+    # kind == "step"
+    if not to_slug:
+        raise ValueError(
+            "a build step keeps its slug NOWHERE once claimed. `renumber_gates` replaces the "
+            "WHOLE `0. `step <slug>`` prefix with the allocated number in one edit, and "
+            f"nothing in {GATES} or {MAP} carries the slug afterwards — a decision survives "
+            "this because its FILE is still named after the slug; a step has no file of its "
+            "own to be renamed. Pass --to-slug <the-original-slug> — the slug the commit "
+            "that first claimed this step used.")
+    if not re.fullmatch(SLUG, to_slug):
+        raise ValueError(
+            f"{to_slug!r} is not a slug — two or more lowercase hyphenated segments.")
+    gates_path = root / GATES
+    if not gates_path.exists():
+        raise ValueError(f"{GATES} does not exist in this tree.")
+    if not re.search(r"^" + str(number) + r"\.\s", read(gates_path), re.M):
+        raise ValueError(
+            f"no `{number}. ` build-order line in {GATES} — `step {number}` is not a "
+            f"claimed step this checkout holds.")
+    return Unclaim("step", number, f"step {number}", "step " + to_slug, to_slug)
+
+
+def ids_at(ref: str, cwd: Optional[str] = None) -> Dict[str, Set[int]]:
+    """Every ALLOCATED id of each kind, as of `ref` — `ceiling_at`'s set, not its max.
+
+    THE FIRST, CHEAP HALF OF THE SAFETY GATE: whether `ref` has an entry at this number AT
+    ALL. It says nothing about whether that entry is THIS one — see `same_entry_on_ref`, which
+    asks the question this file's own worked incident needs answered, and is why a bare
+    presence check here is not the whole gate.
+    """
+    return {kind: allocated_ids(corpus_text_at(ref, cwd=cwd) if kind == "decision"
+                                else git("show", f"{ref}:{path}", cwd=cwd), pattern)
+            for kind, path, pattern, _ in KINDS}
+
+
+def local_heading(root: Path, u: Unclaim) -> str:
+    """The current heading (or GATES.md marker line) for this id, IN THIS TREE, right now —
+    before anything is unclaimed. `""` when it cannot be found, which `plan_unclaim` has
+    already made unreachable for a valid `Unclaim` other than a step/codes id whose own file
+    went missing between planning and this read.
+    """
+    if u.kind == "decision":
+        path, _ = find_decision_file(root, u.number)
+        return read(path).split("\n", 1)[0] if path else ""
+    if u.kind == "codes":
+        path = root / CODES_DECISIONS
+        if not path.exists():
+            return ""
+        match = re.search(r"^##\s+C" + str(u.number) + r"\b.*$", read(path), re.M)
+        return match.group(0) if match else ""
+    path = root / GATES
+    if not path.exists():
+        return ""
+    match = re.search(r"^" + str(u.number) + r"\..*$", read(path), re.M)
+    return match.group(0) if match else ""
+
+
+def ref_heading(ref: str, u: Unclaim, cwd: Optional[str] = None) -> str:
+    """The SAME line, as `ref` carries it right now — which may belong to a completely
+    different entry that merely landed on the same number (see `same_entry_on_ref`)."""
+    if u.kind == "decision":
+        listing = git("ls-tree", "-r", "--name-only", ref, DECISIONS_DIR, cwd=cwd)
+        prefix = f"{DECISIONS_DIR}/D{u.number:03d}-"
+        match = next((line for line in listing.splitlines() if line.startswith(prefix)), None)
+        return git("show", f"{ref}:{match}", cwd=cwd).split("\n", 1)[0] if match else ""
+    if u.kind == "codes":
+        text = git("show", f"{ref}:{CODES_DECISIONS}", cwd=cwd)
+        match = re.search(r"^##\s+C" + str(u.number) + r"\b.*$", text, re.M)
+        return match.group(0) if match else ""
+    text = git("show", f"{ref}:{GATES}", cwd=cwd)
+    match = re.search(r"^" + str(u.number) + r"\..*$", text, re.M)
+    return match.group(0) if match else ""
+
+
+def same_entry_on_ref(root: Path, ref: str, u: Unclaim, cwd: Optional[str] = None) -> bool:
+    """Whether `ref`'s own entry at this number IS this entry, rather than an unrelated one
+    that happens to have landed on the same number.
+
+    THE DISTINCTION THE RAW PRESENCE CHECK CANNOT DRAW, AND THE WHOLE REASON THIS FUNCTION
+    EXISTS. `ids_at` alone answers "does `ref` have an entry here" — and answering `--unclaim`
+    with a flat refusal whenever that is true would refuse the ONE CASE this file was built
+    to answer: the actual 2026-09-12 incident is precisely a branch whose own D<n+1> collided
+    with an UNRELATED entry that `ref` independently claimed at the same number. Reverting
+    THIS branch's own file there corrupts nothing of ref's, because ref's D<n+1> is not this
+    entry — it is someone else's, sharing a number by the same race D140's amendment exists
+    to catch.
+
+    THE HEADING LINE IS THE FINGERPRINT, not the whole body: it is what `apply_to_text`'s own
+    substitution already treats as the identifying text for every OTHER purpose in this file,
+    and two genuinely different entries sharing one by coincidence is a collision this whole
+    mechanism already treats as astronomically unlikely (`claim-ids.py`'s own docstring: "zero
+    collisions of either shape the day the vocabulary was chosen").
+
+    A CLAIMED HEADING is what `ref_heading`/`local_heading` compare — this branch's OWN
+    heading here still reads NUMBERED at this point (unclaiming has not run yet), so both
+    sides are numbers when this fires, and equality means `ref` did not just collide, it
+    correctly carries the SAME entry this branch already sees the answer to.
+    """
+    ours = local_heading(root, u)
+    theirs = ref_heading(ref, u, cwd=cwd)
+    return bool(ours) and ours == theirs
+
+
+def unrenumber_gates(text: str, u: Unclaim) -> str:
+    """Reverse of `renumber_gates`: the numbered marker becomes `0. `step <slug>` ` again.
+
+    THE PREFIX ONLY, exactly mirroring the forward edit — `renumber_gates` touches nothing
+    past the marker it replaces, so neither does this. The number is the step's own id and
+    unique in the file by construction (that uniqueness is what makes it an id at all), so an
+    anchored, single-replacement match is as safe here as the slug-keyed match is going
+    forward.
+    """
+    if u.kind != "step":
+        return text
+    pattern = re.compile(r"^" + re.escape(str(u.number)) + r"\.\s+", re.M)
+    return pattern.sub("0. `step " + u.slug + "` ", text, count=1)
+
+
+def unrenumber_map(text: str, u: Unclaim) -> str:
+    """Reverse of `renumber_map`: the map's bare `"n": <int>` becomes `"n": "<slug>"` again."""
+    if u.kind != "step":
+        return text
+    pattern = re.compile(r'"n":\s*' + re.escape(str(u.number)) + r"(?!\d)")
+    return pattern.sub('"n": "' + u.slug + '"', text, count=1)
+
+
+def apply_unclaim_to_text(text: str, u: Unclaim) -> Tuple[str, int]:
+    """`apply_to_text`'s own bound, run with the token and the replacement swapped.
+
+    THE SAME `(?<![-\\w])...(?![-\\w])` GUARD, reused rather than rebuilt, is the whole point:
+    a hand-rolled reverse would have to remember the `\\b`-boundary bug independently, and
+    this one cannot forget it because it is not a second implementation.
+    """
+    pattern = re.compile(r"(?<![-\w])" + re.escape(u.token) + r"(?![-\w])")
+    return pattern.subn(u.becomes, text)
+
+
+def unindex(text: str, u: Unclaim) -> str:
+    """Reverse of the one line `settle_corpus` added to CLAUDE.md's index for this id.
+
+    MUST RUN BEFORE THE GENERIC SUBSTITUTION TOUCHES THIS FILE, and that ordering is the
+    whole of this function's reason to exist separately from `unsettle_manifest` below. The
+    index line reads `D188 <title>` — a token this id's own generic substitution also
+    matches, since it is bounded exactly like a citation — so a removal keyed on that token
+    that runs AFTER the generic pass finds nothing: the line has already been rewritten to
+    start with the slug by the time it looks. Caught by the self-test's round-trip arm, which
+    is the whole reason this is its own function instead of a `continue` inside `perform()`.
+
+    NOT A CALL TO THE FORWARD GENERATOR WITH THE HEADING ALREADY REVERTED, either.
+    `index-decisions.py` locates a heading by `_ID`, which matches a slug heading too — D182
+    made that heading exempt from the AUDIT, not invisible to the GENERATOR — so regenerating
+    the index after this id's heading is back to slug form would print a slug line into
+    CLAUDE.md that the pre-claim tree never had, and the round trip would not be
+    byte-identical. This removes exactly the one line `settle_corpus` added for THIS id,
+    rather than asking the generator to recompute the whole set and hoping it lands on
+    nothing.
+
+    ONLY A DECISION HAS ONE TO REMOVE: codes and steps get no index line from `settle_corpus`
+    to begin with (the index is `docs/decisions/`'s alone).
+    """
+    if u.kind != "decision":
+        return text
+    pattern = re.compile(r"^" + re.escape(u.token) + r"\s")
+    lines = [line for line in text.split("\n") if not pattern.match(line)]
+    return "\n".join(lines)
+
+
+def unsettle_manifest(root: Path, u: Unclaim, write: bool) -> List[str]:
+    """Reverse of the one entry `settle_corpus` appended to `ORDER.json`'s `order`.
+
+    A SEPARATE STEP FROM `unindex`, RATHER THAN THE SAME KIND OF FIX, because the manifest
+    was never at risk of the ordering bug that motivated `unindex`: `perform_unclaim` already
+    skips `ORDER.json` in the generic loop exactly as `perform()` does, so there is no
+    generic-substitution pass to race against here. Kept as its own function anyway — a
+    manifest edit and a text edit are different operations even when both undo the same
+    forward step, and folding them into one function is how the ordering bug above would have
+    hidden inside a diff that looked like one change.
+    """
+    moved: List[str] = []
+    if u.kind != "decision":
+        return moved
+    manifest_path = root / DECISIONS_MANIFEST
+    if not manifest_path.exists():
+        return moved
+    manifest = json.loads(read(manifest_path))
+    order = list(manifest["order"])
+    if u.old_name not in order:
+        return moved
+    order.remove(u.old_name)
+    manifest["order"] = order
+    if write:
+        manifest_path.write_text(json.dumps(manifest, indent=2) + "\n", encoding="utf-8")
+    moved.append(f"{DECISIONS_MANIFEST} (-1 entry)")
+    return moved
+
+
+def perform_unclaim(root: Path, u: Unclaim, write: bool) -> Dict[str, int]:
+    """Substitute the reverse claim across the tree. Returns path -> replacements.
+
+    SAME SHAPE AS `perform()`, IN THE SAME ORDER: every per-file special case runs BEFORE the
+    generic substitution touches that file (`unrenumber_gates`, `unrenumber_map`, `unindex`),
+    exactly as `renumber_gates`/`renumber_map` run before `apply_to_text` going forward — a
+    special case that ran after would be looking at text the generic pass has already
+    rewritten out from under it, which is exactly the bug `unindex`'s own docstring records.
+    Then the file rename, then the manifest. The rename runs against the file's CURRENT name,
+    which is still `u.old_name` until this function renames it, after the loop that reads
+    every file's content by name has already finished.
+    """
+    touched: Dict[str, int] = {}
+    manifest_path = root / DECISIONS_MANIFEST
+    claude_path = root / "CLAUDE.md"
+    for path in text_files(root):
+        if path == manifest_path:
+            continue
+        before = read(path)
+        after = before
+        if path == root / GATES:
+            after = unrenumber_gates(after, u)
+        if path == root / MAP:
+            after = unrenumber_map(after, u)
+        if path == claude_path:
+            after = unindex(after, u)
+        after, hits = apply_unclaim_to_text(after, u)
+        if after == before:
+            continue
+        touched[str(path.relative_to(root))] = hits or 1
+        if write:
+            path.write_text(after, encoding="utf-8")
+
+    if u.kind == "decision" and u.old_name:
+        old_path = root / DECISIONS_DIR / u.old_name
+        new_path = root / DECISIONS_DIR / u.new_name
+        if old_path.exists():
+            touched[f"{DECISIONS_DIR}/{u.old_name} -> {u.new_name}"] = 1
+            if write:
+                old_path.rename(new_path)
+
+    for label in unsettle_manifest(root, u, write):
+        touched[label] = 1
+    return touched
+
+
+def run_unclaim(root: Path, ident: str, to_slug: Optional[str], ref: str, write: bool) -> int:
+    """`--unclaim`'s whole body: plan, check it is safe, then perform or preview it."""
+    try:
+        u = plan_unclaim(root, ident, to_slug)
+    except ValueError as exc:
+        say(f"REFUSED: {exc}")
+        return 2
+
+    resolved = git("rev-parse", "--verify", "--quiet", f"{ref}^{{commit}}", cwd=str(root)).strip()
+    if not resolved:
+        say(f"REFUSED: `{ref}` does not name a commit in {root}.",
+            "",
+            "  The safety check reads what that ref has taken. Without it there is nothing",
+            "  to check against, and unclaiming on a guess is the thing this command exists",
+            "  to prevent — same rule as the allocation itself.")
+        return 2
+
+    taken = ids_at(ref, cwd=str(root))
+    note: List[str] = []
+    if u.number in taken[u.kind]:
+        if same_entry_on_ref(root, ref, u, cwd=str(root)):
+            say(f"REFUSED: {u.token} on `{ref}` IS this entry.",
+                "",
+                f"  Unclaiming it would put `{u.becomes}` back into this tree while `{ref}`",
+                f"  answers every citation of {u.token} with the SAME entry — a substitution",
+                "  on this token then reaches main's own copy too, which is exactly what",
+                "  `stale_claims` refuses in the other direction and for the same reason.",
+                "",
+                "  D140's design assumes a claimed number is permanent the moment it reaches",
+                f"  `{ref}`. This branch's own claim of {u.token} already correctly landed",
+                "  there — there is nothing stale to put back.")
+            return 3
+        # `ref` has an entry at this number too, but it is a DIFFERENT one — the exact shape
+        # D186's own landing collided with: two unrelated branches independently claimed the
+        # same next free number, and this branch's own copy is the one that lost the race.
+        # Unclaiming touches only THIS branch's own file; `ref`'s entry is untouched by name
+        # or by number.
+        note = [
+            f"  NOTE: `{ref}` also carries {u.token}, but for a DIFFERENT entry — this is",
+            "  the collision this command exists to fix, not a reason to refuse. Only this",
+            f"  branch's own copy is touched; the one on `{ref}` keeps its number.",
+            "",
+        ]
+
+    say(f"PKMNSCAN — unclaim {u.token} -> {u.becomes}{'' if write else '  (PREVIEW)'}")
+    say("=" * 72, "")
+    if note:
+        say(*note)
+    touched = perform_unclaim(root, u, write)
+    for name in sorted(touched):
+        say(f"  {'rewrote' if write else 'would rewrite'}  {name}")
+    say("", f"  1 id, {len(touched)} file(s).")
+    if not write:
+        say("", "  PREVIEW — nothing was written. Add --write to perform it.")
+    else:
+        say("",
+            f"  Run `python3 scripts/claim-ids.py --ref {ref}` to see it allocated again —",
+            "  that is the whole point: a fresh number against main as it stands now, rather",
+            "  than the one that went stale.")
+    return 0
+
+
 # ------------------------------------------------------------------------------------ cli
 
 
@@ -763,6 +1234,19 @@ def build_parser() -> argparse.ArgumentParser:
                         help="report every unclaimed id REV's own trees carry, and exit 3 if "
                              "there are any. The subject is a COMMIT and never a checkout. "
                              "Writes nothing, ever.")
+    parser.add_argument("--unclaim", metavar="ID",
+                        help="put an already-claimed id back to slug form: `D188`, `C4`, or "
+                             "`step 12`. The exact inverse of a claim, for the id "
+                             "`stale_claims` reported gone stale — REFUSES when ID is already "
+                             "on --ref, since an id main holds is not this branch's to give "
+                             "back. Previews by default; needs --write to perform it.")
+    parser.add_argument("--to-slug", metavar="SLUG",
+                        help="the bare slug (no letter, no `step `) a codes id or a build "
+                             "step reverts to. REQUIRED for both, because neither keeps its "
+                             "slug anywhere once claimed — only a decision's does, in its own "
+                             "entry's filename, which --unclaim reads automatically. Ignored "
+                             "for a decision id unless it is given, in which case it "
+                             "overrides the filename's own tail.")
     return parser
 
 
@@ -775,6 +1259,12 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
     # checkout with no remote-tracking branch can still be asked what a commit carries.
     if args.landed:
         return report_landed(root, args.landed)
+
+    # ALSO ANSWERED BEFORE THE SHARED `--ref` RESOLUTION BELOW, because `run_unclaim` does its
+    # own — the message it prints on a bad ref is about the SAFETY CHECK rather than about an
+    # allocation, and folding it into the generic block above would blur the two.
+    if args.unclaim:
+        return run_unclaim(root, args.unclaim, args.to_slug, args.ref, args.write)
 
     # `--verify` AND `^{commit}`, because a bare `git rev-parse foo` prints `foo` on STDOUT
     # and puts the error on stderr — which this reader discards. The refusal below was
