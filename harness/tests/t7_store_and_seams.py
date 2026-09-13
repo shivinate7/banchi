@@ -16777,6 +16777,119 @@ def check_committed_copies_are_the_oldest(checks: Checks) -> None:
         )
 
 
+def _copies_out_reference(
+    inventory: master.Inventory, live_by_sku: dict
+) -> Tuple[dict, dict]:
+    """THE OLD PER-LISTING IMPLEMENTATION, KEPT HERE ONLY, as the equivalence oracle for
+    `check_copies_out_one_pass_matches_reference` below. Never import this into `cli/`; it
+    exists so a future edit to `_copies_out`'s one-pass body can be checked against the
+    arithmetic it must never silently drift from. Copied verbatim from `cli/resolve.py`
+    before store-scaling item 4's rewrite (docs/specs/store-scaling/04-copies-out.md).
+    """
+    out: dict = {}
+    live_now: dict = {}
+    for sku in set(live_by_sku) | set(inventory.listings):
+        listing_entry = inventory.listings.get(sku)
+        reading = live_by_sku.get(sku)
+        offered = reading.quantity if reading else None
+        as_of = reading.as_of if reading else None
+        read = (
+            listing_entry.live_reading(offered, as_of)
+            if listing_entry is not None
+            else (reading.quantity if reading else 0)
+        )
+        read = max(0, int(read))
+        live = max(
+            0,
+            read - (listing_entry.sales_pending(as_of) if listing_entry is not None else 0),
+        )
+        live_now[sku] = live
+        claim = listing_entry.held if listing_entry is not None else 0
+        if read <= 0 and claim <= 0:
+            continue
+        read_at = (
+            listing_entry.reading_taken_at(offered, as_of)
+            if listing_entry is not None
+            else as_of
+        )
+        sold = (
+            len(inventory.positions_for_sku(sku)) - len(inventory.copies_not_sold(sku))
+            if read > 0
+            else inventory.sales_before(sku, read_at)
+        )
+        out[sku] = max(live, claim - sold)
+    return out, live_now
+
+
+def check_copies_out_one_pass_matches_reference(checks: Checks) -> None:
+    """`resolve._copies_out`'s one-pass rewrite (store-scaling item 4,
+    docs/specs/store-scaling/04-copies-out.md) must equal the per-listing arithmetic it
+    replaced, on a store exercising every branch: `read > 0` with a sale, `read <= 0` with a
+    sale before AND after `read_at`, a SKU only in `live_by_sku`, a SKU only in
+    `inventory.listings`, and a SKU whose two copies are one SOLD and one RETIRED — the case
+    that tells `SOLD` alone from `TERMINAL_STATES` (D26), which `copies_not_sold` warns
+    against conflating and which the mutation arm for this check flips.
+    """
+    checks.note("")
+    checks.note("COPIES OUT — one pass equals the old per-listing arithmetic")
+
+    with isolated_home():
+        # SKU A: read > 0, one sold, one not — exercises the `read > 0` branch.
+        for box, idx in ((1, 1), (1, 2)):
+            while Store().read().inventory.next_index(box) <= idx:
+                capture_server.do_capture(capture_payload(box))
+        with Store().write() as writable:
+            writable.inventory.get(master.position_key(1, 1)).sku = "SKU-A"
+            writable.inventory.get(master.position_key(1, 2)).sku = "SKU-A"
+        capture_server.do_mark_sold(1, 1, {})
+
+        # SKU B: read <= 0, one sale before `read_at`, one after — exercises both arms of
+        # the `read <= 0` branch. `state_at` ordering is what `sales_before` reads.
+        for box, idx in ((2, 1), (2, 2)):
+            while Store().read().inventory.next_index(box) <= idx:
+                capture_server.do_capture(capture_payload(box))
+        with Store().write() as writable:
+            writable.inventory.get(master.position_key(2, 1)).sku = "SKU-B"
+            writable.inventory.get(master.position_key(2, 2)).sku = "SKU-B"
+        capture_server.do_mark_sold(2, 1, {})  # before
+        read_at = master.now()
+        capture_server.do_mark_sold(2, 2, {})  # after
+
+        # SKU D: read > 0, one SOLD and one RETIRED — the mutation arm's own case (a
+        # naive "how many of this SKU's copies have left the box" would count both).
+        for box, idx in ((4, 1), (4, 2)):
+            while Store().read().inventory.next_index(box) <= idx:
+                capture_server.do_capture(capture_payload(box))
+        with Store().write() as writable:
+            writable.inventory.get(master.position_key(4, 1)).sku = "SKU-D"
+            writable.inventory.get(master.position_key(4, 2)).sku = "SKU-D"
+        capture_server.do_mark_sold(4, 1, {})
+        capture_server.do_retire(4, 2, {"reason": "pulled"})
+        # A large `held` claim so `claim - sold` (99 correct, 98 under the mutation) is what
+        # `max(live, claim - sold)` actually returns rather than `live` masking the difference.
+        with Store().write() as writable:
+            writable.inventory.listing("SKU-D").bump(master.PUSHED, 100)
+            # SKU C: only in `inventory.listings` (no export row at all this run).
+            writable.inventory.listing("SKU-ONLY-LISTED").bump(master.PUSHED)  # by=1 default
+
+        inventory = Store().read().inventory
+        live_by_sku = {
+            "SKU-A": resolve.LiveReading(quantity=1, as_of=master.now()),
+            "SKU-B": resolve.LiveReading(quantity=0, as_of=read_at),
+            "SKU-D": resolve.LiveReading(quantity=6, as_of=master.now()),
+            "SKU-ONLY-LIVE": resolve.LiveReading(quantity=2, as_of=master.now()),
+        }
+
+        one_pass = resolve._copies_out(inventory, live_by_sku)
+        reference = _copies_out_reference(inventory, live_by_sku)
+        checks.equal(
+            one_pass, reference,
+            "the one-pass rewrite and the old per-listing arithmetic agree on every SKU, "
+            "across both `copies_out` and `live_now` — including SKU-D, whose retired copy "
+            "must NOT be counted alongside the sold one",
+        )
+
+
 def check_listing_commands(checks: Checks) -> None:
     """`emit`, `reconcile` and `join` moving SKU QUANTITIES rather than card states (D7).
 
@@ -26746,6 +26859,7 @@ def run() -> Result:
     check_cli_refusals(checks)
     check_listing_commands(checks)
     check_committed_copies_are_the_oldest(checks)
+    check_copies_out_one_pass_matches_reference(checks)
     check_order_resolver(checks)
     check_order_ledger(checks)
     check_order_screen(checks)

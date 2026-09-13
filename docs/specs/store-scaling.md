@@ -45,7 +45,8 @@ and `events` duplicated under new keys.
 | `Inventory.to_payload()` — `GET /inventory` | 78 ms | 1,485 ms | 19.0x | Home, Inventory, Fulfillment, Orders, on load; Inventory again after **every** sale, retire, move and reshoot |
 | `do_orders()` — `GET /orders` | 185 ms | 3,465 ms | 18.7x | Orders and Shipping on load |
 | `Store.history()` | 16.5 ms | 345 ms | 20.9x | **every** mark-sold press (`_sale_origin`, `server/capture_server.py:7232`), every queue-answer undo, stand-down undo and retirement reversal |
-| `_copies_out` | ~0.9 s / 492 listings (a session's note of 2026-09-11, not re-measured here) | unmeasured; quadratic by reading | — | `GET /pipeline/pricing`'s default landing (`pipeline_routes.py:2405`), `cli/resolve.py:1916` |
+| `_copies_out` (before item 4) | 1,617 ms / 753 listings, 2,535 cards | 32,478 ms / 753 listings, 50,700 cards | 20.1x | `GET /pipeline/pricing`'s default landing (`pipeline_routes.py:2405`), `cli/resolve.py:1916` |
+| `_copies_out` (after item 4 — one `select()` via `_cards_by_sku`) | 6.6 ms | 189 ms | 28.6x | same call sites — 245x and 172x faster than the row above, at 1x and 20x respectively |
 
 **`GET /orders` was a named contradiction and it is resolved: the route's comment is stale
 and the route is slow anyway.** `_Places.__init__` (`server/capture_server.py:2029`) does
