@@ -14,11 +14,25 @@ quietly removing one from the allowlist without saying so — by making `make do
 fail the commit when it happens.
 
 **Done when:** `python3 scripts/docs-audit.py --json` contains a row named
-`"unscoped walk"` with `"scanned": 12`, zero findings on a clean tree; `--self-test`
+`"unscoped walk"` with `"scanned": 13`, zero findings on a clean tree; `--self-test`
 passes two new cases (a synthetic new site fails the row, a synthetic stale-allowlist
 entry fails the row); and `check_dispatch` (already in the file) confirms the new function
 is called from `audit()` — you don't have to prove this by hand, it fails on its own if
 you forget the call.
+
+**CORRECTED DURING IMPLEMENTATION: the census was thirteen sites, not twelve.**
+`store/master.py:next_box_number` (def at line 2119, its own `.distinct("box")` call at
+line 2140) is a real, currently-existing full-table walk this file's "Call sites" table
+below does not name and `docs/specs/store-scaling.md` §4's table does not name either. The
+scanner found it the first time it ran end-to-end against the real tree — it is the same
+shape as `do_boxes`/`counts` (one indexed column, read once, cheap) and is kept on the
+allowlist permanently for the same reason those two are. `UNSCOPED_WALK_EXPECTED` is
+therefore `13`, and every "twelve" below that describes the constant's value (as opposed
+to describing the census this file was written from) is stale; this paragraph is the
+correction, per this file's own instruction to fix a wrong citation in the same commit
+that finds it. Nothing else in the repository's twelve-site count changes: this is an
+addition to what the hand census missed, not a disagreement with any of the twelve it did
+find.
 
 ## Depends on / conflicts with
 
@@ -41,19 +55,22 @@ you forget the call.
   authority for what the guard actually enforces; `00-phases.md`'s own table already
   reflects the correction (its Phase-0 row says "`do_inventory` and `to_payload` stay by
   the owner's word").
-- `scripts/docs-audit.py:13538` `check_rule_enforcement` — the "pinned number, moves only
-  down, mutation-proofed" pattern this row's allowlist count copies.
-- `scripts/docs-audit.py:9836` `check_storage_keys` — the "reconcile code against a
-  roster, in both directions, with `scanned=`" pattern this row's allowlist copies from
-  the other side (roster → code instead of code → roster is symmetric here since there is
-  no markdown roster, only the constant in this same file).
-- `scripts/docs-audit.py:2671` `_history_readers` — the exact `ast.walk` shape to copy for
-  finding calls inside functions and naming which function owns each call.
-- `scripts/docs-audit.py:15548` `audit()` — where every check is dispatched; `check_dispatch`
-  fails the commit if you define a function here and never call it.
-- `scripts/docs-audit.py:12737` `check_subject_counts` — why every `report.add(...)` call
-  needs `scanned=<n>` and what happens if you omit it (a distinct "no count declared"
-  finding, always failing, never silently green).
+- `scripts/docs-audit.py:13547` (was cited as `:13538`, corrected) `check_rule_enforcement`
+  — the "pinned number, moves only down, mutation-proofed" pattern this row's allowlist
+  count copies.
+- `scripts/docs-audit.py:9845` (was cited as `:9836`, corrected) `check_storage_keys` — the
+  "reconcile code against a roster, in both directions, with `scanned=`" pattern this
+  row's allowlist copies from the other side (roster → code instead of code → roster is
+  symmetric here since there is no markdown roster, only the constant in this same file).
+- `scripts/docs-audit.py:2680` (was cited as `:2671`, corrected) `_history_readers` — the
+  exact `ast.walk` shape to copy for finding calls inside functions and naming which
+  function owns each call.
+- `scripts/docs-audit.py:15563` (was cited as `:15548`, corrected) `audit()` — where every
+  check is dispatched; `check_dispatch` fails the commit if you define a function here and
+  never call it.
+- `scripts/docs-audit.py:12746` (was cited as `:12737`, corrected) `check_subject_counts`
+  — why every `report.add(...)` call needs `scanned=<n>` and what happens if you omit it
+  (a distinct "no count declared" finding, always failing, never silently green).
 - `store/rows.py:213-266` — `Rows.where(**equals)`, `Rows.select(columns, **equals)`,
   `Rows.distinct(column)`. `Rows` is a `MutableMapping`, so `.values()`/`.items()` take no
   arguments ever (they are the ABC's own methods) and always materialise every row.
@@ -67,7 +84,7 @@ you forget the call.
 
 ### 1. Add the pinned constant and the allowlist, near the other pinned constants
 
-Put this near `HARD_RULE_FLOOR`/`PROSE_ONLY_EXPECTED` (around line 13432) or in a new
+Put this near `HARD_RULE_FLOOR`/`PROSE_ONLY_EXPECTED` (around line 13441, was cited as line 13432, corrected) or in a new
 section just above your new function — either is fine, but keep the constant and the
 function that reads it in the same file section so the next reader sees both together.
 
@@ -80,11 +97,13 @@ function that reads it in the same file section so the next reader sees both tog
 # on this list, matched by `shape="items"` restricted to the `.cards` chain in the
 # matcher itself, never by which `.items()` call comes first in the function body).
 #
-# TAKEN 2026-09-12, docs/specs/store-scaling.md §4, PLUS ONE. `do_inventory`'s
+# TAKEN 2026-09-12, docs/specs/store-scaling.md §4, PLUS TWO. `do_inventory`'s
 # `to_payload()` call is kept here PERMANENTLY, on the owner's word recorded in
 # docs/specs/store-scaling/00-phases.md ("do_inventory is kept, unused, on the
 # allowlist") — §4's own table says "Removed by: item 2" for that row and that line is
 # stale; the correction lives here and in 00-phases.md, not in store-scaling.md itself.
+# `next_box_number`'s `.distinct("box")` is the second addition — a real site the hand
+# census missed; see the correction under "Goal and done-when" above.
 #
 # THIS COUNT MAY ONLY GO DOWN, same rule as `PROSE_ONLY_EXPECTED` above: an item that
 # removes a full-table read deletes its tuple from UNSCOPED_WALK_ALLOWED and lowers
@@ -104,18 +123,24 @@ UNSCOPED_WALK_ALLOWED: FrozenSet[Tuple[str, str, str]] = frozenset({
     ("server/pipeline_routes.py", "do_pipeline_value", "values"),
     ("store/master.py", "to_payload", "items"),
     ("store/master.py", "counts", "select"),
+    ("store/master.py", "next_box_number", "distinct"),   # kept permanently — one indexed column, cheap; missed by the hand census
     ("cli/resolve.py", "box_views", "values"),
 })
-UNSCOPED_WALK_EXPECTED = 12
+UNSCOPED_WALK_EXPECTED = 13
 ```
+
+**`next_box_number` was added during implementation, not part of the original thirteen
+lines above** — see the correction at the top of this file ("Goal and done-when"). It is
+the thirteenth entry and it is why `UNSCOPED_WALK_EXPECTED` is `13`.
 
 `FrozenSet` needs `FrozenSet` imported from `typing` — check the existing `from typing
 import ...` line near the top of the file (around line 74) and add `FrozenSet` to it if
 it is not already there.
 
-### 2. Write the pure scanner, modelled on `_history_readers` (line 2671)
+### 2. Write the pure scanner, modelled on `_history_readers` (line 2680)
 
-Add this function anywhere above `check_dispatch` (line 12620) — a reasonable spot is
+Add this function anywhere above `check_dispatch` (line 12629, was cited as line 12620,
+corrected) — a reasonable spot is
 right after `_history_readers`/`check_sole_reader`, since both are "walk `.py` files
 looking for a call shape on the store" functions, or immediately before your new
 `check_unscoped_walk` function. Keep it a **pure** function (no `Report` argument) so
@@ -152,7 +177,8 @@ _UNSCOPED_METHODS = frozenset({"values", "items", "distinct"})
 def _enclosing_functions(tree: ast.AST) -> Dict[int, str]:
     """line number -> the name of the FunctionDef/AsyncFunctionDef that contains it.
 
-    Copied from `_history_readers`'s own inline dict-building loop (line ~2689) rather
+    Copied from `_history_readers`'s own inline dict-building loop (line ~2697, was cited
+    as line ~2689, corrected) rather
     than imported, because that loop is not split into its own function there — if a
     future session factors it out, prefer that shared helper over keeping two copies.
     """
@@ -235,18 +261,19 @@ def unscoped_walk_sites(paths: Sequence[Path]) -> List[Tuple[str, int, str, str]
 **Why `select` is `elif` and not folded into the `_UNSCOPED_METHODS` set:** the other
 three methods (`values`/`items`/`distinct`) are unconditionally full scans, but `select`
 needs the extra `not node.keywords` test — `inventory.cards.select(("box",), box=None)`
-inside `_boxes_named` (server/capture_server.py, around line 8348) is a real, scoped call
-right next to the unscoped `distinct("box")` call one line above it, and it must NOT be
-flagged. If you fold `select` into the set and add the keyword check as a second `if`
+inside `_boxes_named` (server/capture_server.py, line 8349, was cited as "around line
+8348", corrected) is a real, scoped call right next to the unscoped `distinct("box")`
+call two lines above it at line 8347 (also corrected — see the "Call sites" table
+below), and it must NOT be flagged. If you fold `select` into the set and add the keyword check as a second `if`
 inside the loop, you get the same result — either shape is fine, but do not drop the
 keyword check, since that is the one line standing between this row and a false positive
 on a real, already-scoped call in a function you are not supposed to touch.
 
 ### 3. Write the check function
 
-Modelled directly on `check_storage_keys` (line 9836) for the "reconcile code against a
+Modelled directly on `check_storage_keys` (line 9845, was cited as line 9836, corrected) for the "reconcile code against a
 constant, three kinds of disagreement, one `report.add`" shape, and on
-`check_rule_enforcement` (line 13538) for "a pinned count that may only move down, and a
+`check_rule_enforcement` (line 13547, was cited as line 13538, corrected) for "a pinned count that may only move down, and a
 non-vacuity floor is not needed here because the list can never legitimately go to zero
 — `do_inventory` never leaves it".
 
@@ -360,7 +387,7 @@ index when `enter_staged_mode()` has run.
 
 ### 4. Register it in `audit()`
 
-At `scripts/docs-audit.py:15548`, add one line. Place it near the other single-purpose
+At `scripts/docs-audit.py:15563` (was cited as `:15548`, corrected), add one line. Place it near the other single-purpose
 code-scanning rows — right after `check_shell_substitution(report)` and before
 `check_rule_enforcement(report)` is fine, or anywhere before the two lines at the very end
 (`check_dispatch(report)` and, if staged, `check_coupling`; `check_subject_counts` must
@@ -382,11 +409,11 @@ and `check_subject_counts` must remain the last two calls (the second reads the 
 
 ### 5. Add the two self-test mutation arms
 
-Find `self_test()` (line 13749). Add a new block anywhere after the existing checks — a
+Find `self_test()` (line 13764, was cited as line 13749, corrected). Add a new block anywhere after the existing checks — a
 natural spot is right after the block that tests `check_rule_enforcement`'s helpers
 (search for `PROSE_ONLY_EXPECTED` inside `self_test()`, or just append before the
 function's final `return`/print-summary lines). Model the `tempfile.TemporaryDirectory()`
-+ single fixture file + assert-on-return-value shape used at line 14046
++ single fixture file + assert-on-return-value shape used at line 14062 (was cited as line 14046, corrected)
 (`module = Path(tmp) / "sample.py"`) — do not spin up a fake `server/` tree; call
 `unscoped_walk_sites` directly against one synthetic file.
 
@@ -501,22 +528,30 @@ self-tests do. If you want an end-to-end proof as well, add one more `ok(...)` t
 your Measure step below, not a self-test arm, since it depends on the real repo being
 clean at the moment you run it.
 
-## Call sites (complete list — the 12 the guard starts from)
+## Call sites (complete list — the 13 the guard starts from)
+
+**Corrected during implementation: every "Verified at" cell below was re-checked against
+the tree and several had drifted by one or two lines (an off-by-one in the hand count);
+`do_pipeline_value`'s citation was wrong by over a hundred lines. Row 13
+(`next_box_number`) was not in the playbook's original table at all — see the correction
+in "Goal and done-when" above.** Corrected values are shown; the struck-through original
+is kept alongside each fix so the drift is visible rather than silently smoothed over.
 
 | # | File:function | Shape | Verified at |
 |---|---|---|---|
-| 1 | `server/capture_server.py` `do_inventory` | `to_payload()` on `inventory` | def line 3056, call at 3094 |
-| 2 | `server/capture_server.py` `_release_plan` | `.items()` on `inventory.cards` | call at 4549 |
-| 3 | `server/capture_server.py` `do_search` | `.values()` on `inventory.cards` | call at 7970 |
-| 4 | `server/capture_server.py` `_boxes_named` | `.distinct("box")` on `inventory.cards` | call at 8349 (a second call in the same function, `select(("box",), box=None)`, is scoped and NOT on the list — it carries a keyword) |
-| 5 | `server/capture_server.py` `do_boxes` | `.distinct("box")` on `inventory.cards` | call at 8388 |
-| 6 | `server/pipeline_routes.py` `_box_names` | `.select(("box","run"))` on `inventory.cards`, no keywords | def line 797, call at 838 |
-| 7 | `server/pipeline_routes.py` `_unsent_ledger` | `.distinct("sku")` on `inventory.cards` | def line 2283, call at 2370 |
-| 8 | `server/pipeline_routes.py` `_on_hand_by_run` | `.select(("run","state"))` on `inventory.cards`, no keywords | def line 2429, call at 2444 |
-| 9 | `server/pipeline_routes.py` `do_pipeline_value` | `.values()` on `inventory.cards` | def line 3117, call at 3202 |
-| 10 | `store/master.py` `to_payload` (method of `Inventory`) | `.items()` on `self.cards` (NOT the `.items()` calls on `self.boxes`/`self.listings` two lines below — the matcher's `_cards_chain` check is what tells them apart) | def line 1447, call at 1458 |
-| 11 | `store/master.py` `counts` (method of `Inventory`) | `.select(("state",))` on `self.cards`, no keywords | def line 2374, call at 2378 |
-| 12 | `cli/resolve.py` `box_views` | `.values()` on `inventory.cards` | def line 372, call at 395 |
+| 1 | `server/capture_server.py` `do_inventory` | `to_payload()` on `inventory` | def line 3056, call at 3094 (unchanged) |
+| 2 | `server/capture_server.py` `_release_plan` | `.items()` on `inventory.cards` | call at 4549 (unchanged) |
+| 3 | `server/capture_server.py` `do_search` | `.values()` on `inventory.cards` | call at 7970 (unchanged) |
+| 4 | `server/capture_server.py` `_boxes_named` | `.distinct("box")` on `inventory.cards` | call at **8347** (was cited as 8349 — that line is actually the OTHER call in this function, `select(("box",), box=None)`, which is scoped and NOT on the list because it carries a keyword) |
+| 5 | `server/capture_server.py` `do_boxes` | `.distinct("box")` on `inventory.cards` | call at 8388 (unchanged) |
+| 6 | `server/pipeline_routes.py` `_box_names` | `.select(("box","run"))` on `inventory.cards`, no keywords | def line 798 (was cited as 797), call at **839** (was cited as 838) |
+| 7 | `server/pipeline_routes.py` `_unsent_ledger` | `.distinct("sku")` on `inventory.cards` | def line 2284 (was cited as 2283), call at **2371** (was cited as 2370) |
+| 8 | `server/pipeline_routes.py` `_on_hand_by_run` | `.select(("run","state"))` on `inventory.cards`, no keywords | def line 2430 (was cited as 2429), call at **2445** (was cited as 2444) |
+| 9 | `server/pipeline_routes.py` `do_pipeline_value` | `.values()` on `inventory.cards` | def line **3010** (was cited as 3117), call at **3095** (was cited as 3202) — the largest drift found |
+| 10 | `store/master.py` `to_payload` (method of `Inventory`) | `.items()` on `self.cards` (NOT the `.items()` calls on `self.boxes`/`self.listings` two lines below — the matcher's `_cards_chain` check is what tells them apart) | def line 1447 (unchanged), call at **1459** (was cited as 1458) |
+| 11 | `store/master.py` `counts` (method of `Inventory`) | `.select(("state",))` on `self.cards`, no keywords | def line 2374 (unchanged), call at **2376** (was cited as 2378) |
+| 12 | `cli/resolve.py` `box_views` | `.values()` on `inventory.cards` | def line 372, call at 395 (unchanged) |
+| 13 | `store/master.py` `next_box_number` (method of `Inventory`) | `.distinct("box")` on `self.cards` | def line 2119, call at 2140 — **not in the playbook's original table**; found by the scanner on its first end-to-end run against the real tree (see "Goal and done-when") |
 
 **Line numbers above are for your verification while writing the matcher, never for the
 allowlist itself** — the allowlist is keyed by `(path, function, shape)` precisely so
@@ -534,21 +569,24 @@ proof lives inline in `self_test()` as `ok(condition, label, detail)` calls, whi
 you are adding in Step 5.
 
 - `scripts/docs-audit.py --self-test` (`make audit-self-test`) — must print `ok` for all
-  five new lines: the three matcher arms in the first block (new site found; scoped
-  `select` not found; unrelated `to_payload()` not found) and the two row-level arms in
-  the second block (new site reportable; every allowlist entry reportable as stale
-  against an empty fixture).
+  six new lines: the three matcher arms in the first block (new site found; scoped
+  `select` not found; unrelated `to_payload()` not found), the two row-level arms in the
+  second block (new site reportable; every allowlist entry reportable as stale against an
+  empty fixture), and the end-to-end arm against the real tree (zero findings on a clean
+  checkout) — shipped as a sixth arm rather than left as a manual-only Measure step.
 - `python3 scripts/docs-audit.py --json | python3 -c "import json,sys; \
   rows={r['label']: r for r in json.load(sys.stdin)['rows']}; \
   print(rows['unscoped walk'])"` — on the clean tree this must show
-  `"scanned": 12, "findings": []`.
+  `"scanned": 13, "findings": []`.
 - `make docs-audit` (full render) — the `unscoped walk` line should print
-  `ok   unscoped walk           12 full-table reads of inventory.cards found, 12 allowed
-  (pinned at 12)` or equivalent wording from your `summary=` string.
+  `ok   unscoped walk           13 full-table reads of inventory.cards found, 13 allowed
+  (pinned at 13)` or equivalent wording from your `summary=` string.
 - `make check` — must stay green; this only adds a new row inside the `docs-audit` target
   that `check` already runs, so no new Makefile target and no `scripts/checks.py` entry.
 
 ## Allowlist (the literal list this row starts from)
+
+**This is 13 entries, not 12 — see the correction under "Goal and done-when" above.**
 
 ```python
 UNSCOPED_WALK_ALLOWED: FrozenSet[Tuple[str, str, str]] = frozenset({
@@ -563,28 +601,37 @@ UNSCOPED_WALK_ALLOWED: FrozenSet[Tuple[str, str, str]] = frozenset({
     ("server/pipeline_routes.py", "do_pipeline_value", "values"),
     ("store/master.py", "to_payload", "items"),
     ("store/master.py", "counts", "select"),
+    ("store/master.py", "next_box_number", "distinct"),   # permanent — one indexed column, cheap; missed by the hand census
     ("cli/resolve.py", "box_views", "values"),
 })
-UNSCOPED_WALK_EXPECTED = 12
+UNSCOPED_WALK_EXPECTED = 13
 ```
 
 Per `docs/specs/store-scaling/00-phases.md`'s phase table, later items lower this as
 follows (recorded here for your own sanity-check only — do not implement any of these
 removals as part of this item, and do not treat a disagreement between this note and a
-later item's own file as your problem to resolve; the later item's file wins):
+later item's own file as your problem to resolve; the later item's file wins).
+**`00-phases.md`'s own table already read 12 → 11 → 5 (it had already folded in
+`do_inventory`'s "stays" correction over the spec's naive count) — that table is corrected
+in the same PR (see below) to 13 → 12 → 6, one higher at every stage, for
+`next_box_number`, which no later item removes** (it is permanent, same reason as
+`do_boxes`/`counts`):
 
-- Phase 1 (items 2, 4) → expected to fall to 10 (removes `_boxes_named`, `_unsent_ledger`).
-- Phase 2 (items 6, 7, 8) → expected to fall to 4 (removes `do_pipeline_value`,
+- Phase 1 (items 2, 4) → expected to fall to 12 (removes `_boxes_named`,
+  `_unsent_ledger`; item 4 nets zero).
+- Phase 2 (items 6, 7, 8) → expected to fall to 6 (removes `do_pipeline_value`,
   `box_views`, `_release_plan`, `_box_names`, `_on_hand_by_run`, `do_search` — six more
-  sites off the 10 Phase 1 leaves). Trust each item's own file's count over this summary
+  sites off the 12 Phase 1 leaves). Trust each item's own file's count over this summary
   line, which exists only to state the direction — down, never up — not to re-derive the
-  arithmetic; `00-phases.md`'s own phase table is the authority if the two disagree.
-- Final resting state: 4 — `do_inventory` (permanent), `store/master.py:to_payload`
+  arithmetic; `00-phases.md`'s own phase table is the authority if the two disagree on
+  which SITES remain.
+- Final resting state: 6 — `do_inventory` (permanent), `store/master.py:to_payload`
   (permanent — nothing removes the legacy JSON-shape method itself, only its two current
   *callers*; if a later item proves `to_payload()`'s own `.items()` call becomes
   unreachable in production code, that is a bonus finding for that item to make, not
   something to assume here), `do_boxes` (permanent — one indexed column, cheap, the guard
-  names it and moves on), `counts` (permanent — same reason).
+  names it and moves on), `counts` (permanent — same reason), `next_box_number`
+  (permanent — same reason, found during this item's own implementation).
 
 ## Do not touch
 
@@ -630,10 +677,10 @@ After implementing, in order:
 
 ```bash
 python3 -c "import ast; ast.parse(open('scripts/docs-audit.py').read())"   # parses clean
-python3 scripts/docs-audit.py --self-test 2>&1 | tail -40                  # your 5 new "ok" lines, 0 FAIL
+python3 scripts/docs-audit.py --self-test 2>&1 | tail -40                  # your 6 new "ok" lines, 0 FAIL
 make audit-self-test                                                        # same, via make
 python3 scripts/docs-audit.py --json | python3 -m json.tool | grep -A6 '"unscoped walk"'
-# expect: "scanned": 12, "findings": []
+# expect: "scanned": 13, "findings": []
 make docs-audit                                                             # full render, "unscoped walk" line reads ok
 make check                                                                  # still green end to end
 ```
@@ -644,8 +691,8 @@ Expected `--json` fragment on a clean tree:
 {
   "label": "unscoped walk",
   "severity": "mechanical",
-  "summary": "12 full-table reads of inventory.cards found, 12 allowed (pinned at 12)",
-  "scanned": 12,
+  "summary": "13 full-table reads of inventory.cards found, 13 allowed (pinned at 13)",
+  "scanned": 13,
   "vacuous": false,
   "findings": []
 }
@@ -671,9 +718,10 @@ Expected `--json` fragment on a clean tree:
   checked against it — a soft version now and a hard flip later would mean none of the six
   PRs was ever actually gated by anything, which is the exact "route exists, nothing
   reaches it" failure CLAUDE.md's hard rules section names by name for a different case.
-- **The final resting allowlist is 4, not 0.** Do not treat a later item's inability to
+- **The final resting allowlist is 6, not 0.** Do not treat a later item's inability to
   reach zero as a sign this guard is broken — `do_inventory`, `store/master.py:to_payload`,
-  `do_boxes`, and `counts` are permanent by design (one is an owner ruling to keep an
-  unused route rather than delete it; the other three are one indexed column each, judged
-  cheap enough in the plan's own §4 table — "stays — one column, cheap; the guard names
-  it").
+  `do_boxes`, `counts`, and `next_box_number` are permanent by design (one is an owner
+  ruling to keep an unused route rather than delete it; the other four are one indexed
+  column each, judged cheap enough in the plan's own §4 table — "stays — one column,
+  cheap; the guard names it" — `next_box_number` by the same reasoning, found during this
+  item's implementation rather than in the original hand census).

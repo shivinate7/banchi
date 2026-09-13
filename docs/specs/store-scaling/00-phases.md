@@ -67,9 +67,9 @@ where it was has removed nothing.
 
 | After | Expected allowlist | Change |
 |---|---|---|
-| Phase 0 | 12 (§4 of the spec; `do_inventory` and `to_payload` stay by the owner's word) | — |
-| Phase 1 | 11 | item 2 removes `_boxes_named`; item 4 REPLACES `_unsent_ledger`'s `distinct("sku")` with its own one-pass `select`, argued, so it nets zero |
-| Phase 2 | 5 | item 7 removes `do_pipeline_value`, `box_views`, `_release_plan`, `_box_names`, `_on_hand_by_run`; item 8 removes `do_search` |
+| Phase 0 | 13 (§4 of the spec, twelve sites; `do_inventory` and `to_payload` stay by the owner's word; PLUS `store/master.py:next_box_number`, a real, currently-existing `.distinct("box")` call the hand census in §4 missed — found by item 1's own scanner on its first end-to-end run against the real tree, and permanent for the same reason `do_boxes`/`counts` are) | — |
+| Phase 1 | 12 | item 2 removes `_boxes_named`; item 4 REPLACES `_unsent_ledger`'s `distinct("sku")` with its own one-pass `select`, argued, so it nets zero |
+| Phase 2 | 6 | item 7 removes `do_pipeline_value`, `box_views`, `_release_plan`, `_box_names`, `_on_hand_by_run`; item 8 removes `do_search` |
 
 The five that remain — `do_inventory`, `to_payload`, `do_boxes`, `counts`, and item 4's
 one pass — are named in the allowlist with their reason and are the plan's end state, not
