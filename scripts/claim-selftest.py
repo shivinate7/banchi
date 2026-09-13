@@ -382,10 +382,19 @@ def build_split(tmp: Path) -> Path:
 def snapshot(root: Path) -> dict:
     """Every tracked-looking file's bytes, keyed by relative path — for a byte-identical
     round-trip assertion that does not care which files moved, only whether the CONTENT did.
+
+    `__pycache__` IS NOT TRACKED-LOOKING, and including it is what made this comparison flaky
+    rather than wrong: CPython writes `scripts/__pycache__/*.pyc` the first time a helper module
+    (`decisions_corpus`, `index-decisions`) is imported by a subprocess this test spawns, so a
+    "before" snapshot taken ahead of the first claim and an "after" snapshot taken past several
+    more subprocess calls can disagree on cache files that were never part of the tree either
+    snapshot is actually asking about. Measured: passed locally where an earlier run had already
+    warmed the cache, failed on a clean CI checkout where it had not — the same tree, two
+    different verdicts, which is the definition of a check that is not asking a real question.
     """
     out = {}
     for path in root.rglob("*"):
-        if path.is_file() and ".git" not in path.parts:
+        if path.is_file() and ".git" not in path.parts and "__pycache__" not in path.parts:
             out[str(path.relative_to(root))] = path.read_bytes()
     return out
 
