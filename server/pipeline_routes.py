@@ -151,6 +151,7 @@ from pipeline import pricehistory  # noqa: E402
 from identify import cost  # noqa: E402
 from identify import sidecar  # noqa: E402
 from store import Store, files, master  # noqa: E402
+from store import readings as store_readings  # noqa: E402
 from store import submissions as claims  # noqa: E402
 from store.session import Snapshot  # noqa: E402
 
@@ -2938,152 +2939,44 @@ def do_pipeline_worklist(wanted: Sequence[str]) -> dict:
 # ------------------------------------------------------- what every card on hand is worth
 
 
-#: Where a reading came from, and when. `at` is a UNIX SECOND so two sources of different
-#: kinds can be compared without parsing two date formats — a run table has an mtime and a
-#: fetched export has a stamp in its name, and neither is a superset of the other's freshness.
-class _Reading(NamedTuple):
-    market: str
-    at: int
-    source: str
-    name: Optional[str]
-    set_name: Optional[str]
-    condition: Optional[str]
-
-
-def _live_export_at(name: str) -> Optional[int]:
-    """The UNIX second a fetched live export was taken, out of its own filename.
-
-    THE NAME IS THE ONLY HONEST CLOCK HERE. `do_live_export` writes
-    `live-tcgplayer-<YYYYMMDD>-<HHMMSS>.csv` from `datetime.now(timezone.utc)` at the moment
-    of the fetch, and the file's mtime is the moment it was WRITTEN TO THIS DISK — the same
-    second today, and a different one entirely for a file restored from a backup or copied
-    between checkouts. The stamp travels with the bytes; the mtime does not.
-
-    `None` for a name this cannot read rather than a guess, which puts the file behind every
-    run table in `_readings` instead of in front of them. A reading whose age is unknown must
-    never win a comparison against one whose age is known.
-    """
-    stem = name[len(LIVE_PREFIX) :] if name.startswith(LIVE_PREFIX) else name
-    stem = stem[:-4] if stem.endswith(".csv") else stem
-    try:
-        moment = datetime.strptime(stem, "%Y%m%d-%H%M%S").replace(tzinfo=timezone.utc)
-    except ValueError:
-        return None
-    return int(moment.timestamp())
+#: One SKU's most recently observed market price, and where it came from — now a row of the
+#: `readings` table (`store/readings.py`) rather than a value this function computed. Aliased
+#: under its old private name because every caller below still reads `reading.market`,
+#: `.at`, `.source`, `.name`, `.set_name` and `.condition` exactly as it always did.
+_Reading = store_readings.Reading
 
 
 def _readings() -> Tuple[Dict[str, _Reading], List[dict]]:
     """`sku -> the NEWEST market price this machine has read for it`, and where each came from.
 
-    TWO SOURCES, COMPARED ON A CLOCK RATHER THAN ON A PRECEDENCE RULE, and the clock is what
-    makes this correct. The obvious shape — "a fetched live export beats a run table" — is
-    wrong on this store today: the newest live fetch is 2026-09-10 and the newest run table
-    was written 2026-09-11, so a fixed precedence would serve a day-old figure for every SKU
-    both files carry. Every reading therefore carries the second it was taken and the newest
-    wins, which is the same rule `reconcile --live` applies to a reading older than the
-    store's own `live_as_of` (D87, amended).
+    A SELECT AGAINST `readings`, AND NOTHING ELSE (D-readings-table). This function used to
+    walk every run's `pricing.json` and the newest live export on every call, comparing two
+    sources on a clock and reporting which files answered — the two-source arbitration
+    `pipeline/readings.py:collect` still does, word for word, but only when
+    `pkmnscan readings adopt --write` runs it. What lives here now is the read half of that
+    split: `store.readings.Readings` is a snapshot field like every other table (D88), and
+    this function's whole job is turning it back into the `(sku -> reading, sources)` shape
+    every caller below already expects.
 
-      run tables    `runs/<n>/pricing.json`, at the table's own mtime — `do_pipeline_pricing`
-                    already establishes that this is the moment a join last read an export,
-                    and that every figure under `snap` came out of it.
-      live exports  the newest file under `inventory/.live`, at the stamp in its name. It is
-                    read through `tcgcsv.read_export` like every other export in this repo —
-                    never `split(",")`, which is a hard rule and not a style note.
+    THE OLD DOCSTRING'S MEASUREMENT STILL EXPLAINS WHY TWO SOURCES EXIST AND WHY NEITHER
+    ALONE IS ENOUGH, and it now lives on `pipeline/readings.py:collect`, which is where the
+    comparison actually happens. What changed is WHEN it happens: on every `GET
+    /pipeline/value` before this, and only on an explicit `readings adopt` press now. A
+    caller reading `_readings()` between two adopts sees the table as of the last one, not
+    the filesystem as of this instant — the read-once/write-many trade this table exists to
+    make, argued in D-readings-table.
 
-    MEASURED, ON THE OWNER'S STORE, WHICH IS WHY BOTH ARE HERE: run tables alone price 1,823
-    of 2,245 cards on hand (81.2%), the newest live export alone 1,584 (70.6%), and the two
-    together 1,855 (82.6%). The 32 cards the second source adds are cards whose run predates
-    a listing — and the freshness it brings reaches every SKU both files hold.
-
-    IT NEVER RAISES. A run directory half-written, a live export that will not parse, a
-    `snap` with no `market` cell — each costs its own rows and none of them costs the screen,
-    which is `_box_names`' rule and `do_status`' before it. What a caller gets instead is a
-    short `sources` list saying which files actually answered, so a thin reading is legible
-    as a thin reading rather than as a store with no valuable cards in it.
+    IT NEVER RAISES, exactly as before: an unreadable store answers with an empty reading
+    rather than a 500, because `do_pipeline_value` already refuses loudly on the read one
+    call above this one, and `#/pricing`'s value screen would rather draw with no prices than
+    not draw at all.
     """
-    found: Dict[str, _Reading] = {}
-    sources: List[dict] = []
-
-    def offer(sku: str, reading: _Reading) -> None:
-        here = found.get(sku)
-        if here is None or reading.at >= here.at:
-            found[sku] = reading
-
-    root = files.runs_dir()
-    if root.is_dir():
-        for entry in sorted(root.iterdir()):
-            table = entry / run_files.PRICING
-            if not entry.is_dir() or not table.is_file():
-                continue
-            try:
-                parsed = json.loads(table.read_text("utf-8"))
-                at = int(table.stat().st_mtime)
-            except (OSError, ValueError):
-                continue
-            priced = 0
-            for row in parsed.get("skus") or ():
-                if not isinstance(row, dict):
-                    continue
-                sku = str(row.get("sku") or "")
-                market = (row.get("snap") or {}).get("market")
-                if not sku or not market:
-                    continue
-                priced += 1
-                offer(
-                    sku,
-                    _Reading(
-                        market=str(market),
-                        at=at,
-                        source=entry.name,
-                        name=row.get("name"),
-                        set_name=row.get("set_name"),
-                        condition=row.get("condition"),
-                    ),
-                )
-            if priced:
-                sources.append(
-                    {"kind": "run", "name": entry.name, "at": at, "skus": priced}
-                )
-
-    # THE NEWEST FETCH ONLY, AND NOT THE DIRECTORY. `do_live_export` never sweeps that
-    # directory — the file is the evidence for the reading the store wrote off it — so it
-    # holds every fetch this machine has ever made (nine, on the owner's store). Reading all
-    # of them would parse ~1.2MB to have the newest overwrite the rest by the clock above.
-    directory = files.inventory_dir() / LIVE_DIR
-    fetched = sorted(directory.glob(f"{LIVE_PREFIX}*.csv")) if directory.is_dir() else []
-    if fetched:
-        newest = fetched[-1]
-        at = _live_export_at(newest.name)
-        if at is not None:
-            try:
-                export = tcgcsv.read_export(newest)
-            except (tcgcsv.MalformedCsv, OSError):
-                export = None
-            if export is not None:
-                priced = 0
-                for row in export.rows:
-                    sku = str(row.get(tcgcsv.SKU_COLUMN) or "")
-                    market = row.get(tcgcsv.MARKET_PRICE_COLUMN) or ""
-                    if not sku or not market.strip():
-                        continue
-                    priced += 1
-                    offer(
-                        sku,
-                        _Reading(
-                            market=market.strip(),
-                            at=at,
-                            source=newest.name,
-                            name=row.get(tcgcsv.NAME_COLUMN),
-                            set_name=row.get(tcgcsv.SET_COLUMN),
-                            condition=row.get(tcgcsv.CONDITION_COLUMN),
-                        ),
-                    )
-                if priced:
-                    sources.append(
-                        {"kind": "live", "name": newest.name, "at": at, "skus": priced}
-                    )
-
-    sources.sort(key=lambda row: row["at"], reverse=True)
+    try:
+        snapshot = Store().read()
+    except (files.StoreError, OSError, ValueError, TypeError):
+        return {}, []
+    found: Dict[str, _Reading] = dict(snapshot.readings.entries)
+    sources = snapshot.readings.sources_payload()
     return found, sources
 
 
@@ -3609,13 +3502,14 @@ def _positive(value, field: str) -> int:
     return number
 
 
-#: Where a fetched live export is kept. Derived, per checkout, and never swept — the file is
-#: the evidence for the reading the store wrote off it, which is `do_pipeline_export`'s rule for
-#: a run's own exports one directory over. `inventory/` is gitignored wholesale.
-LIVE_DIR = ".live"
-#: What a fetched file is named, and the prefix `_open_live_export` requires. A name that could
-#: be anything is a file-read primitive behind an origin header.
-LIVE_PREFIX = "live-tcgplayer-"
+#: Where a fetched live export is kept, and what it is named. MOVED TO `store/files.py`
+#: (D-readings-table), because `pipeline/readings.py:collect` now reads this same directory
+#: to arbitrate a market reading and `pipeline/` cannot import `server/` — the layering runs
+#: the other way. Aliased here, under their original names, because this module still WRITES
+#: into it (`do_live_export`) and `harness/tests/t7_store_and_seams.py` still spells them
+#: `pipeline_routes.LIVE_DIR` / `pipeline_routes.LIVE_PREFIX`.
+LIVE_DIR = files.LIVE_DIRNAME
+LIVE_PREFIX = files.LIVE_PREFIX
 
 
 def do_live_export() -> dict:

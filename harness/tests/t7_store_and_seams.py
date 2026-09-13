@@ -223,6 +223,7 @@ from pipeline import (  # noqa: E402
     pirateship,
     pricehistory,
     pricing,
+    readings,
     reprice,
     selection,
     shipping,
@@ -12137,11 +12138,18 @@ def check_cli_refusals(checks: Checks) -> None:
     # name still resolves to its photograph — and the third, `cards photos`, is the one
     # thing in this dispatch that moves 4.45 GB that cannot be re-taken, previewing by
     # default and verifying every file against a digest before its old copy is removed.
+    #
+    # `readings` IS THE ELEVENTH, AND IT ARRIVED WITH D-readings-table. `readings adopt`
+    # writes the cached market-reading table on `--write` and nowhere else, and `readings
+    # show` only reads. Unlike every other writer in this list it holds no operator
+    # judgement at all — it is a mechanical newest-wins fold of two files already on disk —
+    # so it is the one command here that previews by habit rather than because a real
+    # decision hides inside it.
     checks.equal(
         sorted(entry.COMMANDS),
-        ["cards", "emit", "identify", "join", "prices", "queue", "reconcile", "reprice",
-         "rescue", "scan"],
-        "ten commands are registered, and only ten",
+        ["cards", "emit", "identify", "join", "prices", "queue", "readings", "reconcile",
+         "reprice", "rescue", "scan"],
+        "eleven commands are registered, and only eleven",
     )
 
     # No command may read stdin. Asserted against the source of every module the dispatch
@@ -13067,6 +13075,73 @@ def check_prices_adopt(checks: Checks) -> None:
             "and emit prices the sub-threshold card at the default without touching the "
             "corpus — the answer was already there; emit only reads it",
         )
+
+
+def check_readings_adopt_cli(checks: Checks) -> None:
+    """`pkmnscan readings adopt` and `readings show`, through the real argparse dispatch
+    (D-readings-table).
+
+    THE WALK ITSELF IS PROVED BY `make readings-selftest` — an independent reimplementation
+    compared against `pipeline/readings.py:collect()` across nine fixture shapes, mutation
+    style. What that script cannot see is whether the CLI SURFACE over it actually works:
+    argument parsing, the `COMMANDS` dispatch, and the preview / `--write` / `show` split.
+    This closes that gap the way `check_prices_adopt` closes it for `prices adopt`.
+    """
+    from cli import __main__ as entry
+
+    checks.note("")
+    checks.note("READINGS ADOPT — the CLI surface over pipeline/readings.py:collect")
+
+    with isolated_home():
+        # A run table on disk, and nothing adopted yet.
+        directory = files.runs_dir() / "2026-01-01-box1-01"
+        directory.mkdir(parents=True, exist_ok=True)
+        files.write_json(
+            directory / "pricing.json",
+            {"skus": [{"sku": DUNSPARCE_SKU, "snap": {"market": "1.00"}, "name": "Dunsparce"}]},
+        )
+
+        with quiet() as out:
+            code = entry.main(["readings", "adopt"])
+        checks.equal(code, 0, "a preview exits 0")
+        checks.ok(
+            "DRY RUN" in out.getvalue(),
+            "and says so, in words rather than only by exit code",
+            out.getvalue(),
+        )
+        checks.equal(
+            dict(Store().read().readings.entries),
+            {},
+            "a preview writes nothing — the table is untouched",
+        )
+
+        with quiet() as out:
+            code = entry.main(["readings", "adopt", "--write"])
+        checks.equal(code, 0, "`--write` exits 0")
+        adopted = dict(Store().read().readings.entries)
+        checks.equal(
+            set(adopted),
+            {DUNSPARCE_SKU},
+            "and the SELECT `_readings()` now performs sees exactly what was just adopted",
+        )
+        checks.equal(
+            adopted[DUNSPARCE_SKU].market, "1.00", "carrying the reading the run table gave it"
+        )
+
+        with quiet() as out:
+            code = entry.main(["readings", "show"])
+        checks.equal(code, 0, "`show` exits 0 and never writes")
+        checks.ok(
+            "1 reading" in out.getvalue(),
+            "and reports what adopt just wrote",
+            out.getvalue(),
+        )
+        checks.equal(
+            dict(Store().read().readings.entries),
+            adopted,
+            "a `show` press is read-only — the table is unchanged by looking at it",
+        )
+
 
 def check_live_reconcile(checks: Checks) -> None:
     """The whole store against one live export, both directions (D87).
@@ -26203,6 +26278,14 @@ def check_value_table(checks: Checks) -> None:
         book.answers[RICH] = corpus.Answer(value="44.00")
         book.write()
 
+        # `_readings()` IS A SELECT NOW (D-readings-table): the run tables and the live
+        # export just written to disk answer nothing until a `readings adopt --write` folds
+        # them into the `readings` table, exactly as `pkmnscan readings adopt --write` does.
+        # `pipeline.readings.collect()` is the identical two-source walk the old live
+        # `_readings()` ran inline; only WHEN it runs moved.
+        with Store().write() as snapshot:
+            snapshot.readings.replace(*readings.collect())
+
         payload = pipeline_routes.do_pipeline_value()
         copies = payload["copies"]
         at = {(row["box"], row["index"]): row for row in copies}
@@ -26334,6 +26417,7 @@ def run() -> Result:
     check_emit_identity_stamp(checks)
     check_pricing_authority(checks)
     check_prices_adopt(checks)
+    check_readings_adopt_cli(checks)
     check_merged_emit_cap(checks)
     check_merged_emit_uncapped(checks)
     check_unsent_copies_worklist(checks)

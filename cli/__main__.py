@@ -21,6 +21,7 @@ from cli import (  # noqa: E402
     cmd_join,
     cmd_prices,
     cmd_queue,
+    cmd_readings,
     cmd_reconcile,
     cmd_reprice,
     cmd_rescue,
@@ -421,6 +422,30 @@ def build_parser() -> argparse.ArgumentParser:
     show = prices_sub.add_parser("show", help="what the corpus holds")
     show.add_argument("--held", action="store_true", help="list every card held back")
 
+    # ----------------------------------------------------------------------- readings
+    #
+    # THE CACHED MARKET-READING TABLE, AND THE WALK THAT FILLS IT (D-readings-table).
+    # `_readings()` in server/pipeline_routes.py used to walk every run's `pricing.json` and
+    # the newest live export on every `GET /pipeline/value`; `adopt` runs that same walk once
+    # and writes what it found into `readings`, which is a plain SELECT from there on. It
+    # previews by default for the reason every other free, re-runnable command here does —
+    # `join`, `reconcile`, `reprice list` — never because there is a judgement call inside it:
+    # unlike `prices adopt`, nothing here overrides an operator's own answer.
+    readings = sub.add_parser(
+        "readings",
+        help="the cached market-reading table: fold the two sources in, or look at it",
+    )
+    readings_sub = readings.add_subparsers(dest="readings_command")
+    readings_adopt = readings_sub.add_parser(
+        "adopt",
+        help="walk every run's pricing.json and the newest live export, and cache the "
+        "newest reading per SKU",
+    )
+    readings_adopt.add_argument(
+        "--write", action="store_true", help="actually write; previews without it"
+    )
+    readings_sub.add_parser("show", help="what the table holds, and which files it last read")
+
     # ------------------------------------------------------------------------- reprice
     #
     # THE LIVE LISTINGS THAT ARE NOT SELLING, MARKED DOWN AND PUSHED BACK (D100). Two
@@ -522,6 +547,7 @@ COMMANDS = {
     "emit": cmd_emit.run,
     "reconcile": cmd_reconcile.run,
     "prices": cmd_prices.run,
+    "readings": cmd_readings.run,
     "queue": cmd_queue.run,
     "reprice": cmd_reprice.run,
     "rescue": cmd_rescue.run,

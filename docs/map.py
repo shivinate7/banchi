@@ -374,7 +374,8 @@ COMPONENTS = [
                                     "that were wearing one name, and the fill has fired on 0 of "
                                     "2,535 real captures.",
                             "governed_by": ["D1", "D3", "D9", "D21", "D25", "D36", "D48", "D86",
-                                            "D87", "D100", "D145", "D172", "D180"],
+                                            "D87", "D100", "D145", "D172", "D180",
+                                            "D-readings-table"],
                             "tested_by": ["T7"]},
             "cmd_scan.py": {"does": "read the QR codes off a directory of code-card photos into "
                                     "the ledger. FREE — no model call, no network, no money gate "
@@ -432,6 +433,22 @@ COMPONENTS = [
                                       "named as missing and D62 repeated.",
                               "governed_by": ["D9", "D49", "D62", "D86"],
                               "tested_by": ["T7"]},
+            # THE ARBITRATION LIVES ONE LAYER DOWN NOW (D-readings-table). This module is
+            # argument parsing and the preview/--write/show split; the two-source walk itself
+            # is `pipeline/readings.py:collect`, proved independently by
+            # `make readings-selftest`.
+            "cmd_readings.py": {"does": "`pkmnscan readings adopt` runs `pipeline/readings.py"
+                                        ":collect` and folds the result into the `readings` "
+                                        "table with `Readings.replace()` — a full clear-then"
+                                        "-reinsert, on `--write`. Previews by default, on "
+                                        "`prices adopt`'s own shape, though nothing here "
+                                        "overrides an operator's judgement the way that "
+                                        "command's newest-wins fold can: this walk is purely "
+                                        "mechanical, so a re-run over unchanged files is a "
+                                        "no-op rather than a decision. `readings show` reads "
+                                        "the table and writes nothing.",
+                                "governed_by": ["D-readings-table", "D86"],
+                                "tested_by": ["T7"]},
             "cmd_cards.py": {"does": "`pkmnscan cards <name|audit|photos>` — the card's "
                                      "stable name (D172). `name` previews what the naming "
                                      "sees and would do, `audit` asks whether every card's "
@@ -857,6 +874,33 @@ COMPONENTS = [
                           "governed_by": ["D7", "D8", "D9", "D43", "D48", "D49", "D62", "D86",
                                           "D99", "D100", "D103"],
                           "tested_by": ["T7"]},
+            # THE WALK `server/pipeline_routes.py:_readings()` USED TO RUN ON EVERY REQUEST,
+            # MOVED HERE UNCHANGED (D-readings-table). `pipeline/` sits below `server/` in this
+            # repo's layering, so this is where the two-source arbitration has to live for
+            # `pkmnscan readings adopt` — a CLI command with no server in sight — to reach it.
+            "readings.py": {"does": "`collect()` — every run's pricing.json and the newest "
+                                    "live export, compared on a clock, newest wins. The "
+                                    "identical rule `_readings()` always ran, extracted "
+                                    "rather than rewritten: MEASURED, on the owner's store, "
+                                    "run tables alone priced 81.2% of cards on hand, the "
+                                    "newest live export alone 70.6%, both together 82.6%. "
+                                    "`live_export_at` reads the UNIX second a live fetch was "
+                                    "taken out of its own filename — the only honest clock, "
+                                    "since a copied or restored file's mtime is not when the "
+                                    "reading was taken — and answers `None` for a name it "
+                                    "cannot read, which puts that file behind every run table "
+                                    "rather than in front of them; a reading whose age is "
+                                    "unknown must never win.",
+                            "governed_by": ["D-readings-table", "D86", "D87"],
+                            "note": "PROVED BY `make readings-selftest`, against an "
+                                    "INDEPENDENT reimplementation of this same walk rather "
+                                    "than a golden file — 31 assertions across an empty "
+                                    "store, run-only, live-only, both directions of a "
+                                    "disagreement, an unparseable live filename, and two "
+                                    "adopts in a row. No harness test calls `collect()` "
+                                    "directly, so `tested_by` is empty rather than a "
+                                    "citation nothing backs — `check_readings_adopt_cli` in "
+                                    "T7 exercises it only through the CLI dispatch."},
             "livecheck.py": {"does": "the whole store against one live TCGplayer export "
                                      "(My Pricing), both directions. D87: `cli/cmd_reconcile.py` "
                                      "scopes its diff to one run's emitted_skus while "
@@ -1288,9 +1332,33 @@ COMPONENTS = [
                                        "has been "
                                        "written by a real identify press, so nothing here has "
                                        "yet prevented an invoice."},
+            # THE MARKET READING, CACHED (D-readings-table). `server/pipeline_routes.py:
+            # _readings()` used to walk every run's `pricing.json` and the newest live export
+            # on every request; that walk moved to `pipeline/readings.py:collect`, run once by
+            # `pkmnscan readings adopt --write`, and this module is the two tables it fills.
+            "readings.py": {"does": "the `readings` table (sku -> the newest market reading, "
+                                    "one row per SKU) and `readings_sources` beside it (one "
+                                    "row per file `collect` read, and how many SKUs it "
+                                    "offered BEFORE arbitration — not recoverable from "
+                                    "`readings` alone once two sources have collided on a "
+                                    "SKU). `Readings.replace()` is a FULL REPLACE of both "
+                                    "tables: a SKU whose only source has since been retired "
+                                    "must disappear exactly as it would have dropped out of "
+                                    "the old live walk. `Rows`'s baseline diff means an "
+                                    "unchanged reading writes nothing even through a full "
+                                    "clear-then-reinsert.",
+                            "governed_by": ["D-readings-table", "D7", "D86", "D87", "D88"],
+                            "note": "PROVED BY `make readings-selftest`, submissions.py's own "
+                                    "reason: it is a table filled by a CLI press over a "
+                                    "throwaway store, and against an INDEPENDENT "
+                                    "reimplementation of the walk rather than a golden file — "
+                                    "31 assertions, all caught. No harness test exercises it, "
+                                    "so `tested_by` is empty rather than a citation nothing "
+                                    "backs."},
             "files.py": {"does": "where the store lives, the lock, and the atomic replace the "
                                  "files still beside the database use (prices.json, codes.jsonl)",
-                         "governed_by": ["D13", "D15", "D43", "D86", "D166"], "tested_by": ["T7"]},
+                         "governed_by": ["D13", "D15", "D43", "D86", "D166", "D-readings-table"],
+                         "tested_by": ["T7"]},
             # D53 still, and D63, because the header now says what the transaction DOES
             # promise where it used to say what five files did not: one commit over every
             # table, history rows included. D53's drain is still a prerequisite for the
@@ -1301,7 +1369,8 @@ COMPONENTS = [
                                    "loads only the rows a caller names. `buried()` (D134) is "
                                    "`history()`'s narrower sibling: the `buried` events alone, "
                                    "for `#/graveyard`'s read.",
-                           "governed_by": ["D145", "D13", "D53", "D63", "D88", "D134", "D174"], "tested_by": ["T7"]},
+                           "governed_by": ["D145", "D13", "D53", "D63", "D88", "D134", "D174",
+                                           "D-readings-table"], "tested_by": ["T7"]},
             "rows.py": {"does": "`Rows`: a keyed mapping of records that is a dict to every "
                                 "caller and, bound to a `Source`, loads one row, one indexed "
                                 "column's matches, or column values with no object built at all. "
@@ -1316,7 +1385,8 @@ COMPONENTS = [
                               "`events_named` (D134) is an unindexed `WHERE event = ?` scan over "
                               "that same table — no new index, because this repo has no schema "
                               "migration to add one to a store already on disk.",
-                      "governed_by": ["D145", "D20", "D26", "D86", "D88", "D134", "D172", "D174"], "tested_by": ["T7"]},
+                      "governed_by": ["D145", "D20", "D26", "D86", "D88", "D134", "D172", "D174",
+                                      "D-readings-table"], "tested_by": ["T7"]},
             "photos.py": {"does": "where a card's photograph lives, and the ONLY module permitted "
                                   "to compose that path: `<home>/photos/<aa>/<cid>.jpg`, a pure "
                                   "function of the card's own name. `adopt` is the per-card, "
@@ -1992,6 +2062,22 @@ COMPONENTS = [
                         "sixteen arms, all caught, and arm 13 found two assertions of this "
                         "suite's own passing for the wrong reason.",
                 "governed_by": ["D174", "D7", "D18", "D48", "D88", "D136"],
+            },
+            "readings-selftest.py": {
+                "does": "proves store/readings.py and pipeline/readings.py against a "
+                        "throwaway store (D-readings-table). `golden()` is an INDEPENDENT "
+                        "reimplementation of the two-source walk — not sharing a line with "
+                        "`collect()` — so a bug introduced into one is caught by comparison "
+                        "rather than reproduced in both. Nine fixture shapes: empty, "
+                        "run-only, live-only, a disagreement won each direction by the "
+                        "clock, an unparseable live filename (must lose to everything and "
+                        "never fall back to an older readable file), adopt --write followed "
+                        "by the exact SELECT `_readings()` now performs, two adopts in a row "
+                        "unchanged (idempotent, no duplicate rows), a new run landing "
+                        "between two adopts, and a run directory deleted between two adopts "
+                        "(its SKU drops out — a cache refresh, never an accumulating "
+                        "ledger). Thirty-one assertions, all passing.",
+                "governed_by": ["D-readings-table", "D18", "D86", "D88"],
             },
             "reap-selftest.sh": {
                 "does": "proves reap.py by pointing it at processes it must not kill. A "
@@ -2843,9 +2929,9 @@ COMPONENTS = [
                 # which is exactly what `governed_by` is for — so they are listed rather than
                 # allowlisted away.
                 "governed_by": ["D7", "D16", "D17", "D18", "D26", "D42", "D43", "D44", "D47", "D48", "D53",
-                                "D58", "D60", "D65", "D68", "D74", "D76", "D80", "D82", "D83", "D88", "D89",
-                                "D92", "D111", "D122", "D127", "D129", "D133", "D138", "D139", "D140", "D141",
-                                "D158", "D160", "D171", "D172", "D173", "D176"],
+                                "D58", "D60", "D65", "D68", "D74", "D76", "D80", "D82", "D83", "D86", "D88",
+                                "D89", "D92", "D111", "D122", "D127", "D129", "D133", "D138", "D139", "D140",
+                                "D141", "D158", "D160", "D171", "D172", "D173", "D176", "D-readings-table"],
                 "note": "IT DECLARES THE SUITE AND DELIBERATELY DOES NOT DRIVE IT, which is "
                         "the whole shape. A registry that drove `make check` could not "
                         "disagree with the recipe — and could silently stop running a check, "
@@ -3440,7 +3526,8 @@ COMPONENTS = [
                                 "D58", "D59", "D62", "D64", "D65", "D68", "D76", "D78",
                                 "D79", "D86", "D87", "D88", "D89", "D100", "D103", "D105",
                                 "D134", "D137", "D145", "D147", "D156", "D159", "D163",
-                                "D165", "D166", "D168", "D170", "D172", "D174", "D180"],
+                                "D165", "D166", "D168", "D170", "D172", "D174", "D180",
+                                "D-readings-table"],
                 "tested_by": ["T7"],
             },
             "shipping_routes.py": {

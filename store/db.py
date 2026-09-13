@@ -85,14 +85,13 @@ BOX_IDS_ISSUED = "box_ids_issued"
 CARD_IDS_SEEDED = "card_ids_seeded"
 CARD_ID_SOURCES = "card_id_sources"
 PHOTOS_RELOCATED = "photos_relocated"
-# FOUR, AND THE JUMP FROM 3 IS THE MERGE THIS FUNCTION WAS WARNED ABOUT.
-# `docs/specs/stable-card-id.md` §5 predicted it in as many words: "Two concurrent 2→3 steps
-# in `_upgrade` is a conflict in the one function where taking either side silently loses a
-# migration. Whichever merges first is 2→3 and the second is 3→4." D174's `submissions`
-# table merged first (PR #312) and took 3, so the naming is 4. THE RESOLUTION WAS TO ADD A
-# STEP, NEVER TO TAKE A SIDE — both `if` arms below are live, and the owner's real store had
-# already been stamped 3 by the main checkout's own supervisor before this branch merged.
-SCHEMA_VERSION = 4
+# FIVE, FOR THE SAME REASON FOUR WAS. `docs/specs/stable-card-id.md` §5's warning about a
+# concurrent step landing under one number applies to every schema bump since, not only the
+# one it was written about — so this one is claimed the same way: added as its own step,
+# never folded into an `if` another branch is also writing. D-readings-table's `readings` and
+# `readings_sources` tables are the purest additive step there is (`_add_readings`'s own
+# docstring), exactly `_add_submissions`'s case one version up.
+SCHEMA_VERSION = 5
 
 # The six files a legacy store is made of, and the one that is a log rather than a document.
 LEGACY_INVENTORY = "inventory.json"
@@ -128,9 +127,18 @@ TABLES: Dict[str, Tuple[str, ...]] = {
     # value; the intersection is computed in Python over the handful of live rows, which is
     # what `Submissions.live` keeps small by filtering on the `state` column first.
     "submissions": ("pid", "state", "started_at", "run"),
+    # D-readings-table: the market reading `pkmnscan readings adopt --write` last read for
+    # each SKU, one row per SKU. `store/readings.py` is the module; `pipeline/readings.py`
+    # is the two-source walk that fills it.
+    "readings": ("market", "at", "source", "kind"),
+    # The accounting beside it: one row per file that walk read, keyed `kind:name` — see
+    # `store/readings.py:_source_key` for why `kind` is part of the key.
+    "readings_sources": ("kind", "name", "at", "skus"),
 }
 
-_INTEGER = {"box", "bid", "idx", "pushed", "staged", "live", "cleared_by_human", "pid"}
+_INTEGER = {
+    "box", "bid", "idx", "pushed", "staged", "live", "cleared_by_human", "pid", "at", "skus",
+}
 
 _INDEXES = (
     ("cards", "box"), ("cards", "sku"), ("cards", "capture_id"), ("cards", "state"),
@@ -334,6 +342,8 @@ def _upgrade(
                 _add_submissions(conn)
             if stored < 4:
                 card_receipt = _add_card_ids(conn, prehashed, directory)
+            if stored < 5:
+                _add_readings(conn)
             conn.execute(
                 "INSERT OR REPLACE INTO meta (key, value) VALUES ('schema', ?)",
                 (str(SCHEMA_VERSION),),
@@ -810,6 +820,26 @@ def _add_submissions(conn: sqlite3.Connection) -> None:
     """
     conn.execute(_ddl("submissions", TABLES["submissions"]))
     conn.execute("CREATE INDEX IF NOT EXISTS submissions_state ON submissions(state)")
+
+
+def _add_readings(conn: sqlite3.Connection) -> None:
+    """Schema 5: the `readings` and `readings_sources` tables (D-readings-table).
+
+    `_add_submissions`'s case one version up — two tables nothing older has, so there is
+    nothing to backfill and nothing to read wrong. No receipt file, for the same reason
+    `_add_submissions` writes none: nothing DERIVED an answer for an existing row, so there
+    is no later question about where a value came from.
+
+    AN EMPTY READING TABLE IS THE CORRECT STATE FOR AN UPGRADED STORE. The table is a CACHE
+    of a filesystem walk (`pipeline/readings.py:collect`), never an independent ledger, and a
+    store that has never run `pkmnscan readings adopt --write` answered every price question
+    with an empty reading before this table existed too — `_readings()`'s old live walk over
+    a store with no runs and no live exports returned `({}, [])` exactly as this table does
+    fresh. The first `readings adopt --write` after an upgrade fills it from the same files
+    the old function would have walked on its very next request.
+    """
+    conn.execute(_ddl("readings", TABLES["readings"]))
+    conn.execute(_ddl("readings_sources", TABLES["readings_sources"]))
 
 
 def _add_box_ids(conn: sqlite3.Connection) -> dict:

@@ -51,6 +51,7 @@ from store.cache import Cache
 from store.master import Inventory
 from store.orders import Ledger
 from store.queues import MAIN, PARKED, Queue
+from store.readings import Readings
 from store.rows import Rows
 from store.submissions import Submissions
 
@@ -70,6 +71,11 @@ class Snapshot:
     # against it and the write of it have to be the SAME transaction as the cache consult that
     # decides what is being bought, and D88 is what makes that one transaction.
     submissions: Submissions
+    # THE MARKET READING `pkmnscan readings adopt --write` LAST CACHED, PER SKU
+    # (D-readings-table). Bound like every other table so a `Store.write()` from `readings
+    # adopt` commits it atomically with everything else D88 already protects; every other
+    # writer in this package leaves it untouched.
+    readings: Readings
 
     def queue(self, name: str) -> Queue:
         return self.review if name == MAIN else self.parked
@@ -92,6 +98,8 @@ class Snapshot:
             self.ledger.orders,
             self.ledger.fulfilment,
             self.submissions.entries,
+            self.readings.entries,
+            self.readings.sources,
         ]
 
 
@@ -135,6 +143,10 @@ class Store:
                 fulfilment=bound(Ledger.FULFILMENT, "fulfilment"),
             ),
             submissions=Submissions(entries=bound(Submissions.ENTRIES, "submissions")),
+            readings=Readings(
+                entries=bound(Readings.ENTRIES, "readings"),
+                sources=bound(Readings.SOURCES, "readings_sources"),
+            ),
         )
 
     def read(self) -> Snapshot:
