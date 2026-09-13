@@ -77,6 +77,7 @@ import type {
   OrderCloseReason,
   OrderCloseResult,
   ValueTable,
+  ValueCopy,
   SubmissionClaims,
   ClaimRelease,
 } from './types'
@@ -2470,19 +2471,59 @@ export async function getPricingWorklist(runs: readonly string[] = []): Promise<
  * Every card on hand, ranked by what TCGplayer says it is worth, with the drawer each one
  * sits in — so the operator can take a band out of the boxes.
  *
- * IT TAKES NO BAND, AND THAT IS THE DESIGN RATHER THAN AN OMISSION. Four ways of choosing one
- * were asked for — a typed price, the store's own cut-off, a top-N percentile and the drawers
- * ranked by value — and every one is a slice of the single ranked list this answers with. A
- * percentile cannot be taken without the whole list anyway, and a `?band=` would be a second
- * place for the sort's tie-break to be decided.
- *
- * THE PAYLOAD IS THE WHOLE STORE, WHICH IS WHY IT IS FETCHED ONCE AND NOT POLLED. Measured on
- * the owner's store: 2,245 rows, ~739KB, 0.11s server-side — the same order as
- * `getPricingWorklist` above (~909KB across eight tables) and for the same reason. It reads
- * and presses nothing: no child, no socket, no lock, no write.
+ * PAGINATED, AS OF STORE-SCALING ITEM 7. `GET /pipeline/value` with no query string still
+ * answers the whole unpaginated shape (`ValueTable`, above) for T7 and any other direct
+ * caller, but this client never asks for that shape any more: the row list pages by a VALUE
+ * CURSOR (never an offset, so a concurrent sale or capture cannot skip or repeat a row) and
+ * the aggregates — `boxes`, `unrankable`, `totals`, `sources` — are computed server-side over
+ * EVERY on-hand row regardless of which page is open, so D159's "nothing on hand is omitted"
+ * never shrinks to "what this page could see". At 2,535 cards the old shape measured ~739KB
+ * in one response; a page is bounded by `limit` instead.
  */
-export async function getValueTable(): Promise<ValueTable> {
-  return (await request('/pipeline/value', NO_CACHE)) as ValueTable
+export type ValueAggregates = Pick<
+  ValueTable,
+  'at' | 'basis' | 'threshold' | 'sources' | 'boxes' | 'unrankable'
+> & { totals: ValueTable['totals'] }
+
+export type ValuePage = ValueAggregates & {
+  rows: ValueCopy[]
+  next: string | null
+  total: number
+}
+
+/**
+ * One page of a band — `top`, `bottom` or `gaps` — plus the same store-wide aggregates every
+ * page carries. `after` is a cursor from a previous page's `next`, echoed back verbatim; the
+ * client never inspects it. See `getValueAggregates` below for the aggregates-only form.
+ */
+export async function getValuePage(options: {
+  band: 'top' | 'bottom' | 'gaps'
+  box?: number | null
+  after?: string | null
+  limit?: number
+}): Promise<ValuePage> {
+  const query = new URLSearchParams()
+  query.set('band', options.band)
+  if (options.box !== undefined && options.box !== null) query.set('box', String(options.box))
+  if (options.after) query.set('after', options.after)
+  if (options.limit !== undefined) query.set('limit', String(options.limit))
+  return (await request(`/pipeline/value?${query.toString()}`, NO_CACHE)) as ValuePage
+}
+
+/**
+ * The aggregates alone, with no rows to draw and none to discard. Every band's own chip count
+ * — a percentile share, the cut-off split — is arithmetic over these figures (`totals.valued`,
+ * a box's own `valued`), never a row list (see `ValueBands.tsx`'s file header), so this is what
+ * a screen fetches BEFORE it knows which band the operator wants to look at.
+ *
+ * `limit: 0` ASKS FOR ZERO ROWS RATHER THAN FETCHING A REAL PAGE AND THROWING IT AWAY. The
+ * aggregate pass runs over the whole store either way — that cost is not avoidable — but the
+ * ROWS this puts on the wire are genuinely empty, never a real page discarded client-side.
+ */
+export async function getValueAggregates(box?: number | null): Promise<ValueAggregates> {
+  const page = await getValuePage({ band: 'top', box, limit: 0 })
+  const { rows: _rows, next: _next, total: _total, ...aggregates } = page
+  return aggregates
 }
 
 /**

@@ -26,14 +26,42 @@
  * rich end is a pick list and a drawer summary has no errand in it; the cheap end IS a drawer
  * question — 646 of those 1,042 cards are two drawers entire. So `Worth the most` opens on
  * cards and `Worth the least` on drawers, and one press moves either.
+ *
+ * PAGINATED, AS OF STORE-SCALING ITEM 7 (D159's aggregates, computed server-side). This
+ * component USED to hold the whole store's `copies` array in memory and slice/sort/filter it
+ * four different ways (`ordered`, `slice`, `stacks`, `pulls`). It fetches now:
+ *
+ *   1. Aggregates ALONE (`getValueAggregates`) — `boxes`, `unrankable`, `totals`, `sources` —
+ *      fetched once, since D159's arithmetic is store-wide and does not vary by band or box
+ *      (T7's own `check_value_page` asserts this identity). Every chip count (`p1`/`p5`/`p10`/
+ *      `cutoff`) is arithmetic over these figures — never a row fetch.
+ *   2. The ROWS for the current band, fetched with `getValuePage` at exactly the size the
+ *      aggregates already say the band should be (a percentile share or the cut-off split),
+ *      so "Show N more" over a KNOWN-SIZE band is a DOM throttle exactly as it always was — the
+ *      whole band is already in memory, just not all rendered at once. A TYPED PRICE has no
+ *      known size ahead of time, so its rows accumulate page by page until one fails the
+ *      predicate or the store runs out.
+ *   3. The GAPS disclosure fetches lazily, page by page, ONLY once opened, and "Show N more"
+ *      there is a REAL network fetch (not a DOM reveal) — gaps.total can be in the hundreds and
+ *      the panel is closed by default.
+ *
+ * `stack_index`/`stack_of` NOW TRAVEL ON THE ROW (server-computed), replacing the old
+ * client-side `stacks()` — "copy N of M" needs the whole band's own SKU counts, which a client
+ * holding one page can no longer compute for itself. `pulls()` (the reach/spots-and-drawers
+ * measurement) STAYS CLIENT-SIDE: every fetch strategy above ends with the FULL current band in
+ * `rows` before the reach line is drawn (a known-size band is fetched whole; a typed-price band
+ * is fetched until exhausted), so nothing here computes a reach off a partial page — flagged in
+ * the PR as a deliberate simplification against the playbook's suggestion of a server-side
+ * `reach` field, since this fetch strategy makes the two equivalent.
  */
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 
 import { Button, Chip, EmptyState, Notice, PageHeader, Pill, Segmented, Stat } from './kit'
 import { PositionLabel } from './PositionLabel'
-import { getValueTable } from './server'
-import type { ValueBox, ValueCopy, ValueTable } from './types'
+import { getValueAggregates, getValuePage } from './server'
+import type { ValueAggregates } from './server'
+import type { ValueBox, ValueCopy } from './types'
 import './ValueBands.css'
 
 /** Which end of the money the operator is looking at — their own two words. */
@@ -58,11 +86,11 @@ type View = 'cards' | 'drawers'
  *  does not have — and the money axis, where precision IS available, has its own typed field. */
 const SHARES: Record<'p1' | 'p5' | 'p10', number> = { p1: 1, p5: 5, p10: 10 }
 
-/** How many rows are drawn before the operator asks for more. The screen does NOT virtualize —
- *  `#/pricing` already draws ~423 pricing rows, each with a text input, a popover anchor and
- *  per-keystroke field state, where a row here is a link and two figures. What a page does is
- *  keep the FIRST paint cheap on a 1,042-row cheap band; pressing for more is the operator
- *  saying they want it. */
+/** How many rows a single network page carries, and (for a known-size band) how many are drawn
+ *  before the operator asks for more. The screen does NOT virtualize — `#/pricing` already
+ *  draws ~423 pricing rows, each with a text input, a popover anchor and per-keystroke field
+ *  state, where a row here is a link and two figures. What a page does is keep the FIRST paint
+ *  cheap on a 1,042-row cheap band; pressing for more is the operator saying they want it. */
 const PAGE = 200
 
 const ENDS: readonly { value: ValueEnd; label: string }[] = [
@@ -112,7 +140,8 @@ function whole(n: number): string {
  *  a sweep at the other, and the operator can see which before walking anywhere.
  *
  *  IT IS COMPUTED HERE RATHER THAN SERVED because it is a property of the BAND, and the band is
- *  chosen on this screen. A server figure would describe a slice the server was not told about.
+ *  chosen on this screen, and the fetch strategies below always land the FULL current band in
+ *  `rows` before this runs.
  *
  *  THE SECTION COMES OFF THE COMPOSED LABEL AND IS NEVER RECOMPUTED. `types.ts` forbids a
  *  client computing a section boundary and D10 is why — the dividers are whoever put them in
@@ -141,54 +170,33 @@ function pulls(rows: readonly ValueCopy[]): { reaches: number; boxes: number; se
   return { reaches, boxes: byBox.size, sections: sections.size }
 }
 
-/** The priced rows at one end, in the order the server sorted them.
- *
- *  A CARD WITH NO PRICE IS IN NEITHER BAND, and that is not a drop: every one is drawn in full
- *  at the foot with the reason it cannot be ranked. A band is a claim about money and a card
- *  with no price belongs to neither end of one — sorting it to the cheap end would sweep it
- *  into a bulk pull, which is the wrong answer wearing the shape of a confident one. */
-function ordered(table: ValueTable, end: ValueEnd, box: number | null): ValueCopy[] {
-  const priced = table.copies.filter(
-    (row) => row.market !== null && (box === null || row.box === box),
-  )
-  return end === 'top' ? priced : [...priced].reverse()
+/** The scoped figures a cut's wanted count is computed from — store-wide, or one drawer's own,
+ *  off the SAME aggregates block regardless of which band is on screen (T7's D159 arm). */
+function scopedFigures(
+  aggregates: ValueAggregates,
+  box: number | null,
+): { valued: number; under_cutoff: number; at_or_over: number } {
+  if (box === null) return aggregates.totals
+  const drawer = aggregates.boxes.find((one) => one.box === box)
+  return drawer === undefined
+    ? { valued: 0, under_cutoff: 0, at_or_over: 0 }
+    : { valued: drawer.valued, under_cutoff: drawer.under_cutoff, at_or_over: drawer.at_or_over }
 }
 
-function slice(rows: readonly ValueCopy[], end: ValueEnd, cut: Cut, threshold: string | null, price: string): ValueCopy[] {
-  if (cut === 'price' || cut === 'cutoff') {
-    const bar = cut === 'cutoff' ? num(threshold) : num(price)
-    if (bar === null) return [...rows]
-    /* THE CUT-OFF IS A LINE AND THE TWO ENDS TAKE OPPOSITE SIDES OF IT — the same partition
-       `emit` makes, where at or above the figure a card earns a listing and below it the card
-       is the cheap half (D9, amended). So the cheap end is `< bar` and never `<= bar`, or both
-       bands would claim a card sitting exactly on the line. */
-    return rows.filter((row) => {
-      const market = num(row.market)
-      if (market === null) return false
-      return end === 'top' ? market >= bar : market < bar
-    })
-  }
+/** How many rows the current cut wants, or `null` for a typed price — unknowable ahead of a
+ *  fetch, which is why that one cut alone accumulates page by page rather than in one call. */
+function wantedCount(
+  cut: Cut,
+  end: ValueEnd,
+  figures: { valued: number; under_cutoff: number; at_or_over: number },
+): number | null {
+  if (cut === 'price') return null
+  if (cut === 'cutoff') return end === 'top' ? figures.at_or_over : figures.under_cutoff
   /* A PERCENTILE BAND NEVER ROUNDS TO NOTHING WHILE THERE IS SOMETHING TO RANK. `Math.round(3 *
      5 / 100)` is 0, so a store with fewer than ten priced cards opened on an EMPTY default band
-     — a screen reporting that a store with cards in it holds nothing valuable. Caught by the
-     browser suite, on fixtures of one and three rows, before it reached a fresh checkout.
-     The top 5% of three cards is the top card, which is the honest reading of the question. */
-  return rows.slice(0, Math.max(rows.length === 0 ? 0 : 1, Math.round((rows.length * SHARES[cut]) / 100)))
-}
-
-/** Every copy of this SKU in the band's own parent list, so a duplicate row can say which one
- *  it is. Seven Vilemaw rows are seven reaches and therefore seven rows; `copy 3 of 7` is what
- *  keeps that reading as a fact rather than as a repetition. */
-function stacks(rows: readonly ValueCopy[]): Map<string, ValueCopy[]> {
-  const out = new Map<string, ValueCopy[]>()
-  for (const row of rows) {
-    if (row.sku === null) continue
-    const seen = out.get(row.sku)
-    if (seen === undefined) out.set(row.sku, [row])
-    else seen.push(row)
-  }
-  for (const group of out.values()) group.sort((a, b) => a.box - b.box || a.index - b.index)
-  return out
+     — a screen reporting that a store with cards in it holds nothing valuable. The top 5% of
+     three cards is the top card, which is the honest reading of the question. */
+  return figures.valued === 0 ? 0 : Math.max(1, Math.round((figures.valued * SHARES[cut]) / 100))
 }
 
 /** Where a copy is, or the store key when the server would compose no label.
@@ -213,12 +221,15 @@ function Where({ row, flow }: { readonly row: ValueCopy; readonly flow: 'stack' 
   )
 }
 
-function ValueRow({ row, stack }: { readonly row: ValueCopy; readonly stack: readonly ValueCopy[] | undefined }) {
+function ValueRow({ row }: { readonly row: ValueCopy }) {
   const asking = typeof row.answer === 'string' || typeof row.answer === 'number' ? String(row.answer) : null
   const held = row.answer !== null && typeof row.answer === 'object'
-  const which = stack === undefined || stack.length < 2
+  /* `stack_index`/`stack_of` ARE THE SERVER'S NOW (store-scaling item 7) — the whole reason
+     they travel on the row rather than being grouped client-side is that the client no longer
+     holds every OTHER copy of this SKU to count against. */
+  const which = row.stack_of === undefined || row.stack_of === null || row.stack_of < 2
     ? null
-    : `copy ${stack.findIndex((one) => one.box === row.box && one.index === row.index) + 1} of ${stack.length}`
+    : `copy ${row.stack_index ?? '?'} of ${row.stack_of}`
   const meta = [row.set_name, row.condition, which].filter(Boolean) as string[]
   return (
     <a
@@ -329,7 +340,7 @@ export function ValueBands({ end, onEnd, onLeave }: {
   readonly onEnd: (next: ValueEnd) => void
   readonly onLeave: () => void
 }) {
-  const [table, setTable] = useState<ValueTable | null>(null)
+  const [aggregates, setAggregates] = useState<ValueAggregates | null>(null)
   const [failed, setFailed] = useState<string | null>(null)
   const [cut, setCut] = useState<Cut>('p5')
   const [price, setPrice] = useState('5.00')
@@ -340,65 +351,185 @@ export function ValueBands({ end, onEnd, onLeave }: {
   const [box, setBox] = useState<number | null>(null)
   const [shown, setShown] = useState(PAGE)
   const [openGaps, setOpenGaps] = useState(false)
-  const [gapsShown, setGapsShown] = useState(PAGE)
-  const live = useRef(true)
 
-  const read = useCallback(async () => {
+  /* THE CURRENT BAND'S OWN ROWS — fetched WHOLE for a known-size cut (percentile/cut-off) and
+     accumulated page by page for a typed price, per the file header. */
+  const [rows, setRows] = useState<ValueCopy[]>([])
+  const [rowsFailed, setRowsFailed] = useState<string | null>(null)
+
+  /* THE WIDEST BAND'S OWN EXTREME — what an empty band has to name — fetched independently of
+     `cut`, since "nothing is worth $50 or more" is only half an answer without "the most
+     valuable card you own is $47.57" even when the CURRENT cut has zero rows. */
+  const [best, setBest] = useState<ValueCopy | null>(null)
+
+  /* THE UNRANKABLE DISCLOSURE — lazy, and its own network-driven "Show N more" (never a DOM
+     reveal of an already-fetched array): `gaps.total` can be in the hundreds and the panel is
+     closed by default. */
+  const [gapRows, setGapRows] = useState<ValueCopy[]>([])
+  const [gapsNext, setGapsNext] = useState<string | null>(null)
+  const [gapsLoadingMore, setGapsLoadingMore] = useState(false)
+
+  const liveAgg = useRef(true)
+  const readAggregates = useCallback(async () => {
     setFailed(null)
     try {
-      const answer = await getValueTable()
-      if (live.current) setTable(answer)
+      const answer = await getValueAggregates()
+      if (liveAgg.current) setAggregates(answer)
     } catch (error) {
-      if (live.current) setFailed(error instanceof Error ? error.message : String(error))
+      if (liveAgg.current) setFailed(error instanceof Error ? error.message : String(error))
     }
   }, [])
 
   useEffect(() => {
-    live.current = true
-    void read()
+    liveAgg.current = true
+    void readAggregates()
     return () => {
-      live.current = false
+      liveAgg.current = false
     }
-  }, [read])
+  }, [readAggregates])
 
   /* THE PAGE RESETS WHEN THE BAND MOVES. `shown` counts into a list that has just been replaced,
      so carrying it over draws 400 rows of a 12-row band's successor without anybody asking. */
   useEffect(() => setShown(PAGE), [end, cut, price, view, box])
-  useEffect(() => setGapsShown(PAGE), [box])
 
-  const pool = useMemo(() => (table === null ? [] : ordered(table, end, box)), [table, end, box])
-  const rows = useMemo(
-    () => (table === null ? [] : slice(pool, end, cut, table.threshold, price)),
-    [table, pool, end, cut, price],
-  )
-  const stack = useMemo(() => stacks(pool), [pool])
+  /* THE CURRENT BAND'S ROWS. A generation token guards against a stale fetch (a quick cut/box
+     change mid-flight) landing after a newer one already resolved. */
+  const generation = useRef(0)
+  useEffect(() => {
+    if (aggregates === null || view !== 'cards') return
+    const mine = ++generation.current
+    setRowsFailed(null)
+    void (async () => {
+      try {
+        const figures = scopedFigures(aggregates, box)
+        const collected: ValueCopy[] = []
+        if (cut === 'price' || cut === 'cutoff') {
+          /* A PREDICATE FETCH, NEVER A BLIND LIMIT, EVEN THOUGH THE CUT-OFF'S COUNT IS ALREADY
+             KNOWN (`figures.under_cutoff`/`at_or_over`, from the aggregates). Fetching exactly
+             that many rows off the TOP of the band and trusting them all to satisfy the bar
+             is only safe when the aggregate and the row order agree byte for byte — true of a
+             real store, but not something this component should assume rather than check: the
+             SAME real cut-off `slice()` used to apply client-side (`market >= bar` / `< bar`)
+             is applied here too, per PAGE fetched, stopping at the first row that fails it —
+             the exact mechanism `price` already needs because ITS count is never known ahead
+             of a fetch. */
+          const bar = cut === 'cutoff' ? num(aggregates.threshold) : num(price)
+          let after: string | null = null
+          for (;;) {
+            const page = await getValuePage({ band: end, box, after, limit: PAGE })
+            let stoppedEarly = false
+            for (const row of page.rows) {
+              const market = num(row.market)
+              const passes = bar === null ? true : market !== null && (end === 'top' ? market >= bar : market < bar)
+              if (!passes) {
+                stoppedEarly = true
+                break
+              }
+              collected.push(row)
+            }
+            if (stoppedEarly || page.next === null) break
+            after = page.next
+            if (generation.current !== mine) return
+          }
+        } else {
+          const wanted = wantedCount(cut, end, figures) ?? 0
+          let after: string | null = null
+          while (collected.length < wanted) {
+            const limit = Math.min(PAGE, wanted - collected.length)
+            const page = await getValuePage({ band: end, box, after, limit })
+            collected.push(...page.rows)
+            if (page.next === null) break
+            after = page.next
+            if (generation.current !== mine) return
+          }
+        }
+        if (generation.current === mine) setRows(collected)
+      } catch (error) {
+        if (generation.current === mine) {
+          setRowsFailed(error instanceof Error ? error.message : String(error))
+        }
+      }
+    })()
+  }, [aggregates, box, cut, end, price, view])
+
+  /* THE EXTREME OF THE WHOLE BAND (unfiltered by the cut), for the empty-band sentence. */
+  useEffect(() => {
+    let live = true
+    void (async () => {
+      try {
+        const page = await getValuePage({ band: end, box, limit: 1 })
+        if (live) setBest(page.rows[0] ?? null)
+      } catch {
+        if (live) setBest(null)
+      }
+    })()
+    return () => {
+      live = false
+    }
+  }, [end, box])
+
+  /* THE GAPS DISCLOSURE resets whenever the box scope changes, and fetches its first page only
+     once opened. */
+  useEffect(() => {
+    setGapRows([])
+    setGapsNext(null)
+  }, [box])
+
+  useEffect(() => {
+    if (!openGaps || gapRows.length > 0 || gapsNext !== null) return
+    let live = true
+    void (async () => {
+      const page = await getValuePage({ band: 'gaps', box, after: null, limit: PAGE })
+      if (live) {
+        setGapRows(page.rows)
+        setGapsNext(page.next)
+      }
+    })()
+    return () => {
+      live = false
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [openGaps, box])
+
+  const loadMoreGaps = useCallback(async () => {
+    if (gapsNext === null) return
+    setGapsLoadingMore(true)
+    try {
+      const page = await getValuePage({ band: 'gaps', box, after: gapsNext, limit: PAGE })
+      setGapRows((seen) => [...seen, ...page.rows])
+      setGapsNext(page.next)
+    } finally {
+      setGapsLoadingMore(false)
+    }
+  }, [gapsNext, box])
+
   const reach = useMemo(() => pulls(rows), [rows])
   const worth = useMemo(() => rows.reduce((sum, row) => sum + (num(row.market) ?? 0), 0), [rows])
-  /* EVERY ON-HAND CARD THIS SCREEN CANNOT RANK, in the order the server sent them. Scoped with
-     the band, so a drawer's own unread cards are what its panel lists. */
-  const gapRows = useMemo(
-    () => (table === null ? [] : table.copies.filter((row) => row.market === null && (box === null || row.box === box))),
-    [table, box],
-  )
 
   /* EVERY BAND'S COUNT IS ON ITS OWN CHIP, so the default hides nothing — the operator can see
-     that the cheap end holds 1,042 cards without pressing anything. */
+     that the cheap end holds 1,042 cards without pressing anything. Arithmetic over the
+     aggregates alone (see the file header) — no row fetch needed for a chip count. */
   const counts = useMemo(() => {
-    if (table === null) return null
-    const of = (which: Cut) => slice(pool, end, which, table.threshold, price).length
-    return { p1: of('p1'), p5: of('p5'), p10: of('p10'), cutoff: of('cutoff') }
-  }, [table, pool, end, price])
+    if (aggregates === null) return null
+    const figures = scopedFigures(aggregates, box)
+    return {
+      p1: wantedCount('p1', end, figures) ?? 0,
+      p5: wantedCount('p5', end, figures) ?? 0,
+      p10: wantedCount('p10', end, figures) ?? 0,
+      cutoff: wantedCount('cutoff', end, figures) ?? 0,
+    }
+  }, [aggregates, box, end])
 
   const drawers = useMemo(() => {
-    if (table === null) return []
-    const order = [...table.boxes]
+    if (aggregates === null) return []
+    const order = [...aggregates.boxes]
     /* WHICH DRAWER HOLDS THE MONEY AND WHICH DRAWER IS BULK ARE TWO QUESTIONS, which is why
        `ValueBox` carries both figures: the rich end ranks on the drawer's total and the cheap
        end on what a card out of it is worth. */
     return end === 'top'
       ? order.sort((a, b) => (num(b.total) ?? 0) - (num(a.total) ?? 0))
       : order.sort((a, b) => (num(a.per_card) ?? 0) - (num(b.per_card) ?? 0))
-  }, [table, end])
+  }, [aggregates, end])
 
   const takeEnd = useCallback(
     (next: ValueEnd) => {
@@ -416,12 +547,12 @@ export function ValueBands({ end, onEnd, onLeave }: {
         <Notice tone="danger" title="The store could not be read" code={failed}>
           Nothing was changed. Try again once the capture server is answering.
         </Notice>
-        <div><Button variant="primary" onClick={() => void read()}>Try again</Button></div>
+        <div><Button variant="primary" onClick={() => void readAggregates()}>Try again</Button></div>
       </main>
     )
   }
 
-  if (table === null || counts === null) {
+  if (aggregates === null || counts === null) {
     return (
       <main className="bn-page value-page">
         <PageHeader eyebrow="Workflow · Price · By value" title="What's worth pulling" actions={<Button onClick={onLeave}>Back to pricing</Button>} />
@@ -431,19 +562,16 @@ export function ValueBands({ end, onEnd, onLeave }: {
     )
   }
 
-  const gaps = table.unrankable
-  /* THE WIDEST BAND'S OWN EXTREME, which is what an empty band has to name — "nothing is worth
-     $50 or more" is only half an answer without "the most valuable card you own is $47.57". */
-  const best = pool.length === 0 ? null : pool[0]
-  const scoped = box === null ? null : table.boxes.find((one) => one.box === box) ?? null
+  const gaps = aggregates.unrankable
+  const scoped = box === null ? null : aggregates.boxes.find((one) => one.box === box) ?? null
   /* A BAND THAT IS REAL MONEY AND ROUNDS TO NOTHING SAYS SO RATHER THAN SAYING ZERO — the two
      cards worth listing in box 2 are $0.72 of $2,531.64, and "0% of everything you own" is a
      false sentence about a band the operator is standing in. `money.ts:roundsToNothing` makes
      the same distinction about a figure. */
-  const percent = table.totals.valued === 0 ? 0 : (worth / (num(table.totals.value) ?? 1)) * 100
+  const percent = aggregates.totals.valued === 0 ? 0 : (worth / (num(aggregates.totals.value) ?? 1)) * 100
   const share = percent > 0 && percent < 0.5 ? 'under 1%' : `${Math.round(percent)}%`
 
-  if (table.totals.cards === 0) {
+  if (aggregates.totals.cards === 0) {
     return (
       <main className="bn-page value-page">
         <PageHeader eyebrow="Workflow · Price · By value" title="What's worth pulling" actions={<Button onClick={onLeave}>Back to pricing</Button>} />
@@ -462,24 +590,30 @@ export function ValueBands({ end, onEnd, onLeave }: {
       <PageHeader
         eyebrow="Workflow · Price · By value"
         title="What's worth pulling"
-        lede={`${whole(table.totals.valued)} of ${whole(table.totals.cards)} cards on hand carry a price, ${cash(table.totals.value)} at market.`}
+        lede={`${whole(aggregates.totals.valued)} of ${whole(aggregates.totals.cards)} cards on hand carry a price, ${cash(aggregates.totals.value)} at market.`}
         actions={<Button onClick={onLeave}>Back to pricing</Button>}
       />
 
-      {table.totals.valued === 0 ? (
+      {aggregates.totals.valued === 0 ? (
         <EmptyState
           icon="sparkles"
           title="Nothing here has a price yet"
-          body={`You have ${whole(table.totals.cards)} cards in ${whole(table.boxes.length)} drawers and no run has read any of them. A run reads a box and puts a price on every card in it.`}
+          body={`You have ${whole(aggregates.totals.cards)} cards in ${whole(aggregates.boxes.length)} drawers and no run has read any of them. A run reads a box and puts a price on every card in it.`}
           actions={<Button variant="primary" onClick={() => { window.location.hash = '#/runs' }}>Start a run</Button>}
         />
       ) : (
         <>
-          {table.sources.length === 1 ? (
+          {aggregates.sources.length === 1 ? (
             <Notice tone="info" title="These prices came out of one file">
               A thin reading makes a thin ranking, not a store with nothing valuable in it.
             </Notice>
           ) : null}
+
+          {rowsFailed === null ? null : (
+            <Notice tone="danger" title="This band could not be fetched" code={rowsFailed}>
+              Nothing was changed. Try another band, or come back once the capture server is answering.
+            </Notice>
+          )}
 
           <div className="bn-panel value-bar">
             <div className="value-bar-controls">
@@ -500,9 +634,9 @@ export function ValueBands({ end, onEnd, onLeave }: {
                   onClick={() => setCut('cutoff')}
                   title="Your cut-off is set at the top of the pricing screen"
                 >
-                  {table.threshold === null
+                  {aggregates.threshold === null
                     ? end === 'top' ? 'Over your cut-off' : 'Under your cut-off'
-                    : end === 'top' ? `Over $${table.threshold}` : `Under $${table.threshold}`}
+                    : end === 'top' ? `Over $${aggregates.threshold}` : `Under $${aggregates.threshold}`}
                 </Chip>
                 {/* A CHIP THAT CONTAINS A FIELD, WHICH THE KIT DOES NOT HAVE. `Chip` is a
                     button and `.bn-input` is a field; `Pricing.css`'s `.pricing-flat` already
@@ -531,8 +665,8 @@ export function ValueBands({ end, onEnd, onLeave }: {
             <p className="value-standing">
               {view === 'drawers' ? (
                 end === 'top'
-                  ? `Your ${whole(table.boxes.length)} drawers, richest first.`
-                  : `Your ${whole(table.boxes.length)} drawers, cheapest card first.`
+                  ? `Your ${whole(aggregates.boxes.length)} drawers, richest first.`
+                  : `Your ${whole(aggregates.boxes.length)} drawers, cheapest card first.`
               ) : rows.length === 0 ? (
                 'Nothing sits in that band.'
               ) : (
@@ -577,7 +711,7 @@ export function ValueBands({ end, onEnd, onLeave }: {
                 <DrawerCard
                   key={drawer.box}
                   drawer={drawer}
-                  threshold={table.threshold}
+                  threshold={aggregates.threshold}
                   onScope={() => {
                     setBox(drawer.box)
                     setCut('cutoff')
@@ -592,9 +726,9 @@ export function ValueBands({ end, onEnd, onLeave }: {
               icon="search"
               title={cut === 'price' ? `Nothing is worth ${cash(price)} ${end === 'top' ? 'or more' : 'or less'}` : 'Nothing sits in that band'}
               body={
-                pool.length === 0
+                best === null
                   ? 'Nothing here has a price.'
-                  : `The ${end === 'top' ? 'most' : 'least'} valuable card you own is ${best?.name ?? 'one nobody has named'} at ${cash(best?.market)}, in box ${best?.box ?? '?'}.`
+                  : `The ${end === 'top' ? 'most' : 'least'} valuable card you own is ${best.name ?? 'one nobody has named'} at ${cash(best.market)}, in box ${best.box}.`
               }
               actions={<Button onClick={() => setCut('p10')}>Show me that one</Button>}
             />
@@ -606,7 +740,7 @@ export function ValueBands({ end, onEnd, onLeave }: {
                 <span className="value-heads-money">Worth</span>
               </div>
               {rows.slice(0, shown).map((row) => (
-                <ValueRow key={`${row.box}/${row.index}`} row={row} stack={row.sku === null ? undefined : stack.get(row.sku)} />
+                <ValueRow key={`${row.box}/${row.index}`} row={row} />
               ))}
               {rows.length > shown ? (
                 <div className="value-more">
@@ -659,32 +793,32 @@ export function ValueBands({ end, onEnd, onLeave }: {
               </ul>
               {!openGaps ? null : (
                 <div className="value-gap-rows">
-                  {gapRows
-                    .slice(0, gapsShown)
-                    .map((row) => (
-                      /* THE MONEY TRACK IS NOT DRAWN IN THIS SECTION. An empty money cell in a
-                         column of dollar figures reads as zero, which is the confusion the whole
-                         section exists to prevent. */
-                      <a className="value-gap-row" key={`${row.box}/${row.index}`} href={`#/inventory?box=${row.box}`}>
-                        <span className="value-where">
-                          <Where row={row} flow="run" />
-                        </span>
-                        <span className="value-gap-name">{row.name ?? 'Nobody has named this one'}</span>
-                      </a>
-                    ))}
+                  {gapRows.map((row) => (
+                    /* THE MONEY TRACK IS NOT DRAWN IN THIS SECTION. An empty money cell in a
+                       column of dollar figures reads as zero, which is the confusion the whole
+                       section exists to prevent. */
+                    <a className="value-gap-row" key={`${row.box}/${row.index}`} href={`#/inventory?box=${row.box}`}>
+                      <span className="value-where">
+                        <Where row={row} flow="run" />
+                      </span>
+                      <span className="value-gap-name">{row.name ?? 'Nobody has named this one'}</span>
+                    </a>
+                  ))}
                   {/* A PANEL WHOSE WHOLE SUBJECT IS NOT DROPPING ANYTHING MAY NOT DROP ANYTHING
                       QUIETLY. It paged at 200 with no line saying so, which on the owner's 390
-                      is 190 cards silently missing from the one place they are accounted for. */}
-                  {gapRows.length > gapsShown ? (
+                      is 190 cards silently missing from the one place they are accounted for.
+                      `gaps.total` is the aggregate figure and never `gapRows.length`, so the
+                      "N of M" line is honest even before the last page has been fetched. */}
+                  {gapsNext === null ? null : (
                     <div className="value-more">
-                      <Button onClick={() => setGapsShown((seen) => seen + PAGE)}>
-                        {`Show ${whole(Math.min(PAGE, gapRows.length - gapsShown))} more`}
+                      <Button onClick={() => void loadMoreGaps()} disabled={gapsLoadingMore}>
+                        {`Show ${whole(Math.min(PAGE, gaps.total - gapRows.length))} more`}
                       </Button>
                       <span className="value-more-says">
-                        {`${whole(gapsShown)} of ${whole(gapRows.length)} shown`}
+                        {`${whole(gapRows.length)} of ${whole(gaps.total)} shown`}
                       </span>
                     </div>
-                  ) : null}
+                  )}
                 </div>
               )}
             </section>

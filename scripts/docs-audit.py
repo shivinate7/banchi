@@ -13787,28 +13787,45 @@ _ARGUMENT_MIN_WORDS = 12
 # the SAME `_cards_by_sku` dict instead of scanning `cards` a second time, so that site is
 # gone rather than merely rewritten. One new site, one old site removed: the count nets to
 # zero and stays 13.
+#
+# STORE-SCALING ITEM 7 REMOVES THREE SITES OUTRIGHT AND RENAMES TWO MORE, WHICH IS NOT THE
+# FIVE-SITE REMOVAL THE SPEC'S OWN PLAYBOOK CLAIMED. `_release_plan`, `_box_names` and
+# `_on_hand_by_run` are genuinely gone — each now reads through an indexed `equals` filter
+# (`box=`, `sku=` or `run=`) with no unscoped call left in the function at all.
+# `do_pipeline_value` and `cli/resolve.py:box_views`, by contrast, each front a genuinely
+# STORE-WIDE aggregate that D159 requires (a percentile/cut-off ranking over every on-hand
+# card; a box-coordinate walk with no bound to offer) — moving the per-row cost off `Card`
+# construction and onto a column-only `select()` does not remove the unscoped CALL, it only
+# renames the (function, shape) tuple the scanner reports: `do_pipeline_value`'s walk moved
+# into a new shared helper, `_value_rows` (`.select()`, no keywords — still a full-table
+# read, by design, since the aggregates have to touch every row); `box_views`'s UNBOUNDED
+# branch (`boxes=None`, still every existing caller's default) still runs an unscoped
+# `.select()` where it used to run `.values()` — same function, new shape. Verified by
+# running `unscoped_walk_sites` against the built tree rather than assumed: it reports
+# exactly these ten tuples, and the two `do_pipeline_value`/`box_views` rows the item's own
+# spec file listed as "removed" are not among them — this comment and the tuple set below
+# are the correction, made in the same commit per this row's own rule ("say why the shape
+# changed and update the tuple" rather than leaving a stale entry).
 UNSCOPED_WALK_ALLOWED: FrozenSet[Tuple[str, str, str]] = frozenset({
     # (path relative to ROOT, enclosing function name, shape)
     ("server/capture_server.py", "do_inventory", "to_payload"),   # kept permanently — owner's word
-    ("server/capture_server.py", "_release_plan", "items"),
     ("server/capture_server.py", "_boxes_named", "distinct"),
     ("server/capture_server.py", "do_boxes", "distinct"),
-    ("server/pipeline_routes.py", "_box_names", "select"),
-    ("server/pipeline_routes.py", "_on_hand_by_run", "select"),
-    ("server/pipeline_routes.py", "do_pipeline_value", "values"),
+    ("server/pipeline_routes.py", "_value_rows", "select"),   # store-scaling item 7 — renamed from `do_pipeline_value`'s `.values()`; the aggregate pass is unavoidably store-wide (D159), so the CALL survives, only its shape and enclosing function change
     ("store/master.py", "to_payload", "items"),
     ("store/master.py", "counts", "select"),
     ("store/master.py", "next_box_number", "distinct"),   # kept permanently — one indexed column, cheap; missed by the hand census
-    ("cli/resolve.py", "box_views", "values"),
+    ("cli/resolve.py", "box_views", "select"),   # store-scaling item 7 — renamed from `.values()`; the unbounded (`boxes=None`) branch every existing caller still uses is genuinely store-wide, for the same reason `_value_rows` is
     ("cli/resolve.py", "_cards_by_sku", "select"),   # store-scaling item 4 — one pass, replaces per-SKU `_copies_out`/`_committed_keys`/`_unsent_ledger` reads; the `_unsent_ledger` distinct scan above is deleted, not merely moved
 })
 # STORE-SCALING ITEM 8 REMOVED `do_search`'s ROW: the O(cards) walk over
 # `inventory.cards.values()` is deleted, replaced by an FTS5 `MATCH` query
 # (`store/db.py:_add_search_index`) that narrows the candidate set before `_match_rank` ever
-# runs. 13 -> 12. NOTE FOR THE MERGE: item 7 (phase 2, disjoint functions) lowers this same
-# constant by five in the same window — the two branches will conflict on this literal at
-# merge time, and the fix is to SUM the reductions (13 - 1 - 5 = 7), never to take one side.
-UNSCOPED_WALK_EXPECTED = 12
+# runs. Item 7 (phase 2, disjoint functions) landed first and had already removed
+# `_release_plan` outright (it now reads through an indexed `equals` filter) and renamed
+# `do_pipeline_value`/`box_views` — origin/main's own count was 10 at that point. This merge
+# takes main's allowlist and removes only `do_search`: 10 -> 9.
+UNSCOPED_WALK_EXPECTED = 9
 
 _ROW_NAME_RE = re.compile(r'report\.add\(\s*\n?\s*"([^"\n]+)"')
 _MECH_PATHS = ("scripts/", "harness/tests/", "app/tests/", "app/eslint.config.js", "ruff.toml",

@@ -3384,6 +3384,14 @@ export type ValueCopy = {
   read_at: number | null
   source: string | null
   why: Unrankable | null
+  /** Which of `stack_of` identical-SKU copies this row is, within the current band/box scope
+   *  — `null` for an unpriced row or one with no SKU. ONLY PRESENT ON `GET /pipeline/value`'s
+   *  PAGINATED form (store-scaling item 7): the whole-list route's `copies` never carries
+   *  these, because a client holding the whole list can still compute "copy N of M" itself
+   *  (`app/src/ValueBands.tsx`'s old `stacks()`); a client fetching one page of a band cannot,
+   *  since the other copies of a stacked SKU may sit on a page it has not fetched. */
+  stack_index?: number | null
+  stack_of?: number | null
 }
 
 /** One drawer, and whether the whole thing is bulk.
@@ -3446,5 +3454,8 @@ export type ValueTable = {
     no_reading: number
     by_box: Record<string, number>
   }
-  totals: { cards: number; valued: number; value: string }
+  /** `under_cutoff`/`at_or_over` (store-scaling item 7) are the sum of every box's own
+   *  figure — a store-wide chip count no row list is needed to draw, matching the fields
+   *  `do_pipeline_value_page`'s `totals` block carries. */
+  totals: { cards: number; valued: number; value: string; under_cutoff: number; at_or_over: number }
 }

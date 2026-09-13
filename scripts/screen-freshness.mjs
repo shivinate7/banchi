@@ -197,7 +197,10 @@ const RECORDED = {
     // strip re-addressed at a stamp instead of a run.
     'getMarkdownTable', 'markdownHistory', 'markdownTrends',
     // The band lens's whole input (D159): every card on hand, ranked, one row per copy.
-    'getValueTable',
+    // Split in two by store-scaling item 7 — `getValueAggregates` (the store-wide totals,
+    // boxes and unrankable counts) and `getValuePage` (one band's rows, cursor-paginated) —
+    // where `getValueTable` used to fetch the whole unpaginated shape in one call.
+    'getValueAggregates', 'getValuePage',
     // The claims panel's free count (D174): what a live send is holding.
     // It is the step that comes BEFORE the release below, which is why it is a read at all.
     'getSubmissions',

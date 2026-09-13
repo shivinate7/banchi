@@ -120,7 +120,7 @@ from decimal import Decimal
 from http import HTTPStatus
 from pathlib import Path
 from datetime import datetime, timezone
-from typing import Dict, FrozenSet, List, NamedTuple, Optional, Sequence, Tuple
+from typing import Dict, FrozenSet, Iterable, List, NamedTuple, Optional, Sequence, Tuple
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(REPO_ROOT))
@@ -833,13 +833,27 @@ def _box_names() -> Dict[int, "BoxFacts"]:
     IT NEVER RAISES, which is `do_status`'s rule applied to a decoration. A store this cannot
     read costs the run list its box names and must not cost it the run list — the phase, the
     elapsed time and the download links are what that poll is actually for.
+
+    THE RUN SET IS NOW ONE INDEXED QUERY PER REGISTRY BOX, NEVER A FILTER-LESS PASS OVER
+    `cards` (store-scaling item 7). `inventory.boxes` is the registry — a handful of rows —
+    and `select(("run",), box=b)` is the same indexed column read `_positions_in` already
+    relies on, so this walks `O(boxes) x O(cards per box)` rather than `O(all cards)`.
     """
     try:
         inventory = Store().read().inventory
         present: Dict[int, set] = {}
-        for _, (box, run) in inventory.cards.select(("box", "run")):
-            if box is not None and isinstance(run, str) and run.strip():
-                present.setdefault(int(box), set()).add(run)
+        for key in inventory.boxes:
+            try:
+                box = int(key)
+            except (TypeError, ValueError):
+                continue
+            runs_here = {
+                run
+                for _key, (run,) in inventory.cards.select(("run",), box=box)
+                if isinstance(run, str) and run.strip()
+            }
+            if runs_here:
+                present[box] = runs_here
     except Exception:  # noqa: BLE001 — a name is never worth an unanswered poll
         return {}
     names: Dict[int, BoxFacts] = {}
@@ -2019,7 +2033,17 @@ def _relabel_positions(table) -> None:
         # makes for a malformed corpus, degrading the way `_Places` does: null,
         # never the stored string and never a guess.
         inventory = None
-    views = {} if inventory is None else run_resolve.box_views(inventory)
+    # Bounded to exactly the boxes THIS TABLE'S own positions name (store-scaling item 7) —
+    # a `pricing.json` is always one run's SKUs, never the whole store, so walking every box
+    # to relabel a handful of them is the exact defect item 7 exists to remove.
+    boxes = {
+        at.get("box")
+        for entry in table.get("skus") or ()
+        if isinstance(entry, dict)
+        for at in entry.get("positions") or ()
+        if isinstance(at, dict) and at.get("box") is not None
+    }
+    views = {} if inventory is None else run_resolve.box_views(inventory, boxes=boxes)
     for entry in table.get("skus") or ():
         if not isinstance(entry, dict):
             continue
@@ -2432,8 +2456,9 @@ def _unsent_ledger(
     return UnsentLedger(unsent=unsent, by_run=by_run, held_out=held_out, live_out=live_out)
 
 
-def _on_hand_by_run(inventory: master.Inventory) -> Dict[str, int]:
-    """run name -> how many of its cards this store still HOLDS. One column read, once.
+def _on_hand_by_run(inventory: master.Inventory, runs: Iterable[str]) -> Dict[str, int]:
+    """run name -> how many of its cards this store still HOLDS, for exactly the run names
+    the caller passes.
 
     THE FIGURE A WARNING ABOUT A RUN HAS TO CARRY, and the reason it is counted off the
     CARDS rather than off the run directory: a run's `identifications.json` records what was
@@ -2442,17 +2467,30 @@ def _on_hand_by_run(inventory: master.Inventory) -> Dict[str, int]:
     Measured on the owner's store: `2026-08-29-box1-01` read 133 cards and holds 99.
 
     SOLD AND RETIRED ARE NOT ON HAND and are not counted; a buried record is not in this
-    table at all (D134). `cards.select` reads two indexed columns and builds no card
-    objects (D88), so this is one pass over the store rather than `_copies_out`'s per-run
-    full-table scan — which is ~1s a call on this machine and was never meant for a loop.
+    table at all (D134).
+
+    `runs` IS THE CALLER'S OWN LIST OF NAMES TO COUNT (store-scaling item 7), not a set this
+    function discovers by asking the whole `cards` table which runs exist — every caller
+    already knows this list before calling (it is the joined-run directory listing
+    `do_pipeline_worklist` builds anyway), so asking the whole `cards` table which runs
+    exist and then counting each is strictly more work than counting the runs the caller
+    was already going to look at. `cards.select(("state",), run=name)` reads one indexed
+    column per named run, per run, and builds no card objects (D88) — bounded by the run
+    list and the cards each one holds, never by the size of the store.
     """
     counts: Dict[str, int] = {}
-    for _key, (run, state) in inventory.cards.select(("run", "state")):
-        if not isinstance(run, str) or not run.strip():
-            continue
-        if state in (master.SOLD, master.RETIRED, master.MOVED):
-            continue
-        counts[run] = counts.get(run, 0) + 1
+    for name in runs:
+        n = 0
+        for _key, (state,) in inventory.cards.select(("state",), run=name):
+            if state in (master.SOLD, master.RETIRED, master.MOVED):
+                continue
+            n += 1
+        if n:
+            # A RUN HOLDING NOTHING IS ABSENT RATHER THAN ZERO (unchanged from before this
+            # item) — that is what lets a caller drop a false alarm without dropping a card:
+            # `counts.get(name)` returning `None` for a run with nothing on hand is a
+            # different signal than `0`, and callers rely on the distinction.
+            counts[name] = n
     return counts
 
 
@@ -2580,9 +2618,24 @@ def do_pipeline_worklist(wanted: Sequence[str]) -> dict:
     except (files.StoreError, OSError, ValueError, TypeError):
         snapshot = None
 
-    # ONE PASS, BEFORE THE RUN LOOP, because the loop asks this question once per run and
-    # the answer is one read of two columns for the whole store.
-    on_hand = None if snapshot is None else _on_hand_by_run(snapshot.inventory)
+    # JOINED RUN NAMES, COLLECTED ONCE BEFORE THE MAIN LOOP (store-scaling item 7). This is
+    # the SAME `joined` filter the main loop below applies — reading each manifest once here
+    # and caching it, so the loop reuses the parsed dict instead of re-reading the file a
+    # second time per run. `_on_hand_by_run` then counts exactly these runs rather than
+    # discovering every run that exists in the store through a filter-less scan.
+    manifests_by_entry: Dict[Path, dict] = {}
+    joined_names: List[str] = []
+    for entry in sorted(root.iterdir()):
+        if not entry.is_dir() or not (entry / run_files.MANIFEST).is_file():
+            continue
+        manifest = _manifest(entry)
+        manifests_by_entry[entry] = manifest
+        if manifest.get("joined"):
+            joined_names.append(entry.name)
+
+    on_hand = (
+        None if snapshot is None else _on_hand_by_run(snapshot.inventory, joined_names)
+    )
 
     roster: List[dict] = []
     owed_by_run: Dict[str, List[str]] = {}
@@ -2593,7 +2646,9 @@ def do_pipeline_worklist(wanted: Sequence[str]) -> dict:
     for entry in sorted(root.iterdir()):
         if not entry.is_dir() or not (entry / run_files.MANIFEST).is_file():
             continue
-        manifest = _manifest(entry)
+        manifest = manifests_by_entry.get(entry)
+        if manifest is None:
+            manifest = _manifest(entry)
         if not manifest.get("joined"):
             continue
         table = entry / run_files.PRICING
@@ -2734,8 +2789,19 @@ def do_pipeline_worklist(wanted: Sequence[str]) -> dict:
                 here["copies"] = len(positions)
 
     loaded_names = {row["run"] for row in summaries}
+    # Bounded to exactly the boxes THIS WORKLIST'S merged positions name (store-scaling
+    # item 7) — a cross-run worklist spans the joined runs above, never the whole store, so
+    # walking every box to label a bounded set is the exact defect item 7 exists to remove.
+    worklist_boxes = {
+        p.get("box")
+        for row in merged.values()
+        for p in row.get("positions") or []
+        if p.get("box") is not None
+    }
     views = (
-        run_resolve.box_views(snapshot.inventory) if snapshot is not None and ledger else {}
+        run_resolve.box_views(snapshot.inventory, boxes=worklist_boxes)
+        if snapshot is not None and ledger
+        else {}
     )
 
     # ------------------------------------------------------------------------------------
@@ -3012,6 +3078,249 @@ def _market_of(text) -> Optional[Decimal]:
         return None
 
 
+#: Matches `app/src/ValueBands.tsx`'s own `PAGE` constant — the number of rows a page fetch
+#: returns when the caller does not ask for a specific `limit`.
+_VALUE_PAGE_DEFAULT = 200
+
+
+def _value_sort_key(row: dict) -> Tuple[bool, Decimal, int, int]:
+    """The one order every band is a slice of — market DESCENDING, unpriced last, ties
+    broken on `(box, index)` so a band's rows arrive in walk order within one price.
+
+    Extracted so the full sort (`do_pipeline_value`) and the paginated cursor
+    (`do_pipeline_value_page`) can never independently drift from each other — two sorts of
+    one list is two places for a tie-break to differ.
+    """
+    return (
+        row["market"] is None,
+        -(_market_of(row["market"]) or Decimal("0")),
+        row["box"],
+        row["index"],
+    )
+
+
+def _value_sort_key_reversed(row: dict) -> Tuple[bool, Decimal, int, int]:
+    """The `bottom` band's own ascending order — a REAL comparator, never a `list.reverse()`
+    of the top-sorted array.
+
+    A LITERAL REVERSE WOULD ALSO REVERSE THE TIE-BREAK, which is a genuine, deliberate
+    behavior change from today's client-side `[...priced].reverse()`
+    (`app/src/ValueBands.tsx`): two cards tied on market used to read in DESCENDING
+    box/index order at the cheap end (an artifact of which end the client reversed from) and
+    now read in ASCENDING box/index order — a real, independent ascending-by-cheapness walk,
+    matching the address order every other band already uses. Unlikely to be user-visible
+    (it only touches the order of an exact-price tie), but it is a real difference and is
+    called out in the PR rather than discovered by a flaky row-order assertion.
+    """
+    return (
+        row["market"] is not None,
+        _market_of(row["market"]) or Decimal("0"),
+        row["box"],
+        row["index"],
+    )
+
+
+def _value_cursor_encode(row: Optional[dict]) -> Optional[str]:
+    """An opaque token naming a row's position in the SAME sort order the band's own
+    comparator produces — never a bare integer offset, because an offset desyncs the moment
+    a sale or a new capture changes which row sits at that offset between two page fetches.
+
+    Base64 of a small JSON object; the client never inspects it, only echoes it back as
+    `after`.
+    """
+    if row is None:
+        return None
+    payload = {"market": row["market"], "box": row["box"], "index": row["index"]}
+    return base64.urlsafe_b64encode(json.dumps(payload).encode("utf-8")).decode("ascii")
+
+
+def _value_cursor_decode(token: Optional[str]) -> Optional[dict]:
+    """The reverse of `_value_cursor_encode`. AN UNREADABLE CURSOR IS THE FIRST PAGE, NEVER A
+    REFUSAL — a bookmarked or copy-pasted URL with a stale/mangled `after` should not 400; it
+    should restart the band from the top, which is the harmless direction to fail toward.
+    """
+    if not token:
+        return None
+    try:
+        return json.loads(base64.urlsafe_b64decode(token.encode("ascii")).decode("utf-8"))
+    except (ValueError, TypeError):
+        return None
+
+
+def _value_rows(
+    inventory: master.Inventory,
+    found: Dict[str, _Reading],
+    cut: Decimal,
+    views: Dict[int, join.BoxView],
+    answers: dict,
+    listings,
+) -> Tuple[List[dict], dict]:
+    """One column-only pass over every on-hand card — the shared body of `do_pipeline_value`
+    and `do_pipeline_value_page`, so the two routes can never disagree about a card's row or
+    a drawer's tally.
+
+    NO `Card` OBJECT IS EVER BUILT (store-scaling item 7). `inventory.cards.values()` used to
+    trigger `Rows._load_all()`, JSON-parsing and constructing a `Card` for every stored
+    payload; every field this loop reads — `box`, `index`, `sku`, `state`, `name`,
+    `set_hint`, `condition`, `game` — is an indexed column, so the whole loop runs over
+    `inventory.cards.select(...)` instead. This is UNAVOIDABLY still O(cards) — an aggregate
+    over the whole store has to touch the whole store, and D159's "nothing on hand is
+    omitted" figures depend on that — what this removes is the per-row COST, not the pass.
+
+    Returns `(copies, aggregates)`, UNSORTED — sorting is the caller's job, once, over
+    whichever of the two callers needs it (a full sort here and a paginated sibling sort in
+    `do_pipeline_value_page` would be two places for `_value_sort_key` to drift from itself).
+    """
+    copies: List[dict] = []
+    tally: Dict[int, dict] = {}
+    unrankable = {_NEVER_IDENTIFIED: 0, _READ_NOTHING: 0, _NO_READING: 0}
+    by_box: Dict[str, int] = {}
+    total = Decimal("0")
+    valued = 0
+
+    for _key, (box_raw, idx_raw, sku_raw, state, name, set_hint, condition, game) in (
+        inventory.cards.select(
+            ("box", "idx", "sku", "state", "name", "set_hint", "condition", "game")
+        )
+    ):
+        if state in master.TERMINAL_STATES:
+            continue
+        try:
+            box, index = int(box_raw), int(idx_raw)
+        except (TypeError, ValueError):
+            # A RECORD WHOSE POSITION WILL NOT COERCE IS SKIPPED, `do_inventory`'s rule: it
+            # sits in no drawer a hand can be sent to and belongs to no box a total can be
+            # counted against, so there is nothing this screen could truthfully say about it.
+            # `do_status` is where a record like that is reported, and it reports it already.
+            continue
+
+        sku = str(sku_raw or "")
+        reading = found.get(sku) if sku else None
+        market: Optional[Decimal] = None
+        if reading is not None:
+            market = _market_of(reading.market)
+            if market is None:
+                # A CELL THAT WILL NOT PARSE IS UNPRICED AND NEVER A ZERO. Ranking a card at
+                # $0.00 because its market cell was malformed drops it to the very bottom of
+                # the cheap band and into a bulk pull — a wrong answer wearing the shape of a
+                # confident one, which is what this repo refuses everywhere it prices.
+                reading = None
+
+        why: Optional[str] = None
+        if market is None:
+            if not sku:
+                why = _NEVER_IDENTIFIED if state == master.CAPTURED else _READ_NOTHING
+            else:
+                why = _NO_READING
+            unrankable[why] += 1
+            by_box[str(box)] = by_box.get(str(box), 0) + 1
+
+        seat = tally.setdefault(
+            box,
+            {
+                "cards": 0,
+                "valued": 0,
+                "unpriced": 0,
+                "under": 0,
+                "over": 0,
+                "total": Decimal("0"),
+                "top": None,
+            },
+        )
+        seat["cards"] += 1
+        if market is None:
+            seat["unpriced"] += 1
+        else:
+            valued += 1
+            total += market
+            seat["valued"] += 1
+            seat["total"] += market
+            if market < cut:
+                seat["under"] += 1
+            else:
+                seat["over"] += 1
+            if seat["top"] is None or market > seat["top"]:
+                seat["top"] = market
+
+        record = listings.get(sku) if sku else None
+        answer = answers.get(sku) if sku else None
+        decided = answer.get("value") if isinstance(answer, dict) else None
+        copies.append(
+            {
+                "box": box,
+                "index": index,
+                "label": _position_label(views, inventory, box, index),
+                "sku": sku or None,
+                # THE READING'S OWN NAME FIRST AND THE CARD'S SECOND. The export row is what
+                # TCGplayer calls the product; `card.name` is what the model read off the
+                # photograph, and 172 of the owner's are the empty string. The one a person
+                # recognizes standing at the drawer is the catalogue's.
+                "name": (reading.name if reading else None) or name or None,
+                "set_name": (reading.set_name if reading else None) or set_hint or None,
+                "condition": (reading.condition if reading else None) or condition or None,
+                "game": game or None,
+                "state": state,
+                "market": tcgcsv.format_price(market) if market is not None else None,
+                # WHAT THE OPERATOR DECIDED TO ASK, WHICH IS NOT WHAT THE CARD IS WORTH (D86).
+                # Round-tripped as the corpus holds it — a string, a number, or a
+                # `WithheldRecord` — because flattening that last shape would turn a
+                # deliberate hold (D49) into a missing price.
+                "answer": decided,
+                # HOW MANY COPIES OF THIS SKU TCGPLAYER HOLDS, NEVER WHETHER THIS COPY IS ONE.
+                # `live` is per-SKU and the store does not record which physical copy a push
+                # spent — D147 decides that ordering at the write and not here — so a row
+                # claiming "this one is listed" would be inventing a fact. The operator ruled
+                # these appear with no distinction, which matters because 70% of the copies
+                # under their cut-off are live: this is context on the row, never a filter.
+                "live": int(getattr(record, "live", 0) or 0) if record is not None else 0,
+                "read_at": reading.at if reading is not None else None,
+                "source": reading.source if reading is not None else None,
+                "why": why,
+            }
+        )
+
+    return copies, {
+        "tally": tally,
+        "unrankable": unrankable,
+        "by_box": by_box,
+        "total": total,
+        "valued": valued,
+    }
+
+
+def _boxes_payload(tally: Dict[int, dict], names: Dict[int, "BoxFacts"]) -> List[dict]:
+    """`tally` (built by `_value_rows`) rendered as `do_pipeline_value`'s `boxes` list.
+
+    `boxes` IS NOT A ROLLUP OF `copies` AND MUST NOT BE COMPUTED FROM ONE. It counts every
+    card in the drawer including the unpriced ones, because the operator's question at the
+    drawer level is *is this whole box bulk* — and on the owner's store the answer is yes
+    twice: box 2 is 540 of 542 cards under the cut-off and box 5 is 102 of 102, together 646
+    cards worth $66.79. A rollup computed off priced rows alone would have said box 4 was 418
+    cards when it holds 633, and called the 215 unpriced ones nothing.
+    """
+    return [
+        {
+            "box": box,
+            "name": getattr(names.get(box), "name", None),
+            "cards": seat["cards"],
+            "valued": seat["valued"],
+            "unpriced": seat["unpriced"],
+            "under_cutoff": seat["under"],
+            "at_or_over": seat["over"],
+            "total": tcgcsv.format_price(seat["total"]),
+            # THE MEAN IS OVER EVERY CARD IN THE DRAWER AND NOT OVER THE PRICED ONES. "What is
+            # a card out of this box worth" is the question that decides whether the whole
+            # drawer is bulk, and dividing by the priced subset would flatter box 4 — 633
+            # cards, 215 of them unpriced — against box 2, where every card has a price.
+            "per_card": tcgcsv.format_price(
+                (seat["total"] / seat["cards"]) if seat["cards"] else Decimal("0")
+            ),
+            "top": tcgcsv.format_price(seat["top"]) if seat["top"] is not None else None,
+        }
+        for box, seat in sorted(tally.items())
+    ]
+
+
 def do_pipeline_value() -> dict:
     """`GET /pipeline/value` — every card on hand, with what it is worth and where it sits.
 
@@ -3090,148 +3399,17 @@ def do_pipeline_value() -> dict:
     cut = _market_of(threshold) or pricing_mod.FLOOR
     listings = inventory.listings
 
-    copies: List[dict] = []
-    tally: Dict[int, dict] = {}
-    unrankable = {_NEVER_IDENTIFIED: 0, _READ_NOTHING: 0, _NO_READING: 0}
-    by_box: Dict[str, int] = {}
-    total = Decimal("0")
-    valued = 0
-
-    for card in inventory.cards.values():
-        if card.state in master.TERMINAL_STATES:
-            continue
-        try:
-            box, index = int(card.box), int(card.index)
-        except (TypeError, ValueError):
-            # A RECORD WHOSE POSITION WILL NOT COERCE IS SKIPPED, `do_inventory`'s rule: it
-            # sits in no drawer a hand can be sent to and belongs to no box a total can be
-            # counted against, so there is nothing this screen could truthfully say about it.
-            # `do_status` is where a record like that is reported, and it reports it already.
-            continue
-
-        sku = str(card.sku or "")
-        reading = found.get(sku) if sku else None
-        market: Optional[Decimal] = None
-        if reading is not None:
-            market = _market_of(reading.market)
-            if market is None:
-                # A CELL THAT WILL NOT PARSE IS UNPRICED AND NEVER A ZERO. Ranking a card at
-                # $0.00 because its market cell was malformed drops it to the very bottom of
-                # the cheap band and into a bulk pull — a wrong answer wearing the shape of a
-                # confident one, which is what this repo refuses everywhere it prices.
-                reading = None
-
-        why: Optional[str] = None
-        if market is None:
-            if not sku:
-                why = _NEVER_IDENTIFIED if card.state == master.CAPTURED else _READ_NOTHING
-            else:
-                why = _NO_READING
-            unrankable[why] += 1
-            by_box[str(box)] = by_box.get(str(box), 0) + 1
-
-        seat = tally.setdefault(
-            box,
-            {
-                "cards": 0,
-                "valued": 0,
-                "unpriced": 0,
-                "under": 0,
-                "over": 0,
-                "total": Decimal("0"),
-                "top": None,
-            },
-        )
-        seat["cards"] += 1
-        if market is None:
-            seat["unpriced"] += 1
-        else:
-            valued += 1
-            total += market
-            seat["valued"] += 1
-            seat["total"] += market
-            if market < cut:
-                seat["under"] += 1
-            else:
-                seat["over"] += 1
-            if seat["top"] is None or market > seat["top"]:
-                seat["top"] = market
-
-        record = listings.get(sku) if sku else None
-        answer = answers.get(sku) if sku else None
-        decided = answer.get("value") if isinstance(answer, dict) else None
-        copies.append(
-            {
-                "box": box,
-                "index": index,
-                "label": _position_label(views, inventory, box, index),
-                "sku": sku or None,
-                # THE READING'S OWN NAME FIRST AND THE CARD'S SECOND. The export row is what
-                # TCGplayer calls the product; `card.name` is what the model read off the
-                # photograph, and 172 of the owner's are the empty string. The one a person
-                # recognizes standing at the drawer is the catalogue's.
-                "name": (reading.name if reading else None) or card.name or None,
-                "set_name": (reading.set_name if reading else None) or card.set_hint or None,
-                "condition": (reading.condition if reading else None)
-                or card.condition
-                or None,
-                "game": card.game or None,
-                "state": card.state,
-                "market": tcgcsv.format_price(market) if market is not None else None,
-                # WHAT THE OPERATOR DECIDED TO ASK, WHICH IS NOT WHAT THE CARD IS WORTH (D86).
-                # Round-tripped as the corpus holds it — a string, a number, or a
-                # `WithheldRecord` — because flattening that last shape would turn a
-                # deliberate hold (D49) into a missing price.
-                "answer": decided,
-                # HOW MANY COPIES OF THIS SKU TCGPLAYER HOLDS, NEVER WHETHER THIS COPY IS ONE.
-                # `live` is per-SKU and the store does not record which physical copy a push
-                # spent — D147 decides that ordering at the write and not here — so a row
-                # claiming "this one is listed" would be inventing a fact. The operator ruled
-                # these appear with no distinction, which matters because 70% of the copies
-                # under their cut-off are live: this is context on the row, never a filter.
-                "live": int(getattr(record, "live", 0) or 0) if record is not None else 0,
-                "read_at": reading.at if reading is not None else None,
-                "source": reading.source if reading is not None else None,
-                "why": why,
-            }
-        )
+    copies, agg = _value_rows(inventory, found, cut, views, answers, listings)
 
     # SORTED HERE RATHER THAN ON THE CLIENT, because the percentile band is a slice of this
     # exact order and two sorts of one list is two places for a tie-break to differ. Ties
     # break on `(box, index)`, so a band's rows arrive in walk order within each price — the
     # measurement that shaped this screen is about contiguity, and a stable address order is
     # what lets the cheap band read as 6.5 cards per reach rather than as 1,042 separate trips.
-    copies.sort(
-        key=lambda row: (
-            row["market"] is None,
-            -(_market_of(row["market"]) or Decimal("0")),
-            row["box"],
-            row["index"],
-        )
-    )
+    copies.sort(key=_value_sort_key)
 
     names = _box_names()
-    boxes = [
-        {
-            "box": box,
-            "name": getattr(names.get(box), "name", None),
-            "cards": seat["cards"],
-            "valued": seat["valued"],
-            "unpriced": seat["unpriced"],
-            "under_cutoff": seat["under"],
-            "at_or_over": seat["over"],
-            "total": tcgcsv.format_price(seat["total"]),
-            # THE MEAN IS OVER EVERY CARD IN THE DRAWER AND NOT OVER THE PRICED ONES. "What is
-            # a card out of this box worth" is the question that decides whether the whole
-            # drawer is bulk, and dividing by the priced subset would flatter box 4 — 633
-            # cards, 215 of them unpriced — against box 2, where every card has a price.
-            "per_card": tcgcsv.format_price(
-                (seat["total"] / seat["cards"]) if seat["cards"] else Decimal("0")
-            ),
-            "top": tcgcsv.format_price(seat["top"]) if seat["top"] is not None else None,
-        }
-        for box, seat in sorted(tally.items())
-    ]
+    boxes = _boxes_payload(agg["tally"], names)
 
     return {
         "at": master.now(),
@@ -3240,11 +3418,162 @@ def do_pipeline_value() -> dict:
         "sources": sources,
         "copies": copies,
         "boxes": boxes,
-        "unrankable": {"total": sum(unrankable.values()), **unrankable, "by_box": by_box},
+        "unrankable": {
+            "total": sum(agg["unrankable"].values()),
+            **agg["unrankable"],
+            "by_box": agg["by_box"],
+        },
         "totals": {
             "cards": len(copies),
-            "valued": valued,
-            "value": tcgcsv.format_price(total),
+            "valued": agg["valued"],
+            "value": tcgcsv.format_price(agg["total"]),
+            # NEW, ADDITIVE FIELDS (store-scaling item 7) — the sum of every box's own
+            # under_cutoff/at_or_over, so a store-wide chip count needs no row list either,
+            # matching `do_pipeline_value_page`'s identical totals block.
+            "under_cutoff": sum(seat["under"] for seat in agg["tally"].values()),
+            "at_or_over": sum(seat["over"] for seat in agg["tally"].values()),
+        },
+    }
+
+
+def do_pipeline_value_page(
+    *, band: str, box: Optional[int], after: Optional[str], limit: int
+) -> dict:
+    """`GET /pipeline/value?band=top|bottom|gaps&box=&after=&limit=` — one page of the same
+    ranked list `do_pipeline_value()` returns whole, plus the same aggregates.
+
+    `band` PARTITIONS THE SORTED LIST AND NEVER RE-SORTS IT — `top` is the priced rows in
+    `_value_sort_key` order, `bottom` is the SAME rows in the reverse of that order (a real
+    ascending comparator, `_value_sort_key_reversed`, not `list.reverse()` on a pre-sorted
+    Python list, so a tie group's internal order is deterministic in both directions rather
+    than an artifact of which end the caller reversed from), and `gaps` is the unpriced rows
+    in `(box, index)` order — natural store order, since there is no market to rank them by.
+    `box` narrows every band to one drawer's rows without changing which band's rule chose
+    them.
+
+    THE AGGREGATES ARE COMPUTED OVER EVERY ON-HAND ROW REGARDLESS OF `band`/`box`/`after`/
+    `limit` — D159's "nothing on hand is omitted" figures never shrink to "what this page
+    could see", and the `boxes`/`unrankable`/`totals` blocks are identical across all three
+    band requests against the same store state (asserted in T7's `check_value_page`).
+
+    THE CURSOR NAMES A ROW BY ITS VALUE, NEVER BY A LIST INDEX. A card that leaves the store
+    between two page fetches shifts every later index; comparing by `(market, box, index)`
+    is what keeps the second page starting in the right place regardless — the single most
+    important property of this design, and the one T7's stale-cursor case exists to prove.
+    """
+    if band not in ("top", "bottom", "gaps"):
+        raise PipelineRefusal(
+            HTTPStatus.BAD_REQUEST, "band_unknown", f"No such band: {band!r}"
+        )
+    try:
+        inventory = Store().read().inventory
+    except (files.StoreError, OSError, ValueError, TypeError) as exc:
+        raise PipelineRefusal(
+            HTTPStatus.SERVICE_UNAVAILABLE,
+            "store_unreadable",
+            f"The store could not be read, so nothing can be valued: {exc}",
+        ) from None
+
+    found, sources = _readings()
+    views = run_resolve.box_views(inventory)  # store-wide caller — every box, by design
+    try:
+        book = corpus.Corpus.read()
+    except (decisions.MalformedDecisions, ValueError, OSError):
+        book = corpus.Corpus()
+    answers = book.to_payload().get("skus") or {}
+    threshold = _policy_threshold(book)
+    cut = _market_of(threshold) or pricing_mod.FLOOR
+    listings = inventory.listings
+
+    copies, agg = _value_rows(inventory, found, cut, views, answers, listings)
+    if box is not None:
+        copies = [row for row in copies if row["box"] == box]
+
+    if band == "gaps":
+        scoped = sorted(
+            (row for row in copies if row["market"] is None),
+            key=lambda row: (row["box"], row["index"]),
+        )
+    else:
+        priced = [row for row in copies if row["market"] is not None]
+        # STACK FIELDS, COMPUTED OVER THIS BOX-SCOPED PRICED SET, NEVER STORE-WIDE UNSCOPED —
+        # `app/src/ValueBands.tsx`'s old client-side `stacks()` grouped the same `pool` this
+        # `priced` list is (the whole band, box-filtered, before any percentile/cut-off
+        # slicing), and pagination means the client no longer holds that whole list, so
+        # "copy N of M" has to travel with the row or the claim silently goes wrong beyond
+        # whatever page happens to be loaded.
+        sku_total: Dict[str, int] = {}
+        for row in priced:
+            if row["sku"] is not None:
+                sku_total[row["sku"]] = sku_total.get(row["sku"], 0) + 1
+        sku_seen: Dict[str, int] = {}
+        for row in priced:
+            if row["sku"] is None:
+                row["stack_index"] = None
+                row["stack_of"] = None
+                continue
+            sku_seen[row["sku"]] = sku_seen.get(row["sku"], 0) + 1
+            row["stack_index"] = sku_seen[row["sku"]]
+            row["stack_of"] = sku_total[row["sku"]]
+        priced.sort(key=_value_sort_key)
+        scoped = priced if band == "top" else sorted(priced, key=_value_sort_key_reversed)
+
+    # THE CURSOR IS COMPARED BY THE BAND'S OWN SORT KEY, NEVER BY EXACT ROW IDENTITY. A naive
+    # "find the row whose (market, box, index) equals the cursor, and start after it" breaks
+    # on a TIE: `gaps` sorts by `(box, index)` with no ties possible, but `top`/`bottom` tie
+    # on market whenever two or more copies of one SKU share a price (three RICH copies at
+    # $47.57 on the fixture below) — if the EXACT row the cursor named has since left the
+    # store (sold, retired, moved), a same-market row that sorted after it in the original
+    # page would be silently skipped by an equality search that never finds a match and
+    # falls back to "nothing after this remains". Comparing by the SAME KEY the list is
+    # sorted by, and taking every row whose key sorts STRICTLY AFTER the cursor's, is correct
+    # whether or not the exact row still exists — this is the actual mechanism `after_row`'s
+    # comment above promises ("comparing by VALUE") and T7's stale-cursor case exercises it
+    # against exactly this tie.
+    if band == "gaps":
+        def key_of(row):
+            return (row["box"], row["index"])
+    elif band == "top":
+        key_of = _value_sort_key
+    else:
+        key_of = _value_sort_key_reversed
+
+    after_row = _value_cursor_decode(after)
+    start = 0
+    if after_row is not None:
+        marker_key = key_of(after_row)
+        start = len(scoped)
+        for i, row in enumerate(scoped):
+            if key_of(row) > marker_key:
+                start = i
+                break
+    page = scoped[start : start + limit]
+    next_cursor = (
+        _value_cursor_encode(page[-1]) if page and start + limit < len(scoped) else None
+    )
+
+    names = _box_names()
+    boxes = _boxes_payload(agg["tally"], names)
+    return {
+        "at": master.now(),
+        "basis": "market",
+        "threshold": threshold,
+        "sources": sources,
+        "rows": page,
+        "next": next_cursor,
+        "total": len(scoped),
+        "boxes": boxes,
+        "unrankable": {
+            "total": sum(agg["unrankable"].values()),
+            **agg["unrankable"],
+            "by_box": agg["by_box"],
+        },
+        "totals": {
+            "cards": sum(seat["cards"] for seat in agg["tally"].values()),
+            "valued": agg["valued"],
+            "value": tcgcsv.format_price(agg["total"]),
+            "under_cutoff": sum(seat["under"] for seat in agg["tally"].values()),
+            "at_or_over": sum(seat["over"] for seat in agg["tally"].values()),
         },
     }
 

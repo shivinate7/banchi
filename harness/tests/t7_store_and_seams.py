@@ -12622,7 +12622,9 @@ def check_run_binds_to_bid(checks: Checks) -> None:
             # Straight at the field: this case is about the COUNT, and `do_mark_sold`'s own
             # refusals and undo are `check_mark_sold`'s subject.
             snapshot.inventory.cards.get("1/4").state = master.SOLD
-        counted = pipeline_routes._on_hand_by_run(Store().read().inventory)
+        counted = pipeline_routes._on_hand_by_run(
+            Store().read().inventory, ["stranded-run", "no-such-run"]
+        )
         checks.equal(
             counted.get("stranded-run"),
             3,
@@ -16927,6 +16929,68 @@ def check_pricing_labels(checks: Checks) -> None:
             "cards do reach a join and did land in this table wearing a label D24 says may "
             "never be printed for them (`place_text`, not `Position.label`)",
             f"answered {answer!r}",
+        )
+
+
+def check_box_views_bounded(checks: Checks) -> None:
+    """`cli/resolve.py:box_views(inventory, boxes=...)` (store-scaling item 7) — the bounded
+    branch a caller uses when its own positions already name a small set of boxes, and the
+    unbounded default every existing caller still gets.
+
+    THE TWO BRANCHES DEGRADE DIFFERENTLY, ON PURPOSE (the function's own docstring). The
+    unbounded branch degrades the WHOLE result to `{}` the instant any record's position
+    will not coerce; the bounded branch degrades ONE box at a time, because a caller naming
+    `boxes={3, 7, 12}` already knows exactly what it is asking about and a corrupt box 7
+    should not cost it box 3 and box 12's views too.
+    """
+    checks.note("")
+    checks.note("BOX_VIEWS BOUNDED — a caller that already knows which boxes it wants")
+
+    with isolated_home():
+        capture_server.do_create_box({"box": 1, "sections": [1]})
+        capture_server.do_create_box({"box": 2, "sections": [1]})
+        capture_server.do_create_box({"box": 3, "sections": [1]})
+        for box in (1, 2, 3):
+            for _ in range(2):
+                capture_server.do_capture(capture_payload(box))
+
+        inventory = Store().read().inventory
+        unbounded = resolve.box_views(inventory)
+        bounded = resolve.box_views(inventory, boxes={1, 3})
+
+        checks.equal(
+            sorted(bounded), [1, 3], "the bounded call answers ONLY for the boxes named"
+        )
+        checks.equal(
+            bounded[1], unbounded[1], "and agrees with the unbounded call on box 1"
+        )
+        checks.equal(
+            bounded[3], unbounded[3], "and agrees with the unbounded call on box 3"
+        )
+        checks.ok(
+            2 not in bounded,
+            "a box NOT in `boxes` is absent from the bounded result even though the "
+            "unbounded call would include it",
+        )
+
+        # --- a corrupt INDEX in one requested box degrades only that box -------------------
+        # (`box` itself stays readable, which is what a bounded `select(box=n)` query can
+        # still see — a record whose own `box` column is unreadable is a separate, named gap
+        # in `box_views`'s own docstring, not what this case exercises.)
+        with Store().write() as snapshot:
+            snapshot.inventory.cards["3/1"].index = "not-a-number"
+        degraded = resolve.box_views(Store().read().inventory, boxes={1, 3, 99})
+        checks.ok(
+            1 in degraded and 3 not in degraded,
+            "box 3's own corrupt index degrades box 3 alone — box 1, also requested, still "
+            "answers, which is a genuine deviation from the store-wide branch's "
+            "all-or-nothing degrade",
+            f"degraded keys were: {sorted(degraded)!r}",
+        )
+        checks.ok(
+            99 not in degraded,
+            "a requested box that holds no on-hand card at all is simply absent, never a "
+            "refusal",
         )
 
 
@@ -27814,6 +27878,21 @@ def check_value_table(checks: Checks) -> None:
         checks.equal(
             payload["totals"]["valued"], 8, "the totals count what could actually be ranked"
         )
+        # NEW, ADDITIVE TOTALS FIELDS (store-scaling item 7) — the sum of every box's own
+        # under_cutoff/at_or_over, checked explicitly since `checks.equal` above compares only
+        # `totals["valued"]` and not the whole dict.
+        checks.equal(
+            payload["totals"]["under_cutoff"],
+            5,
+            "the store-wide under-cutoff total is the sum of every box's own figure "
+            "(1 CHEAP copy in box 1, 4 in box 2)",
+        )
+        checks.equal(
+            payload["totals"]["at_or_over"],
+            3,
+            "and the store-wide at-or-over total is the sum of every box's own figure "
+            "(the 3 RICH copies in box 1)",
+        )
         checks.equal(
             {row["kind"] for row in payload["sources"]},
             {"run", "live"},
@@ -27828,6 +27907,246 @@ def check_value_table(checks: Checks) -> None:
             (empty["copies"], empty["boxes"], empty["totals"]["cards"]),
             ([], [], 0),
             "an empty store answers an empty table and never a refusal",
+        )
+        checks.equal(
+            (empty["totals"]["under_cutoff"], empty["totals"]["at_or_over"]),
+            (0, 0),
+            "the new totals fields (store-scaling item 7) read 0 on an empty store too",
+        )
+
+
+def check_value_page(checks: Checks) -> None:
+    """`GET /pipeline/value?band=...` (store-scaling item 7) — the paginated sibling of
+    `do_pipeline_value()` must never disagree with the whole-list route it pages through.
+
+    THE FIXTURE IS `check_value_table`'S OWN SHAPE, rebuilt here rather than shared, because
+    the two tests assert different things about it (that one, the row's fields and the
+    aggregates' arithmetic; this one, that paging reconstructs the SAME order and that a
+    cursor survives a store change between two fetches) and a shared builder would couple
+    them to one signature neither fully needs.
+    """
+    checks.note("")
+    checks.note("VALUE PAGE — the paginated route must never disagree with the whole list")
+
+    RICH, CHEAP, UNREAD, BROKEN = "9027460", "8925667", "7000001", "7000002"
+
+    def build() -> None:
+        with Store().write() as snapshot:
+            inventory = snapshot.inventory
+            inventory.ensure_box(1, name="WB1 R2")
+            inventory.ensure_box(2, name="ME01 C/UC")
+            minted = 0
+
+            def put(box: int, sku, name, state=master.IDENTIFIED):
+                nonlocal minted
+                minted += 1
+                card, _ = inventory.allocate_capture(box, cid=fake_cid(f"page-{minted}"))
+                card.sku = sku
+                card.name = name
+                card.game = "riftbound"
+                card.state = state
+                return card
+
+            for _ in range(3):
+                put(1, RICH, "Last Rites")
+            put(1, CHEAP, "Towering Combatant")
+            put(1, UNREAD, "A card no export prices")
+            put(1, BROKEN, "A card whose market cell is junk")
+            put(1, None, None, state=master.CAPTURED)
+            put(1, None, "")
+            for _ in range(4):
+                put(2, CHEAP, "Towering Combatant")
+
+        def table(run: str, at: float, rows) -> None:
+            directory = files.runs_dir() / run
+            directory.mkdir(parents=True, exist_ok=True)
+            files.write_json(directory / "manifest.json", {"joined": True})
+            path = directory / "pricing.json"
+            files.write_json(path, {"run": run, "skus": rows})
+            os.utime(path, (at, at))
+
+        def row(sku, market, name, set_name="Spiritforged"):
+            return {
+                "sku": sku,
+                "name": name,
+                "set_name": set_name,
+                "condition": "Near Mint Foil",
+                "snap": {"market": market},
+            }
+
+        table(
+            "2026-09-11-box1-02",
+            1789100000,
+            [row(RICH, "47.57", "Last Rites"), row(CHEAP, "0.03", "Towering Combatant")],
+        )
+        book = corpus.Corpus.read()
+        book.threshold = "0.29"
+        book.write()
+        with Store().write() as snapshot:
+            snapshot.readings.replace(*readings.collect())
+
+    with isolated_home():
+        build()
+
+        whole = pipeline_routes.do_pipeline_value()
+        priced_whole = [row for row in whole["copies"] if row["market"] is not None]
+
+        # --- top, paged with limit=2, reconstructs the whole priced order ------------------
+        seen: List[dict] = []
+        after = None
+        pages = 0
+        while True:
+            pages += 1
+            checks.ok(pages < 20, "the page loop must terminate well before 20 rounds")
+            page = pipeline_routes.do_pipeline_value_page(
+                band="top", box=None, after=after, limit=2
+            )
+            seen.extend(page["rows"])
+            after = page["next"]
+            if after is None:
+                break
+        checks.equal(
+            [(row["box"], row["index"]) for row in seen],
+            [(row["box"], row["index"]) for row in priced_whole],
+            "paging band=top with limit=2 reconstructs the exact same priced-row sequence "
+            "`do_pipeline_value()` returns whole",
+        )
+        first_page_rows = pipeline_routes.do_pipeline_value_page(
+            band="top", box=None, after=None, limit=2
+        )["rows"]
+        # THE PAGINATED ROUTE'S ROWS CARRY TWO MORE FIELDS THAN THE WHOLE LIST'S — `stack_index`
+        # and `stack_of` (§A3 point 4), added because the client no longer holds the whole
+        # band in memory to compute "copy N of M" itself. Every OTHER field must agree exactly.
+        checks.equal(
+            [{k: v for k, v in row.items() if k not in ("stack_index", "stack_of")}
+             for row in first_page_rows],
+            priced_whole[:2],
+            "the first page agrees byte-for-byte with the first two rows of the whole list, "
+            "aside from the stack fields the whole-list route does not carry — the two code "
+            "paths must never disagree",
+        )
+        checks.equal(
+            [(row["stack_index"], row["stack_of"]) for row in first_page_rows],
+            [(1, 3), (2, 3)],
+            "and the stack fields say which of the three tied RICH copies each row is",
+        )
+
+        # --- bottom reconstructs the priced rows ascending, ties ascending by (box, index) --
+        bottom_seen: List[dict] = []
+        after = None
+        while True:
+            page = pipeline_routes.do_pipeline_value_page(
+                band="bottom", box=None, after=after, limit=2
+            )
+            bottom_seen.extend(page["rows"])
+            after = page["next"]
+            if after is None:
+                break
+        expected_bottom = sorted(priced_whole, key=pipeline_routes._value_sort_key_reversed)
+        checks.equal(
+            [(row["box"], row["index"]) for row in bottom_seen],
+            [(row["box"], row["index"]) for row in expected_bottom],
+            "band=bottom is a REAL ascending comparator — box/index ascending within a tie — "
+            "never a `list.reverse()` of the top-sorted array",
+        )
+        checks.ok(
+            [(row["box"], row["index"]) for row in bottom_seen]
+            != list(reversed([(row["box"], row["index"]) for row in seen])),
+            "a literal reverse of `top`'s order would also reverse the tie-break; this must "
+            "differ from that on the RICH trio, which ties at one price",
+        )
+
+        # --- gaps reconstructs every unpriced row in (box, index) order ---------------------
+        gaps_seen: List[dict] = []
+        after = None
+        while True:
+            page = pipeline_routes.do_pipeline_value_page(
+                band="gaps", box=None, after=after, limit=2
+            )
+            gaps_seen.extend(page["rows"])
+            after = page["next"]
+            if after is None:
+                break
+        checks.equal(
+            [(row["box"], row["index"]) for row in gaps_seen],
+            sorted((row["box"], row["index"]) for row in whole["copies"] if row["market"] is None),
+            "band=gaps reconstructs every unpriced row in natural (box, index) order",
+        )
+        checks.equal(
+            len(gaps_seen), whole["unrankable"]["total"], "and its count equals `unrankable.total`"
+        )
+
+        # --- the D159 arm: aggregates never shrink to what one page could see ---------------
+        for band in ("top", "bottom", "gaps"):
+            first_page = pipeline_routes.do_pipeline_value_page(
+                band=band, box=None, after=None, limit=1
+            )
+            checks.equal(
+                first_page["unrankable"],
+                whole["unrankable"],
+                f"band={band}, limit=1 (the very first page) still reports the FULL "
+                "store-wide unrankable block — the three `why` causes never shrink to "
+                "what one page could see",
+            )
+            checks.equal(
+                first_page["boxes"],
+                whole["boxes"],
+                f"band={band}'s `boxes` block is identical to the whole list's, describing "
+                "the whole store rather than the band",
+            )
+            checks.equal(
+                first_page["totals"]["valued"],
+                whole["totals"]["valued"],
+                f"band={band}'s `totals.valued` is the whole store's, not the page's",
+            )
+
+        # --- a malformed cursor is the first page, never a 400 -------------------------------
+        garbled = pipeline_routes.do_pipeline_value_page(
+            band="top", box=None, after="not-a-real-cursor!!", limit=2
+        )
+        checks.equal(
+            [(row["box"], row["index"]) for row in garbled["rows"]],
+            [(row["box"], row["index"]) for row in priced_whole[:2]],
+            "an unreadable `after` token restarts the band from the top rather than refusing",
+        )
+
+        # --- an unknown band is refused, loudly --------------------------------------------
+        try:
+            pipeline_routes.do_pipeline_value_page(
+                band="sideways", box=None, after=None, limit=2
+            )
+            checks.ok(False, "an unrecognised band must raise, not fall through silently")
+        except pipeline_routes.PipelineRefusal as exc:
+            checks.equal(exc.code, "band_unknown", "and it names the refusal `band_unknown`")
+
+        # --- a stale cursor: the named row left the store between two fetches ---------------
+        page1 = pipeline_routes.do_pipeline_value_page(
+            band="top", box=None, after=None, limit=1
+        )
+        cursor = page1["next"]
+        stale_row = page1["rows"][0]
+        with Store().write() as snapshot:
+            key = master.position_key(stale_row["box"], stale_row["index"])
+            snapshot.inventory.cards.get(key).state = master.SOLD
+        after_sale = pipeline_routes.do_pipeline_value_page(
+            band="top", box=None, after=cursor, limit=10
+        )
+        # `stale_row` was priced_whole[0] (the first page, limit=1). Selling it does not
+        # change the rank of anything else — including the OTHER two RICH copies, which tie
+        # with it on market and would be silently skipped by an equality-only cursor search
+        # (see the comment on the cursor comparison in `do_pipeline_value_page`). The correct
+        # remainder is simply everything that was ranked after it.
+        checks.equal(
+            (stale_row["box"], stale_row["index"]),
+            (priced_whole[0]["box"], priced_whole[0]["index"]),
+            "sanity: the stale row really is the first page's only row",
+        )
+        checks.equal(
+            [(row["box"], row["index"]) for row in after_sale["rows"]],
+            [(row["box"], row["index"]) for row in priced_whole[1:]],
+            "a cursor naming a row that has since left the store still returns the correct "
+            "remaining rows — including a same-price TIE the sold row sat in front of — "
+            "comparing BY VALUE rather than by a remembered list index or exact row identity",
         )
 
 
@@ -27861,6 +28180,7 @@ def run() -> Result:
     check_corpus_revision(checks)
     check_pricing_clear(checks)
     check_pricing_labels(checks)
+    check_box_views_bounded(checks)
     check_allocator(checks)
     check_boxes_and_listings(checks)
     check_store(checks)
@@ -27938,6 +28258,7 @@ def run() -> Result:
     check_shipping_routes(checks)
     check_shipping_stamps(checks)
     check_value_table(checks)
+    check_value_page(checks)
     return checks.result(
         "store/, server/ and cli/ — the packages no harness test reached before this one."
     )

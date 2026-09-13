@@ -525,6 +525,27 @@ async function stubStore(page: Page): Promise<void> {
       floor: null,
     }),
   )
+  /* `?band=` (store-scaling item 7) — a default so a spec that navigates to `#/pricing?band=`
+     without its own stub (every case today is `value-bands.spec.ts`, which overrides this with
+     its own fixture-driven handler) still gets a real response rather than a hung request.
+     `(\?|$)` covers both the unpaginated `do_pipeline_value()` shape (no query string, still
+     answered by any direct caller) and the paginated `?band=...` form — the same anchor fix
+     `value-bands.spec.ts`'s own `open()` needed for the identical reason. */
+  await page.route(/\/pipeline\/value(\?|$)/, (route) =>
+    json(route, {
+      at: '2026-01-01T00:00:00.000+00:00',
+      basis: 'market',
+      threshold: null,
+      sources: [],
+      rows: [],
+      copies: [],
+      next: null,
+      total: 0,
+      boxes: [],
+      unrankable: { total: 0, never_identified: 0, read_nothing: 0, no_reading: 0, by_box: {} },
+      totals: { cards: 0, valued: 0, value: '0.00', under_cutoff: 0, at_or_over: 0 },
+    }),
+  )
   await page.route(/\/codes$/, (route) =>
     json(route, {
       counts: {},
