@@ -2337,6 +2337,7 @@ D183 A number a person reads is never a key a machine uses, so the photograph is
 D184 A gain step is the baseline times one number, a card is not, and the machine re-baselines only on that proof
 D185 A row declares how many subjects it had, an empty one is pinned by name with a reason, and eleven published claims get the reader they were already cited as having
 D186 A per-card price is divided by the cards actually submitted, and a reading is chosen on a metric the reading can move
+D188 A join reads the store directly when there is no run directory to replay
 ```
 
 **THE GAP THIS LIST CARRIED BETWEEN D116 AND D118 IS CLOSED, AND IT CLOSED THE WAY IT SAID IT

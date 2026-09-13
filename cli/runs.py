@@ -305,6 +305,20 @@ class Run:
         value = self.manifest.get("capture_dir")
         return Path(value) if value else None
 
+    @property
+    def submitted(self) -> Optional[List[str]]:
+        """Every position key this run's identification payload names, if the manifest says.
+
+        A CHEAP READ, WHICH IS THE WHOLE REASON THIS EXISTS: a manifest is a few hundred
+        bytes and `identifications.json` can be megabytes, so a caller that only wants "which
+        keys did this run cover" — `cli/cmd_identify.py:_run_keys_of`, answering `--run <name>`
+        — no longer has to open the larger file to find out. `None` on a run written before
+        `identify` started recording `submitted` (2026-09-12); a caller that needs the keys of
+        such a run falls back to `read_identifications()`.
+        """
+        value = self.manifest.get("submitted")
+        return list(value) if isinstance(value, list) else None
+
     # --------------------------------------------------------------- run-local files
 
     def read_identifications(self) -> Dict[str, Any]:
