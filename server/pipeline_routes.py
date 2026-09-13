@@ -129,6 +129,7 @@ from cli import cmd_reprice  # noqa: E402
 from cli import resolve as run_resolve  # noqa: E402
 from cli import runs as run_files  # noqa: E402
 from pipeline import corpus, decisions, games as game_registry, join, reprice, tcgcsv  # noqa: E402
+from pipeline import readings as readings_walk  # noqa: E402
 from pipeline import selection as selection_mod  # noqa: E402
 from pipeline import worklist  # noqa: E402
 # ALIASED, BECAUSE `pricing` IS A LOCAL IN THIS MODULE. Two handlers bind the name to a
@@ -3568,6 +3569,35 @@ def do_live_export() -> dict:
         if held > 0:
             live_rows += 1
             live_copies += held
+
+    # -------------------------------------------------------------- readings cache (D189)
+    # THE `export` OBJECT ABOVE IS ALREADY PARSED — this reuses it rather than re-reading
+    # `path` a second time, which is the whole cost `pipeline/readings.py:_newest_live_reading`
+    # would otherwise pay again on every fetch. `at` comes off the file's own NAME through
+    # `live_export_at`, never `master.now()` or the write's wall-clock moment: a full
+    # `readings adopt --write` run later reads this same file and must compute the identical
+    # `at`, and `pipeline/readings.py:live_export_at`'s docstring is explicit that the stamp
+    # in the name is "the only honest clock here" — matching it is what keeps the incremental
+    # path and the full recollect path from ever disagreeing about this file's age.
+    #
+    # SUPERSEDES EVERY EXISTING `live` SOURCE, NOT JUST THIS ONE'S OWN NAME. Unlike a run
+    # table, `_newest_live_reading` only ever credits the SINGLE newest live file — the
+    # instant this fetch lands, every SKU any OLDER live file was still carrying in `readings`
+    # is no longer backed by anything `collect()` would read, whether or not this file
+    # happens to reprice the same SKU. `Store().read()` here is a second, lock-free read; it
+    # costs one connection and no full-table scan (`readings_sources` is small).
+    at = readings_walk.live_export_at(name)
+    if at is not None:
+        live_found, live_source = readings_walk.reading_from_export(export, at=at, source=name)
+        stale_live = [
+            s.name for s in Store().read().readings.sources.values()
+            if s.kind == store_readings.KIND_LIVE
+        ]
+        with Store().write() as writable:
+            writable.readings.replace_source(
+                store_readings.KIND_LIVE, name, live_found, live_source,
+                supersede=stale_live or [name],
+            )
 
     return {
         "ok": True,

@@ -76,6 +76,41 @@ def live_export_at(name: str) -> Optional[int]:
     return int(moment.timestamp())
 
 
+def reading_from_table(parsed: dict, *, at: int, source: str) -> Tuple[Dict[str, Reading], Optional[Source]]:
+    """One run's ALREADY-PARSED `pricing.json` (or an equivalent in-memory dict of the same
+    shape, `cli/cmd_join.py`'s `_pricing_table`'s own return value), at a caller-supplied
+    `at`.
+
+    PULLED OUT OF `_run_readings` SO A JOIN CAN CALL IT ON THE TABLE IT JUST BUILT, without a
+    disk round trip and without a second, drifting copy of the row-reading rule (`cli/
+    cmd_join.py`'s `_pricing_table` already returns exactly this `{"skus": [...]}` shape, with
+    the same `sku`, `snap.market`, `name`, `set_name`, `condition` fields this function reads).
+    `_run_readings` below still owns the file I/O and the mtime; this owns only the
+    row-to-`Reading` rule, which is the part two callers now share.
+    """
+    found: Dict[str, Reading] = {}
+    priced = 0
+    for row in parsed.get("skus") or ():
+        if not isinstance(row, dict):
+            continue
+        sku = str(row.get("sku") or "")
+        market = (row.get("snap") or {}).get("market")
+        if not sku or not market:
+            continue
+        priced += 1
+        found[sku] = Reading(
+            market=str(market),
+            at=at,
+            source=source,
+            kind=KIND_RUN,
+            name=row.get("name"),
+            set_name=row.get("set_name"),
+            condition=row.get("condition"),
+        )
+    source_row = Source(kind=KIND_RUN, name=source, at=at, skus=priced) if priced else None
+    return found, source_row
+
+
 def _run_readings(root: Path) -> Tuple[Dict[str, Reading], List[Source]]:
     """Every run's `pricing.json` under `root`, oldest to newest by directory name."""
     found: Dict[str, Reading] = {}
@@ -91,30 +126,43 @@ def _run_readings(root: Path) -> Tuple[Dict[str, Reading], List[Source]]:
             at = int(table.stat().st_mtime)
         except (OSError, ValueError):
             continue
-        priced = 0
-        for row in parsed.get("skus") or ():
-            if not isinstance(row, dict):
-                continue
-            sku = str(row.get("sku") or "")
-            market = (row.get("snap") or {}).get("market")
-            if not sku or not market:
-                continue
-            priced += 1
-            candidate = Reading(
-                market=str(market),
-                at=at,
-                source=entry.name,
-                kind=KIND_RUN,
-                name=row.get("name"),
-                set_name=row.get("set_name"),
-                condition=row.get("condition"),
-            )
+        run_found, run_source = reading_from_table(parsed, at=at, source=entry.name)
+        for sku, candidate in run_found.items():
             here = found.get(sku)
             if here is None or candidate.at >= here.at:
                 found[sku] = candidate
-        if priced:
-            sources.append(Source(kind=KIND_RUN, name=entry.name, at=at, skus=priced))
+        if run_source is not None:
+            sources.append(run_source)
     return found, sources
+
+
+def reading_from_export(export, *, at: int, source: str) -> Tuple[Dict[str, Reading], Optional[Source]]:
+    """One ALREADY-PARSED `tcgcsv.Export` (the object `tcgcsv.read_export` returns), at a
+    caller-supplied `at`.
+
+    `do_live_export` has this object in hand the moment it validates the fetch — this lets it
+    skip a second parse of a file that can run to several MB at 50,000 listings, the same file
+    it just wrote and just read once already.
+    """
+    found: Dict[str, Reading] = {}
+    priced = 0
+    for row in export.rows:
+        sku = str(row.get(tcgcsv.SKU_COLUMN) or "")
+        market = row.get(tcgcsv.MARKET_PRICE_COLUMN) or ""
+        if not sku or not market.strip():
+            continue
+        priced += 1
+        found[sku] = Reading(
+            market=market.strip(),
+            at=at,
+            source=source,
+            kind=KIND_LIVE,
+            name=row.get(tcgcsv.NAME_COLUMN),
+            set_name=row.get(tcgcsv.SET_COLUMN),
+            condition=row.get(tcgcsv.CONDITION_COLUMN),
+        )
+    source_row = Source(kind=KIND_LIVE, name=source, at=at, skus=priced) if priced else None
+    return found, source_row
 
 
 def _newest_live_reading(directory: Path) -> Tuple[Dict[str, Reading], List[Source]]:
@@ -138,24 +186,10 @@ def _newest_live_reading(directory: Path) -> Tuple[Dict[str, Reading], List[Sour
         export = tcgcsv.read_export(newest)
     except (tcgcsv.MalformedCsv, OSError):
         return found, sources
-    priced = 0
-    for row in export.rows:
-        sku = str(row.get(tcgcsv.SKU_COLUMN) or "")
-        market = row.get(tcgcsv.MARKET_PRICE_COLUMN) or ""
-        if not sku or not market.strip():
-            continue
-        priced += 1
-        found[sku] = Reading(
-            market=market.strip(),
-            at=at,
-            source=newest.name,
-            kind=KIND_LIVE,
-            name=row.get(tcgcsv.NAME_COLUMN),
-            set_name=row.get(tcgcsv.SET_COLUMN),
-            condition=row.get(tcgcsv.CONDITION_COLUMN),
-        )
-    if priced:
-        sources.append(Source(kind=KIND_LIVE, name=newest.name, at=at, skus=priced))
+    live_found, live_source = reading_from_export(export, at=at, source=newest.name)
+    found.update(live_found)
+    if live_source is not None:
+        sources.append(live_source)
     return found, sources
 
 

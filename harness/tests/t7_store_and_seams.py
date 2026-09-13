@@ -244,6 +244,9 @@ from store import db, files, master, photos, queues  # noqa: E402
 # — the resolver computes and stores nothing, this one persists — so it takes an alias
 # rather than shadowing the name half this file's order cases are written against.
 from store import orders as order_store  # noqa: E402
+# `readings` above is already `pipeline.readings` — the walk. This is the store-side
+# table module (`KIND_RUN`/`KIND_LIVE`), aliased for the same reason.
+from store import readings as store_readings  # noqa: E402
 from store.session import Store  # noqa: E402
 from scripts import serve  # noqa: E402
 
@@ -13395,6 +13398,224 @@ def check_readings_adopt_cli(checks: Checks) -> None:
             adopted,
             "a `show` press is read-only — the table is unchanged by looking at it",
         )
+
+
+def check_readings_writer_after_join(checks: Checks) -> None:
+    """A join leaves `readings` current with no `readings adopt` press (item 5, D189
+    amended). `check_readings_adopt_cli` proves the CLI surface over the manual press;
+    `check_value_table` proves the two-source arbitration with the table hand-filled. This
+    is the one no existing check makes: that `join` itself keeps the table honest as an
+    ordinary side effect of the write it already makes.
+    """
+    checks.note("")
+    checks.note("READINGS WRITER — a join refreshes the cache with no adopt press")
+
+    with isolated_home():
+        cards = [(1, 1, "Dunsparce", "120", "normal")]
+        run_dir, _ = seam_run(checks, cards, market="9.99")
+
+        # NO `readings adopt` ANYWHERE ABOVE THIS LINE. If item 5's wiring in
+        # `cli/cmd_join.py` were absent or broken, this table would still be empty exactly
+        # as it was the moment PR #333 landed.
+        current = dict(Store().read().readings.entries)
+        checks.ok(
+            len(current) >= 1,
+            "the join that just ran left at least one reading behind with no adopt press",
+            current,
+        )
+        if not current:
+            return
+        sku = next(iter(current))
+        checks.equal(
+            current[sku].source, run_dir.name,
+            "and it is attributed to the run that was just joined",
+        )
+        checks.equal(
+            current[sku].kind, store_readings.KIND_RUN,
+            "as a run-table reading, not a live one",
+        )
+
+        # THE READ ROUTE AGREES, with no second write. `do_pipeline_value` is the caller
+        # `_readings()` exists for; this is the seam a stale table would actually be felt on.
+        # `card.sku` is stamped by `emit` (D174/D180), never by `join` itself, so an `emit`
+        # is what puts this SKU on a row `do_pipeline_value` can key off of — the readings
+        # table is already fresh before this line; this only exercises the read route that
+        # was the actual complaint the manual press left standing.
+        command(checks, "emit", str(run_dir.directory))
+        payload = pipeline_routes.do_pipeline_value()
+        row = next(r for r in payload["copies"] if r["sku"] == sku)
+        checks.ok(
+            row["market"] is not None,
+            "GET /pipeline/value prices this card without anyone having pressed adopt",
+            row,
+        )
+
+        # RE-JOINING SUPERSEDES ONLY THIS RUN'S OWN PRIOR ROWS. A second join of a
+        # DIFFERENT run must not evict the first run's readings.
+        cards2 = [(2, 1, "Articuno", "161", None)]
+        run_dir2, _ = seam_run(checks, cards2, market="4.50")
+        after = dict(Store().read().readings.entries)
+        checks.ok(
+            sku in after,
+            "the first run's reading survives a second, unrelated run's join",
+            after,
+        )
+
+
+def check_readings_writer_after_live_export(checks: Checks) -> None:
+    """A fetched live export leaves `readings` current with no `readings adopt` press (item
+    5, D189 amended), and a SECOND fetch supersedes the first — `pipeline/readings.py:
+    _newest_live_reading` only ever credits the single newest live file, so the moment a
+    fresher one lands every SKU the OLD file was carrying stops being backed by anything
+    `collect()` would read, whether or not the new file happens to reprice it.
+
+    ITS OWN HTTP STUB AND ITS OWN ENVIRONMENT, `check_export_fetch`'s reason: a real fetch
+    would need the owner's live session, and a stray `.env` on this machine would otherwise
+    point `envfile.get_live` at a real secret instead of this block's own fixture cookie.
+    `do_live_export` makes ONE GET with no scope (D104), so the stub is a single handler
+    rather than that check's whole portal.
+    """
+    checks.note("")
+    checks.note("READINGS WRITER — a live fetch refreshes the cache with no adopt press")
+
+    keys = (
+        "PKMNSCAN_TCG_EXPORT_URL",
+        "TCGPLAYER_STORE_COOKIE",
+        "PKMNSCAN_TCG_USER_AGENT",
+        envfile.FROM_FILE_ENV,
+    )
+    previous = {name: os.environ.get(name) for name in keys}
+
+    stub = {"body": b""}
+
+    class Portal(http.server.BaseHTTPRequestHandler):
+        def log_message(self, fmt, *args):  # noqa: A003
+            pass
+
+        def do_GET(self):  # noqa: N802
+            body = stub["body"]
+            self.send_response(200)
+            self.send_header("Content-Type", "text/csv")
+            self.send_header("Content-Length", str(len(body)))
+            self.end_headers()
+            if body:
+                self.wfile.write(body)
+
+    portal = http.server.HTTPServer(("127.0.0.1", 0), Portal)
+    portal_thread = threading.Thread(target=portal.serve_forever, daemon=True)
+    portal_thread.start()
+
+    os.environ["PKMNSCAN_TCG_EXPORT_URL"] = (
+        f"http://127.0.0.1:{portal.server_address[1]}/admin/pricing/downloadexportcsv"
+    )
+    os.environ["TCGPLAYER_STORE_COOKIE"] = (
+        "TCGAuthTicket_Production=t7-readings-not-a-real-session"
+    )
+    os.environ.pop("PKMNSCAN_TCG_USER_AGENT", None)
+
+    # THE SAME HERMETIC DANCE `check_export_fetch` DOES, for the same reason: an unpolluted
+    # `envfile._from_file` is what makes `get_live` honour the variables set above rather than
+    # a real `.env` on this machine.
+    env_before = (envfile.ENV_FILE, set(envfile._from_file), envfile._loaded)
+    envfile.ENV_FILE = Path(tempfile.gettempdir()) / "t7-readings-live-no-such.env"
+    envfile._from_file.clear()
+    os.environ.pop(envfile.FROM_FILE_ENV, None)
+    envfile._loaded = False
+
+    # A FAKE CLOCK, SO THE SECOND FETCH'S FILENAME COMPARES LATER THAN THE FIRST'S WITHOUT
+    # SLEEPING A REAL SECOND. `do_live_export` names its file off
+    # `datetime.now(timezone.utc).strftime("%Y%m%d-%H%M%S")` — second precision — so two
+    # fetches inside the same wall-clock second would collide on one filename and this test
+    # would never see two sources to begin with.
+    base = datetime.now(timezone.utc).replace(microsecond=0)
+    moments = iter([base, base + timedelta(seconds=2)])
+
+    class _FakeDatetime:
+        @staticmethod
+        def now(tz=None):
+            return next(moments)
+
+    real_datetime = pipeline_routes.datetime
+    pipeline_routes.datetime = _FakeDatetime
+
+    try:
+        with isolated_home():
+            source = tcgcsv.read_export(FIXTURE_EXPORT)
+            by_sku = source.by_sku()
+
+            # THE OLD FETCH CARRIES TWO SKUS.
+            old_rows = [dict(by_sku[DUNSPARCE_SKU]), dict(by_sku[ARTICUNO_SKU])]
+            old_rows[0][tcgcsv.MARKET_PRICE_COLUMN] = "1.00"
+            old_path = Path(tempfile.mkdtemp()) / "old-live.csv"
+            tcgcsv.write_csv(old_path, source.header, old_rows)
+            stub["body"] = old_path.read_bytes()
+
+            # NO `readings adopt` ANYWHERE ABOVE THIS LINE. If item 5's wiring in
+            # `do_live_export` were absent or broken, this table would still be empty exactly
+            # as it was the moment PR #333 landed.
+            first = pipeline_routes.do_live_export()
+            sources_after_first = Store().read().readings.sources_payload()
+            checks.equal(
+                [(s["kind"], s["name"]) for s in sources_after_first],
+                [(store_readings.KIND_LIVE, first["fetched"])],
+                "the fetch that just ran left exactly one live source behind with no adopt "
+                "press",
+            )
+            entries_after_first = dict(Store().read().readings.entries)
+            if DUNSPARCE_SKU not in entries_after_first:
+                checks.ok(False, "a fetched SKU's entry exists", entries_after_first)
+                return
+            checks.equal(
+                entries_after_first[DUNSPARCE_SKU].kind, store_readings.KIND_LIVE,
+                "a fetched SKU's entry is kind=live",
+            )
+
+            # THE SECOND FETCH CARRIES ONLY ONE OF THE TWO SKUS, at a different price, and its
+            # own filename is a full clock second later.
+            new_rows = [dict(by_sku[DUNSPARCE_SKU])]
+            new_rows[0][tcgcsv.MARKET_PRICE_COLUMN] = "2.00"
+            new_path = Path(tempfile.mkdtemp()) / "new-live.csv"
+            tcgcsv.write_csv(new_path, source.header, new_rows)
+            stub["body"] = new_path.read_bytes()
+
+            second = pipeline_routes.do_live_export()
+            checks.ok(
+                second["fetched"] != first["fetched"],
+                "the second fetch is a distinct file from the first",
+                (first["fetched"], second["fetched"]),
+            )
+
+            sources_after_second = Store().read().readings.sources_payload()
+            checks.equal(
+                [(s["kind"], s["name"]) for s in sources_after_second],
+                [(store_readings.KIND_LIVE, second["fetched"])],
+                "the second fetch supersedes the first — the OLD source name is gone from "
+                "`sources`",
+            )
+            entries_after_second = dict(Store().read().readings.entries)
+            checks.ok(
+                ARTICUNO_SKU not in entries_after_second,
+                "a SKU only the OLD file carried is gone from `entries`",
+                entries_after_second,
+            )
+            if DUNSPARCE_SKU in entries_after_second:
+                checks.equal(
+                    entries_after_second[DUNSPARCE_SKU].market, "2.00",
+                    "and the surviving SKU's reading is the NEW file's own price",
+                )
+    finally:
+        pipeline_routes.datetime = real_datetime
+        portal.shutdown()
+        portal.server_close()
+        portal_thread.join(5)
+        envfile.ENV_FILE, restore_from_file, envfile._loaded = env_before
+        envfile._from_file.clear()
+        envfile._from_file.update(restore_from_file)
+        for name, value in previous.items():
+            if value is None:
+                os.environ.pop(name, None)
+            else:
+                os.environ[name] = value
 
 
 def check_live_reconcile(checks: Checks) -> None:
@@ -26672,6 +26893,8 @@ def run() -> Result:
     check_pricing_authority(checks)
     check_prices_adopt(checks)
     check_readings_adopt_cli(checks)
+    check_readings_writer_after_join(checks)
+    check_readings_writer_after_live_export(checks)
     check_merged_emit_cap(checks)
     check_merged_emit_uncapped(checks)
     check_unsent_copies_worklist(checks)
