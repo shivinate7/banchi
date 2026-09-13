@@ -3587,7 +3587,7 @@ function LineStandDown({
             disabled={locked}
             onClick={() => onDeclareKind(order, line, 'sealed')}
           >
-            Not a single
+            Sealed product
           </Button>
         ) : (
           <Button
@@ -3596,7 +3596,7 @@ function LineStandDown({
             disabled={locked}
             onClick={() => onDeclareKind(order, line, null)}
           >
-            Not sealed after all
+            Undo — not sealed
           </Button>
         )}
         {owed < 1 ? null : (

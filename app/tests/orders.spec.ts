@@ -353,7 +353,7 @@ test('a line no pull can reach offers the two presses that can, and each sends i
   /* THE CLASSIFICATION IS A SEPARATE PRESS FROM THE FILL, and the shipping lane is why: a sealed
      product must be classifiable BEFORE it ships, or the routing answer arrives after it stopped
      mattering. Two controls here is the assertion, not an accident of layout. */
-  await stand.getByRole('button', { name: 'Not a single' }).click()
+  await stand.getByRole('button', { name: 'Sealed product' }).click()
   await expect
     .poll(() => wire.filter((one) => one.path === '/orders/line-kind').length)
     .toBe(1)
