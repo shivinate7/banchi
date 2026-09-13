@@ -613,6 +613,9 @@ _RUN_PRICING_RE = re.compile(r"^/pipeline/runs/([A-Za-z0-9._-]+)/pricing$")
 # site is what keeps this route from being refused as `no_such_step` — the same care every
 # GET-only sibling below needs, and the reason they are declared together.
 _RUN_EXPORT_RE = re.compile(r"^/pipeline/runs/([A-Za-z0-9._-]+)/export$")
+# D165's rescue, offered from a screen. Matched before `_RUN_STEP_RE` for `_RUN_EXPORT_RE`'s
+# own reason: `rescue` is `[a-z]+` too, and the more specific pattern has to read first.
+_RUN_RESCUE_RE = re.compile(r"^/pipeline/runs/([A-Za-z0-9._-]+)/rescue$")
 # The price history for ONE SKU, named on the query string (D62). Matched before the
 # run-item and step patterns for the same reason the two above are: the more specific
 # path reads first. `history` would otherwise be eaten by `_RUN_STEP_RE`, whose
@@ -11995,6 +11998,15 @@ class CaptureHandler(BaseHTTPRequestHandler):
                 return self._json(
                     HTTPStatus.OK,
                     pipeline_routes.do_pipeline_export(match.group(1), self._body()),
+                )
+            # D165's repair, offered from a screen. Before `_RUN_STEP_RE`, whose `[a-z]+`
+            # would otherwise match `rescue` and refuse it as a step that does not exist —
+            # the same hazard `/export` above it carries and the same remedy.
+            match = _RUN_RESCUE_RE.match(path)
+            if match:
+                return self._json(
+                    HTTPStatus.OK,
+                    pipeline_routes.do_run_rescue(match.group(1), self._body()),
                 )
             match = _RUN_STEP_RE.match(path)
             if match:

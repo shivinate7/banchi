@@ -15,6 +15,7 @@ import { readUpload } from './csvUpload'
 import { Button, EmptyState, Icon, Notice, Pill, Segmented, Stat } from './kit'
 import { toast } from './kit/toast'
 import { RunFiles } from './RunFiles'
+import { RunRescue } from './RunRescue'
 import { FileButton } from './RunsDrop'
 import { LogWell } from './RunsLog'
 import { COMMANDS, StageBar, StagePill, runningFor, stageOf, whenLabel, type Command } from './RunsStage'
@@ -333,6 +334,9 @@ export function RunPanel({ drawers, openRun, onOpenRun, reloadTick, onIdentify, 
   const [trouble, setTrouble] = useState<Trouble | null>(null)
 
   const [openStep, setOpenStep] = useState<Command | null>(null)
+  /* D165's repair, offered only where `detail.box_former` is true. Closed on every run
+     switch, so it can never survive onto a healthy run under `openRun`'s own key. */
+  const [rescueOpen, setRescueOpen] = useState(false)
 
   /* ---------------------------------------------------------------------- the list */
   const loadRuns = useCallback(async () => {
@@ -822,7 +826,17 @@ export function RunPanel({ drawers, openRun, onOpenRun, reloadTick, onIdentify, 
                 <h2 className="runs-detail-h">{runBoxLabel(detail) ?? detail.run}</h2>
                 <span className="runs-detail-name">{detail.run}</span>
               </div>
-              <div className="runs-detail-side">{stage === null ? null : <StagePill stage={stage} />}</div>
+              <div className="runs-detail-side">
+                {/* D165's repair, offered ONLY where the store can no longer join this run —
+                    a drawer reused since (`detail.box_former`). It is a press, not a route
+                    change (D118): the sheet opens over this same header. */}
+                {detail.box_former === true ? (
+                  <Button size="sm" variant="default" onClick={() => setRescueOpen(true)}>
+                    Rebind
+                  </Button>
+                ) : null}
+                {stage === null ? null : <StagePill stage={stage} />}
+              </div>
             </header>
 
             <ol className="runs-stepper" aria-label="The four steps">
@@ -1323,6 +1337,18 @@ export function RunPanel({ drawers, openRun, onOpenRun, reloadTick, onIdentify, 
           </div>
         )}
       </section>
+      {detail === null ? null : (
+        <RunRescue
+          key={detail.run}
+          open={rescueOpen}
+          onClose={() => setRescueOpen(false)}
+          run={detail.run}
+          onOpenRun={(name) => {
+            setRescueOpen(false)
+            onOpenRun(name)
+          }}
+        />
+      )}
     </div>
   )
 }

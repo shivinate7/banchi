@@ -10618,6 +10618,15 @@ _REPO_EXT_RE = re.compile(r"\b[\w-]+\.(?:sqlite|jsonl|json)\b")
 # false positives from this pattern on the tree as it stands.
 _DECISION_CITE_RE = re.compile(r"\bD\d{1,4}\b|\bC\d{1,4}\b|\(D-[A-Za-z0-9][A-Za-z0-9-]*\)")
 
+# A CLI INVOCATION, BACKTICKED OR BARE (D-rescue-is-a-press's own finding). This row had no
+# key for `Pricing.tsx:4468`'s "Run `pkmnscan rescue` to rebind it." — a backticked command
+# is not a decision citation, not one of `_REPO_TOP_DIRS` followed by a slash, and not a
+# `.json`/`.sqlite`/`.jsonl` filename, so it passed this row clean while naming this
+# product's own CLI on screen. `pkmnscan` is the checkout's own name (CLAUDE.md's naming
+# rule) and never a word an operator would use to describe what a press does; a subcommand
+# beside it (`rescue`, `join`, `emit`, …) is exactly the mechanism this row exists to catch.
+_CLI_INVOCATION_RE = re.compile(r"`?\bpkmnscan\b(?:\s+[\w.-]+)*`?", re.I)
+
 
 def _run_user_strings(args: List[str]) -> Optional[List[Dict[str, object]]]:
     """Shell out to scripts/user-strings.mjs; None when the toolchain cannot run it.
@@ -10688,7 +10697,12 @@ def _no_mechanism_findings(strings: List[Dict[str, object]]) -> List[Finding]:
         text = str(item["text"])
         where = f"{item['file']}:{item['line']}"
         shown = text if len(text) <= 100 else text[:97] + "..."
-        code_hit = _DECISION_CITE_RE.search(text) or _REPO_PATH_RE.search(text) or _REPO_EXT_RE.search(text)
+        code_hit = (
+            _DECISION_CITE_RE.search(text)
+            or _REPO_PATH_RE.search(text)
+            or _REPO_EXT_RE.search(text)
+            or _CLI_INVOCATION_RE.search(text)
+        )
         if code_hit is not None:
             findings.append(
                 Finding(
@@ -16584,6 +16598,12 @@ def self_test() -> int:
             "}\n",
         )
         written(
+            "CliInvocation.tsx",
+            "export function CliInvocation() {\n"
+            "  return <span title=\"Run `pkmnscan rescue` to rebind it.\">stranded</span>\n"
+            "}\n",
+        )
+        written(
             "PullConfirm.tsx",
             "export function PullConfirm() {\n"
             "  return <p>Waiting on the pipeline to answer.</p>\n"
@@ -16622,6 +16642,9 @@ def self_test() -> int:
                "the Fulfiller's own screen is NOT exempt — a real person reads it while working")
             ok("PullConfirm.tsx" in hit_files,
                "the pull-confirm screen is NOT exempt, for the same reason")
+            ok("CliInvocation.tsx" in hit_files,
+               "a backticked `pkmnscan …` invocation is caught — `Pricing.tsx:4468`'s own "
+               "defect before D-rescue-is-a-press, and the row had no key for it")
 
     # THE PIN. `NO_MECHANISM_EXEMPT_FILES` is a set of exactly one entry, named in the
     # coordinator's 2026-09-13 ruling and nowhere else — a session widening it to a second

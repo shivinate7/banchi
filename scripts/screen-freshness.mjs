@@ -243,6 +243,7 @@ const RECORDED = {
                                               // backfill naming a buyer the fetch found unnamed
     'reconcileBacklog',                      // D203, the one-time
                                               // stand-down over the historical backlog
+    'rescueRun',                              // D165/D-rescue-is-a-press, the run rebind
   ],
   // `previewReconcileBacklog` is the reconcile's press-nothing half and says so in its own
   // docstring — "FREE and WRITES NOTHING" — which is what earns a place on this list.
