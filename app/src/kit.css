@@ -16,9 +16,15 @@
   padding: var(--bn-6) var(--bn-7) var(--bn-10);
   /* THE PAGE'S CEILING IS THE SHELL'S, AND A SCREEN MAY SET A LOWER ONE by declaring
      `--bn-page-max` on its own root. See `--bn-page-w` in tokens.css for why a cap rather
-     than a breakpoint, and for what `--bn-page-w-rows` is. */
+     than a breakpoint, and for what `--bn-page-w-rows` is.
+     ONE LEFT EDGE FOR EVERY SCREEN (`D197`): a cap NARROWS the page from the
+     shell's own left inset, it never CENTERS it there. `margin: 0 auto` on a screen with a
+     lower cap put that screen's whole gutter in the middle of the column the shell handed
+     it, and the gutter grows with the window — so the left edge moved between routes, up to
+     330px on the owner's own rig. `margin: 0` is the fix; only the WIDTH may vary by
+     screen now, never the anchor. `app/tests/page-edge.spec.ts` asserts it. */
   max-width: var(--bn-page-max, var(--bn-page-w));
-  margin: 0 auto;
+  margin: 0;
   animation: bn-page-in var(--bn-t-slow) var(--bn-ease-out) backwards;
 }
 @media (max-width: 767px) {
@@ -32,6 +38,24 @@
 .bn-row { display: flex; align-items: center; gap: var(--bn-2); }
 .bn-row-wrap { display: flex; align-items: center; gap: var(--bn-2); flex-wrap: wrap; }
 .bn-stack { display: flex; flex-direction: column; gap: var(--bn-3); }
+
+/* THE EQUAL-WIDTH ACTION STACK (D195): buttons of the same role
+   stacked vertically in one sector take the width of the widest sibling's intrinsic
+   (label + padding) width — never the sector's full width, never a hard px. A single
+   `max-content` grid column is sized by its widest child, and `justify-self: stretch`
+   makes every other child fill that column — that is the whole mechanism, no JS measuring.
+   Wrap same-variant, same-size buttons that stack in a sector with this; a primary beside a
+   ghost Cancel, or a horizontal row, is a different case and does not use it. When the
+   buttons cannot share one wrapper (each lives in its own list row), read the capture
+   block's `.capture-block-list` in CaptureScreen.css for the cross-row grid-column form of
+   the same idea. */
+.bn-actions-stack {
+  display: inline-grid;
+  grid-template-columns: max-content;
+  gap: var(--bn-2);
+  justify-content: start;
+}
+.bn-actions-stack > * { justify-self: stretch; }
 .bn-grow { flex: 1 1 auto; min-width: 0; }
 .bn-spacer { flex: 1 1 auto; }
 .bn-truncate { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }

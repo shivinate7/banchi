@@ -2505,7 +2505,7 @@ export function CaptureScreen() {
         key: 'camera',
         icon: 'camera',
         tone: 'plain',
-        text: 'Open the camera before capturing.',
+        text: 'Open the camera.',
         fix: { label: 'Open the camera', icon: 'camera', onPress: camera.retry },
       })
     } else if (!camera.ready) {
@@ -2529,7 +2529,7 @@ export function CaptureScreen() {
         key: 'box',
         icon: 'box',
         tone: 'plain',
-        text: 'Pick a box, or type a new one, before capturing.',
+        text: 'Pick or name a box.',
         fix: { label: 'Pick a box', icon: 'box', onPress: () => toggleField('box') },
       })
     }
@@ -2757,9 +2757,8 @@ export function CaptureScreen() {
           louder. */}
       {halt !== null || !heldAcrossReload ? null : (
         <section className="capture-carried" role="status">
-          <Notice tone="warn" title="A capture from before this page reloaded was never confirmed.">
-            Put that same card back at the lens and capture it — if the server did record it, it
-            will say so and give it no second position. Do not feed the next card first.
+          <Notice tone="warn" title="Unconfirmed capture from before reload">
+            Capture the same card again, not the next one.
           </Notice>
         </section>
       )}
@@ -2768,7 +2767,6 @@ export function CaptureScreen() {
           lamp and the box sentence are the stage's, 60px lower, and are not drawn twice. */}
       <header className="capture-head">
         <div className="capture-head-text">
-          <span className="bn-eyebrow">Workflow</span>
           <h1 className="capture-title">
             <Icon name="camera" size={20} />
             Capture
@@ -2891,9 +2889,6 @@ export function CaptureScreen() {
                           <Icon name="camera" size={26} />
                         </span>
                         <p className="capture-frame-title">The camera is not open</p>
-                        <p className="capture-frame-body">
-                          Nothing on this screen reaches for it until you ask.
-                        </p>
                         <Button variant="primary" icon="camera" onClick={camera.retry}>
                           Open the camera
                         </Button>
@@ -3091,9 +3086,6 @@ export function CaptureScreen() {
                   <Icon name="image" size={24} />
                 </span>
                 <p className="capture-frame-title">Your first capture lands here</p>
-                <p className="capture-frame-body">
-                  Big enough to catch a blur or a finger before the card goes back in the box.
-                </p>
               </div>
             ) : (
               <img
@@ -3427,7 +3419,7 @@ export function CaptureScreen() {
             {undoStack.length === 0 ? null : (
               <p
                 className="capture-film-hint"
-                title="This sitting, newest first, whichever drawer each card went in. A thumbnail undoes that card and everything captured after it."
+                title="Newest first. A thumbnail undoes it and everything after."
               >
                 <Kbd>{UNDO_KEY_LABEL}</Kbd> undoes the newest
               </p>
@@ -3444,8 +3436,8 @@ export function CaptureScreen() {
                   filter speaking — under a sitting-ordered stack a full box and an empty
                   strip is a state that cannot happen. */}
               {box === null
-                ? 'Captures you can undo will appear here once a box is picked.'
-                : 'Nothing to undo yet — this sitting has no captures and this box is empty.'}
+                ? 'Pick a box to start.'
+                : 'Nothing to undo yet.'}
             </p>
           ) : (
             <ul className="capture-undo-list">
@@ -3593,16 +3585,27 @@ export function CaptureScreen() {
                 setHint.trim() === '' ? (
                   /* THE RESTING ROW CARRIES IT TOO, because this is the state the screen sits
                      in for every card of a sitting nobody pressed H on: the field is shut and
-                     `None` on its own reads as a choice that was made. */
+                     `None` on its own reads as a choice that was made. On a game the export
+                     cannot be fetched without one (D170), `None` beside a sub-line reading
+                     "needed for this game" reads at a glance as "none needed" — the opposite
+                     of what it means. The value says the requirement directly instead: no
+                     `None`, no sub-line, just `Needed`. */
                   <span className={needsHint ? 'capture-val capture-val-alert' : 'capture-val is-default'}>
-                    None
-                    {needsHint ? <em className="capture-sub">needed for this game</em> : null}
+                    {needsHint ? 'Needed' : 'None'}
                   </span>
                 ) : (
-                  <span className={hintAlert ? 'capture-val capture-val-alert' : 'capture-val'}>
-                    <span className="bn-mono capture-val-name">{setHint.trim()}</span>
+                  /* The sub-line is a SIBLING of the value, both direct children of
+                     `.capture-right`, never nested inside `.capture-val` — that span is the
+                     overflow-hidden ellipsis container, and a sub-line inside it clips the
+                     instant the row is narrower than value + sub. `.capture-val-name` is the
+                     only element that clips; `.capture-sub` sits beside it with `flex: none`
+                     and never does. */
+                  <>
+                    <span className={hintAlert ? 'capture-val capture-val-alert' : 'capture-val'}>
+                      <span className="bn-mono capture-val-name">{setHint.trim()}</span>
+                    </span>
                     {hintAlert ? <em className="capture-sub">names no set</em> : null}
-                  </span>
+                  </>
                 )
               }
               onToggle={() => toggleField('set')}
@@ -3802,21 +3805,19 @@ export function CaptureScreen() {
                 </>
               )}
               {gameEntry === null ? null : gameEntry.unverified ? (
-                <p className="capture-opennote" title="Rarities are authored in pipeline/games.py">
-                  No TCGplayer export has been seen for {gameEntry.display}, so a card captured as
-                  one could never be identified, priced or listed. Captures are held until an
-                  export is in hand and its rarities are authored.
+                <p className="capture-opennote">
+                  No TCGplayer export exists for {gameEntry.display} — it cannot be identified,
+                  priced, or listed. Captures are held until one is added.
                 </p>
               ) : !gameEntry.catalogued ? (
                 <p className="capture-opennote">
-                  {gameEntry.display} is captured and located like any other card and then stops:
-                  no identification call, no join, no listing. A note under the last capture is
-                  the only thing it can be found by later.
+                  {gameEntry.display} is captured and located, but never identified, priced, or
+                  listed.
                 </p>
               ) : gameEntry.prompt === PROMPT_UNWRITTEN ? (
                 <p className="capture-opennote">
-                  {gameEntry.display} has an export but no identification prompt yet, so these
-                  cards will be captured and positioned now and identified later.
+                  {gameEntry.display} has no identification prompt yet — cards are captured and
+                  positioned now, identified later.
                 </p>
               ) : null}
             </OpenField>
@@ -3856,10 +3857,6 @@ export function CaptureScreen() {
             >
               {!camera.started ? (
                 <>
-                  <p className="capture-opennote">
-                    The camera is not open yet. Nothing on this screen reaches for it until you
-                    ask, so opening the app raises no permission prompt.
-                  </p>
                   <Button variant="primary" size="sm" icon="camera" onClick={camera.retry}>
                     Open the camera
                   </Button>
@@ -3882,16 +3879,15 @@ export function CaptureScreen() {
                   </div>
                   {camera.missing ? (
                     <p className="capture-refused">
-                      The remembered camera is not connected. Check the Cam Link and that the
-                      camera is awake, or pick a camera above. Nothing is open until you do.
+                      The remembered camera is not connected. Check the Cam Link, or pick one
+                      above.
                     </p>
                   ) : null}
                   {camera.error === null ? null : <p className="capture-refused">{camera.error}</p>}
                   {underTarget ? (
                     <p className="capture-refused">
-                      This stream is below the {PIPELINE_LONG_EDGE}px the pipeline works from, so
-                      every photo will be worse than the rig can produce. Check the camera is in
-                      its clean-HDMI output mode and that nothing else is holding the capture card.
+                      This stream is below {PIPELINE_LONG_EDGE}px. Check clean-HDMI output mode,
+                      and that nothing else is holding the capture card.
                     </p>
                   ) : null}
                   {camera.missing || camera.error !== null || underTarget ? (
@@ -3923,14 +3919,18 @@ export function CaptureScreen() {
                 ) : !camera.ready ? (
                   <span className="capture-val is-default">Connecting…</span>
                 ) : (
-                  <span className="capture-val">
-                    <span className="capture-val-name">{cameraLabel ?? 'Camera'}</span>
+                  /* Sub-line is a sibling of the value inside `.capture-right`, not nested
+                     inside `.capture-val` — see the same note on the Set hint row above. */
+                  <>
+                    <span className="capture-val">
+                      <span className="capture-val-name">{cameraLabel ?? 'Camera'}</span>
+                    </span>
                     {signal === null ? null : (
                       <em className={underTarget ? 'capture-sub capture-sub-alert' : 'capture-sub'}>
                         {signal.width}×{signal.height}
                       </em>
                     )}
-                  </span>
+                  </>
                 )
               }
               onToggle={() => toggleField('camera')}
@@ -3999,8 +3999,8 @@ export function CaptureScreen() {
               />
               <p className="capture-opennote">
                 {triggerMode === 'motion'
-                  ? 'The machine fires the shutter when a card settles at the lens — and, where a card never quite does, off the quietest frame it manages rather than not at all. Arming starts the run; it never survives a reload.'
-                  : 'The shutter fires on C. Motion arms a machine that fires it when a card settles at the lens.'}
+                  ? 'Fires when a card settles at the lens — or, if it never quite does, on the best frame it gets. Arming does not survive a reload.'
+                  : 'C fires the shutter. Motion fires it automatically when a card settles.'}
               </p>
             </OpenField>
           ) : (
@@ -4044,8 +4044,8 @@ export function CaptureScreen() {
             </Button>
             <p className="capture-opennote capture-clear-note">
               {setupChosen
-                ? 'Puts the box, the game and every claim back to nothing chosen. The camera, the rotation and everything in the store are untouched.'
-                : 'Nothing is chosen, so there is nothing to clear.'}
+                ? 'Resets the box, game, and claims. The camera, rotation, and store are untouched.'
+                : 'Nothing to clear.'}
             </p>
           </div>
         </section>
