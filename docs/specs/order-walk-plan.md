@@ -3,6 +3,11 @@
 **Status: SPECIFIED, NOT BUILT.** No code in this tree implements any part of it. The owner
 rules on this document before a line is written.
 
+**Three architectural calls were put to the owner on 2026-09-17 and ruled on.** They are
+settled in this document and are not open questions: the solver runs **on the server**;
+`buildWalkPlan` is **replaced, not extended**; and the plan, once the walk starts, **never
+changes** (section 8, which carries the owner's own words).
+
 **What it replaces.** `#/orders`'s `Walk the boxes` stage, and the sentence block, the
 `By order` fold and `buildWalkPlan` around it. `#/orders` and `#/shipping` stay two stages of
 one screen and two routes. No new route appears in `App.tsx`'s `ROUTES` table.
@@ -203,7 +208,8 @@ as the tick list grows.
 
 ### Where it runs
 
-**Server-side, in `pipeline/walkplan.py`.** Three reasons, in order:
+**Server-side, in `pipeline/walkplan.py`.** The owner ruled this on 2026-09-17, on three
+reasons, in order:
 
 - This repo forbids pipeline logic in the browser, and "which copies satisfy which demand" is
   pipeline reasoning over inventory.
@@ -329,19 +335,33 @@ A row's demand is met the moment `taken == wanted`. On that press:
 `Take another` control re-enables the row. The owner's own words: it is not inherently wrong
 to overpull. It is wrong for it to be the path of least resistance.
 
-**The undo window does not re-plan.** An undo inside 20 s restores the row and nothing else
-moves. The plan is recomputed only when the operator asks for it (below).
+**The undo window moves nothing.** An undo inside 20 s restores the row in place. The plan is
+never recomputed, by any press (below).
 
-### Re-planning
+### Re-planning — there is none
 
-The plan is computed once when the walk opens and is **frozen for the pass**. A pull that
-changes what is on hand does not silently re-plan under the operator's hand — the same rule
-D181 gives `#/inventory`'s order.
+**The owner's ruling, 2026-09-17, interviewed on this document:** *"once I hit the button to
+start my walk, my experience should be that nothing's shuffling under me"*, and on what a
+mid-walk change should do: *"maybe a toast spawns, but frankly I can't imagine a copy sold on
+another screen ever happening, and a new order arriving shouldn't alter my walk."*
 
-When the store moves enough that the plan is no longer the best one — a copy sold elsewhere, a
-`CopyAlreadyPulled` refusal, an order ingested — the screen says so in one line with one
-control: **"Two cards moved. Re-plan."** The operator presses it or ignores it. That is the
-whole of the interaction.
+So the plan is computed once, when the walk opens, and **never changes again**. Not on a pull.
+Not on a sale elsewhere. Not on an ingest. There is **no `Re-plan` control**, and the earlier
+draft of this document that offered one was wrong.
+
+- **A new order arriving does not touch the walk.** The walk covers the set ticked at the
+  press. An order that arrives after it is simply not in it.
+- **A copy that goes while the walk is open** marks its own row — `gone, skip` — and moves
+  nothing around it (D118). The stop stays in the list at its own position even when every row
+  in it has gone, because removing it would move the rest.
+- **A toast is the ceiling of the interruption.** One toast, said once, and no banner, no line
+  in the list and no control. The owner does not expect this state to occur.
+- **`CopyAlreadyPulled` is the same shape.** The row that lost marks itself. The walk is
+  unchanged.
+
+This is D181's rule (the order is taken once, and a sale may not retake it) applied to a walk,
+and D118's (a press changes what is on the screen, never where the rest of it is) applied to
+the list the press sits in.
 
 ### The shortfall block
 
@@ -356,7 +376,7 @@ countable at a glance.
   mistake from earlier the same day. What the sentences said — how many to pull, how many are
   on hand, across how many boxes — is said by the take counter on the row and the stop the row
   sits in. No sentence replaces them.
-- **`buildWalkPlan` is replaced, not extended.** It groups by BOX (`key = box/${pick.box}`),
+- **`buildWalkPlan` is replaced, not extended** (the owner's ruling, 2026-09-17). It groups by BOX (`key = box/${pick.box}`),
   ranks by density, is scoped to **one order**, and tallies sections for display only. It is a
   sort. The plan is a cover with multiplicities across many orders. Nothing of its shape
   survives the change of unit, of scope and of objective. Its `PlanStop`/`PlanCard` types go
@@ -377,9 +397,12 @@ countable at a glance.
 - **Fewer sections is not always less work.** A section with 70 cards costs the same as one
   with 33 (both are real on this store). The owner ruled sections counted flat; this is the
   price of the ruling, and it is the first thing a second cost function would address.
-- **Frozen plan, stale plan.** Freezing for the pass is what stops the screen moving under the
-  hand. It also means a plan can be stale by the time it is finished. The `Re-plan` line is
-  the whole mitigation, and it is a control rather than a rule on purpose.
+- **Frozen plan, stale plan, and no way to refresh it.** Freezing for the pass is what stops
+  the screen moving under the hand, and the owner ruled it absolute. So a walk that has gone
+  stale stays stale to its end. The only remedy is to finish it and press again. **This is the
+  sharpest trade in the document**, taken on the owner's own estimate that a copy going during
+  a walk is a state they cannot imagine occurring. If it turns out to occur, this is the first
+  thing to revisit — see section 11.
 - **A second operator is worse off than today.** D212 already named this: two hands pulling at
   once learn of a conflict only at `CopyAlreadyPulled`. A frozen plan makes the wrong walk
   longer before the refusal arrives. This design does not address two hands and should not be
@@ -407,7 +430,12 @@ countable at a glance.
   measurements in §6 no longer bound the real instances. The budget, the bound or the
   formulation is then the subject, not the screen.
 - **A second operator.** Two hands change what a frozen plan is worth, and D212's own
-  reopening condition is the same one.
+  reopening condition is the same one. With no re-plan control at all, the second hand's walk
+  cannot be corrected once it has started.
+- **A copy going mid-walk turns out to be common.** The absence of a `Re-plan` control rests
+  on the owner's estimate that it does not happen. A count of `gone, skip` rows over a month
+  of real walks is the measurement that would settle it. If the number is not near zero, the
+  control comes back — as a press, never as an automatic recompute, which stays refused.
 - **The stop stops being the right unit.** If the owner walks with the phone in one hand and
   wants one card at a time after all, `#/fulfillment`'s unit is the answer and this document's
   §8 is what changes.
