@@ -1,6 +1,6 @@
 ## D150 — A reading taken after a sale is that sale's own result, and it ages the claim
 
-**`cli/resolve.py:_copies_out` ages a stuck `pushed` claim by the SKU's sales where the export corroborates them, and a reading of ZERO taken AFTER a sale is corroboration.** Built 2026-09-11, from the operator's report that two cards they had just scanned into box 1 could not be sent: *"you are aware that I scanned in new falling star and a new fizz and so i should ideally when everything is fixed have some quantity that could be pushed out on that pricing run?"* They were right, and `docs/DEBTS.md` §24 — written the same day, by the branch that fixed D147's ordering defect — had recorded this as deliberately unfixed.
+**`cli/resolve.py:_copies_out` ages a stuck `pushed` claim by the SKU's sales where the export corroborates them, and a reading of ZERO taken AFTER a sale is corroboration.** Built 2026-09-11, from the operator's report that two cards they had just scanned into box 1 could not be sent: *"you are aware that I scanned in new falling star and a new fizz and so i should ideally when everything is fixed have some quantity that could be pushed out on that pricing run?"* They were right, and §24 — written the same day, by the branch that fixed D147's ordering defect — had recorded this as deliberately unfixed.
 
 ### The expression, and the premise that was false
 
@@ -76,4 +76,4 @@ The seven are §24's own table, Falling Star and Fizz, Trickster among them. Sto
 
 ### What is left, and it is named rather than papered over
 
-**A SKU whose import landed in Staged and never went live reads zero too.** A copy sold by hand against that state ages a claim it should not, and the copies are still sitting in TCGplayer's staged channel. Telling that from a sold-out listing needs D59's own reopener — a marker that a copy actually reached an import file, one field on `Card` written by `cmd_emit`'s push loop beside the `sku` stamp. **`docs/DEBTS.md` §24 is now that residue** rather than this whole defect; it is the third entry to turn on not having that field, after D147 and §24 itself.
+**A SKU whose import landed in Staged and never went live reads zero too.** A copy sold by hand against that state ages a claim it should not, and the copies are still sitting in TCGplayer's staged channel. Telling that from a sold-out listing needs D59's own reopener — a marker that a copy actually reached an import file, one field on `Card` written by `cmd_emit`'s push loop beside the `sku` stamp. **§24 is now that residue** rather than this whole defect; it is the third entry to turn on not having that field, after D147 and §24 itself.

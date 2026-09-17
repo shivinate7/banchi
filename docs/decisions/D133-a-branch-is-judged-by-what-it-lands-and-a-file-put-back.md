@@ -84,7 +84,7 @@ name the file. **Fifty-two file-level reversals across eighteen commits**, every
 both sides rather than trusted to the diff arithmetic. Fifty of them are reversals somebody
 meant, and the record already says so: #221 undoing #218 (the case above); #246 undoing #221
 (the re-application, D119 amended) and #244's `indexNote` (D132 amended the same day); #233
-undoing #231 on five files (D125 amended, `docs/DEBTS.md` §7 reopened); #222 removing the
+undoing #231 on five files (D125 amended, §7 reopened); #222 removing the
 `cap_the_store` helper #216 had added to T7 (`policy.live_cap` was deleted, D7); #176 removing
 `RailMark`'s export while deleting `RailMark.tsx` itself; #164 removing four
 `docs-audit-allow.txt` lines that each said "delete when built"; #145 moving `review.spec.ts`'s

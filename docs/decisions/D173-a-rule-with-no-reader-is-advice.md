@@ -21,7 +21,7 @@ matched its
   rather than a prohibition to trip over."*
 - The same session wrote a rule against silencing a write and then ran two commits under
   `>/dev/null 2>&1`, swallowed both refusals, and reported "pushed" off a stale `git log`.
-- `docs/DEBTS.md` §11 carried a sentence about two observed mutation failures that were
+- §11 carried a sentence about two observed mutation failures that were
   **measured false on both counts**. Nothing read it, so nothing contradicted it.
 - `node scripts/screen-freshness.mjs --self-test` exited 1 on main, from 17 exports missing
   from its RECORDED table, **while sitting on no `make` target** — and the plain

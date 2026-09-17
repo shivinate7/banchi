@@ -42,7 +42,7 @@ Each was a published claim with a reader that could not see the half that matter
 
 ### Two narrowings of what was asked, and why
 
-**The fifth concurrency fact stays scoped to `docs/DEBTS.md` §11.** It is the METHOD NAME that sends `Connection: close`, and CLAUDE.md deliberately publishes the header without naming the method — §11 is where the mechanism is argued. Demanding the name in both would have failed an unchanged tree, which is not a defect found but prose wanted. Nothing is uncovered: §11 is the only file making the claim, so it is the only one that can go stale on it.
+**The fifth concurrency fact stays scoped to §11.** It is the METHOD NAME that sends `Connection: close`, and CLAUDE.md deliberately publishes the header without naming the method — §11 is where the mechanism is argued. Demanding the name in both would have failed an unchanged tree, which is not a defect found but prose wanted. Nothing is uncovered: §11 is the only file making the claim, so it is the only one that can go stale on it.
 
 **`recorded deletions` does not carry D110's three dark-only hover overrides.** What D110 deleted is a declaration inside a `[data-theme='dark']` block; `.bn-nav-link`, `.capture-row` and `.capture-opt` are live classes. A substring needle is therefore either the class name — red on every run — or a string appearing nowhere, which is a needle that can never fire, i.e. the vacuous green this entry is about. It wants a CSS-structural reader, not this one.
 

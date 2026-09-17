@@ -118,7 +118,7 @@ Mutation-tested, four arms, all red: the notice link's own pad deleted (a real 1
 crowding case, the one the probe was built for — and a fixed bottom bar grown to 60% of the
 viewport over content that cannot be scrolled clear of it.
 
-**AMENDED 2026-09-13: A COVERED CENTRE NOW FAILS ON ITS OWN, WHICH CLOSED HALF OF docs/DEBTS.md #22 AND LEFT THE OTHER HALF NAMED.** The capture screen's shutter sat half under
+**AMENDED 2026-09-13: A COVERED CENTRE NOW FAILS ON ITS OWN, WHICH CLOSED HALF OF §22 AND LEFT THE OTHER HALF NAMED.** The capture screen's shutter sat half under
 the phone tab bar on first paint — every one of its four corner probes AND its own centre
 landed inside `.bn-tabbar`, and `owns()`'s `chrome(n)` clause forgave every one of them, exactly
 as it is supposed to for a control legitimately scrolling PAST fixed chrome on its way up a
@@ -135,14 +135,14 @@ this file's other three cases — every owner route, the shell's three surfaces,
 still pass with the tightened predicate, so nothing legitimately scrolling under `.bn-topbar` /
 `.bn-tabbar` / `.kit-index` elsewhere in the product got newly flagged.
 
-**THE `n.contains(t)` CLAUSE docs/DEBTS.md #22 ACTUALLY OPENED WITH IS UNCHANGED, RE-MEASURED THE SAME DAY.** `.browse-boxchip` shrunk to 20px against the tightened file: still green. A
+**THE `n.contains(t)` CLAUSE §22 ACTUALLY OPENED WITH IS UNCHANGED, RE-MEASURED THE SAME DAY.** `.browse-boxchip` shrunk to 20px against the tightened file: still green. A
 shrunk control's own centre stays inside its own smaller box — nothing is covering it, so
 `centreOwns` correctly finds the control itself there. It is the CORNER probes that land outside
 the shrunk box and onto `.browse-mobilebar`, its ancestor, forgiven by `n.contains(t)` — the
 clause this entry already calls load-bearing for the padded-wrapper case, and narrowing it is
 still the unmeasured, twelve-route change #22 always said it was. Today's amendment closes a
 different clause (`chrome(n)`, at the centre) on a different reproduction (fixed chrome, not an
-ancestor bar); docs/DEBTS.md #22 is updated to record that split rather than marked closed
+ancestor bar); §22 is updated to record that split rather than marked closed
 outright.
 
 **What is NOT decided here.** D50's three interaction floors are still derived from a mouse:

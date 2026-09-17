@@ -65,4 +65,4 @@ The file is kept under `inventory/.live/` and named, and `POST /pipeline/markdow
 
 ### What would reopen this
 
-*The first fetch*, whose three answers belong in the spec's §6. *The owner's ruling on `ExcludeListos`*, which is one constant and one audit expectation. *A `CategoryId: "0"` refusal*, which makes the per-category loop a real question rather than a speculative one. *A live fetch that is slow enough to matter* — it holds one of `REQUEST_SLOTS = 4` for up to 120s, and `docs/DEBTS.md` §11 is the argument about what not to do about that.
+*The first fetch*, whose three answers belong in the spec's §6. *The owner's ruling on `ExcludeListos`*, which is one constant and one audit expectation. *A `CategoryId: "0"` refusal*, which makes the per-category loop a real question rather than a speculative one. *A live fetch that is slow enough to matter* — it holds one of `REQUEST_SLOTS = 4` for up to 120s, and §11 is the argument about what not to do about that.

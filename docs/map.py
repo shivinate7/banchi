@@ -2619,7 +2619,7 @@ COMPONENTS = [
                                 # D192: `UNSCOPED_WALK_ALLOWED`'s comments cite it twice — once
                                 # for the permanent `do_inventory`/`to_payload` entry the item's
                                 # own playbook argued for, and again for the new
-                                # `do_inventory_copies` entry (docs/DEBTS.md §27, site 1), which
+                                # `do_inventory_copies` entry (§27, site 1), which
                                 # names D192 as the decision that closed the OTHER `GET
                                 # /inventory` call site this branch's route replaces.
                                 "D192",
@@ -2949,6 +2949,30 @@ COMPONENTS = [
                 # slug has to name a file, or the claimer cannot find what it must rename.
                 "governed_by": ["D16", "D18", "D58", "D60", "D79", "D80", "D140",
                                 "D160"],
+            },
+            "debts_corpus.py": {
+                "does": "The debts corpus, read as one text or as one entry — the same "
+                        "seam decisions_corpus.py builds for docs/DECISIONS.md, applied to "
+                        "docs/DEBTS.md. `docs/debts/` holds one markdown file per finding "
+                        "and was one 174 KB file until the split; `text()` reassembles it in "
+                        "`ORDER.json`'s order and hands every checker the same bytes it used "
+                        "to get from `docs/DEBTS.md`. `path_for(n)` reads the bare number "
+                        "`§n`, not `D<n>` — a debts finding is not a decision, and D140's "
+                        "claim-at-merge scheme does not govern it. Reads and never writes; "
+                        "stdlib only.",
+                "governed_by": ["D16", "D18", "D120", "D149", "D160"],
+            },
+            "split-debts.py": {
+                "does": "Performed the split of docs/DEBTS.md into docs/debts/, and proves "
+                        "it lost nothing — split-decisions.py's chunk model applied to "
+                        "docs/DEBTS.md's plain-numbered `## <n> — <title>` headings instead "
+                        "of `## D<id>`. `--verify REF` diffs a reassembly against the "
+                        "pre-split bytes; `--verify-split REF` re-establishes that later "
+                        "from git; `--selftest` is the ongoing claim (not yet wired into "
+                        "`make`, unlike `decisions-selftest`). Section 15's deliberate gap "
+                        "(D120 closed it) is not invented by this script: the chunker only "
+                        "emits chunks for numbers that have a heading.",
+                "governed_by": ["D16", "D18", "D149", "D160"],
             },
             "index-decisions.py": {
                 "does": "Generates CLAUDE.md's decision index from the headings in "
@@ -3607,7 +3631,7 @@ COMPONENTS = [
                         "thread per keep-alive CONNECTION with nothing bounding the "
                         "count, and a burst of clients — make design-check is the "
                         "measured one — takes it to hundreds of threads answering "
-                        "nothing. docs/DEBTS.md section 11 has the argument, the three "
+                        "nothing. §11 has the argument, the three "
                         "measurements and why a worker pool is not a swap. Named here "
                         "because a session diagnosing a wedge from .serve/*.log reads "
                         "this entry and not the two comments inside the file.",
@@ -4469,7 +4493,7 @@ COMPONENTS = [
                                        "shares so the app never has more requests in flight "
                                        "against the capture server than "
                                        "`server/capture_server.py:REQUEST_SLOTS` (4) allows — "
-                                       "the accounting `docs/DEBTS.md` §11 measured was missing "
+                                       "the accounting §11 measured was missing "
                                        "from every poller in the app. `stopWhenNotLive` is the "
                                        "detail poll's and the claims panel's shape (stop asking "
                                        "once the last answer is not live); `restartKey` is the "
@@ -6748,7 +6772,7 @@ COMPONENTS = [
                         "the em-relative re-rank clamped to the same 11px a live path gets.",
                 "governed_by": ["D6", "D24", "D58", "D68", "D71", "D93", "D118", "D119"],
                 "note": "IT EXISTS BECAUSE THE SHEET WAS INCOMPLETE AND NOTHING SAID SO, "
-                        "2026-09-05. `docs/DEBTS.md` section 5 recorded the departed row as "
+                        "2026-09-05. §5 recorded the departed row as "
                         "absent from the kit; the sold fixture inherited a numeric `slot` from "
                         "the base, so `isDeparted` was false and the shell was rendered "
                         "NOWHERE on a page whose entire purpose is that every shape is looked "
