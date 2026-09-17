@@ -4177,6 +4177,329 @@ def check_shipping_columns(report: Report) -> None:
     )
 
 
+# ------------------------------------------------------------ code-side agreements
+#
+# Every row above reconciles a MARKDOWN claim against the code it describes. Nothing in
+# this file reads a claim written INSIDE code — a comment spelling out a tuple's length in
+# words, or a constant copied by hand into a second module, so it can drift the exact way a
+# markdown sentence drifts and no reader here would ever see it. These four rows are that
+# reader, over the four such claims found in a sweep of `server/`, `pipeline/` and `app/`.
+#
+# `CODE_AGREEMENT_ARM_COUNT` is `HARD_RULE_FLOOR`'s own precedent: a NUMBER pinned in code,
+# never a sentence in a comment, so `--self-test` can assert against it rather than a
+# person re-reading this section to count how many mutation arms it is supposed to have.
+# The four rows below are `check_column_count`, `check_threshold_agreement`,
+# `check_dist_path_agreement` and `check_import_filename_agreement`; each has exactly one
+# self-test arm that mutates the subject via a `.bak`-protected temporary edit and asserts
+# the row goes red. Lowering this without removing an arm is a lie the constant makes
+# visible in the diff; raising it with no matching arm added fails `--self-test` outright.
+CODE_AGREEMENT_ARM_COUNT = 4
+
+# Path constants, each patchable in isolation by --self-test (the same shape used
+# above for `MAP`), so a mutation arm can point one row at a throwaway fixture
+# without ever touching a file this repository tracks.
+_TCG_IMPORT_PATH = ROOT / "server" / "tcg_import.py"
+_REVIEWQUEUE_PATH = ROOT / "app" / "src" / "ReviewQueue.tsx"
+_PRICING_PATH = ROOT / "pipeline" / "pricing.py"
+_SERVE_PATH = ROOT / "scripts" / "serve.py"
+_CAPTURE_SERVER_PATH = ROOT / "server" / "capture_server.py"
+_VITE_CONFIG_PATH = ROOT / "app" / "vite.config.ts"
+_SHIPPING_ROUTES_PATH = ROOT / "server" / "shipping_routes.py"
+
+_TCG_IMPORT_COLUMNS_COMMENT_RE = re.compile(
+    r"The ([A-Za-z]+) fields `PricingStagedPrice` reads"
+)
+
+
+def _tcg_import_columns_count() -> Optional[int]:
+    """How many `(source, header)` pairs `server/tcg_import.py:COLUMNS` actually holds.
+
+    Parsed rather than imported, on `_pirateship_column_count`'s own reasoning: this
+    checker runs from a bare `python3` on the commit path (D18), and `server/tcg_import.py`
+    is server code that need not be importable without the venv it never asks for.
+    """
+    try:
+        tree = ast.parse(read(_TCG_IMPORT_PATH))
+    except SyntaxError:
+        return None
+    for node in ast.walk(tree):
+        if isinstance(node, ast.AnnAssign) and isinstance(node.target, ast.Name) \
+                and node.target.id == "COLUMNS" and isinstance(node.value, ast.Tuple):
+            return len(node.value.elts)
+        if isinstance(node, ast.Assign) and len(node.targets) == 1 \
+                and isinstance(node.targets[0], ast.Name) and node.targets[0].id == "COLUMNS" \
+                and isinstance(node.value, ast.Tuple):
+            return len(node.value.elts)
+    return None
+
+
+def check_column_count(report: Report) -> None:
+    """`server/tcg_import.py`'s own comment against the tuple it describes.
+
+    THE DEFECT IS ALREADY IN THE TREE. The comment above `COLUMNS` says "The eleven fields
+    `PricingStagedPrice` reads"; the tuple it introduces holds ten `(source, header)` pairs.
+    Nothing compared the spelled-out word to `len(COLUMNS)`, the same gap `shipping columns`
+    closes for `pipeline/pirateship.py` one file over — a comment inside code is a claim the
+    same as a sentence in a markdown file, and this file audits markdown claims and nothing
+    written in a docstring or a `#` line.
+
+    REFUSES TO GO QUIET: a `COLUMNS` no longer shaped as a bare tuple of pairs, or a comment
+    no longer matching the pattern, is reported by name rather than skipped.
+    """
+    findings: List[Finding] = []
+    total = _tcg_import_columns_count()
+    text = read(_TCG_IMPORT_PATH)
+    match = _TCG_IMPORT_COLUMNS_COMMENT_RE.search(text)
+
+    if total is None:
+        findings.append(Finding(
+            "server/tcg_import.py",
+            "`COLUMNS` is no longer a bare tuple of `(source, header)` pairs, so this row "
+            "cannot count what the comment above it claims. Re-point it.",
+        ))
+    if match is None:
+        findings.append(Finding(
+            "server/tcg_import.py",
+            "no sentence here matches the pattern watching the column-count comment. It was "
+            "reworded past its own check, or the comment was removed — either way the count "
+            "is unwatched now. Re-point the pattern or drop the entry.",
+        ))
+    if total is not None and match is not None:
+        word = match.group(1).lower()
+        said = _NUMBER_WORDS.get(word)
+        line = text.count("\n", 0, match.start()) + 1
+        if said is None:
+            findings.append(Finding(
+                "server/tcg_import.py:{0}".format(line),
+                "`{0} fields` is not a number this row knows.".format(match.group(1)),
+            ))
+        elif said != total:
+            findings.append(Finding(
+                "server/tcg_import.py:{0}".format(line),
+                "says `{0} fields` and `COLUMNS` holds {1} pairs. The tuple is the "
+                "authority; the comment is describing a shape the code does not have."
+                .format(match.group(1), total),
+            ))
+
+    report.add(
+        "column count",
+        MECHANICAL,
+        findings,
+        "the comment's word against COLUMNS's length ({0})".format(total),
+        scanned=1,
+    )
+
+
+_THRESHOLD_TSX_RE = re.compile(r"const THRESHOLD = ([0-9.]+)")
+_THRESHOLD_PY_RE = re.compile(r'THRESHOLD = Decimal\("([0-9.]+)"\)')
+
+
+def check_threshold_agreement(report: Report) -> None:
+    """D9's threshold, spelled once in Python and copied once into JSX, against each other.
+
+    `app/src/ReviewQueue.tsx`'s own comment names `pipeline/pricing.py:THRESHOLD` as the
+    authority — the two constants are supposed to be the same value read by two languages
+    that cannot import from one another, the same shape `port-agreement.py` and
+    `set-hint-agreement.py` already reconcile for a port number and a game vocabulary. Read
+    for style, not extended: this is a different pair of files with no `make` target of its
+    own, so a docs-audit row is the right shape.
+
+    A copied constant is a claim written IN CODE rather than in a markdown sentence, so
+    nothing before this row ever compared the two sides.
+
+    REFUSES TO GO QUIET: either constant going unreadable — renamed, reshaped, moved to a
+    different declaration form — is reported by name rather than skipped.
+    """
+    findings: List[Finding] = []
+    tsx_text = read(_REVIEWQUEUE_PATH)
+    py_text = read(_PRICING_PATH)
+    tsx_match = _THRESHOLD_TSX_RE.search(tsx_text)
+    py_match = _THRESHOLD_PY_RE.search(py_text)
+
+    if tsx_match is None:
+        findings.append(Finding(
+            "app/src/ReviewQueue.tsx",
+            "no `const THRESHOLD = <number>` found. It was renamed or reshaped past the "
+            "pattern watching it, so this row can no longer see the copy it is meant to "
+            "check against `pipeline/pricing.py:THRESHOLD`.",
+        ))
+    if py_match is None:
+        findings.append(Finding(
+            "pipeline/pricing.py",
+            "no `THRESHOLD = Decimal(\"...\")` found. It was renamed, reshaped, or moved off "
+            "the `Decimal` construction this row watches.",
+        ))
+    if tsx_match is not None and py_match is not None:
+        try:
+            tsx_value = float(tsx_match.group(1))
+            py_value = float(py_match.group(1))
+        except ValueError:
+            findings.append(Finding(
+                "app/src/ReviewQueue.tsx",
+                "THRESHOLD values are not both parseable numbers: {0!r} / {1!r}."
+                .format(tsx_match.group(1), py_match.group(1)),
+            ))
+        else:
+            if tsx_value != py_value:
+                line = tsx_text.count("\n", 0, tsx_match.start()) + 1
+                findings.append(Finding(
+                    "app/src/ReviewQueue.tsx:{0}".format(line),
+                    "`THRESHOLD = {0}` and `pipeline/pricing.py:THRESHOLD` is `{1}` — its "
+                    "own comment names that constant as the authority, and the two no "
+                    "longer agree.".format(tsx_match.group(1), py_match.group(1)),
+                ))
+
+    report.add(
+        "threshold agreement",
+        MECHANICAL,
+        findings,
+        "app/src/ReviewQueue.tsx:THRESHOLD against pipeline/pricing.py:THRESHOLD",
+        scanned=1,
+    )
+
+
+_SERVE_DIST_RE = re.compile(r'^DIST = "([^"]+)"', re.M)
+_CAPTURE_APP_DIST_RE = re.compile(
+    r'APP_DIST = Path\(__file__\)\.resolve\(\)\.parent\.parent / "app" / "dist"'
+)
+_VITE_OUTDIR_RE = re.compile(r"\boutDir\s*:")
+
+
+def check_dist_path_agreement(report: Report) -> None:
+    """The built-bundle path, spelled independently in two Python modules and once by
+    Vite's default, reconciled against each other.
+
+    `scripts/serve.py:DIST` (the build-and-swap side) and `server/capture_server.py:APP_DIST`
+    (what the server actually reads from) each spell `app/dist` on their own — one as a
+    string literal, one as a `Path` join — and if either moves while the other does not, the
+    server serves nothing D138 promised it would. `app/vite.config.ts` sets `base` but
+    declares no `outDir`, which is the THIRD side: Vite's own default output directory is
+    `dist` under its project root (`app/`), i.e. `app/dist`, and that side of the agreement
+    is checked only by absence — an `outDir` key appearing in `vite.config.ts` would
+    silently move the bundle Vite writes without moving either Python constant, so its
+    presence is itself the finding.
+
+    NOT FULLY MECHANIZED ON THE VITE SIDE: this row cannot run Vite and read back its
+    resolved `outDir`, so it reads the config file's own text for the key that would
+    override the default. That is real coverage of the failure this row exists for — a
+    session adding `build: { outDir: ... }` — but it is not proof of Vite's default itself,
+    which is documented behaviour this row takes on faith.
+
+    REFUSES TO GO QUIET: either Python constant going unreadable is reported by name.
+    """
+    findings: List[Finding] = []
+    serve_text = read(_SERVE_PATH)
+    capture_text = read(_CAPTURE_SERVER_PATH)
+
+    serve_match = _SERVE_DIST_RE.search(serve_text)
+    if serve_match is None:
+        findings.append(Finding(
+            "scripts/serve.py",
+            "no `DIST = \"...\"` found. It was renamed or reshaped past the pattern watching "
+            "it, so this row can no longer check it against `server/capture_server.py:APP_DIST`.",
+        ))
+    elif serve_match.group(1) != "app/dist":
+        findings.append(Finding(
+            "scripts/serve.py",
+            "`DIST = {0!r}`, not `\"app/dist\"` — `server/capture_server.py:APP_DIST` "
+            "still expects the build at `app/dist`.".format(serve_match.group(1)),
+        ))
+
+    capture_match = _CAPTURE_APP_DIST_RE.search(capture_text)
+    if capture_match is None:
+        findings.append(Finding(
+            "server/capture_server.py",
+            "`APP_DIST` is no longer `Path(__file__).resolve().parent.parent / \"app\" / "
+            "\"dist\"`, the join this row watches to confirm it names the same directory as "
+            "`scripts/serve.py:DIST`. Re-point the pattern or confirm the new form still "
+            "resolves to `app/dist`.",
+        ))
+
+    if exists(_VITE_CONFIG_PATH):
+        vite_text = read(_VITE_CONFIG_PATH)
+        if _VITE_OUTDIR_RE.search(vite_text):
+            findings.append(Finding(
+                "app/vite.config.ts",
+                "declares its own `outDir`, which moves the bundle Vite writes off its "
+                "default (`dist` under the project root, i.e. `app/dist`) without moving "
+                "`scripts/serve.py:DIST` or `server/capture_server.py:APP_DIST` — the build "
+                "and the server would then disagree about where the bundle lives.",
+            ))
+    else:
+        findings.append(Finding(
+            "app/vite.config.ts",
+            "does not exist, and it is the third side of this agreement.",
+        ))
+
+    report.add(
+        "dist path agreement",
+        MECHANICAL,
+        findings,
+        "scripts/serve.py:DIST, server/capture_server.py:APP_DIST and vite.config.ts's outDir",
+        scanned=1,
+    )
+
+
+_SHIPPING_IMPORT_FILENAME_RE = re.compile(r'IMPORT_FILENAME = "([^"]+)"')
+_CAPTURE_CONTENT_DISPOSITION_RE = re.compile(
+    r'"Content-Disposition",\s*\'attachment; filename="([^"]+)"\''
+)
+
+
+def check_import_filename_agreement(report: Report) -> None:
+    """The Pirate Ship import's filename, named once as a constant and once hardcoded in a
+    response header, reconciled against each other.
+
+    `server/shipping_routes.py:IMPORT_FILENAME`'s own comment says "membership of that one
+    name IS the shape check `do_shipping_file` makes" — and `server/capture_server.py`
+    spells the same name a second time, by hand, inside the `Content-Disposition` header it
+    sends alongside the file. Renaming the constant leaves the browser saving the download
+    under the old name, silently, because nothing reads the two together.
+
+    REFUSES TO GO QUIET: either side going unreadable is reported by name rather than
+    skipped.
+    """
+    findings: List[Finding] = []
+    shipping_text = read(_SHIPPING_ROUTES_PATH)
+    capture_text = read(_CAPTURE_SERVER_PATH)
+
+    shipping_match = _SHIPPING_IMPORT_FILENAME_RE.search(shipping_text)
+    if shipping_match is None:
+        findings.append(Finding(
+            "server/shipping_routes.py",
+            "no `IMPORT_FILENAME = \"...\"` found. It was renamed or reshaped past the "
+            "pattern watching it, so this row can no longer check it against the "
+            "`Content-Disposition` header in `server/capture_server.py`.",
+        ))
+    capture_match = _CAPTURE_CONTENT_DISPOSITION_RE.search(capture_text)
+    if capture_match is None:
+        findings.append(Finding(
+            "server/capture_server.py",
+            "no `Content-Disposition: attachment; filename=\"...\"` literal found for the "
+            "Pirate Ship import. It was reworded or moved past the pattern watching it.",
+        ))
+
+    if shipping_match is not None and capture_match is not None \
+            and shipping_match.group(1) != capture_match.group(1):
+        line = capture_text.count("\n", 0, capture_match.start()) + 1
+        findings.append(Finding(
+            "server/capture_server.py:{0}".format(line),
+            "sends `Content-Disposition: attachment; filename=\"{0}\"`, and "
+            "`server/shipping_routes.py:IMPORT_FILENAME` is `{1!r}` — the constant is the "
+            "authority and the header names a file `do_shipping_file` does not produce."
+            .format(capture_match.group(1), shipping_match.group(1)),
+        ))
+
+    report.add(
+        "import filename agreement",
+        MECHANICAL,
+        findings,
+        "server/shipping_routes.py:IMPORT_FILENAME against the Content-Disposition header",
+        scanned=1,
+    )
+
+
+
 # `docs/specs/order-pipeline.md` §3 declares each work item's state in its own heading, and
 # CLAUDE.md's pointer at that spec restates some of them. `NOT BUILT` leads the alternation so
 # it is never read as a bare `BUILT`.
@@ -16990,6 +17313,174 @@ def self_test() -> int:
        "the no-mechanism-on-screen exemption is pinned to exactly one file, `Gallery.tsx`",
        f"got: {sorted(NO_MECHANISM_EXEMPT_FILES)}")
 
+    # ------------------------------------------------------- code-side agreements
+    #
+    # Four arms, one per row, each patching that row's own path constant to a throwaway
+    # fixture — the same save/patch/restore-in-`finally` shape used above for `MAP` — and
+    # calling the ROW ITSELF, never the bare comparison logic, on `unscoped walk`'s own
+    # argument: a fixture-only test proves the matcher works and nothing about whether the
+    # row still calls it. `code_agreement_arms` counts how many of the four actually ran,
+    # and the last line of this section asserts it against `CODE_AGREEMENT_ARM_COUNT` —
+    # raising the constant with no matching arm added, or deleting an arm without lowering
+    # it, both fail `--self-test`.
+    print("\ncode-side agreements: four rows, each proven red on its own fixture")
+    code_agreement_arms = 0
+
+    with tempfile.TemporaryDirectory() as tmp:
+        fixture = Path(tmp) / "tcg_import.py"
+        fixture.write_text(
+            "from typing import Sequence, Tuple\n\n"
+            "# The eleven fields `PricingStagedPrice` reads, mapped from the export's own "
+            "column names.\n"
+            "COLUMNS: Sequence[Tuple[str, str]] = (\n"
+            '    ("A", "a"),\n    ("B", "b"),\n    ("C", "c"),\n'
+            ")\n",
+            encoding="utf-8",
+        )
+        _saved = globals()["_TCG_IMPORT_PATH"]
+        try:
+            globals()["_TCG_IMPORT_PATH"] = fixture
+            report = Report()
+            check_column_count(report)
+        finally:
+            globals()["_TCG_IMPORT_PATH"] = _saved
+        by_label = {row.check: row.findings for row in report.checks}
+        ok(
+            any("eleven" in f.message and "3 pairs" in f.message for f in by_label["column count"]),
+            "column count: a comment saying `eleven` against a 3-pair tuple fails the row, "
+            "naming both",
+            str(by_label["column count"]),
+        )
+        code_agreement_arms += 1
+
+    with tempfile.TemporaryDirectory() as tmp:
+        tsx_fixture = Path(tmp) / "ReviewQueue.tsx"
+        tsx_fixture.write_text(
+            "/* D9's threshold — `pipeline/pricing.py:THRESHOLD`. */\nconst THRESHOLD = 0.9\n",
+            encoding="utf-8",
+        )
+        py_fixture = Path(tmp) / "pricing.py"
+        py_fixture.write_text('THRESHOLD = Decimal("0.40")\n', encoding="utf-8")
+        _saved_tsx = globals()["_REVIEWQUEUE_PATH"]
+        _saved_py = globals()["_PRICING_PATH"]
+        try:
+            globals()["_REVIEWQUEUE_PATH"] = tsx_fixture
+            globals()["_PRICING_PATH"] = py_fixture
+            report = Report()
+            check_threshold_agreement(report)
+        finally:
+            globals()["_REVIEWQUEUE_PATH"] = _saved_tsx
+            globals()["_PRICING_PATH"] = _saved_py
+        by_label = {row.check: row.findings for row in report.checks}
+        ok(
+            any("0.9" in f.message and "0.40" in f.message for f in by_label["threshold agreement"]),
+            "threshold agreement: a JSX copy that disagrees with pipeline/pricing.py fails "
+            "the row, naming both values",
+            str(by_label["threshold agreement"]),
+        )
+        code_agreement_arms += 1
+
+    with tempfile.TemporaryDirectory() as tmp:
+        serve_fixture = Path(tmp) / "serve.py"
+        serve_fixture.write_text('DIST = "app/build"\n', encoding="utf-8")
+        capture_fixture = Path(tmp) / "capture_server.py"
+        capture_fixture.write_text(
+            'APP_DIST = Path(__file__).resolve().parent.parent / "app" / "dist"\n',
+            encoding="utf-8",
+        )
+        vite_fixture = Path(tmp) / "vite.config.ts"
+        vite_fixture.write_text("export default defineConfig({ base: '/' })\n", encoding="utf-8")
+        _saved_serve = globals()["_SERVE_PATH"]
+        _saved_capture = globals()["_CAPTURE_SERVER_PATH"]
+        _saved_vite = globals()["_VITE_CONFIG_PATH"]
+        try:
+            globals()["_SERVE_PATH"] = serve_fixture
+            globals()["_CAPTURE_SERVER_PATH"] = capture_fixture
+            globals()["_VITE_CONFIG_PATH"] = vite_fixture
+            report = Report()
+            check_dist_path_agreement(report)
+        finally:
+            globals()["_SERVE_PATH"] = _saved_serve
+            globals()["_CAPTURE_SERVER_PATH"] = _saved_capture
+            globals()["_VITE_CONFIG_PATH"] = _saved_vite
+        by_label = {row.check: row.findings for row in report.checks}
+        ok(
+            any("app/build" in f.message for f in by_label["dist path agreement"]),
+            "dist path agreement: scripts/serve.py:DIST disagreeing with `app/dist` fails "
+            "the row",
+            str(by_label["dist path agreement"]),
+        )
+        code_agreement_arms += 1
+
+        # A second sub-case on the same arm: an `outDir` appearing in vite.config.ts is
+        # itself a finding, with both Python sides otherwise agreeing.
+        serve_fixture.write_text('DIST = "app/dist"\n', encoding="utf-8")
+        vite_fixture.write_text(
+            "export default defineConfig({ build: { outDir: 'build' } })\n", encoding="utf-8"
+        )
+        try:
+            globals()["_SERVE_PATH"] = serve_fixture
+            globals()["_CAPTURE_SERVER_PATH"] = capture_fixture
+            globals()["_VITE_CONFIG_PATH"] = vite_fixture
+            report = Report()
+            check_dist_path_agreement(report)
+        finally:
+            globals()["_SERVE_PATH"] = _saved_serve
+            globals()["_CAPTURE_SERVER_PATH"] = _saved_capture
+            globals()["_VITE_CONFIG_PATH"] = _saved_vite
+        by_label = {row.check: row.findings for row in report.checks}
+        ok(
+            any("outDir" in f.message for f in by_label["dist path agreement"]),
+            "dist path agreement: an `outDir` key in vite.config.ts fails the row even when "
+            "both Python sides agree",
+            str(by_label["dist path agreement"]),
+        )
+
+    with tempfile.TemporaryDirectory() as tmp:
+        shipping_fixture = Path(tmp) / "shipping_routes.py"
+        shipping_fixture.write_text('IMPORT_FILENAME = "pirateship-import.csv"\n', encoding="utf-8")
+        capture_fixture = Path(tmp) / "capture_server.py"
+        capture_fixture.write_text(
+            "return self._send(HTTPStatus.OK, blob, kind, "
+            '((\"Content-Disposition\", \'attachment; filename="import.csv"\'),))\n',
+            encoding="utf-8",
+        )
+        _saved_shipping = globals()["_SHIPPING_ROUTES_PATH"]
+        _saved_capture = globals()["_CAPTURE_SERVER_PATH"]
+        try:
+            globals()["_SHIPPING_ROUTES_PATH"] = shipping_fixture
+            globals()["_CAPTURE_SERVER_PATH"] = capture_fixture
+            report = Report()
+            check_import_filename_agreement(report)
+        finally:
+            globals()["_SHIPPING_ROUTES_PATH"] = _saved_shipping
+            globals()["_CAPTURE_SERVER_PATH"] = _saved_capture
+        by_label = {row.check: row.findings for row in report.checks}
+        ok(
+            any("import.csv" in f.message and "pirateship-import.csv" in f.message
+                for f in by_label["import filename agreement"]),
+            "import filename agreement: a Content-Disposition header naming a different "
+            "file than IMPORT_FILENAME fails the row, naming both",
+            str(by_label["import filename agreement"]),
+        )
+        code_agreement_arms += 1
+
+    ok(
+        code_agreement_arms == CODE_AGREEMENT_ARM_COUNT,
+        "every code-side agreement row got its own mutation arm",
+        f"ran {code_agreement_arms}, pinned {CODE_AGREEMENT_ARM_COUNT}",
+    )
+
+    # And end to end, unpatched: the real tree agrees with itself on a clean checkout.
+    report = Report()
+    check_column_count(report)
+    check_threshold_agreement(report)
+    check_dist_path_agreement(report)
+    check_import_filename_agreement(report)
+    by_label = {row.check: row.findings for row in report.checks}
+    for label in ("column count", "threshold agreement", "dist path agreement", "import filename agreement"):
+        ok(not by_label[label], f"the real tree has zero findings on `{label}`", str(by_label[label]))
+
     print("\n" + "=" * 72)
     if failures:
         print(f"{len(failures)} self-test {'failure' if len(failures) == 1 else 'failures'}")
@@ -17043,6 +17534,10 @@ def audit(staged_only: bool) -> Report:
     check_server_concurrency(report)
     check_estimate_wire(report)
     check_shipping_columns(report)
+    check_column_count(report)
+    check_threshold_agreement(report)
+    check_dist_path_agreement(report)
+    check_import_filename_agreement(report)
     check_router_certainty(report)
     check_work_item_standing(report)
     check_not_built_endpoints(report)
