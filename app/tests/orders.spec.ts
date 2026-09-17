@@ -309,6 +309,25 @@ async function open(
     })
   })
 
+  /* `POST /orders/picks` — the real-picks tier `Orders.tsx` fetches for the buyer or order
+   *  actually open, and once for the whole walk. EVERY CASE IN THIS FILE ALREADY WRITES ITS
+   *  `picks` INTO THE `/orders` FIXTURE ABOVE, so this stub answers from that SAME payload
+   *  rather than needing a second one per case: it echoes back exactly the resolved orders
+   *  whose key was asked for. A case testing the split itself stubs this route by hand,
+   *  after `open()`, the same way any other default here is overridden. */
+  await page.route(/\/orders\/picks$/, async (route) => {
+    const body = route.request().postDataJSON() as { keys?: string[] }
+    wire.push({ method: route.request().method(), path: new URL(route.request().url()).pathname, body })
+    const chosen = typeof options.orders === 'function' ? options.orders() : options.orders
+    const source = (chosen ?? oneOpenOrder()).resolution.orders
+    const wanted = new Set(body.keys ?? [])
+    await route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify({ orders: source.filter((one) => wanted.has(one.key)) }),
+    })
+  })
+
   await page.goto(VIEW_ROUTE)
   await expect(page.locator(VIEW)).toBeVisible()
   return wire
@@ -1470,6 +1489,17 @@ test('?order= resolves an old link to the buyer group that holds it', async ({ p
   await page.route(/\/orders$/, async (route) => {
     wire.push({ method: route.request().method(), path: new URL(route.request().url()).pathname, body: null })
     await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(both) })
+  })
+  /* THE BUYER OPENED BY THE LINK FETCHES ITS REAL PICKS — `open()`'s own default stub, laid
+   *  out by hand here because this case does not call `open()`. */
+  await page.route(/\/orders\/picks$/, async (route) => {
+    const body = route.request().postDataJSON() as { keys?: string[] }
+    const wanted = new Set(body.keys ?? [])
+    await route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify({ orders: both.resolution.orders.filter((one) => wanted.has(one.key)) }),
+    })
   })
   await page.goto(`${VIEW_ROUTE}?order=${encodeURIComponent(secondOrderKey)}`)
   await expect(page.locator(VIEW)).toBeVisible()

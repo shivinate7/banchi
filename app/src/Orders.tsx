@@ -29,6 +29,7 @@ import {
   closeOrders,
   declareLineKind,
   describeFailure,
+  fetchOrderPicks,
   fetchOrders,
   fillLine,
   getInventoryCopies,
@@ -54,6 +55,7 @@ import type {
   OrderFillReason,
   OrderLineProgress,
   OrderLineReason,
+  OrderPicksPayload,
   OrderRow,
   OrdersFetched,
   OrdersPayload,
@@ -707,9 +709,9 @@ function skusOf(payload: OrdersPayload | null): string[] {
  *  picks. */
 type Claims = ReadonlyMap<string, string>
 
-function indexClaims(payload: OrdersPayload | null): Claims {
+function indexClaims(answers: ReadonlyMap<string, ResolvedOrder>): Claims {
   const out = new Map<string, string>()
-  for (const order of payload?.resolution.orders ?? []) {
+  for (const order of answers.values()) {
     for (const line of order.lines) {
       for (const pick of line.picks) {
         const key = copyKeyOf(pick)
@@ -2580,15 +2582,35 @@ function PullStage({
     setTake(TAKE_IS_CURRENT)
   }
 
-  /** The resolution, keyed so a row can find its own. */
-  const answers = useMemo(() => {
-    const out = new Map<string, ResolvedOrder>()
-    for (const one of payload?.resolution.orders ?? []) out.set(one.key, one)
-    return out
+  /* THE SECOND TIER'S CACHE: real picks and places, fetched on demand for exactly the orders
+   *  this screen is looking at (`POST /orders/picks`, `server/capture_server.py:do_orders`'s
+   *  own comment). `GET /orders` answers `picks: []` on every line now — decorating one was
+   *  52% of that route's wall time for a buyer nobody had opened — so this map is where the
+   *  real thing lands once asked for, keyed by order key, and it is dropped whole every time
+   *  `payload` changes: a pull, a fill or a close refetches `payload`, and a picks cache keyed
+   *  to the last snapshot would go on showing a copy as free (or spoken for) after the write
+   *  that changed it. */
+  const [detail, setDetail] = useState<Map<string, ResolvedOrder>>(new Map())
+  useEffect(() => {
+    setDetail(new Map())
   }, [payload])
 
-  /** Which open order was offered which copy, over the whole resolution. */
-  const claims = useMemo(() => indexClaims(payload), [payload])
+  /** The resolution, keyed so a row can find its own — the lite line from `payload` overlaid
+   *  with the real one from `detail` wherever this screen has actually fetched it. Every
+   *  consumer of `answers` gets real `picks` for an order once fetched and an honest empty
+   *  list (never a guess) until then; the buyer list itself never notices the difference,
+   *  because `statusOf`/`worstStatus`/`passesHideUnknown` read `line.reason` alone. */
+  const answers = useMemo(() => {
+    const out = new Map<string, ResolvedOrder>()
+    for (const one of payload?.resolution.orders ?? []) out.set(one.key, detail.get(one.key) ?? one)
+    return out
+  }, [payload, detail])
+
+  /** Which open order was offered which copy — over what THIS screen has fetched real picks
+   *  for, never the whole resolution (which no longer carries any). A copy in an order this
+   *  screen has not opened is not claimed here; it is not offered anything either, since
+   *  nothing renders a copy map for it. */
+  const claims = useMemo(() => indexClaims(answers), [answers])
 
   /** The Ship stage's lane for an order, when an export is loaded. View-only. */
   const lanesByOrder = useMemo(() => {
@@ -2697,6 +2719,67 @@ function PullStage({
       ? selected
       : (shownGroups[0]?.key ?? earlierGroups[0]?.key ?? null)
   const selectedGroup = allGroups.find((group) => group.key === selectedKey) ?? null
+
+  /* FETCH REAL PICKS FOR THE BUYER ACTUALLY OPEN. `OrderDetail`'s body and `BuyerDetail`'s
+   *  own per-buyer walk both read `line.picks` off `answers`; every other order's line reads
+   *  `reason` alone off the lite tier `payload` already carries. `ownsAWalkableBody` is the
+   *  exact set those two consumers draw from (`groupWalkable`, `OrderDetail`'s own gate), so
+   *  fetching anything wider would pay for a picker no view here builds. Missing keys only —
+   *  once `detail` holds an order it is not asked for again until `payload` changes (the
+   *  effect above clears it then, and only then). This is deliberately a spinner-shaped cost:
+   *  opening a buyer for the first time in a sitting waits on one small POST rather than on
+   *  nothing, in exchange for `GET /orders` no longer paying for it on every poll regardless
+   *  of whether anyone opened anything. */
+  useEffect(() => {
+    if (selectedGroup === null) return
+    const keys = selectedGroup.orders.filter(ownsAWalkableBody).map((order) => order.key)
+    const missing = keys.filter((key) => !detail.has(key))
+    if (missing.length === 0) return
+    let canceled = false
+    fetchOrderPicks(missing)
+      .then((found: OrderPicksPayload) => {
+        if (canceled) return
+        setDetail((prev) => {
+          const next = new Map(prev)
+          for (const one of found.orders) next.set(one.key, one)
+          return next
+        })
+      })
+      .catch(() => {
+        /* Best-effort: the lite tier already in `answers` is a safe fallback (an empty pick
+         *  list, never a wrong one), so a failed fetch here leaves the detail view showing
+         *  no copies rather than crashing it. The next render this buyer is opened retries. */
+      })
+    return () => {
+      canceled = true
+    }
+  }, [selectedGroup, detail])
+
+  /* FETCH REAL PICKS FOR THE WHOLE WALK, IN ONE BATCH, THE MOMENT A PASS FREEZES
+   *  (`hub.walkKeys`). This is the "across many orders at once" case the task names: rather
+   *  than decorating every walkable order on every `GET /orders` poll (which is what made the
+   *  route slow), the walk asks once, by name, for exactly the orders its own frozen pass
+   *  holds — the request naming the orders in the pass, deliberately never a second walk of
+   *  the whole store. */
+  useEffect(() => {
+    if (mode !== 'walk' || hub.walkKeys === null) return
+    const missing = [...hub.walkKeys].filter((key) => !detail.has(key))
+    if (missing.length === 0) return
+    let canceled = false
+    fetchOrderPicks(missing)
+      .then((found: OrderPicksPayload) => {
+        if (canceled) return
+        setDetail((prev) => {
+          const next = new Map(prev)
+          for (const one of found.orders) next.set(one.key, one)
+          return next
+        })
+      })
+      .catch(() => {})
+    return () => {
+      canceled = true
+    }
+  }, [mode, hub.walkKeys, detail])
 
   /* THE HASH NAMES A BUYER, OR — FOR AN OLD LINK — AN ORDER RESOLVED TO ITS BUYER, ONCE THE
      LEDGER HAS ACTUALLY ANSWERED; from then on the store leads and the hash follows. `?buyer=`

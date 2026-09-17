@@ -835,6 +835,34 @@ def answers(checks: Checks, fn, label: str):
     return answer
 
 
+def orders_with_picks() -> dict:
+    """`GET /orders` with real `picks` merged back in, for tests written against the combined
+    shape the route answered before 2026-09-16's two-tier split.
+
+    `do_orders()` now answers `picks: []` on every line — decorating a `place` for every
+    candidate copy of every unfulfilled order was 52% of that route's wall time for a buyer
+    nobody had opened, so it moved to `POST /orders/picks` for exactly the orders a screen
+    asks about. Most of the assertions in this block are about the RESOLUTION (reason, the
+    breakdown, `open`/`terminal`, idempotence) and never cared which route answered `picks` —
+    so rather than rewrite every one of them to call two routes and thread the results
+    together by hand, this helper does that once: it calls `do_orders()`, asks
+    `do_order_picks` for every resolved order's key in one batch (`resolve_all` over a
+    subset answers each of those orders identically to the whole ledger — the same fact
+    `_resolve_records` relies on), and replaces each answered order's `lines` with the real
+    ones. `check_order_picks_tier` below is the one block that asserts the SPLIT itself.
+    """
+    payload = capture_server.do_orders()
+    keys = [order["key"] for order in payload["resolution"]["orders"]]
+    if keys:
+        detailed = capture_server.do_order_picks({"keys": keys})
+        by_key = {order["key"]: order for order in detailed["orders"]}
+        for order in payload["resolution"]["orders"]:
+            full = by_key.get(order["key"])
+            if full is not None:
+                order["lines"] = full["lines"]
+    return payload
+
+
 # --------------------------------------------------------------------------- the allocator
 
 
@@ -25130,7 +25158,7 @@ def check_order_screen(checks: Checks) -> None:
         if booked is not None:
             checks.equal(booked["added"], 2, "and both are recorded")
 
-        drawn = answers(checks, capture_server.do_orders,
+        drawn = answers(checks, orders_with_picks,
                         "GET /orders resolves both against the one copy on hand")
         if drawn is not None:
             by_number = {
@@ -25404,7 +25432,7 @@ def check_order_screen(checks: Checks) -> None:
         )
         key = order_store.order_key("TCGplayer", "A-1")
 
-        before_screen = answers(checks, capture_server.do_orders,
+        before_screen = answers(checks, orders_with_picks,
                                 "GET /orders resolves it against a box holding a pooled copy")
         if before_screen is not None:
             row = before_screen["resolution"]["orders"][0]["lines"][0]
@@ -25493,7 +25521,7 @@ def check_order_screen(checks: Checks) -> None:
             )
 
         after_screen = answers(
-            checks, capture_server.do_orders, "GET /orders after the pull answers"
+            checks, orders_with_picks, "GET /orders after the pull answers"
         )
         if after_screen is not None:
             row = after_screen["resolution"]["orders"][0]["lines"][0]
@@ -25991,6 +26019,121 @@ def check_order_places_scoped(checks: Checks) -> None:
         # The existing empty-store case (`check_order_screen`'s first block) already
         # exercises `GET /orders` through this same path with zero orders at all; this is
         # its unit-level companion for the classmethod alone.
+
+
+def check_order_picks_tier(checks: Checks) -> None:
+    """`GET /orders` answers no picks; `POST /orders/picks` answers exactly the ones asked
+    for, and the two never disagree about anything else — the split this session made
+    2026-09-16 to stop decorating a `place` block for every candidate copy of every
+    unfulfilled order on the route `#/orders` and `#/shipping` poll (measured 52% of that
+    route's wall time, over 1,777 pick-rows for 819 distinct positions).
+    """
+    checks.note("")
+    checks.note("ORDER PICKS TIER — GET /orders vs POST /orders/picks")
+
+    def line(sku, quantity=1, **extra) -> dict:
+        row = {"sku": sku, "quantity": quantity}
+        row.update(extra)
+        return row
+
+    def paste(number, *lines, **extra) -> dict:
+        order = {
+            "source": "TCGplayer",
+            "number": number,
+            "placed_at": extra.pop("placed_at", "2026-08-27T10:00:00.000+00:00"),
+            "lines": list(lines),
+        }
+        order.update(extra)
+        return {"orders": [order]}
+
+    with isolated_home():
+        for at in range(1, 3):
+            capture_server.do_capture(capture_payload(3, capture_id=f"tier{at}"))
+        with Store().write() as snapshot:
+            for at in range(1, 3):
+                snapshot.inventory.record_identification(
+                    f"3/{at}", name="Moonfall", number="198/219",
+                    printed_total="219", confidence="high",
+                )
+                snapshot.inventory.cards[f"3/{at}"].sku = "9191486"
+
+        answers(
+            checks,
+            lambda: capture_server.do_order_ingest(paste("T-1", line("9191486", 1))),
+            "one order for the SKU ingests",
+        )
+        key = order_store.order_key("TCGplayer", "T-1")
+
+        lite = answers(checks, capture_server.do_orders, "GET /orders answers")
+        if lite is not None:
+            lite_line = lite["resolution"]["orders"][0]["lines"][0]
+            checks.equal(
+                lite_line["picks"], [],
+                "NO PICKS AND NO PLACE — every OTHER field is still the real resolution: "
+                "reason, on_hand and the rest are computed exactly as before",
+            )
+            checks.equal(
+                (lite_line["reason"], lite_line["on_hand"], lite_line["fulfilled"]),
+                ("resolved", 2, 2),
+                "the reason and the counts answer without ever building a `_Places` — RED "
+                "if the list tier silently stopped resolving lines to save the same time "
+                "a different way",
+            )
+
+        detailed = answers(
+            checks,
+            lambda: capture_server.do_order_picks({"keys": [key]}),
+            "POST /orders/picks answers the same order, asked for by key",
+        )
+        if detailed is not None:
+            checks.equal(
+                len(detailed["orders"]), 1, "exactly the one order asked about, no more"
+            )
+            full_line = detailed["orders"][0]["lines"][0]
+            checks.equal(
+                (full_line["reason"], full_line["on_hand"], full_line["fulfilled"]),
+                ("resolved", 2, 2),
+                "AND THE VERDICT AGREES WITH THE LIST TIER — the split changes WHEN a pick "
+                "is decorated, never WHETHER a line resolved",
+            )
+            checks.equal(
+                sorted((pick["box"], pick["index"]) for pick in full_line["picks"]),
+                [(3, 1), (3, 2)],
+                "and the real picks are exactly the two copies on hand, each carrying a "
+                "real `place` block",
+            )
+            checks.ok(
+                all(pick["place"]["located"] for pick in full_line["picks"]),
+                "every pick carries a decorated, located place",
+            )
+
+        refusal(
+            checks,
+            lambda: capture_server.do_order_picks({"keys": []}),
+            "keys_required",
+            "an empty `keys` list refuses rather than answering an empty list — those are "
+            "different answers to 'did that work'",
+        )
+        refusal(
+            checks,
+            lambda: capture_server.do_order_picks({"keys": [key], "extra": True}),
+            "field_not_settable",
+            "and an unlisted field refuses by name, the allowlist rule every write on this "
+            "screen already follows",
+        )
+
+        unknown = answers(
+            checks,
+            lambda: capture_server.do_order_picks({"keys": ["tcgplayer:never-heard-of-it"]}),
+            "a key the ledger does not hold is a normal answer, not a refusal",
+        )
+        if unknown is not None:
+            checks.equal(
+                unknown["orders"], [],
+                "SKIPPED, NOT REFUSED — a screen's own last `GET /orders` names an order "
+                "that closed or was un-fetched between that read and this press, and that "
+                "is not a caller error",
+            )
 
 
 def check_inventory_copies_route(checks: Checks) -> None:
@@ -29780,6 +29923,7 @@ def run() -> Result:
     check_order_reconcile_backlog(checks)
     check_order_screen(checks)
     check_order_places_scoped(checks)
+    check_order_picks_tier(checks)
     check_inventory_copies_route(checks)
     check_order_fetch_route(checks)
     check_request_slots(checks)

@@ -68,6 +68,7 @@ import type {
   OrdersFetched,
   OrdersPreview,
   OrdersPayload,
+  OrderPicksPayload,
   PullResult,
   PullTarget,
   ShippingBatch,
@@ -2981,6 +2982,28 @@ export async function buildLot(input: {
  */
 export async function getOrders(): Promise<OrdersPayload> {
   return (await request('/orders', NO_CACHE)) as OrdersPayload
+}
+
+/**
+ * Real picks and places, for exactly the order keys named — `getOrders()`'s own second tier
+ * (`OrderPicksPayload`'s comment has the argument). `Orders.tsx` calls this for the buyer or
+ * order actually open, and once — every key in the pass at once — for the walk; never for
+ * every order the store holds, which is the whole-store decoration this route exists to
+ * avoid re-paying.
+ *
+ * `keys` MAY NOT BE EMPTY — the route refuses `keys_required` on one, so callers gate on a
+ * non-empty set themselves. A key the server no longer holds (closed or un-fetched since the
+ * caller's last `getOrders()`) is simply absent from the answer, not an error.
+ *
+ * WRITE-SHAPED BUT WRITES NOTHING — a POST because an order key is `source:number` and a
+ * number may legally carry a colon, `fetchOrders`'s own reason for its shape.
+ */
+export async function fetchOrderPicks(keys: readonly string[]): Promise<OrderPicksPayload> {
+  return (await request('/orders/picks', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ keys }),
+  })) as OrderPicksPayload
 }
 
 /**
