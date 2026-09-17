@@ -201,11 +201,7 @@ def names(chunks: List[Chunk]) -> List[str]:
             stem = "_preamble"
         elif c.kind == "container":
             stem = (c.folder + "/" if c.folder else "") + "_" + slug(c.title)
-        elif c.kind == "test":
-            stem = f"{c.folder}/{c.ident}-{slug(c.title)}"
-        elif c.kind == "run":
-            stem = f"{c.folder}/{c.ident}-{slug(c.title)}"
-        else:  # step
+        else:  # test, run and step all address by id inside their own kind folder
             stem = f"{c.folder}/{c.ident}-{slug(c.title)}"
         name = stem + ".md"
         if name in used:

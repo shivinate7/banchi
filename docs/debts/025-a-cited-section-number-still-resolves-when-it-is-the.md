@@ -44,7 +44,7 @@ than asking whether a bare number appears somewhere in it. **Measured over all 3
 | wrong citations the rule would have caught, of the seven | 1 |
 
 The other three quoted spans are a code flag (`--shard=N/3 --workers=1`), an f-string fragment
-(`can — see §11.`) and a slice of this very checker's own error text — all
+(`can — see DEBT11.`) and a slice of this very checker's own error text — all
 three would be reported as broken citations, so the rule arrives at **one catch and three false
 alarms.** The prose in this repo cites by narrating, not by quoting, and a row that is wrong three
 times for every time it is right is one the next session turns off.

@@ -2885,8 +2885,8 @@ def check_debt_ids(report: Report, docs: List[Path]) -> None:
                 if _DEBT_PATH_RE.search(line):
                     regressions.append(Finding(
                         f"{rel(path)}:{number}",
-                        f"spells a debts citation the retired way — `docs/DEBTS.md` plus a "
-                        f"number. Use `DEBT<n>` instead.",
+                        "spells a debts citation the retired way — `docs/DEBTS.md` plus a "
+                        "number. Use `DEBT<n>` instead.",
                     ))
 
     dangling: List[Finding] = []
