@@ -2635,7 +2635,13 @@ COMPONENTS = [
                                 # widening that catches a backticked `pkmnscan …` invocation —
                                 # unclaimed, so it sorts to the end until `make merge` gives
                                 # it a number.
-                                "D210"],
+                                "D210",
+                                # D138: `dist path agreement`'s docstring names it — the row
+                                # reconciles `scripts/serve.py:DIST` and
+                                # `server/capture_server.py:APP_DIST` against each other and
+                                # against Vite's own default `outDir`, the same fact D138
+                                # rules on (one process, `app/dist/` beside the checkout).
+                                "D138"],
             },
             "claim-ids.py": {
                 "does": "allocate the numbers this branch's SLUG ids will take, and "
@@ -2970,6 +2976,19 @@ COMPONENTS = [
                         "writes; stdlib only.",
                 "governed_by": ["D16", "D18", "D120", "D149", "D160"],
             },
+            "readiness-agreement.py": {
+                "does": "Reconciles app/src/readiness.ts's second implementation of "
+                        "pipeline/decisions.py:blocking against the Python it re-implements "
+                        "(D54, docs/debts/003). Walks decisions.py with ast, never a regex, "
+                        "and checks FLOOR_CHOICE and FLAT_KEY agree, that OWED_REASONS' "
+                        "length agrees with the count of reasons.append(...) calls inside "
+                        "blocking(), and that every pipeline/decisions.py:<line> citation in "
+                        "readiness.ts resolves to the AST node its own comment claims. "
+                        "--self-test runs its own mutation-tested arms, counted in "
+                        "SELF_TEST_ARM_COUNT. Standalone as shipped; not yet wired into "
+                        "make check.",
+                "governed_by": ["D54", "D149", "D185"],
+            },
             "split-debts.py": {
                 "does": "Performed the split of docs/DEBTS.md into docs/debts/, and proves "
                         "it lost nothing — split-decisions.py's chunk model applied to "
@@ -3277,7 +3296,7 @@ COMPONENTS = [
                 # which is exactly what `governed_by` is for — so they are listed rather than
                 # allowlisted away.
                 "governed_by": ["D7", "D16", "D17", "D18", "D26", "D42", "D43", "D44", "D47", "D48", "D53",
-                                "D58", "D60", "D65", "D68", "D74", "D76", "D80", "D82", "D83", "D86", "D88",
+                                "D54", "D58", "D60", "D65", "D68", "D74", "D76", "D80", "D82", "D83", "D86", "D88",
                                 "D89", "D92", "D111", "D122", "D127", "D129", "D133", "D138", "D139", "D140",
                                 "D141", "D149", "D158", "D160", "D171", "D172", "D173", "D176", "D189"],
                 "note": "IT DECLARES THE SUITE AND DELIBERATELY DOES NOT DRIVE IT, which is "

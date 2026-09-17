@@ -52,26 +52,48 @@ parameter — a prompt-contract change with its own fingerprint questions, since
 `prompt_fingerprint` hashes both user turns and T1's recorded scores are evidence about the
 bytes that exist today.
 
-### `app/src/readiness.ts` is a second `blocking`, and nothing reconciles the two
+### ~~`app/src/readiness.ts` is a second `blocking`, and nothing reconciles the two~~ — CLOSED 2026-09-17
 
-`app/src/readiness.ts:owed` is a second implementation of `pipeline/decisions.py:blocking` so
-`#/pricing`'s ready line settles on the keystroke that satisfies it, with no round trip — D54's
-choice, and the right one for a line whose whole value is that it is instant. **Its header
-claimed an `emit readiness` row in `scripts/docs-audit.py` and a Makefile target,
-`readiness-agreement`, until 2026-09-02, and neither has ever existed.** `OWED_REASONS` was shaped as a flat
-literal for a parser nobody wrote.
+`app/src/readiness.ts:owed` is a second implementation of `pipeline/decisions.py:blocking`.
+It exists so `#/pricing`'s ready line settles on the keystroke that satisfies it. There is no
+round trip. This is D54's choice, and the right one for a line whose whole value is that it is
+instant. Its header claimed an `emit readiness` row in `scripts/docs-audit.py`. It also claimed
+a Makefile target, `readiness-agreement`, until 2026-09-02. Neither had ever existed.
+`OWED_REASONS` was shaped as a flat literal for a parser nobody had written.
 
-**What it costs.** The two can disagree and nothing says so: when `blocking` gains a refusal,
-the line keeps saying *Pricing is answered* while `emit` refuses, and the operator learns it
-from the emit's stdout. The one live defense is the roster on `GET /pipeline/pricing`, which
-asks the Python that actually refuses — so a chip and the line can disagree, and the chip is
-the one that is right.
+**What it cost, while open.** The two could disagree and nothing said so. When `blocking`
+gained a refusal, the line kept saying *Pricing is answered* while `emit` refused. The operator
+learned it from the emit's stdout. The live defense stayed the roster on
+`GET /pipeline/pricing`, which asks the Python that actually refuses. A chip and the line could
+disagree, and the chip was the one that was right.
 
-**Why not fixed.** The honest check reconciles a vocabulary — `OWED_REASONS` against the
-reasons `blocking` can return — and `blocking` builds its reasons as sentences rather than off
-a tuple, so the row needs a roster the Python does not publish. That is cluster 1's decision
-again, asked of one more module. Until it is settled the header says nothing audits it, which
-is the claim this file exists to keep true.
+**Closed by `scripts/readiness-agreement.py`, standalone.** It is not wired into
+`scripts/docs-audit.py` or `make check` here. That wiring is the orchestrating session's to do.
+The script walks `pipeline/decisions.py` with `ast`, never a regex, so a reformat cannot fool
+it. It reads `app/src/readiness.ts` as text. It checks three things. `FLOOR_CHOICE` and
+`FLAT_KEY` must agree byte for byte. `OWED_REASONS`'s length must agree with the count of
+`reasons.append(...)` calls inside `Decisions.blocking`, so a third Python reason with no
+matching TS entry goes red. Every `pipeline/decisions.py:<line>` citation in `readiness.ts`
+must resolve to the AST node its comment claims. Classification uses the "RULE 1" / "RULE 2" /
+"sub-threshold" / "unanswered property" markers already in that prose.
+
+**Proved red on the defect it was built to catch, before anything was fixed.** At the time
+this entry closed, three citations in `readiness.ts` pointed at the wrong code. Two claimed
+`:332`, which is `to_payload`'s `overrides` dict. One claimed `:325`, five lines above the
+actual `unanswered` property. This is D149's disease: a line citation that still resolves and
+still reads clean. The reader named those three and exited 1. The citations were then
+corrected to `:357` (the first `reasons.append`, RULE 1) and `:350` (`unanswered`'s own `def`
+line). The reader now reports 10 of 10 subjects green. `--self-test` runs 9 mutation arms
+against its own logic (`SELF_TEST_ARM_COUNT` in the script). One arm reproduces this exact
+stale-citation shape generically.
+
+**What it still cannot see.** Whether `blocking`'s own two reasons are still the only two
+`emit` can refuse for. `cli/cmd_emit.py`'s other five refusal paths stay outside `blocking()`
+entirely — queue routing, an empty catalog, a disposition naming a SKU outside the batch, a
+suppressed per-game report, an unparseable document. `readiness.ts`'s own header already names
+those five. They stay outside this reader's scope too, by the same header's own rule:
+`owed()` may never grow to read `overrides`, a hold, or the floor.
+
 
 ### ~~The eleventh hop is the fixtures, and adding `product` broke four tests nothing runs~~ — CLOSED 2026-09-05
 

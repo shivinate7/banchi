@@ -173,6 +173,28 @@ CHECKS = (
         "governed_by": ("D18", "D65", "D76"),
     },
     {
+        "target": "readiness-agreement",
+        "runs": "python3 scripts/readiness-agreement.py",
+        "asserts": "`app/src/readiness.ts` against `pipeline/decisions.py:blocking`, which it "
+                   "re-implements on purpose (D54 — the screen settles on the keystroke, so a "
+                   "server-computed answer would lag it). An AST walk of the Python against "
+                   "this file's own flat literals: the two refusal reasons, FLOOR_CHOICE, "
+                   "FLAT_KEY, and every `decisions.py:<line>` citation in the header. A third "
+                   "refusal reason in Python with no third here is a refusal the screen cannot "
+                   "show, and until 2026-09-17 only a person reading both files would find it. "
+                   "The file was SHAPED to be audited in 2026-09-02 and nothing read it until "
+                   "now; its header claimed this target existed for five days before it did.",
+        "needs": ("python3",),
+        "writes": "",
+        "commit_path": False,
+        "why_off_commit_path": "Not the toolchain — this one needs a bare python3 and would "
+                               "run in the hook. The commit path is two checks by choice, and "
+                               "widening it is its own decision rather than a thing a new "
+                               "reader does on the way in.",
+        "gates": True,
+        "governed_by": ("D18", "D54", "D149"),
+    },
+    {
         "target": "screen-freshness",
         "runs": "node scripts/screen-freshness.mjs",
         "asserts": "Every server write in app/src has a way back — a re-read, an invalidation "

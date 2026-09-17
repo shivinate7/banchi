@@ -90,8 +90,9 @@ make design-check   # DESIGN.md's Fulfillment floors, in a browser. TAKES A MACH
 make design-check-quiet  # same run, no progress stream, same lock.
 make suite-lock-selftest # the lock, proved by violating it, including a holder killed -9.
                     #   In `check`.
-make demo           # seed a demo store and record the wire, a fixture bundle. ONE `fetch`,
-                    #   ONE `photoUrl`. A demo differs from real by DATA alone, not a fork.
+make demo           # seed a demo store and record the wire, a fixture bundle. ONE request
+                    #   seam (`server.ts:request`), ONE `photoUrl`. A demo differs from real
+                    #   by DATA alone, not a fork.
                     #   Real: catalogue, whole pipeline after `identify`. Invented: box
                     #   contents, sales, shipments. Synthetic: photographs.
 make demo-seed      # the store alone. Deterministic. Refuses with PKMNSCAN_HOME unset.
@@ -105,7 +106,8 @@ make demo-freshness # whether the bundle matches its recording. No gate: CI rebu
                     #   an authenticated fetch and capture are refused BY NAME. No API key
                     #   reaches the build; only `VITE_`-prefixed vars are inlined.
 make check          # harness + docs-audit + claim-stale + revert-guard +
-                    #   port-agreement + set-hint-agreement + screen-freshness +
+                    #   port-agreement + set-hint-agreement + readiness-agreement +
+                    #   screen-freshness +
                     #   screen-freshness-selftest + sigil-check + ignore-check +
                     #   lint + vale + typecheck + audit-self-test +
                     #   githooks-selftest + merge-selftest + revert-selftest +
