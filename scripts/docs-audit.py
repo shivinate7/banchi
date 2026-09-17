@@ -4564,6 +4564,22 @@ _CID_LOOKUP_LATENCY_SITES: Tuple[_DuplicatedMeasurementSite, ...] = (
 # actually making its point with (`1,091 of`, `0 of`, `2,535 of` on the left) is deliberately
 # left unread, because two sites disagreeing about IT is not this row's claim.
 _STORE_TOTAL_SITES: Tuple[_DuplicatedMeasurementSite, ...] = (
+    # THE DECLARED ROOTS, COMPLETED. The comment above names `server/ pipeline/ store/ cli/
+    # scripts/ app/` as this row's ground and says a copy inside them that a sweep missed
+    # BELONGS here. Ten did: the first pass walked the sites a pattern sweep surfaced and
+    # stopped at fourteen, while `store/`, `cli/` and `server/` carried ten more of the same
+    # denominator in their own comments. A roster that names its roots and then does not
+    # cover them is the shape this row exists to refuse, one level up.
+    ("store/photos.py", re.compile(r"(\d{1,3}(?:,\d{3})*) photographs at ~10 per directory")),
+    ("store/photos.py", re.compile(r"That population is 0 today . (\d{1,3}(?:,\d{3})*) distinct digests")),
+    ("store/photos.py", re.compile(r"reported NO residue while holding (\d{1,3}(?:,\d{3})*) of them")),
+    ("store/photos.py", re.compile(r"Measured on (\d{1,3}(?:,\d{3})*) photographs across")),
+    ("cli/cmd_identify.py", re.compile(r"capture root scans (\d{1,3}(?:,\d{3})*) photographs and narrows")),
+    ("cli/cmd_identify.py", re.compile(r"hashing all (\d{1,3}(?:,\d{3})*) photographs in")),
+    ("server/pipeline_routes.py", re.compile(r"(\d{1,3}(?:,\d{3})*) photographs where a cart of five")),
+    ("server/pipeline_routes.py", re.compile(r"a press over (\d{1,3}(?:,\d{3})*) cards in five drawers reported")),
+    ("server/pipeline_routes.py", re.compile(r"a press over everything is (\d{1,3}(?:,\d{3})*) cards and")),
+    ("server/pipeline_routes.py", re.compile(r"because all (\d{1,3}(?:,\d{3})*) are cache hits")),
     ("pipeline/selection.py", re.compile(r"store holds (\d{1,3}(?:,\d{3})*) photographs")),
     ("pipeline/selection.py", re.compile(r"the same (\d{1,3}(?:,\d{3})*) photographs in 0\.386 s")),
     ("pipeline/selection.py", re.compile(r"0 of (\d{1,3}(?:,\d{3})*) captures lack a position")),
@@ -4696,9 +4712,17 @@ def check_duplicated_measurements(report: Report) -> None:
         "duplicated measurements",
         MECHANICAL,
         findings,
-        "cid lookup latency (3 sites), store total (14 sites) and largest drawer (3 sites) "
-        "— a declared list over live code, tests, CLAUDE.md and docs/map.py, never "
-        "docs/decisions or docs/specs",
+        # DERIVED, NEVER TYPED. This line read "(3 sites), store total (14 sites)" as a
+        # literal while the table held 24 — the row published a count of its own subjects
+        # that its own subjects did not control, which is the exact defect it exists to
+        # catch. A summary is a published number like any other.
+        "cid lookup latency ({0} sites), store total ({1} sites) and largest drawer "
+        "({2} sites) — a declared list over live code, tests, CLAUDE.md and docs/map.py, "
+        "never docs/decisions or docs/specs".format(
+            len(_CID_LOOKUP_LATENCY_SITES),
+            len(_STORE_TOTAL_SITES),
+            len(_LARGEST_DRAWER_SITES),
+        ),
         scanned=scanned,
     )
 
