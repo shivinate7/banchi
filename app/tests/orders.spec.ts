@@ -1472,6 +1472,44 @@ test('a buyer with two open orders draws one merged walk carrying rows from both
   await expect(page.locator('.orders-buyer-byorder')).toContainText(SECOND_ORDER)
 })
 
+test('opening a two-order buyer sends exactly one batched POST /orders/picks, never one per key', async ({ page }) => {
+  /* THE REGRESSION THIS CATCHES: `detail` (React state) does not settle inside one render
+   *  pass, so a dedupe check reading only `detail` sees the SAME empty map across every
+   *  render that happens before the first fetch resolves and fires a fresh identical POST
+   *  each time. Measured against the seeded server on :8265 (2026-09-17): a fresh load with
+   *  a four-order buyer selected by default sent SEVEN identical calls before the fix
+   *  (`pendingPicks`, a ref marked synchronously before the fetch's own `await`); one after.
+   *  This fixture's buyer holds two orders, which is enough to prove the batching — both
+   *  keys travel in ONE call, never two single-key ones. */
+  const secondLine = () =>
+    line({
+      order: SECOND_ORDER,
+      order_key: secondOrderKey,
+      sku: '9197754',
+      picks: [pick({ index: 30, capture_id: 'cap-second', card_name: 'Sunrise', card_number: '030' })],
+      line: { ...line().line, sku: '9197754', name: 'Sunrise', number: '030' },
+    })
+  const both = payloadOf(
+    [order(), order({ key: secondOrderKey, number: SECOND_ORDER })],
+    [
+      { key: `TCGplayer:${ORDER_NUMBER}`, number: ORDER_NUMBER, complete: false, outstanding: 1, lines: [line()] },
+      { key: secondOrderKey, number: SECOND_ORDER, complete: false, outstanding: 1, lines: [secondLine()] },
+    ],
+  )
+  const wire = await open(page, { orders: both })
+  await page.locator('.orders-index-row').first().click()
+
+  /* Wait for the merged walk to actually render — the same proof of "the picks arrived" the
+     test above uses — before counting the wire, so this does not race the fetch. */
+  await expect(page.locator('.orders-buyer-walk .orders-pick')).toHaveCount(2)
+
+  const picksCalls = wire.filter((one) => one.path.endsWith('/orders/picks'))
+  expect(picksCalls).toHaveLength(1)
+  expect(new Set((picksCalls[0]?.body as { keys: string[] }).keys)).toEqual(
+    new Set([`TCGplayer:${ORDER_NUMBER}`, secondOrderKey]),
+  )
+})
+
 test('?order= resolves an old link to the buyer group that holds it', async ({ page }) => {
   const secondLine = () =>
     line({ order: SECOND_ORDER, order_key: secondOrderKey, sku: '9197754', picks: [pick({ index: 30, capture_id: 'cap-second' })] })

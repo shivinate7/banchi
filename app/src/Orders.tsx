@@ -2591,9 +2591,88 @@ function PullStage({
    *  to the last snapshot would go on showing a copy as free (or spoken for) after the write
    *  that changed it. */
   const [detail, setDetail] = useState<Map<string, ResolvedOrder>>(new Map())
+  /* THE IN-FLIGHT SET, AND WHY `detail` ALONE CANNOT DO THIS JOB. React state does not settle
+   *  inside one render pass: opening a buyer whose group is still assembling (the buyer effect
+   *  below, `selectedGroup` moving from null to a group across the first few renders after
+   *  mount) re-runs the effect several times before the first `fetchOrderPicks` promise has
+   *  resolved, and every one of those renders sees the SAME empty `detail` — so the dedupe
+   *  check `!detail.has(key)` passes every time and queues another identical request. Measured
+   *  against the seeded server on :8265 (2026-09-17): a fresh `#/orders` load with a
+   *  four-order buyer selected by default fired SEVEN identical `POST /orders/picks` calls,
+   *  all carrying the same four keys, before any of them had landed.
+   *
+   *  `pendingPicks` marks a key SYNCHRONOUSLY, in the same tick the fetch is initiated —
+   *  before the `await` — which is the one thing a ref can do that state cannot. It is
+   *  checked ALONGSIDE `detail`, never instead of it: `detail` is what stops an ALREADY
+   *  ANSWERED key from being asked again; the ref is what stops a key from being asked twice
+   *  while its first answer is still on the wire.
+   *
+   *  CLEARED ON SETTLE, INCLUDING ON FAILURE — `.finally()`, not the `.then()` branch alone.
+   *  A rejected fetch that left its key in the set would make that order unfetchable for the
+   *  rest of the mount: a permanently empty panel, which is a worse defect than the duplicate
+   *  calls this fixes.
+   *
+   *  AND CLEARED ON THE SAME TRANSITION THAT DROPS `detail` — a pull, a fill or a close
+   *  refetches `payload`, and a stale in-flight entry surviving that transition would suppress
+   *  the very refetch the `detail` reset exists to force, leaving the panel showing nothing
+   *  after a write that changed what it should show. */
+  const pendingPicks = useRef<Set<string>>(new Set())
+  /* GUARDS AGAINST STRICTMODE'S OWN DOUBLE-FETCH, WHICH IS A SECOND REAL BUG THIS RESET
+   *  EFFECT CAN CAUSE, AND A REFERENCE CHECK DOES NOT FIX. `main.tsx` mounts under
+   *  `<StrictMode>`, and the mount effect above that calls `reread()` (`getOrders()`) has no
+   *  guard of its own against StrictMode's double-invoke — so on mount it makes TWO separate
+   *  `GET /orders` calls and lands TWO genuinely distinct `payload` objects, back to back,
+   *  before this screen has done anything. Comparing `payload` BY REFERENCE (an earlier
+   *  version of this effect did) treats that second, content-identical answer as a real
+   *  change: it wipes `pendingPicks` out from under the buyer-fetch effect's first in-flight
+   *  request, whose own dedupe then sees an empty set again and fires a second, fully
+   *  redundant `POST /orders/picks` for the same keys. Measured: the spec case below caught
+   *  this as TWO identical calls where the ref alone should have left one.
+   *
+   *  So this compares CONTENT, not identity: `JSON.stringify(payload)`. Two consecutive
+   *  reads of an unchanged store serialize identically and are treated as no change at all
+   *  — cheap correctness here, since this only runs when `payload`'s reference changes at
+   *  all, never on every render. A REAL change — a pull, a fill, a close, or a poll that
+   *  actually found something different — serializes differently and resets exactly as
+   *  before. This is also why a coarser signature (say, just the resolved orders' KEYS) was
+   *  rejected: a pull that records a copy without removing the order from `resolution`
+   *  (still short, now for one fewer copy) would leave that narrower signature unchanged and
+   *  suppress the very refetch the reset exists to force — the stale-picks-after-pull defect
+   *  by another door. */
+  const payloadSignature = useRef<string | null>(null)
   useEffect(() => {
+    const signature = payload === null ? null : JSON.stringify(payload)
+    if (payloadSignature.current === signature) return
+    payloadSignature.current = signature
     setDetail(new Map())
+    pendingPicks.current = new Set()
   }, [payload])
+
+  /** Fetch real picks for exactly the keys not already answered and not already in flight,
+   *  in one batched `POST /orders/picks` — the one door both fetch effects below use, so the
+   *  dedupe rule lives in one place rather than twice. */
+  const fetchMissingPicks = useCallback((keys: readonly string[]) => {
+    const missing = keys.filter((key) => !detail.has(key) && !pendingPicks.current.has(key))
+    if (missing.length === 0) return
+    for (const key of missing) pendingPicks.current.add(key)
+    fetchOrderPicks(missing)
+      .then((found: OrderPicksPayload) => {
+        setDetail((prev) => {
+          const next = new Map(prev)
+          for (const one of found.orders) next.set(one.key, one)
+          return next
+        })
+      })
+      .catch(() => {
+        /* Best-effort: the lite tier already in `answers` is a safe fallback (an empty pick
+         *  list, never a wrong one), so a failed fetch here leaves the detail view showing
+         *  no copies rather than crashing it. Clearing the ref below (not skipped on this
+         *  branch) is what lets the next render of this buyer or walk retry. */
+      })
+      .finally(() => {
+        for (const key of missing) pendingPicks.current.delete(key)
+      })
+  }, [detail])
 
   /** The resolution, keyed so a row can find its own — the lite line from `payload` overlaid
    *  with the real one from `detail` wherever this screen has actually fetched it. Every
@@ -2733,27 +2812,8 @@ function PullStage({
   useEffect(() => {
     if (selectedGroup === null) return
     const keys = selectedGroup.orders.filter(ownsAWalkableBody).map((order) => order.key)
-    const missing = keys.filter((key) => !detail.has(key))
-    if (missing.length === 0) return
-    let canceled = false
-    fetchOrderPicks(missing)
-      .then((found: OrderPicksPayload) => {
-        if (canceled) return
-        setDetail((prev) => {
-          const next = new Map(prev)
-          for (const one of found.orders) next.set(one.key, one)
-          return next
-        })
-      })
-      .catch(() => {
-        /* Best-effort: the lite tier already in `answers` is a safe fallback (an empty pick
-         *  list, never a wrong one), so a failed fetch here leaves the detail view showing
-         *  no copies rather than crashing it. The next render this buyer is opened retries. */
-      })
-    return () => {
-      canceled = true
-    }
-  }, [selectedGroup, detail])
+    fetchMissingPicks(keys)
+  }, [selectedGroup, fetchMissingPicks])
 
   /* FETCH REAL PICKS FOR THE WHOLE WALK, IN ONE BATCH, THE MOMENT A PASS FREEZES
    *  (`hub.walkKeys`). This is the "across many orders at once" case the task names: rather
@@ -2763,23 +2823,8 @@ function PullStage({
    *  the whole store. */
   useEffect(() => {
     if (mode !== 'walk' || hub.walkKeys === null) return
-    const missing = [...hub.walkKeys].filter((key) => !detail.has(key))
-    if (missing.length === 0) return
-    let canceled = false
-    fetchOrderPicks(missing)
-      .then((found: OrderPicksPayload) => {
-        if (canceled) return
-        setDetail((prev) => {
-          const next = new Map(prev)
-          for (const one of found.orders) next.set(one.key, one)
-          return next
-        })
-      })
-      .catch(() => {})
-    return () => {
-      canceled = true
-    }
-  }, [mode, hub.walkKeys, detail])
+    fetchMissingPicks([...hub.walkKeys])
+  }, [mode, hub.walkKeys, fetchMissingPicks])
 
   /* THE HASH NAMES A BUYER, OR — FOR AN OLD LINK — AN ORDER RESOLVED TO ITS BUYER, ONCE THE
      LEDGER HAS ACTUALLY ANSWERED; from then on the store leads and the hash follows. `?buyer=`

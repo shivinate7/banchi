@@ -596,6 +596,15 @@ async function stubStore(page: Page): Promise<void> {
       },
     }),
   )
+  /* THE PICKS TIER — `GET /orders` above answers zero orders, so there is nothing any key
+   *  asked here could ever name. `/\/orders$/`'s regex does not match this path (no `$`
+   *  collision, `orders/picks` is a longer string), so without this a spec that merely
+   *  visits `#/orders` sends an unstubbed POST straight into `sealCapture`'s catch-all,
+   *  which ABORTS AND RECORDS rather than answering — `sealEveryTest` then fails the test
+   *  for a leaked request that was never a bug in the screen. The seal refuses; this
+   *  answers, matching what `do_order_picks` actually returns for a key it holds nothing
+   *  for. `orders.spec.ts`'s own `open()` overrides this per case with real fixtures. */
+  await page.route(/\/orders\/picks$/, (route) => json(route, { orders: [] }))
 
   await stubCropPreview(page)
 
