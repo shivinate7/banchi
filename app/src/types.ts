@@ -2899,6 +2899,13 @@ export type OrderRow = {
   wanted: number
   recorded: number
   open: boolean
+  /** The MARKETPLACE's own word that this order is finished — `server/capture_server.py:
+   *  _order_row` emits `order_store.is_terminal_status(record.status)` unconditionally, never
+   *  the `status` string itself (D114). Distinct from `open`, which is the LEDGER's answer to
+   *  "does this still owe copies": a `terminal` order can still owe copies when TCGplayer
+   *  reports it shipped before every line was pulled here, which is exactly the case `open`
+   *  alone cannot tell a screen about. */
+  terminal: boolean
   lines: OrderLineWire[]
   progress: OrderLineProgress[]
 }
@@ -3041,6 +3048,23 @@ export type OrdersPayload = {
   summary: string
   orders: OrderRow[]
   resolution: { orders: ResolvedOrder[]; counts: Record<OrderLineReason, number> }
+}
+
+/** `POST /orders/picks` — the second tier `GET /orders` names in its own comment.
+ *
+ *  `OrdersPayload.resolution.orders[].lines[].picks` IS ALWAYS `[]` NOW (2026-09-16):
+ *  decorating a real `place` for every candidate copy of every unfulfilled order was 52% of
+ *  `GET /orders`'s wall time, for orders no buyer had opened. Every other field on a line —
+ *  `reason`, `on_hand`, `sold`, `retired`, `pooled`, `wanted`, `owed`, `fulfilled`,
+ *  `outstanding` — is unchanged and still answers on `GET /orders` alone, because the buyer
+ *  list, its reason chips, its status pills and `passesHideUnknown` read none of `picks`.
+ *
+ *  This route answers the SAME shape (`ResolvedOrder[]`), with real `picks`, for exactly the
+ *  order keys asked about — the order or buyer being opened, or every order in a walk pass
+ *  in one batch. A key the ledger no longer holds is simply absent from `orders`, not an
+ *  error. */
+export type OrderPicksPayload = {
+  orders: ResolvedOrder[]
 }
 
 /** THE PROJECTION, and NOTHING MAY BE ADDED TO IT BEYOND WHAT IS ARGUED HERE.

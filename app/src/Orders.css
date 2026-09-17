@@ -33,6 +33,48 @@
 .orders-mode .bn-seg-item { min-height: var(--bn-control-h-sm); }
 .orders-toolbar-note { font-size: var(--bn-fs-sm); color: var(--bn-ink-3); }
 
+/* ---- the buyer list's own view: search, status, sort, hide-unknown ------------ */
+.orders-view-controls {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--bn-2);
+}
+.orders-search {
+  flex: 1 1 220px;
+  min-width: 160px;
+  max-width: 320px;
+}
+.orders-search-input { min-height: var(--bn-control-h-sm); font-size: var(--bn-fs-sm); }
+/* `.bn-input-wrap`'s own right slot is sized for a `<kbd>`; a clear button needs the same spot
+   with a hit target rather than the kbd's tight padding. */
+.orders-search-clear {
+  position: absolute;
+  right: 6px;
+  display: grid;
+  place-items: center;
+  width: 20px;
+  height: 20px;
+  border-radius: var(--bn-r-sm);
+  color: var(--bn-ink-3);
+  transition: background-color var(--bn-t-fast) var(--bn-ease), color var(--bn-t-fast) var(--bn-ease);
+}
+.orders-search-clear:hover { background: var(--bn-surface-2); color: var(--bn-ink); }
+.orders-search-input::-webkit-search-cancel-button { appearance: none; }
+/* Room for the clear button so typed text never runs under it. */
+.orders-search:has(.orders-search-clear) .orders-search-input { padding-right: 26px; }
+
+.orders-status-select { min-height: var(--bn-control-h-sm); font-size: var(--bn-fs-sm); width: auto; min-width: 120px; }
+.orders-sort .bn-seg-item { min-height: var(--bn-control-h-sm); }
+.orders-hide-unknown {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: var(--bn-fs-sm);
+  color: var(--bn-ink-2);
+  white-space: nowrap;
+}
+
 .orders-chips { display: flex; flex-wrap: wrap; gap: var(--bn-2); }
 .orders-chip {
   display: inline-flex;
@@ -106,9 +148,22 @@
   flex-direction: column;
   gap: 2px;
   overflow-y: auto;
+  /* `overflow-y: auto` computes `overflow-x` to `auto` too (the scroll-box rule), which was
+     clipping the row's own hover shadow left/right as well as top/bottom — measured live: a
+     selected/hovered row sits flush with the scroller's content box on every side, so any
+     paint outside the border box is cut. Pin `overflow-x` explicitly rather than leaving it
+     an accident of the other axis. */
+  overflow-x: hidden;
   min-height: 0;
-  padding: 2px;
-  margin: -2px;
+  /* THE BLEED IS SIZED TO `--bn-shadow-1`'s OWN REACH, NOT A MAGIC NUMBER: that token's first
+     layer is `0 1px 2px`, a 1px vertical offset plus a 2px blur, so its paint reaches 3px past
+     the row's border box on the side the offset pushes toward (measured: bottom) and 2px on
+     every other side; `:hover` also lifts the row `translateY(-1px)`, which only pulls the
+     shadow's reach on the top back down to 2px. 3px on every side covers the worst of those
+     with room rather than a fitted-per-edge value that breaks the next time `--bn-shadow-1`
+     changes. If that token's offset or blur grows, raise this to match. */
+  padding: 3px;
+  margin: -3px;
 }
 .orders-index > li { animation: bn-page-in var(--bn-t) var(--bn-ease-out) backwards; }
 .orders-index-hint { display: flex; align-items: center; gap: 4px; padding: 0 var(--bn-2); font-size: var(--bn-fs-xs); color: var(--bn-ink-4); }

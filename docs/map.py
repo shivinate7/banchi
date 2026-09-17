@@ -795,12 +795,20 @@ COMPONENTS = [
                                   "counts its breakdown, which is how a filled line keeps its "
                                   "figures on screen without a second implementation of "
                                   "`OrderLine`. A NEGATIVE quantity is still the bug it always "
-                                  "was.",
+                                  "was. "
+                                  "AMENDED 2026-09-16 (D97, the owner's fungibility ruling): the "
+                                  "exclusive per-pass draw described above is GONE — every order "
+                                  "is offered every available copy, `picks` is every candidate "
+                                  "rather than an allocation capped at the line's quantity, and "
+                                  "the guard against shipping one card twice is "
+                                  "`store/orders.py:record_pull`'s `CopyAlreadyPulled` at the "
+                                  "WRITE rather than anything this module withholds.",
                           # D58 because it decides what this module deliberately does NOT
                           # do: a card's number counts the cards in the box now, so drawing
                           # a label needs the box's whole occupancy — a `Pick` carries the
                           # box and index and leaves the rendering to the one label formula.
-                          "governed_by": ["D7", "D10", "D21", "D24", "D26", "D36", "D58", "D90"],
+                          "governed_by": ["D7", "D10", "D21", "D24", "D26", "D36", "D58", "D90",
+                                          "D97"],
                           "tested_by": ["T7"],
                           "note": "THE SKU IS COERCED AT THE BOUNDARY AND WITHOUT THAT NOTHING WORKS "
                                   "AT ALL: `Card.sku` is a CSV string and a JSON payload carries the "
@@ -4614,7 +4622,7 @@ COMPONENTS = [
                                              "D168",
                                              "D79", "D83", "D86", "D87", "D89", "D91", "D92",
                                              "D93", "D100", "D103", "D104", "D113", "D115",
-                                             "D116", "D132", "D134", "D147",
+                                             "D114", "D116", "D132", "D134", "D147",
                                              "D159", "D172", "D174", "D180",
                                              "D193", "D165"]},
             "src/deviceMemory.ts": {"does": "every `localStorage` key the shell owns — the "

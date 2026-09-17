@@ -13,6 +13,7 @@ import {
   DEFAULT_ORDER_VIEW,
   orderStalenessSentence,
   passesHideUnknown,
+  passesQuery,
   passesStatus,
   sortGroups,
   staleCount,
@@ -28,6 +29,7 @@ import {
   closeOrders,
   declareLineKind,
   describeFailure,
+  fetchOrderPicks,
   fetchOrders,
   fillLine,
   getInventoryCopies,
@@ -53,6 +55,7 @@ import type {
   OrderFillReason,
   OrderLineProgress,
   OrderLineReason,
+  OrderPicksPayload,
   OrderRow,
   OrdersFetched,
   OrdersPayload,
@@ -706,9 +709,9 @@ function skusOf(payload: OrdersPayload | null): string[] {
  *  picks. */
 type Claims = ReadonlyMap<string, string>
 
-function indexClaims(payload: OrdersPayload | null): Claims {
+function indexClaims(answers: ReadonlyMap<string, ResolvedOrder>): Claims {
   const out = new Map<string, string>()
-  for (const order of payload?.resolution.orders ?? []) {
+  for (const order of answers.values()) {
     for (const line of order.lines) {
       for (const pick of line.picks) {
         const key = copyKeyOf(pick)
@@ -810,6 +813,17 @@ function headlineOf(line: ResolvedLine): Headline {
 /* ---- status ---------------------------------------------------------------------------------- */
 
 type Status = 'ready' | 'short' | 'look' | 'unresolved' | 'done'
+
+/** Does this order still have a body worth drawing — a walk, its lines, a Pull button — even
+ *  though `order.open` says no? An order the marketplace calls done for having every copy
+ *  pulled already (`!open`, not `terminal`, nothing owed) has nothing left to walk, same as
+ *  before. An order the marketplace calls done for its OWN reasons while copies are still
+ *  owed (`terminal` and `wanted > recorded`) is the one the owner wants opened back up —
+ *  `terminal` is `types.ts`'s own field now, off `server/capture_server.py:_order_row`. */
+function ownsAWalkableBody(order: OrderRow): boolean {
+  if (order.open) return true
+  return order.terminal && order.wanted > order.recorded
+}
 
 function statusOf(order: OrderRow, answer: ResolvedOrder | null): Status {
   if (!order.open) return 'done'
@@ -2553,15 +2567,129 @@ function PullStage({
    *  state and what an explicit re-sort restores. */
   const [take, setTake] = useState<OrderTake>(TAKE_IS_CURRENT)
 
-  /** The resolution, keyed so a row can find its own. */
-  const answers = useMemo(() => {
-    const out = new Map<string, ResolvedOrder>()
-    for (const one of payload?.resolution.orders ?? []) out.set(one.key, one)
-    return out
+  /* THE BUYER SEARCH — transient component state, deliberately NOT `banchi.orders.fetch-filter`
+   *  and NOT any `localStorage` key. A remembered query would hide orders on the next visit
+   *  with no chip on screen saying why, which is exactly the hiding D103's anti-hiding floor
+   *  refuses for staleness; this control gets the same rule. Cleared on unmount for free by
+   *  being ordinary state. */
+  const [query, setQuery] = useState('')
+  const onQueryChange = (next: string) => {
+    setQuery(next)
+    /* A changed search is an explicit retake, the same rule `onStatusChange` and
+       `onHideUnknownChange` already apply (D181 — narrowing the shown set is a request to see
+       the shelf as it stands now, not a reason to hold last take's positions over rows the
+       new query may not even include). */
+    setTake(TAKE_IS_CURRENT)
+  }
+
+  /* THE SECOND TIER'S CACHE: real picks and places, fetched on demand for exactly the orders
+   *  this screen is looking at (`POST /orders/picks`, `server/capture_server.py:do_orders`'s
+   *  own comment). `GET /orders` answers `picks: []` on every line now — decorating one was
+   *  52% of that route's wall time for a buyer nobody had opened — so this map is where the
+   *  real thing lands once asked for, keyed by order key, and it is dropped whole every time
+   *  `payload` changes: a pull, a fill or a close refetches `payload`, and a picks cache keyed
+   *  to the last snapshot would go on showing a copy as free (or spoken for) after the write
+   *  that changed it. */
+  const [detail, setDetail] = useState<Map<string, ResolvedOrder>>(new Map())
+  /* THE IN-FLIGHT SET, AND WHY `detail` ALONE CANNOT DO THIS JOB. React state does not settle
+   *  inside one render pass: opening a buyer whose group is still assembling (the buyer effect
+   *  below, `selectedGroup` moving from null to a group across the first few renders after
+   *  mount) re-runs the effect several times before the first `fetchOrderPicks` promise has
+   *  resolved, and every one of those renders sees the SAME empty `detail` — so the dedupe
+   *  check `!detail.has(key)` passes every time and queues another identical request. Measured
+   *  against the seeded server on :8265 (2026-09-17): a fresh `#/orders` load with a
+   *  four-order buyer selected by default fired SEVEN identical `POST /orders/picks` calls,
+   *  all carrying the same four keys, before any of them had landed.
+   *
+   *  `pendingPicks` marks a key SYNCHRONOUSLY, in the same tick the fetch is initiated —
+   *  before the `await` — which is the one thing a ref can do that state cannot. It is
+   *  checked ALONGSIDE `detail`, never instead of it: `detail` is what stops an ALREADY
+   *  ANSWERED key from being asked again; the ref is what stops a key from being asked twice
+   *  while its first answer is still on the wire.
+   *
+   *  CLEARED ON SETTLE, INCLUDING ON FAILURE — `.finally()`, not the `.then()` branch alone.
+   *  A rejected fetch that left its key in the set would make that order unfetchable for the
+   *  rest of the mount: a permanently empty panel, which is a worse defect than the duplicate
+   *  calls this fixes.
+   *
+   *  AND CLEARED ON THE SAME TRANSITION THAT DROPS `detail` — a pull, a fill or a close
+   *  refetches `payload`, and a stale in-flight entry surviving that transition would suppress
+   *  the very refetch the `detail` reset exists to force, leaving the panel showing nothing
+   *  after a write that changed what it should show. */
+  const pendingPicks = useRef<Set<string>>(new Set())
+  /* GUARDS AGAINST STRICTMODE'S OWN DOUBLE-FETCH, WHICH IS A SECOND REAL BUG THIS RESET
+   *  EFFECT CAN CAUSE, AND A REFERENCE CHECK DOES NOT FIX. `main.tsx` mounts under
+   *  `<StrictMode>`, and the mount effect above that calls `reread()` (`getOrders()`) has no
+   *  guard of its own against StrictMode's double-invoke — so on mount it makes TWO separate
+   *  `GET /orders` calls and lands TWO genuinely distinct `payload` objects, back to back,
+   *  before this screen has done anything. Comparing `payload` BY REFERENCE (an earlier
+   *  version of this effect did) treats that second, content-identical answer as a real
+   *  change: it wipes `pendingPicks` out from under the buyer-fetch effect's first in-flight
+   *  request, whose own dedupe then sees an empty set again and fires a second, fully
+   *  redundant `POST /orders/picks` for the same keys. Measured: the spec case below caught
+   *  this as TWO identical calls where the ref alone should have left one.
+   *
+   *  So this compares CONTENT, not identity: `JSON.stringify(payload)`. Two consecutive
+   *  reads of an unchanged store serialize identically and are treated as no change at all
+   *  — cheap correctness here, since this only runs when `payload`'s reference changes at
+   *  all, never on every render. A REAL change — a pull, a fill, a close, or a poll that
+   *  actually found something different — serializes differently and resets exactly as
+   *  before. This is also why a coarser signature (say, just the resolved orders' KEYS) was
+   *  rejected: a pull that records a copy without removing the order from `resolution`
+   *  (still short, now for one fewer copy) would leave that narrower signature unchanged and
+   *  suppress the very refetch the reset exists to force — the stale-picks-after-pull defect
+   *  by another door. */
+  const payloadSignature = useRef<string | null>(null)
+  useEffect(() => {
+    const signature = payload === null ? null : JSON.stringify(payload)
+    if (payloadSignature.current === signature) return
+    payloadSignature.current = signature
+    setDetail(new Map())
+    pendingPicks.current = new Set()
   }, [payload])
 
-  /** Which open order was offered which copy, over the whole resolution. */
-  const claims = useMemo(() => indexClaims(payload), [payload])
+  /** Fetch real picks for exactly the keys not already answered and not already in flight,
+   *  in one batched `POST /orders/picks` — the one door both fetch effects below use, so the
+   *  dedupe rule lives in one place rather than twice. */
+  const fetchMissingPicks = useCallback((keys: readonly string[]) => {
+    const missing = keys.filter((key) => !detail.has(key) && !pendingPicks.current.has(key))
+    if (missing.length === 0) return
+    for (const key of missing) pendingPicks.current.add(key)
+    fetchOrderPicks(missing)
+      .then((found: OrderPicksPayload) => {
+        setDetail((prev) => {
+          const next = new Map(prev)
+          for (const one of found.orders) next.set(one.key, one)
+          return next
+        })
+      })
+      .catch(() => {
+        /* Best-effort: the lite tier already in `answers` is a safe fallback (an empty pick
+         *  list, never a wrong one), so a failed fetch here leaves the detail view showing
+         *  no copies rather than crashing it. Clearing the ref below (not skipped on this
+         *  branch) is what lets the next render of this buyer or walk retry. */
+      })
+      .finally(() => {
+        for (const key of missing) pendingPicks.current.delete(key)
+      })
+  }, [detail])
+
+  /** The resolution, keyed so a row can find its own — the lite line from `payload` overlaid
+   *  with the real one from `detail` wherever this screen has actually fetched it. Every
+   *  consumer of `answers` gets real `picks` for an order once fetched and an honest empty
+   *  list (never a guess) until then; the buyer list itself never notices the difference,
+   *  because `statusOf`/`worstStatus`/`passesHideUnknown` read `line.reason` alone. */
+  const answers = useMemo(() => {
+    const out = new Map<string, ResolvedOrder>()
+    for (const one of payload?.resolution.orders ?? []) out.set(one.key, detail.get(one.key) ?? one)
+    return out
+  }, [payload, detail])
+
+  /** Which open order was offered which copy — over what THIS screen has fetched real picks
+   *  for, never the whole resolution (which no longer carries any). A copy in an order this
+   *  screen has not opened is not claimed here; it is not offered anything either, since
+   *  nothing renders a copy map for it. */
+  const claims = useMemo(() => indexClaims(answers), [answers])
 
   /** The Ship stage's lane for an order, when an export is loaded. View-only. */
   const lanesByOrder = useMemo(() => {
@@ -2575,6 +2703,14 @@ function PullStage({
     const all = payload?.orders ?? []
     return { open: all.filter((one) => one.open), done: all.filter((one) => !one.open) }
   }, [payload])
+
+  /* WHAT THE WALK IS OVER — never `open` alone (the owner's own words opening this task: "I
+   *  need the ability to walk orders even if it already shows shipped"). `ownsAWalkableBody` is
+   *  the one discriminator, shared with `OrderDetail`'s body gate, so a card that has a Pull
+   *  button in the "By order" fold is never absent from the one pass built to walk a shelf in a
+   *  single trip. Measured on the owner's store: 40 open against 235 terminal-and-still-owing —
+   *  the walk covered 40 of 275 orders that owe copies before this. */
+  const walkable = useMemo(() => (payload?.orders ?? []).filter(ownsAWalkableBody), [payload])
 
   /* GROUPED BY BUYER, NOT BY ORDER NUMBER (`D193`). `groupBuyers` is
      pure and takes its own clock, so it is pinned to the render that saw this `payload` rather
@@ -2603,17 +2739,26 @@ function PullStage({
                 group.open.length > 0 &&
                 group.open.some((order) => (answers.get(order.key)?.lines ?? []).some((line) => line.reason === filter)),
             )
-      ).filter((group) => passesStatus(group, view.status) && passesHideUnknown(group, view.hideUnknown, answers)),
-    [filter, groups, answers, view.status, view.hideUnknown],
+      ).filter(
+        (group) =>
+          passesStatus(group, view.status) && passesHideUnknown(group, view.hideUnknown, answers) && passesQuery(group, query),
+      ),
+    [filter, groups, answers, view.status, view.hideUnknown, query],
   )
   /* THE EARLIER FOLD IS DONE-ONLY. A closed buyer older than `RECENT_DAYS` has nothing an 'all'
-     or reason filter would ever show, so it is drawn nowhere but under the "Done" chip. */
+     or reason filter would ever show, so it is drawn nowhere but under the "Done" chip.
+     THE SEARCH REACHES IT TOO — a Done buyer past the 7-day fold is exactly the one a name
+     search has to find, since it is unreachable any other way (the owner's own case: cmd-F-ing
+     the page for someone whose only order closed weeks ago). */
   const earlierGroups = useMemo(
     () =>
       filter === 'done'
-        ? groups.earlier.filter((group) => passesStatus(group, view.status) && passesHideUnknown(group, view.hideUnknown, answers))
+        ? groups.earlier.filter(
+            (group) =>
+              passesStatus(group, view.status) && passesHideUnknown(group, view.hideUnknown, answers) && passesQuery(group, query),
+          )
         : [],
-    [filter, groups, answers, view.status, view.hideUnknown],
+    [filter, groups, answers, view.status, view.hideUnknown, query],
   )
 
   /* THE DEFAULT ORDER: Ready to Ship leads, newest first within a group, read as an ORDERING
@@ -2653,6 +2798,33 @@ function PullStage({
       ? selected
       : (shownGroups[0]?.key ?? earlierGroups[0]?.key ?? null)
   const selectedGroup = allGroups.find((group) => group.key === selectedKey) ?? null
+
+  /* FETCH REAL PICKS FOR THE BUYER ACTUALLY OPEN. `OrderDetail`'s body and `BuyerDetail`'s
+   *  own per-buyer walk both read `line.picks` off `answers`; every other order's line reads
+   *  `reason` alone off the lite tier `payload` already carries. `ownsAWalkableBody` is the
+   *  exact set those two consumers draw from (`groupWalkable`, `OrderDetail`'s own gate), so
+   *  fetching anything wider would pay for a picker no view here builds. Missing keys only —
+   *  once `detail` holds an order it is not asked for again until `payload` changes (the
+   *  effect above clears it then, and only then). This is deliberately a spinner-shaped cost:
+   *  opening a buyer for the first time in a sitting waits on one small POST rather than on
+   *  nothing, in exchange for `GET /orders` no longer paying for it on every poll regardless
+   *  of whether anyone opened anything. */
+  useEffect(() => {
+    if (selectedGroup === null) return
+    const keys = selectedGroup.orders.filter(ownsAWalkableBody).map((order) => order.key)
+    fetchMissingPicks(keys)
+  }, [selectedGroup, fetchMissingPicks])
+
+  /* FETCH REAL PICKS FOR THE WHOLE WALK, IN ONE BATCH, THE MOMENT A PASS FREEZES
+   *  (`hub.walkKeys`). This is the "across many orders at once" case the task names: rather
+   *  than decorating every walkable order on every `GET /orders` poll (which is what made the
+   *  route slow), the walk asks once, by name, for exactly the orders its own frozen pass
+   *  holds — the request naming the orders in the pass, deliberately never a second walk of
+   *  the whole store. */
+  useEffect(() => {
+    if (mode !== 'walk' || hub.walkKeys === null) return
+    fetchMissingPicks([...hub.walkKeys])
+  }, [mode, hub.walkKeys, fetchMissingPicks])
 
   /* THE HASH NAMES A BUYER, OR — FOR AN OLD LINK — AN ORDER RESOLVED TO ITS BUYER, ONCE THE
      LEDGER HAS ACTUALLY ANSWERED; from then on the store leads and the hash follows. `?buyer=`
@@ -2706,7 +2878,7 @@ function PullStage({
     return () => window.removeEventListener('keydown', onKey)
   }, [wide, mode, shownGroups, selectedKey])
 
-  const walk = useMemo(() => buildWalk(open, answers), [open, answers])
+  const walk = useMemo(() => buildWalk(walkable, answers), [walkable, answers])
 
   const setFilter = (next: PullFilter) => setHub({ filter: next })
   const select = (key: string) => setHub({ selected: key })
@@ -2807,22 +2979,39 @@ function PullStage({
     </div>
   )
 
-  const nothingShown = (
-    <div className="bn-panel">
-      <EmptyState
-        icon={filter === 'done' ? 'check' : 'sparkles'}
-        title={filter === 'all' ? 'Nothing outstanding' : filter === 'done' ? 'Nothing fulfilled yet' : `Nothing left under “${REASON_SHORT[filter]}”`}
-        body={filter === 'all' ? 'Every order has its copies.' : 'Pick another filter, or show every open order.'}
-        actions={
-          filter === 'all' ? undefined : (
-            <Button icon="list" onClick={() => setFilter('all')}>
-              Show all open
+  /* A SEARCH THAT LEAVES NOTHING GETS ITS OWN SENTENCE, ahead of the filter-shaped ones below
+     — the query is the reason nothing is drawn regardless of which chip is active, and "Clear
+     search" is the one action that actually restores something. */
+  const nothingShown =
+    query !== '' ? (
+      <div className="bn-panel">
+        <EmptyState
+          icon="search"
+          title="No buyer matches"
+          body={`Nobody's name or order number contains “${query}”.`}
+          actions={
+            <Button icon="x" onClick={() => onQueryChange('')}>
+              Clear search
             </Button>
-          )
-        }
-      />
-    </div>
-  )
+          }
+        />
+      </div>
+    ) : (
+      <div className="bn-panel">
+        <EmptyState
+          icon={filter === 'done' ? 'check' : 'sparkles'}
+          title={filter === 'all' ? 'Nothing outstanding' : filter === 'done' ? 'Nothing fulfilled yet' : `Nothing left under “${REASON_SHORT[filter]}”`}
+          body={filter === 'all' ? 'Every order has its copies.' : 'Pick another filter, or show every open order.'}
+          actions={
+            filter === 'all' ? undefined : (
+              <Button icon="list" onClick={() => setFilter('all')}>
+                Show all open
+              </Button>
+            )
+          }
+        />
+      </div>
+    )
 
   const detailOf = (group: BuyerGroup, variant: 'panel' | 'inline') => (
     <BuyerDetail
@@ -2881,29 +3070,33 @@ function PullStage({
             { value: 'walk', label: 'Walk the boxes', icon: 'box' },
           ]}
           /* ENTERING THE WALK FREEZES WHAT IT IS A WALK OVER, and only if no pass is already
-             held. The set is taken from `open` at that instant, so the figure below counts
-             orders leaving it rather than the ledger's whole history.
+             held. The set is taken from `walkable` at that instant — every order
+             `ownsAWalkableBody`, not `open` alone — so the figure below counts orders leaving
+             THAT set rather than the ledger's whole history. This is the owner's own ask
+             answered here too: "I need the ability to walk orders even if it already shows
+             shipped" — a terminal-but-owing order freezes into the pass exactly like an open one.
 
              A TOGGLE IS NOT THE END OF A PASS, and freezing on every entry made it one. Because
-             `walkKeys` is drawn from `open` and an order leaves `open` the moment its last copy
-             is recorded, a fresh freeze can never contain an order this pass has finished — so
-             stepping out to `By order` and back reset the figure to nothing, ZERO BY
-             CONSTRUCTION, which is the same shape as the defect this whole change is about.
-             Measured: after one pull the pill read `1 of 2`, and after `By order` → `Walk the
-             boxes` it was gone. The pass is held instead, and `onFetch` ends it — new orders off
-             TCGplayer are a new sitting, and that is the only boundary the operator draws. */
+             `walkKeys` is drawn from `walkable` and an order leaves it the moment it stops
+             owing (its last copy recorded, whatever door that came through), a fresh freeze can
+             never contain an order this pass has finished — so stepping out to `By order` and
+             back reset the figure to nothing, ZERO BY CONSTRUCTION, which is the same shape as
+             the defect this whole change is about. Measured: after one pull the pill read `1 of
+             2`, and after `By order` → `Walk the boxes` it was gone. The pass is held instead,
+             and `onFetch` ends it — new orders off TCGplayer are a new sitting, and that is the
+             only boundary the operator draws. */
           onChange={(next) =>
             setHub((current) => ({
               mode: next,
               walkKeys:
                 next === 'walk'
-                  ? (current.walkKeys ?? new Set(open.map((order) => order.key)))
+                  ? (current.walkKeys ?? new Set(walkable.map((order) => order.key)))
                   : current.walkKeys,
             }))
           }
         />
         {mode === 'walk' ? (
-          <p className="orders-toolbar-note">Every open order&apos;s copies, in box order.</p>
+          <p className="orders-toolbar-note">Every unfulfilled order&apos;s copies, in box order.</p>
         ) : (
           <>
             {chips}
@@ -2912,6 +3105,33 @@ function PullStage({
                 else stays reachable behind the status select rather than dropped (D103's shape).
                 They compose with the reason chips above; sort applies last (`orderView.ts`). */}
             <div className="orders-view-controls" role="group" aria-label="Sort and narrow the buyer list">
+              {/* THE BUYER SEARCH. Composes as an AND with everything else in this group and
+                  with the reason chips above (`filteredGroups`/`earlierGroups`) — never a
+                  second gate. Folded the same way `orderBuyers.ts:buyerKeyOf` folds a name, so
+                  a name this screen already treats as one buyer is found by any spelling of it.
+                  Transient: cleared on navigation, never remembered (see the state above). */}
+              <div className="bn-input-wrap orders-search">
+                <Icon name="search" size={16} />
+                <input
+                  type="search"
+                  className="bn-input orders-search-input"
+                  aria-label="Search buyers by name or order number"
+                  placeholder="Search buyers or order #"
+                  autoComplete="off"
+                  value={query}
+                  onChange={(event) => onQueryChange(event.target.value)}
+                />
+                {query === '' ? null : (
+                  <button
+                    type="button"
+                    className="orders-search-clear"
+                    aria-label="Clear search"
+                    onClick={() => onQueryChange('')}
+                  >
+                    <Icon name="x" size={12} />
+                  </button>
+                )}
+              </div>
               <select
                 className="bn-select orders-status-select"
                 aria-label="Filter by status"
@@ -2977,7 +3197,7 @@ function PullStage({
 
       {mode === 'walk' ? (
         <>
-          <WalkView walk={walk} open={open} done={done} walkKeys={hub.walkKeys} busy={busy} onPull={onPull} />
+          <WalkView walk={walk} walkable={walkable} walkKeys={hub.walkKeys} busy={busy} onPull={onPull} />
           {why}
         </>
       ) : shownGroups.length === 0 && earlierGroups.length === 0 ? (
@@ -3271,8 +3491,13 @@ function OrderDetail({
     </span>
   )
 
+  /* A DONE ORDER IS NOT ALWAYS A CLOSED BOOK (fix for the owner's report: a shipped order can
+     still owe copies). `ownsAWalkableBody` is the discriminator — `terminal` plus what is
+     still owed, never the `status` string (D114) — so an order closed because every copy was
+     already pulled draws nothing here exactly as before, and one closed by the marketplace
+     while copies remain open gets its lines and its Pull button back. */
   const body =
-    status === 'done' ? null : answer === null ? (
+    !ownsAWalkableBody(order) ? null : answer === null ? (
       <div className="orders-reason orders-reason-warn">
         <Icon name="clock" size={16} />
         <div>
@@ -3414,12 +3639,17 @@ function BuyerDetail({
   readonly variant: 'panel' | 'inline'
 }) {
   const heading = group.name ?? `No name · #${group.number}`
-  const walk = useMemo(() => buildWalk(group.open, answers as Map<string, ResolvedOrder>), [group, answers])
-  /* WHETHER THE MERGED WALK ACTUALLY DREW SOMETHING — never merely "is anything open". An open
-     order whose only lines are `sku_unseen` or `no_copies_on_hand` has nothing `buildWalk` can
-     aim at, so a buyer in that state gets no walk section at all and the "By order" fold is
-     where the whole answer lives; defaulting it closed there would hide the only controls this
-     buyer has. */
+  /* THE SAME WIDENING AS THE GLOBAL WALK, ONE BUYER AT A TIME: every order this group holds
+     that `ownsAWalkableBody`, never `group.open` alone — a buyer whose only order is
+     terminal-but-owing gets a merged walk too, not just a "By order" fold with a lone Pull
+     button in it. */
+  const groupWalkable = useMemo(() => group.orders.filter(ownsAWalkableBody), [group])
+  const walk = useMemo(() => buildWalk(groupWalkable, answers as Map<string, ResolvedOrder>), [groupWalkable, answers])
+  /* WHETHER THE MERGED WALK ACTUALLY DREW SOMETHING — never merely "is anything open" (or, now,
+     anything walkable). An order whose only lines are `sku_unseen` or `no_copies_on_hand` has
+     nothing `buildWalk` can aim at, so a buyer in that state gets no walk section at all and the
+     "By order" fold is where the whole answer lives; defaulting it closed there would hide the
+     only controls this buyer has. */
   const hasWalk = walk.rows.length > 0
 
   const chips = group.orders.map((order) => {
@@ -4186,21 +4416,28 @@ function PickLine({
 
 function WalkView({
   walk,
-  open,
-  done,
+  walkable,
   walkKeys,
   busy,
   onPull,
 }: {
   readonly walk: Walk
-  readonly open: OrderRow[]
-  readonly done: OrderRow[]
+  /** Every order `ownsAWalkableBody` RIGHT NOW — the fresh answer, re-read every time this
+   *  renders, never frozen (unlike `walkKeys`, the pass's own snapshot). Feeds the head figure
+   *  and the empty state the same way it feeds `PullStage`'s `buildWalk` call, so the number at
+   *  the top of the walk and the rows under it can never name a different scope than each
+   *  other. */
+  readonly walkable: OrderRow[]
   readonly walkKeys: ReadonlySet<string> | null
   readonly busy: string | null
   readonly onPull: PullHandler
 }) {
-  const wanted = open.reduce((sum, order) => sum + order.wanted, 0)
-  const recorded = open.reduce((sum, order) => sum + order.recorded, 0)
+  /* `passComplete` below reads a `walkKeys` member's ABSENCE from this set as "no longer owes",
+   *  which is what lets a terminal-but-owing order count as finished only once its own copies
+   *  are actually recorded, rather than the instant the pass opens. */
+  const walkableKeys = useMemo(() => new Set(walkable.map((order) => order.key)), [walkable])
+  const wanted = walkable.reduce((sum, order) => sum + order.wanted, 0)
+  const recorded = walkable.reduce((sum, order) => sum + order.recorded, 0)
   const pct = wanted > 0 ? Math.min(100, Math.round((recorded / wanted) * 100)) : 0
   /* THE SECOND FIGURE IS IN THE OTHER UNIT, and that is the whole reason it is here. The
      figure above counts CARDS and a card is what the walk hands you; what you pack is an
@@ -4231,9 +4468,18 @@ function WalkView({
 
      SO IT IS A COUNT. `2 orders complete in this pass` cannot claim completion, because it never
      had a total to reach. `walkKeys` is still what makes `in this pass` mean anything — the set
-     frozen when the walk began — and the count is its members that have LEFT `open`, which
-     starts at 0 and only rises, and is therefore NOT the zero-by-construction figure this
+     frozen when the walk began — and the count is its members that have LEFT `walkableKeys`,
+     which starts at 0 and only rises, and is therefore NOT the zero-by-construction figure this
      comment rejects above.
+
+     LEFT `walkableKeys`, NOT LEFT `open` — the walk now opens over `ownsAWalkableBody`, which is
+     true for an open order AND for a terminal-but-owing one, so "finished" has to be read off
+     the SAME predicate the freeze used, re-evaluated against what the store says right now. A
+     terminal-but-owing order sits in `walkKeys` from the moment the pass opens, and it is ALSO
+     in `walkableKeys` at that instant — reading completion off `done` (which a terminal order
+     already belongs to before a single copy is pulled) would have counted it complete on
+     arrival, the exact zero-by-construction shape one paragraph up. It only leaves
+     `walkableKeys` once its own copies actually close the gap.
 
      `complete` AND NOT `fully pulled`, WHICH IS WHAT IT SAID. An order reaches `done` by any
      route — a sale marked on `#/inventory`, an ingest, another device — and this screen sees
@@ -4244,7 +4490,7 @@ function WalkView({
      they answer different questions — the headline is about the ledger, this is about the
      sitting you are in. A `null` set draws nothing rather than falling back to the lifetime
      figure: a fallback that silently restores it is how it would come back. */
-  const passComplete = walkKeys === null ? 0 : done.filter((order) => walkKeys.has(order.key)).length
+  const passComplete = walkKeys === null ? 0 : [...walkKeys].filter((key) => !walkableKeys.has(key)).length
   const next = walk.rows[0] ?? null
 
   if (walk.rows.length === 0) {
@@ -4253,7 +4499,7 @@ function WalkView({
         <EmptyState
           icon="check"
           title="Nothing left to walk"
-          body={open.length === 0 ? 'Every order has its copies.' : 'No open order has a copy to pull here; each order says why.'}
+          body={walkable.length === 0 ? 'Every order has its copies.' : 'No unfulfilled order has a copy to pull here; each order says why.'}
         />
       </div>
     )
@@ -4268,7 +4514,7 @@ function WalkView({
           <p className="orders-walk-figure">
             <strong>{Math.max(0, wanted - recorded)}</strong>
             <span>
-              still to pull across {open.length} open order{open.length === 1 ? '' : 's'}
+              still to pull across {walkable.length} unfulfilled order{walkable.length === 1 ? '' : 's'}
               {recorded === 0 ? '' : ` · ${recorded} already pulled`}
             </span>
             {/* Drawn only once one is whole, by the bar's own rule beside it: none finished is

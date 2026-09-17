@@ -835,6 +835,34 @@ def answers(checks: Checks, fn, label: str):
     return answer
 
 
+def orders_with_picks() -> dict:
+    """`GET /orders` with real `picks` merged back in, for tests written against the combined
+    shape the route answered before 2026-09-16's two-tier split.
+
+    `do_orders()` now answers `picks: []` on every line — decorating a `place` for every
+    candidate copy of every unfulfilled order was 52% of that route's wall time for a buyer
+    nobody had opened, so it moved to `POST /orders/picks` for exactly the orders a screen
+    asks about. Most of the assertions in this block are about the RESOLUTION (reason, the
+    breakdown, `open`/`terminal`, idempotence) and never cared which route answered `picks` —
+    so rather than rewrite every one of them to call two routes and thread the results
+    together by hand, this helper does that once: it calls `do_orders()`, asks
+    `do_order_picks` for every resolved order's key in one batch (`resolve_all` over a
+    subset answers each of those orders identically to the whole ledger — the same fact
+    `_resolve_records` relies on), and replaces each answered order's `lines` with the real
+    ones. `check_order_picks_tier` below is the one block that asserts the SPLIT itself.
+    """
+    payload = capture_server.do_orders()
+    keys = [order["key"] for order in payload["resolution"]["orders"]]
+    if keys:
+        detailed = capture_server.do_order_picks({"keys": keys})
+        by_key = {order["key"]: order for order in detailed["orders"]}
+        for order in payload["resolution"]["orders"]:
+            full = by_key.get(order["key"])
+            if full is not None:
+                order["lines"] = full["lines"]
+    return payload
+
+
 # --------------------------------------------------------------------------- the allocator
 
 
@@ -22892,13 +22920,17 @@ def check_order_resolver(checks: Checks) -> None:
     reads an `Inventory` it is handed and touches no disk — and that is itself the property
     worth having: a pure core is testable without a store.
 
-    THE CASE THAT MATTERS IS THE FIRST ONE. Two open orders for one SKU, resolved
-    per-order, are handed THE SAME PHYSICAL CARDS and both report success — the picker
-    walks to box 3 card 3 twice. It is the whole reason `resolve_all` takes every order at
-    once and `resolve_one` does not exist, so it is asserted as three facts that a
-    per-order resolver fails on separately: the second order reports `short`, its
-    fulfilment count is the copies that were actually left, and not one position appears
-    on both orders.
+    THE CASE THAT MATTERS IS THE FIRST ONE, AND IT CHANGED SHAPE ON 2026-09-16. Until then
+    it asserted that two open orders for one SKU, resolved per-order, are handed THE SAME
+    PHYSICAL CARDS and both report success — the picker walks to box 3 card 3 twice — and
+    that `resolve_all`'s shared pool was what stopped it, by giving the older order the
+    copies EXCLUSIVELY and leaving the younger one `short`. The owner overruled that
+    exclusivity outright: *"All orders should not 'claim' or take priority/claim any item,
+    because they're all fungible."* So the case now asserts the opposite of what it used
+    to: two orders wanting the same one copy are BOTH offered it, in full, and the guard
+    against shipping it twice moved to the WRITE — `store/orders.py:record_pull`'s
+    `CopyAlreadyPulled` — which this file asserts explicitly rather than trusting the
+    resolver to still be doing a job it no longer does.
 
     OBSERVED FAILING FIRST. Every case here was run against a mutation of the code it
     covers before it was kept — a per-order pool, a dropped SKU coercion, a dropped
@@ -22933,10 +22965,12 @@ def check_order_resolver(checks: Checks) -> None:
         return orders.OrderLine(sku=sku, quantity=quantity, **extra)
 
     with isolated_home() as home:
-        # ---------------------------------------------------- 1. no cross-order allocation
+        # -------------------------------------------------- 1. fungibility, not allocation
         #
         # The proven real join: sku 9191486 (Moonfall) is four copies in box 3. Two open
-        # orders want three each, and there are four.
+        # orders both want three, and there are four — RED against the pre-2026-09-16
+        # code, which gave the older order three of the four EXCLUSIVELY and left the
+        # younger one `short` with one.
         inventory = stock(
             card(3, 3, "9191486"),
             card(3, 31, "9191486"),
@@ -22960,45 +22994,51 @@ def check_order_resolver(checks: Checks) -> None:
             lines=(line("9191486", 3),),
         )
 
-        # DELIBERATELY HANDED OVER NEWEST-FIRST, so the sequencing is doing work rather
-        # than agreeing with the argument order by luck.
+        # DELIBERATELY HANDED OVER NEWEST-FIRST, so a sequencing bug would still be
+        # visible — though sequence no longer decides WHO GETS OFFERED anything, only the
+        # order the answer reports orders back in (`order_sequence`, amended 2026-09-16).
         answer = orders.resolve_all(inventory, [second, first])
         a = answer.for_order("A-1")
         b = answer.for_order("B-2")
 
         checks.equal(
             (a.lines[0].reason, a.lines[0].fulfilled),
-            (orders.RESOLVED, 3),
-            "the OLDER order is served first and takes three of the four copies — the "
-            "sequence is placed_at, not whatever order the feed handed them over in",
+            (orders.RESOLVED, 4),
+            "BOTH orders are offered every copy the store holds — wanting 3 with 4 on hand "
+            "is `resolved`, and `fulfilled` is now the count of CANDIDATES (4), not an "
+            "allocation. RED against the old code, which gave this order only 3",
         )
         checks.equal(
             (b.lines[0].reason, b.lines[0].fulfilled, b.lines[0].outstanding),
-            (orders.SHORT, 1, 2),
-            "and the second order gets the ONE copy that is left, and says `short` — a "
-            "per-order resolver reports `resolved` here, having promised three cards twice",
+            (orders.RESOLVED, 4, 0),
+            "and the SECOND order is ALSO `resolved` with all four candidates and zero "
+            "outstanding — the owner's ruling in one assertion: 'they're all fungible', so "
+            "nothing an earlier order was offered is withheld from a later one. RED against "
+            "the old code, which reported this order `short` with one copy and 2 "
+            "outstanding",
         )
-        taken_a = {(p.box, p.index) for p in a.lines[0].picks}
-        taken_b = {(p.box, p.index) for p in b.lines[0].picks}
+        picks_a = {(p.box, p.index) for p in a.lines[0].picks}
+        picks_b = {(p.box, p.index) for p in b.lines[0].picks}
         checks.equal(
-            sorted(taken_a | taken_b),
+            picks_a,
+            picks_b,
+            "the two orders are offered the IDENTICAL set of four copies — not a "
+            "complementary split, which is what an exclusive pool would still produce even "
+            "if it happened to leave nothing short",
+        )
+        checks.equal(
+            sorted(picks_a),
             [(3, 3), (3, 31), (3, 34), (3, 35)],
-            "between them they name all four copies and no copy twice — the pool is SHARED, "
-            "which is the property a per-order pass cannot have at any level of care",
-        )
-        checks.equal(
-            len(taken_a & taken_b), 0, "no physical card is promised to two buyers"
-        )
-        checks.ok(
-            not answer.complete and a.complete and not b.complete,
-            "the resolution is incomplete because one order is, and says which",
+            "and it is all four positions the store actually holds",
         )
         checks.equal(
             [(p.box, p.index) for p in orders.resolve_all(inventory, [first, second])
              .for_order("A-1").lines[0].picks],
-            sorted(taken_a),
-            "re-running over an unchanged inventory allocates identically — the answer is "
-            "a function of the store and the orders, never of the walk order",
+            sorted(picks_a),
+            "re-running over an unchanged inventory, orders handed over in the OTHER "
+            "sequence, answers identically — the answer is a function of the store and the "
+            "orders, never of the walk order, which is order_sequence's remaining job now "
+            "that it decides no priority",
         )
         checks.equal(
             a.lines[0].picks[0].capture_id,
@@ -23008,10 +23048,104 @@ def check_order_resolver(checks: Checks) -> None:
         )
         checks.equal(
             answer.counts(),
-            {orders.RESOLVED: 1, orders.SHORT: 1, orders.NO_COPIES_ON_HAND: 0,
+            {orders.RESOLVED: 2, orders.SHORT: 0, orders.NO_COPIES_ON_HAND: 0,
              orders.SKU_UNKNOWN: 0, orders.SKU_UNSEEN: 0, orders.NOT_A_SINGLE: 0},
-            "and every reason is reported including the zeros, so `nothing was short` and "
-            "`nothing was checked` are not the same output",
+            "and every reason is reported including the zeros — BOTH lines are `resolved` "
+            "now, where the old exclusive pool made one of them `short`",
+        )
+        checks.ok(
+            answer.complete and a.complete and b.complete,
+            "the whole resolution is complete because both orders are now that the pool is "
+            "shared rather than exclusive",
+        )
+
+        # ------------------------------------- 1b. `short` is a genuine shortfall, only
+        #
+        # Two orders wanting the SAME one copy: both are `short`, neither `resolved`,
+        # because the store does not hold enough — never because someone else got there
+        # first. And wanting exactly what is on hand resolves even with a competing order.
+        one_copy = stock(card(4, 1, "SHORTSKU"))
+        want_two = orders.resolve_all(
+            one_copy, [orders.Order(number="C-1", lines=(line("SHORTSKU", 2),))]
+        ).lines[0]
+        checks.equal(
+            (want_two.reason, want_two.on_hand, len(want_two.picks), want_two.outstanding),
+            (orders.SHORT, 1, 1, 1),
+            "wanting 2 with 1 on hand is `short` with the one candidate offered and one "
+            "outstanding — a genuine shortfall, the only kind `short` means now",
+        )
+        want_one_a = orders.Order(number="D-1", lines=(line("SHORTSKU", 1),))
+        want_one_b = orders.Order(number="D-2", lines=(line("SHORTSKU", 1),))
+        competing = orders.resolve_all(one_copy, [want_one_a, want_one_b])
+        checks.equal(
+            (
+                competing.for_order("D-1").lines[0].reason,
+                competing.for_order("D-2").lines[0].reason,
+            ),
+            (orders.RESOLVED, orders.RESOLVED),
+            "wanting 1 with 1 on hand is `resolved` for BOTH competing orders — the fact "
+            "that another order also wants it does not make either one `short`, which is "
+            "the whole owner's ruling: fungible means every order sees the same stock",
+        )
+
+        # ------------------------------------------------- 1c. the write-time guard holds
+        #
+        # THE SAFETY THAT REPLACED THE EXCLUSIVE DRAW is `store/orders.py:record_pull`'s
+        # `CopyAlreadyPulled`, asserted explicitly rather than assumed: this pass offers
+        # the same card to two orders on purpose now, so the module that must still refuse
+        # shipping it twice is the ledger, at the point it is actually recorded.
+        ledger = order_store.Ledger()
+        ledger.ingest([
+            order_store.OrderRecord(
+                source="TCGplayer", number="E-1",
+                placed_at="2026-08-28T10:00:00+00:00",
+                lines=[order_store.OrderLine(sku="SHORTSKU", quantity=1)],
+            ),
+            order_store.OrderRecord(
+                source="TCGplayer", number="E-2",
+                placed_at="2026-08-29T10:00:00+00:00",
+                lines=[order_store.OrderLine(sku="SHORTSKU", quantity=1)],
+            ),
+        ])
+        e1 = order_store.order_key("TCGplayer", "E-1")
+        e2 = order_store.order_key("TCGplayer", "E-2")
+        ledger.record_pull(e1, "SHORTSKU", ["CARD-SHORTSKU-1"])
+        checks.raises(
+            order_store.CopyAlreadyPulled,
+            lambda: ledger.record_pull(e2, "SHORTSKU", ["CARD-SHORTSKU-1"]),
+            "and pulling the SAME physical copy for the second order — the one this pass "
+            "was perfectly willing to offer it — is refused at the write, which is where "
+            "the safety this dropped claim used to provide now lives entirely",
+        )
+
+        # ------------------------------------------- 1d. the walk itself is widened too
+        #
+        # The owner, 2026-09-16, extending the brief mid-review: *"widen the walk itself
+        # too... how is the walk only showing one instance."* A line wanting ONE copy of a
+        # SKU the store holds FIVE of is offered every one of the five, ranked and never
+        # rationed — `picks` is a candidate list the operator chooses from, not an
+        # allocation capped at the buyer's quantity. RED against the pre-2026-09-16 code,
+        # which capped `picks` at `line.quantity` and offered exactly one.
+        wide = stock(
+            card(6, 1, "WIDESKU"), card(6, 2, "WIDESKU"), card(6, 3, "WIDESKU"),
+            card(6, 4, "WIDESKU"), card(6, 5, "WIDESKU"),
+        )
+        want_one_of_five = orders.resolve_all(
+            wide, [orders.Order(number="F-1", lines=(line("WIDESKU", 1),))]
+        ).lines[0]
+        checks.equal(
+            (
+                want_one_of_five.reason,
+                want_one_of_five.outstanding,
+                sorted((p.box, p.index) for p in want_one_of_five.picks),
+            ),
+            (
+                orders.RESOLVED, 0,
+                [(6, 1), (6, 2), (6, 3), (6, 4), (6, 5)],
+            ),
+            "a line wanting 1 copy of a SKU the store holds 5 of is offered EVERY copy, "
+            "and still reads `resolved` with `outstanding` 0 — wanting one no longer "
+            "means being handed one",
         )
 
         # -------------------------------------------------------- 2. the SKU is coerced
@@ -23023,7 +23157,12 @@ def check_order_resolver(checks: Checks) -> None:
         coerced = orders.resolve_all(inventory, [integer]).for_order("C-3")
         checks.equal(
             (coerced.lines[0].sku, coerced.lines[0].reason, coerced.lines[0].fulfilled),
-            ("9191486", orders.RESOLVED, 1),
+            # `inventory` above holds all four Moonfall copies, and `fulfilled` is every
+            # candidate offered (2026-09-16) rather than the one this line asked for —
+            # 4, not 1. What this case is actually proving is unchanged: an uncoerced SKU
+            # comparison finds nothing at all, silently, and `reason` would read
+            # `sku_unseen` rather than `resolved`.
+            ("9191486", orders.RESOLVED, 4),
             "a line built from an int SKU resolves — uncoerced, it silently finds nothing",
         )
 
@@ -24990,12 +25129,12 @@ def check_order_screen(checks: Checks) -> None:
             "takes the WHOLE order screen down for one bad paste",
         )
 
-    # --------------------------------- 6-7. the double book, and the one label formula
+    # ------------------------- 6-7. both orders share one copy, and the one label formula
     with isolated_home():
         stock(3, 1, "9191486")
-        # NEWEST FIRST, deliberately: the request order is the wrong order, so a route that
-        # served the pass in the sequence it was handed would give the last copy to the new
-        # buyer and this case would catch it.
+        # NEWEST FIRST, deliberately: it used to matter for who "won" the one copy under
+        # the exclusive draw; it no longer decides who is OFFERED anything (2026-09-16),
+        # only the order the answer reports orders back in.
         booked = answers(
             checks,
             lambda: capture_server.do_order_ingest(
@@ -25019,7 +25158,7 @@ def check_order_screen(checks: Checks) -> None:
         if booked is not None:
             checks.equal(booked["added"], 2, "and both are recorded")
 
-        drawn = answers(checks, capture_server.do_orders,
+        drawn = answers(checks, orders_with_picks,
                         "GET /orders resolves both against the one copy on hand")
         if drawn is not None:
             by_number = {
@@ -25028,20 +25167,25 @@ def check_order_screen(checks: Checks) -> None:
             checks.equal(
                 (by_number["OLD"]["reason"], len(by_number["OLD"]["picks"])),
                 ("resolved", 1),
-                "THE OLDER ORDER CARRIES THE PICK. `order_sequence` sorts oldest "
-                "`placed_at` first and the whole pass draws from ONE pool",
+                "the older order is `resolved` — it wants 1 and 1 is on hand",
             )
             checks.equal(
-                (by_number["NEW"]["reason"], by_number["NEW"]["picks"],
+                (by_number["NEW"]["reason"], len(by_number["NEW"]["picks"]),
                  by_number["NEW"]["on_hand"]),
-                ("short", [], 1),
-                "AND THE NEWER ONE IS `short` WITH NO PICKS AT ALL — asserted on the "
-                "ROUTE's payload, because a handler that looped `resolve_all` per order "
-                "passes every assertion in `check_order_resolver` and still hands two "
-                "buyers the same physical card. `short` and not `no_copies_on_hand`, and "
-                "`on_hand` IS 1 RATHER THAN 0: the copy has not LEFT, it is spoken for, and "
-                "that number beside the reason is the only thing telling a screen which "
-                "kind of shortfall it is holding — wait for stock, or stop looking",
+                ("resolved", 1, 1),
+                "AND THE NEWER ONE IS ALSO `resolved`, OFFERED THE SAME ONE COPY — asserted "
+                "on the ROUTE's payload. Until 2026-09-16 this was `short` with no picks: "
+                "the pool was exclusive and the older order took the copy alone. The owner "
+                "ruled every copy fungible, so both orders see the same one copy and both "
+                "read `resolved`; the guard against shipping it twice is "
+                "`store/orders.py:record_pull`'s `CopyAlreadyPulled` at the PULL, not "
+                "anything this route's resolution withholds. RED against the pre-2026-09-16 "
+                "code, which answered `short` here",
+            )
+            checks.equal(
+                by_number["OLD"]["picks"][0]["capture_id"],
+                by_number["NEW"]["picks"][0]["capture_id"],
+                "and it is literally the SAME physical copy on both lines",
             )
 
             checks.equal(
@@ -25088,13 +25232,17 @@ def check_order_screen(checks: Checks) -> None:
                 "drawing `Section 4 · Card 48`, with nothing saying which is which",
             )
 
-    # ------------------------------------- 7b. the terminal override (D63 amended 2026-09-13)
+    # ---------------------- 7b. `open` vs RESOLVED (D63 amended 2026-09-13, then 2026-09-16)
     #
-    # The owner's two rulings: a Canceled order is never open, and a Shipped-or-Delivered
-    # order closes on the feed's own word — but ONLY those recognised words, and never a
-    # guess. One box holds exactly one copy, so whichever order is NOT excluded from
-    # `open_keys` is the one that gets it; that is what proves the terminal orders are
-    # excluded from the resolution pool and not merely hidden on the summary list.
+    # The owner's `open` rulings are UNCHANGED: a Canceled order is never open, and a
+    # Shipped-or-Delivered order closes on the feed's own word — but ONLY those recognised
+    # words, and never a guess. WHAT CHANGED is which orders get RESOLVED: until
+    # 2026-09-16 a terminal order was excluded from the resolution pool outright (D113's
+    # priority bug, a shipped order taking a copy ahead of a live one because it was
+    # older). That hazard cannot occur any more — no order's draw withholds anything from
+    # another's — so every order that still owes copies is resolved now, terminal or not,
+    # and `open` is the only field a terminal status still moves. RED against the
+    # pre-2026-09-16 code, which answered only 3 of these 6 orders in `resolution.orders`.
     with isolated_home():
         stock(3, 1, "9191486")
         answers(
@@ -25191,18 +25339,76 @@ def check_order_screen(checks: Checks) -> None:
             }
             checks.equal(
                 resolved_numbers,
-                {"READY-1"},
-                "AND THE ONE PHYSICAL COPY WENT TO THE OLDEST NON-TERMINAL ORDER — proving "
-                "the three terminal orders were excluded from the resolution POOL and not "
-                "merely hidden on the summary list, which is the correctness half of D113's "
-                "own measured bug (an already-shipped order, being older, took a copy ahead "
-                "of a live one)",
+                {"CANCELED-1", "TRANSIT-1", "DELIVERED-1", "READY-1", "PAID-1", "MYSTERY-1"},
+                "AND ALL SIX ORDERS RESOLVE — EVEN THE THREE TERMINAL ONES — because the "
+                "one copy is fungible and every order wanting one is offered it. This is "
+                "the change from 2026-09-16: the old exclusive draw gave the copy to "
+                "'the oldest non-terminal order' alone; there is no 'the one order that "
+                "gets it' any more, by the owner's own ruling. RED against the pre-2026-09-16 "
+                "code, which resolved only READY-1 here",
             )
             checks.equal(
                 {order["number"] for order in drawn["resolution"]["orders"]},
-                {"READY-1", "PAID-1", "MYSTERY-1"},
-                "and the resolution answers only for the three orders that are still open "
-                "— CANCELED-1, TRANSIT-1 and DELIVERED-1 do not appear in it at all",
+                {"CANCELED-1", "TRANSIT-1", "DELIVERED-1", "READY-1", "PAID-1", "MYSTERY-1"},
+                "and the resolution answers for EVERY order that still owes a copy, "
+                "terminal or not — the old exclusion from the resolution pool (never only "
+                "from the summary list) is gone along with the priority hazard it existed "
+                "to prevent. `open` is still false for the three terminal ones (asserted "
+                "above): a terminal order resolving with a real pick does not make it draw "
+                "open on screen, because the screen branches on `open`/`terminal` and not "
+                "on whether a resolution answers for the order",
+            )
+
+    # ------------------------------- 7c. a fully-pulled order is never resolved, terminal or not
+    #
+    # `Ledger.unfulfilled()` is what decides `resolve_keys` now (no terminal filter). An
+    # order with nothing left to pull must still not appear in `resolution.orders` at
+    # all — it does not need an answer, and giving it a picks list over a copy it has
+    # already recorded would suggest there is something still to walk to.
+    with isolated_home():
+        stock(3, 1, "9191486", prefix="full")
+        answers(
+            checks,
+            lambda: capture_server.do_order_ingest(
+                {
+                    "orders": [
+                        {
+                            "source": "TCGplayer", "number": "DONE-1",
+                            "placed_at": "2026-08-20T10:00:00.000+00:00",
+                            "status": "Shipped - Delivered",
+                            "lines": [line("9191486", 1)],
+                        },
+                    ]
+                }
+            ),
+            "one order for the one copy on hand, already shipped",
+        )
+        answers(
+            checks,
+            lambda: capture_server.do_order_pull(
+                {
+                    "source": "TCGplayer", "number": "DONE-1", "sku": "9191486",
+                    "targets": [target(3, 1, "full1")],
+                }
+            ),
+            "and it is fully pulled",
+        )
+        drawn = answers(
+            checks, capture_server.do_orders,
+            "GET /orders after the line is fully recorded",
+        )
+        if drawn is not None:
+            checks.equal(
+                {order["number"] for order in drawn["resolution"]["orders"]},
+                set(),
+                "DONE-1 owes nothing (`Ledger.unfulfilled()` excludes it), so it is not "
+                "resolved at all — terminal status is not what kept it out here, having "
+                "nothing left to pull is",
+            )
+            checks.equal(
+                next(row["open"] for row in drawn["orders"] if row["number"] == "DONE-1"),
+                False,
+                "and `open` still reads false, unchanged by any of this",
             )
 
     # ------------------------------------------- 8-21. the pull, in both directions
@@ -25226,18 +25432,22 @@ def check_order_screen(checks: Checks) -> None:
         )
         key = order_store.order_key("TCGplayer", "A-1")
 
-        before_screen = answers(checks, capture_server.do_orders,
+        before_screen = answers(checks, orders_with_picks,
                                 "GET /orders resolves it against a box holding a pooled copy")
         if before_screen is not None:
             row = before_screen["resolution"]["orders"][0]["lines"][0]
             checks.equal(
                 (row["pooled"], sorted((pick["index"] for pick in row["picks"]))),
-                (1, [1, 2, 3]),
+                (1, [1, 2, 3, 4]),
                 "A POOLED-GAME COPY COUNTS AND IS NEVER PICKED (D24). It carries the "
                 "ordered SKU and is not terminal, so it is in the SKU's history and reaches "
                 "`pooled`; it is not at a place, so the resolver will not send anybody to "
                 "walk to it. The breakdown is what makes `no_copies_on_hand` readable — "
-                "sold, retired and pooled are three different remedies",
+                "sold, retired and pooled are three different remedies. AND EVERY LOCATED "
+                "COPY IS OFFERED, NOT ONLY THE THREE WANTED (2026-09-16, the owner: 'widen "
+                "the walk itself too') — index 4 carries no `capture_id` and is still a "
+                "candidate the operator may choose, because `picks` is a ranked list to "
+                "choose from and never an allocation capped at the buyer's quantity",
             )
 
         pulled = answers(
@@ -25311,7 +25521,7 @@ def check_order_screen(checks: Checks) -> None:
             )
 
         after_screen = answers(
-            checks, capture_server.do_orders, "GET /orders after the pull answers"
+            checks, orders_with_picks, "GET /orders after the pull answers"
         )
         if after_screen is not None:
             row = after_screen["resolution"]["orders"][0]["lines"][0]
@@ -25320,12 +25530,14 @@ def check_order_screen(checks: Checks) -> None:
                     row["wanted"], row["owed"], row["fulfilled"], row["outstanding"],
                     row["reason"], sorted(pick["index"] for pick in row["picks"]),
                 ),
-                (3, 2, 2, 0, "resolved", [2, 3]),
+                (3, 2, 3, 0, "resolved", [2, 3, 4]),
                 "THE RESOLVER IS ASKED FOR WHAT IS STILL OWED. One of three is recorded, so "
-                "the line wants two more, finds two and is `resolved` — not `short` with a "
-                "third pick the buyer is not owed. `wanted` stays the order's quantity and "
-                "`owed` is the ledger's; before this the resolver was handed the raw quantity "
-                "and over-allocated against every other order for the SKU",
+                "the line wants two more; it is `resolved` because three are ON HAND, which "
+                "is at least the two owed — not `short` with a pick withheld from the "
+                "buyer. `wanted` stays the order's quantity and `owed` is the ledger's; the "
+                "resolver is handed `owed` rather than the raw quantity. `fulfilled` and "
+                "`picks` are EVERY remaining candidate (2, 3 and 4), never capped at 2 — "
+                "picks is a list to choose from, not an allocation (2026-09-16)",
             )
             checks.equal(
                 after_screen["orders"][0]["progress"][0]["pulled"],
@@ -25807,6 +26019,121 @@ def check_order_places_scoped(checks: Checks) -> None:
         # The existing empty-store case (`check_order_screen`'s first block) already
         # exercises `GET /orders` through this same path with zero orders at all; this is
         # its unit-level companion for the classmethod alone.
+
+
+def check_order_picks_tier(checks: Checks) -> None:
+    """`GET /orders` answers no picks; `POST /orders/picks` answers exactly the ones asked
+    for, and the two never disagree about anything else — the split this session made
+    2026-09-16 to stop decorating a `place` block for every candidate copy of every
+    unfulfilled order on the route `#/orders` and `#/shipping` poll (measured 52% of that
+    route's wall time, over 1,777 pick-rows for 819 distinct positions).
+    """
+    checks.note("")
+    checks.note("ORDER PICKS TIER — GET /orders vs POST /orders/picks")
+
+    def line(sku, quantity=1, **extra) -> dict:
+        row = {"sku": sku, "quantity": quantity}
+        row.update(extra)
+        return row
+
+    def paste(number, *lines, **extra) -> dict:
+        order = {
+            "source": "TCGplayer",
+            "number": number,
+            "placed_at": extra.pop("placed_at", "2026-08-27T10:00:00.000+00:00"),
+            "lines": list(lines),
+        }
+        order.update(extra)
+        return {"orders": [order]}
+
+    with isolated_home():
+        for at in range(1, 3):
+            capture_server.do_capture(capture_payload(3, capture_id=f"tier{at}"))
+        with Store().write() as snapshot:
+            for at in range(1, 3):
+                snapshot.inventory.record_identification(
+                    f"3/{at}", name="Moonfall", number="198/219",
+                    printed_total="219", confidence="high",
+                )
+                snapshot.inventory.cards[f"3/{at}"].sku = "9191486"
+
+        answers(
+            checks,
+            lambda: capture_server.do_order_ingest(paste("T-1", line("9191486", 1))),
+            "one order for the SKU ingests",
+        )
+        key = order_store.order_key("TCGplayer", "T-1")
+
+        lite = answers(checks, capture_server.do_orders, "GET /orders answers")
+        if lite is not None:
+            lite_line = lite["resolution"]["orders"][0]["lines"][0]
+            checks.equal(
+                lite_line["picks"], [],
+                "NO PICKS AND NO PLACE — every OTHER field is still the real resolution: "
+                "reason, on_hand and the rest are computed exactly as before",
+            )
+            checks.equal(
+                (lite_line["reason"], lite_line["on_hand"], lite_line["fulfilled"]),
+                ("resolved", 2, 2),
+                "the reason and the counts answer without ever building a `_Places` — RED "
+                "if the list tier silently stopped resolving lines to save the same time "
+                "a different way",
+            )
+
+        detailed = answers(
+            checks,
+            lambda: capture_server.do_order_picks({"keys": [key]}),
+            "POST /orders/picks answers the same order, asked for by key",
+        )
+        if detailed is not None:
+            checks.equal(
+                len(detailed["orders"]), 1, "exactly the one order asked about, no more"
+            )
+            full_line = detailed["orders"][0]["lines"][0]
+            checks.equal(
+                (full_line["reason"], full_line["on_hand"], full_line["fulfilled"]),
+                ("resolved", 2, 2),
+                "AND THE VERDICT AGREES WITH THE LIST TIER — the split changes WHEN a pick "
+                "is decorated, never WHETHER a line resolved",
+            )
+            checks.equal(
+                sorted((pick["box"], pick["index"]) for pick in full_line["picks"]),
+                [(3, 1), (3, 2)],
+                "and the real picks are exactly the two copies on hand, each carrying a "
+                "real `place` block",
+            )
+            checks.ok(
+                all(pick["place"]["located"] for pick in full_line["picks"]),
+                "every pick carries a decorated, located place",
+            )
+
+        refusal(
+            checks,
+            lambda: capture_server.do_order_picks({"keys": []}),
+            "keys_required",
+            "an empty `keys` list refuses rather than answering an empty list — those are "
+            "different answers to 'did that work'",
+        )
+        refusal(
+            checks,
+            lambda: capture_server.do_order_picks({"keys": [key], "extra": True}),
+            "field_not_settable",
+            "and an unlisted field refuses by name, the allowlist rule every write on this "
+            "screen already follows",
+        )
+
+        unknown = answers(
+            checks,
+            lambda: capture_server.do_order_picks({"keys": ["tcgplayer:never-heard-of-it"]}),
+            "a key the ledger does not hold is a normal answer, not a refusal",
+        )
+        if unknown is not None:
+            checks.equal(
+                unknown["orders"], [],
+                "SKIPPED, NOT REFUSED — a screen's own last `GET /orders` names an order "
+                "that closed or was un-fetched between that read and this press, and that "
+                "is not a caller error",
+            )
 
 
 def check_inventory_copies_route(checks: Checks) -> None:
@@ -29596,6 +29923,7 @@ def run() -> Result:
     check_order_reconcile_backlog(checks)
     check_order_screen(checks)
     check_order_places_scoped(checks)
+    check_order_picks_tier(checks)
     check_inventory_copies_route(checks)
     check_order_fetch_route(checks)
     check_request_slots(checks)

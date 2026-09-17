@@ -149,7 +149,7 @@ const ts = (await import(pathToFileURL(TYPESCRIPT).href)).default
  * adding a line here, only by adding a line here AND making the source say why. */
 const NON_MUTATING = new Set([
   'preflightRun', 'cropPreview', 'fetchOrders', 'previewOrders', 'previewReconcileBacklog',
-  'getInventoryCopies',
+  'getInventoryCopies', 'fetchOrderPicks',
 ])
 const NON_MUTATING_CLAIM = /writes nothing|creates no run directory|creates nothing/i
 
@@ -250,9 +250,12 @@ const RECORDED = {
   // docstring — "FREE and WRITES NOTHING" — which is what earns a place on this list.
   // `getInventoryCopies` (DEBT27, site 1) is the same shape: a POST because the
   // SKU list is too big for a query string, over `Store().read()` alone.
+  // `fetchOrderPicks` (2026-09-16, the orders-screen picks tier) is the same shape again:
+  // a POST because an order key may legally carry a colon, over `Store().read()` alone —
+  // `do_order_picks` never opens `Store().write()`.
   nonMutating: [
     'preflightRun', 'cropPreview', 'fetchOrders', 'previewOrders', 'previewReconcileBacklog',
-    'getInventoryCopies',
+    'getInventoryCopies', 'fetchOrderPicks',
   ],
   nonRequests: [
     'describeFailure', 'photoUrl', 'positionLabel', 'isDeparted', 'placeParts', 'placeSentence',

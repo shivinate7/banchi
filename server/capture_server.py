@@ -924,6 +924,16 @@ INVENTORY_COPIES_LIMIT = 5000
 # an order's state — so a list past this is a client sending something other than what it ticked.
 ORDER_FETCH_STATUS_LIMIT = 50
 
+# What `POST /orders/picks` accepts: a list of order keys (`source:number`), and nothing
+# beside it. The list tier (`GET /orders`) answers every order's reason with no picks; this
+# is where a screen asks for the real thing, for exactly the orders it names.
+ORDER_PICKS_FIELDS = ("keys",)
+
+# THE CEILING ON ONE PICKS PRESS. The walk is the widest caller — every order
+# `ownsAWalkableBody` in one batch — and measured at 275 on the owner's store; 2000 is
+# headroom over that the same way `ORDER_NAMES_LIMIT` is headroom over its own walk.
+ORDER_PICKS_LIMIT = 2000
+
 # What `POST /orders/pull` carries in each direction. TWO TUPLES, `ANSWER_FIELDS`'
 # convention exactly: a body carrying `undo` AND an order key is a client that has confused
 # the directions, and obeying it with the order ignored would reverse a pull the caller
@@ -2119,6 +2129,16 @@ class _Places:
         # builds, and `_company` reads it to short-circuit D30's decoration for that instance
         # alone — see `for_keys`'s own docstring for why.
         self._sparse = False
+        # PER-POSITION MEMO FOR `.of()`, KEYED BY `(box, index)`. Added for `do_orders`
+        # (2026-09-16): with the exclusive draw dropped, one physical copy is routinely
+        # offered as a pick to several different orders in the same pass, and `_pick_row`
+        # calls `.of()` once per PICK rather than once per POSITION — measured 1,777
+        # pick-rows over 819 distinct positions on the owner's store, so 958 of those calls
+        # were rebuilding a dict (`join.Position`, the slot bisect, `_company`) this
+        # instance had already built. `view()` above already caches the whole BOX; this
+        # caches the CARD, which is the layer `view()` cannot see. Safe for the same reason
+        # every other cache on this class is: the instance never outlives one request.
+        self._of_cache: Dict[Tuple[int, int], dict] = {}
 
     @classmethod
     def for_keys(
@@ -2399,6 +2419,14 @@ class _Places:
         number = int(box)
         at = int(index)
 
+        cached = self._of_cache.get((number, at))
+        if cached is not None:
+            return cached
+        block = self._of_uncached(number, at)
+        self._of_cache[(number, at)] = block
+        return block
+
+    def _of_uncached(self, number: int, at: int) -> dict:
         # The pooled branch, BEFORE the box view: a pooled card's block borrows nothing
         # from the box — no denominator, no layout, no name — so the whole-box scan is
         # work done to fill fields this block answers null for, and a corrupt neighbour
@@ -9253,24 +9281,19 @@ def _order_stamps(numbers: Sequence[str]) -> Tuple[int, Dict[str, Tuple[str, ...
     if not found:
         return len(ledger.orders), {}
 
-    # THE SAME SEQUENCE `do_orders` RESOLVES IN, and the same reason: `Ledger.unfulfilled`
-    # and `pipeline/orders.py:order_sequence` sort oldest-placed first with a missing stamp
-    # LAST, so the screen deciding who gets the last copy and the label naming where it is
-    # cannot disagree about which order comes first.
+    # THE SAME SEQUENCE `do_orders` RESOLVES IN, so the label naming where a copy is cannot
+    # disagree with the screen about which order comes first — `resolve_all`'s own
+    # `order_sequence` sorts oldest-placed first with a missing stamp LAST, and this mirrors
+    # it for the same determinism reason rather than for any priority it used to imply.
     sequence = sorted(
         ledger.orders.values(),
         key=lambda record: (record.placed_at is None, record.placed_at or "", record.key),
     )
-    # THE TERMINAL OVERRIDE, exactly as `do_orders` applies it and for the same reason: this
-    # docstring already requires the two resolutions to agree, and a Canceled or
-    # already-Shipped order left in this pool would compete for a copy a live order needs —
-    # D113's own measured bug, one register down. See `store/orders.py:is_terminal_status`.
-    open_keys = {
-        record.key
-        for record in ledger.unfulfilled()
-        if not order_store.is_terminal_status(record.status)
-    }
-    open_records = [record for record in sequence if record.key in open_keys]
+    # NO TERMINAL OVERRIDE HERE. Every record that still OWES copies is resolved, terminal
+    # status or not — see `do_orders` for why the old override existed (D113's measured
+    # priority bug) and why dropping the exclusive draw makes it structurally impossible now.
+    resolve_keys = {record.key for record in ledger.unfulfilled()}
+    open_records = [record for record in sequence if record.key in resolve_keys]
     asked = [_engine_order(record, ledger) for record in open_records]
     behind = {id(order): record for order, record in zip(asked, open_records)}
     resolution = order_engine.resolve_all(snapshot.inventory, asked)
@@ -9457,18 +9480,37 @@ def _pick_row(
 
 def _line_answer(
     inventory: master.Inventory,
-    places: _Places,
+    places: Optional[_Places],
     held: Dict[str, dict],
     record: order_store.OrderRecord,
     line,
+    *,
+    include_picks: bool = True,
 ) -> dict:
     """One resolved line: the reason, the breakdown behind it, and the copies it found.
 
     `order_key` travels beside `order` because the resolver keys on the NUMBER alone and this
     store keys on `source:number` — a number is unique to a marketplace and not across two,
     so a screen that wanted to act on this line would have nothing to name it by.
+
+    `include_picks=False` IS THE LIST'S OWN TIER, ADDED 2026-09-16. Every reason, count and
+    figure below still answers exactly as before — whether a line resolved never changes —
+    but `picks` is `[]` and `places`/`held` are never read. The buyer list draws none of
+    `picks`: `statusOf`, `worstStatus`, the reason chips and `passesHideUnknown` all read
+    `reason` alone (`app/src/Orders.tsx`, `app/src/orderView.ts`). Decorating a `place` block
+    for every candidate copy of every one of ~260 unfulfilled orders — most of them for a
+    buyer nobody has opened — was 52% of `GET /orders`'s wall time, over 1,777 pick-rows for
+    819 distinct positions: the fungibility ruling offers one copy to more than one order, and
+    each offer used to redecorate it from scratch. `POST /orders/picks`
+    (`do_order_picks`) is the second tier: the same shape, `include_picks=True`, for exactly
+    the orders a screen is actually looking at — the order or buyer open, or the walk.
     """
     ordered = record.line_for(line.sku)
+    picks: List[dict] = (
+        [_pick_row(inventory, places, held, pick) for pick in line.picks]
+        if include_picks and places is not None
+        else []
+    )
     return {
         "order": line.order,
         "order_key": record.key,
@@ -9486,23 +9528,100 @@ def _line_answer(
         "retired": line.retired,
         "pooled": line.pooled,
         "line": asdict(line.line),
-        "picks": [_pick_row(inventory, places, held, pick) for pick in line.picks],
+        "picks": picks,
     }
+
+def _held_index(ledger: order_store.Ledger) -> Dict[str, dict]:
+    """The reverse index behind `held_by`, built fresh and NEVER stored.
+
+    A stored position-keyed index is the fourth thing no renumber path remaps —
+    `pipeline/orders.py` names the three that already exist — which is why this is keyed by
+    `capture_id`. Shared by `do_orders` and `do_order_picks` so the two tiers cannot answer
+    two different ideas of "already recorded against a line".
+    """
+    held: Dict[str, dict] = {}
+    for key, rows in ledger.fulfilment.items():
+        holder = ledger.orders.get(key)
+        for sku, row in rows.items():
+            for copy in row.copies:
+                held[str(copy)] = {
+                    "order": holder.number if holder is not None else key,
+                    "sku": sku,
+                }
+    return held
+
+
+def _resolve_records(
+    inventory: master.Inventory,
+    ledger: order_store.Ledger,
+    records: Sequence[order_store.OrderRecord],
+    *,
+    include_picks: bool,
+) -> List[dict]:
+    """Resolve exactly `records` and answer each in `_line_answer`'s wire shape.
+
+    ONE `_Places`, SCOPED TO WHAT THIS CALL ACTUALLY DECORATES. When `include_picks` is
+    False no `_Places` is built at all — the list tier's whole point — and when it is True
+    the instance is scoped to the picks THIS resolution returned (`_Places.for_keys`), never
+    to the whole store, exactly as `do_orders` always did.
+
+    RESOLVING A SUBSET IS THE SAME ANSWER AS RESOLVING EVERYTHING, for the reason
+    `pipeline/orders.py`'s own header now gives: the exclusive draw is gone, so no order's
+    line withholds a copy from another order's line, and `resolve_all` over one record
+    answers that one record identically to `resolve_all` over the whole ledger. This is what
+    lets `do_order_picks` ask for a handful of orders' real picks without re-resolving (or
+    re-decorating) the other few hundred.
+    """
+    asked = [_engine_order(record, ledger) for record in records]
+    behind = {id(order): record for order, record in zip(asked, records)}
+    resolution = order_engine.resolve_all(inventory, asked)
+
+    places: Optional[_Places] = None
+    if include_picks:
+        keys = {
+            (pick.box, pick.index)
+            for answer in resolution.orders
+            for line in answer.lines
+            for pick in line.picks
+        }
+        places = _Places.for_keys(inventory, keys)
+    held = _held_index(ledger) if include_picks else {}
+
+    answered = []
+    for answer in resolution.orders:
+        record = behind[id(answer.order)]
+        answered.append(
+            {
+                "key": record.key,
+                "number": record.number,
+                "complete": answer.complete,
+                "outstanding": answer.outstanding,
+                "lines": [
+                    _line_answer(
+                        inventory, places, held, record, line, include_picks=include_picks
+                    )
+                    for line in answer.lines
+                ],
+            }
+        )
+    return answered, resolution
 
 
 def do_orders() -> dict:
-    """`GET /orders` — every order, and where the copies for the open ones are.
+    """`GET /orders` — every order, and its per-line verdict, with NO PICKS AND NO PLACES.
 
     ONE SNAPSHOT, NO LOCK. This route writes nothing, so `Store().read()` answers a snapshot
     outright — the same call and the same reason as `do_review_catalog`. One snapshot rather
     than two is what keeps the order list and the resolution from disagreeing: read twice and
     a sale landing between them would show a card both on hand and gone.
 
-    THE OPEN ORDERS ARE RESOLVED IN ONE CALL AND THERE IS DELIBERATELY NO `resolve_one`.
-    `pipeline/orders.py` refuses to offer one, and its header says why: a per-order resolver
-    cannot see what another order has already been promised, so it hands two buyers the same
-    physical card and reports success twice. The picker walks to box 3 card 3 twice and the
-    second envelope goes out short.
+    EVERY ORDER THAT STILL OWES COPIES IS RESOLVED IN ONE CALL, TERMINAL STATUS OR NOT
+    (amended 2026-09-16, on the owner's fungibility ruling). `pipeline/orders.py` still
+    offers no `resolve_one`, but not for its old reason: with the exclusive draw dropped, a
+    per-order resolve and an all-orders resolve produce the same answer for the order asked
+    about, because no order's line withholds a copy from another order's line any more. One
+    pass remains for ordinary efficiency — one snapshot, one per-SKU cache — not because a
+    second pass would double-promise a card.
 
     NO `paperwork=` IS PASSED, AND THE COST IS NAMED RATHER THAN HIDDEN. The run-side backup
     would come from `cli/resolve.py:paperwork_for`, which takes ONE run, reads its
@@ -9519,6 +9638,15 @@ def do_orders() -> dict:
     `placed_at` first, then the key, with a missing stamp LAST rather than first — so a
     screen listing what is outstanding and a resolver deciding who gets the last copy cannot
     disagree about which order comes first.
+
+    NEITHER `picks` NOR A `_Places` INSTANCE IS BUILT HERE AT ALL, AS OF 2026-09-16. Every
+    line still carries `reason`, `wanted`, `owed`, `fulfilled`, `outstanding`, `on_hand`,
+    `sold`, `retired` and `pooled` — the whole of what the buyer list, its reason chips, its
+    status pills and `passesHideUnknown` read — but `picks` answers `[]`. Decorating a real
+    `place` for every candidate copy of every unfulfilled order, most of them for a buyer
+    nobody has opened, was the measured cost of this route (52% of its wall time, over 1,777
+    pick-rows for 819 distinct positions on the owner's store): `POST /orders/picks` is where
+    a screen asks for the real thing, for exactly the orders it is looking at.
     """
     snapshot = Store().read()
     ledger = snapshot.ledger
@@ -9527,79 +9655,34 @@ def do_orders() -> dict:
         ledger.orders.values(),
         key=lambda record: (record.placed_at is None, record.placed_at or "", record.key),
     )
-    # THE TERMINAL OVERRIDE (D63 amended 2026-09-13). `unfulfilled` is still the ledger's own
-    # answer to "does this order still owe copies"; a status this store RECOGNISES as
-    # terminal removes it from `open_keys` regardless, so a Canceled or already-Shipped order
-    # neither draws `open: true` on the screen NOR competes for a physical copy in the
-    # resolution below — which is the correctness bug D113 measured (a shipped order, being
-    # older, took a copy ahead of a live one). An unrecognised status changes nothing here:
-    # `is_terminal_status` answers `False` for it, so the order stays exactly as open as
-    # `unfulfilled` alone would have made it.
+    # `open_keys` STILL DECIDES `open: true` ON THE SCREEN (D63 amended 2026-09-13), and
+    # THAT HALF IS UNCHANGED: a status this store RECOGNISES as terminal
+    # (`order_store.is_terminal_status`) never draws as open, regardless of `unfulfilled`.
+    # An unrecognised status changes nothing: `is_terminal_status` answers `False` for it,
+    # so the order stays exactly as open as `unfulfilled` alone would have made it.
     open_keys = {
         record.key
         for record in ledger.unfulfilled()
         if not order_store.is_terminal_status(record.status)
     }
-    open_records = [record for record in sequence if record.key in open_keys]
+    # WHAT IS RESOLVED IS A DIFFERENT, WIDER SET AS OF 2026-09-16, AND THE OLD TERMINAL
+    # EXCLUSION FROM RESOLUTION IS GONE. It existed only to stop a Canceled or
+    # already-Shipped order from competing for a physical copy a live order needed — D113's
+    # measured bug, a shipped order taking a copy ahead of a live one because it was older.
+    # That hazard is now structurally impossible: `pipeline/orders.py` no longer draws
+    # copies exclusively (the owner's fungibility ruling — every order is offered every
+    # available copy, and the guard against one card reaching two buyers moved to the
+    # WRITE, `store/orders.py:record_pull`'s `CopyAlreadyPulled`). So every record that
+    # still owes copies is resolved here, terminal or not, and the terminal ones still draw
+    # `open: false` off `open_keys` above — resolving a terminal order gives its own picker
+    # (the stamps route, a re-opened dispute) real picks instead of an empty resolution, and
+    # costs nothing else on screen because `open` is what `#/orders` branches on.
+    resolve_keys = {record.key for record in ledger.unfulfilled()}
+    open_records = [record for record in sequence if record.key in resolve_keys]
 
-    asked = [_engine_order(record, ledger) for record in open_records]
-    # KEYED BY OBJECT IDENTITY rather than by order number, because `order_sequence` sorts
-    # the very objects it was handed and hands them back — so identity survives the pass,
-    # while a number does not identify a record: two marketplaces may spell one number, and
-    # `source:number` is the key for exactly that reason.
-    behind = {id(order): record for order, record in zip(asked, open_records)}
-    resolution = order_engine.resolve_all(snapshot.inventory, asked)
-
-    # ONE `_Places` FOR THE WHOLE RESPONSE, SCOPED TO THE PICKS THE RESOLUTION ACTUALLY
-    # RETURNED. It does NOT walk the entire store per instantiation, and never did — the
-    # ordinary constructor is lazy per box (D88) but still hydrates a full `Card` per record
-    # in every box a pick touches (`_walk`, D30's neighbor decoration), and an order's picks
-    # routinely span most of the store's boxes: with five boxes, that is effectively the
-    # whole store, once, on the route Orders and Shipping poll (measured 185 ms -> 3,465 ms
-    # at 20x the store, `docs/specs/store-scaling.md` §1). Neither screen draws `neighbors`
-    # or `section_gaps` (`app/src/Orders.tsx`, `OrdersShipStage.tsx`), so `_Places.for_keys`
-    # answers `Place.slot` and everything derived from it — `label`, `section`, `card`,
-    # `fraction`, `box_total` — from two indexed columns per box
-    # (`Inventory.occupied_indices`) instead of a whole-box hydration, and answers those two
-    # decoration fields null, which is an existing degraded state and not a new one. The
-    # instance never outlives this request, so it cannot serve a stale denominator to the
-    # next one.
-    keys = {
-        (pick.box, pick.index)
-        for answer in resolution.orders
-        for line in answer.lines
-        for pick in line.picks
-    }
-    places = _Places.for_keys(snapshot.inventory, keys)
-
-    # The reverse index behind `held_by`, built in this request and NEVER stored. A stored
-    # position-keyed index is the fourth thing no renumber path remaps — `pipeline/orders.py`
-    # names the three that already exist — which is why this is keyed by `capture_id`.
-    held: Dict[str, dict] = {}
-    for key, rows in ledger.fulfilment.items():
-        holder = ledger.orders.get(key)
-        for sku, row in rows.items():
-            for copy in row.copies:
-                held[str(copy)] = {
-                    "order": holder.number if holder is not None else key,
-                    "sku": sku,
-                }
-
-    answered = []
-    for answer in resolution.orders:
-        record = behind[id(answer.order)]
-        answered.append(
-            {
-                "key": record.key,
-                "number": record.number,
-                "complete": answer.complete,
-                "outstanding": answer.outstanding,
-                "lines": [
-                    _line_answer(snapshot.inventory, places, held, record, line)
-                    for line in answer.lines
-                ],
-            }
-        )
+    answered, resolution = _resolve_records(
+        snapshot.inventory, ledger, open_records, include_picks=False
+    )
 
     return {
         "summary": ledger.summary,
@@ -9615,6 +9698,57 @@ def do_orders() -> dict:
             "orders": answered,
         },
     }
+
+
+def do_order_picks(payload: dict) -> dict:
+    """`POST /orders/picks` — real picks and places, for exactly the orders named.
+
+    THE SECOND TIER `GET /orders` NAMES IN ITS OWN DOCSTRING. `#/orders` calls this for the
+    buyer or order actually open, and once — with every order in the pass named at once —
+    for the walk (`buildWalk` needs picks across many orders simultaneously; a request naming
+    them all is the batch this route accepts, never a decoration of the whole store).
+
+    BODY-ADDRESSED, `ORDER_PULL_FIELDS`'s own reason: an order key is `source:number` and a
+    number may legally carry a colon, so there is no clean path spelling.
+
+    A KEY THE LEDGER DOES NOT HOLD IS SKIPPED, NOT REFUSED. The set a screen asks about is
+    read off its own last `GET /orders`, and an order that closed or was un-fetched between
+    that read and this press is not a caller error — the answer for it is simply absent from
+    `orders`, exactly as an absent `held_by` entry already means "we don't know of one".
+
+    THIS RESOLVES EXACTLY THE RECORDS ASKED FOR, no more — the same one-line argument
+    `_resolve_records` makes: with the exclusive draw gone, resolving a subset of the ledger
+    answers each of those orders identically to resolving the whole thing.
+    """
+    _reject_unknown(payload, ORDER_PICKS_FIELDS)
+    raw = payload.get("keys")
+    if not isinstance(raw, list) or not raw or not all(isinstance(k, str) for k in raw):
+        raise BadRequest(
+            HTTPStatus.BAD_REQUEST,
+            "keys_required",
+            "Send `keys` — a non-empty list of order keys (`source:number`, `GET "
+            "/orders`'s own `key`). An empty list asks for nothing, which is refused rather "
+            "than answered with an empty list, because those are different answers to "
+            "\"did that work\".",
+        )
+    if len(raw) > ORDER_PICKS_LIMIT:
+        raise BadRequest(
+            HTTPStatus.BAD_REQUEST,
+            "too_many_keys",
+            f"{len(raw)} order keys in one press, and this route takes at most "
+            f"{ORDER_PICKS_LIMIT}. Send them in smaller batches.",
+        )
+    wanted = {key.strip() for key in raw if key.strip()}
+
+    snapshot = Store().read()
+    ledger = snapshot.ledger
+    records = [ledger.orders[key] for key in wanted if key in ledger.orders]
+    # THE SAME SEQUENCE `do_orders` RESOLVES IN, for the same determinism reason — a caller
+    # comparing this answer against `GET /orders`'s should never have to reorder either side.
+    records.sort(key=lambda record: (record.placed_at is None, record.placed_at or "", record.key))
+
+    answered, _ = _resolve_records(snapshot.inventory, ledger, records, include_picks=True)
+    return {"orders": answered}
 
 
 def _ingest_line(order_at: int, line_at: int, raw) -> order_store.OrderLine:
@@ -12145,6 +12279,11 @@ class CaptureHandler(BaseHTTPRequestHandler):
             # colon.
             if path == "/orders/fetch":
                 return self._json(HTTPStatus.OK, do_order_fetch(self._body()))
+            # The second tier `GET /orders` names in its own docstring — real picks and
+            # places, for exactly the orders a screen is looking at (the order or buyer
+            # open, or the whole walk in one batch).
+            if path == "/orders/picks":
+                return self._json(HTTPStatus.OK, do_order_picks(self._body()))
             if path == "/orders/ingest":
                 return self._json(HTTPStatus.OK, do_order_ingest(self._body()))
             # D193's backfill: attach a display name to an order

@@ -27,7 +27,7 @@
  */
 
 import type { OrderRow, ResolvedOrder } from './types'
-import type { BuyerGroup } from './orderBuyers'
+import { foldName, type BuyerGroup } from './orderBuyers'
 
 export type OrderSort = 'newest' | 'oldest'
 
@@ -107,6 +107,22 @@ export function sortGroups(groups: readonly BuyerGroup[], sort: OrderSort): Buye
 export function passesStatus(group: BuyerGroup, status: string | null): boolean {
   if (status === null) return true
   return group.orders.some((order) => (order.status ?? '').trim() === status)
+}
+
+/** Does this group survive a typed search — by buyer NAME or by ORDER NUMBER, the two things
+ *  the row already draws. Blank (untrimmed to nothing) always passes, the same anti-hiding
+ *  default every other predicate here uses. Folded with `orderBuyers.ts:foldName` — the exact
+ *  rule `buyerKeyOf` already applies to build the group key — so this is a substring match over
+ *  the same normalized text a shared spelling already collapses to, never a second folding
+ *  rule that could disagree with the first about what counts as the same name. A number is
+ *  folded too, cheaply: TCGplayer's own numbers are plain digits, but folding both sides the
+ *  same way means one rule to read rather than a name rule and a number rule that happen to
+ *  agree today. */
+export function passesQuery(group: BuyerGroup, query: string): boolean {
+  const needle = foldName(query)
+  if (needle === '') return true
+  if (group.name !== null && foldName(group.name).includes(needle)) return true
+  return group.orders.some((order) => foldName(order.number).includes(needle))
 }
 
 /** Does this group carry a line the resolver could not identify — the "Never seen" chip's own

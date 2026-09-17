@@ -206,6 +206,7 @@ export function order(over: Partial<OrderRow> = {}): OrderRow {
     wanted: 1,
     recorded: 0,
     open: true,
+    terminal: false,
     lines: [line().line],
     progress: [
       {
