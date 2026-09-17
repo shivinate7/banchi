@@ -95,7 +95,7 @@ MAX_PRICE = 200000.0
 # deliberately not from here.
 SCOPE_THIS_UPLOAD = 3
 
-# The eleven fields `PricingStagedPrice` reads, mapped from the export's own column names.
+# The ten fields `PricingStagedPrice` reads, mapped from the export's own column names.
 # ORDER IS THIS DICT'S ORDER and matters only for reproducibility of the body, not for the
 # server — but a stable body is what makes a captured request diffable against a later one.
 COLUMNS: Sequence[Tuple[str, str]] = (

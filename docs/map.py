@@ -2627,7 +2627,13 @@ COMPONENTS = [
                                 # widening that catches a backticked `pkmnscan …` invocation —
                                 # unclaimed, so it sorts to the end until `make merge` gives
                                 # it a number.
-                                "D210"],
+                                "D210",
+                                # D138: `dist path agreement`'s docstring names it — the row
+                                # reconciles `scripts/serve.py:DIST` and
+                                # `server/capture_server.py:APP_DIST` against each other and
+                                # against Vite's own default `outDir`, the same fact D138
+                                # rules on (one process, `app/dist/` beside the checkout).
+                                "D138"],
             },
             "claim-ids.py": {
                 "does": "allocate the numbers this branch's SLUG ids will take, and "
