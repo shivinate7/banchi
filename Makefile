@@ -99,7 +99,7 @@ help:
 	@echo "  make reap-selftest  the kill guard, proved by pointing it at what it must not kill."
 	@echo "  make silent-write-selftest  the silenced-write guard, proved by reproducing the"
 	@echo "                    refused commit whose refusal went to /dev/null."
-	@echo "  make guard-shell-selftest  the five-clause shell guard, proved by committing its"
+	@echo "  make guard-shell-selftest  the eight-clause shell guard, proved by committing its"
 	@echo "                    mistakes in a throwaway repo: a destroyed file, a write into"
 	@echo "                    another checkout, a nested symlink, a pattern that is not a process."
 	@echo "  make coordinator-selftest  the merge-queue verdict rules. No network."
