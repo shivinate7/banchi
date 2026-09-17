@@ -1181,14 +1181,19 @@ def string_assign(source: str, name: str) -> Optional[str]:
 
 
 def gates_sections() -> Dict[str, str]:
-    """`### T1 — …` heading text -> that section's body."""
-    gates = ROOT / "docs" / "GATES.md"
-    if not exists(gates):
+    """`### T1 — …` heading text -> that section's body.
+
+    Reads `gates_text()` — the docs/gates/ corpus reassembled — rather than docs/GATES.md
+    directly, since the split (Lane D, 2026-09-16). The reassembly is byte-identical to the
+    monolith this regex was written against, so nothing else here changed.
+    """
+    text = gates_text()
+    if not text:
         return {}
     sections: Dict[str, str] = {}
     current: Optional[str] = None
     body: List[str] = []
-    for line in read(gates).splitlines():
+    for line in text.splitlines():
         heading = re.match(r"^#{2,3}\s+(T[1-9][0-9]?)\b", line)
         if heading:
             if current:
@@ -2092,6 +2097,123 @@ def check_decision_ids(report: Report, docs: List[Path]) -> None:
                scanned=len(code_haystack))
 
 
+# --------------------------------------------------------- the gates corpus as a directory
+
+# THE GATES CORPUS IS `docs/gates/`, ONE FILE PER RECORD IN ONE FOLDER PER KIND (LANE D,
+# 2026-09-16) — `scripts/gates_corpus.py`'s own docstring has the shape. Every row below that
+# used to open `docs/GATES.md` opens the corpus's reassembled text instead, through
+# `gates_text()`, and asserts exactly what it asserted before: `gates_sections()`,
+# `check_id_claims()`, `check_map_gate_status` (folded into `check_build_order`) and
+# `check_build_order_mirror()` are unmodified beyond that one substitution, because the
+# reassembly is byte-identical to the file they used to read (`scripts/split-gates.py
+# --verify`), so every regex written against the monolith keeps matching.
+#
+# READ FAIL-OPEN, the same rule `_corpus()` states for decisions and `browser scope` states
+# for its own module: a missing `scripts/gates_corpus.py` or a broken manifest makes
+# `gates_text()` answer "", never a partial or wrong reassembly, so a caller that already
+# treated `not exists(docs/GATES.md)` as "nothing to check" keeps that exact behaviour rather
+# than crashing on an import it cannot make.
+
+
+def _gates_corpus():
+    """scripts/gates_corpus.py, or None."""
+    return _sibling("gates_corpus.py")
+
+
+def gates_text() -> str:
+    """The gates corpus as one text — `docs/GATES.md` in every reader's eyes, whether the
+    bytes come from the stub (never, since the split) or from `docs/gates/`'s reassembly."""
+    corpus = _gates_corpus()
+    if corpus is None:
+        return ""
+    try:
+        return corpus.text()
+    except Exception:
+        return ""
+
+
+# THE FLOOR IS PINNED HERE TOO, on the same reasoning `split-gates.py --selftest` gives for
+# pinning its own: a parser finding nothing over a renamed heading or a broken manifest must
+# read as BROKEN, never as a clean tree with nothing to reconcile. `check_gates_structure`
+# is this row's mechanical half; `make gates-selftest` is the corpus's own completeness proof
+# and is not duplicated here.
+_GATES_MIN_TESTS = 9
+_GATES_MIN_RUNS = 5
+_GATES_MIN_SHIPPED = 15
+
+
+def check_gates_structure(report: Report) -> None:
+    """The gates corpus reads as non-empty and self-consistent, in both directions.
+
+    Mirrors `decision index`'s own floor: an unreadable corpus, a manifest naming a file that
+    is gone, or a regex that stopped matching after a heading moved must never look like a
+    corpus with nothing wrong in it. `make gates-selftest` (`scripts/split-gates.py
+    --selftest`) proves the same non-vacuity claim from the split side; this row proves it
+    from the READER side — `gates_corpus.tests()`/`.runs()`/`.steps()` — so a regression in
+    either one is caught by the other.
+    """
+    corpus = _gates_corpus()
+    if corpus is None:
+        report.add("gates structure", MECHANICAL,
+                   [Finding("scripts/gates_corpus.py",
+                             "does not exist or failed to import. docs/GATES.md's corpus "
+                             "cannot be read at all, which every row below this one silently "
+                             "treats as \"nothing to check\" rather than \"broken\".")])
+        return
+    findings: List[Finding] = []
+    try:
+        tests = corpus.tests()
+        runs = corpus.runs()
+        shipped = corpus.steps("shipped")
+        open_steps = corpus.steps("open")
+        unregistered = corpus.unregistered()
+    except Exception as exc:
+        report.add("gates structure", MECHANICAL,
+                   [Finding("docs/gates/ORDER.json", f"unreadable: {exc}")])
+        return
+    if len(tests) < _GATES_MIN_TESTS:
+        findings.append(Finding(
+            "docs/gates/contract/",
+            f"the manifest names only {len(tests)} harness-contract entries; expected at "
+            f"least {_GATES_MIN_TESTS} (T1..T9). Either a real test was deleted, or the "
+            f"`### Tn` reader stopped matching a renamed heading — both are a broken corpus, "
+            f"never a clean one.",
+        ))
+    if len(runs) < _GATES_MIN_RUNS:
+        findings.append(Finding(
+            "docs/gates/gate-runs/",
+            f"the manifest names only {len(runs)} gate-run entries; expected at least "
+            f"{_GATES_MIN_RUNS} (Gate A, Gate B, Box 2, Gate C, the per-run reading).",
+        ))
+    if len(shipped) < _GATES_MIN_SHIPPED:
+        findings.append(Finding(
+            "docs/gates/steps/",
+            f"the manifest names only {len(shipped)} shipped steps; expected at least "
+            f"{_GATES_MIN_SHIPPED}.",
+        ))
+    overlap = sorted(set(shipped) & set(open_steps))
+    if overlap:
+        findings.append(Finding(
+            "docs/gates/ORDER.json",
+            f"step id(s) {overlap} are listed under BOTH shipped and open. A step is in "
+            f"exactly one list — the list IS the status, the same rule `build order mirror` "
+            f"already applies to docs/map.py's SHIPPED and OPEN.",
+        ))
+    for name in unregistered:
+        head = (corpus.DIRECTORY / name).read_text(encoding="utf-8").split("\n", 1)[0] if \
+            (corpus.DIRECTORY / name).exists() else ""
+        if not (head.startswith("### ") or head.startswith("## ")):
+            findings.append(Finding(
+                f"docs/gates/{name}",
+                "is on disk but not in ORDER.json, and its first line is not a heading — "
+                "this is not a branch adding a new record; the file is malformed.",
+            ))
+    report.add("gates structure", MECHANICAL, findings,
+               f"{len(tests)} contract entries, {len(runs)} run entries, "
+               f"{len(shipped)} shipped + {len(open_steps)} open steps",
+               scanned=len(tests) + len(runs) + len(shipped) + len(open_steps))
+
+
 # ------------------------------------------------------------------ ids are claimed at merge
 
 # A BRANCH DOES NOT TAKE A NUMBER (D140). The allocation's only input is what main
@@ -2175,7 +2297,6 @@ def on_main() -> bool:
 def check_id_claims(report: Report) -> None:
     findings: List[Finding] = []
     codes = ROOT / "docs" / "CODES-DECISIONS.md"
-    gates = ROOT / "docs" / "GATES.md"
 
     unclaimed: List[str] = []
     for path in decision_files() + [codes]:
@@ -2199,7 +2320,7 @@ def check_id_claims(report: Report) -> None:
     # A STEP IS CITED BY A SLUG THAT SOME `0.` MARKER DECLARES, or it is a dangling id — the
     # same superset rule the letter namespaces get from `decision ids`, which cannot see this
     # one because a step wears no letter.
-    declared_steps = set(_GATES_STEP_SLUG.findall(read(gates))) if exists(gates) else set()
+    declared_steps = set(_GATES_STEP_SLUG.findall(gates_text()))
     for path in sorted(set(python_files()) | set(_walk(ROOT, (".md", ".ts", ".tsx")))):
         for number, raw in enumerate(read(path).splitlines(), start=1):
             for slug in _STEP_CITATION.findall(without_noqa(raw)):
@@ -5074,10 +5195,11 @@ def check_map(report: Report, allowed: Dict[str, str]) -> None:
                 ))
 
     # Gate status has two homes; they must agree.
-    gates_text = read(ROOT / "docs" / "GATES.md") if exists(ROOT / "docs" / "GATES.md") else ""
+    gates_corpus_text = gates_text()
     for gate in gates:
         name = gate.get("gate", "")
-        heading = re.search(r"^#{2,3}\s+Gate\s+" + re.escape(name) + r"\b(.*)$", gates_text, re.MULTILINE)
+        heading = re.search(r"^#{2,3}\s+Gate\s+" + re.escape(name) + r"\b(.*)$",
+                             gates_corpus_text, re.MULTILINE)
         if not heading:
             findings.append(Finding("docs/map.py", f"Gate {name} has no `### Gate {name}` heading in docs/GATES.md."))
             continue
@@ -5886,14 +6008,14 @@ def check_build_order_mirror(report: Report) -> None:
     inserted because renumbering "would have to land in four files at once" and nothing
     watched them. One of those files now watches the other three (D80).
     """
-    gates = ROOT / "docs" / "GATES.md"
-    if not exists(MAP) or not exists(gates):
+    text = gates_text()
+    if not exists(MAP) or not text:
         report.add("build order mirror", MECHANICAL,
-                   [Finding("docs/", "docs/map.py or docs/GATES.md is missing.")])
+                   [Finding("docs/", "docs/map.py is missing, or docs/GATES.md's corpus "
+                                     "(docs/gates/) read as empty or unreadable.")])
         return
 
     data = literals_from_module(MAP)
-    text = read(gates)
     findings: List[Finding] = []
     total = 0
 
@@ -16929,6 +17051,7 @@ def audit(staged_only: bool) -> Report:
     check_hook_roster(report)
     check_codex_hooks(report)
     check_map_sections(report)
+    check_gates_structure(report)
     check_build_order_mirror(report)
     check_game_vocabulary(report)
     check_game_coverage(report)

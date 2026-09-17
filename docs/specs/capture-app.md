@@ -14,7 +14,7 @@ holds open is now closed.** The capture screen ran a real feeder session at burs
 (after two capture-latency defects found by that very session were fixed); the review
 queue held real entries from a real run and the owner answered 16 of them through the
 answer route; the pull preview showed a stored photo at its correct physical location.
-§10.2's measurements were taken and live in `docs/GATES.md`'s Gate B section. Still
+§10.2's measurements were taken and live in the gates corpus's `GateB` record. Still
 unexercised: the Fulfillment view against a real order, and the review screen's
 price-banded hierarchy against a mixed-value lot — this run's queue was uniformly
 sub-threshold. The paragraphs below are kept as the record of what "not validated" meant
@@ -743,7 +743,7 @@ REPLACE WITH:
 
 1568px downscale and the batch assembly all ran against real 4K JPEGs. Everything after the
 API call was still unrun when this was written; it ran two days later, on 53 cards — see
-`docs/GATES.md`'s Gate B section.
+the gates corpus's `GateB` record.
 everything after the API call.
 
 - **Clean HDMI output ON at the camera.** The shakedown frames carry the camera's own

@@ -4,7 +4,7 @@
 # the project would be built on top of — `make check` green means every check ran.
 
 .DEFAULT_GOAL := help
-.PHONY: help status map explain harness check cid-selftest cid-audit ignore-check docs-audit vale audit-self-test verdict-selftest githooks-selftest merge merge-selftest revert-guard revert-selftest claim-ids claim-stale claim-selftest decisions-selftest debts-selftest port-agreement set-hint-agreement screen-freshness screen-freshness-selftest sigil-check suite-lock-selftest icloud-sweep audit-history dev server screenshot design-check design-check-quiet lint typecheck venv launch-config worktree-setup hooks up down launch-agent demo demo-photos demo-seed demo-record demo-static demo-preview demo-freshness catalog-refresh catalog-index catalog-index-selftest catalog-mirror
+.PHONY: help status map explain harness check cid-selftest cid-audit ignore-check docs-audit vale audit-self-test verdict-selftest githooks-selftest merge merge-selftest revert-guard revert-selftest claim-ids claim-stale claim-selftest decisions-selftest debts-selftest gates-selftest port-agreement set-hint-agreement screen-freshness screen-freshness-selftest sigil-check suite-lock-selftest icloud-sweep audit-history dev server screenshot design-check design-check-quiet lint typecheck venv launch-config worktree-setup hooks up down launch-agent demo demo-photos demo-seed demo-record demo-static demo-preview demo-freshness catalog-refresh catalog-index catalog-index-selftest catalog-mirror
 
 # Prefer the venv if it exists, so `make harness` works without anyone remembering to
 # activate anything. Falls back to system python3, which still runs T2-T5 — T1 needs the
@@ -72,6 +72,7 @@ help:
 	@echo "  make claim-selftest   the claimer, proved with main moving underneath the branch."
 	@echo "  make decisions-selftest  docs/decisions/ is complete and still round-trips."
 	@echo "  make debts-selftest      docs/debts/ is complete and still round-trips."
+	@echo "  make gates-selftest      docs/gates/ is complete and still round-trips."
 	@echo "  make catalog-refresh  re-clone pokemon-tcg-data and refresh vendor/pokemon-tcg-data/"
 	@echo "                    (D15). Writes; never gates. ARGS=--dry-run to preview the diff."
 	@echo "  make catalog-index  build vendor/pokemon-tcg-data/catalog.sqlite from the snapshot."
@@ -133,7 +134,7 @@ help:
 	@echo "                    lint + vale + typecheck + audit-self-test +"
 	@echo "                    githooks-selftest + merge-selftest + revert-selftest +"
 	@echo "                    claim-selftest + decisions-selftest + debts-selftest +"
-	@echo "                    submission-selftest +"
+	@echo "                    gates-selftest + submission-selftest +"
 	@echo "                    cid-selftest + readings-selftest +"
 	@echo "                    janitor-selftest + reap-selftest + silent-write-selftest +"
 	@echo "                    guard-shell-selftest +"
@@ -446,6 +447,7 @@ check:
 	@$(MAKE) --no-print-directory claim-selftest
 	@$(MAKE) --no-print-directory decisions-selftest
 	@$(MAKE) --no-print-directory debts-selftest
+	@$(MAKE) --no-print-directory gates-selftest
 	@$(MAKE) --no-print-directory submission-selftest
 	@$(MAKE) --no-print-directory cid-selftest
 	@$(MAKE) --no-print-directory readings-selftest
@@ -489,6 +491,7 @@ ci-check:
 	@$(MAKE) --no-print-directory claim-stale
 	@$(MAKE) --no-print-directory decisions-selftest
 	@$(MAKE) --no-print-directory debts-selftest
+	@$(MAKE) --no-print-directory gates-selftest
 	@$(MAKE) --no-print-directory submission-selftest
 	@$(MAKE) --no-print-directory cid-selftest
 	@$(MAKE) --no-print-directory readings-selftest
@@ -651,6 +654,15 @@ decisions-selftest:
 # the set is whole and the reassembly matches the digest recorded when the split was made.
 debts-selftest:
 	@python3 scripts/split-debts.py --selftest
+# THE GATES CORPUS IS COMPLETE AND STILL ROUND-TRIPS — `decisions-selftest`'s own shape, over
+# `docs/gates/` (Lane D, 2026-09-16). Three kind folders (contract/, runs/, steps/), one
+# manifest, and this asserts the set is whole: every file the manifest names is present,
+# every file present is named, no step id is in both the shipped and open lists, and the
+# corpus meets its pinned non-vacuity floor (>=9 contract entries, >=5 run entries, >=15
+# shipped steps) so a broken reader over a renamed heading fails loud rather than reporting a
+# clean, empty corpus. Stdlib only and it writes nothing, so it gates.
+gates-selftest:
+	@python3 scripts/split-gates.py --selftest
 
 # BUILD-ORDER STEP 9, PIECE 1 (D15): re-clone `PokemonTCG/pokemon-tcg-data` and refresh the
 # committed snapshot at `vendor/pokemon-tcg-data/`, recording the upstream commit SHA in

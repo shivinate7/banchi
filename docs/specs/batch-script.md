@@ -804,7 +804,7 @@ Logic in `pipeline/`, `identify/`, `geometry/`; tests in `harness/`.
     which is not the same as photographs from the rig. **That number arrived on 2026-08-22, and
   it was zero**: the tone path found the card in 0 of the 53 Gate B photographs, which is why
   §4.5 now describes two methods and why the border search added beside it finds 53/53.
-  `docs/GATES.md`'s T6 section carries the measurement and the mechanism. A green T6 is still
+  the gates corpus's `T6` entry carries the measurement and the mechanism. A green T6 is still
   not a detection rate — one rig, one lighting state, one day, and the regression case is a
   drawing built from the measured ring values rather than a photograph; `docs/DEBTS.md`
   records what that leaves.

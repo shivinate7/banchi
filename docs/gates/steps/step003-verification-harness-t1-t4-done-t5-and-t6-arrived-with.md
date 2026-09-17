@@ -1,0 +1,1 @@
+3. ~~Verification harness (T1–T4)~~ — done; T5 and T6 arrived with step 4.
