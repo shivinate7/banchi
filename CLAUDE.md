@@ -106,7 +106,8 @@ make demo-freshness # whether the bundle matches its recording. No gate: CI rebu
                     #   an authenticated fetch and capture are refused BY NAME. No API key
                     #   reaches the build; only `VITE_`-prefixed vars are inlined.
 make check          # harness + docs-audit + claim-stale + revert-guard +
-                    #   port-agreement + set-hint-agreement + screen-freshness +
+                    #   port-agreement + set-hint-agreement + readiness-agreement +
+                    #   screen-freshness +
                     #   screen-freshness-selftest + sigil-check + ignore-check +
                     #   lint + vale + typecheck + audit-self-test +
                     #   githooks-selftest + merge-selftest + revert-selftest +

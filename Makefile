@@ -4,7 +4,7 @@
 # the project would be built on top of — `make check` green means every check ran.
 
 .DEFAULT_GOAL := help
-.PHONY: help status map explain harness check cid-selftest cid-audit ignore-check docs-audit vale audit-self-test verdict-selftest githooks-selftest merge merge-selftest revert-guard revert-selftest claim-ids claim-stale claim-selftest decisions-selftest debts-selftest gates-selftest port-agreement set-hint-agreement screen-freshness screen-freshness-selftest sigil-check suite-lock-selftest icloud-sweep audit-history dev server screenshot design-check design-check-quiet lint typecheck venv launch-config worktree-setup hooks up down launch-agent demo demo-photos demo-seed demo-record demo-static demo-preview demo-freshness catalog-refresh catalog-index catalog-index-selftest catalog-mirror
+.PHONY: help status map explain harness check cid-selftest cid-audit ignore-check docs-audit vale audit-self-test verdict-selftest githooks-selftest merge merge-selftest revert-guard revert-selftest claim-ids claim-stale claim-selftest decisions-selftest debts-selftest gates-selftest port-agreement set-hint-agreement readiness-agreement screen-freshness screen-freshness-selftest sigil-check suite-lock-selftest icloud-sweep audit-history dev server screenshot design-check design-check-quiet lint typecheck venv launch-config worktree-setup hooks up down launch-agent demo demo-photos demo-seed demo-record demo-static demo-preview demo-freshness catalog-refresh catalog-index catalog-index-selftest catalog-mirror
 
 # Prefer the venv if it exists, so `make harness` works without anyone remembering to
 # activate anything. Falls back to system python3, which still runs T2-T5 — T1 needs the
@@ -109,6 +109,7 @@ help:
 	@echo "  make sync-selftest  the primary checkout's self-sync, proved by violating it."
 	@echo "  make port-agreement  server/ports.py and app/devPort.ts answer the same numbers."
 	@echo "  make set-hint-agreement  the capture screen and the export fetch resolve a set hint alike."
+	@echo "  make readiness-agreement  app/src/readiness.ts against pipeline/decisions.py:blocking."
 	@echo "  make screen-freshness  every server write in app/ has a way back. Needs node."
 	@echo "  make screen-freshness-selftest  that guard's own cases, both directions. It sat"
 	@echo "                    on no target at all until 2026-09-12 and was red on main."
@@ -129,7 +130,8 @@ help:
 	@echo "                    own last push is green and janitor's preview. Never a daemon,"
 	@echo "                    never --confirm. Writes .serve/heartbeat/, never gates a commit."
 	@echo "  make check        harness + docs-audit + claim-stale + revert-guard +"
-	@echo "                    port-agreement + set-hint-agreement + screen-freshness +"
+	@echo "                    port-agreement + set-hint-agreement + readiness-agreement +"
+	@echo "                    screen-freshness +"
 	@echo "                    screen-freshness-selftest + sigil-check + ignore-check +"
 	@echo "                    lint + vale + typecheck + audit-self-test +"
 	@echo "                    githooks-selftest + merge-selftest + revert-selftest +"
@@ -433,6 +435,7 @@ check:
 	@$(MAKE) --no-print-directory revert-guard
 	@$(MAKE) --no-print-directory port-agreement
 	@$(MAKE) --no-print-directory set-hint-agreement
+	@$(MAKE) --no-print-directory readiness-agreement
 	@$(MAKE) --no-print-directory screen-freshness
 	@$(MAKE) --no-print-directory screen-freshness-selftest
 	@$(MAKE) --no-print-directory sigil-check
@@ -507,6 +510,7 @@ ci-check:
 	@$(MAKE) --no-print-directory verdict-selftest
 	@$(MAKE) --no-print-directory port-agreement
 	@$(MAKE) --no-print-directory set-hint-agreement
+	@$(MAKE) --no-print-directory readiness-agreement
 	@$(MAKE) --no-print-directory screen-freshness
 	@$(MAKE) --no-print-directory screen-freshness-selftest
 	@$(MAKE) --no-print-directory sigil-check
@@ -712,6 +716,9 @@ port-agreement:
 # port-agreement's reason: the git hook runs a bare python3.
 set-hint-agreement:
 	@python3 scripts/set-hint-agreement.py
+
+readiness-agreement:
+	@python3 scripts/readiness-agreement.py
 
 # Every server WRITE in app/src has a way back — a re-read, an invalidation signal, or a
 # reason in the code why none is owed. IN `check` AND NEVER IN THE GIT HOOK, and the reason is

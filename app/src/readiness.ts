@@ -16,7 +16,7 @@ import type { DecisionsDocument, PricingSku } from './types'
  * is still the one that is right. This header claimed an `emit readiness` docs-audit row and
  * a `make readiness-agreement` target until 2026-09-02, and neither existed until now.
  *
- * SO THIS FILE IS SHAPED TO BE AUDITED, even though nothing does yet. `OWED_REASONS` is a
+ * SO THIS FILE IS SHAPED TO BE AUDITED, AND IT IS READ NOW. `OWED_REASONS` is a
  * flat literal a parser can read, every reason is constructed by `owed` below, and nothing
  * else in the app spells one of these strings.
  *
