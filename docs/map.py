@@ -3267,6 +3267,28 @@ COMPONENTS = [
                         "directory is this checkout's own `captures/`, which in a worktree is "
                         "correctly empty and says so rather than reporting a clean zero.",
             },
+            "serve-scope.py": {
+                "does": "does this branch reach what `make serve-selftest` reads? THE ONLY "
+                        "PATH GATE IN THIS REPO. `classify` exits 0 to run and 3 to skip, and "
+                        "the `serve-selftest` recipe is the caller. SCOPE is derived from the "
+                        "self-test's own `CARRY` — the literal list of what it copies into "
+                        "its throwaway tree — and three entries beyond it each carry a "
+                        "`beyond_carry` sentence. It imports the globbing and the recipe "
+                        "narrowing from `browser-scope.py` rather than copying them. "
+                        "`PKMNSCAN_SERVE_SCOPE=off` runs the test regardless.",
+                "governed_by": ["D18", "D138", "D141"],
+                "note": "THE OWNER RULED THIS ONE IN AND PATH GATING IN GENERAL OUT, "
+                        "2026-09-17. `serve-selftest` is 70.1s of `make check`'s 187.5 — 37% "
+                        "— and it copies the checkout with a STUB `app/`, so no screen change "
+                        "can reach it. Nine targets in `check` cost under a tenth of a second "
+                        "each, so a scope list per target would cost more to maintain than it "
+                        "saves, and every path gate is another place a green can be believed "
+                        "over nothing. A SECOND gated target needs the owner's word again. "
+                        "IT FAILS OPEN IN EVERY DIRECTION: no merge-base, an unreadable diff "
+                        "and an EMPTY diff all answer RUN, out loud. `app/**` is absent on "
+                        "purpose and the file says so — the day `CARRY` gains `app`, the "
+                        "`serve scope` audit row fails until this list follows.",
+            },
             "orient.py": {
                 "does": "`make orient <file.tsx>` — every component in a .tsx file, its line "
                         "span, which component draws it, and the expression that decides "

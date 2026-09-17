@@ -46,6 +46,18 @@ make worktree-setup # in a fresh worktree, FIRST: venv, T1's cache, this checkou
                     #   Browser-pane port (D43).
 make status         # where you are: next step, T1 score, branch.
 make map            # docs/map.py RENDERED (D80). ARGS=<package|path|D<n>|--stale>.
+make serve-scope    # what `make serve-selftest` reads, and whether this branch touches it.
+                    #   ARGS=list, or ARGS="classify --base <rev>". Derived from the
+                    #   self-test's own CARRY, reconciled by `make docs-audit`'s `serve scope`
+                    #   row BOTH WAYS. Fails open: no merge-base, an unreadable diff and an
+                    #   EMPTY diff all run the test.
+                    #   `make serve-selftest` IS THE ONLY PATH-GATED TARGET IN THIS REPO
+                    #   (owner's ruling, 2026-09-17). It is 70.1s of `make check`'s 187.5 and
+                    #   copies the checkout with a STUB app/, so no screen change can reach
+                    #   it. Nine targets in `check` cost under 0.1s each, so a scope list per
+                    #   target would cost more than it saves. A SECOND gated target needs the
+                    #   owner's word again — this recipe is not a pattern to copy.
+                    #   `PKMNSCAN_SERVE_SCOPE=off` runs it regardless, printed in every skip.
 make orient         # ARGS=<file.tsx> [--name <C>]: every component, its line span, which
                     #   component DRAWS it, and the expression that decides whether it is
                     #   drawn. A renderer — writes nothing, gates nothing, derived every run.
