@@ -16770,8 +16770,21 @@ def check_pricing_clear(checks: Checks) -> None:
     with isolated_home():
         # A FIXTURE SHAPED LIKE THE OWNER'S FILE: old typed prices, fresh ones, a hold, an
         # `unknown`-channel seed, and one price carrying no date at all.
-        old = "2026-09-07T06:50:31.891+00:00"
-        new = "2026-09-12T03:42:00.000+00:00"
+        #
+        # BOTH STAMPS ARE RELATIVE TO THE MOMENT THE TEST RUNS, AND THAT IS THE FIX FOR A
+        # DEFECT THIS FILE ONCE HAD. Written 2026-09-12 as the two literal absolute stamps
+        # `"2026-09-07T06:50:31.891+00:00"` and `"2026-09-12T03:42:00.000+00:00"` — the
+        # owner's own real measurement that day, 269 of 407 typed prices five days stale —
+        # the second one meant "answered today" only on the day it was written. `older_than_days`
+        # compares against `master.now()`, which never stops moving, so by 2026-09-17 the
+        # "answered today" seed had drifted to five days old itself and the `older_than_days: 3`
+        # case below swept it up with the two genuinely old ones. `old` is five days back,
+        # matching the owner's own five-day measurement; `new` is six hours back — inside the
+        # three-day window on every future day, and never zero so it cannot straddle midnight
+        # in any timezone the suite runs in.
+        _now = datetime.now(timezone.utc)
+        old = (_now - timedelta(days=5)).isoformat(timespec="milliseconds")
+        new = (_now - timedelta(hours=6)).isoformat(timespec="milliseconds")
         book = corpus.Corpus()
         book.answers = {
             "1000": corpus.Answer(value="4.50", at=old),
