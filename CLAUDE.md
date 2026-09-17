@@ -787,6 +787,7 @@ D208 Pricing states its verdict once, and the worklist discloses progressively
 D209 The buyer list leads with Ready to Ship, and a re-sort is a press
 D210 `pkmnscan rescue` is reached from a press, and its report is never shown verbatim
 D211 The Rig panel folds once the setup is already known, and stays open until it is
+D212 Every copy is fungible, so no order claims one, and the write is the only refusal left
 ```
 
 D116-D118: D117 exists and slots between them — a third branch's number, resolved on merge.

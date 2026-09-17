@@ -1,4 +1,4 @@
-## D-no-order-claims-a-copy — Every copy is fungible, so no order claims one, and the write is the only refusal left
+## D212 — Every copy is fungible, so no order claims one, and the write is the only refusal left
 
 **The owner, 2026-09-16, on why two open orders for one SKU should both be offered it.** Every card is fungible. Nothing should claim one or take priority over another order. The owner had already agreed to this for the order walk. A person sees every copy of a card and is free to pick any one. Mid-review, the owner widened the ruling to the walk itself, asking why it showed only one instance of a card the store held many of. Landed in `10d5e6fc`, alongside two unrelated fixes to the same screen. This entry covers only the claim removal.
 
