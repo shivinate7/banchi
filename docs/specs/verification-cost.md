@@ -11,22 +11,38 @@ Every figure below was taken on this Mac, in the worktree
 
 ## 1. The headline, first
 
-**The suite's wall clock is not the expense. Its OUTPUT is.**
+**CORRECTED 2026-09-17, after the first version of this document was wrong.**
 
-A full local verification — `make check` plus `make design-check` — costs **305 seconds**.
-The agent rounds that prompted this complaint cost **900–1,850 seconds** each. Even if every
-round ran everything once, verification is at most **17–34% of the wall clock**, and the
-Stop hook already runs the harness silently on success.
+The first draft's headline was that a green `make check` costs about 213,000 tokens of
+context, 40–68% of an agent round. **That is false, and it was never measured — it was
+inferred from a byte count.** Measured afterwards: the Bash tool does not put a large output
+into context at all. It persists it to a file and shows a **2 KB preview**. Probed directly:
+a 51.8 KB output persisted, a 2.7 MB output persisted. `make check`'s 853,877 bytes and
+`make harness`'s 577,405 bytes are far above that line, so **neither has ever entered an
+agent's context whole.** The token saving claimed for quiet output does not exist.
 
-`make check` prints **853,877 bytes** on a PASSING run. At four bytes to the token that is
-about **213,000 tokens**. The rounds in question spent 313,000–546,000 tokens each. **One
-agent reading one green `make check` accounts for 40–68% of a round's entire token budget.**
-`make harness` alone is 577,405 bytes (~144,000 tokens) and prints 1,187 `ok` lines when
-nothing is wrong. The working agreement tells every agent to run it and *show the output*.
+**What is true about the output, and it is a smaller and different problem.** The preview is
+the **first** 2 KB, and on a green run the first 2 KB is the header — `PASS T1`, `PASS T2`,
+and the start of T2's field list. The verdict, `all 9 passed`, is the LAST line, and an agent
+never sees it. To learn whether the run passed it must spend another turn: a `tail`, a `grep`,
+or a read of the persisted file. **That is the real cost of verbose output here — extra turns
+to find the answer, not tokens to read the noise.** It is worth fixing, and it is worth much
+less than the first draft claimed.
 
-So the tiering question as posed — which checks to stop running — is aimed at the smaller
-half of the cost. The larger half is that our checks are verbose on success, and that
-orchestration lost whole rounds to briefs that were wrong about the code.
+**So the ranking of costs, corrected:**
+
+1. **Rework rounds.** Three rounds lost to orchestrator error (§7), against a total evening of
+   a handful of rounds. Measured as rounds, this is the largest item by a distance.
+2. **Wall clock.** `make check` plus `make design-check` is **305 seconds** against rounds of
+   **900–1,850 seconds** — at most **17–34%**, and only if a round runs everything once. The
+   Stop hook already runs the harness silently and prints only 30 lines on failure.
+3. **Orientation.** `app/src/Orders.tsx` is 4,605 lines, roughly 45,000 tokens to read whole,
+   paid by every agent that touches `#/orders` and paid again on every retry. This is the
+   largest measured TOKEN item that survives the correction.
+4. **Turns spent finding a verdict in a persisted log.** Real, small, and cheap to fix.
+
+The tiering question as posed — which checks to stop running — is aimed at item 2, the middle
+of the list. Items 1 and 3 are larger and neither is a test.
 
 ---
 
@@ -298,19 +314,22 @@ larger than, the entire verification bill for the evening.
 
 ## 8. Recommendation
 
-Adopt four things, none of which reduces coverage:
+Adopt four things, none of which reduces coverage. **Reordered after the §1 correction** —
+the item that was first is now last, because its saving was the one that did not survive
+measurement.
 
-1. **Quiet-on-success output for `make harness` and `make check`.** A `--quiet` mode printing
-   the per-test PASS lines and the totals, with the full detail on failure — the shape
-   `stop-gate.sh` and `mutate-guards` already use. This is the single largest saving in the
-   document: **roughly 213,000 tokens per green `make check` an agent reads**, 40–68% of a
-   round. Amend the working agreement's "show the output" to mean the summary.
+1. **The three brief-writing practices** in §7, and a generated component index for
+   `app/src/Orders.tsx` (§6E). Items 1 and 3 of the corrected cost ranking. Largest saving in
+   the document, and neither is a test.
 2. **A `map-fix` generator** — deriving `governed_by` from `cited_decisions()`, gating
    nothing, per D18 (§6C).
 3. **Extend the mutation corpus** to new assertions, with the corpus entry required in the same
-   commit as the assertion (§6D).
-4. **The three brief-writing practices** in §7, and a generated component index for
-   `app/src/Orders.tsx` (§6E).
+   commit as the assertion (§6D). The saving is agent turns, which the correction did not touch.
+4. **Put the verdict where a 2 KB preview can see it.** Not a quiet mode — the tokens were
+   never spent. The narrow fix is that `make harness` and `make check` print their verdict
+   FIRST as well as last, or that the working agreement tells an agent to run them with the
+   output redirected and read the tail, which costs one turn instead of two. Small, cheap,
+   and worth what it is worth and no more.
 
 Reject the tiering as posed (§6A) and the per-spec local filter (§6B). One honest tiering
 candidate remains and the owner should rule on it separately: **`serve-selftest`, 70.12 s,
