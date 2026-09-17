@@ -233,6 +233,13 @@
 .orders-earlier[open] > summary { margin-bottom: var(--bn-2); }
 
 /* ---- a buyer's detail: the per-order chips and the merged walk ------------------ */
+/* `.bn-panel` carries NO padding of its own (kit.css) — every user supplies `.bn-panel-pad`,
+   `.bn-panel-body`, or its own rule. `.orders-buyer-detail` supplied none, so the buyer's name
+   sat flush against the panel's corner (the owner's own report, 2026-09-17). `.orders-order`,
+   the sibling panel this same screen already draws per order, is `padding: var(--bn-5)` — 24px —
+   falling to `--bn-4` (16px) at the same narrow breakpoint. This panel now matches it exactly
+   rather than inventing its own figure. */
+.orders-buyer-detail { padding: var(--bn-5); }
 .orders-buyer-detail-head { display: flex; flex-direction: column; gap: var(--bn-2); margin-bottom: var(--bn-3); }
 .orders-buyer-detail-name { font-family: var(--bn-font-display); font-size: var(--bn-fs-xl); font-weight: 800; }
 .orders-buyer-chips { display: flex; flex-wrap: wrap; gap: var(--bn-2); }
@@ -539,10 +546,44 @@
 }
 .orders-plan-count { font-size: var(--bn-fs-sm); color: var(--bn-ink-2); font-variant-numeric: tabular-nums; }
 .orders-plan-sect { font-size: var(--bn-fs-xs); color: var(--bn-ink-3); font-variant-numeric: tabular-nums; }
+/* ONE CARD PER ROW, TRUNCATED RATHER THAN WRAPPED — a real name on the owner's own store runs
+   well past this tile's width, and wrapping it would set the stop's height by whichever card
+   drew the longest name rather than by how many cards are in it. `title` carries the whole
+   string, the same rule `.orders-line-name` already applies to the line header above. */
+.orders-plan-cards { display: flex; flex-direction: column; gap: 2px; list-style: none; margin-top: 2px; }
+.orders-plan-card {
+  display: flex;
+  align-items: baseline;
+  gap: 4px;
+  font-size: var(--bn-fs-xs);
+  color: var(--bn-ink-2);
+  min-width: 0;
+}
+.orders-plan-card b {
+  font-variant-numeric: tabular-nums;
+  color: var(--bn-ink);
+  flex: none;
+}
+.orders-plan-card-name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  min-width: 0;
+}
 
 /* ---- the copy map: which drawers hold THIS card, densest first ------------------------- */
 .orders-map { display: flex; flex-direction: column; gap: var(--bn-2); }
-.orders-map-lede { display: flex; align-items: flex-start; gap: 6px; font-size: var(--bn-fs-sm); color: var(--bn-ink-3); }
+/* MIN-HEIGHT RESERVES THE TALLEST STATE (D118). The sentence itself changes on a pull — "Pull 2"
+   drops to "Pull 1", then to "All 2 pulled" — and the element stays mounted throughout rather
+   than unmounting when satisfied, so the box rows beneath it never move under the write. */
+.orders-map-lede {
+  display: flex;
+  align-items: flex-start;
+  gap: 6px;
+  font-size: var(--bn-fs-sm);
+  color: var(--bn-ink-3);
+  min-height: calc(var(--bn-fs-sm) * 1.4);
+}
 .orders-map-lede .bn-icon { color: var(--bn-ink-4); flex: none; margin-top: 2px; }
 /* THE APOLOGY THAT USED TO SIT HERE IS GONE WITH THE DEFECT IT DESCRIBED. `.orders-map-note` said
    "the store holds 3 copies — this is the one this order was offered", because the map could only
@@ -852,6 +893,13 @@
 .orders-walk-next-place { font-family: var(--bn-font-mono); font-size: var(--bn-fs-base); font-weight: 600; color: var(--bn-ink); }
 .orders-walk-next-card { font-size: var(--bn-fs-sm); color: var(--bn-ink-2); }
 
+/* ONE SENTENCE PER CARD, ABOVE EVERY BOX GROUP — `WalkCards`. `.orders-map-lede` is reused
+   VERBATIM (never a second stylesheet rule) because `pullLedeOf` is the one function producing
+   this text everywhere it renders; a list of them here needs only its own spacing and, where two
+   of a buyer's orders share a card, a mono order tag. */
+.orders-walk-cards { display: flex; flex-direction: column; gap: var(--bn-2); list-style: none; margin-bottom: var(--bn-3); }
+.orders-walk-cards-order { font-family: var(--bn-font-mono); font-size: var(--bn-fs-xs); color: var(--bn-ink-3); }
+
 .orders-walk-group { padding: 0; overflow: visible; animation: bn-page-in var(--bn-t-slow) var(--bn-ease-out) backwards; }
 .orders-walk-group-head { display: flex; align-items: baseline; gap: var(--bn-2); padding: var(--bn-3) var(--bn-4); border-bottom: 1px solid var(--bn-line); flex-wrap: wrap; }
 .orders-walk-group-title { font-family: var(--bn-font-display); font-size: var(--bn-fs-lg); font-weight: 700; letter-spacing: var(--bn-tracking-tight); color: var(--bn-ink); }
@@ -968,6 +1016,7 @@
   .orders-acc > .orders-index-row { padding: var(--bn-3); }
   .orders-acc-body { padding: var(--bn-3); }
   .orders-order { padding: var(--bn-4); }
+  .orders-buyer-detail { padding: var(--bn-4); }
   .orders-line-top { grid-template-columns: minmax(0, 1fr) auto; }
   .orders-line-top .orders-tag { grid-column: 2; justify-self: end; }
   .orders-plan { padding: var(--bn-3); }
