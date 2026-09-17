@@ -4188,12 +4188,14 @@ def check_shipping_columns(report: Report) -> None:
 # `CODE_AGREEMENT_ARM_COUNT` is `HARD_RULE_FLOOR`'s own precedent: a NUMBER pinned in code,
 # never a sentence in a comment, so `--self-test` can assert against it rather than a
 # person re-reading this section to count how many mutation arms it is supposed to have.
-# The four rows below are `check_column_count`, `check_threshold_agreement`,
-# `check_dist_path_agreement` and `check_import_filename_agreement`; each has exactly one
-# self-test arm that mutates the subject via a `.bak`-protected temporary edit and asserts
-# the row goes red. Lowering this without removing an arm is a lie the constant makes
-# visible in the diff; raising it with no matching arm added fails `--self-test` outright.
-CODE_AGREEMENT_ARM_COUNT = 4
+# The first four rows are `check_column_count`, `check_threshold_agreement`,
+# `check_dist_path_agreement` and `check_import_filename_agreement`, one arm each. Two more
+# arms belong to `check_duplicated_measurements` — one per group in its own table — and
+# were added the day that row landed. Each arm mutates its subject via a `.bak`-protected
+# temporary edit or a throwaway fixture and asserts the row goes red. Lowering this without
+# removing an arm is a lie the constant makes visible in the diff; raising it with no
+# matching arm added fails `--self-test` outright.
+CODE_AGREEMENT_ARM_COUNT = 6
 
 # Path constants, each patchable in isolation by --self-test (the same shape used
 # above for `MAP`), so a mutation arm can point one row at a throwaway fixture
@@ -4497,6 +4499,133 @@ def check_import_filename_agreement(report: Report) -> None:
         "server/shipping_routes.py:IMPORT_FILENAME against the Content-Disposition header",
         scanned=1,
     )
+
+# ------------------------------------------------------------ duplicated measurements
+#
+# The four rows above each watch ONE relationship between two spellings of one fact. This
+# row watches a different shape: a single MEASUREMENT — taken once, at one moment, by a
+# session that ran a real command against a real tree — copied by hand into several files
+# because each file's own argument needed the number beside it. Nothing re-derives the
+# figure; nothing here claims the number is still true of the machine. What this row proves
+# is narrower and mechanical: every copy still reads the same as every other copy. A
+# session editing one copy — correcting a typo, updating after a re-run, or wordsmithing a
+# sentence around it — and not the others is exactly the drift `column count` and
+# `threshold agreement` exist for one level up; this is the same defect over a hand-copied
+# NUMBER rather than a hand-copied CONSTANT.
+#
+# ONE ROW OVER A DECLARED TABLE, NOT TWO BESPOKE ROWS. The two measurements below —
+# `store/db.py`'s `cid -> (box, idx)` index-probe latency and `pipeline/selection.py`'s
+# store-size snapshot — have nothing to do with each other; a bespoke row per measurement
+# would read slightly clearer for exactly two entries. But `CODE_AGREEMENT_ARM_COUNT`'s own
+# comment already argues the opposite for the four rows above it: a NUMBER pinned in code
+# is what makes `--self-test` verifiable without a person re-counting prose. A table makes
+# an eleventh hand-copied figure a five-line addition instead of a fifth copy-pasted
+# function, and it is the shape `_SHIPPING_COLUMN_CLAIMS` already uses one section up for
+# exactly this reason — several sites, one set of rules, one loop.
+_DuplicatedMeasurementSite = Tuple[str, "re.Pattern[str]"]
+
+_CID_LOOKUP_LATENCY_SITES: Tuple[_DuplicatedMeasurementSite, ...] = (
+    ("store/db.py", re.compile(r"measured at ([0-9.]+) us")),
+    ("store/master.py", re.compile(r"measured at ([0-9.]+) us")),
+    ("docs/specs/stable-card-id.md", re.compile(r"lookup: ([0-9.]+) us")),
+)
+
+_STORE_SIZE_SNAPSHOT_SITES: Tuple[_DuplicatedMeasurementSite, ...] = (
+    (
+        "pipeline/selection.py",
+        re.compile(r"store holds ([0-9,]+) photographs and\n# its largest drawer (\d+)"),
+    ),
+    (
+        "docs/map.py",
+        re.compile(
+            r"hashes (\d+) \"\n\s*\"photographs rather than the store's ([0-9,]+)"
+        ),
+    ),
+    (
+        "app/src/deviceMemory.ts",
+        re.compile(
+            r"box 3 \((\d+) cards\), and roughly a quarter of a full store re-read "
+            r"\(([0-9,]+)\s*\n\s*\*\s*cards"
+        ),
+    ),
+)
+
+# Each site's tuple is the raw regex groups in THAT SITE'S OWN WORD ORDER — the store-size
+# sentences name the drawer first in two files and the total first in the third, because
+# each is making its own argument. `_normalized_measurement` below is what makes the three
+# comparable: it sorts the tuple's TWO NUMBERS onto one axis (max, min) rather than reading
+# "group 1" as if every site put the same number there. The cid figure has only one group,
+# so sorting a 1-tuple is a no-op.
+def _normalized_measurement(raw: Tuple[str, ...]) -> Tuple[float, ...]:
+    values = tuple(float(v.replace(",", "")) for v in raw)
+    return tuple(sorted(values, reverse=True))
+
+
+def check_duplicated_measurements(report: Report) -> None:
+    """A measurement taken once and copied by hand into several files, checked for
+    agreement among its own copies — never against the machine that produced it.
+
+    WHY THIS ROW EXISTS AND WHAT IT DOES NOT PROVE. `store/db.py`'s comment over
+    `_CID_INDEXES` says the `cid -> (box, idx)` lookup was measured at 4.0 us; the same
+    sentence is copied into `store/master.py` and into `docs/specs/stable-card-id.md`'s own
+    transcript. `pipeline/selection.py`'s ARG_MAX comment says the store holds 2,535
+    photographs with an 887-card largest drawer; the same pair is copied into
+    `docs/map.py`'s `cmd_identify.py` entry and into `app/src/deviceMemory.ts`'s spend-notice
+    derivation. Neither figure can be RE-MEASURED by a reader with no microbenchmark to run
+    and no store to open — this row proves only that the copies have not drifted apart from
+    EACH OTHER, which is the half a mechanical check can actually stand behind. Read
+    `docs/DEBTS.md` before treating a clean run here as evidence either number is still true
+    of the owner's live store or their current machine: it is not, and this row does not
+    claim it is.
+
+    REFUSES TO GO QUIET: a site whose pattern no longer matches — reworded, or the sentence
+    removed — is reported by name rather than skipped, on `column count`'s own rule.
+    """
+    findings: List[Finding] = []
+    scanned = 0
+    for label, sites in (
+        ("cid lookup latency", _CID_LOOKUP_LATENCY_SITES),
+        ("store size snapshot", _STORE_SIZE_SNAPSHOT_SITES),
+    ):
+        readings: Dict[str, Tuple[str, ...]] = {}
+        for rel_path, pattern in sites:
+            scanned += 1
+            text = read(ROOT / rel_path)
+            match = pattern.search(text)
+            if match is None:
+                findings.append(Finding(
+                    rel_path,
+                    "[{0}] no sentence here matches the pattern watching this figure. It "
+                    "was reworded past its own check, or the sentence was removed — either "
+                    "way the copy is unwatched now. Re-point the pattern or drop the site."
+                    .format(label),
+                ))
+                continue
+            readings[rel_path] = match.groups()
+
+        if len(readings) < 2:
+            continue
+        normalized = {path: _normalized_measurement(raw) for path, raw in readings.items()}
+        first_path = next(iter(normalized))
+        first_value = normalized[first_path]
+        for path, value in normalized.items():
+            if value != first_value:
+                findings.append(Finding(
+                    path,
+                    "[{0}] reads {1} here and {2} at `{3}` — these are meant to be one "
+                    "measurement copied to several places, and they no longer agree."
+                    .format(label, readings[path], readings[first_path], first_path),
+                ))
+
+    report.add(
+        "duplicated measurements",
+        MECHANICAL,
+        findings,
+        "cid lookup latency (3 sites) and store size snapshot (3 sites), copies against "
+        "each other only",
+        scanned=scanned,
+    )
+
 
 
 
@@ -17315,15 +17444,15 @@ def self_test() -> int:
 
     # ------------------------------------------------------- code-side agreements
     #
-    # Four arms, one per row, each patching that row's own path constant to a throwaway
-    # fixture — the same save/patch/restore-in-`finally` shape used above for `MAP` — and
-    # calling the ROW ITSELF, never the bare comparison logic, on `unscoped walk`'s own
-    # argument: a fixture-only test proves the matcher works and nothing about whether the
-    # row still calls it. `code_agreement_arms` counts how many of the four actually ran,
-    # and the last line of this section asserts it against `CODE_AGREEMENT_ARM_COUNT` —
-    # raising the constant with no matching arm added, or deleting an arm without lowering
-    # it, both fail `--self-test`.
-    print("\ncode-side agreements: four rows, each proven red on its own fixture")
+    # Six arms, each patching its row's own path constant (or, for the table-driven row,
+    # one group's site tuple) to a throwaway fixture — the same save/patch/restore-in-
+    # `finally` shape used above for `MAP` — and calling the ROW ITSELF, never the bare
+    # comparison logic, on `unscoped walk`'s own argument: a fixture-only test proves the
+    # matcher works and nothing about whether the row still calls it. `code_agreement_arms`
+    # counts how many actually ran, and the last line of this section asserts it against
+    # `CODE_AGREEMENT_ARM_COUNT` — raising the constant with no matching arm added, or
+    # deleting an arm without lowering it, both fail `--self-test`.
+    print("\ncode-side agreements: six arms across five rows, each proven red on its own fixture")
     code_agreement_arms = 0
 
     with tempfile.TemporaryDirectory() as tmp:
@@ -17464,6 +17593,75 @@ def self_test() -> int:
             str(by_label["import filename agreement"]),
         )
         code_agreement_arms += 1
+    with tempfile.TemporaryDirectory() as tmp:
+        db_fixture = Path(tmp) / "db.py"
+        db_fixture.write_text("# measured at 4.0 us, EXPLAIN reporting SEARCH\n", encoding="utf-8")
+        master_fixture = Path(tmp) / "master.py"
+        master_fixture.write_text("# measured at 9.9 us, EXPLAIN says SEARCH\n", encoding="utf-8")
+        spec_fixture = Path(tmp) / "stable-card-id.md"
+        spec_fixture.write_text(
+            "cid -> (box, idx) lookup: 4.0 us, EXPLAIN says SEARCH\n", encoding="utf-8"
+        )
+        _saved_sites = globals()["_CID_LOOKUP_LATENCY_SITES"]
+        try:
+            globals()["_CID_LOOKUP_LATENCY_SITES"] = (
+                (str(db_fixture), _saved_sites[0][1]),
+                (str(master_fixture), _saved_sites[1][1]),
+                (str(spec_fixture), _saved_sites[2][1]),
+            )
+            report = Report()
+            check_duplicated_measurements(report)
+        finally:
+            globals()["_CID_LOOKUP_LATENCY_SITES"] = _saved_sites
+        by_label = {row.check: row.findings for row in report.checks}
+        ok(
+            any("4.0" in f.message and "9.9" in f.message
+                for f in by_label["duplicated measurements"]),
+            "duplicated measurements: one copy of the cid-lookup latency reading 9.9 us "
+            "against two copies reading 4.0 us fails the row, naming both",
+            str(by_label["duplicated measurements"]),
+        )
+        code_agreement_arms += 1
+
+    with tempfile.TemporaryDirectory() as tmp:
+        sel_fixture = Path(tmp) / "selection.py"
+        sel_fixture.write_text(
+            "# store holds 2,535 photographs and\n"
+            "# its largest drawer 887, order of magnitude\n",
+            encoding="utf-8",
+        )
+        map_fixture = Path(tmp) / "map.py"
+        map_fixture.write_text(
+            "hashes 887 \"\n"
+            "    \"photographs rather than the store's 2,535; and\n",
+            encoding="utf-8",
+        )
+        device_fixture = Path(tmp) / "deviceMemory.ts"
+        device_fixture.write_text(
+            "box 3 (900 cards), and roughly a quarter of a full store re-read (2,535\n"
+            " * cards, about $3.35).\n",
+            encoding="utf-8",
+        )
+        _saved_size_sites = globals()["_STORE_SIZE_SNAPSHOT_SITES"]
+        try:
+            globals()["_STORE_SIZE_SNAPSHOT_SITES"] = (
+                (str(sel_fixture), _saved_size_sites[0][1]),
+                (str(map_fixture), _saved_size_sites[1][1]),
+                (str(device_fixture), _saved_size_sites[2][1]),
+            )
+            report = Report()
+            check_duplicated_measurements(report)
+        finally:
+            globals()["_STORE_SIZE_SNAPSHOT_SITES"] = _saved_size_sites
+        by_label = {row.check: row.findings for row in report.checks}
+        ok(
+            any("900" in f.message and "887" in f.message
+                for f in by_label["duplicated measurements"]),
+            "duplicated measurements: deviceMemory.ts's drawer figure moved to 900 while "
+            "selection.py and map.py still say 887 fails the row, naming both",
+            str(by_label["duplicated measurements"]),
+        )
+        code_agreement_arms += 1
 
     ok(
         code_agreement_arms == CODE_AGREEMENT_ARM_COUNT,
@@ -17477,8 +17675,9 @@ def self_test() -> int:
     check_threshold_agreement(report)
     check_dist_path_agreement(report)
     check_import_filename_agreement(report)
+    check_duplicated_measurements(report)
     by_label = {row.check: row.findings for row in report.checks}
-    for label in ("column count", "threshold agreement", "dist path agreement", "import filename agreement"):
+    for label in ("column count", "threshold agreement", "dist path agreement", "import filename agreement", "duplicated measurements"):
         ok(not by_label[label], f"the real tree has zero findings on `{label}`", str(by_label[label]))
 
     print("\n" + "=" * 72)
@@ -17538,6 +17737,7 @@ def audit(staged_only: bool) -> Report:
     check_threshold_agreement(report)
     check_dist_path_agreement(report)
     check_import_filename_agreement(report)
+    check_duplicated_measurements(report)
     check_router_certainty(report)
     check_work_item_standing(report)
     check_not_built_endpoints(report)
