@@ -2962,6 +2962,19 @@ COMPONENTS = [
                         "writes; stdlib only.",
                 "governed_by": ["D16", "D18", "D120", "D149", "D160"],
             },
+            "readiness-agreement.py": {
+                "does": "Reconciles app/src/readiness.ts's second implementation of "
+                        "pipeline/decisions.py:blocking against the Python it re-implements "
+                        "(D54, docs/debts/003). Walks decisions.py with ast, never a regex, "
+                        "and checks FLOOR_CHOICE and FLAT_KEY agree, that OWED_REASONS' "
+                        "length agrees with the count of reasons.append(...) calls inside "
+                        "blocking(), and that every pipeline/decisions.py:<line> citation in "
+                        "readiness.ts resolves to the AST node its own comment claims. "
+                        "--self-test runs its own mutation-tested arms, counted in "
+                        "SELF_TEST_ARM_COUNT. Standalone as shipped; not yet wired into "
+                        "make check.",
+                "governed_by": ["D54", "D149", "D185"],
+            },
             "split-debts.py": {
                 "does": "Performed the split of docs/DEBTS.md into docs/debts/, and proves "
                         "it lost nothing — split-decisions.py's chunk model applied to "

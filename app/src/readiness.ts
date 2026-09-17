@@ -8,11 +8,13 @@ import type { DecisionsDocument, PricingSku } from './types'
  * every commit, so a server-computed answer would lag the keystroke that satisfies it — and
  * the whole value of the line is that it settles the moment you answer. The cost is drift.
  *
- * NOTHING AUDITS THIS TODAY — `docs/DEBTS.md` names it. This header claimed an `emit
- * readiness` docs-audit row and a `make readiness-agreement` target until 2026-09-02, and
- * neither has ever existed. What does exist is the roster on `GET /pipeline/pricing`, which
- * asks the Python that actually refuses, so a chip and this line can disagree and the chip is
- * the one that is right.
+ * `scripts/readiness-agreement.py` READS THIS FILE AGAINST `pipeline/decisions.py`, as of
+ * 2026-09-17 — an AST walk of the Python and a text read of this file's own flat literals,
+ * standalone and not yet wired into `make check`. What it does NOT do: it never asks whether
+ * `emit` would actually refuse — that is still `GET /pipeline/pricing`'s roster, which asks
+ * the Python that actually refuses, so a chip and this line can still disagree and the chip
+ * is still the one that is right. This header claimed an `emit readiness` docs-audit row and
+ * a `make readiness-agreement` target until 2026-09-02, and neither existed until now.
  *
  * SO THIS FILE IS SHAPED TO BE AUDITED, even though nothing does yet. `OWED_REASONS` is a
  * flat literal a parser can read, every reason is constructed by `owed` below, and nothing
@@ -29,7 +31,7 @@ import type { DecisionsDocument, PricingSku } from './types'
  * them, and a client that consulted one would be claiming a refusal Python does not make —
  * which is worse than missing one, because it is a run the operator never presses. The
  * fixture pins the sharpest case: a hand-priced override does NOT satisfy the sub-threshold
- * gate, and `pipeline/decisions.py:332` is where that is decided.
+ * gate, and `pipeline/decisions.py:357` is where that is decided.
  */
 
 /** The literal `pipeline/decisions.py:FLOOR_CHOICE` compares against, with a bare `==` and no
@@ -45,9 +47,10 @@ export const FLAT_KEY = 'flat'
 /** Every reason `emit` can refuse a run for that this screen can see.
  *
  *  EXACTLY TWO, and it agrees with `pipeline/decisions.py:blocking`'s two `reasons.append(...)`
- *  calls today. NOTHING CHECKS THAT, and this comment said it did: it called the count "the
- *  auditable fact" and claimed "the audit row asserts the two vocabularies match in both
- *  directions" until 2026-09-05, while `scripts/docs-audit.py` had never mentioned this file
+ *  calls today. `scripts/readiness-agreement.py` checks the count now, standalone — this
+ *  comment said the count was checked and it was not until 2026-09-05, and it called the
+ *  count "the auditable fact" and claimed "the audit row asserts the two vocabularies match
+ *  in both directions" while `scripts/docs-audit.py` had never mentioned this file
  *  or this constant at all. A third reason in Python without a third here is a refusal this
  *  screen cannot show, and today only a person reading both files would find it. */
 export const OWED_REASONS = ['sub_threshold_unset', 'no_market_data_unanswered'] as const
@@ -77,14 +80,14 @@ export function owed(
 ): Owed[] {
   const out: Owed[] = []
 
-  // RULE 1 — `pipeline/decisions.py:332`. Note what it does NOT consult: `overrides`. Pricing
+  // RULE 1 — `pipeline/decisions.py:357`. Note what it does NOT consult: `overrides`. Pricing
   // all 108 of a box's sub-threshold SKUs by hand still leaves `emit` refusing, which is the
   // measured state of two runs on disk and the reason the strip exists at all.
   if ((doc?.sub_threshold ?? null) === null && subThresholdSkus.length > 0) {
     out.push({ reason: 'sub_threshold_unset', count: subThresholdSkus.length })
   }
 
-  // RULE 2 — `pipeline/decisions.py:325`, the `unanswered` property. THE DOCUMENT'S MAP, NOT
+  // RULE 2 — `pipeline/decisions.py:350`, the `unanswered` property. THE DOCUMENT'S MAP, NOT
   // THE TABLE'S BUCKET: Python counts entries in `no_market_data` whose value is null, so a
   // SKU the operator never answered at all is invisible to it. Reading the bucket instead
   // would report a refusal `emit` does not make — the direction this file must never err in.
