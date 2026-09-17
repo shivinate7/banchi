@@ -921,11 +921,26 @@ type CloseLineHandler = (order: OrderRow, line: ResolvedLine, reason: OrderClose
 
 /* ---- the selection, mirrored in the hash ----------------------------------------------------- */
 
-/** The old, order-shaped link — `#/orders?order=<order key>`. Kept as a READER only
- *  (`D193`): the selection is a BUYER now, so a link naming one order
- *  is resolved through `groupForOrderKey` to whichever group holds it. Never written again. */
+/** THE INBOUND LINK — `#/orders?order=<order key>`, READ HERE AND WRITTEN ELSEWHERE.
+ *
+ *  A caller that knows WHICH ORDER but not WHOSE links with this: `CardLocations`' wanted
+ *  pill is the first, and the shape was anticipated before the link existed — `ResolvedLine`
+ *  carries `order_key` beside `order` for exactly this reason, because the resolver keys on
+ *  the number alone and the store keys on `source:number`. Resolving a buyer here instead
+ *  would make every such caller read the order ledger to build a URL.
+ *
+ *  THE VALUE MUST BE THE STORE KEY — `source:number`, `ResolvedLine.order_key`, never the
+ *  bare number `ResolvedLine.order` holds. `groupForOrderKey` matches on the store key, so a
+ *  bare number resolves to nothing, the effect marks the link handled and returns, and the
+ *  press does NOTHING while looking like a link. A caller with only a number has not got
+ *  what this parameter takes.
+ *
+ *  This screen does not write it: the selection is a BUYER, so what it mirrors back is
+ *  `?buyer=`. Both are read, `?buyer=` first, and a link naming one order is resolved
+ *  through `groupForOrderKey` to whichever group holds it (D193). */
 const ORDER_PARAM = 'order'
-/** The current link — `#/orders?buyer=<group key>` — read and written together. */
+/** THE OUTBOUND LINK — `#/orders?buyer=<group key>`, this screen's own selection, read and
+ *  written together. */
 const BUYER_PARAM = 'buyer'
 
 function hashQuery(): URLSearchParams | null {

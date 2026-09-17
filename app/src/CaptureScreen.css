@@ -1192,6 +1192,11 @@
 @media (max-width: 767px), (hover: none) and (pointer: coarse) {
   .capture-row { min-height: 44px; }
   .capture-open-lg > .capture-row { min-height: 44px; }
+  /* THE FLOOR VIA THE TOKEN, NOT A HAND-ROLLED NUMBER — `--bn-control-h-lg` is 46px under this
+     same media query (`tokens.css`), which clears the 44px thumb floor with margin rather than
+     landing on it exactly. Measured red at the bare row height (25px, missing the bottom probe
+     by 19px) before this. */
+  .capture-rig-summary { min-height: var(--bn-control-h-lg); }
   .capture-opt { min-height: 42px; }
   .capture-cell { min-height: 40px; }
   .capture-block-fix { --btn-h: var(--bn-control-h-sm); padding-inline: var(--bn-4); font-size: var(--bn-fs-md); border-radius: var(--bn-r); }
