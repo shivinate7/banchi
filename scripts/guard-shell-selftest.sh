@@ -758,6 +758,138 @@ allows "a detached HEAD — nothing this clause can name as \"the current branch
 (cd "$tmp/main" && git checkout -q main 2>/dev/null)
 
 echo ""
+echo "  7. a consuming/destructive stash, reproduced"
+
+# --------------------------------------------------- 7a. the incident, performed in the fixture
+#
+# A SECOND, ANONYMOUS ENTRY, LOST TO A BARE POP — the shape the parent CLAUDE.md's mandate
+# names, reproduced rather than merely asserted about: session A pushes an untagged entry,
+# session B (another worktree sharing this same stack) pushes its own, and a bare
+# `git stash pop` — typed by either session, meaning "get MY work back" — hands back B's
+# entry to A, or A's own entry is gone under B's next `pop` before A ever sees it again.
+(
+  cd "$tmp/main" || exit 1
+  printf 'session A change\n' >> work.py
+  git stash push -q
+  printf 'session B change\n' >> work.py
+  git stash push -q
+  # the bare pop a session actually types, expecting to get its OWN work back
+  git stash pop -q
+  grep -q "session B change" work.py && ! grep -q "session A change" work.py
+)
+if [ $? -eq 0 ]; then
+  ok "a bare \`git stash pop\` handed back the WRONG entry — session A's own push is still on the stack, unreachable by anything but luck"
+else
+  bad "the stash incident did not reproduce as described"
+fi
+(cd "$tmp/main" && git stash clear -q 2>/dev/null && git checkout -q -- work.py 2>/dev/null)
+(cd "$tmp/main" && printf 'one\ntwo\nthree\nfour\n' > work.py)
+
+echo ""
+echo "  the guard refuses it"
+
+refuses "a bare \`git stash\` — the same six characters mean \"save\" AND \"restore\"" \
+  "$tmp/main" "git stash"
+refuses "\`git stash -u\`, still no subcommand named" "$tmp/main" "git stash -u"
+refuses "\`git stash pop\`, unconditionally" "$tmp/main" "git stash pop"
+refuses "\`git stash pop\` with an explicit index — pop is refused either way" \
+  "$tmp/main" "git stash pop stash@{0}"
+refuses "\`git stash drop\` with no entry named — defaults to \`stash@{0}\`" \
+  "$tmp/main" "git stash drop"
+refuses "\`git stash clear\` — takes no target, always destroys the whole stack" \
+  "$tmp/main" "git stash clear"
+refuses "an env prefix does not launder it" \
+  "$tmp/main" "PKMNSCAN_MAIN=off git stash pop"
+refuses "buried mid-script behind a \`&&\`" \
+  "$tmp/main" "echo tidy && git stash drop"
+
+judge "$tmp/main" "git stash pop"
+case "$out" in *"PKMNSCAN_STASH=off"*) ok "the refusal prints its escape hatch" ;;
+  *) bad "the refusal does not name PKMNSCAN_STASH=off" ;; esac
+case "$out" in *"per-CLONE"*) ok "the refusal explains the shared-stack hazard" ;;
+  *) bad "the refusal does not explain why the stack is shared" ;; esac
+case "$out" in *"never pop"*) ok "the refusal's remedy never names \`pop\` as the safe form" ;;
+  *) bad "the refusal's own remedy could be read as recommending pop" ;; esac
+
+echo ""
+echo "  what clause 7 must NEVER refuse"
+
+for case in \
+  'git stash push -u -m "a tag"' \
+  'git stash push' \
+  'git stash list' \
+  'git stash show stash@{0}' \
+  'git stash apply stash@{0}' \
+  'git stash apply' \
+  'git stash drop stash@{1}' \
+  'git stash drop deadbeef' \
+  'git stash branch some-branch' \
+; do
+  allows "an identified or non-destructive form: \`$case\`" "$tmp/main" "$case"
+done
+
+echo ""
+echo "  8. a hard-family reset, reproduced"
+
+# --------------------------------------------------- 8a. the incident, performed in the fixture
+(
+  cd "$tmp/main" || exit 1
+  printf 'one\ntwo\nthree\nfour\n' > work.py
+  for i in $(seq 1 100); do printf 'reset would destroy this line %s\n' "$i" >> work.py; done
+  wc -l < work.py | tr -d ' ' > "$tmp/reset-before"
+  git reset -q --hard 2>/dev/null
+  wc -l < work.py | tr -d ' ' > "$tmp/reset-after"
+)
+if [ "$(cat "$tmp/reset-before")" = "104" ] && [ "$(cat "$tmp/reset-after")" = "3" ]; then
+  ok "\`git reset --hard\` destroyed 100 uncommitted lines, silently and without asking"
+else
+  bad "the reset incident did not reproduce: $(cat "$tmp/reset-before") before, $(cat "$tmp/reset-after") after"
+fi
+(cd "$tmp/main" && printf 'one\ntwo\nthree\nfour\nfive\n' > work.py)
+
+echo ""
+echo "  the guard refuses it"
+
+refuses "the bare form" "$tmp/main" "git reset --hard"
+refuses "against an explicit commit" "$tmp/main" "git reset --hard HEAD"
+refuses "\`--merge\`, the same discard" "$tmp/main" "git reset --merge"
+refuses "\`--keep\`, the same discard" "$tmp/main" "git reset --keep"
+refuses "an env prefix does not launder it" "$tmp/main" "PKMNSCAN_MAIN=off git reset --hard"
+refuses "buried mid-script behind a \`&&\`" "$tmp/main" "echo tidy && git reset --hard"
+
+judge "$tmp/main" "git reset --hard"
+case "$out" in *"PKMNSCAN_RESET=off"*) ok "the refusal prints its escape hatch" ;;
+  *) bad "the refusal does not name PKMNSCAN_RESET=off" ;; esac
+case "$out" in *".bak"*) ok "the refusal names the \`.bak\` copy as the way to do it safely" ;;
+  *) bad "the refusal does not name the .bak shape" ;; esac
+case "$out" in *"is modified"*) ok "the refusal names the modified file" ;;
+  *) bad "the refusal does not say which file is modified" ;; esac
+case "$out" in *"reference-transaction"*) \
+  ok "the refusal names the ref hook as the OTHER half, so a reader does not think it is redundant" ;;
+  *) bad "the refusal does not distinguish itself from the ref hook" ;; esac
+
+echo ""
+echo "  what clause 8 must NEVER refuse"
+
+for case in \
+  'git reset' \
+  'git reset --mixed' \
+  'git reset --soft' \
+  'git reset --soft HEAD~0' \
+  'git reset -- work.py' \
+  'git reset HEAD -- work.py' \
+; do
+  if real_command "$tmp/main" "$case"; then
+    allows "soft/mixed or a path-form reset — never destroys the working tree: \`$case\`" \
+      "$tmp/main" "$case"
+  fi
+done
+
+(cd "$tmp/main" && git add work.py && git commit -q -m "clean it up for the clean-tree case")
+allows "\`--hard\` over a genuinely clean tree — nothing to lose" "$tmp/main" "git reset --hard"
+(cd "$tmp/main" && printf 'one\ntwo\nthree\nfour\nfive\n' > work.py)
+
+echo ""
 echo "  the repo's own lines, swept and pinned"
 
 # EVERY `git`, `gh` AND `ln` LINE THIS REPO'S OWN TOOLING TYPES. The sweep that produced this
@@ -803,6 +935,10 @@ allows "tree, inline"     "$WT" "PKMNSCAN_TREE=off cat > $tmp/main/work.py"
 # without the hatch and the test would prove nothing about the hatch itself.
 (cd "$tmp/main" && git checkout -q pr-h-readings-table-local 2>/dev/null)
 allows "push, inline"    "$tmp/main" "PKMNSCAN_PUSH=off git push origin HEAD"
+(cd "$tmp/main" && git checkout -q main 2>/dev/null)
+
+allows "stash, inline"   "$tmp/main" "PKMNSCAN_STASH=off git stash pop"
+allows "reset, inline"   "$tmp/main" "PKMNSCAN_RESET=off git reset --hard"
 
 hatch_env() {   # hatch_env <name> <cwd> <command>
   out="$(printf '%s' "$3" \
@@ -815,6 +951,8 @@ hatch_env PKMNSCAN_GH       "$tmp/main" "gh api repos/o/r -f a=1"
 hatch_env PKMNSCAN_LINK     "$tmp/main" "ln -s /x work.py"
 hatch_env PKMNSCAN_WAIT     "$tmp/main" "until ! pgrep -f x; do sleep 5; done"
 hatch_env PKMNSCAN_PUSH     "$tmp/main" "git push origin HEAD"
+hatch_env PKMNSCAN_STASH    "$tmp/main" "git stash pop"
+hatch_env PKMNSCAN_RESET    "$tmp/main" "git reset --hard"
 (cd "$tmp/main" && git checkout -q main 2>/dev/null)
 
 out="$(CWD="$WT" TARGET="$tmp/main/work.py" python3 -c 'import json,os; print(json.dumps({"cwd":os.environ["CWD"],"tool_input":{"file_path":os.environ["TARGET"]}}))' \
@@ -824,8 +962,8 @@ if [ $? -eq 0 ]; then ok "PKMNSCAN_TREE=off in the environment"; else bad "PKMNS
 # EVERY CLAUSE HAS A HATCH AND EVERY HATCH IS PRINTED. The table is read rather than retyped,
 # so a seventh clause added without one fails here instead of shipping unescapable.
 count="$(python3 "$GUARD" --clauses | wc -l | tr -d ' ')"
-if [ "$count" = "6" ]; then ok "six clauses, six hatches, read from the guard's own table"
-else bad "the clause table has $count rows; this file scores six"; fi
+if [ "$count" = "8" ]; then ok "eight clauses, eight hatches, read from the guard's own table"
+else bad "the clause table has $count rows; this file scores eight"; fi
 if python3 "$GUARD" --clauses | grep -qv "PKMNSCAN_.*=off"; then
   bad "a clause in the table names no escape hatch"
 else
