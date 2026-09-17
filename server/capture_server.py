@@ -9242,12 +9242,15 @@ def _order_stamps(numbers: Sequence[str]) -> Tuple[int, Dict[str, Tuple[str, ...
     shelf. An order with nothing outstanding has nothing to pick, and empty corners are the
     true answer for it.
 
-    THE RESOLUTION IS THE WHOLE STORE'S IN ONE PASS, exactly as `do_orders` runs it, and this
-    is not an efficiency choice. `pipeline/orders.py` refuses to offer a `resolve_one` because
-    a per-order resolver cannot see what another order has already been promised and hands two
-    buyers the same physical card; asking it only about the orders in this export would be
-    that defect wearing a shipping label. The batch's numbers filter the ANSWER, never the
-    question.
+    THE RESOLUTION IS THE WHOLE STORE'S IN ONE PASS, exactly as `do_orders` runs it, and it
+    IS an efficiency choice now (amended 2026-09-16, D212 — every copy is fungible, so no
+    order claims one). This paragraph said the opposite until then, on `resolve_all`'s old
+    reason: a per-order resolver could not see what another order had already been promised
+    and would hand two buyers the same physical card. With the exclusive draw gone, no line
+    withholds a copy from any other line, so asking about a subset answers each order
+    identically to asking about all of them. What one pass still buys is one snapshot and one
+    per-SKU cache. The batch's numbers filter the ANSWER, never the question — unchanged, and
+    now a choice rather than a correctness requirement.
 
     A NUMBER TWO RECORDS SPELL IS NOT MATCHED AT ALL. `Ledger` keys on `source:number`
     precisely because a number is unique to a marketplace and not across two, and a shipping

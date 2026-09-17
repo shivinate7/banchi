@@ -3763,7 +3763,7 @@ COMPONENTS = [
                                 "D92", "D93", "D96", "D100", "D103", "D104", "D108", "D113",
                                 "D114", "D115", "D116", "D132", "D134", "D137", "D138", "D159",
                                 "D165", "D168", "D174", "D183", "D172", "D192", "D191",
-                                "D193", "D203"],
+                                "D193", "D203", "D212"],
                 "tested_by": ["T7"],
             },
             "tcg_import.py": {"does": "THE OUTBOUND WRITE to the seller admin, and the only "
