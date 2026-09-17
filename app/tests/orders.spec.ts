@@ -1,4 +1,5 @@
 import { test, expect, type Page, type Route } from '@playwright/test'
+import { settleFonts } from './fontsReady'
 import { sealEveryTest } from './shell'
 import { line, order, payloadOf, pick, place } from './routeFixtures'
 
@@ -2059,4 +2060,371 @@ test('a terminal order sharing a buyer with nothing else draws exactly one Pull 
      which the "By order" fold alone could also produce if the widening regressed. */
   await expect(page.locator('.orders-buyer-walk')).toContainText('Terminal Treasure')
   await expect(page.getByRole('button', { name: 'Pull' })).toHaveCount(1)
+})
+
+/* -------------------------------------------------------------------------------------- D212+ */
+
+/* THE LINE-HEADER SENTENCE (item 1 of the D212 follow-up, the owner's own question 2026-09-17:
+ * "is it saying they ordered one and there's two places, or they need two and here's two
+ * places"). `.orders-map-lede` ties `figure.remaining` ("Pull N"), `line.on_hand`/`map.total`
+ * ("N on hand") and `map.stops.length` ("across N boxes") into one sentence, once, above the
+ * box list — `pullLedeOf` in `Orders.tsx`. These cases render it directly through a copy the
+ * merged buyer walk does NOT cover (every candidate copy already `held_by` another order), the
+ * one path `hidePicks` leaves this line's own map visible on. */
+
+test('the line header sentence names how many to pull, how many are on hand, and how many boxes', async ({
+  page,
+}) => {
+  const spread = line({
+    wanted: 2,
+    fulfilled: 0,
+    outstanding: 2,
+    on_hand: 3,
+    picks: [
+      pick({ capture_id: 'cap-a', held_by: { order: OTHER_ORDER, sku: SKU } }),
+      pick({
+        capture_id: 'cap-b',
+        box: 5,
+        index: 9,
+        place: place({ box: 5, index: 9, slot: 3, card: 3, box_name: 'Mixed Singles', label: 'Box 5 · Section 1 · Card 3' }),
+        held_by: { order: OTHER_ORDER, sku: SKU },
+      }),
+      pick({
+        capture_id: 'cap-c',
+        box: 5,
+        index: 10,
+        place: place({ box: 5, index: 10, slot: 4, card: 4, box_name: 'Mixed Singles', label: 'Box 5 · Section 1 · Card 4' }),
+        held_by: { order: OTHER_ORDER, sku: SKU },
+      }),
+    ],
+  })
+  await open(page, {
+    orders: payloadOf(
+      [order({ wanted: 2, progress: [{ sku: SKU, wanted: 2, recorded: 0, outstanding: 2, over: 0, copies: [], pulled: [], at: null, by_hand: 0, reason: null, declared_kind: null, closed_at: null, closed_reason: null }], })],
+      [{ key: `TCGplayer:${ORDER_NUMBER}`, number: ORDER_NUMBER, complete: false, outstanding: 2, lines: [spread] }],
+    ),
+  })
+
+  await expect(page.locator('.orders-map-lede')).toHaveText('Pull 2 — 3 on hand across 2 boxes.')
+})
+
+test('one box reads ", 1 box", never "across 1 boxes"', async ({ page }) => {
+  const oneBox = line({
+    wanted: 1,
+    fulfilled: 0,
+    outstanding: 1,
+    on_hand: 2,
+    picks: [
+      pick({ capture_id: 'cap-a', held_by: { order: OTHER_ORDER, sku: SKU } }),
+      pick({
+        capture_id: 'cap-b',
+        index: 22,
+        place: place({ index: 22, slot: 18, card: 18, label: 'Box 3 · Section 2 · Card 18' }),
+        held_by: { order: OTHER_ORDER, sku: SKU },
+      }),
+    ],
+  })
+  await open(page, {
+    orders: payloadOf(
+      [order({ wanted: 1, progress: [{ sku: SKU, wanted: 1, recorded: 0, outstanding: 1, over: 0, copies: [], pulled: [], at: null, by_hand: 0, reason: null, declared_kind: null, closed_at: null, closed_reason: null }], })],
+      [{ key: `TCGplayer:${ORDER_NUMBER}`, number: ORDER_NUMBER, complete: false, outstanding: 1, lines: [oneBox] }],
+    ),
+  })
+
+  await expect(page.locator('.orders-map-lede')).toHaveText('Pull 1 — 2 on hand, 1 box.')
+})
+
+test('a satisfied line says so, plainly, rather than "Pull 0"', async ({ page }) => {
+  const done = line({
+    wanted: 1,
+    fulfilled: 0,
+    outstanding: 0,
+    on_hand: 2,
+    picks: [
+      pick({ capture_id: 'cap-a', held_by: { order: OTHER_ORDER, sku: SKU } }),
+      pick({
+        capture_id: 'cap-b',
+        index: 22,
+        place: place({ index: 22, slot: 18, card: 18, label: 'Box 3 · Section 2 · Card 18' }),
+        held_by: { order: OTHER_ORDER, sku: SKU },
+      }),
+    ],
+  })
+  await open(page, {
+    orders: payloadOf(
+      [order({ wanted: 1, recorded: 1, progress: [{ sku: SKU, wanted: 1, recorded: 1, outstanding: 0, over: 0, copies: [], pulled: [], at: null, by_hand: 0, reason: null, declared_kind: null, closed_at: null, closed_reason: null }], })],
+      [{ key: `TCGplayer:${ORDER_NUMBER}`, number: ORDER_NUMBER, complete: true, outstanding: 0, lines: [done] }],
+    ),
+  })
+
+  await expect(page.locator('.orders-map-lede')).toHaveText('All 1 pulled — 2 on hand.')
+  await expect(page.locator('.orders-map-lede')).not.toContainText('Pull 0')
+})
+
+/* `.orders-map-lede` renders on `OrderLineRow` only where `hidePicks` is false — the state where
+ * EVERY candidate copy is already `held_by` another order, because the merged buyer walk covers
+ * every takeable one and this row's own map is suppressed to avoid a second Pull button on the
+ * same copy (see `BuyerDetail`'s own comment). That state has no pressable Pull button on this
+ * line by construction — a click-driven stability proof belongs to the merged walk, which this
+ * session does not touch (out of scope). So this case proves the SAME thing `inventory.spec.ts`
+ * proves for a sale — a write changing what the sentence says moves nothing beneath it — over a
+ * re-read the fixture stands in for, rather than a click this row cannot offer. */
+test('the sentence changing on a write moves no box row beneath it (D118)', async ({ page }) => {
+  const progressOf = (recorded: number) => [
+    {
+      sku: SKU,
+      wanted: 2,
+      recorded,
+      outstanding: 2 - recorded,
+      over: 0,
+      copies: [],
+      pulled: [],
+      at: null,
+      by_hand: 0,
+      reason: null,
+      declared_kind: null,
+      closed_at: null,
+      closed_reason: null,
+    },
+  ]
+  const spread = (recorded: number) =>
+    line({
+      wanted: 2,
+      fulfilled: 0,
+      outstanding: 2 - recorded,
+      on_hand: 2,
+      picks: [
+        pick({ capture_id: 'cap-a', held_by: { order: OTHER_ORDER, sku: SKU } }),
+        pick({
+          capture_id: 'cap-b',
+          box: 5,
+          index: 9,
+          place: place({ box: 5, index: 9, slot: 3, card: 3, box_name: 'Mixed Singles', label: 'Box 5 · Section 1 · Card 3' }),
+          held_by: { order: OTHER_ORDER, sku: SKU },
+        }),
+      ],
+    })
+  const payloadAt = (recorded: number) =>
+    payloadOf(
+      [order({ wanted: 2, recorded, progress: progressOf(recorded) })],
+      [{ key: `TCGplayer:${ORDER_NUMBER}`, number: ORDER_NUMBER, complete: false, outstanding: 2 - recorded, lines: [spread(recorded)] }],
+    )
+
+  let recorded = 0
+  await open(page, { orders: () => payloadAt(recorded) })
+
+  await expect(page.locator('.orders-map-lede')).toHaveText('Pull 2 — 2 on hand across 2 boxes.')
+  await settleFonts(page)
+  const ledeBefore = await page.locator('.orders-map-lede').boundingBox()
+  const stopsBefore = await page.locator('.orders-map-stops').boundingBox()
+  /* THE GAP, NOT THE PAGE POSITION. A reload resets scroll, so the two boxes' absolute page `y`
+     is not comparable across it — what has to hold is the DISTANCE from the sentence to the box
+     list, which is exactly what `.orders-map-lede`'s `min-height` (D118) reserves. */
+  const gapBefore = (stopsBefore?.y ?? 0) - (ledeBefore?.y ?? 0)
+
+  recorded = 1
+  await page.reload()
+  await expect(page.locator(VIEW)).toBeVisible()
+
+  await expect(page.locator('.orders-map-lede')).toHaveText('Pull 1 — 2 on hand across 2 boxes.')
+  await settleFonts(page)
+  const ledeAfter = await page.locator('.orders-map-lede').boundingBox()
+  const stopsAfter = await page.locator('.orders-map-stops').boundingBox()
+  const gapAfter = (stopsAfter?.y ?? 0) - (ledeAfter?.y ?? 0)
+  expect(Math.round(gapAfter), 'the box list moved relative to the sentence above it').toBe(Math.round(gapBefore))
+})
+
+/* A REAL PRESS, NOT A RELOAD (item 2 of the D212 follow-up): `WalkCards`' own sentence and
+ * `WalkGroups`' box header both change wording on a successful `Pull` — "Pull 2" to "Pull 1",
+ * "2 copies of 1 card" to "1 card" — and `.orders-map-lede`'s reused `min-height` (D118) is the
+ * only thing standing between that and a reflow. Two copies of ONE card sit in ONE box so the
+ * pull leaves the group open (one row remains) rather than unmounting it, which is what makes
+ * this a same-group text change rather than the whole-group removal `inventory.spec.ts` already
+ * covers for a sale. */
+test('a real Pull press changes the lede and the box header without changing either one’s height (D118)', async ({
+  page,
+}) => {
+  const progressOf = (recorded: number) => [
+    { sku: SKU, wanted: 2, recorded, outstanding: 2 - recorded, over: 0, copies: [], pulled: [], at: null, by_hand: 0, reason: null, declared_kind: null, closed_at: null, closed_reason: null },
+  ]
+  const twoOfOne = (recorded: number) =>
+    line({
+      wanted: 2,
+      fulfilled: 0,
+      outstanding: 2 - recorded,
+      on_hand: 2,
+      picks: [
+        ...(recorded >= 1 ? [] : [pick({ capture_id: 'cap-a' })]),
+        pick({
+          capture_id: 'cap-b',
+          index: 22,
+          place: place({ index: 22, slot: 18, card: 18, label: 'Box 3 · Section 2 · Card 18' }),
+        }),
+      ],
+    })
+  const payloadAt = (recorded: number) =>
+    payloadOf(
+      [order({ wanted: 2, recorded, progress: progressOf(recorded) })],
+      [{ key: `TCGplayer:${ORDER_NUMBER}`, number: ORDER_NUMBER, complete: false, outstanding: 2 - recorded, lines: [twoOfOne(recorded)] }],
+    )
+
+  let recorded = 0
+  await open(page, {
+    orders: () => payloadAt(recorded),
+    pull: { undone: false, order_key: `TCGplayer:${ORDER_NUMBER}`, sku: SKU, newly: 1, recorded: 1, outstanding: 1, places: [], sales: [] },
+  })
+  await page.locator('main.orders').getByRole('button', { name: 'Walk the boxes' }).click()
+
+  const lede = page.locator('.orders-walk-cards .orders-map-lede').first()
+  const header = page.locator('.orders-walk-group-count').first()
+  await expect(lede).toContainText('Pull 2')
+  await expect(header).toHaveText('2 copies of 1 card')
+  await settleFonts(page)
+  const ledeHeightBefore = (await lede.boundingBox())?.height ?? 0
+  const headerHeightBefore = (await header.boundingBox())?.height ?? 0
+  const ledeXBefore = (await lede.boundingBox())?.x ?? 0
+
+  recorded = 1
+  await page.locator('.orders-walk-group .orders-pick').first().locator('button.orders-pull').click()
+
+  await expect(lede).toContainText('Pull 1')
+  await expect(header).toHaveText('1 card')
+  await settleFonts(page)
+  const ledeHeightAfter = (await lede.boundingBox())?.height ?? 0
+  const headerHeightAfter = (await header.boundingBox())?.height ?? 0
+  const ledeXAfter = (await lede.boundingBox())?.x ?? 0
+
+  /* HEIGHT, NOT PAGE POSITION — `WalkCards` sits above the box group, so pulling its ONLY other
+     copy also unmounts the sibling row beneath it (D113's own reason the group note reads
+     differently once a line closes) and the group is free to shrink; that is real content
+     leaving, not the reflow this case is about. What has to hold, on the SAME single-line
+     sentence and the SAME single-line header, is that neither one grew or shrank a pixel from
+     changing what it says — the min-height reservation `.orders-map-lede` already carries. */
+  expect(Math.round(ledeHeightAfter), 'the lede changed height across the press').toBe(Math.round(ledeHeightBefore))
+  expect(Math.round(headerHeightAfter), 'the box header changed height across the press').toBe(Math.round(headerHeightBefore))
+  expect(Math.round(ledeXAfter), 'the lede moved horizontally, so something beside it changed shape').toBe(Math.round(ledeXBefore))
+})
+
+/* -------------------------------------------------------------------------------------- walk plan */
+
+/* ITEM 3 OF THE D212 FOLLOW-UP: a one-line order gets a walk plan too (the owner's own report,
+ * 2026-09-17: "I always thought there's a button like walk this order"), and the plan names
+ * which card and how many of it sit in each stop rather than counting alone. */
+
+function twoCardOrder(): { row: OrderRow; resolved: ResolvedOrder } {
+  const akshan = pick({ capture_id: 'ak-1', card_name: 'Akshan, Mischievous' })
+  const akshan2 = pick({
+    capture_id: 'ak-2',
+    index: 22,
+    card_name: 'Akshan, Mischievous',
+    place: place({ index: 22, slot: 18, card: 18, label: 'Box 3 · Section 2 · Card 18' }),
+  })
+  const yasuo = pick({
+    capture_id: 'ya-1',
+    card_name: 'Yasuo, Unforgiven',
+    box: 5,
+    index: 9,
+    place: place({ box: 5, index: 9, slot: 3, card: 3, box_name: 'Mixed Singles', label: 'Box 5 · Section 1 · Card 3' }),
+  })
+  const akshanLine = line({ sku: '9038408', picks: [akshan, akshan2], on_hand: 2, wanted: 2, outstanding: 2 })
+  const yasuoLine = line({ sku: '9038409', picks: [yasuo], on_hand: 1, wanted: 1, outstanding: 1 })
+  const row = order({
+    wanted: 3,
+    lines: [akshanLine.line, yasuoLine.line],
+    progress: [
+      { sku: '9038408', wanted: 2, recorded: 0, outstanding: 2, over: 0, copies: [], pulled: [], at: null, by_hand: 0, reason: null, declared_kind: null, closed_at: null, closed_reason: null },
+      { sku: '9038409', wanted: 1, recorded: 0, outstanding: 1, over: 0, copies: [], pulled: [], at: null, by_hand: 0, reason: null, declared_kind: null, closed_at: null, closed_reason: null },
+    ],
+  })
+  return {
+    row,
+    resolved: { key: `TCGplayer:${ORDER_NUMBER}`, number: ORDER_NUMBER, complete: false, outstanding: 3, lines: [akshanLine, yasuoLine] },
+  }
+}
+
+test('a single-line order gets a walk plan when it spans more than one box', async ({ page }) => {
+  const oneLine = line({
+    sku: '9038408',
+    on_hand: 2,
+    wanted: 2,
+    outstanding: 2,
+    picks: [
+      pick({ capture_id: 'cap-a' }),
+      pick({
+        capture_id: 'cap-b',
+        box: 5,
+        index: 9,
+        place: place({ box: 5, index: 9, slot: 3, card: 3, box_name: 'Mixed Singles', label: 'Box 5 · Section 1 · Card 3' }),
+      }),
+    ],
+  })
+  await open(page, {
+    orders: payloadOf(
+      [order({ wanted: 2, lines: [oneLine.line] })],
+      [{ key: `TCGplayer:${ORDER_NUMBER}`, number: ORDER_NUMBER, complete: false, outstanding: 2, lines: [oneLine] }],
+    ),
+  })
+
+  await expect(page.locator('.orders-plan')).toHaveCount(1)
+  await expect(page.locator('.orders-plan')).toContainText('2 boxes')
+})
+
+test('one line, one copy, one box draws no walk plan — the row beneath it already says it', async ({ page }) => {
+  await open(page, { orders: oneOpenOrder() })
+  await expect(page.locator('.orders-plan')).toHaveCount(0)
+})
+
+test('each stop names the cards in it, by how many sit THERE, not by how many the order wants', async ({
+  page,
+}) => {
+  const { row, resolved } = twoCardOrder()
+  await open(page, { orders: payloadOf([row], [resolved]) })
+
+  const stops = page.locator('.orders-plan-stop')
+  await expect(stops).toHaveCount(2)
+  /* Box 3 holds two of Akshan and none of Yasuo; Box 5 holds one of Yasuo. The count is per
+     stop, never the order's own quantity — the order wants 2 Akshan and this stop happens to
+     hold exactly that many, which is the case the wording could be misread on if it leaked the
+     order's own figure instead of the stop's. */
+  await expect(stops.nth(0)).toContainText('2 of Akshan, Mischievous')
+  await expect(stops.nth(1)).toContainText('1 of Yasuo, Unforgiven')
+})
+
+/* THE WALK GROUP HEADER, THE OTHER HALF OF THE OWNER'S 2026-09-17 REPORT: a box holding several
+ * copies of the SAME card must not draw as several cards. Two DIFFERENT cards, one copy each,
+ * is the ordinary case the plain "N cards" always got right; asserted here so a future change
+ * cannot quietly widen the disambiguating "copies of" form to a case that never needed it. */
+test('a box with two different cards, one copy each, still reads as plain cards — not "copies of"', async ({
+  page,
+}) => {
+  const akshan = line({
+    sku: '9038408',
+    on_hand: 1,
+    wanted: 1,
+    outstanding: 1,
+    picks: [pick({ capture_id: 'ak-1', card_name: 'Akshan, Mischievous' })],
+  })
+  const yasuo = line({
+    sku: '9038409',
+    on_hand: 1,
+    wanted: 1,
+    outstanding: 1,
+    picks: [
+      pick({
+        capture_id: 'ya-1',
+        card_name: 'Yasuo, Unforgiven',
+        index: 2,
+        place: place({ index: 2, slot: 2, card: 2, label: 'Box 3 · Section 1 · Card 2' }),
+      }),
+    ],
+  })
+  await open(page, {
+    orders: payloadOf(
+      [order({ wanted: 2, lines: [akshan.line, yasuo.line] })],
+      [{ key: `TCGplayer:${ORDER_NUMBER}`, number: ORDER_NUMBER, complete: false, outstanding: 2, lines: [akshan, yasuo] }],
+    ),
+  })
+  await page.locator('main.orders').getByRole('button', { name: 'Walk the boxes' }).click()
+
+  await expect(page.locator('.orders-walk-group-count').first()).toHaveText('2 cards')
 })

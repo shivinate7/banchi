@@ -1286,6 +1286,16 @@ function buildCopyMap(line: ResolvedLine, store: StoreCopies | null, claims: Cla
 
 /* ---- the walk plan: the same rule one register up, over a whole order ----------------------- */
 
+/** One card's presence in one stop: this stop's own count of it, never the order's. A stop can
+ *  hold eight copies of a card the buyer ordered two of — this is the eight, not the two, and
+ *  the renderer must not let the two figures blur into each other (the same confusion
+ *  `pullLedeOf` exists to close, one register down). */
+type PlanCard = {
+  readonly sku: string
+  readonly name: string
+  readonly count: number
+}
+
 /** One stop on an order's walk: what this box satisfies of the WHOLE order, so a buyer wanting
  *  four different singles is walked in one pass rather than four. */
 type PlanStop = {
@@ -1298,6 +1308,7 @@ type PlanStop = {
   readonly free: number
   readonly cards: number
   readonly sections: string[]
+  readonly cardsHere: PlanCard[]
 }
 
 function buildWalkPlan(answer: ResolvedOrder): { readonly stops: PlanStop[]; readonly copies: number } {
@@ -1311,10 +1322,14 @@ function buildWalkPlan(answer: ResolvedOrder): { readonly stops: PlanStop[]; rea
     free: number
     skus: Set<string>
     sections: Map<number | null, number>
+    /* PER-CARD COUNTS, KEPT AT THE SAME SOURCE `buildCopyMap` uses (`headlineOf(line).name`), so
+       a name on the plan can never disagree with the name on that same line's own map. */
+    cardCounts: Map<string, { name: string; count: number }>
   }
   const drafts = new Map<string, Draft>()
   let copies = 0
   for (const line of answer.lines) {
+    const cardName = headlineOf(line).name
     for (const pick of line.picks) {
       const place = pick.place
       const pooled = place.label === null
@@ -1331,6 +1346,7 @@ function buildWalkPlan(answer: ResolvedOrder): { readonly stops: PlanStop[]; rea
           free: 0,
           skus: new Set(),
           sections: new Map(),
+          cardCounts: new Map(),
         }
         drafts.set(key, stop)
       }
@@ -1340,6 +1356,9 @@ function buildWalkPlan(answer: ResolvedOrder): { readonly stops: PlanStop[]; rea
       stop.skus.add(line.sku)
       const section = pooled ? null : place.section
       stop.sections.set(section, (stop.sections.get(section) ?? 0) + 1)
+      const card = stop.cardCounts.get(line.sku)
+      if (card === undefined) stop.cardCounts.set(line.sku, { name: cardName, count: 1 })
+      else card.count += 1
     }
   }
   const stops = [...drafts.values()]
@@ -1359,6 +1378,10 @@ function buildWalkPlan(answer: ResolvedOrder): { readonly stops: PlanStop[]; rea
       sections: [...draft.sections.keys()]
         .sort((a, b) => (a ?? Number.MAX_SAFE_INTEGER) - (b ?? Number.MAX_SAFE_INTEGER))
         .map((section) => (section === null ? '—' : String(section))),
+      /* Densest card first — the one worth reaching for first inside the stop. */
+      cardsHere: [...draft.cardCounts.entries()]
+        .map(([sku, { name, count }]) => ({ sku, name, count }))
+        .sort((a, b) => b.count - a.count || a.name.localeCompare(b.name)),
     }))
   return { stops, copies }
 }
@@ -3197,7 +3220,15 @@ function PullStage({
 
       {mode === 'walk' ? (
         <>
-          <WalkView walk={walk} walkable={walkable} walkKeys={hub.walkKeys} busy={busy} onPull={onPull} />
+          <WalkView
+            walk={walk}
+            walkable={walkable}
+            walkKeys={hub.walkKeys}
+            store={store}
+            claims={claims}
+            busy={busy}
+            onPull={onPull}
+          />
           {why}
         </>
       ) : shownGroups.length === 0 && earlierGroups.length === 0 ? (
@@ -3713,7 +3744,7 @@ function BuyerDetail({
     <>
       {hasWalk ? (
         <section className="orders-buyer-walk" aria-label="This buyer's copies, in one pass">
-          <WalkGroups groups={walk.groups} busy={busy} onPull={onPull} />
+          <WalkGroups groups={walk.groups} store={store} claims={claims} busy={busy} onPull={onPull} />
         </section>
       ) : null}
       {byOrder}
@@ -4015,7 +4046,9 @@ function OrderLineRow({
         </div>
       )}
 
-      {hidePicks || single || map.stops.length === 0 ? null : <CopyMapView map={map} whole={whole} lit={lit} onLight={setLit} />}
+      {hidePicks || single || map.stops.length === 0 ? null : (
+        <CopyMapView map={map} whole={whole} onHand={line.on_hand} figure={figure} lit={lit} onLight={setLit} />
+      )}
 
       {copies.length === 0 ? null : (
         <ol
@@ -4128,9 +4161,35 @@ function LineFigureView({ figure }: { readonly figure: LineFigure }) {
  *  that used to sit here — "the store holds 3 copies, this is the one this order was offered" —
  *  is deleted with the defect it described: the copies come from `GET /inventory` now, the map is
  *  the union, and the lede states the total as a fact again. */
+/** THE ONE SENTENCE THAT TIES THE THREE LIVE NUMBERS TOGETHER (the owner's own question,
+ *  2026-09-17: "is it saying they ordered one and there's two places, or they need two and
+ *  here's two places"). `figure.remaining` is how many are still owed, `total` is how many the
+ *  store holds, `map.stops` is how many drawers hold them — and this line answers all three in
+ *  one place, once, above the boxes it describes rather than on every button beneath them.
+ *
+ *  NEVER RETURNS NULL (D118). The element this fills stays mounted whether the line is still
+ *  owed or already satisfied — dropping it the instant the last copy is pulled is exactly the
+ *  press that would move every box row beneath it up the page. A satisfied line says so, plainly,
+ *  rather than "Pull 0". */
+function pullLedeOf(figure: LineFigure, map: CopyMap, whole: boolean, onHand: number): string {
+  const total = whole ? onHand : map.total
+  const drawers = map.stops.length
+  const held = `${total} on hand`
+  if (figure.remaining === 0) return `All ${figure.wanted} pulled — ${held}.`
+  const pulled = `Pull ${figure.remaining}`
+  if (drawers === 1) {
+    const only = map.stops[0]
+    if (only?.pooled) return `${pulled} — ${held}, pooled.`
+    return `${pulled} — ${held}, 1 box.`
+  }
+  return `${pulled} — ${held} across ${drawers} boxes.`
+}
+
 function CopyMapView({
   map,
   whole,
+  onHand,
+  figure,
   lit,
   onLight,
 }: {
@@ -4138,41 +4197,20 @@ function CopyMapView({
   /** Whether the store index answered, so `All 14 copies` may be said. When it did not, the map
    *  is the resolver's picks alone and the sentence claims nothing about what it cannot see. */
   readonly whole: boolean
+  readonly onHand: number
+  readonly figure: LineFigure
   readonly lit: string | null
   readonly onLight: (key: string | null) => void
 }) {
-  const lead = map.stops[0] ?? null
+  const lede = pullLedeOf(figure, map, whole, onHand)
   const runnerUp = map.stops[1] ?? null
-
-  /* THE RECOMMENDATION IS SAID AS WELL AS DRAWN, and it says WHY it leads — a drawer holding two
-     of three copies is a different recommendation from four drawers holding one each, where the
-     only thing separating them is the box number. */
-  const head = `${whole ? 'All ' : ''}${map.total} ${map.total === 1 ? 'copy' : 'copies'}`
-  const lede = ((): string | null => {
-    if (lead === null) return null
-    if (runnerUp === null) {
-      if (lead.pooled) return `${head} of this card are pooled — a count, not a place.`
-      const section = lead.sections[0] ?? null
-      if (lead.sections.length > 1 && section !== null) {
-        return `${head} of this card sit in ${lead.title} — ${section.label} holds ${section.total} of them.`
-      }
-      const where = section === null || section.label === 'No section' ? '' : `, ${section.label}`
-      return `${head} of this card sit in ${lead.title}${where}.`
-    }
-    const spread = `${head} across ${map.stops.length} boxes — `
-    if (lead.total > runnerUp.total) return `${spread}${lead.title} holds ${lead.total} of them.`
-    if (lead.free > runnerUp.free) return `${spread}${lead.title} leads, because copies elsewhere are spoken for.`
-    return `${spread}no drawer holds more, so ${lead.title} leads on the lower number.`
-  })()
 
   return (
     <div className="orders-map" role="group" aria-label={`Where the ${map.total} ${map.total === 1 ? 'copy is' : 'copies are'}`}>
-      {lede === null ? null : (
-        <p className="orders-map-lede">
-          <Icon name="layers" size={13} />
-          {lede}
-        </p>
-      )}
+      <p className="orders-map-lede">
+        <Icon name="layers" size={13} />
+        {lede}
+      </p>
       <ol className="orders-map-stops bn-stagger">
         {map.stops.map((stop, at) => (
           <li
@@ -4199,8 +4237,11 @@ function CopyMapView({
               <b>{stop.title}</b>
               {stop.name === null ? null : <em>{stop.name}</em>}
             </span>
+            {/* A PER-BOX FIGURE, NOT THE BOX'S TOTAL — `stop.total` is `buildCopyMap`'s own count
+               of THIS card in this drawer, never a whole-box card count, so "here" is read
+               against the lede's "on hand" rather than against everything the drawer holds. */}
             <span className="orders-map-count">
-              <b>{stop.total}</b> {stop.total === 1 ? 'copy' : 'copies'}
+              <b>{stop.total}</b> here
             </span>
             {stop.spoken === 0 ? null : (
               <span className="orders-map-spoken">
@@ -4245,7 +4286,17 @@ function CopyMapView({
  *  every line's own map is unchanged by what this says. */
 function WalkPlan({ answer }: { readonly answer: ResolvedOrder }) {
   const plan = useMemo(() => buildWalkPlan(answer), [answer])
-  if (plan.stops.length === 0 || answer.lines.length < 2) return null
+  /* A SINGLE-LINE ORDER GETS THE PLAN TOO (the owner's own report, 2026-09-17: "I always
+     thought there's a button like walk this order" — asked of an order the old `lines.length
+     < 2` gate hid it from, because it had exactly one line). The gate that remains is about
+     whether the plan has anything to say, never about how many lines the order carries: one
+     stop holding one card at one copy is the row beneath it, restated, and earns nothing by
+     repeating itself under a heading. Two stops, two cards in one stop, or more than one copy
+     of the one card in the one stop all clear it. */
+  const onlyStop = plan.stops.length === 1 ? (plan.stops[0] ?? null) : null
+  const onlyCard = onlyStop !== null && onlyStop.cardsHere.length === 1 ? (onlyStop.cardsHere[0] ?? null) : null
+  const trivial = onlyCard !== null && onlyCard.count === 1
+  if (plan.stops.length === 0 || trivial) return null
   return (
     <section className="orders-plan" aria-label="Walk plan for this order">
       <header className="orders-plan-head">
@@ -4265,14 +4316,25 @@ function WalkPlan({ answer }: { readonly answer: ResolvedOrder }) {
                 <b>{stop.title}</b>
                 {stop.name === null ? null : <em>{stop.name}</em>}
               </span>
-              <span className="orders-plan-count">
-                {stop.copies} {stop.copies === 1 ? 'copy' : 'copies'} · {stop.cards} {stop.cards === 1 ? 'card' : 'cards'}
-              </span>
               {stop.pooled ? null : (
                 <span className="orders-plan-sect">
                   {stop.sections.length === 1 ? 'Section' : 'Sections'} {stop.sections.join(', ')}
                 </span>
               )}
+              {/* PER-STOP, NEVER PER-ORDER. Each figure here is `cardCounts` off THIS stop's own
+                 picks (`buildWalkPlan`, same source `buildCopyMap` reads) — how many of that
+                 card sit in this drawer, not how many the buyer ordered. A stop can hold eight
+                 of a card the line owes two of; this says eight. */}
+              <ul className="orders-plan-cards">
+                {stop.cardsHere.map((card) => (
+                  <li key={card.sku} className="orders-plan-card">
+                    <b>{card.count}</b> of{' '}
+                    <span className="orders-plan-card-name" title={card.name}>
+                      {card.name}
+                    </span>
+                  </li>
+                ))}
+              </ul>
             </span>
           </li>
         ))}
@@ -4418,6 +4480,8 @@ function WalkView({
   walk,
   walkable,
   walkKeys,
+  store,
+  claims,
   busy,
   onPull,
 }: {
@@ -4429,6 +4493,8 @@ function WalkView({
    *  other. */
   readonly walkable: OrderRow[]
   readonly walkKeys: ReadonlySet<string> | null
+  readonly store: StoreCopies | null
+  readonly claims: Claims
   readonly busy: string | null
   readonly onPull: PullHandler
 }) {
@@ -4555,33 +4621,134 @@ function WalkView({
         )}
       </div>
 
-      <WalkGroups groups={walk.groups} busy={busy} onPull={onPull} />
+      <WalkGroups groups={walk.groups} store={store} claims={claims} busy={busy} onPull={onPull} />
     </div>
+  )
+}
+
+/** Every distinct (order, sku) with a row somewhere in this walk, in first-seen order — the
+ *  cards the merged walk is actually about, deduped the same way `group.rows` already is.
+ *  `WalkGroups` groups by BOX, so one card's copies routinely span more than one group; this is
+ *  what lets its own "Pull N — N on hand across N boxes" sentence be said ONCE, above every
+ *  group, rather than once per box where "across N boxes" would repeat a number that group alone
+ *  never explains. */
+function walkCardsOf(groups: readonly WalkGroup[]): { key: string; order: OrderRow; line: ResolvedLine }[] {
+  const seen = new Map<string, { key: string; order: OrderRow; line: ResolvedLine }>()
+  for (const group of groups) {
+    for (const row of group.rows) {
+      const key = `${row.order.key}/${row.line.sku}`
+      if (!seen.has(key)) seen.set(key, { key, order: row.order, line: row.line })
+    }
+  }
+  return [...seen.values()]
+}
+
+/** One line per card, above the boxes — `pullLedeOf`, the SAME function `CopyMapView` calls, so
+ *  the wording can never fork between the two places it renders (the owner's own screen, this
+ *  one, and the state `CopyMapView` covers when the merged walk does not: every candidate copy
+ *  already claimed elsewhere). Built from `buildCopyMap(line, store, claims)` — the identical
+ *  computation `OrderLineRow` already runs, not a second aggregation over `group.rows`, which
+ *  would answer for only the copies THIS walk happened to draw rather than every copy on hand
+ *  (D212: the resolver's own picks are not always the whole story).
+ *
+ *  ONE BUYER, POSSIBLY TWO ORDERS FOR THE SAME CARD (`showOrder` on `PickLine` is why the merged
+ *  walk names the order per row at all). Each line here is `(order, sku)` — never merged across
+ *  orders — so "Pull N" is always one order's own remaining count. Disambiguated by the order's
+ *  number, said only where more than one line shares a card, so the ordinary one-order case
+ *  reads exactly as `CopyMapView`'s own sentence does. */
+function WalkCards({
+  groups,
+  store,
+  claims,
+}: {
+  readonly groups: readonly WalkGroup[]
+  readonly store: StoreCopies | null
+  readonly claims: Claims
+}) {
+  const cards = walkCardsOf(groups)
+  const bySku = new Map<string, number>()
+  for (const card of cards) bySku.set(card.line.sku, (bySku.get(card.line.sku) ?? 0) + 1)
+  return (
+    <ul className="orders-walk-cards">
+      {cards.map((card) => {
+        const map = buildCopyMap(card.line, store, claims)
+        const whole = map.total >= card.line.on_hand
+        const figure = figureOf(card.order, card.line)
+        const ambiguous = (bySku.get(card.line.sku) ?? 0) > 1
+        /* TRIVIAL IS SKIPPED, THE SAME GATE `WalkPlan` ALREADY DRAWS: one order wants one copy,
+           the store holds exactly one, it sits in one box — nothing here for the sentence to
+           resolve that the box header and the row beneath it do not already say. Built off
+           `figure.wanted`/`map.total`/`map.stops.length`, none of which move when a copy is
+           pulled, so a line that starts trivial stays trivial across the walk (D118) — this
+           never hides a sentence a press would otherwise have left in place. */
+        const trivial = !ambiguous && figure.wanted <= 1 && map.total <= 1 && map.stops.length <= 1
+        if (trivial) return null
+        const lede = pullLedeOf(figure, map, whole, card.line.on_hand)
+        const name = headlineOf(card.line).name
+        return (
+          <li key={card.key} className="orders-map-lede">
+            <Icon name="layers" size={13} />
+            <span>
+              <b>{name}</b>
+              {ambiguous ? <span className="orders-walk-cards-order"> · {card.order.number}</span> : null}
+              {' — '}
+              {lede}
+            </span>
+          </li>
+        )
+      })}
+    </ul>
   )
 }
 
 /** The box→section renderer shared by "Walk the boxes" and a buyer's merged walk
  *  (`D193`) — extracted so a buyer with several open orders gets the
- *  same one-pass grouping the whole-store walk draws, rather than a second copy of it. */
+ *  same one-pass grouping the whole-store walk draws, rather than a second copy of it.
+ *
+ *  `store`/`claims` reach here so `WalkCards` above can build the SAME `buildCopyMap` every
+ *  other screen builds — not so the group header below can: that count is deliberately read off
+ *  `group.rows` alone. The owner's own report, 2026-09-17: a box holding three copies of one
+ *  card drew "3 cards" — several different cards where there was one, because `group.rows` is
+ *  one row per COPY and the header read its length as a card count. D212 is why this was never
+ *  wrong before: dropping the exclusive claim means a box can now hold several copies of the
+ *  SAME card, which a per-copy row count never distinguished from several different cards. Fixed
+ *  below by counting distinct SKUs separately from rows. */
 function WalkGroups({
   groups,
+  store,
+  claims,
   busy,
   onPull,
 }: {
   readonly groups: readonly WalkGroup[]
+  readonly store: StoreCopies | null
+  readonly claims: Claims
   readonly busy: string | null
   readonly onPull: PullHandler
 }) {
   return (
     <>
-      {groups.map((group) => (
+      <WalkCards groups={groups} store={store} claims={claims} />
+      {groups.map((group) => {
+        const skus = new Set(group.rows.map((row) => row.line.sku))
+        const copies = group.rows.length
+        const cardCount = skus.size
+        /* ONE WORD FOR THE ORDINARY DRAWER, TWO WHERE IT MATTERS. `copies === cardCount` means
+           every row is a distinct card — the plain "N cards" the header always said is already
+           correct there, and saying "of N cards" beside it would only repeat the number. The
+           longer, disambiguating form is spent only where `group.rows.length` and a real card
+           count actually disagree — several copies of the SAME card sharing a box, the shape
+           D212 made possible and the shape the old count got wrong. */
+        const label =
+          copies === cardCount
+            ? `${cardCount} ${cardCount === 1 ? 'card' : 'cards'}`
+            : `${copies} ${copies === 1 ? 'copy' : 'copies'} of ${cardCount} ${cardCount === 1 ? 'card' : 'cards'}`
+        return (
         <section key={group.key} className="bn-panel orders-walk-group" aria-label={group.title}>
           <header className="orders-walk-group-head">
             <span className="orders-walk-group-title">{group.title}</span>
             {group.note === null ? null : <span className="orders-walk-group-note">{group.note}</span>}
-            <span className="orders-walk-group-count">
-              {group.rows.length} {group.rows.length === 1 ? 'card' : 'cards'}
-            </span>
+            <span className="orders-walk-group-count">{label}</span>
           </header>
           <ol className="orders-picks orders-walk-list">
             {group.rows.map((row, at) => (
@@ -4599,7 +4766,8 @@ function WalkGroups({
             ))}
           </ol>
         </section>
-      ))}
+        )
+      })}
     </>
   )
 }
