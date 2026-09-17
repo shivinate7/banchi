@@ -727,7 +727,7 @@ def _copies_out(
         # AND IT ONLY AGES A CLAIM THE EXPORT CORROBORATES. A sale reduces what TCGplayer
         # holds only if the copy was THERE, and the export's reading is the only witness this
         # Mac has to that. What CHANGED is that the reading was being asked one question when
-        # it can answer two (`docs/DEBTS.md` §24, now the entry below):
+        # it can answer two (DEBT24, now the entry below):
         #
         #   - A reading that reports copies LIVE vouches for every sale of the SKU. Our copies
         #     reach that shelf, so a copy that sold sold from it, whenever it sold. `sold` is
@@ -764,7 +764,7 @@ def _copies_out(
         # SKU whose import landed in Staged and never went live reads zero too, so a copy sold
         # by hand against THAT state ages a claim it should not. Telling it from a sold-out
         # listing needs D59's own reopener — a marker that a copy actually reached an import
-        # file — and `docs/DEBTS.md` §24 is now that residue rather than this whole defect.
+        # file — and DEBT24 is now that residue rather than this whole defect.
         #
         # AND SO DOES THE CORROBORATION GATE. "What did the export report" is a fact about the
         # FILE, and an estimate is not a file. Driven by the estimate the live arm would switch
@@ -856,7 +856,7 @@ def _committed_keys(
     reported as *"every copy in this run is already listed or has left the box"*. The
     operator read that sentence and said it was *"just not true/possible"*. 52 of the 59 are
     this defect; the other 7 are the stuck claim `_copies_out` could not age, which is
-    `docs/DEBTS.md` §24 and is not fixed here — `_copies_out` aged them the next day
+    DEBT24 and is not fixed here — `_copies_out` aged them the next day
     (`D150`), and nothing about this ordering moved.
 
     PREFERRING COPIES OUTSIDE THE RUN BEING EMITTED WAS THE OTHER CANDIDATE AND IT OVER-SENDS.

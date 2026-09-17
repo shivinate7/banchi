@@ -82,7 +82,7 @@ one Python process rather than fourteen browsers. `make check` shells out to `ts
 `ruff` — two concurrent runs is a handful of single-core processes against a 15-core machine, an
 order of magnitude off the load that produced the eighteen failures, and it is not a load anything
 here has measured a failure from.
-**That is reasoning and not a measurement, and §16 records it as such**,
+**That is reasoning and not a measurement, and DEBT16 records it as such**,
 along with what would reopen it.
 
 **THE ESCAPE HATCH IS `PKMNSCAN_SUITE_LOCK=off` AND IT IS PRINTED IN EVERY REFUSAL**, in the shape

@@ -2661,14 +2661,14 @@ def check_debt_index(report: Report) -> None:
     for path in corpus.files():
         m = re.match(r"^##\s+(\d+)\s*[—-]\s*(.+)$", read(path).split("\n", 1)[0])
         if m:
-            want.append((f"§{m.group(1)}", m.group(2).strip()))
+            want.append((f"DEBT{m.group(1)}", m.group(2).strip()))
 
-    # The index is the first fenced block whose lines all start `§<n> `.
+    # The index is the first fenced block whose lines all start `DEBT<n> `.
     got: List[Tuple[str, str]] = []
     fenced, block = False, []
     for line in read(stub).split("\n"):
         if line.lstrip().startswith("```"):
-            if fenced and block and all(re.match(r"^§\d+\s", b) for b in block if b.strip()):
+            if fenced and block and all(re.match(r"^DEBT\d+\s", b) for b in block if b.strip()):
                 got = [(b.split(None, 1)[0], b.split(None, 1)[1].strip())
                        for b in block if b.strip()]
                 break
@@ -2703,6 +2703,81 @@ def check_debt_index(report: Report) -> None:
     report.add("debt index", MECHANICAL, findings,
                f"{len(got)} indexed, matching {len(want)} headings",
                scanned=len(want))
+
+
+_DEBT_RE = re.compile(r"\bDEBT([0-9]+)\b")
+
+# THE PATH FORM, IN EVERY SPELLING THIS SPLIT RETIRED: the stub's path, optionally
+# possessive, followed by "section", a section mark or a hash and a number — anything that
+# names the FILE and a number in the same breath. Provably wrong once `DEBT<n>` exists:
+# there is no reason left to spell a debts citation this way, so a match here is a
+# regression, not a judgement call. (Written here without a literal worked example on
+# purpose — this file is itself scanned, and an example would be the regression it flags.)
+_DEBT_PATH_RE = re.compile(r"docs/DEBTS\.md`?('s)?\s+(?:own\s+)?(?:section\s+|§\s*|#)[0-9]+")
+
+
+def check_debt_ids(report: Report, docs: List[Path]) -> None:
+    """Every `DEBT<n>` citation resolves, and the retired path form has not come back.
+
+    THE DEBTS TWIN OF `decision ids`, NARROWER ON PURPOSE. `decision ids` can require every
+    `D<n>` to resolve because `D<n>` is the ONLY numbering scheme that letter names. `§<n>`
+    is not: `docs/specs/*.md` alone carries 409 bare `§<n>` references to THEIR OWN sections
+    (measured 2026-09-16, `docs/specs/mechanization-backlog.md`, `docs/specs/logo.md`,
+    `docs/specs/motion-trigger.md` among them), and `docs/decisions/*.md` and
+    `scripts/docs-audit.py` add over a hundred more citing OTHER documents' own sections by
+    the same bare sigil — `logo.md §3`, `order-pipeline.md §6`, `store-scaling.md §0`. A rule
+    that failed every bare `§<n>` outside `docs/debts/` would be red on all of those, none of
+    which are about debts at all. THIS IS WHY THE ID IS `DEBT<n>` AND NOT A BARE `§<n>`
+    (the fix this row exists to protect): only a prefixed token can be checked without
+    reading the sentence around it, which is exactly D149's own conclusion — "this repo's
+    prose cites by narrating, not by quoting" — turned into the two things that ARE
+    decidable without narrating:
+
+    1. every `DEBT<n>` in the tree names a real entry (MECHANICAL, like `decision ids`).
+    2. the RETIRED PATH FORM — `docs/DEBTS.md` plus a number, in any of the three spellings
+       this split found — has not been reintroduced anywhere outside `docs/debts/` itself
+       (MECHANICAL: a literal substring match, zero judgement, and it was true of 100% of
+       this tree's citations before this fix and should stay true after it).
+
+    NOT MECHANIZED: a bare `§<n>` with no `DEBT` prefix and no `docs/DEBTS.md` nearby, added
+    by a future session who means DEBT<n> and does not know to prefix it. Catching that
+    requires knowing what a sentence is ABOUT, which is D149's and DEBT25's own conclusion
+    about the general form of this problem, not a gap unique to this row.
+    """
+    if _debts_corpus_empty(report, "debt ids"):
+        return
+    known = {f"DEBT{i}" for i in _debts_corpus().idents()}
+
+    def scan(paths: Iterable[Path], out: List[Finding], regressions: List[Finding]) -> None:
+        for path in paths:
+            if str(rel(path)).replace("\\", "/").startswith("docs/debts/"):
+                continue  # a sibling entry may cite another by a bare §<n> — see the stub
+            for number, raw in enumerate(read(path).splitlines(), start=1):
+                line = without_noqa(raw)
+                for ident in _DEBT_RE.findall(line):
+                    if f"DEBT{ident}" not in known:
+                        out.append(Finding(
+                            f"{rel(path)}:{number}",
+                            f"cites DEBT{ident}, which has no `## {ident}` heading in "
+                            f"docs/debts/.",
+                        ))
+                if _DEBT_PATH_RE.search(line):
+                    regressions.append(Finding(
+                        f"{rel(path)}:{number}",
+                        f"spells a debts citation the retired way — `docs/DEBTS.md` plus a "
+                        f"number. Use `DEBT<n>` instead.",
+                    ))
+
+    dangling: List[Finding] = []
+    regressions: List[Finding] = []
+    code_haystack = python_files() + _walk(ROOT, (".ts", ".tsx", ".css", ".js", ".mjs"))
+    scan(docs, dangling, regressions)
+    scan(code_haystack, dangling, regressions)
+
+    report.add("debt ids", MECHANICAL, dangling + regressions,
+               f"{len(known)} entries, citations in docs and code all resolve, "
+               f"the retired path form is gone",
+               scanned=len(docs) + len(code_haystack))
 
 
 def _debts_section(number: int) -> Optional[str]:
@@ -16835,6 +16910,7 @@ def audit(staged_only: bool) -> Report:
     check_entry_budget(report)
     check_debts_headings(report)
     check_debt_index(report)
+    check_debt_ids(report, docs)
     check_env_vars(report, docs, allowed)
     check_env_names(report)
     check_hatch_state(report)

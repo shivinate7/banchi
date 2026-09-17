@@ -475,7 +475,7 @@ export function Fulfillment() {
    * cause" rule refuses. Order resolution itself never touched `getInventory()` here: `GET
    * /orders` already resolves every open order's lines to picks carrying their own place and
    * capture id (`orderGroups`, above), so this is the ONE call site left on the full walk.
-   * `docs/DEBTS.md` §27 is the named debt: the measured cost, why this cannot be box-scoped,
+   * DEBT27 is the named debt: the measured cost, why this cannot be box-scoped,
    * and the candidate primitive. */
   useEffect(() => {
     let livePage = true

@@ -42,7 +42,7 @@
 
 ### What it costs
 
-**The check is text, so a renamed local walks past it.** A nominal type over the two numbers is the fix that could not be evaded, and it was rejected on blast radius. §9 carries the ceiling and the argument. **`PlaceNeighbor.index` is sent and read by nothing**, which is a deliberate unread field. **And the departed card's frozen count is RECORDED AND NOT BUILT**: it needs the event log, because current state plus `state_at` does not reconstruct it — tested, and 31 of 105 records come out wrong that way. It carries a question nobody has answered: what a re-sold card's frozen count means.
+**The check is text, so a renamed local walks past it.** A nominal type over the two numbers is the fix that could not be evaded, and it was rejected on blast radius. DEBT9 carries the ceiling and the argument. **`PlaceNeighbor.index` is sent and read by nothing**, which is a deliberate unread field. **And the departed card's frozen count is RECORDED AND NOT BUILT**: it needs the event log, because current state plus `state_at` does not reconstruct it — tested, and 31 of 105 records come out wrong that way. It carries a question nobody has answered: what a re-sold card's frozen count means.
 
 **What would reopen this: a neighbor row that becomes a click target, a screen that needs to draw a key inside a count column, or the frozen-count panel.** The first is why `index` is still on the wire. The second is what `sigil-ok:` is for. The third is the one piece of this entry that is a want rather than a build.
 
@@ -50,7 +50,7 @@
 
 **The sweep the Banchi merge deferred is done, and it turned up exactly one real violation.** `CaptureScreen.tsx`'s undo filmstrip drew `#{slotNumber(target)}`, and `slotNumber` fell back to the raw index whenever `target.label` was null. That target is not hypothetical: `undoStack` composes one from the server's high-water mark whenever the session never saw a capture response — every reload mid-run. So the one screen where the number is a store key drew it wearing the count's sigil, on the row a person presses to undo.
 
-**`scripts/sigil-check.py` was green over that line the whole time, and this is not a hole in it.** It matches the text inside a `#{…}`, and the text there was a helper call, not the word `index`. A helper is a renamed local with a longer name — precisely the ceiling this entry named and §9 wrote down. Nothing has changed about what the check can see; a defect reached the tree through the gap that was already recorded, which is the trigger §9 set for revisiting the nominal type.
+**`scripts/sigil-check.py` was green over that line the whole time, and this is not a hole in it.** It matches the text inside a `#{…}`, and the text there was a helper call, not the word `index`. A helper is a renamed local with a longer name — precisely the ceiling this entry named and DEBT9 wrote down. Nothing has changed about what the check can see; a defect reached the tree through the gap that was already recorded, which is the trigger §9 set for revisiting the nominal type.
 
 **The spelling is `app/src/storeKey.ts` now, with `STORE_KEY` beside it.** Two screens composed `B<box> #<index>` by hand from the same two fields, independently — which is `cardNumber.ts`'s lesson (D67) about the other number a card carries. The reader and the writer of one string live in one file, so a respelling in `join.departed_label` lands on two adjacent lines rather than on however many screens reached for a template literal.
 

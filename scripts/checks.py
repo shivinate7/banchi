@@ -399,6 +399,27 @@ CHECKS = (
         "governed_by": ("D16", "D18", "D60", "D160"),
     },
     {
+        "target": "debts-selftest",
+        "runs": "python3 scripts/split-debts.py --selftest",
+        "asserts": "`docs/debts/` is a complete, well-formed set — the debts twin of "
+                   "`decisions-selftest`, same shape: every file `ORDER.json` names is "
+                   "present, every markdown file present is named, no id appears in two "
+                   "files, and the reassembly still ends in a newline. It does NOT hash the "
+                   "live corpus for the same reason `decisions-selftest` does not: editing "
+                   "a finding is the normal way this corpus changes. The historical claim "
+                   "that the split itself lost nothing is `--verify-split REF`.",
+        "needs": ("python3",),
+        "writes": "",
+        "commit_path": False,
+        "why_off_commit_path": "Same argument as `decisions-selftest`: a corpus that has "
+                               "lost a file fails `debt ids` and `debt index` in the same "
+                               "run, so the commit gate already refuses the damage this "
+                               "names. It is in `check` and `ci-check` for the earlier, "
+                               "clearer message.",
+        "gates": True,
+        "governed_by": ("D16", "D18", "D149", "D160"),
+    },
+    {
         "target": "submission-selftest",
         "runs": "python3 scripts/submission-selftest.py",
         "asserts": "store/submissions.py — the claim table that refuses a second `identify` "

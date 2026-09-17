@@ -223,7 +223,7 @@ async function open(
    * refusal from a live store. These stubs reach nothing. */
   /* THE HUB'S OTHER READ, UNCONDITIONALLY. `OrdersHub` asks `POST /inventory/copies` after
      every `GET /orders` lands — it needs the cards to resolve a line to copies, scoped to the
-     SKUs the ledger just named (docs/DEBTS.md §27, site 1) — and this file stubbed the old
+     SKUs the ledger just named (DEBT27, site 1) — and this file stubbed the old
      whole-store `GET /inventory` only inside the `boot` branch below, so every case that did
      not ask for a boot header sent that read to the capture port. `sealEveryTest` named it.
      Registered BEFORE the branch, so the boot variant is the newer handler and still wins

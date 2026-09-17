@@ -771,7 +771,7 @@ export async function getRecentCards(limit: number): Promise<{ cards: Record<str
 }
 
 /** Every on-hand copy of the given SKUs, store-wide, in `getInventory()`'s own per-card
- *  shape — `docs/DEBTS.md` §27, site 1. `Orders.tsx:indexStore` is the one caller: it needs
+ *  shape — DEBT27, site 1. `Orders.tsx:indexStore` is the one caller: it needs
  *  EVERY copy of a card, not only the ones the resolver's own picks name, because a line
  *  stops drawing picks the moment it is filled while the store may hold many more.
  *

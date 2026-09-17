@@ -142,7 +142,7 @@ const auditSource = (mode: Mode) => `(() => {
        a 22px tick answer at 46 through a wrapper, and narrowing it wants its own measurement. */
     const owns = (n) => n !== null && (t.contains(n) || n.contains(t) || chrome(n))
     /* A CONTROL WHOSE OWN CENTRE PAINTS UNDER FIXED CHROME IS NOT BRUSHING PAST IT, IT IS SITTING
-       BEHIND IT (docs/DEBTS.md #22, closed 2026-09-13). owns() forgives chrome(n) so a probe
+       BEHIND IT (DEBT22, closed 2026-09-13). owns() forgives chrome(n) so a probe
        that lands on .bn-topbar / .bn-tabbar / .kit-index while a control scrolls PAST one of
        them is not read as crowded — D117's own case, measured on #/inventory at every whole-pixel
        offset. That forgiveness is right for a CORNER probe brushing an edge and wrong for the

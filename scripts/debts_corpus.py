@@ -75,11 +75,17 @@ def text() -> str:
 
 
 def path_for(ident: str) -> Optional[Path]:
-    """The file holding one entry, or None. `ident` is the bare number, e.g. `"11"`."""
+    """The file holding one entry, or None.
+
+    `ident` is the bare number (`"11"`) or the `DEBT<n>` id form (`"DEBT11"`) — the second
+    is what a citation outside `docs/debts/` is required to spell (the stub's own "CITE BY
+    ID" rule), and this accepts both so a caller does not have to strip the prefix itself.
+    """
+    number = ident[4:] if ident.upper().startswith("DEBT") else ident
     for path in files():
         head = path.read_text(encoding="utf-8").split("\n", 1)[0]
         match = HEADING_RE.match(head)
-        if match and match.group(1) == ident:
+        if match and match.group(1) == number:
             return path
     return None
 

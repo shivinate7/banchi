@@ -7,7 +7,7 @@ item 2 removed nothing (`_boxes_named` is `do_status`'s), item 4 replaced one en
 own one-pass `select`, and item 7 kept a renamed entry each for `GET /pipeline/value`'s
 aggregate and `box_views`'s unbounded branch, because a store-wide ranking is O(cards) by
 nature and reads two indexed columns rather than building a `Card`. Two screens still read
-`GET /inventory` whole and say why (§27). `docs/specs/store-scaling/
+`GET /inventory` whole and say why (DEBT27). `docs/specs/store-scaling/
 00-phases.md` has the per-phase counts and the schema versions as they were actually taken.
 The paragraphs below are the plan as agreed; §1's table carries the after-figures each PR
 measured. The owner's inventory is 2,535 cards today and

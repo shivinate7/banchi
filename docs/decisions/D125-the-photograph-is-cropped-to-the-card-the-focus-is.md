@@ -1,6 +1,6 @@
 ## D125 — The photograph is cropped to the card, the focus is derived from the reading, and a reading that cannot be believed is a refusal
 
-**Settled 2026-09-09, on the owner's instruction to take §7.** That section had
+**Settled 2026-09-09, on the owner's instruction to take DEBT7.** That section had
 been open on the ground that its two fixes — `object-fit: contain` and a server-side crop — traded
 legibility against coverage in opposite directions, and that one of them moved a published floor.
 **Neither is what landed.** The thing that closed the argument was built for something else in
@@ -47,7 +47,7 @@ D32 keeps the whole frame where a photograph is matched to a physical slot, and 
 floors are not a session's to reopen. Both survive:
 
 - **The floor is on painted SIZE, and the crop only makes the card bigger in the same box.**
-  §7 already records that a floor on size cannot see whether the
+  DEBT7 already records that a floor on size cannot see whether the
   card is inside what was drawn, and this is that gap being paid rather than widened.
 - **Measured on his screen at the worst geometry §7 recorded** — a card with its bottom edge at
   98% of the frame — **`cover` cut 68px off the bottom of the card in a 440x615 box.** The
@@ -168,7 +168,7 @@ entry got wrong is the inference that removing the clipping was worth what it co
 that moves under you as a reading lands, on every card of a walk.
 **The clipping is a defect you can measure; the crop is a defect you can feel.**
 The second one is the one being used.
-§7 is reopened on exactly that basis.
+DEBT7 is reopened on exactly that basis.
 
 **ONE THING IS DELIBERATELY NOT REVERTED.** `#/pricing`'s drawer does not go back to what it was.
 Its original state was the kit's `contain` — 36.1px of ground down each side of a 340px window,

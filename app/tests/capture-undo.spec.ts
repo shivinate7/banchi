@@ -435,7 +435,7 @@ test('a walk that is refused partway says how far it got, in the server’s own 
  * WHAT IT GUARDS. `undoFigure` used to draw `#{slotNumber(target)}` here, and `slotNumber` returned
  * the raw index — D58's countable number spelled over the store key, three functions away from the
  * `#`, which is why `make sigil-check` was green over that line from the day it was written
- * (docs/DEBTS.md §9). Nothing in this suite reached the branch: the fix shipped in `42e6b96` with
+ * (DEBT9). Nothing in this suite reached the branch: the fix shipped in `42e6b96` with
  * no test file touched at all, and its only evidence was a render somebody looked at once.
  *
  * `toHaveText` and an anchored `aria-label` rather than a `contains`: `B3 #7` contains `#7`, so a

@@ -1676,7 +1676,7 @@ def refuse_unconfirmed(args: argparse.Namespace, verb: str) -> bool:
     it, and the word is still the operator's.
 
     WHY IT EXISTS. On 2026-09-04 a session ran `make design-check` about eight times against the
-    owner's live server, degraded it the way `docs/DEBTS.md` section 11 describes, and then ran
+    owner's live server, degraded it the way DEBT11 describes, and then ran
     the `restart` target to fix what it had done — since removed by D138, the bounce now being
     `make up ARGS=--restart`. The drain expired and the supervisor killed the process with a
     request in flight, which crashed Python out from under the owner mid-use. The

@@ -449,7 +449,7 @@ const PRICED_STORE: Store = { cards: JOINED, search: (query) => searchAnswer(que
  * reports `Property 'products' is missing in type ... but required in type 'GameRegistry'`.
  *
  * `capture-undo.spec.ts` and `capture-claims.spec.ts` carry the same annotation for the same
- * reason. Twelve of the eighteen spec files still do not; docs/DEBTS.md §3 says so. */
+ * reason. Twelve of the eighteen spec files still do not; DEBT3 says so. */
 const GAMES: GameRegistry = {
   default: 'pokemon',
   games: [

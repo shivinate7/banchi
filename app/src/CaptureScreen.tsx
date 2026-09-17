@@ -731,7 +731,7 @@ function Track({
  *
  *  `scripts/sigil-check.py` never saw it and could not have: it matches the text inside a `#{…}`
  *  and the text here was a call to this function, not the word `index`. That is the ceiling
- *  `docs/DEBTS.md` §9 wrote down in advance, not a new hole.
+ *  DEBT9 wrote down in advance, not a new hole.
  *
  *  THE TAIL MUST BE `<word> <number>` TO BE PROMOTED. `/(\d+)$/` alone would take the `31` off
  *  a `… · departed · B3 #31` tail and print `#31` — a bare sigil over a key by the other door.
