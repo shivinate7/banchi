@@ -4,7 +4,7 @@
 # the project would be built on top of — `make check` green means every check ran.
 
 .DEFAULT_GOAL := help
-.PHONY: help status map explain harness check cid-selftest cid-audit ignore-check docs-audit map-fix map-fix-selftest orient orient-selftest vale audit-self-test verdict-selftest githooks-selftest merge merge-selftest revert-guard revert-selftest claim-ids claim-stale claim-selftest decisions-selftest debts-selftest gates-selftest port-agreement set-hint-agreement readiness-agreement mutate-anchors mutate-guards screen-freshness screen-freshness-selftest sigil-check suite-lock-selftest icloud-sweep audit-history dev server screenshot design-check design-check-quiet lint typecheck venv launch-config worktree-setup hooks up down launch-agent demo demo-photos demo-seed demo-record demo-static demo-preview demo-freshness catalog-refresh catalog-index catalog-index-selftest catalog-mirror
+.PHONY: help status map explain harness check cid-selftest cid-audit ignore-check docs-audit map-fix map-fix-selftest orient orient-selftest serve-scope serve-scope-selftest vale audit-self-test verdict-selftest githooks-selftest merge merge-selftest revert-guard revert-selftest claim-ids claim-stale claim-selftest decisions-selftest debts-selftest gates-selftest port-agreement set-hint-agreement readiness-agreement mutate-anchors mutate-guards screen-freshness screen-freshness-selftest sigil-check suite-lock-selftest icloud-sweep audit-history dev server screenshot design-check design-check-quiet lint typecheck venv launch-config worktree-setup hooks up down launch-agent demo demo-photos demo-seed demo-record demo-static demo-preview demo-freshness catalog-refresh catalog-index catalog-index-selftest catalog-mirror
 
 # Prefer the venv if it exists, so `make harness` works without anyone remembering to
 # activate anything. Falls back to system python3, which still runs T2-T5 — T1 needs the
@@ -113,6 +113,11 @@ help:
 	@echo "  make suite-lock-selftest  one browser fleet at a time, proved by violating it."
 	@echo "  make verdict-selftest  the design-check verdict reporter, run for real. No browser."
 	@echo "  make serve-selftest  the supervisor's build job, against a throwaway tree. No node."
+	@echo "                    PATH GATED (the only one): skipped when nothing in the branch"
+	@echo "                    reaches it. PKMNSCAN_SERVE_SCOPE=off runs it regardless."
+	@echo "  make serve-scope   what serve-selftest reads, and whether this branch touches it."
+	@echo "                    ARGS=list | ARGS=\"classify --base <rev>\". Fails open."
+	@echo "  make serve-scope-selftest  that gate, including a CARRY drift it must catch."
 	@echo "  make sync-selftest  the primary checkout's self-sync, proved by violating it."
 	@echo "  make port-agreement  server/ports.py and app/devPort.ts answer the same numbers."
 	@echo "  make set-hint-agreement  the capture screen and the export fetch resolve a set hint alike."
@@ -842,8 +847,30 @@ janitor-selftest:
 # standing and the same reason as the three self-tests around it: it starts and stops real
 # supervisors and swaps real directories, so it is in `check` and never in the git hook.
 # No node — the stub is a shell script — so it runs anywhere the rest of `check` does.
+# PATH GATED SINCE 2026-09-17, AND IT IS THE ONLY TARGET IN THIS FILE THAT IS.
+# It is 70.1s, 37% of `make check`'s 187.5, and it copies this checkout into a throwaway tree
+# with a STUB `app/` — so no screen change can reach it. `scripts/serve-scope.py` derives what
+# it reads from the self-test's own `CARRY` and answers 0 to run, 3 to skip. It fails OPEN:
+# no merge-base, an unreadable diff and an EMPTY diff all run it.
+#
+# THE OWNER RULED THIS ONE IN AND PATH GATING IN GENERAL OUT (docs/specs/verification-cost.md
+# §9). Nine targets in `make check` cost under a tenth of a second each, so a scope list per
+# target would cost more to maintain than it saves. A SECOND gated target needs the owner's
+# word again — do not read this recipe as a pattern to copy.
+#
+# PKMNSCAN_SERVE_SCOPE=off runs it regardless, and every skip prints that.
 serve-selftest:
-	@$(PYTHON) scripts/serve-selftest.py
+	@if python3 scripts/serve-scope.py classify --base origin/main; then \
+		$(PYTHON) scripts/serve-selftest.py; \
+	else \
+		echo "serve-selftest: SKIPPED — nothing in this branch reaches what it reads."; \
+	fi
+
+serve-scope:
+	@python3 scripts/serve-scope.py $(ARGS)
+
+serve-scope-selftest:
+	@python3 scripts/serve-scope.py selftest
 
 # THE PRIMARY CHECKOUT'S SELF-SYNC, proved by violating it in throwaway clones. It switches
 # branches and moves `refs/heads/main`, which is exactly why it may never be pointed at this

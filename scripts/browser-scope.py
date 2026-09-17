@@ -202,16 +202,25 @@ def recipe_text(makefile: str, target: str) -> Optional[str]:
 SideReader = Callable[[str, str], Optional[str]]
 
 
-def classify_paths(paths: Sequence[str], read_side: SideReader) -> Verdict:
-    """The pure half: a list of changed paths in, a verdict out. No git, no environment."""
+def classify_paths(paths: Sequence[str], read_side: SideReader,
+                   scope: Sequence[dict] = SCOPE, subject: str = "what a browser draws",
+                   noun: str = "the matrix") -> Verdict:
+    """The pure half: a list of changed paths in, a verdict out. No git, no environment.
+
+    `scope`, `subject` and `noun` are parameters because a SECOND gate now asks the same
+    question about a different suite (`scripts/serve-scope.py`, 2026-09-17). They default to
+    this file's own, so every existing caller is unchanged, and the alternative was a second
+    copy of the globbing and the recipe narrowing — the two pieces here that are subtle
+    enough to drift apart without anyone noticing which copy was right.
+    """
     lines: List[str] = []
     run = False
     if not paths:
         return Verdict(True, [
             "no changed files were found. That is more likely a wrong base than an empty "
-            "change, so the matrix RUNS."])
+            f"change, so {noun} RUNS."])
     for path in paths:
-        hits = [entry for entry in SCOPE if matches(entry["path"], path)]
+        hits = [entry for entry in scope if matches(entry["path"], path)]
         if not hits:
             lines.append(f"  skip  {path}")
             continue
@@ -242,8 +251,8 @@ def classify_paths(paths: Sequence[str], read_side: SideReader) -> Verdict:
         else:
             lines.append(f"  skip  {path}  (changed outside the `{target}` recipe)")
     lines.append(
-        "the change reaches what a browser draws — the matrix RUNS" if run
-        else "nothing here reaches what a browser draws — the matrix is SKIPPED")
+        f"the change reaches {subject} — {noun} RUNS" if run
+        else f"nothing here reaches {subject} — {noun} is SKIPPED")
     return Verdict(run, lines)
 
 

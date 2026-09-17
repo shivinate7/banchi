@@ -13581,6 +13581,8 @@ def check_suite_lock(report: Report) -> None:
 # on the same line as a `//` inside a URL, which the comment blanker takes with it. Each is a
 # miss and never a false finding.
 BROWSER_SCOPE_SCRIPT = ROOT / "scripts" / "browser-scope.py"
+SERVE_SCOPE_SCRIPT = ROOT / "scripts" / "serve-scope.py"
+SERVE_SELFTEST_SCRIPT = ROOT / "scripts" / "serve-selftest.py"
 CHECK_WORKFLOW = ROOT / ".github" / "workflows" / "check.yml"
 PLAYWRIGHT_CONFIG = ROOT / "app" / "playwright.config.ts"
 VITE_CONFIG = ROOT / "app" / "vite.config.ts"
@@ -13856,6 +13858,98 @@ def check_browser_scope(report: Report) -> None:
 
     report.add("browser scope", MECHANICAL, findings,
                f"{len(scope)} entries cover {len(seen)} derived dependencies, read fail-open",
+               scanned=len(scope))
+
+
+def check_serve_scope(report: Report) -> None:
+    """`scripts/serve-scope.py:SCOPE` against `serve-selftest.py:CARRY`, both ways.
+
+    MECHANICAL, on `browser scope`'s reasoning exactly. `CARRY` is the literal list of what
+    the self-test copies into its throwaway tree, which IS the definition of what that test
+    can observe. A carried name with no SCOPE entry is a class of change the gate has
+    silently stopped running for, and a SCOPE entry that is not carried and does not say why
+    is a filter covering something the test cannot see. Neither is a judgement.
+
+    THE ONE PATH-GATED TARGET IN THE REPO, and the row exists because of what makes it
+    dangerous rather than what makes it useful. `make serve-selftest` is 70.1s of `make
+    check`'s 187.5, and the owner ruled it in and path gating in general out
+    (`docs/specs/verification-cost.md` §9). A second gated target needs the owner's word
+    again, so this row is deliberately written about THIS gate and not as a framework.
+    """
+    if not exists(SERVE_SCOPE_SCRIPT):
+        report.add("serve scope", MECHANICAL, [Finding(
+            rel(SERVE_SCOPE_SCRIPT),
+            "does not exist, and the Makefile gates `serve-selftest` on it.")])
+        return
+    if not exists(SERVE_SELFTEST_SCRIPT):
+        report.add("serve scope", MECHANICAL, [Finding(
+            rel(SERVE_SELFTEST_SCRIPT), "does not exist, so there is nothing to scope.")])
+        return
+
+    scope = literals_from_module(SERVE_SCOPE_SCRIPT).get("SCOPE")
+    carry = literals_from_module(SERVE_SELFTEST_SCRIPT).get("CARRY")
+    if not isinstance(scope, tuple) or not scope or not all(
+        isinstance(entry, dict) and isinstance(entry.get("path"), str) for entry in scope
+    ):
+        report.add("serve scope", MECHANICAL, [Finding(
+            rel(SERVE_SCOPE_SCRIPT),
+            "`SCOPE` is not a tuple of `{\"path\": …}` literals this row can read.")])
+        return
+    if not isinstance(carry, tuple) or not carry:
+        report.add("serve scope", MECHANICAL, [Finding(
+            rel(SERVE_SELFTEST_SCRIPT),
+            "`CARRY` is not a tuple of names this row can read, so nothing defines what the\n"
+            "  self-test observes and the scope list is unreconcilable.")])
+        return
+
+    findings: List[Finding] = []
+    carried = {str(name) for name in carry}
+
+    def stands_for(entry: dict) -> str:
+        path = str(entry["path"])
+        return path[:-3] if path.endswith("/**") else path
+
+    declared = {stands_for(entry) for entry in scope if "beyond_carry" not in entry}
+
+    for name in sorted(carried - declared):
+        findings.append(Finding(rel(SERVE_SCOPE_SCRIPT), (
+            f"`{name}` is carried into the self-test's tree and no SCOPE entry stands for it.\n"
+            "  A change to it would skip the self-test, and the green would be believed.")))
+
+    for name in sorted(declared - carried):
+        findings.append(Finding(rel(SERVE_SCOPE_SCRIPT), (
+            f"`{name}` is in SCOPE but `CARRY` does not carry it. Either add `beyond_carry`\n"
+            "  saying why the test depends on something it never copies, or drop the entry.")))
+
+    for entry in scope:
+        if not str(entry.get("why") or "").strip():
+            findings.append(Finding(rel(SERVE_SCOPE_SCRIPT),
+                                    f"`{entry['path']}` gives no reason for being in the list."))
+        beyond = entry.get("beyond_carry")
+        if beyond is not None and not str(beyond).strip():
+            findings.append(Finding(rel(SERVE_SCOPE_SCRIPT), (
+                f"`{entry['path']}` declares `beyond_carry` with no argument in it. The whole\n"
+                "  point of the field is the sentence.")))
+
+    # THE WIRING. A classifier nothing consults is a list, not a gate.
+    makefile = read(ROOT / "Makefile") if exists(ROOT / "Makefile") else ""
+    recipe = ""
+    for line in makefile.split("\n"):
+        if line.startswith("serve-selftest:"):
+            recipe = makefile.split("serve-selftest:", 1)[1].split("\n\n", 1)[0]
+            break
+    if "serve-scope.py" not in recipe:
+        findings.append(Finding(
+            "Makefile",
+            "the `serve-selftest` recipe does not consult `scripts/serve-scope.py`. The scope\n"
+            "  list then gates nothing and is a list somebody maintains for no reader."))
+    elif "serve-selftest.py" not in recipe:
+        findings.append(Finding(
+            "Makefile",
+            "the `serve-selftest` recipe consults the scope but never runs the self-test."))
+
+    report.add("serve scope", MECHANICAL, findings,
+               f"{len(scope)} entries against {len(carry)} carried names, both ways",
                scanned=len(scope))
 
 
@@ -17912,6 +18006,7 @@ def audit(staged_only: bool) -> Report:
     check_no_mechanism_on_screen(report)
     check_suite_lock(report)
     check_browser_scope(report)
+    check_serve_scope(report)
     check_positional_references(report, docs)
     check_audit_invocation(report)
     check_identifier_spelling(report)

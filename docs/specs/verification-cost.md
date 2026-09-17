@@ -396,10 +396,40 @@ still does not know that `hidePicks` is what selects it. That is a relationship,
 location. Judge the split later on whether `make orient`'s output got shorter, and treat it
 as its own argument.
 
-**`serve-selftest` path gating is not built, and the reason is a measurement not yet taken.**
-The ruling was to gate it and revisit if the list grows. Before writing a scope list, someone
-has to derive what `serve-selftest` actually reads — the way `scripts/browser-scope.py`
-derives its `SCOPE` from Vite's root, Playwright's `testDir` and the recipes — and it needs
-the `docs-audit` row that reconciles it in both directions, because a path filter with no
-reader is how a gate quietly stops running. That is its own piece of work, not a line to add
-here. It is the next thing, and it is the only item from §8 still open.
+**`serve-selftest` path gating is BUILT, 2026-09-17.** `scripts/serve-scope.py` +
+`make serve-scope`, and the `serve-selftest` recipe is its caller. It is the only path-gated
+target in the repository, and its own header says so, because the ruling was this one and not
+a policy.
+
+- **The list is derived, not typed.** `SCOPE` stands against `serve-selftest.py`'s own
+  `CARRY` — the literal list of what gets copied into the throwaway tree, which is the
+  definition of what that test can observe. Three entries go beyond `CARRY` (the test itself,
+  the classifier, and the `serve-selftest` recipe) and each carries a `beyond_carry` sentence.
+- **It has a reader, in both directions.** `make docs-audit`'s new `serve scope` row: a
+  carried name with no entry is a class of change the gate has silently stopped running for;
+  an entry that is not carried and does not say why is a filter over something the test cannot
+  see. It also checks the wiring, because a classifier nothing consults is a list, not a gate.
+- **`app/**` is absent on purpose and the file says so.** The self-test writes a STUB `app/`
+  and never copies this one. The day `CARRY` gains `app`, the audit row fails until `SCOPE`
+  follows.
+- **It reuses the matcher.** The globbing and the recipe narrowing are imported from
+  `scripts/browser-scope.py`, whose `classify_paths` took three new defaulted parameters.
+  Two copies of that logic would drift, and both would answer.
+- **It fails open in every direction**: no merge-base, an unreadable diff, and an EMPTY diff
+  all answer RUN, out loud. `PKMNSCAN_SERVE_SCOPE=off` runs it regardless and is printed in
+  every skip.
+
+**Proved on real commits, not only in the selftest.** Commit `37629dd6`, which touches only
+`app/`, classifies SKIP (exit 3). This branch, which edits the classifier, classifies RUN
+(exit 0). The hatch turns the skip back into a run. `make serve-scope-selftest` covers ten
+classification cases plus the `CARRY` reconciliation and a drift it must catch.
+
+**The saving is 70.1 s on any branch that does not reach the supervisor — `make check` at
+about 117 s instead of 187 s.** On this branch it ran, correctly, and `make check` was 3m10.
+
+**What it lets through:** a supervisor or build-job regression reaching `serve-selftest`
+through something neither `CARRY` nor the three `beyond_carry` entries name. The audit row
+exists to make that a failing commit rather than a quiet skip, and it is the only thing
+standing between this gate and the failure every other path gate in this document was
+rejected for.
+
