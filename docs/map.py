@@ -3267,6 +3267,52 @@ COMPONENTS = [
                         "directory is this checkout's own `captures/`, which in a worktree is "
                         "correctly empty and says so rather than reporting a clean zero.",
             },
+            "orient.py": {
+                "does": "`make orient <file.tsx>` — every component in a .tsx file, its line "
+                        "span, which component draws it, and the expression that decides "
+                        "whether it is drawn. A RENDERER: it writes nothing and gates "
+                        "nothing, so D18 leaves it alone, the same standing `map-view.py` "
+                        "has. Derived on every run and never stored, because a stale index "
+                        "sends an agent to the wrong component with more confidence than no "
+                        "index at all.",
+                "governed_by": ["D17", "D18"],
+                "note": "WRITTEN 2026-09-17 FOR ONE DEFECT. A fix to `#/orders` was briefed "
+                        "against `CopyMapView`; the screen the owner looks at renders "
+                        "`WalkGroups`, because `BuyerDetail` passes `hidePicks={hasWalk}` and "
+                        "`OrderLineRow` suppresses the first on it. Three lines, 1,000 apart, "
+                        "in a 4,605-line file. The work was correct and invisible and it cost "
+                        "a whole agent round. SPLITTING THE FILE WOULD NOT HAVE FIXED IT: "
+                        "which prop selects which component is a relationship, not a "
+                        "location. The condition walks back by BRACE DEPTH rather than by "
+                        "proximity — the first version handed a tag the condition of the "
+                        "closed expression above it, and a false relationship is the one "
+                        "output worse than none here. No TypeScript parser is in the "
+                        "standard library, so a component reached through a variable or a "
+                        "table of components is invisible to it, and it says so in its own "
+                        "output every time it runs.",
+            },
+            "map-fix.py": {
+                "does": "`make map-fix` — add the decision ids a file cites to that file's "
+                        "`governed_by` here. THE ONE GENERATOR IN THE REPO, and it gates "
+                        "nothing: D18's seam list names this one location and nothing else. "
+                        "Previews by default; `--write` applies. It imports "
+                        "`docs-audit.py:cited_decisions()` rather than reimplementing it, so "
+                        "the writer and the gate cannot disagree about what a file cites. "
+                        "Stdlib, and it splices with `ast` so the hand-written prose around "
+                        "each list survives untouched.",
+                "governed_by": ["D16", "D17", "D18", "D173"],
+                "note": "IT ONLY EVER ADDS. An id in `governed_by` that the file does not "
+                        "cite is invisible to the `repo map` row and to this alike, because "
+                        "that check is one-directional — so removing one stays a person's "
+                        "judgement. WRITTEN 2026-09-17 after a cost measurement: 112 of the "
+                        "last 200 non-merge commits touch this file, 416 of the 2,620 lines "
+                        "they changed in it are `governed_by`, and three commits in one "
+                        "evening were blocked for nothing else. The seam it uses is an "
+                        "amendment to D18 argued on its own terms, not a judgement made "
+                        "while implementing something else. Its selftest is deliberately NOT "
+                        "in `make check`, on `catalog-index-selftest`'s precedent: what it "
+                        "writes is already verified by a gate that runs on every commit.",
+            },
             "map-view.py": {
                 "does": "`make map` — docs/map.py rendered for a person, in four views: the "
                         "shape, one package, one module, everything a decision governs, and "
