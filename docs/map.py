@@ -3267,6 +3267,30 @@ COMPONENTS = [
                         "directory is this checkout's own `captures/`, which in a worktree is "
                         "correctly empty and says so rather than reporting a clean zero.",
             },
+            "orient.py": {
+                "does": "`make orient <file.tsx>` — every component in a .tsx file, its line "
+                        "span, which component draws it, and the expression that decides "
+                        "whether it is drawn. A RENDERER: it writes nothing and gates "
+                        "nothing, so D18 leaves it alone, the same standing `map-view.py` "
+                        "has. Derived on every run and never stored, because a stale index "
+                        "sends an agent to the wrong component with more confidence than no "
+                        "index at all.",
+                "governed_by": ["D17", "D18"],
+                "note": "WRITTEN 2026-09-17 FOR ONE DEFECT. A fix to `#/orders` was briefed "
+                        "against `CopyMapView`; the screen the owner looks at renders "
+                        "`WalkGroups`, because `BuyerDetail` passes `hidePicks={hasWalk}` and "
+                        "`OrderLineRow` suppresses the first on it. Three lines, 1,000 apart, "
+                        "in a 4,605-line file. The work was correct and invisible and it cost "
+                        "a whole agent round. SPLITTING THE FILE WOULD NOT HAVE FIXED IT: "
+                        "which prop selects which component is a relationship, not a "
+                        "location. The condition walks back by BRACE DEPTH rather than by "
+                        "proximity — the first version handed a tag the condition of the "
+                        "closed expression above it, and a false relationship is the one "
+                        "output worse than none here. No TypeScript parser is in the "
+                        "standard library, so a component reached through a variable or a "
+                        "table of components is invisible to it, and it says so in its own "
+                        "output every time it runs.",
+            },
             "map-fix.py": {
                 "does": "`make map-fix` — add the decision ids a file cites to that file's "
                         "`governed_by` here. THE ONE GENERATOR IN THE REPO, and it gates "

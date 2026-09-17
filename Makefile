@@ -4,7 +4,7 @@
 # the project would be built on top of — `make check` green means every check ran.
 
 .DEFAULT_GOAL := help
-.PHONY: help status map explain harness check cid-selftest cid-audit ignore-check docs-audit map-fix map-fix-selftest vale audit-self-test verdict-selftest githooks-selftest merge merge-selftest revert-guard revert-selftest claim-ids claim-stale claim-selftest decisions-selftest debts-selftest gates-selftest port-agreement set-hint-agreement readiness-agreement mutate-anchors mutate-guards screen-freshness screen-freshness-selftest sigil-check suite-lock-selftest icloud-sweep audit-history dev server screenshot design-check design-check-quiet lint typecheck venv launch-config worktree-setup hooks up down launch-agent demo demo-photos demo-seed demo-record demo-static demo-preview demo-freshness catalog-refresh catalog-index catalog-index-selftest catalog-mirror
+.PHONY: help status map explain harness check cid-selftest cid-audit ignore-check docs-audit map-fix map-fix-selftest orient orient-selftest vale audit-self-test verdict-selftest githooks-selftest merge merge-selftest revert-guard revert-selftest claim-ids claim-stale claim-selftest decisions-selftest debts-selftest gates-selftest port-agreement set-hint-agreement readiness-agreement mutate-anchors mutate-guards screen-freshness screen-freshness-selftest sigil-check suite-lock-selftest icloud-sweep audit-history dev server screenshot design-check design-check-quiet lint typecheck venv launch-config worktree-setup hooks up down launch-agent demo demo-photos demo-seed demo-record demo-static demo-preview demo-freshness catalog-refresh catalog-index catalog-index-selftest catalog-mirror
 
 # Prefer the venv if it exists, so `make harness` works without anyone remembering to
 # activate anything. Falls back to system python3, which still runs T2-T5 — T1 needs the
@@ -62,6 +62,9 @@ help:
 	@echo "                    THE ONE GENERATOR: it writes and gates nothing (D18)."
 	@echo "                    Previews. ARGS=--write applies. ARGS=--selftest proves it."
 	@echo "  make map-fix-selftest  that generator, over a throwaway map it writes and drops."
+	@echo "  make orient       which component renders the thing, and what selects it."
+	@echo "                    ARGS=<file.tsx> [--name <Component>]. Derived, never stored."
+	@echo "  make orient-selftest  that renderer, including the Orders.tsx case it exists for."
 	@echo "  make vale         prose style over every tracked .md. Needs vale; never gates."
 	@echo "  make audit-history  which docs-audit checks ever fired. Diagnostic; never gates."
 	@echo "  make audit-self-test  the checker checks itself. In \`check\`, never in the git hook."
@@ -433,6 +436,20 @@ map-fix:
 
 map-fix-selftest:
 	@python3 scripts/map-fix.py --selftest
+
+# WHICH COMPONENT RENDERS THE THING, AND WHAT SELECTS IT. A RENDERER — it writes nothing and
+# gates nothing, so D18 does not reach it, the same standing `make map` has.
+#
+# Written after a fix to `#/orders` was briefed against `CopyMapView` when the screen the
+# owner looks at renders `WalkGroups`, because `hidePicks` suppresses the first. Three lines,
+# 1,000 apart, in a 4,605-line file. The work was correct and invisible and it cost a round.
+# A split would not have fixed it: which prop selects which component is a RELATIONSHIP, not
+# a location.
+orient:
+	@python3 scripts/orient.py $(ARGS)
+
+orient-selftest:
+	@python3 scripts/orient.py --selftest
 
 # Deliberately NOT a prerequisite of `check`, and never wired to a hook: every tree after
 # the audit landed is clean because the hook blocked anything else, so a zero here cannot

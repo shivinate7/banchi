@@ -61,10 +61,6 @@ def _cited_decisions():
     return audit.cited_decisions
 
 
-def _key(entry: int) -> int:
-    return entry
-
-
 def _sort_ids(ids) -> List[str]:
     return sorted(ids, key=lambda value: int(value[1:]))
 

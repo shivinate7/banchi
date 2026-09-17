@@ -46,6 +46,10 @@ make worktree-setup # in a fresh worktree, FIRST: venv, T1's cache, this checkou
                     #   Browser-pane port (D43).
 make status         # where you are: next step, T1 score, branch.
 make map            # docs/map.py RENDERED (D80). ARGS=<package|path|D<n>|--stale>.
+make orient         # ARGS=<file.tsx> [--name <C>]: every component, its line span, which
+                    #   component DRAWS it, and the expression that decides whether it is
+                    #   drawn. A renderer — writes nothing, gates nothing, derived every run.
+                    #   READ IT BEFORE BRIEFING A SCREEN CHANGE.
 make map-fix        # THE ONE GENERATOR (D18, amended). Adds the decision ids a file cites
                     #   to its `governed_by` in docs/map.py — the answer `make docs-audit`'s
                     #   `repo map` row already computes, imported from that row rather than
@@ -556,6 +560,36 @@ itself. "Solved" with no bucket named is refused. Bold labels in one quoted bloc
 never a code fence. Start with the point. No task restatement.
 
 - Run `make harness` before saying something works. Show the output.
+
+### Writing a brief
+
+Three practices, each earned by a lost round on 2026-09-17. Together they cost more time
+that evening than every verification target combined (`docs/specs/verification-cost.md`).
+
+- **Name the rendering component, and the state that selects it.** Not "fix the walk
+  sentence" but "in `#/orders`, with `hidePicks` true, `WalkGroups` renders the walk
+  sentence — change it there." Mechanized: `make orient ARGS=app/src/Orders.tsx --name
+  WalkGroups` prints which component draws it and under which expression. Run it before the
+  brief is written. Where two components can render the same thing, the brief says which and
+  why. The round this cost: a fix briefed against `CopyMapView`, which `hidePicks` suppresses
+  in exactly the state the owner was looking at. Correct, and invisible.
+- **Never ask an agent to reconstruct a state it has already left.** A "before" image is
+  captured before the edit or not at all. Wanting one afterwards is the orchestrator's job,
+  in a separate clean checkout — never the working agent, never in a shared tree. The round
+  this cost: an agent told to produce a "before" screenshot went looking for a way to un-build
+  its own change and reached for `git stash`, which is shared with every worktree of this
+  clone. `scripts/guard-shell.py`'s `PKMNSCAN_STASH` clause refuses the command; the brief
+  should not have pointed an agent at it.
+  **NOT MECHANIZED:** a machine cannot read a sentence addressed to a person and tell that
+  satisfying it requires undoing work.
+- **State a fence by intent, and name the exception.** Not "do not touch `WalkView` or
+  `buildWalk`" but "do not change which cards a walk contains or how they are ordered —
+  rendering changes inside `WalkView` are in scope." A fence around files is a fence around a
+  guess about which files matter. A fence around behaviour survives being wrong about the
+  layout. The round this cost: a fence meant to stop cross-order scope creep also enclosed
+  the component that renders.
+  **NOT MECHANIZED:** a machine cannot tell a fence drawn around behaviour from one drawn
+  around files, because both are prose in a brief.
 - **Show the screen before saying it looks right.** Render at 1440, 820 and 390, both themes,
   and look at the images.
 - Read `docs/decisions/` before proposing an architecture change

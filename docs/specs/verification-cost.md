@@ -357,3 +357,49 @@ Taken in an interview after the §1 correction was on the table.
 per-spec filter (§6B), and path gating as a general policy — nine targets in `make check` cost
 under 0.1 s each, so 35 scope lists would cost more to maintain than they save, and every path
 gate is another place a green can be believed over nothing.
+
+---
+
+## 10. What was built on the rulings, 2026-09-17
+
+| Ruling | Landed as |
+|---|---|
+| Output: parent rule only | A prompt handed to the owner for `~/Developer/claude-settings/CLAUDE.md`. It carries the §1 correction, so the parent does not inherit the wrong number. **No Makefile change**, as ruled. |
+| `map-fix` after a D18 amendment | D18 amended with its first seam entry — `docs/map.py` -> a module's `governed_by`, and nothing else. `scripts/map-fix.py` + `make map-fix`. |
+| Path gating: `serve-selftest` only | **Not built.** See below. |
+| Brief practices + `Orders.tsx` index | Three practices under CLAUDE.md's *Writing a brief*. `scripts/orient.py` + `make orient`. |
+
+**`map-fix` is proved in both directions, not just asserted.** A `D111` citation added to
+`pipeline/games.py` is exactly what the generator proposes and exactly what the `repo map`
+row refuses, and both go quiet when it is removed. The generator imports the row's own
+`cited_decisions()`, so the two cannot drift apart. It only ever adds. It is on no hook and
+is a prerequisite of nothing, which is the whole of D18.
+
+**`orient` answers the question that cost the round, in one command:**
+
+```
+$ make orient ARGS="app/src/Orders.tsx --name CopyMapView"
+  CopyMapView  4131-4245  (115 lines)
+                 drawn by OrderLineRow:4018
+                   when  hidePicks || single || map.stops.length === 0 ? … :
+```
+
+It is a renderer — it writes nothing, gates nothing, and is derived on every run, so D18
+does not reach it and there is no second index to keep true. It says in its own output what
+it cannot see: no TypeScript parser is in the standard library, so a component reached
+through a variable or a table is invisible to it.
+
+**Splitting `Orders.tsx` is deliberately not done.** The seam is real — 1,285 of its 4,605
+lines are pure helpers and types with no JSX, a clean lift to `orders/model.ts`. But the
+split does not fix the defect that prompted it: an agent with `WalkGroups` in its own file
+still does not know that `hidePicks` is what selects it. That is a relationship, not a
+location. Judge the split later on whether `make orient`'s output got shorter, and treat it
+as its own argument.
+
+**`serve-selftest` path gating is not built, and the reason is a measurement not yet taken.**
+The ruling was to gate it and revisit if the list grows. Before writing a scope list, someone
+has to derive what `serve-selftest` actually reads — the way `scripts/browser-scope.py`
+derives its `SCOPE` from Vite's root, Playwright's `testDir` and the recipes — and it needs
+the `docs-audit` row that reconciles it in both directions, because a path filter with no
+reader is how a gate quietly stops running. That is its own piece of work, not a line to add
+here. It is the next thing, and it is the only item from §8 still open.
