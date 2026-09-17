@@ -991,7 +991,7 @@
    The crop that replaced it is reverted at the owner's word, so this states D38's answer directly
    rather than inheriting the kit's: fill the window with the photograph and let the frame's edges
    go. What that costs is the card's own edges when it sits off-centre, which is the trade D38
-   made knowingly and `docs/DEBTS.md` §7 carries. */
+   made knowingly and DEBT7 carries. */
 .pricing-photo-frame { aspect-ratio: 5 / 7; max-height: 56vh; }
 .pricing-photo-frame img { object-fit: cover; }
 .pricing-photo-caption { display: flex; align-items: center; gap: 6px; font-size: var(--bn-fs-sm); color: var(--bn-ink-3); }

@@ -8,7 +8,7 @@ import { useEffect, useRef } from 'react'
  * and on window focus. None of the five knew about tab visibility, none backed off on a
  * failing server, and none of them were counted against how many requests the capture server
  * can actually run at once — `server/capture_server.py:REQUEST_SLOTS` bounds that at 4
- * (`docs/DEBTS.md` §11: less concurrency is measurably BETTER on this rig, not more), and a
+ * (DEBT11: less concurrency is measurably BETTER on this rig, not more), and a
  * fifth timer added on top of the other four would have spent a slot nobody was watching.
  *
  * THE PRIMITIVE WAS UNFACTORED, NOT MISSING — CLAUDE.md's own test for reaching past a
@@ -28,7 +28,7 @@ import { useEffect, useRef } from 'react'
 /** How many requests this app will let itself have in flight against the capture server at
  *  once, mirroring `server/capture_server.py:REQUEST_SLOTS`. Declared here rather than read
  *  off the wire because `/status` does not publish it and a constant that never moves without
- *  a matching server-side change is the safer half of `docs/DEBTS.md` §11's own measurement:
+ *  a matching server-side change is the safer half of DEBT11's own measurement:
  *  a slot beyond this one is not "faster", it is the GIL contention that measurement found. */
 const REQUEST_SLOTS = 4
 

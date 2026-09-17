@@ -136,7 +136,7 @@ the one that proves a rescue cannot photograph an empty stand; the six sessions 
 pinned as T9's fourth corpus. The cadence module and its spec are deleted, with the third
 Trigger cell, the period pin and the beat's HUD spans.
 
-**RECORDED:** here, in `docs/specs/motion-trigger.md` §2 and §7, in `docs/GATES.md`'s T9 block,
+**RECORDED:** here, in `docs/specs/motion-trigger.md` §2 and §7, in the gates corpus's `T9` entry,
 and as amendments closing D130 and D131.
 
 **NEITHER — AND THIS IS THE HALF THAT MATTERS.**

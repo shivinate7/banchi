@@ -924,7 +924,7 @@ rubber stamp. Each entry says what a machine would have to be able to SEE.
   Nearest partial: It becomes decidable once the contract is DECLARED rather than inferred — a
   named helper stating "this case requires the re-read to disagree with the overlay", never a
   copyable skipMutationCheck flag. Then an eslint rule can refuse a bare `cards[...] =` after a
-  `click()` in an undeclared case. docs/DEBTS.md §23 is the entry; the declaration is the work.
+  `click()` in an undeclared case. DEBT23 is the entry; the declaration is the work.
 
 - **A change the browser suite depends on must run the browser matrix — including a path the suite composes at runtime.**
   A machine would need: A path built from pieces, or a Vite `server.fs.allow` widening spelled

@@ -19022,7 +19022,7 @@ def check_listing_commands(checks: Checks) -> None:
 
     # --- a zero reading taken AFTER the sale ages the claim (D150) ---
     #
-    # THE OWNER'S OWN CASE, WHICH `docs/DEBTS.md` §24 RECORDED AS DELIBERATELY UNFIXED. A copy
+    # THE OWNER'S OWN CASE, WHICH DEBT24 RECORDED AS DELIBERATELY UNFIXED. A copy
     # is pushed, it sells, and a later export reads `Total Quantity` 0 for the SKU. `pushed`
     # has no drawdown and the old gate aged it only where the export reported copies LIVE, so
     # the claim stood at its full count forever: the copies on hand were committed against it
@@ -25810,7 +25810,7 @@ def check_order_places_scoped(checks: Checks) -> None:
 
 
 def check_inventory_copies_route(checks: Checks) -> None:
-    """`docs/DEBTS.md` §27, site 1: `POST /inventory/copies` — every on-hand copy of a SKU
+    """DEBT27, site 1: `POST /inventory/copies` — every on-hand copy of a SKU
     set, store-wide, in `do_inventory`'s own per-card shape.
 
     THE WHOLE POINT IS THAT A COPY THE RESOLVER NEVER PICKED STILL COMES BACK. A box-scoped
@@ -25831,7 +25831,7 @@ def check_inventory_copies_route(checks: Checks) -> None:
          position independently — the two must agree on `slot`/`label`/`section`/`card`
     """
     checks.note("")
-    checks.note("POST /inventory/copies — docs/DEBTS.md §27, site 1")
+    checks.note("POST /inventory/copies — DEBT27, site 1")
 
     with isolated_home():
         # Box 1 and box 3 both hold a copy of the SAME SKU — the shape a box-scoped
@@ -27412,7 +27412,7 @@ def check_request_slots(checks: Checks) -> None:
     WHAT THIS PROVES AND WHAT IT DOES NOT, because the difference is the whole honesty of this
     check. It proves the MECHANISM: no more than `REQUEST_SLOTS` requests are inside `_dispatch`
     at once, and a request waiting for a slot is not counted as in flight. It does NOT prove the
-    bound fixes the failure `docs/DEBTS.md` section 11 records — that took 80 real browsers
+    bound fixes the failure DEBT11 records — that took 80 real browsers
     against a real store, and the reproduction was attempted and failed on an empty one, where
     every endpoint answers in under ten milliseconds and nothing contends the interpreter.
 

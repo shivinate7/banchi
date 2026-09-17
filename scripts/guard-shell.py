@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Refuse six shell mistakes this repo has already made and paid for.
+"""Refuse eight shell mistakes this repo has already made and paid for.
 
 EVERY CLAUSE HERE HAS AN INCIDENT BEHIND IT, and not one of them was a lapse of care: each
 was a rule somebody had already written down, in a memory file or in CLAUDE.md, and then
@@ -52,6 +52,26 @@ work. So these six are mechanical.
        the fix — but naming a refspec, even an unqualified `HEAD`, is git's own signal that
        the caller knows what they want, and that signal was wrong.
 
+    7. `git stash pop` / `drop` / `clear`, or a bare `git stash`, in a clone with ~30
+       working trees sharing one stash stack
+       No single incident is behind this one — the owner's OWN parent CLAUDE.md names the
+       command outright before this repo ever mistyped it: "Never run `git stash` … in a
+       shared checkout." D173 is what a rule with no incident yet still gets: mechanised
+       now, on the strength of the argument alone, rather than waited on until it is paid
+       for. The argument: a stack entry made by another worktree's session is
+       indistinguishable, by index, from this session's own — `stash@{0}` names "whatever is
+       on top right now", not "the thing I pushed a minute ago" — so `pop`/`drop`/`clear`
+       consume or destroy an entry the caller never identified, and a bare `git stash` is the
+       same command habit uses interchangeably to mean "save" AND "restore".
+
+    8. `git reset --hard` / `--merge` / `--keep` over a working tree that still holds
+       uncommitted changes
+       Also named outright by the parent CLAUDE.md, and mechanised for D173's reason above
+       rather than after a loss. A hard-family reset overwrites the index and the working
+       tree from a commit with no confirmation and no record of what it overwrote — the same
+       "reverts to HEAD, silently, without asking" shape rank 1's `git checkout` already
+       covers for a single path, one level up: the whole tree instead of one file.
+
 THE STANDARD IS `scripts/reap.py:hook`'S AND IT IS NOT NEGOTIABLE HERE EITHER:
 
     a broken GUARD fails OPEN — any parse error, any bug here, an unreadable payload, a
@@ -76,10 +96,10 @@ purpose, every legitimate shape this repo actually types is pinned as PASSING in
 `scripts/guard-shell-selftest.sh`, and each is RUN there before it is scored, because a case
 that is secretly a typo passes for the wrong reason.
 
-SIX CLAUSES, SIX HATCHES, AND THAT IS DELIBERATE. One switch for the whole hook would mean
+EIGHT CLAUSES, EIGHT HATCHES, AND THAT IS DELIBERATE. One switch for the whole hook would mean
 disarming the destructive-checkout clause in order to make a symlink, which is how a guard
 stops being one. Each refusal prints only its own, each is honoured in the environment and
-inline, and all six are documented in CLAUDE.md (`make docs-audit`'s `env names` row refuses
+inline, and all eight are documented in CLAUDE.md (`make docs-audit`'s `env names` row refuses
 a variable the code reads and no markdown names).
 
     scripts/guard-shell.py --hook            the PreToolUse hook. Payload on stdin.
@@ -139,6 +159,12 @@ CLAUSES = (
     Clause("push", "PKMNSCAN_PUSH",
            "never `git push <remote> HEAD` / `<remote> <branch>` when the tracked upstream "
            "is a different, non-default branch"),
+    Clause("stash", "PKMNSCAN_STASH",
+           "never a bare `git stash`, `git stash pop`, or `git stash drop`/`clear` with no "
+           "explicit entry — the stack is shared across every worktree"),
+    Clause("reset", "PKMNSCAN_RESET",
+           "never `git reset --hard`/`--merge`/`--keep` over a tree that still holds "
+           "uncommitted tracked changes"),
 )
 
 HATCH = {clause.name: clause.hatch for clause in CLAUSES}
@@ -1190,6 +1216,194 @@ def clause_push(reading: "shell_parse.Reading", cwd: str) -> Verdict:
     return Verdict(refusals, notes)
 
 
+# --------------------------------------------------------- 7. a consuming/destructive stash
+
+# Subcommands git itself recognises. Anything else after `stash` — a flag, or nothing at
+# all — is the BARE form, which git reads as an implicit `push`.
+_STASH_SUBCOMMANDS = {"push", "save", "pop", "apply", "drop", "clear", "list", "show",
+                     "branch", "create", "store"}
+
+# `pop` and `clear` are refused UNCONDITIONALLY — see the ruling below. `drop` is refused
+# only with no explicit entry named; `push`/`save`/`apply`/`list`/`show`/`branch`/`create`/
+# `store` never destroy an entry that already exists, so this clause has no opinion about
+# them at all.
+_STASH_ALWAYS = {"pop", "clear"}
+
+
+def _stash_refusal(text: str, why: List[str], heading: str) -> Refusal:
+    lines = ["  {0}".format(text)] + why + [
+        "",
+        "  The stash stack is per-CLONE, not per-worktree (D43 covers the store and the",
+        "  ports; the stash was never split the same way) — this clone runs ~30 working",
+        "  trees, often with a live session in each, all pushing onto ONE stack. An index",
+        "  like `stash@{0}` names \"whatever is on top right now\", which is a different",
+        "  entry from one call to the next as other sessions push and pop.",
+        "",
+        "  Set work aside with a commit instead, which is addressed by its own sha and",
+        "  cannot be reinterpreted by somebody else's push:",
+        "      git add -A && git commit -m \"WIP: <what this is>\"",
+        "  The disciplined stash form this guard allows, when a commit genuinely will not",
+        "  do:",
+        "      git stash push -u -m \"<a tag nothing else would type>\"",
+        "      git stash list                      # find it again by that tag",
+        "      git stash apply <the sha it names>   # never pop — apply never drops it",
+    ]
+    return Refusal("stash", lines, heading)
+
+
+def clause_stash(reading: "shell_parse.Reading", cwd: str) -> Verdict:
+    """`git stash pop`/`drop`/`clear`, and the bare form, refused; `push`/`apply` pass.
+
+    THE RULING THE MODULE DOCSTRING ASKS FOR, WRITTEN HERE RATHER THAN THERE SO IT STAYS
+    BESIDE THE CODE IT GOVERNS:
+
+    `pop` is refused EVEN WHEN THE CALLER NAMES AN EXPLICIT ENTRY, unlike `drop` below. `pop`
+    applies and drops in one atomic step — if the apply is wrong, the entry that would have
+    let you recover is already gone, and naming it first does not buy back that window;
+    "which entry" was never the risk `pop` carries, "no chance to check before it is gone"
+    is. Use `apply <sha>` (never dropped, so the mistake is inspectable) then a `drop <sha>`
+    once you have looked, which this clause DOES allow because `drop` names an explicit
+    entry — `pop` cannot be split into those two steps, so its whole verb is refused.
+
+    `clear` always refuses: it takes no target at all, so "no explicit entry" is not a
+    condition to check, it is the whole command.
+
+    `drop` refuses only bare (`stash@{0}` implied); a caller who types any operand at all —
+    an index, a sha, whatever — has identified something, and RESOLUTION rather than
+    spelling is what every other clause here does with an operand it cannot itself verify:
+    reported if it fails to resolve, allowed either way, because "this guard could not
+    confirm it" is not the same claim as "this destroys something".
+
+    A bare `git stash` (no subcommand, implicit `push`) is refused too, and it destroys
+    nothing — the reason is IDENTIFICATION, not survival. The same six characters are what a
+    single-user habit types to mean "save my work" AND "get my stash back", and in a clone
+    where entries pile up from other sessions an untagged, unindexed push is unfindable by
+    anything but luck. `push -u -m <tag>` costs one flag and turns every entry into something
+    `list`/`apply <sha>` can find again.
+    """
+    refusals: List[Refusal] = []
+    notes: List[str] = []
+    for placed in reading.placed:
+        argv = shell_parse.strip_prefixes(placed.stage.argv)
+        verb, rest = shell_parse.git_verb(argv)
+        if verb != "stash":
+            continue
+        where = shell_parse.git_cwd(argv) or cwd
+        if not os.path.isdir(where):
+            notes.append("`{0}` names a directory this guard cannot read, so it has no "
+                         "opinion about it".format(shell_parse.short(placed.stage.text)))
+            continue
+        sub = rest[0] if rest and rest[0] in _STASH_SUBCOMMANDS else ""
+        text = shell_parse.short(placed.stage.text)
+        if sub == "":
+            refusals.append(_stash_refusal(text, [
+                "      no subcommand is named, so this is an implicit `push` — an",
+                "      anonymous entry that nothing but luck finds again in a shared stack.",
+            ], "BLOCKED: name what this does — `push`, `list`, `apply` — a bare `git stash` "
+               "is ambiguous."))
+            continue
+        if sub in _STASH_ALWAYS:
+            if sub == "pop":
+                why = [
+                    "      `git stash pop` applies AND drops an entry in one atomic step —",
+                    "      even a named one has no window to confirm the apply was right",
+                    "      before the entry that would undo it is gone.",
+                ]
+            else:
+                why = [
+                    "      `git stash clear` destroys EVERY entry on the shared stack at",
+                    "      once, including every other session's, and takes no target to",
+                    "      narrow it.",
+                ]
+            refusals.append(_stash_refusal(
+                text, why, "BLOCKED: this consumes or destroys a stash entry no caller here "
+                          "identified."))
+            continue
+        if sub == "drop":
+            operand = [token for token in rest[1:] if not token.startswith("-")]
+            if not operand:
+                refusals.append(_stash_refusal(text, [
+                    "      no entry is named, so this drops `stash@{0}` — the top of a",
+                    "      stack every worktree in this clone shares.",
+                ], "BLOCKED: this consumes or destroys a stash entry no caller here "
+                   "identified."))
+    return Verdict(refusals, notes)
+
+
+# --------------------------------------------------------------- 8. a hard-family reset
+
+_RESET_DISCARDING_MODES = {"--hard", "--merge", "--keep"}
+
+
+def _reset_refusal(text: str, mode: str, changed: List[Tuple[str, str]]) -> Refusal:
+    lines = ["  {0}".format(text)]
+    for path, status in changed[:8]:
+        lines.append("      {0} is {1}".format(path, _porcelain(status)))
+    if len(changed) > 8:
+        lines.append("      and {0} more".format(len(changed) - 8))
+    lines.extend([
+        "",
+        "  `reset {0}` overwrites the index AND the working tree from a commit, with no".format(
+            mode),
+        "  confirmation and no record of what it overwrote — `git checkout <path>`'s own",
+        "  shape (rank 1 above) one register up: the whole tree instead of one file.",
+        "",
+        "  Mutation-test with a copy instead, which cannot reach anything you did not copy:",
+        "      cp path/to/file.py path/to/file.py.bak    # before the mutation",
+        "      cp path/to/file.py.bak path/to/file.py     # restore it after",
+        "  Commit first when the work is real: `reset --hard` over a clean tree destroys",
+        "  nothing, because there is nothing uncommitted left for it to overwrite.",
+        "",
+        "  NOTE: `scripts/githooks/reference-transaction` already refuses this shape when it",
+        "  would MOVE A PROTECTED REF (`main`) — that hook and this clause see different",
+        "  halves: the ref hook guards which commit a branch points at, this guards the",
+        "  uncommitted work in the tree standing on it, and a reset can lose the second",
+        "  while never touching the first.",
+    ])
+    return Refusal("reset", lines,
+                   "BLOCKED: this would discard uncommitted work, and git will not ask first.")
+
+
+def clause_reset(reading: "shell_parse.Reading", cwd: str) -> Verdict:
+    """`git reset --hard`/`--merge`/`--keep` over a dirty tree, refused; everything else passes.
+
+    THE RULING THE MODULE DOCSTRING ASKS FOR. A path-form reset — `git reset [<commit>] --
+    <paths>...` — is NEVER refused, and that is not a gap: git itself refuses to combine a
+    pathspec with `--hard`/`--merge`/`--keep` ("fatal: Cannot do hard reset with paths."), so
+    the only mode a pathspec can ever reach is the mixed/soft one, which touches the INDEX
+    and never the working tree. Unstaging a file cannot discard its content — the content on
+    disk is exactly what it was before the command ran — so there is no discarding path-form
+    case for this clause to catch, and every path-form shape below is pinned as PASSING for
+    that reason rather than left untested. A bare `git reset` (no mode, no paths) is the same
+    mixed default and passes the same way; `--soft` never touches the working tree either.
+
+    So the whole predicate is: one of the three discarding modes, over a tree `git status`
+    says is not clean. Untracked files are excluded on purpose — `--hard` never touches them
+    (that is `git clean`'s job, not this clause's), and counting them would refuse a `--hard`
+    that discards nothing.
+    """
+    refusals: List[Refusal] = []
+    notes: List[str] = []
+    for placed in reading.placed:
+        argv = shell_parse.strip_prefixes(placed.stage.argv)
+        verb, rest = shell_parse.git_verb(argv)
+        if verb != "reset":
+            continue
+        where = shell_parse.git_cwd(argv) or cwd
+        if not os.path.isdir(where):
+            notes.append("`{0}` names a directory this guard cannot read, so it has no "
+                         "opinion about it".format(shell_parse.short(placed.stage.text)))
+            continue
+        mode = next((token for token in rest if token in _RESET_DISCARDING_MODES), "")
+        if not mode:
+            continue                       # soft/mixed, or a path-form reset: nothing to lose
+        changed = _modified([], where)
+        if not changed:
+            continue                       # a genuinely clean tree: nothing to lose either
+        refusals.append(_reset_refusal(shell_parse.short(placed.stage.text), mode, changed))
+    return Verdict(refusals, notes)
+
+
 # ------------------------------------------------------------------------------ the verdict
 
 def read_command(command: str, cwd: str, backgrounded: bool = False) -> Verdict:
@@ -1224,6 +1438,8 @@ def read_command(command: str, cwd: str, backgrounded: bool = False) -> Verdict:
         ("link", lambda: clause_link(reading, cwd)),
         ("wait", lambda: clause_wait(reading, command, cwd, backgrounded)),
         ("push", lambda: clause_push(reading, cwd)),
+        ("stash", lambda: clause_stash(reading, cwd)),
+        ("reset", lambda: clause_reset(reading, cwd)),
     ):
         if _off(clause, command):
             continue
@@ -1293,7 +1509,7 @@ def explain(command: str, write: str, cwd: str) -> int:
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         prog="guard-shell",
-        description="Refuse six shell mistakes this repo has already paid for.",
+        description="Refuse eight shell mistakes this repo has already paid for.",
     )
     parser.add_argument("--hook", action="store_true",
                         help="run as a PreToolUse hook; reads the payload on stdin")

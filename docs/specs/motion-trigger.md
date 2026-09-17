@@ -2,7 +2,7 @@
 
 Written 2026-08-22, the day it was built. D19 is the decision; this file is the mechanism,
 the derivations, and the protocol for the part no computer can do — tuning at the rig.
-`docs/GATES.md`'s Gate C section carries the measurements every number here leans on.
+the gates corpus's `GateC` record carries the measurements every number here leans on.
 
 ## STATUS — CONFIRMED LIVE AT 85/85, REBUILT ON MEASUREMENTS 2026-08-31, CORRECTED 2026-09-01, THE RATCHET GIVEN AN ESCAPE AND THE CARD THAT WILL NOT SETTLE A RESCUE 2026-09-11
 

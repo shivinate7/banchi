@@ -1181,14 +1181,19 @@ def string_assign(source: str, name: str) -> Optional[str]:
 
 
 def gates_sections() -> Dict[str, str]:
-    """`### T1 — …` heading text -> that section's body."""
-    gates = ROOT / "docs" / "GATES.md"
-    if not exists(gates):
+    """`### T1 — …` heading text -> that section's body.
+
+    Reads `gates_text()` — the docs/gates/ corpus reassembled — rather than docs/GATES.md
+    directly, since the split (Lane D, 2026-09-16). The reassembly is byte-identical to the
+    monolith this regex was written against, so nothing else here changed.
+    """
+    text = gates_text()
+    if not text:
         return {}
     sections: Dict[str, str] = {}
     current: Optional[str] = None
     body: List[str] = []
-    for line in read(gates).splitlines():
+    for line in text.splitlines():
         heading = re.match(r"^#{2,3}\s+(T[1-9][0-9]?)\b", line)
         if heading:
             if current:
@@ -2092,6 +2097,123 @@ def check_decision_ids(report: Report, docs: List[Path]) -> None:
                scanned=len(code_haystack))
 
 
+# --------------------------------------------------------- the gates corpus as a directory
+
+# THE GATES CORPUS IS `docs/gates/`, ONE FILE PER RECORD IN ONE FOLDER PER KIND (LANE D,
+# 2026-09-16) — `scripts/gates_corpus.py`'s own docstring has the shape. Every row below that
+# used to open `docs/GATES.md` opens the corpus's reassembled text instead, through
+# `gates_text()`, and asserts exactly what it asserted before: `gates_sections()`,
+# `check_id_claims()`, `check_map_gate_status` (folded into `check_build_order`) and
+# `check_build_order_mirror()` are unmodified beyond that one substitution, because the
+# reassembly is byte-identical to the file they used to read (`scripts/split-gates.py
+# --verify`), so every regex written against the monolith keeps matching.
+#
+# READ FAIL-OPEN, the same rule `_corpus()` states for decisions and `browser scope` states
+# for its own module: a missing `scripts/gates_corpus.py` or a broken manifest makes
+# `gates_text()` answer "", never a partial or wrong reassembly, so a caller that already
+# treated `not exists(docs/GATES.md)` as "nothing to check" keeps that exact behaviour rather
+# than crashing on an import it cannot make.
+
+
+def _gates_corpus():
+    """scripts/gates_corpus.py, or None."""
+    return _sibling("gates_corpus.py")
+
+
+def gates_text() -> str:
+    """The gates corpus as one text — `docs/GATES.md` in every reader's eyes, whether the
+    bytes come from the stub (never, since the split) or from `docs/gates/`'s reassembly."""
+    corpus = _gates_corpus()
+    if corpus is None:
+        return ""
+    try:
+        return corpus.text()
+    except Exception:
+        return ""
+
+
+# THE FLOOR IS PINNED HERE TOO, on the same reasoning `split-gates.py --selftest` gives for
+# pinning its own: a parser finding nothing over a renamed heading or a broken manifest must
+# read as BROKEN, never as a clean tree with nothing to reconcile. `check_gates_structure`
+# is this row's mechanical half; `make gates-selftest` is the corpus's own completeness proof
+# and is not duplicated here.
+_GATES_MIN_TESTS = 9
+_GATES_MIN_RUNS = 5
+_GATES_MIN_SHIPPED = 15
+
+
+def check_gates_structure(report: Report) -> None:
+    """The gates corpus reads as non-empty and self-consistent, in both directions.
+
+    Mirrors `decision index`'s own floor: an unreadable corpus, a manifest naming a file that
+    is gone, or a regex that stopped matching after a heading moved must never look like a
+    corpus with nothing wrong in it. `make gates-selftest` (`scripts/split-gates.py
+    --selftest`) proves the same non-vacuity claim from the split side; this row proves it
+    from the READER side — `gates_corpus.tests()`/`.runs()`/`.steps()` — so a regression in
+    either one is caught by the other.
+    """
+    corpus = _gates_corpus()
+    if corpus is None:
+        report.add("gates structure", MECHANICAL,
+                   [Finding("scripts/gates_corpus.py",
+                             "does not exist or failed to import. docs/GATES.md's corpus "
+                             "cannot be read at all, which every row below this one silently "
+                             "treats as \"nothing to check\" rather than \"broken\".")])
+        return
+    findings: List[Finding] = []
+    try:
+        tests = corpus.tests()
+        runs = corpus.runs()
+        shipped = corpus.steps("shipped")
+        open_steps = corpus.steps("open")
+        unregistered = corpus.unregistered()
+    except Exception as exc:
+        report.add("gates structure", MECHANICAL,
+                   [Finding("docs/gates/ORDER.json", f"unreadable: {exc}")])
+        return
+    if len(tests) < _GATES_MIN_TESTS:
+        findings.append(Finding(
+            "docs/gates/contract/",
+            f"the manifest names only {len(tests)} harness-contract entries; expected at "
+            f"least {_GATES_MIN_TESTS} (T1..T9). Either a real test was deleted, or the "
+            f"`### Tn` reader stopped matching a renamed heading — both are a broken corpus, "
+            f"never a clean one.",
+        ))
+    if len(runs) < _GATES_MIN_RUNS:
+        findings.append(Finding(
+            "docs/gates/gate-runs/",
+            f"the manifest names only {len(runs)} gate-run entries; expected at least "
+            f"{_GATES_MIN_RUNS} (Gate A, Gate B, Box 2, Gate C, the per-run reading).",
+        ))
+    if len(shipped) < _GATES_MIN_SHIPPED:
+        findings.append(Finding(
+            "docs/gates/steps/",
+            f"the manifest names only {len(shipped)} shipped steps; expected at least "
+            f"{_GATES_MIN_SHIPPED}.",
+        ))
+    overlap = sorted(set(shipped) & set(open_steps))
+    if overlap:
+        findings.append(Finding(
+            "docs/gates/ORDER.json",
+            f"step id(s) {overlap} are listed under BOTH shipped and open. A step is in "
+            f"exactly one list — the list IS the status, the same rule `build order mirror` "
+            f"already applies to docs/map.py's SHIPPED and OPEN.",
+        ))
+    for name in unregistered:
+        head = (corpus.DIRECTORY / name).read_text(encoding="utf-8").split("\n", 1)[0] if \
+            (corpus.DIRECTORY / name).exists() else ""
+        if not (head.startswith("### ") or head.startswith("## ")):
+            findings.append(Finding(
+                f"docs/gates/{name}",
+                "is on disk but not in ORDER.json, and its first line is not a heading — "
+                "this is not a branch adding a new record; the file is malformed.",
+            ))
+    report.add("gates structure", MECHANICAL, findings,
+               f"{len(tests)} contract entries, {len(runs)} run entries, "
+               f"{len(shipped)} shipped + {len(open_steps)} open steps",
+               scanned=len(tests) + len(runs) + len(shipped) + len(open_steps))
+
+
 # ------------------------------------------------------------------ ids are claimed at merge
 
 # A BRANCH DOES NOT TAKE A NUMBER (D140). The allocation's only input is what main
@@ -2175,7 +2297,6 @@ def on_main() -> bool:
 def check_id_claims(report: Report) -> None:
     findings: List[Finding] = []
     codes = ROOT / "docs" / "CODES-DECISIONS.md"
-    gates = ROOT / "docs" / "GATES.md"
 
     unclaimed: List[str] = []
     for path in decision_files() + [codes]:
@@ -2199,7 +2320,7 @@ def check_id_claims(report: Report) -> None:
     # A STEP IS CITED BY A SLUG THAT SOME `0.` MARKER DECLARES, or it is a dangling id — the
     # same superset rule the letter namespaces get from `decision ids`, which cannot see this
     # one because a step wears no letter.
-    declared_steps = set(_GATES_STEP_SLUG.findall(read(gates))) if exists(gates) else set()
+    declared_steps = set(_GATES_STEP_SLUG.findall(gates_text()))
     for path in sorted(set(python_files()) | set(_walk(ROOT, (".md", ".ts", ".tsx")))):
         for number, raw in enumerate(read(path).splitlines(), start=1):
             for slug in _STEP_CITATION.findall(without_noqa(raw)):
@@ -2539,70 +2660,265 @@ def check_entry_budget(report: Report) -> None:
                scanned=len(sized))
 
 
+def _debts_corpus():
+    """scripts/debts_corpus.py, or None. The debts twin of `_corpus()`."""
+    return _sibling("debts_corpus.py")
+
+
+_DEBTS_EMPTY = ("the debts corpus read as EMPTY. docs/debts/ holds one file per finding "
+                "and its manifest is ORDER.json; a manifest naming a file that is gone, an "
+                "unreadable directory or a missing scripts/debts_corpus.py all arrive here. "
+                "This row asserts nothing until that is fixed — the same fail-open rule "
+                "`decision structure` uses for its own corpus, for the same reason: an "
+                "unreadable directory must never read as a clean one.")
+
+# NON-VACUITY FLOOR. The corpus held 27 entries at the split (2026-09-16); a reader that
+# finds fewer than this is broken, not tidy, on `decision structure`'s own argument for why
+# an empty corpus must fail loudly rather than pass in silence.
+_DEBTS_FLOOR = 20
+
+
+def _debts_corpus_empty(report: Report, label: str) -> bool:
+    corpus = _debts_corpus()
+    if corpus is None:
+        report.add(label, MECHANICAL, [Finding("docs/debts/", _DEBTS_EMPTY)])
+        return True
+    try:
+        n = len(corpus.idents())
+    except Exception:
+        report.add(label, MECHANICAL, [Finding("docs/debts/", _DEBTS_EMPTY)])
+        return True
+    if n < _DEBTS_FLOOR:
+        report.add(label, MECHANICAL, [Finding(
+            "docs/debts/",
+            f"the corpus read {n} entries, under the pinned floor of {_DEBTS_FLOOR}. "
+            f"{_DEBTS_EMPTY}",
+        )])
+        return True
+    return False
+
+
 def check_debts_headings(report: Report) -> None:
-    """Every `## ` heading in `docs/DEBTS.md` is one `_debts_section` can address.
+    """Every `## ` heading in `docs/debts/` is one `_debts_section` can address.
 
     That helper matches `## <n> — ` and returns None otherwise, and BOTH its consumers
     tolerate a None — one with `or ""`, one with an early return. So a heading written in
     any other shape is not a failure, it is a section that silently does not exist, and
-    every row reading that file inherits it.
+    every row reading the corpus inherits it.
 
     MEASURED 2026-09-11: sections 20 to 24 were written `## <n>. ` — five of the file's
     twenty-three live sections, invisible to the only reader the audit has for it, with
     every row green throughout. Normalized the same day under `D149`;
     this row is what stops the next one being written that way.
 
+    THE CORPUS IS A DIRECTORY NOW (2026-09-16), one file per entry under `docs/debts/`, with
+    `docs/DEBTS.md` left as the stub — the same split D160 performed for decisions. This row
+    reads the directory rather than the monolith and asserts exactly what it asserted before.
+
     MECHANICAL on D16's test: a heading either parses or it does not, which is the same
     standard `decision structure` is held to. It says nothing about what a section CONTAINS
-    — that is the check `docs/DEBTS.md` section 25 measured and declined to build.
+    — that is the check §25 measured and declined to build.
     """
-    target = ROOT / "docs" / "DEBTS.md"
-    if not exists(target):
-        report.add("debts headings", MECHANICAL,
-                   [Finding("docs/DEBTS.md", "does not exist.")])
+    if _debts_corpus_empty(report, "debts headings"):
         return
 
     findings: List[Finding] = []
-    seen: Dict[int, int] = {}
+    seen: Dict[int, str] = {}
     total = 0
-    for lineno, line in enumerate(read(target).split("\n"), 1):
-        if not line.startswith("## "):
-            continue
-        total += 1
-        good = re.match(r"^## (\d+) — \S", line)
-        if good is None:
-            findings.append(Finding(
-                f"docs/DEBTS.md:{lineno}",
-                f"`{line[:60]}` is not the `## <n> — <title>` shape "
-                f"`_debts_section` matches, so this section cannot be addressed by any "
-                f"row that reads this file, and asking for it returns None rather than "
-                f"failing.",
-            ))
-            continue
-        number = int(good.group(1))
-        if number in seen:
-            findings.append(Finding(
-                f"docs/DEBTS.md:{lineno}",
-                f"section {number} is also the heading at line {seen[number]}; "
-                f"`_debts_section({number})` returns the FIRST and the second is "
-                f"unreachable.",
-            ))
-            continue
-        seen[number] = lineno
+    for path in _debts_corpus().files():
+        for lineno, line in enumerate(read(path).split("\n"), 1):
+            if not line.startswith("## "):
+                continue
+            total += 1
+            good = re.match(r"^## (\d+) — \S", line)
+            if good is None:
+                findings.append(Finding(
+                    f"{rel(path)}:{lineno}",
+                    f"`{line[:60]}` is not the `## <n> — <title>` shape "
+                    f"`_debts_section` matches, so this section cannot be addressed by "
+                    f"any row that reads it, and asking for it returns None rather than "
+                    f"failing.",
+                ))
+                continue
+            number = int(good.group(1))
+            if number in seen:
+                findings.append(Finding(
+                    f"{rel(path)}:{lineno}",
+                    f"section {number} is also the heading in {seen[number]}; "
+                    f"`_debts_section({number})` returns the FIRST and the second is "
+                    f"unreachable.",
+                ))
+                continue
+            seen[number] = rel(path)
 
     report.add("debts headings", MECHANICAL, findings,
                f"{total} headings, every one addressable by `_debts_section`",
                scanned=total)
 
 
-def _debts_section(number: int) -> Optional[str]:
-    """The body of one `## <n> — ...` section of `docs/DEBTS.md`, or None if it is not there.
+def check_debt_index(report: Report) -> None:
+    """`docs/DEBTS.md`'s fenced index against `docs/debts/`'s headings, both directions.
 
-    Matched on the heading's NUMBER rather than its wording: the titles in that file are
-    sentences and get edited, and a check keyed to a sentence would fail on a rewrite that
-    changed nothing it cares about.
+    The debts twin of `decision index` (D160): an index that has drifted is worse than
+    none, because it is believed. Both sides are ids and titles, so this is MECHANICAL —
+    D16's test for what may block.
+
+    UNLIKE THE DECISION INDEX, THERE IS NO CLAIM-AT-MERGE EXEMPTION HERE. A debts finding
+    is not a decision (D140 does not govern it); its number is assigned by hand at the time
+    it is written, the way every entry in the original monolith always was. So every id with
+    a heading is required in the index, and every id in the index is required to have a
+    heading, with no unclaimed-slug tolerance to carry over from `_is_unclaimed`.
     """
-    text = read(ROOT / "docs" / "DEBTS.md")
+    if _debts_corpus_empty(report, "debt index"):
+        return
+    stub = ROOT / "docs" / "DEBTS.md"
+    if not exists(stub):
+        report.add("debt index", MECHANICAL,
+                   [Finding("docs/DEBTS.md", "the stub does not exist.")])
+        return
+
+    corpus = _debts_corpus()
+    want: List[Tuple[str, str]] = []
+    for path in corpus.files():
+        m = re.match(r"^##\s+(\d+)\s*[—-]\s*(.+)$", read(path).split("\n", 1)[0])
+        if m:
+            want.append((f"DEBT{m.group(1)}", m.group(2).strip()))
+
+    # The index is the first fenced block whose lines all start `DEBT<n> `.
+    got: List[Tuple[str, str]] = []
+    fenced, block = False, []
+    for line in read(stub).split("\n"):
+        if line.lstrip().startswith("```"):
+            if fenced and block and all(re.match(r"^DEBT\d+\s", b) for b in block if b.strip()):
+                got = [(b.split(None, 1)[0], b.split(None, 1)[1].strip())
+                       for b in block if b.strip()]
+                break
+            fenced, block = not fenced, []
+            continue
+        if fenced:
+            block.append(line)
+
+    findings: List[Finding] = []
+    if not got:
+        findings.append(Finding("docs/DEBTS.md", "no debts index found."))
+    else:
+        want_ids = [i for i, _ in want]
+        got_ids = [i for i, _ in got]
+        for ident in [i for i in want_ids if i not in got_ids]:
+            findings.append(Finding("docs/DEBTS.md",
+                                    f"`{ident}` has a heading but is not in the index."))
+        for ident in [i for i in got_ids if i not in want_ids]:
+            findings.append(Finding("docs/DEBTS.md",
+                                    f"the index lists `{ident}`, which has no heading."))
+        titles = dict(want)
+        for ident, title in got:
+            if ident in titles and titles[ident] != title:
+                findings.append(Finding(
+                    "docs/DEBTS.md",
+                    f"`{ident}`'s index line reads {title!r} and its heading reads "
+                    f"{titles[ident]!r}. The heading is the source.",
+                ))
+        if got_ids != [i for i in want_ids if i in got_ids]:
+            findings.append(Finding("docs/DEBTS.md", "the index is not in heading order."))
+
+    report.add("debt index", MECHANICAL, findings,
+               f"{len(got)} indexed, matching {len(want)} headings",
+               scanned=len(want))
+
+
+_DEBT_RE = re.compile(r"\bDEBT([0-9]+)\b")
+
+# THE PATH FORM, IN EVERY SPELLING THIS SPLIT RETIRED: the stub's path, optionally
+# possessive, followed by "section", a section mark or a hash and a number — anything that
+# names the FILE and a number in the same breath. Provably wrong once `DEBT<n>` exists:
+# there is no reason left to spell a debts citation this way, so a match here is a
+# regression, not a judgement call. (Written here without a literal worked example on
+# purpose — this file is itself scanned, and an example would be the regression it flags.)
+_DEBT_PATH_RE = re.compile(r"docs/DEBTS\.md`?('s)?\s+(?:own\s+)?(?:section\s+|§\s*|#)[0-9]+")
+
+
+def check_debt_ids(report: Report, docs: List[Path]) -> None:
+    """Every `DEBT<n>` citation resolves, and the retired path form has not come back.
+
+    THE DEBTS TWIN OF `decision ids`, NARROWER ON PURPOSE. `decision ids` can require every
+    `D<n>` to resolve because `D<n>` is the ONLY numbering scheme that letter names. `§<n>`
+    is not: `docs/specs/*.md` alone carries 409 bare `§<n>` references to THEIR OWN sections
+    (measured 2026-09-16, `docs/specs/mechanization-backlog.md`, `docs/specs/logo.md`,
+    `docs/specs/motion-trigger.md` among them), and `docs/decisions/*.md` and
+    `scripts/docs-audit.py` add over a hundred more citing OTHER documents' own sections by
+    the same bare sigil — `logo.md §3`, `order-pipeline.md §6`, `store-scaling.md §0`. A rule
+    that failed every bare `§<n>` outside `docs/debts/` would be red on all of those, none of
+    which are about debts at all. THIS IS WHY THE ID IS `DEBT<n>` AND NOT A BARE `§<n>`
+    (the fix this row exists to protect): only a prefixed token can be checked without
+    reading the sentence around it, which is exactly D149's own conclusion — "this repo's
+    prose cites by narrating, not by quoting" — turned into the two things that ARE
+    decidable without narrating:
+
+    1. every `DEBT<n>` in the tree names a real entry (MECHANICAL, like `decision ids`).
+    2. the RETIRED PATH FORM — `docs/DEBTS.md` plus a number, in any of the three spellings
+       this split found — has not been reintroduced anywhere outside `docs/debts/` itself
+       (MECHANICAL: a literal substring match, zero judgement, and it was true of 100% of
+       this tree's citations before this fix and should stay true after it).
+
+    NOT MECHANIZED: a bare `§<n>` with no `DEBT` prefix and no `docs/DEBTS.md` nearby, added
+    by a future session who means DEBT<n> and does not know to prefix it. Catching that
+    requires knowing what a sentence is ABOUT, which is D149's and DEBT25's own conclusion
+    about the general form of this problem, not a gap unique to this row.
+    """
+    if _debts_corpus_empty(report, "debt ids"):
+        return
+    known = {f"DEBT{i}" for i in _debts_corpus().idents()}
+
+    def scan(paths: Iterable[Path], out: List[Finding], regressions: List[Finding]) -> None:
+        for path in paths:
+            if str(rel(path)).replace("\\", "/").startswith("docs/debts/"):
+                continue  # a sibling entry may cite another by a bare §<n> — see the stub
+            for number, raw in enumerate(read(path).splitlines(), start=1):
+                line = without_noqa(raw)
+                for ident in _DEBT_RE.findall(line):
+                    if f"DEBT{ident}" not in known:
+                        out.append(Finding(
+                            f"{rel(path)}:{number}",
+                            f"cites DEBT{ident}, which has no `## {ident}` heading in "
+                            f"docs/debts/.",
+                        ))
+                if _DEBT_PATH_RE.search(line):
+                    regressions.append(Finding(
+                        f"{rel(path)}:{number}",
+                        "spells a debts citation the retired way — `docs/DEBTS.md` plus a "
+                        "number. Use `DEBT<n>` instead.",
+                    ))
+
+    dangling: List[Finding] = []
+    regressions: List[Finding] = []
+    code_haystack = python_files() + _walk(ROOT, (".ts", ".tsx", ".css", ".js", ".mjs"))
+    scan(docs, dangling, regressions)
+    scan(code_haystack, dangling, regressions)
+
+    report.add("debt ids", MECHANICAL, dangling + regressions,
+               f"{len(known)} entries, citations in docs and code all resolve, "
+               f"the retired path form is gone",
+               scanned=len(docs) + len(code_haystack))
+
+
+def _debts_section(number: int) -> Optional[str]:
+    """The body of one `## <n> — ...` section of the debts corpus, or None if not there.
+
+    Matched on the heading's NUMBER rather than its wording: the titles are sentences and
+    get edited, and a check keyed to a sentence would fail on a rewrite that changed
+    nothing it cares about.
+
+    READS THE DIRECTORY, NOT THE MONOLITH, since 2026-09-16 — `scripts/debts_corpus.py`
+    hands this function the same bytes `docs/DEBTS.md` used to hold, so every caller below
+    keeps working across the split unchanged.
+    """
+    corpus = _debts_corpus()
+    if corpus is None:
+        return None
+    try:
+        text = corpus.text()
+    except Exception:
+        return None
     start = re.search(rf"^## {number} — ", text, re.M)
     if start is None:
         return None
@@ -3213,7 +3529,7 @@ def check_claim_clients(report: Report) -> None:
 
 DETECT_RESULT = ROOT / "harness" / "results" / "detect.json"
 
-# What `docs/DEBTS.md` section 6 publishes about the current scan, and where the number lives
+# What §6 publishes about the current scan, and where the number lives
 # in `harness/results/detect.json`. Each is a (claim pattern, dotted path into the result).
 #
 # THE PHRASES ARE PART OF THE PIN. "photographs in the owner's six boxes" is THIS scan; D75's
@@ -3270,7 +3586,7 @@ def check_detector_standing(report: Report) -> None:
     if not exists(DETECT_RESULT):
         report.add("detector standing", MECHANICAL, [
             Finding("harness/results/detect.json",
-                    "is absent, and docs/DEBTS.md section 6 quotes it. Re-run "
+                    "is absent, and §6 quotes it. Re-run "
                     "`scripts/score-detect.py`, or strike the figures it published.")
         ], "")
         return
@@ -3376,7 +3692,7 @@ def check_sole_reader(report: Report) -> None:
 
 
 def check_server_concurrency(report: Report) -> None:
-    """`docs/DEBTS.md` section 11 names the capture server's concurrency; the code decides it.
+    """§11 names the capture server's concurrency; the code decides it.
 
     WHY THIS ROW EXISTS, which is the same argument the section it guards makes about itself.
     Every fact in section 11 was already in the tree, inside two comments in
@@ -3402,7 +3718,7 @@ def check_server_concurrency(report: Report) -> None:
     Nothing here judges whether the concurrency is right. It judges whether the document and the
     code agree about what it IS, which is the only half a checker can hold honestly (D16).
 
-    **TWO PUBLICATIONS, AS OF THIS ROW'S SECOND WIDENING. Only `docs/DEBTS.md` §11 had a
+    **TWO PUBLICATIONS, AS OF THIS ROW'S SECOND WIDENING. Only §11 had a
     reader, and CLAUDE.md publishes the same four attributed literals** — `class
     CaptureServer(ThreadingHTTPServer)`, `request_queue_size = 128`, `CaptureHandler.timeout
     = 15`, `REQUEST_SLOTS = 4` — in the file every session loads before it touches the server
@@ -3470,7 +3786,7 @@ def check_server_concurrency(report: Report) -> None:
                 Finding(
                     "server/capture_server.py",
                     f"{what} no longer matches `{shape}`, so this row cannot read what "
-                    f"`docs/DEBTS.md` section 11 claims. Re-point the pattern, and check the "
+                    f"§11 claims. Re-point the pattern, and check the "
                     f"section still describes the server that exists.",
                 )
             )
@@ -4879,10 +5195,11 @@ def check_map(report: Report, allowed: Dict[str, str]) -> None:
                 ))
 
     # Gate status has two homes; they must agree.
-    gates_text = read(ROOT / "docs" / "GATES.md") if exists(ROOT / "docs" / "GATES.md") else ""
+    gates_corpus_text = gates_text()
     for gate in gates:
         name = gate.get("gate", "")
-        heading = re.search(r"^#{2,3}\s+Gate\s+" + re.escape(name) + r"\b(.*)$", gates_text, re.MULTILINE)
+        heading = re.search(r"^#{2,3}\s+Gate\s+" + re.escape(name) + r"\b(.*)$",
+                             gates_corpus_text, re.MULTILINE)
         if not heading:
             findings.append(Finding("docs/map.py", f"Gate {name} has no `### Gate {name}` heading in docs/GATES.md."))
             continue
@@ -5691,14 +6008,14 @@ def check_build_order_mirror(report: Report) -> None:
     inserted because renumbering "would have to land in four files at once" and nothing
     watched them. One of those files now watches the other three (D80).
     """
-    gates = ROOT / "docs" / "GATES.md"
-    if not exists(MAP) or not exists(gates):
+    text = gates_text()
+    if not exists(MAP) or not text:
         report.add("build order mirror", MECHANICAL,
-                   [Finding("docs/", "docs/map.py or docs/GATES.md is missing.")])
+                   [Finding("docs/", "docs/map.py is missing, or docs/GATES.md's corpus "
+                                     "(docs/gates/) read as empty or unreadable.")])
         return
 
     data = literals_from_module(MAP)
-    text = read(gates)
     findings: List[Finding] = []
     total = 0
 
@@ -13249,6 +13566,12 @@ UNDISPATCHED: Dict[str, str] = {
         "`report.add` and why `audit()` does not call it. Dispatching it directly would "
         "print a third row nobody asked for; leaving it out of this list would report it "
         "as a check that has never run.",
+    "_debts_corpus_empty":
+        "The debts twin of `corpus_is_empty`, for the same reason: `check_debts_headings` "
+        "and `check_debt_index` both iterate docs/debts/, and both would report a clean "
+        "read of nothing under whichever label called it. It also carries the pinned "
+        "non-vacuity floor, so it must run under BOTH callers' names rather than once "
+        "under its own.",
 }
 
 
@@ -14208,7 +14531,7 @@ UNSCOPED_WALK_ALLOWED: FrozenSet[Tuple[str, str, str]] = frozenset({
     ("store/master.py", "next_box_number", "distinct"),   # kept permanently — one indexed column, cheap; missed by the hand census
     ("cli/resolve.py", "box_views", "select"),   # store-scaling item 7 — renamed from `.values()`; the unbounded (`boxes=None`) branch every existing caller still uses is genuinely store-wide, for the same reason `_value_rows` is
     ("cli/resolve.py", "_cards_by_sku", "select"),   # store-scaling item 4 — one pass, replaces per-SKU `_copies_out`/`_committed_keys`/`_unsent_ledger` reads; the `_unsent_ledger` distinct scan above is deleted, not merely moved
-    ("server/capture_server.py", "do_inventory_copies", "select"),   # docs/DEBTS.md §27, site 1 — a NEW full-table scan, added rather than removed, and named as a cost paid: `POST /inventory/copies` replaces `Orders.tsx`'s `GET /inventory` (D192's own site 1), and the one unfiltered `_cards_by_sku`-shaped pass here is what lets the box set handed to `_Places.for_keys` be DERIVED from the scan rather than guessed at from the request — the docstring on the function has the full argument for why that is sound where box-scoping the walk itself is not. This is the count going UP by one, on purpose, for a route this file's own item 1 could not have existed to forbid before it existed to write.
+    ("server/capture_server.py", "do_inventory_copies", "select"),   # §27, site 1 — a NEW full-table scan, added rather than removed, and named as a cost paid: `POST /inventory/copies` replaces `Orders.tsx`'s `GET /inventory` (D192's own site 1), and the one unfiltered `_cards_by_sku`-shaped pass here is what lets the box set handed to `_Places.for_keys` be DERIVED from the scan rather than guessed at from the request — the docstring on the function has the full argument for why that is sound where box-scoping the walk itself is not. This is the count going UP by one, on purpose, for a route this file's own item 1 could not have existed to forbid before it existed to write.
 })
 # STORE-SCALING ITEM 8 REMOVED `do_search`'s ROW: the O(cards) walk over
 # `inventory.cards.values()` is deleted, replaced by an FTS5 `MATCH` query
@@ -14220,7 +14543,7 @@ UNSCOPED_WALK_ALLOWED: FrozenSet[Tuple[str, str, str]] = frozenset({
 #
 # 9 -> 10, THE ONE DIRECTION THIS PIN HAS NEVER MOVED BEFORE, AND IT IS SAID PLAINLY RATHER
 # THAN QUIETLY. `POST /inventory/copies` (`do_inventory_copies`) is a NEW full-table scan,
-# closing `docs/DEBTS.md` §27 site 1 (`Orders.tsx`'s `GET /inventory`) by replacing a whole-
+# closing §27 site 1 (`Orders.tsx`'s `GET /inventory`) by replacing a whole-
 # store WIRE PAYLOAD with a whole-store SERVER-SIDE scan that answers only the requested
 # SKUs — the cost moves, it does not disappear, and this row exists precisely to keep that
 # honest. It earns its own allowlist entry rather than folding into an existing one, because
@@ -14343,7 +14666,7 @@ def check_rule_enforcement(report: Report) -> None:
     exact forbidden waiter loop — and its own file now records that the rule failed *because*
     it was phrased as an explanation to recall rather than a prohibition to trip over. The
     same session wrote a rule against silencing a write and then swallowed two commit refusals
-    with `>/dev/null 2>&1`. `docs/DEBTS.md` §11 carried a sentence about two observed mutation
+    with `>/dev/null 2>&1`. §11 carried a sentence about two observed mutation
     failures that were measured false on both counts. `screen-freshness --self-test` exited 1
     on main while sitting on no make target and printing *"run --self-test"*. Against that:
     `raw color`, `storage keys`, `route census`, `check census`, `codex hooks`, `id claims`
@@ -16708,6 +17031,8 @@ def audit(staged_only: bool) -> Report:
     check_claim_vocabulary(report)
     check_entry_budget(report)
     check_debts_headings(report)
+    check_debt_index(report)
+    check_debt_ids(report, docs)
     check_env_vars(report, docs, allowed)
     check_env_names(report)
     check_hatch_state(report)
@@ -16726,6 +17051,7 @@ def audit(staged_only: bool) -> Report:
     check_hook_roster(report)
     check_codex_hooks(report)
     check_map_sections(report)
+    check_gates_structure(report)
     check_build_order_mirror(report)
     check_game_vocabulary(report)
     check_game_coverage(report)

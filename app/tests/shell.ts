@@ -420,7 +420,7 @@ async function stubStore(page: Page): Promise<void> {
      `nav.spec.ts`'s own `CARD`, which is the one fixture in this directory already written to
      that rule. */
   await page.route(/\/inventory$/, (route) => json(route, { version: 2, cards: CARDS, boxes: {}, listings: {} }))
-  /* `docs/DEBTS.md` §27, site 1: `Orders.tsx` no longer calls the bare `/inventory` above —
+  /* DEBT27, site 1: `Orders.tsx` no longer calls the bare `/inventory` above —
    * it calls `POST /inventory/copies` with the SKU set its own ledger read just named, and
    * a spec seeding real orders (`routeFixtures.ts:seedPopulatedOrders`) alongside `stubStore`
    * would otherwise leak that write to the real capture port. Filtered the same way the real

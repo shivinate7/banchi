@@ -599,7 +599,7 @@ written to prevent, pointing the other way.
 **Built met a real queue at Gate B (2026-08-22), and this paragraph previously said it
 never had.** The run put real entries in both queue files, the owner answered 16 of them
 on this screen through the answer route, and the §10.2 measurements were taken —
-`docs/GATES.md`'s Gate B section holds them. What that run could *not* test is the one
+the gates corpus's `GateB` record holds them. What that run could *not* test is the one
 number called out below: its queue was uniformly sub-threshold commons, so the
 price-banded type hierarchy has still never seen the mixed-value list it was designed
 for. The rest of this section now describes a screen that has done its job once.

@@ -34,7 +34,7 @@ registered and dispatched to. That section keeps each argument.
 
 **One of the five was measured and lost, and the measurement is the point.** The rarity
 clause in the prompt was built, A/B'd for $0.17, and **switched off**: holdout fell 1.5
-points and high-confidence misses rose by two. `docs/GATES.md`'s T1 section has the numbers,
+points and high-confidence misses rose by two. the gates corpus's `T1` entry has the numbers,
 and they are cited at the switch itself.
 
 **WHAT HAS MET A REAL CARD.** Nothing here. Gate B ran 53 Pokémon cards through a pipeline that

@@ -248,7 +248,7 @@ const RECORDED = {
   ],
   // `previewReconcileBacklog` is the reconcile's press-nothing half and says so in its own
   // docstring — "FREE and WRITES NOTHING" — which is what earns a place on this list.
-  // `getInventoryCopies` (docs/DEBTS.md §27, site 1) is the same shape: a POST because the
+  // `getInventoryCopies` (DEBT27, site 1) is the same shape: a POST because the
   // SKU list is too big for a query string, over `Store().read()` alone.
   nonMutating: [
     'preflightRun', 'cropPreview', 'fetchOrders', 'previewOrders', 'previewReconcileBacklog',
