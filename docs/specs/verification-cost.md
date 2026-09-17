@@ -339,3 +339,21 @@ because it is the one place in this document where a real second is bought with 
 narrow, coverage gap.
 
 **Nothing above is implemented. The owner rules first.**
+
+---
+
+## 9. The owner's rulings, 2026-09-17
+
+Taken in an interview after the §1 correction was on the table.
+
+| Item | Ruling |
+|---|---|
+| Output work (§8.4) | **Parent rule only. No Makefile change.** The rule is repo-independent and goes in the parent `CLAUDE.md`, not here. |
+| `map-fix` (§6C) | **Write the D18 amendment first, then build.** The seam entry is argued on its own terms and ruled on before any generator exists. |
+| Path gating (§6B, §8) | **`serve-selftest` only, and revisit if the list grows.** A request for a second entry is evidence the policy is spreading and needs the owner's word again. |
+| First build (§7, §6E) | **Both on one branch** — the three brief practices and the `Orders.tsx` component index. They are one failure seen from two sides: an agent that cannot find the rendering component. |
+
+**What was rejected and stays rejected:** breakpoint tiering of `design-check` (§6A), a local
+per-spec filter (§6B), and path gating as a general policy — nine targets in `make check` cost
+under 0.1 s each, so 35 scope lists would cost more to maintain than they save, and every path
+gate is another place a green can be believed over nothing.
