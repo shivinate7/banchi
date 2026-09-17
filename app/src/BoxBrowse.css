@@ -472,6 +472,72 @@
 .browse-queuechip:hover { text-decoration: none; filter: brightness(0.95); }
 .browse-queued { padding: 0 var(--bn-5) var(--bn-4); }
 
+/* ---- the printing chooser: name -> variant, one row per SKU a search answers with ---- */
+.browse-variants { display: flex; flex-direction: column; gap: var(--bn-3); padding: var(--bn-4); }
+.browse-variants-lede { font-size: var(--bn-fs-sm); color: var(--bn-ink-3); }
+.browse-variants-list {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  max-height: 60vh;
+  overflow-y: auto;
+}
+.browse-variant-tile {
+  width: 100%;
+  display: grid;
+  grid-template-columns: 40px minmax(0, 1fr) auto;
+  align-items: center;
+  gap: var(--bn-3);
+  min-height: 56px;
+  padding: var(--bn-2) var(--bn-3);
+  border-radius: var(--bn-r);
+  text-align: left;
+  color: var(--bn-ink);
+  background: var(--bn-surface);
+}
+.browse-variant-tile:hover { background: var(--bn-hover); }
+.browse-variant-photo {
+  width: 40px;
+  height: 56px;
+  border-radius: var(--bn-r-sm);
+  overflow: hidden;
+  display: grid;
+  place-items: center;
+  background: var(--bn-surface-2);
+  color: var(--bn-ink-4);
+  flex: none;
+}
+.browse-variant-photo > img { width: 100%; height: 100%; object-fit: cover; }
+.browse-variant-text { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.browse-variant-name {
+  font-weight: 600;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.browse-variant-name.is-unnamed { color: var(--bn-ink-3); font-weight: 500; }
+.browse-variant-sub {
+  font-size: var(--bn-fs-xs);
+  color: var(--bn-ink-3);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.browse-variant-count {
+  font-size: var(--bn-fs-xs);
+  color: var(--bn-ink-3);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+  flex: none;
+}
+@media (max-width: 479px) {
+  /* No horizontal scroll at 390: the count drops beside the name row instead of sitting in
+     its own grid column, which is the one thing at this width that could push past the
+     viewport (a long name already wraps or ellipses inside `minmax(0, 1fr)`). */
+  .browse-variant-tile { grid-template-columns: 36px minmax(0, 1fr); grid-template-rows: auto auto; }
+  .browse-variant-count { grid-column: 2; grid-row: 2; text-align: left; }
+}
+
 /* the card menu */
 .browse-cardops { position: relative; flex: none; }
 .browse-menu { position: absolute; right: 0; top: calc(100% + 6px); z-index: 30; min-width: 220px; }
