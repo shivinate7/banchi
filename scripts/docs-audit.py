@@ -10618,7 +10618,7 @@ _REPO_EXT_RE = re.compile(r"\b[\w-]+\.(?:sqlite|jsonl|json)\b")
 # false positives from this pattern on the tree as it stands.
 _DECISION_CITE_RE = re.compile(r"\bD\d{1,4}\b|\bC\d{1,4}\b|\(D-[A-Za-z0-9][A-Za-z0-9-]*\)")
 
-# A CLI INVOCATION, BACKTICKED OR BARE (D-rescue-is-a-press's own finding). This row had no
+# A CLI INVOCATION, BACKTICKED OR BARE (D210's own finding). This row had no
 # key for `Pricing.tsx:4468`'s "Run `pkmnscan rescue` to rebind it." — a backticked command
 # is not a decision citation, not one of `_REPO_TOP_DIRS` followed by a slash, and not a
 # `.json`/`.sqlite`/`.jsonl` filename, so it passed this row clean while naming this
@@ -16655,7 +16655,7 @@ def self_test() -> int:
                "the pull-confirm screen is NOT exempt, for the same reason")
             ok("CliInvocation.tsx" in hit_files,
                "a backticked `pkmnscan …` invocation is caught — `Pricing.tsx:4468`'s own "
-               "defect before D-rescue-is-a-press, and the row had no key for it")
+               "defect before D210, and the row had no key for it")
 
     # THE PIN. `NO_MECHANISM_EXEMPT_FILES` is a set of exactly one entry, named in the
     # coordinator's 2026-09-13 ruling and nowhere else — a session widening it to a second

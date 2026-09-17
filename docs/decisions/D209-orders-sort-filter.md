@@ -1,4 +1,4 @@
-## D-orders-sort-filter — The buyer list leads with Ready to Ship, and a re-sort is a press
+## D209 — The buyer list leads with Ready to Ship, and a re-sort is a press
 
 **The owner's ruling, verbatim in intent, 2026-09-13:** TCGplayer "Ready to Ship" leads the
 buyer list, newest first within a group, and everything else stays reachable behind a status

@@ -1,4 +1,4 @@
-## D-the-rig-panel-folds-once-a-box-is-known — The Rig panel folds once the setup is already known, and stays open until it is
+## D211 — The Rig panel folds once the setup is already known, and stays open until it is
 
 `app/src/CaptureScreen.tsx`'s Game/Camera/Rotation/Trigger panel — the SESSION box, "set once
 when the rig is set up, then read" per this file's own comment — rendered all four fields

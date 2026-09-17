@@ -351,7 +351,7 @@ export function RunPanel({ drawers, openRun, onOpenRun, reloadTick, onIdentify, 
   }, [])
 
   /* Re-read while on screen: fast while something is live, slow otherwise — `usePoll`'s own
-     live/idle pair (D-one-poller). The first failure is reported and later ones swallowed,
+     live/idle pair (D207). The first failure is reported and later ones swallowed,
      which `announced` still decides; what the shared hook adds is the pause while this tab
      is hidden and the backoff a run of failures gets, neither of which this poll had before. */
   const announced = useRef(false)

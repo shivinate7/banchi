@@ -990,7 +990,7 @@ export function Pricing() {
   const trendWalk = useRef(0)
   const [note, setNote] = useState<{ sku: string; text: string } | null>(null)
   const [filterHeld, setFilterHeld] = useState(false)
-  /* PROGRESSIVE DISCLOSURE ON THE WORKLIST (Ruling B, D-one-verdict-on-pricing). One toggle
+  /* PROGRESSIVE DISCLOSURE ON THE WORKLIST (Ruling B, D208). One toggle
      per SECTION — keyed by `section.bucket` — not per row: 400+ rows would each carry their
      own toggle state otherwise. Off by default: Low / +Ship / Direct and the plain box/run-
      span badge are hidden until the operator asks for them; an over-cap warning is never
@@ -3878,7 +3878,7 @@ export function Pricing() {
 
       {run === null ? null : (
         <aside className="pricing-ship" ref={measureShip} role="region" aria-label="Ship this run" data-ready={owes.length === 0 ? 'true' : 'false'}>
-          {/* THE VERDICT IS STATED ONCE, ON THE DECK ABOVE (Ruling A, D-one-verdict-on-pricing):
+          {/* THE VERDICT IS STATED ONCE, ON THE DECK ABOVE (Ruling A, D208):
               this bar used to restate readiness as a second pill and sentence, walking back to
               the same account the deck already gives at the top of the screen. That restatement
               — and the button that carried it — is gone; the bar is the press and its two
@@ -4511,7 +4511,7 @@ function UnreachableLine({ at }: { at: Unreachable | null }) {
     )
   const strandedRuns = heldBack(at.reallocated)
   const stranded = strandedRuns.reduce((n, run) => n + (run.cards ?? 0), 0)
-  // THE TOOLTIP NAMES THE WAY OUT AND NAMES NO COMMAND (D-rescue-is-a-press): rebinding a
+  // THE TOOLTIP NAMES THE WAY OUT AND NAMES NO COMMAND (D210): rebinding a
   // stranded run is a press on `#/runs` now — the run's own header, on the row this tooltip
   // describes — so the sentence points there instead of at a CLI invocation nobody here may
   // ever draw a backtick around.
@@ -4651,7 +4651,7 @@ function ReadyPanel({
 
       <UnreachableLine at={unreachable} />
 
-      {/* THE FOUR COUNT CHIPS ARE GONE (Ruling A, D-one-verdict-on-pricing): this bar
+      {/* THE FOUR COUNT CHIPS ARE GONE (Ruling A, D208): this bar
           restated typed/held/rule/cheap as a second accounting of the same figures the
           sentence above already states once, in `.pricing-verdict-says`. One verdict,
           stated once — the headline sentence keeps every figure the chips carried. */}

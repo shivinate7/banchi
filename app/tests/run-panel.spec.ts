@@ -2719,7 +2719,7 @@ test('the release names its receipt and confirms, and the page does not move und
   ])
 })
 
-/* THE FOOT LIES FOR UP TO FIFTEEN SECONDS, AND THE FIX IS NOT IN THE FOOT (D-one-poller).
+/* THE FOOT LIES FOR UP TO FIFTEEN SECONDS, AND THE FIX IS NOT IN THE FOOT (D207).
  *
  * `useServerPresence` used to learn the server was gone ONLY from its own `GET /status` —
  * on mount, on a 15s interval, on window focus. Every other request in the app could fail
@@ -2782,7 +2782,7 @@ test('a failed poll elsewhere flips the server foot before the next status check
 
 // ------------------------------------------------------------------------- D165's rescue
 
-/* THE REPAIR, REACHED FROM THE ROW IT STRANDS (D-rescue-is-a-press). `box_former` is the same
+/* THE REPAIR, REACHED FROM THE ROW IT STRANDS (D210). `box_former` is the same
  * flag `runBoxLabel` already draws `Box 1 (deleted)` off — this asserts the control that sits
  * beside that label, and the sheet it opens.
  *

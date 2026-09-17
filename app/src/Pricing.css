@@ -473,7 +473,7 @@
 .pricing-verdict-warn { display: flex; align-items: flex-start; gap: 6px; font-size: var(--bn-fs-sm); line-height: 1.45; color: var(--bn-warn); }
 .pricing-verdict-warn .bn-icon { flex: none; margin-top: 1px; }
 .pricing-verdict-warn a { color: inherit; text-decoration: underline; text-underline-offset: 2px; }
-/* THE PROPORTIONAL BAR IS GONE (Ruling A, D-one-verdict-on-pricing): `.pricing-meter` and
+/* THE PROPORTIONAL BAR IS GONE (Ruling A, D208): `.pricing-meter` and
    `.pricing-meter-bar` drew a second accounting of the figures `.pricing-verdict-says`
    already states once. `.pricing-meter-keys`/`.pricing-meter-dot` below stay — the live
    inventory verdict's own three-part key strip (`LiveVerdict`, not `ReadyPanel`) still
@@ -1015,7 +1015,7 @@
   animation: bn-receipt-in var(--bn-t-slow) var(--bn-ease-spring) both;
 }
 .pricing-ship-status { display: flex; align-items: center; gap: var(--bn-3); flex: 1 1 260px; min-width: 0; flex-wrap: wrap; }
-/* `.pricing-ship-verdict` IS GONE (Ruling A, D-one-verdict-on-pricing): the single-run ship
+/* `.pricing-ship-verdict` IS GONE (Ruling A, D208): the single-run ship
    bar used to carry a second Ready/Not-yet pill and a walk-back-to-deck button, restating
    the account the deck already gives once at the top of the screen. `.pricing-ready`/
    `.pricing-ship-says` stay — the merged and lens bars still use them for their own

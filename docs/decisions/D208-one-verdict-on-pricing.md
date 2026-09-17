@@ -1,4 +1,4 @@
-## D-one-verdict-on-pricing — Pricing states its verdict once, and the worklist discloses progressively
+## D208 — Pricing states its verdict once, and the worklist discloses progressively
 
 **The owner's two rulings, batch 4 (2026-09-13).**
 

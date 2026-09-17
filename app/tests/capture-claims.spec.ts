@@ -1217,7 +1217,7 @@ test('a restored box the store still calls the same drawer is kept', async ({ pa
 })
 
 /* ============================================================================================
-   THE RIG PANEL FOLDS ONCE THE SETUP IS ALREADY KNOWN (D-the-rig-panel-folds-once-a-box-is-known)
+   THE RIG PANEL FOLDS ONCE THE SETUP IS ALREADY KNOWN (D211)
    ========================================================================================== */
 
 test('the Rig panel starts open with no remembered box, and folded with one', async ({ page }) => {

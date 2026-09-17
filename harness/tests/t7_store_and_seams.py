@@ -12536,7 +12536,7 @@ def check_rescue_json_reasons(checks: Checks) -> None:
     THE COORDINATOR'S OWN FINDING: `_parse_rescue_console` (the substring parser this PR
     replaced) had six branches and only `not_stranded` was ever exercised by anything —
     reword a sentence in `cli/cmd_rescue.py` tomorrow and five reasons silently become the
-    wrong code or none at all, with every check green. `--json` (D-rescue-is-a-press) makes
+    wrong code or none at all, with every check green. `--json` (D210) makes
     the command say its own answer rather than have a route guess at it from prose, and this
     is where each of the six codes gets proven against the actual condition that produces it
     — a healthy run, a run whose cards have all left, cards split across two drawers, a

@@ -549,7 +549,7 @@ export function rememberSpendNotice(dollars: number): void {
 
 /**
  * WHETHER THIS BROWSER SHOWS THE REFERENCE COLUMNS ON `#/pricing`, PER SECTION
- * (D-one-verdict-on-pricing, amending the ruling that shipped Compare as component state).
+ * (D208, amending the ruling that shipped Compare as component state).
  *
  * THE COORDINATOR'S CATCH: as first built, the toggle was `useState` and forgot itself on
  * every reload — an operator who wanted Low/+Ship/Direct visible had to press Compare again,

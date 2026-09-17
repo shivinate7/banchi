@@ -929,7 +929,7 @@ test('every export column that carries data is on the row, once Compare is asked
   await open(page)
 
   /* The owner's requirement in their own words: "I want all the data from the CSV shown when
-     I make the decision" — still true, and still reachable: Ruling B (D-one-verdict-on-pricing)
+     I make the decision" — still true, and still reachable: Ruling B (D208)
      moved three of the four behind a per-section Compare toggle so the default row is not a
      wall of reference prices, but the toggle is one press and nothing is deleted. The four
      price columns are the ones a subset would have dropped. Drawn Market, Low, +Ship, Direct
@@ -1001,7 +1001,7 @@ test('the sub-threshold policy is answered from the start, and the floor press w
      written nothing is ANSWERED from the start and the bar is content on arrival. What survives
      of the old assertion is the pair below: the panel says the figure is not written, and the
      verdict is not claiming otherwise. */
-  /* THE VERDICT IS STATED ONCE, ON THE HEADLINE (Ruling A, D-one-verdict-on-pricing) — the
+  /* THE VERDICT IS STATED ONCE, ON THE HEADLINE (Ruling A, D208) — the
      single-run ship bar no longer carries a second Ready/Not-yet pill or sentence, so this
      locator moves to `.pricing-deck-title`, the one place readiness is now said. */
   await expect(
@@ -1180,7 +1180,7 @@ test('the field refuses anything that is not a price, at the keystroke', async (
 test('a letter snaps the price to its column, and does not commit', async ({ page }) => {
   const wire = await open(page)
 
-  /* `l` ACTS ONLY WHILE ITS COLUMN IS ON SCREEN (Ruling B, D-one-verdict-on-pricing) — Compare
+  /* `l` ACTS ONLY WHILE ITS COLUMN IS ON SCREEN (Ruling B, D208) — Compare
      is off by default, so this snap needs the toggle first; `m` alone would not. */
   await page.getByRole('button', { name: 'Compare' }).first().click()
   await field(page).focus()
@@ -1385,7 +1385,7 @@ test('every control that answers a row is on the row, with nothing to open first
      this file overruling that. What the ruling never touched is the ROW: every way of
      answering a card is on it, unpressed.
 
-     RULING B (D-one-verdict-on-pricing) IS A DELIBERATE, NAMED EXCEPTION to "no click to
+     RULING B (D208) IS A DELIBERATE, NAMED EXCEPTION to "no click to
      open": the Low/+Ship/Direct reference cells sit behind a per-section Compare toggle,
      which the batch-4 brief itself specifies. The Qty field, the price field, the hold
      control and the history control are still on the row with nothing to open first —

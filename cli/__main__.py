@@ -244,7 +244,7 @@ def build_parser() -> argparse.ArgumentParser:
         action="store_true",
         help="create the rescue run. Previews without it, and writes nothing at all.",
     )
-    # D-rescue-is-a-press. OFF BY DEFAULT — a terminal's report is unchanged whether or not
+    # D210. OFF BY DEFAULT — a terminal's report is unchanged whether or not
     # this is passed. When it is, one extra line of compact JSON is printed alongside the
     # ordinary prose (`_report_line` in cmd_rescue.py), naming the reason code, the counts,
     # the destination and whether an identical rescue already exists — the machine-readable

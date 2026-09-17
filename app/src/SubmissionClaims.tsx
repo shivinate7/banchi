@@ -87,7 +87,7 @@ export function SubmissionClaims() {
   }, [])
 
   /* THE POLL STOPS WHEN NOTHING IS HELD, which is the ordinary state — `stopWhenNotLive`
-     (D-one-poller) is exactly this panel's own shape: one unconditional read on mount, and no
+     (D207) is exactly this panel's own shape: one unconditional read on mount, and no
      more requests at all once the answer holds no claims. A timer running forever against a
      route that answers an empty list on a healthy store is the kind of cost nobody notices
      and nobody needs, which is the same argument this poll always made for itself. */

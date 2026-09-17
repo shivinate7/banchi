@@ -1,6 +1,6 @@
 import { useEffect, useRef } from 'react'
 
-/* ONE POLLING PRIMITIVE, WHERE FIVE HAND-ROLLED TIMERS USED TO STAND (D-one-poller).
+/* ONE POLLING PRIMITIVE, WHERE FIVE HAND-ROLLED TIMERS USED TO STAND (D207).
  *
  * `RunPanel.tsx` polled the run list and a run's own detail; `BoxRuns.tsx` copied the run
  * list's constants BY COMMENT (`4s / 20s, commented as copying RunPanel`); `SubmissionClaims.tsx`

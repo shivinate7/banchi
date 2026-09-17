@@ -2537,6 +2537,11 @@ D203 The two-year backlog is stood down by one press over a cutoff the operator 
 D204 The phone drawer's nav scrolls in the space above its foot, for any row count, and the CSS says so explicitly rather than relying on it
 D205 The phone tab bar has one height, and every layout that leaves room for it reads the same name
 D206 Build-order step 9's first two pieces landed; the mirror stays dry-run
+D207 The foot learns from every request, and five timers become one hook
+D208 Pricing states its verdict once, and the worklist discloses progressively
+D209 The buyer list leads with Ready to Ship, and a re-sort is a press
+D210 `pkmnscan rescue` is reached from a press, and its report is never shown verbatim
+D211 The Rig panel folds once the setup is already known, and stays open until it is
 ```
 
 **THE GAP THIS LIST CARRIED BETWEEN D116 AND D118 IS CLOSED, AND IT CLOSED THE WAY IT SAID IT

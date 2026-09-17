@@ -1170,7 +1170,7 @@ timestamp rather than a client timer, and it argues the distinction at length), 
 alternatives are an explicit *end this pass* control nobody has asked for, or leaving it here. THIS
 IS NOT A CLAIM THAT THE CLIENT CARRIES NO REPEATING TIMER — it carries five, all of them polls
 re-asking a question on a cadence rather than a wall clock deciding an answer has gone stale by
-itself, and `D-one-poller` gives them one shared primitive rather than a sixth hand-rolled one. The
+itself, and `D207` gives them one shared primitive rather than a sixth hand-rolled one. The
 sentence above was read as the opposite once and corrected here rather than reopened: a poll and an
 expiry are different mechanisms, and this repo has built the first kind five times and the second
 kind never.
@@ -2415,7 +2415,7 @@ it — the closure is exactly the shape D192 already argued for and named as fut
 
 ## 28 — `pkmnscan rescue` is reachable from no screen, and the screen that needs it names a command
 
-**CLOSED 2026-09-13 (D-rescue-is-a-press).** `#/pricing`'s "over a deleted box" sentence used
+**CLOSED 2026-09-13 (D210).** `#/pricing`'s "over a deleted box" sentence used
 to tell the operator, in a tooltip, to run `pkmnscan rescue` on the stranded run — a CLI press
 with no route, no client function and no control, the shape CLAUDE.md's "a route is not a
 feature" rule refuses for a server capability, one register over. On 2026-09-13 the owner hit
@@ -2431,7 +2431,7 @@ gated — `do_queue_refresh`'s shape) in `server/pipeline_routes.py`, dispatched
 screen instead of the command. The owner's same-day ruling that raw machine text may never
 reach a screen meant the route could not simply relay `cmd_rescue`'s stdout the way every
 other free step does; `do_run_rescue` parses it into a structured `RescueResult` instead, and
-the raw report goes to a log file under the run's own directory. See D-rescue-is-a-press for
+the raw report goes to a log file under the run's own directory. See D210 for
 the whole argument, and `harness/tests/t7_store_and_seams.py:check_rescue_route` and
 `app/tests/run-panel.spec.ts`'s four rescue cases for what proves it.
 

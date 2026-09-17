@@ -1,4 +1,4 @@
-## D-rescue-is-a-press — `pkmnscan rescue` is reached from a press, and its report is never shown verbatim
+## D210 — `pkmnscan rescue` is reached from a press, and its report is never shown verbatim
 
 **DEBTS §28 named the gap: `pkmnscan rescue` (D165) had been reachable from no screen.**
 `cli/cmd_rescue.py:run` — the one-time repair for a run D36 refuses, over a drawer D20 has

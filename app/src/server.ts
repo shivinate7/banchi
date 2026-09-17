@@ -573,7 +573,7 @@ function noteBoot(response: Response): void {
   for (const listener of bootListeners) listener(seen)
 }
 
-/* D-one-poller: THE SAME SHAPE AS `onServerBoot` ABOVE, ONE REGISTER DOWN. `useServerPresence`
+/* D207: THE SAME SHAPE AS `onServerBoot` ABOVE, ONE REGISTER DOWN. `useServerPresence`
  * used to learn the server was gone only from its OWN `GET /status` poll — 15s and on window
  * focus — so any OTHER request in the app could fail without the foot ever hearing about it.
  * `request()` is the one seam every call in this module passes through, exactly like `noteBoot`

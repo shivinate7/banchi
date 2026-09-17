@@ -205,7 +205,7 @@ def _sort_key(position: str) -> Tuple[int, int]:
 def _report_line(report: dict) -> str:
     """One line of compact, deterministic JSON — the machine-readable half of a rescue.
 
-    ADDED FOR D-rescue-is-a-press. THE ROUTE USED TO RECOVER A REFUSAL REASON BY MATCHING
+    ADDED FOR D210. THE ROUTE USED TO RECOVER A REFUSAL REASON BY MATCHING
     SUBSTRINGS OUT OF THIS COMMAND'S OWN PROSE, and only one of six branches was ever
     exercised by a real run through the real command — reword a sentence above and five
     reasons silently become the wrong code or none at all, with every check still green. This

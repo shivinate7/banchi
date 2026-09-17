@@ -1496,7 +1496,7 @@ test('a buyer with nothing open and closed long ago sits under the Earlier fold'
 
 /* ------------------------------------------------------------------------------------- 20
  *
- * SORT AND FILTER (`D-orders-sort-filter`). Ready to Ship leads, newest first within a group,
+ * SORT AND FILTER (`D209`). Ready to Ship leads, newest first within a group,
  * everything else stays reachable behind the status select — an ORDERING and never a hiding.
  *
  * THREE BUYERS, ONE FIXTURE. Alice (Ready to Ship, oldest), Carol (Ready to Ship, newest),

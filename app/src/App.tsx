@@ -231,7 +231,7 @@ function useRouteStep(enabled: boolean, path: string): void {
 /* ---- server presence ----------------------------------------------------------------- */
 type ServerState = 'unknown' | 'online' | 'offline'
 
-/** The shell's own poll, on `usePoll` (D-one-poller) rather than a hand-rolled interval — the
+/** The shell's own poll, on `usePoll` (D207) rather than a hand-rolled interval — the
  *  15s cadence and the window-focus refresh are `liveMs`/`idleMs` (there is no live/idle
  *  distinction here, so both carry the same figure) and `refreshOnFocus` respectively.
  *  `useServerPresence` still owns two things `usePoll` cannot: the ONLINE/OFFLINE verdict a
@@ -259,7 +259,7 @@ function useServerPresence(enabled: boolean): { state: ServerState; cards: numbe
       refresh()
     })
   }, [enabled, refresh])
-  /* D-one-poller: THE FOOT LEARNS FROM EVERY REQUEST IN THE APP, NOT JUST ITS OWN POLL.
+  /* D207: THE FOOT LEARNS FROM EVERY REQUEST IN THE APP, NOT JUST ITS OWN POLL.
    * `server.ts:request()` is the one seam every call funnels through, and it now reports
    * reachability there — so a poll failing on `#/runs` while this screen sits on `#/pricing`
    * flips this dot within that ONE request rather than waiting up to 15s for the next

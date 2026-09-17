@@ -15,7 +15,7 @@ import './BoxRuns.css'
  * standing on. Deliberately not a second run panel: no step, no console, no control that spends. */
 
 /** Live runs are re-read on this cadence, idle ones on the slower one — the same pair
- *  `RunPanel` uses, and now the same HOOK (D-one-poller) rather than a copy of its constants
+ *  `RunPanel` uses, and now the same HOOK (D207) rather than a copy of its constants
  *  kept in step by comment alone. */
 const LIVE_MS = 4000
 const IDLE_MS = 20000
