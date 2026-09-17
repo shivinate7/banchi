@@ -515,8 +515,8 @@ not rendered — not focusable, not reachable by a screen reader).
   `PKMNSCAN_TREE` (a write outside this checkout), `PKMNSCAN_GH` (`gh api -f` with no method),
   `PKMNSCAN_LINK` (`ln -s` at an existing path), `PKMNSCAN_WAIT` (a polling loop),
   `PKMNSCAN_PUSH` (a push to a differently-named upstream), `PKMNSCAN_STASH` (a bare
-  `git stash`, or a `pop`/`clear`/`drop` OVER A NON-EMPTY STACK — the stack is shared by
-  every worktree of this clone, and an empty one is no subject to refuse over) and `PKMNSCAN_RESET` (`git reset --hard`/`--merge`/`--keep`
+  `git stash`, a `pop`, or a `drop`/`clear` naming no entry — the stash stack is shared by
+  every worktree of this clone) and `PKMNSCAN_RESET` (`git reset --hard`/`--merge`/`--keep`
   over uncommitted tracked work). `make guard-shell-selftest` proves each one by committing
   its mistake in a throwaway repository.
 - **A screen answers to the system**: `--bn-*` tokens only, verified at 1440, 820 and 390,
