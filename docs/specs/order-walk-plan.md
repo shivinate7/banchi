@@ -5,8 +5,9 @@ rules on this document before a line is written.
 
 **Three architectural calls were put to the owner on 2026-09-17 and ruled on.** They are
 settled in this document and are not open questions: the solver runs **on the server**;
-`buildWalkPlan` is **replaced, not extended**; and the plan, once the walk starts, **never
-changes** (section 8, which carries the owner's own words).
+`buildWalkPlan` is **replaced, not extended**; and the plan does not move **inside a pass**,
+where a pass is one press of Start to the end of that walk and nothing longer (section 8,
+which carries the owner's own words).
 
 **What it replaces.** `#/orders`'s `Walk the boxes` stage, and the sentence block, the
 `By order` fold and `buildWalkPlan` around it. `#/orders` and `#/shipping` stay two stages of
@@ -338,16 +339,46 @@ to overpull. It is wrong for it to be the path of least resistance.
 **The undo window moves nothing.** An undo inside 20 s restores the row in place. The plan is
 never recomputed, by any press (below).
 
-### Re-planning — there is none
+### The pass, and why the plan does not move inside it
 
-**The owner's ruling, 2026-09-17, interviewed on this document:** *"once I hit the button to
-start my walk, my experience should be that nothing's shuffling under me"*, and on what a
-mid-walk change should do: *"maybe a toast spawns, but frankly I can't imagine a copy sold on
-another screen ever happening, and a new order arriving shouldn't alter my walk."*
+**A pass is one press of Start to the end of that walk, and nothing longer.** The owner, 2026-09-17:
+*"I'm thinking of walk as every time I tick some orders and hit start this walk, only for that
+period things remain frozen for me, not some longer duration than that. As soon as I finish
+those that were ticked and return to the app then things can move."*
 
-So the plan is computed once, when the walk opens, and **never changes again**. Not on a pull.
-Not on a sale elsewhere. Not on an ingest. There is **no `Re-plan` control**, and the earlier
-draft of this document that offered one was wrong.
+**Leaving the walk ends the pass** (the owner's ruling, same interview). Tap another screen,
+close the tab, come back an hour later — that walk is over. The buyer list keeps the ticks. The
+next Start builds a **fresh plan against the store as it is then**. One screen, one pass, and
+no walk outlives the sitting it was built in.
+
+**Inside a pass, the plan is computed once and does not move.** The owner, on what a mid-walk
+change should do: *"maybe a toast spawns, but frankly I can't imagine a copy sold on another
+screen ever happening, and a new order arriving shouldn't alter my walk."* So there is **no
+`Re-plan` control**. An earlier draft of this document offered one and was wrong.
+
+### Leaving mid-walk loses nothing, and the reason is where the write lands
+
+**A pull is banked at the press, not at the end of the walk.** `store/orders.py:record_pull`
+writes to the ledger the moment the button is pressed. So a pass abandoned after three pulls
+has three pulls recorded, exactly as if it had run to the end.
+
+**The next plan asks only for what is still owed.** Demand is `quantity − progress.recorded`
+(section 5), so a banked copy is already out of the arithmetic. Nothing is asked for twice.
+
+**A half-filled line simply shrinks, and may re-route.** Two copies wanted, one taken, the
+second drawer never reached: the next plan wants one, and it may send the operator to a
+different drawer than the first plan did. That is the solver being correct, not the plan
+changing under a hand — it is a **new** plan, over what is left, in a new pass.
+
+**The one real hole is not this plan's, and is recorded rather than fixed here.** The 20 s
+undo lives only on a toast. `app/src/server.ts:undoPull` has exactly two callers in the whole
+product, `Orders.tsx:undoFromToast` and `Fulfillment.tsx`, both of them toasts. Leave the
+screen inside those 20 s and the undo dies with the toast: the card stays sold and no screen
+offers a way back. The owner's ruling, 2026-09-17: fix it separately, as the reach of the pull
+receipt across `#/orders` and `#/fulfillment` together, not as a clause of this document. This
+paragraph exists so the gap is not discovered again from scratch.
+
+Inside a pass, then:
 
 - **A new order arriving does not touch the walk.** The walk covers the set ticked at the
   press. An order that arrives after it is simply not in it.
@@ -397,12 +428,12 @@ countable at a glance.
 - **Fewer sections is not always less work.** A section with 70 cards costs the same as one
   with 33 (both are real on this store). The owner ruled sections counted flat; this is the
   price of the ruling, and it is the first thing a second cost function would address.
-- **Frozen plan, stale plan, and no way to refresh it.** Freezing for the pass is what stops
-  the screen moving under the hand, and the owner ruled it absolute. So a walk that has gone
-  stale stays stale to its end. The only remedy is to finish it and press again. **This is the
-  sharpest trade in the document**, taken on the owner's own estimate that a copy going during
-  a walk is a state they cannot imagine occurring. If it turns out to occur, this is the first
-  thing to revisit — see section 11.
+- **A stale pass stays stale to its end.** Freezing is what stops the screen moving under the
+  hand, and inside a pass the owner ruled it absolute. So there is no way to refresh a walk
+  that has drifted. The remedy is to end the pass and press Start again, which is cheap —
+  leaving the screen is what ends it, the ticks are kept and every pull is already banked. The
+  trade is bounded by the pass, not by the day, and it is taken on the owner's own estimate
+  that a copy going during a walk is a state they cannot imagine occurring.
 - **A second operator is worse off than today.** D212 already named this: two hands pulling at
   once learn of a conflict only at `CopyAlreadyPulled`. A frozen plan makes the wrong walk
   longer before the refusal arrives. This design does not address two hands and should not be
@@ -431,7 +462,7 @@ countable at a glance.
   formulation is then the subject, not the screen.
 - **A second operator.** Two hands change what a frozen plan is worth, and D212's own
   reopening condition is the same one. With no re-plan control at all, the second hand's walk
-  cannot be corrected once it has started.
+  cannot be corrected inside the pass — only ended and started again.
 - **A copy going mid-walk turns out to be common.** The absence of a `Re-plan` control rests
   on the owner's estimate that it does not happen. A count of `gone, skip` rows over a month
   of real walks is the measurement that would settle it. If the number is not near zero, the
