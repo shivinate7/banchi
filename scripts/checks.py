@@ -399,6 +399,30 @@ CHECKS = (
         "governed_by": ("D16", "D18", "D60", "D160"),
     },
     {
+        "target": "gates-selftest",
+        "runs": "python3 scripts/split-gates.py --selftest",
+        "asserts": "`docs/gates/` is a complete, well-formed set: every file `ORDER.json` "
+                   "names is present, every markdown file present is named, no step id "
+                   "appears in both the shipped and open lists, and the corpus meets its "
+                   "pinned non-vacuity floor (>=9 contract entries T1..T9, >=5 run entries, "
+                   ">=15 shipped steps) — a parser finding nothing over a renamed heading is "
+                   "reported as BROKEN, never as a clean tree. It does NOT hash the live "
+                   "corpus, for `decisions-selftest`'s own reason: editing an entry is the "
+                   "normal way this corpus changes. The historical claim — that the split "
+                   "itself lost nothing — is `--verify-split REF`, which reads both sides "
+                   "out of git.",
+        "needs": ("python3",),
+        "writes": "",
+        "commit_path": False,
+        "why_off_commit_path": "Nothing here is urgent enough to pay for on every commit: a "
+                               "corpus that has lost a file fails `gates structure` and "
+                               "`build order mirror` in the same run, so the commit gate "
+                               "already refuses the damage this names. It is in `check` and "
+                               "`ci-check` for the earlier, clearer message.",
+        "gates": True,
+        "governed_by": ("D16", "D18", "D80", "D160"),
+    },
+    {
         "target": "submission-selftest",
         "runs": "python3 scripts/submission-selftest.py",
         "asserts": "store/submissions.py — the claim table that refuses a second `identify` "

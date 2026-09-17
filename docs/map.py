@@ -2950,6 +2950,51 @@ COMPONENTS = [
                 "governed_by": ["D16", "D18", "D58", "D60", "D79", "D80", "D140",
                                 "D160"],
             },
+            "gates_corpus.py": {
+                "does": "The gates corpus, read as one text — decisions_corpus.py's twin. "
+                        "`docs/gates/` holds one markdown file per record in three kind "
+                        "folders (contract/ for the harness's Tn thresholds, gate-runs/ for the "
+                        "Gate A/B/C run records and their addenda, steps/ for the build "
+                        "order's SHIPPED and OPEN lists); `text()` reassembles it in "
+                        "ORDER.json's order and hands every checker the same bytes it used "
+                        "to get from docs/GATES.md, so gates_sections(), check_id_claims() "
+                        "and check_build_order_mirror() in docs-audit.py are unmodified "
+                        "beyond that substitution. tests()/runs()/steps(list_name) are the "
+                        "three per-kind indexes; steps() keeps shipped and open SEPARATE on "
+                        "purpose, since sorting them into one list would erase which one an "
+                        "id is in. Reads and never writes; stdlib only, so the git hook's "
+                        "bare python3 can use it.",
+                # D80 rules the step-list ordering this module preserves (SHIPPED by
+                # landing date, OPEN with no `next`). D160 is the "one file per kind"
+                # argument one register up, which this module's THREE folders answer for a
+                # corpus that is not one kind. D16/D18: this reads, and the split script
+                # that writes the directory is a separate program that does not gate.
+                "governed_by": ["D16", "D18", "D80", "D160"],
+            },
+            "split-gates.py": {
+                "does": "Performed the split of docs/GATES.md into docs/gates/, and proves "
+                        "it lost nothing. Extends split-decisions.py's chunk model one "
+                        "level: cuts at every `## `, then a SECOND time inside `## The "
+                        "harness is the contract` and `## Gates` (at `### `) and inside "
+                        "`## What shipped`/`## What is open` (at a top-level numbered list "
+                        "item) — every line still lands in exactly one chunk and "
+                        "reassembly is still flat concatenation in the manifest's order. "
+                        "`--verify REF` diffs a reassembly against the pre-split bytes and "
+                        "was IDENTICAL at 119,118 bytes across 42 files; `--verify-split "
+                        "REF` re-establishes that later out of git; `--selftest` is the "
+                        "ONGOING claim and runs in `make check` as `gates-selftest` — the "
+                        "set is complete, no step id is in both the shipped and open lists, "
+                        "and the corpus meets a pinned non-vacuity floor (>=9 contract "
+                        "entries, >=5 run entries, >=15 shipped steps) so a broken reader "
+                        "over a renamed heading fails loud rather than passing over an "
+                        "empty corpus.",
+                # Kept after the move for the same reason split-decisions.py is: the only
+                # reviewable account of what happened to a 119 KB file, and --verify-split
+                # is how a later session re-checks the claim rather than taking this file's
+                # word for it. D80 and D160 are the rulings this split enacts; the rest are
+                # the same worked-example citations split-decisions.py carries.
+                "governed_by": ["D16", "D18", "D80", "D160"],
+            },
             "index-decisions.py": {
                 "does": "Generates CLAUDE.md's decision index from the headings in "
                         "docs/decisions/. The index is the OTHER half of the conflict a "
