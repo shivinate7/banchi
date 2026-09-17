@@ -3736,7 +3736,7 @@ test('a clear empties the fields it cleared, and offers the way back', async ({ 
 
      ALL THREE ARE REGISTERED BEFORE ANY PRESS. A stub swapped in after `click()` loses to the
      press's own re-read, and the assertion then retries a STABLE wrong answer — the race
-     `docs/DEBTS.md` §23 records. These mutate one object in place instead. */
+     DEBT23 records. These mutate one object in place instead. */
   const live: Record<string, unknown> = { '8608859': { ...TYPED } }
   await page.route(/\/pricing$/, async (route) => {
     if (route.request().method() === 'PUT') return route.fallback()

@@ -117,7 +117,7 @@ deleted it on 2026-09-07. `9439765` — PR #221, *"The cap is a ceiling on copie
 had touched, and its single commit carried all of them back onto main under a message about
 `--cap` wording: `Inventory.tsx` with `LocationCard`, `Inventory.css` with its rules,
 `CardLocations.tsx` with the `current` term back in `noBar`, `Gallery.tsx` without the re-rank
-specimen, both specs with the pre-deletion assertions, `docs/DEBTS.md`'s section 5 note, and
+specimen, both specs with the pre-deletion assertions, DEBT5 note, and
 `docs/map.py`'s prose about all of it. `docs/DECISIONS.md` alone was not reverted — this entry
 survived, and CLAUDE.md's index line for it — so for four days the record said deleted and the
 tree said otherwise, which is the exact shape D16 is written against.

@@ -142,7 +142,7 @@ const auditSource = (mode: Mode) => `(() => {
        a 22px tick answer at 46 through a wrapper, and narrowing it wants its own measurement. */
     const owns = (n) => n !== null && (t.contains(n) || n.contains(t) || chrome(n))
     /* A CONTROL WHOSE OWN CENTRE PAINTS UNDER FIXED CHROME IS NOT BRUSHING PAST IT, IT IS SITTING
-       BEHIND IT (docs/DEBTS.md #22, closed 2026-09-13). owns() forgives chrome(n) so a probe
+       BEHIND IT (DEBT22, closed 2026-09-13). owns() forgives chrome(n) so a probe
        that lands on .bn-topbar / .bn-tabbar / .kit-index while a control scrolls PAST one of
        them is not read as crowded — D117's own case, measured on #/inventory at every whole-pixel
        offset. That forgiveness is right for a CORNER probe brushing an edge and wrong for the
@@ -538,7 +538,7 @@ test('leaving a scrolled screen lands the next one at the top', async ({ page })
  * touching this file, and a route this sweep cannot reach fails by name instead of by a session
  * finding it by hand.
  */
-/* SKIPPED 2026-09-17, DELIBERATELY AND TEMPORARILY, AND IT IS A BANDAID (docs/DEBTS.md §29).
+/* SKIPPED 2026-09-17, DELIBERATELY AND TEMPORARILY, AND IT IS A BANDAID (DEBT29).
    THE SUBJECT IS SOUND AND THE TEST'S OWN TIMING IS NOT. It failed three times on CI — shard 2
    of 3, twice on PR #375's head and once on its claim commit — always here, always
    `page.goto: net::ERR_ABORTED; maybe frame was detached?`, and it passes on the rig every

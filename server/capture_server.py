@@ -3361,7 +3361,7 @@ def do_inventory_recent(limit: int) -> dict:
 
 def do_inventory_copies(payload: dict) -> dict:
     """`POST /inventory/copies` — every on-hand copy of the requested SKUs, store-wide, in
-    `do_inventory`'s own per-card shape (docs/DEBTS.md §27, site 1 — `Orders.tsx:indexStore`).
+    `do_inventory`'s own per-card shape (DEBT27, site 1 — `Orders.tsx:indexStore`).
 
     THE SITE THIS REPLACES READ THE WHOLE STORE BECAUSE THE RESOLVER'S OWN PICKS ARE NOT THE
     ANSWER. `pipeline/orders.py:LinePass.line` stops drawing picks the moment a line is
@@ -11349,7 +11349,7 @@ class CaptureHandler(BaseHTTPRequestHandler):
                 f"This server is answering {REQUEST_SLOTS} requests already and this one waited "
                 f"{files.LOCK_TIMEOUT_SECONDS:.0f}s for a turn. Nothing was read or written. "
                 f"Retry, and if it keeps happening something is driving it harder than a person "
-                f"can — see docs/DEBTS.md section 11.",
+                f"can — see DEBT11.",
             )
             return
         _inflight_enter()
@@ -11911,7 +11911,7 @@ class CaptureHandler(BaseHTTPRequestHandler):
                     int(match.group(1)), int(match.group(2)), self._body()
                 )
                 return self._json(HTTPStatus.OK, body)
-            # `docs/DEBTS.md` §27, site 1: every on-hand copy of a SKU set, store-wide, in
+            # DEBT27, site 1: every on-hand copy of a SKU set, store-wide, in
             # one pass whose box set is derived rather than guessed (`do_inventory_copies`'s
             # own docstring has the argument). An exact string, matched before every digit
             # route below it — `/inventory/copies` cannot coerce to a box number, so no
@@ -12340,7 +12340,7 @@ _inflight = 0
 # ------------------------------------------------------- the bound on concurrent requests
 #
 # WHAT RAN OUT WAS THE INTERPRETER, NOT THREADS, AND THAT IS WHY THE BOUND IS HERE.
-# `docs/DEBTS.md` section 11 records the measurement this exists for: 969 handler threads under
+# DEBT11 records the measurement this exists for: 969 handler threads under
 # a Playwright fleet, every one of them blocked in `PyEval_AcquireThread` — waiting for the GIL,
 # not for the store and not for the network — at 338% CPU, holding the port and answering
 # nothing. The contended resource was Python itself.

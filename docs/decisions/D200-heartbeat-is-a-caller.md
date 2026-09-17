@@ -65,7 +65,7 @@ request failing, from the 2026-09-13 UX walkthrough) that has nothing to do with
 sharing the word "heartbeat" — GATES item 24 is about *this repository's own state across
 sessions and branches*, never about a browser tab's connection to its own capture server. That
 fix belongs to whichever session owns `useServerPresence` and `app/src/server.ts`, and is not
-this entry's to claim. `docs/DEBTS.md` §10 is unchanged by this entry: no client-side clock was
+this entry's to claim. DEBT10 is unchanged by this entry: no client-side clock was
 added by the work this entry actually ships.
 
 ### What no check can see

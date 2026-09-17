@@ -182,13 +182,13 @@ make design-check   # DESIGN.md's Fulfillment floors, asserted in a browser. IT 
                     #   as a hang, which is the other half of what that session hit.
                     #   `PKMNSCAN_SUITE_LOCK=off` runs it anyway, and is printed in every
                     #   refusal. `make harness` and `make check` deliberately do NOT take it;
-                    #   docs/DEBTS.md §16 is why, and which half of that is measured.
+                    #   DEBT16 is why, and which half of that is measured.
                     #   `PW_ARGS=<flags>` REACHES PLAYWRIGHT AND `ARGS` NEVER DOES (D136): the
                     #   `--` on each side keeps them apart. CI runs this as three shards of one
                     #   worker each — `PW_ARGS="--shard=1/3 --workers=1"` — because one runner
                     #   ran all 481 cases on one worker in 15 minutes; on the rig it is for one
                     #   spec (`PW_ARGS=tests/brand.spec.ts`). NEVER RAISE THE WORKER COUNT TO GO
-                    #   FASTER: docs/DEBTS.md §8's one-in-thirteen red has "the suite around
+                    #   FASTER: DEBT8's one-in-thirteen red has "the suite around
                     #   it" as its only known mechanism.
                     #   AND IT LEAVES A VERDICT, WHICH IS HOW A SESSION WAITS FOR IT. 89-175s
                     #   measured across five runs, against a 120s tool timeout — so a session
@@ -352,7 +352,8 @@ make check          # harness + docs-audit + claim-stale + revert-guard +
                     #   screen-freshness-selftest + sigil-check + ignore-check +
                     #   lint + vale + typecheck + audit-self-test +
                     #   githooks-selftest + merge-selftest + revert-selftest +
-                    #   claim-selftest + decisions-selftest + submission-selftest +
+                    #   claim-selftest + decisions-selftest + debts-selftest +
+                    #   submission-selftest +
                     #   cid-selftest + readings-selftest +
                     #   janitor-selftest + reap-selftest + silent-write-selftest +
                     #   guard-shell-selftest +
@@ -488,7 +489,7 @@ make silent-write-selftest  # that guard, proved by REPRODUCING the incident: a 
                     #   a temp repo). Mutation-tested — twenty-one arms, nineteen caught, and the
                     #   two survivors are one requirement covered twice, proved by a twenty-first
                     #   arm that removes both and goes red.
-                    # SIX SHELL MISTAKES ARE REFUSED BEFORE THEY RUN, AND THERE IS NO
+                    # EIGHT SHELL MISTAKES ARE REFUSED BEFORE THEY RUN, AND THERE IS NO
                     #   TARGET FOR THAT EITHER — `scripts/guard-shell.py --hook` is a
                     #   PreToolUse hook on Bash AND on Write|Edit, armed in both rosters
                     #   (D135). Every clause has an incident behind it, and every one of those
@@ -555,7 +556,15 @@ make silent-write-selftest  # that guard, proved by REPRODUCING the incident: a 
                     #   `main`/`master` that exists locally. The incident's own shape — a
                     #   DIFFERENT feature branch tracked, never the default — stays refused.
                     #   `PKMNSCAN_PUSH=off`.
-                    #   SIX HATCHES AND NOT ONE, so disarming the symlink clause cannot disarm
+                    #   A BARE `git stash`, A `pop`, OR A `drop`/`clear` NAMING NO ENTRY IS
+                    #   REFUSED — the stash stack is shared by every worktree of this clone,
+                    #   so an entry is very likely another session's. `git stash push -u -m
+                    #   <tag>`, `list`, `show` and `apply <sha>` pass. `PKMNSCAN_STASH=off`.
+                    #   `git reset --hard`/`--merge`/`--keep` OVER A TREE HOLDING UNCOMMITTED
+                    #   TRACKED CHANGES IS REFUSED, and the refusal names the `.bak` copy.
+                    #   `--soft`, a bare mixed reset and a clean tree all pass.
+                    #   `PKMNSCAN_RESET=off`.
+                    #   EIGHT HATCHES AND NOT ONE, so disarming the symlink clause cannot disarm
                     #   the one that guards uncommitted work. Each is honoured in the
                     #   environment and inline, and printed in its own refusal. Fails OPEN on
                     #   its own bugs, including a missing `scripts/shell_parse.py` — the
@@ -1457,7 +1466,7 @@ A screen is not finished because it compiles.
   **`ThreadingHTTPServer` is therefore not the fix — it is the cause.** A session on 2026-09-04
   diagnosed a wedge from `.serve/*.log` without opening the file, told the owner the server was
   single-threaded, and proposed the class it has been built on since the beginning. The real fix is
-  a bounded worker pool and it is not a swap; `docs/DEBTS.md` §11 has the whole argument, the three
+  a bounded worker pool and it is not a swap; DEBT11 has the whole argument, the three
   measurements, and why a pool over keep-alive starves.
 
   **Both bounds landed 2026-09-04, and the second one is the pool.** `REQUEST_SLOTS = 4` caps how
@@ -1946,7 +1955,7 @@ apostrophes in names) live in the `tcgplayer-csv` skill. It loads on demand.
   forbidden waiter loop; that file now records why — it was *"phrased as an explanation to
   recall rather than a prohibition to trip over."* The same session wrote a rule against
   silencing a write and then swallowed two commit refusals with `>/dev/null 2>&1`.
-  `docs/DEBTS.md` §11 carried a sentence about two observed mutation failures that were
+  DEBT11 carried a sentence about two observed mutation failures that were
   measured false on both counts. `node scripts/screen-freshness.mjs --self-test` exited 1 on
   main while sitting on no `make` target and printing *"run --self-test"* — the check told the
   operator to run the check that was red, and nothing made them. **Against all of that:
@@ -2254,7 +2263,7 @@ apostrophes in names) live in the `tcgplayer-csv` skill. It loads on demand.
   install a gate that is green precisely when the browser suite is red.
 
   **The owner has separately ruled against gating on the browser suite at all**, on the ground
-  that `docs/DEBTS.md` section 8's flake rate would teach reaching for `--admin` — and a habit of
+  that DEBT8's flake rate would teach reaching for `--admin` — and a habit of
   `--admin` takes the two required checks down with it, which is the same argument this file
   already makes about `core.hooksPath` and the three opsec rules.
 
@@ -2649,7 +2658,7 @@ was open** — the rule is renumber your own, never another's.
   three reviews reversed two of its six items — and its §5 for the three settled rulings it
   reopens on the owner's word. §4 is the allowlist the guard started from; it ended at 9,
   not 6, and the status paragraph says which three entries stayed and why. Two screens
-  still read `GET /inventory` whole (`docs/DEBTS.md` §27), and `make docs-audit`'s
+  still read `GET /inventory` whole (DEBT27), and `make docs-audit`'s
   `import layering` row landed with item 8 because that item broke D63's rule and nothing
   had ever read it.
 - `docs/specs/stable-card-id.md` — a card's name is the first photograph of it: `cards.cid`,

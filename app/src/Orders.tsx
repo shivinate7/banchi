@@ -1443,7 +1443,7 @@ export function OrdersHub({ stage }: { readonly stage: Stage }) {
     }
   }, [])
 
-  /* NO LONGER THE WHOLE STORE (docs/DEBTS.md §27, site 1, closed). This used to call
+  /* NO LONGER THE WHOLE STORE (DEBT27, site 1, closed). This used to call
      `getInventory()` — the whole card map — for the reason `copiesOf`'s comment above still
      gives: a line stops drawing picks once it is filled, so the resolver's own picks are not
      the answer, and this screen needs EVERY on-hand copy of a card, including the ones sitting

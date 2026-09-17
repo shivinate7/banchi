@@ -1337,7 +1337,7 @@ test('a run that predates the true index is still marked, and has no name to rec
   /* THE ARM THE OWNER'S OWN MACHINE TAKES, and it needs its own `test` rather than a second
      `open` inside the one above: `open` re-stubs the wire, and the list the first fixture
      already painted is what `.first()` would read. That is the click-then-mutate race
-     docs/DEBTS.md section 23 names, one register up — and it cost this case a red on its first
+     DEBT23 names, one register up — and it cost this case a red on its first
      run, which is the guard working.
 
      Every run on the owner's machine predates `box_bid`, so the server answers by the older

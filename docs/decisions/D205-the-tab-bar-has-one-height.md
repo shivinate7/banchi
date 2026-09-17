@@ -58,7 +58,7 @@ than here: `phone.spec.ts`'s own `owns()` forgives a probe landing on `.bn-tabba
 legitimately scrolling past it is not read as crowded, and the shutter's every corner probe —
 as well as its centre — landed inside the bar and were all forgiven, so the general
 thumb-floor sweep (the "every owner screen" case in the same file) reported the route clean
-even on the unfixed tree. `docs/DEBTS.md` #22 is partly closed by that amendment; see it and
+even on the unfixed tree. DEBT22 is partly closed by that amendment; see it and
 D117 for the mechanism and for what is still open.
 
 ### Not mechanized
