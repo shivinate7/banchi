@@ -4190,12 +4190,12 @@ def check_shipping_columns(report: Report) -> None:
 # person re-reading this section to count how many mutation arms it is supposed to have.
 # The first four rows are `check_column_count`, `check_threshold_agreement`,
 # `check_dist_path_agreement` and `check_import_filename_agreement`, one arm each. Two more
-# arms belong to `check_duplicated_measurements` — one per group in its own table — and
-# were added the day that row landed. Each arm mutates its subject via a `.bak`-protected
+# arms belong to `check_duplicated_measurements` — one per group in its own table (a
+# third arm joined when the store-total group split from the largest-drawer group). Each arm mutates its subject via a `.bak`-protected
 # temporary edit or a throwaway fixture and asserts the row goes red. Lowering this without
 # removing an arm is a lie the constant makes visible in the diff; raising it with no
 # matching arm added fails `--self-test` outright.
-CODE_AGREEMENT_ARM_COUNT = 6
+CODE_AGREEMENT_ARM_COUNT = 7
 
 # Path constants, each patchable in isolation by --self-test (the same shape used
 # above for `MAP`), so a mutation arm can point one row at a throwaway fixture
@@ -4513,15 +4513,44 @@ def check_import_filename_agreement(report: Report) -> None:
 # `threshold agreement` exist for one level up; this is the same defect over a hand-copied
 # NUMBER rather than a hand-copied CONSTANT.
 #
-# ONE ROW OVER A DECLARED TABLE, NOT TWO BESPOKE ROWS. The two measurements below —
-# `store/db.py`'s `cid -> (box, idx)` index-probe latency and `pipeline/selection.py`'s
-# store-size snapshot — have nothing to do with each other; a bespoke row per measurement
-# would read slightly clearer for exactly two entries. But `CODE_AGREEMENT_ARM_COUNT`'s own
-# comment already argues the opposite for the four rows above it: a NUMBER pinned in code
-# is what makes `--self-test` verifiable without a person re-counting prose. A table makes
-# an eleventh hand-copied figure a five-line addition instead of a fifth copy-pasted
-# function, and it is the shape `_SHIPPING_COLUMN_CLAIMS` already uses one section up for
-# exactly this reason — several sites, one set of rules, one loop.
+# ONE ROW OVER A DECLARED TABLE, NOT TWO BESPOKE ROWS. `store/db.py`'s `cid -> (box, idx)`
+# index-probe latency and the store's card total have nothing to do with each other; a
+# bespoke row per measurement would read slightly clearer for exactly two entries. But
+# `CODE_AGREEMENT_ARM_COUNT`'s own comment already argues the opposite for the four rows
+# above it: a NUMBER pinned in code is what makes `--self-test` verifiable without a person
+# re-counting prose. A table makes a next hand-copied figure a five-line addition instead
+# of a fifth copy-pasted function, and it is the shape `_SHIPPING_COLUMN_CLAIMS` already
+# uses one section up for exactly this reason — several sites, one set of rules, one loop.
+#
+# THE STORE TOTAL IS A DENOMINATOR, NOT A SITE LIST OF ONE SHARED SENTENCE. A coordinator's
+# review of the first cut of this row found 11 more copies of "2,535" beyond the 3 this row
+# started with, and named the real shape: `1,091 of 2,535 cards`, `0 of 2,535 captures` and
+# `2,535 of 2,535 digests` are three DIFFERENT claims that all cite the SAME fact — the
+# store's current card count — as their denominator. `_STORE_TOTAL_SITES` is that
+# denominator, extracted from each site's own sentence and compared on its own, decoupled
+# from whatever numerator that sentence was making its point with.
+#
+# A DECLARED LIST, NOT EVERY OCCURRENCE — AND THAT LINE IS DRAWN ON PURPOSE, NOT ON EFFORT.
+# A sweep of the whole tree for "2,535" turns up on the order of 130 hits. The great
+# majority sit under `docs/decisions/`, `docs/specs/`, `docs/debts/` and `docs/gates/` —
+# and this repo's own rule for that ground is the opposite of "keep it in sync":
+# `docs/GATES.md`'s own section says its numbers "are evidence and are never rewritten to
+# match a later tree", and `docs/specs/stable-card-id.md` §7 says outright "do not read my
+# 2,535/2,535 as permanent." A mechanical row that failed a commit because a 2026-08-22
+# decision entry and a 2026-09-13 one cite the store at two different sizes would be
+# punishing the tree for aging correctly — exactly the failure mode CLAUDE.md's "a settled
+# decision is an argument, not an authority" paragraph exists to name. So this row's
+# declared list is deliberately narrow: live code, comments, tests and the repo map — the
+# places a session edits as ordinary product work, where two copies disagreeing is a
+# session's mistake made THIS WEEK, never history moving on. `CLAUDE.md` and `docs/map.py`
+# are the two exceptions let in from outside `server/ pipeline/ store/ cli/ scripts/ app/`,
+# because both are continuously-maintained pointers this repo already keeps mechanically in
+# step with the code (`docs-audit`'s own `repo map` and `check census` rows), not frozen
+# evidence of one session's run. A FIFTEENTH copy inside `docs/decisions/` is not this row's
+# problem, by the same argument that keeps `docs/decisions/` off `raw color`'s and every
+# other code-facing row's ground. A fifteenth copy inside the declared roots — including one
+# this sweep missed — belongs in `_STORE_TOTAL_SITES` and should be added there when found;
+# until it is, this row does not see it, and says so rather than implying completeness.
 _DuplicatedMeasurementSite = Tuple[str, "re.Pattern[str]"]
 
 _CID_LOOKUP_LATENCY_SITES: Tuple[_DuplicatedMeasurementSite, ...] = (
@@ -4530,53 +4559,97 @@ _CID_LOOKUP_LATENCY_SITES: Tuple[_DuplicatedMeasurementSite, ...] = (
     ("docs/specs/stable-card-id.md", re.compile(r"lookup: ([0-9.]+) us")),
 )
 
-_STORE_SIZE_SNAPSHOT_SITES: Tuple[_DuplicatedMeasurementSite, ...] = (
+# The store's card total, read off FOURTEEN sentences that each cite it for a different
+# argument. Every regex captures ONLY the denominator — the numerator each sentence is
+# actually making its point with (`1,091 of`, `0 of`, `2,535 of` on the left) is deliberately
+# left unread, because two sites disagreeing about IT is not this row's claim.
+_STORE_TOTAL_SITES: Tuple[_DuplicatedMeasurementSite, ...] = (
+    ("pipeline/selection.py", re.compile(r"store holds (\d{1,3}(?:,\d{3})*) photographs")),
+    ("pipeline/selection.py", re.compile(r"the same (\d{1,3}(?:,\d{3})*) photographs in 0\.386 s")),
+    ("pipeline/selection.py", re.compile(r"0 of (\d{1,3}(?:,\d{3})*) captures lack a position")),
+    ("docs/map.py", re.compile(r"the store's (\d{1,3}(?:,\d{3})*);")),
+    ("CLAUDE.md", re.compile(r"of (\d{1,3}(?:,\d{3})*) digests match")),
     (
-        "pipeline/selection.py",
-        re.compile(r"store holds ([0-9,]+) photographs and\n# its largest drawer (\d+)"),
+        "app/tests/capture-undo.spec.ts",
+        re.compile(r"of (\d{1,3}(?:,\d{3})*) cards . 43% of the store"),
     ),
     (
-        "docs/map.py",
-        re.compile(
-            r"hashes (\d+) \"\n\s*\"photographs rather than the store's ([0-9,]+)"
-        ),
+        "app/src/RunsComposer.tsx",
+        re.compile(r"their press would be (\d{1,3}(?:,\d{3})*)\n \* photographs"),
+    ),
+    (
+        "app/src/RunsComposer.tsx",
+        re.compile(r"every one of (\d{1,3}(?:,\d{3})*) cards was already answered and cached"),
+    ),
+    (
+        "app/src/RunsComposer.tsx",
+        re.compile(r"a press over (\d{1,3}(?:,\d{3})*) cards in five drawers\."),
+    ),
+    ("app/src/runScope.ts", re.compile(r"of the owner's (\d{1,3}(?:,\d{3})*) stamped cards")),
+    (
+        "app/src/CaptureScreen.tsx",
+        re.compile(r"of (\d{1,3}(?:,\d{3})*) cards . the figure was wrong for 43% of the store"),
+    ),
+    (
+        "app/src/types.ts",
+        re.compile(r"press over (\d{1,3}(?:,\d{3})*) cards in five drawers reported"),
+    ),
+    (
+        "app/src/motion.ts",
+        re.compile(r"measured on the owner's (\d{1,3}(?:,\d{3})*)\n\s*\*\s*4K photographs"),
     ),
     (
         "app/src/deviceMemory.ts",
-        re.compile(
-            r"box 3 \((\d+) cards\), and roughly a quarter of a full store re-read "
-            r"\(([0-9,]+)\s*\n\s*\*\s*cards"
-        ),
+        re.compile(r"full store re-read \((\d{1,3}(?:,\d{3})*)\n\s*\*\s*cards"),
     ),
 )
 
-# Each site's tuple is the raw regex groups in THAT SITE'S OWN WORD ORDER — the store-size
-# sentences name the drawer first in two files and the total first in the third, because
-# each is making its own argument. `_normalized_measurement` below is what makes the three
-# comparable: it sorts the tuple's TWO NUMBERS onto one axis (max, min) rather than reading
-# "group 1" as if every site put the same number there. The cid figure has only one group,
-# so sorting a 1-tuple is a no-op.
-def _normalized_measurement(raw: Tuple[str, ...]) -> Tuple[float, ...]:
-    values = tuple(float(v.replace(",", "")) for v in raw)
-    return tuple(sorted(values, reverse=True))
+# The largest drawer's own card count (887), read off the same three sites that first
+# carried this row — kept SEPARATE from the store total above because it is a different
+# fact (how many cards sit in one drawer, not how many the whole store holds) that happens
+# to sit beside it in the same three sentences.
+_LARGEST_DRAWER_SITES: Tuple[_DuplicatedMeasurementSite, ...] = (
+    ("pipeline/selection.py", re.compile(r"its largest drawer (\d{1,3}(?:,\d{3})*)")),
+    (
+        "docs/map.py",
+        re.compile(r"hashes (\d{1,3}(?:,\d{3})*) \"\n\s*\"photographs rather than the store's"),
+    ),
+    ("app/src/deviceMemory.ts", re.compile(r"box 3 \((\d{1,3}(?:,\d{3})*) cards\)")),
+)
 
 
 def check_duplicated_measurements(report: Report) -> None:
     """A measurement taken once and copied by hand into several files, checked for
     agreement among its own copies — never against the machine that produced it.
 
-    WHY THIS ROW EXISTS AND WHAT IT DOES NOT PROVE. `store/db.py`'s comment over
-    `_CID_INDEXES` says the `cid -> (box, idx)` lookup was measured at 4.0 us; the same
-    sentence is copied into `store/master.py` and into `docs/specs/stable-card-id.md`'s own
-    transcript. `pipeline/selection.py`'s ARG_MAX comment says the store holds 2,535
-    photographs with an 887-card largest drawer; the same pair is copied into
-    `docs/map.py`'s `cmd_identify.py` entry and into `app/src/deviceMemory.ts`'s spend-notice
-    derivation. Neither figure can be RE-MEASURED by a reader with no microbenchmark to run
-    and no store to open — this row proves only that the copies have not drifted apart from
-    EACH OTHER, which is the half a mechanical check can actually stand behind. Read
-    `docs/DEBTS.md` before treating a clean run here as evidence either number is still true
-    of the owner's live store or their current machine: it is not, and this row does not
-    claim it is.
+    THREE GROUPS. `store/db.py`'s comment over `_CID_INDEXES` says the `cid -> (box, idx)`
+    lookup was measured at 4.0 us; the same sentence is copied into `store/master.py` and
+    into `docs/specs/stable-card-id.md`'s own transcript — three sites, one shared
+    sentence. The store's card total and its largest drawer's size are a different shape:
+    fourteen sentences cite the total as their DENOMINATOR while each makes its own point
+    with a different numerator (`1,091 of 2,535`, `0 of 2,535`, `2,535 of 2,535`), and three
+    of those fourteen also carry the drawer figure (887) beside it. `_STORE_TOTAL_SITES` and
+    `_LARGEST_DRAWER_SITES` extract each figure on its own, decoupled from the numerator or
+    the sibling figure sitting next to it in the same sentence.
+
+    WHAT THIS ROW DOES NOT PROVE. Neither figure can be RE-MEASURED by a reader with no
+    microbenchmark to run and no store to open — this row proves only that the copies have
+    not drifted apart from EACH OTHER, which is the half a mechanical check can actually
+    stand behind. Read `docs/DEBTS.md` before treating a clean run here as evidence either
+    number is still true of the owner's live store or their current machine: it is not, and
+    this row does not claim it is.
+
+    WHAT THIS ROW DELIBERATELY DOES NOT SCAN. A sweep of the whole tree for the store's
+    total turns up roughly 130 hits, most of them under `docs/decisions/`, `docs/specs/`,
+    `docs/debts/` and `docs/gates/` — ground this repo's own rules treat as dated evidence
+    of one session's run, never rewritten to match a later tree (`docs/GATES.md`'s own
+    section says so in as many words, and `docs/specs/stable-card-id.md` §7 says "do not
+    read my 2,535/2,535 as permanent"). `_STORE_TOTAL_SITES` and `_LARGEST_DRAWER_SITES` are
+    declared lists over live code, tests, `CLAUDE.md` and `docs/map.py` only — the ground a
+    session edits as ordinary product work — and they do not claim to be every occurrence.
+    A new copy inside the declared roots belongs in the table; a new copy inside
+    `docs/decisions/` or `docs/specs/` is that entry's own frozen number and not this row's
+    business.
 
     REFUSES TO GO QUIET: a site whose pattern no longer matches — reworded, or the sentence
     removed — is reported by name rather than skipped, on `column count`'s own rule.
@@ -4585,44 +4658,47 @@ def check_duplicated_measurements(report: Report) -> None:
     scanned = 0
     for label, sites in (
         ("cid lookup latency", _CID_LOOKUP_LATENCY_SITES),
-        ("store size snapshot", _STORE_SIZE_SNAPSHOT_SITES),
+        ("store total", _STORE_TOTAL_SITES),
+        ("largest drawer", _LARGEST_DRAWER_SITES),
     ):
-        readings: Dict[str, Tuple[str, ...]] = {}
-        for rel_path, pattern in sites:
+        readings: Dict[Tuple[str, int], str] = {}
+        for index, (rel_path, pattern) in enumerate(sites):
             scanned += 1
             text = read(ROOT / rel_path)
             match = pattern.search(text)
             if match is None:
                 findings.append(Finding(
-                    rel_path,
+                    "{0} (site {1})".format(rel_path, index + 1),
                     "[{0}] no sentence here matches the pattern watching this figure. It "
                     "was reworded past its own check, or the sentence was removed — either "
                     "way the copy is unwatched now. Re-point the pattern or drop the site."
                     .format(label),
                 ))
                 continue
-            readings[rel_path] = match.groups()
+            readings[(rel_path, index)] = match.group(1)
 
         if len(readings) < 2:
             continue
-        normalized = {path: _normalized_measurement(raw) for path, raw in readings.items()}
-        first_path = next(iter(normalized))
-        first_value = normalized[first_path]
-        for path, value in normalized.items():
+        first_key = next(iter(readings))
+        first_value = readings[first_key]
+        for key, value in readings.items():
             if value != first_value:
+                path, index = key
+                first_path, first_index = first_key
                 findings.append(Finding(
-                    path,
-                    "[{0}] reads {1} here and {2} at `{3}` — these are meant to be one "
-                    "measurement copied to several places, and they no longer agree."
-                    .format(label, readings[path], readings[first_path], first_path),
+                    "{0} (site {1})".format(path, index + 1),
+                    "[{0}] reads {1} here and {2} at `{3}` (site {4}) — these are meant to "
+                    "be one measurement copied to several places, and they no longer agree."
+                    .format(label, value, first_value, first_path, first_index + 1),
                 ))
 
     report.add(
         "duplicated measurements",
         MECHANICAL,
         findings,
-        "cid lookup latency (3 sites) and store size snapshot (3 sites), copies against "
-        "each other only",
+        "cid lookup latency (3 sites), store total (14 sites) and largest drawer (3 sites) "
+        "— a declared list over live code, tests, CLAUDE.md and docs/map.py, never "
+        "docs/decisions or docs/specs",
         scanned=scanned,
     )
 
@@ -17444,7 +17520,7 @@ def self_test() -> int:
 
     # ------------------------------------------------------- code-side agreements
     #
-    # Six arms, each patching its row's own path constant (or, for the table-driven row,
+    # Seven arms, each patching its row's own path constant (or, for the table-driven row,
     # one group's site tuple) to a throwaway fixture — the same save/patch/restore-in-
     # `finally` shape used above for `MAP` — and calling the ROW ITSELF, never the bare
     # comparison logic, on `unscoped walk`'s own argument: a fixture-only test proves the
@@ -17452,7 +17528,7 @@ def self_test() -> int:
     # counts how many actually ran, and the last line of this section asserts it against
     # `CODE_AGREEMENT_ARM_COUNT` — raising the constant with no matching arm added, or
     # deleting an arm without lowering it, both fail `--self-test`.
-    print("\ncode-side agreements: six arms across five rows, each proven red on its own fixture")
+    print("\ncode-side agreements: seven arms across five rows, each proven red on its own fixture")
     code_agreement_arms = 0
 
     with tempfile.TemporaryDirectory() as tmp:
@@ -17624,41 +17700,65 @@ def self_test() -> int:
         code_agreement_arms += 1
 
     with tempfile.TemporaryDirectory() as tmp:
-        sel_fixture = Path(tmp) / "selection.py"
-        sel_fixture.write_text(
-            "# store holds 2,535 photographs and\n"
-            "# its largest drawer 887, order of magnitude\n",
+        # Three of the fourteen real store-total sites, standing in for all fourteen —
+        # this arm proves the DENOMINATOR-ONLY extraction and the mismatch report, not
+        # every real regex (the real ones are proven red separately, via `.bak` copies
+        # of the actual tree, in the PR this arm shipped with).
+        total_a = Path(tmp) / "selection.py"
+        total_a.write_text("# store holds 2,535 photographs and\n", encoding="utf-8")
+        total_b = Path(tmp) / "runScope.ts"
+        total_b.write_text(
+            " *  sitting, and 1,091 of the owner's 2,600 stamped cards\n",
             encoding="utf-8",
         )
-        map_fixture = Path(tmp) / "map.py"
-        map_fixture.write_text(
-            "hashes 887 \"\n"
-            "    \"photographs rather than the store's 2,535; and\n",
+        total_c = Path(tmp) / "CLAUDE.md"
+        total_c.write_text(
+            "  yet. The measurement -- 2,535 of 2,535 digests match -- is real.\n",
             encoding="utf-8",
         )
-        device_fixture = Path(tmp) / "deviceMemory.ts"
-        device_fixture.write_text(
-            "box 3 (900 cards), and roughly a quarter of a full store re-read (2,535\n"
-            " * cards, about $3.35).\n",
-            encoding="utf-8",
-        )
-        _saved_size_sites = globals()["_STORE_SIZE_SNAPSHOT_SITES"]
+        _saved_total_sites = globals()["_STORE_TOTAL_SITES"]
         try:
-            globals()["_STORE_SIZE_SNAPSHOT_SITES"] = (
-                (str(sel_fixture), _saved_size_sites[0][1]),
-                (str(map_fixture), _saved_size_sites[1][1]),
-                (str(device_fixture), _saved_size_sites[2][1]),
+            globals()["_STORE_TOTAL_SITES"] = (
+                (str(total_a), re.compile(r"store holds (\d{1,3}(?:,\d{3})*) photographs")),
+                (str(total_b), re.compile(r"of the owner's (\d{1,3}(?:,\d{3})*) stamped cards")),
+                (str(total_c), re.compile(r"of (\d{1,3}(?:,\d{3})*) digests match")),
             )
             report = Report()
             check_duplicated_measurements(report)
         finally:
-            globals()["_STORE_SIZE_SNAPSHOT_SITES"] = _saved_size_sites
+            globals()["_STORE_TOTAL_SITES"] = _saved_total_sites
+        by_label = {row.check: row.findings for row in report.checks}
+        ok(
+            any("2,600" in f.message and "2,535" in f.message
+                for f in by_label["duplicated measurements"]),
+            "duplicated measurements: runScope.ts's store total drifting to 2,600 while "
+            "selection.py and CLAUDE.md still say 2,535 fails the row, naming both -- the "
+            "numerator (1,091) beside it is never read or compared",
+            str(by_label["duplicated measurements"]),
+        )
+        code_agreement_arms += 1
+
+    with tempfile.TemporaryDirectory() as tmp:
+        drawer_a = Path(tmp) / "selection.py"
+        drawer_a.write_text("# its largest drawer 887, order of magnitude\n", encoding="utf-8")
+        drawer_b = Path(tmp) / "deviceMemory.ts"
+        drawer_b.write_text(" * drawer on it but box 3 (900 cards), and roughly\n", encoding="utf-8")
+        _saved_drawer_sites = globals()["_LARGEST_DRAWER_SITES"]
+        try:
+            globals()["_LARGEST_DRAWER_SITES"] = (
+                (str(drawer_a), re.compile(r"its largest drawer (\d{1,3}(?:,\d{3})*)")),
+                (str(drawer_b), re.compile(r"box 3 \((\d{1,3}(?:,\d{3})*) cards\)")),
+            )
+            report = Report()
+            check_duplicated_measurements(report)
+        finally:
+            globals()["_LARGEST_DRAWER_SITES"] = _saved_drawer_sites
         by_label = {row.check: row.findings for row in report.checks}
         ok(
             any("900" in f.message and "887" in f.message
                 for f in by_label["duplicated measurements"]),
             "duplicated measurements: deviceMemory.ts's drawer figure moved to 900 while "
-            "selection.py and map.py still say 887 fails the row, naming both",
+            "selection.py still says 887 fails the row, naming both",
             str(by_label["duplicated measurements"]),
         )
         code_agreement_arms += 1
