@@ -4,7 +4,7 @@
 # the project would be built on top of — `make check` green means every check ran.
 
 .DEFAULT_GOAL := help
-.PHONY: help status map explain harness check cid-selftest cid-audit ignore-check docs-audit vale audit-self-test verdict-selftest githooks-selftest merge merge-selftest revert-guard revert-selftest claim-ids claim-stale claim-selftest decisions-selftest debts-selftest gates-selftest port-agreement set-hint-agreement readiness-agreement mutate-anchors mutate-guards screen-freshness screen-freshness-selftest sigil-check suite-lock-selftest icloud-sweep audit-history dev server screenshot design-check design-check-quiet lint typecheck venv launch-config worktree-setup hooks up down launch-agent demo demo-photos demo-seed demo-record demo-static demo-preview demo-freshness catalog-refresh catalog-index catalog-index-selftest catalog-mirror
+.PHONY: help status map explain harness check cid-selftest cid-audit ignore-check docs-audit map-fix map-fix-selftest vale audit-self-test verdict-selftest githooks-selftest merge merge-selftest revert-guard revert-selftest claim-ids claim-stale claim-selftest decisions-selftest debts-selftest gates-selftest port-agreement set-hint-agreement readiness-agreement mutate-anchors mutate-guards screen-freshness screen-freshness-selftest sigil-check suite-lock-selftest icloud-sweep audit-history dev server screenshot design-check design-check-quiet lint typecheck venv launch-config worktree-setup hooks up down launch-agent demo demo-photos demo-seed demo-record demo-static demo-preview demo-freshness catalog-refresh catalog-index catalog-index-selftest catalog-mirror
 
 # Prefer the venv if it exists, so `make harness` works without anyone remembering to
 # activate anything. Falls back to system python3, which still runs T2-T5 — T1 needs the
@@ -58,6 +58,10 @@ help:
 	@echo "  make hooks        arm the git hooks          (once, and again after every clone)"
 	@echo "  make harness      T1-T8 verification tests. Run at turn end by the Stop hook."
 	@echo "  make docs-audit   markdown vs the code it describes. Reports; never writes."
+	@echo "  make map-fix      add the ids a file cites to its governed_by in docs/map.py."
+	@echo "                    THE ONE GENERATOR: it writes and gates nothing (D18)."
+	@echo "                    Previews. ARGS=--write applies. ARGS=--selftest proves it."
+	@echo "  make map-fix-selftest  that generator, over a throwaway map it writes and drops."
 	@echo "  make vale         prose style over every tracked .md. Needs vale; never gates."
 	@echo "  make audit-history  which docs-audit checks ever fired. Diagnostic; never gates."
 	@echo "  make audit-self-test  the checker checks itself. In \`check\`, never in the git hook."
@@ -411,6 +415,24 @@ docs-audit:
 	@python3 scripts/docs-audit.py; \
 	status=$$?; \
 	if [ $$status -eq 1 ]; then exit 1; fi
+
+# THE ONE GENERATOR IN THIS REPO, AND IT GATES NOTHING (D18, amended 2026-09-17). It adds
+# the decision ids a file cites to that file's `governed_by` in docs/map.py — the answer
+# `make docs-audit`'s `repo map` row already computes to decide the commit. It imports that
+# row's own `cited_decisions()` rather than reimplementing it, so the two cannot disagree.
+#
+# NOT A PREREQUISITE OF ANYTHING, and never wired to a hook. That is the whole of D18: a
+# generator on the commit path regenerates, the audit passes, and the doc now says whatever
+# the code said. Run it when the row refuses you. The row is still what says you are right.
+#
+# ITS SELF-TEST IS NOT IN `make check`, on `catalog-index-selftest`'s precedent. What this
+# writes is verified by a gate that runs on every commit already, so a second reader on the
+# commit path would be proving the same thing one step further from the damage.
+map-fix:
+	@python3 scripts/map-fix.py $(ARGS)
+
+map-fix-selftest:
+	@python3 scripts/map-fix.py --selftest
 
 # Deliberately NOT a prerequisite of `check`, and never wired to a hook: every tree after
 # the audit landed is clean because the hook blocked anything else, so a zero here cannot

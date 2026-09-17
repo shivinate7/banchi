@@ -46,6 +46,13 @@ make worktree-setup # in a fresh worktree, FIRST: venv, T1's cache, this checkou
                     #   Browser-pane port (D43).
 make status         # where you are: next step, T1 score, branch.
 make map            # docs/map.py RENDERED (D80). ARGS=<package|path|D<n>|--stale>.
+make map-fix        # THE ONE GENERATOR (D18, amended). Adds the decision ids a file cites
+                    #   to its `governed_by` in docs/map.py — the answer `make docs-audit`'s
+                    #   `repo map` row already computes, imported from that row rather than
+                    #   reimplemented. IT GATES NOTHING and is on no hook. Run it when the row
+                    #   refuses you; the row is still what says you are right. Previews.
+                    #   ARGS=--write applies. It only ever ADDS. `make map-fix-selftest`
+                    #   proves it, deliberately NOT in `make check`.
 make harness        # all NINE verification tests (T1-T9); the Stop hook runs it at turn end.
                     #   RECOUNT from harness/run.py's TESTS list.
 make up             # THE server, detached — ONE PROCESS (D138). Serves app/dist/ and the API

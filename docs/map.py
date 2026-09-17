@@ -3267,6 +3267,28 @@ COMPONENTS = [
                         "directory is this checkout's own `captures/`, which in a worktree is "
                         "correctly empty and says so rather than reporting a clean zero.",
             },
+            "map-fix.py": {
+                "does": "`make map-fix` — add the decision ids a file cites to that file's "
+                        "`governed_by` here. THE ONE GENERATOR IN THE REPO, and it gates "
+                        "nothing: D18's seam list names this one location and nothing else. "
+                        "Previews by default; `--write` applies. It imports "
+                        "`docs-audit.py:cited_decisions()` rather than reimplementing it, so "
+                        "the writer and the gate cannot disagree about what a file cites. "
+                        "Stdlib, and it splices with `ast` so the hand-written prose around "
+                        "each list survives untouched.",
+                "governed_by": ["D16", "D17", "D18", "D173"],
+                "note": "IT ONLY EVER ADDS. An id in `governed_by` that the file does not "
+                        "cite is invisible to the `repo map` row and to this alike, because "
+                        "that check is one-directional — so removing one stays a person's "
+                        "judgement. WRITTEN 2026-09-17 after a cost measurement: 112 of the "
+                        "last 200 non-merge commits touch this file, 416 of the 2,620 lines "
+                        "they changed in it are `governed_by`, and three commits in one "
+                        "evening were blocked for nothing else. The seam it uses is an "
+                        "amendment to D18 argued on its own terms, not a judgement made "
+                        "while implementing something else. Its selftest is deliberately NOT "
+                        "in `make check`, on `catalog-index-selftest`'s precedent: what it "
+                        "writes is already verified by a gate that runs on every commit.",
+            },
             "map-view.py": {
                 "does": "`make map` — docs/map.py rendered for a person, in four views: the "
                         "shape, one package, one module, everything a decision governs, and "
