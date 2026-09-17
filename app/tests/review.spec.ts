@@ -889,7 +889,9 @@ test('the contradiction names both words, not just that there was one', async ({
 
 test('the claim is a chip, so it is on screen before the sentence is read', async ({ page }) => {
   await open(page, NAMED_CONTRADICTION)
-  const chip = page.locator('.review-chip', { hasText: 'Claimed' })
+  /* "Claimed" alone did not say claimed WHAT — renamed to "Rarity" to match "Sorted as" and
+     "Photo" beside it, at the same word count (D194's ratchet). */
+  const chip = page.locator('.review-chip', { hasText: 'Rarity' })
   await expect(chip).toContainText('Epic')
 })
 
@@ -901,7 +903,7 @@ test('an entry queued before the fields existed keeps the wording it had', async
   const sentence = page.locator('.review-sentence')
   await expect(sentence).toContainText('rarities claimed at capture')
   await expect(sentence).not.toContainText('You claimed this stack holds')
-  await expect(page.locator('.review-chip', { hasText: 'Claimed' })).toHaveCount(0)
+  await expect(page.locator('.review-chip', { hasText: 'Rarity' })).toHaveCount(0)
 })
 
 /* THE MIRROR. `1/51` on the owner's store: read `Irelia, Blade Dancer`, number `190/221`,

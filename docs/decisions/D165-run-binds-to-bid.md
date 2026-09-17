@@ -76,6 +76,12 @@ So the honest division is: **the binding ends the class going forward; the rescu
 
 **It does not make the rescue reachable from a screen, and that is a choice rather than an omission.** `CLAUDE.md`'s route-is-not-a-feature rule governs capabilities built in `server/`; this is a CLI repair in the shape `pkmnscan prices adopt` already has — one press, by the owner, once. What the SCREEN gained is the figure that says the repair is needed, and `#/pricing`'s warning names the command. **If a second run is ever stranded this way, that is the signal to reopen and build the door.**
 
+**That door is built. See D210** (DEBTS §28, closed 2026-09-13): `POST
+/pipeline/runs/<name>/rescue`, a control on `RunPanel.tsx`'s own run header, and a report
+returned structured rather than as this route's raw stdout, on the owner's same-day ruling
+against machine text on screen. This paragraph's reasoning is kept because it was correct
+when written — the shrinking, legacy set of strandable runs is exactly why the door waited.
+
 **It does not take the box out of anything else.** `_resolve_scope`, `_busy_run` and the selection are a separate pass with its own entry and its own measurements; this touches none of them.
 
 ### What would reopen it

@@ -176,6 +176,11 @@ async function open(
      *  interesting cases are about WHAT THE SCREEN SENT — the scope and the window — and a
      *  fixed payload could not tell a store-wide press from a scoped one. */
     clear?: (body: Record<string, unknown>) => unknown
+    /** HOLD `GET /pipeline/pricing` OPEN THIS LONG BEFORE ANSWERING, so a case can assert what
+     *  draws WHILE the worklist fetch is still in flight — the "Nothing loaded." caption used
+     *  to render through exactly this window, asserting a completed empty answer during a
+     *  request that had not finished. */
+    pricingDelayMs?: number
   } = {},
 ): Promise<Wire[]> {
   const wire: Wire[] = []
@@ -411,6 +416,7 @@ async function open(
      a case that hands over `worklist` is testing the merge. The answers are NOT on this
      payload: they are the corpus's, read through `/pricing` above. */
   await page.route(/\/pipeline\/pricing/, async (route) => {
+    if (options.pricingDelayMs !== undefined) await new Promise((r) => setTimeout(r, options.pricingDelayMs))
     const listed = options.worklist?.runs ??
       options.runs ?? [{ run: RUN, box: 7, box_name: 'Riftbound epics', skus: 1 }]
     const rows =
@@ -919,12 +925,16 @@ test('an unknown card count is still warned about, and a known zero is not', asy
   await expect(line).not.toContainText('2 runs')
 })
 
-test('every export column that carries data is on the row', async ({ page }) => {
+test('every export column that carries data is on the row, once Compare is asked for', async ({ page }) => {
   await open(page)
 
   /* The owner's requirement in their own words: "I want all the data from the CSV shown when
-     I make the decision". The four price columns are the ones a subset would have dropped.
-     Drawn Market, Low, +Ship, Direct left to right. */
+     I make the decision" — still true, and still reachable: Ruling B (D208)
+     moved three of the four behind a per-section Compare toggle so the default row is not a
+     wall of reference prices, but the toggle is one press and nothing is deleted. The four
+     price columns are the ones a subset would have dropped. Drawn Market, Low, +Ship, Direct
+     left to right, once asked for. */
+  await page.getByRole('button', { name: 'Compare' }).first().click()
   /* EACH COLUMN NAMES ITSELF ON THE ROW NOW — `Market $22.03` rather than a bare figure under
      a header — so the assertions carry the label. That is not a looser claim: it is the same
      four values, each still pinned exactly, with the column they belong to pinned as well,
@@ -991,7 +1001,12 @@ test('the sub-threshold policy is answered from the start, and the floor press w
      written nothing is ANSWERED from the start and the bar is content on arrival. What survives
      of the old assertion is the pair below: the panel says the figure is not written, and the
      verdict is not claiming otherwise. */
-  await expect(page.locator('.pricing-ready')).not.toContainText('Emit will refuse')
+  /* THE VERDICT IS STATED ONCE, ON THE HEADLINE (Ruling A, D208) — the
+     single-run ship bar no longer carries a second Ready/Not-yet pill or sentence, so this
+     locator moves to `.pricing-deck-title`, the one place readiness is now said. */
+  await expect(
+    page.getByRole('region', { name: 'Whether the import files can be written' }).locator('.pricing-deck-title'),
+  ).toHaveText('Ready to write')
   await expect(page.locator('.pricing-cheap .bn-pill')).toContainText('Default')
 
   /* THE ANSWER IS THE STORE'S, AND IT IS THE FIGURE ITSELF THAT IS TYPED. The panel used to
@@ -1015,19 +1030,35 @@ test('the sub-threshold policy is answered from the start, and the floor press w
      the other, because the schema still permits it — the constraint is the screen's. */
   expect(sentPolicy(wire).threshold).toBe('0.40')
 
-  /* THE VERDICT FLIPS, AND IT NAMES THE FIGURE IT FLIPPED ON. The bar reads the cheap rows'
-     standing answer back — `1 cheap at $0.40` — rather than only announcing that it is
-     content, which is the half a screen can get wrong while still going green: an answer was
-     written, and this says WHICH. */
+  /* THE VERDICT FLIPS, AND IT NAMES THE FIGURE IT FLIPPED ON — ON THE HEADLINE, THE ONE PLACE
+     THIS IS NOW SAID (Ruling A). `.pricing-verdict-says` reads the cheap rows' standing answer
+     back — "writes at $0.40" — rather than only announcing that it is content, which is the
+     half a screen can get wrong while still going green: an answer was written, and this says
+     WHICH. */
   const bar = page.locator('.pricing-ship')
   await expect(bar).toHaveAttribute('data-ready', 'true')
   await expect(page.locator('.pricing-cheap .bn-pill')).toContainText('Written')
-  await expect(page.locator('.pricing-ready')).toContainText('1 cheap at $0.40')
+  await expect(page.locator('.pricing-verdict-says')).toContainText('1 cheap card')
+  await expect(page.locator('.pricing-verdict-says')).toContainText('Writes at $0.40')
   /* AND IT CLAIMS ONLY WHAT IT CHECKED. The screen sees two of emit's ~8 refusals; "ready to
      emit" would be a promise it cannot keep, and overstating a check is worse than not
      running one. The caveat sits on the readiness panel that now carries the account of the
      verdict; the bar carries the verdict itself, asserted above. */
   await expect(page.locator('.pricing-verdict')).toContainText('can still refuse')
+})
+
+test('"Nothing loaded." never renders under the skeleton, and waits for the fetch', async ({
+  page,
+}) => {
+  await open(page, { noRun: true, runs: [], pricingDelayMs: 1500 })
+
+  /* RED-FIRST AGAINST THE UNMODIFIED SCREEN: the skeleton is on screen and the request has
+     not answered yet, so "Nothing loaded." must not be — it asserts a completed, empty
+     answer during a fetch that has not finished. */
+  await expect(page.locator('.pricing-list .bn-skeleton').first()).toBeVisible()
+  await expect(page.getByText('Nothing loaded.')).toHaveCount(0)
+
+  await expect(page.getByText('Nothing loaded.')).toBeVisible({ timeout: 3000 })
 })
 
 test('typing a price then pressing emit saves before it sends', async ({ page }) => {
@@ -1149,6 +1180,9 @@ test('the field refuses anything that is not a price, at the keystroke', async (
 test('a letter snaps the price to its column, and does not commit', async ({ page }) => {
   const wire = await open(page)
 
+  /* `l` ACTS ONLY WHILE ITS COLUMN IS ON SCREEN (Ruling B, D208) — Compare
+     is off by default, so this snap needs the toggle first; `m` alone would not. */
+  await page.getByRole('button', { name: 'Compare' }).first().click()
   await field(page).focus()
   await page.keyboard.press('l')
   await expect(field(page)).toHaveValue('21.98')
@@ -1162,6 +1196,8 @@ test('a letter snaps the price to its column, and does not commit', async ({ pag
 test('a snap onto a blank column refuses, says so, and writes nothing', async ({ page }) => {
   const wire = await open(page)
 
+  /* `d` NEEDS COMPARE ON, THE SAME AS EVERY NON-MARKET SNAP (Ruling B). */
+  await page.getByRole('button', { name: 'Compare' }).first().click()
   await field(page).focus()
   await page.keyboard.press('d')
 
@@ -1347,8 +1383,15 @@ test('every control that answers a row is on the row, with nothing to open first
      the screen; the owner has since ruled that this rebuild's disclosures stay collapsed —
      they hold a console and a set of options, not an answer — so an absence of folds would be
      this file overruling that. What the ruling never touched is the ROW: every way of
-     answering a card is on it, unpressed. */
+     answering a card is on it, unpressed.
+
+     RULING B (D208) IS A DELIBERATE, NAMED EXCEPTION to "no click to
+     open": the Low/+Ship/Direct reference cells sit behind a per-section Compare toggle,
+     which the batch-4 brief itself specifies. The Qty field, the price field, the hold
+     control and the history control are still on the row with nothing to open first —
+     Compare is asked for once and reveals the rest. */
   await expect(field(page)).toBeVisible()
+  await page.getByRole('button', { name: 'Compare' }).first().click()
   await expect(page.locator('.pricing-row .pricing-ref')).toHaveCount(4)
   await expect(page.locator('.pricing-row .pricing-hold')).toBeVisible()
   await expect(page.locator('.pricing-row .pricing-history')).toBeVisible()
@@ -2861,7 +2904,7 @@ test('one answer is written once, for the store, however many runs hold the card
   await expect(page.locator('.pricing-save')).toHaveText('Saved')
 })
 
-test('a card in two drawers says where it is, and a card in one says nothing', async ({
+test('a card in two drawers says where it is once Compare is on, and a card in one says nothing', async ({
   page,
 }) => {
   await open(page, { worklist: SPAN })
@@ -2869,12 +2912,112 @@ test('a card in two drawers says where it is, and a card in one says nothing', a
   const rows = page.locator('.pricing-row')
   await expect(rows).toHaveCount(2)
 
-  /* THE BOXES AND NOT THE RUN NAMES. A person owns drawers, not directories; the runs are on
-     the chips above. Deduped and ascending, which is the order the shelf is in. */
+  /* RULING B: THE PLAIN BOX/RUN-SPAN TEXT IS DISCLOSURE-GATED BEHIND COMPARE, OFF BY
+     DEFAULT — this is the red-first half: the span text is absent on arrival even for the
+     over-cap row, because Compare has not been turned on for this section yet. */
+  await expect(rows.nth(0).locator('.pricing-span-where')).toHaveCount(0)
+
+  await page.getByRole('button', { name: 'Compare' }).first().click()
+
+  /* THE BOXES AND NOT THE RUN NAMES, ONCE ASKED FOR. A person owns drawers, not directories;
+     the runs are on the chips above. Deduped and ascending, which is the order the shelf is
+     in. */
   await expect(rows.nth(0).locator('.pricing-span-where')).toHaveText('Boxes 3, 4 · 2 runs')
 
-  /* THE ABSENCE, WHICH IS THE HALF A MARKER-ON-EVERY-ROW REGRESSION WOULD STILL SATISFY. */
+  /* THE ABSENCE, WHICH IS THE HALF A MARKER-ON-EVERY-ROW REGRESSION WOULD STILL SATISFY —
+     Compare being on draws nothing for a card in one drawer, because there is nothing to
+     compare. */
   await expect(rows.nth(1).locator('.pricing-row-span')).toHaveCount(0)
+})
+
+test('the over-cap warning is visible with Compare off, and the toggle does not hide a refusal', async ({
+  page,
+}) => {
+  await open(page, { worklist: SPAN })
+
+  /* D156's OWN PROMISE — "what cannot go is named on the deck, with a door each" — MUST
+     SURVIVE THE NEW TOGGLE (a regression pin, not a red-first case: nothing hides this
+     today and it must stay that way). The over-cap row's warning badge is visible with no
+     click at all. */
+  await expect(page.locator('.pricing-row').nth(0).locator('.pricing-span-cap')).toBeVisible()
+  await expect(page.locator('.pricing-row').nth(0).locator('.pricing-span-cap')).toHaveText(
+    'Runs claim 4 · 3 can go',
+  )
+
+  /* AND IT STAYS AFTER THE TOGGLE, TOO — Compare only ever ADDS context, it never removes a
+     warning. */
+  await page.getByRole('button', { name: 'Compare' }).first().click()
+  await expect(page.locator('.pricing-row').nth(0).locator('.pricing-span-cap')).toBeVisible()
+})
+
+test('Compare toggle is one control per section, off by default', async ({ page }) => {
+  await open(page, { worklist: SPAN })
+
+  const toggle = page.getByRole('button', { name: 'Compare' }).first()
+  await expect(toggle).toHaveAttribute('aria-pressed', 'false')
+
+  /* LOW / +SHIP / DIRECT ARE HIDDEN UNTIL ASKED FOR. Only the Market column head is drawn
+     by default; the caption is the caption's own ground truth for what a row can show. */
+  await expect(page.locator('.pricing-caption-low')).toHaveCount(0)
+  await expect(page.locator('.pricing-caption-low_with_shipping')).toHaveCount(0)
+  await expect(page.locator('.pricing-caption-direct_low')).toHaveCount(0)
+  await expect(page.locator('.pricing-caption-market')).toBeVisible()
+  await expect(page.locator('.pricing-row').first().locator('.pricing-ref-low')).toHaveCount(0)
+  await expect(page.locator('.pricing-row').first().locator('.pricing-ref-market')).toBeVisible()
+
+  await toggle.click()
+  await expect(toggle).toHaveAttribute('aria-pressed', 'true')
+  await expect(page.locator('.pricing-caption-low')).toBeVisible()
+  await expect(page.locator('.pricing-row').first().locator('.pricing-ref-low')).toBeVisible()
+})
+
+test('Compare survives a reload, per browser, on the device-local key', async ({ page }) => {
+  /* RED-FIRST AGAINST THE FIRST BUILD: Compare was `useState`, forgotten on every reload — an
+     operator pricing hundreds of rows in one sitting had to re-press it per section every time
+     they opened the screen. `deviceMemory.ts:rememberPricingCompare` persists the on/off set
+     to `banchi.pricing.compare`, the same kind of fact as `banchi.inventory.hide-sold`: how
+     THIS browser is dressed, never a card. */
+  await open(page, { worklist: SPAN })
+
+  const toggle = page.getByRole('button', { name: 'Compare' }).first()
+  await expect(toggle).toHaveAttribute('aria-pressed', 'false')
+  await expect(page.locator('.pricing-caption-low')).toHaveCount(0)
+
+  await toggle.click()
+  await expect(toggle).toHaveAttribute('aria-pressed', 'true')
+  await expect(page.locator('.pricing-caption-low')).toBeVisible()
+
+  await page.reload()
+  await settleFonts(page)
+  await expect(page.locator(VIEW)).toBeVisible()
+
+  /* THE RULING'S DEFAULT IS UNCHANGED ON A FRESH BROWSER — this is the SAME browser, having
+     asked once, so the columns come back on without a second press. */
+  const toggleAfterReload = page.getByRole('button', { name: 'Compare' }).first()
+  await expect(toggleAfterReload).toHaveAttribute('aria-pressed', 'true')
+  await expect(page.locator('.pricing-caption-low')).toBeVisible()
+  await expect(page.locator('.pricing-row').first().locator('.pricing-ref-low')).toBeVisible()
+})
+
+test('l/s/d snap keys act only while Compare is on; m always works', async ({ page }) => {
+  const wire = await open(page, { worklist: SPAN })
+
+  await field(page).first().focus()
+  const before = await field(page).first().inputValue()
+  await page.keyboard.press('l')
+  /* RED-FIRST: WITH COMPARE OFF, A HIDDEN COLUMN'S KEY DOES NOTHING (Ruling B option (b),
+     D49 amended) — a command reaching a figure the operator cannot see breaks the
+     alphabet's own legibility even though D118 never names this exact case. The field's
+     rule-price default already carries digits, so the assertion is that `l` changed
+     NOTHING — never that the field is blank. */
+  await expect(field(page).first()).toHaveValue(before)
+
+  await page.getByRole('button', { name: 'Compare' }).first().click()
+  await field(page).first().focus()
+  await page.keyboard.press('l')
+  await expect(field(page).first()).toHaveValue('21.98')
+
+  void wire
 })
 
 test('the cap is what can go, and the row says the runs disagree with it', async ({ page }) => {
@@ -3053,11 +3196,14 @@ test('the standing policy is on the multi-run landing, and one press writes it o
     },
   })
 
-  /* THE READY LINE IS DRAWN HERE TOO. `owes` is computed over the union of every run on
-     screen, so this is the line that says whether a MERGED emit would refuse — and nothing
-     drew it on this landing before. */
+  /* THE MERGED BAR'S OWN `.pricing-ready` IS A MECHANISM SENTENCE, NEVER A READINESS
+     RESTATEMENT (Ruling A corrects a comment that was wrong about this even before the
+     change): it says what the merge dedupes or what the cap does, never ready/not-ready —
+     that account lives once on the headline's `.pricing-verdict`, computed over the same
+     union of every run on screen regardless of which bar is showing. */
   const region = page.getByRole('region', { name: 'Ship these runs' })
   await expect(region.locator('.pricing-ready')).toBeVisible()
+  await expect(page.locator('.pricing-verdict')).toBeVisible()
 
   /* THE CONTROL IS THE CUT-OFF FIELD, AND THE FLOOR PRESS IT REPLACED IS RETIRED (D98). Main
      asserted a segmented row here offering "a flat price" or "the $0.40 floor"; the owner had

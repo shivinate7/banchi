@@ -118,6 +118,10 @@ type OrderRef = {
   orderKey: string
   source: string
   number: string
+  /** The buyer's display name, verbatim off the feed (D193) — `null` for a nameless order.
+   *  Never the raw order id alone on screen: `orderLabel` below pairs whichever of these
+   *  two he sees with the other, secondary. */
+  buyer: string | null
   sku: string
   capture_id: string
 }
@@ -161,7 +165,7 @@ type BoxGroup = { box: number; name: string | null; cards: Sellable[] }
 
 /** One open order as he sees it: its number, the cards in the boxes that fill it in walk
  *  order, and how many of the things it wants are not cards in the boxes at all. */
-type OrderGroup = { key: string; number: string; cards: Sellable[]; elsewhere: number }
+type OrderGroup = { key: string; number: string; buyer: string | null; cards: Sellable[]; elsewhere: number }
 
 function sellable(key: string, card: InventoryCard): Sellable | null {
   const place = positionLabel(card)
@@ -227,10 +231,20 @@ function pickSellable(order: OrderRow, line: ResolvedLine, pick: PickRow): Sella
       orderKey: order.key,
       source: order.source,
       number: order.number,
+      buyer: order.buyer ?? null,
       sku: line.sku,
       capture_id: pick.capture_id,
     },
   }
+}
+
+/** How he reads an order he does not have raw access to: the buyer's name where the ledger
+ *  has one (D193), the id always present but never alone — paired as `secondary` rather than
+ *  standing for the order by itself. A nameless order reads "No name", the same fallback
+ *  `orderBuyers.ts:groupBuyers` uses on the owner's own screen, so the two views agree. */
+function orderLabel(buyer: string | null, number: string): { primary: string; secondary: string } {
+  const trimmed = buyer?.trim() ?? ''
+  return { primary: trimmed === '' ? 'No name' : trimmed, secondary: `#${number}` }
 }
 
 /** The open orders, each with its cards in walk order. A physical copy is offered once. */
@@ -256,7 +270,13 @@ function orderGroups(payload: OrdersPayload): OrderGroup[] {
       elsewhere += Math.max(0, line.wanted - recorded - found)
     }
     if (cards.length === 0 && elsewhere === 0) continue
-    groups.push({ key: resolved.key, number: resolved.number, cards: inWalkOrder(cards), elsewhere })
+    groups.push({
+      key: resolved.key,
+      number: resolved.number,
+      buyer: row.buyer ?? null,
+      cards: inWalkOrder(cards),
+      elsewhere,
+    })
   }
   return groups
 }
@@ -551,6 +571,17 @@ export function Fulfillment() {
   )
   const walk = useMemo(() => waiting.flatMap((group) => group.cards), [waiting])
   const orderByKey = useMemo(() => new Map(walk.map((card) => [card.key, card])), [walk])
+
+  /** A real card from THIS store for the search field's example, rather than a name from a
+   *  game that may hold none of this store's cards (D21 — game is a per-card claim, not a
+   *  fixed catalog). Prefers what he is already holding — the walk — so the hint matches the
+   *  card he is most likely to try next; falls back to any named card on hand, and to a
+   *  generic noun when the store has named nothing yet. */
+  const exampleCardName = useMemo(() => {
+    const named = (list: Sellable[] | null): string | null =>
+      (list ?? []).find((card) => card.name !== NO_NAME)?.name ?? null
+    return named(walk) ?? named(cards)
+  }, [walk, cards])
 
   /** The order's own copy of a card wherever one exists, so a card reached through a box or a
    *  search is still sold through the order that is waiting for it. */
@@ -965,14 +996,17 @@ export function Fulfillment() {
             {forOrder === null || walkAt < 0 ? null : (
               <p className="fulfillment-say ff-card-eyebrow">
                 <span className="ff-card-step">
-                  Card {walkAt + 1} of {walk.length}
+                  Pull {walkAt + 1} of {walk.length}
                 </span>
                 <span className="ff-card-eyebrow-sep" aria-hidden="true">
                   {' '}
                   ·{' '}
                 </span>
                 <span className="ff-card-order">
-                  For order <b>{forOrder.number}</b>
+                  For <b>{orderLabel(forOrder.buyer, forOrder.number).primary}</b>{' '}
+                  <span className="ff-card-order-id">
+                    {orderLabel(forOrder.buyer, forOrder.number).secondary}
+                  </span>
                 </span>
               </p>
             )}
@@ -1180,7 +1214,9 @@ export function Fulfillment() {
             value={query}
             onChange={setQuery}
             persona="fulfiller"
-            placeholder="For example, Charizard"
+            placeholder={
+              exampleCardName === null ? "For example, a card's name" : `For example, ${exampleCardName}`
+            }
           />
           {hunting ? (
             <button
@@ -1249,13 +1285,16 @@ export function Fulfillment() {
                         </span>
                         <span className="ff-order-text">
                           <span className="fulfillment-say ff-order-title">
-                            Order <b>{group.number}</b>
+                            <b>{orderLabel(group.buyer, group.number).primary}</b>{' '}
+                            <span className="ff-order-id">
+                              {orderLabel(group.buyer, group.number).secondary}
+                            </span>
                           </span>
                           <span className="fulfillment-say ff-order-count">
                             {count(group.cards.length, 'card', 'cards')} to pull
                             {group.elsewhere === 0
                               ? ''
-                              : ` · ${count(group.elsewhere, 'thing', 'things')} on this order ${group.elsewhere === 1 ? 'is' : 'are'} not in the boxes`}
+                              : ` · ${count(group.elsewhere, 'thing', 'things')} on this order ${group.elsewhere === 1 ? 'is' : 'are'} not in the boxes yet — tell the owner before you seal this one`}
                           </span>
                         </span>
                       </header>
@@ -1344,7 +1383,7 @@ export function Fulfillment() {
                             </ul>
                             {group.cards.length <= SHOWN_PER_BOX ? null : (
                               <p className="fulfillment-say ff-say">
-                                {`These are the first ${SHOWN_PER_BOX} of ${group.cards.length} cards in this box. Type a name above to find any of the others.`}
+                                {`Showing the first ${SHOWN_PER_BOX} of ${group.cards.length}. Search above to find the rest.`}
                               </p>
                             )}
                           </div>

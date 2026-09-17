@@ -420,6 +420,24 @@ async function stubStore(page: Page): Promise<void> {
      `nav.spec.ts`'s own `CARD`, which is the one fixture in this directory already written to
      that rule. */
   await page.route(/\/inventory$/, (route) => json(route, { version: 2, cards: CARDS, boxes: {}, listings: {} }))
+  /* `docs/DEBTS.md` §27, site 1: `Orders.tsx` no longer calls the bare `/inventory` above —
+   * it calls `POST /inventory/copies` with the SKU set its own ledger read just named, and
+   * a spec seeding real orders (`routeFixtures.ts:seedPopulatedOrders`) alongside `stubStore`
+   * would otherwise leak that write to the real capture port. Filtered the same way the real
+   * route filters: on-hand copies of an asked-about SKU only, `sold`/`retired`/`moved`
+   * excluded — the same predicate `Orders.tsx`'s own `GONE` set names. */
+  await page.route(/\/inventory\/copies$/, (route) => {
+    const gone = new Set(['sold', 'retired', 'moved'])
+    const body = route.request().postDataJSON() as { skus?: unknown }
+    const wanted = new Set(Array.isArray(body.skus) ? body.skus : [])
+    const cards = Object.fromEntries(
+      Object.entries(CARDS).filter(([, c]) => {
+        const row = c as { sku?: string | null; state: string }
+        return row.sku != null && wanted.has(row.sku) && !gone.has(row.state)
+      }),
+    )
+    return json(route, { cards })
+  })
   /* D192 (store-scaling item 2): `#/inventory` and Home's hero deck no longer call
    * the bare `/inventory` above — `getInventoryBox`/`getRecentCards` reach these two instead.
    * `/\/inventory$/` above is anchored and never matches either (a box number or `recent`

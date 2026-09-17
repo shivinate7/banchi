@@ -1163,9 +1163,17 @@ a moving target — and that is a design question, not a fix.
 argument, and `mode` already survives an Orders → Shipping → Orders detour under it, so `walkKeys` does
 too. A tab left open overnight keeps a figure describing a sitting that ended, and nothing on screen
 says so. `onFetch` clears it, which is the boundary the operator actually draws — but only if they
-press it. **The fix that would close this is a clock, and this repo does not put one in the client**
-(`store/orders.py` records the one deliberate exception and argues it at length), so the honest
-alternatives are an explicit *end this pass* control nobody has asked for, or leaving it here.
+press it. **The fix that would close this is WALL-CLOCK ELAPSED TIME USED AS A SEMANTIC INPUT —
+expiring a pass after N minutes have passed — and this repo does not put THAT kind of clock in the
+client** (`store/orders.py`'s `now()`/`changed_at` is the one deliberate exception, a server-side
+timestamp rather than a client timer, and it argues the distinction at length), so the honest
+alternatives are an explicit *end this pass* control nobody has asked for, or leaving it here. THIS
+IS NOT A CLAIM THAT THE CLIENT CARRIES NO REPEATING TIMER — it carries five, all of them polls
+re-asking a question on a cadence rather than a wall clock deciding an answer has gone stale by
+itself, and `D207` gives them one shared primitive rather than a sixth hand-rolled one. The
+sentence above was read as the opposite once and corrected here rather than reopened: a poll and an
+expiry are different mechanisms, and this repo has built the first kind five times and the second
+kind never.
 
 **A capture-server restart DOES end it now, closed 2026-09-05.** `onServerBoot` clears `walkKeys`
 beside the shipping batch: a server that restarted may have taken orders since, so a figure counted
@@ -2320,7 +2328,7 @@ when PR #282 took that number while this branch was open — the rule working ra
 collision, and the same one `docs/DECISIONS.md` keeps: renumber your own, never another's. 26 is
 what was next on 2026-09-11.
 
-## 27 — Two `GET /inventory` call sites are still store-wide, and no cheap replacement exists yet
+## 27 — Two `GET /inventory` call sites were store-wide; site 1 is closed, site 2 is argued and left
 
 **D192 (store-scaling item 2, PR #341) closed most of `getInventory()`'s callers and
 named these two rather than patching around them.** `#/inventory` and Home's hero deck moved to
@@ -2328,17 +2336,62 @@ named these two rather than patching around them.** `#/inventory` and Home's her
 browse and `Orders.tsx`'s `indexStore` (the per-line copy-map widening) did not, and this is
 that debt's own record — referenced from both code comments by number rather than argued twice.
 
-**The measured cost they still pay.** `GET /inventory` itself is unchanged and still walks the
-whole store: 212 ms at the owner's real size (2,535 cards) and 2,816 ms at a 20x-duplicated
-copy (50,700 cards) — a `.backup`-copy measurement taken for D192's own PR. Both call
-sites pay this on every load, and `Orders.tsx`'s pays it twice per screen (`reread`/`rereadStore`
-race independently).
+**SITE 1 IS CLOSED.** `Orders.tsx:indexStore` no longer calls `getInventory()` at all.
+`POST /inventory/copies` (`server/capture_server.py:do_inventory_copies`) answers exactly the
+question that call was standing in for — every on-hand copy of a requested SKU set, store-wide
+— from one unfiltered `_cards_by_sku`-shaped scan whose derived box set (never a guessed one)
+is handed to `_Places.for_keys`. This is the "lean on-hand copies by SKU, store-wide" route
+this entry named as the candidate primitive two paragraphs below, before it was built.
 
-**Why neither can be box-scoped the way `#/inventory` was.**
+**Measured, on `docs/specs/store-scaling.md` §1's own method (five runs, median, base and
+20x), on a SYNTHETIC store built to the real store's own shape** rather than a `.backup` of the
+owner's actual inventory — this branch worked in an isolated agent worktree with no access to
+the main checkout's real store, and that substitution is recorded here rather than silently
+presented as the owner's own numbers. 2,535 cards over 5 boxes, 300 distinct SKUs, 20 of them
+asked about (a realistic count of SKUs an operator's open orders would actually name at once):
 
-- **`Fulfillment.tsx`'s browse** (D5/D6's "no order in hand" fallback) lists every sellable card
-  across every box, precisely because there may be no order to name a box from at all. There is
-  no set of boxes to scope the fetch to — the whole point of this view is that none is known.
+| call | base (2,535 cards) | 20x (50,700 cards, boxes 1-100) | ratio |
+|---|---|---|---|
+| `GET /inventory` (old site 1, `Inventory.to_payload()`) | 130.5 ms | 2,684.3 ms | 20.6x |
+| `POST /inventory/copies` (new, `do_inventory_copies`) | 12.2 ms | 219.8 ms | 18.0x |
+| speedup (old / new) | **10.7x** | **12.2x** | |
+
+**And the wire, which is the half the operator's own browser pays for**: the base store's whole
+`GET /inventory` answer is 2,914,751 bytes over 2,535 cards; the same store's
+`POST /inventory/copies` over the 20 asked-about SKUs is 114,521 bytes over 112 on-hand copies
+— **25x smaller**. These numbers are close to `docs/specs/store-scaling.md` §1's own
+`Inventory.to_payload()` row (78 ms / 1,485 ms on the owner's real 2,535-card store, 19.0x) —
+the synthetic store's base 130.5 ms sits in the same order of magnitude, and the gap is
+plausibly this store's larger average `sku`/place-decoration load per card rather than a
+methodology difference.
+
+**THE COST DID NOT DISAPPEAR — IT MOVED, AND THAT IS SAID IN THE SAME BREATH AS THE FIX.** The
+scan inside `do_inventory_copies` is still a full, unfiltered pass over `inventory.cards` —
+genuinely store-wide, by the same argument that made scoping it to "the boxes an order's
+resolver picks name" unsound (see the next paragraph, unchanged). `scripts/docs-audit.py`'s
+`unscoped walk` guard (item 1) pins this: `UNSCOPED_WALK_EXPECTED` moved **9 -> 10**, the first
+time that pin has ever moved up, with `do_inventory_copies` named on its own allowlist line and
+the reason argued there rather than silently absorbed. What is smaller is not the scan — it is
+the WIRE: the client no longer downloads and decorates every card in the store, only the ones a
+requested SKU actually has on hand.
+
+**SITE 2 — `Fulfillment.tsx`'s browse — IS UNCHANGED AND IS ARGUED RATHER THAN PATCHED.**
+(D5/D6's "no order in hand" fallback) lists every sellable card across every box, precisely
+because there may be no order to name a box from — or a SKU set to ask about — at all. There is
+no set of boxes and no set of SKUs to scope the fetch to; the whole point of this view is that
+neither is known before the fetch runs. `POST /inventory/copies` cannot answer it: that route
+takes a SKU set as its whole input and this screen has none to give it. This entry's own
+conclusion (§27, unchanged) is to leave site 2 as the store-wide `GET /inventory` read it always
+was, named here again rather than quietly closed by a route that does not fit its question.
+A column projection and paginated place decoration are named as future work for site 2 and are
+NOT built under this item.
+
+**Why site 2 (and the resolver's own picks, for site 1) could not be box-scoped instead — the
+argument that made the box-scoped shape the idea to avoid rather than the one to build:**
+
+- **`Fulfillment.tsx`'s browse** lists every sellable card across every box, precisely because
+  there may be no order to name a box from at all. There is no set of boxes to scope the fetch
+  to — the whole point of this view is that none is known.
 - **`Orders.tsx`'s `indexStore`** widens each order line's copy map to "every on-hand copy of
   that SKU the store holds, including copies in far boxes no resolver pick names" (`copiesOf`'s
   own comment in that file). Scoping the fetch to "the boxes an order's resolver picks name"
@@ -2346,41 +2399,46 @@ race independently).
   resolver only returns as many picks as needed to fill demand, so a box holding three spare
   copies of a card that already has enough elsewhere would never be named at all. That is a
   correctness regression (fewer copies drawn than exist), not merely a slower screen, which is
-  why D192's own decision entry (D192) declined to patch
-  around it.
+  why D192's own decision entry (D192) declined to patch around it, and why
+  `do_inventory_copies` derives its box set from an unscoped SCAN rather than from a guess —
+  the fix moves the SCOPING QUESTION off "which boxes" onto "which SKUs", which the screen
+  genuinely has in hand, rather than trying to answer the box question more cleverly.
 
-**The candidate primitive for each, named rather than built under this item's budget.** A lean
-"on-hand copies by SKU, store-wide" route — column-only, `Rows.select`/`Rows.where` over the
-`sku` index rather than a whole-object walk — would answer `Orders.tsx`'s actual question
-directly instead of building it client-side from a full card map; it is the more general fix
-and would likely serve `Fulfillment.tsx`'s browse too, filtered to sellable states. The nearer,
-narrower alternative for `Orders.tsx` alone is item 6's own `do_orders` rebuild
-(`docs/specs/store-scaling.md` §3), which the plan already describes as building `_Places` only
-"for the boxes those copies sit in, never for a box no line touches" — the same shape of fix,
-scoped to the order-resolution path rather than to the wider copy-map widening.
+**Not mechanically enforced for site 2, and named as such.** The `unscoped walk` guard (item 1)
+watches `server/*.py` and `store/master.py` for a full-table walk server-side; `Fulfillment.tsx`'s
+`getInventory()` call is client-side — a `fetch` in `app/src`, which that guard's own scope does
+not reach. Nothing currently fails a commit that leaves it as it is.
 
-**Not mechanically enforced, and named as such.** The `unscoped walk` guard (item 1) watches
-`server/*.py` and `store/master.py` for a full-table walk server-side; neither of these two
-sites is server-side — they are client `fetch` calls in `app/src`, which that guard's own scope
-does not reach. Nothing currently fails a commit that leaves them as they are.
+**D192 and D88 are not reopened by this closure.** This paragraph is site 1's own record of
+what changed; neither decision's ruling is amended, and no new decision number was claimed for
+it — the closure is exactly the shape D192 already argued for and named as future work.
 
 ## 28 — `pkmnscan rescue` is reachable from no screen, and the screen that needs it names a command
 
-`#/pricing`'s "over a deleted box" sentence tells the operator, in a tooltip, to run
-`pkmnscan rescue` on the stranded run. That is a CLI press with no route, no client function
-and no control — the shape CLAUDE.md's "a route is not a feature" rule refuses for a server
-capability, one register over. On 2026-09-13 the owner hit the sentence, could not act on it
-from the app, and a session ran the three steps (`rescue`, `--write`, `join`) for them from a
-terminal. PR #347 made the sentence go away once a joined rescue exists; it did not put the
-press on a screen.
+**CLOSED 2026-09-13 (D210).** `#/pricing`'s "over a deleted box" sentence used
+to tell the operator, in a tooltip, to run `pkmnscan rescue` on the stranded run — a CLI press
+with no route, no client function and no control, the shape CLAUDE.md's "a route is not a
+feature" rule refuses for a server capability, one register over. On 2026-09-13 the owner hit
+the sentence, could not act on it from the app, and a session ran the three steps (`rescue`,
+`--write`, `join`) for them from a terminal. PR #347 made the sentence go away once a joined
+rescue exists; it did not put the press on a screen.
 
-**Why it is deferred rather than built.** D165 records that every run on the owner's machine
-that CAN strand predates the `bid` field, and every run since 2026-09-12 binds to the drawer's
-true index and cannot strand. So the press is for a shrinking, legacy set — one run today —
-and a control on `#/runs` beside the run panel is real work for a case that D145 has already
-made rare. It is named here so the next session that widens `#/runs` finds the argument, not
-the tooltip.
+**What closed it.** `POST /pipeline/runs/<name>/rescue` (free, preview by default, `write`
+gated — `do_queue_refresh`'s shape) in `server/pipeline_routes.py`, dispatched in
+`server/capture_server.py` ahead of `_RUN_STEP_RE`; a client function (`rescueRun`) in
+`app/src/server.ts`; and a control on `RunPanel.tsx`'s own run header, drawn only when
+`detail.box_former` is true — the same gate the tooltip used. The tooltip now names the
+screen instead of the command. The owner's same-day ruling that raw machine text may never
+reach a screen meant the route could not simply relay `cmd_rescue`'s stdout the way every
+other free step does; `do_run_rescue` parses it into a structured `RescueResult` instead, and
+the raw report goes to a log file under the run's own directory. See D210 for
+the whole argument, and `harness/tests/t7_store_and_seams.py:check_rescue_route` and
+`app/tests/run-panel.spec.ts`'s four rescue cases for what proves it.
 
-**What closes it.** A `POST /pipeline/runs/<name>/rescue` that previews by default and
-writes on `confirm`, a client function in `app/src/server.ts`, and a control on the run's own
-row on `#/runs` drawn only when `box_former` is set — the same gate the sentence uses.
+Original text, kept for the record — **why it was deferred rather than built, at the time**:
+D165 records that every run on the owner's machine that CAN strand predates the `bid` field,
+and every run since 2026-09-12 binds to the drawer's true index and cannot strand. So the
+press was for a shrinking, legacy set — one run at the time — and a control on `#/runs` beside
+the run panel was real work for a case D145 had already made rare. It was named there so the
+next session that widened `#/runs` would find the argument, not the tooltip. That session is
+this one.

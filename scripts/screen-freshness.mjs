@@ -149,6 +149,7 @@ const ts = (await import(pathToFileURL(TYPESCRIPT).href)).default
  * adding a line here, only by adding a line here AND making the source say why. */
 const NON_MUTATING = new Set([
   'preflightRun', 'cropPreview', 'fetchOrders', 'previewOrders', 'previewReconcileBacklog',
+  'getInventoryCopies',
 ])
 const NON_MUTATING_CLAIM = /writes nothing|creates no run directory|creates nothing/i
 
@@ -243,15 +244,22 @@ const RECORDED = {
                                               // backfill naming a buyer the fetch found unnamed
     'reconcileBacklog',                      // D203, the one-time
                                               // stand-down over the historical backlog
+    'rescueRun',                              // D165/D210, the run rebind
   ],
   // `previewReconcileBacklog` is the reconcile's press-nothing half and says so in its own
   // docstring — "FREE and WRITES NOTHING" — which is what earns a place on this list.
+  // `getInventoryCopies` (docs/DEBTS.md §27, site 1) is the same shape: a POST because the
+  // SKU list is too big for a query string, over `Store().read()` alone.
   nonMutating: [
     'preflightRun', 'cropPreview', 'fetchOrders', 'previewOrders', 'previewReconcileBacklog',
+    'getInventoryCopies',
   ],
   nonRequests: [
     'describeFailure', 'photoUrl', 'positionLabel', 'isDeparted', 'placeParts', 'placeSentence',
     'onServerBoot', 'newCaptureId', 'runFileUrl', 'shippingFileUrl', 'markdownFileUrl',
+    // D207: listener-shaped exactly like `onServerBoot` above — it registers a
+    // callback and returns an unsubscribe function, and makes no request of its own.
+    'onServerReachable',
   ],
 }
 

@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 
 import { describeFailure, getSubmissions, releaseSubmission, type Failure } from './server'
 import type { SubmissionClaim } from './types'
+import { usePoll } from './usePoll'
 import { Button, Notice, Pill } from './kit'
 import { toast } from './kit/toast'
 import './SubmissionClaims.css'
@@ -85,24 +86,26 @@ export function SubmissionClaims() {
     }
   }, [])
 
-  useEffect(() => {
-    let live = true
-    void (async () => {
-      if (live) await read()
-    })()
-    return () => {
-      live = false
-    }
-  }, [read])
-
-  useEffect(() => {
-    /* THE POLL STOPS WHEN NOTHING IS HELD, which is the ordinary state. A timer running
-       forever against a route that answers an empty list on a healthy store is the kind of
-       cost nobody notices and nobody needs. */
-    if (claims === null || claims.length === 0) return
-    const timer = window.setInterval(() => void read(), POLL_MS)
-    return () => window.clearInterval(timer)
-  }, [claims, read])
+  /* THE POLL STOPS WHEN NOTHING IS HELD, which is the ordinary state — `stopWhenNotLive`
+     (D207) is exactly this panel's own shape: one unconditional read on mount, and no
+     more requests at all once the answer holds no claims. A timer running forever against a
+     route that answers an empty list on a healthy store is the kind of cost nobody notices
+     and nobody needs, which is the same argument this poll always made for itself. */
+  usePoll<{ claims: readonly SubmissionClaim[] }>({
+    fn: getSubmissions,
+    onData: (answer) => {
+      everLoaded.current = true
+      setClaims(answer.claims)
+      setFailure(null)
+    },
+    onError: (err) => {
+      if (!everLoaded.current) setFailure(describeFailure(err))
+    },
+    isLive: (answer) => answer.claims.length > 0,
+    stopWhenNotLive: true,
+    liveMs: POLL_MS,
+    idleMs: POLL_MS,
+  })
 
   useEffect(() => {
     /* A RECEIPT FOR A ROW THAT HAS GONE IS A LEAK. Once the poll's answer no longer carries a

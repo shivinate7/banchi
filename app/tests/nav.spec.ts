@@ -677,3 +677,23 @@ test('the Review tile never says nothing waiting while a card is parked', async 
   await expect(tile.locator('.home-stage-figure')).not.toHaveText('0')
   await expect(tile).not.toHaveClass(/home-stage-ok/)
 })
+
+/* AN UNKNOWN HASH GETS THE OWNER'S SHELL, NOT NONE.
+ *
+ * `NoSuchView` used to draw chromeless — no sidebar, no nav, no way back but its own three
+ * doors, one of which sent the OWNER to the FULFILLER's screen. A fat-fingered URL cost the
+ * owner their whole nav, and the one spare door crossed personas for no reason. */
+test('an unknown route keeps the owner’s shell, and offers no door to the Fulfiller', async ({
+  page,
+}) => {
+  await stub(page)
+  await page.goto('/#/no-such-screen')
+
+  /* The sidebar is still on screen — this is the owner's shell, not a chromeless orphan. */
+  await expect(page.locator(NAV)).toBeVisible()
+  await expect(page.locator('.no-such-view')).toBeVisible()
+
+  await expect(page.locator('.no-such-view-door[href="#/fulfillment"]')).toHaveCount(0)
+  await expect(page.locator('.no-such-view-door[href="#/"]')).toBeVisible()
+  await expect(page.locator('.no-such-view-door[href="#/inventory"]')).toBeVisible()
+})

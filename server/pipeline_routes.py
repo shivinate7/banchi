@@ -3697,6 +3697,101 @@ def do_queue_refresh(payload: dict) -> dict:
     }
 
 
+# ------------------------------------------------------------------------ the rescue, D165
+
+def _extract_rescue_report(text: str) -> Optional[dict]:
+    """`cmd_rescue.run --json`'s own report line, read out of its stdout.
+
+    THIS USED TO BE A SUBSTRING PARSER OVER THE COMMAND'S ENGLISH PROSE, AND THE COORDINATOR
+    NAMED WHY THAT WAS THE WRONG FIX: only one of its six reason branches (`not_stranded`) was
+    ever exercised by a real run through the real command, so reword a sentence in
+    `cli/cmd_rescue.py` and five reasons silently become the wrong code or none at all, with
+    every check still green — a guard that cannot see its subject. The cause was that the
+    command had no machine-readable output; the fix is that it does now.
+    `cli/cmd_rescue.py --json` prints exactly one line of compact JSON (`_report_line`) on
+    every path — every refusal, the already-rescued no-op, the preview, and the write — and
+    this function is the whole of what reads it: scan lines from the end (the report line is
+    always the last thing printed, ahead only of a raised `RunError`'s own prose reaching
+    stdout through `cli/__main__.py`'s exception handler) and return the first one that parses
+    as a JSON object. `None` means the command crashed before reaching any of `run`'s own
+    return or raise statements — `_open_run` above already guards the one case that would
+    (a missing run directory), so this is the honest "I don't know" rather than a guess.
+    """
+    for line in reversed(text.splitlines()):
+        line = line.strip()
+        if not line.startswith("{") or not line.endswith("}"):
+            continue
+        try:
+            parsed = json.loads(line)
+        except (json.JSONDecodeError, ValueError):
+            continue
+        if isinstance(parsed, dict) and "reason" in parsed and "counts" in parsed:
+            return parsed
+    return None
+
+
+def do_run_rescue(name: str, payload: dict) -> dict:
+    """`POST /pipeline/runs/<name>/rescue` — D165's repair, offered from the run it strands.
+
+    FREE, PREVIEW BY DEFAULT, `write` GATED — `do_queue_refresh`'s shape, for the same reason:
+    a rescue re-addresses every one of a stranded run's records at once, and a write nobody
+    watched is how a wrong destination becomes the new positions. `cmd_rescue.run` itself
+    refuses a run that is not stranded, so this route adds no policy of its own; it is the
+    command, reached from a screen instead of a terminal (the standing rule that a route with
+    no client half is not "done").
+
+    NOT IN `FREE_STEPS`, deliberately: it is not one of `join`/`emit`/`reconcile` and needs its
+    own dispatch, matched ahead of `_RUN_STEP_RE` in `capture_server.py` for the same reason
+    `/export` is — `[a-z]+` would otherwise swallow `rescue` as a step that does not exist.
+
+    THE RESPONSE IS STRUCTURED, NOT `console`, ON THE OWNER'S 2026-09-13 RULING that raw
+    machine text is never visible on the front end, not even behind a disclosure. `--json`
+    asks `cmd_rescue.run` for its own machine-readable line (`_extract_rescue_report`) instead
+    of matching substrings out of its prose; the full stdout — prose AND that line — is written
+    to `runs/<name>/logs/rescue-<stamp>.log` and never returned on the wire, for a person at
+    the machine to read and for no screen ever to.
+    """
+    directory = _open_run(name)
+    write = bool(payload.get("write"))
+    argv = [str(PKMNSCAN), "rescue", str(directory), "--json"]
+    if write:
+        argv.append("--write")
+    code, console = _run_sync(argv, STEP_TIMEOUT_S)
+
+    log_dir = directory / "logs"
+    log_dir.mkdir(parents=True, exist_ok=True)
+    stamp = time.strftime("%Y%m%d-%H%M%S", time.gmtime())
+    log_path = log_dir / f"rescue-{stamp}.log"
+    log_path.write_text(console, encoding="utf-8")
+
+    parsed = _extract_rescue_report(console) or {
+        "reason": None,
+        "counts": {"records": None, "no_digest": 0, "rebound": 0, "not_on_shelf": 0, "ambiguous": 0},
+        "destination": None,
+        "already_rescued": None,
+        "new_run": None,
+    }
+    ok = code == 0
+    counts = parsed.get("counts") or {}
+    return {
+        "ok": ok,
+        "exit_code": code,
+        "wrote": write and ok and parsed.get("new_run") is not None,
+        "run": directory.name,
+        "reason": None if ok else parsed.get("reason"),
+        "counts": {
+            "records": counts.get("records"),
+            "rebound": counts.get("rebound", 0),
+            "not_on_shelf": counts.get("not_on_shelf", 0),
+            "ambiguous": counts.get("ambiguous", 0),
+        },
+        "destination": parsed.get("destination"),
+        "already_rescued": parsed.get("already_rescued"),
+        "new_run": parsed.get("new_run"),
+        "log": str(log_path.relative_to(files.runs_dir())),
+    }
+
+
 # ------------------------------------------------------------- the stale-listing markdown
 
 

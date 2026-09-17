@@ -1987,7 +1987,12 @@ function Claims({ entry, claims }: { entry: QueueEntryWire; claims: Claims }) {
       chips.push(
         <span key="claim" className="review-chip" title={`Rarity claimed at capture: ${claimed.join(', ')}`}>
           <Icon name="tag" size={12} />
-          <span className="review-chip-key">Claimed</span>
+          {/* "Claimed" alone did not say claimed WHAT — the walkthrough's "CLAIMED · Showcase"
+              reads as a verdict rather than a fact about the rarity, unlike "Sorted as" and
+              "Photo" beside it, which both name their subject. "Rarity" matches that pattern
+              at the SAME word count (D194's ratchet forbids a route's words rising), and the
+              `title` above still spells the whole sentence out for a hover. */}
+          <span className="review-chip-key">Rarity</span>
           <span className="review-chip-value">{claimed.map(humanize).join(' · ')}</span>
         </span>,
       )

@@ -2718,3 +2718,200 @@ test('the release names its receipt and confirms, and the page does not move und
     ['/pipeline/submissions/sub-dead-1/release', { confirm: true }],
   ])
 })
+
+/* THE FOOT LIES FOR UP TO FIFTEEN SECONDS, AND THE FIX IS NOT IN THE FOOT (D207).
+ *
+ * `useServerPresence` used to learn the server was gone ONLY from its own `GET /status` —
+ * on mount, on a 15s interval, on window focus. Every other request in the app could fail
+ * without touching that state, so the sidebar went on drawing `Server online` while a poll
+ * elsewhere on the very same screen was failing outright. This is the six-second case from
+ * one instance: the run detail poll fails while `/status` keeps answering, and the foot must
+ * flip within ONE REQUEST rather than wait out the interval.
+ *
+ * RED, BEFORE THE FIX: this case failed with
+ *   Error: Timed out 5000ms waiting for expect(locator).toHaveAttribute(expected)
+ *   Locator: locator('.bn-server')
+ *   Expected string: "offline"
+ *   Received string: "online"
+ * — because nothing but `/status` could tell the shell the server had gone, and the fake
+ * clock had advanced only 4.5s of the 15s the shell was willing to wait. */
+test('a failed poll elsewhere flips the server foot before the next status check', async ({ page }) => {
+  await page.clock.install()
+  await open(page, { live: true })
+  await openRun(page)
+  await expect(page.locator('.bn-server')).toHaveAttribute('data-state', 'online')
+
+  /* Overrides the routes `open()` and `sealEveryTest()` registered — Playwright matches the
+     LAST route added, so these win for every request from here on. BOTH have to go dark:
+     the detail poll, which is the ordinary request that is actually failing, and `/status`,
+     because `server.ts:request()` probes it on any fetch failure to tell "this address is
+     refused" apart from "the server is gone" (D43) — a `/status` that still answered would
+     correctly read as the FORMER, not the latter, and this case is about the latter. */
+  await page.route(/\/pipeline\/runs\/[^/]+$/, (route) => route.abort('addressunreachable'))
+  await page.route(/\/status$/, (route) => route.abort('addressunreachable'))
+
+  // The detail poll's own cadence (`RunPanel.tsx`'s `POLL_MS`) — well under the 15s the
+  // shell's own `/status` interval waits before it would notice on its own.
+  await page.clock.fastForward(4500)
+
+  await expect(page.locator('.bn-server')).toHaveAttribute('data-state', 'offline')
+
+  /* Bring `/status` back before the case ends — `sealEveryTest`'s own teardown refuses a
+     screen left showing the offline banner, which is the correct floor for every OTHER case
+     in this file and would otherwise turn this one legitimate reproduction into a permanent
+     red. The interval this restores is the shell's own 15s poll, which the fix does not
+     touch and does not need to for the assertion above to have already held. */
+  await page.route(/\/status$/, (route) =>
+    route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify({
+        captures_root: 'captures',
+        store: 'inventory/store.sqlite',
+        store_exists: true,
+        cards: 0,
+        states: {},
+        queues: { review: 0, parked: 0 },
+        next_index: {},
+      }),
+    }),
+  )
+  await page.clock.fastForward(15500)
+  await expect(page.locator('.bn-server')).toHaveAttribute('data-state', 'online')
+})
+
+// ------------------------------------------------------------------------- D165's rescue
+
+/* THE REPAIR, REACHED FROM THE ROW IT STRANDS (D210). `box_former` is the same
+ * flag `runBoxLabel` already draws `Box 1 (deleted)` off — this asserts the control that sits
+ * beside that label, and the sheet it opens.
+ *
+ * NO RAW MACHINE TEXT ANYWHERE IN THIS FILE'S ASSERTIONS, on the owner's 2026-09-13 ruling:
+ * `rescueRun`'s response carries no `console` field, and every sentence the sheet draws is
+ * asserted by its OWN words, never by a substring of a stub's `log`/`reason` value.
+ */
+
+function rescueStub(page: Page, wire: Wire[], answers: unknown[]) {
+  let call = 0
+  return page.route(/\/pipeline\/runs\/[^/]+\/rescue$/, async (route) => {
+    const body = route.request().postDataJSON()
+    wire.push({ method: 'POST', path: new URL(route.request().url()).pathname, body })
+    const answer = answers[Math.min(call, answers.length - 1)]
+    call += 1
+    await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(answer) })
+  })
+}
+
+test('the rebind control appears only on a run over a deleted drawer', async ({ page }) => {
+  await open(page, { detail: { box_former: false } })
+  await openRun(page)
+  await expect(page.getByRole('button', { name: 'Rebind' })).toHaveCount(0)
+})
+
+test('rebind: the sheet previews on open, and Apply is absent until it answers', async ({ page }) => {
+  const wire: Wire[] = []
+  await open(page, { detail: { box_former: true, box_bid: 1 } })
+  await rescueStub(page, wire, [
+    {
+      ok: true,
+      exit_code: 0,
+      wrote: false,
+      run: '2026-08-24-box9-01',
+      reason: null,
+      counts: { records: 2, rebound: 2, not_on_shelf: 0, ambiguous: 0 },
+      destination: { box: 3, box_name: 'RB Epics' },
+      already_rescued: null,
+      new_run: null,
+      log: '2026-08-24-box9-01/logs/rescue-20260913-000000.log',
+    },
+  ])
+  await openRun(page)
+
+  await page.getByRole('button', { name: 'Rebind' }).click()
+  const sheet = page.locator('.rescue-sheet')
+  await expect(sheet).toBeVisible()
+
+  /* NO APPLY UNTIL THE PREVIEW HAS ANSWERED — the same rule `QueueRefresh`'s `applyable`
+     encodes, asserted here rather than assumed because a sheet that opens with the write
+     button already drawn is one press from spending nothing on a stale reading. */
+  await expect(sheet.getByRole('button', { name: 'Rebind these cards' })).toBeVisible()
+  await expect(sheet).toContainText('Box 3 · RB Epics')
+  await expect(sheet).toContainText('2')
+
+  /* NOTHING ON SCREEN NAMES A COMMAND, A PATH OR A DECISION NUMBER (D196/no mechanism on
+     screen) — the owner's 2026-09-13 ruling widened to this sheet specifically. */
+  const text = (await sheet.innerText()).toLowerCase()
+  expect(text).not.toContain('pkmnscan')
+  expect(text).not.toContain('d165')
+  expect(text).not.toContain('/logs/')
+
+  expect(wire.filter((call) => call.path.endsWith('/rescue'))).toHaveLength(1)
+})
+
+test('rebind: the write lands a receipt with a way back to the new run, never console', async ({ page }) => {
+  const wire: Wire[] = []
+  await open(page, { detail: { box_former: true, box_bid: 1 } })
+  await rescueStub(page, wire, [
+    {
+      ok: true,
+      exit_code: 0,
+      wrote: false,
+      run: '2026-08-24-box9-01',
+      reason: null,
+      counts: { records: 2, rebound: 2, not_on_shelf: 0, ambiguous: 0 },
+      destination: { box: 3, box_name: 'RB Epics' },
+      already_rescued: null,
+      new_run: null,
+      log: '2026-08-24-box9-01/logs/rescue-20260913-000000.log',
+    },
+    {
+      ok: true,
+      exit_code: 0,
+      wrote: true,
+      run: '2026-08-24-box9-01',
+      reason: null,
+      counts: { records: 2, rebound: 2, not_on_shelf: 0, ambiguous: 0 },
+      destination: { box: 3, box_name: 'RB Epics' },
+      already_rescued: null,
+      new_run: 'box3-rescue-01',
+      log: '2026-08-24-box9-01/logs/rescue-20260913-000000.log',
+    },
+  ])
+  await openRun(page)
+  await page.getByRole('button', { name: 'Rebind' }).click()
+
+  const sheet = page.locator('.rescue-sheet')
+  await sheet.getByRole('button', { name: 'Rebind these cards' }).click()
+  await expect(sheet.getByText(/rebound into/)).toBeVisible()
+  await expect(sheet.getByRole('button', { name: 'Open the new run' })).toBeVisible()
+
+  const writes = wire.filter((call) => call.path.endsWith('/rescue'))
+  expect(writes.map((call) => call.body)).toEqual([{ write: false }, { write: true }])
+})
+
+test('rebind: a refusal draws a sentence, never the CLI reason code', async ({ page }) => {
+  const wire: Wire[] = []
+  await open(page, { detail: { box_former: true, box_bid: 1 } })
+  await rescueStub(page, wire, [
+    {
+      ok: false,
+      exit_code: 1,
+      wrote: false,
+      run: '2026-08-24-box9-01',
+      reason: 'none_on_shelf',
+      counts: { records: 2, rebound: 0, not_on_shelf: 2, ambiguous: 0 },
+      destination: null,
+      already_rescued: null,
+      new_run: null,
+      log: '2026-08-24-box9-01/logs/rescue-20260913-000000.log',
+    },
+  ])
+  await openRun(page)
+  await page.getByRole('button', { name: 'Rebind' }).click()
+
+  const sheet = page.locator('.rescue-sheet')
+  await expect(sheet).toContainText('already left the store')
+  const text = (await sheet.innerText()).toLowerCase()
+  expect(text).not.toContain('none_on_shelf')
+  expect(sheet.getByRole('button', { name: 'Rebind these cards' })).toHaveCount(0)
+})

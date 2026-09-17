@@ -1538,16 +1538,19 @@ A screen is not finished because it compiles.
   about a card or the inventory in `localStorage`. Inventory state is server-side, in the
   store; the camera uses a device picker. Two devices share one truth.
 
-  **Ten keys are stored on the device, and each is a fact about THIS machine rather than
+  **Eleven keys are stored on the device, and each is a fact about THIS machine rather than
   about a card**: `banchi.capture.deviceId` and `banchi.capture.rotation`
   (`app/src/useCamera.ts` — which camera and which way up, meaningless on another machine),
   `banchi.theme`, `banchi.rail`, `banchi.orders.fetch-filter`, `banchi.inventory.hide-sold`,
-  `banchi.box-recency`, `banchi.capture.setup` and `banchi.runs.spend-notice`
+  `banchi.box-recency`, `banchi.capture.setup`, `banchi.runs.spend-notice` and
+  `banchi.pricing.compare`
   (`app/src/deviceMemory.ts` — how this
   browser is dressed, which order statuses this device bothers fetching (D114), whether the
   inventory walk folds sold rows away, when THIS browser last reached for each box, the
-  setup the operator last worked at, and the figure above which THIS browser draws a louder
-  confirm on the identify press), and `banchi.orders.last-check` (`app/src/Orders.tsx` —
+  setup the operator last worked at, the figure above which THIS browser draws a louder
+  confirm on the identify press, and which `#/pricing` worklist sections THIS browser has
+  asked to see the Low/+Ship/Direct reference columns on), and `banchi.orders.last-check`
+  (`app/src/Orders.tsx` —
   when THIS device last checked TCGplayer, so a fetch receipt can say what is new since; the
   owner ruled it belongs there on 2026-09-03). None of them is a card, a position or an order.
 
@@ -2534,6 +2537,11 @@ D203 The two-year backlog is stood down by one press over a cutoff the operator 
 D204 The phone drawer's nav scrolls in the space above its foot, for any row count, and the CSS says so explicitly rather than relying on it
 D205 The phone tab bar has one height, and every layout that leaves room for it reads the same name
 D206 Build-order step 9's first two pieces landed; the mirror stays dry-run
+D207 The foot learns from every request, and five timers become one hook
+D208 Pricing states its verdict once, and the worklist discloses progressively
+D209 The buyer list leads with Ready to Ship, and a re-sort is a press
+D210 `pkmnscan rescue` is reached from a press, and its report is never shown verbatim
+D211 The Rig panel folds once the setup is already known, and stays open until it is
 ```
 
 **THE GAP THIS LIST CARRIED BETWEEN D116 AND D118 IS CLOSED, AND IT CLOSED THE WAY IT SAID IT

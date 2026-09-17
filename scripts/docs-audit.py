@@ -10618,6 +10618,15 @@ _REPO_EXT_RE = re.compile(r"\b[\w-]+\.(?:sqlite|jsonl|json)\b")
 # false positives from this pattern on the tree as it stands.
 _DECISION_CITE_RE = re.compile(r"\bD\d{1,4}\b|\bC\d{1,4}\b|\(D-[A-Za-z0-9][A-Za-z0-9-]*\)")
 
+# A CLI INVOCATION, BACKTICKED OR BARE (D210's own finding). This row had no
+# key for `Pricing.tsx:4468`'s "Run `pkmnscan rescue` to rebind it." — a backticked command
+# is not a decision citation, not one of `_REPO_TOP_DIRS` followed by a slash, and not a
+# `.json`/`.sqlite`/`.jsonl` filename, so it passed this row clean while naming this
+# product's own CLI on screen. `pkmnscan` is the checkout's own name (CLAUDE.md's naming
+# rule) and never a word an operator would use to describe what a press does; a subcommand
+# beside it (`rescue`, `join`, `emit`, …) is exactly the mechanism this row exists to catch.
+_CLI_INVOCATION_RE = re.compile(r"`?\bpkmnscan\b(?:\s+[\w.-]+)*`?", re.I)
+
 
 def _run_user_strings(args: List[str]) -> Optional[List[Dict[str, object]]]:
     """Shell out to scripts/user-strings.mjs; None when the toolchain cannot run it.
@@ -10688,7 +10697,12 @@ def _no_mechanism_findings(strings: List[Dict[str, object]]) -> List[Finding]:
         text = str(item["text"])
         where = f"{item['file']}:{item['line']}"
         shown = text if len(text) <= 100 else text[:97] + "..."
-        code_hit = _DECISION_CITE_RE.search(text) or _REPO_PATH_RE.search(text) or _REPO_EXT_RE.search(text)
+        code_hit = (
+            _DECISION_CITE_RE.search(text)
+            or _REPO_PATH_RE.search(text)
+            or _REPO_EXT_RE.search(text)
+            or _CLI_INVOCATION_RE.search(text)
+        )
         if code_hit is not None:
             findings.append(
                 Finding(
@@ -14194,6 +14208,7 @@ UNSCOPED_WALK_ALLOWED: FrozenSet[Tuple[str, str, str]] = frozenset({
     ("store/master.py", "next_box_number", "distinct"),   # kept permanently — one indexed column, cheap; missed by the hand census
     ("cli/resolve.py", "box_views", "select"),   # store-scaling item 7 — renamed from `.values()`; the unbounded (`boxes=None`) branch every existing caller still uses is genuinely store-wide, for the same reason `_value_rows` is
     ("cli/resolve.py", "_cards_by_sku", "select"),   # store-scaling item 4 — one pass, replaces per-SKU `_copies_out`/`_committed_keys`/`_unsent_ledger` reads; the `_unsent_ledger` distinct scan above is deleted, not merely moved
+    ("server/capture_server.py", "do_inventory_copies", "select"),   # docs/DEBTS.md §27, site 1 — a NEW full-table scan, added rather than removed, and named as a cost paid: `POST /inventory/copies` replaces `Orders.tsx`'s `GET /inventory` (D192's own site 1), and the one unfiltered `_cards_by_sku`-shaped pass here is what lets the box set handed to `_Places.for_keys` be DERIVED from the scan rather than guessed at from the request — the docstring on the function has the full argument for why that is sound where box-scoping the walk itself is not. This is the count going UP by one, on purpose, for a route this file's own item 1 could not have existed to forbid before it existed to write.
 })
 # STORE-SCALING ITEM 8 REMOVED `do_search`'s ROW: the O(cards) walk over
 # `inventory.cards.values()` is deleted, replaced by an FTS5 `MATCH` query
@@ -14202,7 +14217,17 @@ UNSCOPED_WALK_ALLOWED: FrozenSet[Tuple[str, str, str]] = frozenset({
 # `_release_plan` outright (it now reads through an indexed `equals` filter) and renamed
 # `do_pipeline_value`/`box_views` — origin/main's own count was 10 at that point. This merge
 # takes main's allowlist and removes only `do_search`: 10 -> 9.
-UNSCOPED_WALK_EXPECTED = 9
+#
+# 9 -> 10, THE ONE DIRECTION THIS PIN HAS NEVER MOVED BEFORE, AND IT IS SAID PLAINLY RATHER
+# THAN QUIETLY. `POST /inventory/copies` (`do_inventory_copies`) is a NEW full-table scan,
+# closing `docs/DEBTS.md` §27 site 1 (`Orders.tsx`'s `GET /inventory`) by replacing a whole-
+# store WIRE PAYLOAD with a whole-store SERVER-SIDE scan that answers only the requested
+# SKUs — the cost moves, it does not disappear, and this row exists precisely to keep that
+# honest. It earns its own allowlist entry rather than folding into an existing one, because
+# it is a genuinely new site even though its shape (one unfiltered `.select()`) matches
+# `_cards_by_sku`'s — see that entry's own comment, above, for why one unfiltered scan is
+# the correct implementation here rather than a shortcut around scoping it.
+UNSCOPED_WALK_EXPECTED = 10
 
 _ROW_NAME_RE = re.compile(r'report\.add\(\s*\n?\s*"([^"\n]+)"')
 _MECH_PATHS = ("scripts/", "harness/tests/", "app/tests/", "app/eslint.config.js", "ruff.toml",
@@ -16584,6 +16609,12 @@ def self_test() -> int:
             "}\n",
         )
         written(
+            "CliInvocation.tsx",
+            "export function CliInvocation() {\n"
+            "  return <span title=\"Run `pkmnscan rescue` to rebind it.\">stranded</span>\n"
+            "}\n",
+        )
+        written(
             "PullConfirm.tsx",
             "export function PullConfirm() {\n"
             "  return <p>Waiting on the pipeline to answer.</p>\n"
@@ -16622,6 +16653,9 @@ def self_test() -> int:
                "the Fulfiller's own screen is NOT exempt — a real person reads it while working")
             ok("PullConfirm.tsx" in hit_files,
                "the pull-confirm screen is NOT exempt, for the same reason")
+            ok("CliInvocation.tsx" in hit_files,
+               "a backticked `pkmnscan …` invocation is caught — `Pricing.tsx:4468`'s own "
+               "defect before D210, and the row had no key for it")
 
     # THE PIN. `NO_MECHANISM_EXEMPT_FILES` is a set of exactly one entry, named in the
     # coordinator's 2026-09-13 ruling and nowhere else — a session widening it to a second

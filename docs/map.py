@@ -381,7 +381,7 @@ COMPONENTS = [
                                     "2,535 real captures.",
                             "governed_by": ["D1", "D3", "D9", "D21", "D25", "D36", "D48", "D86",
                                             "D87", "D100", "D145", "D172", "D180",
-                                            "D189"],
+                                            "D189", "D210"],
                             "tested_by": ["T7"]},
             "cmd_scan.py": {"does": "read the QR codes off a directory of code-card photos into "
                                     "the ledger. FREE — no model call, no network, no money gate "
@@ -494,7 +494,7 @@ COMPONENTS = [
                                       "recovers is the PRICING surface, not the stock.",
                               "governed_by": ["D7", "D10", "D25", "D36", "D48", "D83", "D86",
                                               "D134", "D145", "D165", "D180", "D183", "D26",
-                                              "D188"],
+                                              "D188", "D210"],
                               "tested_by": ["T7"]},
             "cmd_reprice.py": {"does": "`pkmnscan reprice list` reports which live listings are "
                                         "not selling and writes a WORKLIST with a price already "
@@ -1553,7 +1553,7 @@ COMPONENTS = [
                 "decision-context hook, `make status`, the SessionStart worktree guard "
                 "and the launch-config writer it calls, the screenshot runner and its "
                 "manifest, and audit-history — diagnostic, never gating, per D18.",
-        "governed_by": ["D14", "D16", "D17", "D18", "D42"],
+        "governed_by": ["D14", "D16", "D17", "D18", "D42", "D207"],
         # What the orphan rule covers here, and the one hole no declaration can close.
         # Declaring the key is also what makes the scan recursive, which is the only way
         # scripts/githooks/ is reached at all.
@@ -2426,7 +2426,7 @@ COMPONENTS = [
                 "governed_by": ["D13", "D14", "D18", "D58", "D62", "D76", "D79", "D83", "D86",
                                 "D87", "D89", "D96", "D100", "D103", "D104", "D106", "D113",
                                 "D134", "D159", "D167", "D168", "D174", "D192",
-                                "D193", "D203"],
+                                "D193", "D203", "D165", "D210"],
             },
             "verdict-selftest.py": {"does": "PROVES `app/design-check-reporter.ts` STILL WRITES A "
                                             "VERDICT, BY RUNNING IT. `make docs-audit`'s "
@@ -2615,7 +2615,19 @@ COMPONENTS = [
                                 # D196: the `no mechanism on screen` row,
                                 # shelling out to scripts/user-strings.mjs below — unclaimed,
                                 # so it sorts to the end until `make merge` gives it a number.
-                                "D196"],
+                                "D196",
+                                # D192: `UNSCOPED_WALK_ALLOWED`'s comments cite it twice — once
+                                # for the permanent `do_inventory`/`to_payload` entry the item's
+                                # own playbook argued for, and again for the new
+                                # `do_inventory_copies` entry (docs/DEBTS.md §27, site 1), which
+                                # names D192 as the decision that closed the OTHER `GET
+                                # /inventory` call site this branch's route replaces.
+                                "D192",
+                                # D210: `_CLI_INVOCATION_RE`, the word-list
+                                # widening that catches a backticked `pkmnscan …` invocation —
+                                # unclaimed, so it sorts to the end until `make merge` gives
+                                # it a number.
+                                "D210"],
             },
             "claim-ids.py": {
                 "does": "allocate the numbers this branch's SLUG ids will take, and "
@@ -3627,7 +3639,7 @@ COMPONENTS = [
                                 "D77", "D79", "D83", "D86", "D87", "D88", "D89", "D90", "D91",
                                 "D92", "D93", "D96", "D100", "D103", "D104", "D108", "D113",
                                 "D114", "D115", "D116", "D132", "D134", "D137", "D138", "D159",
-                                "D168", "D174", "D183", "D172", "D192", "D191",
+                                "D165", "D168", "D174", "D183", "D172", "D192", "D191",
                                 "D193", "D203"],
                 "tested_by": ["T7"],
             },
@@ -4298,7 +4310,11 @@ COMPONENTS = [
                                     "to, and raises a `status` toast; it still SUBSCRIBES and "
                                     "never polls for the boot fact, and the 15s `/status` poll "
                                     "beside it is the online/offline banner rather than the "
-                                    "reload. An error boundary wraps each route, so one screen "
+                                    "reload. THAT POLL IS `usePoll` NOW (D207), and it "
+                                    "also subscribes to `onServerReachable` — a request "
+                                    "failing on ANY screen, not only this one's own `/status` "
+                                    "tick, flips the foot within that one request. An error "
+                                    "boundary wraps each route, so one screen "
                                     "throwing leaves the nav standing. "
                                     "`hasChrome` is unchanged in intent and now covers far "
                                     "more: sidebar, rail, app bar, tab bar, palette, which-key, "
@@ -4327,7 +4343,7 @@ COMPONENTS = [
                                             "D28", "D31", "D33", "D39", "D49", "D51", "D53",
                                             "D57", "D61", "D63", "D66", "D69", "D70", "D94",
                                             "D95", "D100", "D105", "D109", "D120", "D134",
-                                            "D159"]},
+                                            "D159", "D207"]},
             "src/Codes.tsx": {"does": "the code-card screen: read a box's QRs into the ledger, "
                                       "see the two lanes C11 tiers the pile into, and hand a "
                                       "lane's codes to a buyer against a named order. The "
@@ -4419,7 +4435,13 @@ COMPONENTS = [
                                       "server's own messages verbatim, and holds the two "
                                       "readers every screen shares: a thrown thing as an "
                                       "owner-side screen draws it, and the position label as "
-                                      "the server rendered it.",
+                                      "the server rendered it. `request()` IS THE ONE SEAM "
+                                      "(D207): every call funnels through it, so it is "
+                                      "also where reachability is observed — `noteReachable`/"
+                                      "`onServerReachable`, the same shape as `noteBoot`/"
+                                      "`onServerBoot` beside it, firing on both the success and "
+                                      "the failure path of every fetch and only when the "
+                                      "state actually changes.",
                               "governed_by": ["D3", "D4", "D5", "D6", "D7", "D8", "D10", "D13",
                                               "D19", "D21", "D22", "D23", "D24", "D26", "D28",
                                               "D29", "D30", "D32", "D33", "D34", "D37", "D43",
@@ -4430,7 +4452,33 @@ COMPONENTS = [
                                               "D159", "D168",
                                               "D104", "D113", "D116", "D132", "D134", "D172",
                                               "D174", "D180", "D192",
-                                              "D193", "D203"]},
+                                              "D193", "D203", "D207", "D36", "D165"]},
+            "src/usePoll.ts": {"does": "ONE POLLING PRIMITIVE, WHERE FIVE HAND-ROLLED TIMERS "
+                                       "USED TO STAND (D207). `RunPanel.tsx` (the run "
+                                       "list and, separately, an open run's own detail), "
+                                       "`BoxRuns.tsx` (which used to copy the run list's "
+                                       "constants BY COMMENT), `SubmissionClaims.tsx` and "
+                                       "`App.tsx`'s `/status` poll all migrated onto it in one "
+                                       "change, which is the whole of how it was verified — "
+                                       "their existing specs staying green rather than a new "
+                                       "spec asserting the hook alone. Owns a live/idle cadence "
+                                       "pair, a pause while `document.hidden` (with an "
+                                       "immediate tick on becoming visible again), a backoff "
+                                       "that lengthens the idle cadence on a run of consecutive "
+                                       "failures, and ONE MODULE-LEVEL COUNTER every caller "
+                                       "shares so the app never has more requests in flight "
+                                       "against the capture server than "
+                                       "`server/capture_server.py:REQUEST_SLOTS` (4) allows — "
+                                       "the accounting `docs/DEBTS.md` §11 measured was missing "
+                                       "from every poller in the app. `stopWhenNotLive` is the "
+                                       "detail poll's and the claims panel's shape (stop asking "
+                                       "once the last answer is not live); `restartKey` is the "
+                                       "detail poll's alone (ask again at once when a DIFFERENT "
+                                       "run opens, rather than waiting out the old run's "
+                                       "timer); `refreshOnFocus` and the returned `refresh()` "
+                                       "are the shell's (a boot toast wants an immediate ask, "
+                                       "not a wait for the next tick).",
+                               "governed_by": ["D207", "D16"]},
             "src/demoFlag.d.ts": {"does": "declares `__BN_DEMO__`, the build-time demo flag "
                                           "`vite.config.ts` substitutes with a boolean "
                                           "literal. It exists because three other forms of "
@@ -4499,7 +4547,7 @@ COMPONENTS = [
                                              "D93", "D100", "D103", "D104", "D113", "D115",
                                              "D116", "D132", "D134", "D147",
                                              "D159", "D172", "D174", "D180",
-                                             "D193"]},
+                                             "D193", "D165"]},
             "src/deviceMemory.ts": {"does": "every `localStorage` key the shell owns — the "
                                             "theme, the rail, which order statuses this "
                                             "device bothers fetching (D114), whether the "
@@ -4513,11 +4561,13 @@ COMPONENTS = [
                                             "index since 2026-09-12 "
                                             "(D153), which is a field "
                                             "in that document rather than a seventh key and is "
-                                            "the one value here no screen draws — and nothing "
-                                            "else",
+                                            "the one value here no screen draws, and which "
+                                            "`#/pricing` worklist sections this browser has "
+                                            "asked Compare on for (D208) "
+                                            "— and nothing else",
                                     "governed_by": ["D13", "D27", "D91", "D94", "D95", "D114", "D132",
                                                     "D142", "D145",
-                                                    "D153", "D193"],
+                                                    "D153", "D193", "D208"],
                                     "note": "IT EXISTS BECAUSE OF A LINT RULE, which is the "
                                             "rule working rather than being worked around. "
                                             "`app/eslint.config.js` bans the STORE and not the "
@@ -4913,7 +4963,7 @@ COMPONENTS = [
                         "up, because its choices ride digits that mean candidates everywhere "
                         "else on this screen; the mid-box delete is deliberately not on it. "
                         "The re-check sheet owns it the same way, and for the same reason.",
-                "governed_by": ["D3", "D4", "D5", "D6", "D9", "D10", "D13", "D22", "D23", "D26", "D28", "D29", "D32", "D35", "D37", "D46", "D55", "D67", "D77", "D87", "D137", "D162", "D167", "D172"],
+                "governed_by": ["D3", "D4", "D5", "D6", "D9", "D10", "D13", "D22", "D23", "D26", "D28", "D29", "D32", "D35", "D37", "D46", "D55", "D67", "D77", "D87", "D137", "D162", "D167", "D172", "D194"],
             },
             # D9 governs a stylesheet here, and it is the sharpest instance of what building
             # 7b early costs: the price bands that drive the type scale are the one set of
@@ -5128,15 +5178,20 @@ COMPONENTS = [
                 "does": "a smaller sheet than a working screen's, because this one has no "
                         "form and no write: a toolbar, a `.bn-table` that becomes a stacked "
                         "card at 639px on the same idiom `Codes.css` established, and a "
-                        "loading skeleton. Every color is a `--bn-*` token.",
-                "governed_by": ["D50", "D94", "D134"],
+                        "loading skeleton. Every color is a `--bn-*` token. THE FILTER ROW "
+                        "SCROLLS SIDEWAYS ON A PHONE, ON THE SAME COARSE-POINTER ARM D117 "
+                        "ALREADY MAKES FOR A THUMB (Orders' own chip row): five filters with "
+                        "counts were sized to their own content inside a flex column and bled "
+                        "the whole page wider than the viewport rather than either wrapping or "
+                        "scrolling.",
+                "governed_by": ["D50", "D94", "D117", "D134"],
             },
             "src/Fulfillment.tsx": {
                 "does": "D5's second persona's entire product: cards to pull in box-walk "
                         "order, photo-confirm before each pull, one-tap mark-sold with an undo "
                         "window. No machine string and no server message reaches this screen — "
                         "both are correct for the owner and neither is his.",
-                "governed_by": ["D5", "D6", "D7", "D10", "D13", "D24", "D26", "D69", "D125", "D32", "D172", "D93", "D192"],
+                "governed_by": ["D5", "D6", "D7", "D10", "D13", "D21", "D24", "D26", "D69", "D125", "D32", "D172", "D93", "D192", "D193"],
             },
             "src/Fulfillment.css": {
                 "does": "the generous 24-64 end of the one system, two densities. Every floor "
@@ -5298,6 +5353,27 @@ COMPONENTS = [
                                       # `make design-check`, not at turn end, so it is named
                                       # here in prose rather than in `tested_by`.
                                       },
+            "src/RunRescue.tsx": {"does": "D165's repair, offered from `RunPanel.tsx`'s own "
+                                          "header ONLY where `detail.box_former` is true — a "
+                                          "run over a drawer D20 has since handed to another "
+                                          "box. Free, preview by default, `write` gated: the "
+                                          "same shape `QueueRefresh` and `LiveReconcile` use, "
+                                          "for their reason. THE ONE SHEET WITH NO `LogWell` "
+                                          "IN IT (D210, the owner's ruling of "
+                                          "2026-09-13): raw machine text is never visible on "
+                                          "the front end, not even behind a disclosure, so this "
+                                          "reads `RescueResult`'s typed fields — never a "
+                                          "`console` string — and translates the `reason` code "
+                                          "through its own copy table. The write's receipt is "
+                                          "the way back to the run it wrote (D118: a press, "
+                                          "never a route change), and the source run is never "
+                                          "edited.",
+                                  "governed_by": ["D20", "D33", "D36", "D118", "D145",
+                                                  "D165", "D210"]},
+            "src/RunRescue.css": {"does": "the rescue sheet's own layout, `LiveReconcile.css`'s "
+                                          "shape — width, padding, the thumb floor on a coarse "
+                                          "pointer (D117).",
+                                  "governed_by": ["D117", "D165", "D210"]},
             "src/SubmissionClaims.tsx": {"does": "the panel on #/runs saying what a live send "
                                                  "is holding, and the ONE way out of a stuck "
                                                  "claim (D174). It draws "
@@ -5319,9 +5395,15 @@ COMPONENTS = [
                                                  "for an action that exists and cannot be used "
                                                  "now. The poll stops when nothing is held, and "
                                                  "a dropped poll holds the last list rather than "
-                                                 "letting a live claim vanish off the screen",
+                                                 "letting a live claim vanish off the screen. "
+                                                 "ON `usePoll` NOW (D207): "
+                                                 "`stopWhenNotLive` is this panel's own shape "
+                                                 "exactly — one unconditional read on mount, no "
+                                                 "more requests at all once the answer holds no "
+                                                 "claims.",
                                          "governed_by": ["D174", "D33", "D39",
-                                                         "D50", "D57", "D89", "D94", "D118"]},
+                                                         "D50", "D57", "D89", "D94", "D118",
+                                                         "D207"]},
             "src/SubmissionClaims.css": {"does": "that panel's own styles: the row's two columns "
                                                  "and nothing else — the kit supplies the panel, "
                                                  "the list, the pills and the buttons. The action "
@@ -5622,7 +5704,7 @@ COMPONENTS = [
                                                 "D49", "D51", "D54", "D56", "D58", "D59",
                                                 "D62", "D78", "D79", "D85", "D86", "D89",
                                                 "D99", "D100", "D103", "D101", "D105", "D107", "D98", "D109", "D115", "D117", "D125", "D38",
-                                                "D118", "D159", "D168", "D172"]},
+                                                "D118", "D159", "D168", "D172", "D208", "D210"]},
             "src/ClearPrices.tsx": {"does": "THE MASS-CLEAR, the third sheet off #/pricing's "
                                             "header (D168). The operator's "
                                             "own ask - \"after several emits a lot of pricing "
@@ -5687,7 +5769,7 @@ COMPONENTS = [
                                         "control and nothing has to win a stacking order.",
                                 "governed_by": ["D5", "D9", "D28", "D38", "D41", "D49", "D50",
                                                 "D54", "D56", "D62", "D78", "D79", "D85",
-                                                "D86", "D103", "D105", "D117", "D125"]},
+                                                "D86", "D103", "D105", "D117", "D125", "D208"]},
             # D62 is the screen half of pipeline/pricehistory.py. D8 governs it because that
             # entry names the export as the pricing source: this draws a reading BESIDE that
             # figure and writes nothing, and the day it prices anything is a change to D8.
@@ -5887,6 +5969,25 @@ COMPONENTS = [
                                         "is the `?order=` deep link's reverse lookup into "
                                         "whichever group holds it.",
                                 "governed_by": ["D13", "D63", "D69", "D97", "D193"]},
+            "src/orderView.ts": {"does": "HOW THE BUYER LIST IS SORTED AND FILTERED "
+                                        "(`D209`): Ready to Ship leads, newest "
+                                        "first within a group, everything else stays reachable "
+                                        "behind a status select rather than dropped — an "
+                                        "ORDERING and never a hiding, D103's shape carried over. "
+                                        "`statusVocabulary` builds the status options from the "
+                                        "distinct strings the feed itself sent, with counts, "
+                                        "never a hardcoded list (D114). `passesStatus` / "
+                                        "`passesHideUnknown` are the two narrowing predicates "
+                                        "the toolbar composes with the existing reason chips. "
+                                        "`OrderTake` / `takeOrder` / `applyTake` / `staleCount` "
+                                        "are `frozenRank.ts`'s ruling (D181, D118) carried over "
+                                        "to a total order with insertions rather than "
+                                        "respelled: a position snapshot rather than a per-row "
+                                        "boolean, because the buyer list has one call site and "
+                                        "not three. A re-sort or an arrival that would reorder "
+                                        "only OFFERS to, via a reserved chip; a changed status "
+                                        "or hide-unknown toggle retakes immediately.",
+                                 "governed_by": ["D103", "D114", "D118", "D181", "D209"]},
             "src/csvUpload.ts": {"does": "the one FileReader every CSV upload in this app goes "
                                          "through, lifted out of RunPanel.tsx on 2026-08-30 so "
                                          "#/runs and #/shipping cannot carry two encodings to "
@@ -5946,7 +6047,7 @@ COMPONENTS = [
                                        "join by order number with nothing written across the "
                                        "seam — including the buyer's name, which "
                                        "OrdersShipStage.tsx still does not draw.",
-                               "governed_by": ["D7", "D10", "D24", "D27", "D28", "D36", "D39", "D51", "D57", "D58", "D61", "D63", "D66", "D69", "D91", "D96", "D113", "D114", "D118", "D159", "D192", "D193", "D203"]},
+                               "governed_by": ["D7", "D10", "D24", "D27", "D28", "D36", "D39", "D51", "D57", "D58", "D61", "D63", "D66", "D69", "D91", "D96", "D103", "D113", "D114", "D118", "D159", "D181", "D192", "D193", "D203", "D209"]},
             "src/Orders.css": {"does": "the order screen at owner density: the line, its reason "
                                        "and remedy, and the pick rows under it. A copy already "
                                        "spoken for by another line is drawn as spoken for "
@@ -6090,12 +6191,17 @@ COMPONENTS = [
                                         "SPENDS — D33's money gate is two presses that must both "
                                         "happen where the estimate is on screen. Polls GET "
                                         "/pipeline/runs on the panel's own 4s/20s cadence, "
-                                        "because a run started in a terminal begins live.",
+                                        "because a run started in a terminal begins live. THE "
+                                        "CADENCE IS THE SAME PAIR AND THE POLL IS `usePoll` NOW "
+                                        "(D207) — this file used to copy `RunPanel`'s "
+                                        "constants by comment alone, which is exactly the drift "
+                                        "the shared hook exists to close.",
                                 # D39 is why it exists at all; D33 is the gate it must not
                                 # become a second door to; D7 is the fungible-copy model the
                                 # ticked selection writes against; D13 is one truth on one Mac,
                                 # which is why a run this tab did not start still shows here.
-                                "governed_by": ["D5", "D7", "D13", "D33", "D39", "D56"]},
+                                "governed_by": ["D5", "D7", "D13", "D33", "D39", "D56",
+                                                 "D207"]},
             "src/BoxRuns.css": {"does": "one row, and the rule that it must stay one — the whole "
                                         "argument for the panel leaving this screen was its "
                                         "625-1143px height in a column whose question is 'where "
@@ -6277,8 +6383,11 @@ COMPONENTS = [
                                  # is why it WAS a panel on #/inventory rather than a route; D39 is
                                  # the owner overruling that, and this file is unchanged by it — the
                                  # scope arrives as a prop either way. D32 is the crop and the
-                                 # max-edge, both of which the composer now presses.
-                                 "governed_by": ["D1", "D3", "D9", "D13", "D16", "D28", "D31", "D32", "D33", "D39", "D48", "D49", "D54", "D56", "D64", "D65", "D76", "D86"]},
+                                 # max-edge, both of which the composer now presses. D207
+                                 # is the shared poll hook the run list and the open run's detail
+                                 # both moved onto — the detail poll's `restartKey` is what
+                                 # switching between two live runs needs and the hook alone supplies.
+                                 "governed_by": ["D1", "D3", "D9", "D13", "D16", "D28", "D31", "D32", "D33", "D39", "D48", "D49", "D54", "D56", "D64", "D65", "D76", "D86", "D207", "D118", "D165"]},
             "src/RunPanel.css": {"does": "the panel at owner density — the 4-16 end of the scale, mono "
                                          "on every number, and exactly one solid accent fill: the "
                                          "button that spends, drawn only once the estimate is on "
@@ -6382,7 +6491,8 @@ COMPONENTS = [
                         "the Box field, because a literal a-z would have put Rainbow Rare on "
                         "the capture key. Run by `make design-check`.",
                 "governed_by": ["D3", "D20", "D22", "D23", "D27", "D56", "D65", "D101", "D118",
-                                "D142", "D145", "D153"],
+                                "D142", "D145", "D153",
+                                "D211"],
                 "note": "The shutter is never pressed, so no capture is ever taken — "
                         "motion-live.spec.ts's rule, for its reason. The `S` cases DO select a "
                         "box and stub the section route, because the act writes to one; "
@@ -6805,8 +6915,8 @@ COMPONENTS = [
                                              "asserts NOTHING about the order walk; that is "
                                              "app/tests/order-walk.spec.ts. Not a harness test — "
                                              "it starts a browser; `make design-check` runs it.",
-                                     "governed_by": ["D24", "D27", "D28", "D36", "D49", "D58", "D63", "D69", "D73", "D90", "D91", "D96", "D113", "D114", "D118", "D123", "D132",
-                                                     "D193", "D194", "D203"]},
+                                     "governed_by": ["D24", "D27", "D28", "D36", "D49", "D58", "D63", "D69", "D73", "D90", "D91", "D96", "D103", "D113", "D114", "D118", "D123", "D132",
+                                                     "D181", "D193", "D194", "D203", "D209"]},
             "tests/shipping.spec.ts": {"does": "the shipping screen in a browser, and its "
                                                "strongest cases are ABSENCES: no buyer name, "
                                                "address, city or postcode appears anywhere on "
@@ -6878,7 +6988,7 @@ COMPONENTS = [
                                               "fallback. Named by `app/tests/shell.ts`'s seal; "
                                               "all seventy-one pass against the cropped render.",
                                       "governed_by": ["D156", "D8", "D9", "D20", "D28", "D33", "D48", "D49", "D51", "D54", "D56", "D57", "D58", "D59", "D62", "D68", "D78", "D79", "D85", "D86", "D98", "D99", "D103", "D115", "D117", "D118",
-                                                      "D168"]},
+                                                      "D168", "D208"]},
             "tests/live-reconcile.spec.ts": {
                 "does": "the store-wide reconcile in a browser (D87): that it is reachable from "
                         "#/runs at all, that the preview asks for no write, and that the settle "
@@ -6921,7 +7031,7 @@ COMPONENTS = [
                 # D31 is why this is a panel on #/inventory rather than a seventh route.
                 # D78 is the sunk row the first stage draws; D117 is the thumb floor its phone
                 # case measures.
-                "governed_by": ["D145", "D36", "D1", "D3", "D9", "D13", "D20", "D31", "D32", "D33", "D39", "D48", "D54", "D56", "D64", "D65", "D49", "D76", "D78", "D117", "D166", "D174", "D57", "D118", "D136", "D180"],
+                "governed_by": ["D145", "D36", "D1", "D3", "D9", "D13", "D20", "D31", "D32", "D33", "D39", "D48", "D54", "D56", "D64", "D65", "D49", "D76", "D78", "D117", "D166", "D174", "D57", "D118", "D136", "D180", "D43", "D207", "D165", "D196", "D210"],
                 "note": "THE PIPELINE WAS THE LARGEST INSTANCE OF THE ROUTE-IS-NOT-A-FEATURE "
                         "FAILURE AND NOBODY HAD COUNTED IT. The four commands have existed "
                         "since step 4 and have been through a 53-card run and a 544-card run; "
@@ -7024,7 +7134,7 @@ COMPONENTS = [
                 # suppress it for the other ninety-nine.
                 "governed_by": ["D4", "D13", "D23", "D24", "D28", "D29", "D32", "D35", "D16",
                                 "D41", "D37", "D46", "D77", "D136",
-                                "D146"],
+                                "D146", "D194"],
                 "note": "NOT a harness test — it starts a browser, which docs/GATES.md keeps "
                         "off the seven-test contract deliberately. The photograph stub is "
                         "2160x3840 and that is load-bearing: the rig's stored frame is 9:16 "
@@ -7039,7 +7149,7 @@ COMPONENTS = [
                         "rendered view, with every contrast ratio computed from the colors "
                         "the page actually painted rather than from a number published in "
                         "docs/DESIGN.md. Run by `make design-check`.",
-                "governed_by": ["D5", "D10", "D13", "D24", "D31", "D41", "D115", "D125", "D136"],
+                "governed_by": ["D5", "D10", "D13", "D21", "D24", "D31", "D41", "D115", "D125", "D136", "D193"],
                 "note": "NOT a harness test, same as its sibling above. It failed 16 of the 30 "
                         "assertions `make design-check` runs for the few hours between the view "
                         "being built and being routed — all of them because every test asserts "

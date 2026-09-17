@@ -202,7 +202,46 @@ def _sort_key(position: str) -> Tuple[int, int]:
         return 0, 0
 
 
+def _report_line(report: dict) -> str:
+    """One line of compact, deterministic JSON — the machine-readable half of a rescue.
+
+    ADDED FOR D210. THE ROUTE USED TO RECOVER A REFUSAL REASON BY MATCHING
+    SUBSTRINGS OUT OF THIS COMMAND'S OWN PROSE, and only one of six branches was ever
+    exercised by a real run through the real command — reword a sentence above and five
+    reasons silently become the wrong code or none at all, with every check still green. This
+    is the fix: the command says its own answer in a form nothing has to parse English to
+    read. `sort_keys=True` and no extra whitespace so the line is stable and easy to grep for
+    in a log.
+    """
+    return json.dumps(report, sort_keys=True)
+
+
+def _empty_report() -> dict:
+    """The report's shape, every field present from the first line printed. A route reading
+    this never has to guess whether a key is merely absent or genuinely unknown — it is
+    always one of these five, filled in as the command learns each answer."""
+    return {
+        "reason": None,
+        "counts": {"records": None, "no_digest": 0, "rebound": 0, "not_on_shelf": 0, "ambiguous": 0},
+        "destination": None,
+        "already_rescued": None,
+        "new_run": None,
+    }
+
+
 def run(args, say) -> int:
+    as_json = bool(getattr(args, "json", False))
+    report = _empty_report()
+
+    def refuse_json(reason: str) -> None:
+        """Print the report and nothing more, ONLY when `--json` was asked for. When it was
+        not, this is a no-op and the caller's `raise` below is the whole of what changes —
+        which is the "off by default" half of the contract: a terminal's report is byte-for-
+        byte what it always was unless this flag was named."""
+        if as_json:
+            report["reason"] = reason
+            say(_report_line(report))
+
     source = runs.open_run(args.run_dir)
     # THE REPLAY BRANCH (D188). `realign` and this whole command
     # exist to repair a FROZEN snapshot's stale positions (D36), and only `pkmnscan identify`
@@ -214,6 +253,7 @@ def run(args, say) -> int:
     # match to repair. Such a run is never "stranded" in D36's sense: read it again and its
     # cards are wherever they currently are, by construction, every time.
     if not source.path(runs.IDENTIFICATIONS).is_file():
+        refuse_json("no_identifications")
         raise runs.RunError(
             f"REFUSING: {source.name} has no {runs.IDENTIFICATIONS} — it looks like a "
             f"store-backed join's own output directory (`pkmnscan join` with no run "
@@ -232,6 +272,7 @@ def run(args, say) -> int:
     # ------------------------------------------------------------------ is it even stranded
     why = _stranded_because(payload, inventory, source)
     if not why:
+        refuse_json("not_stranded")
         raise runs.RunError(
             f"REFUSING: {source.name} is not stranded — the store still reads its drawer as "
             f"its own, so `pkmnscan join {source.directory}` works and this command has "
@@ -246,8 +287,11 @@ def run(args, say) -> int:
 
     # ------------------------------------------------------------------ what the run recorded
     by_key, blind, twice_in_run = _digests_in(payload)
-    say(f"  records       {len(payload.get('cards') or {})}")
+    report["counts"]["records"] = len(payload.get("cards") or {})
+    say(f"  records       {report['counts']['records']}")
     if twice_in_run:
+        report["counts"]["ambiguous"] = len(twice_in_run)
+        refuse_json("digest_twice_in_run")
         raise runs.RunError(
             f"REFUSING: {len(twice_in_run)} photograph digest(s) in this run are carried by "
             f"more than one record, so a digest does not name a card here. That is a "
@@ -255,6 +299,7 @@ def run(args, say) -> int:
             f"Nothing was written."
         )
     if blind:
+        report["counts"]["no_digest"] = len(blind)
         say(f"  no digest     {len(blind)} record(s) cannot be checked: {_few(blind)}")
 
     # ------------------------------------------------------------------ where they are now
@@ -280,6 +325,8 @@ def run(args, say) -> int:
             missing.append(key)
 
     if ambiguous:
+        report["counts"]["ambiguous"] = len(ambiguous)
+        refuse_json("digest_ambiguous_on_disk")
         raise runs.RunError(
             f"REFUSING: {len(ambiguous)} record(s) match a digest that is on two photographs "
             f"on disk: {_few(ambiguous)}. A digest that names two slots is a question, not a "
@@ -288,6 +335,8 @@ def run(args, say) -> int:
         )
 
     if not moved:
+        report["counts"]["not_on_shelf"] = len(missing)
+        refuse_json("none_on_shelf")
         raise runs.RunError(
             f"REFUSING: none of this run's {len(by_key)} checkable record(s) matches a "
             f"photograph in any live drawer, so there is nothing on a shelf to re-address. "
@@ -298,6 +347,9 @@ def run(args, say) -> int:
 
     landed = sorted({_sort_key(new)[0] for new in moved.values()})
     if len(landed) > 1:
+        report["counts"]["rebound"] = len(moved)
+        report["counts"]["not_on_shelf"] = len(missing)
+        refuse_json("spread_across_boxes")
         raise runs.RunError(
             f"REFUSING: this run's cards are spread across boxes "
             f"{', '.join(str(b) for b in landed)}. D48 keeps a run to one box, and a rescue "
@@ -309,6 +361,9 @@ def run(args, say) -> int:
     entry = inventory.box(box)
     bid = None if entry is None else master.int_or_none(entry.bid)
     label = f"box {box}" + (f" ({entry.name})" if entry is not None and entry.name else "")
+    report["counts"]["rebound"] = len(moved)
+    report["counts"]["not_on_shelf"] = len(missing)
+    report["destination"] = {"box": box, "box_name": entry.name if entry is not None else None}
     say(f"  found         {len(moved)} card(s), all in {label}")
     say(f"  bid           {bid if bid is not None else 'none — this drawer has no true index'}")
     if missing:
@@ -331,14 +386,19 @@ def run(args, say) -> int:
         except (OSError, ValueError):
             continue
         if already == json.loads(json.dumps(rebuilt, default=str)):
+            report["already_rescued"] = other.name
             say(f"already rescued: {other.name} holds exactly these {len(moved)} card(s).")
             say("Nothing written — this command is re-runnable and had nothing to add.")
             say(f"Next:  ./pkmnscan join {other.directory}")
+            if as_json:
+                say(_report_line(report))
             return 0
 
     if not args.write:
         say(f"--write would create a run over box {box} holding {len(moved)} card(s),")
         say(f"leaving {source.name} exactly as it is. Nothing was written.")
+        if as_json:
+            say(_report_line(report))
         return 0
 
     # ------------------------------------------------------------------ write the rescue run
@@ -405,6 +465,9 @@ def run(args, say) -> int:
     say("")
     say(f"Next:  ./pkmnscan join {rescued.directory}")
     say(f"       ./pkmnscan emit {rescued.directory}")
+    if as_json:
+        report["new_run"] = rescued.name
+        say(_report_line(report))
     return 0
 
 

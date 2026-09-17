@@ -244,6 +244,17 @@ def build_parser() -> argparse.ArgumentParser:
         action="store_true",
         help="create the rescue run. Previews without it, and writes nothing at all.",
     )
+    # D210. OFF BY DEFAULT — a terminal's report is unchanged whether or not
+    # this is passed. When it is, one extra line of compact JSON is printed alongside the
+    # ordinary prose (`_report_line` in cmd_rescue.py), naming the reason code, the counts,
+    # the destination and whether an identical rescue already exists — the machine-readable
+    # answer `server/pipeline_routes.py:do_run_rescue` reads, in place of matching substrings
+    # out of the sentences above it.
+    rescue.add_argument(
+        "--json",
+        action="store_true",
+        help="also print one line of machine-readable JSON. The prose is unchanged either way.",
+    )
 
     # ---------------------------------------------------------------------------- cards
     # THE CARD'S STABLE NAME (D172). Two of the three subcommands write nothing EVER, and

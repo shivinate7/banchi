@@ -133,19 +133,46 @@ export function rememberRail(rail: boolean): void {
  */
 const ORDER_FILTER_KEY = 'banchi.orders.fetch-filter'
 
+/** The buyer list's own standing view — status, sort, whether an unresolved SKU is folded
+ *  out — added to this SAME document rather than a new key. The owner's ruling for the six
+ *  capture values above is the same habit here: "the view I work the list in" is one fact a
+ *  person sets and clears together, and `app/src/orderView.ts:DEFAULT_ORDER_VIEW` is what a
+ *  device that has never touched these controls gets — every row shown, newest first. */
+export type OrderView = {
+  readonly status: string | null
+  readonly sort: 'newest' | 'oldest'
+  readonly hideUnknown: boolean
+}
+
 /** What this device narrows the order fetch to. `statuses: null` is every status the window
- *  holds; `asked` is whether a human has ever been shown that list. */
+ *  holds; `asked` is whether a human has ever been shown that list. `view` is the buyer
+ *  list's sort/filter, above. */
 export type OrderFetchFilter = {
   readonly statuses: readonly string[] | null
   readonly skipKnown: boolean
   readonly asked: boolean
+  readonly view: OrderView
 }
+
+const DEFAULT_VIEW: OrderView = { status: null, sort: 'newest', hideUnknown: false }
 
 /** A device that has never been asked. Every status — and, as of `D193`,
  *  skipping what the ledger already holds by default: the ordinary press is an all-statuses,
  *  skip-known append, and a device that never opens the picker gets that press rather than a
  *  slower one nobody chose. The picker still opens from its own "Only these statuses…" control. */
-const UNASKED: OrderFetchFilter = { statuses: null, skipKnown: true, asked: false }
+const UNASKED: OrderFetchFilter = { statuses: null, skipKnown: true, asked: false, view: DEFAULT_VIEW }
+
+function parsedView(raw: unknown): OrderView {
+  if (typeof raw !== 'object' || raw === null) return DEFAULT_VIEW
+  const status = (raw as { status?: unknown }).status
+  const sort = (raw as { sort?: unknown }).sort
+  const hideUnknown = (raw as { hideUnknown?: unknown }).hideUnknown
+  return {
+    status: typeof status === 'string' && status.trim() !== '' ? status : null,
+    sort: sort === 'oldest' ? 'oldest' : 'newest',
+    hideUnknown: hideUnknown === true,
+  }
+}
 
 export function storedOrderFilter(): OrderFetchFilter {
   try {
@@ -169,6 +196,10 @@ export function storedOrderFilter(): OrderFetchFilter {
          press is the safer of the two to default to. */
       skipKnown: (parsed as { skipKnown?: unknown }).skipKnown !== false,
       asked: (parsed as { asked?: unknown }).asked === true,
+      /* Absent on every document written before this field existed — reads as `DEFAULT_VIEW`,
+         the same "show everything" a fresh device gets, so an old value never narrows a list
+         it never chose to narrow. */
+      view: parsedView((parsed as { view?: unknown }).view),
     }
   } catch {
     /* Private mode, blocked storage, or a half-written value. UNASKED, which means the press
@@ -187,6 +218,7 @@ export function rememberOrderFilter(filter: OrderFetchFilter): void {
         statuses: filter.statuses === null ? null : [...filter.statuses],
         skipKnown: filter.skipKnown,
         asked: filter.asked,
+        view: filter.view,
       }),
     )
   } catch {
@@ -510,5 +542,54 @@ export function rememberSpendNotice(dollars: number): void {
   } catch {
     /* Quota or a blocked origin. The figure still holds for this tab, which is the press that
        was made — only the next visit is asked again. */
+  }
+}
+
+/* -------------------------------------------------------- the pricing worklist's Compare */
+
+/**
+ * WHETHER THIS BROWSER SHOWS THE REFERENCE COLUMNS ON `#/pricing`, PER SECTION
+ * (D208, amending the ruling that shipped Compare as component state).
+ *
+ * THE COORDINATOR'S CATCH: as first built, the toggle was `useState` and forgot itself on
+ * every reload — an operator who wanted Low/+Ship/Direct visible had to press Compare again,
+ * per section, every time they opened the screen, and this is the screen a person prices
+ * hundreds of rows on in one sitting. That is friction charged to exactly the operator who
+ * liked the old density, which is the opposite of what progressive disclosure was for.
+ *
+ * IT IS THE SAME KIND OF FACT AS `banchi.inventory.hide-sold` ABOVE: how THIS browser is
+ * dressed, not anything about a card, a price or a run. Losing it costs one press per section
+ * of a control that is on screen, and the store stays the one truth about every card D13
+ * actually protects.
+ *
+ * ONE KEY, A SET OF SECTION BUCKETS THAT ARE ON — never a full map with `false` entries,
+ * because the ruling's own default is all-off: an absent key, an empty array, or a bucket
+ * missing from the array all read as off, and a fresh browser or a bucket this build has
+ * never seen (a game added a new section) is off exactly as the ruling specifies. No
+ * migration from an old spelling, D27's own rule — there isn't one; this key is new.
+ */
+const PRICING_COMPARE_KEY = 'banchi.pricing.compare'
+
+/** Which sections THIS browser has asked to see Low/+Ship/Direct on. Absent, malformed, or a
+ *  bucket never named all read as off — the ruling's default. */
+export function storedPricingCompare(): ReadonlySet<string> {
+  try {
+    const raw = localStorage.getItem(PRICING_COMPARE_KEY)
+    if (raw === null) return new Set()
+    const parsed: unknown = JSON.parse(raw)
+    if (!Array.isArray(parsed)) return new Set()
+    return new Set(parsed.filter((one): one is string => typeof one === 'string'))
+  } catch {
+    return new Set()
+  }
+}
+
+/** Record which sections are on for this browser, as the full set — not a single toggle, so a
+ *  clear (an empty set) is expressible and a stale bucket cannot linger past a rename. */
+export function rememberPricingCompare(on: ReadonlySet<string>): void {
+  try {
+    localStorage.setItem(PRICING_COMPARE_KEY, JSON.stringify([...on]))
+  } catch {
+    /* storage unavailable — the choice still holds for this tab */
   }
 }
