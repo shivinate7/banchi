@@ -782,8 +782,46 @@ if [ $? -eq 0 ]; then
 else
   bad "the stash incident did not reproduce as described"
 fi
-(cd "$tmp/main" && git stash clear -q 2>/dev/null && git checkout -q -- work.py 2>/dev/null)
+# THE CLEANUP THAT NEVER RAN. This line used to read `git stash clear -q`, and `clear` takes
+# no options: git answered `error: unknown switch \`q'` with exit 129, `2>/dev/null` ate it,
+# and the `&&` short-circuited so the `checkout` never ran either. Every refusal case below
+# therefore ran over a one-entry stack BY ACCIDENT for as long as clause 7 existed — and
+# since the clause did not read the stack at all, nothing could tell that apart from a real
+# refusal. Both halves are now deliberate and asserted, which is the whole point of 7b.
+(cd "$tmp/main" && git stash clear 2>/dev/null; git checkout -q -- work.py 2>/dev/null)
 (cd "$tmp/main" && printf 'one\ntwo\nthree\nfour\n' > work.py)
+
+echo ""
+echo "  7b. AN EMPTY STACK IS NOT A SUBJECT — the clause resolves before it refuses"
+
+# THE ARM THAT GOES RED ON THE DEFECT. Measured 2026-09-17: before the stack reader landed,
+# these three verdicts over an EMPTY stack were byte-identical to the ones over a real entry,
+# while `git stash pop` itself answers "No stash entries found." A guard whose answer does not
+# move when its subject does is matching the SUBCOMMAND NAME — `reap.py`'s `\bpkill\b` defect,
+# one command over. Revert `_stash_entries` and all three of these go red.
+stack_depth() { (cd "$1" && git stash list | wc -l | tr -d ' '); }
+
+if [ "$(stack_depth "$tmp/main")" = "0" ]; then
+  ok "the fixture's stack is genuinely empty — the arm below has the subject it claims"
+else
+  bad "the fixture's stack is NOT empty, so the empty-stack arm proves nothing"
+fi
+allows "\`git stash pop\` over an EMPTY stack — nothing to consume, and git itself refuses it" \
+  "$tmp/main" "git stash pop"
+allows "\`git stash clear\` over an EMPTY stack — it destroys nothing" \
+  "$tmp/main" "git stash clear"
+allows "\`git stash drop\` over an EMPTY stack — there is no \`stash@{0}\` to drop" \
+  "$tmp/main" "git stash drop"
+refuses "a bare \`git stash\` is refused EVEN over an empty stack — it is a push, and its hazard is identification, not consumption" \
+  "$tmp/main" "git stash"
+
+# Now put a real entry on the stack, deliberately, so every case below has a subject.
+(cd "$tmp/main" && printf 'work to set aside\n' >> work.py && git stash push -q -m "selftest entry")
+if [ "$(stack_depth "$tmp/main")" = "1" ]; then
+  ok "one real entry is on the stack — the refusal cases below are not vacuous"
+else
+  bad "the fixture could not put an entry on the stack"
+fi
 
 echo ""
 echo "  the guard refuses it"
@@ -808,8 +846,12 @@ case "$out" in *"PKMNSCAN_STASH=off"*) ok "the refusal prints its escape hatch" 
   *) bad "the refusal does not name PKMNSCAN_STASH=off" ;; esac
 case "$out" in *"per-CLONE"*) ok "the refusal explains the shared-stack hazard" ;;
   *) bad "the refusal does not explain why the stack is shared" ;; esac
-case "$out" in *"never pop"*) ok "the refusal's remedy never names \`pop\` as the safe form" ;;
-  *) bad "the refusal's own remedy could be read as recommending pop" ;; esac
+case "$out" in *"never a stash"*) ok "the refusal's remedy names a commit on your own branch" ;;
+  *) bad "the refusal's remedy does not tell the caller to commit instead" ;; esac
+case "$out" in *"stash push"*) bad "the remedy still offers a tagged stash — a tag fixes identification only, and the entry still belongs to no branch and dies with the session holding the tag" ;;
+  *) ok "the remedy offers no stash form at all, tagged or otherwise" ;; esac
+case "$out" in *"working tree"*) ok "the refusal states a worktree count" ;;
+  *) bad "the refusal does not say how many trees share the stack" ;; esac
 
 echo ""
 echo "  what clause 7 must NEVER refuse"

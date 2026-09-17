@@ -1230,23 +1230,55 @@ _STASH_SUBCOMMANDS = {"push", "save", "pop", "apply", "drop", "clear", "list", "
 _STASH_ALWAYS = {"pop", "clear"}
 
 
-def _stash_refusal(text: str, why: List[str], heading: str) -> Refusal:
+def _stash_entries(cwd: str) -> Optional[List[str]]:
+    """One subject line per entry, newest first. None when the stack cannot be read at all.
+
+    THE RESOLUTION THIS CLAUSE WAS MISSING. Measured 2026-09-17, before this function
+    existed: over an EMPTY stack, in a throwaway fixture where `git stash pop` answers
+    "No stash entries found.", the clause refused `pop`, `clear`, `drop` and the bare form
+    with exactly the verdicts it gives over a real entry — the two arms were byte-identical.
+    A guard whose answer does not move when its subject does is testing the subcommand's
+    NAME, which is the `\\bpkill\\b` defect `reap.py` exists to not be, and which
+    `clause_checkout` and `clause_reset` both already avoid by reading
+    `git status --porcelain` before they refuse.
+    """
+    ok, out = _run(["git", "stash", "list", "--format=%gs"], cwd=cwd)
+    if not ok:
+        return None
+    return [line for line in out.splitlines() if line]
+
+
+def _worktree_count(cwd: str) -> Optional[int]:
+    """How many working trees share this clone's one stash stack.
+
+    Derived rather than typed: the refusal used to assert "~30 working trees" as a constant,
+    and the measurement on 2026-09-17 was 27. A number a reader is asked to believe is a
+    number this guard can read for itself.
+    """
+    ok, out = _run(["git", "worktree", "list", "--porcelain"], cwd=cwd)
+    if not ok:
+        return None
+    count = sum(1 for line in out.splitlines() if line.startswith("worktree "))
+    return count or None
+
+
+def _stash_refusal(text: str, why: List[str], heading: str,
+                   trees: Optional[int] = None) -> Refusal:
     lines = ["  {0}".format(text)] + why + [
         "",
         "  The stash stack is per-CLONE, not per-worktree (D43 covers the store and the",
-        "  ports; the stash was never split the same way) — this clone runs ~30 working",
-        "  trees, often with a live session in each, all pushing onto ONE stack. An index",
+        "  ports; the stash was never split the same way) — this clone runs {0}, often".format(
+            "{0} working tree{1}".format(trees, "" if trees == 1 else "s") if trees
+            else "many working trees"),
+        "  with a live session in each, all pushing onto ONE stack. An index",
         "  like `stash@{0}` names \"whatever is on top right now\", which is a different",
         "  entry from one call to the next as other sessions push and pop.",
         "",
-        "  Set work aside with a commit instead, which is addressed by its own sha and",
-        "  cannot be reinterpreted by somebody else's push:",
+        "  Set work aside with a commit on your own branch, never a stash. A stash entry",
+        "  belongs to no branch, and it outlives no session that holds its tag:",
         "      git add -A && git commit -m \"WIP: <what this is>\"",
-        "  The disciplined stash form this guard allows, when a commit genuinely will not",
-        "  do:",
-        "      git stash push -u -m \"<a tag nothing else would type>\"",
-        "      git stash list                      # find it again by that tag",
-        "      git stash apply <the sha it names>   # never pop — apply never drops it",
+        "  A commit is addressed by its own sha, cannot be reinterpreted by somebody else's",
+        "  push, and travels with the branch when you push it.",
     ]
     return Refusal("stash", lines, heading)
 
@@ -1295,12 +1327,31 @@ def clause_stash(reading: "shell_parse.Reading", cwd: str) -> Verdict:
             continue
         sub = rest[0] if rest and rest[0] in _STASH_SUBCOMMANDS else ""
         text = shell_parse.short(placed.stage.text)
+        trees = _worktree_count(where)
+        # THE BARE FORM IS JUDGED BEFORE THE STACK IS READ, AND THAT ASYMMETRY IS THE POINT.
+        # A bare `git stash` is an implicit PUSH: it CREATES an anonymous entry, so its
+        # hazard is identification and not consumption, and an entry pushed onto an empty
+        # stack is exactly as unfindable once other sessions push onto it. Gating it on
+        # current depth would be reading the wrong subject — the stack it will join, not the
+        # stack it finds.
         if sub == "":
             refusals.append(_stash_refusal(text, [
                 "      no subcommand is named, so this is an implicit `push` — an",
                 "      anonymous entry that nothing but luck finds again in a shared stack.",
             ], "BLOCKED: name what this does — `push`, `list`, `apply` — a bare `git stash` "
-               "is ambiguous."))
+               "is ambiguous.", trees))
+            continue
+        # RESOLVE THE SUBJECT BEFORE REFUSING OVER IT — clause 1 and clause 8's standard,
+        # which this clause did not meet until 2026-09-17. Everything below CONSUMES an
+        # entry that already exists, so an empty stack is a pass: there is nothing on it to
+        # destroy, and git itself answers "No stash entries found." An unreadable stack is
+        # REPORTED rather than passed silently, per this guard's non-vacuity line.
+        entries = _stash_entries(where)
+        if entries is None:
+            notes.append("`{0}` — this guard could not read the stash stack, so it has no "
+                         "opinion about it".format(text))
+            continue
+        if not entries:
             continue
         if sub in _STASH_ALWAYS:
             if sub == "pop":
@@ -1317,7 +1368,7 @@ def clause_stash(reading: "shell_parse.Reading", cwd: str) -> Verdict:
                 ]
             refusals.append(_stash_refusal(
                 text, why, "BLOCKED: this consumes or destroys a stash entry no caller here "
-                          "identified."))
+                          "identified.", trees))
             continue
         if sub == "drop":
             operand = [token for token in rest[1:] if not token.startswith("-")]
@@ -1326,7 +1377,7 @@ def clause_stash(reading: "shell_parse.Reading", cwd: str) -> Verdict:
                     "      no entry is named, so this drops `stash@{0}` — the top of a",
                     "      stack every worktree in this clone shares.",
                 ], "BLOCKED: this consumes or destroys a stash entry no caller here "
-                   "identified."))
+                   "identified.", trees))
     return Verdict(refusals, notes)
 
 
