@@ -2335,6 +2335,33 @@ COMPONENTS = [
                         "the exemption it feeds — eleven caught and three equivalent mutants.",
                 "governed_by": ["D179", "D18", "D43", "D127", "D171", "D173"],
             },
+            "mutate-guards.py": {
+                "does": "a mutation runner over five of this repo's guards "
+                        "(guard-shell.py, silent-write-guard.py, reap.py, primary_sync.py, "
+                        "revert-audit.py), built because the hand-kept arm counts drift — "
+                        "`checks.py`'s own claim-selftest entry says a sentence claimed "
+                        "sixteen arms over a file that held eighteen, caught by a person "
+                        "rather than a check. It copies each guard, applies one literal "
+                        "mutation at a time from a table anchored to real source text, and "
+                        "runs THAT guard's OWN selftest suite against the mutated copy — "
+                        "the `.sh` suites by copying the whole `scripts/` directory so the "
+                        "suite's own relative path finds the mutated guard, "
+                        "`sync-selftest.py` by mirroring `scripts/` and `server/ports.py` "
+                        "the way its own `load_module()` already does, `revert-audit.py` by "
+                        "copying the one dependency-free file and calling its `selftest` "
+                        "subcommand. A mutation the suite does not catch SURVIVES and fails "
+                        "the run; an anchor no longer found in the current source is STALE "
+                        "and fails loudly rather than being skipped. `--verify-anchors` is "
+                        "the fast half with no subprocess, meant to sit on the commit path; "
+                        "the full run shells out to real selftests and is not. `--counts` "
+                        "prints the arm count per guard, which is the number a docs-audit "
+                        "row or a session reconciles against the prose in CLAUDE.md and "
+                        "`checks.py`. Not every mutation-tested guard is covered — five "
+                        "were picked by the cost of a miss, and a guard left out is left "
+                        "out by name rather than padded with an arm that proves nothing.",
+                "governed_by": ["D18", "D42", "D53", "D133", "D139", "D158", "D169",
+                                "D171", "D173"],
+            },
             "coordinator.py": {
                 "does": "`make coordinator` — the merge queue READ rather than remembered, so "
                         "a status report is generated instead of composed out of a session's "

@@ -110,6 +110,7 @@ make check          # harness + docs-audit + claim-stale + revert-guard +
                     #   screen-freshness +
                     #   screen-freshness-selftest + sigil-check + ignore-check +
                     #   lint + vale + typecheck + audit-self-test +
+                    #   mutate-anchors +
                     #   githooks-selftest + merge-selftest + revert-selftest +
                     #   claim-selftest + decisions-selftest + debts-selftest +
                     #   gates-selftest + submission-selftest +

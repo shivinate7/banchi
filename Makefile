@@ -4,7 +4,7 @@
 # the project would be built on top of — `make check` green means every check ran.
 
 .DEFAULT_GOAL := help
-.PHONY: help status map explain harness check cid-selftest cid-audit ignore-check docs-audit vale audit-self-test verdict-selftest githooks-selftest merge merge-selftest revert-guard revert-selftest claim-ids claim-stale claim-selftest decisions-selftest debts-selftest gates-selftest port-agreement set-hint-agreement readiness-agreement screen-freshness screen-freshness-selftest sigil-check suite-lock-selftest icloud-sweep audit-history dev server screenshot design-check design-check-quiet lint typecheck venv launch-config worktree-setup hooks up down launch-agent demo demo-photos demo-seed demo-record demo-static demo-preview demo-freshness catalog-refresh catalog-index catalog-index-selftest catalog-mirror
+.PHONY: help status map explain harness check cid-selftest cid-audit ignore-check docs-audit vale audit-self-test verdict-selftest githooks-selftest merge merge-selftest revert-guard revert-selftest claim-ids claim-stale claim-selftest decisions-selftest debts-selftest gates-selftest port-agreement set-hint-agreement readiness-agreement mutate-anchors mutate-guards screen-freshness screen-freshness-selftest sigil-check suite-lock-selftest icloud-sweep audit-history dev server screenshot design-check design-check-quiet lint typecheck venv launch-config worktree-setup hooks up down launch-agent demo demo-photos demo-seed demo-record demo-static demo-preview demo-freshness catalog-refresh catalog-index catalog-index-selftest catalog-mirror
 
 # Prefer the venv if it exists, so `make harness` works without anyone remembering to
 # activate anything. Falls back to system python3, which still runs T2-T5 — T1 needs the
@@ -110,6 +110,8 @@ help:
 	@echo "  make port-agreement  server/ports.py and app/devPort.ts answer the same numbers."
 	@echo "  make set-hint-agreement  the capture screen and the export fetch resolve a set hint alike."
 	@echo "  make readiness-agreement  app/src/readiness.ts against pipeline/decisions.py:blocking."
+	@echo "  make mutate-anchors  every mutation anchor still present in the guard it targets. 0.03s."
+	@echo "  make mutate-guards   RUN the mutations: each guard's suite must go red. ~190s, off check."
 	@echo "  make screen-freshness  every server write in app/ has a way back. Needs node."
 	@echo "  make screen-freshness-selftest  that guard's own cases, both directions. It sat"
 	@echo "                    on no target at all until 2026-09-12 and was red on main."
@@ -134,6 +136,7 @@ help:
 	@echo "                    screen-freshness +"
 	@echo "                    screen-freshness-selftest + sigil-check + ignore-check +"
 	@echo "                    lint + vale + typecheck + audit-self-test +"
+	@echo "                    mutate-anchors +"
 	@echo "                    githooks-selftest + merge-selftest + revert-selftest +"
 	@echo "                    claim-selftest + decisions-selftest + debts-selftest +"
 	@echo "                    gates-selftest + submission-selftest +"
@@ -444,6 +447,7 @@ check:
 	@$(MAKE) --no-print-directory vale
 	@$(MAKE) --no-print-directory typecheck
 	@$(MAKE) --no-print-directory audit-self-test
+	@$(MAKE) --no-print-directory mutate-anchors
 	@$(MAKE) --no-print-directory githooks-selftest
 	@$(MAKE) --no-print-directory merge-selftest
 	@$(MAKE) --no-print-directory revert-selftest
@@ -487,6 +491,7 @@ ci-check:
 	@$(MAKE) --no-print-directory harness
 	@$(MAKE) --no-print-directory docs-audit
 	@$(MAKE) --no-print-directory audit-self-test
+	@$(MAKE) --no-print-directory mutate-anchors
 	@$(MAKE) --no-print-directory githooks-selftest
 	@$(MAKE) --no-print-directory merge-selftest
 	@$(MAKE) --no-print-directory revert-selftest
@@ -720,6 +725,16 @@ set-hint-agreement:
 readiness-agreement:
 	@python3 scripts/readiness-agreement.py
 
+mutate-anchors:
+	@python3 scripts/mutate-guards.py --verify-anchors
+
+# THE SLOW HALF, AND DELIBERATELY OFF `check`: 190s against `mutate-anchors`'s 0.03s,
+# because it runs five guards' whole selftests once per mutation. The anchor check is what
+# gates, and it is the half that catches ROT — a guard reworded past its own mutation is a
+# corpus that proves nothing while still reporting a count.
+mutate-guards:
+	@python3 scripts/mutate-guards.py
+
 # Every server WRITE in app/src has a way back — a re-read, an invalidation signal, or a
 # reason in the code why none is owed. IN `check` AND NEVER IN THE GIT HOOK, and the reason is
 # port-agreement's exactly: it runs node, and the pre-commit hook runs a bare python3 with
@@ -819,6 +834,10 @@ reap:
 # guard exists to protect is the owner's live server, and "point it at that and see" is the
 # incident rather than the test — so every case runs against a throwaway checkout and a
 # throwaway sibling standing in for everywhere-else. Mutation-tested: twenty-two arms, all caught.
+# THAT COUNT IS A HAND SWEEP AND STAYS. `make mutate-guards` now re-runs a MECHANIZED SUBSET of
+# it — 3 anchored arms here, one per rule — and `make mutate-anchors` fails the moment one of
+# those anchors stops matching. The hand count is the larger history; the anchored corpus is the
+# part a machine can repeat.
 # Its fixture spawned every subject by an ABSOLUTE path until 2026-09-12, which is why thirteen
 # arms could not see the bare sweep's blind spot — `spawn_relative` is the subject it lacked.
 reap-selftest:
@@ -889,14 +908,16 @@ readings-selftest:
 # `git fetch origin -q 2>/dev/null`, `git merge --abort 2>/dev/null` — because a guard that
 # fires on those is worse than no guard. Mutation-tested: twenty-one arms, nineteen caught, and
 # the two survivors are proved to be one requirement covered twice.
+# `make mutate-guards` carries 7 anchored arms over this guard — a mechanized subset of the
+# twenty-one, not a replacement for them.
 silent-write-selftest:
 	@bash scripts/silent-write-selftest.sh
 
 .PHONY: silent-write-selftest
 
-# FIVE SHELL MISTAKES THIS REPO HAS ALREADY PAID FOR, refused before they run. Every one was a
+# EIGHT SHELL MISTAKES THIS REPO HAS ALREADY PAID FOR, refused before they run. Every one was a
 # rule somebody had written down and a later session broke anyway — which is D171's ruling
-# about what a rule IS, applied to five more commands:
+# about what a rule IS, applied to eight more commands:
 #
 #   `git checkout <modified path>`     2026-09-06, ~240 lines of uncommitted work destroyed
 #   a write outside this checkout      2026-09-06, ~1,500 lines into the owner's MAIN tree, on
@@ -907,9 +928,15 @@ silent-write-selftest:
 #   a polling loop                     2026-09-12 twice: a `pgrep` waiter whose pattern is not
 #                                      the process, and a backgrounded driver that ran 119
 #                                      rounds over 3h58m across a compaction
+#   `git push <remote> HEAD`           2026-09-12, a stray branch on origin while the real PR
+#                                      branch went untouched, the tracked upstream being a
+#                                      DIFFERENT name (D179, amended 2026-09-13)
+#   a bare `git stash` / `pop`         the stash stack is shared by every worktree of this
+#                                      clone, so a pop takes whatever another tree pushed
+#   `git reset --hard`/`--merge`       over uncommitted tracked work
 #
 # `scripts/guard-shell.py --hook` is a PreToolUse hook on Bash and on Write|Edit — not a target
-# you run — and this self-test is what proves it. FOUR OF THE FIVE INCIDENTS ARE PERFORMED in a
+# you run — and this self-test is what proves it. FIVE OF THE EIGHT INCIDENTS ARE PERFORMED in a
 # throwaway repository before the guard is asked about them, which is reap-selftest's standard;
 # the false positives are RUN there too, because a case that is secretly a typo passes for the
 # wrong reason. IN `check`, NEVER IN THE GIT HOOK: it writes a temp repository (D18).

@@ -322,6 +322,26 @@ CHECKS = (
         "governed_by": ("D16", "D18"),
     },
     {
+        "target": "mutate-anchors",
+        "runs": "python3 scripts/mutate-guards.py --verify-anchors",
+        "asserts": "Every mutation in `scripts/mutate-guards.py` still has its anchor text "
+                   "present exactly once in the guard it targets. 28 arms over 5 guards, in "
+                   "0.03s. THE ROT CHECK AND NOT THE PROOF: `make mutate-guards` is what runs "
+                   "the mutations, at 190s, and is off every list for that reason. This is the "
+                   "half that catches a guard reworded past its own mutation — the corpus goes "
+                   "on reporting a count while proving nothing, which is precisely how the "
+                   "PROSE arm counts rotted (the sentence at :378 in this file says its own "
+                   "number was wrong once). A behaviour-preserving reword of one anchored line "
+                   "takes this from 28 verified to `1 of 28 stale`, exit 1.",
+        "needs": ("python3",),
+        "writes": "",
+        "commit_path": False,
+        "why_off_commit_path": "Not the toolchain and not the runtime — it needs a bare python3 "
+                               "and costs 0.03s. The commit path is two checks by choice.",
+        "gates": True,
+        "governed_by": ("D18", "D173"),
+    },
+    {
         "target": "githooks-selftest",
         "runs": "bash scripts/githooks-selftest.sh",
         "asserts": "D42's two hooks over main, exercised in a bare repo and a clone built for "
