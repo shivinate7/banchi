@@ -9253,24 +9253,19 @@ def _order_stamps(numbers: Sequence[str]) -> Tuple[int, Dict[str, Tuple[str, ...
     if not found:
         return len(ledger.orders), {}
 
-    # THE SAME SEQUENCE `do_orders` RESOLVES IN, and the same reason: `Ledger.unfulfilled`
-    # and `pipeline/orders.py:order_sequence` sort oldest-placed first with a missing stamp
-    # LAST, so the screen deciding who gets the last copy and the label naming where it is
-    # cannot disagree about which order comes first.
+    # THE SAME SEQUENCE `do_orders` RESOLVES IN, so the label naming where a copy is cannot
+    # disagree with the screen about which order comes first — `resolve_all`'s own
+    # `order_sequence` sorts oldest-placed first with a missing stamp LAST, and this mirrors
+    # it for the same determinism reason rather than for any priority it used to imply.
     sequence = sorted(
         ledger.orders.values(),
         key=lambda record: (record.placed_at is None, record.placed_at or "", record.key),
     )
-    # THE TERMINAL OVERRIDE, exactly as `do_orders` applies it and for the same reason: this
-    # docstring already requires the two resolutions to agree, and a Canceled or
-    # already-Shipped order left in this pool would compete for a copy a live order needs —
-    # D113's own measured bug, one register down. See `store/orders.py:is_terminal_status`.
-    open_keys = {
-        record.key
-        for record in ledger.unfulfilled()
-        if not order_store.is_terminal_status(record.status)
-    }
-    open_records = [record for record in sequence if record.key in open_keys]
+    # NO TERMINAL OVERRIDE HERE. Every record that still OWES copies is resolved, terminal
+    # status or not — see `do_orders` for why the old override existed (D113's measured
+    # priority bug) and why dropping the exclusive draw makes it structurally impossible now.
+    resolve_keys = {record.key for record in ledger.unfulfilled()}
+    open_records = [record for record in sequence if record.key in resolve_keys]
     asked = [_engine_order(record, ledger) for record in open_records]
     behind = {id(order): record for order, record in zip(asked, open_records)}
     resolution = order_engine.resolve_all(snapshot.inventory, asked)
@@ -9498,11 +9493,13 @@ def do_orders() -> dict:
     than two is what keeps the order list and the resolution from disagreeing: read twice and
     a sale landing between them would show a card both on hand and gone.
 
-    THE OPEN ORDERS ARE RESOLVED IN ONE CALL AND THERE IS DELIBERATELY NO `resolve_one`.
-    `pipeline/orders.py` refuses to offer one, and its header says why: a per-order resolver
-    cannot see what another order has already been promised, so it hands two buyers the same
-    physical card and reports success twice. The picker walks to box 3 card 3 twice and the
-    second envelope goes out short.
+    EVERY ORDER THAT STILL OWES COPIES IS RESOLVED IN ONE CALL, TERMINAL STATUS OR NOT
+    (amended 2026-09-16, on the owner's fungibility ruling). `pipeline/orders.py` still
+    offers no `resolve_one`, but not for its old reason: with the exclusive draw dropped, a
+    per-order resolve and an all-orders resolve produce the same answer for the order asked
+    about, because no order's line withholds a copy from another order's line any more. One
+    pass remains for ordinary efficiency — one snapshot, one per-SKU cache — not because a
+    second pass would double-promise a card.
 
     NO `paperwork=` IS PASSED, AND THE COST IS NAMED RATHER THAN HIDDEN. The run-side backup
     would come from `cli/resolve.py:paperwork_for`, which takes ONE run, reads its
@@ -9527,20 +9524,30 @@ def do_orders() -> dict:
         ledger.orders.values(),
         key=lambda record: (record.placed_at is None, record.placed_at or "", record.key),
     )
-    # THE TERMINAL OVERRIDE (D63 amended 2026-09-13). `unfulfilled` is still the ledger's own
-    # answer to "does this order still owe copies"; a status this store RECOGNISES as
-    # terminal removes it from `open_keys` regardless, so a Canceled or already-Shipped order
-    # neither draws `open: true` on the screen NOR competes for a physical copy in the
-    # resolution below — which is the correctness bug D113 measured (a shipped order, being
-    # older, took a copy ahead of a live one). An unrecognised status changes nothing here:
-    # `is_terminal_status` answers `False` for it, so the order stays exactly as open as
-    # `unfulfilled` alone would have made it.
+    # `open_keys` STILL DECIDES `open: true` ON THE SCREEN (D63 amended 2026-09-13), and
+    # THAT HALF IS UNCHANGED: a status this store RECOGNISES as terminal
+    # (`order_store.is_terminal_status`) never draws as open, regardless of `unfulfilled`.
+    # An unrecognised status changes nothing: `is_terminal_status` answers `False` for it,
+    # so the order stays exactly as open as `unfulfilled` alone would have made it.
     open_keys = {
         record.key
         for record in ledger.unfulfilled()
         if not order_store.is_terminal_status(record.status)
     }
-    open_records = [record for record in sequence if record.key in open_keys]
+    # WHAT IS RESOLVED IS A DIFFERENT, WIDER SET AS OF 2026-09-16, AND THE OLD TERMINAL
+    # EXCLUSION FROM RESOLUTION IS GONE. It existed only to stop a Canceled or
+    # already-Shipped order from competing for a physical copy a live order needed — D113's
+    # measured bug, a shipped order taking a copy ahead of a live one because it was older.
+    # That hazard is now structurally impossible: `pipeline/orders.py` no longer draws
+    # copies exclusively (the owner's fungibility ruling — every order is offered every
+    # available copy, and the guard against one card reaching two buyers moved to the
+    # WRITE, `store/orders.py:record_pull`'s `CopyAlreadyPulled`). So every record that
+    # still owes copies is resolved here, terminal or not, and the terminal ones still draw
+    # `open: false` off `open_keys` above — resolving a terminal order gives its own picker
+    # (the stamps route, a re-opened dispute) real picks instead of an empty resolution, and
+    # costs nothing else on screen because `open` is what `#/orders` branches on.
+    resolve_keys = {record.key for record in ledger.unfulfilled()}
+    open_records = [record for record in sequence if record.key in resolve_keys]
 
     asked = [_engine_order(record, ledger) for record in open_records]
     # KEYED BY OBJECT IDENTITY rather than by order number, because `order_sequence` sorts

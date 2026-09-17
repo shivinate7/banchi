@@ -51,6 +51,7 @@ function orderRow(over: Partial<OrderRow>): OrderRow {
     wanted: 2,
     recorded: 0,
     open: true,
+    terminal: false,
     lines: [],
     progress: [],
   }

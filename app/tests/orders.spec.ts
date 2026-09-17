@@ -1772,3 +1772,223 @@ test('the reconcile press sends the cutoff shown on screen, and the receipt carr
     undo: true,
   })
 })
+
+/* ------------------------------------------------------------------------------------- 21
+ *
+ * THE BUYER SEARCH. Filters `.orders-index-row` by name or order number, folded the same way
+ * `orderBuyers.ts:buyerKeyOf` folds a group key, composes as an AND with every other control,
+ * and reaches the Earlier fold — the one place a name search actually earns its keep, since a
+ * Done buyer past the 7-day cut is otherwise unreachable except by scrolling every row.
+ */
+
+test('the search narrows the buyer list by name, case- and space-insensitively', async ({ page }) => {
+  await open(page, { orders: threeBuyerPayload() })
+  await expect(page.locator('.orders-index-row')).toHaveCount(3)
+
+  const search = page.locator('.orders-search-input')
+  await search.fill('  ALICE ')
+  await expect(page.locator('.orders-index-row')).toHaveCount(1)
+  await expect(page.locator('.orders-index-row')).toContainText('Alice')
+
+  await search.fill('')
+  await expect(page.locator('.orders-index-row')).toHaveCount(3)
+})
+
+test('the search matches an order number too', async ({ page }) => {
+  await open(page, { orders: threeBuyerPayload() })
+  await page.locator('.orders-search-input').fill('c0003')
+  await expect(page.locator('.orders-index-row')).toHaveCount(1)
+  await expect(page.locator('.orders-index-row')).toContainText('Carol')
+})
+
+test('the search composes with the status select — an AND, never a second gate', async ({ page }) => {
+  await open(page, { orders: threeBuyerPayload() })
+  await page.locator('.orders-status-select').selectOption('Ready to Ship')
+  await expect(page.locator('.orders-index-row')).toHaveCount(2) // Carol, Alice
+
+  await page.locator('.orders-search-input').fill('bob')
+  await expect(page.locator('.orders-index-row')).toHaveCount(0)
+})
+
+test('the search reaches the Earlier fold, so a Done buyer past the 7-day cut is findable by name', async ({
+  page,
+}) => {
+  const stale = order({
+    buyer: 'Grace Hopper',
+    open: false,
+    recorded: 1,
+    placed_at: '2020-01-01T00:00:00+00:00',
+    progress: [{ sku: SKU, wanted: 1, recorded: 1, outstanding: 0, over: 0, copies: [], pulled: [], at: null, by_hand: 0, reason: null, declared_kind: null, closed_at: null, closed_reason: null }],
+  })
+  await open(page, { orders: payloadOf([order(), stale], [{ key: `TCGplayer:${ORDER_NUMBER}`, number: ORDER_NUMBER, complete: false, outstanding: 1, lines: [line()] }]) })
+
+  await page.locator('main.orders').getByRole('button', { name: 'Done' }).click()
+  await page.locator('.orders-search-input').fill('hopper')
+  const earlier = page.locator('.orders-earlier')
+  await expect(earlier).toBeVisible()
+  await expect(earlier).toContainText('Grace Hopper')
+})
+
+test('a search with nothing left says so by name and offers to clear it', async ({ page }) => {
+  await open(page, { orders: threeBuyerPayload() })
+  await page.locator('.orders-search-input').fill('nobody named this')
+  await expect(page.locator('main.orders')).toContainText('No buyer matches')
+  await expect(page.locator('main.orders')).toContainText('nobody named this')
+
+  const clear = page.locator('.bn-empty').getByRole('button', { name: 'Clear search' })
+  await clear.click()
+  await expect(page.locator('.orders-search-input')).toHaveValue('')
+  await expect(page.locator('.orders-index-row')).toHaveCount(3)
+})
+
+test('a changed search is an explicit retake — no stale chip offered', async ({ page }) => {
+  await open(page, { orders: threeBuyerPayload() })
+  expect(await buyerOrder(page)).toEqual(['Carol', 'Alice', 'Bob'])
+
+  await page.locator('.orders-search-input').fill('a')
+  await expect(page.locator('.orders-resort-slot .orders-resort')).toHaveCount(0)
+})
+
+/* ------------------------------------------------------------------------------------- 22
+ *
+ * A DONE ORDER THAT STILL OWES COPIES OPENS BACK UP. `_order_row`'s `terminal` field, plus
+ * what is still owed, is the discriminator — never the `status` string (D114). An order the
+ * marketplace calls done because every copy already went stays exactly as closed as before.
+ */
+
+function terminalOwingOrder(over: Partial<OrderRow> = {}): OrderRow {
+  return order({ open: false, wanted: 3, recorded: 1, status: 'Shipped', terminal: true, ...over })
+}
+
+test('a done order with nothing owed still draws nothing — unchanged from before this fix', async ({ page }) => {
+  const closed = order({ open: false, wanted: 1, recorded: 1, status: 'Shipped', terminal: true })
+  await open(page, { orders: payloadOf([closed], []) })
+  await page.locator('main.orders').getByRole('button', { name: 'Done' }).click()
+  await expect(page.locator('main.orders')).toContainText('Done')
+  await expect(page.locator('.orders-lines')).toHaveCount(0)
+  await expect(page.getByRole('button', { name: 'Pull' })).toHaveCount(0)
+})
+
+test('a terminal order that still owes copies, with no answer yet, shows a way to try again rather than nothing', async ({
+  page,
+}) => {
+  const owing = terminalOwingOrder()
+  await open(page, { orders: payloadOf([owing], []) })
+  await page.locator('main.orders').getByRole('button', { name: 'Done' }).click()
+  await expect(page.locator('main.orders')).toContainText('Not resolved in this read.')
+  await expect(page.getByRole('button', { name: 'Try again' })).toBeVisible()
+})
+
+test('a terminal order that still owes copies, once resolved, draws its lines and a Pull button', async ({
+  page,
+}) => {
+  const owing = terminalOwingOrder({ key: `TCGplayer:${ORDER_NUMBER}`, number: ORDER_NUMBER, lines: [line().line] })
+  const resolved: ResolvedOrder = { key: `TCGplayer:${ORDER_NUMBER}`, number: ORDER_NUMBER, complete: false, outstanding: 1, lines: [line()] }
+  await open(page, { orders: payloadOf([owing], [resolved]) })
+
+  await page.locator('main.orders').getByRole('button', { name: 'Done' }).click()
+  await expect(page.locator('.orders-lines')).toHaveCount(1)
+  await expect(page.getByRole('button', { name: 'Pull' })).toBeVisible()
+})
+
+/* ------------------------------------------------------------------------------------- 23
+ *
+ * "WALK THE BOXES" COVERS EVERY UNFULFILLED ORDER, NOT ONLY THE OPEN ONES. The owner's own
+ * words opening this task: "I need the ability to walk orders even if it already shows
+ * shipped ... when I do the order walk, I see all copies of the card". `buildWalk` now takes
+ * `ownsAWalkableBody`'s union — open, or terminal-and-still-owing — at both call sites, and
+ * `walkKeys`/`passComplete` are re-derived off the SAME predicate so a terminal order does not
+ * read as "complete in this pass" the instant the pass opens.
+ */
+
+const TERM_NUMBER = 'T0001'
+const TERM_KEY = `TCGplayer:${TERM_NUMBER}`
+const TERM_SKU = '9000001'
+
+/** A terminal-and-still-owing order, WITH a resolved answer carrying one pickable copy in a
+ *  box distinct from the default fixture's, so the two never collide in the walk's own
+ *  box/section grouping. */
+function terminalOwingWalkable(over: Partial<OrderRow> = {}): { row: OrderRow; resolved: ResolvedOrder } {
+  const theLine = line({
+    order: TERM_NUMBER,
+    order_key: TERM_KEY,
+    sku: TERM_SKU,
+    line: { ...line().line, sku: TERM_SKU, name: 'Terminal Treasure' },
+    picks: [pick({ box: 5, index: 50, capture_id: 'cap-term', card_name: 'Terminal Treasure', place: place({ box: 5, box_name: 'Box Five', label: 'Box 5 · Section 1 · Card 1' }) })],
+  })
+  const row = terminalOwingOrder({ key: TERM_KEY, number: TERM_NUMBER, buyer: 'Nora Terminal', lines: [theLine.line], ...over })
+  const resolved: ResolvedOrder = { key: TERM_KEY, number: TERM_NUMBER, complete: false, outstanding: 1, lines: [theLine] }
+  return { row, resolved }
+}
+
+test('the walk includes a terminal-but-owing order once resolved, and counts it in the head figure', async ({
+  page,
+}) => {
+  const term = terminalOwingWalkable()
+  await open(page, {
+    orders: payloadOf(
+      [order(), term.row],
+      [{ key: `TCGplayer:${ORDER_NUMBER}`, number: ORDER_NUMBER, complete: false, outstanding: 1, lines: [line()] }, term.resolved],
+    ),
+  })
+  await page.locator('main.orders').getByRole('button', { name: 'Walk the boxes' }).click()
+  await expect(page.locator('.orders-walk-figure')).toContainText('2 unfulfilled orders')
+  await expect(page.locator('.orders-walk')).toContainText('Terminal Treasure')
+  await expect(page.getByRole('button', { name: 'Pull' })).toHaveCount(2)
+})
+
+test('a fully-pulled terminal order (nothing owed) never enters the walk', async ({ page }) => {
+  const settled = order({ open: false, wanted: 1, recorded: 1, status: 'Shipped', terminal: true })
+  await open(page, { orders: payloadOf([settled], []) })
+  await page.locator('main.orders').getByRole('button', { name: 'Walk the boxes' }).click()
+  await expect(page.locator('main.orders')).toContainText('Nothing left to walk')
+  await expect(page.getByRole('button', { name: 'Pull' })).toHaveCount(0)
+})
+
+test('a terminal order does not read as complete the instant the pass opens, only once its copy is pulled', async ({
+  page,
+}) => {
+  /* A SECOND, ALWAYS-OPEN ORDER IS NOT DECORATION (same reason as the older "capture server
+     restart" case above): with only the terminal order, pulling its one copy leaves the walk
+     with no rows at all, `WalkView` draws its EmptyState BEFORE the head, and the pill's absence
+     would be indistinguishable from the head being gone entirely. */
+  const term = terminalOwingWalkable()
+  let served = payloadOf(
+    [order(), term.row],
+    [{ key: `TCGplayer:${ORDER_NUMBER}`, number: ORDER_NUMBER, complete: false, outstanding: 1, lines: [line()] }, term.resolved],
+  )
+  await open(page, { orders: served })
+  await page.route(/\/orders$/, async (route) => {
+    if (route.request().method() !== 'GET') return route.fallback()
+    return route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(served) })
+  })
+
+  await page.locator('main.orders').getByRole('button', { name: 'Walk the boxes' }).click()
+  /* NOTHING FINISHED YET — the pass just opened, and the order was terminal from the start. */
+  await expect(page.locator('.orders-walk-figure .bn-pill')).toHaveCount(0)
+
+  /* NOW ITS OWN COPY IS RECORDED, wanted <= recorded, and it drops out of `ownsAWalkableBody`. */
+  served = payloadOf(
+    [order(), { ...term.row, recorded: term.row.wanted }],
+    [{ key: `TCGplayer:${ORDER_NUMBER}`, number: ORDER_NUMBER, complete: false, outstanding: 1, lines: [line()] }],
+  )
+  await page.locator('.orders-walk li', { hasText: 'Terminal Treasure' }).getByRole('button', { name: 'Pull' }).click()
+  await expect(page.locator('.orders-walk-figure .bn-pill')).toHaveText('1 order complete in this pass')
+})
+
+test('a terminal order sharing a buyer with nothing else draws exactly one Pull per copy, never two', async ({
+  page,
+}) => {
+  const term = terminalOwingWalkable()
+  await open(page, { orders: payloadOf([term.row], [term.resolved]) })
+
+  /* THE GROUP IS DONE-ONLY (`group.open.length === 0`), so it sits behind the Done chip, same
+     as any other terminal buyer. */
+  await page.locator('main.orders').getByRole('button', { name: 'Done' }).click()
+  await expect(page.locator('main.orders')).toContainText('Nora Terminal')
+
+  /* THE MERGED WALK ITSELF MUST BE THE ONE DRAWING IT — not merely "one Pull button somewhere",
+     which the "By order" fold alone could also produce if the widening regressed. */
+  await expect(page.locator('.orders-buyer-walk')).toContainText('Terminal Treasure')
+  await expect(page.getByRole('button', { name: 'Pull' })).toHaveCount(1)
+})

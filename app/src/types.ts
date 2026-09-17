@@ -2899,6 +2899,13 @@ export type OrderRow = {
   wanted: number
   recorded: number
   open: boolean
+  /** The MARKETPLACE's own word that this order is finished — `server/capture_server.py:
+   *  _order_row` emits `order_store.is_terminal_status(record.status)` unconditionally, never
+   *  the `status` string itself (D114). Distinct from `open`, which is the LEDGER's answer to
+   *  "does this still owe copies": a `terminal` order can still owe copies when TCGplayer
+   *  reports it shipped before every line was pulled here, which is exactly the case `open`
+   *  alone cannot tell a screen about. */
+  terminal: boolean
   lines: OrderLineWire[]
   progress: OrderLineProgress[]
 }

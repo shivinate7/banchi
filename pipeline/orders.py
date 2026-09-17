@@ -15,11 +15,11 @@ WHAT THIS MODULE IS NOT ALLOWED TO DO, and each of the five is a defect it was w
 against rather than a principle it admires:
 
   IT RESOLVES EVERY OPEN ORDER IN ONE PASS.  `resolve_all` is the entry point and
-  `resolve_one` does not exist. Resolving per order takes the first `quantity` copies of
-  `copies_on_hand` every time, so two open orders for one SKU are handed THE SAME PHYSICAL
-  CARDS and both report success — a picker walks to box 3 card 3 twice and the second
-  envelope goes out short, or does not go out at all. One pass, a deterministic sequence,
-  and a SHARED per-SKU pool is the only shape that cannot do that.
+  `resolve_one` does not exist — NOT, as of 2026-09-16, because a second pass could
+  double-promise a card: the pool is no longer exclusive, so any number of passes over an
+  unchanged snapshot agree with each other. One pass is kept for the ordinary reasons —
+  one per-SKU cache, one consistent snapshot for the whole answer — and a caller that wants
+  one order's answer resolves them all and reads `for_order`.
 
   IT STORES NOTHING.  Every answer here is recomputed from the `Inventory` it was handed.
   D10 ruling 1 lets a junk capture be deleted from the middle of a box, which slides every
@@ -41,11 +41,13 @@ against rather than a principle it admires:
 
   ITS CANDIDATES ARE A HINT, NEVER A PERMISSION SET.  This module never computes a slice
   of copies and then refuses anything outside it. A copy is valid for a line when it holds
-  the line's SKU, is not in a terminal state, is a located game, and has not already been
-  recorded against another line — four properties of the copy, none of them an address.
-  Slicing first and refusing afterwards re-imposes an address on a fungible copy, which is
-  the defect D7's own amendment overruled: `live` is a quantity, not a set of addresses,
-  and any three of seven identical cards fill an order for three.
+  the line's SKU, is not in a terminal state and is a located game — three properties of
+  the copy, none of them an address and none of them a fact about any OTHER line
+  (2026-09-16: "already spoken for" was a fourth property until the owner ruled every copy
+  fungible, and it is gone). Slicing first and refusing afterwards re-imposes an address on
+  a fungible copy, which is the defect D7's own amendment overruled: `live` is a quantity,
+  not a set of addresses, and any number of identical cards are offered to any number of
+  orders that want one.
 
 THE SKU IS COERCED AT THE BOUNDARY, AND WITHOUT THAT NOTHING WORKS AT ALL. `Card.sku` is
 a string, because it comes out of a CSV cell; a JSON order payload carries the same value
@@ -263,6 +265,15 @@ class LineResolution:
     them is available, and the operator needs to know whether that is because they sold,
     because they were retired (D26 — a departure with no sale, so "already shipped" would
     be a lie), or because the game is pooled (D24 — a code card is a count, not a place).
+
+    `picks` IS EVERY CANDIDATE COPY, NOT AN ALLOCATION, AS OF 2026-09-16. It used to stop
+    at `line.quantity`; now it is every copy `_Draw.available` offers, so `fulfilled`
+    (`len(picks)`) equals `on_hand` rather than `min(wanted, on_hand)`. `outstanding` is
+    still right regardless — `max(0, wanted - fulfilled)` reads as `max(0, wanted -
+    on_hand)` once the two are equal, which is exactly "how many copies short of the
+    store's own count" — but a reader should not take `fulfilled` to mean "how many this
+    order was actually given": nothing here allocates any more (D97, one register down —
+    a copy map ranks and never picks).
     """
 
     order: str
@@ -284,7 +295,12 @@ class LineResolution:
 
     @property
     def fulfilled(self) -> int:
-        """How many copies this line found. A COUNT, never a set of addresses."""
+        """How many copies this line found. A COUNT, never a set of addresses.
+
+        Equal to `on_hand` since `picks` stopped being capped at `wanted` (2026-09-16) —
+        this counts every candidate offered, not a number of copies actually given to
+        this order. See the class docstring.
+        """
         return len(self.picks)
 
     @property
@@ -353,11 +369,16 @@ class Resolution:
 
 
 def order_sequence(orders: Iterable[Order]) -> Tuple[Order, ...]:
-    """The deterministic order two orders competing for one SKU are served in.
+    """The deterministic order `resolve_all` walks orders in and reports them back in.
 
-    Oldest `placed_at` first, then the order number — so the answer does not depend on
-    whatever sequence a feed happened to hand them over in, and re-running the resolver
-    over an unchanged store produces the identical allocation.
+    NO LONGER A PRIORITY ORDERING — with the exclusive draw gone (the owner's fungibility
+    ruling, 2026-09-16), no order's position in this sequence changes what it is offered,
+    because nothing an earlier order draws is withheld from a later one. What this still
+    buys is determinism of the OUTPUT: oldest `placed_at` first, then the order number, so
+    `Resolution.orders` does not depend on whatever sequence a feed happened to hand them
+    over in, and re-running the resolver over an unchanged store reports the same answer in
+    the same order every time — which is what lets a screen and this module agree about
+    which order is "first" without either one guessing at the other's walk.
 
     STRING COMPARISON ON `placed_at`, which is exact for the stamps this project writes:
     `store/master.py:now()` is UTC ISO-8601, so lexical order is time order, and
@@ -411,12 +432,15 @@ def _located(card: master.Card) -> bool:
 
 
 class _Draw:
-    """The shared pool, drawn down once across every order in the pass.
+    """The shared pool, read fresh by every order in the pass.
 
-    One instance per `resolve_all`. It holds a set of identities already recorded against
-    a line and nothing else — no per-line slice, no reservation table, no addresses. That
-    absence is the point: a copy is valid because of what it IS, and the only thing the
-    pass remembers is which ones have been spoken for.
+    One instance per `resolve_all`. It caches each SKU's copies once, per the store's own
+    ruling on fungibility (the owner, 2026-09-16): *"All orders should not 'claim' or take
+    priority/claim any item, because they're all fungible."* No line reserves a copy against
+    another line's draw, no reservation table, no addresses — every line asks the same
+    question of the same pool and gets the same answer. What decides whether a card actually
+    goes to one buyer or another is the WRITE that pulls it (`store/orders.py:record_pull`'s
+    `CopyAlreadyPulled`), not anything this pass remembers.
     """
 
     def __init__(
@@ -425,7 +449,6 @@ class _Draw:
         paperwork: Sequence[PaperworkEntry] = (),
     ) -> None:
         self._inventory = inventory
-        self._taken: set = set()
         self._copies: Dict[str, Tuple[_Copy, ...]] = {}
         self._paper: Dict[str, List[PaperworkEntry]] = {}
         for entry in paperwork:
@@ -475,8 +498,12 @@ class _Draw:
         """The copies a line may draw from: here, not departed, and at a place.
 
         Not filtered by which line, by which order, or by how many are wanted — that is
-        the hint-not-a-permission-set rule. What a line takes is decided by walking this
-        and skipping what is already spoken for.
+        the hint-not-a-permission-set rule, and it now applies without exception: every
+        line sees this same list and draws from the front of it, and no earlier line's
+        draw removes anything from what a later line is offered (the owner's fungibility
+        ruling, 2026-09-16 — every order is free to be offered any copy, and the guard
+        against one physical card reaching two buyers is the WRITE-time refusal in
+        `store/orders.py:record_pull`, never this walk).
         """
         return tuple(
             copy
@@ -485,7 +512,18 @@ class _Draw:
         )
 
     def line(self, order: Order, line: OrderLine) -> LineResolution:
-        """Resolve one line against what the pass has not already given away."""
+        """Resolve one line to every candidate copy on hand, ranked and never rationed.
+
+        `picks` IS NOT CAPPED AT `line.quantity`, AND THAT IS DELIBERATE (the owner,
+        2026-09-16 — *"widen the walk itself too"*). D97 already rules that a copy map
+        ranks and never picks; this is the same ruling one register down. A line wanting
+        one copy of a SKU the store holds five of offers all five as candidates, because
+        the operator is free to pull whichever one is in front of their hand — capping the
+        list at the buyer's quantity was what sent them to exactly one drawer for a card
+        the store holds all over the place. Quantity still governs whether the LINE reads
+        `resolved` or `short` (see `_reason`); it no longer governs how many copies are
+        offered to choose from.
+        """
         if line.kind != LINE_KIND_SINGLE:
             # CHECKED BEFORE ANY LOOKUP, and the order matters. An accessory's SKU is not
             # a card's SKU and never will be, so asking the inventory about it produces
@@ -495,25 +533,23 @@ class _Draw:
             return LineResolution(order=order.number, line=line, reason=NOT_A_SINGLE)
 
         sku = line.sku
-        picks: List[Pick] = []
-        for copy in self.available(sku):
-            if len(picks) >= line.quantity:
-                break
-            key = _identity(copy.card)
-            if key in self._taken:
-                continue
-            self._taken.add(key)
-            picks.append(
-                Pick(
-                    box=copy.card.box,
-                    index=copy.card.index,
-                    capture_id=copy.card.capture_id,
-                    source=copy.source,
-                    run=copy.run,
-                )
+        picks: List[Pick] = [
+            Pick(
+                box=copy.card.box,
+                index=copy.card.index,
+                capture_id=copy.card.capture_id,
+                source=copy.source,
+                run=copy.run,
             )
+            for copy in self.available(sku)
+        ]
 
         every = self.copies(sku)
+        # `on_hand == len(picks)` NOW, BY CONSTRUCTION — `picks` no longer stops short of
+        # `available(sku)`, so this second walk is redundant work rather than a different
+        # answer. Kept as its own call rather than reused from `picks` so `available` stays
+        # the one place "on hand" is defined; a future re-introduction of a cap on `picks`
+        # must not silently make `on_hand` wrong by association.
         on_hand = len(self.available(sku))
         breakdown = {
             "sold": len([c for c in every if c.card.state == master.SOLD]),
@@ -530,7 +566,7 @@ class _Draw:
         return LineResolution(
             order=order.number,
             line=line,
-            reason=self._reason(sku, line.quantity, len(picks), on_hand, every),
+            reason=self._reason(sku, line.quantity, on_hand, every),
             picks=tuple(picks),
             on_hand=on_hand,
             **breakdown,
@@ -540,26 +576,45 @@ class _Draw:
         self,
         sku: str,
         wanted: int,
-        fulfilled: int,
         on_hand: int,
         every: Sequence[_Copy],
     ) -> str:
         """Which of the six words this line earned. Disjoint by construction.
 
-        `short` COVERS THE ZERO CASE WHERE THE COPIES EXIST AND ARE SPOKEN FOR, and that
-        is worth stating because it is the one outcome the six words do not name directly.
-        Two orders for three copies of a SKU there are three of: the first resolves, the
-        second finds nothing — and the remedy is the same as any other shortfall (wait for
-        stock, or ship what is there), so it is `short` with `fulfilled` 0 and `outstanding`
-        equal to the whole line. It is deliberately NOT `no_copies_on_hand`, which means
-        the copies have LEFT and whose remedy is to stop looking; `on_hand` beside the
-        reason is what tells a screen which kind of `short` it is holding. A seventh reason
+        COMPARES `on_hand` AGAINST `wanted`, NEVER `len(picks)` — AND THAT IS THE POINT.
+        `picks` stopped being an allocation on 2026-09-16 (the owner: *"widen the walk
+        itself too"*): `_Draw.line` no longer caps it at `wanted`, so `len(picks) ==
+        on_hand` by construction and passing it through a parameter still called
+        `fulfilled` would have read as "how many copies this line was given" while
+        actually meaning "how many copies exist" — a correct answer resting on a
+        coincidence of two numbers that happen to be equal today. This function takes
+        `on_hand` directly and says what it means: does the store hold at least as many
+        copies as the line wants.
+
+        `short` MEANS ONLY A GENUINE SHORTFALL: the store holds fewer copies than this
+        line wants, full stop. Until 2026-09-16 this docstring described a second case —
+        two orders competing for a smaller pool, where the pass had already spoken for the
+        copies on an earlier order's behalf and a later order's line found nothing to draw.
+        That case cannot arise from this pass any more: the owner ruled every copy is
+        fungible and no line's draw removes anything from what another line is offered
+        (`_Draw.available`), so two orders wanting the same one card are BOTH offered it,
+        and each is `short` or `resolved` purely on whether the STORE has enough, never on
+        whether some other order got there first. The remedy is unchanged either way: wait
+        for stock, or ship what is there. It is deliberately NOT `no_copies_on_hand`, which
+        means the copies have LEFT and whose remedy is to stop looking. A seventh reason
         was the alternative and was declined: six were specified, and the fact is carried
         by a number rather than by a word nothing else in the product knows.
+
+        THE SAFETY THAT REPLACED THE OLD EXCLUSIVITY IS NOT HERE. Two orders both offered
+        the same physical card is fine at THIS layer — it is `store/orders.py:record_pull`'s
+        `CopyAlreadyPulled` that refuses the second buyer's pull once the first buyer's has
+        actually been recorded, and `held_by` on the wire is built from real recorded pulls
+        (`ledger.fulfilment`), never from anything this pass remembers. A two-orders-one-card
+        shortfall discovered at the shelf is the accepted cost of dropping the claim.
         """
-        if fulfilled >= wanted:
+        if on_hand >= wanted:
             return RESOLVED
-        if fulfilled > 0 or on_hand > 0:
+        if on_hand > 0:
             return SHORT
         if every:
             # Positions exist for this SKU and not one of them is available. `sold`,
@@ -586,12 +641,19 @@ def resolve_all(
 ) -> Resolution:
     """Resolve every open order against one inventory, in ONE pass over a shared pool.
 
-    THIS IS THE ONLY ENTRY POINT, AND THERE IS DELIBERATELY NO `resolve_one`. A per-order
+    THIS IS THE ONLY ENTRY POINT, AND THERE IS DELIBERATELY NO `resolve_one` — BUT NOT FOR
+    THE REASON THIS DOCSTRING GAVE UNTIL 2026-09-16. It used to argue that a per-order
     resolver cannot see what another order has already been promised, so it hands two
-    buyers the same physical card and reports success twice. Anything that wants one
-    order's answer resolves them all and reads the one it wanted off `for_order` — the
-    cost is a walk over the open orders, and the alternative is an envelope that cannot be
-    filled discovered at the box.
+    buyers the same physical card and reports success twice. That argument is now obsolete:
+    with the exclusivity dropped (`_Draw.available`, on the owner's fungibility ruling),
+    every order IS free to be offered the same card as every other, so a per-order resolve
+    and an all-orders resolve over an unchanged snapshot produce the identical answer for
+    the order asked about. The remaining reason for one pass is ordinary efficiency and
+    consistency, not correctness: `_Draw` caches each SKU's copies once per snapshot rather
+    than once per order, and one pass guarantees every order in the answer was read against
+    the SAME snapshot rather than against however many separate reads a caller might
+    otherwise take. Anything that wants one order's answer resolves them all and reads the
+    one it wanted off `for_order` — the cost is a walk over the open orders.
 
     `paperwork` is the run-side backup and defaults to nothing: with none, this is a pure
     card-first resolution and every reason but `sku_unknown` is still reachable.

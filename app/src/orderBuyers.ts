@@ -73,7 +73,9 @@ export type BuyerGroup = {
  *  key. `normalize('NFKC')` folds width and compatibility variants (a full-width letter, a
  *  ligature) before `toLocaleLowerCase()` folds case, so the two operations do not fight
  *  over which one runs last. */
-function foldName(name: string): string {
+/** Exported so a search box can fold a typed query the same way — one folding rule, not a
+ *  second copy of it (`orderView.ts:passesQuery`). */
+export function foldName(name: string): string {
   return name.trim().replace(/\s+/g, ' ').normalize('NFKC').toLocaleLowerCase()
 }
 
