@@ -7008,6 +7008,28 @@ COMPONENTS = [
                         "assertion. Not a harness test; it has no test of its own and is "
                         "exercised by every spec that imports it.",
                 "governed_by": ["D16", "D38", "D50", "D124"]},
+            "tests/motionSettled.ts": {
+                "does": "one helper, `settleMotion`, the sibling of `fontsReady.ts` one layer out: "
+                        "it waits until every FINITE animation in the document has reached "
+                        "`finished`, so a `boundingBox()` is never taken while `kit.css`'s "
+                        "`bn-page-in` is still running `translateY(6px)` to `none` under "
+                        "`.bn-stagger`'s per-row delay. It closes a finding that was misread "
+                        "twice: `orders.spec.ts`'s D118 guard failed about a third of the time "
+                        "and was recorded first as a flaky guard, then as a real sub-pixel "
+                        "reflow in `#/orders`. Measured 2026-09-17, both readings were wrong — "
+                        "`getBoundingClientRect` inside the page reports the gap as exactly 26px "
+                        "on every run while `boundingBox()` at the same moment reported 24.88 "
+                        "through 26.00, and with this awaited first, twelve consecutive runs "
+                        "report a drift of 0.000. Infinite-iteration animations are excluded by "
+                        "construction: a spinner never reaches `finished`, so waiting on one "
+                        "would hang rather than settle. Weakens no assertion — the two D118 "
+                        "guards it serves were tightened from a rounded comparison to a raw "
+                        "sub-pixel bound in the same change. `pricing.spec.ts`'s `settleEnter` "
+                        "delegates to it rather than keeping its own narrower copy, which asked "
+                        "`main` for its OWN animations and so could not see a staggered row "
+                        "under it at all. Not a harness test; `make design-check` runs the specs "
+                        "that import it.",
+                "governed_by": ["D16", "D50", "D118"]},
             "tests/nav.spec.ts": {
                 "does": "the shell's keyboard, and the first test this app has had of the strip "
                         "every screen sits under: D51's Cmd-arrow steps the ring in the order "

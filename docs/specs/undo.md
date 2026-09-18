@@ -15,10 +15,12 @@ not a screen change** — `#/orders` never drew a position for an already-pulled
 server computed for nobody on a request already measured at 520-580ms. The owner's ruling was
 already true on screen.
 
-**One thing this build did NOT fix, measured while integrating: DEBT30.** A D118 guard on
-`#/orders` intermittently catches a real sub-pixel reflow and reports it as a rounding
-disagreement. The reflow is on `main`, not in this build, and nothing on the commit path runs
-the test that sees it.
+**One thing this build did not fix, and it turned out not to be a defect at all.** A D118
+guard on `#/orders` failed intermittently while integrating, and was recorded as a real
+sub-pixel reflow on `main`. Measured again on 2026-09-17, that reading was wrong for the third
+time: `getBoundingClientRect` reports the gap as exactly 26px on every run, and what varied was
+a `boundingBox()` taken while `kit.css`'s `bn-page-in` was still moving the rows it measured.
+`app/tests/motionSettled.ts` waits that out, and the finding is closed.
 
 ## 1. What is in the tree today
 

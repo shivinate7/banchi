@@ -1,5 +1,6 @@
 import { test, expect, type Page, type Route } from '@playwright/test'
 import { settleFonts } from './fontsReady'
+import { settleMotion } from './motionSettled'
 import { sealEveryTest } from './shell'
 import { line, order, payloadOf, pick, place } from './routeFixtures'
 
@@ -2355,6 +2356,7 @@ test('the sentence changing on a write moves no box row beneath it (D118)', asyn
 
   await expect(page.locator('.orders-map-lede')).toHaveText('Pull 2 — 2 on hand across 2 boxes.')
   await settleFonts(page)
+  await settleMotion(page)
   const ledeBefore = await page.locator('.orders-map-lede').boundingBox()
   const stopsBefore = await page.locator('.orders-map-stops').boundingBox()
   /* THE GAP, NOT THE PAGE POSITION. A reload resets scroll, so the two boxes' absolute page `y`
@@ -2368,10 +2370,20 @@ test('the sentence changing on a write moves no box row beneath it (D118)', asyn
 
   await expect(page.locator('.orders-map-lede')).toHaveText('Pull 1 — 2 on hand across 2 boxes.')
   await settleFonts(page)
+  await settleMotion(page)
   const ledeAfter = await page.locator('.orders-map-lede').boundingBox()
   const stopsAfter = await page.locator('.orders-map-stops').boundingBox()
   const gapAfter = (stopsAfter?.y ?? 0) - (ledeAfter?.y ?? 0)
-  expect(Math.round(gapAfter), 'the box list moved relative to the sentence above it').toBe(Math.round(gapBefore))
+  /* THE RAW GAPS, NOT TWO ROUNDED ONES. `Math.round` on either side of this comparison was both
+     too loose and too tight: `24.6` against `25.4` is 0.8px of real reflow that both round to
+     `25` and pass, and `25.4` against `26` is a hair either side of a half pixel that fails.
+     THE GUARANTEE GETS TIGHTER, NOT LOOSER: the worst drift this can now wave through is 0.34px,
+     against very nearly a whole pixel before. Where rounding was tighter than that it was by
+     accident of which side of a half pixel the pair happened to land on, which is not a bound at
+     all. Measured on the rig with `settleMotion` above it, twelve consecutive runs report 26.000
+     against 26.000, drift 0.000, so the margin is headroom for a future layout rather than
+     tolerance for a known wobble; mutating the reading by 0.5px turns this red. */
+  expect(Math.abs(gapAfter - gapBefore), 'the box list moved relative to the sentence above it').toBeLessThan(0.34)
 })
 
 /* A REAL PRESS, NOT A RELOAD (item 2 of the D212 follow-up): `WalkCards`' own sentence and
@@ -2420,6 +2432,7 @@ test('a real Pull press changes the lede and the box header without changing eit
   await expect(lede).toContainText('Pull 2')
   await expect(header).toHaveText('2 copies of 1 card')
   await settleFonts(page)
+  await settleMotion(page)
   const ledeHeightBefore = (await lede.boundingBox())?.height ?? 0
   const headerHeightBefore = (await header.boundingBox())?.height ?? 0
   const ledeXBefore = (await lede.boundingBox())?.x ?? 0
@@ -2430,6 +2443,7 @@ test('a real Pull press changes the lede and the box header without changing eit
   await expect(lede).toContainText('Pull 1')
   await expect(header).toHaveText('1 card')
   await settleFonts(page)
+  await settleMotion(page)
   const ledeHeightAfter = (await lede.boundingBox())?.height ?? 0
   const headerHeightAfter = (await header.boundingBox())?.height ?? 0
   const ledeXAfter = (await lede.boundingBox())?.x ?? 0
@@ -2440,9 +2454,13 @@ test('a real Pull press changes the lede and the box header without changing eit
      leaving, not the reflow this case is about. What has to hold, on the SAME single-line
      sentence and the SAME single-line header, is that neither one grew or shrank a pixel from
      changing what it says — the min-height reservation `.orders-map-lede` already carries. */
-  expect(Math.round(ledeHeightAfter), 'the lede changed height across the press').toBe(Math.round(ledeHeightBefore))
-  expect(Math.round(headerHeightAfter), 'the box header changed height across the press').toBe(Math.round(headerHeightBefore))
-  expect(Math.round(ledeXAfter), 'the lede moved horizontally, so something beside it changed shape').toBe(Math.round(ledeXBefore))
+  /* RAW, FOR THE REASON THE CASE ABOVE CARRIES IN FULL: rounding a sub-pixel measurement hides
+     up to a whole pixel of real movement and fails on a fifth of one that straddles a boundary.
+     Same third-of-a-pixel bound, same direction of travel — tighter than the rounding it
+     replaces, not looser. */
+  expect(Math.abs(ledeHeightAfter - ledeHeightBefore), 'the lede changed height across the press').toBeLessThan(0.34)
+  expect(Math.abs(headerHeightAfter - headerHeightBefore), 'the box header changed height across the press').toBeLessThan(0.34)
+  expect(Math.abs(ledeXAfter - ledeXBefore), 'the lede moved horizontally, so something beside it changed shape').toBeLessThan(0.34)
 })
 
 /* -------------------------------------------------------------------------------------- walk plan */

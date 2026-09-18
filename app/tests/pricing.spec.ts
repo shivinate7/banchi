@@ -1,5 +1,6 @@
 import { test, expect, type Locator, type Page } from '@playwright/test'
 import { settleFonts } from './fontsReady'
+import { settleMotion } from './motionSettled'
 import { sealEveryTest } from './shell'
 
 import type {
@@ -622,10 +623,13 @@ async function open(
  *  that had not settled yet. It weakens nothing: no threshold moves, and a bar that really is
  *  punched through is still punched through once it has stopped. */
 async function settleEnter(page: Page): Promise<void> {
-  await page.waitForFunction(() => {
-    const main = document.querySelector('main')
-    return main !== null && main.getAnimations().every((one) => one.playState === 'finished')
-  })
+  /* THIS USED TO ASK `main` FOR ITS OWN ANIMATIONS, which is `main`'s slide and nothing inside
+     it. `getAnimations()` on an element is not a subtree walk, so every staggered row under it
+     was invisible to this wait. `motionSettled.ts` asks the DOCUMENT and excludes the looping
+     ones, which is the same argument reaching the rest of the page; its header carries the
+     measurement that earned it. Strictly more is waited for, so nothing that passed can start
+     failing for having settled too little. */
+  await settleMotion(page)
 }
 
 /** A reading in the shape `server/pipeline_routes.py:do_pipeline_history` answers.
