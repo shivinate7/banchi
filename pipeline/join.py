@@ -1486,7 +1486,10 @@ class Catalog:
         #
         # SEALED PRODUCT SURVIVES and is not an exception to the rule so much as outside it —
         # see `tcgcsv.SEALED_CONDITION`, which carries the argument and the measurement.
-        conditions = {str(v) for v in dict(entry["condition_by_finish"]).values()}
+        # `games.near_mint_conditions`, not restated here — see its own docstring
+        # (docs/specs/card-variants.md section 3b) for why this expression now lives in
+        # exactly one place rather than three.
+        conditions = games.near_mint_conditions(game)
         conditions.add(tcgcsv.SEALED_CONDITION)
 
         def this_game(row) -> bool:
@@ -1725,6 +1728,13 @@ class SkuMatch:
     @property
     def set_name(self) -> str:
         return self.row.get(tcgcsv.SET_COLUMN, "")
+
+    @property
+    def rarity(self) -> str:
+        """The catalogue's own rarity for this row (D-the-set-is-a-stored-fact-and-the-hint-was-never-one).
+        Stored beside `set_name` at the same write and for the same reason: both are read off
+        the row `sku` already resolved to, not re-derived or asked for."""
+        return self.row.get(tcgcsv.RARITY_COLUMN, "")
 
     @property
     def name(self) -> str:

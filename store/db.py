@@ -109,7 +109,16 @@ PHOTOS_RELOCATED = "photos_relocated"
 # renumbers its own — the D140 rule for decision ids, applied to schema versions, and the
 # same shape `store/db.py`'s own 3->4 comment already names as precedent. `_add_search_index`
 # builds the FTS5 index that replaces `do_search`'s O(cards) walk.
-SCHEMA_VERSION = 7
+#
+# EIGHT, FOR D-the-set-is-a-stored-fact-and-the-hint-was-never-one. `_add_set_columns` adds
+# `set_name` and `rarity` to `cards` and sweeps the 99 `UNL` rows from 2026-08-29 to
+# `Unleashed` — the DDL and the sweep, which cost nothing to run on every open. Filling the
+# two new columns for cards the store already holds is a SEPARATE, re-runnable step
+# (`./pkmnscan cards variants --write`), never bound to a schema version: it resolves a SKU
+# against whatever export happens to be on disk, which can change from one run to the next,
+# and a migration that ran once at open time could never re-answer a card whose export
+# arrived later.
+SCHEMA_VERSION = 8
 
 # The six files a legacy store is made of, and the one that is a log rather than a document.
 LEGACY_INVENTORY = "inventory.json"
@@ -133,6 +142,11 @@ TABLES: Dict[str, Tuple[str, ...]] = {
     "cards": (
         "box", "idx", "state", "sku", "condition", "capture_id", "name", "number", "game",
         "set_hint", "run", "captured_at", "state_at", "cid",
+        # D-the-set-is-a-stored-fact-and-the-hint-was-never-one: the catalogue's own answer,
+        # written at the moment a SKU is committed and never a live join. `set_name` and not
+        # `set` — SQLite's own `UPDATE ... SET` grammar cannot take an unquoted column
+        # literally spelled `set` (see `store/master.py:Card.set_name`).
+        "set_name", "rarity",
         # STORE-SCALING ITEM 8: the composition and screen forms of the card's number,
         # reused rather than re-derived so the FTS5 index (and any other reader) sees
         # exactly what `pipeline/join.py:join_key`/`display_number` compose — see
@@ -172,6 +186,10 @@ _INDEXES = (
     # remove. `_ensure_schema` creates it with `CREATE INDEX IF NOT EXISTS` at connect, so an
     # existing store gets it with no migration and no schema version bump.
     ("cards", "captured_at"),
+    # D-the-set-is-a-stored-fact-and-the-hint-was-never-one: "it becomes a facet later" —
+    # a filter over `set_name` is the next thing this column exists for, and an index scan
+    # over it rather than a table scan is the same argument `captured_at`'s own entry makes.
+    ("cards", "set_name"),
     ("queues", "box"),
     ("events", "position"),
     ("boxes", "bid"),
@@ -386,6 +404,8 @@ def _upgrade(
                 _add_captured_at_index(conn)
             if stored < 7:
                 _add_search_index(conn)      # STORE-SCALING ITEM 8
+            if stored < 8:
+                _add_set_columns(conn)       # D-the-set-is-a-stored-fact-and-the-hint-was-never-one
             conn.execute(
                 "INSERT OR REPLACE INTO meta (key, value) VALUES ('schema', ?)",
                 (str(SCHEMA_VERSION),),
@@ -1055,6 +1075,50 @@ def _add_search_index(conn: sqlite3.Connection) -> None:
         "SELECT rowid, name, number, sku, set_hint, json_extract(payload, '$.note'), "
         "number_key, number_display FROM cards"
     )
+
+
+# The exact rows the sweep below rewrites — 99 Riftbound cards captured 2026-08-29, in one run,
+# before `app/src/setHint.ts` (2026-08-31, `356dd8f7`) started completing the hint on Enter.
+# `pipeline/setnames.py:resolve` already folds the two together for MATCHING; this closes the
+# gap for DISPLAY, so a filter drawn on the stored value does not split one drawer into two.
+_SET_HINT_SWEEP = {"UNL": "Unleashed"}
+
+
+def _add_set_columns(conn: sqlite3.Connection) -> None:
+    """Schema 8: `cards.set_name` and `cards.rarity`
+    (D-the-set-is-a-stored-fact-and-the-hint-was-never-one).
+
+    ADDITIVE LIKE `_add_search_index`'s TWO COLUMNS: the `ALTER`s are guarded by
+    `PRAGMA table_info` so a re-run after a crash is a no-op, and nothing existing is READ to
+    decide what to write — both columns default to NULL and stay NULL until
+    `./pkmnscan cards variants --write` or the next identification fills them.
+    `_add_search_index`'s own case for why the CID is here rather than derived per read
+    applies unchanged: `_copies_out` and `do_search` are both O(cards) already, and a facet
+    computed by joining an export on every request would be the same defect this schema
+    exists to avoid, sized against a filter this time instead of a search.
+
+    THIS STEP DOES NOT BACKFILL THE COLUMNS THEMSELVES — that is deliberately not a schema
+    migration. Filling them means resolving a SKU against whatever export
+    `inventory/.exports/<game>/` happens to hold, and an export is exactly the kind of thing
+    that ages in (D166) or is fetched for the first time between two opens of this store; a
+    migration bound to `SCHEMA_VERSION` runs once, ever, and could never re-answer a card
+    whose export arrived a week later. `./pkmnscan cards variants` is the re-runnable
+    counterpart — the same shape `photos`/`prices adopt` already use for a fact this store
+    can only partially answer the day it is asked.
+
+    THE 99 `UNL` ROWS ARE SWEPT HERE, though, because that IS a one-time, unconditional
+    rewrite with no data outside this file to consult: `_SET_HINT_SWEEP` is a closed table
+    of literal strings, not a lookup that can go stale.
+    """
+    columns = {row[1] for row in conn.execute("PRAGMA table_info(cards)").fetchall()}
+    for column in ("set_name", "rarity"):
+        if column not in columns:
+            conn.execute(f"ALTER TABLE cards ADD COLUMN {column} TEXT")
+    conn.execute("CREATE INDEX IF NOT EXISTS cards_set_name ON cards(set_name)")
+    for stale, resolved in _SET_HINT_SWEEP.items():
+        conn.execute(
+            "UPDATE cards SET set_hint = ? WHERE set_hint = ?", (resolved, stale)
+        )
 
 
 def _add_box_ids(conn: sqlite3.Connection) -> dict:

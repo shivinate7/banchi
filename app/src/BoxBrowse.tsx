@@ -11,6 +11,7 @@ import type {
   QueueSnapshot,
   RemoveResult,
   SearchCopy,
+  SearchGroup,
 } from './types'
 import type { SaleResult } from './types'
 import type { Failure } from './server'
@@ -66,6 +67,55 @@ function rowsOf(cards: Record<string, InventoryCard>): Row[] {
 }
 
 const NO_ROWS: Row[] = []
+const EMPTY_GROUPS: SearchGroup[] = []
+
+/** Strips a trailing parenthetical off a card name — `"Calm Rune (R02a)"` -> `"Calm Rune"` —
+ *  so a base printing and its promo/alt-art siblings fold to the same key. This is the ONE
+ *  naming convention this store's own data was measured to use for "another printing of the
+ *  same card": `pkmnscan cards name`'s corpus and the real Riftbound export both carry the
+ *  parenthetical suffix on exactly the rows that are a variant of the un-suffixed name, never
+ *  on an unrelated card that happens to share a word. */
+function baseCardName(name: string): string {
+  return name.replace(/\s*\([^()]*\)\s*$/, '').trim()
+}
+
+/** THE "SAME CARD" TEST (2026-09-17 regression fix). `results.groups` is several SKUs
+ *  whenever a search's matched cards span more than one SKU — and that shape means two very
+ *  different things depending on what those SKUs ARE:
+ *
+ *   - several PRINTINGS of one card (`Mind Rune`: 3 SKUs, `names: ['Mind Rune']` on every one
+ *     of them; `Vanguard Armory`: 2 SKUs, same story, differing only by condition) — the
+ *     missing level this branch built the chooser for.
+ *   - several DIFFERENT cards that merely share a `set_hint` (`ME01`: ~110 SKUs, each with its
+ *     own name — Abra, Bayleef, Bewear, ... — because a set hint is a fact about the BOX, not
+ *     the card) — the case that regressed: the chooser drew over a plain multi-card search and
+ *     swallowed the walk the two `inventory.spec.ts` tests below depend on.
+ *
+ *  MEASURED against the real store (`do_search`, read-only) before choosing: every "same
+ *  card" case above has every group's `names` identical once a trailing parenthetical variant
+ *  suffix is stripped (`baseCardName`); every "different cards" case has a distinct base name
+ *  per group, with one group (`Corphish`) even disagreeing WITHIN itself on spelling — which
+ *  is a fact about that one SKU's own copies, not a reason to compare across groups by
+ *  anything looser than exact base-name equality. So: several groups are the same card only
+ *  when EVERY group has at least one name, and stripping the parenthetical from every name in
+ *  every group leaves exactly one base name across the whole result. A group with no name at
+ *  all (an unidentified card) never satisfies this — D22's free-text note case is not a
+ *  "printing" of anything, and a query cannot equal a null name in the first place, so this
+ *  never actually excludes a real match. */
+function groupsAreSamePrinting(groups: readonly SearchGroup[]): boolean {
+  if (groups.length < 2) return false
+  let shared: string | null = null
+  for (const group of groups) {
+    if (group.names.length === 0) return false
+    for (const name of group.names) {
+      const base = baseCardName(name)
+      if (base === '') return false
+      if (shared === null) shared = base
+      else if (base !== shared) return false
+    }
+  }
+  return shared !== null
+}
 
 /** No listing records read yet. Not the same as "this store has listed nothing". */
 const NO_LISTINGS: Readonly<Record<string, Listing>> = {}
@@ -634,6 +684,83 @@ function useMediaQuery(query: string): boolean {
   return matches
 }
 
+/** THE MISSING NAME -> VARIANT LEVEL: one row per SKU a name search answers with, when there
+ *  is more than one. Before this, a name matching five printings dumped every copy of all
+ *  five into one undifferentiated walk, and the only way to a sibling was clicking rows until
+ *  one happened to belong to a different SKU (`app/src/Inventory.tsx`'s `CopiesPanel` then
+ *  asks for that ROW's own SKU, so the walk anchors there and the other four stop being
+ *  fetched at all). This is what stands between the search and that walk instead.
+ *
+ *  A LIST, NOT A GRID — legible whatever the count, and the count runs high: measured on the
+ *  owner's own store, one name reaches 15 rows (three sets by five conditions). A grid needs
+ *  a second axis to wrap a name into and a phone at 390px has none to spare; a list only ever
+ *  grows taller, and the panel around it already scrolls.
+ *
+ *  `sku` KEYS THE ROW WHEN THERE IS ONE; THE UNIDENTIFIED BAG (`sku: null`) TAKES ITS OWN
+ *  INDEX-KEYED ROW AND IS NEVER LEFT OUT — a card the pipeline could not name is exactly the
+ *  card an operator searches for, and the hard rule against dropping one silently reaches
+ *  this list too. */
+function VariantChooser({
+  groups,
+  onPick,
+}: {
+  groups: readonly SearchGroup[]
+  onPick: (index: number) => void
+}) {
+  /* RARITY DRAWN ONLY WHERE THE PRINTINGS ON SCREEN ACTUALLY DIFFER IN IT. The Runes all
+     read `Showcase`, and a word every tile repeats is not what tells two tiles apart — it
+     is `number_display`/set/condition doing that work, exactly as they already do below.
+     Two real SKUs can still be separated by rarity alone (a promo stamp on an otherwise
+     identical row), and this is what puts the word back the moment that happens. */
+  const rarities = new Set(groups.map((group) => group.rarity).filter((r): r is string => !!r))
+  const showRarity = rarities.size > 1
+
+  return (
+    <div className="browse-variants">
+      <p className="browse-variants-lede">{groups.length} printings match.</p>
+      <ul className="browse-variants-list" role="list">
+        {groups.map((group, index) => {
+          const photoCopy = group.copies.find((copy) => copy.has_photo)
+          const name = group.names[0] ?? 'Not identified yet'
+          // THE CATALOGUE'S OWN SET FIRST, `set_hint` ONLY WHEN THERE IS NO OTHER ANSWER
+          // (D-the-set-is-a-stored-fact-and-the-hint-was-never-one) — the fallback D65
+          // already established for the case no export has ever priced this game.
+          const sub = [
+            group.number_display,
+            group.set ?? group.set_hint,
+            group.condition,
+            showRarity ? group.rarity : null,
+          ]
+            .filter((part): part is string => typeof part === 'string' && part !== '')
+            .join(' · ')
+          return (
+            <li key={group.sku ?? `unidentified-${index}`}>
+              <button type="button" className="browse-variant-tile" onClick={() => onPick(index)}>
+                <span className="browse-variant-photo" aria-hidden="true">
+                  {photoCopy === undefined ? (
+                    <Icon name="image" size={18} />
+                  ) : (
+                    <img src={photoUrl(photoCopy.place.box, photoCopy.place.index, photoCopy.cid)} alt="" />
+                  )}
+                </span>
+                <span className="browse-variant-text">
+                  <span className={name === 'Not identified yet' ? 'browse-variant-name is-unnamed' : 'browse-variant-name'}>
+                    {name}
+                  </span>
+                  {sub === '' ? null : <span className="browse-variant-sub">{sub}</span>}
+                </span>
+                <span className="browse-variant-count">
+                  {group.on_hand.toLocaleString()} {group.on_hand === 1 ? 'copy' : 'copies'}
+                </span>
+              </button>
+            </li>
+          )
+        })}
+      </ul>
+    </div>
+  )
+}
+
 export function BoxBrowse({
   head,
   detail,
@@ -742,12 +869,61 @@ export function BoxBrowse({
     onQuery?.(query)
   }, [query, onQuery])
 
+  /* WHICH PRINTING THE OPERATOR PICKED, when a search answers with more than one SKU group
+   * sharing a name (the missing name -> variant level: five printings of one name are five
+   * SKUs, and nothing before this told them apart). Tied to the QUERY TEXT it was picked for,
+   * rather than cleared by an effect: a changed query is a new question and invalidates the
+   * old pick just by no longer matching it, which is the same idiom `frozenRank.ts`'s callers
+   * already use for "this answer is for a different question now". */
+  const [chosenVariant, setChosenVariant] = useState<{ query: string; index: number } | null>(null)
+
+  const searchGroups = results?.groups ?? null
+  /* MORE THAN ONE SKU FOR ONE ANSWER — the shape a name search returns when it is not really
+     naming one card. `null`-SKU cards (not yet identified) count as a group like any other:
+     CLAUDE.md's own hard rule is never to drop a card silently, and a card the pipeline
+     could not name is exactly the card an operator searches for. */
+  const multiGroup = searchGroups !== null && groupsAreSamePrinting(searchGroups)
+  const resolvedVariant =
+    chosenVariant !== null &&
+    chosenVariant.query === query &&
+    searchGroups !== null &&
+    chosenVariant.index < searchGroups.length
+      ? chosenVariant.index
+      : null
+  /* THE CHOOSER IS SHOWING, AND NOTHING BELOW MAY ACT AS IF A PRINTING WERE PICKED. */
+  const chooserActive = multiGroup && resolvedVariant === null
+
+  /* THE GROUPS EVERY BOX-WALK COMPUTATION BELOW READS, IN PLACE OF `results.groups` DIRECTLY.
+   * Empty while the chooser is showing — which is what makes clicking a box a no-op then: the
+   * box list's own `cells` marks every shelf unreachable when `shelves` is empty, so this one
+   * substitution is what keeps the walk from being enterable until a printing is picked, with
+   * no second flag to keep in step. One group — the picked one, or the sole one a query
+   * already resolves to — once it is. */
+  const activeGroups = useMemo(() => {
+    if (searchGroups === null || chooserActive) return EMPTY_GROUPS
+    if (resolvedVariant === null) return searchGroups
+    const picked = searchGroups[resolvedVariant]
+    return picked === undefined ? searchGroups : [picked]
+  }, [searchGroups, chooserActive, resolvedVariant])
+
+  /* THE WALK LEAVES THE BOX IT WAS ON WHILE THE CHOOSER IS SHOWING. The shelf-picking effect
+   * below returns early the moment `shelves` is empty (its own guard, written for the
+   * registry's late arrival — see its own comment) — which under a plain empty search is
+   * exactly right, and under an UNRESOLVED chooser would otherwise leave the walk parked on
+   * whatever box it was on before the operator typed, with every one of its cells now
+   * disabled under it. One box press cannot reach it either: `cells` marks every shelf
+   * unreachable while `shelves` is empty, so nothing downstream can act as if a printing were
+   * picked — this is the one line that also has to say so out loud. */
+  useEffect(() => {
+    if (chooserActive) setShelf(null)
+  }, [chooserActive])
+
   const matched = useMemo(() => {
     if (results === null) return null
     const keys = new Set<string>()
-    for (const group of results.groups) for (const copy of group.copies) keys.add(copy.key)
+    for (const group of activeGroups) for (const copy of group.copies) keys.add(copy.key)
     return keys
-  }, [results])
+  }, [results, activeGroups])
 
   /* Filtered only when there is an answer to filter by. */
   const inQuery = useMemo(() => {
@@ -782,7 +958,7 @@ export function BoxBrowse({
     const liveMatches = new Map<number, number>()
     if (filtered && results !== null) {
       const perSection = new Map<string, number>()
-      for (const group of results.groups) {
+      for (const group of activeGroups) {
         for (const copy of group.copies) {
           const shelf = copyShelf(copy)
           /* A COPY THAT LEFT SINCE THIS ORDER WAS TAKEN STILL COUNTS (`frozenRank.ts`), so a
@@ -807,7 +983,7 @@ export function BoxBrowse({
       if (ha !== hb) return hb - ha
       return a - b
     }
-  }, [boxRecords, recency, filtered, results, frozen])
+  }, [boxRecords, recency, filtered, results, activeGroups, frozen])
 
   /* D192, item 2: under a search, which OTHER boxes hold a match comes off the search's own
      result now — `inQuery` is only this box's matched rows since the fetch became box-scoped,
@@ -815,14 +991,14 @@ export function BoxBrowse({
   const searchBoxes = useMemo(() => {
     if (results === null) return []
     const boxes = new Set<number>()
-    for (const group of results.groups) {
+    for (const group of activeGroups) {
       for (const copy of group.copies) {
         const shelf = copyShelf(copy)
         if (typeof shelf === 'number') boxes.add(shelf)
       }
     }
     return [...boxes]
-  }, [results])
+  }, [results, activeGroups])
 
   const shelves = useMemo(
     () => shelvesOf(inQuery, filtered ? searchBoxes : boxRecords.map((record) => record.box), order),
@@ -868,14 +1044,14 @@ export function BoxBrowse({
   const matchesByShelf = useMemo(() => {
     const out = new Map<Shelf, number>()
     if (!filtered || results === null) return out
-    for (const group of results.groups) {
+    for (const group of activeGroups) {
       for (const copy of group.copies) {
         const s = copyShelf(copy)
         out.set(s, (out.get(s) ?? 0) + 1)
       }
     }
     return out
-  }, [filtered, results])
+  }, [filtered, results, activeGroups])
 
   /* Every position with an open question, for the row badges. */
   const queuedKeys = useMemo(() => {
@@ -1052,7 +1228,7 @@ export function BoxBrowse({
     const holdsLive = (candidate: Shelf) =>
       !filtered ||
       results === null ||
-      results.groups.some((group) =>
+      activeGroups.some((group) =>
         group.copies.some(
           (copy) => copyShelf(copy) === candidate && ranksAsLive(copy.key, copyDeparted(copy), frozen),
         ),
@@ -1071,7 +1247,7 @@ export function BoxBrowse({
       if (!fresh && prev !== null && pool.includes(prev)) return prev
       return pool[0] ?? null
     })
-  }, [shelves, boxesAnswered, filtered, results, frozen])
+  }, [shelves, boxesAnswered, filtered, results, activeGroups, frozen])
 
   /* The selection follows the filter. When nothing matches it is left alone.
      A NEW ANSWER LANDS IN THE FULLEST SECTION (D132 amended): the query's answer is drawn by
@@ -1983,7 +2159,12 @@ export function BoxBrowse({
             <div className="browse-side">
               {selectedRow === null ? (
                 <div className="bn-panel">
-                  {filtered ? (
+                  {chooserActive && searchGroups !== null ? (
+                    <VariantChooser
+                      groups={searchGroups}
+                      onPick={(index) => setChosenVariant({ query, index })}
+                    />
+                  ) : filtered ? (
                     <EmptyState
                       icon="search"
                       title={`Nothing matches “${query.trim()}”`}
@@ -2025,6 +2206,17 @@ export function BoxBrowse({
                             ))}
                         </p>
                         <div className="browse-hero-chips">
+                          {/* No `chooserActive` check needed here: while the chooser shows,
+                              `selectedRow` is null and this whole branch does not render, so
+                              nothing here can bypass it. This chip is reachable only once a
+                              printing is picked (or the search always had one), and it is
+                              what gets an operator back to the chooser after the walk has
+                              carried them away from it. */}
+                          {searchGroups !== null && searchGroups.length > 1 ? (
+                            <Chip icon="layers" onClick={() => setChosenVariant(null)}>
+                              {searchGroups.length} printings · change
+                            </Chip>
+                          ) : null}
                           {claimList(selectedRow.card.metadata_finish).map((finish) => (
                             <Pill key={`f-${finish}`} icon="sparkles">
                               {titleCase(finish)}

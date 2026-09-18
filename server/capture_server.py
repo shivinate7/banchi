@@ -271,7 +271,7 @@ from dataclasses import asdict, replace
 from http import HTTPStatus
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
-from typing import Dict, Iterable, List, Optional, Sequence, Set, Tuple
+from typing import Dict, FrozenSet, Iterable, List, Optional, Sequence, Set, Tuple
 from urllib.parse import parse_qs, urlparse
 
 # `make server` runs this by path, so sys.path[0] is server/ and the project packages are
@@ -279,7 +279,7 @@ from urllib.parse import parse_qs, urlparse
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 from codes import products  # noqa: E402
-from pipeline import games, join, tcgcsv  # noqa: E402
+from pipeline import games, join, setnames, tcgcsv  # noqa: E402
 from pipeline import orders as order_engine  # noqa: E402
 from cli import runs as cli_runs  # noqa: E402
 from store import Store, db, files, master, photos, queues  # noqa: E402
@@ -1751,6 +1751,25 @@ def _optional_text(payload: dict, key: str) -> Optional[str]:
     return text or None
 
 
+def _resolve_set_hint(hint: Optional[str], game: Optional[str]) -> Optional[str]:
+    """A typed `set_hint`, completed the way `app/src/setHint.ts` completes it on Enter —
+    but at the write, so a shutter press that skipped Enter, a bulk claim, or any other
+    writer still lands on the resolved name
+    (D-the-set-is-a-stored-fact-and-the-hint-was-never-one,
+    "the remaining hole is narrow, and it is still worth closing").
+
+    NEVER REFUSES, NEVER BLOCKS ON A NETWORK CALL. `pipeline/setnames.py:resolve_for_game`
+    reads whatever export this game already has on disk and answers `None` for no export, no
+    match, or more than one candidate — exactly D65's own rule for an unresolved hint. This
+    function's OWN rule is the same one every claim-normalizer on this route already
+    follows: an unresolved value is kept exactly as typed, never replaced with a guess and
+    never a reason to refuse a capture with the physical card already in hand."""
+    if not hint:
+        return hint
+    resolved = setnames.resolve_for_game(hint, game or games.DEFAULT_GAME)
+    return resolved if resolved is not None else hint
+
+
 def _require_text(payload: dict, key: str, code: str, message: str) -> str:
     """A non-empty string, or a refusal in this route's own code."""
     text = _optional_text(payload, key)
@@ -2613,7 +2632,11 @@ def do_capture(payload: dict) -> Tuple[HTTPStatus, dict]:
     # record will be READ as (D21's read-side backfill) — validation only, never a write.
     game = _optional_game(payload)
     claims = {
-        "set_hint": _optional_text(payload, "set_hint"),
+        # RESOLVED AT THE WRITE (D-the-set-is-a-stored-fact-and-the-hint-was-never-one):
+        # `app/src/setHint.ts` completes this on Enter, and a shutter press that skips it —
+        # every feeder run, by construction — reached the store with the raw string until
+        # now. See `_resolve_set_hint`.
+        "set_hint": _resolve_set_hint(_optional_text(payload, "set_hint"), game),
         "metadata_finish": _optional_variant(payload, game),
         "game": game,
         "rarity_claim": _optional_rarity_claim(payload, game),
@@ -3580,6 +3603,13 @@ def do_put_card(box: int, index: int, payload: dict) -> dict:
         # read (`identify/sidecar.py` drops them, loudly) rather than a refusal that would
         # force every game correction to restate a claim it never mentioned.
         judged_against = incoming.get("game", card.game)
+        # RESOLVED HERE, NOW THAT THE GAME IT RESOLVES AGAINST IS KNOWN — the card's own
+        # game, or the one this same PUT sets. Same rule `_resolve_set_hint` always follows:
+        # an unresolved hint is kept exactly as typed.
+        # (D-the-set-is-a-stored-fact-and-the-hint-was-never-one,
+        # "the two `set_hint` patch paths".)
+        if incoming.get("set_hint"):
+            incoming["set_hint"] = _resolve_set_hint(incoming["set_hint"], judged_against)
         if "variant" in payload:
             # The RETURN is what lands, not `variant_shape`: this is where the claim is put
             # into the game's enum order, and only this side knows the game (D3 rung 1's set
@@ -3827,6 +3857,15 @@ def do_put_box_claims(box: int, payload: dict) -> dict:
                 )
             if "rarity_claim" in payload:
                 fields["rarity_claim"] = claim_shape
+            # RESOLVED PER CARD, AGAINST THE GAME THAT CARD IS JUDGED AGAINST — a mixed-game
+            # box with no `game` in this body has each card's own game, exactly the pattern
+            # `metadata_finish` follows two lines up.
+            # (D-the-set-is-a-stored-fact-and-the-hint-was-never-one,
+            # "the two `set_hint` patch paths".)
+            if fields.get("set_hint"):
+                fields["set_hint"] = _resolve_set_hint(
+                    fields["set_hint"], incoming.get("game", card.game)
+                )
             changed = {}
             for field, value in fields.items():
                 current = getattr(card, field)
@@ -5814,7 +5853,11 @@ def _answer_before(events: Sequence[dict], key: str) -> Optional[dict]:
         if not isinstance(previous, dict):
             return None
         pair = {}
-        for field in ("sku", "condition"):
+        # `set_name`/`rarity` ARE ABSENT ON EVERY `answered` LINE WRITTEN BEFORE
+        # D-the-set-is-a-stored-fact-and-the-hint-was-never-one — `.get()` reads that as
+        # None, which is exactly right: an answer that predates the pair could not have
+        # overwritten it, so there is nothing for an undo of THAT answer to put back.
+        for field in ("sku", "condition", "set_name", "rarity"):
             value = previous.get(field)
             if value is not None and not isinstance(value, str):
                 return None
@@ -6123,12 +6166,12 @@ CATALOG_LOOKUP_LIMIT = 9
 def _near_mint_conditions(game: str) -> Set[str]:
     """The Condition strings this game's Near Mint rows carry (D12 hardcodes Near Mint).
 
-    Read off the registry rather than restated, so a game whose finishes change here changes
-    in one place. `variant.resolve` narrows to exactly these when it builds candidates, and a
-    lookup that offered `Lightly Played Foil` would be offering a row the ladder never would.
+    `pipeline/games.py:near_mint_conditions`, kept as a local name because every call site in
+    this file already reads `_near_mint_conditions`. `variant.resolve` narrows to exactly
+    these when it builds candidates, and a lookup that offered `Lightly Played Foil` would be
+    offering a row the ladder never would.
     """
-    entry = games.require(game)
-    return {str(v) for v in dict(entry["condition_by_finish"]).values()}
+    return games.near_mint_conditions(game)
 
 
 def _catalog_for_card(card) -> Tuple[object, str]:
@@ -6225,6 +6268,95 @@ def _catalog_for_card(card) -> Tuple[object, str]:
     return join.Catalog.from_export(export, game), game
 
 
+def _split_catalog_query(
+    query: str, catalog
+) -> Tuple[str, FrozenSet[str], FrozenSet[str]]:
+    """`query`, split into the words that identify a NAME and the words that identify a
+    printing — docs/specs/card-variants.md section 3a.
+
+    `Catalog.from_export`'s own `export.rows` carries `Set Name` and `Rarity` on every row,
+    and `_catalog_matches` below never read either — a term matching neither a name nor a
+    number was simply part of the string it folded and compared whole, so `Spiritforged`
+    alone found no name to be part of and the query went empty, and `Calm Rune Spiritforged`
+    still matched every Calm Rune printing because `wanted in name`/`name in wanted` care
+    about the STRING, not about which WORDS in it are doing the identifying.
+
+    A CONTIGUOUS RUN OF TERMS IS CLASSIFIED AGAINST THIS GAME'S OWN VOCABULARY, never
+    against a row's name and never one word at a time. Testing a term against product names
+    is what the mirror-case docstring below already warns is fragile — `Yi,` is not `Yi` —
+    and it is also the wrong question: a set or rarity is a closed, short, hand-authored list
+    (D22) an exact fold either answers or does not, and a name is open text no such list
+    could stand in for.
+
+    ONE WORD WAS NEVER ENOUGH. Five of this export's twelve sets are multi-word —
+    `Riftbound Organized Play Promotional Cards`, 1,110 rows on the owner's own export — and
+    a single-term test can never match a phrase. Measured before this: six of the owner's own
+    Runes (Calm, Mind, Body, Fury, Order, Chaos) each carry 16 candidate rows with that exact
+    set past row 9, unreachable by any digit key AND unnarrowable by any typed word, because
+    every spelling of the set's own name was silently ignored one word at a time.
+
+    LONGEST PHRASE FIRST, OVER THE VOCABULARY, NEVER A GENERAL PHRASE SEARCH. Every distinct
+    Set Name and Rarity this game's export carries is folded once, keyed by how many words it
+    has. Candidate windows of the query are tried longest-first — checking a 5-word window
+    before a 1-word one — so `Origins: Proving Grounds` (a real 3-word set) is consumed
+    whole before the standalone 1-word set `Origins` ever gets a chance to claim just its
+    first word. A window already spent by a longer match is never reconsidered, which is what
+    keeps two filters (a set AND a rarity) from fighting over one word.
+
+    AN ORDINARY NAME WORD OR EPITHET NEVER FOLDS TO A REAL SET OR RARITY, so this changes
+    nothing for a query with no printing word in it — the loose name match below runs exactly
+    as before, in both directions.
+
+    Returns the recombined name-query (empty when every term was consumed as a filter), the
+    set of matched Set Name folds, and the set of matched Rarity folds.
+    """
+    sets_by_words: Dict[int, Dict[str, None]] = {}
+    rarities_by_words: Dict[int, Dict[str, None]] = {}
+    for row in catalog.export.rows:
+        set_name = str(row.get(tcgcsv.SET_COLUMN, "")).strip()
+        if set_name:
+            sets_by_words.setdefault(len(set_name.split()), {})[
+                join.name_index_key(set_name)
+            ] = None
+        rarity = str(row.get(tcgcsv.RARITY_COLUMN, "")).strip()
+        if rarity:
+            rarities_by_words.setdefault(len(rarity.split()), {})[
+                join.name_index_key(rarity)
+            ] = None
+
+    terms = query.split()
+    consumed = [False] * len(terms)
+    set_folds: List[str] = []
+    rarity_folds: List[str] = []
+
+    # LONGEST WINDOW SIZE FIRST, ACROSS BOTH VOCABULARIES TOGETHER — a 3-word rarity (were
+    # one ever authored) must get the same priority over a 1-word set that a 3-word set gets
+    # over a 1-word one; the two lists are not ranked against each other, only by length.
+    widths = sorted(set(sets_by_words) | set(rarities_by_words), reverse=True)
+    for width in widths:
+        if width > len(terms):
+            continue
+        known_sets = sets_by_words.get(width, {})
+        known_rarities = rarities_by_words.get(width, {})
+        if not known_sets and not known_rarities:
+            continue
+        for start in range(0, len(terms) - width + 1):
+            if any(consumed[start : start + width]):
+                continue
+            folded = join.name_index_key(" ".join(terms[start : start + width]))
+            if folded in known_sets:
+                set_folds.append(folded)
+            elif folded in known_rarities:
+                rarity_folds.append(folded)
+            else:
+                continue
+            for i in range(start, start + width):
+                consumed[i] = True
+
+    name_terms = [term for term, taken in zip(terms, consumed) if not taken]
+    return " ".join(name_terms), frozenset(set_folds), frozenset(rarity_folds)
+
+
 def _catalog_matches(catalog, game: str, query: str) -> List[dict]:
     """Catalog rows a human might mean by `query`, best first.
 
@@ -6243,9 +6375,22 @@ def _catalog_matches(catalog, game: str, query: str) -> List[dict]:
 
     Near Mint only (D12), read off the registry, because those are the rows the ladder itself
     would have offered.
+
+    SET/RARITY TERMS FILTER RATHER THAN BEING FOLDED INTO THE NAME TEST (D137,
+    docs/specs/card-variants.md section 3a) — see `_split_catalog_query`. `Calm Rune
+    Spiritforged` now ranks on `Calm Rune` alone (unchanged) and then keeps only the
+    Spiritforged row; `Spiritforged` alone carries no name term at all, so every condition-
+    scoped row is a candidate before the filter narrows it to that set — a query that is
+    ENTIRELY a printing word browses the printing, which is the defect's own fix rather than
+    an empty list.
     """
-    wanted = join.name_index_key(query)
-    number = join.number_index_key(query)
+    name_query, set_folds, rarity_folds = _split_catalog_query(query, catalog)
+    wanted = join.name_index_key(name_query)
+    # `name_query`, NOT THE RAW `query` — a recognised set/rarity WORD is vocabulary, never a
+    # digit run, so it cannot itself become part of a number fold; leaving it in would only
+    # risk gluing it onto a real number cell for no gain (`"R02 Spiritforged"` folding as one
+    # string rather than as `R02` alone).
+    number = join.number_index_key(name_query)
     conditions = _near_mint_conditions(game)
     scored: List[Tuple[int, str, dict]] = []
     # `Catalog.from_export` has already filtered `export.rows` to this game's product
@@ -6256,16 +6401,29 @@ def _catalog_matches(catalog, game: str, query: str) -> List[dict]:
     for row in catalog.export.rows:
         if str(row.get(tcgcsv.CONDITION_COLUMN, "")) not in conditions:
             continue
+        if set_folds and join.name_index_key(row.get(tcgcsv.SET_COLUMN, "")) not in set_folds:
+            continue
+        if (
+            rarity_folds
+            and join.name_index_key(row.get(tcgcsv.RARITY_COLUMN, "")) not in rarity_folds
+        ):
+            continue
         name = join.name_index_key(row.get(tcgcsv.NAME_COLUMN, ""))
         cell = join.number_index_key(row.get(tcgcsv.NUMBER_COLUMN, ""))
         sku = str(row.get(tcgcsv.SKU_COLUMN, ""))
-        if wanted and name == wanted:
+        if not wanted:
+            # EVERY TERM WAS A FILTER — `query` named a printing and nothing else, so there
+            # is no name signal left to rank on. Every row that survived the set/rarity
+            # filter above is an equally good candidate; D22's own set/rarity vocabulary is
+            # what made the filter exact, so nothing here is a guess.
+            rank = 4
+        elif name == wanted:
             rank = 0
         elif (number and cell == number) or (sku and sku == query.strip()):
             rank = 1
-        elif wanted and wanted in name:
+        elif wanted in name:
             rank = 2  # the epithet case: the read is part of the catalogued title
-        elif wanted and name in wanted:
+        elif name in wanted:
             rank = 3  # the read carries more than the title does
         else:
             continue
@@ -6518,7 +6676,7 @@ def do_review_answer(box: int, index: int, payload: dict) -> dict:
         # whole so the group route can run the identical checks — card before queue, one
         # governing entry, the pair checked against the offered row. Nothing is written
         # until it returns.
-        card, holders, offering, governing, _, offered_condition = _answer_target(
+        card, holders, offering, governing, chosen, offered_condition = _answer_target(
             snapshot, box, index, sku, condition, from_catalog=from_catalog
         )
 
@@ -6534,10 +6692,24 @@ def do_review_answer(box: int, index: int, payload: dict) -> dict:
         # `do_put_card` rule above: `_history` drops a None extra, so a flat `previous_sku`
         # would vanish precisely when the answer was written onto a blank card, and a line
         # recording nothing would be indistinguishable from a line recording no change.
-        restores_to = {"sku": card.sku, "condition": card.condition}
+        restores_to = {
+            "sku": card.sku,
+            "condition": card.condition,
+            # D-the-set-is-a-stored-fact-and-the-hint-was-never-one: written and
+            # restored beside `sku`/`condition` for the same reason — an undo puts the
+            # card back to carrying no answer, set and rarity included.
+            "set_name": card.set_name,
+            "rarity": card.rarity,
+        }
 
         card.sku = sku
         card.condition = offered_condition
+        # THE CANDIDATE ROW IN HAND, RIGHT HERE — the same moment `sku`/`condition`
+        # are committed. `chosen.get(...)` rather than `or None`: a blank string and
+        # an absent key both answer null, matching `_candidate_rows`' own rule that a
+        # row carrying no rarity omits the key rather than sending `""`.
+        card.set_name = str(chosen.get("set") or "").strip() or None
+        card.rarity = str(chosen.get("rarity") or "").strip() or None
 
         cleared = {queues.MAIN: False, queues.PARKED: False}
         for queue, entry in holders:
@@ -7033,6 +7205,12 @@ def _reverse_answer(box: int, index: int) -> dict:
         withdrawn = {"sku": card.sku, "condition": card.condition}
         card.sku = previous["sku"]
         card.condition = previous["condition"]
+        # `.get()`, NOT `previous[...]`: an `answered` line written before this pair existed
+        # has no such keys, and `_answer_before` already answers None for both in that case
+        # — putting the card back to carrying no catalogue set/rarity, which is the honest
+        # state an answer that predates the pair could have left it in.
+        card.set_name = previous.get("set_name")
+        card.rarity = previous.get("rarity")
 
         reopened = {queues.MAIN: False, queues.PARKED: False}
         for queue in cleared:
@@ -7294,7 +7472,7 @@ def do_review_group_answer(payload: dict) -> dict:
         refused: List[Tuple[str, BadRequest]] = []
         for box, index, sku, condition, key in parsed:
             try:
-                card, holders, offering, governing, _chosen, offered = _answer_target(
+                card, holders, offering, governing, chosen, offered = _answer_target(
                     snapshot, box, index, sku, condition
                 )
             except BadRequest as exc:
@@ -7311,6 +7489,10 @@ def do_review_group_answer(payload: dict) -> dict:
                     "offering": offering,
                     "governing": governing,
                     "offered": offered,
+                    # D-the-set-is-a-stored-fact-and-the-hint-was-never-one: the same
+                    # candidate row the single answer route carries, one per card here.
+                    "set_name": str(chosen.get("set") or "").strip() or None,
+                    "rarity": str(chosen.get("rarity") or "").strip() or None,
                 }
             )
 
@@ -7361,9 +7543,16 @@ def do_review_group_answer(payload: dict) -> dict:
         cleared_positions = []
         for target in targets:
             card = target["card"]
-            restores_to = {"sku": card.sku, "condition": card.condition}
+            restores_to = {
+                "sku": card.sku,
+                "condition": card.condition,
+                "set_name": card.set_name,
+                "rarity": card.rarity,
+            }
             card.sku = target["sku"]
             card.condition = target["offered"]
+            card.set_name = target["set_name"]
+            card.rarity = target["rarity"]
 
             cleared = {queues.MAIN: False, queues.PARKED: False}
             for queue, held_entry in target["holders"]:
@@ -8520,6 +8709,15 @@ def do_search(query: str) -> dict:
                 # `_agreed`'s job and is not what this changes.
                 "number_display": _agreed(_number_display(card) for card in copies),
                 "set_hint": _agreed(card.set_hint for card in copies),
+                # THE CATALOGUE'S OWN ANSWER, BESIDE THE OPERATOR'S HINT
+                # (D-the-set-is-a-stored-fact-and-the-hint-was-never-one). `set_hint`
+                # above stays exactly as it was — a screen still needs the fallback
+                # for the card no export has ever priced. `set`/`rarity` are `None`
+                # on every card identified before this pair existed, until
+                # `./pkmnscan cards variants --write` or the next identification
+                # fills them.
+                "set": _agreed(card.set_name for card in copies),
+                "rarity": _agreed(card.rarity for card in copies),
                 "condition": _agreed(card.condition for card in copies)
                 or (listing.condition if listing is not None else None),
                 # ZEROS RATHER THAN NULL FOR A SKU WITH NO LISTING RECORD. "Nothing has been
@@ -8586,6 +8784,8 @@ def do_search(query: str) -> dict:
                 # one every one of them carries.
                 "number_display": _agreed(_number_display(card) for card in loose),
                 "set_hint": _agreed(card.set_hint for card in loose),
+                "set": _agreed(card.set_name for card in loose),
+                "rarity": _agreed(card.rarity for card in loose),
                 "condition": _agreed(card.condition for card in loose),
                 "listed": {stage: 0 for stage in master.LISTING_STAGES},
                 # THE LOOSE BAG HAS NO SKU, so it has no listing record and no reading —

@@ -1411,6 +1411,20 @@ export type SearchGroup = {
    *  `044/166`) still null both fields and the group still says nothing. */
   number_display: string | null
   set_hint: string | null
+
+  /** THE CATALOGUE'S OWN SET, BESIDE `set_hint` AND NEVER A REPLACEMENT FOR IT
+   *  (D-the-set-is-a-stored-fact-and-the-hint-was-never-one). `set_hint` above is the
+   *  operator's own claim, typed at the shutter; this is read off the export row the SKU
+   *  resolved to at identification time. `null` on every card identified before this field
+   *  existed, until `./pkmnscan cards variants --write` or the next identification fills
+   *  it — a screen prefers this and falls back to `set_hint`. */
+  set: string | null
+
+  /** The catalogue's own rarity, same source and same write moment as `set`. Kept beside
+   *  `InventoryCard.rarity_claim` and never merged into it — a disagreement between the
+   *  two is itself information (see the governing decision). */
+  rarity: string | null
+
   condition: string | null
 
   /** How many copies have reached each of the three listing states. Three counts and not one,

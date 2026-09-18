@@ -213,7 +213,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 import envfile  # noqa: E402
 from harness.tests import Checks, Result  # noqa: E402
 
-from cli import cmd_reprice, requeue, resolve, runs  # noqa: E402
+from cli import cmd_cards, cmd_reprice, requeue, resolve, runs  # noqa: E402
 from identify import batch, cost, prompt, sidecar  # noqa: E402
 from pipeline import (  # noqa: E402
     corpus,
@@ -1055,6 +1055,180 @@ def check_store(checks: Checks) -> None:
         checks.ok(
             not list(Store().directory.glob(".*.tmp")),
             "and nothing is staged beside the database — the transaction is the atomicity",
+        )
+
+
+def check_set_and_rarity(checks: Checks) -> None:
+    """D-the-set-is-a-stored-fact-and-the-hint-was-never-one: the schema migration
+    (`store/db.py:_add_set_columns`) and the backfill (`cli/cmd_cards.py`'s `variants`).
+
+    THE MIGRATION HALF: an old store, stamped 7, gains `set_name` and `rarity` with every
+    row preserved and the 99 `UNL` rows swept to `Unleashed` in the same pass — built by
+    hand from `db.TABLES`/`db._INDEXES` minus the two new members, the same shape
+    `store/db.py`'s own docstring for `_add_search_index` argues an upgrade must be additive
+    against.
+
+    THE BACKFILL HALF: a SKU that resolves against the export on disk gets a real set and
+    rarity; a SKU that resolves to nothing keeps a null set and its own record — never
+    guessed, never dropped, over `./pkmnscan cards variants --write`'s own code path rather
+    than a re-implementation of it.
+    """
+    checks.note("")
+    checks.note("SET + RARITY — store/db.py schema 8, cli/cmd_cards.py `variants`")
+
+    # ---------------------------------------------------------------- the migration itself
+    with isolated_home():
+        directory = files.inventory_dir()
+        directory.mkdir(parents=True, exist_ok=True)
+        conn = sqlite3.connect(str(db.path(directory)))
+        for table, columns in db.TABLES.items():
+            cols = [c for c in columns if c not in ("set_name", "rarity")]
+            conn.execute(db._ddl(table, cols))
+        conn.execute(
+            "CREATE TABLE IF NOT EXISTS events (id INTEGER PRIMARY KEY AUTOINCREMENT, "
+            "at TEXT, event TEXT, position TEXT, payload TEXT NOT NULL)"
+        )
+        conn.execute("CREATE TABLE IF NOT EXISTS meta (key TEXT PRIMARY KEY, value TEXT)")
+        for table, column in db._INDEXES:
+            if column == "set_name":
+                continue
+            conn.execute(f"CREATE INDEX IF NOT EXISTS {table}_{column} ON {table}({column})")
+        for statement in db._CID_INDEXES:
+            conn.execute(statement)
+        db._add_search_index(conn)
+        conn.execute("INSERT INTO meta (key, value) VALUES ('schema', '7')")
+        conn.execute(
+            "INSERT INTO cards (key, box, idx, state, sku, condition, set_hint, name, "
+            "number, game, payload) VALUES (?,?,?,?,?,?,?,?,?,?,?)",
+            (
+                "1/1", 1, 1, master.IDENTIFIED, "SKU1", "Near Mint", "UNL", "Calm Rune",
+                "045", "riftbound", json.dumps({"box": 1, "index": 1}),
+            ),
+        )
+        conn.commit()
+
+        before = {row[1] for row in conn.execute("PRAGMA table_info(cards)").fetchall()}
+        checks.ok(
+            "set_name" not in before and "rarity" not in before,
+            "the fixture really starts on schema 7, with neither column",
+        )
+
+        db._upgrade(conn, 7, directory=directory, locked=True)
+
+        after = {row[1] for row in conn.execute("PRAGMA table_info(cards)").fetchall()}
+        checks.ok(
+            {"set_name", "rarity"} <= after,
+            "the upgrade adds both columns",
+            f"columns: {sorted(after)}",
+        )
+        checks.equal(
+            conn.execute("SELECT count(*) FROM cards").fetchone()[0],
+            1,
+            "and preserves every row — an upgrade is additive and never drops one",
+        )
+        checks.equal(
+            conn.execute("SELECT value FROM meta WHERE key = 'schema'").fetchone()[0],
+            "8",
+            "stamped at the new version",
+        )
+        checks.equal(
+            conn.execute("SELECT set_hint FROM cards WHERE key = '1/1'").fetchone()[0],
+            "Unleashed",
+            "and the 99 `UNL` rows from 2026-08-29 are swept to `Unleashed` in the same "
+            "migration",
+        )
+        checks.equal(
+            conn.execute("SELECT set_name, rarity FROM cards WHERE key = '1/1'").fetchone(),
+            (None, None),
+            "while the two new columns stay null — the migration is schema only, and the "
+            "backfill below is the separate, re-runnable step that fills them",
+        )
+        conn.close()
+
+    # ------------------------------------------------------------------- the backfill itself
+    with isolated_home() as home:
+        exports = home / "inventory" / ".exports" / "riftbound"
+        exports.mkdir(parents=True)
+        (exports / "export.csv").write_text(
+            "TCGplayer Id,Product Line,Set Name,Product Name,Number,Rarity,Condition,"
+            "TCG Market Price,Total Quantity\r\n"
+            "CR-VEN-001,Riftbound League of Legends Trading Card Game,Vendetta,"
+            "Mind Rune (R03a),R03a,Showcase,Near Mint Foil,1.00,0\r\n",
+            encoding="utf-8",
+        )
+        with Store().write() as snapshot:
+            inv = snapshot.inventory
+            resolvable, _ = inv.allocate_capture(1, game="riftbound", cid=fake_cid("resolvable"))
+            resolvable_key = resolvable.key
+            card = inv.cards[resolvable_key]
+            card.name, card.number = "Mind Rune", "R03a"
+            card.sku, card.condition = "CR-VEN-001", "Near Mint Foil"
+            card.state = master.IDENTIFIED
+
+            unresolvable, _ = inv.allocate_capture(
+                1, game="riftbound", cid=fake_cid("unresolvable")
+            )
+            unresolvable_key = unresolvable.key
+            card2 = inv.cards[unresolvable_key]
+            card2.name, card2.number = "Mind Rune", "R03a"
+            card2.sku, card2.condition = "CR-GHOST-999", "Near Mint Foil"
+            card2.state = master.IDENTIFIED
+
+        class Args:
+            def __init__(self, write: bool):
+                self.cards_action = "variants"
+                self.write = write
+
+        say_lines: List[str] = []
+        cmd_cards.run(Args(write=True), say_lines.append)
+
+        after_inv = Store().read().inventory
+        resolved = after_inv.cards[resolvable_key]
+        checks.equal(
+            (resolved.set_name, resolved.rarity),
+            ("Vendetta", "Showcase"),
+            "the backfill resolves a real SKU against the export on disk",
+        )
+        ghost = after_inv.cards[unresolvable_key]
+        checks.ok(
+            ghost.set_name is None and ghost.rarity is None and ghost.sku == "CR-GHOST-999",
+            "and a SKU that resolves to nothing keeps a null set and its own record — "
+            "never guessed and never dropped",
+            f"card: sku={ghost.sku!r} set_name={ghost.set_name!r}",
+        )
+
+    # ------------------------------------------------------- the real collision, on the wire
+    # D-the-set-is-a-stored-fact-and-the-hint-was-never-one's own worked example: two SKUs
+    # identical in name, number, rarity and condition, differing only by set, with
+    # `set_hint` NULL on both — the exact shape that made the chooser draw two
+    # indistinguishable tiles before this item.
+    with isolated_home():
+        with Store().write() as snapshot:
+            inv = snapshot.inventory
+            for n, (sku, set_name) in enumerate(
+                (("CR-SPI-001", "Spiritforged"), ("CR-UNL-001", "Unleashed")), start=1
+            ):
+                allocated, _ = inv.allocate_capture(1, game="riftbound", cid=fake_cid(f"collision-{n}"))
+                card = inv.cards[allocated.key]
+                card.name, card.number = "Mind Rune", "R03a"
+                card.sku, card.condition = sku, "Near Mint Foil"
+                card.set_name, card.rarity = set_name, "Showcase"
+                card.state = master.IDENTIFIED
+
+        result = capture_server.do_search("Mind Rune")
+        checks.equal(len(result["groups"]), 2, "two SKUs, two groups")
+        sets = sorted(str(g["set"]) for g in result["groups"])
+        checks.equal(
+            sets,
+            ["Spiritforged", "Unleashed"],
+            "the two groups disagree on `set` although `set_hint`, `condition` and "
+            "`rarity` all agree — the one field a chooser tile can key its distinctness "
+            "off, which is the whole of what this item was built to restore",
+        )
+        checks.ok(
+            all(g["set_hint"] is None for g in result["groups"]),
+            "and `set_hint` stays null on both — the real collision this was measured "
+            "against, not a fixture that quietly gives the chooser an easier field",
         )
 
 
@@ -4148,7 +4322,7 @@ def check_review_answer(checks: Checks) -> None:
         )
         checks.equal(
             body["restores_to"],
-            {"sku": None, "condition": None},
+            {"sku": None, "condition": None, "set_name": None, "rarity": None},
             "and what an undo would put back: the pair of NULLS a never-identified card "
             "held, which is the NORMAL case and not an empty one — a card is in a review "
             "queue precisely because it has never carried a SKU, and the reversal returns "
@@ -4162,7 +4336,7 @@ def check_review_answer(checks: Checks) -> None:
         )
         checks.equal(
             last_event("3/1").get("restores_to"),
-            {"sku": None, "condition": None},
+            {"sku": None, "condition": None, "set_name": None, "rarity": None},
             "and the `answered` HISTORY line carries the same pair — THE BLOCKER'S "
             "REGRESSION: the line used to log only what the route WROTE, never what it "
             "overwrote, so nothing anywhere could say what an undo should put back",
@@ -4340,7 +4514,7 @@ def check_review_answer(checks: Checks) -> None:
     checks.note("")
     checks.note("REVIEW ANSWER UNDO — the same route, reversed (D28)")
 
-    prior = {"sku": DUNSPARCE_SKU, "condition": "Near Mint"}
+    prior = {"sku": DUNSPARCE_SKU, "condition": "Near Mint", "set_name": None, "rarity": None}
 
     with isolated_home():
         for _ in range(6):
@@ -4608,7 +4782,7 @@ def check_review_answer(checks: Checks) -> None:
         )
         checks.equal(
             last_event("3/6").get("restores_to"),
-            {"sku": None, "condition": None},
+            {"sku": None, "condition": None, "set_name": None, "rarity": None},
             "while the `answered` history line still records the pair — the two "
             "deliberately disagree: the log states what is true, the field answers "
             "whether to draw a button",
@@ -5075,7 +5249,7 @@ def check_group_answer(checks: Checks) -> None:
             )
             checks.equal(
                 [r["restores_to"] for r in body["results"]],
-                [{"sku": None, "condition": None}] * 3,
+                [{"sku": None, "condition": None, "set_name": None, "rarity": None}] * 3,
                 "and its own restores_to — the pair of nulls a never-identified card "
                 "held, per member, under the single answer's contract",
             )
@@ -5099,7 +5273,7 @@ def check_group_answer(checks: Checks) -> None:
         )
         checks.equal(
             [line.get("restores_to") for line in answered_lines],
-            [{"sku": None, "condition": None}] * 3,
+            [{"sku": None, "condition": None, "set_name": None, "rarity": None}] * 3,
             "and each line carries its own restores_to, exactly as a single answer "
             "writes it — which is what makes the per-card undo below possible at all",
         )
@@ -5173,7 +5347,7 @@ def check_group_answer(checks: Checks) -> None:
         if body is not None:
             checks.equal(
                 [r["restores_to"] for r in body["results"]],
-                [None, {"sku": None, "condition": None}],
+                [None, {"sku": None, "condition": None, "set_name": None, "rarity": None}],
                 "the held member answers restores_to NULL while its partner keeps the "
                 "pair — per position, because a group control that reverses eleven of "
                 "sixteen on its best day is SaleResult's recorded defect at scale",
@@ -5181,7 +5355,7 @@ def check_group_answer(checks: Checks) -> None:
         held_lines = [last_event("4/10"), last_event("4/11")]
         checks.equal(
             [line.get("restores_to") for line in held_lines],
-            [{"sku": None, "condition": None}] * 2,
+            [{"sku": None, "condition": None, "set_name": None, "rarity": None}] * 2,
             "while BOTH history lines still record the pair — the log states what is "
             "true, the field answers whether to draw a button, and the two deliberately "
             "disagree",
@@ -6708,7 +6882,7 @@ def check_history(checks: Checks) -> None:
         )
         checks.equal(
             answered.get("restores_to"),
-            {"sku": None, "condition": None},
+            {"sku": None, "condition": None, "set_name": None, "rarity": None},
             "and the pair the answer REPLACED — the blocker's regression (D28): this "
             "line used to log only what was written, so the log held everything needed "
             "to audit an answer and nothing needed to reverse one",
@@ -6737,7 +6911,7 @@ def check_history(checks: Checks) -> None:
         )
         checks.equal(
             unanswered.get("restored"),
-            {"sku": None, "condition": None},
+            {"sku": None, "condition": None, "set_name": None, "rarity": None},
             "...and what went back on — both pairs, because neither is derivable from "
             "the other once the card has moved on again",
         )
@@ -11060,6 +11234,198 @@ def check_review_catalog(checks: Checks) -> None:
             Store().read().inventory.cards["1/3"].sku is None,
             "and that refusal wrote nothing",
         )
+
+
+def check_catalog_set_rarity_match(checks: Checks) -> None:
+    """`server/capture_server.py:_catalog_matches` sees `Set Name`/`Rarity`
+    (docs/specs/card-variants.md section 3a).
+
+    THE REAL CASE, OFF THE COMMITTED EXPORT, NOT A HAND-BUILT ONE. `Calm Rune` in
+    `fixtures/riftbound_export_untouched.csv` is wider than the owner's own quoted example —
+    the loose `wanted in name` rung already recovers `Calm Rune (R02a)`, `(R02b)` and
+    `(Alternate Art)` beside the plain product, which this file's own docstring argues for —
+    so a bare `Calm Rune` query answers with 16 Near Mint rows across FIVE sets today, and
+    that width is exactly why a set word could not narrow anything before this item.
+
+    BOTH LOOSE-NAME DIRECTIONS ARE ASSERTED TOO, because a term-splitting rewrite that
+    fixed the reported defect and broke the recovery this function was built for would be a
+    real regression wearing a fix's clothes. `Wuju Master`/`Master Yi, Wuju Master` and
+    `Master Yi, Tempered`/`Master Yi` are the docstring's own two cases, reproduced here as a
+    fixture because the docstring's own measurement (490 of 494 epithets, 38 of 98 champion
+    names) is over an export this harness does not carry — the two rows below are what makes
+    the CLAIM checkable rather than merely quoted.
+    """
+    checks.note("")
+    checks.note("CATALOG SET/RARITY MATCH — server/capture_server.py:_catalog_matches (3a)")
+
+    export = tcgcsv.read_export(RIFTBOUND_EXPORT)
+    catalog = join.Catalog.from_export(export, "riftbound")
+
+    def matched(query: str):
+        return capture_server._catalog_matches(catalog, "riftbound", query)
+
+    unfiltered = matched("Calm Rune")
+    checks.equal(
+        sorted({row["set"] for row in unfiltered}),
+        ["Origins", "Riftbound Organized Play Promotional Cards", "Spiritforged",
+         "Unleashed", "Vendetta"],
+        "the baseline, unchanged: a query with no set/rarity word answers from every "
+        "`Calm Rune`-named row the loose name match already recovered, across five sets",
+    )
+
+    narrowed = matched("Calm Rune Spiritforged")
+    checks.ok(
+        len(narrowed) > 0 and len(narrowed) < len(unfiltered),
+        "a set WORD APPENDED to the name query genuinely narrows — fewer rows than the "
+        "unfiltered name match, never zero",
+        f"unfiltered={len(unfiltered)} narrowed={len(narrowed)}",
+    )
+    checks.equal(
+        {row["set"] for row in narrowed},
+        {"Spiritforged"},
+        "and EVERY surviving row is that one set — the word filters rather than being "
+        "folded into the name test, where it used to change nothing at all",
+    )
+
+    bare_set = matched("Spiritforged")
+    checks.ok(
+        len(bare_set) > 0,
+        "a BARE set word returns that set's rows rather than an empty list — the reported "
+        "defect was `Spiritforged` alone finding nothing at all",
+    )
+    checks.ok(
+        all(row["set"] == "Spiritforged" for row in bare_set),
+        "and every row it returns really is that set — the filter, not a coincidence",
+    )
+    checks.ok(
+        {row["sku"] for row in narrowed} <= {row["sku"] for row in bare_set},
+        "and it is a SUPERSET of the name-narrowed answer — the bare set word browses the "
+        "whole set, which includes every `Calm Rune` row the first case found",
+    )
+
+    # ---- multi-word sets, matched as a PHRASE — the hole a single-term test could not see.
+    # Five of this export's twelve sets are multi-word, and `Calm Rune`'s own `Riftbound
+    # Organized Play Promotional Cards` printing is exactly the shape that made six of the
+    # owner's own Runes carry an UNREACHABLE row past the nine-digit cut: 16 candidates, the
+    # multi-word set past row 9, and no typed word — one word at a time — ever narrowed it.
+    promo_set = "Riftbound Organized Play Promotional Cards"
+    promo_full = matched(f"Calm Rune {promo_set}")
+    checks.ok(
+        len(promo_full) > 0,
+        "the FULL 5-word set name, typed after the name, is consumed as one phrase and "
+        "narrows to that set rather than being ignored word by word",
+        f"query: 'Calm Rune {promo_set}' -> {len(promo_full)} rows",
+    )
+    checks.equal(
+        {row["set"] for row in promo_full},
+        {promo_set},
+        "and every surviving row really is that 5-word set",
+    )
+    checks.ok(
+        len(promo_full) <= 9,
+        "and the count a person can actually reach is under the nine-digit cut — this is "
+        "the printing 3c found unreachable before phrase matching existed",
+        f"count: {len(promo_full)}",
+    )
+
+    partial_word = matched("Calm Rune Promotional")
+    checks.equal(
+        {row["set"] for row in partial_word},
+        {row["set"] for row in unfiltered},
+        "A SINGLE WORD OF A MULTI-WORD SET IS NOT A MATCH — `Promotional` alone is not the "
+        "set's own name, so it stays a name term and the query is unchanged; a phrase "
+        "matcher that let a partial word narrow would be guessing at what was meant",
+    )
+
+    # `Ivern, Green Father` carries a real Secret Garden printing (2 words) beside its
+    # Riftbound Organized Play Promotional Cards and Unleashed ones.
+    ivern_unfiltered = matched("Ivern")
+    ivern_narrowed = matched("Ivern Secret Garden")
+    checks.ok(
+        0 < len(ivern_narrowed) < len(ivern_unfiltered),
+        "a 2-word set phrase (`Secret Garden`) narrows a real multi-printing card too — not "
+        "just the 5-word promo set",
+        f"unfiltered={len(ivern_unfiltered)} narrowed={len(ivern_narrowed)}",
+    )
+    checks.equal(
+        {row["set"] for row in ivern_narrowed},
+        {"Secret Garden"},
+        "and only the Secret Garden row(s) survive",
+    )
+
+    # `Origins` is a real 1-word set on its own AND the first word of the real 3-word
+    # `Origins: Proving Grounds` — longest match first is what keeps typing the short set
+    # name from being swallowed by the long one, and vice versa.
+    origins_bare = matched("Origins")
+    origins_colon = matched("Origins: Proving Grounds")
+    checks.ok(
+        len(origins_bare) > 0 and len(origins_colon) > 0,
+        "both spellings answer",
+        f"Origins={len(origins_bare)} 'Origins: Proving Grounds'={len(origins_colon)}",
+    )
+    checks.equal(
+        {row["set"] for row in origins_bare}, {"Origins"},
+        "the bare word resolves to the SHORT set, not the long one it is also a prefix of",
+    )
+    checks.equal(
+        {row["set"] for row in origins_colon}, {"Origins: Proving Grounds"},
+        "and the full colon phrase resolves to the LONG set — longest match first is what "
+        "keeps the two from colliding into one answer",
+    )
+    checks.ok(
+        set(row["sku"] for row in origins_bare).isdisjoint(
+            row["sku"] for row in origins_colon
+        ),
+        "and the two answers share no row — they are genuinely two different sets, not one "
+        "query accidentally subsuming the other",
+    )
+
+    # ---- both loose-name directions, reproduced as a fixture (docstring's own two cases)
+
+    epithet_rows = (
+        {
+            tcgcsv.SKU_COLUMN: "9990001",
+            tcgcsv.NAME_COLUMN: "Master Yi, Wuju Master",
+            tcgcsv.NUMBER_COLUMN: "045",
+            tcgcsv.SET_COLUMN: "Origins",
+            tcgcsv.RARITY_COLUMN: "Rare",
+            tcgcsv.CONDITION_COLUMN: "Near Mint",
+            tcgcsv.PRODUCT_LINE_COLUMN: str(games.require("riftbound")["product_line"]),
+            tcgcsv.MARKET_PRICE_COLUMN: "1.00",
+        },
+        {
+            tcgcsv.SKU_COLUMN: "9990002",
+            tcgcsv.NAME_COLUMN: "Master Yi",
+            tcgcsv.NUMBER_COLUMN: "046",
+            tcgcsv.SET_COLUMN: "Origins",
+            tcgcsv.RARITY_COLUMN: "Rare",
+            tcgcsv.CONDITION_COLUMN: "Near Mint",
+            tcgcsv.PRODUCT_LINE_COLUMN: str(games.require("riftbound")["product_line"]),
+            tcgcsv.MARKET_PRICE_COLUMN: "1.00",
+        },
+    )
+    epithet_export = tcgcsv.Export(
+        header=tuple(epithet_rows[0].keys()), rows=epithet_rows
+    )
+    epithet_catalog = join.Catalog.from_export(epithet_export, "riftbound")
+
+    def epithet_matched(query: str):
+        return capture_server._catalog_matches(epithet_catalog, "riftbound", query)
+
+    checks.equal(
+        [row["sku"] for row in epithet_matched("Wuju Master")],
+        ["9990001"],
+        "THE EPITHET CASE STILL WORKS: `Wuju Master` (the champion dropped) still finds "
+        "`Master Yi, Wuju Master` — `wanted in name`, unaffected by the set/rarity split "
+        "because neither word folds to a known set or rarity",
+    )
+    checks.equal(
+        [row["sku"] for row in epithet_matched("Master Yi, Tempered")],
+        ["9990002"],
+        "AND THE MIRROR CASE STILL WORKS: `Master Yi, Tempered` (a hallucinated suffix) "
+        "still finds the shorter catalogued `Master Yi` — `name in wanted`, for the same "
+        "reason",
+    )
 
 
 def check_identify_preflight_stage(checks: Checks) -> None:
@@ -29974,6 +30340,7 @@ def run() -> Result:
     check_allocator(checks)
     check_boxes_and_listings(checks)
     check_store(checks)
+    check_set_and_rarity(checks)
     check_store_of_record(checks)
     check_photo_reclaim(checks)
     check_server_routes(checks)
@@ -30022,6 +30389,7 @@ def run() -> Result:
     check_identify_preflight_stage(checks)
     check_review_stand_down(checks)
     check_review_catalog(checks)
+    check_catalog_set_rarity_match(checks)
     check_run_realignment(checks)
     check_reused_box_refusal(checks)
     check_box_true_index(checks)

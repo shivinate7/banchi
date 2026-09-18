@@ -2855,4 +2855,88 @@ def run() -> Result:
         "D35/printed_code: an unknown name finds nothing and stays unmatched",
     )
 
+    _check_near_mint_candidates(c)
+
     return c.result()
+
+
+def _near_mint_row(sku: str, set_name: str, condition: str) -> dict:
+    """A `tcgcsv.Row`-shaped dict carrying only the three columns
+    `cli/resolve.py:_near_mint_candidates` reads. `Product Name`/`Number` are irrelevant to
+    that function and are left out on purpose, so a future read of a field this fixture does
+    not carry fails loudly rather than passing on an accidental default."""
+    return {
+        tcgcsv.SKU_COLUMN: sku,
+        tcgcsv.SET_COLUMN: set_name,
+        tcgcsv.CONDITION_COLUMN: condition,
+    }
+
+
+def _check_near_mint_candidates(c: Checks) -> None:
+    """docs/specs/card-variants.md section 3b: the review queue's own candidates narrowed to
+    Near Mint (D12, D137), through `cli/resolve.py:_near_mint_candidates` /
+    `pipeline/games.py:near_mint_conditions` — never a fourth inline copy of the condition
+    set.
+
+    THE REAL SHAPE, REPRODUCED. Measured read-only against the owner's store: the widest
+    open `set_ambiguous` entry (`4/102`, 2026-09-11) is 15 rows — two SKUs of one promo
+    print, five conditions each, plus five more of a third SKU under `Unleashed` — and
+    narrows to exactly 3, one per SKU, when this filter runs. This fixture reproduces that
+    multiplicity (3 SKUs by 5 conditions, two of them sharing one `Set Name` string) rather
+    than a tidier 3-sets-3-rows shape that would not exercise the same collapse.
+    """
+    c.note("")
+    c.note("NEAR MINT CANDIDATES — cli/resolve.py:_near_mint_candidates (section 3b)")
+
+    conditions = ("Near Mint Foil", "Lightly Played Foil", "Moderately Played Foil",
+                  "Heavily Played Foil", "Damaged Foil")
+    wide = []
+    for sku_base, set_name in (("A", "Riftbound Organized Play Promotional Cards"),
+                                ("B", "Riftbound Organized Play Promotional Cards"),
+                                ("C", "Unleashed")):
+        for i, condition in enumerate(conditions):
+            wide.append(_near_mint_row(f"{sku_base}{i}", set_name, condition))
+
+    narrowed = resolve._near_mint_candidates(wide, "riftbound")
+    c.equal(len(narrowed), 3, "15 candidates narrow to 3 — one per SKU, all off-grade rows gone")
+    c.equal(
+        {row[tcgcsv.CONDITION_COLUMN] for row in narrowed},
+        {"Near Mint Foil"},
+        "every surviving row is the game's own Near Mint string",
+    )
+    c.equal(
+        {row[tcgcsv.SET_COLUMN] for row in narrowed},
+        {"Riftbound Organized Play Promotional Cards", "Unleashed"},
+        "DROPS CONDITIONS, NEVER SETS — both `Set Name` strings the wide list carried are "
+        "still present; no printing left the choice, only the play-grade rows of each one",
+    )
+    c.equal(
+        {row[tcgcsv.SKU_COLUMN] for row in narrowed},
+        {"A0", "B0", "C0"},
+        "and the specific SKU kept from each group of five is its own Near Mint row, not "
+        "an arbitrary survivor",
+    )
+
+    # THE OTHER CASE: every candidate off-grade. Filtering would leave zero rows to answer
+    # over a photograph the operator is looking at, which is worse than a wide list — a wide
+    # list is at least answerable. `_near_mint_candidates` must return every row unchanged.
+    #
+    # MEASURED UNREACHABLE ON THE OWNER'S STORE: read-only against the real store, 124
+    # review/parked entries first seen in 2026-09 carry at least one off-grade candidate —
+    # `set_ambiguous` 61, `detected_finish_not_stocked` 33, `ambiguous_no_signal` 20,
+    # `rarity_claim_mismatch` 10 — and NONE of the 124 would be emptied; every one keeps at
+    # least one Near Mint row. That makes this arm untested by any real entry today, which
+    # is exactly why it needs a fixture rather than a trust: a branch nobody can reach still
+    # has to be correct.
+    all_off_grade = [
+        _near_mint_row("X0", "Vendetta", "Lightly Played"),
+        _near_mint_row("X1", "Vendetta", "Moderately Played"),
+        _near_mint_row("X2", "Vendetta", "Damaged"),
+    ]
+    kept = resolve._near_mint_candidates(all_off_grade, "riftbound")
+    c.equal(
+        kept,
+        all_off_grade,
+        "an entry whose every candidate is off-grade keeps them all, unchanged and in "
+        "order — an unanswerable entry is worse than a wide one",
+    )

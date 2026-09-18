@@ -58,7 +58,7 @@ and T4 pass untouched.
 
 from __future__ import annotations
 
-from typing import Dict, Optional, Tuple
+from typing import Dict, Optional, Set, Tuple
 
 
 class UnknownGame(KeyError):
@@ -968,3 +968,23 @@ def require(key: str) -> Dict[str, object]:
             "fall back to another game's."
         )
     return entry
+
+
+def near_mint_conditions(key: str) -> Set[str]:
+    """The `Condition` strings this game's Near Mint rows carry (D12 hardcodes Near Mint).
+
+    THE ONE PLACE THIS SET IS COMPUTED, per docs/specs/card-variants.md section 3b: it was
+    inlined twice — `pipeline/join.py:Catalog.from_export` (D137) and
+    `server/capture_server.py:_near_mint_conditions` — and a THIRD inline copy in the review
+    queue's own candidate builder is exactly the drift D137's own docstring warns against
+    ("read off the registry rather than restated, so a game whose finishes change here
+    changes in one place"). Both existing sites now call this rather than repeating the
+    expression; this function is not new authority, it is the one they already agreed on,
+    named.
+
+    `condition_by_finish`'s VALUES, not its keys — one Near Mint string per finish (`Near
+    Mint`, `Near Mint Foil`, `Near Mint Holofoil`, …), which is what lets
+    `variant.resolve`'s ladder land on exactly one of these for any finish it settles.
+    """
+    entry = require(key)
+    return {str(v) for v in dict(entry["condition_by_finish"]).values()}

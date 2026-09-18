@@ -381,7 +381,8 @@ COMPONENTS = [
                                     "2,535 real captures.",
                             "governed_by": ["D1", "D3", "D9", "D21", "D25", "D36", "D48", "D86",
                                             "D87", "D100", "D145", "D172", "D180",
-                                            "D189", "D210"],
+                                            "D189", "D210",
+                                            "D-the-set-is-a-stored-fact-and-the-hint-was-never-one"],
                             "tested_by": ["T7"]},
             "cmd_scan.py": {"does": "read the QR codes off a directory of code-card photos into "
                                     "the ledger. FREE — no model call, no network, no money gate "
@@ -469,7 +470,8 @@ COMPONENTS = [
                                      "— it is the one thing here that touches 4.45 GB that "
                                      "cannot be re-taken",
                              "governed_by": ["D172", "D183",
-                                             "D26", "D88", "D89"],
+                                             "D26", "D88", "D89",
+                                             "D-the-set-is-a-stored-fact-and-the-hint-was-never-one"],
                              "tested_by": ["T7"]},
             "cmd_rescue.py": {"does": "`pkmnscan rescue <run>` re-addresses a STRANDED run's "
                                       "cards to the positions their photographs are at now and "
@@ -561,7 +563,7 @@ COMPONENTS = [
                                     "CSV row was written. Not match.positions — every terminal "
                                     "copy is committed, and set_state has no terminal guard, so "
                                     "iterating those would resurrect a sold card (D10, D26).",
-                            "governed_by": ["D7", "D9", "D10", "D25", "D26", "D49", "D54", "D58", "D59", "D86", "D99", "D172"], "tested_by": ["T7"]},
+                            "governed_by": ["D7", "D9", "D10", "D25", "D26", "D49", "D54", "D58", "D59", "D86", "D99", "D172", "D-the-set-is-a-stored-fact-and-the-hint-was-never-one"], "tested_by": ["T7"]},
             "cmd_reconcile.py": {"does": "diff intent against TCGplayer's Export From Staged", "governed_by": ["D7", "D8", "D11", "D49", "D54", "D87", "D106", "D115", "D59"], "tested_by": ["T7"]},
             "cmd_queue.py": {"does": "`pkmnscan queue refresh` — re-resolve every OPEN queue "
                                      "entry against a current export, store-wide. Free, "
@@ -623,7 +625,7 @@ COMPONENTS = [
                                    "dict instead of one `Rows.where(sku=sku)` per listing — "
                                    "measured at 0.9s over 492 listings before the rewrite "
                                    "(D156).",
-                           "governed_by": ["D147", "D145", "D4", "D8", "D10", "D11", "D20", "D21", "D22", "D23", "D24", "D25", "D26", "D33", "D34", "D36", "D49", "D56", "D58", "D59", "D64", "D87", "D89", "D115", "D150", "D156", "D166", "D180", "D183", "D188"], "tested_by": ["T7"]},
+                           "governed_by": ["D147", "D145", "D4", "D8", "D10", "D11", "D12", "D20", "D21", "D22", "D23", "D24", "D25", "D26", "D33", "D34", "D36", "D49", "D56", "D58", "D59", "D64", "D87", "D89", "D115", "D137", "D150", "D156", "D166", "D180", "D183", "D188"], "tested_by": ["T7"]},
             "runs.py": {"does": "run directories and manifest.json", "governed_by": ["D1", "D25", "D49", "D54", "D86"], "tested_by": ["T7"]},
         },
     },
@@ -671,7 +673,7 @@ COMPONENTS = [
                                  "travel without the measurement, and may not be authored on a "
                                  "`category` game, where it could never fire.",
                          "governed_by": ["D3", "D8", "D11", "D12", "D14", "D16", "D18", "D21", "D22", "D23", "D24", "D25", "D65", "D76",
-                                         "D170"],
+                                         "D137", "D170"],
                          "note": "THE MATRIX IS A SUPERSET OF WHAT ANY ONE EXPORT PROVES, and that "
                                  "is load-bearing rather than sloppy: D23's capture screen renders "
                                  "a finish chip excluded by a rarity claim as unselectable, which "
@@ -696,7 +698,7 @@ COMPONENTS = [
                                 "Near-Mint-only exports by hand and cost D3 rung 2 outright once the "
                                 "fetch started sending every play grade",
                         "governed_by": ["D2", "D3", "D4", "D7", "D9", "D10", "D11", "D12", "D16", "D20", "D21", "D23", "D24", "D25", "D29", "D30", "D35", "D36", "D41", "D49", "D54", "D55", "D56", "D58", "D59", "D63", "D64", "D65", "D67", "D68", "D71", "D76", "D87", "D137",
-                                        "D146"], "tested_by": ["T3"]},
+                                        "D146", "D-the-set-is-a-stored-fact-and-the-hint-was-never-one"], "tested_by": ["T3"]},
             # Rung 0 (a human's answer) sits above the ladder and is applied by join.py, so
             # T3 is what covers it — T4 owns the four rungs that infer.
             # D22 because FINISHES and CONDITION_BY_FINISH are no longer written here: they
@@ -718,7 +720,7 @@ COMPONENTS = [
                                     "and the join both read. Label, colon side, guarded prefix, then "
                                     "a <=4-character abbreviation; ambiguity answers None and both "
                                     "callers widen rather than guess.",
-                            "governed_by": ["D2", "D3", "D22", "D65"], "tested_by": ["T3"]},
+                            "governed_by": ["D2", "D3", "D22", "D65", "D-the-set-is-a-stored-fact-and-the-hint-was-never-one"], "tested_by": ["T3"]},
             "catalog.py": {"does": "build-order step 9, piece 2's READER: opens "
                                    "vendor/pokemon-tcg-data/catalog.sqlite (built by "
                                    "scripts/catalog-index.py) and answers cards_by_join_key, "
@@ -1287,7 +1289,7 @@ COMPONENTS = [
                                   "still hands out the lowest free integer (D20) — the number is a "
                                   "label on a drawer and the id is an identity, which is `Place."
                                   "slot` and `Place.index` one register up (D58)",
-                          "governed_by": ["D145", "D3", "D7", "D8", "D10", "D11", "D20", "D21", "D23", "D24", "D26", "D30", "D34", "D36", "D55", "D56", "D58", "D59", "D63", "D67", "D83", "D87", "D88", "D89", "D100", "D115", "D132", "D167", "D172", "D183", "D192"], "tested_by": ["T7"]},
+                          "governed_by": ["D145", "D3", "D7", "D8", "D10", "D11", "D20", "D21", "D23", "D24", "D26", "D30", "D34", "D36", "D55", "D56", "D58", "D59", "D63", "D67", "D83", "D87", "D88", "D89", "D100", "D115", "D132", "D146", "D167", "D172", "D183", "D192", "D-the-set-is-a-stored-fact-and-the-hint-was-never-one"], "tested_by": ["T7"]},
             "queues.py": {"does": "the standing queues — the `queues` table, one mapping per queue "
                                   "name — and the cross-queue release a re-routed position needs",
                           "governed_by": ["D4", "D9", "D22", "D26", "D28", "D37", "D88"], "tested_by": ["T7"]},
@@ -1447,8 +1449,8 @@ COMPONENTS = [
                               "`events_named` (D134) is an unindexed `WHERE event = ?` scan over "
                               "that same table — no new index, because this repo has no schema "
                               "migration to add one to a store already on disk.",
-                      "governed_by": ["D145", "D20", "D26", "D86", "D88", "D134", "D140", "D172",
-                                      "D174", "D189", "D192"], "tested_by": ["T7"]},
+                      "governed_by": ["D145", "D20", "D26", "D86", "D88", "D134", "D140", "D166", "D172",
+                                      "D174", "D189", "D192", "D-the-set-is-a-stored-fact-and-the-hint-was-never-one"], "tested_by": ["T7"]},
             "photos.py": {"does": "where a card's photograph lives, and the ONLY module permitted "
                                   "to compose that path: `<home>/photos/<aa>/<cid>.jpg`, a pure "
                                   "function of the card's own name. `adopt` is the per-card, "
@@ -3831,7 +3833,8 @@ COMPONENTS = [
                                 "D92", "D93", "D96", "D100", "D103", "D104", "D108", "D113",
                                 "D114", "D115", "D116", "D132", "D134", "D137", "D138", "D159",
                                 "D165", "D168", "D174", "D183", "D172", "D192", "D191",
-                                "D193", "D203", "D212"],
+                                "D193", "D203", "D212",
+                                "D-the-set-is-a-stored-fact-and-the-hint-was-never-one"],
                 "tested_by": ["T7"],
             },
             "tcg_import.py": {"does": "THE OUTBOUND WRITE to the seller admin, and the only "
@@ -4738,7 +4741,8 @@ COMPONENTS = [
                                              "D93", "D100", "D103", "D104", "D113", "D115",
                                              "D114", "D116", "D132", "D134", "D147",
                                              "D159", "D172", "D174", "D180",
-                                             "D193", "D165"]},
+                                             "D193", "D165",
+                                             "D-the-set-is-a-stored-fact-and-the-hint-was-never-one"]},
             "src/deviceMemory.ts": {"does": "every `localStorage` key the shell owns — the "
                                             "theme, the rail, which order statuses this "
                                             "device bothers fetching (D114), whether the "
@@ -5099,7 +5103,7 @@ COMPONENTS = [
             # D90 is main's order-driven mode, whose two props this file no longer carries; the
             # citation stays so a session reading main's history knows they were removed on
             # purpose rather than lost.
-            "governed_by": ["D6", "D8", "D9", "D10", "D16", "D19", "D20", "D21", "D22", "D23", "D24", "D26", "D27", "D30", "D31", "D33", "D35", "D38", "D39", "D41", "D45", "D46", "D49", "D52", "D58", "D67", "D68", "D89", "D90", "D92", "D118", "D125", "D132", "D119", "D172", "D181", "D192"]},
+            "governed_by": ["D6", "D8", "D9", "D10", "D16", "D19", "D20", "D21", "D22", "D23", "D24", "D26", "D27", "D30", "D31", "D33", "D35", "D38", "D39", "D41", "D45", "D46", "D49", "D52", "D58", "D65", "D67", "D68", "D89", "D90", "D92", "D118", "D125", "D132", "D119", "D172", "D181", "D192", "D-the-set-is-a-stored-fact-and-the-hint-was-never-one"]},
             "src/BoxBrowse.css": {"does": "its layout, and why no accent appears anywhere in it. Its list keeps an "
                                   "INSET focus ring and says so — it clips its own overflow, which is the "
                                   "case base.css's standing ring cannot serve. D38's band lives here: the "
@@ -5243,7 +5247,8 @@ COMPONENTS = [
                 "governed_by": ["D5", "D6", "D7", "D8", "D10", "D13", "D24", "D26", "D27", "D28",
                                 "D31", "D33", "D36", "D38", "D39", "D41", "D45", "D49", "D57",
                                 "D58", "D68", "D71", "D90", "D93", "D118", "D119", "D125", "D132",
-                                "D172", "D181", "D192"],
+                                "D172", "D181", "D192",
+                                "D-the-set-is-a-stored-fact-and-the-hint-was-never-one"],
             },
             "src/Inventory.css": {
                 "does": "its layout, at the dense owner-side end of the one system, two "
@@ -7304,6 +7309,21 @@ COMPONENTS = [
                         "that request. Neither can see the other's half. Like its siblings it "
                         "is NOT a harness test: it starts a browser, so it runs under "
                         "`make design-check` and is deliberately off the commit path.",
+            },
+            "tests/card-variants.spec.ts": {
+                "does": "the name -> variant chooser drawn against the owner's own two real "
+                        "collisions (D-the-set-is-a-stored-fact-and-the-hint-was-never-one): "
+                        "two SKUs identical in name, number, rarity AND condition, `set_hint` "
+                        "null on both, differing only by `set`; and two SKUs identical but for "
+                        "`condition`. Every assertion reads RENDERED TILE TEXT, never the "
+                        "`SearchGroup` object passed in — a test over the object proves the "
+                        "data differs, not that the screen draws it, which is the gap this "
+                        "item exists to close. A third case, one SKU, asserts no chooser draws "
+                        "at all — a single-group search is unchanged from before this item.",
+                "governed_by": ["D-the-set-is-a-stored-fact-and-the-hint-was-never-one"],
+                "note": "NOT A HARNESS TEST, like its siblings in this directory: it starts a "
+                        "browser, so it runs under `make design-check` and is deliberately "
+                        "off the commit path.",
             },
             # THE SCREEN docs/DESIGN.md SPECIFIES HARDEST WAS THE ONE WITH NO BROWSER
             # COVERAGE, until 2026-08-24. `grep -rn '#/review' app/tests/` returned nothing:

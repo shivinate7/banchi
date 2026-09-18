@@ -193,6 +193,14 @@ make catalog-mirror # STEP 9 PIECE 3, DRY RUN ONLY as shipped. ARGS=--dry-run HE
                                    #   refuse on mismatch, hard link, re-hash destination, THEN
                                    #   unlink source. The bytes exist under a name at every
                                    #   instant.
+./pkmnscan cards    variants [--write]
+                                   # backfill `set`/`rarity` from whatever export a card's own
+                                   #   game already has on disk. Governed by
+                                   #   D-the-set-is-a-stored-fact-and-the-hint-was-never-one.
+                                   #   Previews by default.
+                                   #   Never guesses: a SKU that resolves to nothing keeps a
+                                   #   null set. Re-runnable — a card already carrying a set
+                                   #   is left alone.
 ./pkmnscan prices   adopt [--write] # fold every run's legacy decisions.json into the corpus.
                                    #   Previews. Newest-wins. Names the holds it replaces.
 ./pkmnscan prices   show [--held]   # what the corpus holds. `--held` is the cross-run view.

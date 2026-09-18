@@ -750,6 +750,12 @@ def run(args, say) -> int:
                     master.IDENTIFIED,
                     sku=match.sku,
                     condition=match.condition,
+                    # D-the-set-is-a-stored-fact-and-the-hint-was-never-one: the catalogue
+                    # row this SKU resolved to is in hand right here, and this is the
+                    # moment it is committed to the card — the same moment `sku` and
+                    # `condition` always have been.
+                    set_name=match.set_name or None,
+                    rarity=match.rarity or None,
                     run=run_dir.name,
                 )
                 if stamped and key in live_keys:
@@ -1113,6 +1119,8 @@ def run_merged(args, say) -> int:
                     master.IDENTIFIED,
                     sku=row.sku,
                     condition=row.match.condition,
+                    set_name=row.match.set_name or None,
+                    rarity=row.match.rarity or None,
                     run=run_name,
                 )
                 if stamped and key in live_keys:

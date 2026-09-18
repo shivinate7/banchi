@@ -469,6 +469,30 @@ class Card:
     detected_finish: Optional[str] = None
     sku: Optional[str] = None
     condition: Optional[str] = None
+    # THE SET, AS THE CATALOGUE NAMES IT (D-the-set-is-a-stored-fact-and-the-hint-was-never-one).
+    # `set_hint` above is the operator's own claim, typed at the shutter and evidence about
+    # its own card; this is a fact about the PRODUCT, read off the export row `sku` resolved
+    # to at the moment the SKU was committed. Two of five `Calm Rune` copies would tie on
+    # every field this record carried before this one — name, number, `set_hint` (null on
+    # all five) — and this is the one that tells them apart.
+    #
+    # NAMED `set_name`, NOT `set`. SQLite's `UPDATE ... SET` grammar cannot parse an unquoted
+    # column literally spelled `set` — `sqlite3.OperationalError: near "set": syntax error`,
+    # reproduced before this was written — so every DDL, DML and search statement that ever
+    # touches it would need to carry a quoting exception this codebase draws nowhere else.
+    # `set_name` is `pipeline/join.py:SkuMatch.set_name`'s own name for exactly this fact,
+    # reused rather than invented.
+    #
+    # NULL ON EVERY CARD IDENTIFIED BEFORE THIS FIELD EXISTED, backfilled once by
+    # `./pkmnscan cards variants --write` and never guessed: a SKU whose export row cannot be
+    # found (no export ever fetched, or the SKU has aged out of one that was) keeps a null
+    # set rather than a fallback value invented for the column.
+    set_name: Optional[str] = None
+    # THE CATALOGUE'S OWN RARITY, kept beside `rarity_claim` above and never merged into it.
+    # `rarity_claim` is the operator's claim at the shutter (D23, D146) and can disagree with
+    # what TCGplayer calls the product — a disagreement is itself information and both are
+    # kept on the record for that reason. Same source and same write moment as `set_name`.
+    rarity: Optional[str] = None
     state: str = CAPTURED
     state_at: Optional[str] = None
     # Why a retired card left — one of `RETIRE_REASONS`, set by `retire()` and cleared by
@@ -1302,6 +1326,8 @@ def _card_columns(card: "Card") -> Dict[str, object]:
         "state": card.state,
         "sku": card.sku,
         "condition": card.condition,
+        "set_name": card.set_name,
+        "rarity": card.rarity,
         "capture_id": card.capture_id,
         "name": card.name,
         "number": card.number,
@@ -1810,6 +1836,8 @@ class Inventory:
         *,
         sku: Optional[str] = None,
         condition: Optional[str] = None,
+        set_name: Optional[str] = None,
+        rarity: Optional[str] = None,
         run: Optional[str] = None,
     ) -> bool:
         """Move one card to a new state. Returns False if this position has no record.
@@ -1818,6 +1846,12 @@ class Inventory:
         bug #5's exact shape — a transition that appears to happen, is reported as having
         happened, and did not — so callers check it and report the gap rather than
         assuming the write landed.
+
+        `set_name` AND `rarity` FOLLOW `sku`/`condition`'s OWN RULE: written only when the
+        caller has an answer, because the moment a SKU is committed is the moment the
+        catalogue row is in hand — `cli/cmd_emit.py`'s `SkuMatch` carries both beside the
+        SKU it resolved. A caller with no catalogue row (a bare state transition) passes
+        neither and leaves them as they were.
         """
         check_state(state)
         card = self.cards.get(key)
@@ -1829,6 +1863,10 @@ class Inventory:
             card.sku = sku
         if condition is not None:
             card.condition = condition
+        if set_name is not None:
+            card.set_name = set_name
+        if rarity is not None:
+            card.rarity = rarity
         if run is not None:
             card.run = run
         self._log(state, key, sku=card.sku, run=card.run)
@@ -2566,6 +2604,9 @@ class Inventory:
             "box", "idx", "state", "sku", "condition", "capture_id", "name", "number",
             "game", "set_hint", "run", "captured_at", "state_at", "cid",
             "number_key", "number_display",
+            # D-the-set-is-a-stored-fact-and-the-hint-was-never-one, matching
+            # `store/db.py:TABLES["cards"]` and `_card_columns` above.
+            "set_name", "rarity",
         ),
     )
     BOXES = TableSpec(
