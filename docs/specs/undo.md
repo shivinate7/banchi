@@ -1,10 +1,23 @@
 # Undo in Banchi
 
-**STATUS: SPECIFIED, NOT BUILT.** Every ruling below is the owner's, given in interview on
-2026-09-17. The session opened on one defect — the pull undo is reachable only from a toast —
-and the owner reopened undo as a whole: *"do you want to just reopen the entirety of undo as a
-concept on banchi and interview me from the start to see if what's been built or assumed is in
-line with what I want?"* This file is the answer to that question. Nothing is built.
+**STATUS: BUILT 2026-09-17, all four sections.** Every ruling below is the owner's, given in
+interview the same day. The session opened on one defect — the pull undo is reachable only from
+a toast — and the owner reopened undo as a whole: *"do you want to just reopen the entirety of
+undo as a concept on banchi and interview me from the start to see if what's been built or
+assumed is in line with what I want?"* This file is the answer to that question, and then the
+record of building it.
+
+**What landed, one branch per section:** section 3's `U` widening, section 4's resurrect and the
+ledger half of the sale undo, section 5's position drop, and section 6's mid-sitting removal on
+the capture strip. Section 8's checks all ran. **Section 5 turned out to be a wire change and
+not a screen change** — `#/orders` never drew a position for an already-pulled copy, and
+`progress.pulled` had zero readers in the whole front end, so what was removed is a join the
+server computed for nobody on a request already measured at 520-580ms. The owner's ruling was
+already true on screen.
+
+**One thing this build did NOT fix, measured while integrating: DEBT30.** A D118 guard on
+`#/orders` flakes by one pixel about a third of the time, on `main`, and nothing on the commit
+path runs it.
 
 ## 1. What is in the tree today
 

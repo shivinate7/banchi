@@ -866,7 +866,8 @@ adopting some and deferring others (D99 sits where it does because main took D90
   product claim BUILT, channel decision RECORDED and not executed.
 - `docs/specs/stale-listings.md` — SPECIFIED and BUILT, NOT VALIDATED. No file has ever
   reached TCGplayer.
-- `docs/specs/undo.md` — SPECIFIED, NOT BUILT. Undo as one concept, interviewed 2026-09-17.
+- `docs/specs/undo.md` — BUILT 2026-09-17, all four sections. Undo as one concept, interviewed
+  the same day.
   Two mechanisms by ruling: `U` and the receipt for the press just made, and a menu on the
   sunk row on `#/inventory` for a mistake found later. No clock is a limit anywhere — three
   built reversals (the sale, the retirement, the pull) are reachable only from a
