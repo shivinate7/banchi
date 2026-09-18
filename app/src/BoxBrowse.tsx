@@ -12,6 +12,7 @@ import type {
   RemoveResult,
   SearchCopy,
 } from './types'
+import type { SaleResult } from './types'
 import type { Failure } from './server'
 import {
   describeFailure,
@@ -26,6 +27,8 @@ import {
   reshootPhoto,
   updateCard,
   newCaptureId,
+  undoRetire,
+  undoSale,
 } from './server'
 import { BoxIdentity, BoxOps, ClaimEditor, type ClaimPatch } from './BoxOps'
 import { reasonLabel } from './reasons'
@@ -2352,9 +2355,13 @@ function ReshootControl({ row, busy, failure, onPick }: ReshootControlProps) {
 }
 
 /* THE CARD-LEVEL OPERATIONS behind one menu: correct what this card claims (with the re-shoot
- * inside), and delete a junk capture out of the middle of a box. The correction is reversible
- * and takes no confirm; the mid-box delete renumbers and asks a second time. Neither is drawn
- * for a sold or retired card. */
+ * inside), delete a junk capture out of the middle of a box, and — for a sold or retired
+ * card — bring it back (`docs/specs/undo.md` §4's slow path, the departed row's own menu).
+ * The correction is reversible and takes no confirm; the mid-box delete renumbers and asks a
+ * second time. Correct-claims and delete are drawn only for a card still on hand; the
+ * resurrect item is drawn only for the terminal states, and moved is excluded — a move is a
+ * transplant reached through `Inventory.move_card` alone, and reversing one wears the same
+ * word for a different write. */
 function CardOps({
   row,
   onChanged,
@@ -2368,6 +2375,12 @@ function CardOps({
   const [open, setOpen] = useState<'claims' | 'delete' | null>(null)
   const [busy, setBusy] = useState(false)
   const [trouble, setTrouble] = useState<Failure | null>(null)
+  // Set once a resurrect attempt refuses as `sold_origin_unknown` or `retired_origin_unknown`
+  // — the store's own answer that history cannot say what to put this card back to. There is
+  // no route to ask that in advance (`_sale_origin`/`_retirement_origin` run inside the
+  // write's own lock), so the FIRST press is what learns it; every one after degrades to the
+  // note, the same way the sale receipt withholds Undo once `restores_to` reads null.
+  const [originUnknown, setOriginUnknown] = useState(false)
   const anchor = useRef<HTMLDivElement | null>(null)
 
   const terminal = row.card.state === 'sold' || row.card.state === 'retired'
@@ -2445,6 +2458,56 @@ function CardOps({
     }
   }
 
+  /* THE SLOW PATH: bring a departed card back, exactly where it was. No confirm — this route
+   * IS the reversal, and `docs/DESIGN.md` bans a confirm on an action that already is one.
+   * One press: the state goes back (D10, D58 — the stored index never moved, so nothing here
+   * renumbers), and where the sale pulled this copy for an order, that line is released in
+   * the same write (`docs/specs/undo.md` §4) — the receipt below says so without a second
+   * request. */
+  const resurrect = async () => {
+    if (busy) return
+    setBusy(true)
+    setTrouble(null)
+    try {
+      // NOT `positionLabel`: for a departed card that reads "Box 1 · departed · B1 #1"
+      // (D68), which would say a card just brought back is still departed. The store key,
+      // spelled the way a departed row's own slot cell already spells it (`storeKeyText`),
+      // names the same physical card without the tense clash.
+      const label = storeKeyText(row.card.box, row.card.index)
+      if (row.card.state === 'sold') {
+        const result: SaleResult = await undoSale(row.card.box, row.card.index)
+        toast({
+          kind: 'ok',
+          icon: 'undo',
+          title: 'Card brought back',
+          body: result.order_released
+            ? `${label} is back in its box. The order it was pulled for no longer counts it shipped.`
+            : `${label} is back in its box.`,
+          ttlMs: 12000,
+        })
+      } else {
+        await undoRetire(row.card.box, row.card.index)
+        toast({
+          kind: 'ok',
+          icon: 'undo',
+          title: 'Card brought back',
+          body: `${label} is back in its box.`,
+          ttlMs: 12000,
+        })
+      }
+      setMenu(false)
+      onChanged()
+    } catch (err) {
+      const failure = describeFailure(err)
+      if (failure.code === 'sold_origin_unknown' || failure.code === 'retired_origin_unknown') {
+        setOriginUnknown(true)
+      }
+      setTrouble(failure)
+    } finally {
+      setBusy(false)
+    }
+  }
+
   return (
     <div className="browse-cardops" ref={anchor}>
       <Button
@@ -2485,9 +2548,36 @@ function CardOps({
             <Icon name="refresh" size={16} /> Re-read the inventory
           </button>
           {terminal || !addressable ? (
-            <p className="browse-menu-note">
-              This card has left inventory, so it cannot be removed from its box.
-            </p>
+            <>
+              {!terminal || !addressable ? null : (
+                <>
+                  <div className="bn-menu-sep" />
+                  {originUnknown ? (
+                    <p className="browse-menu-note">
+                      {row.card.state === 'sold'
+                        ? 'The store has no earlier state for this card, so the sale cannot be reversed here. Set it by hand instead.'
+                        : 'The store has no earlier state for this card, so the retirement cannot be reversed here. Set it by hand instead.'}
+                    </p>
+                  ) : (
+                    <button
+                      role="menuitem"
+                      type="button"
+                      className="bn-menu-item"
+                      disabled={busy}
+                      onClick={() => void resurrect()}
+                    >
+                      <Icon name="undo" size={16} /> Bring this card back
+                    </button>
+                  )}
+                </>
+              )}
+              <p className="browse-menu-note">
+                This card has left inventory, so it cannot be removed from its box.
+              </p>
+              {trouble === null ? null : (
+                <Notice tone="danger" title={trouble.message} code={trouble.code} />
+              )}
+            </>
           ) : (
             <>
               <div className="bn-menu-sep" />

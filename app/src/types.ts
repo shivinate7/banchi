@@ -949,6 +949,15 @@ export type SaleResult = {
    *  D10: sold is a state and never a removal, so a reversal is a state transition backwards
    *  and this is the state it goes back to. */
   restores_to: string | null
+
+  /** The order line a REVERSAL released, or null. `docs/specs/undo.md` §4's own finding:
+   *  a copy pulled for an order and then sold carries a ledger entry the sale never touches,
+   *  so a sale's own undo must release it in the SAME write or the order keeps reading that
+   *  copy as shipped while the card sits back on the shelf. Always null on a sale — recording
+   *  a pull is `POST /orders/pull`'s job, already done before a card reaches this route sold —
+   *  and null on a reversal that held no order line. Additive: every field above this one is
+   *  unmoved. */
+  order_released: { key: string; sku: string } | null
 }
 
 /** Why a retired card left (D26). The send-side union — the four words the server's
