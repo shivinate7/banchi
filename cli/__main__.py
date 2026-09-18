@@ -299,7 +299,7 @@ def build_parser() -> argparse.ArgumentParser:
     cards_variants = cards_sub.add_parser(
         "variants",
         help="backfill `set` and `rarity` from whatever export each card's game already "
-        "has on disk (D-the-set-is-a-stored-fact-and-the-hint-was-never-one). Previews by "
+        "has on disk (D213). Previews by "
         "default. Never guesses: a SKU that resolves to nothing keeps a null set.",
     )
     cards_variants.add_argument(

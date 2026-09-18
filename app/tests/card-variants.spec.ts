@@ -3,7 +3,7 @@ import { settleFonts } from './fontsReady'
 import { sealEveryTest } from './shell'
 
 /* THE NAME -> VARIANT CHOOSER, PROVEN ON THE OWNER'S OWN TWO COLLISIONS
- * (D-the-set-is-a-stored-fact-and-the-hint-was-never-one).
+ * (D213).
  *
  * `card-variants.spec.ts` exists apart from `inventory.spec.ts` because its fixture is the
  * point: two SKUs identical in name, number, rarity AND condition, with `set_hint` NULL on

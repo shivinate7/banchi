@@ -1059,7 +1059,7 @@ def check_store(checks: Checks) -> None:
 
 
 def check_set_and_rarity(checks: Checks) -> None:
-    """D-the-set-is-a-stored-fact-and-the-hint-was-never-one: the schema migration
+    """D213: the schema migration
     (`store/db.py:_add_set_columns`) and the backfill (`cli/cmd_cards.py`'s `variants`).
 
     THE MIGRATION HALF: an old store, stamped 7, gains `set_name` and `rarity` with every
@@ -1198,7 +1198,7 @@ def check_set_and_rarity(checks: Checks) -> None:
         )
 
     # ------------------------------------------------------- the real collision, on the wire
-    # D-the-set-is-a-stored-fact-and-the-hint-was-never-one's own worked example: two SKUs
+    # D213's own worked example: two SKUs
     # identical in name, number, rarity and condition, differing only by set, with
     # `set_hint` NULL on both — the exact shape that made the chooser draw two
     # indistinguishable tiles before this item.

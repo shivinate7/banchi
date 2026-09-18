@@ -31,7 +31,7 @@ names and aliases already in hand and stays dependency-free for that reason, unc
 what follows.
 
 `known_sets`/`resolve_for_game`, ADDED FOR
-D-the-set-is-a-stored-fact-and-the-hint-was-never-one,
+D213,
 ARE THE ONE EXCEPTION, and they import lazily, inside the function body, precisely so
 loading this module for the pure ladder above still costs nothing. They read
 `inventory/.exports/<game>/` off disk to complete a hint AT THE WRITE without a network call
@@ -206,7 +206,7 @@ def resolve(
 
 # --------------------------------------------------------------------- write-time completion
 #
-# D-the-set-is-a-stored-fact-and-the-hint-was-never-one, "the remaining hole": completion is
+# D213, "the remaining hole": completion is
 # offered on Enter by `app/src/setHint.ts` and enforced nowhere. Everything below runs the
 # same ladder AT THE WRITE, against whatever export this game already has on disk — never
 # fetched, because a write path must not open a socket to store a string, and the export the
@@ -229,7 +229,7 @@ def _export_dir(game: str) -> Path:
 def known_sets(game: str) -> Tuple[str, ...]:
     """Every distinct `Set Name` across every export this game has on disk, in no particular
     order, or empty when the game has never been fetched — the honest Pokemon answer today
-    (D-the-set-is-a-stored-fact-and-the-hint-was-never-one's own measurement: 0 of 542).
+    (D213's own measurement: 0 of 542).
 
     EVERY FILE UNDER THE DIRECTORY, NOT ONE. `inventory/.exports/<game>/` can hold more than
     one CSV over a store's life — a narrower fetch today, a wider one last month — and a set

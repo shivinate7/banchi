@@ -1,4 +1,4 @@
-## D-the-set-is-a-stored-fact-and-the-hint-was-never-one
+## D213 — The set is a stored fact, and the hint was never one
 
 **The owner, 2026-09-17, on searching a card by name and reaching the wrong printing.** Searching
 `Mind Rune` or `Calm Rune` on `#/inventory` lands on one SKU. It offers no way to reach a sibling
