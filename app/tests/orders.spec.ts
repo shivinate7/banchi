@@ -953,7 +953,7 @@ test('the walk counts the orders it was started over, and the figure moves as on
     number: HISTORY,
     recorded: 1,
     open: false,
-    progress: [{ sku: SKU, wanted: 1, recorded: 1, outstanding: 0, over: 0, copies: [], pulled: [], at: null, by_hand: 0, reason: null, declared_kind: null, closed_at: null, closed_reason: null }],
+    progress: [{ sku: SKU, wanted: 1, recorded: 1, outstanding: 0, over: 0, copies: [], at: null, by_hand: 0, reason: null, declared_kind: null, closed_at: null, closed_reason: null }],
   })
 
   const both = payloadOf(
@@ -1553,7 +1553,7 @@ test('a buyer with nothing open and closed long ago sits under the Earlier fold'
     open: false,
     recorded: 1,
     placed_at: '2020-01-01T00:00:00+00:00',
-    progress: [{ sku: SKU, wanted: 1, recorded: 1, outstanding: 0, over: 0, copies: [], pulled: [], at: null, by_hand: 0, reason: null, declared_kind: null, closed_at: null, closed_reason: null }],
+    progress: [{ sku: SKU, wanted: 1, recorded: 1, outstanding: 0, over: 0, copies: [], at: null, by_hand: 0, reason: null, declared_kind: null, closed_at: null, closed_reason: null }],
   })
   await open(page, { orders: payloadOf([order(), stale], [{ key: `TCGplayer:${ORDER_NUMBER}`, number: ORDER_NUMBER, complete: false, outstanding: 1, lines: [line()] }]) })
 
@@ -1606,7 +1606,6 @@ function seededOrder(seed: {
         outstanding: 1,
         over: 0,
         copies: [],
-        pulled: [],
         at: null,
         by_hand: 0,
         reason: null,
@@ -1887,7 +1886,7 @@ test('the search reaches the Earlier fold, so a Done buyer past the 7-day cut is
     open: false,
     recorded: 1,
     placed_at: '2020-01-01T00:00:00+00:00',
-    progress: [{ sku: SKU, wanted: 1, recorded: 1, outstanding: 0, over: 0, copies: [], pulled: [], at: null, by_hand: 0, reason: null, declared_kind: null, closed_at: null, closed_reason: null }],
+    progress: [{ sku: SKU, wanted: 1, recorded: 1, outstanding: 0, over: 0, copies: [], at: null, by_hand: 0, reason: null, declared_kind: null, closed_at: null, closed_reason: null }],
   })
   await open(page, { orders: payloadOf([order(), stale], [{ key: `TCGplayer:${ORDER_NUMBER}`, number: ORDER_NUMBER, complete: false, outstanding: 1, lines: [line()] }]) })
 
@@ -2100,7 +2099,7 @@ test('the line header sentence names how many to pull, how many are on hand, and
   })
   await open(page, {
     orders: payloadOf(
-      [order({ wanted: 2, progress: [{ sku: SKU, wanted: 2, recorded: 0, outstanding: 2, over: 0, copies: [], pulled: [], at: null, by_hand: 0, reason: null, declared_kind: null, closed_at: null, closed_reason: null }], })],
+      [order({ wanted: 2, progress: [{ sku: SKU, wanted: 2, recorded: 0, outstanding: 2, over: 0, copies: [], at: null, by_hand: 0, reason: null, declared_kind: null, closed_at: null, closed_reason: null }], })],
       [{ key: `TCGplayer:${ORDER_NUMBER}`, number: ORDER_NUMBER, complete: false, outstanding: 2, lines: [spread] }],
     ),
   })
@@ -2126,7 +2125,7 @@ test('one box reads ", 1 box", never "across 1 boxes"', async ({ page }) => {
   })
   await open(page, {
     orders: payloadOf(
-      [order({ wanted: 1, progress: [{ sku: SKU, wanted: 1, recorded: 0, outstanding: 1, over: 0, copies: [], pulled: [], at: null, by_hand: 0, reason: null, declared_kind: null, closed_at: null, closed_reason: null }], })],
+      [order({ wanted: 1, progress: [{ sku: SKU, wanted: 1, recorded: 0, outstanding: 1, over: 0, copies: [], at: null, by_hand: 0, reason: null, declared_kind: null, closed_at: null, closed_reason: null }], })],
       [{ key: `TCGplayer:${ORDER_NUMBER}`, number: ORDER_NUMBER, complete: false, outstanding: 1, lines: [oneBox] }],
     ),
   })
@@ -2152,13 +2151,91 @@ test('a satisfied line says so, plainly, rather than "Pull 0"', async ({ page })
   })
   await open(page, {
     orders: payloadOf(
-      [order({ wanted: 1, recorded: 1, progress: [{ sku: SKU, wanted: 1, recorded: 1, outstanding: 0, over: 0, copies: [], pulled: [], at: null, by_hand: 0, reason: null, declared_kind: null, closed_at: null, closed_reason: null }], })],
+      [order({ wanted: 1, recorded: 1, progress: [{ sku: SKU, wanted: 1, recorded: 1, outstanding: 0, over: 0, copies: [], at: null, by_hand: 0, reason: null, declared_kind: null, closed_at: null, closed_reason: null }], })],
       [{ key: `TCGplayer:${ORDER_NUMBER}`, number: ORDER_NUMBER, complete: true, outstanding: 0, lines: [done] }],
     ),
   })
 
   await expect(page.locator('.orders-map-lede')).toHaveText('All 1 pulled — 2 on hand.')
   await expect(page.locator('.orders-map-lede')).not.toContainText('Pull 0')
+})
+
+/* THE CUT `docs/specs/undo.md` §5 (D212) DRAWS, ASSERTED WHERE A REGRESSION WOULD ACTUALLY SHOW:
+ * a copy that has ALREADY LEFT is named by card and count, and a copy still ON HAND is named by
+ * its place. `GET /orders` never joins a position for a recorded copy any more (`server/
+ * capture_server.py:_order_progress` dropped `_pulled_positions`), so this is a real-browser
+ * assertion of the shape the wire now answers with — `pulled` is gone from `OrderLineProgress`,
+ * so a fixture reviving it would fail `tsc` before this file ever ran.
+ *
+ * THE REMAINING COPY IS `held_by` A SECOND ORDER, ON PURPOSE. `OrderLineRow`'s own copy list —
+ * the one place `figure.pulled`'s note draws — is suppressed by `hidePicks` the instant this
+ * line has a copy the MERGED WALK would draw instead (see the comment two cases below this one),
+ * and any takeable on-hand copy earns exactly that. Marking the remaining copy spoken for by
+ * another order takes it out of THIS buyer's walk without taking it out of the box, which is the
+ * state that renders both halves in one screen: this row's own list stays up (not folded behind
+ * the walk), so the already-pulled note is visible beside a copy that has not left — proving the
+ * one draws a place and the other never does. */
+test('an already-pulled copy draws the card and the count, never a place — and a copy still on hand keeps its own', async ({
+  page,
+}) => {
+  const stillOnHand = line({
+    wanted: 3,
+    fulfilled: 1,
+    outstanding: 1,
+    on_hand: 1,
+    picks: [
+      pick({
+        capture_id: 'cap-remaining',
+        box: 3,
+        index: 21,
+        held_by: { order: OTHER_ORDER, sku: SKU },
+      }),
+    ],
+  })
+  await open(page, {
+    orders: payloadOf(
+      [
+        order({
+          wanted: 3,
+          recorded: 2,
+          progress: [
+            {
+              sku: SKU,
+              wanted: 3,
+              recorded: 2,
+              outstanding: 1,
+              over: 0,
+              copies: ['cap-gone-1', 'cap-gone-2'],
+              at: null,
+              by_hand: 0,
+              reason: null,
+              declared_kind: null,
+              closed_at: null,
+              closed_reason: null,
+            },
+          ],
+        }),
+      ],
+      [{ key: `TCGplayer:${ORDER_NUMBER}`, number: ORDER_NUMBER, complete: false, outstanding: 1, lines: [stillOnHand] }],
+    ),
+  })
+
+  /* THE FIGURE: a count beside "remaining", never a drawer. */
+  await expect(page.locator('.orders-line-pulled')).toHaveText('2 already pulled')
+
+  /* THE NOTE UNDER THE COPY LIST: the card left through the count alone. No box, no section, no
+   * slot — `Box`/`Section`/`Card #` is exactly the vocabulary `PositionLabel` draws for a copy
+   * still IN a drawer, and none of it belongs to one that already left it. */
+  const pulledNote = page.locator('.orders-pulled-note')
+  await expect(pulledNote).toBeVisible()
+  await expect(pulledNote).toContainText('2 copies have already been pulled for this order and left')
+  await expect(pulledNote).not.toContainText('Box')
+  await expect(pulledNote).not.toContainText('Section')
+
+  /* THE COPY STILL ON HAND KEEPS ITS PLACE. This is the other half of the cut: a copy that has
+   * not left the box is a card sitting in a drawer, and the row says exactly where. */
+  await expect(page.locator('.orders-pick-place')).toContainText('3', { ignoreCase: true })
+  await expect(page.locator('.orders-pick-link')).toHaveAttribute('title', 'Open box 3 in the inventory')
 })
 
 /* `.orders-map-lede` renders on `OrderLineRow` only where `hidePicks` is false — the state where
@@ -2178,7 +2255,6 @@ test('the sentence changing on a write moves no box row beneath it (D118)', asyn
       outstanding: 2 - recorded,
       over: 0,
       copies: [],
-      pulled: [],
       at: null,
       by_hand: 0,
       reason: null,
@@ -2245,7 +2321,7 @@ test('a real Pull press changes the lede and the box header without changing eit
   page,
 }) => {
   const progressOf = (recorded: number) => [
-    { sku: SKU, wanted: 2, recorded, outstanding: 2 - recorded, over: 0, copies: [], pulled: [], at: null, by_hand: 0, reason: null, declared_kind: null, closed_at: null, closed_reason: null },
+    { sku: SKU, wanted: 2, recorded, outstanding: 2 - recorded, over: 0, copies: [], at: null, by_hand: 0, reason: null, declared_kind: null, closed_at: null, closed_reason: null },
   ]
   const twoOfOne = (recorded: number) =>
     line({
@@ -2332,8 +2408,8 @@ function twoCardOrder(): { row: OrderRow; resolved: ResolvedOrder } {
     wanted: 3,
     lines: [akshanLine.line, yasuoLine.line],
     progress: [
-      { sku: '9038408', wanted: 2, recorded: 0, outstanding: 2, over: 0, copies: [], pulled: [], at: null, by_hand: 0, reason: null, declared_kind: null, closed_at: null, closed_reason: null },
-      { sku: '9038409', wanted: 1, recorded: 0, outstanding: 1, over: 0, copies: [], pulled: [], at: null, by_hand: 0, reason: null, declared_kind: null, closed_at: null, closed_reason: null },
+      { sku: '9038408', wanted: 2, recorded: 0, outstanding: 2, over: 0, copies: [], at: null, by_hand: 0, reason: null, declared_kind: null, closed_at: null, closed_reason: null },
+      { sku: '9038409', wanted: 1, recorded: 0, outstanding: 1, over: 0, copies: [], at: null, by_hand: 0, reason: null, declared_kind: null, closed_at: null, closed_reason: null },
     ],
   })
   return {

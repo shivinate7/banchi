@@ -2839,9 +2839,6 @@ export type OrderLineProgress = {
    *  underneath a legitimate pull is what makes it non-zero. */
   over: number
   copies: string[]
-  /** Where each recorded copy sits RIGHT NOW, joined at read time off its capture id and
-   *  stored nowhere (D36). Nulls where the card is gone. The copies panel's `pulled` mark. */
-  pulled: OrderPulledCopy[]
   /** How many of `recorded` were closed with NO card behind them — `POST /orders/fill`, D113.
    *  `recorded` is the whole count and this is the part of it nothing in the store can
    *  corroborate, so a screen drawing `recorded` alone cannot tell a pulled line from a
@@ -3183,9 +3180,6 @@ export type OrdersFetched = {
  *  `capture_id` is the aim check on the way in (a mid-box delete or a re-shoot changes which
  *  physical card sits at a slot) and the WHOLE of the lookup on the way back. */
 export type PullTarget = { box: number; index: number; capture_id: string }
-
-/** One pulled copy's current position, composed per `GET /orders` answer. */
-export type OrderPulledCopy = { capture_id: string; box: number | null; index: number | null }
 
 /** What a pull or its undo did.
  *
