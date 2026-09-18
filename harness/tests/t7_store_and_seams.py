@@ -213,7 +213,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 import envfile  # noqa: E402
 from harness.tests import Checks, Result  # noqa: E402
 
-from cli import cmd_reprice, requeue, resolve, runs  # noqa: E402
+from cli import cmd_cards, cmd_reprice, requeue, resolve, runs  # noqa: E402
 from identify import batch, cost, prompt, sidecar  # noqa: E402
 from pipeline import (  # noqa: E402
     corpus,
@@ -1055,6 +1055,180 @@ def check_store(checks: Checks) -> None:
         checks.ok(
             not list(Store().directory.glob(".*.tmp")),
             "and nothing is staged beside the database — the transaction is the atomicity",
+        )
+
+
+def check_set_and_rarity(checks: Checks) -> None:
+    """D-the-set-is-a-stored-fact-and-the-hint-was-never-one: the schema migration
+    (`store/db.py:_add_set_columns`) and the backfill (`cli/cmd_cards.py`'s `variants`).
+
+    THE MIGRATION HALF: an old store, stamped 7, gains `set_name` and `rarity` with every
+    row preserved and the 99 `UNL` rows swept to `Unleashed` in the same pass — built by
+    hand from `db.TABLES`/`db._INDEXES` minus the two new members, the same shape
+    `store/db.py`'s own docstring for `_add_search_index` argues an upgrade must be additive
+    against.
+
+    THE BACKFILL HALF: a SKU that resolves against the export on disk gets a real set and
+    rarity; a SKU that resolves to nothing keeps a null set and its own record — never
+    guessed, never dropped, over `./pkmnscan cards variants --write`'s own code path rather
+    than a re-implementation of it.
+    """
+    checks.note("")
+    checks.note("SET + RARITY — store/db.py schema 8, cli/cmd_cards.py `variants`")
+
+    # ---------------------------------------------------------------- the migration itself
+    with isolated_home():
+        directory = files.inventory_dir()
+        directory.mkdir(parents=True, exist_ok=True)
+        conn = sqlite3.connect(str(db.path(directory)))
+        for table, columns in db.TABLES.items():
+            cols = [c for c in columns if c not in ("set_name", "rarity")]
+            conn.execute(db._ddl(table, cols))
+        conn.execute(
+            "CREATE TABLE IF NOT EXISTS events (id INTEGER PRIMARY KEY AUTOINCREMENT, "
+            "at TEXT, event TEXT, position TEXT, payload TEXT NOT NULL)"
+        )
+        conn.execute("CREATE TABLE IF NOT EXISTS meta (key TEXT PRIMARY KEY, value TEXT)")
+        for table, column in db._INDEXES:
+            if column == "set_name":
+                continue
+            conn.execute(f"CREATE INDEX IF NOT EXISTS {table}_{column} ON {table}({column})")
+        for statement in db._CID_INDEXES:
+            conn.execute(statement)
+        db._add_search_index(conn)
+        conn.execute("INSERT INTO meta (key, value) VALUES ('schema', '7')")
+        conn.execute(
+            "INSERT INTO cards (key, box, idx, state, sku, condition, set_hint, name, "
+            "number, game, payload) VALUES (?,?,?,?,?,?,?,?,?,?,?)",
+            (
+                "1/1", 1, 1, master.IDENTIFIED, "SKU1", "Near Mint", "UNL", "Calm Rune",
+                "045", "riftbound", json.dumps({"box": 1, "index": 1}),
+            ),
+        )
+        conn.commit()
+
+        before = {row[1] for row in conn.execute("PRAGMA table_info(cards)").fetchall()}
+        checks.ok(
+            "set_name" not in before and "rarity" not in before,
+            "the fixture really starts on schema 7, with neither column",
+        )
+
+        db._upgrade(conn, 7, directory=directory, locked=True)
+
+        after = {row[1] for row in conn.execute("PRAGMA table_info(cards)").fetchall()}
+        checks.ok(
+            {"set_name", "rarity"} <= after,
+            "the upgrade adds both columns",
+            f"columns: {sorted(after)}",
+        )
+        checks.equal(
+            conn.execute("SELECT count(*) FROM cards").fetchone()[0],
+            1,
+            "and preserves every row — an upgrade is additive and never drops one",
+        )
+        checks.equal(
+            conn.execute("SELECT value FROM meta WHERE key = 'schema'").fetchone()[0],
+            "8",
+            "stamped at the new version",
+        )
+        checks.equal(
+            conn.execute("SELECT set_hint FROM cards WHERE key = '1/1'").fetchone()[0],
+            "Unleashed",
+            "and the 99 `UNL` rows from 2026-08-29 are swept to `Unleashed` in the same "
+            "migration",
+        )
+        checks.equal(
+            conn.execute("SELECT set_name, rarity FROM cards WHERE key = '1/1'").fetchone(),
+            (None, None),
+            "while the two new columns stay null — the migration is schema only, and the "
+            "backfill below is the separate, re-runnable step that fills them",
+        )
+        conn.close()
+
+    # ------------------------------------------------------------------- the backfill itself
+    with isolated_home() as home:
+        exports = home / "inventory" / ".exports" / "riftbound"
+        exports.mkdir(parents=True)
+        (exports / "export.csv").write_text(
+            "TCGplayer Id,Product Line,Set Name,Product Name,Number,Rarity,Condition,"
+            "TCG Market Price,Total Quantity\r\n"
+            "CR-VEN-001,Riftbound League of Legends Trading Card Game,Vendetta,"
+            "Mind Rune (R03a),R03a,Showcase,Near Mint Foil,1.00,0\r\n",
+            encoding="utf-8",
+        )
+        with Store().write() as snapshot:
+            inv = snapshot.inventory
+            resolvable, _ = inv.allocate_capture(1, game="riftbound", cid=fake_cid("resolvable"))
+            resolvable_key = resolvable.key
+            card = inv.cards[resolvable_key]
+            card.name, card.number = "Mind Rune", "R03a"
+            card.sku, card.condition = "CR-VEN-001", "Near Mint Foil"
+            card.state = master.IDENTIFIED
+
+            unresolvable, _ = inv.allocate_capture(
+                1, game="riftbound", cid=fake_cid("unresolvable")
+            )
+            unresolvable_key = unresolvable.key
+            card2 = inv.cards[unresolvable_key]
+            card2.name, card2.number = "Mind Rune", "R03a"
+            card2.sku, card2.condition = "CR-GHOST-999", "Near Mint Foil"
+            card2.state = master.IDENTIFIED
+
+        class Args:
+            def __init__(self, write: bool):
+                self.cards_action = "variants"
+                self.write = write
+
+        say_lines: List[str] = []
+        cmd_cards.run(Args(write=True), say_lines.append)
+
+        after_inv = Store().read().inventory
+        resolved = after_inv.cards[resolvable_key]
+        checks.equal(
+            (resolved.set_name, resolved.rarity),
+            ("Vendetta", "Showcase"),
+            "the backfill resolves a real SKU against the export on disk",
+        )
+        ghost = after_inv.cards[unresolvable_key]
+        checks.ok(
+            ghost.set_name is None and ghost.rarity is None and ghost.sku == "CR-GHOST-999",
+            "and a SKU that resolves to nothing keeps a null set and its own record — "
+            "never guessed and never dropped",
+            f"card: sku={ghost.sku!r} set_name={ghost.set_name!r}",
+        )
+
+    # ------------------------------------------------------- the real collision, on the wire
+    # D-the-set-is-a-stored-fact-and-the-hint-was-never-one's own worked example: two SKUs
+    # identical in name, number, rarity and condition, differing only by set, with
+    # `set_hint` NULL on both — the exact shape that made the chooser draw two
+    # indistinguishable tiles before this item.
+    with isolated_home():
+        with Store().write() as snapshot:
+            inv = snapshot.inventory
+            for n, (sku, set_name) in enumerate(
+                (("CR-SPI-001", "Spiritforged"), ("CR-UNL-001", "Unleashed")), start=1
+            ):
+                allocated, _ = inv.allocate_capture(1, game="riftbound", cid=fake_cid(f"collision-{n}"))
+                card = inv.cards[allocated.key]
+                card.name, card.number = "Mind Rune", "R03a"
+                card.sku, card.condition = sku, "Near Mint Foil"
+                card.set_name, card.rarity = set_name, "Showcase"
+                card.state = master.IDENTIFIED
+
+        result = capture_server.do_search("Mind Rune")
+        checks.equal(len(result["groups"]), 2, "two SKUs, two groups")
+        sets = sorted(str(g["set"]) for g in result["groups"])
+        checks.equal(
+            sets,
+            ["Spiritforged", "Unleashed"],
+            "the two groups disagree on `set` although `set_hint`, `condition` and "
+            "`rarity` all agree — the one field a chooser tile can key its distinctness "
+            "off, which is the whole of what this item was built to restore",
+        )
+        checks.ok(
+            all(g["set_hint"] is None for g in result["groups"]),
+            "and `set_hint` stays null on both — the real collision this was measured "
+            "against, not a fixture that quietly gives the chooser an easier field",
         )
 
 
@@ -4148,7 +4322,7 @@ def check_review_answer(checks: Checks) -> None:
         )
         checks.equal(
             body["restores_to"],
-            {"sku": None, "condition": None},
+            {"sku": None, "condition": None, "set_name": None, "rarity": None},
             "and what an undo would put back: the pair of NULLS a never-identified card "
             "held, which is the NORMAL case and not an empty one — a card is in a review "
             "queue precisely because it has never carried a SKU, and the reversal returns "
@@ -4162,7 +4336,7 @@ def check_review_answer(checks: Checks) -> None:
         )
         checks.equal(
             last_event("3/1").get("restores_to"),
-            {"sku": None, "condition": None},
+            {"sku": None, "condition": None, "set_name": None, "rarity": None},
             "and the `answered` HISTORY line carries the same pair — THE BLOCKER'S "
             "REGRESSION: the line used to log only what the route WROTE, never what it "
             "overwrote, so nothing anywhere could say what an undo should put back",
@@ -4340,7 +4514,7 @@ def check_review_answer(checks: Checks) -> None:
     checks.note("")
     checks.note("REVIEW ANSWER UNDO — the same route, reversed (D28)")
 
-    prior = {"sku": DUNSPARCE_SKU, "condition": "Near Mint"}
+    prior = {"sku": DUNSPARCE_SKU, "condition": "Near Mint", "set_name": None, "rarity": None}
 
     with isolated_home():
         for _ in range(6):
@@ -4608,7 +4782,7 @@ def check_review_answer(checks: Checks) -> None:
         )
         checks.equal(
             last_event("3/6").get("restores_to"),
-            {"sku": None, "condition": None},
+            {"sku": None, "condition": None, "set_name": None, "rarity": None},
             "while the `answered` history line still records the pair — the two "
             "deliberately disagree: the log states what is true, the field answers "
             "whether to draw a button",
@@ -5075,7 +5249,7 @@ def check_group_answer(checks: Checks) -> None:
             )
             checks.equal(
                 [r["restores_to"] for r in body["results"]],
-                [{"sku": None, "condition": None}] * 3,
+                [{"sku": None, "condition": None, "set_name": None, "rarity": None}] * 3,
                 "and its own restores_to — the pair of nulls a never-identified card "
                 "held, per member, under the single answer's contract",
             )
@@ -5099,7 +5273,7 @@ def check_group_answer(checks: Checks) -> None:
         )
         checks.equal(
             [line.get("restores_to") for line in answered_lines],
-            [{"sku": None, "condition": None}] * 3,
+            [{"sku": None, "condition": None, "set_name": None, "rarity": None}] * 3,
             "and each line carries its own restores_to, exactly as a single answer "
             "writes it — which is what makes the per-card undo below possible at all",
         )
@@ -5173,7 +5347,7 @@ def check_group_answer(checks: Checks) -> None:
         if body is not None:
             checks.equal(
                 [r["restores_to"] for r in body["results"]],
-                [None, {"sku": None, "condition": None}],
+                [None, {"sku": None, "condition": None, "set_name": None, "rarity": None}],
                 "the held member answers restores_to NULL while its partner keeps the "
                 "pair — per position, because a group control that reverses eleven of "
                 "sixteen on its best day is SaleResult's recorded defect at scale",
@@ -5181,7 +5355,7 @@ def check_group_answer(checks: Checks) -> None:
         held_lines = [last_event("4/10"), last_event("4/11")]
         checks.equal(
             [line.get("restores_to") for line in held_lines],
-            [{"sku": None, "condition": None}] * 2,
+            [{"sku": None, "condition": None, "set_name": None, "rarity": None}] * 2,
             "while BOTH history lines still record the pair — the log states what is "
             "true, the field answers whether to draw a button, and the two deliberately "
             "disagree",
@@ -6600,7 +6774,7 @@ def check_history(checks: Checks) -> None:
         )
         checks.equal(
             answered.get("restores_to"),
-            {"sku": None, "condition": None},
+            {"sku": None, "condition": None, "set_name": None, "rarity": None},
             "and the pair the answer REPLACED — the blocker's regression (D28): this "
             "line used to log only what was written, so the log held everything needed "
             "to audit an answer and nothing needed to reverse one",
@@ -6629,7 +6803,7 @@ def check_history(checks: Checks) -> None:
         )
         checks.equal(
             unanswered.get("restored"),
-            {"sku": None, "condition": None},
+            {"sku": None, "condition": None, "set_name": None, "rarity": None},
             "...and what went back on — both pairs, because neither is derivable from "
             "the other once the card has moved on again",
         )
@@ -29857,6 +30031,7 @@ def run() -> Result:
     check_allocator(checks)
     check_boxes_and_listings(checks)
     check_store(checks)
+    check_set_and_rarity(checks)
     check_store_of_record(checks)
     check_photo_reclaim(checks)
     check_server_routes(checks)

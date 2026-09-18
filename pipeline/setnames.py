@@ -25,12 +25,23 @@ right to: the fetch widens to the whole category, which is slower and cannot mis
 the join sends the card to review with its photo (D2, D3). Picking one of two sets would scope
 an export to a set the box may not be in, or list a card as the wrong printing.
 
-Stdlib only, and it imports nothing from this repo — `server/tcg_export.py` is otherwise
-dependency-free and this module is not the thing that changes that.
+THE MATCHING LADDER ITSELF (`fold`, `sides`, `tail`, `candidates`, `resolve`) IS STILL STDLIB
+ONLY, with no import from this repo at module load — `server/tcg_export.py` calls it with
+names and aliases already in hand and stays dependency-free for that reason, unchanged by
+what follows.
+
+`known_sets`/`resolve_for_game`, ADDED FOR
+D-the-set-is-a-stored-fact-and-the-hint-was-never-one,
+ARE THE ONE EXCEPTION, and they import lazily, inside the function body, precisely so
+loading this module for the pure ladder above still costs nothing. They read
+`inventory/.exports/<game>/` off disk to complete a hint AT THE WRITE without a network call
+— see their own docstrings for why a write path degrades to the raw hint rather than fetching
+or refusing.
 """
 
 from __future__ import annotations
 
+from pathlib import Path
 from typing import Dict, List, Optional, Sequence, Tuple
 
 # A set code is short. Four is the longest TCGplayer publishes as a colon prefix (`SWSH`,
@@ -191,3 +202,80 @@ def resolve(
     """The one set this hint names, or `None` for blank, no match, or more than one."""
     found = candidates(hint, names, aliases)
     return found[0] if len(found) == 1 else None
+
+
+# --------------------------------------------------------------------- write-time completion
+#
+# D-the-set-is-a-stored-fact-and-the-hint-was-never-one, "the remaining hole": completion is
+# offered on Enter by `app/src/setHint.ts` and enforced nowhere. Everything below runs the
+# same ladder AT THE WRITE, against whatever export this game already has on disk — never
+# fetched, because a write path must not open a socket to store a string, and the export the
+# capture screen's own vocabulary is drawn from (`GET /tcg/sets`) is one degradation of the
+# same source: a live category listing. `inventory/.exports/<game>/` is the local copy of
+# that same vocabulary, one step further degraded (it can be stale or absent) and zero
+# network calls away, which is the trade a write path takes and a read of the hint field
+# never has to.
+
+
+def _export_dir(game: str) -> Path:
+    """`inventory/.exports/<game>/` — `store/files.py`'s own name for it, read here rather
+    than imported from `server/pipeline_routes.py`, which is a route module and not a shared
+    home for a path fragment."""
+    from store import files
+
+    return files.inventory_dir() / files.EXPORTS_DIRNAME / str(game)
+
+
+def known_sets(game: str) -> Tuple[str, ...]:
+    """Every distinct `Set Name` across every export this game has on disk, in no particular
+    order, or empty when the game has never been fetched — the honest Pokemon answer today
+    (D-the-set-is-a-stored-fact-and-the-hint-was-never-one's own measurement: 0 of 542).
+
+    EVERY FILE UNDER THE DIRECTORY, NOT ONE. `inventory/.exports/<game>/` can hold more than
+    one CSV over a store's life — a narrower fetch today, a wider one last month — and a set
+    released since the older file was written would be invisible to a hint typed today if
+    only the newest file answered. A card resolving against the union is never worse than
+    resolving against one file, and `pipeline/join.py`'s own `Catalog.from_export` is built
+    against exactly one export per run for an unrelated reason (which row is authoritative
+    for a JOIN) that does not apply to a plain vocabulary lookup.
+
+    A FILE THAT WILL NOT PARSE IS SKIPPED, NEVER RAISED. This is a convenience for a write
+    path that must not refuse a capture over a stray or half-written file in a directory it
+    does not own the writing of.
+    """
+    from pipeline import tcgcsv
+
+    directory = _export_dir(game)
+    if not directory.is_dir():
+        return ()
+    names: Dict[str, None] = {}
+    for path in sorted(directory.glob("*.csv")):
+        try:
+            export = tcgcsv.read_export(path)
+        except (OSError, tcgcsv.MalformedCsv):
+            continue
+        for row in export.rows:
+            name = str(row.get(tcgcsv.SET_COLUMN) or "").strip()
+            if name:
+                names.setdefault(name, None)
+    return tuple(names)
+
+
+def resolve_for_game(hint: str, game: str) -> Optional[str]:
+    """`resolve`, sourced from whatever this game's own export already holds on disk.
+
+    NEVER FETCHES, NEVER REFUSES. `None` means "nothing to complete this with" — no export
+    for the game, or a hint that does not resolve against what is there — and every caller's
+    rule is the same one D65 already applies to the fetch itself: an unresolved hint is kept
+    exactly as typed, never replaced with a guess and never a reason to refuse the write.
+    """
+    text = str(hint or "").strip()
+    if not text:
+        return None
+    names = known_sets(game)
+    if not names:
+        return None
+    from pipeline import games
+
+    aliases = (games.get(game) or {}).get("set_aliases")
+    return resolve(text, names, aliases)

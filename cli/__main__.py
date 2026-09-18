@@ -265,7 +265,7 @@ def build_parser() -> argparse.ArgumentParser:
         "cards",
         help="the card's stable name: preview it, audit it, move the photographs.",
     )
-    cards_sub = cards.add_subparsers(dest="cards_action", metavar="<name|audit|photos>")
+    cards_sub = cards.add_subparsers(dest="cards_action", metavar="<name|audit|photos|variants>")
     cards_sub.add_parser(
         "name",
         help="what the naming sees and what it would do. Read-only, writes nothing.",
@@ -295,6 +295,17 @@ def build_parser() -> argparse.ArgumentParser:
         "--limit",
         type=int,
         help="stop after this many cards. For a first pass over a large corpus.",
+    )
+    cards_variants = cards_sub.add_parser(
+        "variants",
+        help="backfill `set` and `rarity` from whatever export each card's game already "
+        "has on disk (D-the-set-is-a-stored-fact-and-the-hint-was-never-one). Previews by "
+        "default. Never guesses: a SKU that resolves to nothing keeps a null set.",
+    )
+    cards_variants.add_argument(
+        "--write",
+        action="store_true",
+        help="apply the backfill. Without it nothing is written.",
     )
 
     # ----------------------------------------------------------------------------- join

@@ -656,6 +656,14 @@ function VariantChooser({
   groups: readonly SearchGroup[]
   onPick: (index: number) => void
 }) {
+  /* RARITY DRAWN ONLY WHERE THE PRINTINGS ON SCREEN ACTUALLY DIFFER IN IT. The Runes all
+     read `Showcase`, and a word every tile repeats is not what tells two tiles apart — it
+     is `number_display`/set/condition doing that work, exactly as they already do below.
+     Two real SKUs can still be separated by rarity alone (a promo stamp on an otherwise
+     identical row), and this is what puts the word back the moment that happens. */
+  const rarities = new Set(groups.map((group) => group.rarity).filter((r): r is string => !!r))
+  const showRarity = rarities.size > 1
+
   return (
     <div className="browse-variants">
       <p className="browse-variants-lede">{groups.length} printings match.</p>
@@ -663,7 +671,15 @@ function VariantChooser({
         {groups.map((group, index) => {
           const photoCopy = group.copies.find((copy) => copy.has_photo)
           const name = group.names[0] ?? 'Not identified yet'
-          const sub = [group.number_display, group.set_hint, group.condition]
+          // THE CATALOGUE'S OWN SET FIRST, `set_hint` ONLY WHEN THERE IS NO OTHER ANSWER
+          // (D-the-set-is-a-stored-fact-and-the-hint-was-never-one) — the fallback D65
+          // already established for the case no export has ever priced this game.
+          const sub = [
+            group.number_display,
+            group.set ?? group.set_hint,
+            group.condition,
+            showRarity ? group.rarity : null,
+          ]
             .filter((part): part is string => typeof part === 'string' && part !== '')
             .join(' · ')
           return (

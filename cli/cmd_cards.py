@@ -1,6 +1,6 @@
 """`pkmnscan cards` — the card's stable name: preview it, audit it, move the photographs.
 
-THREE SUBCOMMANDS AND TWO OF THEM WRITE NOTHING EVER.
+FOUR SUBCOMMANDS AND TWO OF THEM WRITE NOTHING EVER.
 
   cards name      what the naming would do, or has done — the source census, every card that
                   would land `nophoto:`, every duplicate photograph, and the receipt
@@ -8,6 +8,10 @@ THREE SUBCOMMANDS AND TWO OF THEM WRITE NOTHING EVER.
                   never two, and the third is `not known`
   cards photos    move the corpus off the legacy `(box, index)` address onto the card's own
                   name. Previews by default; `--write` performs it
+  cards variants  backfill `set` and `rarity` from whatever export a card's game already
+                  has on disk (D-the-set-is-a-stored-fact-and-the-hint-was-never-one).
+                  Previews by default; `--write` performs it. Never guesses: a SKU that
+                  resolves to nothing keeps a null set.
 
 `name` AND `audit` OPEN THE STORE READ-ONLY AND MUST NEVER CALL `db.connect`. That function
 is the single entry to the store and it always calls `_ensure_schema`, so a preview routed
@@ -20,6 +24,14 @@ why it previews first and why every file it moves is verified against a digest t
 already proved. `store/photos.py:adopt` is the per-card step and its docstring carries the
 argument for the link-verify-unlink order; this module is the driver, the census and the
 report.
+
+`cards variants` GOES THROUGH `store.Store`, NOT RAW `sqlite3`, unlike `name`/`audit` above —
+it writes ordinary card fields through the ordinary lock, the same door `set_state` already
+uses, and the `db.connect`-must-not-migrate rule above is `photos`'/`name`'s/`audit`'s own
+because a stray call there would perform a multi-gigabyte photograph move nobody asked for;
+resolving a SKU against a CSV already on disk carries no such risk, and this store's own
+schema migration (`store/db.py:_add_set_columns`) is what adds the two columns this
+subcommand fills in the first place.
 """
 
 from __future__ import annotations
@@ -29,7 +41,7 @@ import sqlite3
 from pathlib import Path
 from typing import Dict, List, Optional, Tuple
 
-from store import db, files, master, photos
+from store import Store, db, files, master, photos
 
 # The ladder's own names, in the order `_name_one_card` tries them, so a report can rank a
 # source by how much it is worth rather than printing a dict in hash order.
@@ -508,16 +520,115 @@ def _photos(args, say) -> int:
     return 0
 
 
+def _variants(args, say) -> int:
+    """Backfill `set` and `rarity` from whatever export a card's own game already has on
+    disk (D-the-set-is-a-stored-fact-and-the-hint-was-never-one). Previews unless `--write`.
+
+    NEVER REFUSES A CARD AND NEVER GATES. A SKU that resolves to nothing keeps a null set,
+    counted and reported, never guessed. RE-RUNNABLE: a card that already carries a set is
+    left exactly as it is, so a second pass over a store an export arrived into since the
+    first only fills what the first pass could not — the same idiom `photos`/`prices adopt`
+    already use for a fact this store can only partially answer the day it is asked.
+
+    EVERY EXPORT UNDER `inventory/.exports/<game>/`, MERGED, first-file-wins on a SKU seen
+    twice — `pipeline/setnames.py:known_sets` makes the identical choice for the same reason:
+    a set released since an older file was fetched must still be visible, and a Set Name or
+    Rarity for one SKU does not change file to file.
+    """
+    write = bool(getattr(args, "write", False))
+    from pipeline import games, tcgcsv
+
+    exports: Dict[str, Dict[str, dict]] = {}
+
+    def export_for(game: str) -> Dict[str, dict]:
+        if game not in exports:
+            directory = files.inventory_dir() / files.EXPORTS_DIRNAME / game
+            merged: Dict[str, dict] = {}
+            if directory.is_dir():
+                for path in sorted(directory.glob("*.csv")):
+                    try:
+                        export = tcgcsv.read_export(path)
+                    except (OSError, tcgcsv.MalformedCsv):
+                        continue
+                    for row in export.rows:
+                        sku = str(row.get(tcgcsv.SKU_COLUMN) or "").strip()
+                        if sku and sku not in merged:
+                            merged[sku] = row
+            exports[game] = merged
+        return exports[game]
+
+    inventory = Store().read().inventory
+    census = {"already_set": 0, "no_sku": 0, "resolved": 0, "unresolved": 0}
+    by_game: Dict[str, Dict[str, int]] = {}
+    changes: List[Tuple[str, str, str, Optional[str]]] = []
+
+    for key, card in inventory.cards.items():
+        if card.set_name is not None:
+            census["already_set"] += 1
+            continue
+        if not card.sku:
+            census["no_sku"] += 1
+            continue
+        game = card.game or games.DEFAULT_GAME
+        stats = by_game.setdefault(game, {"resolved": 0, "unresolved": 0})
+        row = export_for(game).get(card.sku)
+        set_name = str((row or {}).get(tcgcsv.SET_COLUMN) or "").strip() or None
+        rarity = str((row or {}).get(tcgcsv.RARITY_COLUMN) or "").strip() or None
+        if set_name is None:
+            census["unresolved"] += 1
+            stats["unresolved"] += 1
+            continue
+        census["resolved"] += 1
+        stats["resolved"] += 1
+        changes.append((key, card.sku, set_name, rarity))
+
+    say("CARD VARIANTS -> set + rarity, from the export each game already has on disk")
+    say(f"  {len(inventory.cards)} card(s); {'WRITING' if write else 'PREVIEW, nothing will be written'}")
+    say("  " + "  ".join(f"{name}={value}" for name, value in census.items()))
+    for game, stats in sorted(by_game.items()):
+        say(f"    {game}: {stats['resolved']} resolve, {stats['unresolved']} do not")
+    if changes:
+        say("")
+        say("  FIRST FEW:")
+        for key, sku, set_name, rarity in changes[:10]:
+            say(f"    {key}  {sku} -> {set_name}" + (f" · {rarity}" if rarity else ""))
+        if len(changes) > 10:
+            say(f"    … and {len(changes) - 10} more")
+
+    if not write:
+        say("")
+        say(f"  {len(changes)} card(s) would gain a set. Re-run with --write to apply.")
+        return 0
+
+    written = 0
+    if changes:
+        with Store().write() as snapshot:
+            for key, sku, set_name, rarity in changes:
+                card = snapshot.inventory.cards.get(key)
+                # RE-CHECKED INSIDE THE LOCK, AGAINST THE SKU THIS PASS READ — a card sold,
+                # re-answered or re-emitted between the preview above and this write is a
+                # card this pass no longer has authority to describe, and skipping it here
+                # is the same caution `photos`'s per-card digest re-check applies.
+                if card is None or card.sku != sku or card.set_name is not None:
+                    continue
+                card.set_name = set_name
+                card.rarity = rarity
+                written += 1
+    say("")
+    say(f"  WROTE {written} card(s).")
+    return 0
+
+
 # --------------------------------------------------------------------------- dispatch
 
 
-_SUBCOMMANDS = {"name": _name, "audit": _audit, "photos": _photos}
+_SUBCOMMANDS = {"name": _name, "audit": _audit, "photos": _photos, "variants": _variants}
 
 
 def run(args, say) -> int:
     action = getattr(args, "cards_action", None)
     handler = _SUBCOMMANDS.get(action)
     if handler is None:
-        say("pkmnscan cards <name|audit|photos>")
+        say("pkmnscan cards <name|audit|photos|variants>")
         return 2
     return handler(args, say)
