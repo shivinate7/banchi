@@ -16,8 +16,9 @@ server computed for nobody on a request already measured at 520-580ms. The owner
 already true on screen.
 
 **One thing this build did NOT fix, measured while integrating: DEBT30.** A D118 guard on
-`#/orders` flakes by one pixel about a third of the time, on `main`, and nothing on the commit
-path runs it.
+`#/orders` intermittently catches a real sub-pixel reflow and reports it as a rounding
+disagreement. The reflow is on `main`, not in this build, and nothing on the commit path runs
+the test that sees it.
 
 ## 1. What is in the tree today
 
