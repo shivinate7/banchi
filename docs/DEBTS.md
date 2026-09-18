@@ -41,8 +41,11 @@ Not a backlog to burn down on sight. An entry leaves when someone argues it shou
   starts with `011-`.
 - **By the index** — the fenced block below, reconciled against the corpus in both
   directions by `make docs-audit`'s `debt index` row.
-- **Entry 15 is a deliberate gap, not a missing file.** It left 2026-09-07 (D120 answered
-  it) and its number is not reused. `docs/map.py` uses the same rule for its own step ids: a
+- **Entries 15 and 30 are deliberate gaps, not missing files.** 15 left 2026-09-07 (D120
+  answered it). 30 left 2026-09-17, repaired rather than argued away: its own reading — that
+  `#/orders` carried a real sub-pixel reflow — was measured and found false, the `bn-page-in`
+  entry animation was what the ruler had been reading, and `app/tests/motionSettled.ts` now
+  waits it out. Neither number is reused. `docs/map.py` uses the same rule for its own step ids: a
   renumber leaves every citation pointing at a real entry that is not the one meant.
 
 ## Why it is a directory
@@ -84,5 +87,4 @@ DEBT26 The Intelligent Mail barcode encoder is written, correct against the Post
 DEBT27 Two `GET /inventory` call sites were store-wide; site 1 is closed, site 2 is argued and left
 DEBT28 `pkmnscan rescue` is reachable from no screen, and the screen that needs it names a command
 DEBT29 The drawer's tap sweep is skipped, because it races itself on a slower runner
-DEBT30 A D118 guard rounds away the reflow it is watching for, and the reflow is real
 ```
