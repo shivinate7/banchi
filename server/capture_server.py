@@ -7804,11 +7804,58 @@ def do_mark_sold(box: int, index: int, payload: dict) -> dict:
     verbatim by the single review answer and the group one for the same reason: one
     implementation rather than two, because the second copy is the one that stops being
     exact the first time a check changes.
+
+    THE UNDO DIRECTION ALSO REVERSES THE LEDGER, WHERE THE LEDGER HOLDS THE COPY —
+    `docs/specs/undo.md` §4, the sharpest finding in that file. `do_order_pull` is the other
+    caller of `_sell`, and it already reverses `Ledger.holder_of` itself before calling
+    `_sell`, inside its own `Store.write()` — so `_sell`'s own body must never touch the
+    ledger, or a pull's undo would reverse it twice. This route is the ONLY OTHER caller,
+    and until now it never consulted `holder_of` at all: a copy pulled for an order, marked
+    sold from `#/inventory`, then reversed from the row went back on the shelf as
+    `identified` — live, and offered to the next buyer — while the order still read that
+    copy fulfilled. That is the double-shipment `record_pull`'s `capture_id` requirement
+    exists to prevent, reached from the other end.
+
+    Read inside the SAME lock, before `_sell` writes: `holder_of` answers which line (if
+    any) holds this capture id. `_sell` itself never changes a card's `capture_id`, so
+    reading it before or after `_sell` runs is equivalent — read first, so a `capture_id`-
+    less legacy card (`holder_of` needs a string) is a plain `None` rather than a second
+    lookup after the sale already committed. When a holder exists, `forget_pull` releases
+    the copy from that line in the SAME `Store.write()` the sale reverses in, so the two
+    halves commit together or neither does — a raise from `_sell` (`not_sold`,
+    `sold_origin_unknown`, ...) discards the read here along with everything else.
+
+    ONLY THE UNDO DIRECTION TOUCHES THE LEDGER. A plain sale is never `record_pull`'s job —
+    that route is `POST /orders/pull`, which calls `_ledger_pull` itself before `_sell` — so
+    `do_mark_sold`'s forward direction has nothing to release.
+
+    `order_released` IS ADDITIVE. Every key `_sell` already returns — `restores_to`,
+    `undone`, `card`, `listing` among them — is unmoved; this is a new key and only this
+    route sets it. Null on a sale, null on a reversal with no holder, and the released
+    `(order key, sku)` pair on a reversal that closed one — so a screen can say the order
+    moved without a second request, the same reason `listing` rides this body rather than
+    making the Fulfiller ask again.
     """
     _reject_unknown(payload, SOLD_FIELDS)
     undo = _optional_flag(payload, "undo", "undo_invalid")
+    key = master.position_key(box, index)
     with Store().write() as snapshot:
-        return _sell(snapshot, box, index, undo)
+        holder = None
+        if undo:
+            card = snapshot.inventory.cards.get(key)
+            capture_id = card.capture_id if card is not None else None
+            if capture_id:
+                holder = snapshot.ledger.holder_of(str(capture_id))
+
+        body = _sell(snapshot, box, index, undo)
+
+        released = None
+        if undo and holder is not None:
+            held_key, held_sku = holder
+            snapshot.ledger.forget_pull(held_key, held_sku, [str(card.capture_id)])
+            released = {"key": held_key, "sku": held_sku}
+        body["order_released"] = released
+        return body
 
 
 def do_retire(box: int, index: int, payload: dict) -> dict:
