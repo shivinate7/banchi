@@ -11195,6 +11195,83 @@ def check_catalog_set_rarity_match(checks: Checks) -> None:
         "whole set, which includes every `Calm Rune` row the first case found",
     )
 
+    # ---- multi-word sets, matched as a PHRASE — the hole a single-term test could not see.
+    # Five of this export's twelve sets are multi-word, and `Calm Rune`'s own `Riftbound
+    # Organized Play Promotional Cards` printing is exactly the shape that made six of the
+    # owner's own Runes carry an UNREACHABLE row past the nine-digit cut: 16 candidates, the
+    # multi-word set past row 9, and no typed word — one word at a time — ever narrowed it.
+    promo_set = "Riftbound Organized Play Promotional Cards"
+    promo_full = matched(f"Calm Rune {promo_set}")
+    checks.ok(
+        len(promo_full) > 0,
+        "the FULL 5-word set name, typed after the name, is consumed as one phrase and "
+        "narrows to that set rather than being ignored word by word",
+        f"query: 'Calm Rune {promo_set}' -> {len(promo_full)} rows",
+    )
+    checks.equal(
+        {row["set"] for row in promo_full},
+        {promo_set},
+        "and every surviving row really is that 5-word set",
+    )
+    checks.ok(
+        len(promo_full) <= 9,
+        "and the count a person can actually reach is under the nine-digit cut — this is "
+        "the printing 3c found unreachable before phrase matching existed",
+        f"count: {len(promo_full)}",
+    )
+
+    partial_word = matched("Calm Rune Promotional")
+    checks.equal(
+        {row["set"] for row in partial_word},
+        {row["set"] for row in unfiltered},
+        "A SINGLE WORD OF A MULTI-WORD SET IS NOT A MATCH — `Promotional` alone is not the "
+        "set's own name, so it stays a name term and the query is unchanged; a phrase "
+        "matcher that let a partial word narrow would be guessing at what was meant",
+    )
+
+    # `Ivern, Green Father` carries a real Secret Garden printing (2 words) beside its
+    # Riftbound Organized Play Promotional Cards and Unleashed ones.
+    ivern_unfiltered = matched("Ivern")
+    ivern_narrowed = matched("Ivern Secret Garden")
+    checks.ok(
+        0 < len(ivern_narrowed) < len(ivern_unfiltered),
+        "a 2-word set phrase (`Secret Garden`) narrows a real multi-printing card too — not "
+        "just the 5-word promo set",
+        f"unfiltered={len(ivern_unfiltered)} narrowed={len(ivern_narrowed)}",
+    )
+    checks.equal(
+        {row["set"] for row in ivern_narrowed},
+        {"Secret Garden"},
+        "and only the Secret Garden row(s) survive",
+    )
+
+    # `Origins` is a real 1-word set on its own AND the first word of the real 3-word
+    # `Origins: Proving Grounds` — longest match first is what keeps typing the short set
+    # name from being swallowed by the long one, and vice versa.
+    origins_bare = matched("Origins")
+    origins_colon = matched("Origins: Proving Grounds")
+    checks.ok(
+        len(origins_bare) > 0 and len(origins_colon) > 0,
+        "both spellings answer",
+        f"Origins={len(origins_bare)} 'Origins: Proving Grounds'={len(origins_colon)}",
+    )
+    checks.equal(
+        {row["set"] for row in origins_bare}, {"Origins"},
+        "the bare word resolves to the SHORT set, not the long one it is also a prefix of",
+    )
+    checks.equal(
+        {row["set"] for row in origins_colon}, {"Origins: Proving Grounds"},
+        "and the full colon phrase resolves to the LONG set — longest match first is what "
+        "keeps the two from colliding into one answer",
+    )
+    checks.ok(
+        set(row["sku"] for row in origins_bare).isdisjoint(
+            row["sku"] for row in origins_colon
+        ),
+        "and the two answers share no row — they are genuinely two different sets, not one "
+        "query accidentally subsuming the other",
+    )
+
     # ---- both loose-name directions, reproduced as a fixture (docstring's own two cases)
 
     epithet_rows = (

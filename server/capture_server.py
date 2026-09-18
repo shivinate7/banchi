@@ -6281,49 +6281,79 @@ def _split_catalog_query(
     still matched every Calm Rune printing because `wanted in name`/`name in wanted` care
     about the STRING, not about which WORDS in it are doing the identifying.
 
-    EACH WHITESPACE TERM IS CLASSIFIED AGAINST THIS GAME'S OWN VOCABULARY, never against a
-    row's name. Testing a term against product names is what the mirror-case docstring below
-    already warns is fragile — `Yi,` is not `Yi` — and it is also the wrong question: a set
-    or rarity is a closed, short, hand-authored list (D22) an exact fold either answers or
-    does not, and a name is open text no such list could stand in for. So a term is a FILTER
-    term when its fold exactly equals one of this game's own Set Name or Rarity cells, and a
-    NAME term otherwise — which is why an ordinary champion word or epithet, matching no set
-    and no rarity, is never reclassified and the loose name match below runs exactly as
-    before.
+    A CONTIGUOUS RUN OF TERMS IS CLASSIFIED AGAINST THIS GAME'S OWN VOCABULARY, never
+    against a row's name and never one word at a time. Testing a term against product names
+    is what the mirror-case docstring below already warns is fragile — `Yi,` is not `Yi` —
+    and it is also the wrong question: a set or rarity is a closed, short, hand-authored list
+    (D22) an exact fold either answers or does not, and a name is open text no such list
+    could stand in for.
 
-    MULTI-WORD SET NAMES ARE NOT SPLIT INTO A FILTER by this pass — `Riftbound Organized Play
-    Promotional Cards` cannot be typed as one term for it to be caught here. That is a
-    narrower fix than the whole set vocabulary deserves and is named rather than hidden: the
-    two real cases this item was measured against (`Spiritforged`/`Unleashed`/`Vendetta`,
-    `Origins`) are all one word, and a multi-word set is reachable by name terms alone
-    exactly as it always was.
+    ONE WORD WAS NEVER ENOUGH. Five of this export's twelve sets are multi-word —
+    `Riftbound Organized Play Promotional Cards`, 1,110 rows on the owner's own export — and
+    a single-term test can never match a phrase. Measured before this: six of the owner's own
+    Runes (Calm, Mind, Body, Fury, Order, Chaos) each carry 16 candidate rows with that exact
+    set past row 9, unreachable by any digit key AND unnarrowable by any typed word, because
+    every spelling of the set's own name was silently ignored one word at a time.
 
-    Returns the recombined name-query (empty when every term was a filter), the set of
-    matched Set Name folds, and the set of matched Rarity folds.
+    LONGEST PHRASE FIRST, OVER THE VOCABULARY, NEVER A GENERAL PHRASE SEARCH. Every distinct
+    Set Name and Rarity this game's export carries is folded once, keyed by how many words it
+    has. Candidate windows of the query are tried longest-first — checking a 5-word window
+    before a 1-word one — so `Origins: Proving Grounds` (a real 3-word set) is consumed
+    whole before the standalone 1-word set `Origins` ever gets a chance to claim just its
+    first word. A window already spent by a longer match is never reconsidered, which is what
+    keeps two filters (a set AND a rarity) from fighting over one word.
+
+    AN ORDINARY NAME WORD OR EPITHET NEVER FOLDS TO A REAL SET OR RARITY, so this changes
+    nothing for a query with no printing word in it — the loose name match below runs exactly
+    as before, in both directions.
+
+    Returns the recombined name-query (empty when every term was consumed as a filter), the
+    set of matched Set Name folds, and the set of matched Rarity folds.
     """
-    known_sets = {
-        join.name_index_key(row.get(tcgcsv.SET_COLUMN, "")): None
-        for row in catalog.export.rows
-    }
-    known_rarities = {
-        join.name_index_key(row.get(tcgcsv.RARITY_COLUMN, "")): None
-        for row in catalog.export.rows
-    }
-    known_sets.pop("", None)
-    known_rarities.pop("", None)
+    sets_by_words: Dict[int, Dict[str, None]] = {}
+    rarities_by_words: Dict[int, Dict[str, None]] = {}
+    for row in catalog.export.rows:
+        set_name = str(row.get(tcgcsv.SET_COLUMN, "")).strip()
+        if set_name:
+            sets_by_words.setdefault(len(set_name.split()), {})[
+                join.name_index_key(set_name)
+            ] = None
+        rarity = str(row.get(tcgcsv.RARITY_COLUMN, "")).strip()
+        if rarity:
+            rarities_by_words.setdefault(len(rarity.split()), {})[
+                join.name_index_key(rarity)
+            ] = None
 
-    name_terms: List[str] = []
+    terms = query.split()
+    consumed = [False] * len(terms)
     set_folds: List[str] = []
     rarity_folds: List[str] = []
-    for term in query.split():
-        folded = join.name_index_key(term)
-        if folded in known_sets:
-            set_folds.append(folded)
-        elif folded in known_rarities:
-            rarity_folds.append(folded)
-        else:
-            name_terms.append(term)
 
+    # LONGEST WINDOW SIZE FIRST, ACROSS BOTH VOCABULARIES TOGETHER — a 3-word rarity (were
+    # one ever authored) must get the same priority over a 1-word set that a 3-word set gets
+    # over a 1-word one; the two lists are not ranked against each other, only by length.
+    widths = sorted(set(sets_by_words) | set(rarities_by_words), reverse=True)
+    for width in widths:
+        if width > len(terms):
+            continue
+        known_sets = sets_by_words.get(width, {})
+        known_rarities = rarities_by_words.get(width, {})
+        if not known_sets and not known_rarities:
+            continue
+        for start in range(0, len(terms) - width + 1):
+            if any(consumed[start : start + width]):
+                continue
+            folded = join.name_index_key(" ".join(terms[start : start + width]))
+            if folded in known_sets:
+                set_folds.append(folded)
+            elif folded in known_rarities:
+                rarity_folds.append(folded)
+            else:
+                continue
+            for i in range(start, start + width):
+                consumed[i] = True
+
+    name_terms = [term for term, taken in zip(terms, consumed) if not taken]
     return " ".join(name_terms), frozenset(set_folds), frozenset(rarity_folds)
 
 
