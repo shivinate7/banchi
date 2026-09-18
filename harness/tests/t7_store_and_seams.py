@@ -11128,6 +11128,121 @@ def check_review_catalog(checks: Checks) -> None:
         )
 
 
+def check_catalog_set_rarity_match(checks: Checks) -> None:
+    """`server/capture_server.py:_catalog_matches` sees `Set Name`/`Rarity`
+    (docs/specs/card-variants.md section 3a).
+
+    THE REAL CASE, OFF THE COMMITTED EXPORT, NOT A HAND-BUILT ONE. `Calm Rune` in
+    `fixtures/riftbound_export_untouched.csv` is wider than the owner's own quoted example —
+    the loose `wanted in name` rung already recovers `Calm Rune (R02a)`, `(R02b)` and
+    `(Alternate Art)` beside the plain product, which this file's own docstring argues for —
+    so a bare `Calm Rune` query answers with 16 Near Mint rows across FIVE sets today, and
+    that width is exactly why a set word could not narrow anything before this item.
+
+    BOTH LOOSE-NAME DIRECTIONS ARE ASSERTED TOO, because a term-splitting rewrite that
+    fixed the reported defect and broke the recovery this function was built for would be a
+    real regression wearing a fix's clothes. `Wuju Master`/`Master Yi, Wuju Master` and
+    `Master Yi, Tempered`/`Master Yi` are the docstring's own two cases, reproduced here as a
+    fixture because the docstring's own measurement (490 of 494 epithets, 38 of 98 champion
+    names) is over an export this harness does not carry — the two rows below are what makes
+    the CLAIM checkable rather than merely quoted.
+    """
+    checks.note("")
+    checks.note("CATALOG SET/RARITY MATCH — server/capture_server.py:_catalog_matches (3a)")
+
+    export = tcgcsv.read_export(RIFTBOUND_EXPORT)
+    catalog = join.Catalog.from_export(export, "riftbound")
+
+    def matched(query: str):
+        return capture_server._catalog_matches(catalog, "riftbound", query)
+
+    unfiltered = matched("Calm Rune")
+    checks.equal(
+        sorted({row["set"] for row in unfiltered}),
+        ["Origins", "Riftbound Organized Play Promotional Cards", "Spiritforged",
+         "Unleashed", "Vendetta"],
+        "the baseline, unchanged: a query with no set/rarity word answers from every "
+        "`Calm Rune`-named row the loose name match already recovered, across five sets",
+    )
+
+    narrowed = matched("Calm Rune Spiritforged")
+    checks.ok(
+        len(narrowed) > 0 and len(narrowed) < len(unfiltered),
+        "a set WORD APPENDED to the name query genuinely narrows — fewer rows than the "
+        "unfiltered name match, never zero",
+        f"unfiltered={len(unfiltered)} narrowed={len(narrowed)}",
+    )
+    checks.equal(
+        {row["set"] for row in narrowed},
+        {"Spiritforged"},
+        "and EVERY surviving row is that one set — the word filters rather than being "
+        "folded into the name test, where it used to change nothing at all",
+    )
+
+    bare_set = matched("Spiritforged")
+    checks.ok(
+        len(bare_set) > 0,
+        "a BARE set word returns that set's rows rather than an empty list — the reported "
+        "defect was `Spiritforged` alone finding nothing at all",
+    )
+    checks.ok(
+        all(row["set"] == "Spiritforged" for row in bare_set),
+        "and every row it returns really is that set — the filter, not a coincidence",
+    )
+    checks.ok(
+        {row["sku"] for row in narrowed} <= {row["sku"] for row in bare_set},
+        "and it is a SUPERSET of the name-narrowed answer — the bare set word browses the "
+        "whole set, which includes every `Calm Rune` row the first case found",
+    )
+
+    # ---- both loose-name directions, reproduced as a fixture (docstring's own two cases)
+
+    epithet_rows = (
+        {
+            tcgcsv.SKU_COLUMN: "9990001",
+            tcgcsv.NAME_COLUMN: "Master Yi, Wuju Master",
+            tcgcsv.NUMBER_COLUMN: "045",
+            tcgcsv.SET_COLUMN: "Origins",
+            tcgcsv.RARITY_COLUMN: "Rare",
+            tcgcsv.CONDITION_COLUMN: "Near Mint",
+            tcgcsv.PRODUCT_LINE_COLUMN: str(games.require("riftbound")["product_line"]),
+            tcgcsv.MARKET_PRICE_COLUMN: "1.00",
+        },
+        {
+            tcgcsv.SKU_COLUMN: "9990002",
+            tcgcsv.NAME_COLUMN: "Master Yi",
+            tcgcsv.NUMBER_COLUMN: "046",
+            tcgcsv.SET_COLUMN: "Origins",
+            tcgcsv.RARITY_COLUMN: "Rare",
+            tcgcsv.CONDITION_COLUMN: "Near Mint",
+            tcgcsv.PRODUCT_LINE_COLUMN: str(games.require("riftbound")["product_line"]),
+            tcgcsv.MARKET_PRICE_COLUMN: "1.00",
+        },
+    )
+    epithet_export = tcgcsv.Export(
+        header=tuple(epithet_rows[0].keys()), rows=epithet_rows
+    )
+    epithet_catalog = join.Catalog.from_export(epithet_export, "riftbound")
+
+    def epithet_matched(query: str):
+        return capture_server._catalog_matches(epithet_catalog, "riftbound", query)
+
+    checks.equal(
+        [row["sku"] for row in epithet_matched("Wuju Master")],
+        ["9990001"],
+        "THE EPITHET CASE STILL WORKS: `Wuju Master` (the champion dropped) still finds "
+        "`Master Yi, Wuju Master` — `wanted in name`, unaffected by the set/rarity split "
+        "because neither word folds to a known set or rarity",
+    )
+    checks.equal(
+        [row["sku"] for row in epithet_matched("Master Yi, Tempered")],
+        ["9990002"],
+        "AND THE MIRROR CASE STILL WORKS: `Master Yi, Tempered` (a hallucinated suffix) "
+        "still finds the shorter catalogued `Master Yi` — `name in wanted`, for the same "
+        "reason",
+    )
+
+
 def check_identify_preflight_stage(checks: Checks) -> None:
     """`identify` hashes before it decodes, and `Item.stage` is what makes that safe.
 
@@ -30079,6 +30194,7 @@ def run() -> Result:
     check_identify_preflight_stage(checks)
     check_review_stand_down(checks)
     check_review_catalog(checks)
+    check_catalog_set_rarity_match(checks)
     check_run_realignment(checks)
     check_reused_box_refusal(checks)
     check_box_true_index(checks)

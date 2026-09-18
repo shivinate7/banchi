@@ -271,7 +271,7 @@ from dataclasses import asdict, replace
 from http import HTTPStatus
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
-from typing import Dict, Iterable, List, Optional, Sequence, Set, Tuple
+from typing import Dict, FrozenSet, Iterable, List, Optional, Sequence, Set, Tuple
 from urllib.parse import parse_qs, urlparse
 
 # `make server` runs this by path, so sys.path[0] is server/ and the project packages are
@@ -6268,6 +6268,65 @@ def _catalog_for_card(card) -> Tuple[object, str]:
     return join.Catalog.from_export(export, game), game
 
 
+def _split_catalog_query(
+    query: str, catalog
+) -> Tuple[str, FrozenSet[str], FrozenSet[str]]:
+    """`query`, split into the words that identify a NAME and the words that identify a
+    printing — docs/specs/card-variants.md section 3a.
+
+    `Catalog.from_export`'s own `export.rows` carries `Set Name` and `Rarity` on every row,
+    and `_catalog_matches` below never read either — a term matching neither a name nor a
+    number was simply part of the string it folded and compared whole, so `Spiritforged`
+    alone found no name to be part of and the query went empty, and `Calm Rune Spiritforged`
+    still matched every Calm Rune printing because `wanted in name`/`name in wanted` care
+    about the STRING, not about which WORDS in it are doing the identifying.
+
+    EACH WHITESPACE TERM IS CLASSIFIED AGAINST THIS GAME'S OWN VOCABULARY, never against a
+    row's name. Testing a term against product names is what the mirror-case docstring below
+    already warns is fragile — `Yi,` is not `Yi` — and it is also the wrong question: a set
+    or rarity is a closed, short, hand-authored list (D22) an exact fold either answers or
+    does not, and a name is open text no such list could stand in for. So a term is a FILTER
+    term when its fold exactly equals one of this game's own Set Name or Rarity cells, and a
+    NAME term otherwise — which is why an ordinary champion word or epithet, matching no set
+    and no rarity, is never reclassified and the loose name match below runs exactly as
+    before.
+
+    MULTI-WORD SET NAMES ARE NOT SPLIT INTO A FILTER by this pass — `Riftbound Organized Play
+    Promotional Cards` cannot be typed as one term for it to be caught here. That is a
+    narrower fix than the whole set vocabulary deserves and is named rather than hidden: the
+    two real cases this item was measured against (`Spiritforged`/`Unleashed`/`Vendetta`,
+    `Origins`) are all one word, and a multi-word set is reachable by name terms alone
+    exactly as it always was.
+
+    Returns the recombined name-query (empty when every term was a filter), the set of
+    matched Set Name folds, and the set of matched Rarity folds.
+    """
+    known_sets = {
+        join.name_index_key(row.get(tcgcsv.SET_COLUMN, "")): None
+        for row in catalog.export.rows
+    }
+    known_rarities = {
+        join.name_index_key(row.get(tcgcsv.RARITY_COLUMN, "")): None
+        for row in catalog.export.rows
+    }
+    known_sets.pop("", None)
+    known_rarities.pop("", None)
+
+    name_terms: List[str] = []
+    set_folds: List[str] = []
+    rarity_folds: List[str] = []
+    for term in query.split():
+        folded = join.name_index_key(term)
+        if folded in known_sets:
+            set_folds.append(folded)
+        elif folded in known_rarities:
+            rarity_folds.append(folded)
+        else:
+            name_terms.append(term)
+
+    return " ".join(name_terms), frozenset(set_folds), frozenset(rarity_folds)
+
+
 def _catalog_matches(catalog, game: str, query: str) -> List[dict]:
     """Catalog rows a human might mean by `query`, best first.
 
@@ -6286,9 +6345,22 @@ def _catalog_matches(catalog, game: str, query: str) -> List[dict]:
 
     Near Mint only (D12), read off the registry, because those are the rows the ladder itself
     would have offered.
+
+    SET/RARITY TERMS FILTER RATHER THAN BEING FOLDED INTO THE NAME TEST (D137,
+    docs/specs/card-variants.md section 3a) — see `_split_catalog_query`. `Calm Rune
+    Spiritforged` now ranks on `Calm Rune` alone (unchanged) and then keeps only the
+    Spiritforged row; `Spiritforged` alone carries no name term at all, so every condition-
+    scoped row is a candidate before the filter narrows it to that set — a query that is
+    ENTIRELY a printing word browses the printing, which is the defect's own fix rather than
+    an empty list.
     """
-    wanted = join.name_index_key(query)
-    number = join.number_index_key(query)
+    name_query, set_folds, rarity_folds = _split_catalog_query(query, catalog)
+    wanted = join.name_index_key(name_query)
+    # `name_query`, NOT THE RAW `query` — a recognised set/rarity WORD is vocabulary, never a
+    # digit run, so it cannot itself become part of a number fold; leaving it in would only
+    # risk gluing it onto a real number cell for no gain (`"R02 Spiritforged"` folding as one
+    # string rather than as `R02` alone).
+    number = join.number_index_key(name_query)
     conditions = _near_mint_conditions(game)
     scored: List[Tuple[int, str, dict]] = []
     # `Catalog.from_export` has already filtered `export.rows` to this game's product
@@ -6299,16 +6371,29 @@ def _catalog_matches(catalog, game: str, query: str) -> List[dict]:
     for row in catalog.export.rows:
         if str(row.get(tcgcsv.CONDITION_COLUMN, "")) not in conditions:
             continue
+        if set_folds and join.name_index_key(row.get(tcgcsv.SET_COLUMN, "")) not in set_folds:
+            continue
+        if (
+            rarity_folds
+            and join.name_index_key(row.get(tcgcsv.RARITY_COLUMN, "")) not in rarity_folds
+        ):
+            continue
         name = join.name_index_key(row.get(tcgcsv.NAME_COLUMN, ""))
         cell = join.number_index_key(row.get(tcgcsv.NUMBER_COLUMN, ""))
         sku = str(row.get(tcgcsv.SKU_COLUMN, ""))
-        if wanted and name == wanted:
+        if not wanted:
+            # EVERY TERM WAS A FILTER — `query` named a printing and nothing else, so there
+            # is no name signal left to rank on. Every row that survived the set/rarity
+            # filter above is an equally good candidate; D22's own set/rarity vocabulary is
+            # what made the filter exact, so nothing here is a guess.
+            rank = 4
+        elif name == wanted:
             rank = 0
         elif (number and cell == number) or (sku and sku == query.strip()):
             rank = 1
-        elif wanted and wanted in name:
+        elif wanted in name:
             rank = 2  # the epithet case: the read is part of the catalogued title
-        elif wanted and name in wanted:
+        elif name in wanted:
             rank = 3  # the read carries more than the title does
         else:
             continue
