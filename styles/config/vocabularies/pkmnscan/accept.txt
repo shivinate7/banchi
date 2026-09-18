@@ -120,6 +120,7 @@ Reed-Solomon
 Rengar
 Repo
 Repointing
+Rollup
 SKU
 SKUs
 Schwarz
@@ -524,6 +525,7 @@ governed_by
 holdout_accuracy
 https
 initializeexportcsv
+inlines
 iter_code_lines
 letterform
 letterforms
@@ -550,6 +552,7 @@ routing's
 sdist
 semibold
 sha
+subpath
 superellipse
 undo's
 unphotographed
