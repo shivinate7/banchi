@@ -107,13 +107,18 @@ const BOX4 = {
 
 /** Every DELETE the screen sent, in order. The ORDER is the assertion — newest first — so
  *  this is a list and never a set. */
-type Wire = { deletes: string[]; captures: number }
+type Wire = { deletes: string[]; removes: string[]; captures: number }
 
 async function open(
   page: Page,
-  options: { refuseDeleteFrom?: number; nextIndex?: Record<string, number> } = {},
+  options: {
+    refuseDeleteFrom?: number
+    nextIndex?: Record<string, number>
+    /** Section 6: the index a single-card remove refuses over (`renumber_blocked`). */
+    blockRemoveOf?: number
+  } = {},
 ): Promise<Wire> {
-  const wire: Wire = { deletes: [], captures: 0 }
+  const wire: Wire = { deletes: [], removes: [], captures: 0 }
 
   /* A canvas camera, installed before the app script runs. `useCamera` reads
      `navigator.mediaDevices` at call time, so replacing the two methods is enough — and the
@@ -187,6 +192,45 @@ async function open(
         created: true,
         photo: `/tmp/${box}-${index}.jpg`,
         capture_id: null,
+      }),
+    })
+  })
+
+  await page.route(/\/inventory\/\d+\/\d+\/remove$/, (route) => {
+    const path = new URL(route.request().url()).pathname
+    if (route.request().method() !== 'POST') return route.fallback()
+    wire.removes.push(path)
+    const match = /\/inventory\/(\d+)\/(\d+)\/remove$/.exec(path)
+    if (match === null) return route.fallback()
+    const box = match[1] ?? ''
+    const index = match[2] ?? ''
+    if (options.blockRemoveOf !== undefined && Number(index) === options.blockRemoveOf) {
+      return route.fulfill({
+        status: 409,
+        contentType: 'application/json',
+        body: JSON.stringify({
+          error: {
+            code: 'renumber_blocked',
+            message: `Deleting box ${box}, card ${index} would renumber every higher card in the box, and that shift is blocked: card 6 is sold.`,
+          },
+        }),
+      })
+    }
+    const higher = Number(allocated[box] ?? 1) - 1 - Number(index)
+    return route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify({
+        deleted: `${box}/${index}`,
+        box: Number(box),
+        index: Number(index),
+        photo_deleted: true,
+        sidecar_deleted: true,
+        review_deleted: false,
+        parked_deleted: false,
+        cache_deleted: true,
+        shifted: Math.max(0, higher),
+        next_index: Number(allocated[box] ?? 1) - 1,
       }),
     })
   })
@@ -650,3 +694,98 @@ async function place(page: Page, selector: string): Promise<{ top: number; heigh
     return { top: Math.round(rect.top + window.scrollY), height: Math.round(rect.height) }
   })
 }
+
+/** The corner control on each row — section 6, `removeCardInPlace`, beside `undoBack` and
+ *  never instead of it. */
+function drops(page: Page) {
+  return page.locator('.capture-undo-drop')
+}
+
+/* ════════════════════════════════════════════════════════════════════════════════════════
+ * SECTION 6: THE GRANULARITY THE OWNER ASKED FOR UNPROMPTED (docs/specs/undo.md §6) —
+ * "there's currently no way to undo an image that's in the middle of the capturings without
+ * losing all the subsequent capturings from that session." `removeCardInPlace` is D10 ruling
+ * 1's OTHER route: it deletes one card anywhere in a box and slides every higher card down
+ * one, and it already exists (`BoxBrowse.tsx:2418`). This is reach, not a build — a second
+ * control on each row, beside the one `undoBack` already owns. `U` and a whole-row click are
+ * untouched by every case below.
+ * ════════════════════════════════════════════════════════════════════════════════════════ */
+
+test('removing a middle row deletes that card alone, and the later ones survive shifted', async ({
+  page,
+}) => {
+  const wire = await open(page)
+  await shoot(page, 5)
+
+  // Row 2 is Card 3 (newest-first: 5, 4, 3, 2, 1).
+  await expect(rows(page).nth(2)).toHaveAttribute('aria-label', /Card 3$/)
+  await drops(page).nth(2).click()
+
+  await expect(page.getByRole('heading', { name: 'Remove just this card?' })).toBeVisible()
+  await page.getByRole('button', { name: 'Remove this card' }).click()
+
+  await expect(rows(page)).toHaveCount(4)
+  expect(wire.removes).toEqual(['/inventory/3/3/remove'])
+  // ONLY THE ONE REQUEST — not a walk, not a second delete for the row that slid into its
+  // place. That is what distinguishes this from `undoBack`'s own multi-row press.
+  expect(wire.deletes).toEqual([])
+
+  /* CARD 3 IS GONE. Cards 4 and 5 are not — they SLID to 3 and 4, which is the physical truth
+     D10 ruling 1 permits the renumber for. Cards 1 and 2, below the cut, are untouched and
+     keep their server-rendered labels; the two that shifted fall back to the bare store key,
+     because `pipeline/join.py:Position.label` composed the old string against an index that
+     is no longer theirs and this screen never composes a second one (D67). */
+  await expect(rows(page).nth(0)).toHaveAttribute('aria-label', /B3 #4$/)
+  await expect(rows(page).nth(1)).toHaveAttribute('aria-label', /B3 #3$/)
+  await expect(rows(page).nth(2)).toHaveAttribute('aria-label', /Card 2$/)
+  await expect(rows(page).nth(3)).toHaveAttribute('aria-label', /Card 1$/)
+
+  // The receipt says how many labels just changed — the honesty `BoxBrowse.tsx`'s own remove
+  // toast already carries, matched rather than reworded.
+  await expect(page.locator('.capture-undo .capture-quiet').last()).toContainText('2 cards')
+})
+
+test('removing the newest row costs nothing else — no shift, and the note says so', async ({
+  page,
+}) => {
+  const wire = await open(page)
+  await shoot(page, 2)
+
+  await drops(page).nth(0).click()
+  await page.getByRole('button', { name: 'Remove this card' }).click()
+
+  await expect(rows(page)).toHaveCount(1)
+  expect(wire.removes).toEqual(['/inventory/3/2/remove'])
+  await expect(page.locator('.capture-undo .capture-quiet').last()).toContainText(
+    'nothing else moved',
+  )
+})
+
+test('a blocked removal reaches the operator as a sentence naming what blocked it', async ({
+  page,
+}) => {
+  const wire = await open(page, { blockRemoveOf: 3 })
+  await shoot(page, 5)
+
+  await drops(page).nth(2).click()
+  await page.getByRole('button', { name: 'Remove this card' }).click()
+
+  // NOTHING LEFT THE LIST. The refusal changed nothing, which is the whole point of a route
+  // that checks before it writes a single file.
+  await expect(rows(page)).toHaveCount(5)
+  expect(wire.removes).toEqual(['/inventory/3/3/remove'])
+
+  // THE DIALOG CLOSED, so the sentence is not trapped behind its own overlay.
+  await expect(page.getByRole('heading', { name: 'Remove just this card?' })).toBeHidden()
+
+  // AND THE SENTENCE NAMES WHAT BLOCKED IT — the server's own words, which is what "reaches
+  // the operator" means on this screen (`describe()`, matched by every other refusal here).
+  const refusal = page.locator('.capture-undo .capture-refused')
+  await expect(refusal).toContainText('card 6 is sold')
+  await expect(page.locator('.capture-halt-code')).toHaveText('renumber_blocked')
+
+  // NO REGISTERED WORD FOR THE MECHANISM (D196): the sentence the operator reads never says
+  // "capture id" or names the route, only what blocked it and why.
+  await expect(refusal).not.toContainText('capture_id')
+  await expect(refusal).not.toContainText('/inventory/')
+})

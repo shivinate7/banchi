@@ -940,6 +940,42 @@
 .capture-undo-row:focus-visible::after { opacity: 1; }
 .capture-undo-partial { font-weight: 700; }
 
+/* THE CELL WRAPS THE ROW BUTTON AND THE PER-CARD REMOVE BUTTON AS SIBLINGS (section 6) —
+   two controls, not one nested in the other. Ghost cells share `.capture-undo-thumb`'s own
+   aspect-ratio so a reserved row costs the same height as a real one (D118, see `stripFloor`
+   on the component). */
+.capture-undo-cell { position: relative; }
+.capture-undo-ghost { aspect-ratio: 9 / 16; visibility: hidden; pointer-events: none; }
+/* A CIRCLE OVER THE TOP-RIGHT CORNER, not inside the row button's own click area — the row
+   still walks the plan back to here on a press anywhere else on the thumbnail. Sized off
+   `--bn-control-h-sm` so the coarse-pointer lift in kit.css (D117) reaches it exactly the way
+   it reaches every other icon-only control, without importing the kit `Button` for one glyph
+   this file already draws its own way (`capture-undo-row` is hand-rolled for the same reason). */
+.capture-undo-drop {
+  position: absolute;
+  top: -6px;
+  right: -5px;
+  width: 22px;
+  height: 22px;
+  padding: 0;
+  border: none;
+  border-radius: var(--bn-r-full);
+  display: grid;
+  place-items: center;
+  background: var(--bn-surface);
+  color: var(--bn-ink-3);
+  box-shadow: 0 0 0 1px var(--bn-line-strong), var(--bn-shadow-1);
+  cursor: pointer;
+  z-index: 2;
+  transition: background-color var(--bn-t-fast) var(--bn-ease), color var(--bn-t-fast) var(--bn-ease);
+}
+.capture-undo-drop:hover:not(:disabled),
+.capture-undo-drop:focus-visible { background: var(--bn-danger); color: var(--bn-on-accent); }
+.capture-undo-drop:disabled { opacity: 0.5; cursor: not-allowed; }
+@media (max-width: 767px), (hover: none) and (pointer: coarse) {
+  .capture-undo-drop { width: var(--bn-control-h-sm); height: var(--bn-control-h-sm); top: -8px; right: -8px; }
+}
+
 /* ---- the halt (spec 5.5): two lines and one button; the figures sit behind the disclosure ---- */
 .capture-halt {
   display: flex;
