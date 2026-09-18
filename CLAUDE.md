@@ -866,11 +866,14 @@ adopting some and deferring others (D99 sits where it does because main took D90
   product claim BUILT, channel decision RECORDED and not executed.
 - `docs/specs/stale-listings.md` — SPECIFIED and BUILT, NOT VALIDATED. No file has ever
   reached TCGplayer.
-- `docs/specs/pull-undo-reach.md` — SPECIFIED, NOT BUILT, and waiting on the owner's
-  word. `undoPull` is reachable only from a twenty-second toast, so a mis-pull outlives its
-  own way back. The recommendation is the order's own line, with no clock; the file also
-  records a live divergence — `#/inventory`'s sale undo does not consult `holder_of`, so it
-  can put a pulled card back on the shelf while the order still reads it fulfilled.
+- `docs/specs/undo.md` — SPECIFIED, NOT BUILT. Undo as one concept, interviewed 2026-09-17.
+  Two mechanisms by ruling: `U` and the receipt for the press just made, and a menu on the
+  sunk row on `#/inventory` for a mistake found later. No clock is a limit anywhere — three
+  built reversals (the sale, the retirement, the pull) are reachable only from a
+  twenty-second toast. A past order keeps the fact and drops the position (D212). The
+  capture strip gets mid-sitting granularity from the remove route it already has. The file
+  also records a live divergence: the sale undo does not consult `holder_of`, so it can put
+  a pulled card back on the shelf while the order still reads it fulfilled.
 - `docs/specs/corpus-pruning.md` — RECORDED, NOT BUILT (D177). Pruning may never be
   automatic; 430 answers examined, 0 safe to auto-prune.
 - `docs/specs/batch-script.md` — the four commands, storage, routing, pricing. Built.
