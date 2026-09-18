@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
-"""Harness runner — T1-T9.
+"""Harness runner — T1-T11.
 
-`make harness` exits 0 only when all nine tests pass. Nothing in this project is "done"
+`make harness` exits 0 only when all ten tests pass. Nothing in this project is "done"
 until it does. See docs/GATES.md for the contract; every threshold there is a number, not
 an adjective, and the numbers live in the test modules next to the code that checks them.
 
@@ -20,7 +20,16 @@ T8 (code cards) arrived with C9-C11 on 2026-08-30, for the same reason: a code i
 bearer instrument, and reading one wrong, selling one twice, or letting a premium one
 leave in a bulk lot are three different failures that must not hide inside one another.
 
-All nine tests always run, even after one fails. A runner that stops at the first failure
+T11 (the order walk plan) arrived with `pipeline/walkplan.py` on 2026-09-17. THERE IS NO
+T10 AND THE GAP IS DELIBERATE: T10 is spelled for the Intelligent Mail barcode encoder,
+shelved on the owner's ruling with `pipeline/imb.py` on branch
+`claude/tcgtracking-in-house-a7cb43` at c9391e1 and named as T10 throughout
+`docs/debts/026-*.md`. This repo's rule for a contended id is to renumber your own and never
+another's, so the shelf keeps its number. `TESTS` is the count either way, which is what the
+sentences above say to recount from — the range in this file's title is the HIGHEST id and
+has never been a claim that every id between exists.
+
+All ten tests always run, even after one fails. A runner that stops at the first failure
 hides the state of everything behind it, which is the opposite of what a status signal
 is for.
 """
@@ -42,6 +51,7 @@ from harness.tests import (  # noqa: E402
     t7_store_and_seams,
     t8_codes,
     t9_traces,
+    t11_walk_plan,
 )
 
 # Explicit and ordered. No discovery magic: a test that silently stops being collected is
@@ -56,6 +66,7 @@ TESTS = [
     t7_store_and_seams,
     t8_codes,
     t9_traces,
+    t11_walk_plan,
 ]
 
 

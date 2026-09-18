@@ -1,7 +1,9 @@
 # The order walk is a plan, not a list
 
-**Status: SPECIFIED, NOT BUILT.** No code in this tree implements any part of it. The owner
-rules on this document before a line is written.
+**Status: the solver is BUILT. The route and the screen are NOT BUILT.** `pipeline/walkplan.py`
+implements sections 5 and 6, and `harness/tests/t11_walk_plan.py` is its contract. Section 7's
+route and section 8's screen are separate work and no code exists for either. The owner ruled
+on this document on 2026-09-17, before any of it was written.
 
 **Three architectural calls were put to the owner on 2026-09-17 and ruled on.** They are
 settled in this document and are not open questions: the solver runs **on the server**;
