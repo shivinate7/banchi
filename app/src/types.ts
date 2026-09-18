@@ -949,6 +949,15 @@ export type SaleResult = {
    *  D10: sold is a state and never a removal, so a reversal is a state transition backwards
    *  and this is the state it goes back to. */
   restores_to: string | null
+
+  /** The order line a REVERSAL released, or null. `docs/specs/undo.md` §4's own finding:
+   *  a copy pulled for an order and then sold carries a ledger entry the sale never touches,
+   *  so a sale's own undo must release it in the SAME write or the order keeps reading that
+   *  copy as shipped while the card sits back on the shelf. Always null on a sale — recording
+   *  a pull is `POST /orders/pull`'s job, already done before a card reaches this route sold —
+   *  and null on a reversal that held no order line. Additive: every field above this one is
+   *  unmoved. */
+  order_released: { key: string; sku: string } | null
 }
 
 /** Why a retired card left (D26). The send-side union — the four words the server's
@@ -2839,9 +2848,6 @@ export type OrderLineProgress = {
    *  underneath a legitimate pull is what makes it non-zero. */
   over: number
   copies: string[]
-  /** Where each recorded copy sits RIGHT NOW, joined at read time off its capture id and
-   *  stored nowhere (D36). Nulls where the card is gone. The copies panel's `pulled` mark. */
-  pulled: OrderPulledCopy[]
   /** How many of `recorded` were closed with NO card behind them — `POST /orders/fill`, D113.
    *  `recorded` is the whole count and this is the part of it nothing in the store can
    *  corroborate, so a screen drawing `recorded` alone cannot tell a pulled line from a
@@ -3183,9 +3189,6 @@ export type OrdersFetched = {
  *  `capture_id` is the aim check on the way in (a mid-box delete or a re-shoot changes which
  *  physical card sits at a slot) and the WHOLE of the lookup on the way back. */
 export type PullTarget = { box: number; index: number; capture_id: string }
-
-/** One pulled copy's current position, composed per `GET /orders` answer. */
-export type OrderPulledCopy = { capture_id: string; box: number | null; index: number | null }
 
 /** What a pull or its undo did.
  *

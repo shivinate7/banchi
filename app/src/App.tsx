@@ -742,6 +742,7 @@ const SHORTCUTS: readonly KeyGroup[] = [
       { keys: ['Home', 'End'], does: 'Go to the first or last card the filter leaves', when: 'with the card list focused' },
       { keys: ['X'], does: 'Tick the selected card', when: 'with the card list focused' },
       { keys: ['Esc'], does: 'Close the open sheet or panel' },
+      { keys: ['U'], does: 'Undo the newest sale or retirement' },
     ],
   },
   {
@@ -753,6 +754,7 @@ const SHORTCUTS: readonly KeyGroup[] = [
     rows: [
       { keys: ['J', '↓'], does: 'Select the next order' },
       { keys: ['K', '↑'], does: 'Select the order before it' },
+      { keys: ['U'], does: 'Undo the newest pull', when: 'on the Pull stage' },
     ],
   },
   {

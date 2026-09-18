@@ -1,7 +1,7 @@
 import { useSyncExternalStore } from 'react'
 
 import { onServerBoot } from './server'
-import type { OrderLineReason, OrdersPayload, ShippingBatch, ShippingLane } from './types'
+import type { OrderLineReason, OrdersPayload, PullTarget, ShippingBatch, ShippingLane } from './types'
 
 /* THE HUB'S MEMORY ACROSS A STAGE SWITCH.
  *
@@ -58,6 +58,13 @@ export type HubState = {
   /** Bumped by anything that wrote to the ledger from outside a mounted hub (an undo pressed
    *  on a toast), so the next mounted hub re-reads. */
   readonly version: number
+  /** THE NEWEST PULL THIS SCREEN MADE THAT IS STILL UNDOABLE — `docs/specs/undo.md` §3's fast
+   *  path, `U`, reached from `OrdersHub` regardless of which stage or order is on screen. It
+   *  lives here rather than in a component because the pull's own toast outlives the row it
+   *  was pressed from. Overwritten by the next pull, cleared by its own undo, and never
+   *  re-armed by a clock — `until` is read at the moment `U` is pressed, the same "no window,
+   *  no clock" ruling every other undo in this store answers to. */
+  readonly lastPull: { readonly target: PullTarget; readonly place: string; readonly name: string; readonly until: number } | null
 }
 
 let state: HubState = {
@@ -73,6 +80,7 @@ let state: HubState = {
   gone: null,
   busy: null,
   version: 0,
+  lastPull: null,
 }
 
 const listeners = new Set<() => void>()

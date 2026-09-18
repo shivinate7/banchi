@@ -7804,11 +7804,58 @@ def do_mark_sold(box: int, index: int, payload: dict) -> dict:
     verbatim by the single review answer and the group one for the same reason: one
     implementation rather than two, because the second copy is the one that stops being
     exact the first time a check changes.
+
+    THE UNDO DIRECTION ALSO REVERSES THE LEDGER, WHERE THE LEDGER HOLDS THE COPY —
+    `docs/specs/undo.md` §4, the sharpest finding in that file. `do_order_pull` is the other
+    caller of `_sell`, and it already reverses `Ledger.holder_of` itself before calling
+    `_sell`, inside its own `Store.write()` — so `_sell`'s own body must never touch the
+    ledger, or a pull's undo would reverse it twice. This route is the ONLY OTHER caller,
+    and until now it never consulted `holder_of` at all: a copy pulled for an order, marked
+    sold from `#/inventory`, then reversed from the row went back on the shelf as
+    `identified` — live, and offered to the next buyer — while the order still read that
+    copy fulfilled. That is the double-shipment `record_pull`'s `capture_id` requirement
+    exists to prevent, reached from the other end.
+
+    Read inside the SAME lock, before `_sell` writes: `holder_of` answers which line (if
+    any) holds this capture id. `_sell` itself never changes a card's `capture_id`, so
+    reading it before or after `_sell` runs is equivalent — read first, so a `capture_id`-
+    less legacy card (`holder_of` needs a string) is a plain `None` rather than a second
+    lookup after the sale already committed. When a holder exists, `forget_pull` releases
+    the copy from that line in the SAME `Store.write()` the sale reverses in, so the two
+    halves commit together or neither does — a raise from `_sell` (`not_sold`,
+    `sold_origin_unknown`, ...) discards the read here along with everything else.
+
+    ONLY THE UNDO DIRECTION TOUCHES THE LEDGER. A plain sale is never `record_pull`'s job —
+    that route is `POST /orders/pull`, which calls `_ledger_pull` itself before `_sell` — so
+    `do_mark_sold`'s forward direction has nothing to release.
+
+    `order_released` IS ADDITIVE. Every key `_sell` already returns — `restores_to`,
+    `undone`, `card`, `listing` among them — is unmoved; this is a new key and only this
+    route sets it. Null on a sale, null on a reversal with no holder, and the released
+    `(order key, sku)` pair on a reversal that closed one — so a screen can say the order
+    moved without a second request, the same reason `listing` rides this body rather than
+    making the Fulfiller ask again.
     """
     _reject_unknown(payload, SOLD_FIELDS)
     undo = _optional_flag(payload, "undo", "undo_invalid")
+    key = master.position_key(box, index)
     with Store().write() as snapshot:
-        return _sell(snapshot, box, index, undo)
+        holder = None
+        if undo:
+            card = snapshot.inventory.cards.get(key)
+            capture_id = card.capture_id if card is not None else None
+            if capture_id:
+                holder = snapshot.ledger.holder_of(str(capture_id))
+
+        body = _sell(snapshot, box, index, undo)
+
+        released = None
+        if undo and holder is not None:
+            held_key, held_sku = holder
+            snapshot.ledger.forget_pull(held_key, held_sku, [str(card.capture_id)])
+            released = {"key": held_key, "sku": held_sku}
+        body["order_released"] = released
+        return body
 
 
 def do_retire(box: int, index: int, payload: dict) -> dict:
@@ -9331,44 +9378,23 @@ def _order_stamps(numbers: Sequence[str]) -> Tuple[int, Dict[str, Tuple[str, ...
     return len(ledger.orders), stamps
 
 
-def _pulled_positions(inventory: master.Inventory, copies) -> List[dict]:
-    """Where each pulled copy sits RIGHT NOW: `{capture_id, box, index}`, composed per answer.
-
-    THE JOIN THE COPIES PANEL NEEDS AND NOTHING STORES (D36). The ledger holds capture ids,
-    the walk is keyed by position, and a pulled copy is sold — so it is in no pick, and the
-    walk has nothing but this to say which slot it came out of. The panel's `GET /search` rows
-    do carry a capture id since D93, so a client COULD match them here; that would be a second
-    implementation of a join the store is already indexed for, and the one that ran in the
-    browser would be the one with no `card_by_capture_id` to be right about duplicates.
-    `card_by_capture_id` is an
-    indexed lookup under D88 and is answered here, once per recorded copy; a card that is
-    gone, or a duplicate id the store refuses to guess between, answers nulls rather than
-    taking `GET /orders` down.
-    """
-    out: List[dict] = []
-    for capture_id in copies:
-        try:
-            card = inventory.card_by_capture_id(str(capture_id))
-        except master.DuplicateCaptureId:
-            card = None
-        out.append(
-            {
-                "capture_id": str(capture_id),
-                "box": card.box if card is not None else None,
-                "index": card.index if card is not None else None,
-            }
-        )
-    return out
-
-
 def _order_progress(
-    ledger: order_store.Ledger, record: order_store.OrderRecord, inventory: master.Inventory
+    ledger: order_store.Ledger, record: order_store.OrderRecord
 ) -> List[dict]:
     """What WE have recorded against each line of one order. The ledger's own half.
 
     `recorded` rather than `progress`, which is the accessor that INVENTS an empty row and
     stores it — a read that created a fulfilment entry would put a row in the ledger
     claiming a pull that never happened, every time a screen was drawn.
+
+    NO POSITION JOINS HERE ANY MORE (`docs/specs/undo.md` §5, D212). A recorded copy has
+    already left the box, so its slot is no longer a fact this screen states — it names the
+    card and the count, never where it was. The join this used to run —
+    `card_by_capture_id` once per recorded copy — was pure cost: nothing in `app/` ever read
+    the positions it composed (`figure.pulled` on `#/orders` is `row.recorded`, a count, not
+    this list). Removing it is why `GET /orders` is a lookup per line lighter than it was.
+    `store/orders.py:Ledger.holder_of` (capture id -> order) is the unrelated reverse index
+    the slow-path undo still needs, and it is untouched.
     """
     key = record.key
     rows = []
@@ -9386,7 +9412,6 @@ def _order_progress(
                 # argument.
                 "over": ledger.over(key, line.sku),
                 "copies": list(row.copies),
-                "pulled": _pulled_positions(inventory, row.copies),
                 # D113. `recorded` is the whole count and these two are how it was reached:
                 # `by_hand` copies closed with nothing in the store behind them, `reason`
                 # why that was honest. A screen drawing `recorded` alone cannot tell a
@@ -9406,7 +9431,6 @@ def _order_row(
     ledger: order_store.Ledger,
     record: order_store.OrderRecord,
     is_open: bool,
-    inventory: master.Inventory,
 ) -> dict:
     """One order as the feed said it, with our own progress beside it.
 
@@ -9431,7 +9455,7 @@ def _order_row(
     own copy of `TERMINAL_STATUSES` or branching on `status` — either of which is the second
     declaration of one vocabulary that D16 exists to catch.
     """
-    progress = _order_progress(ledger, record, inventory)
+    progress = _order_progress(ledger, record)
     return {
         "key": record.key,
         "source": record.source,
@@ -9690,7 +9714,7 @@ def do_orders() -> dict:
     return {
         "summary": ledger.summary,
         "orders": [
-            _order_row(ledger, record, record.key in open_keys, snapshot.inventory)
+            _order_row(ledger, record, record.key in open_keys)
             for record in sequence
         ],
         "resolution": {

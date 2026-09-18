@@ -5512,6 +5512,114 @@ def check_mark_sold(checks: Checks) -> None:
     )
 
 
+# ------------------------------------------------------ mark sold reverses the order ledger
+
+
+def check_mark_sold_releases_ledger(checks: Checks) -> None:
+    """The sale undo's ledger half — `docs/specs/undo.md` §4, its sharpest finding.
+
+    THE DIVERGENCE THIS CLOSES, IN ONE WALK: pull a copy for an order (the ledger records it
+    against a line), mark it sold from `#/inventory`, then reverse the sale from the SAME
+    place. Before this fix, `do_mark_sold` never consulted `Ledger.holder_of` — the card went
+    back on the shelf as `identified`, live and offered to the next buyer, while the order's
+    line still counted that copy fulfilled. That is the double-shipment `record_pull`'s
+    `capture_id` requirement exists to prevent, reached from the other end.
+
+    A MUTATION-TESTED GUARD ONLY IF IT CAN GO RED ON THAT EXACT BUG. Comment out the
+    `holder`/`forget_pull` block in `do_mark_sold` (or move it into `_sell`, which would
+    reverse `do_order_pull`'s own ledger write a second time) and this must fail — not "some
+    check somewhere", THIS one, on the line that reads `recorded.fulfilled`.
+    """
+    checks.note("")
+    checks.note("MARK SOLD UNDO — reverses the order ledger where it holds the copy")
+
+    with isolated_home():
+        # `capture_id` — the ledger's own identity for a physical copy — is the app's own
+        # id, sent on the capture, never derived from the digest `cid` names it by (D172,
+        # D183). It has to be on the fixture explicitly, the way the real camera always
+        # sends one; `Ledger.record_pull`'s `CopyNotIdentifiable` refuses a card with none.
+        capture_server.do_capture(capture_payload(4, capture_id="u1-copy"))
+        with Store().write() as snapshot:
+            snapshot.inventory.set_state(
+                "4/1", master.IDENTIFIED, sku="9191486", condition="Near Mint"
+            )
+            capture_id = str(snapshot.inventory.cards["4/1"].capture_id)
+            checks.equal(capture_id, "u1-copy", "the fixture's capture id round-trips")
+            snapshot.ledger.ingest([
+                order_store.OrderRecord(
+                    source="TCGplayer",
+                    number="U-1",
+                    placed_at="2026-08-28T10:00:00.000+00:00",
+                    lines=[order_store.OrderLine(sku="9191486", quantity=1)],
+                )
+            ])
+        key = order_store.order_key("TCGplayer", "U-1")
+
+        with Store().write() as snapshot:
+            newly = snapshot.ledger.record_pull(key, "9191486", [capture_id])
+        checks.equal(newly, 1, "the pull records the physical copy against the line")
+        checks.equal(
+            Store().read().ledger.recorded(key, "9191486").fulfilled,
+            1,
+            "and the line now counts it fulfilled — the walk's own state before the sale",
+        )
+
+        # ---------------------------------------------------- the sale, from #/inventory
+        sold = capture_server.do_mark_sold(4, 1, {})
+        checks.equal(sold["state"], master.SOLD, "the card is sold, same as any other")
+        checks.equal(
+            sold.get("order_released"),
+            None,
+            "a plain sale releases nothing — that is `POST /orders/pull`'s job, already "
+            "done before this card was ever marked sold",
+        )
+        checks.equal(
+            Store().read().ledger.recorded(key, "9191486").fulfilled,
+            1,
+            "and the ledger is untouched by the sale itself — only the undo direction reads it",
+        )
+
+        # ---------------------------------------------------- the reversal, from the same row
+        back = capture_server.do_mark_sold(4, 1, {"undo": True})
+        checks.equal(back["state"], master.IDENTIFIED, "the sale reverses as it always did")
+        checks.equal(
+            back.get("order_released"),
+            {"key": key, "sku": "9191486"},
+            "and the response NAMES the line it released, so a screen can say the order "
+            "moved without a second request",
+        )
+
+        after = Store().read().ledger.recorded(key, "9191486")
+        checks.equal(
+            after.fulfilled,
+            0,
+            "THE DIVERGENCE ITSELF: the line no longer counts this copy fulfilled — before "
+            "the fix this stayed at 1 while the card went back on the shelf",
+        )
+        checks.ok(
+            capture_id not in after.copies,
+            "and the copy is off the line's own list, not just off its count",
+        )
+        checks.equal(
+            Store().read().ledger.holder_of(capture_id),
+            None,
+            "and the reverse index agrees: nothing holds this copy any more",
+        )
+
+        # ------------------------------------------------- a sale with no holder releases none
+        unheld = capture_server.do_mark_sold(4, 1, {})
+        checks.equal(
+            unheld.get("order_released"), None, "selling it again has nothing to release"
+        )
+        back_again = capture_server.do_mark_sold(4, 1, {"undo": True})
+        checks.equal(
+            back_again.get("order_released"),
+            None,
+            "and reversing THAT sale releases nothing either — the ledger has already let "
+            "this copy go, and a second release would be a fabricated write",
+        )
+
+
 # ---------------------------------------------------------------------------------- history
 
 
@@ -24163,15 +24271,18 @@ def check_order_ledger(checks: Checks) -> None:
         if drawn is not None:
             shifted = next(order for order in drawn["orders"] if order["key"] == key)
             checks.equal(
-                sorted(
-                    (entry["capture_id"], entry["box"], entry["index"])
-                    for entry in shifted["progress"][0]["pulled"]
-                ),
-                [("o2", 3, 1), ("o3", 3, 2)],
-                "AND THE POSITIONS THE SCREEN DRAWS FOR THE PULLED COPIES FOLLOWED THE CARDS: "
-                "joined at read time off the capture id, so o2 reads 3/1 now and o4's slot is "
-                "named for nobody — a stored position would have pointed the copies panel at "
-                "the card that inherited the slot (D36)",
+                sorted(shifted["progress"][0]["copies"]),
+                ["o2", "o3"],
+                "AND THE LEDGER'S OWN RECORD FOLLOWED THE CARDS BY IDENTITY: capture ids, "
+                "never a position — the mid-box delete renumbered the drawer and neither "
+                "recorded copy dropped out or changed name",
+            )
+            checks.ok(
+                "pulled" not in shifted["progress"][0],
+                "AND NO POSITION IS JOINED FOR AN ALREADY-PULLED COPY (docs/specs/undo.md "
+                "§5, D212) — the card has left the box, so the wire says which card and how "
+                "many, never the slot it came out of; a renumber is the case that used to "
+                "prove the join was live, and it is exactly the case this drops",
             )
         recorded = moved.ledger.recorded(key, "9191486")
         checks.equal(
@@ -25540,11 +25651,17 @@ def check_order_screen(checks: Checks) -> None:
                 "picks is a list to choose from, not an allocation (2026-09-16)",
             )
             checks.equal(
-                after_screen["orders"][0]["progress"][0]["pulled"],
-                [{"capture_id": "p1", "box": 3, "index": 1}],
-                "AND THE PULLED COPY'S POSITION IS JOINED AT READ TIME off its capture id — "
-                "composed for this answer and stored nowhere (D36) — so the copies panel can "
-                "mark the slot a pulled card came out of",
+                after_screen["orders"][0]["progress"][0]["copies"],
+                ["p1"],
+                "AND THE LEDGER NAMES THE CARD IT PULLED, BY CAPTURE ID — the one identity "
+                "a renumber cannot move",
+            )
+            checks.ok(
+                "pulled" not in after_screen["orders"][0]["progress"][0],
+                "AND NO POSITION RIDES BESIDE IT (docs/specs/undo.md §5, D212) — a recorded "
+                "copy has already left the box, so `GET /orders` states the card and the "
+                "count and never the slot it came out of; nothing under `app/` ever read "
+                "the position this used to join",
             )
 
         refusal(
@@ -29875,6 +29992,7 @@ def run() -> Result:
     check_review_answer(checks)
     check_group_answer(checks)
     check_mark_sold(checks)
+    check_mark_sold_releases_ledger(checks)
     check_retire(checks)
     check_reshoot(checks)
     check_history(checks)
