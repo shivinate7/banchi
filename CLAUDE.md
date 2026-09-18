@@ -866,6 +866,11 @@ adopting some and deferring others (D99 sits where it does because main took D90
   product claim BUILT, channel decision RECORDED and not executed.
 - `docs/specs/stale-listings.md` — SPECIFIED and BUILT, NOT VALIDATED. No file has ever
   reached TCGplayer.
+- `docs/specs/pull-undo-reach.md` — SPECIFIED, NOT BUILT, and waiting on the owner's
+  word. `undoPull` is reachable only from a twenty-second toast, so a mis-pull outlives its
+  own way back. The recommendation is the order's own line, with no clock; the file also
+  records a live divergence — `#/inventory`'s sale undo does not consult `holder_of`, so it
+  can put a pulled card back on the shelf while the order still reads it fulfilled.
 - `docs/specs/corpus-pruning.md` — RECORDED, NOT BUILT (D177). Pruning may never be
   automatic; 430 answers examined, 0 safe to auto-prune.
 - `docs/specs/batch-script.md` — the four commands, storage, routing, pricing. Built.
