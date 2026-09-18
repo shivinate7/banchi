@@ -309,13 +309,23 @@ def demand(ledger: order_store.Ledger, keys: Iterable[str]) -> Tuple[Want, ...]:
     candidate copies and zero pulls look filled, and the walk would skip a card the buyer is
     still owed.
 
-    A STOOD-DOWN LINE IS SKIPPED, and this is the one place this module departs from the
-    spec's literal formula. `LineProgress.closed` means the line needs nothing further from
-    this store even though `outstanding` is positive — `Ledger.unfulfilled`'s own docstring
-    says so in as many words, and reads it exactly this way rather than subtracting it from
-    `outstanding`, because "how many copies does this line owe" and "is this store still
-    fetching it" are two questions. A walk is unambiguously the second one: including a
-    stood-down line here sends a hand to a drawer for a card nobody is going to ship.
+    A STOOD-DOWN LINE OWES ZERO HERE, ON THE OWNER'S OWN RULING (2026-09-17): *"If I stand a
+    line down, it should say owed 0 and not send me to the drawer for those lines."* That is
+    an AMENDMENT to the spec's section 5, made in the same commit as this code and not a
+    silent departure from it — the first draft of this module applied the rule unasked, which
+    was the wrong order.
+
+    `LineProgress.closed` means the line needs nothing further from this store even though
+    `outstanding` is positive. `Ledger.unfulfilled` already reads it exactly this way rather
+    than subtracting it from `outstanding`, and its docstring says why: "how many copies does
+    this line owe" is a fact about the ORDER, and "is this store still fetching it" is a fact
+    about this store. A WALK IS THE SECOND QUESTION. `close_line` is the operator saying they
+    are not shipping it, so a plan that routes a hand to that drawer is spending a reach on a
+    card the operator already decided against.
+
+    `server/capture_server.py:_engine_order` deliberately does NOT apply this filter, and the
+    two are not in conflict. It feeds the RESOLVER, which answers what an order is owed — the
+    first question. This answers the second.
 
     A KEY THE LEDGER DOES NOT HOLD CONTRIBUTES NOTHING AND RAISES NOTHING. The spec's route
     skips an unknown key rather than refusing the request, so the skip belongs here where the

@@ -101,6 +101,19 @@ demand[sku] = Σ over ticked orders of max(0, line.quantity − progress.recorde
 reason `figureOf` already gives: `ResolvedLine.fulfilled` is `len(picks)`, which since D212 is
 what could be offered, never what has been taken.
 
+**Amended 2026-09-17, on the owner's ruling: a STOOD-DOWN line owes zero.** Their words, asked
+before the code was written: *"If I stand a line down, it should say owed 0 and not send me to
+the drawer for those lines."* So a line whose `LineProgress.closed` is set contributes nothing
+to `demand`, whatever `outstanding` still reads. `Ledger.unfulfilled` already reads `closed`
+this way rather than subtracting it from `outstanding`, and its own docstring carries the
+argument: "how many copies does this line owe" is a fact about the ORDER, and "is this store
+still fetching it" is a fact about this store. A walk is the second question. `close_line` is
+the operator saying they will not ship it, so routing a hand to that drawer spends a reach on a
+card they already decided against.
+
+`server/capture_server.py:_engine_order` deliberately does NOT apply this filter, and the two
+do not conflict. It feeds the resolver, which answers the first question.
+
 Demand is **capped at total availability** before the solve. A SKU the store cannot fill is
 not the solver's problem; it is reported separately (§8, the shortfall block) and never makes
 the instance infeasible. On the owner's store this is not a footnote: of the 59 SKUs the 40

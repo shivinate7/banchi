@@ -137,6 +137,7 @@ def run() -> Result:
     _multiplicity(c)
     _shortfall(c)
     _pooled(c)
+    _stood_down(c)
     _exact(c)
     _cost_name(c)
 
@@ -322,6 +323,47 @@ def _pooled(c: Checks) -> None:
 
     pooled_sections = [stop for stop in plan.stops if stop.pooled and stop.section is not None]
     c.equal(pooled_sections, [], "no pooled stop is drawn as a section, by construction")
+
+
+def _stood_down(c: Checks) -> None:
+    """A STOOD-DOWN line owes zero and is not walked to. The owner's ruling, 2026-09-17.
+
+    Their words, asked before the code was written: *"If I stand a line down, it should say
+    owed 0 and not send me to the drawer for those lines."* `close_line` is the operator
+    saying they will not ship that line. The ledger still reports `outstanding` above zero for
+    it, because that is a fact about the ORDER — `Ledger.unfulfilled` reads `closed` beside it
+    rather than subtracting it, and its docstring has the argument. A walk asks the other
+    question, so it must not route a hand to that drawer.
+
+    THE SPEC WAS AMENDED IN THE SAME COMMIT AS THIS CHECK. Section 5's formula was written
+    without the carve-out, and the first draft of `pipeline/walkplan.py` applied one unasked.
+    That was the wrong order. The ruling is now in the spec, in the module, and here.
+
+    Two lines, so that the check sees a walk CHANGE rather than merely disappear: `A` stays
+    open and `B` is stood down. A solver that ignores `closed` walks to both drawers.
+    """
+    inventory = _store([1, 2], ["A", "B"])
+    ledger = _ledger({"A": 1, "B": 1})
+
+    before = walkplan.plan(inventory, ledger, ["tcg:1"])
+    c.equal(before.counts.stops, 2, "both lines open, so the walk is two drawers")
+
+    ledger.close_line("tcg:1", "B", reason=order_store.CLOSE_REASONS[0])
+    c.equal(ledger.recorded("tcg:1", "B").closed, True, "the line is now stood down")
+    c.ok(ledger.outstanding("tcg:1", "B") > 0,
+         "and the LEDGER still reports it outstanding — a fact about the order, which is what "
+         "makes this a real filter rather than an arithmetic coincidence")
+
+    after = walkplan.plan(inventory, ledger, ["tcg:1"])
+    c.equal(_taken(after).get("B"), None,
+            "the stood-down line owes zero here: nothing in the walk asks for B")
+    c.equal(after.counts.stops, 1,
+            "and the drawer that only held B is dropped — one reach saved, which is the whole "
+            "point of the ruling")
+    c.equal(_taken(after).get("A"), 1, "the open line on the same order is untouched")
+    c.equal(after.shortfall, (),
+            "a stood-down line is not a SHORTFALL either — the store can fill it, nobody is "
+            "asking it to")
 
 
 def _exact(c: Checks) -> None:
