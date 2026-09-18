@@ -29,6 +29,7 @@ import { CardLocations } from './CardLocations'
 import { PositionBar } from './PositionBar'
 import { PositionLabel } from './PositionLabel'
 import { useSearch } from './useSearch'
+import { isEditableTarget } from './keys'
 import { Button, Icon, Notice, Pill } from './kit'
 import { dismissToast, toast } from './kit/toast'
 import { rememberHideSold, storedHideSold } from './deviceMemory'
@@ -52,6 +53,12 @@ import './Inventory.css'
 
 /** How long a receipt's undo stays. Fulfillment.tsx's number, kept in step. */
 const UNDO_WINDOW_MS = 20_000
+
+/** The one key for the newest reversible write, wherever one stands (`docs/specs/undo.md`
+ *  §3). Same letter, same meaning as `CaptureScreen.tsx` and `ReviewQueue.tsx` — it reaches
+ *  the newest receipt still carrying an undo, sale or retirement alike. */
+const UNDO_KEY = 'u'
+const UNDO_KEY_LABEL = 'U'
 
 /* The refusal codes this screen branches on. `already_sold` on a sale is not this device's
  * sale: a receipt with NO undo. `not_sold` on a reversal is success. The retirement pair
@@ -510,6 +517,37 @@ export function Inventory() {
   )
   doUndoRef.current = doUndo
 
+  /* THE NEWEST RECEIPT STILL CARRYING AN UNDO — sale or retirement, whichever was pressed
+   * last. `receipts` is already newest-first (`remember`), so the first one with `canUndo`
+   * is the one `U` reaches. Read fresh every render; nothing about it needs a ref. */
+  const receiptsRef = useRef(receipts)
+  receiptsRef.current = receipts
+  const newestUndoable = useMemo(() => receipts.find((receipt) => receipt.canUndo) ?? null, [receipts])
+
+  /* `U` IS THE ONE KEY FOR THE NEWEST REVERSIBLE WRITE (`docs/specs/undo.md` §3), the same
+   * ruling `CaptureScreen.tsx` and `ReviewQueue.tsx` already carry out. Registered once,
+   * armed by `handlerRef` rather than a dependency list, for the reason `ReviewQueue.tsx`
+   * gives it: an effect runs after paint, and a key pressed in the gap between a state
+   * change and its effect would close over the previous receipts. Nothing where there is
+   * nothing to undo — no beep, no toast, no navigation. */
+  const onUndoKey = (event: KeyboardEvent) => {
+    if (event.repeat) return
+    if (event.metaKey || event.ctrlKey || event.altKey) return
+    if (isEditableTarget(event.target)) return
+    if (event.key.toLowerCase() !== UNDO_KEY) return
+    const newest = receiptsRef.current.find((receipt) => receipt.canUndo)
+    if (newest === undefined) return
+    event.preventDefault()
+    void doUndoRef.current(newest)
+  }
+  const undoKeyRef = useRef(onUndoKey)
+  undoKeyRef.current = onUndoKey
+  useEffect(() => {
+    const fire = (event: KeyboardEvent) => undoKeyRef.current(event)
+    window.addEventListener('keydown', fire)
+    return () => window.removeEventListener('keydown', fire)
+  }, [])
+
   const soldKeys = useMemo(() => new Set(sold), [sold])
   const retiredKeys = useMemo(() => new Set(retired), [retired])
 
@@ -557,6 +595,7 @@ export function Inventory() {
       soldKeys={soldKeys}
       retiredKeys={retiredKeys}
       undoableSales={undoableSales}
+      undoKeyOn={newestUndoable?.key === copy.key}
       onSell={sell}
       onUndo={undo}
       onRetire={openRetire}
@@ -811,6 +850,7 @@ function Action({
   soldKeys,
   retiredKeys,
   undoableSales,
+  undoKeyOn,
   onSell,
   onUndo,
   onRetire,
@@ -821,6 +861,8 @@ function Action({
   soldKeys: ReadonlySet<string>
   retiredKeys: ReadonlySet<string>
   undoableSales: ReadonlyMap<string, Receipt>
+  /** True on the one copy `U` reaches — the newest receipt still carrying an undo. */
+  undoKeyOn: boolean
   onSell: (copy: SearchCopy) => void
   onUndo: (receipt: Receipt) => void
   onRetire: (copy: SearchCopy) => void
@@ -866,6 +908,7 @@ function Action({
           aria-label={`Undo the sale at ${standing.place}`}
           busy={busy}
           disabled={busyKey !== null && !busy}
+          kbd={undoKeyOn ? UNDO_KEY_LABEL : undefined}
           onClick={() => onUndo(standing)}
         >
           Undo

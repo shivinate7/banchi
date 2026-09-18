@@ -718,6 +718,70 @@ test('the receipt names where the card just was, never the departed label the sa
   await expect(receipt.locator('button.bn-toast-action')).toHaveText('Undo')
 })
 
+/* `docs/specs/undo.md` §3: `U` IS THE ONE KEY FOR THE NEWEST REVERSIBLE WRITE — here, the
+ * newest pull this screen made, held in `OrdersHubStore.lastPull` and reached by
+ * `undoFromToast`, the same function the toast's own Undo button calls. `page.keyboard.press`
+ * is what dispatches a real `keydown` a window listener can see; `.fill()` elsewhere in this
+ * file does not. */
+test('U undoes the newest pull, on the Pull stage', async ({ page }) => {
+  const wire = await open(page, {
+    pull: {
+      undone: false,
+      order_key: `TCGplayer:${ORDER_NUMBER}`,
+      sku: SKU,
+      newly: 1,
+      recorded: 1,
+      outstanding: 0,
+      places: [place()],
+      sales: [{ card: { place: place({ label: 'Box 3 · departed', slot: null, section: null, card: null }) } }],
+    },
+  })
+
+  await page.locator('button.orders-pull').first().click()
+  await expect
+    .poll(() => wire.filter((one) => one.path.endsWith('/orders/pull')).length)
+    .toBe(1)
+
+  // The hand is on the page heading, not in any field.
+  await page.getByRole('heading', { name: 'Orders' }).click()
+  await page.keyboard.press('u')
+
+  await expect
+    .poll(() => wire.filter((one) => one.path.endsWith('/orders/pull')).length)
+    .toBe(2)
+  const pulls = wire.filter((one) => one.path.endsWith('/orders/pull'))
+  expect(pulls[1]?.body).toEqual({ undo: true, targets: [{ box: 3, index: 21, capture_id: 'cap-a' }] })
+  await expect(page.locator('.bn-toast', { hasText: 'Put Volcanion back' })).toBeVisible()
+})
+
+test('u typed into the buyer search field does not undo the pull', async ({ page }) => {
+  const wire = await open(page, {
+    pull: {
+      undone: false,
+      order_key: `TCGplayer:${ORDER_NUMBER}`,
+      sku: SKU,
+      newly: 1,
+      recorded: 1,
+      outstanding: 0,
+      places: [place()],
+      sales: [{ card: { place: place({ label: 'Box 3 · departed', slot: null, section: null, card: null }) } }],
+    },
+  })
+
+  await page.locator('button.orders-pull').first().click()
+  await expect
+    .poll(() => wire.filter((one) => one.path.endsWith('/orders/pull')).length)
+    .toBe(1)
+
+  await page.getByRole('searchbox', { name: 'Search buyers by name or order number' }).click()
+  await page.keyboard.press('u')
+
+  // No second `/orders/pull` call — the field ate the key.
+  await expect(page.locator('.bn-toast', { hasText: 'Put Volcanion back' })).toHaveCount(0)
+  expect(wire.filter((one) => one.path.endsWith('/orders/pull')).length).toBe(1)
+  await expect(page.getByRole('searchbox', { name: 'Search buyers by name or order number' })).toHaveValue('u')
+})
+
 /* -------------------------------------------------------------------------------------- 6 */
 
 test('a pooled copy is drawn as pooled rather than as a position (D24)', async ({ page }) => {

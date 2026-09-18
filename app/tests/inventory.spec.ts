@@ -1888,6 +1888,50 @@ test('the row that sold the copy becomes the way to take it back', async ({ page
   await expect(receiptToast(page).getByRole('button', { name: 'Undo' })).toHaveCount(0)
 })
 
+/* `docs/specs/undo.md` §3: `U` IS THE ONE KEY FOR THE NEWEST REVERSIBLE WRITE, wherever one
+ * stands — the owner's ruling, and the same letter `CaptureScreen.tsx` and `ReviewQueue.tsx`
+ * already carry out. These two cases are the pair `CLAUDE.md`'s brief called for: the key
+ * reaches the write, and a letter typed into the search field does not. Neither is a click —
+ * `page.keyboard.press` is what dispatches a real `keydown` a window listener can see, which
+ * `.fill()` on the searchbox elsewhere in this file does not. */
+test('U undoes the newest sale, wherever the hand is', async ({ page }) => {
+  const { store, sell, unsell } = sellableStore()
+  const wire = await open(page, BOXES, store, () => PRICING,
+    movesOnSale((undo) => (undo ? unsell('2/1') : sell('2/1'))))
+
+  const row = copyRow(page, CARD_1)
+  await row.getByRole('button', { name: 'Mark sold' }).click()
+  await expect(row.getByRole('button', { name: 'Undo the sale at' })).toBeVisible()
+
+  // The hand is nowhere in particular — on the page heading, not in any field.
+  await page.getByRole('heading', { name: 'Inventory' }).click()
+  await page.keyboard.press('u')
+
+  const sales = wire.filter((call) => call.path.endsWith('/sold'))
+  expect(sales.map((call) => call.body)).toEqual([{}, { undo: true }])
+  await expect(row.getByRole('button', { name: 'Mark sold' })).toBeVisible()
+})
+
+test('u typed into the search field does not undo the sale', async ({ page }) => {
+  const { store, sell } = sellableStore()
+  const wire = await open(page, BOXES, store, () => PRICING,
+    movesOnSale((undo) => (undo ? undefined : sell('2/1'))))
+
+  const row = copyRow(page, CARD_1)
+  await row.getByRole('button', { name: 'Mark sold' }).click()
+  const rowUndo = row.getByRole('button', { name: 'Undo the sale at' })
+  await expect(rowUndo).toBeVisible()
+
+  await page.getByRole('searchbox').click()
+  await page.keyboard.press('u')
+
+  // No second `/sold` call — the field ate the key, the card is still sold, still reversible.
+  const sales = wire.filter((call) => call.path.endsWith('/sold'))
+  expect(sales.map((call) => call.body)).toEqual([{}])
+  await expect(rowUndo).toBeVisible()
+  await expect(page.getByRole('searchbox')).toHaveValue('u')
+})
+
 test('the receipt is the undo that survives the rows being replaced', async ({ page }) => {
   const { store, sell } = sellableStore()
   const wire = await open(page, BOXES, store)
