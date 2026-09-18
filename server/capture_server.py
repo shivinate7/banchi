@@ -6166,12 +6166,12 @@ CATALOG_LOOKUP_LIMIT = 9
 def _near_mint_conditions(game: str) -> Set[str]:
     """The Condition strings this game's Near Mint rows carry (D12 hardcodes Near Mint).
 
-    Read off the registry rather than restated, so a game whose finishes change here changes
-    in one place. `variant.resolve` narrows to exactly these when it builds candidates, and a
-    lookup that offered `Lightly Played Foil` would be offering a row the ladder never would.
+    `pipeline/games.py:near_mint_conditions`, kept as a local name because every call site in
+    this file already reads `_near_mint_conditions`. `variant.resolve` narrows to exactly
+    these when it builds candidates, and a lookup that offered `Lightly Played Foil` would be
+    offering a row the ladder never would.
     """
-    entry = games.require(game)
-    return {str(v) for v in dict(entry["condition_by_finish"]).values()}
+    return games.near_mint_conditions(game)
 
 
 def _catalog_for_card(card) -> Tuple[object, str]:

@@ -2337,7 +2337,49 @@ def _resolve(
 # ------------------------------------------------------------------------ queue entries
 
 
-def _candidate_rows(rows, name_matched: Sequence[str] = ()) -> List[Dict[str, object]]:
+def _near_mint_candidates(rows, game: str) -> Sequence[dict]:
+    """`rows` narrowed to the game's own Near Mint strings (D12, D137), for the review
+    screen's own candidate list — docs/specs/card-variants.md section 3b.
+
+    THE CATALOGUE LOOKUP ALREADY FILTERS (`pipeline/join.py:Catalog.from_export`), AND THE
+    QUEUE'S OWN CANDIDATES DID NOT. `Catalog.from_export` narrows what a FRESH join builds a
+    card's candidates FROM; an entry queued before that filter existed, or by any future path
+    that hands this function a wider row set, still carries every play grade until this runs.
+    So this filters again, at the one place every one of those candidate lists passes through
+    on its way to a screen — `games.near_mint_conditions` is the same registry read
+    `Catalog.from_export` and `server/capture_server.py:_near_mint_conditions` both already
+    make, called here rather than restated a third time.
+
+    A FILTER THAT WOULD EMPTY THE LIST MUST NOT (owner's rule). If every one of a card's
+    candidates is off-grade, filtering would leave the operator with NOTHING to answer over a
+    photograph they are looking at — worse than a wide list, because a wide list is at least
+    answerable. So an all-off-grade card keeps every row it had.
+
+    MEASURED UNREACHABLE ON THE OWNER'S STORE, AND STILL HAS TO BE CORRECT. Re-measured
+    read-only against the real store: 124 review/parked entries first seen in 2026-09 carry
+    at least one off-grade candidate — `set_ambiguous` 61, `detected_finish_not_stocked` 33,
+    `ambiguous_no_signal` 20, `rarity_claim_mismatch` 10 — and NONE of the 124 would be
+    emptied by this filter; every one keeps at least one Near Mint row
+    (`detected_finish_not_stocked`'s own case: its ladder reads a `normal` finish and offers
+    five rows of one finish each, one of which is `Near Mint Foil`). The widest,
+    `set_ambiguous` review entry `4/102`, carries 15 rows across two `Set Name` strings and
+    narrows to exactly 3. This is a fact about the export's own data on this store, not a
+    guarantee this function makes — re-measure before trusting it on a different one.
+
+    DROPS CONDITIONS, NEVER SETS. Filtering removes rows by `Condition` alone, and D137's own
+    measurement is why a whole SET is never emptied by it in practice: every finish keeps its
+    own Near Mint row, so a printing (a distinct `Set Name`) that had a row before this runs
+    still has one after — the three-sets-survive assertion in the harness is what checks that
+    this holds for the real 15-row shape rather than assuming it.
+    """
+    conditions = games.near_mint_conditions(game)
+    narrowed = [row for row in rows if row.get(tcgcsv.CONDITION_COLUMN) in conditions]
+    return narrowed if narrowed else rows
+
+
+def _candidate_rows(
+    rows, name_matched: Sequence[str] = (), game: Optional[str] = None
+) -> List[Dict[str, object]]:
     """What the review screen shows beside the photo (D4): the rows this could be.
 
     `found_by` SAYS WHICH READING FOUND THE ROW, and only where that question has two
@@ -2359,7 +2401,14 @@ def _candidate_rows(rows, name_matched: Sequence[str] = ()) -> List[Dict[str, ob
 
     An ABSENT cell stays absent rather than becoming `""`: a row that carries no rarity is
     evidence of nothing, which is exactly how D23's filter reads it, and a screen that drew
-    an empty string there would be asserting the row is unrated."""
+    an empty string there would be asserting the row is unrated.
+
+    `game`, NARROWED TO NEAR MINT FIRST WHEN GIVEN (D137, docs/specs/card-variants.md section
+    3b) — see `_near_mint_candidates`. Optional and defaulting to no filter rather than
+    required, so the harness's own direct calls over a fixture built with no game in mind are
+    unchanged; `queue_entry` below always has one and always passes it."""
+    if game is not None:
+        rows = _near_mint_candidates(rows, game)
     matched = {str(sku) for sku in name_matched}
     out: List[Dict[str, object]] = []
     for row in rows:
@@ -2424,7 +2473,7 @@ def queue_entry(queued: join.QueuedCard) -> queues.QueueEntry:
         },
         confidence=card.confidence,
         reason=queued.destination.reason,
-        candidates=_candidate_rows(queued.candidates, queued.name_matched_skus),
+        candidates=_candidate_rows(queued.candidates, queued.name_matched_skus, card.game),
         market=None if price is None else str(price),
     )
 

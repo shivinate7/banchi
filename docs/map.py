@@ -625,7 +625,7 @@ COMPONENTS = [
                                    "dict instead of one `Rows.where(sku=sku)` per listing — "
                                    "measured at 0.9s over 492 listings before the rewrite "
                                    "(D156).",
-                           "governed_by": ["D147", "D145", "D4", "D8", "D10", "D11", "D20", "D21", "D22", "D23", "D24", "D25", "D26", "D33", "D34", "D36", "D49", "D56", "D58", "D59", "D64", "D87", "D89", "D115", "D150", "D156", "D166", "D180", "D183", "D188"], "tested_by": ["T7"]},
+                           "governed_by": ["D147", "D145", "D4", "D8", "D10", "D11", "D12", "D20", "D21", "D22", "D23", "D24", "D25", "D26", "D33", "D34", "D36", "D49", "D56", "D58", "D59", "D64", "D87", "D89", "D115", "D137", "D150", "D156", "D166", "D180", "D183", "D188"], "tested_by": ["T7"]},
             "runs.py": {"does": "run directories and manifest.json", "governed_by": ["D1", "D25", "D49", "D54", "D86"], "tested_by": ["T7"]},
         },
     },
@@ -673,7 +673,7 @@ COMPONENTS = [
                                  "travel without the measurement, and may not be authored on a "
                                  "`category` game, where it could never fire.",
                          "governed_by": ["D3", "D8", "D11", "D12", "D14", "D16", "D18", "D21", "D22", "D23", "D24", "D25", "D65", "D76",
-                                         "D170"],
+                                         "D137", "D170"],
                          "note": "THE MATRIX IS A SUPERSET OF WHAT ANY ONE EXPORT PROVES, and that "
                                  "is load-bearing rather than sloppy: D23's capture screen renders "
                                  "a finish chip excluded by a rarity claim as unselectable, which "
