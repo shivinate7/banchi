@@ -4947,9 +4947,9 @@ COMPONENTS = [
             # GAP_MINUTES rather than restating it, so the undo strip and the library drawing
             # on `#/` mean the same stretch of work by the same measurement.
             "governed_by": ["D3", "D10", "D13", "D19", "D20", "D21", "D22", "D23", "D27", "D28",
-                            "D34", "D41", "D56", "D58", "D65", "D81", "D92", "D118", "D121",
-                            "D128", "D130", "D131", "D132", "D142", "D145", "D36",
-                            "D153", "D164", "D170", "D172", "D52"]},
+                            "D34", "D36", "D41", "D52", "D56", "D58", "D65", "D67", "D81", "D92",
+                            "D118", "D121", "D128", "D130", "D131", "D132", "D142", "D145", "D153",
+                            "D164", "D170", "D172"]},
             # D3 earns its place on a stylesheet: the no-claim finish chip is drawn dashed
             # because rung 1 distinguishes "no metadata recorded" from a recorded claim, and
             # that distinction is carried here in a border style rather than in any logic.
@@ -6700,8 +6700,7 @@ COMPONENTS = [
                         "undoing exactly one, a row undoing that card AND everything after "
                         "it, and a walk refused partway reporting how far it got in the "
                         "server's own words. Run by `make design-check`.",
-                "governed_by": ["D10", "D41", "D58", "D101", "D118",
-                                "D164"],
+                "governed_by": ["D10", "D41", "D58", "D67", "D101", "D118", "D164", "D196"],
                 "note": "THE ONLY SPEC THAT CAPTURES, and it is the opposite of "
                         "capture-claims.spec.ts's rule rather than an exception to it: "
                         "`POST /capture` and `DELETE /inventory/...` are both intercepted, so "

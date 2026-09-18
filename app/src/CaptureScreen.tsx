@@ -3,7 +3,7 @@ import type { CSSProperties, ReactNode } from 'react'
 
 import { PositionLabel } from './PositionLabel'
 import { storeKeyText } from './storeKey'
-import type { BoxRecord, CardSummary, FinishClaim, GameEntry, GameRegistry } from './types'
+import type { BoxRecord, CardSummary, FinishClaim, GameEntry, GameRegistry, RemoveResult } from './types'
 import {
   getTcgSets,
   ServerError,
@@ -15,9 +15,11 @@ import {
   newCaptureId,
   openSection,
   photoUrl,
+  removeCardInPlace,
   undoCapture,
   updateCard,
 } from './server'
+import { Overlay } from './InventoryOverlay'
 import { resolveSetHint } from './setHint'
 import type { HintVerdict, SetOption } from './setHint'
 import { manualTrigger } from './trigger'
@@ -140,7 +142,20 @@ type Halt = Note & { where: 'camera' | 'server' }
  *  the one built from the server's high-water mark carries nothing, because there is no
  *  response behind it to carry anything. `photoSrc` addresses the first by name and falls
  *  back to the slot — with its nonce — for the second. */
-type UndoTarget = { box: number; index: number; label: string | null; cid: string | null }
+/* `captureId` RIDES ALONG FOR A THIRD ROLE, BESIDE `label` AND `cid`: it is the aim check
+ * `POST /inventory/<box>/<index>/remove` takes (D10 ruling 1), sent exactly as the record
+ * holds it — including null, for the same two reasons `label` and `cid` can be null: a
+ * record written before capture ids existed, or the synthetic high-water-mark row that has
+ * no capture response behind it at all. The route refuses `capture_id_mismatch` rather than
+ * remove whatever now sits at that index, which is what makes a stale aim (a shift the
+ * operator has not seen yet) fail loud instead of quiet. */
+type UndoTarget = {
+  box: number
+  index: number
+  label: string | null
+  cid: string | null
+  captureId: string | null
+}
 
 /** What to call a position on screen — the server's own rendered label, or the record's own
  *  store key when there is no capture response holding one.
@@ -967,6 +982,15 @@ export function CaptureScreen() {
   const [undoNote, setUndoNote] = useState<
     (Note & { done: boolean; position: string | null; did: number; want: number }) | null
   >(null)
+  /* SECTION 6'S GRANULARITY: A SEPARATE PRESS BESIDE `U`, NOT INSTEAD OF IT. `undoBack` above
+   * always deletes the newest of a box (`undoCapture`) and walks newest-first; this is D10
+   * ruling 1's other route (`removeCardInPlace`), aimed at any row the strip still shows, and
+   * it renumbers every higher card in the same box rather than refusing to touch one behind
+   * the newest. `removeConfirm` is the target a dialog is open over — null closes it. The
+   * note shares `undoNote`'s shape and paragraph: both are the strip reporting on itself, and
+   * a second note region one row down would say the same thing twice in two places. */
+  const [removeConfirm, setRemoveConfirm] = useState<UndoTarget | null>(null)
+  const [removeBusy, setRemoveBusy] = useState(false)
   const [revision, setRevision] = useState(0)
   /* Bumped on every capture the server answered, and only then: the viewfinder flashes
    * on it. Undo bumps `revision` (the photo URL must change) and never this. */
@@ -2080,7 +2104,9 @@ export function CaptureScreen() {
       // NO NAME EITHER, FOR THE REASON THERE IS NO LABEL: this row is arithmetic over
       // `GET /status`'s high-water mark, and no capture response stands behind it, so there
       // is no `cid` to address its photograph by. `photoSrc` draws it off the slot.
-      return serverNewest < 1 ? [] : [{ box, index: serverNewest, label: null, cid: null }]
+      return serverNewest < 1
+        ? []
+        : [{ box, index: serverNewest, label: null, cid: null, captureId: null }]
     }
 
     return sitting
@@ -2092,6 +2118,7 @@ export function CaptureScreen() {
         label: shot.card.label,
         // The capture response's own name for the photograph it just wrote (D172).
         cid: shot.card.cid ?? null,
+        captureId: shot.card.capture_id,
       }))
   }, [box, nextForBox, sitting])
 
@@ -2108,6 +2135,18 @@ export function CaptureScreen() {
     () => new Set(undoStack.map((target) => target.box)).size > 1,
     [undoStack],
   )
+
+  /* THE STRIP'S OWN ROW COUNT NEVER SHRINKS DURING A SITTING (D118). The desktop layout wraps
+   * the strip onto a second grid row past five cards; a granular remove (section 6) can drop
+   * the count back under that line while the operator is still mid-shoot, and the footer
+   * losing a row would move the Stack card that sits under it — exactly the "moves where the
+   * REST of it is" D118 forbids. `stripFloor` is the highest row count this sitting has shown,
+   * and ghost cells below pad the grid back up to it; it resets only when the strip goes
+   * empty, which is the one case nothing is reserving space for. */
+  const [stripFloor, setStripFloor] = useState(0)
+  useEffect(() => {
+    setStripFloor((prev) => (undoStack.length === 0 ? 0 : Math.max(prev, undoStack.length)))
+  }, [undoStack.length])
 
   /* WHAT ONE PRESS OF `U` DELETES IS `undoStack[0]`, and there is deliberately no binding
    * for it any more. There used to be an `undoTarget`, and every guard on this screen read
@@ -2317,7 +2356,81 @@ export function CaptureScreen() {
     await undoBack(1)
   }, [undoBack])
 
-  
+  /** Section 6's one card, at any row the strip shows — `removeCardInPlace`, D10 ruling 1's
+   *  other route, aimed by the row's own capture id. Shares `busyRef`/`busy` with every other
+   *  write this screen makes, because a shift mid-shot is exactly the state the shutter guard
+   *  exists for. */
+  const doRemoveOne = useCallback(
+    async (target: UndoTarget) => {
+      if (busyRef.current) return
+      busyRef.current = true
+      setBusy(true)
+      setRemoveBusy(true)
+      setUndoNote(null)
+      try {
+        const result: RemoveResult = await removeCardInPlace(target.box, target.index, target.captureId)
+        setShots((prev) =>
+          prev
+            // The removed shot itself leaves the sitting, the same filter `undoBack` uses.
+            .filter((shot) => !(shot.card.box === target.box && shot.card.index === target.index))
+            // EVERY SHOT BEHIND IT IN THE SAME BOX SLID DOWN ONE INDEX ON THE SERVER, and this
+            // sitting's own copies have to say the same thing or the next press aims at a
+            // position that moved out from under it. The rendered label is retired with it —
+            // `pipeline/join.py:Position.label` composed it against the OLD index and this
+            // screen still never composes a second one (D67) — so it falls back to the bare
+            // store key, `positionText`'s own fallback for exactly this case.
+            .map((shot) =>
+              shot.card.box === target.box && shot.card.index > target.index
+                ? {
+                    ...shot,
+                    card: {
+                      ...shot.card,
+                      index: shot.card.index - 1,
+                      key: `${shot.card.box}/${shot.card.index - 1}`,
+                      label: storeKeyText(shot.card.box, shot.card.index - 1),
+                    },
+                  }
+                : shot,
+            ),
+        )
+        setNextIndex((prev) => ({ ...prev, [String(target.box)]: result.next_index }))
+        setRevision((prev) => prev + 1)
+        setReplayed(null)
+        setUndoNote({
+          done: true,
+          text:
+            result.shifted === 0
+              ? 'Removed. It was the last card in its box, so nothing else moved.'
+              : `Removed. ${result.shifted} ${result.shifted === 1 ? 'card' : 'cards'} behind it moved down one place — every one of those labels just changed.`,
+          position: positionText(target),
+          code: null,
+          did: 1,
+          want: 1,
+        })
+      } catch (err) {
+        // CLOSED HERE TOO, NOT ONLY ON SUCCESS. The dialog is portalled over the whole page
+        // (`InventoryOverlay.tsx`), and `undoNote` renders under the footer behind it — a
+        // refusal left open behind its own dialog would satisfy no reader at all. The
+        // paragraph is the same one `undoBack`'s refusal already uses, so a blocked press
+        // reads exactly the way a blocked walk does.
+        setUndoNote({
+          done: false,
+          position: positionText(target),
+          did: 0,
+          want: 1,
+          ...describe(err),
+        })
+      } finally {
+        setRemoveConfirm(null)
+        busyRef.current = false
+        setBusy(false)
+        setRemoveBusy(false)
+      }
+    },
+    [],
+  )
+
+
   const sectionBusyRef = useRef(false)
   const doSection = useCallback(async () => {
     if (box === null || sectionBusyRef.current) return
@@ -3475,46 +3588,73 @@ export function CaptureScreen() {
             <ul className="capture-undo-list">
               {undoStack.map((target, at) => (
                 <li key={`${target.box}/${target.index}`} style={{ animationDelay: `${at * 30}ms` }}>
-                  <button
-                    type="button"
-                    className="capture-undo-row"
-                    onClick={() => void undoBack(at + 1)}
-                    disabled={busy}
-                    data-undo={at === 0 ? 'Undo' : `Undo ${at + 1}`}
-                    aria-label={
-                      at === 0
-                        ? `Undo the newest capture, ${positionText(target)}`
-                        : `Undo ${at + 1} captures, back to ${positionText(target)}`
-                    }
-                  >
-                    <img
-                      className="capture-undo-thumb capture-undo-thumb-portrait"
-                      src={photoSrc(target.box, target.index, target.cid, revision)}
-                      alt=""
-                    />
-                    {/* THE DRAWER GOES IN THE CAPTION, WHICH IS ALREADY ABSOLUTE — `left: 0;
-                        right: 0; bottom: 0` over the bottom of the thumbnail, so a second
-                        line grows UPWARD over the photograph and moves no layout at all
-                        (D118). The cell's height is the thumbnail's `aspect-ratio`, which
-                        this cannot reach.
-                        `Box 3` AND NOT `B3`: the figure beside it is a COUNT out of a
-                        rendered label, and `B3 #40` would be the key spelling wearing a
-                        count — the one confusion D92 exists to end. A word is not a sigil.
-                        The accessible name needed nothing: `positionText` is the server's own
-                        `Box 3 · Section 1 · Card 40`, which has always named the drawer. This
-                        is the visible half catching up with what a screen reader was already
-                        being told. */}
-                    <span className="capture-undo-pos">
-                      {spansDrawers ? (
-                        <span className="capture-undo-drawer">Box {target.box}</span>
-                      ) : null}
-                      {undoFigure(target)}
-                    </span>
-                    <span className={at === 0 ? 'capture-key is-newest' : 'capture-key'}>
-                      {at === 0 ? UNDO_KEY_LABEL : at + 1}
-                    </span>
-                  </button>
+                  {/* THE CELL WRAPS TWO SIBLING BUTTONS RATHER THAN NESTING ONE INSIDE THE
+                      OTHER — an interactive element cannot hold a second one and stay valid,
+                      and the two mean different things: the row still walks the plan back to
+                      here (`undoBack`, unchanged, D164); the corner control is section 6's
+                      granular press, `removeCardInPlace` aimed at this one card alone. */}
+                  <div className="capture-undo-cell">
+                    <button
+                      type="button"
+                      className="capture-undo-row"
+                      onClick={() => void undoBack(at + 1)}
+                      disabled={busy}
+                      data-undo={at === 0 ? 'Undo' : `Undo ${at + 1}`}
+                      aria-label={
+                        at === 0
+                          ? `Undo the newest capture, ${positionText(target)}`
+                          : `Undo ${at + 1} captures, back to ${positionText(target)}`
+                      }
+                    >
+                      <img
+                        className="capture-undo-thumb capture-undo-thumb-portrait"
+                        src={photoSrc(target.box, target.index, target.cid, revision)}
+                        alt=""
+                      />
+                      {/* THE DRAWER GOES IN THE CAPTION, WHICH IS ALREADY ABSOLUTE — `left: 0;
+                          right: 0; bottom: 0` over the bottom of the thumbnail, so a second
+                          line grows UPWARD over the photograph and moves no layout at all
+                          (D118). The cell's height is the thumbnail's `aspect-ratio`, which
+                          this cannot reach.
+                          `Box 3` AND NOT `B3`: the figure beside it is a COUNT out of a
+                          rendered label, and `B3 #40` would be the key spelling wearing a
+                          count — the one confusion D92 exists to end. A word is not a sigil.
+                          The accessible name needed nothing: `positionText` is the server's own
+                          `Box 3 · Section 1 · Card 40`, which has always named the drawer. This
+                          is the visible half catching up with what a screen reader was already
+                          being told. */}
+                      <span className="capture-undo-pos">
+                        {spansDrawers ? (
+                          <span className="capture-undo-drawer">Box {target.box}</span>
+                        ) : null}
+                        {undoFigure(target)}
+                      </span>
+                      <span className={at === 0 ? 'capture-key is-newest' : 'capture-key'}>
+                        {at === 0 ? UNDO_KEY_LABEL : at + 1}
+                      </span>
+                    </button>
+                    {/* SECTION 6: THIS CARD ALONE, NOT EVERYTHING NEWER THAN IT. The owner's
+                        own complaint — undoing a mid-sitting shot loses every capture after
+                        it too. `removeCardInPlace` is the route that already exists for it
+                        (D10 ruling 1), and this is its second door, beside the row's own. */}
+                    <button
+                      type="button"
+                      className="capture-undo-drop"
+                      disabled={busy}
+                      onClick={(event) => {
+                        event.stopPropagation()
+                        setUndoNote(null)
+                        setRemoveConfirm(target)
+                      }}
+                      aria-label={`Remove just this card, ${positionText(target)}`}
+                    >
+                      <Icon name="x" size={13} />
+                    </button>
+                  </div>
                 </li>
+              ))}
+              {Array.from({ length: Math.max(0, stripFloor - undoStack.length) }).map((_, at) => (
+                <li key={`ghost-${at}`} className="capture-undo-ghost" aria-hidden="true" />
               ))}
             </ul>
           )}
@@ -3543,6 +3683,44 @@ export function CaptureScreen() {
             </p>
           )}
         </footer>
+
+        {removeConfirm === null ? null : (
+          <Overlay
+            kind="dialog"
+            label="Remove just this card"
+            onClose={() => (removeBusy ? undefined : setRemoveConfirm(null))}
+          >
+            <div className="inv-dialog-head">
+              <span className="bn-eyebrow">{positionText(removeConfirm)}</span>
+              <h2 className="inv-dialog-title">Remove just this card?</h2>
+            </div>
+            <div className="inv-dialog-body">
+              <p>
+                This deletes the record and its photograph, and{' '}
+                <strong>every card behind it in this box moves down one place</strong> — every
+                stored position above it changes, and the sitting still holds everything after
+                it. There is no undo.
+              </p>
+              <p className="bn-muted">
+                It is refused if a card behind it has already sold, retired, or been picked up
+                for a listing.
+              </p>
+            </div>
+            <div className="inv-dialog-foot">
+              <Button variant="ghost" onClick={() => setRemoveConfirm(null)} data-autofocus="">
+                Cancel
+              </Button>
+              <Button
+                variant="danger-solid"
+                icon="trash"
+                busy={removeBusy}
+                onClick={() => void doRemoveOne(removeConfirm)}
+              >
+                Remove this card
+              </Button>
+            </div>
+          </Overlay>
+        )}
 
         {/* ============ THE STACK: claims set once per stack ============ */}
         <section className="capture-card capture-card-stack" aria-label="Stack claims">
