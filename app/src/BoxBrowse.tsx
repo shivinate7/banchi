@@ -66,6 +66,54 @@ function rowsOf(cards: Record<string, InventoryCard>): Row[] {
 const NO_ROWS: Row[] = []
 const EMPTY_GROUPS: SearchGroup[] = []
 
+/** Strips a trailing parenthetical off a card name — `"Calm Rune (R02a)"` -> `"Calm Rune"` —
+ *  so a base printing and its promo/alt-art siblings fold to the same key. This is the ONE
+ *  naming convention this store's own data was measured to use for "another printing of the
+ *  same card": `pkmnscan cards name`'s corpus and the real Riftbound export both carry the
+ *  parenthetical suffix on exactly the rows that are a variant of the un-suffixed name, never
+ *  on an unrelated card that happens to share a word. */
+function baseCardName(name: string): string {
+  return name.replace(/\s*\([^()]*\)\s*$/, '').trim()
+}
+
+/** THE "SAME CARD" TEST (2026-09-17 regression fix). `results.groups` is several SKUs
+ *  whenever a search's matched cards span more than one SKU — and that shape means two very
+ *  different things depending on what those SKUs ARE:
+ *
+ *   - several PRINTINGS of one card (`Mind Rune`: 3 SKUs, `names: ['Mind Rune']` on every one
+ *     of them; `Vanguard Armory`: 2 SKUs, same story, differing only by condition) — the
+ *     missing level this branch built the chooser for.
+ *   - several DIFFERENT cards that merely share a `set_hint` (`ME01`: ~110 SKUs, each with its
+ *     own name — Abra, Bayleef, Bewear, ... — because a set hint is a fact about the BOX, not
+ *     the card) — the case that regressed: the chooser drew over a plain multi-card search and
+ *     swallowed the walk the two `inventory.spec.ts` tests below depend on.
+ *
+ *  MEASURED against the real store (`do_search`, read-only) before choosing: every "same
+ *  card" case above has every group's `names` identical once a trailing parenthetical variant
+ *  suffix is stripped (`baseCardName`); every "different cards" case has a distinct base name
+ *  per group, with one group (`Corphish`) even disagreeing WITHIN itself on spelling — which
+ *  is a fact about that one SKU's own copies, not a reason to compare across groups by
+ *  anything looser than exact base-name equality. So: several groups are the same card only
+ *  when EVERY group has at least one name, and stripping the parenthetical from every name in
+ *  every group leaves exactly one base name across the whole result. A group with no name at
+ *  all (an unidentified card) never satisfies this — D22's free-text note case is not a
+ *  "printing" of anything, and a query cannot equal a null name in the first place, so this
+ *  never actually excludes a real match. */
+function groupsAreSamePrinting(groups: readonly SearchGroup[]): boolean {
+  if (groups.length < 2) return false
+  let shared: string | null = null
+  for (const group of groups) {
+    if (group.names.length === 0) return false
+    for (const name of group.names) {
+      const base = baseCardName(name)
+      if (base === '') return false
+      if (shared === null) shared = base
+      else if (base !== shared) return false
+    }
+  }
+  return shared !== null
+}
+
 /** No listing records read yet. Not the same as "this store has listed nothing". */
 const NO_LISTINGS: Readonly<Record<string, Listing>> = {}
 
@@ -831,7 +879,7 @@ export function BoxBrowse({
      naming one card. `null`-SKU cards (not yet identified) count as a group like any other:
      CLAUDE.md's own hard rule is never to drop a card silently, and a card the pipeline
      could not name is exactly the card an operator searches for. */
-  const multiGroup = searchGroups !== null && searchGroups.length > 1
+  const multiGroup = searchGroups !== null && groupsAreSamePrinting(searchGroups)
   const resolvedVariant =
     chosenVariant !== null &&
     chosenVariant.query === query &&

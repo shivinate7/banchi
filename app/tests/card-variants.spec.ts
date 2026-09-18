@@ -25,6 +25,10 @@ import { sealEveryTest } from './shell'
  *                     is the "prove it already works" case, not a new code path.
  *   Solo Print         one SKU. A single-group search must behave exactly as it did before
  *                     this feature existed: no chooser, no extra press.
+ *   Twin Set           two SKUs, TWO DIFFERENT CARD NAMES sharing one `set_hint` — the
+ *                     regression case (2026-09-17): a set hint is a fact about the box, not
+ *                     the card, and several different cards sharing one must never draw the
+ *                     chooser. See `groupsAreSamePrinting` in `BoxBrowse.tsx`.
  */
 
 const NOW = '2026-09-17T12:00:00+00:00'
@@ -91,6 +95,8 @@ const CARDS = {
   '1/3': card({ box: 1, index: 3, name: 'Vanguard Armory', number: '168/221', sku: '9035556', condition: 'Near Mint' }),
   '1/4': card({ box: 1, index: 4, name: 'Vanguard Armory', number: '168/221', sku: '9035561', condition: 'Near Mint Foil' }),
   '1/5': card({ box: 1, index: 5, name: 'Solo Print', number: '001', sku: '9000001', condition: 'Near Mint' }),
+  '1/6': card({ box: 1, index: 6, name: 'Twin Alpha', number: '010', sku: '9000010', condition: 'Near Mint', setHint: 'TW01' }),
+  '1/7': card({ box: 1, index: 7, name: 'Twin Beta', number: '011', sku: '9000011', condition: 'Near Mint', setHint: 'TW01' }),
 }
 
 /** One `SearchGroup`, built directly rather than derived — this spec's whole job is to
@@ -107,6 +113,7 @@ function group(over: {
   key: string
   box: number
   index: number
+  setHint?: string | null
 }) {
   return {
     sku: over.sku,
@@ -114,7 +121,7 @@ function group(over: {
     number: over.number,
     printed_total: '102',
     number_display: `${over.number}/102`,
-    set_hint: null,
+    set_hint: over.setHint ?? null,
     set: over.set,
     rarity: over.rarity,
     condition: over.condition,
@@ -150,11 +157,20 @@ const SOLO_PRINT = [
   group({ sku: '9000001', name: 'Solo Print', number: '001', set: 'Origins', rarity: 'Common', condition: 'Near Mint', key: '1/5', box: 1, index: 5 }),
 ]
 
+/** Two DIFFERENT cards sharing one `set_hint` — the regression's own shape (the real `ME01`
+ *  case has ~110 of these). `names` disagrees across the groups, which is exactly what
+ *  `groupsAreSamePrinting` reads to tell this apart from `MIND_RUNE`/`VANGUARD_ARMORY` above. */
+const TWIN_SET = [
+  group({ sku: '9000010', name: 'Twin Alpha', number: '010', set: null, rarity: null, condition: 'Near Mint', key: '1/6', box: 1, index: 6, setHint: 'TW01' }),
+  group({ sku: '9000011', name: 'Twin Beta', number: '011', set: null, rarity: null, condition: 'Near Mint', key: '1/7', box: 1, index: 7, setHint: 'TW01' }),
+]
+
 function searchAnswer(query: string): { query: string; groups: unknown[] } {
   const asked = query.trim().toLowerCase()
   if (asked === 'mind rune') return { query, groups: MIND_RUNE }
   if (asked === 'vanguard armory') return { query, groups: VANGUARD_ARMORY }
   if (asked === 'solo print') return { query, groups: SOLO_PRINT }
+  if (asked === 'tw01') return { query, groups: TWIN_SET }
   return { query, groups: [] }
 }
 
@@ -175,9 +191,9 @@ async function open(page: Page): Promise<void> {
       body: JSON.stringify({
         boxes: [
           {
-            box: 1, bid: 1, name: null, sections: [], state: 'open', capacity: 100, fill: 5,
-            next_index: 6, cards: 5, on_hand: 5, sold: 0, retired: 0, moved: 0, listed: 0,
-            sections_detail: [{ section: 1, start: 1, end: 5, count: 5 }],
+            box: 1, bid: 1, name: null, sections: [], state: 'open', capacity: 100, fill: 7,
+            next_index: 8, cards: 7, on_hand: 7, sold: 0, retired: 0, moved: 0, listed: 0,
+            sections_detail: [{ section: 1, start: 1, end: 7, count: 7 }],
           },
         ],
       }),
@@ -252,5 +268,19 @@ test.describe('the name -> variant chooser draws real collisions distinctly', ()
     // It drops straight into the walk: the hero card for the one match is on screen with
     // no extra press.
     await expect(page.getByRole('heading', { name: 'Solo Print' })).toBeVisible()
+  })
+
+  test('a set hint shared by two different cards draws no chooser — the walk stays as it was', async ({ page }) => {
+    await open(page)
+    await page.getByPlaceholder('Card name, number or SKU').fill('TW01')
+
+    // THE REGRESSION: `results.groups.length > 1` used to be the whole test, and two SKUs
+    // sharing nothing but a set hint would draw the chooser and swallow the walk underneath
+    // it (`app/tests/inventory.spec.ts`'s `ME01` cases, at real scale — ~110 groups there).
+    await expect(page.locator('.browse-variants')).toHaveCount(0)
+
+    // Both matched cards are directly in the walk, not behind a pick.
+    await expect(page.locator('.browse-row', { hasText: 'Twin Alpha' })).toBeVisible()
+    await expect(page.locator('.browse-row', { hasText: 'Twin Beta' })).toBeVisible()
   })
 })
