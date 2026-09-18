@@ -24163,15 +24163,18 @@ def check_order_ledger(checks: Checks) -> None:
         if drawn is not None:
             shifted = next(order for order in drawn["orders"] if order["key"] == key)
             checks.equal(
-                sorted(
-                    (entry["capture_id"], entry["box"], entry["index"])
-                    for entry in shifted["progress"][0]["pulled"]
-                ),
-                [("o2", 3, 1), ("o3", 3, 2)],
-                "AND THE POSITIONS THE SCREEN DRAWS FOR THE PULLED COPIES FOLLOWED THE CARDS: "
-                "joined at read time off the capture id, so o2 reads 3/1 now and o4's slot is "
-                "named for nobody — a stored position would have pointed the copies panel at "
-                "the card that inherited the slot (D36)",
+                sorted(shifted["progress"][0]["copies"]),
+                ["o2", "o3"],
+                "AND THE LEDGER'S OWN RECORD FOLLOWED THE CARDS BY IDENTITY: capture ids, "
+                "never a position — the mid-box delete renumbered the drawer and neither "
+                "recorded copy dropped out or changed name",
+            )
+            checks.ok(
+                "pulled" not in shifted["progress"][0],
+                "AND NO POSITION IS JOINED FOR AN ALREADY-PULLED COPY (docs/specs/undo.md "
+                "§5, D212) — the card has left the box, so the wire says which card and how "
+                "many, never the slot it came out of; a renumber is the case that used to "
+                "prove the join was live, and it is exactly the case this drops",
             )
         recorded = moved.ledger.recorded(key, "9191486")
         checks.equal(
@@ -25540,11 +25543,17 @@ def check_order_screen(checks: Checks) -> None:
                 "picks is a list to choose from, not an allocation (2026-09-16)",
             )
             checks.equal(
-                after_screen["orders"][0]["progress"][0]["pulled"],
-                [{"capture_id": "p1", "box": 3, "index": 1}],
-                "AND THE PULLED COPY'S POSITION IS JOINED AT READ TIME off its capture id — "
-                "composed for this answer and stored nowhere (D36) — so the copies panel can "
-                "mark the slot a pulled card came out of",
+                after_screen["orders"][0]["progress"][0]["copies"],
+                ["p1"],
+                "AND THE LEDGER NAMES THE CARD IT PULLED, BY CAPTURE ID — the one identity "
+                "a renumber cannot move",
+            )
+            checks.ok(
+                "pulled" not in after_screen["orders"][0]["progress"][0],
+                "AND NO POSITION RIDES BESIDE IT (docs/specs/undo.md §5, D212) — a recorded "
+                "copy has already left the box, so `GET /orders` states the card and the "
+                "count and never the slot it came out of; nothing under `app/` ever read "
+                "the position this used to join",
             )
 
         refusal(

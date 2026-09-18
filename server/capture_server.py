@@ -9331,44 +9331,23 @@ def _order_stamps(numbers: Sequence[str]) -> Tuple[int, Dict[str, Tuple[str, ...
     return len(ledger.orders), stamps
 
 
-def _pulled_positions(inventory: master.Inventory, copies) -> List[dict]:
-    """Where each pulled copy sits RIGHT NOW: `{capture_id, box, index}`, composed per answer.
-
-    THE JOIN THE COPIES PANEL NEEDS AND NOTHING STORES (D36). The ledger holds capture ids,
-    the walk is keyed by position, and a pulled copy is sold — so it is in no pick, and the
-    walk has nothing but this to say which slot it came out of. The panel's `GET /search` rows
-    do carry a capture id since D93, so a client COULD match them here; that would be a second
-    implementation of a join the store is already indexed for, and the one that ran in the
-    browser would be the one with no `card_by_capture_id` to be right about duplicates.
-    `card_by_capture_id` is an
-    indexed lookup under D88 and is answered here, once per recorded copy; a card that is
-    gone, or a duplicate id the store refuses to guess between, answers nulls rather than
-    taking `GET /orders` down.
-    """
-    out: List[dict] = []
-    for capture_id in copies:
-        try:
-            card = inventory.card_by_capture_id(str(capture_id))
-        except master.DuplicateCaptureId:
-            card = None
-        out.append(
-            {
-                "capture_id": str(capture_id),
-                "box": card.box if card is not None else None,
-                "index": card.index if card is not None else None,
-            }
-        )
-    return out
-
-
 def _order_progress(
-    ledger: order_store.Ledger, record: order_store.OrderRecord, inventory: master.Inventory
+    ledger: order_store.Ledger, record: order_store.OrderRecord
 ) -> List[dict]:
     """What WE have recorded against each line of one order. The ledger's own half.
 
     `recorded` rather than `progress`, which is the accessor that INVENTS an empty row and
     stores it — a read that created a fulfilment entry would put a row in the ledger
     claiming a pull that never happened, every time a screen was drawn.
+
+    NO POSITION JOINS HERE ANY MORE (`docs/specs/undo.md` §5, D212). A recorded copy has
+    already left the box, so its slot is no longer a fact this screen states — it names the
+    card and the count, never where it was. The join this used to run —
+    `card_by_capture_id` once per recorded copy — was pure cost: nothing in `app/` ever read
+    the positions it composed (`figure.pulled` on `#/orders` is `row.recorded`, a count, not
+    this list). Removing it is why `GET /orders` is a lookup per line lighter than it was.
+    `store/orders.py:Ledger.holder_of` (capture id -> order) is the unrelated reverse index
+    the slow-path undo still needs, and it is untouched.
     """
     key = record.key
     rows = []
@@ -9386,7 +9365,6 @@ def _order_progress(
                 # argument.
                 "over": ledger.over(key, line.sku),
                 "copies": list(row.copies),
-                "pulled": _pulled_positions(inventory, row.copies),
                 # D113. `recorded` is the whole count and these two are how it was reached:
                 # `by_hand` copies closed with nothing in the store behind them, `reason`
                 # why that was honest. A screen drawing `recorded` alone cannot tell a
@@ -9406,7 +9384,6 @@ def _order_row(
     ledger: order_store.Ledger,
     record: order_store.OrderRecord,
     is_open: bool,
-    inventory: master.Inventory,
 ) -> dict:
     """One order as the feed said it, with our own progress beside it.
 
@@ -9431,7 +9408,7 @@ def _order_row(
     own copy of `TERMINAL_STATUSES` or branching on `status` — either of which is the second
     declaration of one vocabulary that D16 exists to catch.
     """
-    progress = _order_progress(ledger, record, inventory)
+    progress = _order_progress(ledger, record)
     return {
         "key": record.key,
         "source": record.source,
@@ -9690,7 +9667,7 @@ def do_orders() -> dict:
     return {
         "summary": ledger.summary,
         "orders": [
-            _order_row(ledger, record, record.key in open_keys, snapshot.inventory)
+            _order_row(ledger, record, record.key in open_keys)
             for record in sequence
         ],
         "resolution": {
