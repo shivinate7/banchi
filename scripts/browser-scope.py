@@ -479,6 +479,26 @@ def selftest() -> int:
        "`app/src/Inventory.tsx` does not reach `review.spec.ts`")
     ok(inventory_verdict.partial, "a real screen file narrows the run")
 
+    # THE BARE `#/` CASE: home is the one route whose hash has no letters after the slash,
+    # and a hash regex written for `#/inventory`-shaped paths misses it by construction —
+    # `_ROUTE_HASH_RE` must accept the empty tail too, or Home's own spec is invisible to
+    # its own screen forever.
+    home_verdict = classify_specs(["app/src/Home.tsx"])
+    ok("app/tests/home.spec.ts" in home_verdict.specs,
+       "`app/src/Home.tsx` reaches `home.spec.ts` — a bare `#/` names the `/` route")
+
+    # THE OTHER DIRECTION: every route in `ROUTES` must be named by an explicit spec body,
+    # not left to a `routesFromNav(` sweep alone — a sweep asserts something generic about
+    # whatever screen is current, never a claim that IT tested this one. A route that fails
+    # this is `unnamed_route_views()`'s job to catch and `is_shared_surface`'s job to protect.
+    unnamed = unnamed_route_views()
+    if unnamed:
+        print(f"  (unnamed, so shared: {', '.join(sorted(unnamed))})")
+    ok(all(is_shared_surface(view) for view in unnamed),
+       "every unnamed route's view file is protected as a shared surface")
+    ok(is_shared_surface("app/src/Home.tsx") or "app/src/Home.tsx" not in unnamed,
+       "Home is named by its own spec today, so it is not swept-only")
+
     kit_verdict = classify_specs(["app/src/kit/Icon.tsx"])
     ok(kit_verdict.specs == set(all_specs()) and not kit_verdict.partial,
        "a path under `app/src/kit/` selects every spec")
@@ -490,6 +510,19 @@ def selftest() -> int:
     space_verdict = classify_specs(["app/src/My File.tsx"])
     ok(space_verdict.specs == set(all_specs()) and not space_verdict.partial,
        "a path carrying whitespace selects every spec")
+
+    # THAT ALONE IS NOT PROOF THE WHITESPACE CLAUSE FIRED — `app/src/My File.tsx` is also
+    # unmapped, so the unmapped-path fallback reaches the same answer with the clause
+    # deleted. Map the space path to exactly one spec via `classify_specs`'s own `reverse`
+    # injection and check the whitespace clause still overrides that mapping — the
+    # whitespace check runs BEFORE the reverse-map lookup, so a real mapping proves the
+    # clause and not the fallback.
+    mapped_path = "app/src/My File.tsx"
+    fake_reverse = {mapped_path: {"app/tests/home.spec.ts"}}
+    mapped_space_verdict = classify_specs([mapped_path], reverse=fake_reverse)
+    ok(mapped_space_verdict.specs == set(all_specs()) and not mapped_space_verdict.partial,
+       "a whitespace path MAPPED to one spec still selects every spec — the clause, not "
+       "the unmapped fallback, is what fires")
 
     old = os.environ.get("PKMNSCAN_BROWSER_SCOPE")
     os.environ["PKMNSCAN_BROWSER_SCOPE"] = "off"
@@ -620,7 +653,23 @@ def route_views(app_tsx: str = "app/src/App.tsx") -> Dict[str, str]:
     return out
 
 
-_ROUTE_HASH_RE = re.compile(r"#(/[a-z][a-z0-9-]*)")
+_ROUTE_HASH_RE = re.compile(r"#(/[a-z][a-z0-9-]*|/)")
+
+
+def spec_named_views(spec_path: str, routes: Dict[str, str]) -> Set[str]:
+    """The view files a spec names EXPLICITLY, by route hash in its own (comment-stripped)
+    body — never through a `routesFromNav(` sweep. Shared between `spec_reach` (which adds
+    the sweep's own routes on top) and `unnamed_route_views` (which asks whether a screen is
+    ever named this way by ANYONE, or only ever swept)."""
+    full = ROOT / spec_path
+    text = full.read_text(encoding="utf-8", errors="replace") if full.is_file() else ""
+    stripped = strip_comments(text)
+    named: Set[str] = set()
+    for hash_path in sorted(set(_ROUTE_HASH_RE.findall(stripped))):
+        view = routes.get(hash_path)
+        if view is not None:
+            named.add(view)
+    return named
 
 
 def spec_reach(spec_path: str, routes: Dict[str, str]) -> Set[str]:
@@ -634,11 +683,32 @@ def spec_reach(spec_path: str, routes: Dict[str, str]) -> Set[str]:
     if "routesFromNav(" in stripped:
         starts.extend(routes.values())
     else:
-        for hash_path in sorted(set(_ROUTE_HASH_RE.findall(stripped))):
-            view = routes.get(hash_path)
-            if view is not None:
-                starts.append(view)
+        starts.extend(spec_named_views(spec_path, routes))
     return import_closure(starts)
+
+
+_unnamed_routes_cache: Optional[Set[str]] = None
+
+
+def unnamed_route_views() -> Set[str]:
+    """Route view files reached only by a `routesFromNav(` sweep, never named by hash in any
+    spec's own body. A sweep asserts something generic about whatever screen is current; it
+    is not a substitute for a spec that actually claims to be testing that screen. A route
+    that fails this is treated as a shared surface — fail open — rather than trusted to the
+    sweep alone. Cached at module scope, same reasoning as `shell_closure`."""
+    global _unnamed_routes_cache
+    if _unnamed_routes_cache is not None:
+        return _unnamed_routes_cache
+    routes = route_views()
+    named: Set[str] = set()
+    for spec in all_specs():
+        full = ROOT / spec
+        text = full.read_text(encoding="utf-8", errors="replace") if full.is_file() else ""
+        if "routesFromNav(" in strip_comments(text):
+            continue
+        named |= spec_named_views(spec, routes)
+    _unnamed_routes_cache = set(routes.values()) - named
+    return _unnamed_routes_cache
 
 
 def all_specs() -> List[str]:
@@ -700,6 +770,8 @@ def is_shared_surface(path: str) -> bool:
         return True
     if path in shell_closure():
         return True
+    if path in unnamed_route_views():
+        return True
     if path.startswith(APP_TESTS + "/") and not path.endswith(".spec.ts"):
         return True
     return path.startswith("app/") and (
@@ -718,13 +790,19 @@ def build_reverse_map() -> Dict[str, Set[str]]:
     return reverse
 
 
-def classify_specs(paths: Sequence[str]) -> SpecVerdict:
+def classify_specs(paths: Sequence[str],
+                   reverse: Optional[Dict[str, Set[str]]] = None) -> SpecVerdict:
     """Which specs `paths` can reach, or every spec, and whether that is a genuine narrowing.
 
     NEVER A BLOCK-LIST: every direction this cannot resolve — an unmapped `app/**` path, a
     shared surface, a path outside `app/**` that is already top-level SCOPE, a path with
     whitespace (`PW_ARGS` is word-split by `make`), an empty diff, or the escape hatch —
     answers "every spec", printed by name.
+
+    `reverse` is dependency injection, for the selftest ONLY: it lets a case substitute a
+    fake reverse map (a whitespace path mapped to one real spec) without reassigning the
+    module-level `build_reverse_map` name, which a static checker reads as a redefinition
+    when the substitution happens above the real `def` in this file.
     """
     everyone = set(all_specs())
     if os.environ.get("PKMNSCAN_BROWSER_SCOPE") == "off":
@@ -734,7 +812,8 @@ def classify_specs(paths: Sequence[str]) -> SpecVerdict:
         return SpecVerdict(everyone, False, [
             "no changed files were found. That is more likely a wrong base than an empty "
             "change, so every spec runs."])
-    reverse = build_reverse_map()
+    if reverse is None:
+        reverse = build_reverse_map()
     lines: List[str] = []
     result: Set[str] = set()
     narrowed_any = False
@@ -746,6 +825,18 @@ def classify_specs(paths: Sequence[str]) -> SpecVerdict:
             forced_all = True
             continue
         if not path.startswith("app/"):
+            # NO `within: recipe:design-check` NARROWING HERE, deliberately, unlike
+            # `classify_paths` above. That narrowing needs BOTH sides of the diff (the
+            # recipe's text before and after), and `classify_specs` only ever receives a
+            # list of paths — no `read_side`. Threading one through would let a Makefile
+            # change outside the recipe (e.g. `make up`) narrow the SPEC list even while
+            # `classify` still correctly answers RUN for the same change (SCOPE's own
+            # `within` narrowing can still SKIP the matrix on `run`). Reusing that same
+            # narrowing here would make `run` and `specs` agree in effect, but at the cost
+            # of a second, unproven code path for the rarer case (a Makefile touch inside a
+            # branch whose matrix already runs). A Makefile touch forcing every spec is the
+            # safe direction — SCOPE's own entries are few and rarely touched — so this is
+            # left over-inclusive on purpose rather than partially threaded.
             hit = next((entry for entry in SCOPE if matches(entry["path"], path)), None)
             if hit is not None:
                 lines.append(f"  ALL   {path}  (outside `app/**`, already in the top-level "
@@ -839,6 +930,12 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
     if args.command == "selftest":
         return selftest()
     if args.command == "specs":
+        unnamed = unnamed_route_views()
+        if unnamed:
+            print("route naming — named by a sweep only, never by an explicit spec, so "
+                 "treated as shared:")
+            for view in sorted(unnamed):
+                print(f"  {view}")
         base = args.base
         if base is None:
             base_ref = os.environ.get("GITHUB_BASE_REF", "")
