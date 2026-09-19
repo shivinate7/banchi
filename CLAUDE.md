@@ -594,7 +594,7 @@ not rendered — not focusable, not reachable by a screen reader).
   `scripts/user-strings.mjs`'s extraction, RATCHETED against `scripts/typed-interpunct.json`'s
   pinned count (D194's own discipline, mirrored): it fails only when the count RISES; a lower
   count is accepted silently and printed. `node scripts/typed-interpunct-pin.mjs --pin`
-  re-pins it, run by a person, never quietly. See D-no-typed-interpunct-on-screen.
+  re-pins it, run by a person, never quietly. See D217.
 
 ## Working agreement
 
@@ -880,6 +880,7 @@ D212 Every copy is fungible, so no order claims one, and the write is the only r
 D213 The set is a stored fact, and the hint was never one
 D214 A gross-revenue retrospective is its own route, and it never claims to be profit
 D215 Both: the worker count is raised, and the spec allow-list is built
+D217 A typed dot is a defect wherever it is typed, and the reader is the mechanism this time, not the sweep
 ```
 
 D116-D118: D117 exists and slots between them — a third branch's number, resolved on merge.

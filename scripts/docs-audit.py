@@ -11677,7 +11677,7 @@ def check_no_mechanism_on_screen(report: Report) -> None:
     )
 
 
-# ------------------------------------------------------------- typed interpunct (D-no-typed-interpunct-on-screen)
+# ------------------------------------------------------------- typed interpunct (D217)
 #
 # The owner's ruling, 2026-09-19: "this typed dot needs to be removed everywhere it exists."
 # D41 deleted the dot-joined address string from the screen on 2026-08-29 and moved the
@@ -11686,7 +11686,7 @@ def check_no_mechanism_on_screen(report: Report) -> None:
 # day found roughly 200 typed middle dots still reaching the screen across every route, and
 # two mechanisms that re-type the position address specifically at the root: `whole()` in
 # `app/src/PositionLabel.tsx` and the `about` field built in `app/src/Fulfillment.tsx`'s
-# `sellable()`/`pickSellable()`. See docs/decisions/D-no-typed-interpunct-on-screen.md for the
+# `sellable()`/`pickSellable()`. See docs/decisions/D217.md for the
 # full argument; this row is that entry's mechanism.
 
 # U+00B7 MIDDLE DOT and U+2022 BULLET — the two characters the survey named. Kept as a fixed
@@ -11767,7 +11767,7 @@ def _typed_interpunct_verdict(count: int, pin: Optional[int]) -> str:
 
 def check_typed_interpunct(report: Report) -> None:
     """No user-visible string may TYPE a middle dot or bullet as a separator (D41's own
-    ruling, generalised repo-wide 2026-09-19). See D-no-typed-interpunct-on-screen.
+    ruling, generalised repo-wide 2026-09-19). See D217.
 
     THE EXTRACTION IS THE SAME AST WALK `no mechanism on screen` USES, `scripts/user-
     strings.mjs`, run with `TYPED_INTERPUNCT_EXTRACT_ARGS` — two widenings that row's own

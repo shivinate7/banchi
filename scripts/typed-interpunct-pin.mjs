@@ -3,7 +3,7 @@
 //     node scripts/typed-interpunct-pin.mjs --pin
 //
 // Mirrors scripts/copy-budget.mjs's own discipline (D194), for the ratchet
-// scripts/docs-audit.py's `typed interpunct` row asserts (D-no-typed-interpunct-on-screen):
+// scripts/docs-audit.py's `typed interpunct` row asserts (D217):
 // the ROW only ever READS scripts/typed-interpunct.json — D18 forbids it writing, since it
 // runs on the commit path — and this generator is the one thing that may, run by a person
 // choosing, on purpose, to accept today's count as the new ceiling. Never pin quietly:

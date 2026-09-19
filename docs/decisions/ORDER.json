@@ -221,6 +221,7 @@
     "D212-no-order-claims-a-copy.md",
     "D213-the-set-is-a-stored-fact-and-the-hint-was-never-one.md",
     "D214-gross-sales-retrospective.md",
-    "D215-browser-spec-allow-list.md"
+    "D215-browser-spec-allow-list.md",
+    "D217-no-typed-interpunct-on-screen.md"
   ]
 }
