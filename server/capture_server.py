@@ -8907,8 +8907,98 @@ def _section_spans(
     return spans
 
 
+# D213's inventory filter. `_FACET_UNSET` tells "not filtering this facet" apart from
+# "filtering for the null bucket" (`None`/blank on the wire), which a plain default of
+# `None` cannot: a set filter of `None` has to mean "cards with no set", not "no filter".
+_FACET_UNSET = object()
+
+
+def _facet_norm(value: Optional[str]) -> Optional[str]:
+    """Blank and null both mean "no claim" for a facet — the same fold `_card_facets` and
+    `_card_matches_filters` both need, so it is one function rather than two agreeing by
+    accident."""
+    return value if value else None
+
+
+def _card_matches_filters(card: master.Card, filters: Dict[str, Optional[str]]) -> bool:
+    """Does this card pass every ACTIVE facet in `filters`? A facet absent from the dict is
+    not being filtered on at all — see `_FACET_UNSET` above — so this only ever compares
+    keys the caller put there."""
+    if "game" in filters and _facet_norm(card.game) != _facet_norm(filters["game"]):
+        return False
+    if "set_name" in filters and _facet_norm(card.set_name) != _facet_norm(filters["set_name"]):
+        return False
+    return not (
+        "rarity" in filters and _facet_norm(card.rarity) != _facet_norm(filters["rarity"])
+    )
+
+
+def _card_facets(inventory: master.Inventory) -> dict:
+    """The game/set/rarity vocabulary THIS STORE ACTUALLY HOLDS, with counts (D213).
+
+    ONE INDEXED-COLUMN SCAN, NEVER A HARDCODED LIST. `game`, `set_name` and `rarity` are
+    three of the columns `store/db.py:TABLES["cards"]` declares beside the payload, so this
+    is `select` over three columns for every card, and never a walk that builds a `Card`
+    object per row — the same trade `_positions_in` already makes. Measured on the owner's
+    store: 3,510 rows, negligible beside `do_boxes`'s own existing per-box scan, which this
+    route already pays.
+
+    SETS AND RARITIES ARE SCOPED PER GAME, NEVER ONE FLAT LIST. D213's own ruling for the
+    control is a dropdown "because dropdowns would allow for standardization across card
+    games" — which only holds if the set list a game's dropdown offers is that game's own.
+    Riftbound's five sets and Pokemon's (eventually many more) are different vocabularies;
+    a single set list mixing both would let an operator pick "Origins" while filtering on
+    Pokemon and silently see nothing.
+
+    A NULL BUCKET IS COUNTED, NEVER DROPPED — D213's own standing rule, applied to the menu
+    that will drive the filter. 542 Pokemon cards carry no set today because no Pokemon
+    export has ever been fetched, and a menu with no way to ask for "no set on file" would
+    make those cards unreachable under the one control meant to find them. Rendered as
+    `None` here; `docs-audit`'s `no mechanism on screen` row is the reason no string here
+    ever reaches the screen — `Inventory.tsx`'s caller supplies the sentence.
+
+    A CARD WITH NO GAME CLAIM FALLS UNDER THE EMPTY-STRING KEY. JSON object keys must be
+    strings, and every game this store has ever recorded is a non-empty one
+    (`pipeline/games.py`'s registry has no blank entry) — so `""` cannot collide with a real
+    game and is free to mean "no claim", the same read-side backfill D21 already applies
+    everywhere else a `Card.game` of `None` is rendered.
+    """
+    games: Dict[Optional[str], int] = {}
+    sets: Dict[Optional[str], Dict[Optional[str], int]] = {}
+    rarities: Dict[Optional[str], Dict[Optional[str], int]] = {}
+    for _, (game, set_name, rarity) in inventory.cards.select(
+        ("game", "set_name", "rarity")
+    ):
+        game = _facet_norm(game)
+        games[game] = games.get(game, 0) + 1
+        set_name = _facet_norm(set_name)
+        sets.setdefault(game, {})
+        sets[game][set_name] = sets[game].get(set_name, 0) + 1
+        rarity = _facet_norm(rarity)
+        rarities.setdefault(game, {})
+        rarities[game][rarity] = rarities[game].get(rarity, 0) + 1
+
+    def _rows(counts: Dict[Optional[str], int], key: str) -> List[dict]:
+        # Real values first, alphabetically; the null bucket always last, so a screen
+        # drawing this straight through never has to sort it again to keep "no set on
+        # file" from jumping around the list as counts change.
+        return [
+            {key: value, "count": n}
+            for value, n in sorted(counts.items(), key=lambda kv: (kv[0] is None, kv[0] or ""))
+        ]
+
+    return {
+        "games": _rows(games, "game"),
+        "sets": {(game or ""): _rows(counts, "set") for game, counts in sets.items()},
+        "rarities": {(game or ""): _rows(counts, "rarity") for game, counts in rarities.items()},
+    }
+
+
 def _box_row(
-    inventory: master.Inventory, box: int, places: "Optional[_Places]" = None
+    inventory: master.Inventory,
+    box: int,
+    places: "Optional[_Places]" = None,
+    filters: Optional[Dict[str, Optional[str]]] = None,
 ) -> dict:
     """One box, as `GET /boxes` renders it and as both write routes answer with it.
 
@@ -8946,6 +9036,13 @@ def _box_row(
     screen was rendered from — the property `_denominator` used to buy by being one function,
     held structurally instead. `do_boxes` passes one instance down its whole list, so a
     thirteen-box read costs one scan rather than thirteen.
+
+    `filters` ADDS `matches` — D213's inventory filter — TO THE SAME LOOP, RATHER THAN A
+    SECOND PASS. `do_boxes` already builds a `Card` for every record in this box to count
+    `cards`/`sold`/`retired`/`moved`/`listed`; a facet comparison per card costs one function
+    call on an object already in hand. `None` (the default) means no filter is active and
+    no `matches` key is added at all — the box rail's "N on hand" stays what it always was
+    for a screen that never turned the filter on.
     """
     entry = inventory.box(box)
     view = (places or _Places(inventory)).view(box)
@@ -8953,6 +9050,7 @@ def _box_row(
 
     cards = 0
     sold = 0
+    matches = 0
     retired = 0
     moved = 0
     listed = 0
@@ -8982,6 +9080,8 @@ def _box_row(
         # fact about the SKU that a sold copy has as much as an identified one.
         if _listing_hold(inventory, card):
             listed += 1
+        if filters is not None and _card_matches_filters(card, filters):
+            matches += 1
 
     try:
         layout: Optional[Tuple[int, ...]] = inventory.sections_for(box)
@@ -9050,6 +9150,7 @@ def _box_row(
         "moved": moved,
         "listed": listed,
         "sections_detail": detail,
+        **({"matches": matches} if filters is not None else {}),
     }
 
 
@@ -9080,7 +9181,12 @@ def _box_holds_cards(inventory: master.Inventory, box: int) -> bool:
     return bool(inventory.cards.select(("box",), box=int(box)))
 
 
-def do_boxes() -> dict:
+def do_boxes(
+    *,
+    game: object = _FACET_UNSET,
+    set_name: object = _FACET_UNSET,
+    rarity: object = _FACET_UNSET,
+) -> dict:
     """Every box this store knows about: the registry, plus any box a card names.
 
     THE UNION, NOT THE REGISTRY. `Inventory.parse`'s v1 migration registers every box a card
@@ -9092,6 +9198,18 @@ def do_boxes() -> dict:
     `Inventory.box_fill` already pays per call; boxes are counted in handfuls, and the
     alternative — one fused pass with the high-water rule reimplemented here — would put a
     second copy of `next_index` in the file that answers what `next_index` returns.
+
+    THREE OPTIONAL KEYWORDS ARE D213'S FILTER, NOT A NEW ROUTE. `#/inventory`'s box rail
+    already polls this one; a second route for "which boxes hold a Riftbound Spiritforged
+    card" would be a second thing to fetch before the walk could narrow, on the exact
+    pattern D192 already argued against for the per-box read. Each keyword left at
+    `_FACET_UNSET` (the default) means "not filtering this facet" — passing `None`
+    explicitly means "filter for no claim", which `_box_row`/`_card_matches_filters` fold
+    the same way `_card_facets`'s menu does.
+
+    `facets` RIDES ALONG UNCONDITIONALLY, FILTERED OR NOT — it is what the filter's own
+    dropdowns are populated from, and it costs one indexed-column scan regardless of
+    whether a filter is active this call (`_card_facets`'s own docstring has the measurement).
     """
     inventory = Store().read().inventory
 
@@ -9105,8 +9223,22 @@ def do_boxes() -> dict:
         if value is not None:
             numbers.add(int(value))
 
+    filters: Optional[Dict[str, Optional[str]]] = None
+    active: Dict[str, Optional[str]] = {}
+    if game is not _FACET_UNSET:
+        active["game"] = game  # type: ignore[assignment]
+    if set_name is not _FACET_UNSET:
+        active["set_name"] = set_name  # type: ignore[assignment]
+    if rarity is not _FACET_UNSET:
+        active["rarity"] = rarity  # type: ignore[assignment]
+    if active:
+        filters = active
+
     places = _Places(inventory)
-    return {"boxes": [_box_row(inventory, box, places) for box in sorted(numbers)]}
+    return {
+        "boxes": [_box_row(inventory, box, places, filters=filters) for box in sorted(numbers)],
+        "facets": _card_facets(inventory),
+    }
 
 
 def do_create_box(payload: dict) -> Tuple[HTTPStatus, dict]:
@@ -11863,7 +11995,19 @@ class CaptureHandler(BaseHTTPRequestHandler):
             if path == "/queues":
                 return self._json(HTTPStatus.OK, do_queues())
             if path == "/boxes":
-                return self._json(HTTPStatus.OK, do_boxes())
+                # D213's filter. `keep_blank_values=True` is what lets `?set=` mean
+                # "filter for no set" rather than "no set param at all" — the same
+                # distinction `/inventory/recent`'s `limit` reads this same way, two lines
+                # up in this same function.
+                params = parse_qs(parsed.query, keep_blank_values=True)
+                kwargs: Dict[str, object] = {}
+                if "game" in params:
+                    kwargs["game"] = params["game"][0] or None
+                if "set" in params:
+                    kwargs["set_name"] = params["set"][0] or None
+                if "rarity" in params:
+                    kwargs["rarity"] = params["rarity"][0] or None
+                return self._json(HTTPStatus.OK, do_boxes(**kwargs))
             # D134's graveyard: an exact string, matched by no other route's pattern, over
             # a lock-free read on both its sources.
             if path == "/graveyard":

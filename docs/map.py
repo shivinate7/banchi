@@ -2675,51 +2675,16 @@ COMPONENTS = [
                 # function's `is_dir()` guard is what keeps `check_renumbered_decisions` from
                 # crashing on one — found the moment `.agents/skills` became the first such
                 # link this repo's own history ever produced.
-                "governed_by": ["D2", "D3", "D6", "D7", "D8", "D9", "D10", "D12", "D16", "D17",
-                                "D18", "D22", "D23", "D24", "D26", "D27", "D31", "D33", "D39", "D43",
-                                "D47", "D49", "D50", "D51", "D53", "D60", "D64", "D65", "D67", "D69",
-                                "D70", "D72", "D74", "D75", "D76", "D80", "D81", "D83", "D84", "D87",
-                                "D88", "D90", "D92", "D94", "D96", "D101", "D102", "D104",
-                                "D110", "D111", "D113",
-                                "D119", "D122", "D127", "D132", "D135", "D136",
-                                "D140", "D141", "D142", "D143", "D144", "D149", "D155",
-                                "D159", "D161", "D44", "D160", "D178", "D182",
-                                # Appended, in the pre-claim place claim-ids.py's own docstring
-                                # names — the merge resorts it into numeric order once the
-                                # slug below becomes a number.
-                                "D185", "D191",
-                                # D63, D173: `check_import_layering` (store-scaling item 8) —
-                                # store/ may not import pipeline/, and a rule with no reader
-                                # is advice.
-                                "D63", "D173",
-                                # D1, D11, D86, D134, D174, D181: named inside
-                                # `NO_MECHANISM_WORDS`' comments, which say which real
-                                # decision each forbidden noun names — D1 the pipeline itself,
-                                # D11 the join, D86 the corpus, D174/D181 the resolver, D134
-                                # a worked illustration of a citation.
-                                "D1", "D11", "D86", "D134", "D174", "D181",
-                                # D196: the `no mechanism on screen` row,
-                                # shelling out to scripts/user-strings.mjs below — unclaimed,
-                                # so it sorts to the end until `make merge` gives it a number.
-                                "D196",
-                                # D192: `UNSCOPED_WALK_ALLOWED`'s comments cite it twice — once
-                                # for the permanent `do_inventory`/`to_payload` entry the item's
-                                # own playbook argued for, and again for the new
-                                # `do_inventory_copies` entry (DEBT27, site 1), which
-                                # names D192 as the decision that closed the OTHER `GET
-                                # /inventory` call site this branch's route replaces.
-                                "D192",
-                                # D210: `_CLI_INVOCATION_RE`, the word-list
-                                # widening that catches a backticked `pkmnscan …` invocation —
-                                # unclaimed, so it sorts to the end until `make merge` gives
-                                # it a number.
-                                "D210",
-                                # D138: `dist path agreement`'s docstring names it — the row
-                                # reconciles `scripts/serve.py:DIST` and
-                                # `server/capture_server.py:APP_DIST` against each other and
-                                # against Vite's own default `outDir`, the same fact D138
-                                # rules on (one process, `app/dist/` beside the checkout).
-                                "D138"],
+                "governed_by": ["D1", "D2", "D3", "D6", "D7", "D8", "D9", "D10", "D11", "D12",
+                                "D16", "D17", "D18", "D22", "D23", "D24", "D26", "D27", "D31",
+                                "D33", "D39", "D43", "D44", "D47", "D49", "D50", "D51", "D53",
+                                "D60", "D63", "D64", "D65", "D67", "D69", "D70", "D72", "D74",
+                                "D75", "D76", "D80", "D81", "D83", "D84", "D86", "D87", "D88",
+                                "D90", "D92", "D94", "D96", "D101", "D102", "D104", "D110", "D111",
+                                "D113", "D119", "D122", "D127", "D132", "D134", "D135", "D136",
+                                "D138", "D140", "D141", "D142", "D143", "D144", "D149", "D155",
+                                "D159", "D160", "D161", "D173", "D174", "D178", "D181", "D182",
+                                "D185", "D191", "D192", "D196", "D210", "D213"],
             },
             "claim-ids.py": {
                 "does": "allocate the numbers this branch's SLUG ids will take, and "
@@ -4687,15 +4652,14 @@ COMPONENTS = [
                                       "state actually changes.",
                               "governed_by": ["D3", "D4", "D5", "D6", "D7", "D8", "D10", "D13",
                                               "D19", "D21", "D22", "D23", "D24", "D26", "D28",
-                                              "D29", "D30", "D32", "D33", "D34", "D37", "D43",
-                                              "D46", "D48", "D49", "D52", "D53", "D58", "D59",
-                                              "D61", "D62", "D63", "D64", "D65", "D68", "D69",
-                                              "D70", "D73", "D76", "D79", "D83", "D86", "D87",
-                                              "D89", "D90", "D91", "D92", "D100", "D103",
-                                              "D159", "D168",
-                                              "D104", "D113", "D116", "D132", "D134", "D172",
-                                              "D174", "D180", "D192",
-                                              "D193", "D203", "D207", "D36", "D165"]},
+                                              "D29", "D30", "D32", "D33", "D34", "D36", "D37",
+                                              "D43", "D46", "D48", "D49", "D52", "D53", "D58",
+                                              "D59", "D61", "D62", "D63", "D64", "D65", "D68",
+                                              "D69", "D70", "D73", "D76", "D79", "D83", "D86",
+                                              "D87", "D89", "D90", "D91", "D92", "D100", "D103",
+                                              "D104", "D113", "D116", "D132", "D134", "D159",
+                                              "D165", "D168", "D172", "D174", "D180", "D192",
+                                              "D193", "D203", "D207", "D213"]},
             "src/usePoll.ts": {"does": "ONE POLLING PRIMITIVE, WHERE FIVE HAND-ROLLED TIMERS "
                                        "USED TO STAND (D207). `RunPanel.tsx` (the run "
                                        "list and, separately, an open run's own detail), "
@@ -5165,7 +5129,9 @@ COMPONENTS = [
                                   "NO BANNER SLOT: `.browse-banner` came with main's envelope walk "
                                   "(D90) and went with it (D96 amended 2026-09-04), along with the "
                                   "only stylesheet that ever filled it.",
-                                  "governed_by": ["D5", "D6", "D13", "D30", "D31", "D32", "D33", "D38", "D39", "D40", "D41", "D90", "D118", "D119", "D117", "D132"]},
+                                  "governed_by": ["D5", "D6", "D13", "D30", "D31", "D32", "D33",
+                                                  "D38", "D39", "D40", "D41", "D90", "D117", "D118",
+                                                  "D119", "D132", "D213"]},
 
             # ---- 7b's screens. Built 2026-08-13, BEFORE Gate B; routed the same day ----
             #
@@ -7349,7 +7315,12 @@ COMPONENTS = [
                         "and `product_game` outright — `undefined.find` inside `ClaimEditor`, "
                         "the screen behind its error boundary, and six cases here spending "
                         "thirty seconds each on a switch that had been detached. AND THE HASH'S OWN BOX SINCE 2026-09-05: `#/inventory?box=<n>` was honoured only for a box that already had ROWS, because the shelf list is built from the rows first and the registry second and the ref was consumed on the first list — so every box of code cards, which D24 pools and which therefore has none, was unreachable by the one link that aims at one. Two cases, with `GET /boxes` held back so the ordering is the defect's rather than a race.",
-                "governed_by": ["D5", "D7", "D8", "D9", "D10", "D13", "D20", "D22", "D23", "D24", "D26", "D28", "D30", "D31", "D33", "D34", "D37", "D38", "D40", "D41", "D43", "D45", "D49", "D55", "D57", "D58", "D63", "D67", "D68", "D71", "D83", "D89", "D92", "D101", "D115", "D116", "D118", "D124", "D125", "D119", "D132", "D27", "D134", "D142", "D155", "D117", "D136", "D172", "D181", "D192"],
+                "governed_by": ["D5", "D7", "D8", "D9", "D10", "D13", "D20", "D21", "D22", "D23",
+                                "D24", "D26", "D27", "D28", "D30", "D31", "D33", "D34", "D37",
+                                "D38", "D40", "D41", "D43", "D45", "D49", "D55", "D57", "D58",
+                                "D63", "D67", "D68", "D71", "D83", "D89", "D92", "D101", "D115",
+                                "D116", "D117", "D118", "D119", "D124", "D125", "D132", "D134",
+                                "D136", "D142", "D155", "D172", "D181", "D192", "D213"],
                 "note": "THE CHECK `CLAUDE.md`'s ROUTE-IS-NOT-A-FEATURE RULE SAYS DOES NOT "
                         "EXIST. That rule was written on 2026-08-23 after three routes shipped "
                         "with full T7 coverage and no client function and no control — green "

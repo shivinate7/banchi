@@ -16,6 +16,7 @@ import type {
   GroupAnswerResult,
   Inventory,
   InventoryCard,
+  InventoryFacetFilter,
   PhotoReclaimResult,
   Place,
   PlaceNeighbor,
@@ -1465,8 +1466,25 @@ export async function getGames(): Promise<GameRegistry> {
   return (await request('/games', NO_CACHE)) as GameRegistry
 }
 
-export async function getBoxes(): Promise<BoxSummary> {
-  return (await request('/boxes', NO_CACHE)) as BoxSummary
+/** D213's filter, sent as query params so `GET /boxes` stays one route (see
+ *  `server/capture_server.py:do_boxes`'s own docstring for why a second route was refused).
+ *
+ *  A KEY ABSENT FROM `filter` MUST STAY ABSENT FROM THE QUERY STRING, not become `?game=`.
+ *  `Object.entries` and a manual loop rather than `URLSearchParams(filter)`: the latter
+ *  reads every key including ones whose value is `undefined`, and the server's own
+ *  `keep_blank_values=True` parse would then see a real but empty `game` param and filter
+ *  for "no game claim" when the caller never meant to filter on game at all — the exact
+ *  three-state distinction `InventoryFacetFilter`'s own comment exists to protect. */
+export async function getBoxes(filter?: InventoryFacetFilter): Promise<BoxSummary> {
+  const params = new URLSearchParams()
+  if (filter) {
+    for (const [key, value] of Object.entries(filter)) {
+      if (value === undefined) continue
+      params.set(key, value ?? '')
+    }
+  }
+  const query = params.toString()
+  return (await request(`/boxes${query ? `?${query}` : ''}`, NO_CACHE)) as BoxSummary
 }
 
 /**
