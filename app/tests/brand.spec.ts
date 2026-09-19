@@ -820,13 +820,18 @@ test('the phone wordmark is the lockup roman, set as text', async ({ page }) => 
  *
  * AMENDED BY D134'S TENTH ROW: the iPhone 14 no longer fits nine rows' worth of arithmetic
  * shrunk down to eight rows plus headroom — it fits ten rows at the 40px floor instead, the
- * same step the mini already needed (see App.css and the case below). This case still measures
- * the SAME fold — headings, lockup, and every row reachable without scrolling — it is the row
- * height itself, asserted next door, that moved.
+ * same step the mini already needed (see App.css and the case below).
+ *
+ * AMENDED AGAIN BY THE ELEVENTH ROW (`#/revenue`, Sales). App.css's own comment on the second
+ * step already named this day: "nobody has to come back here and re-derive a THIRD step...
+ * the rows just cost one more swipe." Measured at 754, eleven rows at the 40px floor run 37px
+ * past the fold — this case no longer measures a FULL fit, only that what does not fit is
+ * still reachable by scroll, the same reachability `phone.spec.ts`'s own sweep already stands
+ * behind. Headings, lockup and row height are unchanged and still asserted here.
  */
 const SHORT_PHONE = { width: 390, height: 754 }
 
-test('the drawer fits an iPhone in Safari, with its headings intact', async ({ page }) => {
+test('the drawer keeps its headings on an iPhone in Safari, and every row stays reachable', async ({ page }) => {
   await page.setViewportSize(SHORT_PHONE)
   await page.goto('/')
   await page.getByText('More', { exact: true }).click()
@@ -836,23 +841,24 @@ test('the drawer fits an iPhone in Safari, with its headings intact', async ({ p
   const seen = await page.evaluate(() => {
     const drawer = document.querySelector('.bn-drawer')!
     const nav = drawer.querySelector('.bn-nav')!
-    const box = nav.getBoundingClientRect()
-    const links = [...drawer.querySelectorAll('.bn-nav a.bn-nav-link')]
     return {
       overflow: nav.scrollHeight - nav.clientHeight,
-      shown: links.filter((l) => {
-        const r = l.getBoundingClientRect()
-        return r.top >= box.top - 1 && r.bottom <= box.bottom + 1
-      }).length,
-      total: links.length,
+      scrollable: getComputedStyle(nav).overflowY === 'auto' || getComputedStyle(nav).overflowY === 'scroll',
+      total: drawer.querySelectorAll('.bn-nav a.bn-nav-link').length,
       headings: drawer.querySelectorAll('.bn-nav-group-label').length,
       lockup: Number(drawer.querySelector('.bn-lockup')!.getAttribute('width')),
     }
   })
 
-  // every screen the drawer offers is on the screen, with nothing to scroll to reach it
-  expect(seen.overflow, `the nav runs ${seen.overflow}px past the fold`).toBeLessThanOrEqual(0)
-  expect(seen.shown, `${seen.shown} of ${seen.total} rows are on screen`).toBe(seen.total)
+  // THE ELEVENTH ROW MEANS THIS NO LONGER FITS WHOLE — the comment above names the arithmetic.
+  // What is still true, and what this asserts: the overflow is small (under one row), and
+  // what does not fit scrolls rather than clips silently.
+  expect(seen.overflow, `the nav runs ${seen.overflow}px past the fold`).toBeLessThan(44)
+  expect(seen.scrollable, 'what does not fit scrolls, rather than clipping silently').toBe(true)
+
+  // every screen the drawer offers is still reachable, just not without scrolling
+  await page.locator('.bn-drawer .bn-nav a.bn-nav-link').last().scrollIntoViewIfNeeded()
+  await expect(page.locator('.bn-drawer .bn-nav a.bn-nav-link').last()).toBeVisible()
 
   // AND THE HEADINGS SURVIVED, which is the whole reason this is five rules and not one
   expect(seen.headings, 'the four groups still name themselves').toBeGreaterThan(2)
@@ -866,7 +872,13 @@ test('the second step reaches the mini and the iPhone 14, and stops short of a t
      at 754 on purpose — that phone fit nine rows at 44 with nothing to spare. A tenth row costs
      every phone in this family one more 44px row than the arithmetic had, and 754 no longer
      "already fits": ten rows at 44 measured 41px over, and ten at the 40px floor measured 0. So
-     the step's own boundary moved to 754 (see App.css), and this case moved with it. */
+     the step's own boundary moved to 754 (see App.css), and this case moved with it.
+
+     THE ELEVENTH ROW (`#/revenue`) COSTS IT AGAIN, and this is the case App.css's own comment
+     said would not need a third step: eleven rows at the 40px floor run 37px past 754, not 0.
+     The floor is still right — there is no lower step to give (CLAUDE.md's thumb rule) — so
+     what this measures now is that the overflow is small and still scrolls to, never that it
+     is gone. */
   await page.setViewportSize(SHORT_PHONE)
   await page.goto('/')
   await page.getByText('More', { exact: true }).click()
@@ -877,11 +889,15 @@ test('the second step reaches the mini and the iPhone 14, and stops short of a t
     const nav = document.querySelector('.bn-drawer .bn-nav')!
     return {
       overflow: nav.scrollHeight - nav.clientHeight,
+      scrollable: getComputedStyle(nav).overflowY === 'auto' || getComputedStyle(nav).overflowY === 'scroll',
       row: Math.round(document.querySelector('.bn-drawer .bn-nav a.bn-nav-link')!.getBoundingClientRect().height),
     }
   })
-  expect(iphone14.overflow, `the iPhone 14's nav runs ${iphone14.overflow}px past the fold`).toBeLessThanOrEqual(0)
+  expect(iphone14.overflow, `the iPhone 14's nav runs ${iphone14.overflow}px past the fold`).toBeLessThan(44)
+  expect(iphone14.scrollable, 'what does not fit scrolls, rather than clipping silently').toBe(true)
   expect(iphone14.row, 'the rows sit ON the thumb floor at 754, not at 44').toBe(40)
+  await page.locator('.bn-drawer .bn-nav a.bn-nav-link').last().scrollIntoViewIfNeeded()
+  await expect(page.locator('.bn-drawer .bn-nav a.bn-nav-link').last()).toBeVisible()
 
   /* THE MINI GENUINELY DOES NOT FIT TEN ROWS AT THE FLOOR, AND THAT IS THE HONEST ANSWER. 375 x
      722 needs more than ten rows at 40 plus the head, the foot and three headings leave room

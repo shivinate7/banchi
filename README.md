@@ -37,9 +37,10 @@ store/                     the master store: inventory, cache, standing queues, 
                            ledger and the history — one SQLite file since D88
 server/                    capture server: /capture, /status, /photo, inventory state,
                            and the pipeline seam — the one place a route can spend money
-app/                       Banchi. Vite + React 19 + TS. Twelve screens — home, capture,
-                           runs, review, pricing, orders, shipping, inventory, graveyard,
-                           codes, cards to pull, kit — all twelve routed. See "The app" below.
+app/                       Banchi. Vite + React 19 + TS. Thirteen screens — home, capture,
+                           runs, review, pricing, orders, shipping, revenue, inventory,
+                           graveyard, codes, cards to pull, kit — all thirteen routed. See
+                           "The app" below.
 app/src/tokens.css         the design system: --bn-* tokens, light and dark
 app/src/kit.css, kit/      the component kit every screen is built from
 harness/                   T1-T9. The Stop hook runs `make harness` at every turn end.
@@ -143,7 +144,7 @@ directory costs nothing; deleting the store costs every answer you have paid for
 ## The app
 
 A browser front end over the capture server and nothing else: no pipeline logic, no second
-store, no auth, no login. Two personas — the owner, who gets eleven dense working screens, and
+store, no auth, no login. Two personas — the owner, who gets twelve dense working screens, and
 the Fulfiller, a retired non-technical relative who gets one big-type touch screen.
 
 ```
@@ -156,6 +157,9 @@ pricing        the hand-pricing worklist across runs, one row per SKU, and D49's
 orders         which copies this buyer gets and where they are, ranked by how many of them
                sit in one box, pulled one copy at a time
 shipping       which envelope an order goes in, out of TCGplayer's own shipping export
+revenue        the gross-revenue retrospective: a verdict, a month strip, and every sold
+               name TCGplayer's own Orders page cannot be searched by. Gross only — no
+               fees, no cost basis, no profit
 inventory      the box walk, and everything that hangs off it: search, a card's copies
                and its sale, and the box's own operations — and, since D90, an ORDER
                driving that same walk stop by stop, writing nothing per card and
@@ -180,8 +184,8 @@ without recounting fails the commit.
 stored cards, with the box walk as its spine and search narrowing it rather than replacing it
 (D31; `#/boxes` and `#/pull` are gone and do not come back).
 
-All twelve open at a hash, and the Fulfiller's view opens **without the shell** the other
-eleven carry — its row in `docs/DESIGN.md`'s constraints table requires no route out of it, and a
+All thirteen open at a hash, and the Fulfiller's view opens **without the shell** the other
+twelve carry — its row in `docs/DESIGN.md`'s constraints table requires no route out of it, and a
 strip of links to the capture screen's hard-delete undo is exactly the route it forbids. Not
 hidden: not rendered, so it is not focusable, not reachable by a screen reader, and not one
 specificity change from coming back.

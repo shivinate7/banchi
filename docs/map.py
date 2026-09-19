@@ -3685,7 +3685,7 @@ COMPONENTS = [
                         "(D43) — a tracked file cannot name a port derived from one "
                         "directory's path — and screenshot.sh substitutes a worktree's own "
                         "before rendering.",
-                # D5 is what the list is for: SEVEN owner screens and the Fulfiller's, which
+                # D5 is what the list is for: EIGHT owner screens and the Fulfiller's, which
                 # is the one render where the absence of the nav strip is the point. It said
                 # five while the file listed eight — the lines were added (pricing by D49,
                 # orders and shipping by D69) and the count beside them was not, the same
@@ -4138,13 +4138,15 @@ COMPONENTS = [
         # rest of Gate C is physical. scripts/status.py resolves "do this next" through
         # this field, and without it step 10 printed as claimed by nobody.
         "does": "the web app, REBUILT AS BANCHI in 2026-09: a new shell, a shared kit, two "
-                "themes, and every screen redrawn against it. TWELVE routes behind a "
-                "hand-written hash router, ELEVEN of them the owner's — home, which took the "
+                "themes, and every screen redrawn against it. THIRTEEN routes behind a "
+                "hand-written hash router, TWELVE of them the owner's — home, which took the "
                 "root hash and is where the six-stage spine is drawn; the capture screen that "
                 "Gate B runs on, now at `#/capture`; the runs screen the pipeline lives on; the "
                 "review queue; the pricing worklist; the order screen and the shipping lane "
-                "(D69 gave each its own route rather than making one a mode of the other); the "
-                "one inventory view (D31 folded the box walk and the pull preview into it); "
+                "(D69 gave each its own route rather than making one a mode of the other); "
+                "the gross-revenue retrospective at `#/revenue`, routed 2026-09-19 "
+                "(D-gross-sales-retrospective); one inventory view (D31 folded the box walk "
+                "and the pull preview into it); "
                 "`#/graveyard`, where a departed card is read whether its box still stands or "
                 "was deleted out from under it (D134); the code-card screen D70 gave its own "
                 "route; and `#/gallery`, which is the KIT — step 6's component page grown into "
@@ -6367,6 +6369,32 @@ COMPONENTS = [
                                          "fault, because D61's third lane is a deliberate "
                                          "abstention and not a failure to route.",
                                  "governed_by": ["D40", "D50", "D61", "D69"]},
+            "src/Revenue.tsx": {"does": "`#/revenue` (Sales): the gross-revenue "
+                                        "retrospective. A pure reshaping of `GET /orders`, "
+                                        "already fetched by `#/orders` — no new server route, "
+                                        "no change to order parsing or the ledger. Three "
+                                        "tiers behind one period control (3 months, 6 months, "
+                                        "this year, all time): a verdict sentence with the "
+                                        "prior period's own figure beneath it, a month strip "
+                                        "with a sparkline (`PriceHistory.tsx:sparkSegments`, "
+                                        "unmodified), and a product table by name, searchable "
+                                        "(`SearchField`). Canceled orders are dropped "
+                                        "silently by `isCanceled`, which folds and compares "
+                                        "the wire's own `status` string against ONE word — "
+                                        "narrower than `store/orders.py:TERMINAL_STATUSES`, "
+                                        "which also covers Shipped and Delivered, both real "
+                                        "revenue. GROSS ONLY: no fee, cost or refund figure "
+                                        "exists on this wire to draw. No sealed/singles "
+                                        "split — `OrderLineWire.kind` is null on nearly every "
+                                        "line and CLAUDE.md refuses guessing one from a name.",
+                                "governed_by": ["D69", "D86", "D103", "D105", "D193",
+                                                 "D-gross-sales-retrospective"]},
+            "src/Revenue.css": {"does": "the verdict, the month strip and the product table's "
+                                        "own layout, `--bn-*` only. The sparkline's polyline "
+                                        "reuses `--bn-accent` rather than naming a color; the "
+                                        "search field wrapper is sized like every other "
+                                        "screen's own `-search` class (Graveyard, Codes).",
+                                "governed_by": ["D50", "D94"]},
             "src/RunFiles.tsx": {"does": "a run's files, as downloads — extracted from RunPanel on "
                                        "2026-08-30 (D54) so two screens can draw them. The `only` "
                                        "prop is the split: the import CSVs go to #/pricing with the "

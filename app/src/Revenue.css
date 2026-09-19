@@ -1,0 +1,92 @@
+/* SALES (`#/revenue`) — the verdict, the month strip, then the product table. Every color
+ * here is a `--bn-*` token; nothing names one. */
+
+.revenue-verdict {
+  display: flex;
+  flex-direction: column;
+  gap: var(--bn-1);
+  padding: var(--bn-4) 0;
+}
+
+.revenue-verdict-said {
+  font-size: var(--bn-fs-xl);
+  font-family: var(--bn-font-display);
+  color: var(--bn-ink);
+  margin: 0;
+}
+
+.revenue-verdict-prior,
+.revenue-verdict-dropped {
+  font-size: var(--bn-fs-base);
+  color: var(--bn-ink-3);
+  margin: 0;
+}
+
+.revenue-months {
+  display: flex;
+  flex-direction: column;
+  gap: var(--bn-2);
+  padding: var(--bn-3) 0;
+  border-top: 1px solid var(--bn-line);
+}
+
+.revenue-spark {
+  width: 100%;
+  height: 64px;
+  overflow: visible;
+}
+.revenue-spark polyline {
+  fill: none;
+  stroke: var(--bn-accent);
+  stroke-width: 2;
+  stroke-linejoin: round;
+  stroke-linecap: round;
+}
+
+.revenue-month-rows {
+  display: flex;
+  flex-direction: column;
+}
+
+.revenue-month-row {
+  display: grid;
+  grid-template-columns: 1fr auto auto;
+  gap: var(--bn-3);
+  align-items: baseline;
+  padding: var(--bn-2) 0;
+  border-bottom: 1px solid var(--bn-line);
+}
+.revenue-month-row:last-child { border-bottom: 0; }
+.revenue-month-row[data-current='true'] .revenue-month-name { color: var(--bn-ink); font-weight: 600; }
+
+.revenue-month-name { color: var(--bn-ink-2); }
+.revenue-month-orders { color: var(--bn-ink-3); font-size: var(--bn-fs-sm); text-align: right; min-width: 6ch; }
+
+.revenue-products {
+  display: flex;
+  flex-direction: column;
+  gap: var(--bn-2);
+  padding: var(--bn-3) 0;
+  border-top: 1px solid var(--bn-line);
+}
+
+.revenue-products-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--bn-3);
+  flex-wrap: wrap;
+}
+
+.revenue-search { min-width: 220px; max-width: 320px; }
+@media (max-width: 767px) { .revenue-search { max-width: none; width: 100%; } }
+
+.revenue-table td,
+.revenue-table th { white-space: nowrap; }
+.revenue-table td:first-child,
+.revenue-table th:first-child { white-space: normal; }
+
+@media (max-width: 767px) {
+  .revenue-products-head { flex-direction: column; align-items: stretch; }
+  .revenue-table { font-size: var(--bn-fs-sm); }
+}

@@ -245,7 +245,7 @@ the browser. No second store. No auth. `app/src/server.ts` is the only client-ca
 
 ### The screens
 
-**The app has twelve screens and twelve routes — eleven the owner's, one the Fulfiller's.**
+**The app has thirteen screens and thirteen routes — twelve the owner's, one the Fulfiller's.**
 `app/src/App.tsx`'s `ROUTES` table is the count. Recount from the table, never a sentence
 (see "the census" below).
 
@@ -262,6 +262,9 @@ the browser. No second store. No auth. `app/src/server.ts` is the only client-ca
                               `?band=top|bottom` (D159): what is worth pulling, read-only
 #/orders       Orders         grouped by buyer (D193), one walk per person over open orders
 #/shipping     Shipping       shipping export routed into three lanes
+#/revenue      Sales          gross-revenue retrospective (D-gross-sales-retrospective).
+                              Verdict, month strip, by-name search. Canceled excluded.
+                              Gross only, never profit
 #/inventory    Inventory      box walk: search, copies, box operations (Manage box sheet).
                               SOLD IS HIDDEN BY DEFAULT (D132). Order under a search is frozen
                               once taken. A sale may not re-rank it (D181, D118)
@@ -352,7 +355,7 @@ read off a declared class.
 
 ### The shell
 
-`App.tsx` is a hand-written hash router and the shell: twelve hash routes, no routing
+`App.tsx` is a hand-written hash router and the shell: thirteen hash routes, no routing
 library, one table. It renders for every screen except the Fulfiller's (`persona: 'fulfiller'`,
 not rendered — not focusable, not reachable by a screen reader).
 
