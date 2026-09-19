@@ -398,6 +398,21 @@ export type InventoryCard = {
 
   set_hint: string | null
 
+  /** THE CATALOGUE'S OWN SET (D213), ALREADY ON THIS WIRE AND NEVER TYPED HERE UNTIL NOW.
+   *  `server/capture_server.py:_card_row` and `do_inventory` both ship `asdict(card)`
+   *  raw — `store/master.py:Card.set_name` has carried this field since schema 8, and it
+   *  reached `#/inventory`'s per-box read on every request since, with nothing on this side
+   *  declaring it: the gap this filter closes was never a missing route, only a missing
+   *  line in this file. `null` on every card identified before the field existed, or whose
+   *  SKU resolves to no set — see `SearchGroup.set`, the same fact by the same name off
+   *  `do_search`'s different renderer. */
+  set_name: string | null
+
+  /** The catalogue's own rarity, same source and same write moment as `set_name` above, and
+   *  the same "already on the wire" note applies. Kept beside `rarity_claim` below and never
+   *  merged into it — see `SearchGroup.rarity`'s longer note, which is the same fact. */
+  rarity: string | null
+
   /** The capture-time finish claim. Typed loosely rather than as `FinishClaim` on purpose:
    *  this comes off disk, and the store holds records written before the server validated
    *  anything. Narrowing it here would make the type assert something about
@@ -1599,6 +1614,34 @@ export type BoxRecord = {
   moved: number
   listed: number
   sections_detail: SectionDetail[]
+
+  /** How many of this box's cards pass D213's game/set/rarity filter — present ONLY while a
+   *  filter is active, and absent (never zero-by-default) while it is not, matching
+   *  `server/capture_server.py:_box_row`'s own contract. `BoxBrowse.tsx` reads this to grey
+   *  a box in the rail exactly the way a search's own `matches` count already does — one
+   *  behaviour, two sources, so the box rail never learns a second way to say "nothing here". */
+  matches?: number
+}
+
+/** One value of a facet, with how many cards in the whole store carry it (D213). `null`
+ *  is the unclassified bucket — a real value, not an absence, and never dropped from the
+ *  list: `game` and `count` (etc.) are the field names `_card_facets` sends, so this stays
+ *  one contract for both readers of `_rows`'s output. */
+export type FacetCount = { readonly count: number }
+export type GameFacet = FacetCount & { readonly game: string | null }
+export type SetFacet = FacetCount & { readonly set: string | null }
+export type RarityFacet = FacetCount & { readonly rarity: string | null }
+
+/** `GET /boxes`'s `facets` block — the game/set/rarity vocabulary this store actually
+ *  holds (D213), never a hardcoded list. `sets` and `rarities` are keyed by game, because
+ *  D213's whole reason for a dropdown over chips is that one game's set list must not leak
+ *  into another's; a game with no cards of its own is simply absent as a key. The empty
+ *  string key holds cards with no game claim at all (`_card_facets`'s own docstring says
+ *  why `""` is safe to use this way) — no card in the owner's store has ever needed it. */
+export type InventoryFacets = {
+  games: GameFacet[]
+  sets: Record<string, SetFacet[]>
+  rarities: Record<string, RarityFacet[]>
 }
 
 /** `GET /boxes`, whole. The envelope, where `BoxRecord` is the element — named the way
@@ -1606,7 +1649,19 @@ export type BoxRecord = {
  *  is a list. */
 export type BoxSummary = {
   boxes: BoxRecord[]
+  facets: InventoryFacets
 }
+
+/** The filter `BoxBrowse.tsx` sends `getBoxes` (D213). A key ABSENT from this object means
+ *  "not filtering that facet" — the three-state `getBoxes` needs and a plain `string | null`
+ *  cannot give, since `null` here means "filter for the unclassified bucket" and must be
+ *  told apart from "no filter at all". `Partial` is exactly that: TypeScript's own way to
+ *  say a key may be missing rather than merely `undefined`-valued. */
+export type InventoryFacetFilter = Partial<{
+  game: string | null
+  set: string | null
+  rarity: string | null
+}>
 
 /* ------------------------------------------------------------------ the pipeline seam
  *

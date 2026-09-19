@@ -7607,6 +7607,153 @@ def check_game_and_note_seam(checks: Checks) -> None:
     )
 
 
+# ---------------------------------------------------------------- D213's inventory filter
+
+
+def check_inventory_filter_facets(checks: Checks) -> None:
+    """D213 — the game/set/rarity filter on `#/inventory`, built on `GET /boxes`.
+
+    `_card_facets` AND `_box_row`'s OWN `matches` ARE THE TWO HALVES: the first is the
+    vocabulary a dropdown is populated from, the second is what tells the box rail which
+    boxes the CURRENT filter actually touches. Both ride on the one route `#/inventory`
+    already polls, per the decision's own ruling that a second route would repeat D192's
+    argument against a second fetch.
+
+    THE UNCLASSIFIED BUCKET IS THE CASE THIS TEST EXISTS TO PROVE. D213's own standing rule
+    is that a card the pipeline could not classify is never dropped, applied to a filter —
+    so a card with no set on file has to be REACHABLE under `set=` (the wire's spelling of
+    "no set"), not merely counted.
+    """
+    checks.note("")
+    checks.note("D213 — GAME/SET/RARITY FACETS AND THE INVENTORY FILTER")
+
+    with isolated_home():
+        with Store().write() as snapshot:
+            inv = snapshot.inventory
+            # Box 1: two Riftbound cards, one classified and one not.
+            rift_a, _ = inv.allocate_capture(1, game="riftbound", cid=fake_cid("facet-rift-a"))
+            inv.cards[rift_a.key].set_name, inv.cards[rift_a.key].rarity = "Unleashed", "Rare"
+            rift_b, _ = inv.allocate_capture(1, game="riftbound", cid=fake_cid("facet-rift-b"))
+            inv.cards[rift_b.key].set_name, inv.cards[rift_b.key].rarity = None, None
+            # Box 2: one Pokemon card, also unclassified — the store's real shape (D213's
+            # own measurement: every Pokemon card in the owner's store carries no set).
+            poke, _ = inv.allocate_capture(2, game="pokemon", cid=fake_cid("facet-poke"))
+            inv.cards[poke.key].set_name, inv.cards[poke.key].rarity = None, None
+
+        # --- the vocabulary, off the store alone — never a hardcoded list -----------------
+        answer = capture_server.do_boxes()
+        facets = answer["facets"]
+        checks.equal(
+            sorted(row["game"] for row in facets["games"]),
+            ["pokemon", "riftbound"],
+            "GET /boxes answers with the game vocabulary this store actually holds, derived "
+            "from the cards table and not from a fixed list",
+        )
+        rift_sets = {row["set"]: row["count"] for row in facets["sets"]["riftbound"]}
+        checks.equal(
+            rift_sets,
+            {"Unleashed": 1, None: 1},
+            "and Riftbound's set menu counts the classified card AND the null bucket — the "
+            "unclassified card is a row in this menu, never an omission",
+        )
+        checks.equal(
+            {row["set"]: row["count"] for row in facets["sets"]["pokemon"]},
+            {None: 1},
+            "Pokemon's own menu is one row, all of it unclassified — the shape D213 measured "
+            "on the owner's store (no Pokemon export has ever been fetched)",
+        )
+        checks.equal(
+            {row["rarity"]: row["count"] for row in facets["rarities"]["riftbound"]},
+            {"Rare": 1, None: 1},
+            "and rarity gets the same null bucket, off the same read",
+        )
+
+        # --- `matches` is ABSENT with no filter, so the box rail's plain count is untouched
+        by_box = {row["box"]: row for row in answer["boxes"]}
+        checks.ok(
+            "matches" not in by_box[1] and "matches" not in by_box[2],
+            "with no filter active, `matches` is not on the row at all — the box rail's "
+            "'N on hand' stays what it always was for a screen that never turned the filter on",
+        )
+
+        # --- filtering by game narrows, across BOTH boxes at once ------------------------
+        by_game = capture_server.do_boxes(game="riftbound")
+        matches = {row["box"]: row["matches"] for row in by_game["boxes"]}
+        checks.equal(
+            matches,
+            {1: 2, 2: 0},
+            "game=riftbound matches both of box 1's cards and none of box 2's Pokemon card — "
+            "the filter narrows the WHOLE STORE'S box rail, not one box at a time",
+        )
+
+        # --- the unclassified bucket is REACHABLE, never dropped -------------------------
+        unclassified = capture_server.do_boxes(game="riftbound", set_name=None)
+        matches = {row["box"]: row["matches"] for row in unclassified["boxes"]}
+        checks.equal(
+            matches,
+            {1: 1, 2: 0},
+            "game=riftbound AND set=<none> matches box 1's UNCLASSIFIED card and nothing "
+            "else — D213's own standing rule (never drop a card silently) applied to a "
+            "filter, proven on the exact card the decision was measured against",
+        )
+
+        # --- a real value still narrows correctly, and combines with rarity --------------
+        combined = capture_server.do_boxes(game="riftbound", set_name="Unleashed", rarity="Rare")
+        matches = {row["box"]: row["matches"] for row in combined["boxes"]}
+        checks.equal(
+            matches,
+            {1: 1, 2: 0},
+            "game+set+rarity together match only the one fully-classified card — every "
+            "active facet is ANDed, not the last one applied winning",
+        )
+
+        # --- clearing the filter restores everything ------------------------------------
+        cleared = capture_server.do_boxes()
+        checks.ok(
+            all("matches" not in row for row in cleared["boxes"]),
+            "and calling with no filter keywords at all returns to the unfiltered shape — "
+            "the same route, the same rows, nothing left over from the last question asked",
+        )
+
+        # --- the wire itself: `?set=` (blank) means the unclassified bucket, not "unset" --
+        httpd = capture_server.CaptureServer(("127.0.0.1", 0), QuietHandler)
+        port = httpd.server_address[1]
+        thread = threading.Thread(target=httpd.serve_forever, daemon=True)
+        thread.start()
+        try:
+            status, raw, _ = request(port, "GET", "/boxes?game=riftbound&set=")
+            checks.equal(status, 200, "GET /boxes?game=riftbound&set= answers 200")
+            body = json.loads(raw)
+            matches = {row["box"]: row.get("matches") for row in body["boxes"]}
+            checks.equal(
+                matches,
+                {1: 1, 2: 0},
+                "and on the wire, a BLANK `set` param reaches `do_boxes` as `set_name=None` "
+                "— the unclassified bucket, not 'no set filter' — because `keep_blank_values`"
+                " is what tells the two apart",
+            )
+
+            status, raw, _ = request(port, "GET", "/boxes")
+            checks.equal(
+                status,
+                200,
+                "and a bare GET /boxes, with no query string at all, still answers 200",
+            )
+            body = json.loads(raw)
+            checks.ok(
+                all("matches" not in row for row in body["boxes"]),
+                "with `facets` still riding along even though nothing is being filtered",
+            )
+            checks.ok(
+                "facets" in body and "games" in body["facets"],
+                "and the facets block reaches the wire under the same key `do_boxes` returns "
+                "in-process",
+            )
+        finally:
+            httpd.shutdown()
+            thread.join()
+
+
 # ---------------------------------------------------------------- box routes and search
 
 
@@ -30368,6 +30515,7 @@ def run() -> Result:
     check_sidecar_seam(checks)
     check_capture_claim_chain(checks)
     check_game_and_note_seam(checks)
+    check_inventory_filter_facets(checks)
     check_box_routes_and_search(checks)
     check_search_fts5(checks)
     check_inventory_box_route(checks)

@@ -40,6 +40,22 @@
 .browse-rail-toggle { flex: none; color: var(--bn-ink-4); }
 .browse-rail-toggle:hover { color: var(--bn-ink); }
 
+/* D213's game/set/rarity filter. Three `.bn-select`s wrap onto two rows in the rail's own
+ * ~270-300px width rather than being squeezed unreadably thin — the rail is narrower than
+ * a comfortable three-up row of native selects, and wrapping costs nothing a dropdown's own
+ * open state would not already cost. `min-width: 0` on each is what lets flex shrink a
+ * `<select>` at all; browsers give it an intrinsic width from its longest option otherwise. */
+.browse-filters {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--bn-2);
+}
+.browse-filters > select {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+.browse-filters > .bn-btn { flex: none; }
+
 /* the collapsed rail */
 .browse-rail-mini {
   position: sticky;

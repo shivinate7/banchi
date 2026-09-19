@@ -124,6 +124,17 @@ function card(input: {
    *  case is about the name, and those cases keep drawing `GET /photo/<box>/<index>`. One test
    *  passes one, which is what makes the two addresses assertable side by side. */
   cid?: string
+  /** D21's game claim. Defaulted to `'pokemon'` below — every case in this file predates
+   *  D213 and was written against that one game — so a case is only asked for a second one
+   *  when it is actually testing the game/set/rarity filter (D213). */
+  game?: string
+  /** D213's catalogue set, beside `set_hint` and never a replacement for it (see
+   *  `types.ts:InventoryCard.set_name`'s own note). `undefined` is the default and means
+   *  "not asserting on this field", which the fixture below reads as `null` — every case
+   *  before D213 fixed no set, so this cannot change what any of them render. */
+  setName?: string | null
+  /** D213's catalogue rarity, same source and same write moment as `setName` above. */
+  catalogRarity?: string | null
 }) {
   const box = input.box ?? 2
   const boxTotal = input.boxTotal ?? 5
@@ -209,7 +220,9 @@ function card(input: {
     photo_reclaimed_at: input.reclaimed ?? null,
     set_hint: 'ME01',
     metadata_finish: input.finish === undefined ? 'normal' : input.finish,
-    game: 'pokemon',
+    game: input.game ?? 'pokemon',
+    set_name: input.setName ?? null,
+    rarity: input.catalogRarity ?? null,
     /* D23's rarity claim and D22's operator note — the two the card panel could overwrite and
        never displayed until 2026-08-25. Optional inputs so most rows keep the nulls that make
        the fallbacks assertable, and one row carries real values. */
@@ -724,7 +737,10 @@ type OpenOptions = {
 
 async function open(
   page: Page,
-  boxes: unknown = BOXES,
+  /* A plain fixture, or (D213) a function of the request's own query string — for a test
+   * that has to answer `?game=riftbound&set=` differently from a bare `GET /boxes`, the
+   * same way the real route's `matches`/`facets` fields do. */
+  boxes: unknown | ((params: URLSearchParams) => unknown) = BOXES,
   store: Store = STORE,
   priced: Priced = () => PRICING,
   sale: SaleStub = SALE,
@@ -954,9 +970,17 @@ async function open(
      Playwright matches handlers in reverse registration order and a test that re-registered
      this one would be relying on that rule to be read correctly by everyone who edits the
      file afterwards. */
-  await page.route(/\/boxes$/, async (route) => {
+  /* `(\?.*)?` SINCE D213: `getBoxes` now sends the game/set/rarity filter as query params
+   * (`?game=riftbound&set=`), and a bare `$` anchor stopped matching the moment a filter
+   * test asked for anything but the plain unfiltered call every case before this one made.
+   * `boxes` (this function's own second parameter) may now be a function of the URL's
+   * query string rather than a fixed body — a case answering `?game=` differently from a
+   * bare `GET /boxes` passes one; every other case keeps passing a plain object. */
+  await page.route(/\/boxes(\?.*)?$/, async (route) => {
     if (options.boxesDelayMs) await new Promise((resolve) => setTimeout(resolve, options.boxesDelayMs))
-    await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(boxes) })
+    const body =
+      typeof boxes === 'function' ? boxes(new URL(route.request().url()).searchParams) : boxes
+    await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(body) })
   })
 
   await page.route(/\/inventory$/, async (route) => {
@@ -3080,7 +3104,8 @@ test('the product row is drawn for the game that claims products, and for no oth
   await expect(page.locator('.boxops-claim-row', { hasText: 'PRODUCT' })).toHaveCount(0)
   await expect(page.locator('.boxops-claim-row', { hasText: 'FINISH' })).toHaveCount(1)
 
-  await page.getByRole('combobox', { name: 'Game' }).selectOption('pokemon_code')
+  /* `exact: true` since D213's inventory filter added a SECOND control whose accessible name contains 'game' as a substring ('Filter by game') — Playwright's default name match is substring, so this locator needs to say it means the box claims editor's own field and not that one. */
+  await page.getByRole('combobox', { name: 'Game', exact: true }).selectOption('pokemon_code')
 
   const row = page.locator('.boxops-claim-row', { hasText: 'PRODUCT' })
   await expect(row).toHaveCount(1)
@@ -3126,11 +3151,12 @@ test('a product claim armed against the code game leaves with it, rather than ri
      Arm Product against the code game, change the game back, and without the disarming effect
      the row is gone from the screen while its claim is still in the patch — a write nobody can
      see they asked for, over every card in the box. */
-  await page.getByRole('combobox', { name: 'Game' }).selectOption('pokemon_code')
+  /* `exact: true` since D213's inventory filter added a SECOND control whose accessible name contains 'game' as a substring ('Filter by game') — Playwright's default name match is substring, so this locator needs to say it means the box claims editor's own field and not that one. */
+  await page.getByRole('combobox', { name: 'Game', exact: true }).selectOption('pokemon_code')
   await page.locator('.boxops-claim-row', { hasText: 'PRODUCT' }).getByRole('switch').check()
   await page.locator('.boxops-claim-row', { hasText: 'PRODUCT' }).getByRole('combobox', { name: 'Product' }).selectOption('booster')
 
-  await page.getByRole('combobox', { name: 'Game' }).selectOption('pokemon')
+  await page.getByRole('combobox', { name: 'Game', exact: true }).selectOption('pokemon')
   await expect(page.locator('.boxops-claim-row', { hasText: 'PRODUCT' })).toHaveCount(0)
 
   /* Something still has to be armed or the editor refuses and sends nothing, so the note row
@@ -5705,6 +5731,193 @@ test('D132 — a named section is said in the walk header, in the bar\'s sentenc
   await field.fill('Top rares')
   await page.getByRole('button', { name: 'Save names' }).click()
   await expect(page.locator('.boxops-editor')).toHaveCount(0)
+})
+
+// ---------------------------------------------------------------------------------------
+// D213 — the game/set/rarity filter. Two boxes, two games, and one UNCLASSIFIED card in
+// each — the shape the decision itself measured (2,960 of 2,960 Riftbound cards resolve a
+// set; 0 of 543 Pokemon cards do, because no Pokemon export has ever been fetched). The
+// fixture's `boxes` answer is a FUNCTION of the request's own query string, because the
+// assertion that matters is what the SCREEN renders under a real filter round-trip —
+// `getBoxes` sending `?game=riftbound&set=`, this fixture reading it back — never a prop
+// this test handed the component directly.
+
+const FACET_CARDS: Cards = {
+  '1/1': card({
+    index: 1,
+    state: 'identified',
+    name: 'Calm Rune',
+    sku: 'CR-UNL-001',
+    section: 1,
+    sectionStart: 1,
+    sectionEnd: 2,
+    box: 1,
+    boxName: 'Riftbound box',
+    boxTotal: 2,
+    game: 'riftbound',
+    setName: 'Unleashed',
+    catalogRarity: 'Rare',
+  }),
+  '1/2': card({
+    index: 2,
+    state: 'identified',
+    name: 'Mind Rune',
+    sku: 'CR-UNL-002',
+    section: 1,
+    sectionStart: 1,
+    sectionEnd: 2,
+    box: 1,
+    boxName: 'Riftbound box',
+    boxTotal: 2,
+    game: 'riftbound',
+    // UNCLASSIFIED — no export has resolved this card's set or rarity. D213's own standing
+    // rule: reachable under a filter, never dropped.
+    setName: null,
+    catalogRarity: null,
+  }),
+  '2/1': card({
+    index: 1,
+    state: 'identified',
+    name: 'Pikachu',
+    sku: 'PK-ME01-001',
+    section: 1,
+    sectionStart: 1,
+    sectionEnd: 1,
+    box: 2,
+    boxName: 'Pokemon box',
+    boxTotal: 1,
+    game: 'pokemon',
+    setName: null,
+    catalogRarity: null,
+  }),
+}
+const FACET_STORE: Store = { cards: FACET_CARDS, search: () => ({ groups: [] }) }
+
+/** Whether a request's own query string is asking the unclassified bucket, a real value, or
+ *  nothing at all, for one facet — the three states `InventoryFacetFilter` itself carries. */
+function facetParam(params: URLSearchParams, key: string): { active: boolean; value: string | null } {
+  if (!params.has(key)) return { active: false, value: null }
+  return { active: true, value: params.get(key) || null }
+}
+
+function facetBoxes(params: URLSearchParams) {
+  const game = facetParam(params, 'game')
+  const set = facetParam(params, 'set')
+  const rarity = facetParam(params, 'rarity')
+  const filtering = game.active || set.active || rarity.active
+
+  const passes = (cardGame: string, cardSet: string | null, cardRarity: string | null) =>
+    (!game.active || cardGame === game.value) &&
+    (!set.active || cardSet === set.value) &&
+    (!rarity.active || cardRarity === rarity.value)
+
+  const box1Matches = [
+    passes('riftbound', 'Unleashed', 'Rare'),
+    passes('riftbound', null, null),
+  ].filter(Boolean).length
+  const box2Matches = passes('pokemon', null, null) ? 1 : 0
+
+  return {
+    boxes: [
+      {
+        ...BOXES.boxes[0],
+        box: 1,
+        name: 'Riftbound box',
+        cards: 2,
+        on_hand: 2,
+        fill: 2,
+        next_index: 3,
+        sold: 0,
+        retired: 0,
+        sections: [1],
+        sections_detail: [{ section: 1, start: 1, end: 2, count: 2 }],
+        ...(filtering ? { matches: box1Matches } : {}),
+      },
+      {
+        ...BOXES.boxes[0],
+        box: 2,
+        name: 'Pokemon box',
+        cards: 1,
+        on_hand: 1,
+        fill: 1,
+        next_index: 2,
+        sold: 0,
+        retired: 0,
+        sections: [1],
+        sections_detail: [{ section: 1, start: 1, end: 1, count: 1 }],
+        ...(filtering ? { matches: box2Matches } : {}),
+      },
+    ],
+    facets: {
+      games: [
+        { game: 'pokemon', count: 1 },
+        { game: 'riftbound', count: 2 },
+      ],
+      sets: {
+        riftbound: [
+          { set: 'Unleashed', count: 1 },
+          { set: null, count: 1 },
+        ],
+        pokemon: [{ set: null, count: 1 }],
+      },
+      rarities: {
+        riftbound: [
+          { rarity: 'Rare', count: 1 },
+          { rarity: null, count: 1 },
+        ],
+        pokemon: [{ rarity: null, count: 1 }],
+      },
+    },
+  }
+}
+
+test('D213 — filtering by game narrows the walk, and the dropdown is built off the store, not a hardcoded list', async ({
+  page,
+}) => {
+  await open(page, facetBoxes, FACET_STORE, () => PRICING, SALE, { route: '/#/inventory?box=1' })
+
+  await expect(page.locator('.browse-row')).toHaveCount(2)
+
+  await page.locator('select[aria-label="Filter by game"]').selectOption('riftbound')
+  // Box 1 (Riftbound) still holds both its cards; box 2 (Pokemon) drops to zero matches and
+  // the rail marks it unreachable — the SAME "N matches" shape a search already draws.
+  await expect(page.locator('.browse-boxcell', { hasText: 'Pokemon box' })).toHaveText(/0 matches/)
+  await expect(page.locator('.browse-row')).toHaveCount(2)
+
+  // The set dropdown is now populated — Riftbound's own two rows, one of them the
+  // unclassified bucket — and never Pokemon's.
+  const setOptions = await page.locator('select[aria-label="Filter by set"] option').allTextContents()
+  expect(setOptions).toEqual(['Set', 'Unleashed (1)', 'No set on file (1)'])
+
+  await page.locator('select[aria-label="Filter by set"]').selectOption('Unleashed')
+  await expect(page.locator('.browse-row')).toHaveCount(1)
+  await expect(page.locator('.browse-row')).toContainText('Calm Rune')
+})
+
+test('D213 — the unclassified bucket is reachable under a set filter, never dropped', async ({ page }) => {
+  await open(page, facetBoxes, FACET_STORE, () => PRICING, SALE, { route: '/#/inventory?box=1' })
+
+  await page.locator('select[aria-label="Filter by game"]').selectOption('riftbound')
+  // The wire's own spelling of "no set": the blank option, not "Unleashed".
+  await page.locator('select[aria-label="Filter by set"]').selectOption({ label: 'No set on file (1)' })
+
+  await expect(page.locator('.browse-row')).toHaveCount(1)
+  await expect(page.locator('.browse-row')).toContainText('Mind Rune')
+})
+
+test('D213 — clearing the filter restores every card, and a fully-classified card resolves game AND rarity together', async ({
+  page,
+}) => {
+  await open(page, facetBoxes, FACET_STORE, () => PRICING, SALE, { route: '/#/inventory?box=1' })
+
+  await page.locator('select[aria-label="Filter by game"]').selectOption('riftbound')
+  await page.locator('select[aria-label="Filter by rarity"]').selectOption('Rare')
+  await expect(page.locator('.browse-row')).toHaveCount(1)
+  await expect(page.locator('.browse-row')).toContainText('Calm Rune')
+
+  await page.getByRole('button', { name: 'Clear filter' }).click()
+  await expect(page.locator('select[aria-label="Filter by game"]')).toHaveValue('')
+  await expect(page.locator('.browse-row')).toHaveCount(2)
 })
 
 test('D132 — a search lands on a box with a LIVE copy, never on the sold one the walk was standing beside', async ({ page }) => {
