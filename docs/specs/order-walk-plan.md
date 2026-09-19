@@ -475,6 +475,46 @@ then make one deliberate pass. The first is the serious one.
 4. **No position bar and no neighbours on the row.** Section 8 lists both. The row draws
    `Card 8` and stops. The stop's own span chip is present and correct.
 
+5. **THE SELECTION IS A FLAT LIST AND NOTHING ELSE, AND THIS ONE IS THIS DOCUMENT'S FAULT.**
+   `WalkSelect` draws one checkbox per walkable order, a `Walk N orders` button, and that is the
+   entire component. There is no tick all, no untick all, no search, no status filter and no
+   sort. Everything arrives ticked and the only way to narrow it is to untick rows one at a time.
+
+   **The build matches this document exactly, which is the problem.** Section 8's "Selecting"
+   specifies a tick per walkable order, one button, and every open order ticked by default. It
+   says nothing about narrowing the list, so nothing was built. On a seven-order demo store the
+   result looks correct, which is how it passed a render.
+
+   **`By buyer` sits three inches away and has all of it**: a search box, four status chips
+   (`All open`, `Every copy found`, `Short`, `Done`), a Newest and Oldest sort, and
+   `Hide unknown SKUs`. The walk is the mode meant for the operator with the most on their plate
+   — 275 walkable orders on the owner's own store, against 40 open — and it is the mode with the
+   fewest ways to say what they mean.
+
+   The owner, looking at the real screen on 2026-09-18: *"I immediately get everything all
+   ticked with no other options, no untick all, no tick all, no 'open only', no other filters."*
+
+   **RULED 2026-09-18: the walk BORROWS `By buyer`'s controls.** The owner's word: *"Just borrow
+   for now."* Not a second vocabulary for the same job — the same chips, the same search, the
+   same sort, so there is one set of behaviours to learn and one place they are decided.
+
+   **What the ruling costs, stated rather than discovered.** Those controls are not components.
+   They are inline JSX inside `PullStage` — the chips built as a local `chips` value, the search,
+   the sort and `Hide unknown SKUs` each written in place. Borrowing them means EXTRACTING them,
+   and the thing they are extracted out of is the mode this document does not touch. So the
+   hazard is not the walk. It is breaking `By buyer` while lifting its own controls out from
+   under it.
+
+   **And the default press changes meaning, which follows from the ruling rather than being a
+   separate one.** Section 8 made every open order ticked by default so the first press stays the
+   press it is today. Once the list can be narrowed, a filter has to narrow BOTH the list and
+   what the button covers, and the button has to say what it covers — `Walk 12 orders` where
+   twelve is what survived the filter. A control that changes the list without changing the press
+   is a control that lies about what the press will do.
+
+   Findings 1 through 4 are deferred behind this one, on the owner's ruling. They are about the
+   row read with a hand already in a drawer. This one is about reaching a drawer at all.
+
 **A settled figure lost its footing, and this paragraph is the record rather than the ruling.**
 D96's "N orders complete in this pass" head figure, and the boot-triggered clear beside it, are
 GONE from the rebuild. That figure was twice amended and hard won: it existed because a lifetime
