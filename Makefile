@@ -49,6 +49,7 @@ help:
 	@echo
 	@echo "  make status       where you are: next step, T1 score, branch. Derived."
 	@echo "  make map          docs/map.py, rendered. ARGS=<package|path|D<n>|--stale>"
+	@echo "                    ARGS=\"D<n> --full\" prints that entry in full."
 	@echo "  make explain      what \`make check\` runs, and what each row is worth."
 	@echo "                    ARGS=<target> for one entry in full."
 	@echo "  make venv         .venv + requirements.txt   (before the first harness run, and"

@@ -46,6 +46,10 @@ make worktree-setup # in a fresh worktree, FIRST: venv, T1's cache, this checkou
                     #   Browser-pane port (D43).
 make status         # where you are: next step, T1 score, branch.
 make map            # docs/map.py RENDERED (D80). ARGS=<package|path|D<n>|--stale>.
+                    #   ARGS="D<n> --full" prints that ENTRY in full, verbatim. The
+                    #   default view also names the entry's path. The filenames are
+                    #   zero-padded (D42 is `D042-...md`), so a glob typed from a
+                    #   citation matches nothing and says nothing.
 make serve-scope    # what `make serve-selftest` reads, and whether this branch touches it.
                     #   ARGS=list, or ARGS="classify --base <rev>". Derived from the
                     #   self-test's own CARRY, reconciled by `make docs-audit`'s `serve scope`
