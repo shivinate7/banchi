@@ -1413,7 +1413,7 @@ export type SearchGroup = {
   set_hint: string | null
 
   /** THE CATALOGUE'S OWN SET, BESIDE `set_hint` AND NEVER A REPLACEMENT FOR IT
-   *  (D-the-set-is-a-stored-fact-and-the-hint-was-never-one). `set_hint` above is the
+   *  (D213). `set_hint` above is the
    *  operator's own claim, typed at the shutter; this is read off the export row the SKU
    *  resolved to at identification time. `null` on every card identified before this field
    *  existed, until `./pkmnscan cards variants --write` or the next identification fills

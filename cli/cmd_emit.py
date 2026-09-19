@@ -750,7 +750,7 @@ def run(args, say) -> int:
                     master.IDENTIFIED,
                     sku=match.sku,
                     condition=match.condition,
-                    # D-the-set-is-a-stored-fact-and-the-hint-was-never-one: the catalogue
+                    # D213: the catalogue
                     # row this SKU resolved to is in hand right here, and this is the
                     # moment it is committed to the card — the same moment `sku` and
                     # `condition` always have been.

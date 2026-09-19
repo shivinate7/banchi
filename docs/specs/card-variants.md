@@ -1,7 +1,10 @@
 # Reaching the right printing
 
-**Status, 2026-09-17.** Section 1 is SPECIFIED and IN BUILD. Sections 2 and 3 are SPECIFIED, NOT
-BUILT. The governing entry is `D-the-set-is-a-stored-fact-and-the-hint-was-never-one`.
+**Status, 2026-09-17.** Sections 1, 2, 3a and 3b are BUILT. Section 3c is MEASURED and needs no
+build. The governing entry is D213.
+
+**The backfill has never run against the owner's store.** `./pkmnscan cards variants` previews by
+default. Measured over the real store: 2,960 of 3,502 cards would gain a set.
 
 The owner's report: searching a card by name on `#/inventory` reaches one printing and offers no way
 to any other. The only move is to click around boxes until a copy of a different printing falls

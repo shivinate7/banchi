@@ -196,7 +196,7 @@ make catalog-mirror # STEP 9 PIECE 3, DRY RUN ONLY as shipped. ARGS=--dry-run HE
 ./pkmnscan cards    variants [--write]
                                    # backfill `set`/`rarity` from whatever export a card's own
                                    #   game already has on disk. Governed by
-                                   #   D-the-set-is-a-stored-fact-and-the-hint-was-never-one.
+                                   #   D213.
                                    #   Previews by default.
                                    #   Never guesses: a SKU that resolves to nothing keeps a
                                    #   null set. Re-runnable — a card already carrying a set
@@ -852,6 +852,7 @@ D209 The buyer list leads with Ready to Ship, and a re-sort is a press
 D210 `pkmnscan rescue` is reached from a press, and its report is never shown verbatim
 D211 The Rig panel folds once the setup is already known, and stays open until it is
 D212 Every copy is fungible, so no order claims one, and the write is the only refusal left
+D213 The set is a stored fact, and the hint was never one
 ```
 
 D116-D118: D117 exists and slots between them — a third branch's number, resolved on merge.

@@ -469,7 +469,7 @@ class Card:
     detected_finish: Optional[str] = None
     sku: Optional[str] = None
     condition: Optional[str] = None
-    # THE SET, AS THE CATALOGUE NAMES IT (D-the-set-is-a-stored-fact-and-the-hint-was-never-one).
+    # THE SET, AS THE CATALOGUE NAMES IT (D213).
     # `set_hint` above is the operator's own claim, typed at the shutter and evidence about
     # its own card; this is a fact about the PRODUCT, read off the export row `sku` resolved
     # to at the moment the SKU was committed. Two of five `Calm Rune` copies would tie on
@@ -2604,7 +2604,7 @@ class Inventory:
             "box", "idx", "state", "sku", "condition", "capture_id", "name", "number",
             "game", "set_hint", "run", "captured_at", "state_at", "cid",
             "number_key", "number_display",
-            # D-the-set-is-a-stored-fact-and-the-hint-was-never-one, matching
+            # D213, matching
             # `store/db.py:TABLES["cards"]` and `_card_columns` above.
             "set_name", "rarity",
         ),

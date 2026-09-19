@@ -1755,7 +1755,7 @@ def _resolve_set_hint(hint: Optional[str], game: Optional[str]) -> Optional[str]
     """A typed `set_hint`, completed the way `app/src/setHint.ts` completes it on Enter —
     but at the write, so a shutter press that skipped Enter, a bulk claim, or any other
     writer still lands on the resolved name
-    (D-the-set-is-a-stored-fact-and-the-hint-was-never-one,
+    (D213,
     "the remaining hole is narrow, and it is still worth closing").
 
     NEVER REFUSES, NEVER BLOCKS ON A NETWORK CALL. `pipeline/setnames.py:resolve_for_game`
@@ -2632,7 +2632,7 @@ def do_capture(payload: dict) -> Tuple[HTTPStatus, dict]:
     # record will be READ as (D21's read-side backfill) — validation only, never a write.
     game = _optional_game(payload)
     claims = {
-        # RESOLVED AT THE WRITE (D-the-set-is-a-stored-fact-and-the-hint-was-never-one):
+        # RESOLVED AT THE WRITE (D213):
         # `app/src/setHint.ts` completes this on Enter, and a shutter press that skips it —
         # every feeder run, by construction — reached the store with the raw string until
         # now. See `_resolve_set_hint`.
@@ -3606,7 +3606,7 @@ def do_put_card(box: int, index: int, payload: dict) -> dict:
         # RESOLVED HERE, NOW THAT THE GAME IT RESOLVES AGAINST IS KNOWN — the card's own
         # game, or the one this same PUT sets. Same rule `_resolve_set_hint` always follows:
         # an unresolved hint is kept exactly as typed.
-        # (D-the-set-is-a-stored-fact-and-the-hint-was-never-one,
+        # (D213,
         # "the two `set_hint` patch paths".)
         if incoming.get("set_hint"):
             incoming["set_hint"] = _resolve_set_hint(incoming["set_hint"], judged_against)
@@ -3860,7 +3860,7 @@ def do_put_box_claims(box: int, payload: dict) -> dict:
             # RESOLVED PER CARD, AGAINST THE GAME THAT CARD IS JUDGED AGAINST — a mixed-game
             # box with no `game` in this body has each card's own game, exactly the pattern
             # `metadata_finish` follows two lines up.
-            # (D-the-set-is-a-stored-fact-and-the-hint-was-never-one,
+            # (D213,
             # "the two `set_hint` patch paths".)
             if fields.get("set_hint"):
                 fields["set_hint"] = _resolve_set_hint(
@@ -5854,7 +5854,7 @@ def _answer_before(events: Sequence[dict], key: str) -> Optional[dict]:
             return None
         pair = {}
         # `set_name`/`rarity` ARE ABSENT ON EVERY `answered` LINE WRITTEN BEFORE
-        # D-the-set-is-a-stored-fact-and-the-hint-was-never-one — `.get()` reads that as
+        # D213 — `.get()` reads that as
         # None, which is exactly right: an answer that predates the pair could not have
         # overwritten it, so there is nothing for an undo of THAT answer to put back.
         for field in ("sku", "condition", "set_name", "rarity"):
@@ -6695,7 +6695,7 @@ def do_review_answer(box: int, index: int, payload: dict) -> dict:
         restores_to = {
             "sku": card.sku,
             "condition": card.condition,
-            # D-the-set-is-a-stored-fact-and-the-hint-was-never-one: written and
+            # D213: written and
             # restored beside `sku`/`condition` for the same reason — an undo puts the
             # card back to carrying no answer, set and rarity included.
             "set_name": card.set_name,
@@ -7489,7 +7489,7 @@ def do_review_group_answer(payload: dict) -> dict:
                     "offering": offering,
                     "governing": governing,
                     "offered": offered,
-                    # D-the-set-is-a-stored-fact-and-the-hint-was-never-one: the same
+                    # D213: the same
                     # candidate row the single answer route carries, one per card here.
                     "set_name": str(chosen.get("set") or "").strip() or None,
                     "rarity": str(chosen.get("rarity") or "").strip() or None,
@@ -8710,7 +8710,7 @@ def do_search(query: str) -> dict:
                 "number_display": _agreed(_number_display(card) for card in copies),
                 "set_hint": _agreed(card.set_hint for card in copies),
                 # THE CATALOGUE'S OWN ANSWER, BESIDE THE OPERATOR'S HINT
-                # (D-the-set-is-a-stored-fact-and-the-hint-was-never-one). `set_hint`
+                # (D213). `set_hint`
                 # above stays exactly as it was — a screen still needs the fallback
                 # for the card no export has ever priced. `set`/`rarity` are `None`
                 # on every card identified before this pair existed, until

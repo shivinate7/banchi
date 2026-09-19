@@ -723,7 +723,7 @@ function VariantChooser({
           const photoCopy = group.copies.find((copy) => copy.has_photo)
           const name = group.names[0] ?? 'Not identified yet'
           // THE CATALOGUE'S OWN SET FIRST, `set_hint` ONLY WHEN THERE IS NO OTHER ANSWER
-          // (D-the-set-is-a-stored-fact-and-the-hint-was-never-one) — the fallback D65
+          // (D213) — the fallback D65
           // already established for the case no export has ever priced this game.
           const sub = [
             group.number_display,

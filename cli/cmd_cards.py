@@ -9,7 +9,7 @@ FOUR SUBCOMMANDS AND TWO OF THEM WRITE NOTHING EVER.
   cards photos    move the corpus off the legacy `(box, index)` address onto the card's own
                   name. Previews by default; `--write` performs it
   cards variants  backfill `set` and `rarity` from whatever export a card's game already
-                  has on disk (D-the-set-is-a-stored-fact-and-the-hint-was-never-one).
+                  has on disk (D213).
                   Previews by default; `--write` performs it. Never guesses: a SKU that
                   resolves to nothing keeps a null set.
 
@@ -522,7 +522,7 @@ def _photos(args, say) -> int:
 
 def _variants(args, say) -> int:
     """Backfill `set` and `rarity` from whatever export a card's own game already has on
-    disk (D-the-set-is-a-stored-fact-and-the-hint-was-never-one). Previews unless `--write`.
+    disk (D213). Previews unless `--write`.
 
     NEVER REFUSES A CARD AND NEVER GATES. A SKU that resolves to nothing keeps a null set,
     counted and reported, never guessed. RE-RUNNABLE: a card that already carries a set is

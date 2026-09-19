@@ -110,7 +110,7 @@ PHOTOS_RELOCATED = "photos_relocated"
 # same shape `store/db.py`'s own 3->4 comment already names as precedent. `_add_search_index`
 # builds the FTS5 index that replaces `do_search`'s O(cards) walk.
 #
-# EIGHT, FOR D-the-set-is-a-stored-fact-and-the-hint-was-never-one. `_add_set_columns` adds
+# EIGHT, FOR D213. `_add_set_columns` adds
 # `set_name` and `rarity` to `cards` and sweeps the 99 `UNL` rows from 2026-08-29 to
 # `Unleashed` — the DDL and the sweep, which cost nothing to run on every open. Filling the
 # two new columns for cards the store already holds is a SEPARATE, re-runnable step
@@ -142,7 +142,7 @@ TABLES: Dict[str, Tuple[str, ...]] = {
     "cards": (
         "box", "idx", "state", "sku", "condition", "capture_id", "name", "number", "game",
         "set_hint", "run", "captured_at", "state_at", "cid",
-        # D-the-set-is-a-stored-fact-and-the-hint-was-never-one: the catalogue's own answer,
+        # D213: the catalogue's own answer,
         # written at the moment a SKU is committed and never a live join. `set_name` and not
         # `set` — SQLite's own `UPDATE ... SET` grammar cannot take an unquoted column
         # literally spelled `set` (see `store/master.py:Card.set_name`).
@@ -186,7 +186,7 @@ _INDEXES = (
     # remove. `_ensure_schema` creates it with `CREATE INDEX IF NOT EXISTS` at connect, so an
     # existing store gets it with no migration and no schema version bump.
     ("cards", "captured_at"),
-    # D-the-set-is-a-stored-fact-and-the-hint-was-never-one: "it becomes a facet later" —
+    # D213: "it becomes a facet later" —
     # a filter over `set_name` is the next thing this column exists for, and an index scan
     # over it rather than a table scan is the same argument `captured_at`'s own entry makes.
     ("cards", "set_name"),
@@ -405,7 +405,7 @@ def _upgrade(
             if stored < 7:
                 _add_search_index(conn)      # STORE-SCALING ITEM 8
             if stored < 8:
-                _add_set_columns(conn)       # D-the-set-is-a-stored-fact-and-the-hint-was-never-one
+                _add_set_columns(conn)       # D213
             conn.execute(
                 "INSERT OR REPLACE INTO meta (key, value) VALUES ('schema', ?)",
                 (str(SCHEMA_VERSION),),
@@ -1086,7 +1086,7 @@ _SET_HINT_SWEEP = {"UNL": "Unleashed"}
 
 def _add_set_columns(conn: sqlite3.Connection) -> None:
     """Schema 8: `cards.set_name` and `cards.rarity`
-    (D-the-set-is-a-stored-fact-and-the-hint-was-never-one).
+    (D213).
 
     ADDITIVE LIKE `_add_search_index`'s TWO COLUMNS: the `ALTER`s are guarded by
     `PRAGMA table_info` so a re-run after a crash is a no-op, and nothing existing is READ to

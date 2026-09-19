@@ -1731,7 +1731,7 @@ class SkuMatch:
 
     @property
     def rarity(self) -> str:
-        """The catalogue's own rarity for this row (D-the-set-is-a-stored-fact-and-the-hint-was-never-one).
+        """The catalogue's own rarity for this row (D213).
         Stored beside `set_name` at the same write and for the same reason: both are read off
         the row `sku` already resolved to, not re-derived or asked for."""
         return self.row.get(tcgcsv.RARITY_COLUMN, "")

@@ -198,7 +198,7 @@ function loneGroup(row: Row, copy: SearchCopy): SearchGroup {
     set_hint: row.card.set_hint,
     // NULL, NOT DERIVED: this group has no SKU (`skuOrName` proved it), and `set`/`rarity`
     // are written at identification time out of the row a SKU resolved to
-    // (D-the-set-is-a-stored-fact-and-the-hint-was-never-one) — a card with none has
+    // (D213) — a card with none has
     // nothing to carry them from. `InventoryCard` does not put them on the wire at all;
     // only `do_search`'s own group does.
     set: null,
