@@ -209,3 +209,47 @@ capitalisations, and `.browse-empty`'s count. All five come off that single snap
 
 **Mutation-tested.** Reverting the `shelfSource` gate draws `.browse-card` count 1: box 2's
 card, under the Box 7 header. Reverting either empty-state gate draws the false claim `true`.
+
+### Blank was itself the defect: the previous drawer stays, dimmed (2026-09-19)
+
+**The owner ruled again, on the fix above.** It fell to `null` for a press or a walk-to —
+no row, no rows, no sentence, no spinner. That window runs up to ~1.5s on a slow store.
+
+His word: keep the previous drawer's rows on screen, DIMMED, until the new answer lands.
+Both the walk list and the copies column. No new visible words — `copy-budget.json` holds.
+
+**Blank is not neutral.** An empty pane during a press reads as a fault, not a wait. The
+first fix traded one wrong claim for a different cost, and the owner ruled the cost real.
+
+**What is held.** `held` already kept the last row `found` in `visible`, for a search
+re-rank. Two more refs join it: `heldSections` (the list's last answered `sections`) and
+`heldDetail` (the `{detail}` prop, `Inventory.tsx`'s `CopiesPanel`, off the same render).
+
+All three write only when the render is not `awaitingRows`. None can ever hold a partial
+or in-flight answer. Each one only ever holds a box that fully answered.
+
+**Dimmed is not a smaller a4f3594b claim.** Box 2's row, drawn under a `Box 7` header, is
+literally the shape that regression named. What makes it safe is that it cannot be acted on.
+
+`.browse-list[aria-busy='true']` and `.browse-card[aria-busy='true']` (BoxBrowse.css) drop
+to `--bn-disabled` opacity, the token this file already had for "on screen, not live". Both
+set `pointer-events: none`. No click can land on a card the header no longer names.
+
+The list also leaves the tab order (`tabIndex={-1}`). Its `onKeyDown` is not attached
+while dimmed — the one keyboard path onto a stale row (`TICK_KEY`) cannot fire either.
+`aria-busy="true"` stays on both regions the whole time, so a screen reader is told: not
+final. Dimmed is drawn, never claimed.
+
+**No layout jump.** Neither region unmounts now. The list keeps its own node across the
+wait — nothing collapses and reappears. The card panel's key does not change between the
+held row and that same row once it lands. Only a genuinely different card remounts
+`CardOps`.
+
+**`inventory.spec.ts`'s renamed case** (`a press to another drawer dims its predecessor's
+rows rather than drawing them as the new box's, or drawing nothing`) keeps the one-shot
+`page.evaluate` snapshot. It adds both elements' computed `opacity` (under 1) and
+`pointerEvents` (`'none'`), both `aria-busy` values (`'true'`), and the list's `tabIndex`
+(`-1`). It adds the list's own height, unmoved against its value before the press. Same
+box, same content, held through the wait — the one comparison that isolates the fix.
+Box 2's row count and photograph are still drawn while held. The false-claim and
+`.browse-empty` checks stand: dimmed never lies about what box holds what.
