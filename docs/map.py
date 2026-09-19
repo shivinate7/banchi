@@ -6437,7 +6437,7 @@ COMPONENTS = [
                                         "exists on this wire to draw. No sealed/singles "
                                         "split — `OrderLineWire.kind` is null on nearly every "
                                         "line and CLAUDE.md refuses guessing one from a name. "
-                                        "SINCE `D-revenue-slice`: every column sorts, the "
+                                        "SINCE `D217`: every column sorts, the "
                                         "month strip cross-filters the product table, a "
                                         "product row drills into the orders behind it, a "
                                         "custom range picks its own week/month granularity, "
@@ -6446,18 +6446,18 @@ COMPONENTS = [
                                         "the URL.",
                                 "governed_by": ["D50", "D62", "D69", "D86", "D103", "D105",
                                                  "D118", "D159", "D193", "D194", "D201",
-                                                 "D214", "D-revenue-slice"]},
+                                                 "D214", "D217"]},
             "src/Revenue.css": {"does": "the verdict, the month strip and the product table's "
                                         "own layout, `--bn-*` only. The sparkline's polyline "
                                         "reuses `--bn-accent` rather than naming a color; the "
                                         "search field wrapper is sized like every other "
                                         "screen's own `-search` class (Graveyard, Codes). "
-                                        "Since `D-revenue-slice`: sortable headers, a "
+                                        "Since `D217`: sortable headers, a "
                                         "cross-filterable month row, a drill-down's nested "
                                         "table, and a 390px-only wrap on this screen's own "
                                         "`Segmented` instance, scoped here rather than to the "
                                         "shared kit rule.",
-                                "governed_by": ["D50", "D94", "D-revenue-slice"]},
+                                "governed_by": ["D50", "D94", "D217"]},
             "src/RunFiles.tsx": {"does": "a run's files, as downloads — extracted from RunPanel on "
                                        "2026-08-30 (D54) so two screens can draw them. The `only` "
                                        "prop is the split: the import CSVs go to #/pricing with the "
@@ -7368,7 +7368,7 @@ COMPONENTS = [
                                       "governed_by": ["D156", "D8", "D9", "D20", "D28", "D33", "D48", "D49", "D51", "D54", "D56", "D57", "D58", "D59", "D62", "D68", "D78", "D79", "D85", "D86", "D98", "D99", "D103", "D115", "D117", "D118",
                                                       "D168", "D208"]},
             "tests/revenue.spec.ts": {
-                "does": "`#/revenue`'s own suite (`D-revenue-slice`): the empty and failure "
+                "does": "`#/revenue`'s own suite (`D217`): the empty and failure "
                         "states, every column's sort and its reverse, the search field, the "
                         "month strip's cross-filter and its Clear, a drill-down's nested "
                         "orders table, a custom range's week-granularity switch, the "
@@ -7380,7 +7380,7 @@ COMPONENTS = [
                         "in its own header once a fifth period option existed. Not a harness "
                         "test; `make design-check` runs it.",
                 "governed_by": ["D50", "D62", "D103", "D118", "D159", "D193", "D201",
-                                 "D214", "D-revenue-slice"],
+                                 "D214", "D217"],
             },
             "tests/live-reconcile.spec.ts": {
                 "does": "the store-wide reconcile in a browser (D87): that it is reachable from "

@@ -2,7 +2,7 @@
 
 `#/revenue`. Routed 2026-09-19, an eleventh nav row on purpose — tried off-nav the same day
 and reversed the same day on the owner's own word. See D214 for why this is its own route,
-why it is gross-only, and the full account of both rulings. See D-revenue-slice for the
+why it is gross-only, and the full account of both rulings. See D217 for the
 sort, filter, cross-filter, drill-down and URL work this document now describes. Neither
 entry's own counting rules changed.
 
@@ -41,7 +41,7 @@ filters all three tiers together, off the same underlying set of sales. `Custom`
 `From`/`To` date pair. Every one of these controls lives in the URL's own query string:
 `?period=&q=&sort=&dir=&month=&from=&to=`. So does the search text and the active bucket. A
 view can be reloaded or shared exactly as it was left. Writes use `history.replaceState`,
-never a pushed entry. D-revenue-slice states why, and names the trade it costs.
+never a pushed entry. D217 states why, and names the trade it costs.
 
 ## What it deliberately does not do
 
@@ -80,7 +80,7 @@ never a pushed entry. D-revenue-slice states why, and names the trade it costs.
 ## The copy-budget ceiling
 
 `app/tests/copy-budget.json` pins `#/revenue` at 64 words, raised from 56 by
-`D-revenue-slice`. See that entry for the eight-word breakdown, and for why the ceiling was
+`D217`. See that entry for the eight-word breakdown, and for why the ceiling was
 already measuring a populated screen rather than the empty state.
 
 ## Measured, once, on the owner's live store (2026-09-19)

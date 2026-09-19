@@ -35,7 +35,7 @@ import './Revenue.css'
  * product — the table is one list, sorted by gross, mixed on purpose. NONE OF THE ABOVE
  * CHANGED (D214's counting rules stand): what is new is what a person can do with the same
  * rows once they are on screen — sort them, filter them, cross-filter by month, drill into
- * one product's own orders, and share the exact view as a link. See D-revenue-slice.
+ * one product's own orders, and share the exact view as a link. See D217.
  */
 
 /** The one word this screen treats as "not a sale" — folded the way `is_terminal_status`

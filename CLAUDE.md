@@ -872,6 +872,7 @@ D213 The set is a stored fact, and the hint was never one
 D214 A gross-revenue retrospective is its own route, and it never claims to be profit
 D215 Both: the worker count is raised, and the spec allow-list is built
 D216 The price history's honest agent stopped answering, and D64's escape hatch already fit it
+D217 Sales becomes a tool: sort, filter, cross-filter, drill down and deep-link, over the same rows D214 already drew
 ```
 
 D116-D118: D117 exists and slots between them — a third branch's number, resolved on merge.

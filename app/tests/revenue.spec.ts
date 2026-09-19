@@ -4,7 +4,7 @@ import { sealEveryTest } from './shell'
 import type { OrderLineWire, OrderRow, OrdersPayload } from '../src/types'
 
 /* `#/revenue` (SALES) BECOMES A TOOL — sort, filter, cross-filter, deep-link and drill down
- * (`D-revenue-slice`), over the same `GET /orders` payload D214 already reshapes. Nothing here
+ * (`D217`), over the same `GET /orders` payload D214 already reshapes. Nothing here
  * touches what counts as revenue: D214's counting rules (gross only, Canceled dropped, no
  * sealed/singles split) are unchanged and this file does not re-test them — `docs/specs/
  * revenue.md` is where that argument lives.

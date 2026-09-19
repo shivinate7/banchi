@@ -72,7 +72,7 @@
   flex-direction: column;
 }
 
-/* A ROW IS NOW A BUTTON (cross-filtering, D-revenue-slice) rather than a `<div>`, so the
+/* A ROW IS NOW A BUTTON (cross-filtering, D217) rather than a `<div>`, so the
  * cursor, hover and press floors in `base.css` cover it for free — this file only supplies
  * the layout and the two states neither floor knows about: the SELECTED (`aria-pressed`)
  * filter and the CURRENT, still-forming bucket (`data-current`). */

@@ -1,4 +1,4 @@
-## D-revenue-slice — Sales becomes a tool: sort, filter, cross-filter, drill down and deep-link, over the same rows D214 already drew
+## D217 — Sales becomes a tool: sort, filter, cross-filter, drill down and deep-link, over the same rows D214 already drew
 
 **The problem this closes.** D214 built `#/revenue` as a retrospective. A verdict, a month
 strip, a product table sorted by gross. The owner's own words: *"all we have right now is
