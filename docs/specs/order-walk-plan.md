@@ -388,6 +388,48 @@ close the tab, come back an hour later — that walk is over. The buyer list kee
 next Start builds a **fresh plan against the store as it is then**. One screen, one pass, and
 no walk outlives the sitting it was built in.
 
+### What the freeze covers, and what it does not — RULED 2026-09-19
+
+**The freeze is about RANKING, never about where a card physically sits.** The owner's ruling,
+answering a case this document had not considered.
+
+FROZEN, and recomputed by nothing inside a pass: which drawers the walk visits, which cards it
+asks for, the order of the stops, the order of the rows inside a stop, and the order of the
+copies inside a row — including the rule that cards packed into one section rank higher. A pull
+re-solves NOTHING. This is D181 and D118 applied to the walk, and it is the whole point of the
+pass.
+
+REFRESHED, on every pull, for the rows still ahead in the box that changed: the card's
+neighbours, its own number, and its position bar. These are not the plan. They are the
+DESCRIPTION of a card that is still the same card, still at the same stop, still in the same
+place in the list — said correctly instead of said stale.
+
+**The case that forced this is the walk's own normal operation, not an outside sale.** The
+solver packs a walk into the fewest drawers, so two cards at one stop are LIKELY to be physical
+neighbours. Pull the first and D58 renumbers everything after it in that box: the second card's
+neighbour line now names a card that is no longer there, and its `#17` is now `#16`. The
+operator is counting to a number the screen has wrong, about a card the screen says is beside
+something that has gone.
+
+This is not the edge case section 8 waved at above ("I can't imagine a copy sold on another
+screen ever happening"). It is caused BY the walk, ON most walks.
+
+**All positional facts refresh together, or none do.** The owner's reasoning: a line between
+which ones are worth refreshing would be arbitrary, and they come back in one query either way.
+So neighbours, number and bar move as one.
+
+**A row that has gone blanks its own neighbour line** rather than keep showing a name that the
+same press made wrong.
+
+**Nothing here may move anything on screen** (D118). A refreshed fact changes the text inside a
+row that is already there, at a height already reserved. A row that grows or shrinks on another
+row's press is this ruling built wrong.
+
+**Everywhere else already solves this by re-reading.** `#/inventory` re-reads after every write,
+`#/fulfillment` re-reads in six places, and `CardLocations` refreshes with its parent. The walk
+is the one screen that deliberately does not, which is why it is the one screen with the defect.
+The remedy is not a re-read — that would re-solve the plan — but this narrower refresh.
+
 **Inside a pass, the plan is computed once and does not move.** The owner, on what a mid-walk
 change should do: *"maybe a toast spawns, but frankly I can't imagine a copy sold on another
 screen ever happening, and a new order arriving shouldn't alter my walk."* So there is **no
