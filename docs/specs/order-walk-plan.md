@@ -274,6 +274,7 @@ values in the message.
           "copies": [
             { "box": 3, "index": 271, "slot": 244, "capture_id": "...", "cid": "...",
               "card": 244, "label": "Box 3 · Section 6 · Card 244",
+              "box_total": 987, "box_closed": false, "fraction": 0.246,
               "neighbors": { "prev": {...}, "next": {...} } } ] } ] } ],
   "shortfall": [ { "sku": "...", "name": "...", "wanted": 3, "on_hand": 1, "short": 2,
                    "for": [ ... ] } ],
@@ -310,11 +311,22 @@ prevent. On the owner's store today it has never fired.
 
 ### Selecting
 
-The buyer list gains a tick per walkable order and one `Walk N orders` button. The default
-tick is every currently open order — the set `Walk the boxes` already flattens — so the
-default press is the same press it is today. The plan covers exactly the ticked set, and the
-head says so in the operator's units: **"Six drawers. Forty-one cards."** Not sections, not
-boxes, not SKUs.
+**SUPERSEDED 2026-09-18 by the owner, after looking at the built screen. The replacement is
+section 12. Read that, not this paragraph.** What this paragraph specified — a second list,
+behind a mode tab, with a tick per row — was built exactly and is wrong. The owner's words:
+*"I imagined an integrated screen, no separate tabs for By Buyer and Walk the boxes, just an
+order screen, and in that screen I can be seeing the buyers and if I want tick next to their
+names and then 'start the walk' rather than clicking a new tab, then operate a UI, then click
+start."*
+
+The original text, kept because section 12 is an argument against it: the buyer list gains a
+tick per walkable order and one `Walk N orders` button. The default tick is every currently
+open order, so the default press is the same press it is today. The plan covers exactly the
+ticked set, and the head says so in the operator's units: **"Six drawers. Forty-one cards."**
+Not sections, not boxes, not SKUs.
+
+**The head's sentence survives section 12 unchanged.** It is the one part of this paragraph the
+owner did not overturn.
 
 ### A stop
 
@@ -376,6 +388,48 @@ those that were ticked and return to the app then things can move."*
 close the tab, come back an hour later — that walk is over. The buyer list keeps the ticks. The
 next Start builds a **fresh plan against the store as it is then**. One screen, one pass, and
 no walk outlives the sitting it was built in.
+
+### What the freeze covers, and what it does not — RULED 2026-09-19
+
+**The freeze is about RANKING, never about where a card physically sits.** The owner's ruling,
+answering a case this document had not considered.
+
+FROZEN, and recomputed by nothing inside a pass: which drawers the walk visits, which cards it
+asks for, the order of the stops, the order of the rows inside a stop, and the order of the
+copies inside a row — including the rule that cards packed into one section rank higher. A pull
+re-solves NOTHING. This is D181 and D118 applied to the walk, and it is the whole point of the
+pass.
+
+REFRESHED, on every pull, for the rows still ahead in the box that changed: the card's
+neighbours, its own number, and its position bar. These are not the plan. They are the
+DESCRIPTION of a card that is still the same card, still at the same stop, still in the same
+place in the list — said correctly instead of said stale.
+
+**The case that forced this is the walk's own normal operation, not an outside sale.** The
+solver packs a walk into the fewest drawers, so two cards at one stop are LIKELY to be physical
+neighbours. Pull the first and D58 renumbers everything after it in that box: the second card's
+neighbour line now names a card that is no longer there, and its `#17` is now `#16`. The
+operator is counting to a number the screen has wrong, about a card the screen says is beside
+something that has gone.
+
+This is not the edge case section 8 waved at above ("I can't imagine a copy sold on another
+screen ever happening"). It is caused BY the walk, ON most walks.
+
+**All positional facts refresh together, or none do.** The owner's reasoning: a line between
+which ones are worth refreshing would be arbitrary, and they come back in one query either way.
+So neighbours, number and bar move as one.
+
+**A row that has gone blanks its own neighbour line** rather than keep showing a name that the
+same press made wrong.
+
+**Nothing here may move anything on screen** (D118). A refreshed fact changes the text inside a
+row that is already there, at a height already reserved. A row that grows or shrinks on another
+row's press is this ruling built wrong.
+
+**Everywhere else already solves this by re-reading.** `#/inventory` re-reads after every write,
+`#/fulfillment` re-reads in six places, and `CardLocations` refreshes with its parent. The walk
+is the one screen that deliberately does not, which is why it is the one screen with the defect.
+The remedy is not a re-read — that would re-solve the plan — but this narrower refresh.
 
 **Inside a pass, the plan is computed once and does not move.** The owner, on what a mid-walk
 change should do: *"maybe a toast spawns, but frankly I can't imagine a copy sold on another
@@ -475,6 +529,50 @@ then make one deliberate pass. The first is the serious one.
 4. **No position bar and no neighbours on the row.** Section 8 lists both. The row draws
    `Card 8` and stops. The stop's own span chip is present and correct.
 
+5. **THE SELECTION IS A FLAT LIST AND NOTHING ELSE, AND THIS ONE IS THIS DOCUMENT'S FAULT.**
+   `WalkSelect` draws one checkbox per walkable order, a `Walk N orders` button, and that is the
+   entire component. There is no tick all, no untick all, no search, no status filter and no
+   sort. Everything arrives ticked and the only way to narrow it is to untick rows one at a time.
+
+   **The build matches this document exactly, which is the problem.** Section 8's "Selecting"
+   specifies a tick per walkable order, one button, and every open order ticked by default. It
+   says nothing about narrowing the list, so nothing was built. On a seven-order demo store the
+   result looks correct, which is how it passed a render.
+
+   **`By buyer` sits three inches away and has all of it**: a search box, four status chips
+   (`All open`, `Every copy found`, `Short`, `Done`), a Newest and Oldest sort, and
+   `Hide unknown SKUs`. The walk is the mode meant for the operator with the most on their plate
+   — 275 walkable orders on the owner's own store, against 40 open — and it is the mode with the
+   fewest ways to say what they mean.
+
+   The owner, looking at the real screen on 2026-09-18: *"I immediately get everything all
+   ticked with no other options, no untick all, no tick all, no 'open only', no other filters."*
+
+   **RULED 2026-09-18: the walk BORROWS `By buyer`'s controls.** The owner's word: *"Just borrow
+   for now."* Not a second vocabulary for the same job — the same chips, the same search, the
+   same sort, so there is one set of behaviours to learn and one place they are decided.
+
+   **What the ruling costs, stated rather than discovered.** Those controls are not components.
+   They are inline JSX inside `PullStage` — the chips built as a local `chips` value, the search,
+   the sort and `Hide unknown SKUs` each written in place. Borrowing them means EXTRACTING them,
+   and the thing they are extracted out of is the mode this document does not touch. So the
+   hazard is not the walk. It is breaking `By buyer` while lifting its own controls out from
+   under it.
+
+   **And the default press changes meaning, which follows from the ruling rather than being a
+   separate one.** Section 8 made every open order ticked by default so the first press stays the
+   press it is today. Once the list can be narrowed, a filter has to narrow BOTH the list and
+   what the button covers, and the button has to say what it covers — `Walk 12 orders` where
+   twelve is what survived the filter. A control that changes the list without changing the press
+   is a control that lies about what the press will do.
+
+   **AMENDED 2026-09-18, by the owner: nothing is ticked by default.** Section 12 carries the
+   ruling. The button still says what it covers, and over an empty selection it is not offered
+   at all.
+
+   Findings 1 through 4 are deferred behind this one, on the owner's ruling. They are about the
+   row read with a hand already in a drawer. This one is about reaching a drawer at all.
+
 **A settled figure lost its footing, and this paragraph is the record rather than the ruling.**
 D96's "N orders complete in this pass" head figure, and the boot-triggered clear beside it, are
 GONE from the rebuild. That figure was twice amended and hard won: it existed because a lifetime
@@ -490,6 +588,17 @@ orders already in hand and the pass's own recorded map, or rule D96 superseded h
 an entry. One piece of D96 IS already reversed in the open, by section 8's own words: "leaving the
 walk ends the pass" directly contradicts D96 amended's "a toggle is not the end of a pass," and
 that reversal was the owner's, in the 2026-09-17 interview.
+
+**DEFERRED ON THE OWNER'S WORD, 2026-09-19.** Asked directly, with both ways out on the table,
+the owner's answer was: *"we don't really need it right now so leave that as it is."* So this
+paragraph stays exactly what it is — a record that the argument is unanswered and the mechanism
+absent. D96 is NOT superseded and the figure is NOT being rebuilt. A later session should not
+re-raise this as an open question; it was raised and held.
+
+Worth noting for whoever does pick it up: the mechanism got cheaper after this was written. The
+pull now answers with post-write facts (§8's 2026-09-19 ruling), so the moment an order's last
+copy is recorded is something the screen already sees. The figure could be counted off the
+pass's own presses rather than by re-reading the ledger.
 
 It is named here so it cannot be lost the way a silent revert is lost. `make docs-audit`'s
 `recorded deletions` row and `make revert-guard` both exist because this repository has dropped
@@ -557,3 +666,190 @@ settled work by accident before.
 - **Sections stop fragmenting.** The whole objective assumes sections are finer than boxes. On
   this store they are — 50 sections over 5 boxes — and a store that stops sectioning makes the
   cost function equal to counting boxes.
+
+## 12. One screen, and the list that is already there
+
+**Ruled by the owner on 2026-09-18, looking at the built screen.** This section replaces
+section 8's "Selecting" and makes finding 5 in section 9a moot rather than fixed. It is the
+next piece of work and nothing in sections 1 to 7 changes.
+
+### What is wrong with what was built
+
+Three presses stand between the operator and a drawer: click a tab they were not on, work a
+list they have never seen, press start. The middle list is a SECOND list of the same orders,
+with none of the controls the first one has — no search, no status chips, no sort, no tick all,
+no untick all. Everything arrives ticked. On the owner's store that is 275 rows.
+
+**The second list should not be narrowed. It should not exist.** The screen already draws a
+list of these orders, with every control, and the operator is already reading it. That list is
+the selection.
+
+### The shape
+
+`#/orders` takes `#/inventory`'s frame. That frame is `.browse-body` in `app/src/BoxBrowse.css`:
+
+```
+grid-template-columns: 300px minmax(0, 1fr);     /* the rail, then the work */
+[data-rail='collapsed']  52px  minmax(0, 1fr)
+<= 1100px-ish            268px minmax(0, 1fr)
+phone                    minmax(0, 1fr)          /* one column, stacked */
+```
+
+- **The left column is the orders**, the list that exists today, with every control it has
+  today, and a tick per walkable row.
+- **The main column is the walk**, the stops and their cards.
+- **No mode strip and no `PullMode`.** `By buyer` and `Walk the boxes` stop being two modes of
+  one screen and become one screen. Four things go in one change: the `Segmented<PullMode>`
+  strip in `app/src/Orders.tsx`, the `PullMode` type in `app/src/OrdersHubStore.ts`, and the
+  two branches on `mode === 'walk'` in `Orders.tsx`. Find them with
+  `make orient ARGS=app/src/Orders.tsx`, never by the line numbers an earlier draft of this
+  section carried — those were 28 lines stale within a day of being written.
+
+  **The two branches are not the same deletion, and one of them is the point.** The second
+  branch swaps the buyer list for `<OrdersWalk>`, and deleting it is what puts the walk in the
+  main column beside the list rather than instead of it. The FIRST branch is
+  `{mode === 'walk' ? null : (...)}` around the reason chips and the
+  `orders-view-controls` group — the status select, the sort, the buyer search. Today it hides
+  every filter the moment the walk begins. The owner's answer 1 makes those filters the
+  SELECTING tool, so that branch is not incidental cleanup: it is the line that currently stops
+  the operator doing the one thing this shape is for.
+- **`WalkSelect` in `app/src/OrdersWalk.tsx` is DELETED**, not improved. It is the second list.
+- **One press starts the walk**, from the list the operator was already reading.
+
+### What this settles, and what is left to the build
+
+**Settled by the shape itself.** The filters and the search are the ones already on the screen, because there is
+only one list now. A filter narrows what the press covers, because the list and the selection
+are the same thing — the question section 9a raised about that answers itself here.
+
+**Settled by the owner on 2026-09-18, answering this section's own three questions.**
+
+**1. A tick does NOT survive a filter that hides its row.** Filter to `Short` and every buyer
+who falls out of view loses the tick. Filtering back does not bring it back. The tick is a
+property of the list as drawn, not a set held behind it.
+
+This makes the filter a selecting tool rather than a view. The flow is: narrow the list, tick
+what is left, press Start. Tick all and untick all act on the rows in view, because those are
+the only rows that can hold a tick.
+
+**3. Nothing is ticked by default.** The first draft ticked every open order so that the first
+press matched the press before the walk existed. That argument is retired. The operator says
+who the walk is for, every time, and an empty selection means Start is not offered.
+
+**2 was not a question the owner could answer as asked, because "a frozen pass" was this
+document's word and not defined here.** It is defined in section 8: from the press of Start to
+the end of that walk, the plan is computed once and does not move. A new order does not join
+it. A copy that goes elsewhere marks its own row and moves nothing around it. The freeze covers
+the WALK, in the main column.
+
+The left column is the orders list, and that list is live. It re-sorts on Ready to Ship (D209).
+Rows change status under the hand. So one screen would hold a frozen walk beside a moving list.
+
+**The answers above resolve it, and the resolution needs the owner's word.** The walk covers the
+set that was ticked AT THE PRESS. Once Start is pressed the list is no longer the walk's input,
+so the list may keep filtering, sorting and unticking without touching the walk. The two clocks
+do not collide, because only one of them is read.
+
+What that leaves open is what the ticks LOOK LIKE during a pass, and it is small enough to
+decide at build time with the owner watching: the ticks stay as the operator left them and are
+simply not read again, or the press clears them, which says plainly that the walk is now its own
+thing.
+
+### Sequencing
+
+1. The three questions above are answered. What the ticks look like during a pass is decided
+   at build time, in front of the owner.
+2. Build the frame and move the list into it. This is the whole of the layout change and it
+   touches `Orders.tsx`, `OrdersWalk.tsx`, their sheets and `OrdersHubStore.ts`.
+3. Delete `WalkSelect`, the mode strip and `PullMode` in the same change. A half-removed mode is
+   worse than either state.
+4. Findings 1 through 4 in section 9a, deferred behind this on the owner's word. They are the
+   ROW read with a hand already in a drawer. This section is about reaching a drawer at all.
+
+### What the next session must not repeat
+
+**`make check` DOES NOT RUN THE BROWSER SUITE.** `make design-check` is deliberately outside it
+(DEBT16). The agent that built section 8's screen ran `make check`, got exit 0, and reported the
+screen verified. Thirteen tests in `app/tests/orders.spec.ts` were red on CI, all of them
+asserting the walk section 9 had deleted. Run `make design-check` before claiming a screen
+works, and check the verdict's own `counts.total` — a `PW_ARGS` `--grep` containing spaces
+silently becomes a file filter and runs other tests green.
+
+**The suite is the only thing that reads these screens, and it asserts the OLD walk in places.**
+Removing the mode strip will break tests that click it. Rewrite them against the rule they were
+protecting, re-aim them if the subject moved, and delete only with the claim named — section 9a
+records what a quiet deletion cost this document already.
+
+**Render it against a store with real volume.** Finding 5 passed a render because the demo store
+holds seven orders. The defect only appears at the owner's 275. A screen that looks right on the
+fixture is not verified.
+
+**Never `git stash` in any worktree of this clone.** The stack is per-clone, not per-worktree, so
+another session's pop takes it. Commit to set work aside. `git show <rev>:<path>` or a `.bak`
+copy to read a baseline.
+
+### What landed, 2026-09-19
+
+**BUILT.** `#/orders` is one screen. The buyer list holds a tick per walkable buyer, and
+`Tick all` and `Untick all` act on the rows in view. Start is absent over an empty selection
+and while a pass runs. The walk fills the column beside the list. The mode strip, `PullMode`,
+`HubState.mode` and `WalkSelect` are deleted.
+
+**Two things this section left to the build, settled here.**
+
+- **What the ticks look like during a pass: they stay.** Section 8 already ruled it — "leaving
+  the walk ends the pass ... The buyer list keeps the ticks." They are simply not read again
+  once the pass is frozen, so ending a pass finds the selection as the operator left it.
+- **How a pass ENDS, ruled by the owner on 2026-09-19.** Deleting the mode strip deleted the
+  thing that used to end one (tapping `By buyer`). The replacement is an explicit `End walk` in
+  the walk's own header. Nothing else ends a pass: not a filter, not a sort, not a tick, not
+  clicking a buyer. Leaving `#/orders` still does, through the unmount cleanup that already
+  existed. The owner also ruled the left list stays live during a pass. Clicking a buyer
+  selects it, and the main column keeps the walk.
+
+**The tick is pruned, not intersected.** A tick does not survive a filter that hides its row
+(answer 1), and the stored set is what loses the member. A render-time `ticked` against
+`visible` would hand the tick back the moment the filter was cleared. Answer 1 forbids that in
+as many words. `app/tests/orders.spec.ts` asserts both directions, and that case was proved red
+against the intersection build before it was kept.
+
+**Findings 1 to 4 of section 9a are still open**, deferred behind this on the owner's ruling.
+
+### The positional facts, built 2026-09-19
+
+**BUILT.** The half of §9a finding 4 that was fixed in form and not in substance, plus the
+freeze ruling above it.
+
+- **`WalkPlanCopy` carries the box's own numbers** — `box_total`, `box_closed` and `fraction`,
+  the same three `Place` carries. `_walk_plan_copy` already held them in the block `_Places.of`
+  composed. They were simply not on the wire, so `neighborShim` passed `box_total: 0` and
+  `PositionBar` drew its honest "a box the server could not size" state on every row. That
+  state is a blank track and one sentence. The shim is now `placeOf` and the 0 is gone.
+- **`neighbors` is real.** `POST /orders/walk-plan` dropped `_Places.for_keys` for the ordinary
+  `_Places`, which is already scoped by being lazy per box. That constructor's restriction was
+  argued for `do_orders`, whose picks span most of the store. This route fires once per pass
+  over the few drawers the solver picked.
+  **Measured 2026-09-19**, synthetic store at the owner's own scale (2,560 cards, 8 drawers,
+  275 walkable orders), timing the `_Places` build plus the whole stop rendering:
+  **4.5 ms → 18.5 ms** for 40 open orders, **24.1 ms → 32.2 ms** for all 275. The delta is the
+  per-box walk of the drawers the plan reaches, not of the copies in it. It is paid once per
+  press.
+- **`POST /orders/pull` takes `refresh` and answers `refreshed`, in both directions.**
+  `refresh` is a list of `{box, index}` the caller is still DRAWING and is not pulling. It
+  carries no `capture_id`, because nothing is aimed at. `refreshed` is one post-write `Place`
+  per position the press actually touched the box of. A position in any other drawer is
+  skipped rather than answered. The route's phase one is untouched: `places` is still the
+  pre-write receipt, and phase three builds its own `_Places` so it cannot read the pre-write
+  walk.
+- **`WalkPass` holds a `facts` map** keyed by position, folds `refreshed` into it, and passes it
+  down to `CopyRow`. Nothing else reads it. The plan is still fetched once per pass.
+  `app/tests/orders.spec.ts` asserts the call count beside a string of every stop, row and
+  copy id before and after a press.
+- **A gone row blanks its own ladder**, and `.walkplan-copy-neighbors` reserves the ladder's
+  tallest state. Blanking it, or a `skipped` line appearing, therefore moves nothing (D118).
+  The reservation is derived from `PlaceNeighbors.css`'s own two line heights rather than
+  typed.
+
+**Unchanged, and asserted so:** the drawers, the cards, the stop order, the row order and the
+copy order. The rule that packed sections rank higher is untouched. `pipeline/walkplan.py` is
+not edited by this work.

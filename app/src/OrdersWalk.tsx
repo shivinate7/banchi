@@ -16,17 +16,29 @@
  * server.ts:walkPlan()`, section 7's own branch, merged in. Nothing here invents a field the
  * wire does not carry.
  *
- * WHAT THE WIRE DOES NOT CARRY, STATED RATHER THAN PAPERED OVER:
- *   - `WalkPlanStop` has no `box_total`, so the "where in the drawer" bar cannot be the
- *     proportional ruler `PositionBar` draws elsewhere (that needs the box's total count to
- *     size the track) — it is not a "reach for the kit" miss, `PositionBar` was tried first
- *     and needs a number this wire does not send. Drawn instead as the honest span numbers
- *     alone (`#242–284`), never a fabricated proportion. Flagged in this branch's report as
- *     worth a look if a true ruler is wanted here.
- *   - `WalkPlanCopy.neighbors` is always null as shipped (`types.ts`'s own comment: the
- *     server's `_Places.for_keys` scoping degrades it) — so the neighbour sentence this file
- *     builds via `placeParts` never actually renders yet. Left in rather than cut, because it
- *     costs nothing idle and draws the moment the route stops degrading it.
+ * THE POSITIONAL FACTS ARE REAL, AND THEY REFRESH ON A PULL (§8's ruling of 2026-09-19).
+ * `WalkPlanCopy` now carries the box's own `box_total`/`box_closed`/`fraction` and a real
+ * `neighbors`, so `PositionBar` draws a ruler rather than its "a box the server could not
+ * size" blank track and `PlaceNeighbors` draws the ladder. And because the solver packs a
+ * pass into the fewest drawers, two cards at one stop are LIKELY to be physical neighbours:
+ * pull the first and D58 renumbers the drawer behind it, so the second row's `#17` becomes
+ * `#16` and its neighbour line names a card that has gone. `POST /orders/pull` answers
+ * `refreshed` for the positions this screen names in `refresh`, POST-write, and `facts`
+ * below is where they land.
+ *
+ * NOTHING RE-SOLVES AND NOTHING RE-RANKS. The plan is still fetched ONCE per pass and there
+ * is still no `Re-plan` control. Which drawers, which cards, the stop order, the row order,
+ * the copy order and the rule that packed sections rank higher are all frozen — what moves
+ * is the DESCRIPTION of a card that is still the same card, at the same stop, in the same
+ * place in the list. `facts` is a Map keyed by position and is never read for an ordering.
+ *
+ * WHAT THE WIRE STILL DOES NOT CARRY, STATED RATHER THAN PAPERED OVER:
+ *   - `WalkPlanStop` has no `box_total`, so the stop's own "where in the drawer" chip cannot
+ *     be the proportional ruler `PositionBar` draws elsewhere (that needs the box's total
+ *     count to size the track) — it is not a "reach for the kit" miss, `PositionBar` was tried
+ *     first and needs a number this wire does not send. Drawn instead as the honest span
+ *     numbers alone (`#242–284`), never a fabricated proportion. The COPY now has the total;
+ *     the STOP still does not, and the two are different questions.
  *   - `WalkPlanTake.for` names which orders share a take but not how the demand at THIS stop
  *     splits between them when there is more than one. `pickOrderFor` below picks the first
  *     one still owing, tracked against what this pass has itself recorded — a rendering-side
@@ -37,19 +49,20 @@
  * renders both arrays exactly as sent and contains no `.sort()` over either.
  */
 
-import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 
 import { Button, EmptyState, Icon, Pill } from './kit'
-import { PositionLabel } from './PositionLabel'
-import { describeFailure, photoUrl, placeParts, walkPlan } from './server'
+import { PlaceNeighbors } from './PlaceNeighbors'
+import { PositionBar } from './PositionBar'
+import { describeFailure, photoUrl, walkPlan } from './server'
 import type { Failure } from './server'
 import type {
   OrderRow,
   Place,
+  PullRefresh,
   PullTarget,
   WalkPlan,
   WalkPlanCopy,
-  WalkPlanRef,
   WalkPlanShort,
   WalkPlanStop,
   WalkPlanTake,
@@ -62,50 +75,86 @@ import './OrdersWalk.css'
  *  worth. */
 const UNDO_WINDOW_MS = 20_000
 
-export type WalkPullOutcome = { readonly ok: true; readonly place: string } | { readonly ok: false; readonly failure: Failure }
+export type WalkPullOutcome =
+  | { readonly ok: true; readonly place: string; readonly refreshed: readonly Place[] }
+  | { readonly ok: false; readonly failure: Failure }
+
+export type WalkUndoOutcome =
+  | { readonly ok: true; readonly refreshed: readonly Place[] }
+  | { readonly ok: false }
 
 /** The walk's own pull — real data, not a `ResolvedLine`/`PickRow` built to satisfy a type
  *  the walk's shape does not fill honestly. `Orders.tsx`'s `onPull` stays the buyer-list
- *  path; this is `OrdersHub`'s sibling call for the same underlying write. */
+ *  path; this is `OrdersHub`'s sibling call for the same underlying write.
+ *
+ *  `refresh` NAMES CARDS THIS PRESS IS NOT TOUCHING (§8's ruling of 2026-09-19) — the walk's
+ *  other rows in the same drawer, whose numbers and neighbours the write is about to move
+ *  (D58). It travels to `POST /orders/pull` and comes back as `refreshed`. */
 export type WalkPullFn = (args: {
   readonly order: OrderRow
   readonly sku: string
   readonly name: string
   readonly target: PullTarget
   readonly place: string | null
+  readonly refresh: readonly PullRefresh[]
 }) => Promise<WalkPullOutcome>
 
-export type WalkUndoFn = (target: PullTarget, place: string, name: string) => Promise<boolean>
+export type WalkUndoFn = (
+  target: PullTarget,
+  place: string,
+  name: string,
+  refresh: readonly PullRefresh[],
+) => Promise<WalkUndoOutcome>
 
-/* ---- the copy's key, and the neighbour-sentence reuse -------------------------------------- */
+/* ---- the copy's key, and the position/neighbour shim ---------------------------------------- */
 
 function copyKeyOf(copy: WalkPlanCopy): string {
   return copy.capture_id ?? `${copy.box}/${copy.index}`
 }
 
-/** `server.ts:placeParts` reused for its neighbour sentence, and for nothing else on this
- *  object. `Place` carries fields this wire does not send at the copy level (`box_total`,
- *  `fraction`, …) — `placeParts` reads only `.located` and `.neighbors`, so the rest are
- *  filled with values that satisfy the type and are NEVER DRAWN. This is a shim for one
- *  function's own logic, not a second `Place`, and it must never reach `PositionBar`. */
-function neighborShim(copy: WalkPlanCopy, stop: WalkPlanStop): Place {
-  return {
-    label: copy.label,
-    located: true,
-    box: copy.box,
-    index: copy.index,
-    slot: copy.slot,
-    section: stop.section,
-    card: copy.card,
-    box_name: stop.box_name,
-    section_name: stop.section_name ?? undefined,
-    section_start: stop.span?.start ?? 0,
-    section_end: stop.span?.end ?? null,
-    box_total: 0, // unread by placeParts; never drawn from this object
-    box_closed: true, // unread by placeParts; never drawn from this object
-    fraction: null,
-    neighbors: copy.neighbors ?? null,
-  }
+/** A position's key in `facts` — the STORE address (D58's `index`, not the slot a person
+ *  counts to), because that is the one half of a card's identity a renumber cannot move. */
+function factKeyOf(box: number, index: number): string {
+  return `${box}/${index}`
+}
+
+/** `CopyRow`'s own `Place`, fed to BOTH `PositionBar` and `PlaceNeighbors` — the kit's own
+ *  components, reused rather than a fourth hand-rolled rendering of a position.
+ *
+ *  THREE SOURCES, IN ONE ORDER, AND THE ORDER IS THE POINT.
+ *
+ *    `fresh`   the server's own post-write block for this position, when a pull in this
+ *              drawer has since re-described it. It is a whole `Place` composed by the one
+ *              renderer, so it is USED WHOLE rather than merged field by field — a merge
+ *              would be this file deciding which half of a position to believe.
+ *    the copy  the plan's own block, as fetched. Its `box_total`/`fraction`/`box_closed`
+ *              are the box's real numbers since 2026-09-19, so `PositionBar` draws a ruler.
+ *    the stop  the section the whole stop shares, for the two fields a copy does not carry.
+ *
+ *  `gone` BLANKS THE NEIGHBOURS AND NOTHING ELSE (§8). A copy the press found already pulled
+ *  is not re-described by the server — nobody asked it to be — so the ladder it still holds
+ *  names cards around a card that is no longer there. Blank is the honest answer, and the
+ *  reserved height in `OrdersWalk.css` is why blanking moves nothing (D118). */
+function placeOf(copy: WalkPlanCopy, stop: WalkPlanStop, fresh: Place | undefined, gone: boolean): Place {
+  const base: Place =
+    fresh ?? {
+      label: copy.label,
+      located: true,
+      box: copy.box,
+      index: copy.index,
+      slot: copy.slot,
+      section: stop.section,
+      card: copy.card,
+      box_name: stop.box_name,
+      section_name: stop.section_name ?? undefined,
+      section_start: stop.span?.start ?? 0,
+      section_end: stop.span?.end ?? null,
+      box_total: copy.box_total,
+      box_closed: copy.box_closed,
+      fraction: copy.fraction,
+      neighbors: copy.neighbors ?? null,
+    }
+  return gone ? { ...base, neighbors: null } : base
 }
 
 /* ---- who a press should be recorded against ------------------------------------------------ */
@@ -156,78 +205,12 @@ function rowKeyOf(stop: WalkPlanStop, take: WalkPlanTake): string {
   return `${stop.key}/${take.sku}`
 }
 
-/* ============================================================================ the selection */
-
-/** The tick list before Start — every walkable order, defaulted ticked, so the first press of
- *  `Walk N orders` covers exactly what `Walk the boxes` already flattened (§8). `unticked` is
- *  a blacklist rather than a whitelist so an order that arrives mid-selection is ticked by
- *  default too, matching "the default tick is every currently open order". */
-function WalkSelect({
-  walkable,
-  unticked,
-  onToggle,
-  onStart,
-}: {
-  readonly walkable: readonly OrderRow[]
-  readonly unticked: ReadonlySet<string>
-  readonly onToggle: (key: string) => void
-  readonly onStart: (keys: ReadonlySet<string>) => void
-}) {
-  const ticked = walkable.filter((order) => !unticked.has(order.key))
-  const cards = ticked.reduce((sum, order) => sum + Math.max(0, order.wanted - order.recorded), 0)
-
-  if (walkable.length === 0) {
-    return (
-      <div className="bn-panel">
-        <EmptyState icon="check" title="Nothing to walk" body="Every order has its copies." />
-      </div>
-    )
-  }
-
-  return (
-    <div className="bn-panel walkplan-select" aria-label="Choose which orders to walk">
-      <header className="walkplan-select-head">
-        <span className="bn-section-title">
-          <Icon name="box" size={16} /> Walk the boxes
-        </span>
-        <p className="walkplan-select-note">Tick which orders this pass covers. Every open order starts ticked.</p>
-      </header>
-      <ol className="walkplan-select-list">
-        {walkable.map((order) => {
-          const owed = Math.max(0, order.wanted - order.recorded)
-          return (
-            <li key={order.key} className="walkplan-select-row">
-              <label>
-                <input type="checkbox" checked={!unticked.has(order.key)} onChange={() => onToggle(order.key)} />
-                <span className="walkplan-select-name">{order.buyer ?? `No name · #${order.number}`}</span>
-                <span className="bn-mono walkplan-select-number">{order.number}</span>
-                <span className="walkplan-select-owed">
-                  {owed} {owed === 1 ? 'card' : 'cards'}
-                </span>
-              </label>
-            </li>
-          )
-        })}
-      </ol>
-      <div className="walkplan-select-foot">
-        <Button variant="primary" size="lg" icon="box" disabled={ticked.length === 0} onClick={() => onStart(new Set(ticked.map((o) => o.key)))}>
-          Walk {ticked.length} order{ticked.length === 1 ? '' : 's'}
-        </Button>
-        {ticked.length === 0 ? null : (
-          <span className="walkplan-select-preview">
-            {cards} {cards === 1 ? 'card' : 'cards'} to pull
-          </span>
-        )}
-      </div>
-    </div>
-  )
-}
-
 /* ============================================================================== a copy row */
 
 function CopyRow({
   copy,
   stop,
+  fresh,
   taken,
   gone,
   locked,
@@ -237,6 +220,9 @@ function CopyRow({
 }: {
   readonly copy: WalkPlanCopy
   readonly stop: WalkPlanStop
+  /** The server's own post-write block for this position, once a pull in this drawer has
+   *  re-described it. Undefined until then — the plan's own block is what draws. */
+  readonly fresh: Place | undefined
   readonly taken: TakenCopy | null
   readonly gone: boolean
   readonly locked: boolean
@@ -245,9 +231,12 @@ function CopyRow({
   readonly onPull: () => void
 }) {
   const [broken, setBroken] = useState(false)
-  const parts = placeParts(neighborShim(copy, stop))
   const where = copy.label ?? `Box ${stop.box ?? '?'}`
   const key = copyKeyOf(copy)
+  /* THE STOP ALREADY NAMES THE DRAWER (§9a finding 1). Neither the box nor the section is drawn
+   * again here as a labelled field — `PositionBar`'s own caption is the card's slot figure
+   * alone, never `BOX <name>` / `SECTION <n>`. */
+  const place = placeOf(copy, stop, fresh, gone)
   return (
     <li className="walkplan-copy" data-state={gone ? 'gone' : taken !== null ? 'taken' : 'open'} data-capture-id={copy.capture_id ?? undefined}>
       {broken || copy.cid === null ? (
@@ -260,13 +249,15 @@ function CopyRow({
         </div>
       )}
       <div className="walkplan-copy-body">
-        <PositionLabel
-          label={copy.label ?? `box ${copy.box}, index ${copy.index}`}
-          lead="slot"
-          boxName={stop.box_name}
-          sectionName={stop.section_name}
-        />
-        {parts === null ? null : <p className="walkplan-copy-neighbors">{parts.said}</p>}
+        <PositionBar place={place} persona="owner" />
+        {/* THE SLOT RESERVES THE LADDER'S TALLEST STATE (D118). Another row's press
+            re-describes this one — a `skipped` line can appear, a side can lose its last
+            named landmark, and a gone row blanks the block entirely — and not one of those
+            may move the Pull button under it. The height is in `OrdersWalk.css`, derived
+            from the ladder's own two line heights rather than guessed. */}
+        <div className="walkplan-copy-neighbors">
+          <PlaceNeighbors place={place} />
+        </div>
       </div>
       {gone ? (
         <span className="walkplan-copy-gone">
@@ -300,6 +291,7 @@ function TakeBlock({
   stop,
   take,
   row,
+  facts,
   ordersByKey,
   recordedForSku,
   showBuyer,
@@ -312,6 +304,8 @@ function TakeBlock({
   readonly stop: WalkPlanStop
   readonly take: WalkPlanTake
   readonly row: RowState
+  /** Post-write position blocks, by `factKeyOf`. Read per copy and never for an order. */
+  readonly facts: ReadonlyMap<string, Place>
   readonly ordersByKey: ReadonlyMap<string, OrderRow>
   readonly recordedForSku: ReadonlyMap<string, number>
   readonly showBuyer: boolean
@@ -327,9 +321,17 @@ function TakeBlock({
   const locked = satisfied && !row.overpull
   const collapsed = satisfied && !withinUndo && !row.reopened
   const takenByKey = useMemo(() => new Map(row.taken.map((t) => [t.key, t])), [row.taken])
-  const buyers = useMemo(() => {
-    const seen = new Map<string, WalkPlanRef>()
-    for (const ref of take.for) seen.set(ref.key, ref)
+  /* §9a finding 2: A NAME, NEVER THE ORDER'S OWN KEY OR NUMBER. `ref.number` is a machine
+   *  string (`A2FFC195-0000F4-006AC`) and never stands in for a name a person did not give —
+   *  an order with no buyer name on it is left out of the sentence rather than naming itself
+   *  by its own key, the same refusal `PositionLabel`'s neighbour block makes for a card
+   *  nobody has named (D116). */
+  const buyerNames = useMemo(() => {
+    const seen = new Map<string, string>()
+    for (const ref of take.for) {
+      const name = ref.buyer?.trim()
+      if (name) seen.set(ref.key, name)
+    }
     return [...seen.values()]
   }, [take.for])
 
@@ -357,7 +359,7 @@ function TakeBlock({
       <div className="walkplan-take-head">
         <span className="walkplan-take-name">{take.name ?? take.sku}</span>
         {take.number_display === null ? null : <span className="walkplan-take-number">{take.number_display}</span>}
-        {!showBuyer ? null : <span className="walkplan-take-for">for {buyers.map((b) => b.buyer ?? b.number).join(', ')}</span>}
+        {!showBuyer || buyerNames.length === 0 ? null : <span className="walkplan-take-for">for {buyerNames.join(', ')}</span>}
         <span className="walkplan-take-counter">
           <b>{takenCount}</b> of {take.wanted} taken
         </span>
@@ -390,6 +392,7 @@ function TakeBlock({
               key={key}
               copy={copy}
               stop={stop}
+              fresh={facts.get(factKeyOf(copy.box, copy.index))}
               taken={takenCopy}
               gone={gone}
               locked={locked || target === null}
@@ -414,6 +417,7 @@ function TakeBlock({
 function StopBlock({
   stop,
   rows,
+  facts,
   ordersByKey,
   recorded,
   busy,
@@ -424,6 +428,7 @@ function StopBlock({
 }: {
   readonly stop: WalkPlanStop
   readonly rows: ReadonlyMap<string, RowState>
+  readonly facts: ReadonlyMap<string, Place>
   readonly ordersByKey: ReadonlyMap<string, OrderRow>
   readonly recorded: ReadonlyMap<string, ReadonlyMap<string, number>>
   readonly busy: string | null
@@ -465,6 +470,7 @@ function StopBlock({
             stop={stop}
             take={take}
             row={rows.get(rowKey) ?? EMPTY_ROW}
+            facts={facts}
             ordersByKey={ordersByKey}
             recordedForSku={recorded.get(take.sku) ?? new Map()}
             showBuyer={distinctBuyers > 1}
@@ -507,18 +513,30 @@ function ShortfallBlock({ rows }: { readonly rows: readonly WalkPlanShort[] }) {
 
 /* ============================================================================== the pass */
 
-function WalkPass({
+/** THE PASS ITSELF, AND THE ONLY THING THIS FILE EXPORTS AS A VIEW.
+ *
+ *  `WalkSelect` and the `OrdersWalk` wrapper around it are GONE (§12). The selection is the
+ *  buyer list on `#/orders` itself, so there is no second list to choose between and no
+ *  wrapper left to choose with: `Orders.tsx` draws this component directly the moment
+ *  `hub.walkKeys` is set, in the column beside that list.
+ *
+ *  `onEnd` is how a pass stops. Deleting the mode strip deleted the thing that used to end one
+ *  (tapping `By buyer`), so the header below carries the replacement — the owner's ruling,
+ *  2026-09-19. Leaving `#/orders` still ends it, through `Orders.tsx`'s own unmount cleanup. */
+export function WalkPass({
   walkKeys,
   ordersByKey,
   busy,
   onPull,
   onUndo,
+  onEnd,
 }: {
   readonly walkKeys: ReadonlySet<string>
   readonly ordersByKey: ReadonlyMap<string, OrderRow>
   readonly busy: string | null
   readonly onPull: WalkPullFn
   readonly onUndo: WalkUndoFn
+  readonly onEnd: () => void
 }) {
   const keysSig = useMemo(() => [...walkKeys].sort().join('\u0000'), [walkKeys])
   const [plan, setPlan] = useState<WalkPlan | null>(null)
@@ -529,6 +547,12 @@ function WalkPass({
   /** How many copies THIS PASS has recorded, per sku then per order key — `pickOrderFor`'s
    *  only input beyond the live ledger figure. Reset with the plan: a new plan is a new pass. */
   const [recorded, setRecorded] = useState<Map<string, Map<string, number>>>(new Map())
+  /** THE POSITIONAL FACTS A PULL HAS SINCE RE-DESCRIBED, by `factKeyOf` (§8's 2026-09-19
+   *  ruling). Empty until the first press. It holds `Place` blocks the server composed AFTER
+   *  its own write and is read ONLY by `CopyRow`, per copy — never by anything that decides
+   *  which stop, which row or which copy comes first. Reset with the plan: a new plan is a
+   *  new pass, and it arrives already current. */
+  const [facts, setFacts] = useState<Map<string, Place>>(new Map())
   const [now, setNow] = useState(() => Date.now())
 
   useEffect(() => {
@@ -544,6 +568,7 @@ function WalkPass({
     setPlan(null)
     setRows(new Map())
     setRecorded(new Map())
+    setFacts(new Map())
     walkPlan([...walkKeys])
       .then((got) => {
         if (live.current) setPlan(got)
@@ -576,11 +601,56 @@ function WalkPass({
 
   const setRow = (rowKey: string, next: RowState) => setRows((prev) => new Map(prev).set(rowKey, next))
 
+  /** THE CARDS THIS PRESS IS ABOUT TO MAKE STALE, AND NOT ONE IT IS TOUCHING.
+   *
+   *  Every copy in the plan that sits in the drawer `box` names, minus the one being pressed
+   *  and minus the rows this pass has already finished with — a taken copy has left and a
+   *  gone one was already claimed elsewhere, so neither is a card the screen is still telling
+   *  somebody to count to. Scoped to the ONE box, because D58 renumbers the drawer that
+   *  changed and no other, and a copy at another stop of the SAME box is in that drawer too.
+   *
+   *  It reads `plan` and `rows` and returns positions. It sorts nothing and decides nothing
+   *  about order — the fence in this file's header. */
+  const staleAfter = (box: number, pressedKey: string): PullRefresh[] => {
+    if (plan === null) return []
+    const out: PullRefresh[] = []
+    const seen = new Set<string>()
+    for (const stop of plan.stops) {
+      for (const take of stop.takes) {
+        const row = rows.get(rowKeyOf(stop, take)) ?? EMPTY_ROW
+        const takenKeys = new Set(row.taken.map((t) => t.key))
+        for (const copy of take.copies) {
+          if (copy.box !== box) continue
+          const key = copyKeyOf(copy)
+          if (key === pressedKey || takenKeys.has(key) || row.gone.has(key)) continue
+          const factKey = factKeyOf(copy.box, copy.index)
+          if (seen.has(factKey)) continue
+          seen.add(factKey)
+          out.push({ box: copy.box, index: copy.index })
+        }
+      }
+    }
+    return out
+  }
+
+  /** The server's post-write blocks, folded in by position. A block for a position this pass
+   *  is not drawing is simply never asked for, so nothing here filters. */
+  const absorb = (blocks: readonly Place[]) => {
+    if (blocks.length === 0) return
+    setFacts((prev) => {
+      const next = new Map(prev)
+      for (const block of blocks) next.set(factKeyOf(block.box, block.index), block)
+      return next
+    })
+  }
+
   const pullOne = (rowKey: string, sku: string, target: PullTarget, name: string, place: string | null, order: OrderRow, copyKey: string) => {
     void (async () => {
-      const result = await onPull({ order, sku, name, target, place })
+      const refresh = staleAfter(target.box, copyKey)
+      const result = await onPull({ order, sku, name, target, place, refresh })
       if (!live.current) return
       if (result.ok) {
+        absorb(result.refreshed)
         setRecorded((prev) => {
           const next = new Map(prev)
           const bySku = new Map(next.get(sku) ?? [])
@@ -614,8 +684,14 @@ function WalkPass({
 
   const handleUndo = (rowKey: string, sku: string, copy: TakenCopy) => {
     void (async () => {
-      const ok = await onUndo(copy.target, copy.place, rowKey)
-      if (!live.current || !ok) return
+      /* THE SAME LIST, THE OTHER WAY ROUND (§8). The copy returns to the drawer, so every
+         card behind it takes its old number back (D58) and the rows still ahead need saying
+         again. `copy.key` is excluded for the same reason it was on the way in: it is the
+         card being written, not one being re-described. */
+      const refresh = staleAfter(copy.target.box, copy.key)
+      const result = await onUndo(copy.target, copy.place, rowKey, refresh)
+      if (!live.current || !result.ok) return
+      absorb(result.refreshed)
       setRows((prev) => {
         const current = prev.get(rowKey)
         if (current === undefined) return prev
@@ -681,6 +757,13 @@ function WalkPass({
             </Pill>
           </span>
         )}
+        {/* THE ONE WAY OUT OF A PASS THAT IS NOT LEAVING THE SCREEN (§12, the owner's ruling
+            2026-09-19). Nothing else ends a pass: not a filter, not a sort, not a tick, not
+            clicking a buyer in the list beside this. It sits in the head rather than at the
+            foot so it is reachable on a phone without scrolling the whole walk. */}
+        <Button className="walkplan-end" icon="x" onClick={onEnd}>
+          End walk
+        </Button>
       </header>
 
       {plan.stops.length === 0 ? (
@@ -693,6 +776,7 @@ function WalkPass({
             key={stop.key}
             stop={stop}
             rows={rows}
+            facts={facts}
             ordersByKey={ordersByKey}
             recorded={recorded}
             busy={busy}
@@ -707,33 +791,4 @@ function WalkPass({
       <ShortfallBlock rows={plan.shortfall} />
     </div>
   )
-}
-
-/* ============================================================================== the export */
-
-export function OrdersWalk({
-  walkable,
-  ordersByKey,
-  walkKeys,
-  unticked,
-  onToggleTick,
-  onStart,
-  busy,
-  onPull,
-  onUndo,
-}: {
-  readonly walkable: readonly OrderRow[]
-  readonly ordersByKey: ReadonlyMap<string, OrderRow>
-  readonly walkKeys: ReadonlySet<string> | null
-  readonly unticked: ReadonlySet<string>
-  readonly onToggleTick: (key: string) => void
-  readonly onStart: (keys: ReadonlySet<string>) => void
-  readonly busy: string | null
-  readonly onPull: WalkPullFn
-  readonly onUndo: WalkUndoFn
-}): ReactNode {
-  if (walkKeys === null) {
-    return <WalkSelect walkable={walkable} unticked={unticked} onToggle={onToggleTick} onStart={onStart} />
-  }
-  return <WalkPass walkKeys={walkKeys} ordersByKey={ordersByKey} busy={busy} onPull={onPull} onUndo={onUndo} />
 }

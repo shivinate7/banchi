@@ -26,12 +26,28 @@ import type { Page } from '@playwright/test'
  * A LOOPING ANIMATION IS EXCLUDED BY CONSTRUCTION. `docs/DESIGN.md`: only loops carrying
  * meaning keep turning, and a spinner's `iterations` is `Infinity` — it never reaches
  * `finished`, so waiting on it would hang rather than settle. Finite animations only.
+ *
+ * SO IS A SCROLL-DRIVEN ONE, AND THAT EXCLUSION WAS MISSING UNTIL 2026-09-19. A progress
+ * animation attached to `scroll()` rather than to the document's clock has `iterations: 1` and
+ * is therefore FINITE, but it advances with a scroller's position and not with time: it reads
+ * `running` for as long as the element exists and reaches `finished` only if the scroller is
+ * pushed to its end. `.orders-chips` and `.review-filters` each carry one below 768px
+ * (`animation-timeline: scroll(self inline)`, the phone chip strip's edge fade), so this helper
+ * hung for its full 30s timeout on every phone-width render of `#/orders` and `#/review` —
+ * measured, not inferred: `bn-edgefade` on `DIV.orders-chips`, `playState: running`,
+ * `iterations: 1`, forever.
+ *
+ * THE TEST IS THE TIMELINE AND NOT THE NAME. `animation.timeline !== document.timeline` is true
+ * of exactly the animations whose progress is not a clock, so a scroll or view timeline added
+ * to any other screen is covered the day it lands rather than the day somebody remembers to add
+ * its class here.
  */
 export async function settleMotion(page: Page): Promise<void> {
   await page.waitForFunction(() =>
     document
       .getAnimations()
       .filter((one) => (one.effect?.getTiming().iterations ?? 1) !== Infinity)
+      .filter((one) => one.timeline === document.timeline)
       .every((one) => one.playState === 'finished'),
   )
 }

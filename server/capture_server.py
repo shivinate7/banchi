@@ -945,9 +945,22 @@ ORDER_WALK_PLAN_FIELDS = ("keys", "cost")
 # convention exactly: a body carrying `undo` AND an order key is a client that has confused
 # the directions, and obeying it with the order ignored would reverse a pull the caller
 # believed it was recording.
-ORDER_PULL_FIELDS = ("source", "number", "sku", "targets", "undo")
-ORDER_PULL_UNDO_FIELDS = ("undo", "targets")
+#
+# `refresh` RIDES BOTH DIRECTIONS AND IS NOT A TARGET. It names positions the caller is
+# STILL DRAWING and is not touching — the walk's own rows further down the same drawer
+# (`docs/specs/order-walk-plan.md` §8, "What the freeze covers, and what it does not").
+# A pull renumbers the box behind it (D58), so those rows' neighbours, slot and box total
+# all go stale on the press; this is how they are said correctly instead of said stale.
+# It is optional in both directions, because an undo has to put the same facts back.
+ORDER_PULL_FIELDS = ("source", "number", "sku", "targets", "undo", "refresh")
+ORDER_PULL_UNDO_FIELDS = ("undo", "targets", "refresh")
 ORDER_PULL_TARGET_FIELDS = ("box", "index", "capture_id")
+ORDER_PULL_REFRESH_FIELDS = ("box", "index")
+
+# How many positions one press may ask to have re-described. A stop is one drawer and the
+# solver exists to keep a plan's drawers few, so a realistic ask is a handful; this is sized
+# to a whole drawer's worth of walk rows and refuses the script that meant to re-read a box.
+ORDER_PULL_REFRESH_LIMIT = 250
 
 # What `POST /orders/fill` and `POST /orders/line-kind` carry. The fill takes two tuples for
 # `ORDER_PULL_FIELDS`' reason — a body carrying `undo` AND a reason is a client that has
@@ -10120,6 +10133,14 @@ def _walk_plan_copy(places: _Places, copy: "walkplan.Copy") -> dict:
     /orders/picks` — `slot`, `card`, `label` and `neighbors` all come from that one call
     rather than a second composition of `pipeline/join.py:Position` here. `capture_id` and
     `cid` travel on `walkplan.Copy` itself (the solver's own snapshot), never re-derived.
+
+    THE BOX'S OWN THREE NUMBERS RIDE ALONG SINCE 2026-09-19, and they are what make the
+    walk's position bar a ruler rather than a blank track. `box_total`, `box_closed` and
+    `fraction` are already in the block `places.of` just built; leaving them off cost the
+    client its denominator, so `app/src/OrdersWalk.tsx:neighborShim` passed `box_total: 0`
+    and `PositionBar` drew its honest "a box the server could not size" state — a blank
+    track and one sentence — on EVERY row, for ever (§9a finding 4). Nothing extra is read
+    to send them: this is the same dict, three keys wider.
     """
     place = places.of(copy.box, copy.index)
     return {
@@ -10131,6 +10152,9 @@ def _walk_plan_copy(places: _Places, copy: "walkplan.Copy") -> dict:
         "card": place["card"],
         "label": place["label"],
         "neighbors": place["neighbors"],
+        "box_total": place["box_total"],
+        "box_closed": place["box_closed"],
+        "fraction": place["fraction"],
     }
 
 
@@ -10278,11 +10302,26 @@ def do_order_walk_plan(payload: dict) -> dict:
     formula in this repo, and every `box_name`, `section_name`, `label`, `neighbors` and
     `card` below is composed through it, never re-derived.
 
-    `_Places.for_keys` IS THE SAME SCOPING `do_order_picks` USES for its own picks, and for
-    the same reason: a plan's copies can span most of the store's boxes, and the ordinary
-    constructor's whole-store walk is the cost `for_keys` exists to avoid. `neighbors` and
-    `section_gaps` therefore answer null on every copy here, exactly as they do on a pick row
-    — an existing, typed, degraded state, not a new one.
+    IT USES THE ORDINARY `_Places`, WHICH IS ALREADY SCOPED BY BEING LAZY, and that is a
+    reversal of what shipped on 2026-09-18. `_Places.for_keys` was borrowed from
+    `do_orders` — "the route the Orders and Shipping screens poll" — whose picks span most
+    of the store's boxes, and its whole trade is to drop D30's neighbour decoration because
+    that needs every card's NAME. THE PREMISE DOES NOT REACH THIS ROUTE. This one fires ONCE
+    per pass (§8: the plan is computed once and there is no `Re-plan` control), and it covers
+    only the boxes the plan touches, which the solver exists to keep few — and `view()` walks
+    a box only when a position in it is asked for, so the ordinary constructor over a plan IS
+    the scoped one.
+
+    MEASURED RATHER THAN ASSERTED, 2026-09-19, over a synthetic store at the owner's own
+    scale (2,560 cards, 8 drawers, 275 walkable orders), timing the `_Places` construction
+    plus the whole stop rendering:
+
+        40 open orders, 31 stops, 8 drawers, 40 copies      4.5 ms -> 18.5 ms
+        all 275 walkable, 64 stops, 8 drawers, 275 copies  24.1 ms -> 32.2 ms
+
+    The delta is the per-box `records_in` walk — a fixed cost of the drawers the plan
+    reaches, not of the copies in it, and paid once per press. D116 is what it buys: a card
+    nobody has named is not a landmark, and the distance is what keeps the skip honest.
 
     AN UNKNOWN `cost` IS REFUSED BY NAME, WITH THE LEGAL VALUES IN THE MESSAGE, and it is
     `pipeline/walkplan.py:UnknownCostFunction` that decides what "unknown" means — surfaced
@@ -10327,13 +10366,10 @@ def do_order_walk_plan(payload: dict) -> dict:
     except walkplan.UnknownCostFunction as exc:
         raise BadRequest(HTTPStatus.BAD_REQUEST, "cost_unknown", str(exc)) from exc
 
-    boxsec_keys = {
-        (copy.box, copy.index)
-        for stop in result.stops
-        for take in stop.takes
-        for copy in take.copies
-    }
-    places = _Places.for_keys(snapshot.inventory, boxsec_keys)
+    # THE LAZY WALK IS THE SCOPING — see the docstring's measurement. `view()` walks a box
+    # the first time a position in it is asked for and never again, so this instance touches
+    # exactly the drawers the plan reaches, with D30's decoration intact.
+    places = _Places(snapshot.inventory)
 
     return {
         "cost": result.cost,
@@ -10925,6 +10961,64 @@ def _pull_target(at: int, raw) -> dict:
     return {"box": box, "index": index, "capture_id": capture_id.strip()}
 
 
+def _pull_refresh(payload: dict) -> List[Tuple[int, int]]:
+    """`POST /orders/pull`'s `refresh` list: positions the caller is still DRAWING.
+
+    NOT TARGETS, AND THE DIFFERENCE IS THE WHOLE POINT. A target is a card coming out of the
+    box. These are cards STAYING in it — the walk's other rows in the same drawer — whose
+    description the write is about to make wrong, because a pull renumbers everything behind
+    it (D58). No `capture_id` rides here: nothing is aimed at, nothing is written, and an
+    aim check on a card nobody is touching would refuse a re-description over a re-shoot.
+
+    ABSENT IS THE ORDINARY CASE. Every caller but the walk sends no `refresh` at all and
+    gets an empty `refreshed` back, which is the same answer as "nothing needed re-saying".
+    """
+    raw = payload.get("refresh")
+    if raw is None:
+        return []
+    if not isinstance(raw, list):
+        raise BadRequest(
+            HTTPStatus.BAD_REQUEST,
+            "refresh_invalid",
+            "`refresh` is a list of {box, index} positions you are still drawing and are "
+            "NOT pulling — leave it out to ask for nothing.",
+        )
+    if len(raw) > ORDER_PULL_REFRESH_LIMIT:
+        raise BadRequest(
+            HTTPStatus.BAD_REQUEST,
+            "too_many_refresh",
+            f"{len(raw)} positions to re-describe in one press, and this route takes at "
+            f"most {ORDER_PULL_REFRESH_LIMIT}. A press re-describes the rows still on the "
+            f"screen, never a whole box.",
+        )
+    out: List[Tuple[int, int]] = []
+    for at, entry in enumerate(raw, start=1):
+        if not isinstance(entry, dict):
+            raise BadRequest(
+                HTTPStatus.BAD_REQUEST,
+                "refresh_invalid",
+                f"Refresh {at} is not an object. Send {{\"box\": …, \"index\": …}}.",
+            )
+        _reject_unknown(entry, ORDER_PULL_REFRESH_FIELDS)
+        box = entry.get("box")
+        index = entry.get("index")
+        if isinstance(box, bool) or not isinstance(box, int) or box < 1:
+            raise BadRequest(
+                HTTPStatus.BAD_REQUEST,
+                "refresh_invalid",
+                f"Refresh {at} names box {box!r}; send a whole number, and boxes start at 1.",
+            )
+        if isinstance(index, bool) or not isinstance(index, int) or index < 1:
+            raise BadRequest(
+                HTTPStatus.BAD_REQUEST,
+                "refresh_invalid",
+                f"Refresh {at} names index {index!r}; send a whole number. This is the "
+                f"STORED index, never the slot a person counts to (D58).",
+            )
+        out.append((int(box), int(index)))
+    return out
+
+
 def _prepare_targets(
     snapshot,
     places: "_Places",
@@ -11105,6 +11199,23 @@ def do_order_pull(payload: dict) -> dict:
       anywhere discards every earlier state change and every history line queued behind it.
       Correctness therefore does not depend on the order; the reading order matches the
       refusal order.
+
+      PHASE THREE COMPUTES `refreshed`, AND IT IS THE EXACT OPPOSITE OF `places` ABOVE.
+      `places` is the RECEIPT and is pre-write on purpose. `refreshed` is the answer to the
+      caller's own `refresh` list — cards it is STILL DRAWING and did not touch — and it is
+      POST-write on purpose, because the write is what made their description wrong. The two
+      must never be folded into one another: one says where the operator just was, the other
+      says what the drawer looks like now. `docs/specs/order-walk-plan.md` §8's ruling of
+      2026-09-19 is why the second exists.
+
+      A FRESH `_Places`, BECAUSE THE ONE ABOVE IS A PRE-WRITE SNAPSHOT. That instance
+      cached the box's walk and its per-position blocks before anything sold, which is
+      exactly what the receipt needs and exactly what this must not read.
+
+      SCOPED TO THE BOXES THIS PRESS ACTUALLY TOUCHED. A position in any other box is
+      SKIPPED rather than answered: nothing moved there, so re-describing it would be a
+      re-read dressed as a consequence, and the walk's own ruling says a pull refreshes the
+      box that changed and no other.
     """
     # Read before `_reject_unknown`, because which fields are settable depends on which
     # direction this is. A stringified flag refuses rather than being coerced.
@@ -11129,6 +11240,7 @@ def do_order_pull(payload: dict) -> dict:
             f"a script that meant to send the whole box.",
         )
     parsed = [_pull_target(at, entry) for at, entry in enumerate(raw, start=1)]
+    wanted_again = _pull_refresh(payload)
 
     key = ""
     sku = ""
@@ -11187,6 +11299,20 @@ def do_order_pull(payload: dict) -> dict:
             _sell(snapshot, entry["box"], entry["index"], undo) for entry in prepared
         ]
 
+        # ------------------------------------------------------------- phase three
+        # THE POST-WRITE DESCRIPTION, FOR CARDS NOBODY TOUCHED. A fresh renderer, because
+        # `places` above is holding a pre-write walk of this very box and reusing it would
+        # answer with the numbers the write has just moved. The docstring's phase three has
+        # the argument; this is one box's `records_in` at most, and only when a caller asked.
+        refreshed: List[dict] = []
+        if wanted_again:
+            touched = {int(entry["box"]) for entry in prepared}
+            after = _Places(snapshot.inventory)
+            for box, index in wanted_again:
+                if box not in touched:
+                    continue
+                refreshed.append(after.of(box, index))
+
         body = {
             "undone": bool(undo),
             "order_key": key,
@@ -11197,6 +11323,9 @@ def do_order_pull(payload: dict) -> dict:
             # The PRE-WRITE places, one per target in request order — where the operator
             # just was, not where the box has closed up to.
             "places": [entry["place"] for entry in prepared],
+            # AND THE POST-WRITE ones, for the cards the caller is still drawing and never
+            # touched. Empty unless `refresh` asked. Never the receipt — see phase three.
+            "refreshed": refreshed,
             "sales": sales,
         }
 

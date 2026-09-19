@@ -72,6 +72,7 @@ import type {
   OrderPicksPayload,
   WalkPlan,
   PullResult,
+  PullRefresh,
   PullTarget,
   ShippingBatch,
   ShippingForgotten,
@@ -3411,6 +3412,7 @@ export async function reconcileBacklog(cutoff?: string): Promise<ReconcileBacklo
 export async function pullCopy(
   line: { source: string; number: string; sku: string },
   targets: readonly PullTarget[],
+  refresh: readonly PullRefresh[] = [],
 ): Promise<PullResult> {
   return pull({
     /* camelCase in the argument, snake_case on the wire, HERE AND ONLY HERE — this module's
@@ -3420,6 +3422,10 @@ export async function pullCopy(
     number: line.number,
     sku: line.sku,
     targets: targets.map(({ box, index, capture_id }) => ({ box, index, capture_id })),
+    /* THE CARDS THE CALLER IS STILL DRAWING AND IS NOT PULLING. Omitted entirely when empty,
+     * so every caller but the walk sends the body it always sent. `refreshed` on the answer
+     * is what comes back, POST-write — never `places`, which is the pre-write receipt. */
+    ...(refresh.length === 0 ? {} : { refresh: refresh.map(({ box, index }) => ({ box, index })) }),
   })
 }
 
@@ -3436,10 +3442,17 @@ export async function pullCopy(
  * `pull_spans_lines` means the targets belong to two different lines, and the remedy is to
  * undo them separately.
  */
-export async function undoPull(targets: readonly PullTarget[]): Promise<PullResult> {
+export async function undoPull(
+  targets: readonly PullTarget[],
+  refresh: readonly PullRefresh[] = [],
+): Promise<PullResult> {
   return pull({
     undo: true,
     targets: targets.map(({ box, index, capture_id }) => ({ box, index, capture_id })),
+    /* AN UNDO PUTS THE DESCRIPTION BACK TOO. The copy returns to the drawer, so every card
+     * behind it takes its old number again (D58) — the same list, the same answer, the
+     * other way round. */
+    ...(refresh.length === 0 ? {} : { refresh: refresh.map(({ box, index }) => ({ box, index })) }),
   })
 }
 
