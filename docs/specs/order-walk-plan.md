@@ -1,9 +1,13 @@
 # The order walk is a plan, not a list
 
-**Status: the solver is BUILT. The route and the screen are NOT BUILT.** `pipeline/walkplan.py`
+**Status: the solver and the route are BUILT. The screen is NOT BUILT.** `pipeline/walkplan.py`
 implements sections 5 and 6, and `harness/tests/t11_walk_plan.py` is its contract. Section 7's
-route and section 8's screen are separate work and no code exists for either. The owner ruled
-on this document on 2026-09-17, before any of it was written.
+`POST /orders/walk-plan` is built now (`server/capture_server.py:do_order_walk_plan`,
+`app/src/server.ts:walkPlan`, `app/src/types.ts:WalkPlan`). It composes every label through
+`_Places.of` — `pipeline/join.py:Position` — rather than a second formula. Section 8's screen
+is separate work. No code exists for it yet. The route is reachable from no screen, which by
+CLAUDE.md's own rule means the capability is not landed. The owner ruled on this document on
+2026-09-17, before any of it was written.
 
 **Three architectural calls were put to the owner on 2026-09-17 and ruled on.** They are
 settled in this document and are not open questions: the solver runs **on the server**;

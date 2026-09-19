@@ -281,6 +281,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 from codes import products  # noqa: E402
 from pipeline import games, join, setnames, tcgcsv  # noqa: E402
 from pipeline import orders as order_engine  # noqa: E402
+from pipeline import walkplan  # noqa: E402
 from cli import runs as cli_runs  # noqa: E402
 from store import Store, db, files, master, photos, queues  # noqa: E402
 from store import orders as order_store  # noqa: E402
@@ -933,6 +934,12 @@ ORDER_PICKS_FIELDS = ("keys",)
 # `ownsAWalkableBody` in one batch — and measured at 275 on the owner's store; 2000 is
 # headroom over that the same way `ORDER_NAMES_LIMIT` is headroom over its own walk.
 ORDER_PICKS_LIMIT = 2000
+
+# What `POST /orders/walk-plan` accepts (`docs/specs/order-walk-plan.md` §7): the same
+# `keys` `POST /orders/picks` takes, plus `cost` — the named objective `pipeline/walkplan.py`
+# resolves against `COST_FUNCTIONS`. `cost` is optional; its absence is the module's own
+# default, never a second spelling of it here.
+ORDER_WALK_PLAN_FIELDS = ("keys", "cost")
 
 # What `POST /orders/pull` carries in each direction. TWO TUPLES, `ANSWER_FIELDS`'
 # convention exactly: a body carrying `undo` AND an order key is a client that has confused
@@ -10110,6 +10117,247 @@ def do_order_picks(payload: dict) -> dict:
     return {"orders": answered}
 
 
+def _walk_plan_copy(places: _Places, copy: "walkplan.Copy") -> dict:
+    """One copy of a `Take`, as a pick-shaped row (`docs/specs/order-walk-plan.md` §7).
+
+    `places.of` IS THE ONLY LABEL FORMULA, exactly as `_pick_row` calls it for `POST
+    /orders/picks` — `slot`, `card`, `label` and `neighbors` all come from that one call
+    rather than a second composition of `pipeline/join.py:Position` here. `capture_id` and
+    `cid` travel on `walkplan.Copy` itself (the solver's own snapshot), never re-derived.
+    """
+    place = places.of(copy.box, copy.index)
+    return {
+        "box": copy.box,
+        "index": copy.index,
+        "slot": place["slot"],
+        "capture_id": copy.capture_id,
+        "cid": copy.cid,
+        "card": place["card"],
+        "label": place["label"],
+        "neighbors": place["neighbors"],
+    }
+
+
+def _walk_plan_sort_key(copy: "walkplan.Copy", places: _Places) -> Tuple[int, int]:
+    """Densest-first inside a stop, `app/src/Orders.tsx:walkOrderOf`'s own rule: the slot a
+    hand counts to (D58), falling back to the store index for a copy with no slot."""
+    slot = places.of(copy.box, copy.index)["slot"]
+    return (0, int(slot)) if slot is not None else (1, int(copy.index))
+
+
+def _walk_plan_order_ref(ledger: order_store.Ledger, key: str) -> Optional[dict]:
+    """`{key, number, buyer}` for one order this walk is filling, or None for a key the
+    ledger no longer holds — the same skip `demand`'s own docstring argues, one register up."""
+    record = ledger.orders.get(key)
+    if record is None:
+        return None
+    return {"key": record.key, "number": record.number, "buyer": record.buyer}
+
+
+def _walk_plan_refs(ledger: order_store.Ledger, keys: Sequence[str]) -> List[dict]:
+    return [ref for ref in (_walk_plan_order_ref(ledger, key) for key in keys) if ref is not None]
+
+
+def _walk_plan_sku_display(
+    inventory: master.Inventory, copies: Sequence["walkplan.Copy"]
+) -> Tuple[Optional[str], Optional[str]]:
+    """`(name, number_display)` off the first ranked copy's own record — D172's identification,
+    never re-guessed from the feed's own words, which is what a `Take` (a real on-hand card)
+    always has evidence for."""
+    if not copies:
+        return None, None
+    card = inventory.cards.get(master.position_key(copies[0].box, copies[0].index))
+    if card is None:
+        return None, None
+    return card.name, _number_display(card)
+
+
+def _walk_plan_short_name(ledger: order_store.Ledger, sku: str, orders: Sequence[str]) -> Optional[str]:
+    """A shortfall SKU has no guaranteed on-hand copy to identify it by, so this falls back to
+    the feed's own words (`OrderLine.name`) off the first order that still owes it — the same
+    description a screen already shows for a line no card has been matched to."""
+    for key in orders:
+        record = ledger.orders.get(key)
+        if record is None:
+            continue
+        line = record.line_for(sku)
+        if line is not None and line.name:
+            return line.name
+    return None
+
+
+def _walk_plan_stop_key(stop: "walkplan.Stop") -> str:
+    """The wire's own key for one stop — `box/<n>/section/<n>` or `game/<key>` for a pooled
+    stop (D24) — never a section number where there is no section."""
+    if stop.pooled:
+        return f"game/{stop.game}"
+    return f"box/{stop.box}/section/{stop.section}"
+
+
+def _walk_plan_take(
+    inventory: master.Inventory,
+    ledger: order_store.Ledger,
+    places: _Places,
+    take: "walkplan.Take",
+) -> dict:
+    copies = sorted(take.copies, key=lambda copy: _walk_plan_sort_key(copy, places))
+    name, number_display = _walk_plan_sku_display(inventory, copies)
+    return {
+        "sku": take.sku,
+        "name": name,
+        "number_display": number_display,
+        "wanted": take.wanted,
+        "for": _walk_plan_refs(ledger, take.orders),
+        "copies": [_walk_plan_copy(places, copy) for copy in copies],
+    }
+
+
+def _walk_plan_stop(
+    inventory: master.Inventory,
+    ledger: order_store.Ledger,
+    places: _Places,
+    stop: "walkplan.Stop",
+) -> dict:
+    takes = [_walk_plan_take(inventory, ledger, places, take) for take in stop.takes]
+    span: Optional[dict] = None
+    if not stop.pooled:
+        # ONE `.of()` CALL FOR THE SPAN, off the first take's first copy — every copy at one
+        # stop shares one box and one section by construction (`StopKey`), so its
+        # `section_start`/`section_end` answer the stop's own bounds and a second walk of the
+        # box to re-derive them would be `_Places`' own second-renderer failure one call up.
+        for take in stop.takes:
+            if take.copies:
+                sample = places.of(take.copies[0].box, take.copies[0].index)
+                span = {"start": sample["section_start"], "end": sample["section_end"]}
+                box_name = sample["box_name"]
+                section_name = sample["section_name"]
+                break
+        else:
+            box_name = None
+            section_name = None
+    else:
+        box_name = None
+        section_name = None
+    return {
+        "key": _walk_plan_stop_key(stop),
+        "box": stop.box,
+        "box_name": box_name,
+        "section": stop.section,
+        "section_name": section_name,
+        "pooled": stop.pooled,
+        "game": stop.game,
+        "game_display": stop.game_display,
+        "order": stop.order,
+        "span": span,
+        "takes": takes,
+    }
+
+
+def _walk_plan_short(ledger: order_store.Ledger, short: "walkplan.Short") -> dict:
+    return {
+        "sku": short.sku,
+        "name": _walk_plan_short_name(ledger, short.sku, short.orders),
+        "wanted": short.wanted,
+        "on_hand": short.on_hand,
+        "short": short.short,
+        "for": _walk_plan_refs(ledger, short.orders),
+    }
+
+
+def do_order_walk_plan(payload: dict) -> dict:
+    """`POST /orders/walk-plan` — the ticked-order walk as the fewest drawers to open
+    (`docs/specs/order-walk-plan.md` §7).
+
+    IT FOLLOWS `POST /orders/picks` IN EVERY RESPECT: one `Store().read()` snapshot, no
+    lock, no write. `keys` is required and non-empty (an empty list is refused rather than
+    answered with an empty plan, `keys_required`'s own reason at that route) and capped at
+    `ORDER_PICKS_LIMIT` — the same ceiling, because the walk is the same widest caller
+    `ORDER_PICKS_LIMIT`'s own comment already measures. A key the ledger does not hold is
+    SKIPPED rather than refused: `pipeline/walkplan.py:demand` is where that lookup first
+    happens, and it already implements exactly this skip, so it is not re-checked here.
+
+    THE COMPOSITION IS THIS ROUTE'S JOB AND THE SOLVER'S NON-JOB. `pipeline/walkplan.py`
+    returns boxes, sections and positions and renders no labels on purpose (its own module
+    docstring). `_Places.of` — `pipeline/join.py:Position` one door up — is the one label
+    formula in this repo, and every `box_name`, `section_name`, `label`, `neighbors` and
+    `card` below is composed through it, never re-derived.
+
+    `_Places.for_keys` IS THE SAME SCOPING `do_order_picks` USES for its own picks, and for
+    the same reason: a plan's copies can span most of the store's boxes, and the ordinary
+    constructor's whole-store walk is the cost `for_keys` exists to avoid. `neighbors` and
+    `section_gaps` therefore answer null on every copy here, exactly as they do on a pick row
+    — an existing, typed, degraded state, not a new one.
+
+    AN UNKNOWN `cost` IS REFUSED BY NAME, WITH THE LEGAL VALUES IN THE MESSAGE, and it is
+    `pipeline/walkplan.py:UnknownCostFunction` that decides what "unknown" means — surfaced
+    here rather than pre-checked a second time against `walkplan.COST_FUNCTIONS`, which
+    would be two answers to one question the moment a name is added to the table.
+    """
+    _reject_unknown(payload, ORDER_WALK_PLAN_FIELDS)
+    raw = payload.get("keys")
+    if not isinstance(raw, list) or not raw or not all(isinstance(k, str) for k in raw):
+        raise BadRequest(
+            HTTPStatus.BAD_REQUEST,
+            "keys_required",
+            "Send `keys` — a non-empty list of order keys (`source:number`, `GET "
+            "/orders`'s own `key`). An empty list asks for nothing, which is refused rather "
+            "than answered with an empty plan, because those are different answers to "
+            "\"did that work\".",
+        )
+    if len(raw) > ORDER_PICKS_LIMIT:
+        raise BadRequest(
+            HTTPStatus.BAD_REQUEST,
+            "too_many_keys",
+            f"{len(raw)} order keys in one press, and this route takes at most "
+            f"{ORDER_PICKS_LIMIT}. Send them in smaller batches.",
+        )
+
+    cost = payload.get("cost")
+    if cost is None:
+        cost = walkplan.COST_SECTIONS
+    elif not isinstance(cost, str):
+        raise BadRequest(
+            HTTPStatus.BAD_REQUEST,
+            "cost_invalid",
+            f"`cost` is {cost!r}; send one of the wire's cost names as a string, or leave "
+            f"it out for {walkplan.COST_SECTIONS!r}.",
+        )
+
+    keys = [key.strip() for key in raw if key.strip()]
+
+    snapshot = Store().read()
+    try:
+        result = walkplan.plan(snapshot.inventory, snapshot.ledger, keys, cost=cost)
+    except walkplan.UnknownCostFunction as exc:
+        raise BadRequest(HTTPStatus.BAD_REQUEST, "cost_unknown", str(exc)) from exc
+
+    boxsec_keys = {
+        (copy.box, copy.index)
+        for stop in result.stops
+        for take in stop.takes
+        for copy in take.copies
+    }
+    places = _Places.for_keys(snapshot.inventory, boxsec_keys)
+
+    return {
+        "cost": result.cost,
+        "stops": [
+            _walk_plan_stop(snapshot.inventory, snapshot.ledger, places, stop)
+            for stop in result.stops
+        ],
+        "shortfall": [_walk_plan_short(snapshot.ledger, short) for short in result.shortfall],
+        "counts": {
+            "stops": result.counts.stops,
+            "boxes": result.counts.boxes,
+            "copies": result.counts.copies,
+            "sections_considered": result.counts.sections_considered,
+            "sections_candidate": result.counts.sections_candidate,
+            "exact": result.counts.exact,
+            "solve_ms": result.counts.solve_ms,
+        },
+    }
+
+
 def _ingest_line(order_at: int, line_at: int, raw) -> order_store.OrderLine:
     """One line of a pasted order. `_reject_unknown` FIRST, before a value is read."""
     where = f"line {line_at} of order {order_at}"
@@ -12655,6 +12903,11 @@ class CaptureHandler(BaseHTTPRequestHandler):
             # open, or the whole walk in one batch).
             if path == "/orders/picks":
                 return self._json(HTTPStatus.OK, do_order_picks(self._body()))
+            # The ticked-order walk as the fewest drawers to open
+            # (`docs/specs/order-walk-plan.md` §7). Body-addressed for the same reason
+            # `/orders/picks` is: an order key may legally carry a colon.
+            if path == "/orders/walk-plan":
+                return self._json(HTTPStatus.OK, do_order_walk_plan(self._body()))
             if path == "/orders/ingest":
                 return self._json(HTTPStatus.OK, do_order_ingest(self._body()))
             # D193's backfill: attach a display name to an order

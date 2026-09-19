@@ -70,6 +70,7 @@ import type {
   OrdersPreview,
   OrdersPayload,
   OrderPicksPayload,
+  WalkPlan,
   PullResult,
   PullTarget,
   ShippingBatch,
@@ -3022,6 +3023,25 @@ export async function fetchOrderPicks(keys: readonly string[]): Promise<OrderPic
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ keys }),
   })) as OrderPicksPayload
+}
+
+/**
+ * The ticked-order walk as the fewest drawers to open (`docs/specs/order-walk-plan.md` §7).
+ * `pipeline/walkplan.py:plan` over one snapshot, server-side (§5's own ruling) — this call
+ * carries no arithmetic, only the SKUs a screen wants covered.
+ *
+ * `keys` MAY NOT BE EMPTY — the route refuses `keys_required` on one, exactly as
+ * `fetchOrderPicks` does. `cost` names the objective (`plan.cost` on the wire); omit it for
+ * the server's own default. An unknown name is refused by the server, by name.
+ *
+ * WRITE-SHAPED BUT WRITES NOTHING, no lock, one snapshot — `fetchOrderPicks`'s own reason.
+ */
+export async function walkPlan(keys: readonly string[], cost?: string): Promise<WalkPlan> {
+  return (await request('/orders/walk-plan', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(cost === undefined ? { keys } : { keys, cost }),
+  })) as WalkPlan
 }
 
 /**
