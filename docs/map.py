@@ -2616,8 +2616,11 @@ COMPONENTS = [
                         "session refining the rule edits one dictionary rather than two "
                         "files. `--dir <path>` points it at a throwaway fixture tree for "
                         "the auditor's own self-test rather than trusting app/src to hold "
-                        "a case. Never writes.",
-                "governed_by": ["D134", "D196"],
+                        "a case. Never writes. WIDENED, OFF BY DEFAULT, FOR ONE "
+                        "CALLER: `--include-code-attr` and `--join-literals` "
+                        "(D-no-typed-interpunct-on-screen) — see the header for what each "
+                        "adds and why neither reaches `no mechanism on screen`'s own call.",
+                "governed_by": ["D134", "D196", "D-no-typed-interpunct-on-screen"],
             },
             "build-mark.mjs": {"does": "generates the app's mark — app/src/kit/markGeometry.ts, markPalettes.ts and app/public/favicon.svg — by READING docs/specs/logo/sheets/small-cut.html and evaluating the drawing routine out of it, so there is exactly one implementation of the geometry in this repo. Asserts on what it extracted (the tile is 221 points, the display bracket is an outlined polygon, the small bracket is a stroked path) before writing 25KB of path data into app/. D18: a generator may write and nothing that writes may gate a commit — this is run by hand, never on the commit path.",
                                 "governed_by": ["D18", "D94", "D102"]},
@@ -2635,6 +2638,21 @@ COMPONENTS = [
                                         "and cannot drift apart. Written exactly, no slack — "
                                         "slack is how a ratchet leaks.",
                                 "governed_by": ["D18", "D194"]},
+            "typed-interpunct-pin.mjs": {
+                "does": "`node scripts/typed-interpunct-pin.mjs --pin` re-measures the "
+                        "typed-dot count `scripts/docs-audit.py`'s `typed interpunct` row "
+                        "asserts and rewrites `scripts/typed-interpunct.json`. Mirrors "
+                        "copy-budget.mjs's own discipline: shells out to "
+                        "`scripts/user-strings.mjs --join-literals --include-code-attr`, "
+                        "the same extraction the row itself reads, so the pin path and the "
+                        "assert path cannot drift apart. Written exactly, no slack.",
+                "governed_by": ["D18", "D194", "D196", "D-no-typed-interpunct-on-screen"]},
+            "typed-interpunct.json": {
+                "does": "the ratchet's pinned ceiling, one field, `count`. Written only by "
+                        "`typed-interpunct-pin.mjs --pin`; `scripts/docs-audit.py`'s `typed "
+                        "interpunct` row only reads it, since that row sits on the commit "
+                        "path (D18).",
+                "governed_by": ["D18", "D194", "D-no-typed-interpunct-on-screen"]},
             "docs-audit.py": {
                 "does": "D16's layers 1 and 2: every mechanical check, plus the coupling "
                         "question under `--staged`. `--json` is the machine surface "
@@ -2702,15 +2720,15 @@ COMPONENTS = [
                 # link this repo's own history ever produced.
                 "governed_by": ["D1", "D2", "D3", "D6", "D7", "D8", "D9", "D10", "D11", "D12",
                                 "D16", "D17", "D18", "D22", "D23", "D24", "D26", "D27", "D31",
-                                "D33", "D39", "D43", "D44", "D47", "D49", "D50", "D51", "D53",
+                                "D33", "D39", "D41", "D43", "D44", "D47", "D49", "D50", "D51", "D53",
                                 "D60", "D63", "D64", "D65", "D67", "D69", "D70", "D72", "D74",
                                 "D75", "D76", "D80", "D81", "D83", "D84", "D86", "D87", "D88",
                                 "D90", "D92", "D94", "D96", "D101", "D102", "D104", "D110", "D111",
                                 "D113", "D119", "D122", "D127", "D132", "D134", "D135", "D136",
                                 "D138", "D140", "D141", "D142", "D143", "D144", "D149", "D155",
                                 "D159", "D160", "D161", "D173", "D174", "D178", "D181", "D182",
-                                "D185", "D191", "D192", "D196", "D210", "D213",
-                                "D215"],
+                                "D185", "D191", "D192", "D194", "D196", "D210", "D213",
+                                "D215", "D-no-typed-interpunct-on-screen"],
             },
             "claim-ids.py": {
                 "does": "allocate the numbers this branch's SLUG ids will take, and "
