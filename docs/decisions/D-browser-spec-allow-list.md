@@ -93,3 +93,43 @@ separately, same ruling, for the worker count. D18: `browser-scope.py` writes no
 decision-bearing. `specs` only prints and writes `GITHUB_OUTPUT`/`GITHUB_STEP_SUMMARY`, which
 the workflow reads back the same run. D173: the mechanism is `scripts/browser-scope.py
 selftest`, wired into `make check`, plus `make docs-audit`'s `spec map` row.
+
+### Proof on the runner (2026-09-19)
+
+Three dispatched series on `claude/inventory-copies-blank`, six shards of `--workers=2`
+each, `check.yml`'s own concurrency group forcing them strictly sequential.
+
+**Before the product fix**, 20 dispatches: 3 red of 20, every red the same case —
+`inventory.spec.ts`'s "a new search takes a new order" (shard 3).
+
+**After the first, inert fix attempt** (`ef9086a4`, later reverted — see D118): 3 red of 6.
+The same case. The fix had not reached the cause.
+
+**After D118's product fix**, 20 dispatches, sequential:
+
+| run id | conclusion | matrix wall clock |
+|---|---|---|
+| 35462958909 | success | 222s |
+| 35463225944 | success | 210s |
+| 35463441186 | success | 224s |
+| 35463671534 | success | 191s |
+| 35463881817 | success | 212s |
+| 35464102894 | success | 216s |
+| 35464321304 | success | 203s |
+| 35464516836 | success | 194s |
+| 35464725490 | success | 205s |
+| 35464935376 | success | 198s |
+| 35465136391 | success | 199s |
+| 35465340101 | success | 206s |
+| 35465570423 | success | 213s |
+| 35465779479 | success | 207s |
+| 35465970498 | success | 217s |
+| 35466189684 | success | 201s |
+| 35466399037 | success | 213s |
+| 35466615489 | success | 233s |
+| 35466846772 | success | 210s |
+| 35467058626 | success | 203s |
+
+0 red of 20. Median matrix wall clock 208.5s, max 233s. Median shard duration 182s (120
+samples). Median `check` job 177.5s. The inventory case did not appear as a failure in any
+of the 20 runs. "At most 1 red in 20" holds, at 0.
