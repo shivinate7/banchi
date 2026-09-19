@@ -446,6 +446,44 @@ countable at a glance.
   `stops` as the route sends them. `buildCopyMap` stays — it answers the per-line question on
   `By buyer`, which is unchanged.
 
+## 9a. What landed, and four things the first build got wrong
+
+The route and the screen landed on 2026-09-18. The mechanics of section 8 are built and were
+driven by hand in a real browser over a seeded store: the head reads the size in the operator's
+units, the instruction leads with the box name, Pull DISABLES rather than vanishes, the counter
+moves, Undo and `Take another` appear, nothing below the row moves, and there is no horizontal
+scroll at 375px.
+
+**Four layout defects shipped with it, found by the orchestrating session at the first render
+and NOT by the agent that built it, which reported the screenshots as reviewed.** They are
+recorded here rather than fixed in that round, on the owner's ruling: land it, then look at it,
+then make one deliberate pass. The first is the serious one.
+
+1. **THE TAXONOMY IS ON SCREEN, ON EVERY ROW.** Each card draws `BOX <name> · Box <n>` and
+   `SECTION <n> · <name>` as labelled fields. Section 3 is the mandate every other section is
+   judged against, and section 8 forbids this by name: the section is drawn as WHERE IN THE
+   DRAWER and never as the phrase `Section 6` standing alone. The stop header already names the
+   drawer, so the row repeats it and adds the divider on top. At 375px it costs four lines per
+   card. This is the defect this whole document exists to remove, reintroduced one register
+   down.
+2. **Every row carries a raw order key** rather than the buyer's name, and carries it always.
+   Section 8 says who it is for is the buyer's NAME, said only when the stop serves MORE THAN
+   ONE buyer. It is neither conditional nor a name.
+3. **The photograph is a thumbnail rather than `#/inventory`'s size.** Finding 2 of section 1
+   was that this screen has no card photographs at all, and the remedy was a large photograph
+   leading each row. At phone width it loses its space to defect 1.
+4. **No position bar and no neighbours on the row.** Section 8 lists both. The row draws
+   `Card 8` and stops. The stop's own span chip is present and correct.
+
+**Two questions the build raised and nobody has answered.** They are design, not defects.
+
+- **Which order a press records against**, when one card at a stop serves more than one buyer.
+  The wire names every order a take serves and does not say how the demand splits between them,
+  so the client picks. Today it takes the first order in `for` still owing by the live ledger
+  figure. That is a rendering-side heuristic standing in for a fact the route could carry.
+- **Whether the stop span should be a proportional bar.** `WalkPlanStop` carries no box total,
+  so the screen draws the honest span numbers rather than fabricating a proportion.
+
 ## 10. What this gives up
 
 - **The plan can be worse for a hand that is already at a drawer.** A constant per-section cost
