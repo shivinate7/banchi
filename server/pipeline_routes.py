@@ -125,6 +125,12 @@ from typing import Dict, FrozenSet, Iterable, List, NamedTuple, Optional, Sequen
 REPO_ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(REPO_ROOT))
 
+# STDLIB-ONLY LIKE EVERY IMPORT HERE — `envfile.py` reaches only `os` and `pathlib`, the
+# same clearance `tcg_export` already carries this module across. Read here rather than
+# left to `pipeline/pricehistory.py`, which may not import it (see that module's own
+# `AGENT_ENV`): the caller that knows about `.env` supplies the value, the way this file
+# already supplies `Market` a cache directory it cannot discover for itself.
+import envfile  # noqa: E402
 from cli import cmd_reprice  # noqa: E402
 from cli import cmd_rescue  # noqa: E402
 from cli import resolve as run_resolve  # noqa: E402
@@ -5185,6 +5191,27 @@ def market_cache_dir() -> Path:
     return files.home() / ".cache" / "market"
 
 
+def _history_user_agent() -> str:
+    """The User-Agent `pipeline/pricehistory.py` presents to tcgcsv and infinite-api.
+
+    REUSES `server/tcg_export.py`'s OWN KEY (`AGENT_ENV`), NOT A SECOND ONE
+    (D-tcg-price-history-user-agent-block). It already means "the User-Agent to present to
+    TCGplayer", it is already documented in `.env.example`, and tcgcsv answers either value
+    — measured 2026-09-19, the same day infinite-api stopped answering the honest default.
+    One knob, because there is no argument for wanting two different browsers' worth of
+    disguise out of one operator's own `.env`.
+
+    `get_live`, NOT `get` — the same D64 judgement `tcg_export._agent()` already made: this
+    is exactly the kind of value an operator edits into a running process without a restart,
+    and `get` cannot see the replacement once it has cached the name once.
+
+    `pipeline/pricehistory.py` cannot make this call itself — it imports nothing outside
+    itself and the stdlib — so this is the caller doing what `Market`'s own header already
+    asks of a caller for `cache_dir`: resolve it and hand it in.
+    """
+    return (envfile.get_live(tcg_export.AGENT_ENV) or "").strip() or pricehistory.USER_AGENT
+
+
 def _history_row(directory: Path, sku: str) -> dict:
     """This run's `pricing.json` entry for one SKU, or a refusal naming which half is missing.
 
@@ -5320,12 +5347,16 @@ def do_pipeline_history(name: str, sku: str) -> dict:
     five requests cold and two warm, each one a small JSON document off a mirror. The server
     is threaded, so a slow host costs this request and no other.
 
-    A REFUSAL IS A SENTENCE WITH ITS OWN CODE, and there are four kinds. The run has no
+    A REFUSAL IS A SENTENCE WITH ITS OWN CODE, and there are five kinds. The run has no
     table, or no such SKU (`_history_row`). The card is not one a catalogue covers
     (`not_catalogued`). The walk found no single product (`history_unresolved`). A host did
-    not answer (`history_unreachable`). Each names what to do next, because a panel that
-    said only "failed" would send the operator to the wrong file — a `misc` card with no
-    product line and a mirror having a bad day are not the same problem.
+    not answer (`history_unreachable`). A host answered and refused this client BY NAME
+    (`history_blocked`, D-tcg-price-history-user-agent-block) — its own code and never
+    folded into the one above, because "nothing is wrong with the run" is the wrong sentence
+    for a 403 and its remedy is an environment variable rather than "try again". Each names
+    what to do next, because a panel that said only "failed" would send the operator to the
+    wrong file — a `misc` card with no product line and a mirror having a bad day are not the
+    same problem, and neither is this client having been declined.
     """
     directory = _open_run(name)
     wanted = _wanted_sku(sku)
@@ -5351,9 +5382,9 @@ def _history_for_entry(entry: dict, wanted: str, source: dict) -> dict:
     catalogue walk reads five cells out of it (`Product Line`, `Set Name`, `Number`,
     `Product Name`, `TCGplayer Id`), which a My Pricing export carries on every row. So the
     markdown routes are a second ADDRESS over this body and never a second implementation:
-    `not_catalogued`, `history_unresolved` and `history_unreachable` are one vocabulary, and
-    the cache below is keyed by product rather than by document, so a card already read on a
-    run is warm here.
+    `not_catalogued`, `history_unresolved`, `history_unreachable` and `history_blocked` are
+    one vocabulary, and the cache below is keyed by product rather than by document, so a
+    card already read on a run is warm here.
 
     `source` NAMES THE DOCUMENT and is spread into the answer — `{"run": …}` or
     `{"markdown": …}`. A markdown stamp sent back under a field called `run` would be a lie
@@ -5374,9 +5405,20 @@ def _history_for_entry(entry: dict, wanted: str, source: dict) -> dict:
             f"`misc` rather than a missing export.",
         )
 
-    market = pricehistory.Market(cache_dir=market_cache_dir())
+    market = pricehistory.Market(cache_dir=market_cache_dir(), user_agent=_history_user_agent())
     try:
         reading = market.reading_for_row(row)
+    except pricehistory.Blocked as exc:
+        # CAUGHT BEFORE `Unreachable`, NOT AFTER — the two are siblings (see `Blocked`'s own
+        # docstring), so order is what keeps a 403 from falling into `history_unreachable`,
+        # whose whole meaning is that nothing is wrong with the run. Something is: the client
+        # this process presents. `AGENT_ENV`'s remedy is already in `exc`; it is never echoed
+        # a second time here, and never with the value.
+        raise PipelineRefusal(
+            HTTPStatus.BAD_GATEWAY,
+            "history_blocked",
+            str(exc),
+        ) from None
     except pricehistory.Unreachable as exc:
         raise PipelineRefusal(
             HTTPStatus.BAD_GATEWAY,
@@ -5584,7 +5626,7 @@ def _trends_for_entries(
             continue
         rows.append(row)
 
-    market = pricehistory.Market(cache_dir=market_cache_dir())
+    market = pricehistory.Market(cache_dir=market_cache_dir(), user_agent=_history_user_agent())
     # THE WALK ITSELF NEVER RAISES PAST HERE. `readings_for_rows` catches every
     # `PriceHistoryError` per product and answers refusals alongside readings, which is the
     # right shape for a batch: one unresolvable card must not cost the other forty-five their

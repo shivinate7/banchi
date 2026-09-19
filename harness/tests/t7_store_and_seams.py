@@ -24403,6 +24403,158 @@ def check_history_route(checks: Checks) -> None:
                 )
         finally:
             urllib.request.urlopen = real_urlopen
+
+
+def check_history_blocked_route(checks: Checks) -> None:
+    """A 403 refuses as `history_blocked`, and `PKMNSCAN_TCG_USER_AGENT` reaches the wire
+    (D-tcg-price-history-user-agent-block).
+
+    ITS OWN RUN, ITS OWN ENVIRONMENT ISOLATION — `check_export_fetch`'s reason applies again:
+    a stray real `.env` on this machine must never leak into what this block asserts, and
+    this key is exactly the kind of value that would.
+
+    STILL NO SOCKET, TO A THIRD PARTY OR OTHERWISE. `urllib.request.urlopen` is patched to
+    RAISE the 403 itself, in-process, so `pipeline/pricehistory.py`'s real `fetch_json` runs
+    its real exception handling — this is not a stand-in for `Blocked`, it is `Blocked` —
+    while the patched function also RECORDS the header it was handed, which is the one thing
+    a fixture dictionary could not prove: that `server/pipeline_routes.py:_history_user_agent`
+    actually reaches the request `pricehistory.py` sends.
+
+    THE CATALOG HOPS ARE SEEDED AND THE HISTORY HOP IS NOT, on purpose — seeding all five
+    slugs the way `_seed_market_cache` does would answer everything from disk and never call
+    `fetch_json` at all. Leaving `history/<id>-month` and `-annual` cold is what forces the
+    walk through the one impure function this block needs to inspect.
+    """
+    checks.note("")
+    checks.note(
+        "HISTORY ROUTE BLOCKED — a 403 is `history_blocked`, and the override reaches the "
+        "wire (D-tcg-price-history-user-agent-block)"
+    )
+
+    keys = ("PKMNSCAN_TCG_USER_AGENT", envfile.FROM_FILE_ENV)
+    previous = {name: os.environ.get(name) for name in keys}
+    os.environ.pop("PKMNSCAN_TCG_USER_AGENT", None)
+
+    env_before = (envfile.ENV_FILE, set(envfile._from_file), envfile._loaded)
+    envfile.ENV_FILE = Path(tempfile.gettempdir()) / "t7-history-blocked-no-such.env"
+    envfile._from_file.clear()
+    os.environ.pop(envfile.FROM_FILE_ENV, None)
+    envfile._loaded = False
+
+    seen_agents: list = []
+    real_urlopen = urllib.request.urlopen
+
+    def blocked_urlopen(request, *args, **kwargs):  # noqa: ANN001, ANN002, ANN003
+        seen_agents.append(request.get_header("User-agent"))
+        raise urllib.error.HTTPError(request.full_url, 403, "Forbidden", {}, io.BytesIO(b""))
+
+    with isolated_home():
+        run_dir = runs.create("t7-history-blocked")
+        for _ in range(1):
+            capture_server.do_capture(capture_payload(7, game="riftbound"))
+        with Store().write() as snapshot:
+            snapshot.inventory.set_state("7/1", master.IDENTIFIED)
+            snapshot.inventory.cards["7/1"].game = "riftbound"
+        run_dir.write_identifications(
+            {
+                "prompt_fingerprint": "t7-history-blocked",
+                "cards": {
+                    "7/1": {
+                        "photo": run_photo(7, 1),
+                        "box": 7,
+                        "index": 1,
+                        "set_hint": None,
+                        "metadata_finish": "foil",
+                        "status": "ok",
+                        "error": None,
+                        "identification": {
+                            "name": "Vilemaw",
+                            "number": "060/219",
+                            "printed_total": "219",
+                            "confidence": "high",
+                            "finish": "foil",
+                        },
+                    }
+                },
+            }
+        )
+        command(checks, "join", str(run_dir.directory), "--export", str(RIFTBOUND_EXPORT))
+        name = run_dir.directory.name
+
+        # ONLY THE CATALOG HOPS ARE WARM. The history slug is deliberately absent, so
+        # `Market.history` reaches `self._fetch(url)` — the real `fetch_json` — rather than
+        # answering from disk.
+        directory = pipeline_routes.market_cache_dir()
+        at = time.time()
+        for slug, payload in (
+            ("tcgcsv/categories", {"results": [{"categoryId": 89,
+                                                "name": "Riftbound League of Legends Trading "
+                                                        "Card Game"}]}),
+            ("tcgcsv/89/groups", {"results": [{"groupId": 24560, "name": "Unleashed"}]}),
+            ("tcgcsv/89/24560/products", json.loads(TCGCSV_PRODUCTS.read_text("utf-8"))),
+        ):
+            path = directory / f"{slug}.json"
+            path.parent.mkdir(parents=True, exist_ok=True)
+            path.write_text(json.dumps({"fetched_at": at, "payload": payload}), "utf-8")
+
+        urllib.request.urlopen = blocked_urlopen
+        try:
+            try:
+                pipeline_routes.do_pipeline_history(name, "9189317")
+                checks.ok(False, "a 403 refuses rather than answering", "it answered instead")
+            except pipeline_routes.PipelineRefusal as refusal:
+                checks.equal(
+                    refusal.code,
+                    "history_blocked",
+                    "A 403 FROM infinite-api REFUSES AS `history_blocked` — never folded "
+                    "into `history_unreachable`, whose whole meaning (D62) is that nothing "
+                    "is wrong with the run",
+                )
+                checks.ok(
+                    pricehistory.AGENT_ENV in str(refusal),
+                    "...and the refusal NAMES THE REMEDY, the environment variable (D171)",
+                    str(refusal),
+                )
+            checks.ok(
+                bool(seen_agents) and seen_agents[-1] == pricehistory.USER_AGENT,
+                "WITH NOTHING SET, the request that reached the (patched) socket carried "
+                "the module's own honest default",
+                seen_agents,
+            )
+
+            # THE OVERRIDE, SET LIVE — `get_live` is what `_history_user_agent` reads, so a
+            # value that appears in `.env` after the process started still takes effect,
+            # the same guarantee D64 built `_agent()` on.
+            os.environ["PKMNSCAN_TCG_USER_AGENT"] = "pkmnscan-t7-browser-stand-in/1"
+            try:
+                pipeline_routes.do_pipeline_history(name, "9189317")
+                checks.ok(False, "still 403, still refuses", "it answered instead")
+            except pipeline_routes.PipelineRefusal as refusal:
+                checks.equal(
+                    refusal.code,
+                    "history_blocked",
+                    "...still `history_blocked` once the override is set — the stub still "
+                    "answers 403 regardless of who is asking",
+                )
+            checks.equal(
+                seen_agents[-1],
+                "pkmnscan-t7-browser-stand-in/1",
+                "AND WITH THE OVERRIDE SET, THE HEADER CHANGES — `PKMNSCAN_TCG_USER_AGENT` "
+                "reaches the request through `server/pipeline_routes.py:_history_user_agent`, "
+                "not only through `pipeline/pricehistory.py`'s own default",
+            )
+        finally:
+            urllib.request.urlopen = real_urlopen
+            envfile.ENV_FILE, restore_from_file, envfile._loaded = env_before
+            envfile._from_file.clear()
+            envfile._from_file.update(restore_from_file)
+            for env_name, value in previous.items():
+                if value is None:
+                    os.environ.pop(env_name, None)
+                else:
+                    os.environ[env_name] = value
+
+
 def check_order_ledger(checks: Checks) -> None:
     """`store/orders.py` — `inventory/orders.json`, the durable half of the order flow.
 
@@ -27687,6 +27839,107 @@ def check_price_history(checks: Checks) -> None:
         "answered where the caller can act on it rather than inside the walk",
     )
 
+    # ---------------------------------- the escape hatch, and the named block (D-tcg-
+    # ---------------------------------- price-history-user-agent-block)
+    #
+    # A REAL SOCKET, BUT NEVER A THIRD PARTY. Everything above is offline by a fetcher
+    # function, which is the right shape for the WALK — but the property under test here is
+    # the HEADER `fetch_json` actually puts on the wire and the EXCEPTION it raises on a
+    # 403, and no fixture dictionary can stand in for either. So this block starts its own
+    # `http.server` on loopback and stops there — never `tcgcsv.com`, never `infinite-api`.
+    agent_seen = {"value": None}
+    stub = {"mode": "ok"}
+
+    class Agent(http.server.BaseHTTPRequestHandler):
+        def log_message(self, fmt, *args):  # noqa: A003
+            pass
+
+        def do_GET(self):  # noqa: N802
+            agent_seen["value"] = self.headers.get("User-Agent")
+            if stub["mode"] == "blocked":
+                self.send_response(403)
+                self.send_header("Content-Length", "0")
+                self.end_headers()
+                return
+            if stub["mode"] == "boom":
+                self.send_response(500)
+                self.send_header("Content-Length", "0")
+                self.end_headers()
+                return
+            body = b'{"ok": true}'
+            self.send_response(200)
+            self.send_header("Content-Type", "application/json")
+            self.send_header("Content-Length", str(len(body)))
+            self.end_headers()
+            self.wfile.write(body)
+
+    agent_server = http.server.HTTPServer(("127.0.0.1", 0), Agent)
+    threading.Thread(target=agent_server.serve_forever, daemon=True).start()
+    agent_url = f"http://127.0.0.1:{agent_server.server_address[1]}/"
+
+    checks.equal(
+        pricehistory.fetch_json(agent_url),
+        {"ok": True},
+        "fetch_json with no override still answers — the default holds when nothing sets it",
+    )
+    checks.equal(
+        agent_seen["value"],
+        pricehistory.USER_AGENT,
+        "...and the header the server actually SAW is the module's own honest string, not "
+        "a claim about it — a WAF's answer is measured off the header, not off this docstring",
+    )
+
+    pricehistory.fetch_json(agent_url, user_agent="pkmnscan-t7-probe/1")
+    checks.equal(
+        agent_seen["value"],
+        "pkmnscan-t7-probe/1",
+        "AN EXPLICIT user_agent REPLACES THE DEFAULT — the same shape `Market`'s own "
+        "`cache_dir` argument already takes, per that class's header: passed in, never "
+        "discovered, because this module may not read `.env` for itself",
+    )
+
+    stub["mode"] = "blocked"
+    try:
+        pricehistory.fetch_json(agent_url, user_agent="pkmnscan-t7-secret-agent/1")
+        checks.ok(False, "a 403 refuses rather than answering", "it answered")
+    except pricehistory.Blocked as exc:
+        checks.equal(
+            agent_seen["value"],
+            "pkmnscan-t7-secret-agent/1",
+            "the override still reached the wire — the host refused it, not this module",
+        )
+        checks.ok(
+            pricehistory.AGENT_ENV in str(exc),
+            "A 403 RAISES `Blocked` AND NAMES THE REMEDY — the environment variable, so a "
+            "refusal that reaches a caller says what to do next (D171)",
+            str(exc),
+        )
+        checks.ok(
+            "pkmnscan-t7-secret-agent" not in str(exc),
+            "...and NEVER ECHOES THE VALUE presented — the message names the KNOB, never "
+            "what was turned",
+            str(exc),
+        )
+        checks.ok(
+            not isinstance(exc, pricehistory.Unreachable),
+            "...and `Blocked` is a SIBLING of `Unreachable`, never a subclass — "
+            "`history_unreachable`'s whole meaning (D62) is that nothing is wrong with the "
+            "run, and a 403 says the opposite: the client presenting itself is declined",
+        )
+    except pricehistory.Unreachable:
+        checks.ok(False, "a 403 must be `Blocked`, never fold into `Unreachable`", "it did")
+
+    # A DIFFERENT REFUSAL IS STILL `Unreachable`, UNCHANGED — asserted so a change that made
+    # every status `Blocked` would go red here rather than passing by never being tried.
+    stub["mode"] = "boom"
+    try:
+        pricehistory.fetch_json(agent_url)
+        checks.ok(False, "a 500 refuses rather than answering", "it answered")
+    except pricehistory.Unreachable:
+        checks.ok(True, "...and a 500 is still `Unreachable` — only a 403 gets its own name")
+    except pricehistory.Blocked:
+        checks.ok(False, "a 500 must not be reported as `Blocked`", "it was")
+
 
 # ------------------------------------------------------- the shipping lane (D61)
 
@@ -30812,6 +31065,7 @@ def run() -> Result:
     check_key_rotation(checks)
     check_price_history(checks)
     check_history_route(checks)
+    check_history_blocked_route(checks)
     check_shipping_lane(checks)
     check_shipping_routes(checks)
     check_shipping_stamps(checks)
