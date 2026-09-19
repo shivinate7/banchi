@@ -475,6 +475,26 @@ then make one deliberate pass. The first is the serious one.
 4. **No position bar and no neighbours on the row.** Section 8 lists both. The row draws
    `Card 8` and stops. The stop's own span chip is present and correct.
 
+**A settled figure lost its footing, and this paragraph is the record rather than the ruling.**
+D96's "N orders complete in this pass" head figure, and the boot-triggered clear beside it, are
+GONE from the rebuild. That figure was twice amended and hard won: it existed because a lifetime
+total was masquerading as a progress figure on the owner's own store. Nothing here answers its
+argument. It simply has nothing left to attach to — `WalkPass` fetches the plan once and never
+re-reads `GET /orders`, so there is no live comparison between what is open and what this pass
+covers, and completion is now counted per card row rather than per order.
+
+**This document does NOT rule D96 superseded.** A settled decision is an argument, and repealing
+one is the owner's act, not a session's. What is recorded is that the argument is unanswered and
+the mechanism is absent. Two ways out, for the owner: rebuild the figure client-side over the
+orders already in hand and the pass's own recorded map, or rule D96 superseded here and say so in
+an entry. One piece of D96 IS already reversed in the open, by section 8's own words: "leaving the
+walk ends the pass" directly contradicts D96 amended's "a toggle is not the end of a pass," and
+that reversal was the owner's, in the 2026-09-17 interview.
+
+It is named here so it cannot be lost the way a silent revert is lost. `make docs-audit`'s
+`recorded deletions` row and `make revert-guard` both exist because this repository has dropped
+settled work by accident before.
+
 **Two questions the build raised and nobody has answered.** They are design, not defects.
 
 - **Which order a press records against**, when one card at a stop serves more than one buyer.
