@@ -1751,6 +1751,67 @@ test('the press that sells a copy moves nothing outside the panel it lands in', 
     'the copy row changed height on the press').toBe(Math.round(rowBox?.height ?? -2))
 })
 
+/* D118, THE RE-READ HALF. The sweep above measures the SALE'S OWN move (the departed lens, the
+ * button pill) and passes even on a slow re-read, because Playwright's `expect` retries until
+ * `data-gone` lands — it never looks at the FRAME IN BETWEEN. What the owner did not report
+ * until the answer was slowed down: `useSearch` sets `loading` true and KEEPS the old `results`
+ * while the re-read is in flight, and `Inventory.tsx` used to draw an 86px skeleton (WHILE
+ * `CardLocations` was still rendered under it) for exactly that gap — `.card-locations` jumps
+ * from y=79 to y=181 and back the instant the answer lands. Measured at 1440 with `/search`
+ * delayed 800ms. On the owner's own store the real gap is ~93ms, too fast to see without
+ * slowing it down, which is why this needed a delayed stub rather than a real server. */
+test('the press that sells a copy does not shift while the re-read is in flight', async ({ page }) => {
+  const { store, sell, depart } = sellableStore()
+  await open(page, BOXES, store, () => PRICING, movesOnSale(() => {
+    sell('2/1')
+    depart('2/1')
+  }))
+
+  /* SLOW THE SECOND `/search` ONLY. The first call is the mount's own read and must land
+     normally, or nothing is on screen to sample; the second is the re-read `doSell`'s
+     `setReloads` triggers, and delaying it is what makes the in-flight frame observable. This
+     handler is registered AFTER `open()`'s, so it wins (this file's own convention, stated
+     where `/search` is first stubbed). */
+  let calls = 0
+  await page.route(/\/search\?/, async (route) => {
+    calls += 1
+    const asked = new URL(route.request().url()).searchParams.get('q') ?? ''
+    if (calls === 2) await new Promise((resolve) => setTimeout(resolve, 800))
+    await route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify(store.search(asked)),
+    })
+  })
+
+  const row = page.locator('.card-locations-row.is-current')
+  const press = row.getByRole('button', { name: 'Mark sold' })
+  await press.scrollIntoViewIfNeeded()
+
+  const locations = page.locator('.card-locations')
+  const topsBefore = Math.round((await locations.boundingBox())?.y ?? -1)
+
+  await press.click()
+  await expect(page.locator('.inventory-receipt')).toContainText('Undo')
+
+  /* SAMPLE THROUGH THE GAP, not only before and after it. `data-gone` only ever reads `true`
+     once the re-read has landed, so waiting on it alone (as the sweep above does) would let
+     Playwright's retry skip straight past the frame this case is about. */
+  const seenTops = new Set<number>()
+  let sawSkeleton = false
+  const deadline = Date.now() + 5000
+  while (Date.now() < deadline) {
+    const box = await locations.boundingBox()
+    if (box !== null) seenTops.add(Math.round(box.y))
+    if ((await page.locator('.inventory-looking').count()) > 0) sawSkeleton = true
+    if ((await row.locator('.position-bar').getAttribute('data-gone')) === 'true') break
+    await new Promise((resolve) => setTimeout(resolve, 50))
+  }
+
+  expect([...seenTops], 'the copies list moved while the re-read was in flight').toEqual([topsBefore])
+  expect(sawSkeleton, 'a skeleton was drawn over the standing list').toBe(false)
+})
+
 /* A KEY WIDE ENOUGH TO BE SEEN. The fixture above walks box 2 card 1, whose departed key is
    `B2 #1` — five characters, 33px, and the slot column's floor is 34px, so the widening the case
    below is about is absorbed and nothing moves however wrong the CSS is. That is not a property
