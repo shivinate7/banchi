@@ -17,16 +17,21 @@
  * wire does not carry.
  *
  * WHAT THE WIRE DOES NOT CARRY, STATED RATHER THAN PAPERED OVER:
- *   - `WalkPlanStop` has no `box_total`, so the "where in the drawer" bar cannot be the
- *     proportional ruler `PositionBar` draws elsewhere (that needs the box's total count to
- *     size the track) — it is not a "reach for the kit" miss, `PositionBar` was tried first
- *     and needs a number this wire does not send. Drawn instead as the honest span numbers
- *     alone (`#242–284`), never a fabricated proportion. Flagged in this branch's report as
- *     worth a look if a true ruler is wanted here.
+ *   - `WalkPlanStop` has no `box_total`, so the stop's own "where in the drawer" chip cannot
+ *     be the proportional ruler `PositionBar` draws elsewhere (that needs the box's total
+ *     count to size the track) — it is not a "reach for the kit" miss, `PositionBar` was tried
+ *     first and needs a number this wire does not send. Drawn instead as the honest span
+ *     numbers alone (`#242–284`), never a fabricated proportion.
+ *   - `WalkPlanCopy` carries no `box_total` either (§9a finding 4). `CopyRow` still reaches
+ *     for `PositionBar` per copy, at `neighborShim`'s `box_total: 0` — `PositionBar`'s OWN
+ *     documented degraded state for "a box the server could not size" (`position.ts:
+ *     sentenceOf`'s `box_total <= 0` branch, `PositionBar.tsx`'s `position-bar-segment-blank`),
+ *     not a second fabrication. It draws the slot figure and an honest blank track rather than
+ *     nothing, which is strictly more than the bare `Card 8` finding 4 named.
  *   - `WalkPlanCopy.neighbors` is always null as shipped (`types.ts`'s own comment: the
- *     server's `_Places.for_keys` scoping degrades it) — so the neighbour sentence this file
- *     builds via `placeParts` never actually renders yet. Left in rather than cut, because it
- *     costs nothing idle and draws the moment the route stops degrading it.
+ *     server's `_Places.for_keys` scoping degrades it) — so `PlaceNeighbors` draws nothing for
+ *     it today. Reached for anyway (§9a finding 4: the kit's own component, not a fourth
+ *     hand-rolled sentence), and it draws the moment the route stops degrading it.
  *   - `WalkPlanTake.for` names which orders share a take but not how the demand at THIS stop
  *     splits between them when there is more than one. `pickOrderFor` below picks the first
  *     one still owing, tracked against what this pass has itself recorded — a rendering-side
@@ -40,8 +45,9 @@
 import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 
 import { Button, EmptyState, Icon, Pill } from './kit'
-import { PositionLabel } from './PositionLabel'
-import { describeFailure, photoUrl, placeParts, walkPlan } from './server'
+import { PlaceNeighbors } from './PlaceNeighbors'
+import { PositionBar } from './PositionBar'
+import { describeFailure, photoUrl, walkPlan } from './server'
 import type { Failure } from './server'
 import type {
   OrderRow,
@@ -49,7 +55,6 @@ import type {
   PullTarget,
   WalkPlan,
   WalkPlanCopy,
-  WalkPlanRef,
   WalkPlanShort,
   WalkPlanStop,
   WalkPlanTake,
@@ -77,17 +82,22 @@ export type WalkPullFn = (args: {
 
 export type WalkUndoFn = (target: PullTarget, place: string, name: string) => Promise<boolean>
 
-/* ---- the copy's key, and the neighbour-sentence reuse -------------------------------------- */
+/* ---- the copy's key, and the position/neighbour shim ---------------------------------------- */
 
 function copyKeyOf(copy: WalkPlanCopy): string {
   return copy.capture_id ?? `${copy.box}/${copy.index}`
 }
 
-/** `server.ts:placeParts` reused for its neighbour sentence, and for nothing else on this
- *  object. `Place` carries fields this wire does not send at the copy level (`box_total`,
- *  `fraction`, …) — `placeParts` reads only `.located` and `.neighbors`, so the rest are
- *  filled with values that satisfy the type and are NEVER DRAWN. This is a shim for one
- *  function's own logic, not a second `Place`, and it must never reach `PositionBar`. */
+/** `CopyRow`'s own `Place`, fed to BOTH `PositionBar` (§9a finding 4's position bar) and
+ *  `PlaceNeighbors` (the same finding's neighbours) — the kit's own components, reused rather
+ *  than a fourth hand-rolled rendering of a position. `box_total: 0` is deliberate and honest,
+ *  not a placeholder: `WalkPlanCopy` carries no box total (the wire fact `stop.span`'s own
+ *  comment already states one level up), and 0 is `PositionBar`'s OWN documented shape for "a
+ *  box the server could not size" (`position.ts:sentenceOf`'s `box_total <= 0` branch,
+ *  `PositionBar.tsx`'s `position-bar-segment-blank`) — an honest blank track and the slot
+ *  figure alone, never a fabricated proportion. `fraction: null` and `box_closed: true` follow
+ *  the same rule and are consistent with it: `sentenceOf` never reaches `box_closed` once
+ *  `fraction` is null, so it is inert, not misleading. */
 function neighborShim(copy: WalkPlanCopy, stop: WalkPlanStop): Place {
   return {
     label: copy.label,
@@ -101,8 +111,8 @@ function neighborShim(copy: WalkPlanCopy, stop: WalkPlanStop): Place {
     section_name: stop.section_name ?? undefined,
     section_start: stop.span?.start ?? 0,
     section_end: stop.span?.end ?? null,
-    box_total: 0, // unread by placeParts; never drawn from this object
-    box_closed: true, // unread by placeParts; never drawn from this object
+    box_total: 0, // honest "box the server could not size" — see the doc comment above
+    box_closed: true, // inert: sentenceOf never reads it once fraction is null
     fraction: null,
     neighbors: copy.neighbors ?? null,
   }
@@ -245,9 +255,12 @@ function CopyRow({
   readonly onPull: () => void
 }) {
   const [broken, setBroken] = useState(false)
-  const parts = placeParts(neighborShim(copy, stop))
   const where = copy.label ?? `Box ${stop.box ?? '?'}`
   const key = copyKeyOf(copy)
+  /* THE STOP ALREADY NAMES THE DRAWER (§9a finding 1). Neither the box nor the section is drawn
+   * again here as a labelled field — `PositionBar`'s own caption is the card's slot figure
+   * alone, never `BOX <name>` / `SECTION <n>`. */
+  const place = neighborShim(copy, stop)
   return (
     <li className="walkplan-copy" data-state={gone ? 'gone' : taken !== null ? 'taken' : 'open'} data-capture-id={copy.capture_id ?? undefined}>
       {broken || copy.cid === null ? (
@@ -260,13 +273,8 @@ function CopyRow({
         </div>
       )}
       <div className="walkplan-copy-body">
-        <PositionLabel
-          label={copy.label ?? `box ${copy.box}, index ${copy.index}`}
-          lead="slot"
-          boxName={stop.box_name}
-          sectionName={stop.section_name}
-        />
-        {parts === null ? null : <p className="walkplan-copy-neighbors">{parts.said}</p>}
+        <PositionBar place={place} persona="owner" />
+        <PlaceNeighbors place={place} />
       </div>
       {gone ? (
         <span className="walkplan-copy-gone">
@@ -327,9 +335,17 @@ function TakeBlock({
   const locked = satisfied && !row.overpull
   const collapsed = satisfied && !withinUndo && !row.reopened
   const takenByKey = useMemo(() => new Map(row.taken.map((t) => [t.key, t])), [row.taken])
-  const buyers = useMemo(() => {
-    const seen = new Map<string, WalkPlanRef>()
-    for (const ref of take.for) seen.set(ref.key, ref)
+  /* §9a finding 2: A NAME, NEVER THE ORDER'S OWN KEY OR NUMBER. `ref.number` is a machine
+   *  string (`A2FFC195-0000F4-006AC`) and never stands in for a name a person did not give —
+   *  an order with no buyer name on it is left out of the sentence rather than naming itself
+   *  by its own key, the same refusal `PositionLabel`'s neighbour block makes for a card
+   *  nobody has named (D116). */
+  const buyerNames = useMemo(() => {
+    const seen = new Map<string, string>()
+    for (const ref of take.for) {
+      const name = ref.buyer?.trim()
+      if (name) seen.set(ref.key, name)
+    }
     return [...seen.values()]
   }, [take.for])
 
@@ -357,7 +373,7 @@ function TakeBlock({
       <div className="walkplan-take-head">
         <span className="walkplan-take-name">{take.name ?? take.sku}</span>
         {take.number_display === null ? null : <span className="walkplan-take-number">{take.number_display}</span>}
-        {!showBuyer ? null : <span className="walkplan-take-for">for {buyers.map((b) => b.buyer ?? b.number).join(', ')}</span>}
+        {!showBuyer || buyerNames.length === 0 ? null : <span className="walkplan-take-for">for {buyerNames.join(', ')}</span>}
         <span className="walkplan-take-counter">
           <b>{takenCount}</b> of {take.wanted} taken
         </span>

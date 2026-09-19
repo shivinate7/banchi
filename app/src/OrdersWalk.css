@@ -136,16 +136,21 @@
 .walkplan-copy[data-state='taken'] { opacity: 0.6; }
 .walkplan-copy[data-state='gone'] { opacity: 0.5; }
 
+/* §9a finding 3: `#/inventory`'s OWN size for a photograph — `BoxBrowse.css`'s `.browse-shot`/
+ * `.browse-photo-frame` (a content-sized column, 220-300px, at the card's own aspect ratio),
+ * not the 84px thumbnail this screen shipped with. Same numbers, same ratio; this screen has
+ * no grid band to size a percentage against, so the column is expressed as a clamp instead of
+ * `BoxBrowse`'s `minmax(220px, 34%)`. */
 .walkplan-copy-photo {
-  width: 84px;
+  width: min(220px, 100%);
+  max-width: 300px;
   aspect-ratio: 63 / 88;
   flex: none;
 }
 .walkplan-copy-photo img { object-fit: cover; }
 .walkplan-copy-photo-blank { display: flex; align-items: center; justify-content: center; color: var(--bn-ink-4); }
 
-.walkplan-copy-body { display: flex; flex-direction: column; gap: 2px; min-width: 0; flex: 1; }
-.walkplan-copy-neighbors { margin: 0; font-size: var(--bn-fs-xs); color: var(--bn-ink-3); overflow-wrap: anywhere; }
+.walkplan-copy-body { display: flex; flex-direction: column; gap: var(--bn-2); min-width: 0; flex: 1; padding-top: 2px; }
 
 .walkplan-copy-taken,
 .walkplan-copy-gone {
@@ -178,8 +183,17 @@
 .walkplan-shortfall-figure { font-size: var(--bn-fs-sm); color: var(--bn-ink-2); font-variant-numeric: tabular-nums; }
 .walkplan-shortfall-for { font-size: var(--bn-fs-sm); color: var(--bn-ink-3); margin-left: auto; }
 
+/* A 220-300px photograph, a position bar and neighbours cannot sit beside each other under
+ * ~560px (`BoxBrowse.css`'s own `@container pane (min-width: 560px)`, the point its hero photo
+ * stops sharing a row with its details) — so the copy row stacks the same way, photo first. */
+@media (max-width: 559px) {
+  .walkplan-copy { flex-direction: column; align-items: stretch; }
+  .walkplan-copy-photo { width: 100%; max-width: 260px; margin: 0 auto; }
+  .walkplan-copy-taken,
+  .walkplan-copy-gone,
+  .walkplan-pull { align-self: flex-end; }
+}
+
 @media (max-width: 479px) {
-  .walkplan-copy { flex-wrap: wrap; }
-  .walkplan-pull { margin-left: auto; }
   .walkplan-shortfall-for { margin-left: 0; }
 }

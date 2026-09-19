@@ -2528,3 +2528,133 @@ test('a box with two different cards, one copy each, still reads as plain cards 
   await expect(page.locator('.walkplan-take-name').nth(0)).toHaveText('Akshan, Mischievous')
   await expect(page.locator('.walkplan-take-name').nth(1)).toHaveText('Yasuo, Unforgiven')
 })
+
+/* ------------------------------------------------------------------------------------- 66-69
+ *
+ * `docs/specs/order-walk-plan.md` §9a, findings 1-4 — four layout defects the orchestrating
+ * session found at the first render of the walk row, recorded rather than fixed in that round.
+ * Each case here is mutation-proved: it fails against the code as it shipped on 2026-09-18,
+ * before this fix.
+ */
+
+test('a walk row names neither the box nor the section as a labelled field (finding 1)', async ({ page }) => {
+  await open(page, { orders: oneOpenOrder() })
+  await stubWalkPlan(
+    page,
+    walkPlanOf([walkPlanStop({ box_name: 'RB Epics', section_name: 'Rares' })]),
+  )
+  await page.locator('main.orders').getByRole('button', { name: 'Walk the boxes' }).click()
+  await page.locator('.walkplan-select-foot').getByRole('button', { name: /Walk \d+ orders?/ }).click()
+
+  const row = page.locator('.walkplan-copy').first()
+  await expect(row).toBeVisible()
+  /* `PositionLabel` is what draws `BOX <name> · Box <n>` and `SECTION <n> · <name>` as
+   * key/value fields (`.position-path`) — its absence here is the assertion, not a class name
+   * chosen to dodge the words: the stop header already carries the drawer's name and section
+   * span once, and a row repeating it is exactly this finding. */
+  await expect(row.locator('.position-path')).toHaveCount(0)
+  await expect(row).not.toContainText('SECTION')
+  await expect(row).not.toContainText(/\bBOX\b/)
+})
+
+test('the buyer for a card is named only on a stop with more than one buyer, and never by a raw order key (finding 2)', async ({ page }) => {
+  await open(page, { orders: oneOpenOrder() })
+  await stubWalkPlan(
+    page,
+    walkPlanOf([
+      /* One buyer: nothing is said, because the walk already knows who it is for. */
+      walkPlanStop({
+        key: 'box/3/section/2',
+        takes: [walkPlanTake({ for: [{ key: `TCGplayer:${ORDER_NUMBER}`, number: ORDER_NUMBER, buyer: 'Ada Lovelace' }] })],
+      }),
+      /* Two buyers: each take says which, by NAME — never `ref.number`, the order's own key. */
+      walkPlanStop({
+        key: 'box/5/section/1',
+        box: 5,
+        box_name: 'Box Five',
+        section: 1,
+        span: { start: 1, end: 10 },
+        order: 2,
+        takes: [
+          walkPlanTake({
+            sku: '9038408',
+            for: [{ key: `TCGplayer:${ORDER_NUMBER}`, number: ORDER_NUMBER, buyer: 'Ada Lovelace' }],
+            copies: [walkPlanCopy({ capture_id: 'cap-two-a' })],
+          }),
+          walkPlanTake({
+            sku: '9038409',
+            name: 'Yasuo, Unforgiven',
+            for: [{ key: `TCGplayer:${OTHER_ORDER}`, number: OTHER_ORDER, buyer: 'Grace Hopper' }],
+            copies: [walkPlanCopy({ capture_id: 'cap-two-b', index: 40 })],
+          }),
+        ],
+      }),
+    ]),
+  )
+  await page.locator('main.orders').getByRole('button', { name: 'Walk the boxes' }).click()
+  await page.locator('.walkplan-select-foot').getByRole('button', { name: /Walk \d+ orders?/ }).click()
+
+  const stops = page.locator('.walkplan-stop')
+  await expect(stops).toHaveCount(2)
+  await expect(stops.nth(0).locator('.walkplan-take-for')).toHaveCount(0)
+
+  const multiBuyerFors = stops.nth(1).locator('.walkplan-take-for')
+  await expect(multiBuyerFors).toHaveCount(2)
+  await expect(multiBuyerFors.nth(0)).toHaveText('for Ada Lovelace')
+  await expect(multiBuyerFors.nth(1)).toHaveText('for Grace Hopper')
+  await expect(multiBuyerFors.nth(0)).not.toContainText(ORDER_NUMBER)
+  await expect(multiBuyerFors.nth(1)).not.toContainText(OTHER_ORDER)
+})
+
+test('the photograph on a walk row is drawn at #/inventory\'s own size, not a thumbnail (finding 3)', async ({ page }) => {
+  await open(page, { orders: oneOpenOrder() })
+  await stubWalkPlan(page, walkPlanOf([walkPlanStop()]))
+  await page.locator('main.orders').getByRole('button', { name: 'Walk the boxes' }).click()
+  await page.locator('.walkplan-select-foot').getByRole('button', { name: /Walk \d+ orders?/ }).click()
+
+  const photo = page.locator('.walkplan-copy-photo').first()
+  await expect(photo).toBeVisible()
+  const box = await photo.boundingBox()
+  /* `BoxBrowse.css`'s own floor for the same photograph, `.browse-shot`/`.browse-photo-frame`:
+   * `minmax(220px, 34%)`. 84px (this screen's shipped thumbnail) fails this by a wide margin;
+   * asserting the floor rather than the exact clamp keeps this case honest about what it
+   * checks — the SIZE CLASS, not a pixel-perfect match to a value duplicated by hand. */
+  expect(box?.width ?? 0).toBeGreaterThanOrEqual(200)
+})
+
+test('a walk row draws the copy\'s own position bar and its physical neighbours (finding 4)', async ({ page }) => {
+  await open(page, { orders: oneOpenOrder() })
+  await stubWalkPlan(
+    page,
+    walkPlanOf([
+      walkPlanStop({
+        takes: [
+          walkPlanTake({
+            copies: [
+              walkPlanCopy({
+                neighbors: {
+                  prev: { name: 'Galio, Indefatigable', slot: 16, index: 20, skipped: 0 },
+                  next: { name: 'Evelynn, Entrancing', slot: 18, index: 22, skipped: 0 },
+                },
+              }),
+            ],
+          }),
+        ],
+      }),
+    ]),
+  )
+  await page.locator('main.orders').getByRole('button', { name: 'Walk the boxes' }).click()
+  await page.locator('.walkplan-select-foot').getByRole('button', { name: /Walk \d+ orders?/ }).click()
+
+  const row = page.locator('.walkplan-copy').first()
+  /* The position bar — the kit's own `PositionBar`, reused rather than the bare `Card 8` this
+   * finding named. `role="img"` is `PositionBar`'s own accessible shape. */
+  await expect(row.getByRole('img').first()).toBeVisible()
+  /* The physical neighbours — `PlaceNeighbors`, reused rather than a fifth hand-rolled
+   * sentence. Its own two names, ranked as `after`/`before`. */
+  await expect(row.locator('.nb')).toBeVisible()
+  await expect(row.locator('.nb')).toContainText('Galio')
+  await expect(row.locator('.nb')).toContainText('Evelynn')
+  /* The stop's own span chip is untouched and not duplicated onto the row. */
+  await expect(page.locator('.walkplan-stop-span')).toHaveCount(1)
+})
