@@ -26530,13 +26530,29 @@ def check_order_screen(checks: Checks) -> None:
 
 
 def check_order_walk_plan_route(checks: Checks) -> None:
-    """`POST /orders/walk-plan` composes a REAL position for every copy it offers.
+    """`POST /orders/walk-plan` composes a REAL position for every copy it offers, and —
+    RULED 2026-09-19, "The stop, rebuilt" — carries EVERY on-hand copy of the take's SKU,
+    store-wide, not only the copies standing at the stop the solver chose.
 
     `pipeline/walkplan.py` is proved by T11 and renders no labels on purpose. This is the
-    route above it, and the thing it gets wrong is silent: it shipped on 2026-09-18 using
-    `_Places.for_keys`, so every copy answered `neighbors: null` and — because `WalkPlanCopy`
-    carried no box total at all — `app/src/OrdersWalk.tsx` drew `PositionBar`'s honest "a box
-    the server could not size" blank track on every row, for ever (§9a finding 4).
+    route above it. Two defects, one per ruling:
+
+      2026-09-18   it shipped using `_Places.for_keys`, so every copy answered
+                   `neighbors: null` and — because `WalkPlanCopy` carried no box total at
+                   all — `app/src/OrdersWalk.tsx` drew `PositionBar`'s honest "a box the
+                   server could not size" blank track on every row, for ever (§9a finding 4).
+                   Fixed 2026-09-19 by dropping `for_keys` for the ordinary, lazy `_Places`.
+      2026-09-19   "The stop, rebuilt" found the SAME shape still wrong in its UNIT: a
+                   `WalkPlanCopy` carried only the copies the solver picked for this one
+                   stop, so a card the store held three of could draw two, with no way to
+                   see where the third was. D212 (every copy is fungible, no order claims
+                   one) and D93 (the copies panel draws every copy and hides none) both
+                   already ruled this for the resolver and for `/search`; this is that same
+                   rule reaching the walk's own row. `WalkPlanCopy` is now `_copy_row`'s own
+                   dict (`key`, `state`, `has_photo`, `capture_id`, `cid`, `place`) plus
+                   `here` — the flat fields (`box`, `index`, `slot`, `card`, `label`,
+                   `neighbors`, `box_total`, `box_closed`, `fraction`) are GONE, folded into
+                   `place`, exactly as `SearchCopy.place` already carries them.
 
     THE SCOPING WAS BORROWED FROM A DIFFERENT CALLER AND THE PREMISE DID NOT REACH HERE.
     `for_keys` exists for `do_orders` — "the route the Orders and Shipping screens poll" —
@@ -26545,7 +26561,10 @@ def check_order_walk_plan_route(checks: Checks) -> None:
     `_Places` is already scoped by being lazy per box. Measured 2026-09-19 at the owner's own
     scale (2,560 cards, 8 drawers, 275 walkable orders): 4.5 ms -> 18.5 ms for 40 open
     orders, 24.1 ms -> 32.2 ms for all 275. The delta is the per-box walk of the drawers the
-    plan reaches, paid once per press.
+    plan reaches, paid once per press. MEASURED AGAIN the day the copies list widened,
+    end to end this time (`do_order_walk_plan` itself): 6.8 ms -> 9.0 ms for 40 open orders,
+    19.6 ms -> 34.9 ms for 275, over a second synthetic store of the same scale — see
+    `do_order_walk_plan`'s own docstring for the fixture and the caveat about its shape.
 
     WHY THIS IS A ROUTE TEST AND NOT A SCREEN TEST. `app/tests/orders.spec.ts` stubs the
     wire, so it proves the screen draws what it is handed and can prove nothing about what
@@ -26558,6 +26577,11 @@ def check_order_walk_plan_route(checks: Checks) -> None:
     with isolated_home():
         for at in range(1, 13):
             capture_server.do_capture(capture_payload(3, capture_id=f"w{at}", set_hint="sv9"))
+        # A THIRD COPY OF THE ORDERED SKU, IN A DRAWER THE SOLVER NEVER VISITS — demand is
+        # one and box 3 alone holds two, so nothing sends the walk to box 7. Store-wide
+        # widening (D212, D93) is the only reason this copy appears on the wire at all.
+        for at in range(1, 4):
+            capture_server.do_capture(capture_payload(7, capture_id=f"o{at}", set_hint="sv9"))
         with Store().write() as snapshot:
             for at in range(1, 13):
                 # EVERY CARD NAMED, because D116 walks PAST a card nobody has named: a box
@@ -26568,6 +26592,18 @@ def check_order_walk_plan_route(checks: Checks) -> None:
                     printed_total="219", confidence="high",
                 )
                 snapshot.inventory.cards[f"3/{at}"].sku = "9191486" if at in (4, 5) else f"91914{at:02d}"
+            for at in range(1, 4):
+                snapshot.inventory.record_identification(
+                    f"7/{at}", name=f"Other {at}", number=f"{at:03d}/219",
+                    printed_total="219", confidence="high",
+                )
+                snapshot.inventory.cards[f"7/{at}"].sku = "9191486" if at == 2 else f"91915{at:02d}"
+            # `set`/`rarity` AGREE ACROSS ALL THREE COPIES OF THE ORDERED SKU, so the take
+            # header's `_agreed` fold has something real to agree on — D213's pair, composed
+            # for the take exactly as `do_search` composes them for a `SearchGroup`.
+            for key in ("3/4", "3/5", "7/2"):
+                snapshot.inventory.cards[key].set_name = "Twilight Masquerade"
+                snapshot.inventory.cards[key].rarity = "Rare"
 
         answers(
             checks,
@@ -26581,41 +26617,78 @@ def check_order_walk_plan_route(checks: Checks) -> None:
             "an order for a card sitting mid-box ingests",
         )
 
+        search_before = answers(
+            checks,
+            lambda: capture_server.do_search("9191486"),
+            "GET /search over the same SKU, to check the walk's `place` against the truth",
+        )
+        search_places = {}
+        if search_before is not None:
+            for group in search_before["groups"]:
+                if group["sku"] == "9191486":
+                    search_places = {copy["key"]: copy["place"] for copy in group["copies"]}
+
         plan = answers(
             checks,
             lambda: capture_server.do_order_walk_plan({"keys": ["tcgplayer:w-1"]}),
             "POST /orders/walk-plan answers a plan over that order",
         )
         if plan is not None:
-            copies = [
-                copy
-                for stop in plan["stops"]
-                for take in stop["takes"]
-                for copy in take["copies"]
-            ]
+            stops = [stop for stop in plan["stops"] if not stop["pooled"]]
+            checks.equal(len(stops), 1, "one drawer to open — box 7's copy never earns a stop")
+            stop = stops[0]
             checks.equal(
-                sorted(copy["index"] for copy in copies),
-                [4, 5],
-                "both copies of the ordered SKU are offered, not one (D93, D97 — the "
-                "machine ranks and the person reaches)",
+                stop["box_total"],
+                12,
+                "THE STOP CARRIES THE BOX'S OWN TOTAL BESIDE THE SPAN (§8's 2026-09-19 "
+                "ruling: 'both are real now that `box_total` is on the wire') — the span "
+                "bar's own denominator, read off the same `.of()` call the span itself "
+                "comes from, not a copy's place reached into from one level up",
+            )
+            checks.equal(len(stop["takes"]), 1, "one SKU wanted at this stop")
+            take = stop["takes"][0]
+            copies = take["copies"]
+
+            checks.equal(
+                [copy["key"] for copy in copies],
+                ["3/4", "3/5", "7/2"],
+                "EVERY ON-HAND COPY OF THE SKU, STORE-WIDE (D212, D93; RULED 2026-09-19) — "
+                "not only the two the solver chose at this stop. ORDER IS LOAD-BEARING: the "
+                "stop's own copies first, densest-first as the solver ranked them, then the "
+                "rest ascending (box, index) — box 7's copy last because nothing outranks "
+                "'this drawer' but the drawer itself",
             )
             checks.equal(
-                [copy["box_total"] for copy in copies],
-                [12, 12],
-                "AND EVERY COPY CARRIES THE BOX'S OWN TOTAL. Zero is `PositionBar`'s "
-                "documented shape for a box the server could not size, so a wire that "
-                "omitted this made every walk row draw a blank track and the sentence "
-                "\"where this sits in the box is not known yet\" — honest, and wrong on "
-                "every row of a box the server can size perfectly well",
+                [copy["here"] for copy in copies],
+                [True, True, False],
+                "`here` IS TRUE FOR EXACTLY THE STOP'S OWN COPIES and false for a copy this "
+                "stop merely offers — a fungible pick in another drawer, D212's own words",
             )
             checks.equal(
-                [copy["fraction"] is not None for copy in copies],
-                [True, True],
-                "and the fraction beside it, so the mark on the track has somewhere to be",
+                [set(copy) for copy in copies],
+                [{"key", "state", "state_at", "has_photo", "capture_id", "cid", "place", "here"}] * 3,
+                "AND THE OLD FLAT FIELDS ARE GONE. `_copy_row`'s own dict plus `here` — no "
+                "`box`, `index`, `slot`, `card`, `label`, `neighbors`, `box_total`, "
+                "`box_closed` or `fraction` riding beside `place` a second time. A client "
+                "reading `copy.box_total` now reads `undefined`, not a stale zero",
             )
+            checks.equal(
+                [copy["place"]["box_total"] for copy in copies],
+                [12, 12, 3],
+                "and each copy's OWN place carries ITS OWN box's total — box 3's twelve, "
+                "box 7's three — which a stop-level `box_total` alone could not say for the "
+                "widened copy sitting in a different drawer",
+            )
+            if search_places:
+                checks.equal(
+                    [copies[0]["place"], copies[1]["place"], copies[2]["place"]],
+                    [search_places.get("3/4"), search_places.get("3/5"), search_places.get("7/2")],
+                    "EACH COPY'S `place` EQUALS WHAT `/search` SENDS FOR THE SAME KEY — one "
+                    "composer (`_copy_row` -> `_Places.of`), not two describing one physical "
+                    "card differently depending on which route asked",
+                )
             named = [
-                (copy["neighbors"] or {}).get("prev", {}) or {}
-                for copy in copies
+                ((copy["place"]["neighbors"] or {}).get("prev") or {}) for copy in copies[:2]
             ]
             checks.equal(
                 [side.get("name") for side in named],
@@ -26627,10 +26700,22 @@ def check_order_walk_plan_route(checks: Checks) -> None:
                 "`Card 4` countable by hand once the section has holes",
             )
             checks.equal(
-                [copy["slot"] for copy in copies],
-                [4, 5],
+                [copy["place"]["slot"] for copy in copies],
+                [4, 5, 2],
                 "and the slot is D58's count, composed by the one renderer rather than "
                 "read off the store index beside it",
+            )
+            checks.equal(
+                (take["set"], take["rarity"]),
+                ("Twilight Masquerade", "Rare"),
+                "THE TAKE CARRIES `set`/`rarity` EXACTLY AS `do_search` COMPOSES THEM FOR A "
+                "`SearchGroup` — `_agreed` over the SKU's whole position history, all three "
+                "copies agreeing",
+            )
+            checks.ok(
+                "condition" in take,
+                "and `condition` rides beside them even where nothing agrees (null here — "
+                "no listing recorded and no card carries one)",
             )
 
 
