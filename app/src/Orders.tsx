@@ -2283,23 +2283,31 @@ export function OrdersHub({ stage }: { readonly stage: Stage }) {
         title={stage === 'pull' ? 'Orders' : 'Shipping'}
         lede={lede}
         actions={
-          stage === 'pull' && populated ? (
-            <>
-              <Button
-                icon={arriving ? 'x' : 'plus'}
-                aria-expanded={arriving}
-                onClick={() => setHub((was) => ({ arriving: was.arriving !== true }))}
-              >
-                {arriving ? 'Hide' : 'Add orders'}
-              </Button>
-              {/* The hand-off the sidebar makes, made here too: the Fulfiller's page, in its own tab. */}
-              <a className="bn-btn orders-handoff" href="#/fulfillment" target="_blank" rel="noopener">
-                <Icon name="hand" size={16} />
-                Cards to pull
-                <Icon name="external" size={14} />
-              </a>
-            </>
-          ) : undefined
+          <>
+            {stage === 'pull' && populated ? (
+              <>
+                <Button
+                  icon={arriving ? 'x' : 'plus'}
+                  aria-expanded={arriving}
+                  onClick={() => setHub((was) => ({ arriving: was.arriving !== true }))}
+                >
+                  {arriving ? 'Hide' : 'Add orders'}
+                </Button>
+                {/* The hand-off the sidebar makes, made here too: the Fulfiller's page, in its own tab. */}
+                <a className="bn-btn orders-handoff" href="#/fulfillment" target="_blank" rel="noopener">
+                  <Icon name="hand" size={16} />
+                  Cards to pull
+                  <Icon name="external" size={14} />
+                </a>
+              </>
+            ) : null}
+            {/* SALES (`#/revenue`) IS OFF-NAV ON THE OWNER'S OWN WORD (D-gross-sales-retrospective):
+                this is the one plain way in from an existing screen, same tab, no hand-off. */}
+            <a className="bn-btn" href="#/revenue">
+              <Icon name="dollar" size={16} />
+              Sales
+            </a>
+          </>
         }
       />
 

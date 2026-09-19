@@ -58,7 +58,6 @@ export const ROUTES: readonly Route[] = [
   { path: '/pricing', label: 'Pricing', icon: 'tag', view: Pricing, persona: 'owner', group: 'work', hotkey: 'p', nav: true, keywords: 'price hold write files emit worklist markdown stale reprice live listings mark down' },
   { path: '/orders', label: 'Orders', icon: 'cart', view: Orders, persona: 'owner', group: 'sell', hotkey: 'o', nav: true, tab: true, keywords: 'pull sell fetch orders paste ledger' },
   { path: '/shipping', label: 'Shipping', icon: 'truck', view: Shipping, persona: 'owner', group: 'sell', hotkey: 's', nav: true, keywords: 'ship lanes envelope parcel export' },
-  { path: '/revenue', label: 'Sales', icon: 'dollar', view: Revenue, persona: 'owner', group: 'sell', hotkey: 'v', nav: true, keywords: 'revenue sold gross money history search by name retrospective' },
   /* THE STALE-LISTING MARKDOWN IS NOT A ROW HERE, AND IT MOVED SCREENS RATHER THAN GAINING ONE.
    *
    * D100 wanted `#/markdown` on D49's precedent — a worklist the operator sits in is what earned
@@ -89,6 +88,16 @@ export const ROUTES: readonly Route[] = [
   { path: '/inventory', label: 'Inventory', icon: 'box', view: Inventory, persona: 'owner', group: 'library', hotkey: 'i', nav: true, tab: true, keywords: 'boxes find a card where search sold retire move' },
   { path: '/graveyard', label: 'Graveyard', icon: 'history', view: Graveyard, persona: 'owner', group: 'library', hotkey: 'g', nav: true, keywords: 'sold retired moved buried departed history gone deleted box' },
   { path: '/codes', label: 'Codes', icon: 'qr', view: Codes, persona: 'owner', group: 'library', hotkey: 'd', nav: true, keywords: 'code cards qr redeem read a box' },
+  /* SALES (`#/revenue`) IS OFF-NAV ON THE OWNER'S OWN WORD, 2026-09-19. The table below
+   * counts THIRTEEN routes and TEN nav rows — this is the third of `aside`'s members, not
+   * a fourth nav row. Measured at 390 x 754 (an iPhone 14 in Safari): an ELEVENTH nav row
+   * runs the drawer's rows 37px past the fold at the 40px thumb floor — CLAUDE.md's own
+   * floor, with no lower step to give (App.css's short-screen comment). The owner's
+   * ruling, having been shown both: keep the drawer whole; the retrospective is reached
+   * from the command palette and from a link on `#/orders` instead. It stays a full
+   * screen with its own route — see D-gross-sales-retrospective — never a lens on another
+   * one; only its NAV ROW, not its existence, was the thing that cost 37px. */
+  { path: '/revenue', label: 'Sales', icon: 'dollar', view: Revenue, persona: 'owner', group: 'aside', keywords: 'revenue sold gross money history search by name retrospective' },
   { path: '/fulfillment', label: 'Cards to pull', icon: 'hand', view: Fulfillment, persona: 'fulfiller', group: 'aside' },
   { path: '/gallery', label: 'Kit', icon: 'grid', view: Gallery, persona: 'owner', group: 'aside' },
 ]
@@ -102,15 +111,17 @@ const GROUPS: readonly { readonly id: Group; readonly label: string | null }[] =
 
 /* THE GROUPS THE NAV DELIBERATELY DOES NOT DRAW, declared rather than implied.
  *
- * `aside` holds the two routes reached from somewhere other than the nav list: the
- * Fulfiller's screen, which sits in the sidebar foot because it opens in its own tab and is
- * not one of the owner's screens, and the component kit, which is reachable from the command
- * palette only. Both are registered routes and both must stay reachable — they are simply not
- * items in the workflow list.
+ * `aside` holds THREE routes reached from somewhere other than the nav list: the Fulfiller's
+ * screen, which sits in the sidebar foot because it opens in its own tab and is not one of
+ * the owner's screens; the component kit, reachable from the command palette only; and Sales
+ * (`#/revenue`), reachable from the command palette and from a link on `#/orders` — the
+ * owner's ruling, 2026-09-19, over the ROUTES table's own comment beside it. All three are
+ * registered routes and all three must stay reachable — they are simply not items in the
+ * workflow list.
  *
  * IT IS A CONSTANT BECAUSE A CHECK READS IT. `scripts/docs-audit.py`'s `route rosters` row
  * reconciles every route's group against the groups the nav draws, and without this it can
- * only conclude that two routes have gone unreachable. Deleting this line does not change
+ * only conclude that three routes have gone unreachable. Deleting this line does not change
  * what the app draws; it changes a passing check into a false alarm, which is the failure
  * mode that teaches people to ignore checks. */
 const OFF_NAV: readonly Group[] = ['aside']
@@ -622,7 +633,6 @@ const SHORTCUTS: readonly KeyGroup[] = [
       { keys: [',P'], does: 'Pricing' },
       { keys: [',O'], does: 'Orders' },
       { keys: [',S'], does: 'Shipping' },
-      { keys: [',V'], does: 'Sales' },
       { keys: [',I'], does: 'Inventory' },
       { keys: [',G'], does: 'Graveyard' },
       { keys: [',D'], does: 'Codes' },
@@ -767,14 +777,6 @@ const SHORTCUTS: readonly KeyGroup[] = [
     at: '/codes',
     where: 'Only while Codes is open.',
     rows: [{ keys: ['Esc'], does: 'Close the open sheet' }],
-  },
-  {
-    id: 'revenue',
-    title: 'Sales',
-    icon: 'dollar',
-    at: '/revenue',
-    where: 'Only while Sales is open.',
-    rows: [{ keys: ['/'], does: 'Jump into the product search field' }],
   },
   {
     id: 'fulfillment',
@@ -1473,6 +1475,7 @@ export function App() {
       { id: 'theme', group: 'Appearance', label: theme === 'dark' ? 'Switch to light mode' : 'Switch to dark mode', icon: theme === 'dark' ? 'sun' : 'moon', run: toggleTheme },
       { id: 'rail', group: 'Appearance', label: rail ? 'Expand the sidebar' : 'Collapse the sidebar', icon: 'columns', hint: '⌘ .', run: toggleRail },
       { id: 'keys', group: 'Help', label: 'Keyboard shortcuts', icon: 'keyboard', hint: '?', keywords: 'hotkeys bindings reference cheatsheet keys shortcut arrow leader', run: () => setKeysOpen(true) },
+      { id: 'sales', group: 'Go to', label: 'Sales', icon: 'dollar', keywords: 'revenue sold gross money history search by name retrospective', run: () => go('/revenue') },
       { id: 'kit', group: 'Developer', label: 'Component kit', icon: 'grid', run: () => go('/gallery') },
     ]
     return [...goTo, ...extras]

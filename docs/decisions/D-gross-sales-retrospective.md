@@ -1,7 +1,7 @@
 ## D-gross-sales-retrospective — A gross-revenue retrospective is its own route, and it never claims to be profit
 
 **The problem this closes.** TCGplayer's own seller Orders page indexes orders, not line
-items. There is no way to ask it "how much have I made selling Charizard ex". This store's
+items. There is no way to ask it "how much have I made selling one named card". This store's
 own order ledger already carries every line's `unit_price` (`OrderLine`, `store/orders.py`).
 The answer was always one reshaping away. `#/revenue`, labelled **Sales**, is that reshaping:
 a verdict sentence for the selected period, a month strip, and a searchable table by name.
@@ -45,7 +45,7 @@ one list, sorted by gross, and stays that way until the feed itself carries a re
 804 orders, 1,346 lines, zero missing `unit_price`. Excluding Canceled: $66,334.71 gross over
 1,268 lines, 539 distinct product names, spanning 2026-05 through 2026-09. `GET /orders`
 answers in 230ms at 1.15MB. There is no new server route, no new parsing, and no change to
-`server/capture_server.py:do_orders` or to any order resolution or ledger behaviour. This
+`server/capture_server.py:do_orders` or to any order resolution or ledger behavior. This
 screen reads that one payload and reshapes it in `app/`.
 
 ### Canceled is dropped, silently, on the owner's own ruling
@@ -62,3 +62,20 @@ vocabulary.
 See also: D69 (a screen earns a route on its job, not its data source), D86/D103/D105
 (kinship of implementation is not kinship of job), D193 (the ledger's own buyer field is
 unread here — this screen never draws a name, an address or a payment detail).
+
+
+### Off-nav, on the owner's own word — the route stays, the nav row does not
+
+The screen shipped with a nav row and a hotkey. The owner ruled it off after being shown the
+measurement: an eleventh nav row runs the phone drawer's rows 37px past the fold at 390x754,
+on the 40px thumb floor CLAUDE.md already sets, with no lower step to give. `app/src/App.css`'s
+own short-screen comment had already named this day — a future row would cost one more swipe,
+never reachability — but the owner chose the whole drawer over the row instead of the swipe.
+
+**Only the NAV ROW was the cost, never the screen.** `#/revenue` keeps its own route, its own
+file, its own decision entry. It moved to App.tsx's `aside` group, beside the component kit
+and the Fulfiller's screen — reached from the command palette, and from one plain link on
+`#/orders` (`Sales`, beside the Fulfiller hand-off). Nothing about the screen's job, its gross-
+only register, or its exclusion of Canceled orders changed. This is the same shape D105 argues
+for kinship of implementation versus kinship of job, one level up: a screen's ROUTE answers to
+its job, and a nav ROW is a cost that job does not have to pay to exist.

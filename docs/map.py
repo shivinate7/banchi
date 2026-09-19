@@ -4144,8 +4144,10 @@ COMPONENTS = [
                 "Gate B runs on, now at `#/capture`; the runs screen the pipeline lives on; the "
                 "review queue; the pricing worklist; the order screen and the shipping lane "
                 "(D69 gave each its own route rather than making one a mode of the other); "
-                "the gross-revenue retrospective at `#/revenue`, routed 2026-09-19 "
-                "(D-gross-sales-retrospective); one inventory view (D31 folded the box walk "
+                "the gross-revenue retrospective at `#/revenue`, routed 2026-09-19 and kept "
+                "OFF THE NAV LIST on the owner's own word — reached from the command palette "
+                "and a link on `#/orders` instead (D-gross-sales-retrospective); one "
+                "inventory view (D31 folded the box walk "
                 "and the pull preview into it); "
                 "`#/graveyard`, where a departed card is read whether its box still stands or "
                 "was deleted out from under it (D134); the code-card screen D70 gave its own "
@@ -4561,7 +4563,7 @@ COMPONENTS = [
                                             "D28", "D31", "D33", "D39", "D49", "D51", "D53",
                                             "D57", "D61", "D63", "D66", "D69", "D70", "D94",
                                             "D95", "D100", "D105", "D109", "D120", "D134",
-                                            "D159", "D207"]},
+                                            "D159", "D207", "D-gross-sales-retrospective"]},
             "src/Codes.tsx": {"does": "the code-card screen: read a box's QRs into the ledger, "
                                       "see the two lanes C11 tiers the pile into, and hand a "
                                       "lane's codes to a buyer against a named order. The "
@@ -6268,7 +6270,7 @@ COMPONENTS = [
                                                "D51", "D57", "D58", "D61", "D63", "D66", "D69",
                                                "D91", "D93", "D96", "D97", "D103", "D113", "D114",
                                                "D118", "D159", "D181", "D192", "D193", "D203",
-                                               "D209", "D212"]},
+                                               "D209", "D212", "D-gross-sales-retrospective"]},
             "src/Orders.css": {"does": "the order screen at owner density: the line, its reason "
                                        "and remedy, and the pick rows under it. A copy already "
                                        "spoken for by another line is drawn as spoken for "
@@ -6370,7 +6372,11 @@ COMPONENTS = [
                                          "abstention and not a failure to route.",
                                  "governed_by": ["D40", "D50", "D61", "D69"]},
             "src/Revenue.tsx": {"does": "`#/revenue` (Sales): the gross-revenue "
-                                        "retrospective. A pure reshaping of `GET /orders`, "
+                                        "retrospective, OFF-NAV on the owner's word — App.tsx's "
+                                        "ROUTES comment and D-gross-sales-retrospective both "
+                                        "have the 37px-at-754 arithmetic. Reached from the "
+                                        "command palette and a link on `#/orders`, never the "
+                                        "nav list. A pure reshaping of `GET /orders`, "
                                         "already fetched by `#/orders` — no new server route, "
                                         "no change to order parsing or the ledger. Three "
                                         "tiers behind one period control (3 months, 6 months, "
