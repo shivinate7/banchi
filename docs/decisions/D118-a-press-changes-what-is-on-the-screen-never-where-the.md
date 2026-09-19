@@ -102,3 +102,41 @@ directions, with a fixture built so a frozen order and a recomputed one give dif
 press that makes the order stale, inside a band whose height is fixed, so its slot is reserved
 whether or not it is occupied — the same bargain `.browse-row-slotghost` makes in the amendment
 above, paid once at render rather than at the moment of the sale.
+
+### A re-land onto a copy already answered for is a press too (2026-09-19)
+
+**The owner ruled on a CI flake, 2026-09-19.** His word was "fix the product."
+`inventory.spec.ts`'s "a new search takes a new order" case failed on CI. It failed in 3 of 20
+runs, at 2 workers. Always the same way. `toHaveCount(6)` passed. A later, non-retrying read of
+the same rows then came back `[]`. No press was involved. The operator had only typed a second
+query into the same box. The trace showed three `GET /search?q=8937370` requests, for one text.
+That is the tell. Something re-asked without the text changing.
+
+**The cause was in `BoxBrowse.tsx`'s landing effect, not in `CopiesPanel`.** That effect is
+D132's rule: a fresh answer goes to the fullest section. `visible` can read empty for a render or
+two. This happens while `shelf` is still catching up to a just-landed answer. The shelf-picking
+effect runs first, in the same commit. Its own pool can name a different box for one tick. It
+settles back after. The selection effect returned early on that empty `visible`. It did so
+without recording the query it had just seen. Its own `answered` ref then kept a stale value. The
+next render carried the SAME repeat answer, for the SAME query text. `visible` was populated
+again. It read as `fresh` a second time. It re-landed `selected` on the fullest section, as if a
+new question had been asked. Nothing about the query had changed. Only the ref's own bookkeeping
+had fallen behind it. The fix settles `fresh` and writes the ref before the early return. A
+repeat answer now reads as one, even across an empty tick.
+
+**This is the same sentence as D181's amendment, on a second axis D181 could not see.** D181
+found that a rank recompute reshuffles rows, without moving a pixel. This is a rank recompute
+that never should have happened. The query had not changed. Its symptom was not a reshuffle. It
+was `CopiesPanel`'s `row` prop, pointing at a copy its own still-loading search had not answered
+for yet. That fell through to the skeleton. `Inventory.tsx`'s own comment there once read: draw
+it only when there is nothing to stand on. A stale-selection bounce, onto another copy of the
+SAME card, is exactly the case that guard did not name. `CopiesPanel` now keeps the last non-null
+group it drew, for a given handle — SKU or name. It stands on that group while its `row` changes.
+This holds only while a fetch for that same handle is still in flight. The skeleton stays for a
+handle this panel has never resolved. It is never drawn again for a re-ask of a handle it already
+has an answer for.
+
+**Guarded by `inventory.spec.ts`'s own case, sampling frames after the new answer lands.**
+A single retrying `toHaveCount` cannot see this. It
+stops retrying the moment it is true. So it cannot see a state that was true and then was not.
+Same reasoning as D181's row-identity proof, for not trusting geometry alone.
