@@ -2801,13 +2801,58 @@ test('the census greps to the store, and the identity line says what the box hol
     page.locator('.boxops-census-cell', { hasText: 'Next index' }).locator('.boxops-census-note'),
   ).toHaveText('Where the next capture lands')
 
-  /* Five, not seven: two of the seven records have left. */
-  await expect(page.locator('.boxops-identity-fill')).toHaveText('5 on hand')
+  /* Five, not seven: two of the seven records have left. THE CENSUS TRIAD (D41) REACHED THIS
+     PANEL — `on hand` is a `bn-stat` figure now, the same primitive `CardLocations`' own three
+     figures use, so the assertion reads the figure and its label as the two spans they now
+     are rather than one string. */
+  await expect(
+    page.locator('.boxops-identity-line .boxops-stat', { hasText: 'on hand' }).locator('.bn-stat-value'),
+  ).toHaveText('5')
+  await expect(
+    page.locator('.boxops-identity-line .boxops-stat', { hasText: 'on hand' }).locator('.bn-stat-label'),
+  ).toHaveText('on hand')
 
   /* And the control that freezes capacity names the ALLOCATOR's number, because that is what
      `close_box` writes — D20's rule, and the one denominator D58 deliberately left alone. */
   const seal = page.getByRole('button', { name: /^Seal box/ })
   await expect(seal.locator('.boxops-op-detail')).toHaveText('freezes at 7')
+})
+
+test('the box panel draws its census as bn-stat figures, not the old dotted line', async ({
+  page,
+}) => {
+  /* THE OWNER'S RULING, 2026-09-19: this rail still drew the OLD dotted line — a muted string
+     of `label value` parts joined by a CSS `::before` interpunct — while the card pane beside
+     it already drew D41's census-triad, three `bn-stat` tiles. This is the receipt for the fix,
+     asserted the way a mutation catches a reversion: the OLD markup (`.boxops-identity-part`,
+     one interpunct-joined string per fact) must be GONE, and the new one (`.boxops-stat`, a
+     `bn-stat-value`/`bn-stat-label` pair per fact) must be there, four figures for this fixture
+     box — on hand, sold, retired, captured. Run against a `.bak` of the pre-fix `BoxOps.tsx`/
+     `BoxOps.css` (never `git stash`, which is shared with every worktree of this clone), this
+     case is RED: the pre-fix panel has zero `.boxops-stat` nodes and four `.boxops-identity-part`
+     nodes instead. */
+  await open(page)
+  await openBoxOps(page)
+  await page.keyboard.press('Escape')
+  await expect(page.getByRole('button', { name: 'Rename' })).toHaveCount(0)
+
+  await expect(page.locator('.boxops-identity-part')).toHaveCount(0)
+
+  const stats = page.locator('.boxops-identity-line .boxops-stat')
+  await expect(stats).toHaveCount(4)
+  await expect(stats.locator('.bn-stat-value')).toHaveText(['5', '1', '1', '7'])
+  await expect(stats.locator('.bn-stat-label')).toHaveText(['on hand', 'sold', 'retired', 'captured'])
+
+  /* THE PILL AND THE NOTE STAY OUTSIDE THE STAT ROW. `open`/`sealed` is the lid, not a count of
+     what is in the box, and this fixture box is open so there is no `sealed at N` note to draw
+     — `#/inventory`'s sealed-box case (this same file, "the seal names...") covers that text. */
+  await expect(page.locator('.boxops-identity-line .boxops-state')).toHaveText('open')
+
+  /* AND THE FOUR FIGURES SIT ON ONE ROW AT 1440 — the rail is 300px and this is the width the
+     brief named as the floor for it. */
+  await page.setViewportSize({ width: 1440, height: 900 })
+  const tops = await stats.evaluateAll((nodes) => nodes.map((n) => n.getBoundingClientRect().top))
+  expect(new Set(tops.map((t) => Math.round(t))).size).toBe(1)
 })
 
 // ------------------------------------------------------- the box's operations, as rows (D20)
