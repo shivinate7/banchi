@@ -1,6 +1,22 @@
 /* SALES (`#/revenue`) — the verdict, the month strip, then the product table. Every color
  * here is a `--bn-*` token; nothing names one. */
 
+.revenue-period {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: var(--bn-2);
+}
+
+.revenue-range {
+  display: flex;
+  align-items: flex-end;
+  gap: var(--bn-3);
+  flex-wrap: wrap;
+}
+.revenue-range .bn-field { width: 152px; }
+.revenue-range .bn-field-hint { width: 100%; text-align: right; }
+
 .revenue-verdict {
   display: flex;
   flex-direction: column;
@@ -56,18 +72,28 @@
   flex-direction: column;
 }
 
+/* A ROW IS NOW A BUTTON (cross-filtering, D-revenue-slice) rather than a `<div>`, so the
+ * cursor, hover and press floors in `base.css` cover it for free — this file only supplies
+ * the layout and the two states neither floor knows about: the SELECTED (`aria-pressed`)
+ * filter and the CURRENT, still-forming bucket (`data-current`). */
 .revenue-month-row {
   display: grid;
   grid-template-columns: 1fr auto auto;
   gap: var(--bn-3);
   align-items: baseline;
-  padding: var(--bn-2) 0;
+  width: 100%;
+  padding: var(--bn-2) var(--bn-2);
   border-bottom: 1px solid var(--bn-line);
+  text-align: left;
+  min-height: var(--bn-control-h-sm);
+  border-radius: var(--bn-r-sm);
 }
 .revenue-month-row:last-child { border-bottom: 0; }
+.revenue-month-row:hover { background: var(--bn-hover); }
+.revenue-month-row[aria-pressed='true'] { background: var(--bn-accent-tint); }
 .revenue-month-row[data-current='true'] .revenue-month-name { color: var(--bn-ink); font-weight: 600; }
 
-.revenue-month-name { color: var(--bn-ink-2); }
+.revenue-month-name { color: var(--bn-ink-2); display: inline-flex; align-items: center; gap: var(--bn-2); }
 .revenue-month-orders { color: var(--bn-ink-3); font-size: var(--bn-fs-sm); text-align: right; min-width: 6ch; }
 
 .revenue-products {
@@ -86,15 +112,66 @@
   flex-wrap: wrap;
 }
 
+.revenue-active-filter { display: flex; align-items: center; gap: var(--bn-2); }
+
 .revenue-search { min-width: 220px; max-width: 320px; }
 @media (max-width: 767px) { .revenue-search { max-width: none; width: 100%; } }
 
 .revenue-table td,
 .revenue-table th { white-space: nowrap; }
-.revenue-table td:first-child,
-.revenue-table th:first-child { white-space: normal; }
+.revenue-table td:nth-child(2),
+.revenue-table th:nth-child(2) { white-space: normal; }
+
+/* ---- sortable headers ------------------------------------------------------------ */
+/* The button INHERITS the `<th>`'s own type treatment (`font: inherit; color: inherit`,
+ * `base.css`) so an inactive header looks exactly like the plain text it replaced; only the
+ * icon's opacity and the hover colour say it is a control at all. */
+.revenue-sort {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--bn-1);
+  min-height: var(--bn-control-h-sm);
+}
+.revenue-sort:hover { color: var(--bn-ink); }
+/* `flex-shrink: 0` — a numeric column's own icon was found squeezed to under 1px wide at
+ * 390px (measured: 0.39px against Gross's protected 4.98px), because a plain SVG's flex
+ * min-width is 0 and `white-space: nowrap` on the header text gives it nowhere else to
+ * shrink to. Protecting the icon's size pushes any remaining compression onto the Name
+ * column instead, which already wraps (`white-space: normal`) rather than overflowing. */
+.revenue-sort .bn-icon { flex-shrink: 0; }
+.revenue-sort-icon { opacity: 0.55; }
+.revenue-sort-icon-active { opacity: 1; color: var(--bn-accent); }
+th.num .revenue-sort { flex-direction: row-reverse; }
+
+/* ---- drill-down disclosure -------------------------------------------------------- */
+.revenue-disclosure-col { width: 32px; padding-right: 0 !important; }
+.revenue-disclosure {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: var(--bn-control-h-sm);
+  height: var(--bn-control-h-sm);
+  border-radius: var(--bn-r-sm);
+  color: var(--bn-ink-3);
+}
+.revenue-disclosure:hover { background: var(--bn-hover); color: var(--bn-ink); }
+
+.revenue-detail-row td { padding: 0 var(--bn-3) var(--bn-3); border-bottom: 1px solid var(--bn-line); }
+.revenue-detail-table { background: var(--bn-surface-2); border-radius: var(--bn-r); }
+.revenue-detail-table th, .revenue-detail-table td { padding: var(--bn-2) var(--bn-3); }
+.revenue-detail-table tbody tr:last-child td { border-bottom: 0; }
 
 @media (max-width: 767px) {
   .revenue-products-head { flex-direction: column; align-items: stretch; }
   .revenue-table { font-size: var(--bn-fs-sm); }
+  /* Measured: the sort icon's `flex-shrink: 0` fix (above) traded 11px of horizontal page
+   * scroll at 390px for a legible icon — the icon was never the thing to give up. Narrower
+   * cell padding buys that 11px back instead. */
+  .revenue-table th, .revenue-table td { padding-left: var(--bn-2); padding-right: var(--bn-2); }
+  .revenue-period { align-items: stretch; }
+  /* FIVE OPTIONS (`Custom` is new) measured 11px past 390px width in `.bn-seg`'s own
+   * one-row layout — the kit's shared rule stays a single, non-wrapping row for every
+   * OTHER screen's Segmented, which all fit; only this screen's own instance wraps. */
+  .revenue-period .bn-seg { flex-wrap: wrap; justify-content: flex-end; }
+  .revenue-range .bn-field { width: auto; flex: 1; min-width: 132px; }
 }
