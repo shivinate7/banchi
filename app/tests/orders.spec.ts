@@ -2289,19 +2289,24 @@ test('a real Pull press changes the take counter without changing its height (D1
   await page.locator('.walkplan-select-foot').getByRole('button', { name: /Walk \d+ orders?/ }).click()
 
   const counter = page.locator('.walkplan-take-counter').first()
+  const takeName = page.locator('.walkplan-take-name').first()
   await expect(counter).toContainText('0 of 2 taken')
   await settleFonts(page)
   await settleMotion(page)
-  const counterHeightBefore = (await counter.boundingBox())?.height ?? 0
-  const counterXBefore = (await counter.boundingBox())?.x ?? 0
+  const counterBoxBefore = await counter.boundingBox()
+  const counterHeightBefore = counterBoxBefore?.height ?? 0
+  const counterRightBefore = (counterBoxBefore?.x ?? 0) + (counterBoxBefore?.width ?? 0)
+  const nameBoxBefore = await takeName.boundingBox()
 
   await page.locator('.walkplan-copy').first().locator('button.walkplan-pull').click()
 
   await expect(counter).toContainText('1 of 2 taken')
   await settleFonts(page)
   await settleMotion(page)
-  const counterHeightAfter = (await counter.boundingBox())?.height ?? 0
-  const counterXAfter = (await counter.boundingBox())?.x ?? 0
+  const counterBoxAfter = await counter.boundingBox()
+  const counterHeightAfter = counterBoxAfter?.height ?? 0
+  const counterRightAfter = (counterBoxAfter?.x ?? 0) + (counterBoxAfter?.width ?? 0)
+  const nameBoxAfter = await takeName.boundingBox()
 
   /* HEIGHT, NOT PAGE POSITION — the SECOND copy is still there, `Taken` rather than removed
      (D118's own rule for a row: disabled, not gone), so nothing beneath the counter unmounts.
@@ -2309,7 +2314,29 @@ test('a real Pull press changes the take counter without changing its height (D1
      pixel from changing what it says. RAW, for the reason the case this replaces carried in
      full: rounding a sub-pixel measurement hides up to a whole pixel of real movement. */
   expect(Math.abs(counterHeightAfter - counterHeightBefore), 'the counter changed height across the press').toBeLessThan(0.34)
-  expect(Math.abs(counterXAfter - counterXBefore), 'the counter moved horizontally, so something beside it changed shape').toBeLessThan(0.34)
+
+  /* THE COUNTER'S OWN LEFT EDGE IS NOT THE RIGHT SUBJECT (CI evidence below). `margin-left:
+     auto` anchors the counter's RIGHT edge to the row's own right edge; its LEFT edge is
+     `row-right - own-width`, and `own-width` is a measurement of the very text D118 entitles
+     the press to change (`0 of 2 taken` -> `1 of 2 taken`). Asserting the left edge therefore
+     asserts that the counter's own changing text rendered at an identical width on two
+     different strings — a claim about font-rasterization precision, not about D118.
+     MEASURED, not guessed: `inter-latin.woff2`'s `tnum` substitutes (`zero.tf`, `one.tf`, …)
+     are all exactly 1328 font units wide, so the design-time advance is equal, and this rig's
+     DOM measurement of both strings agrees to the pixel (0.000px apart, `getBoundingClientRect`,
+     Chromium 1.58.0). Canvas-measured WITHOUT `font-variant-numeric` the same two strings
+     differ by 2.69px, so the feature is doing real work here — it is a rig-dependent rendering
+     guarantee (glyph shaping/hinting), not a CSS layout fact, and CI's shard-2 failure (run
+     35418072547: height held, X moved by exactly 1px, nothing else in the DOM changed size —
+     confirmed by instrumenting `document.documentElement.scrollHeight`/`clientWidth` across
+     the press, both constant) is consistent with that precision differing by a device pixel on
+     Linux's text stack. What D118 actually requires is that NOTHING BESIDE the counter moved:
+     the row's own right edge (what `margin-left: auto` is anchored to, independent of the
+     counter's own width) and the take's name, both outside the text the press is allowed to
+     change. */
+  expect(Math.abs(counterRightAfter - counterRightBefore), 'the row narrowed or widened around the counter').toBeLessThan(0.34)
+  expect(Math.abs((nameBoxAfter?.x ?? 0) - (nameBoxBefore?.x ?? 0)), 'the take name moved').toBeLessThan(0.34)
+  expect(Math.abs((nameBoxAfter?.y ?? 0) - (nameBoxBefore?.y ?? 0)), 'the take name moved').toBeLessThan(0.34)
 })
 
 /* -------------------------------------------------------------------------------------- walk plan */
