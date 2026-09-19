@@ -3,7 +3,7 @@ import { useEffect, useMemo, useState } from 'react'
 import { describeFailure, getOrders, type Failure } from './server'
 import type { OrderLineWire, OrderRow } from './types'
 import { EmptyState, Notice, PageHeader, Segmented } from './kit'
-import { money } from './money'
+import { money, moneyGrouped } from './money'
 import { sparkSegments } from './PriceHistory'
 import { SearchField } from './SearchField'
 import './Revenue.css'
@@ -131,14 +131,20 @@ function orderCount(sales: readonly Sale[]): number {
   return new Set(sales.map((sale) => sale.order)).size
 }
 
-/** One line in the verdict's own smaller-type comparison. `null` reads as "no prior period",
- *  never as a silent zero. */
-function compareLine(current: number, previous: number | null): string {
-  if (previous === null) return 'No earlier period to compare it against yet.'
-  if (previous === 0) return `The period before had no gross at all.`
+/** One line in the verdict's own smaller-type comparison. `null` reads as "no prior period at
+ *  all" (the `all time` control has nothing before it) -- a different fact from `previousRows`
+ *  being empty, which is "the store has no ORDERS recorded that far back", never "the store
+ *  sold nothing". Every real line carries a positive gross, so an empty previous window and a
+ *  previous window nobody has data for read identically here and are said the same honest
+ *  way: nothing is RECORDED, true whether the store did not exist yet or simply made no
+ *  sales -- this screen cannot tell those apart and does not pretend to. */
+function compareLine(current: number, previousRows: readonly Sale[] | null): string {
+  if (previousRows === null) return 'No earlier period to compare it against yet.'
+  if (previousRows.length === 0) return 'Nothing is recorded for the period before this one.'
+  const previous = sum(previousRows)
   const change = ((current - previous) / previous) * 100
   const said = change >= 0 ? `up ${change.toFixed(0)}%` : `down ${Math.abs(change).toFixed(0)}%`
-  return `The period before this one made ${money(previous)}, ${said}.`
+  return `The period before this one made ${moneyGrouped(previous)}, ${said}.`
 }
 
 function Loading() {
@@ -196,6 +202,13 @@ export function Revenue() {
 
   const periodMonths = useMemo(() => months.filter((m) => new Date(`${m.key}-01`) >= windowStart), [months, windowStart])
 
+  // OLDEST ON THE LEFT, time running the direction a reader already expects -- the reversed
+  // version read backwards as a story: newest-on-the-left draws a real DECLINE as a line
+  // climbing toward the right, because the right edge is the oldest month. The row list below
+  // stays newest-first on purpose (a retrospective is read "what happened lately" first), so
+  // the two halves genuinely run in opposite directions now -- which is fine, and is the whole
+  // reason the strip below draws the first and last month by name rather than leaving the
+  // axis to be inferred.
   const spark = useMemo(
     () => sparkSegments(periodMonths.map((m) => m.gross), 560, 64),
     [periodMonths],
@@ -246,7 +259,8 @@ export function Revenue() {
   }
 
   const total = sum(inPeriod)
-  const previousTotal = inPrevious === null ? null : sum(inPrevious)
+  // PASSED AS ROWS, NOT A NUMBER -- `compareLine` tells "no data" from "a real zero"
+  // by row count, and a number alone has already thrown that fact away.
   const periodLabel = PERIODS.find((p) => p.value === period)?.label ?? period
 
   return (
@@ -260,9 +274,9 @@ export function Revenue() {
 
       <section className="revenue-verdict">
         <p className="revenue-verdict-said">
-          {`You grossed ${money(total)} over ${periodLabel.toLowerCase()}, across ${orderCount(inPeriod).toLocaleString()} ${orderCount(inPeriod) === 1 ? 'order' : 'orders'}.`}
+          {`You grossed ${moneyGrouped(total)} over ${periodLabel.toLowerCase()}, across ${orderCount(inPeriod).toLocaleString()} ${orderCount(inPeriod) === 1 ? 'order' : 'orders'}.`}
         </p>
-        <p className="revenue-verdict-prior">{compareLine(total, previousTotal)}</p>
+        <p className="revenue-verdict-prior">{compareLine(total, inPrevious)}</p>
         {dropped === 0 ? null : (
           <p className="revenue-verdict-dropped">
             {`${dropped.toLocaleString()} ${dropped === 1 ? 'line has' : 'lines have'} no usable price or date and ${dropped === 1 ? 'is' : 'are'} left out of every figure here.`}
@@ -273,17 +287,29 @@ export function Revenue() {
       <section className="revenue-months">
         <h2 className="bn-label">By month</h2>
         {spark === null ? null : (
-          <svg
-            className="revenue-spark"
-            viewBox="0 0 560 64"
-            preserveAspectRatio="none"
-            aria-hidden="true"
-            focusable="false"
-          >
-            {spark.map((segment, at) => (
-              <polyline key={at} points={segment.map(([x, y]) => `${x.toFixed(1)},${y.toFixed(1)}`).join(' ')} />
-            ))}
-          </svg>
+          <>
+            <svg
+              className="revenue-spark"
+              viewBox="0 0 560 64"
+              preserveAspectRatio="none"
+              aria-hidden="true"
+              focusable="false"
+            >
+              {spark.map((segment, at) => (
+                <polyline key={at} points={segment.map(([x, y]) => `${x.toFixed(1)},${y.toFixed(1)}`).join(' ')} />
+              ))}
+            </svg>
+            {/* THE AXIS, NAMED RATHER THAN LEFT TO GUESSING. Oldest-left is the direction a
+                reader already expects of a line chart, but the row list right below runs the
+                other way on purpose (a retrospective reads "what happened lately" first) --
+                so the two ends are said in words, not just drawn. */}
+            {periodMonths.length > 0 ? (
+              <div className="revenue-spark-axis" aria-hidden="true">
+                <span>{monthLabel(periodMonths[0]!.key)}</span>
+                <span>{monthLabel(periodMonths[periodMonths.length - 1]!.key)}</span>
+              </div>
+            ) : null}
+          </>
         )}
         <div className="revenue-month-rows">
           {periodMonths
@@ -292,7 +318,7 @@ export function Revenue() {
             .map((m) => (
               <div className="revenue-month-row" key={m.key} data-current={m.key === monthKey(latest)}>
                 <span className="revenue-month-name">{monthLabel(m.key)}</span>
-                <span className="bn-money">{money(m.gross)}</span>
+                <span className="bn-money">{moneyGrouped(m.gross)}</span>
                 <span className="revenue-month-orders">{`${m.orders.toLocaleString()} ${m.orders === 1 ? 'order' : 'orders'}`}</span>
               </div>
             ))}
@@ -323,6 +349,11 @@ export function Revenue() {
                 <tr key={row.name}>
                   <td>{row.name}</td>
                   <td className="num">{row.copies.toLocaleString()}</td>
+                  {/* PLAIN, NOT GROUPED — a per-product row reads at three or four digits,
+                      the same size `money()` is already right for everywhere else it is used,
+                      and a comma here would be the only one in a column of otherwise-plain
+                      figures. Grouping is for the two headline totals, not every number on
+                      the screen. */}
                   <td className="num"><span className="bn-money">{money(row.gross)}</span></td>
                   <td>{row.last.toLocaleDateString()}</td>
                 </tr>

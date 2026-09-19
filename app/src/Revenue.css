@@ -43,6 +43,14 @@
   stroke-linecap: round;
 }
 
+.revenue-spark-axis {
+  display: flex;
+  justify-content: space-between;
+  font-size: var(--bn-fs-xs);
+  color: var(--bn-ink-4);
+  margin-top: var(--bn-1);
+}
+
 .revenue-month-rows {
   display: flex;
   flex-direction: column;
