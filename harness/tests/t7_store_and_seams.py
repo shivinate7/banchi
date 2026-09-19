@@ -1128,7 +1128,7 @@ def check_set_and_rarity(checks: Checks) -> None:
         )
         checks.equal(
             conn.execute("SELECT value FROM meta WHERE key = 'schema'").fetchone()[0],
-            "8",
+            str(db.SCHEMA_VERSION),
             "stamped at the new version",
         )
         checks.equal(
@@ -14163,11 +14163,17 @@ def check_cli_refusals(checks: Checks) -> None:
     # judgement at all — it is a mechanical newest-wins fold of two files already on disk —
     # so it is the one command here that previews by habit rather than because a real
     # decision hides inside it.
+    #
+    # `archive` IS THE TWELFTH, AND IT ARRIVED WITH D-a-price-history-archive. `archive
+    # sweep` writes the price-history archive on `--write` and nowhere else, and `archive
+    # show` only reads. Unlike `readings adopt`, `sweep --write` is never a full replace —
+    # a bucket a pass does not mention survives, because the source's own 357-day window
+    # means it may be the only copy of that observation left anywhere.
     checks.equal(
         sorted(entry.COMMANDS),
-        ["cards", "emit", "identify", "join", "prices", "queue", "readings", "reconcile",
-         "reprice", "rescue", "scan"],
-        "eleven commands are registered, and only eleven",
+        ["archive", "cards", "emit", "identify", "join", "prices", "queue", "readings",
+         "reconcile", "reprice", "rescue", "scan"],
+        "twelve commands are registered, and only twelve",
     )
 
     # No command may read stdin. Asserted against the source of every module the dispatch

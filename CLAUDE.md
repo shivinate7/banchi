@@ -218,6 +218,15 @@ make catalog-mirror # STEP 9 PIECE 3, DRY RUN ONLY as shipped. ARGS=--dry-run HE
                                    #   (D189). Previews. `--write` is a FULL REPLACE of both
                                    #   tables.
 ./pkmnscan readings show           # what the table holds, and which files it last credited.
+./pkmnscan archive  sweep [--write] # THE PRICE-HISTORY ARCHIVE (D-a-price-history-archive).
+                                   #   The source's 357-day window slides. This press reads
+                                   #   every range for every sku this store has sold or holds,
+                                   #   and keeps a copy past that ceiling. Previews. UNLIKE
+                                   #   `readings adopt`, `--write` NEVER clears a row a pass
+                                   #   did not mention. A bucket that ages out of the source
+                                   #   is never deleted here. No timer runs this. It is a press.
+./pkmnscan archive  show [--sku ID] # what the archive holds, and which ranges were last
+                                   #   swept. `--sku` also prints one sku's own buckets.
 ./pkmnscan queue    refresh [--export <file.csv>] [--write]
                                    # re-resolve EVERY open queue entry, store-wide, not only
                                    #   entries whose box holds a live run. Runs the same ladder

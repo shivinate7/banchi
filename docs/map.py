@@ -382,7 +382,7 @@ COMPONENTS = [
                             "governed_by": ["D1", "D3", "D9", "D21", "D25", "D36", "D48", "D86",
                                             "D87", "D100", "D145", "D172", "D180",
                                             "D189", "D210",
-                                            "D213"],
+                                            "D213", "D-a-price-history-archive"],
                             "tested_by": ["T7"]},
             "cmd_scan.py": {"does": "read the QR codes off a directory of code-card photos into "
                                     "the ledger. FREE — no model call, no network, no money gate "
@@ -473,6 +473,20 @@ COMPONENTS = [
                                              "D26", "D88", "D89",
                                              "D213"],
                              "tested_by": ["T7"]},
+            # THE PRESS `pkmnscan archive sweep` RUNS (D-a-price-history-archive). Argument
+            # parsing and the preview/--write/show split; the walk itself is
+            # `pipeline/pricearchive.py`, proved independently by `make pricearchive-selftest`.
+            "cmd_pricearchive.py": {"does": "`pkmnscan archive sweep` runs "
+                                            "`pipeline/pricearchive.py:sweep` over "
+                                            "`rows_from_store()` and folds the result into "
+                                            "`price_history` with `PriceArchive.upsert()` — "
+                                            "which NEVER clears a row a pass did not mention, "
+                                            "unlike `readings adopt`'s full replace. Previews "
+                                            "by default. `archive show [--sku]` reads the "
+                                            "table and writes nothing.",
+                                    "governed_by": ["D-a-price-history-archive", "D62", "D86",
+                                                    "D43"],
+                                    "tested_by": []},
             "cmd_rescue.py": {"does": "`pkmnscan rescue <run>` re-addresses a STRANDED run's "
                                       "cards to the positions their photographs are at now and "
                                       "derives a SECOND run over the drawer they are actually "
@@ -988,6 +1002,28 @@ COMPONENTS = [
                                     "directly, so `tested_by` is empty rather than a "
                                     "citation nothing backs — `check_readings_adopt_cli` in "
                                     "T7 exercises it only through the CLI dispatch."},
+            # THE SWEEP `pkmnscan archive sweep` RUNS (D-a-price-history-archive). Reads
+            # `pipeline/pricehistory.py`'s live endpoint for every SKU `rows_from_store` names
+            # and hands `store/pricearchive.py` what came back, keyed so D62's overlapping
+            # ranges never collide.
+            "pricearchive.py": {"does": "`rows_from_store` reads only the `cards` table for "
+                                        "every distinct, non-empty SKU and builds one "
+                                        "export-shaped row per SKU (Product Line resolved "
+                                        "through `pipeline/games.py`). `sweep` takes those "
+                                        "rows and anything shaped like "
+                                        "`pipeline/pricehistory.py:Market` and turns every "
+                                        "range's buckets into `store/pricearchive.py:Bucket` "
+                                        "rows, keyed `(sku, range, start)` — never "
+                                        "`width_days`, because `semiannual` and `annual` are "
+                                        "both seven-day buckets and a width-only key would "
+                                        "collide them. Reports refusals by SKU, never drops "
+                                        "one.",
+                                "governed_by": ["D62", "D26", "D134", "D-a-price-history-archive"],
+                                "note": "PROVED BY `make pricearchive-selftest`, not in "
+                                        "`make check` — no network call, a FakeMarket stand-in, "
+                                        "17 assertions including the D62 collision arm run both "
+                                        "ways (the real key keeps two rows, a width-only key "
+                                        "collapses them to one)."},
             "livecheck.py": {"does": "the whole store against one live TCGplayer export "
                                      "(My Pricing), both directions. D87: `cli/cmd_reconcile.py` "
                                      "scopes its diff to one run's emitted_skus while "
@@ -1489,6 +1525,25 @@ COMPONENTS = [
                                     "31 assertions, all caught. No harness test exercises it, "
                                     "so `tested_by` is empty rather than a citation nothing "
                                     "backs."},
+            # THE PRICE-HISTORY ARCHIVE (D-a-price-history-archive). Unlike `readings.py`'s
+            # `Readings.replace()`, this table is NEVER a full replace — see its own module
+            # docstring for why a bucket a later sweep does not mention must survive forever
+            # once the source's 357-day window can no longer reproduce it.
+            "pricearchive.py": {"does": "`price_history` (one row per (sku, range, start), "
+                                        "never `width_days` — `semiannual` and `annual` are "
+                                        "both seven-day buckets, so a width-only key would "
+                                        "collide two different observations, exactly the D62 "
+                                        "collision this table exists to prevent) and "
+                                        "`price_history_sources` beside it (one row per range "
+                                        "last swept — requested, answered, refused). "
+                                        "`PriceArchive.upsert()` only ADDS a new key or "
+                                        "overwrites an existing key with a fresher reading of "
+                                        "the SAME bucket; a key a pass does not mention is left "
+                                        "untouched, forever.",
+                                "governed_by": ["D-a-price-history-archive", "D62", "D88",
+                                                "D189"],
+                                "note": "PROVED BY `make pricearchive-selftest` — 17 "
+                                        "assertions, no network, over a throwaway store."},
             "files.py": {"does": "where the store lives, the lock, and the atomic replace the "
                                  "files still beside the database use (prices.json, codes.jsonl)",
                          "governed_by": ["D13", "D15", "D43", "D86", "D166", "D189"],
@@ -1504,7 +1559,8 @@ COMPONENTS = [
                                    "`history()`'s narrower sibling: the `buried` events alone, "
                                    "for `#/graveyard`'s read.",
                            "governed_by": ["D145", "D13", "D53", "D63", "D88", "D134", "D174",
-                                           "D189", "D191"], "tested_by": ["T7"]},
+                                           "D189", "D191", "D-a-price-history-archive"],
+                           "tested_by": ["T7"]},
             "rows.py": {"does": "`Rows`: a keyed mapping of records that is a dict to every "
                                 "caller and, bound to a `Source`, loads one row, one indexed "
                                 "column's matches, or column values with no object built at all. "
@@ -1520,7 +1576,8 @@ COMPONENTS = [
                               "that same table — no new index, because this repo has no schema "
                               "migration to add one to a store already on disk.",
                       "governed_by": ["D145", "D20", "D26", "D86", "D88", "D134", "D140", "D166", "D172",
-                                      "D174", "D189", "D192", "D213"], "tested_by": ["T7"]},
+                                      "D174", "D189", "D192", "D213", "D-a-price-history-archive"],
+                      "tested_by": ["T7"]},
             "photos.py": {"does": "where a card's photograph lives, and the ONLY module permitted "
                                   "to compose that path: `<home>/photos/<aa>/<cid>.jpg`, a pure "
                                   "function of the card's own name. `adopt` is the per-card, "
@@ -2263,6 +2320,20 @@ COMPONENTS = [
                         "(its SKU drops out — a cache refresh, never an accumulating "
                         "ledger). Thirty-one assertions, all passing.",
                 "governed_by": ["D189", "D18", "D86", "D88"],
+            },
+            "pricearchive-selftest.py": {
+                "does": "proves store/pricearchive.py and pipeline/pricearchive.py against a "
+                        "throwaway store, no network (D-a-price-history-archive). A "
+                        "FakeMarket duck-types `Market.readings_for_rows` over canned "
+                        "pipeline/pricehistory.py objects. Proves the D62 key argument both "
+                        "ways: the real (sku, range, start) key keeps two rows for the same "
+                        "calendar day read from `semiannual` and `annual`, and a width-only "
+                        "key is shown, in the same run, to collapse them into one. Proves "
+                        "the never-delete rule: a later sweep over a narrower selection, or "
+                        "one that resolves nothing, never removes an earlier pass's rows. "
+                        "Seventeen assertions, all passing. Not wired into `make check` — "
+                        "`make catalog-index-selftest`'s own precedent.",
+                "governed_by": ["D-a-price-history-archive", "D62", "D18"],
             },
             "reap-selftest.sh": {
                 "does": "proves reap.py by pointing it at processes it must not kill. A "
