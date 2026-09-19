@@ -13865,13 +13865,19 @@ def check_spec_map(report: Report) -> None:
     """`scripts/browser-scope.py`'s spec map (`specs`), against `app/tests/` and the shared
     surfaces it names, both ways (D-browser-spec-allow-list).
 
-    MECHANICAL, `browser scope`'s reasoning one level down: every spec under `app/tests/`
-    must reach at least one file (itself, at minimum — a spec the map cannot resolve at all
-    is a spec `classify_specs` can never narrow FOR, so every change reaching it would
-    silently widen to every spec, never a defect on its own but worth seeing), every file the
-    map's reverse index names must still exist, and `main.tsx`'s own import closure — the
-    real shell chain Vite loads first — must be covered by `is_shared_surface` or by the kit
-    prefix, or a shared file has quietly stopped being treated as one.
+    MECHANICAL, `browser scope`'s reasoning one level down. Four things, none of them
+    "a spec reaches its own file" — every spec's own closure trivially contains its own
+    path, so that check passes on a spec import-graph that resolves nothing real:
+
+    - every spec's closure reaches at least one file under `app/src/` — a spec that only
+      ever reaches test helpers and itself is a spec the map cannot narrow FOR, and every
+      change to the screen it claims to test would silently widen to every spec instead;
+    - every `ROUTES` view file is reached by at least one spec that NAMES its hash
+      explicitly (never a `routesFromNav(` sweep alone — `unnamed_route_views()`'s own
+      argument, checked here rather than trusted to it);
+    - every file the map's reverse index names must still exist;
+    - the shell's own closure (`App.tsx`/`main.tsx`, cut off at the screens) must be covered
+      by `is_shared_surface`, or a shared file has quietly stopped being treated as one.
     """
     if not exists(BROWSER_SCOPE_SCRIPT):
         report.add("spec map", MECHANICAL, [Finding(
@@ -13896,16 +13902,32 @@ def check_spec_map(report: Report) -> None:
         findings.append(Finding(rel(BROWSER_SCOPE_SCRIPT),
                                 "`all_specs()` found no `app/tests/*.spec.ts` files."))
 
+    routes = module.route_views()
     reached_by: Dict[str, Set[str]] = {}
-    for spec_path, files in ((s, module.spec_reach(s, module.route_views())) for s in specs):
+    spec_closures: Dict[str, Set[str]] = {}
+    for spec_path in specs:
+        files = module.spec_reach(spec_path, routes)
+        spec_closures[spec_path] = files
         for path in files:
             reached_by.setdefault(path, set()).add(spec_path)
 
     for spec_path in specs:
-        if spec_path not in reached_by or spec_path not in reached_by.get(spec_path, set()):
+        if not any(path.startswith("app/src/") for path in spec_closures[spec_path]):
             findings.append(Finding(spec_path, (
-                "the map does not reach this spec's own file, so nothing narrows to it — "
-                "every change would widen to every spec for this file alone.")))
+                "reaches no file under `app/src/` at all — its own path is not that (a "
+                "spec's closure always contains itself, which proves nothing). A change to "
+                "whatever screen this spec claims to test would never narrow to it.")))
+
+    named_views: Set[str] = set()
+    for spec_path in specs:
+        named_views |= module.spec_named_views(spec_path, routes)
+    for route_path, view in sorted(routes.items()):
+        if view not in named_views:
+            findings.append(Finding(view, (
+                f"the `{route_path}` route's view file is never named by hash in any "
+                "spec's own body — only ever, at best, by a `routesFromNav(` sweep. "
+                "`unnamed_route_views()` must then cover it as a shared surface (checked "
+                "in the shell-closure loop below); either way this is worth seeing.")))
 
     for path in reached_by:
         if not exists(ROOT / path):
