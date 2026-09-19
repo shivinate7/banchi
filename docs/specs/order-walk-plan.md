@@ -530,6 +530,9 @@ says still owes, and `record_pull` refuses if the line is already full. The ship
 **The copy's bar reads `#8 of 34`, never `#8 of 34 so far`** (owner, 2026-09-19). `so far` is
 `PositionBar`'s own caption for a box still being filled — true on `#/capture` and `#/inventory`,
 meaningless in the middle of a pull. The walk drops the two words; every other screen keeps them.
+**Superseded the same evening, once §13 made the pane one component:** the owner ruled *drop it
+everywhere*, `#/inventory` included, rather than carry a flag that makes the shared pane differ
+by two words. `#8 of 34` is the whole caption on every screen.
 
 **The row's address stays as built — `#8 RB Origins Commons` — until the owner has walked with
 it.** The owner's word: leave it, and ask again after real use. A session that changes it before
@@ -795,7 +798,8 @@ order is chosen; that is theirs to shape after they see the build and is NOT bui
 **Inventory's card pane, unchanged.** Name, number, game, the pills, the photograph, *Every copy
 of this card* with its triad, the SKU line, every copy in the store with `CARD n`, `BOX`,
 `SECTION`, after/before, the state pill, **`Mark sold`**, the section ruler and the box bar
-(D155), `#387 of 675 so far`, Details. **`Mark sold` is the button and the word**; on this screen
+(D155), `#387 of 675` (no `so far` anywhere, ruled with §8's caption), Details. **`Mark sold` is
+the button and the word**; on this screen
 it also records the copy against an owing order (D212: no order claims a copy, the write
 refuses a full line). The copies in the section you are standing in come first; the order is
 held for the walk (§8's ruling: ranking frozen, position refreshed); a sale refreshes
@@ -805,8 +809,22 @@ owed copies are all sold, the next card lights.
 ### Words
 
 Inventory's, only: box, section, card, copy, on hand, sold, Mark sold. `all pulled` on a buyer
-row becomes `all sold`. `Drawer`, `pull`, `stop`, `take` do not appear on this screen. No typed
-middle dot in any string (the rule and its reader are their own branch).
+row becomes `all sold`. The order pill that read `Ready to pull` reads **`Ready`** — one word
+(owner, 2026-09-19, over `Ready to sell` and `Ready to walk`). `Drawer`, `pull`, `stop`, `take`
+do not appear on this screen. No typed middle dot in any string (the rule and its reader are
+their own branch).
+
+### Four answers after the second render — RULED 2026-09-19
+
+The owner saw the rebuilt screen over a seeded store beside `#/inventory` and answered:
+
+- **Copy budget (D194).** `#/orders` measures 140 words against the pinned 107; the 33 are
+  Inventory's Details vocabulary the reused pane carries. **Pin to the measured count.** The
+  pane is worth its words; hiding facts on one screen would make the two panes differ.
+- **`so far`.** Dropped everywhere — see §8's caption paragraph.
+- **`market` and `listings`.** Not wired for Orders in this build; the pane's two pricing facts
+  draw their honest empty states. **Ship as is.** Wiring is a follow-up if the walk misses them.
+- **The pill's word** is `Ready`, above.
 
 ### What is deleted
 
