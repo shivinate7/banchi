@@ -795,7 +795,15 @@ function CopiesPanel({
     <section className="inventory-copies">
       {failure === null ? null : <Notice tone="danger" title={failure.message} code={failure.code} />}
 
-      {loading || !settled ? (
+      {/* D118: a press changes what is on screen, never where the rest of it is. A re-read
+          after `Mark sold` (`doSell`'s `setReloads`) keeps `group` standing from the old
+          `results` while `useSearch` sets `loading` — measured at 1440 with `/search` delayed
+          800ms: drawing this skeleton on every `loading`/`!settled` pushed `CardLocations` from
+          y=79 to y=181 and back on an ~93ms answer. Draw it only when there is nothing to stand
+          on — a fresh card on the walk (`group` is null because `row.key` is not in the still-
+          old `results`) or the very first read. A re-read of the SAME card keeps its `group`
+          (found by key in the stale `results`) and the list stays put while the fetch runs. */}
+      {group === null && (loading || !settled) ? (
         <div className="inventory-looking">
           <span className="bn-skeleton" style={{ width: 140, height: 14 }} />
           <span className="bn-skeleton" style={{ width: '100%', height: 64 }} />
