@@ -24,6 +24,14 @@ only one of them has a removal path, so there is no flag and no argument that ca
 doubtful case into a delete — the same asymmetry `icloud-sweep.py` is built on, taken
 deliberately rather than reinvented.
 
+LIVENESS IS READ FROM EVERY PLACE IT IS WRITTEN, AND THERE ARE TWO. The console app keeps one
+answer in `~/.claude/sessions/<pid>.json`; git keeps the other in a worktree's own `locked`
+file. Neither is complete. A session that spawns agents registers ONE `cwd` and locks SEVERAL
+trees — measured on this clone 2026-09-19: one live session's record named one worktree while
+its locks held three — so the records alone said "no session" over trees a live process had
+claimed, and the sweep printed `reaped` over two of them. `worktrees` reads the lock and
+`_lock_lines` reports it; a locked tree is never a candidate.
+
 LIVENESS IS READ, NEVER GUESSED. File mtimes and `git status` cannot tell a live worktree from
 a dead one: on the day this was written two trees showed zero dirty files and no recent writes,
 then switched branches while they were being measured. The console app already keeps the
@@ -43,7 +51,8 @@ and nothing that writes may run on the path that decides whether a commit procee
 SELF-TEST gates, and does not write outside a temp directory. `make status` reports the count,
 which is where a fact you should know but need not act on belongs.
 
-    scripts/janitor.py                     preview this repo. Presses nothing.
+    scripts/janitor.py                     preview this repo. Presses nothing — and since
+                                           2026-09-19 that is true: tier 1 used to run here.
     scripts/janitor.py --confirm           reap tier 2 as well as tier 1.
     scripts/janitor.py --tier1             the provably-dead only, no prompt. What a hook runs.
     scripts/janitor.py --root PATH         another checkout. Repo-agnostic on purpose.
@@ -63,7 +72,6 @@ PROVE a session started, and it can never name the main checkout's server.
 from __future__ import annotations
 
 import argparse
-import contextlib
 import json
 import os
 import re
@@ -146,6 +154,29 @@ def _real(path: str) -> str:
         return path
 
 
+def _pid_alive(pid: int) -> bool:
+    """Is this pid running right now? ANYTHING THAT IS NOT A DEFINITE "no" READS AS ALIVE.
+
+    It is `os.kill(pid, 0)` and not `ps -o pid= -p`, though the two ask the same question, and
+    the reason is the direction-of-safety rule this whole file turns on. `ps` answers with an
+    EXIT CODE and an empty line for a pid that is gone — and with exactly the same pair when
+    `ps` itself cannot be run at all, so the one case that must read LIVE is indistinguishable
+    from the one case that must read DEAD. `os.kill` cannot fail to start, and it separates the
+    two by errno: `ProcessLookupError` is the only answer that means gone. `EPERM` means the
+    process EXISTS and belongs to somebody else, which `live_sessions` read as dead until this
+    function was written.
+    """
+    if pid <= 0:
+        return True
+    try:
+        os.kill(pid, 0)
+    except ProcessLookupError:
+        return False
+    except OSError:
+        return True
+    return True
+
+
 def say(*lines: str) -> None:
     for line in lines:
         print(line)
@@ -211,7 +242,20 @@ def _same_process(record: dict, pid: int) -> bool:
     return abs(actual - started / 1000.0) <= 120.0
 
 
-def live_sessions(sessions_dir: Path) -> List[Session]:
+class Oracle(NamedTuple):
+    """What the liveness records said, AND WHICH OF THEM WOULD NOT PARSE.
+
+    The second half is not bookkeeping. A record that cannot be read is a session that cannot
+    be SEEN, and an unseen session is a tree this sweep would call empty — the same shape of
+    failure as the 2026-09-06 timezone bug, arriving by a different door. The old build
+    `continue`d past an unparseable file in silence, so the one signal that the oracle was
+    incomplete was thrown away at the moment it was produced.
+    """
+    sessions: List[Session]
+    unreadable: List[str]
+
+
+def live_sessions(sessions_dir: Path) -> Oracle:
     """Every Claude session running right now, and the tree each one is standing in.
 
     THIS IS THE ONE FACT THAT CANNOT BE INFERRED FROM THE REPOSITORY. A worktree with no dirty
@@ -224,25 +268,26 @@ def live_sessions(sessions_dir: Path) -> List[Session]:
     not returned — it is not an error, and it is not worth reporting.
     """
     found = []  # type: List[Session]
+    torn = []  # type: List[str]
     if not sessions_dir.is_dir():
-        return found
+        return Oracle(found, torn)
     for path in sorted(sessions_dir.glob("*.json")):
         try:
             record = json.loads(path.read_text(encoding="utf-8"))
         except (OSError, ValueError):
+            torn.append(path.name)
             continue
         pid = record.get("pid")
         cwd = record.get("cwd")
         if not isinstance(pid, int) or not isinstance(cwd, str) or not cwd:
+            torn.append(path.name)
             continue
-        try:
-            os.kill(pid, 0)
-        except OSError:
+        if not _pid_alive(pid):
             continue
         if not _same_process(record, pid):
             continue
         found.append(Session(pid, _real(cwd), str(record.get("name") or "")))
-    return found
+    return Oracle(found, torn)
 
 
 def sessions_in(sessions: Sequence[Session], tree: str) -> List[Session]:
@@ -308,7 +353,8 @@ def _process_table() -> List[Tuple[int, str]]:
     return rows
 
 
-def dead_rooted_servers(mine: int, confine: str = "") -> List[Server]:
+def dead_rooted_servers(mine: int, confine: str = "",
+                        table: Optional[Sequence[Tuple[int, str]]] = None) -> List[Server]:
     """Processes still running out of a directory that is gone.
 
     `confine` narrows the hunt to one subtree. It is empty in every real run — an orphan's
@@ -326,7 +372,7 @@ def dead_rooted_servers(mine: int, confine: str = "") -> List[Server]:
     on that day still existed precisely because the loop kept recreating it.
     """
     found = []  # type: List[Server]
-    for pid, command in _process_table():
+    for pid, command in (_process_table() if table is None else table):
         if pid == mine:
             continue
         for raw in _ABS_PATH_RE.findall(command):
@@ -348,23 +394,44 @@ def dead_rooted_servers(mine: int, confine: str = "") -> List[Server]:
     return found
 
 
-def servers_under(tree: str, mine: int) -> List[Server]:
-    """Anything running out of `tree` whose files are all still present.
+def servers_under(tree: str, skip: Set[int],
+                  table: Optional[Sequence[Tuple[int, str]]] = None,
+                  dirs: Optional[dict] = None) -> List[Server]:
+    """Anything running out of `tree` — by a path in its argv, OR by the directory it runs in.
 
     Reported, never reaped by this sweep: a tree that still exists may have a person in it, and
     stopping a server is `make down`'s job and the teardown hook's. The janitor's interest is
     only in saying that it is there.
+
+    THE SECOND ARM WAS MISSING AND `_placed` HAD IT ALL ALONG. Two functions in this one file
+    asked "does this process run out of that tree" and answered differently: `_placed` reads the
+    argv AND the working directory, this read the argv alone. So the exact incident `_placed`
+    was widened for — `bash scratchpad/autodrive.sh`, whose command line carries no path under
+    any checkout — did NOT stop its tree being offered for removal, and removing the tree under
+    it is how 2026-09-06's four restarting supervisors were made. One question, one answer.
+
+    `skip` IS A CHAIN AND NOT A PID, AND THE SECOND ARM IS WHY. The old exclusion was
+    `pid == mine`, which was enough while only the argv was read: the sweep's own `python3
+    scripts/janitor.py` carries no absolute path. A working directory does. Run from a linked
+    worktree, the SHELL that started the sweep is standing in that very tree — so the tree
+    would report "a server is running out of it" about the sweep asking the question, and a
+    genuinely reapable tree could never be offered while anybody swept from inside it.
+    `loose_processes` had the answer already: exclude this process and every ancestor of it.
+
+    `table` and `dirs` are passed in by `sweep` so that every tree and every husk is judged
+    against ONE sample of the process table. Read per call, twenty trees meant twenty `ps` runs
+    over three seconds, and two trees judged a second apart were judged against two different
+    machines.
     """
     root = _real(tree)
+    rows = _process_table() if table is None else table
+    where = {} if dirs is None else dirs
     found = []  # type: List[Server]
-    for pid, command in _process_table():
-        if pid == mine:
+    for pid, command in rows:
+        if pid in skip:
             continue
-        for raw in _ABS_PATH_RE.findall(command):
-            token = _real(raw)
-            if token == root or token.startswith(root + os.sep):
-                found.append(Server(pid, command, "", root))
-                break
+        if _placed(command, where.get(pid, ""), root):
+            found.append(Server(pid, command, "", root))
     return found
 
 
@@ -451,7 +518,7 @@ def _working_dirs(pids: Set[int]) -> dict:
 
     Bounded on purpose. `reap.py` asks `lsof` for the whole machine because a kill's targets
     can be anywhere; here the candidates have already been narrowed by `_SESSION_MARK` to a
-    handful, and `make status` runs this sweep at the head of every session. Measured over six
+    handful, and `make status` runs this sweep whenever somebody types it. Measured over six
     pids on this machine: 97 ms.
     """
     if not pids:
@@ -531,8 +598,9 @@ def loose_processes(root: str, main_tree: str, trees: Sequence[Tree],
 
       * NO LIVE OWNER — offered, and pressed only on `--confirm`. Tier 2, not tier 1, and the
         entry argues it: `sweep` reaps tier 1 before it looks at `confirm` at all, so `make
-        status` — which runs the bare preview at the head of every session — would SIGTERM
-        these with no preview and no prompt.
+        status` — which runs the bare sweep — would have SIGTERMed these with no preview and
+        no prompt. That ordering is fixed as of 2026-09-19 and this placement is still right:
+        `--tier1` presses whatever tier 1 holds, unattended, at every session end.
       * STILL OWNED BUT OLDER THAN `STALE_HOURS` — reported, and never reaped under any flag.
         A live session claims it, and a sweep does not get to kill something whose owner is
         sitting right there to be asked.
@@ -608,25 +676,112 @@ def loose_processes(root: str, main_tree: str, trees: Sequence[Tree],
 class Tree(NamedTuple):
     path: str
     branch: str
+    locked: bool = False
+    lock: str = ""      # the lock's own reason, or "" when it was locked without one
+
+
+# The pid inside a lock reason. `git worktree lock --reason` takes free text, and the one this
+# machine writes is `claude agent <name> (pid 95092 start Sat Sep 19 17:22:35 2026)` — so the
+# pid is READ OUT of prose rather than parsed from a field, and a reason shaped any other way
+# simply yields nothing. Yielding nothing keeps the tree, which is the safe answer, so this
+# regex can only ever make the sweep more cautious and never less.
+_LOCK_PID_RE = re.compile(r"\bpid[\s:=#]*(\d+)\b", re.IGNORECASE)
+
+
+def _lock_text(tree: str, porcelain: str) -> str:
+    """A lock's reason, read from the file git keeps it in, falling back to the porcelain line.
+
+    THE FILE IS PREFERRED BECAUSE THE PORCELAIN LINE CANNOT CARRY A NEWLINE. `git worktree list
+    --porcelain` prints `locked <reason>` on one line and the reason is free text, so a
+    multi-line reason runs off the end of its own record and the remainder parses as whatever
+    attribute it happens to resemble. `$GIT_COMMON_DIR/worktrees/<name>/locked` holds the same
+    text with no framing at all, and a linked tree names that directory in its own `.git` file.
+    """
+    marker = Path(tree) / ".git"
+    try:
+        if marker.is_file():
+            head = marker.read_text(encoding="utf-8").strip()
+            if head.startswith("gitdir:"):
+                text = (Path(head[len("gitdir:"):].strip()) / "locked").read_text(
+                    encoding="utf-8").strip()
+                if text:
+                    return text
+    except OSError:
+        pass
+    return porcelain
 
 
 def worktrees(root: str) -> List[Tree]:
-    """Every registered working tree of this clone, main included."""
+    """Every registered working tree of this clone, main included — AND WHETHER IT IS LOCKED.
+
+    THE LOCK IS A SECOND LIVENESS SIGNAL, ALREADY ON DISK, AND NOTHING HERE READ IT UNTIL
+    2026-09-19. `live_sessions` is an oracle about SESSIONS, and a session that spawns agents
+    registers ONE `cwd`: measured on this clone, pid 95092's record named
+    `worktrees/app-tasks-architecture-61dc78` while its locks held
+    `worktrees/agent-a27760bcdfc77fa9a` as well, and pid 2423's record named one tree while its
+    locks held two others. `sessions_in` could not see those trees under any reading of the
+    records, so the sweep printed `reaped ... (no session, nothing uncommitted)` over two trees
+    a live process had claimed — one of them carrying two uncommitted files. The only thing
+    between that sentence and the act was `git worktree remove`'s own refusal, which is
+    somebody else's guard and therefore not coverage.
+
+    THE PARSE IS RECORD-BASED RATHER THAN LINE-BASED, and that is the lock's doing. The old
+    loop cleared its cursor the moment it saw `branch` or `detached`, so an attribute printed
+    AFTER those — which `locked` and `prunable` both are — could never be attributed to the
+    tree it belonged to. There was no line to add.
+    """
     got = run(["git", "worktree", "list", "--porcelain"], cwd=root)
     if not got.ok:
         return []
     trees = []  # type: List[Tree]
     here = ""
-    for line in got.out.splitlines():
+    branch = ""
+    locked = False
+    lock = ""
+
+    def flush() -> None:
+        if here:
+            trees.append(Tree(here, branch, locked, _lock_text(here, lock) if locked else ""))
+
+    for line in got.out.splitlines() + [""]:
         if line.startswith("worktree "):
+            flush()
             here = _real(line[len("worktree "):].strip())
-        elif line.startswith("branch ") and here:
-            trees.append(Tree(here, line[len("branch refs/heads/"):].strip()))
-            here = ""
-        elif line.startswith("detached") and here:
-            trees.append(Tree(here, ""))
-            here = ""
+            branch, locked, lock = "", False, ""
+        elif line.startswith("branch "):
+            branch = line[len("branch refs/heads/"):].strip()
+        elif line.startswith("locked"):
+            locked = True
+            lock = line[len("locked"):].strip()
+        elif not line.strip():
+            flush()
+            here, branch, locked, lock = "", "", False, ""
     return trees
+
+
+def _lock_lines(tree: Tree) -> List[str]:
+    """What the sweep says about a locked tree. It is KEPT either way; only the sentence moves.
+
+    A LOCK IS SOMEBODY'S EXPLICIT CLAIM, so a dead pid does not release it. The pid is read and
+    reported because an operator clearing up needs to know which of these is finished — but the
+    sweep does not get to decide that a claim somebody wrote down has expired, and `git worktree
+    unlock` is a person's press. Every unreadable case lands on the keep side by construction:
+    no reason, no pid in the reason, and an unreadable pid all leave the tree alone.
+    """
+    if not tree.lock:
+        return ["locked, with no reason recorded — a lock is a claim, and this sweep keeps it"]
+    found = _LOCK_PID_RE.search(tree.lock)
+    lines = ["locked: {0}".format(_shorten(tree.lock))]
+    if not found:
+        lines.append("the reason names no pid, so nothing here can say the claim is over")
+        return lines
+    pid = int(found.group(1))
+    if _pid_alive(pid):
+        lines.append("pid {0} IS ALIVE — this tree is in use".format(pid))
+    else:
+        lines.append("pid {0} is gone; `git worktree unlock {1}` releases it".format(
+            pid, tree.path))
+    return lines
 
 
 def main_checkout(root: str) -> str:
@@ -658,7 +813,13 @@ def husks(root: str, live_roots: Set[str]) -> List[str]:
     for entry in sorted(base.iterdir()):
         if not entry.is_dir() or _real(str(entry)) in live_roots:
             continue
-        contents = {child.name for child in entry.iterdir()}
+        try:
+            contents = {child.name for child in entry.iterdir()}
+        except OSError:
+            # A directory this sweep cannot read is not one it may delete, and an unhandled
+            # traceback here takes tier 1 down with it — including the orphan reaping that runs
+            # unattended at every session end.
+            continue
         if contents and contents <= HUSK_NAMES:
             found.append(_real(str(entry)))
     return found
@@ -727,7 +888,7 @@ def _relative(path: str, root: str) -> str:
         return path
 
 
-def _stop(pid: int) -> None:
+def _stop(pid: int) -> bool:
     """SIGTERM one process, and its group ONLY WHEN IT LEADS THAT GROUP.
 
     A supervisor's children should go with it, and `serve.py` spawns every one
@@ -739,12 +900,22 @@ def _stop(pid: int) -> None:
     orphan whose own script is gone, and the loose process nothing owns — and a guard that
     reasoned one way in one place and another way in the other is how `reap.py`'s own
     `pids_under`/`verdict_for` split produced a defect nobody could see.
+
+    THE RETURN VALUE IS "THE SIGNAL WAS DELIVERED", NOT "THE PROCESS IS GONE", and the caller
+    prints one and not the other. A process already gone counts as delivered; a process that
+    refuses the signal — another user's, EPERM — counts as not, and the sweep says so rather
+    than printing the word `reaped` over it.
     """
-    with contextlib.suppress(OSError):
+    try:
         if os.getpgid(pid) == pid:
             os.killpg(pid, signal.SIGTERM)
         else:
             os.kill(pid, signal.SIGTERM)
+    except ProcessLookupError:
+        return True
+    except OSError:
+        return False
+    return True
 
 
 def _shorten(command: str, width: int = 64) -> str:
@@ -760,39 +931,124 @@ def sweep(root: str, sessions_dir: Path, confirm: bool, tier1: bool,
     `backup/` branch is a fact you should know and never a thing to do, so a healthy clone with
     one in it must not fail — the first build returned 1 there and made `make janitor` print
     `Error 1` on a repo with nothing wrong with it.
+
+    A BARE RUN PRESSES NOTHING, WHICH IS WHAT IT HAS ALWAYS CLAIMED AND DID NOT DO. The header
+    above says "preview this repo. Presses nothing" and `status.py:janitor()` says "`make
+    status` must never be a thing that changes the tree" — and until 2026-09-19 the tier 1
+    block ran before `confirm` was ever consulted, so the bare run SIGTERMed orphans, ran `git
+    worktree prune` and `rmtree`'d husks under a command that had asked for none of it. Two
+    documents stating one contract and the code keeping another is not a decision anybody
+    made; it is a drift.
+    Tier 1 is still pressed with no prompt by whatever asks for it BY NAME — `--tier1`, which
+    is what `session-teardown.sh` runs — and by `--confirm`. Nothing is lost and the word
+    PREVIEW means what it says.
+
+    THE RULE THE NEIGHBOURS KEEP IS "NAME THE ACT", NOT "PREVIEW BY DEFAULT", and it is what
+    settled this (owner's word, 2026-09-19, after the convention was looked up rather than
+    recalled). Every comparable tool makes the caller say the destructive word out loud before
+    it presses: `git worktree prune` IS the word, and previews only under `-n`; `git gc` is the
+    word; `docker system prune` is the word and still stops to ask, skippable with `-f`; `git
+    clean` is the word and REFUSES anyway — `clean.requireForce` defaults to true, so it does
+    nothing at all without `-f`, `-i` or `-n`, because its targets exist nowhere else. Not one
+    of them does destructive work under a bare invocation that names no act.
+
+    That is exactly what this was doing. `janitor.py` with no argument names nothing, prints
+    the word PREVIEW in its own header, and signalled processes and deleted directories. The
+    defect was never that tier 1 presses — it is that it pressed under a command that had not
+    been asked. A prompt is the other half of the convention and is no use here: this runs from
+    a SessionEnd hook and from agent sessions with nobody at the keyboard, so the flag is the
+    right form, which is `git clean -f`'s answer to the same problem.
+
+    THE ARGUMENT FOR LEAVING IT ALONE WAS A MEASUREMENT ERROR, AND IT IS RECORDED BECAUSE IT
+    nearly carried the day. The case for pressing was that the bare run is a third cleanup
+    trigger that does not depend on SessionEnd, which `.claude/settings.json` itself calls
+    unreliable at app quit and machine sleep. It is not a trigger at all: the only SessionStart
+    hook is `worktree-guard.sh`, and nothing anywhere runs `make status` or `make janitor` by
+    itself. The comment that says the bare preview runs "at the head of every session" is prose
+    habit, and reading it rather than the hook roster is how this argument was first made.
+
+    TIER 1'S PREVIEW IS `reported` AND NEVER `pending`, because `pending` is the count of work
+    waiting on a HUMAN word and tier 1 waits on no word at all: the session-end hook presses it
+    unattended. Counting it would make `make status` ask the operator for a press that another
+    hook is about to make on its own.
     """
     mine = os.getpid()
-    sessions = live_sessions(sessions_dir)
+    oracle = live_sessions(sessions_dir)
+    sessions = oracle.sessions
     trees = worktrees(root)
     main_tree = main_checkout(root)
-    held = {tree.branch for tree in trees if tree.branch}
     live_roots = {tree.path for tree in trees}
 
+    # ONE SAMPLE OF THE PROCESS TABLE FOR THE WHOLE SWEEP. Every placement question below is
+    # asked against this and not against a fresh `ps`, so two trees judged a second apart are
+    # judged against the same machine. Measured on this one: 936 processes, and the `lsof` that
+    # gives them their working directories costs 0.49 s once, against roughly 30 ms per `ps`
+    # multiplied by every tree and every husk in the old build.
+    table = _process_table()
+    dirs = _working_dirs({pid for pid, _ in table})
+    # The sweep's own chain, for `servers_under`'s reason. `_process_tree` is a second `ps`
+    # because only it carries the parent link; `loose_processes` computes its own for the same
+    # reason and the two agree because nothing between them presses anything.
+    family = set(_chain(_process_tree(), mine))
+    family.add(mine)
+
     reaped = reported = pending = 0
+    press = confirm or tier1
+    verb1 = "reaped   " if press else "would reap"
 
     # ---------------------------------------------------------------- tier 1: the dead
-    orphans = dead_rooted_servers(mine, confine)
-    for server in orphans:
-        say("  reaped    pid {0} — its own {1} is gone".format(
-            server.pid, Path(server.missing).name))
+    for server in dead_rooted_servers(mine, confine, table):
+        say("  {0} pid {1} — its own {2} is gone".format(
+            verb1, server.pid, Path(server.missing).name))
         say("            {0}".format(server.missing))
-        _stop(server.pid)
-        reaped += 1
+        if not press:
+            reported += 1
+            continue
+        if _stop(server.pid):
+            reaped += 1
+        else:
+            say("            NOT STOPPED — the signal was refused")
+            reported += 1
 
-    pruned = run(["git", "worktree", "prune", "-v"], cwd=root)
+    pruned = run(["git", "worktree", "prune", "-v"] + ([] if press else ["--dry-run"]), cwd=root)
     for line in pruned.out.splitlines():
         if line.strip():
-            say("  reaped    registration — {0}".format(line.strip()))
-            reaped += 1
+            say("  {0} registration — {1}".format(verb1, line.strip()))
+            reaped += bool(press)
+            reported += not press
 
     # A husk is removed only once nothing is running under it — they regenerate otherwise.
     for husk in husks(root, live_roots):
-        if servers_under(husk, mine):
+        # THE SESSION ORACLE IS ASKED HERE TOO, AND IT WAS NOT. A husk is a directory whose
+        # REGISTRATION is gone, which is exactly what a session standing in a pruned worktree
+        # is left holding — and `servers_under` alone was the only thing consulted, so one
+        # liveness source stood in for the whole question on the one path that deletes a
+        # directory with no confirmation at all.
+        who = sessions_in(sessions, husk)
+        if who:
+            say("  KEPT      {0}".format(_relative(husk, root)))
+            say("            a session is live in it ({0})".format(
+                ", ".join(s.name or str(s.pid) for s in who)))
+            reported += 1
+            continue
+        if servers_under(husk, family, table, dirs):
             say("  KEPT      {0}".format(_relative(husk, root)))
             say("            a process is still running under it; it would come back")
             reported += 1
             continue
+        if not press:
+            say("  {0} {1}  (husk — no registration, no source)".format(
+                verb1, _relative(husk, root)))
+            reported += 1
+            continue
         shutil.rmtree(husk, ignore_errors=True)
+        if Path(husk).exists():
+            # `ignore_errors=True` swallows a permission failure whole, so the old build printed
+            # `reaped` over a directory that is still there. Look, then speak.
+            say("  NOT REAPED {0}".format(_relative(husk, root)))
+            say("            the directory is still on disk")
+            reported += 1
+            continue
         say("  reaped    {0}  (husk — no registration, no source)".format(_relative(husk, root)))
         reaped += 1
 
@@ -800,6 +1056,25 @@ def sweep(root: str, sessions_dir: Path, confirm: bool, tier1: bool,
         return reaped, reported, pending
 
     # ------------------------------------------------------- tier 2: needs a human word
+    #
+    # NOTHING BELOW RUNS WHILE A SUBJECT IS UNREADABLE, AND THE TWO CASES ARE THE TWO ORACLES.
+    # An unparseable session record is a session this sweep cannot see, and a tree it cannot see
+    # a session in is a tree it calls empty. An unreadable `git worktree list` is worse: `trees`
+    # comes back empty, so every branch loses the protection `held` gives it and `main_tree`
+    # comes back "" — which puts the MAIN CHECKOUT in `linked` inside `loose_processes` and
+    # makes the rig supervisor D53 exists to protect offerable. Both of those failed OPEN.
+    if oracle.unreadable:
+        say("  KEPT      every tree, branch and process — the liveness oracle is incomplete")
+        for name in oracle.unreadable:
+            say("            {0} would not parse".format(name))
+        say("            a record that cannot be read is a session that cannot be seen")
+        return reaped, reported + 1, pending
+    if not trees or not main_tree:
+        say("  KEPT      every tree, branch and process — this clone's own layout is unreadable")
+        say("            `git worktree list` gave {0} tree(s) and the main checkout read as "
+            "{1!r}".format(len(trees), main_tree))
+        return reaped, reported + 1, pending
+
     verb = "reaped   " if confirm else "would reap"
 
     # THE PROCESS NOTHING OWNS COMES FIRST, BECAUSE ITS TREE CANNOT BE REAPED WHILE IT RUNS. The
@@ -833,49 +1108,93 @@ def sweep(root: str, sessions_dir: Path, confirm: bool, tier1: bool,
         say("            started out of {0}, up {1}".format(
             _relative(loose.tree, root),
             "an unreadable time" if loose.hours < 0 else "{0:.1f} h".format(loose.hours)))
-        if confirm:
-            _stop(loose.pid)
-            reaped += 1
-        else:
+        if not confirm:
             reported += 1
             pending += 1
+        elif _stop(loose.pid):
+            reaped += 1
+        else:
+            say("            NOT STOPPED — the signal was refused")
+            reported += 1
 
+    # ------------------------------------------------------------------------- the trees
+    #
+    # THE VERDICT IS COMPUTED BEFORE ANYTHING IS PRINTED OR PRESSED, AND THE BRANCHES ARE WHY.
+    # `held` protects a branch a worktree is standing on, and the old build discarded a branch
+    # from it INSIDE `if confirm:` — after a successful removal. On a preview no tree is
+    # removed, so nothing was ever discarded, so every branch whose tree was about to go still
+    # read as held and printed KEPT; on `--confirm` the same branch was discarded mid-loop and
+    # became eligible to cut. The preview therefore under-reported branch deletions
+    # systematically, and no amount of reading it could have revealed one:
+    # `claude/claude-md-dedupe-v2` and `claude/elegant-matsumoto-d092ba` both printed
+    # `ON NO REMOTE — it is only on this disk` and both were gone after the word, their commits
+    # surviving as dangling objects. One plan, read twice, is the only shape that cannot do
+    # that — the preview is now the confirm run with its hands tied.
+    plans = []  # type: List[Tuple[Tree, Optional[List[str]]]]
     for tree in trees:
         if tree.path == main_tree:
             continue
+        if tree.locked:
+            plans.append((tree, _lock_lines(tree)))
+            continue
         who = sessions_in(sessions, tree.path)
         if who:
-            say("  KEPT      {0}".format(_relative(tree.path, root)))
-            say("            a session is live in it ({0})".format(
-                ", ".join(s.name or str(s.pid) for s in who)))
-            reported += 1
+            plans.append((tree, ["a session is live in it ({0})".format(
+                ", ".join(s.name or str(s.pid) for s in who))]))
             continue
         dirty = run(["git", "status", "--porcelain"], cwd=tree.path)
-        if dirty.ok and dirty.out:
+        if not dirty.ok:
+            # `dirty.ok and dirty.out` fell THROUGH to reapable when `git status` would not
+            # run — a tree whose state could not be read was treated as a tree with nothing
+            # in it. The direction-of-safety rule says the opposite.
+            plans.append((tree, ["`git status` would not run here — "
+                                 "a tree this sweep cannot read is a tree it keeps"]))
+            continue
+        if dirty.out:
+            plans.append((tree, ["{0} uncommitted file(s) — look at them yourself".format(
+                len(dirty.out.splitlines()))]))
+            continue
+        if servers_under(tree.path, family, table, dirs):
+            plans.append((tree, ["a server is running out of it; stop it first"]))
+            continue
+        plans.append((tree, None))
+
+    held = {tree.branch for tree in trees if tree.branch}
+    held -= {tree.branch for tree, why in plans if why is None and tree.branch}
+
+    for tree, why in plans:
+        if why:
             say("  KEPT      {0}".format(_relative(tree.path, root)))
-            say("            {0} uncommitted file(s) — look at them yourself".format(
-                len(dirty.out.splitlines())))
+            for line in why:
+                say("            {0}".format(line))
             reported += 1
             continue
-        if servers_under(tree.path, mine):
-            say("  KEPT      {0}".format(_relative(tree.path, root)))
-            say("            a server is running out of it; stop it first")
+        if not confirm:
+            say("  would reap  {0}  (no session, nothing uncommitted)".format(
+                _relative(tree.path, root)))
             reported += 1
+            pending += 1
             continue
-        say("  {0}  {1}  (no session, nothing uncommitted)".format(
-            verb, _relative(tree.path, root)))
-        pending += not confirm
-        if confirm:
-            gone = run(["git", "worktree", "remove", tree.path], cwd=root)
-            if not gone.ok:
-                tail = (gone.err.splitlines() or [""])[-1]
-                say("            not removed — {0}".format(tail))
-                reported += 1
-                continue
-            held.discard(tree.branch)
+        # THE OUTCOME IS REPORTED AFTER THE ATTEMPT. The old build fixed the word `reaped` up
+        # front and printed it before `git worktree remove` ran, so a refusal produced
+        # `reaped ...` followed two lines later by `not removed — ...`: a line claiming an act
+        # that did not happen, contradicting itself in the same paragraph, with the count
+        # correctly excluding it so the body and the total disagreed.
+        gone = run(["git", "worktree", "remove", tree.path], cwd=root)
+        if gone.ok:
+            say("  reaped      {0}  (no session, nothing uncommitted)".format(
+                _relative(tree.path, root)))
             reaped += 1
-        else:
-            reported += 1
+            continue
+        say("  NOT REAPED  {0}".format(_relative(tree.path, root)))
+        say("            {0}".format((gone.err.splitlines() or [""])[-1]))
+        reported += 1
+        # The plan said this tree was going, so its branch was let out of `held`. It did not go,
+        # so the branch is protected again. That is the ONE place preview and confirm may
+        # differ, and it differs in the safe direction: the preview over-reports a cut, which an
+        # operator reads before pressing, where the bug above under-reported one.
+        if tree.branch:
+            held.add(tree.branch)
 
     cut, kept = reapable_branches(root, held)
     for entry in kept:
@@ -923,9 +1242,19 @@ def teardown(tree: str, sessions_dir: Path) -> int:
     if not (Path(tree) / ".git").is_file():
         return 0
 
-    others = sessions_in(live_sessions(sessions_dir), tree)
+    # THE LEAVING SESSION IS ITS OWN ANCESTOR, NOT ITS OWN PID, AND THAT IS WHAT MADE THIS A
+    # NO-OP. This runs from the leaving session's SessionEnd hook, so `os.getpid()` is this
+    # Python process — a grandchild of the `claude` process whose record still sits in
+    # `~/.claude/sessions`. Comparing the two pids could never match, so the leaving session
+    # counted as "somebody else still here" and the teardown declined to stop anything, every
+    # time. `loose_processes` already had the shape of the answer: exclude the sweep's own
+    # CHAIN. Anything unreadable still keeps the servers up — `_chain` over an empty table
+    # yields this pid alone, which is the old behaviour and the cautious one.
     mine = os.getpid()
-    others = [s for s in others if s.pid != mine]
+    family = set(_chain(_process_tree(), mine))
+    family.add(mine)
+    others = [s for s in sessions_in(live_sessions(sessions_dir).sessions, tree)
+              if s.pid not in family]
     if others:
         say("session-teardown: {0} session(s) still here — leaving the server up.".format(
             len(others)))
@@ -942,7 +1271,7 @@ def teardown(tree: str, sessions_dir: Path) -> int:
 
     # No Banchi supervisor here. Signalling an unknown repo's processes is a bigger claim than
     # this tool has evidence for, so it says what it found and stops.
-    running = servers_under(tree, mine)
+    running = servers_under(tree, family)
     if running:
         say("session-teardown: {0} process(es) still running out of this tree; not mine to "
             "stop.".format(len(running)))

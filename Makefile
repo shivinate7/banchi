@@ -831,6 +831,14 @@ icloud-sweep:
 # TIER 1 IS REAPED WITHOUT ASKING AND TIER 2 IS NOT. A process whose own script has been deleted
 # cannot be live; a worktree that merely LOOKS idle can be, and was, twice, on the day this was
 # written. `make status` reports the count. Reaping tier 2 is opt-in: `make janitor ARGS=--confirm`.
+#
+# "WITHOUT ASKING" MEANS WITHOUT A PROMPT, NOT WITHOUT BEING ASKED, AND THAT DISTINCTION WAS
+# LOST UNTIL 2026-09-19. A BARE `make janitor` previews BOTH tiers and presses nothing, which
+# is what janitor.py's own header and `status.py:janitor()` have always said and what the code
+# did not do — the bare run SIGTERMed orphans, ran `git worktree prune` and deleted husks, at
+# the head of every session, because `make status` runs it. Tier 1 is still pressed with no
+# prompt by whatever names it: `--tier1`, which `session-teardown.sh` runs at every session
+# end, and `--confirm`.
 # EXIT 1 IS NOT A FAILURE HERE, AND THAT DIFFERS FROM icloud-sweep ON PURPOSE. The sweep exits 1
 # when something is waiting on `--confirm`, which for a preview is the ORDINARY answer rather
 # than a rare finding — a conflict copy is unusual, a reapable worktree is Tuesday. So `make`
