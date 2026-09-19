@@ -435,7 +435,11 @@ function TakeBlock({
                     <PlaceNeighbors place={displayPlace} />
                   </div>
                 </div>
-                <PositionBar place={displayPlace} persona="owner" />
+                {/* NEVER "SO FAR" (§8's "The stop, rebuilt" ruling, owner, 2026-09-19): `so
+                    far` is the caption's own word for a box still being FILLED, meaningless in
+                    the middle of a PULL. `#/capture` and `#/inventory` keep it; this is the
+                    walk's own opt-out and nobody else's. */}
+                <PositionBar place={displayPlace} persona="owner" soFar={false} />
                 <span className="walkplan-row-state">
                   <Pill tone={gone ? 'default' : stateTone(copy.state)}>{gone ? 'Gone' : stateLabel(copy.state)}</Pill>
                 </span>

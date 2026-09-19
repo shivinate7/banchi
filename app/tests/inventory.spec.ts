@@ -2569,6 +2569,12 @@ test('the last section of an open box counts what is in it, and says so far', as
   /* One accessible name carrying both, because `role="img"` hides every descendant — a screen
      reader is told the second scale here or not at all. */
   await expect(bar).toHaveAttribute('aria-label', '#5 of 5 so far · Section 2 · card 2 of 2 so far')
+
+  /* THE GUARD FOR THE OTHER HALF OF §8's "The stop, rebuilt" RULING (owner, 2026-09-19): the
+     walk drops `so far` (`PositionBar`'s own `soFar` prop, `OrdersWalk.tsx`'s one call, and
+     `app/tests/orders.spec.ts`'s "the walk's copy bar never says \"so far\""), but `#/inventory`
+     never passes that prop and keeps the word — this is a box still being FILLED, not a pull in
+     progress. This case is what stops the next person dropping the two words everywhere. */
 })
 
 test('the card with no group gets both depths too', async ({ page }) => {

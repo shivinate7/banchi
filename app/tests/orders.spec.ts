@@ -3314,14 +3314,32 @@ test('the walk row draws a real proportion, not the "box we could not size" blan
   await startWalk(page)
 
   /* `PositionBar`'s accessible name IS `position.ts:sentenceOf`. With a real `box_total` the
-     owner's form reads `#17 of 133 so far`; with the `box_total: 0` this screen shipped with
-     it reads "where this sits in the box is not known yet", on every row, for ever. The two
-     are different sentences, so asserting the first is a guard the second cannot pass — and
-     it is D194's own direction of travel too, the real one being the shorter. */
+     owner's form elsewhere reads `#17 of 133 so far`; with the `box_total: 0` this screen
+     shipped with it reads "where this sits in the box is not known yet", on every row, for
+     ever. The two are different sentences, so asserting the first is a guard the second
+     cannot pass — and it is D194's own direction of travel too, the real one being the
+     shorter. The walk's own copy is shorter still: no `so far` (see below). */
   const bar = copyRow(page, 'cap-a').getByRole('img').first()
-  await expect(bar).toHaveAttribute('aria-label', '#17 of 133 so far')
+  await expect(bar).toHaveAttribute('aria-label', '#17 of 133')
   /* And the track is real segments rather than the honest blank one. */
   await expect(copyRow(page, 'cap-a').locator('.position-bar-segment-blank')).toHaveCount(0)
+})
+
+test('the walk\'s copy bar never says "so far"', async ({ page }) => {
+  /* `docs/specs/order-walk-plan.md` §8's "The stop, rebuilt" ruling, owner, 2026-09-19: "The
+     copy's bar reads `#8 of 34`, never `#8 of 34 so far`." `so far` is `PositionBar`'s own
+     caption for a box still being FILLED — true on `#/capture` and `#/inventory`, meaningless
+     in the middle of a PULL. This is the walk's own opt-out (`PositionBar`'s `soFar` prop,
+     `OrdersWalk.tsx`'s one direct call), asserted directly against the caption's own text so a
+     future caller cannot quietly bring the two words back. */
+  await open(page, { orders: oneOpenOrder() })
+  await stubWalkPlan(page, walkPlanOf([walkPlanStop()]))
+  await startWalk(page)
+
+  const bar = copyRow(page, 'cap-a').getByRole('img').first()
+  await expect(bar).toHaveAttribute('aria-label', '#17 of 133')
+  const label = await bar.getAttribute('aria-label')
+  expect(label ?? '').not.toContain('so far')
 })
 
 test('a pull re-describes the row still ahead in the same drawer', async ({ page }) => {
@@ -3330,7 +3348,7 @@ test('a pull re-describes the row still ahead in the same drawer', async ({ page
   await startWalk(page)
 
   const sunrise = copyRow(page, 'cap-b')
-  await expect(sunrise.getByRole('img').first()).toHaveAttribute('aria-label', '#18 of 133 so far')
+  await expect(sunrise.getByRole('img').first()).toHaveAttribute('aria-label', '#18 of 133')
   await expect(sunrise.locator('.nb')).toContainText('Volcanion')
 
   await pullRowNamed(page, 'Volcanion')
@@ -3346,7 +3364,7 @@ test('a pull re-describes the row still ahead in the same drawer', async ({ page
 
   /* AND THE ROW SAYS THE NEW THING. The drawer closed up, so Sunrise is card 17 of 132 now and
      the landmark it used to sit behind has gone. */
-  await expect(sunrise.getByRole('img').first()).toHaveAttribute('aria-label', '#17 of 132 so far')
+  await expect(sunrise.getByRole('img').first()).toHaveAttribute('aria-label', '#17 of 132')
   await expect(sunrise.locator('.nb')).not.toContainText('Volcanion')
   await expect(sunrise.locator('.nb')).toContainText('Galio')
 })
@@ -3361,7 +3379,7 @@ test('a pull re-describes nothing in a drawer it never opened', async ({ page })
   const farLadder = await far.locator('.nb').textContent()
 
   await pullRowNamed(page, 'Volcanion')
-  await expect(copyRow(page, 'cap-b').getByRole('img').first()).toHaveAttribute('aria-label', '#17 of 132 so far')
+  await expect(copyRow(page, 'cap-b').getByRole('img').first()).toHaveAttribute('aria-label', '#17 of 132')
 
   /* The box-5 copy was never named in `refresh` — nothing moved in that drawer — and it says
      exactly what it said before. */
@@ -3471,7 +3489,7 @@ test('an undo inside the window puts the description back with the card', async 
 
   await pullRowNamed(page, 'Volcanion')
   const sunrise = copyRow(page, 'cap-b')
-  await expect(sunrise.getByRole('img').first()).toHaveAttribute('aria-label', '#17 of 132 so far')
+  await expect(sunrise.getByRole('img').first()).toHaveAttribute('aria-label', '#17 of 132')
 
   await page
     .locator('.walkplan-take')
@@ -3480,7 +3498,7 @@ test('an undo inside the window puts the description back with the card', async 
     .click()
 
   /* The reversal named the same cards the pull did, and the row is back at card 18 of 133. */
-  await expect(sunrise.getByRole('img').first()).toHaveAttribute('aria-label', '#18 of 133 so far')
+  await expect(sunrise.getByRole('img').first()).toHaveAttribute('aria-label', '#18 of 133')
   const undone = wire.filter((one) => one.path.endsWith('/orders/pull')).at(-1)?.body as {
     undo: boolean
     refresh: { box: number; index: number }[]
@@ -3513,7 +3531,7 @@ test('THE FENCE: a pull re-orders no stop, no row and no copy, and re-solves not
   const planCalls = planned.calls()
 
   await pullRowNamed(page, 'Volcanion')
-  await expect(copyRow(page, 'cap-b').getByRole('img').first()).toHaveAttribute('aria-label', '#17 of 132 so far')
+  await expect(copyRow(page, 'cap-b').getByRole('img').first()).toHaveAttribute('aria-label', '#17 of 132')
 
   expect(await shapeOf(page)).toBe(before)
   expect(planned.calls()).toBe(planCalls)
