@@ -4,7 +4,7 @@ import { Button, Chip, EmptyState, Icon, Kbd, Notice, PageHeader, Pill, Segmente
 import { toast } from './kit/toast'
 import { readPaste, DEFAULT_ORDER_SOURCE } from './orderPaste'
 import { ORDER_REASONS, orderReasonLabel, orderReasonRemedy } from './orderReasons'
-import { rememberOrderFilter, storedOrderFilter, type OrderFetchFilter } from './deviceMemory'
+import { rememberHideSold, rememberOrderFilter, storedHideSold, storedOrderFilter, type OrderFetchFilter } from './deviceMemory'
 import { hubState, setHub, touchHub, useHub, type PullFilter, type Stage } from './OrdersHubStore'
 import { isEditableTarget } from './keys'
 import { PositionLabel } from './PositionLabel'
@@ -840,7 +840,7 @@ function statusOf(order: OrderRow, answer: ResolvedOrder | null): Status {
 }
 
 const STATUS_PILL: Record<Status, { label: string; tone: PillTone; icon: IconName }> = {
-  ready: { label: 'Ready to pull', tone: 'ok', icon: 'check' },
+  ready: { label: 'Ready to sell', tone: 'ok', icon: 'check' },
   short: { label: 'Short', tone: 'warn', icon: 'alert' },
   look: { label: 'Needs a look', tone: 'warn', icon: 'eye' },
   unresolved: { label: 'Not resolved', tone: 'default', icon: 'clock' },
@@ -1264,6 +1264,15 @@ export function OrdersHub({ stage }: { readonly stage: Stage }) {
      write for the same reason the ledger is — a pull sells the card, and a sold card must leave
      every other line's map on the same frame it leaves its own. */
   const [store, setStore] = useState<StoreCopies | null>(null)
+  /* THE SAME READ, KEPT WHOLE — every `InventoryCard` `getInventoryCopies` answered, keyed by
+   *  `box/index`, alongside `store`'s own narrowed `PickRow` shape. `#/orders`' walk pane
+   *  (§13, superseding this file's earlier plain `<img>`) needs the FULL card — its own
+   *  identity, claims and provenance, the same three groups `#/inventory`'s Details section
+   *  reads (`factGroupsOf`, moved to `CardHero.tsx` so both screens share it) — and `store`'s
+   *  own `pickOfCard` narrows exactly those fields away. Covers every SKU any open order
+   *  names (`skusOf`), which is always a superset of what a walk over open orders can stand
+   *  on. */
+  const [rawCards, setRawCards] = useState<ReadonlyMap<string, InventoryCard>>(new Map())
   const [storeFailed, setStoreFailed] = useState(false)
   const [localBusy, setBusy] = useState<string | null>(null)
   /* A write pressed here locks from inside; an undo pressed on a toast locks from outside, through
@@ -1379,6 +1388,7 @@ export function OrdersHub({ stage }: { readonly stage: Stage }) {
          except that this is not a failure. */
       if (live.current) {
         setStore(indexStore({ cards: {} }))
+        setRawCards(new Map())
         setStoreFailed(false)
       }
       return
@@ -1387,6 +1397,7 @@ export function OrdersHub({ stage }: { readonly stage: Stage }) {
       const inventory = await getInventoryCopies(skus)
       if (!live.current) return
       setStore(indexStore(inventory))
+      setRawCards(new Map(Object.values(inventory.cards).map((card) => [`${card.box}/${card.index}`, card])))
       setStoreFailed(false)
     } catch {
       if (!live.current) return
@@ -1394,6 +1405,7 @@ export function OrdersHub({ stage }: { readonly stage: Stage }) {
          the box as one you can still reach for, and a map that is quietly wrong is worse than a
          map that is quietly narrow. */
       setStore(null)
+      setRawCards(new Map())
       setStoreFailed(true)
     }
   }, [])
@@ -2244,6 +2256,7 @@ export function OrdersHub({ stage }: { readonly stage: Stage }) {
         <PullStage
           payload={payload}
           store={store}
+          rawCards={rawCards}
           storeFailed={storeFailed}
           onRereadStore={() => void rereadStore()}
           failure={failure}
@@ -2446,6 +2459,7 @@ function ReconcileBacklogPanel({
 function PullStage({
   payload,
   store,
+  rawCards,
   storeFailed,
   onRereadStore,
   failure,
@@ -2473,6 +2487,9 @@ function PullStage({
   /** Every on-hand copy the store holds, keyed by sku. Null while the first read is in flight and
    *  null again when one fails — the maps then draw the resolver's picks alone. */
   readonly store: StoreCopies | null
+  /** The same read, whole — `InventoryCard` by `box/index`, for the walk pane's own
+   *  `CardHeroHead`/`CardDetailsSection` (§13: inventory's card pane, unchanged). */
+  readonly rawCards: ReadonlyMap<string, InventoryCard>
   readonly storeFailed: boolean
   readonly onRereadStore: () => void
   readonly failure: Failure | null
@@ -2739,10 +2756,13 @@ function PullStage({
    *  other slot for them; this is the same move for the ledger. */
   const [manageOpen, setManageOpen] = useState(false)
 
-  /** Hide sold (D132's own control, restated here): transient, unlike `#/inventory`'s own
-   *  device-remembered chip — a walk's own sold copies are this sitting's business, not a
-   *  standing preference `banchi.inventory.hide-sold` was never meant to answer for. */
-  const [hideSold, setHideSold] = useState(false)
+  /** Hide sold (D132) — `#/inventory`'s own persisted `banchi.inventory.hide-sold`, on the
+   *  owner's word: same preference, same screen family, one key. No new key. */
+  const [hideSold, setHideSoldState] = useState<boolean>(() => storedHideSold())
+  const setHideSold = (next: boolean) => {
+    setHideSoldState(next)
+    rememberHideSold(next)
+  }
   const toggleWalkTick = (key: string) =>
     setWalkTicked((prev) => {
       const next = new Set(prev)
@@ -2870,7 +2890,7 @@ function PullStage({
     return out
   }, [selectedGroup, walkableOf, walkTicked])
 
-  const walk = useOrderWalk({ walkedKeys, ordersByKey, onPull: onWalkPull, onUndo: onWalkUndo })
+  const walk = useOrderWalk({ walkedKeys, ordersByKey, rawCards, onPull: onWalkPull, onUndo: onWalkUndo })
 
   /* THE HASH NAMES A BUYER, OR — FOR AN OLD LINK — AN ORDER RESOLVED TO ITS BUYER, ONCE THE
      LEDGER HAS ACTUALLY ANSWERED; from then on the store leads and the hash follows. `?buyer=`
@@ -3246,7 +3266,7 @@ function PullStage({
           {walk.sections.length} {plural(walk.sections.length, 'section', 'sections')}
         </span>
         <span className="bn-spacer" />
-        <Chip pressed={hideSold} className="browse-hidesold" onClick={() => setHideSold((held) => !held)}>
+        <Chip pressed={hideSold} className="browse-hidesold" onClick={() => setHideSold(!hideSold)}>
           Hide sold
         </Chip>
       </div>
@@ -3297,7 +3317,7 @@ function PullStage({
             {railWalkPanel}
           </div>
           <div className="browse-side">
-            <WalkMainPane walk={walk} />
+            <WalkMainPane walk={walk} phone={!wide} />
             {why}
           </div>
         </div>
@@ -3309,7 +3329,7 @@ function PullStage({
             {ordersList}
           </div>
           {railWalkPanel}
-          <WalkMainPane walk={walk} />
+          <WalkMainPane walk={walk} phone={!wide} />
           {why}
         </>
       )}
@@ -3525,6 +3545,11 @@ function OrderPanel({
   }, 0)
   const placed = whenLabel(group.latest)
   const pct = group.wanted > 0 ? Math.min(100, Math.round((group.recorded / group.wanted) * 100)) : 0
+  /* MOCK A NAMES ONE ORDER; A BUYER MAY HOLD SEVERAL (D193). §13 does not resolve this case, so
+   * this is this build's own call, kept for the owner to overrule: a two-order buyer's panel
+   * reads `2 ORDERS` in the small-caps slot instead of a single id, and owed/sold/short
+   * aggregate across every order the buyer holds — the same total `BuyerRow`'s own figure
+   * already counts, not a second arithmetic. */
   const label = group.orders.length === 1 ? `ORDER ${group.orders[0]!.number}` : `${group.orders.length} ORDERS`
 
   return (

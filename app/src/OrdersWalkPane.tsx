@@ -27,11 +27,14 @@
 
 import { useEffect, useMemo, useRef, useState } from 'react'
 
+import { CardDetailsSection, CardHeroHead, PhotoPanel, type Row } from './CardHero'
 import { CardLocations } from './CardLocations'
+import { Overlay } from './InventoryOverlay'
 import { Button, Icon, Pill } from './kit'
 import { describeFailure, photoUrl, walkPlan } from './server'
 import type { Failure } from './server'
 import type {
+  InventoryCard,
   OrderRow,
   Place,
   PullRefresh,
@@ -178,11 +181,16 @@ type Receipt = { readonly at: number; readonly canUndo: boolean; readonly target
 export function useOrderWalk({
   walkedKeys,
   ordersByKey,
+  rawCards,
   onPull,
   onUndo,
 }: {
   readonly walkedKeys: ReadonlySet<string>
   readonly ordersByKey: ReadonlyMap<string, OrderRow>
+  /** Every `InventoryCard` `Orders.tsx` has read, by `box/index` — the walk pane's own
+   *  `CardHeroHead`/`CardDetailsSection` (§13: inventory's card pane, unchanged) read the
+   *  CURRENT row's card off this map. */
+  readonly rawCards: ReadonlyMap<string, InventoryCard>
   readonly onPull: WalkPullFn
   readonly onUndo: WalkUndoFn
 }) {
@@ -300,6 +308,18 @@ export function useOrderWalk({
       }),
     }
   }, [currentRow, facts])
+
+  /** THE CURRENT CARD, WHOLE (§13: inventory's card pane, unchanged) — the real `InventoryCard`
+   *  for the row the walk stands on, looked up by the copy's own (possibly refreshed) place,
+   *  never by the take's synthesised `SearchGroup`, which carries only what the wire needs for
+   *  the copies list and nothing an identity/claims/provenance panel would read. Null exactly
+   *  when `Orders.tsx` has not read this card yet (`rawCards` covers every SKU any open order
+   *  names, so this is only ever transiently null on a fresh plan). */
+  const currentCard: InventoryCard | null = useMemo(() => {
+    if (currentRow === null) return null
+    const place = facts.get(currentRow.copy.key) ?? currentRow.copy.place
+    return rawCards.get(`${place.box}/${place.index}`) ?? null
+  }, [currentRow, facts, rawCards])
 
   const totalRecorded = (sku: string): number => {
     let sum = 0
@@ -442,6 +462,7 @@ export function useOrderWalk({
     current,
     currentRow,
     currentGroup,
+    currentCard,
     select,
     step,
     onSell,
@@ -458,10 +479,10 @@ export type OrderWalk = ReturnType<typeof useOrderWalk>
 /* ------------------------------------------------------------------------------ the walk list */
 
 /** `BoxBrowse.tsx`'s own `.browse-list` / `.browse-group` / `.browse-row` shape, over the
- *  plan's rows instead of a box's cards. No tick is drawn on a row here: `BoxBrowse`'s own tick
- *  feeds a pipeline run scope (`./pkmnscan identify --box`), which has no meaning over a
- *  buyer's walk, and a checkbox with nothing to do is a control nobody can reach — see the
- *  report for the open question this leaves for the owner's word. */
+ *  plan's rows instead of a box's cards. NO TICK IS DRAWN ON A ROW HERE, on the owner's own
+ *  word (§13): the ticks are on ORDERS, in the rail above ("hit ticks to the side so I can
+ *  select multiple") — the mock carried a tick here only by fidelity to inventory's own
+ *  markup, and a checkbox with nothing to do is worse than none. */
 export function WalkList({
   walk,
   hideSold,
@@ -574,41 +595,71 @@ function RowAction({ walk, copy }: { readonly walk: OrderWalk; readonly copy: Se
 /** `CardLocations`, over the current card's copies — inventory's own card pane, unadapted
  *  beyond `preserveOrder` (the trap this screen's brief names first): the walk's density order
  *  leads, this stop's own copies first, and a sale never re-sorts it. */
-export function WalkMainPane({ walk }: { readonly walk: OrderWalk }) {
-  const { currentRow, currentGroup } = walk
+/** INVENTORY'S CARD PANE, UNCHANGED (§13) — the header, the pills, the photograph as
+ *  `#/inventory` frames it (`PhotoPanel`, `CardHero.tsx`), "Every copy of this card"
+ *  (`CardLocations`, `preserveOrder`), and `Details` (`CardDetailsSection`). Reused, not
+ *  rebuilt: all three come off `CardHero.tsx`, the same file `BoxBrowse.tsx` reads them from.
+ *
+ *  LEFT OUT, BY NAME, AND ONLY BECAUSE THEY EDIT: `CardOps`'s menu (correct claims, retire,
+ *  remove) and the re-shoot control. Both change a card's own record — identification,
+ *  position, the stored photograph — which is Inventory's job and not a fulfillment walk's;
+ *  neither is passed to `CardHeroHead` or `PhotoPanel` here. `market` (a run's own pricing
+ *  join) and `listings` (`GET /inventory`'s own map) are not data this screen reads either, so
+ *  `CardDetailsSection` gets `undefined`/`{}` — the same honest-empty state those facts already
+ *  draw on `#/inventory` before either has loaded.
+ *
+ *  BEFORE `rawCards` HAS ANSWERED FOR THIS ROW (the first render of a freshly landed plan),
+ *  there is no full `InventoryCard` yet — the synthesised take-level header stands in, off the
+ *  same wire fields the old `TakeBlock` used, so the pane is never blank while the read
+ *  catches up. */
+export function WalkMainPane({ walk, phone }: { readonly walk: OrderWalk; readonly phone: boolean }) {
+  const { currentRow, currentGroup, currentCard } = walk
+  const [broken, setBroken] = useState(false)
+  const [zoomed, setZoomed] = useState(false)
+  useEffect(() => {
+    setBroken(false)
+    setZoomed(false)
+  }, [currentRow?.copy.key])
 
   if (currentGroup === null || currentRow === null) return null
 
   const take = currentRow.take
-  const showPhoto = currentRow.copy.cid !== null
+  const row: Row | null = currentCard === null ? null : { key: currentRow.copy.key, card: currentCard }
 
   return (
     <section className="bn-panel browse-card orders-walk-card">
-      <div className="browse-hero-head">
-        <div className="browse-hero-text">
-          <h2 className={take.name === null ? 'browse-hero-name is-unnamed' : 'browse-hero-name'}>{take.name ?? 'Not identified yet'}</h2>
-          <p className="browse-hero-sub">
-            {[take.number_display, take.set].filter((part): part is string => Boolean(part)).map((part, i) => (
-              <span key={`${part}-${i}`}>{part}</span>
-            ))}
-          </p>
-          <div className="browse-hero-chips">
-            {take.rarity === null ? null : <Pill>{take.rarity}</Pill>}
+      {row === null ? (
+        <div className="browse-hero-head">
+          <div className="browse-hero-text">
+            <h2 className={take.name === null ? 'browse-hero-name is-unnamed' : 'browse-hero-name'}>{take.name ?? 'Not identified yet'}</h2>
+            <p className="browse-hero-sub">
+              {[take.number_display, take.set].filter((part): part is string => Boolean(part)).map((part, i) => (
+                <span key={`${part}-${i}`}>{part}</span>
+              ))}
+            </p>
+            <div className="browse-hero-chips">{take.rarity === null ? null : <Pill>{take.rarity}</Pill>}</div>
           </div>
         </div>
-      </div>
+      ) : (
+        <CardHeroHead card={row.card} game={row.card.place?.game_display ?? null} />
+      )}
       <div className="browse-band">
         <div className="browse-shot">
-          <div className="orders-walk-photo">
-            {showPhoto ? (
-              <img
-                src={photoUrl(currentRow.copy.place.box, currentRow.copy.place.index, currentRow.copy.cid)}
-                alt={`The card ${take.name ?? take.sku}`}
-              />
-            ) : (
+          {row === null ? (
+            <div className="orders-walk-photo">
               <Icon name="image" size={28} />
-            )}
-          </div>
+            </div>
+          ) : (
+            <PhotoPanel
+              row={row}
+              label={currentRow.copy.place.label}
+              absent={broken}
+              onAbsent={() => setBroken(true)}
+              nonce={null}
+              onZoom={() => setZoomed(true)}
+              reshoot={null}
+            />
+          )}
         </div>
         <div className="browse-under">
           <CardLocations
@@ -623,6 +674,12 @@ export function WalkMainPane({ walk }: { readonly walk: OrderWalk }) {
           />
         </div>
       </div>
+      {row === null ? null : <CardDetailsSection card={row.card} market={undefined} listings={{}} phone={phone} />}
+      {!zoomed || row === null ? null : (
+        <Overlay kind="lightbox" label="The photograph, full size" onClose={() => setZoomed(false)}>
+          <img src={photoUrl(row.card.box, row.card.index, row.card.cid)} alt={`The card at ${currentRow.copy.place.label ?? row.key}`} />
+        </Overlay>
+      )}
     </section>
   )
 }
