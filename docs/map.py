@@ -1141,6 +1141,11 @@ COMPONENTS = [
             # the only things in the product that want a trend and have none. D22 because the
             # `Product Line` cell it resolves a category by is that entry's to author. D35 for
             # the number-then-name shape the join borrows, D25 for the per-game partition.
+            # D216 because infinite-api stopped answering the
+            # honest `USER_AGENT` on 2026-09-19 (D62's own premise measured 2026-08-30), and
+            # this is the entry that reuses D64's `AGENT_ENV` and names a 403 `Blocked`
+            # rather than folding it into `history_unreachable`. D171 because that refusal
+            # names its remedy — a refusal that reaches nobody did not happen.
             "pricehistory.py": {"does": "what a SKU has been selling for: the public "
                                         "infinite-api price-history endpoint, reached through a "
                                         "LOCAL sku -> productId join against tcgcsv.com's mirror "
@@ -1150,7 +1155,9 @@ COMPONENTS = [
                                         "transaction and within-bucket dispersion. It also reads "
                                         "that mirror's current /prices, which are per product per "
                                         "PRINTING and never per SKU.",
-                                "governed_by": ["D8", "D16", "D22", "D25", "D35", "D47", "D49"],
+                                "governed_by": ["D8", "D16", "D22", "D25", "D35", "D47", "D49",
+                                                "D62", "D64", "D171",
+                                                "D216"],
                                 "tested_by": ["T7"],
                                 "note": "REACHABLE AS OF 2026-08-30 (D62) — this entry read "
                                         "RECORDED RATHER THAN BUILT for one day, and the whole "
@@ -1176,7 +1183,20 @@ COMPONENTS = [
                                         "which is why `Bound` names both denominators rather "
                                         "than reporting one percentage. The join was measured "
                                         "at 3,588 distinct products across all four committed "
-                                        "exports, 100% resolved, zero ambiguous."},
+                                        "exports, 100% resolved, zero ambiguous. "
+                                        "D62's OWN MEASUREMENT THAT infinite-api TOOK A BARE "
+                                        "`curl` — NO KEY, NO COOKIE, NO USER-AGENT THAT "
+                                        "MATTERED — ROTTED ON 2026-09-19: it now answers this "
+                                        "project's honest default with HTTP 403 while a "
+                                        "browser's still answers 200 "
+                                        "(D216). `fetch_json` and "
+                                        "`Market` take an explicit `user_agent`, defaulting to "
+                                        "the unchanged honest string; `server/pipeline_routes.py` "
+                                        "resolves D64's `AGENT_ENV` (`PKMNSCAN_TCG_USER_AGENT`, "
+                                        "reused rather than a second knob) and passes it in. A "
+                                        "403 is now `Blocked`, a sibling of `Unreachable`, and "
+                                        "the route answers it as `history_blocked` rather than "
+                                        "folding it into `history_unreachable`."},
         },
     },
     {
@@ -1878,7 +1898,7 @@ COMPONENTS = [
                         "the tree was tested.",
                 # D136 is the gate this composes with, D18 is why it writes nothing, D16 is
                 # why the list has a reader before it has a filter.
-                "governed_by": ["D16", "D18", "D136", "D141"],
+                "governed_by": ["D16", "D18", "D136", "D141", "D215"],
                 "note": "THE LIST IS DERIVED AND HAS A READER: `make docs-audit`'s `browser "
                         "scope` row reconciles SCOPE against Playwright's config, Vite's "
                         "config, every code string in app/tests and app/src naming a tracked "
@@ -2616,8 +2636,11 @@ COMPONENTS = [
                         "session refining the rule edits one dictionary rather than two "
                         "files. `--dir <path>` points it at a throwaway fixture tree for "
                         "the auditor's own self-test rather than trusting app/src to hold "
-                        "a case. Never writes.",
-                "governed_by": ["D134", "D196"],
+                        "a case. Never writes. WIDENED, OFF BY DEFAULT, FOR ONE "
+                        "CALLER: `--include-code-attr` and `--join-literals` "
+                        "(D218) — see the header for what each "
+                        "adds and why neither reaches `no mechanism on screen`'s own call.",
+                "governed_by": ["D134", "D196", "D218"],
             },
             "build-mark.mjs": {"does": "generates the app's mark — app/src/kit/markGeometry.ts, markPalettes.ts and app/public/favicon.svg — by READING docs/specs/logo/sheets/small-cut.html and evaluating the drawing routine out of it, so there is exactly one implementation of the geometry in this repo. Asserts on what it extracted (the tile is 221 points, the display bracket is an outlined polygon, the small bracket is a stroked path) before writing 25KB of path data into app/. D18: a generator may write and nothing that writes may gate a commit — this is run by hand, never on the commit path.",
                                 "governed_by": ["D18", "D94", "D102"]},
@@ -2635,6 +2658,21 @@ COMPONENTS = [
                                         "and cannot drift apart. Written exactly, no slack — "
                                         "slack is how a ratchet leaks.",
                                 "governed_by": ["D18", "D194"]},
+            "typed-interpunct-pin.mjs": {
+                "does": "`node scripts/typed-interpunct-pin.mjs --pin` re-measures the "
+                        "typed-dot count `scripts/docs-audit.py`'s `typed interpunct` row "
+                        "asserts and rewrites `scripts/typed-interpunct.json`. Mirrors "
+                        "copy-budget.mjs's own discipline: shells out to "
+                        "`scripts/user-strings.mjs --join-literals --include-code-attr`, "
+                        "the same extraction the row itself reads, so the pin path and the "
+                        "assert path cannot drift apart. Written exactly, no slack.",
+                "governed_by": ["D18", "D194", "D196", "D218"]},
+            "typed-interpunct.json": {
+                "does": "the ratchet's pinned ceiling, one field, `count`. Written only by "
+                        "`typed-interpunct-pin.mjs --pin`; `scripts/docs-audit.py`'s `typed "
+                        "interpunct` row only reads it, since that row sits on the commit "
+                        "path (D18).",
+                "governed_by": ["D18", "D194", "D218"]},
             "docs-audit.py": {
                 "does": "D16's layers 1 and 2: every mechanical check, plus the coupling "
                         "question under `--staged`. `--json` is the machine surface "
@@ -2702,14 +2740,15 @@ COMPONENTS = [
                 # link this repo's own history ever produced.
                 "governed_by": ["D1", "D2", "D3", "D6", "D7", "D8", "D9", "D10", "D11", "D12",
                                 "D16", "D17", "D18", "D22", "D23", "D24", "D26", "D27", "D31",
-                                "D33", "D39", "D43", "D44", "D47", "D49", "D50", "D51", "D53",
+                                "D33", "D39", "D41", "D43", "D44", "D47", "D49", "D50", "D51", "D53",
                                 "D60", "D63", "D64", "D65", "D67", "D69", "D70", "D72", "D74",
                                 "D75", "D76", "D80", "D81", "D83", "D84", "D86", "D87", "D88",
                                 "D90", "D92", "D94", "D96", "D101", "D102", "D104", "D110", "D111",
                                 "D113", "D119", "D122", "D127", "D132", "D134", "D135", "D136",
                                 "D138", "D140", "D141", "D142", "D143", "D144", "D149", "D155",
                                 "D159", "D160", "D161", "D173", "D174", "D178", "D181", "D182",
-                                "D185", "D191", "D192", "D196", "D210", "D213"],
+                                "D185", "D191", "D192", "D194", "D196", "D210", "D213",
+                                "D215", "D218"],
             },
             "claim-ids.py": {
                 "does": "allocate the numbers this branch's SLUG ids will take, and "
@@ -3363,7 +3402,7 @@ COMPONENTS = [
                         "the writer and the gate cannot disagree about what a file cites. "
                         "Stdlib, and it splices with `ast` so the hand-written prose around "
                         "each list survives untouched.",
-                "governed_by": ["D16", "D17", "D18", "D173"],
+                "governed_by": ["D16", "D17", "D18", "D140", "D173"],
                 "note": "IT ONLY EVER ADDS. An id in `governed_by` that the file does not "
                         "cite is invisible to the `repo map` row and to this alike, because "
                         "that check is one-directional — so removing one stays a person's "
@@ -3434,7 +3473,8 @@ COMPONENTS = [
                 "governed_by": ["D7", "D16", "D17", "D18", "D26", "D42", "D43", "D44", "D47", "D48", "D53",
                                 "D54", "D58", "D60", "D65", "D68", "D74", "D76", "D80", "D82", "D83", "D86", "D88",
                                 "D89", "D92", "D111", "D122", "D127", "D129", "D133", "D138", "D139", "D140",
-                                "D141", "D149", "D158", "D160", "D171", "D172", "D173", "D176", "D189"],
+                                "D141", "D149", "D158", "D160", "D171", "D172", "D173", "D176", "D189",
+                                "D215"],
                 "note": "IT DECLARES THE SUITE AND DELIBERATELY DOES NOT DRIVE IT, which is "
                         "the whole shape. A registry that drove `make check` could not "
                         "disagree with the recipe — and could silently stop running a check, "
@@ -4039,7 +4079,7 @@ COMPONENTS = [
                                 "D79", "D86", "D87", "D88", "D89", "D100", "D103", "D105",
                                 "D134", "D137", "D145", "D147", "D156", "D159", "D163",
                                 "D165", "D166", "D168", "D170", "D172", "D174", "D180",
-                                "D188", "D189"],
+                                "D188", "D189", "D216"],
                 "tested_by": ["T7"],
             },
             "shipping_routes.py": {
@@ -4450,8 +4490,8 @@ COMPONENTS = [
                                     "containing block for fixed descendants. `forwards` is right in "
                                     "exactly one place, `[data-leaving]`, where the node is about to "
                                     "unmount.",
-                            "governed_by": ["D5", "D13", "D32", "D50", "D94", "D117", "D125", "D26",
-                                            "D195", "D197"]},
+                            "governed_by": ["D5", "D13", "D26", "D32", "D41", "D50", "D94", "D117",
+                                            "D125", "D195", "D197"]},
             "src/kit/markGeometry.ts": {"does": "the Banchi mark's two optical cuts as static path data, GENERATED by scripts/build-mark.mjs out of docs/specs/logo/sheets/small-cut.html. Never hand-edited: the sheet is the one implementation of the drawing, so the app cannot drift from the spec by being edited. Two cuts because a 1.7 stroke is a scratch at 32px and absent at 16px (logo.md section 3, swept in section 11) — `SMALL` is what ships, since every surface in this product is below 64px, and `DISPLAY` is what #/gallery shows. The geometry does not vary across the six marks; all six generate byte-identical paths.",
                                           "governed_by": ["D94", "D102"]},
             "src/kit/lockupGeometry.ts": {"does": "the lockup as static path data — 番地 and BANCHI OUTLINED, the bracket's arm and its two end discs, the block's dimensions and section 13's eleven settled parameters. GENERATED by scripts/build-lockup.mjs and never hand-edited. Every number is a ratio of the kanji size and the paths are drawn in a 319 x 233 box at kanji 100, so ONE geometry serves every size through a viewBox — which is not only smaller than per-size data but more correct, since a vector scaled by a viewBox cannot re-layout and live text could, and did: the width match had to be SOLVED per size. Carries no `fill`: the component's own <g> supplies it by inheritance so a stylesheet can switch section 16's dark metal, which a fill attribute on the child would make unreachable.",
@@ -5141,7 +5181,11 @@ COMPONENTS = [
             # D90 is main's order-driven mode, whose two props this file no longer carries; the
             # citation stays so a session reading main's history knows they were removed on
             # purpose rather than lost.
-            "governed_by": ["D6", "D8", "D9", "D10", "D16", "D19", "D20", "D21", "D22", "D23", "D24", "D26", "D27", "D30", "D31", "D33", "D35", "D38", "D39", "D41", "D45", "D46", "D49", "D52", "D58", "D65", "D67", "D68", "D89", "D90", "D92", "D118", "D125", "D132", "D119", "D172", "D181", "D192", "D213"]},
+            "governed_by": ["D6", "D8", "D9", "D10", "D16", "D19", "D20", "D21", "D22", "D23",
+                            "D24", "D26", "D27", "D30", "D31", "D33", "D35", "D38", "D39", "D41",
+                            "D45", "D46", "D49", "D52", "D58", "D65", "D67", "D68", "D89", "D90",
+                            "D92", "D94", "D99", "D118", "D119", "D125", "D132", "D172", "D181",
+                            "D192", "D213"]},
             "src/BoxBrowse.css": {"does": "its layout, and why no accent appears anywhere in it. Its list keeps an "
                                   "INSET focus ring and says so — it clips its own overflow, which is the "
                                   "case base.css's standing ring cannot serve. D38's band lives here: the "
@@ -6423,15 +6467,28 @@ COMPONENTS = [
                                         "revenue. GROSS ONLY: no fee, cost or refund figure "
                                         "exists on this wire to draw. No sealed/singles "
                                         "split — `OrderLineWire.kind` is null on nearly every "
-                                        "line and CLAUDE.md refuses guessing one from a name.",
-                                "governed_by": ["D69", "D86", "D103", "D105", "D193",
-                                                 "D214"]},
+                                        "line and CLAUDE.md refuses guessing one from a name. "
+                                        "SINCE `D217`: every column sorts, the "
+                                        "month strip cross-filters the product table, a "
+                                        "product row drills into the orders behind it, a "
+                                        "custom range picks its own week/month granularity, "
+                                        "the in-progress bucket is marked, and period, sort, "
+                                        "search and the active bucket all round-trip through "
+                                        "the URL.",
+                                "governed_by": ["D50", "D62", "D69", "D86", "D103", "D105",
+                                                 "D118", "D159", "D193", "D194", "D201",
+                                                 "D214", "D217"]},
             "src/Revenue.css": {"does": "the verdict, the month strip and the product table's "
                                         "own layout, `--bn-*` only. The sparkline's polyline "
                                         "reuses `--bn-accent` rather than naming a color; the "
                                         "search field wrapper is sized like every other "
-                                        "screen's own `-search` class (Graveyard, Codes).",
-                                "governed_by": ["D50", "D94"]},
+                                        "screen's own `-search` class (Graveyard, Codes). "
+                                        "Since `D217`: sortable headers, a "
+                                        "cross-filterable month row, a drill-down's nested "
+                                        "table, and a 390px-only wrap on this screen's own "
+                                        "`Segmented` instance, scoped here rather than to the "
+                                        "shared kit rule.",
+                                "governed_by": ["D50", "D94", "D217"]},
             "src/RunFiles.tsx": {"does": "a run's files, as downloads — extracted from RunPanel on "
                                        "2026-08-30 (D54) so two screens can draw them. The `only` "
                                        "prop is the split: the import CSVs go to #/pricing with the "
@@ -7341,6 +7398,21 @@ COMPONENTS = [
                                               "all seventy-one pass against the cropped render.",
                                       "governed_by": ["D156", "D8", "D9", "D20", "D28", "D33", "D48", "D49", "D51", "D54", "D56", "D57", "D58", "D59", "D62", "D68", "D78", "D79", "D85", "D86", "D98", "D99", "D103", "D115", "D117", "D118",
                                                       "D168", "D208"]},
+            "tests/revenue.spec.ts": {
+                "does": "`#/revenue`'s own suite (`D217`): the empty and failure "
+                        "states, every column's sort and its reverse, the search field, the "
+                        "month strip's cross-filter and its Clear, a drill-down's nested "
+                        "orders table, a custom range's week-granularity switch, the "
+                        "in-progress bucket mark, and full state round-tripping through the "
+                        "URL, including a reload. Two mutation-proved defect fixes: a "
+                        "previous period summing to exactly $0.00 never renders `Infinity%` "
+                        "or `NaN%`, and a SKU-fallback name draws in mono while a real name "
+                        "does not. A dedicated case pins the 390px overflow this build found "
+                        "in its own header once a fifth period option existed. Not a harness "
+                        "test; `make design-check` runs it.",
+                "governed_by": ["D50", "D62", "D103", "D118", "D159", "D193", "D201",
+                                 "D214", "D217"],
+            },
             "tests/live-reconcile.spec.ts": {
                 "does": "the store-wide reconcile in a browser (D87): that it is reachable from "
                         "#/runs at all, that the preview asks for no write, and that the settle "

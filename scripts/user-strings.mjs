@@ -39,6 +39,33 @@
  * every `toast(` call site outside a `.bak` file is in a `.tsx`), and `app/tests` is a
  * different tree entirely.
  *
+ * TWO EXTRACTIONS ARE OFF BY DEFAULT, and stay off for `scripts/docs-audit.py`'s own
+ * `no mechanism on screen` row, which reads this script with no flags and whose fixtures
+ * assert both stay unreached without one — widening the default would retroactively change
+ * a row this file did not touch. `typed interpunct` (D218) opts
+ * into both, because it counts a different thing (a typed separator character) over a wider
+ * notion of "visible" than D196's mechanism-naming policy needs:
+ *
+ *   - `--include-code-attr` adds `code` to the tracked attribute set for this run only —
+ *     `Notice`'s own `code` prop (CLAUDE.md's Register paragraph: "the pipeline's own string
+ *     stays available on hover and in the run log"). That prop DOES render, on hover and in
+ *     the run log, so a typed dot inside it reaches a person exactly the way JSX text does,
+ *     even though D196 deliberately does not police what mechanism-shaped words it may carry.
+ *   - `--join-literals` extracts the literal separator argument of any `<expr>.join(<literal>)`
+ *     call, anywhere in the file — not only where the call's OWN return value is used
+ *     directly as JSX. This is the direct-literal check for the gap the header above already
+ *     names: `parts.join(' · ')` fed to a local helper (`PositionLabel.tsx`'s `whole()`) or
+ *     stored on an object field read back later (`Fulfillment.tsx`'s `sellable().about`) never
+ *     becomes a JsxText, a tracked attribute or a toast argument, so the walk above cannot see
+ *     it — but the separator LITERAL passed to `.join()` is a fact about the string that call
+ *     is about to build, independent of where the result travels, and grabbing it there is
+ *     cheap and precise: it fires on the two known roots and on every other `.join(<literal>)`
+ *     call in the tree alike, which is the honest scope of what became visible once this was
+ *     built, not a hand-picked pair of file:line citations that the next rename invalidates.
+ *     Still unreached: a named helper that builds a separator WITHOUT `.join` (string
+ *     concatenation into a `const`, then returned and interpolated by reference elsewhere) —
+ *     the same data-flow gap the header names, one call shape narrower.
+ *
  * Prints one JSON array to stdout: `[{file, line, text}, …]`, file relative to the repo root.
  * Never writes. `--self-test` is not here — the auditor's own `--self-test` drives this
  * script by shelling out to it over synthetic fixtures, the same split
@@ -68,6 +95,14 @@ const ts = (await import(pathToFileURL(TYPESCRIPT).href)).default
 // on purpose, so there is exactly one place either list is edited.
 const VISIBLE_ATTRS = new Set(['title', 'aria-label', 'placeholder', 'label', 'alt', 'body'])
 const TOAST_PROPS = new Set(['title', 'body', 'label'])
+
+// `--include-code-attr` and `--join-literals` — see the header for what each widens and why
+// neither is on by default. Read once, at module load, off the raw argv rather than the
+// `--dir` parsing below, so a caller can pass either in any order alongside `--dir`.
+const RAW_ARGS = process.argv.slice(2)
+const INCLUDE_CODE_ATTR = RAW_ARGS.includes('--include-code-attr')
+const INCLUDE_JOIN_LITERALS = RAW_ARGS.includes('--join-literals')
+if (INCLUDE_CODE_ATTR) VISIBLE_ATTRS.add('code')
 
 /** The literal text of a template literal, substitutions dropped. A citation or a path lives
  *  in the literal part of a sentence, never inside `${…}` — every example measured against
@@ -156,6 +191,19 @@ function walkFile(file, text) {
       node.expression.text === 'toast'
     ) {
       for (const arg of node.arguments) collectObjectStrings(arg)
+    } else if (
+      INCLUDE_JOIN_LITERALS &&
+      ts.isCallExpression(node) &&
+      ts.isPropertyAccessExpression(node.expression) &&
+      node.expression.name.text === 'join' &&
+      node.arguments.length === 1 &&
+      (ts.isStringLiteral(node.arguments[0]) || ts.isNoSubstitutionTemplateLiteral(node.arguments[0]))
+    ) {
+      // `<expr>.join(<literal>)` — the separator ITSELF, never the joined array. Reached
+      // regardless of where the call's return value goes (a JSX child, a local variable, an
+      // object field read back three functions later): see the header for why this is scoped
+      // to `.join()` specifically rather than every call expression in the tree.
+      push(node.arguments[0], node.arguments[0].text)
     }
     ts.forEachChild(node, visit)
   }

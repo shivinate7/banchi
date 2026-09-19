@@ -220,6 +220,10 @@
     "D211-the-rig-panel-folds-once-a-box-is-known.md",
     "D212-no-order-claims-a-copy.md",
     "D213-the-set-is-a-stored-fact-and-the-hint-was-never-one.md",
-    "D214-gross-sales-retrospective.md"
+    "D214-gross-sales-retrospective.md",
+    "D215-browser-spec-allow-list.md",
+    "D216-tcg-price-history-user-agent-block.md",
+    "D217-revenue-slice.md",
+    "D218-no-typed-interpunct-on-screen.md"
   ]
 }

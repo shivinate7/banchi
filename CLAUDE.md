@@ -105,7 +105,9 @@ make design-check   # DESIGN.md's Fulfillment floors, in a browser. TAKES A MACH
                     #   `PKMNSCAN_SUITE_LOCK=off` overrides. NOT in `make harness` or
                     #   `make check` (DEBT16).
                     #   `PW_ARGS=<flags>` reaches Playwright. `ARGS` never does (D136). CI runs
-                    #   3 shards of 1 worker each. NEVER RAISE THE WORKER COUNT (DEBT8).
+                    #   6 shards of 2 workers each, widened on the owner's word, 2026-09-19.
+                    #   D136 is amended: DEBT8's 2-vCPU premise went false when the repo went
+                    #   public, 2026-09-11. A 20-dispatch proof is D136's own reader.
                     #   Backgrounds itself. Read `.serve/design-check.json` ONCE when the run
                     #   lands. It says `"running"` until it finishes, so a stale `running`
                     #   after exit means the run died. No file at all means it never reached
@@ -115,10 +117,16 @@ make design-check   # DESIGN.md's Fulfillment floors, in a browser. TAKES A MACH
                     #   No browser, no dev server: in `check` and `ci-check`, no lock.
                     #   ON CI, GATED TO WHAT A BROWSER DRAWS (D141) by scripts/browser-scope.py,
                     #   audited by `make docs-audit`'s `browser scope` row both directions.
-                    #   `server/` is deliberately out of scope (sealEveryTest).
+                    #   `server/` is deliberately out of scope (sealEveryTest). WHICH SPECS
+                    #   LOAD is a second, narrower question: `browser-scope.py specs`
+                    #   (D215), a derived allow-list over `app/tests/*`.
+                    #   It fails open to every spec. `make docs-audit`'s `spec map` row checks
+                    #   both ways. A partial spec run never writes D136's pass record.
 make design-check-quiet  # same run, no progress stream, same lock.
 make suite-lock-selftest # the lock, proved by violating it, including a holder killed -9.
                     #   In `check`.
+make browser-scope-selftest # the browser-matrix classifier's spec map, on fixtures and the
+                    #   real tree (D215). In `check`.
 make demo           # seed a demo store and record the wire, a fixture bundle.
                     #   `docs/specs/demo.md` IS THE ARGUMENT FOR THIS WHOLE FAMILY — why it
                     #   is not a fork, what is real and what is invented, why VITE_DEMO is
@@ -140,7 +148,8 @@ make check          # harness + docs-audit + claim-stale + revert-guard +
                     #   gates-selftest + submission-selftest +
                     #   cid-selftest + readings-selftest + janitor-selftest +
                     #   reap-selftest + silent-write-selftest + guard-shell-selftest +
-                    #   coordinator-selftest + suite-lock-selftest + serve-selftest +
+                    #   coordinator-selftest + suite-lock-selftest +
+                    #   browser-scope-selftest + serve-selftest +
                     #   sync-selftest + verdict-selftest, IN THIS ORDER (D161): product
                     #   first, guard selftests last. `make docs-audit`'s `check census`
                     #   row reconciles this against the `check:` recipe both ways.
@@ -577,6 +586,15 @@ not rendered — not focusable, not reachable by a screen reader).
   **An orchestrating session carries a standing D42 grant as of 2026-09-13.** The owner named
   the act once for a whole batch, reaching only that session, only for PRs it planned and
   reviewed, only via `make merge ARGS="<n> --confirm"` with CI green, never `--admin`.
+- **No user-visible string may TYPE a middle dot or bullet (U+00B7, U+2022) as a separator.**
+  Owner's ruling, 2026-09-19: "this typed dot needs to be removed everywhere it exists." D41
+  removed the dot-joined address string and moved the separator into CSS
+  (`::before { content: '·' }`) — a screen may SHOW a separator, never TYPE one into a
+  string. Mechanized by `make docs-audit`'s `typed interpunct` row over
+  `scripts/user-strings.mjs`'s extraction, RATCHETED against `scripts/typed-interpunct.json`'s
+  pinned count (D194's own discipline, mirrored): it fails only when the count RISES; a lower
+  count is accepted silently and printed. `node scripts/typed-interpunct-pin.mjs --pin`
+  re-pins it, run by a person, never quietly. See D218.
 
 ## Working agreement
 
@@ -861,6 +879,10 @@ D211 The Rig panel folds once the setup is already known, and stays open until i
 D212 Every copy is fungible, so no order claims one, and the write is the only refusal left
 D213 The set is a stored fact, and the hint was never one
 D214 A gross-revenue retrospective is its own route, and it never claims to be profit
+D215 Both: the worker count is raised, and the spec allow-list is built
+D216 The price history's honest agent stopped answering, and D64's escape hatch already fit it
+D217 Sales becomes a tool: sort, filter, cross-filter, drill down and deep-link, over the same rows D214 already drew
+D218 A typed dot is a defect wherever it is typed, and the reader is the mechanism this time, not the sweep
 ```
 
 D116-D118: D117 exists and slots between them — a third branch's number, resolved on merge.

@@ -2801,13 +2801,58 @@ test('the census greps to the store, and the identity line says what the box hol
     page.locator('.boxops-census-cell', { hasText: 'Next index' }).locator('.boxops-census-note'),
   ).toHaveText('Where the next capture lands')
 
-  /* Five, not seven: two of the seven records have left. */
-  await expect(page.locator('.boxops-identity-fill')).toHaveText('5 on hand')
+  /* Five, not seven: two of the seven records have left. THE CENSUS TRIAD (D41) REACHED THIS
+     PANEL — `on hand` is a `bn-stat` figure now, the same primitive `CardLocations`' own three
+     figures use, so the assertion reads the figure and its label as the two spans they now
+     are rather than one string. */
+  await expect(
+    page.locator('.boxops-identity-line .boxops-stat', { hasText: 'on hand' }).locator('.bn-stat-value'),
+  ).toHaveText('5')
+  await expect(
+    page.locator('.boxops-identity-line .boxops-stat', { hasText: 'on hand' }).locator('.bn-stat-label'),
+  ).toHaveText('on hand')
 
   /* And the control that freezes capacity names the ALLOCATOR's number, because that is what
      `close_box` writes — D20's rule, and the one denominator D58 deliberately left alone. */
   const seal = page.getByRole('button', { name: /^Seal box/ })
   await expect(seal.locator('.boxops-op-detail')).toHaveText('freezes at 7')
+})
+
+test('the box panel draws its census as bn-stat figures, not the old dotted line', async ({
+  page,
+}) => {
+  /* THE OWNER'S RULING, 2026-09-19: this rail still drew the OLD dotted line — a muted string
+     of `label value` parts joined by a CSS `::before` interpunct — while the card pane beside
+     it already drew D41's census-triad, three `bn-stat` tiles. This is the receipt for the fix,
+     asserted the way a mutation catches a reversion: the OLD markup (`.boxops-identity-part`,
+     one interpunct-joined string per fact) must be GONE, and the new one (`.boxops-stat`, a
+     `bn-stat-value`/`bn-stat-label` pair per fact) must be there, four figures for this fixture
+     box — on hand, sold, retired, captured. Run against a `.bak` of the pre-fix `BoxOps.tsx`/
+     `BoxOps.css` (never `git stash`, which is shared with every worktree of this clone), this
+     case is RED: the pre-fix panel has zero `.boxops-stat` nodes and four `.boxops-identity-part`
+     nodes instead. */
+  await open(page)
+  await openBoxOps(page)
+  await page.keyboard.press('Escape')
+  await expect(page.getByRole('button', { name: 'Rename' })).toHaveCount(0)
+
+  await expect(page.locator('.boxops-identity-part')).toHaveCount(0)
+
+  const stats = page.locator('.boxops-identity-line .boxops-stat')
+  await expect(stats).toHaveCount(4)
+  await expect(stats.locator('.bn-stat-value')).toHaveText(['5', '1', '1', '7'])
+  await expect(stats.locator('.bn-stat-label')).toHaveText(['on hand', 'sold', 'retired', 'captured'])
+
+  /* THE PILL AND THE NOTE STAY OUTSIDE THE STAT ROW. `open`/`sealed` is the lid, not a count of
+     what is in the box, and this fixture box is open so there is no `sealed at N` note to draw
+     — `#/inventory`'s sealed-box case (this same file, "the seal names...") covers that text. */
+  await expect(page.locator('.boxops-identity-line .boxops-state')).toHaveText('open')
+
+  /* AND THE FOUR FIGURES SIT ON ONE ROW AT 1440 — the rail is 300px and this is the width the
+     brief named as the floor for it. */
+  await page.setViewportSize({ width: 1440, height: 900 })
+  const tops = await stats.evaluateAll((nodes) => nodes.map((n) => n.getBoundingClientRect().top))
+  expect(new Set(tops.map((t) => Math.round(t))).size).toBe(1)
 })
 
 // ------------------------------------------------------- the box's operations, as rows (D20)
@@ -6097,6 +6142,57 @@ async function railOrder(page: Page): Promise<string[]> {
   return out
 }
 
+/* WHAT THE COPIES COLUMN DID, FRAME BY FRAME, BECAUSE A POLL CANNOT SEE IT (D118).
+ *
+ * Every `expect(locator)` in this file retries until it is true and then stops asking, so a
+ * list that empties and fills again between two polls is invisible to all of them — and that
+ * is precisely the shape of the defect this guards: the column came back, so every assertion
+ * about it passed, while the owner watched six rows turn into nothing under his hand.
+ * `requestAnimationFrame` is the only sampler here that runs on the browser's own paint
+ * schedule, so it cannot step over a frame the operator could have seen.
+ *
+ * THREE THINGS ARE WATCHED AND THEY FAIL DIFFERENTLY. `rows` is what the operator counts.
+ * `column` is `.inventory-detail`, which goes to zero when the panel is TORN DOWN rather than
+ * re-pointed. `skeleton` is the panel rebuilt from nothing and waiting on a fetch it should
+ * never have had to make. A guard reading only the first would have called the rebuild a
+ * blank and sent the next session looking in the wrong file. */
+async function installCopiesWatch(page: Page): Promise<void> {
+  await page.evaluate(() => {
+    const seen: { rows: number; column: number; skeleton: number }[] = []
+    ;(window as unknown as { __copiesWatch: typeof seen }).__copiesWatch = seen
+    const tick = () => {
+      seen.push({
+        rows: document.querySelectorAll('.card-locations-row .position-parts').length,
+        column: document.querySelectorAll('.inventory-detail').length,
+        skeleton: document.querySelectorAll('.inventory-detail .bn-skeleton').length,
+      })
+      requestAnimationFrame(tick)
+    }
+    requestAnimationFrame(tick)
+  })
+}
+
+/** The watch's verdict: the column was there, full, and never rebuilt. */
+async function expectCopiesHeld(page: Page): Promise<void> {
+  const seen = await page.evaluate(
+    () =>
+      (window as unknown as { __copiesWatch?: { rows: number; column: number; skeleton: number }[] })
+        .__copiesWatch ?? [],
+  )
+  /* THE WATCH ITSELF IS CHECKED FIRST. An empty recording is a watch that never ran — a
+     navigation, or an install after the work was already over — and that reads as a pass. */
+  expect(seen.length, 'the frame watch recorded nothing').toBeGreaterThan(2)
+  const lost = seen
+    .map((frame, at) => ({ ...frame, at }))
+    .filter((frame) => frame.rows === 0 || frame.column === 0 || frame.skeleton > 0)
+  expect(
+    lost.map(
+      (frame) => `#${frame.at} rows=${frame.rows} column=${frame.column} skeleton=${frame.skeleton}`,
+    ),
+    `${seen.length} frames watched`,
+  ).toEqual([])
+}
+
 /* THE FIXTURE THE OWNER'S COMPLAINT NEEDS, and it is D132's own with one copy moved.
  *
  * Six live Thievul: THREE in box 7 section 1, TWO in box 2 section 2, ONE in box 2 section 1. So
@@ -6428,6 +6524,12 @@ test('a new search takes a new order, so the staleness never carries across answ
      an Eiscue list holds no Thievul. `8937370` is the same group under a different string, so
      the frozen copy is still on screen and the only thing that can take the chip down is the
      release. */
+  /* THE WATCHER GOES UP BEFORE THE QUESTION IS ASKED (D118, amended 2026-09-19). Every
+     assertion below retries on Playwright's own interval, so all of them can settle AFTER a
+     blank has happened and healed — which is how this screen shipped a copies list that
+     emptied under the hand for weeks. This samples every animation frame from here until the
+     order has been read, and the read at the end is of what HELD, not of what is there now. */
+  await installCopiesWatch(page)
   await page.getByRole('searchbox').fill('8937370')
   /* Waited for the NEW order's own first row, not for a count: six rows is true before the
      answer lands and after it, so a count gates nothing. */
@@ -6448,6 +6550,226 @@ test('a new search takes a new order, so the staleness never carries across answ
     'Box 7 · Section 1 · Card 40',
     'Box 2 · Section 1 · Card 1',
   ])
+  await expectCopiesHeld(page)
+})
+
+test('the copies list holds while a new answer moves the walk to another drawer', async ({ page }) => {
+  /* D118's FOURTH FLOOR OVER THE SLOWEST MOMENT THIS SCREEN HAS, AND THE ORDERING IS FORCED
+     RATHER THAN HOPED FOR.
+     The case above asserts the same continuity on whatever ordering the machine happens to
+     produce, which on a fast rig is the easy one. This one makes the hard ordering certain:
+     every `GET /inventory/<box>` answers 400ms late, so when a fresh answer re-ranks the
+     drawers and the walk moves from box 7 to box 2, box 2's own cards are still in flight.
+     For the length of that flight `BoxBrowse`'s `visible` — one drawer's rows, narrowed to
+     the shelf — holds nothing at all for the shelf the walk is now on.
+     WHAT THAT USED TO DO, measured on the rig at this delay: the walk's row was not in
+     `visible`, so `selectedRow` read null, `Inventory.tsx` drew no `detail`, and the copies
+     column was destroyed and built again 679ms later as a skeleton — six rows to none and
+     back with no press, which is the report the owner made ("for I don't know how many
+     weeks"). A second tear-down rode on `.browse-card`'s `key`, which rebuilt the same column
+     on every change of selection.
+     400ms IS A DELAY AND NOT AN ASSERTION. It cannot make a passing build fail: what it does
+     is hold open a window the product must survive, and a product that survives it survives a
+     window of any length. The runner reaches the same window through CPU contention at two
+     workers, three runs in twenty. */
+  const cards: Cards = stackedThievul()
+  const store: Store = { cards, search: (query) => searchAnswer(query, cards) }
+  const depart = (key: string) => {
+    const held = cards[key]
+    if (held === undefined) return
+    const place = held.place
+    cards[key] = { ...held, state: 'sold', label: `Box ${place.box} · departed · B${place.box} #${place.index}`, place: { ...place, label: `Box ${place.box} · departed · B${place.box} #${place.index}`, slot: null, card: null, fraction: null } }
+    delete (cards[key] as { card?: number }).card
+  }
+  await open(page, STACKED_BOXES, store, () => PRICING, movesOnSale((undo) => { if (!undo) depart('7/38') }), {
+    route: '/#/inventory?box=2',
+    hideSold: true,
+  })
+  /* Registered AFTER `open`, so it is matched first and hands the request on to `open`'s own
+     stubs when the delay is over. `route.fallback()` rather than a fulfilment of its own:
+     what is being changed here is WHEN the answer lands, never what is in it. */
+  await page.route(/\/inventory\/\d+$/, async (route) => {
+    if (route.request().method() !== 'GET') return route.fallback()
+    await new Promise((resolve) => setTimeout(resolve, 400))
+    return route.fallback()
+  })
+  await expandAll(page)
+  await page.getByRole('searchbox').fill('Thievul')
+  await expect(page.locator('.card-locations-row .position-parts').nth(0)).toHaveAttribute('aria-label', 'Box 7 · Section 1 · Card 38')
+  await copyRow(page, 'Box 7 · Section 1 · Card 38').getByRole('button', { name: 'Mark sold' }).click()
+  await expect(
+    page.locator('.card-locations-row .position-parts[aria-label="Box 7 · departed · B7 #38"]'),
+  ).toHaveCount(1)
+
+  await installCopiesWatch(page)
+  /* The same SKU under a different string, so the answer is a new one and the drawer it leads
+     with is not the drawer the walk is on. */
+  await page.getByRole('searchbox').fill('8937370')
+  await expect(page.locator('.card-locations-row .position-parts').nth(0)).toHaveAttribute(
+    'aria-label',
+    'Box 2 · Section 2 · Card 1',
+  )
+  /* THE WALK ITSELF IS WAITED FOR, not just the copies list. Box 2's rows are the last thing
+     to land, and the watch has to cover the whole flight rather than stop at the answer that
+     started it — reading the verdict before the rows arrive is how a guard goes green over
+     the exact window it was written for. */
+  await expect(page.locator(`.browse-row`)).toHaveCount(3)
+  await expect(page.locator('.card-locations-row .position-parts')).toHaveCount(6)
+  await expectCopiesHeld(page)
+})
+test('a press to another drawer dims its predecessor’s rows rather than drawing them as the new box’s, or drawing nothing', async ({ page }) => {
+  /* THE REGRESSION PR #404 SHIPPED, caught in review before it merged, and the OWNER'S
+     RULING THAT FOLLOWED IT, 2026-09-19. The fix in the review holds the walk's row across a
+     fresh SEARCH answer that re-ranks the drawers on its own — but the code it changed could
+     not tell that case apart from a PRESS to a different drawer, and a manual press produces
+     the identical shape: `shelf` changes, `rows` still answers for the box before it,
+     `visible` reads empty for the length of the fetch. Its own fix fell straight to BLANK for
+     a press: no row, no rows, no sentence, no spinner, for as long as ~1.5s on a slow store.
+
+     PROVED LIVE (the review's own reproduction): box 2 to box 7, `/inventory/7` delayed
+     1500ms. The box header said Box 7. The walk list said "Nothing in box 7 yet" — false,
+     it holds three cards. The detail column still drew box 2's Thievul, with `CardOps` live
+     against it. An operator acting on that panel would sell or retire box 2's card while
+     believing they stood in box 7.
+
+     THE OWNER'S WORD ON THE BLANK ITSELF: keep the previous drawer's rows on screen, DIMMED,
+     until the new answer lands — in both the walk list and the copies column. Dimmed is not
+     a smaller version of the a4f3594b claim: `aria-busy` and `pointer-events: none`
+     (BoxBrowse.css) say the content is a TRANSITION, and block every click a press could
+     land on a card that is no longer where the header says it is.
+
+     THIS CASE FORCES THAT ORDERING RATHER THAN HOPING FOR IT: `/inventory/7` is delayed, and
+     every assertion below runs in the window the delay holds open, before waiting on the
+     answer. `shelfSource` (BoxBrowse.tsx, beside `shelfAnswered`) is what tells this press
+     apart from D132's own re-rank — only a fresh search answer may hold the outgoing row as
+     the LIVE answer; a press or a walk-to holds it DIMMED instead, through `held`/
+     `heldSections`/`heldDetail`, same as before the D118 fix existed except never blank. */
+  const cards: Cards = stackedThievul()
+  const store: Store = { cards, search: (query) => searchAnswer(query, cards) }
+  await open(page, STACKED_BOXES, store, () => PRICING, SALE, {
+    route: '/#/inventory?box=2',
+  })
+  await expect(page.locator('.browse-boxcell[aria-current="true"]')).toHaveAttribute('aria-label', /^Box 2/)
+  await expect(page.locator('.browse-card')).toContainText('Thievul')
+  const rowsBefore = await page.locator('.browse-row').count()
+  /* THE LIST'S OWN HEIGHT, not its viewport top — box 7 carries a name box 2 does not
+     (`stackedThievul` below: "ME01 spares"), so the HEADER above the list is a real
+     content difference and the list's absolute position moves for a reason unrelated to
+     this fix. Height is the fair measure: both boxes hold three rows, so a `.browse-list`
+     that never collapsed reads the same height throughout, held or landed. */
+  const listHeightBefore = await page.locator('.browse-list').first().evaluate((node) => node.getBoundingClientRect().height)
+
+  /* Registered AFTER `open`, matched first, and narrowed to box 7 alone — box 2's own
+     fetches (the initial load) are not slowed, only the box the press moves to. 800ms
+     gives the one-shot snapshot below comfortable room over CI's own latency. */
+  await page.route(/\/inventory\/7$/, async (route) => {
+    if (route.request().method() !== 'GET') return route.fallback()
+    await new Promise((resolve) => setTimeout(resolve, 800))
+    return route.fallback()
+  })
+
+  await page.locator('.browse-boxcell[aria-label^="Box 7"]').click()
+
+  /* THE WINDOW: box 7's own rows have not landed. A RETRYING `expect(locator)` CANNOT SEE
+     IT — every one of them polls until it is true (or times out) and would happily settle
+     AFTER the 800ms delay clears and the false state has healed on its own, which is
+     precisely how this shipped once already (D118's frame-watch note applies just as much
+     here). This reads the whole subject in ONE synchronous in-page snapshot instead, taken
+     right after the click and before anything awaits the network. */
+  const snap = await page.evaluate(() => {
+    const list = document.querySelector('.browse-list')
+    const card = document.querySelector('.browse-card') as (HTMLElement & { inert: boolean }) | null
+    /* REVIEW OF PR #407, FINDING 1 (HIGH): `pointer-events: none` blocks the mouse alone.
+       Tab still reached CardOps' "Card actions" button and Enter opened its menu on
+       `held.current` — box 2's card, live, under the Box 7 header — the a4f3594b
+       regression again, by keyboard. `inert` (BoxBrowse.tsx) is meant to remove the whole
+       dimmed section from the tab order AND refuse activation. Proved here by calling
+       `.focus()` on the button directly: an `inert` subtree refuses that call by spec, so
+       `document.activeElement` stays put and this reads false. A real Tab walk would prove
+       the same fact more slowly and no more certainly — `inert` governs both paths by one
+       mechanism. */
+    const cardActionsBtn = card === null
+      ? null
+      : [...card.querySelectorAll('button')].find((b) => b.textContent?.trim() === 'Card actions') ?? null
+    const before = document.activeElement
+    cardActionsBtn?.focus()
+    const cardActionsFocused = cardActionsBtn !== null && document.activeElement === cardActionsBtn
+    if (document.activeElement !== before && document.activeElement instanceof HTMLElement) {
+      document.activeElement.blur()
+    }
+    return {
+      current: document.querySelector('.browse-boxcell[aria-current="true"]')?.getAttribute('aria-label') ?? null,
+      /* `.browse-card` is now HELD DIMMED rather than absent — box 2's rows are still ITS
+         own, drawn under the same aria-busy/opacity contract as the list below, never as a
+         claim that they are box 7's. Both spellings of the false sentence must still be
+         absent: dimmed is a transition, not a claim either. */
+      cardCount: document.querySelectorAll('.browse-card').length,
+      cardAriaBusy: card?.getAttribute('aria-busy') ?? null,
+      cardOpacity: card === null ? null : Number.parseFloat(getComputedStyle(card).opacity),
+      cardPointerEvents: card === null ? null : getComputedStyle(card).pointerEvents,
+      cardInert: card === null ? null : card.inert,
+      cardActionsPresent: cardActionsBtn !== null,
+      cardActionsFocusable: cardActionsFocused,
+      /* Box 2's own photograph is still drawn (held, dimmed) — it is what proves the
+         panel is showing the PREVIOUS drawer's card rather than nothing, and the
+         aria-busy/opacity pair above is what proves it is marked as stale rather than
+         claimed as box 7's. */
+      box2Photo: document.querySelectorAll('img[alt*="Box 2 ·"]').length,
+      /* REVIEW OF PR #407, FINDING 2 (MEDIUM): `panelDetail` must still be the HELD
+         `{detail}` — `Inventory.tsx`'s `CopiesPanel` — not the live one (which is `null`
+         while `dimPanel`, drawing nothing) and not some invented stand-in. `.browse-under`
+         is `{panelDetail}`'s own wrapper; `.card-locations-owner` is `CopiesPanel`'s own
+         top-level class (CardLocations.tsx) and `.card-locations-row` is one row of real
+         copy data, so both counts prove the copies column is drawing REAL, HELD content,
+         not an empty div. */
+      underOwnerCount: document.querySelectorAll('.browse-under .card-locations-owner').length,
+      underRowCount: document.querySelectorAll('.browse-under .card-locations-row').length,
+      rowCount: document.querySelectorAll('.browse-row').length,
+      listAriaBusy: list?.getAttribute('aria-busy') ?? null,
+      listOpacity: list === null ? null : Number.parseFloat(getComputedStyle(list).opacity),
+      listPointerEvents: list === null ? null : getComputedStyle(list).pointerEvents,
+      listTabIndex: list === null ? null : list.getAttribute('tabindex'),
+      /* THE LIST'S OWN HEIGHT, not its viewport top (see `listHeightBefore` above): held,
+         it is drawing the SAME three rows it drew before the press, so a list that never
+         collapsed reads the same height here as it did then. */
+      listHeight: list === null ? null : list.getBoundingClientRect().height,
+      falseClaim: document.body.innerText.includes('Nothing in box 7 yet') || document.body.innerText.includes('Nothing in Box 7 yet'),
+      emptyCount: document.querySelectorAll('.browse-empty').length,
+    }
+  })
+  expect(snap.current, 'box-cell aria-current').toMatch(/^Box 7/)
+  expect(snap.cardCount, '.browse-card count').toBe(1)
+  expect(snap.cardAriaBusy, '.browse-card aria-busy').toBe('true')
+  expect(snap.cardOpacity, '.browse-card computed opacity').toBeLessThan(1)
+  expect(snap.cardPointerEvents, '.browse-card computed pointer-events').toBe('none')
+  expect(snap.cardInert, '.browse-card is inert while dimmed').toBe(true)
+  expect(snap.cardActionsPresent, '"Card actions" button exists in the dimmed panel').toBe(true)
+  expect(snap.cardActionsFocusable, '"Card actions" is NOT focusable while the panel is inert').toBe(false)
+  expect(snap.box2Photo, "box 2's photo alt count, held dimmed").toBe(1)
+  expect(snap.underOwnerCount, '.browse-under draws the held CopiesPanel, not nothing').toBe(1)
+  expect(snap.underRowCount, '.browse-under draws real held copy rows, not an empty panel').toBeGreaterThan(0)
+  expect(snap.rowCount, '.browse-row count, held dimmed').toBe(rowsBefore)
+  expect(snap.listAriaBusy, '.browse-list aria-busy').toBe('true')
+  expect(snap.listOpacity, '.browse-list computed opacity').toBeLessThan(1)
+  expect(snap.listPointerEvents, '.browse-list computed pointer-events').toBe('none')
+  expect(snap.listTabIndex, '.browse-list tabindex, out of the tab order while dimmed').toBe('-1')
+  expect(snap.listHeight, "the list's own height, held, D118: nothing collapsed").toBe(listHeightBefore)
+  expect(snap.falseClaim, '"Nothing in box 7 yet" shown before the answer').toBe(false)
+  expect(snap.emptyCount, '.browse-empty count').toBe(0)
+
+  /* AND ONCE THE ANSWER LANDS: the honest state, box 7's own three rows, and the walk
+     settling on one of them — never a false claim, never a stale card. Its own height is
+     NOT compared against `listHeightBefore` here: box 7 groups its three cards into one
+     section where box 2 groups its three into two (`stackedThievul` above), so the two
+     boxes' lists are never the same height by content alone. The held-vs-before compare
+     above is the one that isolates the fix — same box, same content, before the press and
+     during the wait — and it is the one D118's "nothing collapsed" claim is about. */
+  await expect(page.locator('.browse-row')).toHaveCount(3)
+  await expect(page.locator('.browse-card')).toBeVisible()
+  await expect(page.locator('.browse-card')).toContainText('Thievul')
+  await expect(page.locator('.browse-card')).not.toHaveAttribute('aria-busy', 'true')
+  await expect(page.locator('.browse-list')).not.toHaveAttribute('aria-busy', 'true')
+  await expect(page.locator('.browse-boxcell[aria-current="true"]')).toHaveAttribute('aria-label', /^Box 7/)
 })
 
 test('a box whose last live match departs keeps the walk, rather than handing it to another box', async ({ page }) => {
