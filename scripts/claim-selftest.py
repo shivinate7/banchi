@@ -855,6 +855,107 @@ def main() -> int:
            "and a roster that never fills to the floor RUNS OUT rather than passing, naming "
            "the shortfall", "\n".join(lines))
 
+        # ------------------------------- wait on required checks only (owner's word, 2026-09-19)
+        # Four arms, matching D148's own four-part rule applied to the NARROWER roster:
+        # (a) required green + non-required in progress -> merges; (b) required green +
+        # non-required RED -> still refuses, because narrowing what is WAITED FOR is not
+        # narrowing what is WATCHED FOR; (c) the protection endpoint unreadable -> falls back
+        # to waiting for everything, as before; (d) an empty roster of required contexts is
+        # never a pass on its own — it is treated the same as unreadable, never as "nothing
+        # is required".
+        print("\n  -- required green, non-required still running: this is the merge --")
+        eyes = Scripted(reading(module, done("check"), done("revert-guard"),
+                                running("design-check (1)")))
+        watch = Clock()
+        green, lines = quietly(module.wait_for_checks, "abc1234", 99, 0, eyes, watch.sleep,
+                               watch.now, ("check", "revert-guard"))
+        joined = "\n".join(lines)
+        ok(green, "required checks complete and green is enough — a non-required run in "
+           "progress does not hold the merge", joined)
+        ok("design-check (1)" in joined and "not required" in joined,
+           "and the still-running non-required run is NAMED at the moment of merging, not "
+           "swallowed", joined)
+        ok("browser matrix is not required and was not waited for" in joined,
+           "and the fixed sentence is printed — a red there lands on main's own run and is "
+           "fixed forward", joined)
+
+        print("\n  -- required green, non-required RED: still refuses --")
+        eyes = Scripted(reading(module, done("check"), done("revert-guard"),
+                                done("design-check (1)", "failure")))
+        watch = Clock()
+        green, lines = quietly(module.wait_for_checks, "abc1234", 99, 0, eyes, watch.sleep,
+                               watch.now, ("check", "revert-guard"))
+        ok(not green and "did not pass" in "\n".join(lines),
+           "A RED RUN THAT IS ALREADY VISIBLE REFUSES REGARDLESS OF WHETHER IT IS REQUIRED — "
+           "a narrower wait is not a blindfold, and a known red is not something to merge "
+           "past", "\n".join(lines))
+
+        print("\n  -- a required check not yet attached holds the wait, same as absence --")
+        eyes = Scripted(reading(module, done("check")),
+                        reading(module, done("check"), done("revert-guard")))
+        watch = Clock()
+        green, lines = quietly(module.wait_for_checks, "abc1234", 99, 0, eyes, watch.sleep,
+                               watch.now, ("check", "revert-guard"))
+        ok(green and len(eyes.asked) == 3,
+           "`revert-guard` had not attached yet on the first read — waited for, not treated "
+           "as satisfied by its absence", "\n".join(lines) + "\nasked " + str(len(eyes.asked)))
+
+        print("\n  -- a required check that never attaches never goes green --")
+        eyes = Scripted(reading(module, done("check")))
+        watch = Clock()
+        green, lines = quietly(module.wait_for_checks, "abc1234", 99, 0, eyes, watch.sleep,
+                               watch.now, ("check", "revert-guard"))
+        ok(not green and "revert-guard" in "\n".join(lines) and "gave up" in "\n".join(lines),
+           "`revert-guard` is REQUIRED and is never in the roster — the wait names it and "
+           "runs out, rather than settling on `check` alone because nothing else is pending",
+           "\n".join(lines))
+
+        print("\n  -- the floor is the parent's REQUIRED count, not its total --")
+        # Both required names are attached (`missing` is empty), so this is a floor case and
+        # not a missing-name one: floor 3 against a roster that only ever carries the two
+        # required contexts never fills, however many of the roster's OTHER runs attach.
+        eyes = Scripted(reading(module, done("check"), done("revert-guard"), done("also-here")))
+        watch = Clock()
+        green, lines = quietly(module.wait_for_checks, "abc1234", 99, 3, eyes, watch.sleep,
+                               watch.now, ("check", "revert-guard"))
+        ok(not green and "parent commit carried 3" in "\n".join(lines),
+           "the floor counts required contexts only — three non-required runs beside the two "
+           "required ones does not fill a floor of 3 required", "\n".join(lines))
+
+        print("\n  -- required_contexts: an unreadable protection endpoint fails CLOSED --")
+        module2 = waitable()
+        def unreadable_gh():
+            return module2.Ran(False, "", "gh: HTTP 404")
+        ok(module2.required_contexts(unreadable_gh) is None,
+           "an unreadable answer returns None, and None is the caller's OWN fallback: wait "
+           "for every check run, exactly as before 2026-09-19")
+
+        print("\n  -- required_contexts: an EMPTY roster is never a pass --")
+        def empty_gh():
+            return module2.Ran(True, json.dumps({"contexts": []}), "")
+        ok(module2.required_contexts(empty_gh) is None,
+           "an empty `contexts` list cannot be told apart from `everything is required`, so "
+           "it is treated the same as unreadable rather than as `nothing is required`")
+        def junk_gh():
+            return module2.Ran(True, json.dumps({"contexts": [123, None]}), "")
+        ok(module2.required_contexts(junk_gh) is None,
+           "a `contexts` list with nothing readable as a name resolves to empty, and empty "
+           "is unreadable's twin here too — not silently `()`, which a caller could mistake "
+           "for `nothing is required`")
+
+        print("\n  -- required_contexts: a real roster is read and returned --")
+        def real_gh():
+            return module2.Ran(True, json.dumps({"contexts": ["check", "revert-guard"]}), "")
+        ok(module2.required_contexts(real_gh) == ("check", "revert-guard"),
+           "a well-formed answer is returned as the tuple the wait narrows on")
+
+        print("\n  -- attached_count, narrowed to the required names --")
+        eyes = Scripted(reading(module, done("check"), done("revert-guard"), done("browser-scope")))
+        ok(module.attached_count("parent-sha", eyes, required=("check", "revert-guard")) == 2,
+           "counts only the required-named runs the parent carries, not its total of three")
+        ok(module.attached_count("parent-sha", eyes, required=None) == 3,
+           "and with no required set, it is the old, unnarrowed count")
+
         print("\n  -- a roster that grows between two complete reads is not settled --")
         eyes = Scripted(reading(module, done("check")),
                         reading(module, done("check"), done("revert-guard")))
