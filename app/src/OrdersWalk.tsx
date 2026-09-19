@@ -12,10 +12,9 @@
  * copies are different physical cards even where they are the same printing, and only a
  * photograph of THIS slot proves what a hand would actually pick up there.
  *
- * THE WIRE IS PINNED, NOT MINE. `docs/specs/order-walk-plan.md` §7 fixes `WalkPlan` and its
- * parts; `orderWalkPlanWire.ts` is a TEMPORARY stub of that shape (see its own header) because
- * the route and `app/src/types.ts`'s real declaration are a parallel branch. Nothing here
- * invents a field the wire does not carry.
+ * THE WIRE IS PINNED, NOT MINE — `app/src/types.ts`'s `WalkPlan` and its parts, `app/src/
+ * server.ts:walkPlan()`, section 7's own branch, merged in. Nothing here invents a field the
+ * wire does not carry.
  *
  * WHAT THE WIRE DOES NOT CARRY, STATED RATHER THAN PAPERED OVER:
  *   - `WalkPlanStop` has no `box_total`, so the "where in the drawer" bar cannot be the
@@ -24,28 +23,37 @@
  *     and needs a number this wire does not send. Drawn instead as the honest span numbers
  *     alone (`#242–284`), never a fabricated proportion. Flagged in this branch's report as
  *     worth a look if a true ruler is wanted here.
+ *   - `WalkPlanCopy.neighbors` is always null as shipped (`types.ts`'s own comment: the
+ *     server's `_Places.for_keys` scoping degrades it) — so the neighbour sentence this file
+ *     builds via `placeParts` never actually renders yet. Left in rather than cut, because it
+ *     costs nothing idle and draws the moment the route stops degrading it.
  *   - `WalkPlanTake.for` names which orders share a take but not how the demand at THIS stop
  *     splits between them when there is more than one. `pickOrderFor` below picks the first
  *     one still owing, tracked against what this pass has itself recorded — a rendering-side
  *     choice forced by completing the write, not a second demand computation. Also flagged.
+ *
+ * ORDERING IS THE ROUTE'S, NEVER RE-SORTED HERE (the owner's ruling, 2026-09-18): cards
+ * (`stop.takes`) densest-first, copies (`take.copies`) front to back ascending slot. This file
+ * renders both arrays exactly as sent and contains no `.sort()` over either.
  */
 
 import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 
 import { Button, EmptyState, Icon, Pill } from './kit'
 import { PositionLabel } from './PositionLabel'
-import { describeFailure, photoUrl, placeParts } from './server'
+import { describeFailure, photoUrl, placeParts, walkPlan } from './server'
 import type { Failure } from './server'
-import type { OrderRow, Place, PullTarget } from './types'
-import {
-  walkPlan,
-  type WalkPlan,
-  type WalkPlanCopy,
-  type WalkPlanOrderRef,
-  type WalkPlanShort,
-  type WalkPlanStop,
-  type WalkPlanTake,
-} from './walkPlanWire'
+import type {
+  OrderRow,
+  Place,
+  PullTarget,
+  WalkPlan,
+  WalkPlanCopy,
+  WalkPlanRef,
+  WalkPlanShort,
+  WalkPlanStop,
+  WalkPlanTake,
+} from './types'
 import './OrdersWalk.css'
 
 /** `Inventory.tsx`'s and `Fulfillment.tsx`'s own number, restated here for the same reason
@@ -320,7 +328,7 @@ function TakeBlock({
   const collapsed = satisfied && !withinUndo && !row.reopened
   const takenByKey = useMemo(() => new Map(row.taken.map((t) => [t.key, t])), [row.taken])
   const buyers = useMemo(() => {
-    const seen = new Map<string, WalkPlanOrderRef>()
+    const seen = new Map<string, WalkPlanRef>()
     for (const ref of take.for) seen.set(ref.key, ref)
     return [...seen.values()]
   }, [take.for])
@@ -512,7 +520,7 @@ function WalkPass({
   readonly onPull: WalkPullFn
   readonly onUndo: WalkUndoFn
 }) {
-  const keysSig = useMemo(() => [...walkKeys].sort().join(' '), [walkKeys])
+  const keysSig = useMemo(() => [...walkKeys].sort().join('\u0000'), [walkKeys])
   const [plan, setPlan] = useState<WalkPlan | null>(null)
   const [failure, setFailure] = useState<Failure | null>(null)
   const [loading, setLoading] = useState(true)

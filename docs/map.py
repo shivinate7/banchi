@@ -6298,20 +6298,6 @@ COMPONENTS = [
                                                 "D61's third answer drawn as the pile that needs "
                                                 "a person.",
                                         "governed_by": ["D5", "D61", "D66", "D69", "D73", "D94"]},
-            "src/walkPlanWire.ts": {"does": "TEMPORARY STUB, DELETED AT INTEGRATION. "
-                                          "`docs/specs/order-walk-plan.md` §7 pins "
-                                          "`WalkPlan`/`WalkPlanStop`/`WalkPlanTake`/"
-                                          "`WalkPlanCopy`/`WalkPlanShort`/`WalkPlanCounts` and "
-                                          "a `walkPlan(keys, cost?)` client call as additions "
-                                          "to `app/src/types.ts`/`app/src/server.ts`, built on "
-                                          "a parallel branch. This file declares the SAME "
-                                          "shapes so `OrdersWalk.tsx` can typecheck before "
-                                          "that branch merges. `app/src/types.ts` is the only "
-                                          "wire-shape file in this product; this is a cast "
-                                          "held until the real declaration lands, not a second "
-                                          "one kept on purpose — delete this file and switch "
-                                          "`OrdersWalk.tsx`'s imports the moment it does.",
-                                          "governed_by": ["D33"]},
             "src/OrdersWalk.tsx": {"does": "`Walk the boxes` (`docs/specs/order-walk-plan.md` "
                                            "§8-9): the mode BECOMES the solver's own plan "
                                            "rather than a third mode beside `By buyer`. Two "
