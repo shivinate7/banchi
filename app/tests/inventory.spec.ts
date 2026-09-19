@@ -6572,12 +6572,14 @@ test('the copies list holds while a new answer moves the walk to another drawer'
   await expect(page.locator('.card-locations-row .position-parts')).toHaveCount(6)
   await expectCopiesHeld(page)
 })
-test('a press to another drawer never draws its predecessor’s card while the fetch is in flight', async ({ page }) => {
-  /* THE REGRESSION PR #404 SHIPPED, caught in review before it merged. The fix above holds
-     the walk's row across a fresh SEARCH answer that re-ranks the drawers on its own — but
-     the code it changed could not tell that case apart from a PRESS to a different drawer,
-     and a manual press produces the identical shape: `shelf` changes, `rows` still answers
-     for the box before it, `visible` reads empty for the length of the fetch.
+test('a press to another drawer dims its predecessor’s rows rather than drawing them as the new box’s, or drawing nothing', async ({ page }) => {
+  /* THE REGRESSION PR #404 SHIPPED, caught in review before it merged, and the OWNER'S
+     RULING THAT FOLLOWED IT, 2026-09-19. The fix in the review holds the walk's row across a
+     fresh SEARCH answer that re-ranks the drawers on its own — but the code it changed could
+     not tell that case apart from a PRESS to a different drawer, and a manual press produces
+     the identical shape: `shelf` changes, `rows` still answers for the box before it,
+     `visible` reads empty for the length of the fetch. Its own fix fell straight to BLANK for
+     a press: no row, no rows, no sentence, no spinner, for as long as ~1.5s on a slow store.
 
      PROVED LIVE (the review's own reproduction): box 2 to box 7, `/inventory/7` delayed
      1500ms. The box header said Box 7. The walk list said "Nothing in box 7 yet" — false,
@@ -6585,11 +6587,18 @@ test('a press to another drawer never draws its predecessor’s card while the f
      against it. An operator acting on that panel would sell or retire box 2's card while
      believing they stood in box 7.
 
+     THE OWNER'S WORD ON THE BLANK ITSELF: keep the previous drawer's rows on screen, DIMMED,
+     until the new answer lands — in both the walk list and the copies column. Dimmed is not
+     a smaller version of the a4f3594b claim: `aria-busy` and `pointer-events: none`
+     (BoxBrowse.css) say the content is a TRANSITION, and block every click a press could
+     land on a card that is no longer where the header says it is.
+
      THIS CASE FORCES THAT ORDERING RATHER THAN HOPING FOR IT: `/inventory/7` is delayed, and
      every assertion below runs in the window the delay holds open, before waiting on the
      answer. `shelfSource` (BoxBrowse.tsx, beside `shelfAnswered`) is what tells this press
-     apart from D132's own re-rank — only a fresh search answer may hold the outgoing row;
-     a press or a walk-to must resolve to null, same as before the D118 fix existed. */
+     apart from D132's own re-rank — only a fresh search answer may hold the outgoing row as
+     the LIVE answer; a press or a walk-to holds it DIMMED instead, through `held`/
+     `heldSections`/`heldDetail`, same as before the D118 fix existed except never blank. */
   const cards: Cards = stackedThievul()
   const store: Store = { cards, search: (query) => searchAnswer(query, cards) }
   await open(page, STACKED_BOXES, store, () => PRICING, SALE, {
@@ -6597,6 +6606,13 @@ test('a press to another drawer never draws its predecessor’s card while the f
   })
   await expect(page.locator('.browse-boxcell[aria-current="true"]')).toHaveAttribute('aria-label', /^Box 2/)
   await expect(page.locator('.browse-card')).toContainText('Thievul')
+  const rowsBefore = await page.locator('.browse-row').count()
+  /* THE LIST'S OWN HEIGHT, not its viewport top — box 7 carries a name box 2 does not
+     (`stackedThievul` below: "ME01 spares"), so the HEADER above the list is a real
+     content difference and the list's absolute position moves for a reason unrelated to
+     this fix. Height is the fair measure: both boxes hold three rows, so a `.browse-list`
+     that never collapsed reads the same height throughout, held or landed. */
+  const listHeightBefore = await page.locator('.browse-list').first().evaluate((node) => node.getBoundingClientRect().height)
 
   /* Registered AFTER `open`, matched first, and narrowed to box 7 alone — box 2's own
      fetches (the initial load) are not slowed, only the box the press moves to. 800ms
@@ -6615,31 +6631,99 @@ test('a press to another drawer never draws its predecessor’s card while the f
      precisely how this shipped once already (D118's frame-watch note applies just as much
      here). This reads the whole subject in ONE synchronous in-page snapshot instead, taken
      right after the click and before anything awaits the network. */
-  const snap = await page.evaluate(() => ({
-    current: document.querySelector('.browse-boxcell[aria-current="true"]')?.getAttribute('aria-label') ?? null,
-    /* `.browse-card` ONLY RENDERS WHEN `selectedRow` IS NOT NULL — the strongest check
-       available, since both boxes' cards happen to share the name "Thievul" and a
-       name-based check could not tell them apart. Its absence is what proves box 2's
-       card is not being drawn under the Box 7 header. */
-    cardCount: document.querySelectorAll('.browse-card').length,
-    /* Its photograph carries the position and confirms it a second way. */
-    box2Photo: document.querySelectorAll('img[alt*="Box 2 ·"]').length,
-    /* Both spellings: the list's own EmptyState reads "Nothing in box 7 yet", the detail
-       column's reads "Nothing in Box 7 yet" — same false claim, two capitalisations. */
-    falseClaim: document.body.innerText.includes('Nothing in box 7 yet') || document.body.innerText.includes('Nothing in Box 7 yet'),
-    emptyCount: document.querySelectorAll('.browse-empty').length,
-  }))
+  const snap = await page.evaluate(() => {
+    const list = document.querySelector('.browse-list')
+    const card = document.querySelector('.browse-card') as (HTMLElement & { inert: boolean }) | null
+    /* REVIEW OF PR #407, FINDING 1 (HIGH): `pointer-events: none` blocks the mouse alone.
+       Tab still reached CardOps' "Card actions" button and Enter opened its menu on
+       `held.current` — box 2's card, live, under the Box 7 header — the a4f3594b
+       regression again, by keyboard. `inert` (BoxBrowse.tsx) is meant to remove the whole
+       dimmed section from the tab order AND refuse activation. Proved here by calling
+       `.focus()` on the button directly: an `inert` subtree refuses that call by spec, so
+       `document.activeElement` stays put and this reads false. A real Tab walk would prove
+       the same fact more slowly and no more certainly — `inert` governs both paths by one
+       mechanism. */
+    const cardActionsBtn = card === null
+      ? null
+      : [...card.querySelectorAll('button')].find((b) => b.textContent?.trim() === 'Card actions') ?? null
+    const before = document.activeElement
+    cardActionsBtn?.focus()
+    const cardActionsFocused = cardActionsBtn !== null && document.activeElement === cardActionsBtn
+    if (document.activeElement !== before && document.activeElement instanceof HTMLElement) {
+      document.activeElement.blur()
+    }
+    return {
+      current: document.querySelector('.browse-boxcell[aria-current="true"]')?.getAttribute('aria-label') ?? null,
+      /* `.browse-card` is now HELD DIMMED rather than absent — box 2's rows are still ITS
+         own, drawn under the same aria-busy/opacity contract as the list below, never as a
+         claim that they are box 7's. Both spellings of the false sentence must still be
+         absent: dimmed is a transition, not a claim either. */
+      cardCount: document.querySelectorAll('.browse-card').length,
+      cardAriaBusy: card?.getAttribute('aria-busy') ?? null,
+      cardOpacity: card === null ? null : Number.parseFloat(getComputedStyle(card).opacity),
+      cardPointerEvents: card === null ? null : getComputedStyle(card).pointerEvents,
+      cardInert: card === null ? null : card.inert,
+      cardActionsPresent: cardActionsBtn !== null,
+      cardActionsFocusable: cardActionsFocused,
+      /* Box 2's own photograph is still drawn (held, dimmed) — it is what proves the
+         panel is showing the PREVIOUS drawer's card rather than nothing, and the
+         aria-busy/opacity pair above is what proves it is marked as stale rather than
+         claimed as box 7's. */
+      box2Photo: document.querySelectorAll('img[alt*="Box 2 ·"]').length,
+      /* REVIEW OF PR #407, FINDING 2 (MEDIUM): `panelDetail` must still be the HELD
+         `{detail}` — `Inventory.tsx`'s `CopiesPanel` — not the live one (which is `null`
+         while `dimPanel`, drawing nothing) and not some invented stand-in. `.browse-under`
+         is `{panelDetail}`'s own wrapper; `.card-locations-owner` is `CopiesPanel`'s own
+         top-level class (CardLocations.tsx) and `.card-locations-row` is one row of real
+         copy data, so both counts prove the copies column is drawing REAL, HELD content,
+         not an empty div. */
+      underOwnerCount: document.querySelectorAll('.browse-under .card-locations-owner').length,
+      underRowCount: document.querySelectorAll('.browse-under .card-locations-row').length,
+      rowCount: document.querySelectorAll('.browse-row').length,
+      listAriaBusy: list?.getAttribute('aria-busy') ?? null,
+      listOpacity: list === null ? null : Number.parseFloat(getComputedStyle(list).opacity),
+      listPointerEvents: list === null ? null : getComputedStyle(list).pointerEvents,
+      listTabIndex: list === null ? null : list.getAttribute('tabindex'),
+      /* THE LIST'S OWN HEIGHT, not its viewport top (see `listHeightBefore` above): held,
+         it is drawing the SAME three rows it drew before the press, so a list that never
+         collapsed reads the same height here as it did then. */
+      listHeight: list === null ? null : list.getBoundingClientRect().height,
+      falseClaim: document.body.innerText.includes('Nothing in box 7 yet') || document.body.innerText.includes('Nothing in Box 7 yet'),
+      emptyCount: document.querySelectorAll('.browse-empty').length,
+    }
+  })
   expect(snap.current, 'box-cell aria-current').toMatch(/^Box 7/)
-  expect(snap.cardCount, '.browse-card count').toBe(0)
-  expect(snap.box2Photo, "box 2's photo alt count").toBe(0)
+  expect(snap.cardCount, '.browse-card count').toBe(1)
+  expect(snap.cardAriaBusy, '.browse-card aria-busy').toBe('true')
+  expect(snap.cardOpacity, '.browse-card computed opacity').toBeLessThan(1)
+  expect(snap.cardPointerEvents, '.browse-card computed pointer-events').toBe('none')
+  expect(snap.cardInert, '.browse-card is inert while dimmed').toBe(true)
+  expect(snap.cardActionsPresent, '"Card actions" button exists in the dimmed panel').toBe(true)
+  expect(snap.cardActionsFocusable, '"Card actions" is NOT focusable while the panel is inert').toBe(false)
+  expect(snap.box2Photo, "box 2's photo alt count, held dimmed").toBe(1)
+  expect(snap.underOwnerCount, '.browse-under draws the held CopiesPanel, not nothing').toBe(1)
+  expect(snap.underRowCount, '.browse-under draws real held copy rows, not an empty panel').toBeGreaterThan(0)
+  expect(snap.rowCount, '.browse-row count, held dimmed').toBe(rowsBefore)
+  expect(snap.listAriaBusy, '.browse-list aria-busy').toBe('true')
+  expect(snap.listOpacity, '.browse-list computed opacity').toBeLessThan(1)
+  expect(snap.listPointerEvents, '.browse-list computed pointer-events').toBe('none')
+  expect(snap.listTabIndex, '.browse-list tabindex, out of the tab order while dimmed').toBe('-1')
+  expect(snap.listHeight, "the list's own height, held, D118: nothing collapsed").toBe(listHeightBefore)
   expect(snap.falseClaim, '"Nothing in box 7 yet" shown before the answer').toBe(false)
   expect(snap.emptyCount, '.browse-empty count').toBe(0)
 
   /* AND ONCE THE ANSWER LANDS: the honest state, box 7's own three rows, and the walk
-     settling on one of them — never a false claim, never a stale card. */
+     settling on one of them — never a false claim, never a stale card. Its own height is
+     NOT compared against `listHeightBefore` here: box 7 groups its three cards into one
+     section where box 2 groups its three into two (`stackedThievul` above), so the two
+     boxes' lists are never the same height by content alone. The held-vs-before compare
+     above is the one that isolates the fix — same box, same content, before the press and
+     during the wait — and it is the one D118's "nothing collapsed" claim is about. */
   await expect(page.locator('.browse-row')).toHaveCount(3)
   await expect(page.locator('.browse-card')).toBeVisible()
   await expect(page.locator('.browse-card')).toContainText('Thievul')
+  await expect(page.locator('.browse-card')).not.toHaveAttribute('aria-busy', 'true')
+  await expect(page.locator('.browse-list')).not.toHaveAttribute('aria-busy', 'true')
   await expect(page.locator('.browse-boxcell[aria-current="true"]')).toHaveAttribute('aria-label', /^Box 7/)
 })
 

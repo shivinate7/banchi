@@ -1141,6 +1141,11 @@ COMPONENTS = [
             # the only things in the product that want a trend and have none. D22 because the
             # `Product Line` cell it resolves a category by is that entry's to author. D35 for
             # the number-then-name shape the join borrows, D25 for the per-game partition.
+            # D216 because infinite-api stopped answering the
+            # honest `USER_AGENT` on 2026-09-19 (D62's own premise measured 2026-08-30), and
+            # this is the entry that reuses D64's `AGENT_ENV` and names a 403 `Blocked`
+            # rather than folding it into `history_unreachable`. D171 because that refusal
+            # names its remedy — a refusal that reaches nobody did not happen.
             "pricehistory.py": {"does": "what a SKU has been selling for: the public "
                                         "infinite-api price-history endpoint, reached through a "
                                         "LOCAL sku -> productId join against tcgcsv.com's mirror "
@@ -1150,7 +1155,9 @@ COMPONENTS = [
                                         "transaction and within-bucket dispersion. It also reads "
                                         "that mirror's current /prices, which are per product per "
                                         "PRINTING and never per SKU.",
-                                "governed_by": ["D8", "D16", "D22", "D25", "D35", "D47", "D49"],
+                                "governed_by": ["D8", "D16", "D22", "D25", "D35", "D47", "D49",
+                                                "D62", "D64", "D171",
+                                                "D216"],
                                 "tested_by": ["T7"],
                                 "note": "REACHABLE AS OF 2026-08-30 (D62) — this entry read "
                                         "RECORDED RATHER THAN BUILT for one day, and the whole "
@@ -1176,7 +1183,20 @@ COMPONENTS = [
                                         "which is why `Bound` names both denominators rather "
                                         "than reporting one percentage. The join was measured "
                                         "at 3,588 distinct products across all four committed "
-                                        "exports, 100% resolved, zero ambiguous."},
+                                        "exports, 100% resolved, zero ambiguous. "
+                                        "D62's OWN MEASUREMENT THAT infinite-api TOOK A BARE "
+                                        "`curl` — NO KEY, NO COOKIE, NO USER-AGENT THAT "
+                                        "MATTERED — ROTTED ON 2026-09-19: it now answers this "
+                                        "project's honest default with HTTP 403 while a "
+                                        "browser's still answers 200 "
+                                        "(D216). `fetch_json` and "
+                                        "`Market` take an explicit `user_agent`, defaulting to "
+                                        "the unchanged honest string; `server/pipeline_routes.py` "
+                                        "resolves D64's `AGENT_ENV` (`PKMNSCAN_TCG_USER_AGENT`, "
+                                        "reused rather than a second knob) and passes it in. A "
+                                        "403 is now `Blocked`, a sibling of `Unreachable`, and "
+                                        "the route answers it as `history_blocked` rather than "
+                                        "folding it into `history_unreachable`."},
         },
     },
     {
@@ -3382,7 +3402,7 @@ COMPONENTS = [
                         "the writer and the gate cannot disagree about what a file cites. "
                         "Stdlib, and it splices with `ast` so the hand-written prose around "
                         "each list survives untouched.",
-                "governed_by": ["D16", "D17", "D18", "D173"],
+                "governed_by": ["D16", "D17", "D18", "D140", "D173"],
                 "note": "IT ONLY EVER ADDS. An id in `governed_by` that the file does not "
                         "cite is invisible to the `repo map` row and to this alike, because "
                         "that check is one-directional — so removing one stays a person's "
@@ -4059,7 +4079,7 @@ COMPONENTS = [
                                 "D79", "D86", "D87", "D88", "D89", "D100", "D103", "D105",
                                 "D134", "D137", "D145", "D147", "D156", "D159", "D163",
                                 "D165", "D166", "D168", "D170", "D172", "D174", "D180",
-                                "D188", "D189"],
+                                "D188", "D189", "D216"],
                 "tested_by": ["T7"],
             },
             "shipping_routes.py": {
@@ -6434,15 +6454,28 @@ COMPONENTS = [
                                         "revenue. GROSS ONLY: no fee, cost or refund figure "
                                         "exists on this wire to draw. No sealed/singles "
                                         "split — `OrderLineWire.kind` is null on nearly every "
-                                        "line and CLAUDE.md refuses guessing one from a name.",
-                                "governed_by": ["D69", "D86", "D103", "D105", "D193",
-                                                 "D214"]},
+                                        "line and CLAUDE.md refuses guessing one from a name. "
+                                        "SINCE `D217`: every column sorts, the "
+                                        "month strip cross-filters the product table, a "
+                                        "product row drills into the orders behind it, a "
+                                        "custom range picks its own week/month granularity, "
+                                        "the in-progress bucket is marked, and period, sort, "
+                                        "search and the active bucket all round-trip through "
+                                        "the URL.",
+                                "governed_by": ["D50", "D62", "D69", "D86", "D103", "D105",
+                                                 "D118", "D159", "D193", "D194", "D201",
+                                                 "D214", "D217"]},
             "src/Revenue.css": {"does": "the verdict, the month strip and the product table's "
                                         "own layout, `--bn-*` only. The sparkline's polyline "
                                         "reuses `--bn-accent` rather than naming a color; the "
                                         "search field wrapper is sized like every other "
-                                        "screen's own `-search` class (Graveyard, Codes).",
-                                "governed_by": ["D50", "D94"]},
+                                        "screen's own `-search` class (Graveyard, Codes). "
+                                        "Since `D217`: sortable headers, a "
+                                        "cross-filterable month row, a drill-down's nested "
+                                        "table, and a 390px-only wrap on this screen's own "
+                                        "`Segmented` instance, scoped here rather than to the "
+                                        "shared kit rule.",
+                                "governed_by": ["D50", "D94", "D217"]},
             "src/RunFiles.tsx": {"does": "a run's files, as downloads — extracted from RunPanel on "
                                        "2026-08-30 (D54) so two screens can draw them. The `only` "
                                        "prop is the split: the import CSVs go to #/pricing with the "
@@ -7352,6 +7385,21 @@ COMPONENTS = [
                                               "all seventy-one pass against the cropped render.",
                                       "governed_by": ["D156", "D8", "D9", "D20", "D28", "D33", "D48", "D49", "D51", "D54", "D56", "D57", "D58", "D59", "D62", "D68", "D78", "D79", "D85", "D86", "D98", "D99", "D103", "D115", "D117", "D118",
                                                       "D168", "D208"]},
+            "tests/revenue.spec.ts": {
+                "does": "`#/revenue`'s own suite (`D217`): the empty and failure "
+                        "states, every column's sort and its reverse, the search field, the "
+                        "month strip's cross-filter and its Clear, a drill-down's nested "
+                        "orders table, a custom range's week-granularity switch, the "
+                        "in-progress bucket mark, and full state round-tripping through the "
+                        "URL, including a reload. Two mutation-proved defect fixes: a "
+                        "previous period summing to exactly $0.00 never renders `Infinity%` "
+                        "or `NaN%`, and a SKU-fallback name draws in mono while a real name "
+                        "does not. A dedicated case pins the 390px overflow this build found "
+                        "in its own header once a fifth period option existed. Not a harness "
+                        "test; `make design-check` runs it.",
+                "governed_by": ["D50", "D62", "D103", "D118", "D159", "D193", "D201",
+                                 "D214", "D217"],
+            },
             "tests/live-reconcile.spec.ts": {
                 "does": "the store-wide reconcile in a browser (D87): that it is reachable from "
                         "#/runs at all, that the preview asks for no write, and that the settle "
