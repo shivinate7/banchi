@@ -39,6 +39,10 @@ tmp="$(mktemp -d "${TMPDIR:-/tmp}/pkmnscan-janitor.XXXXXX")" || { echo "cannot m
 kids=""
 cleanup() {
   for k in $kids; do kill "$k" 2>/dev/null; done
+  # One case below makes a directory unwritable to force `git worktree remove` to fail. It puts
+  # the mode back itself; this is the backstop for a run that dies before it gets there, because
+  # `rm -rf` cannot unlink out of a parent it may not write either.
+  chmod -R u+rwX "$tmp" 2>/dev/null
   rm -rf "$tmp"
 }
 trap cleanup EXIT
@@ -289,6 +293,79 @@ read -r bystander_pid inner_pid <<<"$(spawn_marked_pair "$snap" \
   "$tmp/outside")"
 kids="$kids $bystander_pid $inner_pid"
 
+# A DIRECTORY UNDER `.claude/worktrees/` THAT CANNOT BE READ AT ALL. `husks` listed every entry
+# with a bare `entry.iterdir()`, and an unreadable one raises — out of TIER 1, which runs
+# unattended at every session end, so one directory with the wrong mode took down the orphan
+# reaping and everything after it. It is not a husk and it is not reaped; it is stepped over.
+mkdir -p "$tmp/work/.claude/worktrees/husk-sealed"
+chmod 0000 "$tmp/work/.claude/worktrees/husk-sealed"
+
+# A HUSK WITH A SESSION STANDING IN IT. `husks` is TIER 1 — it deletes a directory with no
+# preview and no prompt — and the only liveness signal it consulted was `servers_under`, the
+# process table. A session whose worktree was pruned out from under it is left standing in
+# exactly this: a directory git no longer registers, holding nothing but `.serve/`. One oracle
+# was standing in for the whole question on the one path that presses hardest.
+mkdir -p "$tmp/work/.claude/worktrees/husk-session/.serve"
+echo log > "$tmp/work/.claude/worktrees/husk-session/.serve/capture.log"
+husk_session_pid="$(plain_spawn "$tmp/marker.py")"; kids="$kids $husk_session_pid"
+cat > "$tmp/sessions/$husk_session_pid.json" <<JSON
+{"pid": $husk_session_pid, "cwd": "$tmp/work/.claude/worktrees/husk-session",
+ "startedAt": $now_ms, "name": "fixture-in-a-husk"}
+JSON
+
+# A TREE WHOSE STATE CANNOT BE READ. `if dirty.ok and dirty.out` fell THROUGH to reapable when
+# `git status` would not run at all, so a tree the sweep could not read was treated as a tree
+# with nothing in it — the direction-of-safety rule inverted. Its `.git` file is overwritten
+# with text that is not a gitdir pointer, which is what a half-written or hand-edited one looks
+# like; `git worktree list` still registers it, so it still reaches the loop.
+git branch blind-tree
+git worktree add -q "$tmp/work/.claude/worktrees/blind" blind-tree 2>/dev/null
+echo "this is not a gitdir pointer" > "$tmp/work/.claude/worktrees/blind/.git"
+
+# ------------------------------------------------------------- A LOCKED WORKTREE (2026-09-19)
+#
+# THE SWEEP WAS BLIND TO THESE AND IT COST TWO TREES. `~/.claude/sessions` holds ONE `cwd` per
+# session, and a session that spawns agents locks SEVERAL trees: measured on the owner's clone,
+# pid 95092's record named `worktrees/app-tasks-architecture-61dc78` while its locks held
+# `worktrees/agent-a27760bcdfc77fa9a` too. `sessions_in` cannot see the second under any reading
+# of the records, so the sweep printed `reaped ... (no session, nothing uncommitted)` over it —
+# one of the two carrying uncommitted work on `claude/revenue-route-sales`.
+#
+# EVERY LOCKED TREE HERE IS OTHERWISE PERFECTLY REAPABLE: clean, and with no session record
+# pointing at it. The lock is the ONLY thing standing between it and the offer, which is what
+# makes these arms go red the moment the lock is unread.
+#
+# AND THE ARMS ASSERT THE JANITOR'S OWN SENTENCE, NEVER MERE SURVIVAL. `git worktree remove`
+# refuses a locked tree on its own — that is the refusal that saved the owner's two trees — so a
+# test that only checked the directory afterwards would pass against a janitor that had never
+# heard of a lock. This file's header says it: survival by somebody else's refusal is not
+# coverage.
+git branch locked-alive
+git worktree add -q "$tmp/work/.claude/worktrees/locked-alive" locked-alive 2>/dev/null
+git worktree lock --reason "claude agent locked-alive (pid $busy_pid start now)" \
+  "$tmp/work/.claude/worktrees/locked-alive" 2>/dev/null
+
+# The same tree with a pid that is GONE. It is still KEPT — a lock is a claim somebody wrote
+# down, and this sweep does not get to decide a written claim has expired — but the sentence
+# changes, and the arm below proves the pid was actually read rather than the word `locked`
+# merely matched. The pid is signalled and then left to die during the fixture build that
+# follows; the arm ahead of the cases asserts it is gone rather than assuming it.
+dead_pid="$(plain_spawn "$tmp/marker.py")"
+kill "$dead_pid" 2>/dev/null
+
+git branch locked-dead
+git worktree add -q "$tmp/work/.claude/worktrees/locked-dead" locked-dead 2>/dev/null
+git worktree lock --reason "claude agent locked-dead (pid $dead_pid start then)" \
+  "$tmp/work/.claude/worktrees/locked-dead" 2>/dev/null
+
+# A lock whose reason names no pid at all. `git worktree lock` takes free text, so this is the
+# ordinary case for a human-written lock, and the direction-of-safety rule says an unreadable
+# reason keeps the tree rather than releasing it.
+git branch locked-mute
+git worktree add -q "$tmp/work/.claude/worktrees/locked-mute" locked-mute 2>/dev/null
+git worktree lock --reason "a person is in here" \
+  "$tmp/work/.claude/worktrees/locked-mute" 2>/dev/null
+
 # A CLONE WITH NOTHING RUNNING UNDER IT, for the census. `examined` of nought and `examined` of
 # twelve must not print the same sentence, and no case above can tell those apart because the
 # fixture always has processes in it.
@@ -342,6 +419,18 @@ case "$(ps -ww -o command= -p "$cwd_kid")" in
   *"$tmp/work"*) bad "the fixture is wrong — the cwd-only process names a path under the clone, so arm one places it and the cwd arm is never reached" ;;
   *) ok "the cwd-only process names NO path under the clone — only its directory ties it here" ;;
 esac
+alive "$busy_pid" \
+  && ok "the locked-alive tree's pid really is alive" \
+  || bad "the fixture is wrong — the live lock names a dead pid, so both lock arms say the same thing"
+alive "$dead_pid" \
+  && bad "the fixture is wrong — the dead lock's pid is still running, so the two lock arms are one case" \
+  || ok "the locked-dead tree's pid really is gone"
+[ -f "$tmp/work/.git/worktrees/locked-alive/locked" ] \
+  && ok "git really wrote the lock file the sweep reads" \
+  || bad "the fixture is wrong — no lock file, so the lock arms test nothing"
+[ -z "$(git -C "$tmp/work/.claude/worktrees/locked-alive" status --porcelain)" ] \
+  && ok "the locked tree is otherwise REAPABLE — clean, so only the lock keeps it" \
+  || bad "the fixture is wrong — the locked tree is dirty, so it would be kept without the lock"
 alive "$bystander_pid" && alive "$inner_pid" \
   && ok "the bystander and the process inside its group are running" \
   || bad "the fixture is wrong — the bystander pair is dead"
@@ -361,6 +450,31 @@ git show-ref -q --verify refs/heads/merged-loose \
 [ -d "$tmp/work/.claude/worktrees/idle" ] \
   && ok "PREVIEW LEFT the idle worktree alone" || bad "preview removed the idle worktree"
 
+# THE SWEEP IS NOT A SERVER RUNNING OUT OF THE TREE IT IS SWEPT FROM. `servers_under` grew a
+# second arm on 2026-09-19 — a process's working DIRECTORY, not only its argv — because
+# `_placed` had read both all along and the two functions answering one question differently is
+# how a tree gets deleted under a loop whose command line names nothing. The cost of that arm,
+# if the exclusion were still a single pid, is that the SHELL that started the sweep is standing
+# in the tree being judged: every tree would report a server, and nothing would ever be offered
+# from inside one again.
+inside="$( cd "$tmp/work/.claude/worktrees/idle" && python3 "$JANITOR" \
+           --sessions "$tmp/sessions" --confine "$tmp" 2>&1 )"
+# AND THE TREE HELD ONLY BY A PROCESS'S WORKING DIRECTORY IS KEPT. `cwdonly` is the 2026-09-11
+# incident's own shape — `bash scratchpad/autodrive.sh`, a script written outside the checkout,
+# whose command line names no path under any clone — so the argv arm finds nothing and only the
+# directory ties it here. `servers_under` read the argv ALONE until 2026-09-19 while `_placed`,
+# three hundred lines below it, read both: one question, two answers, and the tree offered for
+# removal out from under the very loop the sweep had just named on the line above.
+not_said "A TREE HELD ONLY BY A PROCESS'S DIRECTORY IS NEVER OFFERED" \
+         "worktrees/cwdonly  (no" "$prev"
+
+# ONE ARM, NOT TWO, AND DELIBERATELY. The obvious companion — "the janitor never said `a server
+# is running out of it`" — is unscoped: three other trees in this fixture legitimately have
+# processes in them and print exactly that sentence. The offer below is the specific claim, and
+# it cannot be made while the tree reads as busy for any reason at all.
+said "A TREE SWEPT FROM INSIDE ITSELF IS STILL OFFERED" \
+     "would reap  .  (no session" "$inside"
+
 # ------------------------------------------------------------------------------ REFUSALS
 echo
 echo "  -- the refusals, asserted on the janitor's own sentence --"
@@ -373,6 +487,36 @@ not_said "the dirty tree is never offered"     "worktrees/dirty  (no"   "$prev"
 not_said "an unmerged branch is never offered" "would reap unmerged-local" "$prev"
 not_said "a backup/ branch is never offered"   "would reap backup/keepme" "$prev"
 not_said "a held branch is never offered"      "would reap merged-held" "$prev"
+
+said "a tree whose git status will not run is KEPT, and says so" \
+     "a tree this sweep cannot read is a tree it keeps" "$prev"
+not_said "AND IT IS NEVER OFFERED" "worktrees/blind  (no" "$prev"
+
+# ----------------------------------------------------------------------- THE LOCKED TREES
+echo
+echo "  -- a locked worktree is a second liveness signal, and it is read --"
+
+not_said "A LOCKED TREE WHOSE PID IS ALIVE IS NEVER OFFERED" \
+         "worktrees/locked-alive  (no" "$prev"
+said "and the lock's own reason is printed"  "locked: claude agent locked-alive" "$prev"
+said "and the pid in it is checked and called ALIVE" \
+     "pid $busy_pid IS ALIVE" "$prev"
+
+not_said "A LOCKED TREE WHOSE PID IS DEAD IS ALSO KEPT — a lock is a written claim" \
+         "worktrees/locked-dead  (no" "$prev"
+said "but the sentence says the pid is gone, so the pid was really read" \
+     "pid $dead_pid is gone" "$prev"
+said "and it names the press that releases it" "git worktree unlock" "$prev"
+
+not_said "A LOCK NAMING NO PID KEEPS THE TREE TOO" \
+         "worktrees/locked-mute  (no" "$prev"
+said "and says WHY it cannot judge it" "names no pid" "$prev"
+
+# THE BRANCH HALF. A locked tree is never planned for removal, so its branch must stay in
+# `held` — and `merged-held`'s arm below cannot prove this one, because that tree is kept for a
+# different reason entirely.
+not_said "a locked tree's branch is never offered" "would reap locked-alive" "$prev"
+not_said "nor the dead-locked one's"               "would reap locked-dead"  "$prev"
 
 # ------------------------------------------------------ the process nothing owns any more
 echo
@@ -440,7 +584,11 @@ not_said "A PROCESS CARRYING NO SESSION MARK IS NEVER OFFERED" \
 # could never have found it, and passed while the guard it names was deleted.
 own="$(python3 "$JANITOR" --root "$tmp/work/.claude/worktrees/loose" \
        --sessions "$tmp/sessions" --confine "$tmp" 2>&1)"
-own_offers="$(printf '%s\n' "$own" | grep -c 'would reap pid' || true)"
+# THE PATTERN CARRIES THE SUFFIX, AND IT HAS TO. A bare `janitor.py` previews TIER 1 as well
+# since 2026-09-19 — it used to press it — so `would reap pid ...` is now printed by the orphan
+# arm as well as by this one, and the count read 4 against a fixture holding 3. The loose offer
+# is the line that names a session: `(no live session owns it)`.
+own_offers="$(printf '%s\n' "$own" | grep -c 'would reap pid .*(no live session owns it)' || true)"
 [ "$own_offers" -gt 0 ] \
   && ok "the run from a linked worktree offers something — the count below means something" \
   || bad "the fixture is wrong — that run offered nothing at all, so the self-exclusion is untested"
@@ -474,6 +622,12 @@ alive "$busy_pid"   && ok "TIER 1 LEFT the live session's process alone" || bad 
 alive "$husk_pid"   && ok "TIER 1 LEFT the husk's process alone"         || bad "tier 1 killed the husk's process"
 [ ! -d "$tmp/work/.claude/worktrees/husk-quiet" ] \
   && ok "the quiet husk was reaped" || bad "the quiet husk survived"
+# NON-VACUITY FOR THE SEALED DIRECTORY: the arm is that the sweep got PAST it, and the line
+# above is the proof it did — the quiet husk is listed after `husk-sealed` alphabetically, so a
+# raise on the sealed one would have taken tier 1 down before ever reaching it.
+[ -d "$tmp/work/.claude/worktrees/husk-sealed" ] \
+  && ok "AND THE UNREADABLE DIRECTORY WAS STEPPED OVER, not deleted and not fatal" \
+  || bad "a directory the sweep could not even list was removed"
 [ -d "$tmp/work/.claude/worktrees/husk-busy" ] \
   && ok "THE BUSY HUSK SURVIVED — it would only come back" || bad "the busy husk was reaped under a running process"
 said "the busy husk says why it was kept" "it would come back" "$t1"
@@ -485,6 +639,10 @@ alive "$loose_parent" \
   || bad "tier 1 killed a loose process; \`make status\` would now press this with no prompt"
 alive "$rig_parent" \
   && ok "TIER 1 LEFT THE MAIN CHECKOUT'S PROCESS ALONE" || bad "tier 1 killed the rig arm"
+[ -d "$tmp/work/.claude/worktrees/husk-session" ] \
+  && ok "A HUSK WITH A LIVE SESSION IN IT SURVIVED TIER 1 — no process was running under it" \
+  || bad "tier 1 deleted a directory a live session is standing in, with no preview and no prompt"
+said "and it says a session is the reason" "a session is live in it (fixture-in-a-husk)" "$t1"
 
 # ------------------------------------------------------------------------------ CONFIRM
 echo
@@ -506,8 +664,26 @@ git show-ref -q --verify refs/heads/merged-held \
   && ok "THE BUSY TREE SURVIVED --confirm" || bad "a tree with a live session was removed"
 [ -d "$tmp/work/.claude/worktrees/dirty" ] \
   && ok "the dirty tree survived --confirm" || bad "a tree with uncommitted work was removed"
+[ -d "$tmp/work/.claude/worktrees/blind" ] \
+  && ok "the unreadable tree survived --confirm" || bad "a tree the sweep could not read was removed"
+# The loose process in it is SIGTERMed on this sweep and the tree goes on the NEXT one — that
+# two-pass shape is `sweep`'s own account of why the process comes first, and the process table
+# it judges trees against was sampled before any of it was pressed.
+[ -d "$tmp/work/.claude/worktrees/cwdonly" ] \
+  && ok "THE DIRECTORY-HELD TREE SURVIVED --confirm — it goes on the next sweep, not this one" \
+  || bad "a tree was removed in the same sweep that stopped the loop running inside it"
 [ -f "$tmp/work/file.txt" ] \
   && ok "THE MAIN CHECKOUT WAS NEVER TOUCHED" || bad "the main checkout was damaged"
+[ -d "$tmp/work/.claude/worktrees/locked-alive" ] \
+  && ok "THE LOCKED TREE SURVIVED --confirm" || bad "a locked worktree was removed"
+[ -d "$tmp/work/.claude/worktrees/locked-dead" ] \
+  && ok "and so did the one whose pid is dead" || bad "the dead-locked worktree was removed"
+git show-ref -q --verify refs/heads/locked-alive \
+  && ok "and the locked tree's branch was never cut" || bad "a locked tree's branch was deleted"
+git show-ref -q --verify refs/heads/locked-dead \
+  && ok "nor the dead-locked one's" || bad "the dead-locked tree's branch was deleted"
+said "--confirm keeps saying WHY a locked tree is kept" \
+     "locked: claude agent locked-alive" "$did"
 
 sleep 0.5
 alive "$loose_parent" && bad "the loose parent survived --confirm" \
@@ -527,6 +703,224 @@ alive "$cwd_kid" && bad "the cwd-only loop survived --confirm" \
 alive "$bystander_pid" \
   && ok "THE BYSTANDER LEADING THE GROUP SURVIVED — the group is signalled only from its leader" \
   || bad "--confirm signalled a process group on a non-leader's behalf and took a bystander with it"
+
+# ------------------------------------------- THE PREVIEW AND THE CONFIRM MUST AGREE (2026-09-19)
+#
+# THE MOST SERIOUS OF THE THREE, BECAUSE THE PREVIEW IS THE ONLY SAFETY CHECK THERE IS. `held`
+# protects a branch a worktree stands on. The old build discarded a branch from `held` INSIDE
+# `if confirm:`, after a successful removal — so on a preview nothing was ever discarded and
+# every branch whose tree was about to go printed KEPT, while `--confirm` discarded it mid-loop
+# and cut it. `claude/claude-md-dedupe-v2` and `claude/elegant-matsumoto-d092ba` both printed
+# `ON NO REMOTE — it is only on this disk` and both were gone after the word, their commits
+# left as dangling objects to be re-anchored by hand.
+#
+# IT IS A DIFF OF TWO SETS, NOT A GREP FOR A NAME, and that is deliberate: the defect is the
+# DIVERGENCE, so the assertion has to be the comparison itself. Anything the preview did not
+# name and the confirm deleted fails this, whatever it was called.
+#
+# ITS OWN FIXTURE, because the comparison has to run twice over one starting state and the main
+# fixture above has already been reaped by the time this point is reached.
+echo
+echo "  -- the preview names every branch the confirm would delete --"
+
+mkdir -p "$tmp/no-sessions"
+git init -q -b main "$tmp/cmp"
+git -C "$tmp/cmp" config user.email selftest@example.com
+git -C "$tmp/cmp" config user.name selftest
+git -C "$tmp/cmp" config commit.gpgsign false
+echo seed > "$tmp/cmp/file.txt"
+git -C "$tmp/cmp" add file.txt
+git -C "$tmp/cmp" commit -qm seed
+
+# THE BUG'S OWN SHAPE: merged, AND held by a worktree the sweep is about to remove. Under the
+# old ordering this branch is the whole finding — KEPT in the preview, cut on the word.
+git -C "$tmp/cmp" branch merged-with-tree
+git -C "$tmp/cmp" worktree add -q "$tmp/cmp/.claude/worktrees/wt-merged" merged-with-tree 2>/dev/null
+# merged and held by nothing: cut in both runs, so it can never be the thing that makes the
+# sets differ. It is here so an all-empty comparison cannot pass.
+git -C "$tmp/cmp" branch merged-free
+# unmerged and held by a reapable worktree: the tree goes, the branch must not, in BOTH runs.
+git -C "$tmp/cmp" checkout -q -b unmerged-with-tree
+echo only > "$tmp/cmp/only-here.txt"
+git -C "$tmp/cmp" add only-here.txt
+git -C "$tmp/cmp" commit -qm "a commit on this disk and nowhere else"
+git -C "$tmp/cmp" checkout -q main
+git -C "$tmp/cmp" worktree add -q "$tmp/cmp/.claude/worktrees/wt-unmerged" unmerged-with-tree 2>/dev/null
+# merged and held by a LOCKED worktree: the tree stays, so the branch stays, in BOTH runs.
+git -C "$tmp/cmp" branch merged-locked
+git -C "$tmp/cmp" worktree add -q "$tmp/cmp/.claude/worktrees/wt-locked" merged-locked 2>/dev/null
+git -C "$tmp/cmp" worktree lock --reason "claude agent cmp (pid $busy_pid start now)" \
+  "$tmp/cmp/.claude/worktrees/wt-locked" 2>/dev/null
+
+branches() { git -C "$tmp/cmp" for-each-ref --format='%(refname:short)' refs/heads/ | sort; }
+
+git -C "$tmp/cmp" merge-base --is-ancestor merged-with-tree main \
+  && ok "the comparison fixture arms the bug — merged-with-tree really is merged" \
+  || bad "the fixture is wrong — merged-with-tree is unmerged, so no run would ever cut it"
+
+before="$(branches)"
+cmp_prev="$(python3 "$JANITOR" --root "$tmp/cmp" --sessions "$tmp/no-sessions" --confine "$tmp" 2>&1)"
+predicted="$(printf '%s\n' "$cmp_prev" \
+  | sed -n 's/^  would reap \([^ ][^ ]*\)  (merged, no working tree)$/\1/p' | sort)"
+cmp_did="$(python3 "$JANITOR" --root "$tmp/cmp" --sessions "$tmp/no-sessions" --confine "$tmp" --confirm 2>&1)"
+after="$(branches)"
+actual="$(comm -23 <(printf '%s\n' "$before") <(printf '%s\n' "$after"))"
+
+# NON-VACUITY FIRST. Two empty sets are equal, and an equality over two empty sets is the exact
+# shape of a guard that proves nothing — `corpus_is_empty` in `docs-audit.py` is this repo's
+# name for it.
+[ -n "$actual" ] \
+  && ok "the confirm run really deleted something — the comparison has a subject" \
+  || bad "the fixture is wrong — --confirm cut no branch at all, so the diff below is vacuous"
+case "$actual" in
+  *merged-with-tree*) ok "and it deleted the branch whose worktree it removed — the bug's own case is live" ;;
+  *) bad "the fixture is wrong — merged-with-tree survived, so the divergence cannot be observed" ;;
+esac
+
+if [ "$predicted" = "$actual" ]; then
+  ok "THE PREVIEW NAMED EVERY BRANCH THE CONFIRM DELETED"
+else
+  bad "THE PREVIEW AND THE CONFIRM DISAGREE — a branch was deleted that no preview named"
+  printf '         preview said would cut: %s\n' "$(printf '%s ' $predicted)"
+  printf '         confirm actually cut:   %s\n' "$(printf '%s ' $actual)"
+fi
+
+git -C "$tmp/cmp" show-ref -q --verify refs/heads/unmerged-with-tree \
+  && ok "the unmerged branch survived, though its worktree went" \
+  || bad "an unmerged branch was deleted when its worktree was removed"
+git -C "$tmp/cmp" show-ref -q --verify refs/heads/merged-locked \
+  && ok "and the locked tree's branch survived both runs" \
+  || bad "a locked tree's branch was cut"
+
+# ------------------------------------------ "reaped" IS SAID AFTER THE ACT, NEVER BEFORE IT
+#
+# The old build fixed the word up front and printed it before `git worktree remove` ran, so a
+# refusal produced `reaped     <tree>` and then, two lines down, `not removed — ...`: a claim
+# and its own contradiction in one paragraph, with `reaped += 1` correctly skipped so the
+# trailing count disagreed with the body.
+#
+# THE REFUSAL IS MANUFACTURED RATHER THAN WAITED FOR. A locked tree no longer reaches the
+# removal at all, which is the point of the first fix, so the failure is made a different way:
+# the tree's PARENT directory is made unwritable, and `git worktree remove` cannot unlink a
+# directory out of a parent it may not write. Its own fixture again, so the comparison above
+# stays free of a removal that fails.
+echo
+echo "  -- a removal that fails does not get to say it succeeded --"
+
+git init -q -b main "$tmp/stuck"
+git -C "$tmp/stuck" config user.email selftest@example.com
+git -C "$tmp/stuck" config user.name selftest
+git -C "$tmp/stuck" config commit.gpgsign false
+echo seed > "$tmp/stuck/file.txt"
+git -C "$tmp/stuck" add file.txt
+git -C "$tmp/stuck" commit -qm seed
+git -C "$tmp/stuck" branch stuck-tree
+mkdir -p "$tmp/stuck/.claude/worktrees/pen"
+git -C "$tmp/stuck" worktree add -q "$tmp/stuck/.claude/worktrees/pen/stuck" stuck-tree 2>/dev/null
+chmod 0555 "$tmp/stuck/.claude/worktrees/pen"
+
+stuck_out="$(python3 "$JANITOR" --root "$tmp/stuck" --sessions "$tmp/no-sessions" \
+             --confine "$tmp" --confirm 2>&1)"
+chmod 0755 "$tmp/stuck/.claude/worktrees/pen"
+
+[ -d "$tmp/stuck/.claude/worktrees/pen/stuck" ] \
+  && ok "the fixture arms the case — the removal really did fail" \
+  || bad "the fixture is wrong — the tree was removed, so the failure path is never reached"
+said "the failure is reported as a failure" "NOT REAPED" "$stuck_out"
+not_said "AND IT NEVER SAYS reaped ABOUT A TREE IT DID NOT REMOVE" \
+         "reaped      .claude/worktrees/pen/stuck" "$stuck_out"
+git -C "$tmp/stuck" show-ref -q --verify refs/heads/stuck-tree \
+  && ok "and the branch of a tree that did not go is protected again" \
+  || bad "a branch was cut although its worktree is still standing on it"
+
+# ------------------------------------------- AN ORACLE WITH A HOLE IN IT NAMES NOTHING AT ALL
+#
+# `live_sessions` used to `continue` past a session record it could not parse, in silence. A
+# record that cannot be read is a session that cannot be SEEN, and a tree it cannot see a
+# session in is a tree it calls empty — the 2026-09-06 failure arriving by a different door.
+# The one signal that the oracle was incomplete was thrown away at the moment it was produced.
+#
+# BOTH DIRECTIONS, because "offered nothing" is also what a sweep with nothing to do prints.
+# The same root is swept twice, with a whole oracle and with a torn one.
+echo
+echo "  -- a session record that will not parse stops tier 2 dead --"
+
+mkdir -p "$tmp/no-sessions" "$tmp/torn-sessions"
+printf '{"pid": 1, "cwd":' > "$tmp/torn-sessions/half-written.json"
+
+git init -q -b main "$tmp/torn"
+git -C "$tmp/torn" config user.email selftest@example.com
+git -C "$tmp/torn" config user.name selftest
+git -C "$tmp/torn" config commit.gpgsign false
+echo seed > "$tmp/torn/file.txt"
+git -C "$tmp/torn" add file.txt
+git -C "$tmp/torn" commit -qm seed
+git -C "$tmp/torn" branch torn-idle
+git -C "$tmp/torn" worktree add -q "$tmp/torn/.claude/worktrees/idle" torn-idle 2>/dev/null
+
+whole="$(python3 "$JANITOR" --root "$tmp/torn" --sessions "$tmp/no-sessions" --confine "$tmp" 2>&1)"
+said "with a whole oracle the tree IS offered — the refusal below means something" \
+     "would reap" "$whole"
+torn="$(python3 "$JANITOR" --root "$tmp/torn" --sessions "$tmp/torn-sessions" --confine "$tmp" 2>&1)"
+not_said "WITH A TORN ONE NOTHING IS OFFERED" "would reap  " "$torn"
+said "and the sweep says which record it could not read" "half-written.json" "$torn"
+said "and why that matters"  "a session that cannot be seen" "$torn"
+
+# --confirm over the same hole must press nothing either: the refusal is not a preview-only
+# caution, it is the sweep declining to act on an oracle it knows is incomplete.
+python3 "$JANITOR" --root "$tmp/torn" --sessions "$tmp/torn-sessions" --confine "$tmp" \
+  --confirm >/dev/null 2>&1
+[ -d "$tmp/torn/.claude/worktrees/idle" ] \
+  && ok "AND --confirm PRESSED NOTHING EITHER" \
+  || bad "--confirm removed a tree while the liveness oracle had a hole in it"
+
+# ------------------------------------------------- THE LEAVING SESSION IS ITS OWN ANCESTOR
+#
+# `--teardown` is what the SessionEnd and WorktreeRemove hooks run. It excludes "this session"
+# from the list of sessions still standing in the tree by comparing `os.getpid()` — the janitor
+# process — against the record's pid, which is the `claude` process several levels ABOVE it.
+# Those two can never be equal, so the leaving session always counted as somebody else still
+# being there and the teardown declined to stop anything, every single time it ran.
+#
+# THE ARM IS TWO RUNS OVER ONE TREE, because "it stopped nothing" is what a correct teardown
+# prints for a tree with nothing in it. One record names an ancestor of the janitor (this
+# script's own shell, which the janitor is a descendant of); the other names a process that is
+# no relation.
+echo
+echo "  -- a session ending does not count itself as somebody else --"
+
+git init -q -b main "$tmp/td"
+git -C "$tmp/td" config user.email selftest@example.com
+git -C "$tmp/td" config user.name selftest
+git -C "$tmp/td" config commit.gpgsign false
+echo seed > "$tmp/td/file.txt"
+git -C "$tmp/td" add file.txt
+git -C "$tmp/td" commit -qm seed
+git -C "$tmp/td" branch leaving
+git -C "$tmp/td" worktree add -q "$tmp/td/.claude/worktrees/leaving" leaving 2>/dev/null
+mkdir -p "$tmp/td/.claude/worktrees/leaving/scripts"
+printf 'import sys\nsys.exit(0)\n' > "$tmp/td/.claude/worktrees/leaving/scripts/serve.py"
+
+td_now="$(python3 -c 'import time; print(int(time.time()*1000))')"
+mkdir -p "$tmp/td-mine" "$tmp/td-other"
+cat > "$tmp/td-mine/$$.json" <<JSON
+{"pid": $$, "cwd": "$tmp/td/.claude/worktrees/leaving",
+ "startedAt": $(ps -o lstart= -p $$ | python3 -c 'import sys,time; print(int(time.mktime(time.strptime(sys.stdin.read().strip()))*1000))'),
+ "name": "the-leaving-session"}
+JSON
+cat > "$tmp/td-other/$busy_pid.json" <<JSON
+{"pid": $busy_pid, "cwd": "$tmp/td/.claude/worktrees/leaving",
+ "startedAt": $td_now, "name": "somebody-else"}
+JSON
+
+td_mine="$(python3 "$JANITOR" --teardown "$tmp/td/.claude/worktrees/leaving" \
+           --sessions "$tmp/td-mine" 2>&1)"
+said "THE LEAVING SESSION'S OWN RECORD DOES NOT STOP ITS OWN TEARDOWN" \
+     "servers stopped" "$td_mine"
+td_other="$(python3 "$JANITOR" --teardown "$tmp/td/.claude/worktrees/leaving" \
+            --sessions "$tmp/td-other" 2>&1)"
+said "AND A RECORD THAT IS NO RELATION STILL DOES — the exclusion is the chain, not everybody" \
+     "still here" "$td_other"
 
 # ------------------------------------------------------------------------- NOT A REPO
 echo
