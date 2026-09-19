@@ -645,9 +645,20 @@ phone                    minmax(0, 1fr)          /* one column, stacked */
   today, and a tick per walkable row.
 - **The main column is the walk**, the stops and their cards.
 - **No mode strip and no `PullMode`.** `By buyer` and `Walk the boxes` stop being two modes of
-  one screen and become one screen. The strip at `app/src/Orders.tsx:3127` goes, and so does
-  `PullMode` in `app/src/OrdersHubStore.ts:21` and both branches on `mode === 'walk'` at
-  `Orders.tsx:3156` and `:3256`.
+  one screen and become one screen. Four things go in one change: the `Segmented<PullMode>`
+  strip in `app/src/Orders.tsx`, the `PullMode` type in `app/src/OrdersHubStore.ts`, and the
+  two branches on `mode === 'walk'` in `Orders.tsx`. Find them with
+  `make orient ARGS=app/src/Orders.tsx`, never by the line numbers an earlier draft of this
+  section carried — those were 28 lines stale within a day of being written.
+
+  **The two branches are not the same deletion, and one of them is the point.** The second
+  branch swaps the buyer list for `<OrdersWalk>`, and deleting it is what puts the walk in the
+  main column beside the list rather than instead of it. The FIRST branch is
+  `{mode === 'walk' ? null : (...)}` around the reason chips and the
+  `orders-view-controls` group — the status select, the sort, the buyer search. Today it hides
+  every filter the moment the walk begins. The owner's answer 1 makes those filters the
+  SELECTING tool, so that branch is not incidental cleanup: it is the line that currently stops
+  the operator doing the one thing this shape is for.
 - **`WalkSelect` in `app/src/OrdersWalk.tsx` is DELETED**, not improved. It is the second list.
 - **One press starts the walk**, from the list the operator was already reading.
 
