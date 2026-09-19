@@ -123,21 +123,32 @@ time for a fixed fact. The width must be stated beside any comparison.
 
 ## 4. The archive
 
-The price history source has a hard ceiling of 357 days. Everything older is already gone.
-Everything not captured from now on ages out on the same schedule.
+**BUILT.** The price history source has a hard ceiling of 357 days. Everything older is
+already gone. Everything not captured from now on ages out on the same schedule.
 
-This is the only item in either file where delay costs something that cannot be recovered later.
+This was the only item in either file where delay costs something nobody can recover later.
 
-The house pattern is the readings table and its adopt command. That is a table, a deliberate press
-that fills it, and an accounting of what each pass read.
+The house pattern is the readings table and its adopt command, applied here.
+`store/pricearchive.py` is the table. `pipeline/pricearchive.py` is the walk.
+`cli/cmd_pricearchive.py` is the press (`pkmnscan archive sweep [--write]`,
+`pkmnscan archive show [--sku ID]`).
 
-Buckets are keyed by width, as well as by product and start date. The ranges overlap. One day is a
-one day bucket in one range. The same day sits inside a seven day bucket in another. Those are two
-facts and never one. D62 forbids joining ranges and that rule survives into storage.
+Buckets are keyed by `(sku, range, start)`, **not** by width. The ranges overlap. `semiannual`
+and `annual` are both seven-day-wide, so a width-only key would collide two independent
+observations. That is exactly the collision D62 forbids.
+`docs/decisions/D-a-price-history-archive.md` argues the key in full.
 
-The owner asked for a scheduled sweep. The schedule is deferred. The sweep comes first. A timer
-reverses D62's statement that this reader cannot fire on its own. That reversal needs its own
-argument.
+The archive never deletes a row. A bucket a later sweep does not mention is left exactly as it
+was. That covers two cases: it aged out of the source, or that SKU fell outside a narrower
+pass. This is the opposite of `readings adopt`, which is a full replace. The two entries' own
+module docstrings say why each shape is correct for its own table.
+
+The sweep's subject is every distinct SKU the `cards` table has ever recorded. Sold or held,
+neither state deletes the row (D26, D134).
+
+The owner asked for a scheduled sweep. The schedule is still deferred. The sweep is a press a
+person runs. A timer reverses D62's own statement. D62 says this reader cannot fire on its
+own. That reversal needs its own argument, which nobody has made.
 
 ## 5. Defects to carry into whichever change comes first
 

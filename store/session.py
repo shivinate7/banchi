@@ -50,6 +50,7 @@ from store import db, files
 from store.cache import Cache
 from store.master import Inventory
 from store.orders import Ledger
+from store.pricearchive import PriceArchive
 from store.queues import MAIN, PARKED, Queue
 from store.readings import Readings
 from store.rows import Rows
@@ -76,6 +77,11 @@ class Snapshot:
     # adopt` commits it atomically with everything else D88 already protects; every other
     # writer in this package leaves it untouched.
     readings: Readings
+    # THE PRICE-HISTORY ARCHIVE (D-a-price-history-archive): every bucket `pkmnscan archive
+    # sweep --write` has ever read, kept past the source's own 357-day ceiling. In the
+    # snapshot for the same reason `readings` is: a `Store.write()` from `archive sweep`
+    # commits it atomically with everything else D88 already protects.
+    archive: PriceArchive
 
     def queue(self, name: str) -> Queue:
         return self.review if name == MAIN else self.parked
@@ -100,6 +106,8 @@ class Snapshot:
             self.submissions.entries,
             self.readings.entries,
             self.readings.sources,
+            self.archive.entries,
+            self.archive.sources,
         ]
 
 
@@ -146,6 +154,10 @@ class Store:
             readings=Readings(
                 entries=bound(Readings.ENTRIES, "readings"),
                 sources=bound(Readings.SOURCES, "readings_sources"),
+            ),
+            archive=PriceArchive(
+                entries=bound(PriceArchive.ENTRIES, "price_history"),
+                sources=bound(PriceArchive.SOURCES, "price_history_sources"),
             ),
         )
 
