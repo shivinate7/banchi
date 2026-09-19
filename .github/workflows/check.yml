@@ -252,6 +252,8 @@ jobs:
     runs-on: ubuntu-latest
     outputs:
       run: ${{ steps.scope.outputs.run }}
+      specs: ${{ steps.specs.outputs.specs }}
+      partial: ${{ steps.specs.outputs.partial }}
     steps:
       - uses: actions/checkout@v4
         with:
@@ -260,6 +262,15 @@ jobs:
       - name: Does the change reach what a browser draws?
         id: scope
         run: python3 scripts/browser-scope.py classify
+
+      # THE SECOND LEVER (D-browser-spec-allow-list), asked regardless of the RUN/SKIP
+      # answer above so the mechanism is exercised on every run — `design-check`'s own `if:`
+      # is what actually skips the matrix. Never a typed list: `scripts/browser-scope.py`
+      # derives which `app/tests/*.spec.ts` files the change can reach and fails open, in
+      # every direction, to every spec.
+      - name: Which specs can the change reach?
+        id: specs
+        run: python3 scripts/browser-scope.py specs --base "origin/${{ github.base_ref || 'main' }}"
 
   # The browser half. Same tree, different question: what a person actually sees.
   #
@@ -319,8 +330,13 @@ jobs:
       # serving on a fresh runner, which is exactly the state it is written for. The port comes
       # from `app/devPort.ts`, which vite.config.ts and playwright.config.ts both import so they
       # cannot disagree — on a runner this is the main-tree 5173.
+      # THE SPEC ALLOW-LIST (D-browser-spec-allow-list): `browser-scope`'s `specs` output is
+      # `all` (nothing appended, so `make design-check` runs Playwright's own `testDir`) or a
+      # space-separated list of `app/tests/*.spec.ts` paths. `make` word-splits `PW_ARGS`, so
+      # a path with a space would silently become two filters — the reason the classifier
+      # answers "every spec" rather than name one.
       - name: make design-check
-        run: make design-check PW_ARGS="--shard=${{ matrix.shard }}/6 --workers=2"
+        run: make design-check PW_ARGS="--shard=${{ matrix.shard }}/6 --workers=2 ${{ needs.browser-scope.outputs.specs != 'all' && needs.browser-scope.outputs.specs || '' }}"
 
       # WHAT A RED RUN LEAVES BEHIND, because until 2026-09-11 it left four lines. The config turns
       # `trace: retain-on-failure` on under CI, so a failing case has its DOM before and after every
@@ -344,9 +360,14 @@ jobs:
   # never the writer, and a record it left would only ever answer itself. Thirty days is the
   # window: a PR that passed longer ago than that and then merges gets the full matrix, which
   # is the conservative side of the bargain.
+  # `needs.browser-scope.outputs.partial != 'true'` is D-browser-spec-allow-list's own
+  # condition: a PARTIAL run — a narrowed spec list — never writes a pass record, because a
+  # later push to main reading that record as "this tree was fully tested" would be wrong.
+  # A full run (the ordinary case: most branches touch a shared surface or an unmapped file)
+  # still writes it exactly as before this landed.
   design-check-passed:
-    needs: design-check
-    if: github.event_name != 'push'
+    needs: [design-check, browser-scope]
+    if: github.event_name != 'push' && needs.browser-scope.outputs.partial != 'true'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4

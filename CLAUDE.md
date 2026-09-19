@@ -105,7 +105,9 @@ make design-check   # DESIGN.md's Fulfillment floors, in a browser. TAKES A MACH
                     #   `PKMNSCAN_SUITE_LOCK=off` overrides. NOT in `make harness` or
                     #   `make check` (DEBT16).
                     #   `PW_ARGS=<flags>` reaches Playwright. `ARGS` never does (D136). CI runs
-                    #   3 shards of 1 worker each. NEVER RAISE THE WORKER COUNT (DEBT8).
+                    #   6 shards of 2 workers each, widened on the owner's word, 2026-09-19.
+                    #   D136 is amended: DEBT8's 2-vCPU premise went false when the repo went
+                    #   public, 2026-09-11. A 20-dispatch proof is D136's own reader.
                     #   Backgrounds itself. Read `.serve/design-check.json` ONCE when the run
                     #   lands. It says `"running"` until it finishes, so a stale `running`
                     #   after exit means the run died. No file at all means it never reached
@@ -115,10 +117,16 @@ make design-check   # DESIGN.md's Fulfillment floors, in a browser. TAKES A MACH
                     #   No browser, no dev server: in `check` and `ci-check`, no lock.
                     #   ON CI, GATED TO WHAT A BROWSER DRAWS (D141) by scripts/browser-scope.py,
                     #   audited by `make docs-audit`'s `browser scope` row both directions.
-                    #   `server/` is deliberately out of scope (sealEveryTest).
+                    #   `server/` is deliberately out of scope (sealEveryTest). WHICH SPECS
+                    #   LOAD is a second, narrower question: `browser-scope.py specs`
+                    #   (D-browser-spec-allow-list), a derived allow-list over `app/tests/*`.
+                    #   It fails open to every spec. `make docs-audit`'s `spec map` row checks
+                    #   both ways. A partial spec run never writes D136's pass record.
 make design-check-quiet  # same run, no progress stream, same lock.
 make suite-lock-selftest # the lock, proved by violating it, including a holder killed -9.
                     #   In `check`.
+make browser-scope-selftest # the browser-matrix classifier's spec map, on fixtures and the
+                    #   real tree (D-browser-spec-allow-list). In `check`.
 make demo           # seed a demo store and record the wire, a fixture bundle.
                     #   `docs/specs/demo.md` IS THE ARGUMENT FOR THIS WHOLE FAMILY — why it
                     #   is not a fork, what is real and what is invented, why VITE_DEMO is
@@ -140,7 +148,8 @@ make check          # harness + docs-audit + claim-stale + revert-guard +
                     #   gates-selftest + submission-selftest +
                     #   cid-selftest + readings-selftest + janitor-selftest +
                     #   reap-selftest + silent-write-selftest + guard-shell-selftest +
-                    #   coordinator-selftest + suite-lock-selftest + serve-selftest +
+                    #   coordinator-selftest + suite-lock-selftest +
+                    #   browser-scope-selftest + serve-selftest +
                     #   sync-selftest + verdict-selftest, IN THIS ORDER (D161): product
                     #   first, guard selftests last. `make docs-audit`'s `check census`
                     #   row reconciles this against the `check:` recipe both ways.
