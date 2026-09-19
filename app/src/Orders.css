@@ -256,14 +256,7 @@
 .orders-buyer-chip-number { font-weight: 600; }
 .orders-buyer-chip-bar { width: 44px; height: 4px; }
 .orders-buyer-walk { margin: var(--bn-3) 0; }
-.orders-buyer-byorder { margin-top: var(--bn-3); }
-.orders-buyer-byorder > summary {
-  cursor: pointer;
-  font-size: var(--bn-fs-sm);
-  font-weight: 600;
-  color: var(--bn-ink-3);
-  padding: var(--bn-2) 0;
-}
+.orders-buyer-byorder { margin-top: var(--bn-3); display: flex; flex-direction: column; gap: var(--bn-3); }
 .orders-buyer-order + .orders-buyer-order { margin-top: var(--bn-3); }
 
 /* ---- the accordion (under 1024px) --------------------------------------------- */
@@ -867,38 +860,11 @@
 }
 
 /* ---- the walk ------------------------------------------------------------------- */
+/* `.orders-walk` is the shared vertical rhythm: `By buyer`'s merged walk (`WalkGroups`, below)
+   and `Walk the boxes`' own plan screen (`OrdersWalk.css`) both sit in it. Everything from
+   `.orders-walk-head` down through `.orders-walk-cards*` was `WalkView`'s and `WalkCards`'
+   own — both deleted (`docs/specs/order-walk-plan.md` §9) — and is deleted with them. */
 .orders-walk { display: flex; flex-direction: column; gap: var(--bn-4); }
-.orders-walk-head {
-  position: sticky;
-  top: var(--bn-2);
-  z-index: 3;
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) auto;
-  gap: var(--bn-3) var(--bn-6);
-  align-items: center;
-  padding: var(--bn-3) var(--bn-4);
-  border-radius: var(--bn-r-lg);
-  background: var(--bn-surface);
-  box-shadow: var(--bn-shadow-2);
-}
-.orders-walk-progress { display: flex; flex-direction: column; gap: 6px; min-width: 0; }
-.orders-walk-figure { display: flex; align-items: baseline; gap: var(--bn-2); flex-wrap: wrap; }
-.orders-walk-figure strong { font-family: var(--bn-font-display); font-size: var(--bn-fs-xl); font-weight: 800; letter-spacing: -0.01em; font-variant-numeric: tabular-nums; color: var(--bn-ink); }
-/* `:not(.bn-pill)` because the orders-filled count sits on this line and a kit primitive
-   answers to the kit, never to the screen that hosts it (D50). */
-.orders-walk-figure span:not(.bn-pill) { font-size: var(--bn-fs-sm); color: var(--bn-ink-3); }
-.orders-walk-bar { width: 100%; }
-.orders-walk-next { display: flex; flex-direction: column; gap: 2px; align-items: flex-end; text-align: right; min-width: 0; }
-.orders-walk-next-label { font-size: var(--bn-fs-xs); font-weight: 600; letter-spacing: var(--bn-tracking-caps); text-transform: uppercase; color: var(--bn-ink-3); }
-.orders-walk-next-place { font-family: var(--bn-font-mono); font-size: var(--bn-fs-base); font-weight: 600; color: var(--bn-ink); }
-.orders-walk-next-card { font-size: var(--bn-fs-sm); color: var(--bn-ink-2); }
-
-/* ONE SENTENCE PER CARD, ABOVE EVERY BOX GROUP — `WalkCards`. `.orders-map-lede` is reused
-   VERBATIM (never a second stylesheet rule) because `pullLedeOf` is the one function producing
-   this text everywhere it renders; a list of them here needs only its own spacing and, where two
-   of a buyer's orders share a card, a mono order tag. */
-.orders-walk-cards { display: flex; flex-direction: column; gap: var(--bn-2); list-style: none; margin-bottom: var(--bn-3); }
-.orders-walk-cards-order { font-family: var(--bn-font-mono); font-size: var(--bn-fs-xs); color: var(--bn-ink-3); }
 
 .orders-walk-group { padding: 0; overflow: visible; animation: bn-page-in var(--bn-t-slow) var(--bn-ease-out) backwards; }
 .orders-walk-group-head { display: flex; align-items: baseline; gap: var(--bn-2); padding: var(--bn-3) var(--bn-4); border-bottom: 1px solid var(--bn-line); flex-wrap: wrap; }
@@ -1031,8 +997,6 @@
   .orders-reason > .bn-btn { grid-column: 2; justify-self: start; min-height: var(--bn-control-h-lg); }
   .orders-reason { grid-template-columns: auto minmax(0, 1fr); }
   .orders-reason .orders-tag { grid-column: 2; justify-self: start; }
-  .orders-walk-head { top: calc(var(--bn-topbar-h) + var(--bn-2)); grid-template-columns: 1fr; gap: var(--bn-2); }
-  .orders-walk-next { align-items: flex-start; text-align: left; }
   .orders-empty .orders-paste { padding: var(--bn-4); }
   .orders-empty .bn-rule { padding: 0 var(--bn-4); }
 }

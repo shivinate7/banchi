@@ -860,14 +860,15 @@ COMPONENTS = [
                             "governed_by": ["D10", "D21", "D24", "D26", "D36", "D58", "D63", "D93",
                                             "D97", "D172", "D183", "D212"],
                             "tested_by": ["T11"],
-                            "note": "IT TOUCHES NO WIRE AND NO BROWSER. The route in "
-                                    "`docs/specs/order-walk-plan.md` section 7 is a CALLER that "
-                                    "composes labels over this answer; a label formula here would "
+                            "note": "IT TOUCHES NO WIRE AND NO BROWSER. `POST /orders/walk-plan` "
+                                    "(`server/capture_server.py:do_order_walk_plan`) and "
+                                    "`app/src/server.ts:walkPlan` are BUILT, composing labels over "
+                                    "this answer through `_Places.of` — a label formula there would "
                                     "be a second spelling of `pipeline/join.py:Position`, which is "
-                                    "the only one in this repo. IT IS A LIBRARY AND NOT A FEATURE "
-                                    "— no route, no client function and no screen reaches it, "
-                                    "which by CLAUDE.md's own rule means it is not landed and must "
-                                    "not be reported as such."},
+                                    "the only one in this repo. NO SCREEN REACHES IT YET (section "
+                                    "8 is separate work), which by CLAUDE.md's own rule means the "
+                                    "capability is still not landed and must not be reported as "
+                                    "such."},
             # THE ONE-WAY EDGE INSIDE THIS PACKAGE: shipping.py imports pirateship.py and
             # never the reverse, so the Pirate Ship format knows nothing about TCGplayer and
             # can be fed by the Bridge without being touched. Same direction store/ and
@@ -4742,20 +4743,16 @@ COMPONENTS = [
                                      "`market: null` and a `why`, because 390 of the owner's "
                                      "2,245 cards on hand have no price and a ranking that "
                                      "dropped 17% of the store would be a silent drop.",
-                             "governed_by": ["D159", "D156", "D142", "D145", "D166",
-                                             "D3", "D4", "D6", "D7", "D8", "D9", "D10", "D11",
-                                             "D16", "D20", "D21", "D22", "D23", "D24", "D26",
-                                             "D28", "D29", "D30", "D32", "D33", "D34", "D36",
-                                             "D37", "D39", "D45", "D46", "D48", "D49", "D52",
-                                             "D53", "D54", "D56", "D58", "D59", "D61", "D62",
-                                             "D63", "D64", "D65", "D67", "D69", "D73", "D76",
-                                             "D168",
-                                             "D79", "D83", "D86", "D87", "D89", "D91", "D92",
-                                             "D93", "D100", "D103", "D104", "D113", "D115",
-                                             "D114", "D116", "D132", "D134", "D147",
-                                             "D159", "D172", "D174", "D180",
-                                             "D193", "D165",
-                                             "D213"]},
+                             "governed_by": ["D3", "D4", "D6", "D7", "D8", "D9", "D10", "D11",
+                                             "D16", "D20", "D21", "D22", "D23", "D24", "D26", "D28",
+                                             "D29", "D30", "D32", "D33", "D34", "D36", "D37", "D39",
+                                             "D45", "D46", "D48", "D49", "D52", "D53", "D54", "D56",
+                                             "D58", "D59", "D61", "D62", "D63", "D64", "D65", "D67",
+                                             "D69", "D73", "D76", "D79", "D83", "D86", "D87", "D89",
+                                             "D91", "D92", "D93", "D97", "D100", "D103", "D104",
+                                             "D113", "D114", "D115", "D116", "D132", "D134", "D142",
+                                             "D145", "D147", "D156", "D159", "D165", "D166", "D168",
+                                             "D172", "D174", "D180", "D183", "D193", "D213"]},
             "src/deviceMemory.ts": {"does": "every `localStorage` key the shell owns — the "
                                             "theme, the rail, which order statuses this "
                                             "device bothers fetching (D114), whether the "
@@ -6301,6 +6298,47 @@ COMPONENTS = [
                                                 "D61's third answer drawn as the pile that needs "
                                                 "a person.",
                                         "governed_by": ["D5", "D61", "D66", "D69", "D73", "D94"]},
+            "src/OrdersWalk.tsx": {"does": "`Walk the boxes` (`docs/specs/order-walk-plan.md` "
+                                           "§8-9): the mode BECOMES the solver's own plan "
+                                           "rather than a third mode beside `By buyer`. Two "
+                                           "phases in one component: a SELECTION list of every "
+                                           "walkable order with a tick, defaulted to all of "
+                                           "them, and one `Walk N orders` press that freezes "
+                                           "the ticked set into `hub.walkKeys`; once frozen, "
+                                           "this calls `POST /orders/walk-plan` ONCE (no "
+                                           "Re-plan control) and renders the answer as STOPS "
+                                           "(a drawer), each holding TAKES (one card ordered, "
+                                           "with a counter), each holding COPIES (one physical "
+                                           "card, with its own photograph, position and "
+                                           "neighbours — the copy is what proves what a hand "
+                                           "would pick up, not the take). A row's Pull buttons "
+                                           "disable rather than vanish once `taken === wanted` "
+                                           "(D118), the row keeps a 20s inline Undo "
+                                           "(`UNDO_WINDOW_MS`, this file's own copy of "
+                                           "`Inventory.tsx`'s and `Fulfillment.tsx`'s number), "
+                                           "then collapses to one line with a `Take another` "
+                                           "escape for a deliberate over-pull; nothing re-ranks "
+                                           "for the pass. A mid-pass `copy_already_pulled` "
+                                           "marks that copy `gone, skip` in place. "
+                                           "`pickOrderFor` attributes a press to the first "
+                                           "order in a take's `for` still owing by the LIVE "
+                                           "ledger figure — the wire names every order a take "
+                                           "serves but not how the demand splits between them, "
+                                           "so this is a rendering-side choice forced by "
+                                           "completing the write, not a second demand "
+                                           "computation; flagged for the owner in this branch's "
+                                           "own report. Replaces `WalkView`, `WalkCards` and "
+                                           "`buildWalkPlan`/`PlanStop`/`PlanCard`/`WalkPlan`, "
+                                           "all deleted from `Orders.tsx`. `WalkGroups` and "
+                                           "`buildWalk` stay in `Orders.tsx` — `By buyer`'s "
+                                           "merged walk is a different job (D193, D209) and "
+                                           "this file does not touch it.",
+                                   "governed_by": ["D93", "D96", "D97", "D118", "D181", "D193", "D209", "D212"]},
+            "src/OrdersWalk.css": {"does": "`Walk the boxes`' own stylesheet — the selection "
+                                           "list, the stop/take/copy hierarchy, the shortfall "
+                                           "block. `--bn-*` tokens only, the repo's one color "
+                                           "rule.",
+                                   "governed_by": ["D50", "D94", "D118"]},
             "src/Shipping.tsx": {"does": "`#/shipping`: NINE LINES THAT POINT THE ROUTE AT THE "
                                          "HUB — `<OrdersHub stage=\'ship\'/>`. The stage itself "
                                          "is src/OrdersShipStage.tsx, which `Orders.tsx` "

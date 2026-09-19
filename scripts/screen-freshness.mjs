@@ -149,7 +149,7 @@ const ts = (await import(pathToFileURL(TYPESCRIPT).href)).default
  * adding a line here, only by adding a line here AND making the source say why. */
 const NON_MUTATING = new Set([
   'preflightRun', 'cropPreview', 'fetchOrders', 'previewOrders', 'previewReconcileBacklog',
-  'getInventoryCopies', 'fetchOrderPicks',
+  'getInventoryCopies', 'fetchOrderPicks', 'walkPlan',
 ])
 const NON_MUTATING_CLAIM = /writes nothing|creates no run directory|creates nothing/i
 
@@ -253,9 +253,12 @@ const RECORDED = {
   // `fetchOrderPicks` (2026-09-16, the orders-screen picks tier) is the same shape again:
   // a POST because an order key may legally carry a colon, over `Store().read()` alone —
   // `do_order_picks` never opens `Store().write()`.
+  // `walkPlan` (docs/specs/order-walk-plan.md §7) is the same shape a third time:
+  // `do_order_walk_plan` reads one snapshot and calls `pipeline/walkplan.py:plan`, which
+  // touches no wire and no store of its own.
   nonMutating: [
     'preflightRun', 'cropPreview', 'fetchOrders', 'previewOrders', 'previewReconcileBacklog',
-    'getInventoryCopies', 'fetchOrderPicks',
+    'getInventoryCopies', 'fetchOrderPicks', 'walkPlan',
   ],
   nonRequests: [
     'describeFailure', 'photoUrl', 'positionLabel', 'isDeparted', 'placeParts', 'placeSentence',

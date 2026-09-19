@@ -31,6 +31,14 @@ WHAT IT IS NOT ALLOWED TO DO, each earned rather than admired:
   standing at it, ranked. D93 and D97 are unamended: the machine ranks, the person reaches.
   `Take.wanted` is a COUNT and `Take.copies` is longer than it by design.
 
+  TWO REGISTERS, NOT ONE, and they do not share a rule (the owner's ruling, 2026-09-18, read
+  off main rather than the earlier draft of the spec). `Stop.takes` — WHICH CARD to reach for
+  first — ranks densest first: count descending, same as `buildWalkPlan`'s `cardsHere` in
+  `app/src/Orders.tsx` on main. `Take.copies` — WHICH COPY of one card, once a hand is at it —
+  ranks front to back, ascending slot, per `app/src/Orders.tsx`'s own comment on why a hand
+  goes front to back. This file only orders `takes`; `copies` was already ordered correctly
+  and is untouched.
+
   IT ADDS NO DEPENDENCY.  Pure Python, standard library only. `requirements.txt` argues every
   dependency it carries and this venv is Python 3.9.6 with no `scipy`. A 1.1 ms solve over the
   owner's forty open orders does not earn one — see `solve`'s own measurements.
@@ -855,6 +863,17 @@ def plan(
         take_counts = assigned.get(key)
         if not take_counts:
             continue
+        # TWO REGISTERS, NOT ONE (the owner's ruling, 2026-09-18, read off main rather than
+        # the spec). THE TAKES AT A STOP RANK DENSEST FIRST — the card worth reaching for
+        # first — count descending, same as `buildWalkPlan`'s `cardsHere` in
+        # `app/src/Orders.tsx` on main (`count` descending, `name` ascending tie-break).
+        # `Take` carries no name, so the tie-break here is `sku` ascending instead: stable,
+        # and deterministic across two reads of the same plan. THE COPIES INSIDE ONE TAKE
+        # rank the other way, front to back by slot (`app/src/Orders.tsx:1381`'s own
+        # comment: a hand goes front to back) — that register is untouched here, `_assign`
+        # and `supply` already order `Take.copies` that way, and this loop only orders the
+        # SKUs, never the copies under one.
+        ordered_skus = sorted(take_counts, key=lambda sku: (-take_counts[sku], sku))
         takes = tuple(
             Take(
                 sku=sku,
@@ -862,7 +881,7 @@ def plan(
                 copies=stocks.copies.get((key, sku), ()),
                 orders=owed_by.get(sku, ()),
             )
-            for sku in sorted(take_counts)
+            for sku in ordered_skus
         )
         stops.append(Stop(key=key, order=len(stops) + 1, takes=takes))
 

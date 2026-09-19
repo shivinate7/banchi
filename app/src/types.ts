@@ -3050,6 +3050,100 @@ export type ResolvedOrder = {
   lines: ResolvedLine[]
 }
 
+/** `POST /orders/walk-plan` — the ticked-order walk as the fewest drawers to open
+ *  (`docs/specs/order-walk-plan.md` §7). `pipeline/walkplan.py:plan` over one snapshot; NOT
+ *  STORED (D36), and a plan re-pressed a minute later over a changed store can name
+ *  different cards. */
+export type WalkPlanRef = { key: string; number: string; buyer: string | null }
+
+/** One copy of a `WalkPlanTake`, as a pick-shaped row. `label`, `card` and `neighbors` are
+ *  composed by the server's one renderer (`pipeline/join.py:Position`), exactly as
+ *  `PickRow.place` is — `_Places.for_keys` scoping, so `neighbors` is always null here,
+ *  the same degraded-but-typed state a pick row already carries. */
+export type WalkPlanCopy = {
+  box: number
+  index: number
+  slot: number | null
+  capture_id: string | null
+  /** The card's own name (D172, D183) — what lets this screen address the photograph the
+   *  way `#/inventory` and `#/fulfillment` do, rather than by `photoUrl(box, index)`. Null
+   *  for a copy recorded before the field existed. */
+  cid: string | null
+  card: number | null
+  label: string | null
+  neighbors: { prev: PlaceNeighbor | null; next: PlaceNeighbor | null } | null
+}
+
+/** One SKU at one stop: how many to take, and every copy standing there.
+ *
+ *  `copies` IS LONGER THAN `wanted` ON PURPOSE (D93, D97): the machine ranks every copy of
+ *  this SKU at this stop, densest-first; the person reaches. Capping the list at `wanted`
+ *  would put an address back on a fungible copy. */
+export type WalkPlanTake = {
+  sku: string
+  /** The identified card's own name, off its first ranked copy — null where the store holds
+   *  no identification for it yet. */
+  name: string | null
+  /** `198/219`, `pipeline/join.py:display_number` — null where the card has no number. */
+  number_display: string | null
+  wanted: number
+  for: WalkPlanRef[]
+  copies: WalkPlanCopy[]
+}
+
+/** One reach: a drawer to open, and what to take out of it. A pooled stop (D24) is one
+ *  synthetic stop per game, cost 1, always last in the walk order — never a section, and
+ *  `box`/`section`/`box_name`/`section_name`/`span` are all null on it. */
+export type WalkPlanStop = {
+  /** `box/<n>/section/<n>`, or `game/<key>` for a pooled stop. */
+  key: string
+  box: number | null
+  box_name: string | null
+  section: number | null
+  section_name: string | null
+  pooled: boolean
+  game: string | null
+  game_display: string | null
+  /** The walk order, ascending box then section, pooled stops last. 1-based. */
+  order: number
+  /** This stop's section bounds, in D58's slot space — null for a pooled stop. */
+  span: { start: number; end: number | null } | null
+  takes: WalkPlanTake[]
+}
+
+/** One SKU the store cannot fill at all — reported rather than made infeasible (§5): 23 of
+ *  the owner's 59 wanted SKUs are in exactly this state. NOT A STOP and never drawn as one. */
+export type WalkPlanShort = {
+  sku: string
+  /** The feed's own words (`OrderLine.name`) off the first order still owing it — a shortfall
+   *  SKU has no guaranteed on-hand copy to identify it by by D172's own rule. */
+  name: string | null
+  wanted: number
+  on_hand: number
+  short: number
+  for: WalkPlanRef[]
+}
+
+/** The plan's own arithmetic, including the two figures that say how hard it was to compute.
+ *  `exact: false` is reachable — the solver's wall-clock budget ran out and the greedy
+ *  incumbent came back flagged rather than silently passed off as optimal. */
+export type WalkPlanCounts = {
+  stops: number
+  boxes: number
+  copies: number
+  sections_considered: number
+  sections_candidate: number
+  exact: boolean
+  solve_ms: number
+}
+
+export type WalkPlan = {
+  cost: string
+  stops: WalkPlanStop[]
+  shortfall: WalkPlanShort[]
+  counts: WalkPlanCounts
+}
+
 /** `POST /orders/fill` in both directions — D113. Nothing is sold and no card is touched;
  *  there is no card. `moved` is how many copies this press recorded or reversed. */
 export type OrderFillResult = {

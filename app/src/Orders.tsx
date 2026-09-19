@@ -47,6 +47,7 @@ import {
 } from './server'
 import type { Failure } from './server'
 import { ShipStage } from './OrdersShipStage'
+import { OrdersWalk, type WalkPullFn, type WalkUndoFn } from './OrdersWalk'
 import type {
   IngestResult,
   Inventory,
@@ -1290,107 +1291,6 @@ function buildCopyMap(line: ResolvedLine, store: StoreCopies | null, claims: Cla
   }
 }
 
-/* ---- the walk plan: the same rule one register up, over a whole order ----------------------- */
-
-/** One card's presence in one stop: this stop's own count of it, never the order's. A stop can
- *  hold eight copies of a card the buyer ordered two of — this is the eight, not the two, and
- *  the renderer must not let the two figures blur into each other (the same confusion
- *  `pullLedeOf` exists to close, one register down). */
-type PlanCard = {
-  readonly sku: string
-  readonly name: string
-  readonly count: number
-}
-
-/** One stop on an order's walk: what this box satisfies of the WHOLE order, so a buyer wanting
- *  four different singles is walked in one pass rather than four. */
-type PlanStop = {
-  readonly key: string
-  readonly title: string
-  readonly name: string | null
-  readonly box: number | null
-  readonly pooled: boolean
-  readonly copies: number
-  readonly free: number
-  readonly cards: number
-  readonly sections: string[]
-  readonly cardsHere: PlanCard[]
-}
-
-function buildWalkPlan(answer: ResolvedOrder): { readonly stops: PlanStop[]; readonly copies: number } {
-  type Draft = {
-    key: string
-    title: string
-    name: string | null
-    box: number | null
-    pooled: boolean
-    copies: number
-    free: number
-    skus: Set<string>
-    sections: Map<number | null, number>
-    /* PER-CARD COUNTS, KEPT AT THE SAME SOURCE `buildCopyMap` uses (`headlineOf(line).name`), so
-       a name on the plan can never disagree with the name on that same line's own map. */
-    cardCounts: Map<string, { name: string; count: number }>
-  }
-  const drafts = new Map<string, Draft>()
-  let copies = 0
-  for (const line of answer.lines) {
-    const cardName = headlineOf(line).name
-    for (const pick of line.picks) {
-      const place = pick.place
-      const pooled = place.label === null
-      const key = pooled ? `pooled/${place.game ?? ''}` : `box/${pick.box}`
-      let stop = drafts.get(key)
-      if (stop === undefined) {
-        stop = {
-          key,
-          title: pooled ? (text(place.game_display) ? place.game_display : 'Pooled') : `Box ${pick.box}`,
-          name: pooled ? 'no position' : (text(place.box_name) ? place.box_name : null),
-          box: pooled ? null : pick.box,
-          pooled,
-          copies: 0,
-          free: 0,
-          skus: new Set(),
-          sections: new Map(),
-          cardCounts: new Map(),
-        }
-        drafts.set(key, stop)
-      }
-      stop.copies += 1
-      copies += 1
-      if (takeableOf(line, pick)) stop.free += 1
-      stop.skus.add(line.sku)
-      const section = pooled ? null : place.section
-      stop.sections.set(section, (stop.sections.get(section) ?? 0) + 1)
-      const card = stop.cardCounts.get(line.sku)
-      if (card === undefined) stop.cardCounts.set(line.sku, { name: cardName, count: 1 })
-      else card.count += 1
-    }
-  }
-  const stops = [...drafts.values()]
-    .sort((a, b) => byDensity({ ...a, total: a.copies }, { ...b, total: b.copies }))
-    .map((draft) => ({
-      key: draft.key,
-      title: draft.title,
-      name: draft.name,
-      box: draft.box,
-      pooled: draft.pooled,
-      copies: draft.copies,
-      free: draft.free,
-      cards: draft.skus.size,
-      /* Ascending, and deliberately NOT by density: at the plan's register this is which parts of
-         the drawer the walk passes through, and a hand goes front to back. The density ranking
-         that decides what to reach for first is the per-line map's, one register down. */
-      sections: [...draft.sections.keys()]
-        .sort((a, b) => (a ?? Number.MAX_SAFE_INTEGER) - (b ?? Number.MAX_SAFE_INTEGER))
-        .map((section) => (section === null ? '—' : String(section))),
-      /* Densest card first — the one worth reaching for first inside the stop. */
-      cardsHere: [...draft.cardCounts.entries()]
-        .map(([sku, { name, count }]) => ({ sku, name, count }))
-        .sort((a, b) => b.count - a.count || a.name.localeCompare(b.name)),
-    }))
-  return { stops, copies }
-}
 
 /* ---- the figure on a line ------------------------------------------------------------------- */
 
@@ -1964,6 +1864,59 @@ export function OrdersHub({ stage }: { readonly stage: Stage }) {
     })()
   }
 
+  /* THE WALK'S OWN PULL — same write (`pullCopy`), same toast, same `lastPull` fast-undo path,
+     over the walk plan's OWN shape rather than a `ResolvedLine`/`PickRow` built to satisfy a
+     type the plan does not fill honestly (`OrdersWalk.tsx`'s own header has the argument).
+     Returns the outcome rather than throwing, because a walk row needs to know a `gone` copy
+     from a real failure to draw `gone, skip` without ending the whole pass over it. */
+  const onWalkPull: WalkPullFn = async ({ order, sku, name, target, place }) => {
+    const busyKey = `walk/${sku}/${target.capture_id}`
+    setBusy(busyKey)
+    setFailure(null)
+    try {
+      const done = await pullCopy({ source: order.source, number: order.number, sku }, [target])
+      if (!live.current) return { ok: false, failure: { code: 'unmounted', message: '' } }
+      const resolvedPlace = done.places[0]?.label ?? place ?? `box ${target.box}, index ${target.index}`
+      toast({
+        kind: 'receipt',
+        icon: 'hand',
+        title: `Pulled ${name}`,
+        body: `from ${resolvedPlace} · order ${order.number}`,
+        ttlMs: UNDO_WINDOW_MS,
+        action: { label: 'Undo', onPress: () => void undoFromToast(target, resolvedPlace, name) },
+      })
+      setHub({ lastPull: { target, place: resolvedPlace, name, until: Date.now() + UNDO_WINDOW_MS } })
+      await Promise.all([reread(), rereadStore()])
+      return { ok: true, place: resolvedPlace }
+    } catch (err) {
+      const trouble = describeFailure(err)
+      if (live.current) setFailure(trouble)
+      return { ok: false, failure: trouble }
+    } finally {
+      if (live.current) setBusy(null)
+    }
+  }
+
+  /** The walk row's own inline Undo (§8's 20s window) — a direct call rather than
+   *  `undoFromToast`, because a row needs to know whether it succeeded to put its own copy
+   *  back into the pressable state; `undoFromToast` only ever reports through a toast. */
+  const onWalkUndo: WalkUndoFn = async (target, place, name) => {
+    setHub({ busy: `undo/${target.capture_id}` })
+    try {
+      await undoPull([target])
+      toast({ kind: 'ok', icon: 'undo', title: `Put ${name} back`, body: `${place} holds it again.` })
+      await Promise.all([reread(), rereadStore()])
+      return true
+    } catch (err) {
+      const trouble = describeFailure(err)
+      toast({ kind: 'refusal', title: 'The card was not put back', body: `${trouble.message} · ${trouble.code}` })
+      return false
+    } finally {
+      setHub((current) => ({ busy: null, lastPull: current.lastPull?.target.capture_id === target.capture_id ? null : current.lastPull }))
+      touchHub()
+    }
+  }
+
   /* ------------------------------------------------------- the two lines that cannot be pulled */
 
   /* D113. A line whose SKU no card carries can never be closed by a pull — `record_pull` needs a
@@ -2382,6 +2335,8 @@ export function OrdersHub({ stage }: { readonly stage: Stage }) {
             )
           }
           onPull={onPull}
+          onWalkPull={onWalkPull}
+          onWalkUndo={onWalkUndo}
           onFill={onFill}
           onDeclareKind={onDeclareKind}
           onStandDown={onStandDown}
@@ -2567,6 +2522,8 @@ function PullStage({
   emptyWell,
   receipt,
   onPull,
+  onWalkPull,
+  onWalkUndo,
   onFill,
   onDeclareKind,
   onStandDown,
@@ -2595,6 +2552,10 @@ function PullStage({
   /** The last fetch's receipt, or null before one has been pressed. */
   readonly receipt: ReactNode
   readonly onPull: PullHandler
+  /** `Walk the boxes`' own pull and undo — `OrdersWalk.tsx`'s own shape, over the same
+   *  underlying write `onPull` makes for `By buyer`. */
+  readonly onWalkPull: WalkPullFn
+  readonly onWalkUndo: WalkUndoFn
   readonly onFill: FillHandler
   readonly onDeclareKind: KindHandler
   readonly onStandDown: StandDownHandler
@@ -2873,16 +2834,49 @@ function PullStage({
     fetchMissingPicks(keys)
   }, [selectedGroup, fetchMissingPicks])
 
-  /* FETCH REAL PICKS FOR THE WHOLE WALK, IN ONE BATCH, THE MOMENT A PASS FREEZES
-   *  (`hub.walkKeys`). This is the "across many orders at once" case the task names: rather
-   *  than decorating every walkable order on every `GET /orders` poll (which is what made the
-   *  route slow), the walk asks once, by name, for exactly the orders its own frozen pass
-   *  holds — the request naming the orders in the pass, deliberately never a second walk of
-   *  the whole store. */
+  /* `docs/specs/order-walk-plan.md` §8 REPLACES THE WALK'S OWN FETCH. `OrdersWalk` calls
+   *  `POST /orders/walk-plan` itself once a pass starts, which already answers with every
+   *  copy's photograph key, position and neighbours — there is nothing left for
+   *  `fetchOrderPicks` to add for this mode, and the old per-order-picks fetch this effect
+   *  ran is gone with it. */
+
+  /* WHICH TICKED ORDERS `Walk N orders` WOULD COVER RIGHT NOW — a blacklist rather than a
+   *  whitelist so an order that shows up mid-selection (a fresh fetch, a paste) starts ticked
+   *  too, matching "the default tick is every currently open order" (§8). Local state, not
+   *  the hub: `PullStage` does not unmount when the mode toggles, so a tick survives leaving
+   *  `Walk the boxes` and coming back — the SAME survival §8 asks of "the buyer list keeps
+   *  the ticks" — without outliving the tab the way `hub.walkKeys` (the frozen PASS) must
+   *  not (see the next effect). */
+  const [walkUnticked, setWalkUnticked] = useState<ReadonlySet<string>>(new Set())
+  const toggleWalkTick = (key: string) =>
+    setWalkUnticked((prev) => {
+      const next = new Set(prev)
+      if (next.has(key)) next.delete(key)
+      else next.add(key)
+      return next
+    })
+
+  /* LEAVING THE WALK ENDS THE PASS (§8, the owner's ruling, 2026-09-17): "tap another screen,
+   *  close the tab, come back an hour later — that walk is over." Toggling to `By buyer` IS
+   *  tapping another screen — `Walk the boxes` and `By buyer` are the two screens finding 3
+   *  named — so leaving `mode === 'walk'` clears the frozen pass (`hub.walkKeys`) the same
+   *  way `onFetch` already does for a new sitting. The unmount cleanup below covers leaving
+   *  `#/orders` entirely, which this effect cannot see (`mode` does not change on a route
+   *  change away and back). The ticks above are NOT cleared here — only the pass is. */
   useEffect(() => {
-    if (mode !== 'walk' || hub.walkKeys === null) return
-    fetchMissingPicks([...hub.walkKeys])
-  }, [mode, hub.walkKeys, fetchMissingPicks])
+    if (mode !== 'walk' && hub.walkKeys !== null) setHub({ walkKeys: null })
+  }, [mode, hub.walkKeys])
+  useEffect(() => {
+    return () => {
+      if (hubState().walkKeys !== null) setHub({ walkKeys: null })
+    }
+  }, [])
+
+  const ordersByKey = useMemo(() => {
+    const out = new Map<string, OrderRow>()
+    for (const order of payload?.orders ?? []) out.set(order.key, order)
+    return out
+  }, [payload])
 
   /* THE HASH NAMES A BUYER, OR — FOR AN OLD LINK — AN ORDER RESOLVED TO ITS BUYER, ONCE THE
      LEDGER HAS ACTUALLY ANSWERED; from then on the store leads and the hash follows. `?buyer=`
@@ -2935,8 +2929,6 @@ function PullStage({
     window.addEventListener('keydown', onKey)
     return () => window.removeEventListener('keydown', onKey)
   }, [wide, mode, shownGroups, selectedKey])
-
-  const walk = useMemo(() => buildWalk(walkable, answers), [walkable, answers])
 
   const setFilter = (next: PullFilter) => setHub({ filter: next })
   const select = (key: string) => setHub({ selected: key })
@@ -3127,35 +3119,15 @@ function PullStage({
             { value: 'orders', label: 'By buyer', icon: 'cart' },
             { value: 'walk', label: 'Walk the boxes', icon: 'box' },
           ]}
-          /* ENTERING THE WALK FREEZES WHAT IT IS A WALK OVER, and only if no pass is already
-             held. The set is taken from `walkable` at that instant — every order
-             `ownsAWalkableBody`, not `open` alone — so the figure below counts orders leaving
-             THAT set rather than the ledger's whole history. This is the owner's own ask
-             answered here too: "I need the ability to walk orders even if it already shows
-             shipped" — a terminal-but-owing order freezes into the pass exactly like an open one.
-
-             A TOGGLE IS NOT THE END OF A PASS, and freezing on every entry made it one. Because
-             `walkKeys` is drawn from `walkable` and an order leaves it the moment it stops
-             owing (its last copy recorded, whatever door that came through), a fresh freeze can
-             never contain an order this pass has finished — so stepping out to `By order` and
-             back reset the figure to nothing, ZERO BY CONSTRUCTION, which is the same shape as
-             the defect this whole change is about. Measured: after one pull the pill read `1 of
-             2`, and after `By order` → `Walk the boxes` it was gone. The pass is held instead,
-             and `onFetch` ends it — new orders off TCGplayer are a new sitting, and that is the
-             only boundary the operator draws. */
-          onChange={(next) =>
-            setHub((current) => ({
-              mode: next,
-              walkKeys:
-                next === 'walk'
-                  ? (current.walkKeys ?? new Set(walkable.map((order) => order.key)))
-                  : current.walkKeys,
-            }))
-          }
+          /* ENTERING `Walk the boxes` NO LONGER FREEZES ANYTHING BY ITSELF
+             (`docs/specs/order-walk-plan.md` §8, replacing the ruling this comment used to
+             carry). A mode switch is a mode switch; the pass starts only when `Walk N orders`
+             is pressed inside `OrdersWalk`, over exactly the ticked set, and the effect above
+             ends it the moment `mode` leaves `'walk'` — "leaving the walk ends the pass" is
+             now literal rather than an exception this control had to avoid. */
+          onChange={(next) => setHub({ mode: next })}
         />
-        {mode === 'walk' ? (
-          <p className="orders-toolbar-note">Every unfulfilled order&apos;s copies, in box order.</p>
-        ) : (
+        {mode === 'walk' ? null : (
           <>
             {chips}
             {/* STATUS / SORT / HIDE-UNKNOWN — the owner's ruling read as an ORDERING, never a
@@ -3254,18 +3226,17 @@ function PullStage({
       ) : null}
 
       {mode === 'walk' ? (
-        <>
-          <WalkView
-            walk={walk}
-            walkable={walkable}
-            walkKeys={hub.walkKeys}
-            store={store}
-            claims={claims}
-            busy={busy}
-            onPull={onPull}
-          />
-          {why}
-        </>
+        <OrdersWalk
+          walkable={walkable}
+          ordersByKey={ordersByKey}
+          walkKeys={hub.walkKeys}
+          unticked={walkUnticked}
+          onToggleTick={toggleWalkTick}
+          onStart={(keys) => setHub({ walkKeys: keys })}
+          busy={busy}
+          onPull={onWalkPull}
+          onUndo={onWalkUndo}
+        />
       ) : shownGroups.length === 0 && earlierGroups.length === 0 ? (
         <>
           {nothingShown}
@@ -3576,10 +3547,6 @@ function OrderDetail({
       </div>
     ) : (
       <>
-        {/* THE WALK PLAN SITS ABOVE THE LINES AND CHANGES NONE OF THEM. It is the density rule one
-            register up: which drawers satisfy the most of THIS order, so four different singles
-            are fetched in one pass. */}
-        <WalkPlan answer={answer} />
         <ol className="orders-lines">
           {answer.lines.map((line) => (
             <OrderLineRow
@@ -3745,41 +3712,61 @@ function BuyerDetail({
     )
   })
 
+  /* THE FOLD IS A REAL KIT BUTTON NOW, NOT AN UNSTYLED `<summary>` (§9's "what is deleted",
+   *  finding 5 — the owner found the walk plan "by hunting" behind exactly this control).
+   *  Section 8's own plan replaced what was hidden BEHIND this toggle at the whole-store
+   *  level; this is the one place the fold itself survives, because `By buyer` still needs a
+   *  way to reach stand-down/close-line/declare-kind per order. `null` follows the default
+   *  (`!hasWalk`) until the operator presses it once, the same "manual wins until the default
+   *  itself changes" rule `<details open>` gave for free. */
+  const [byOrderOpen, setByOrderOpen] = useState<boolean | null>(null)
+  const byOrderIsOpen = byOrderOpen ?? !hasWalk
   const byOrder = (
-    <details className="orders-buyer-byorder" open={!hasWalk}>
-      <summary>By order</summary>
-      {group.orders.map((order) => (
-        <div key={order.key} className="orders-buyer-order">
-          <OrderDetail
-            order={order}
-            answer={answers.get(order.key) ?? null}
-            lane={lanesByOrder.get(order.number) ?? null}
-            store={store}
-            claims={claims}
-            busy={busy}
-            onPull={onPull}
-            onFill={onFill}
-            onDeclareKind={onDeclareKind}
-            onCloseLine={onCloseLine}
-            onReread={onReread}
-            variant="panel"
-            /* THE MERGED WALK IS THE ONE PLACE TO PULL FROM. Drawing the same pick rows again
-               here — the byOrder fold's own reason `buildWalk` and `OrderLineRow` share the same
-               `aimOf`/`copiesOf` machinery — would put two Pull buttons on screen for one copy.
-               Suppressed only when the walk exists to cover it; a buyer with nothing walkable
-               still gets the full per-line breakdown, because it is all there is. */
-            hidePicks={hasWalk}
-          />
-        </div>
-      ))}
-    </details>
+    <div className="orders-buyer-byorder">
+      <Button
+        variant="quiet"
+        size="sm"
+        iconRight={byOrderIsOpen ? 'chevronUp' : 'chevronDown'}
+        aria-expanded={byOrderIsOpen}
+        onClick={() => setByOrderOpen(!byOrderIsOpen)}
+      >
+        By order
+      </Button>
+      {!byOrderIsOpen
+        ? null
+        : group.orders.map((order) => (
+            <div key={order.key} className="orders-buyer-order">
+              <OrderDetail
+                order={order}
+                answer={answers.get(order.key) ?? null}
+                lane={lanesByOrder.get(order.number) ?? null}
+                store={store}
+                claims={claims}
+                busy={busy}
+                onPull={onPull}
+                onFill={onFill}
+                onDeclareKind={onDeclareKind}
+                onCloseLine={onCloseLine}
+                onReread={onReread}
+                variant="panel"
+                /* THE MERGED WALK IS THE ONE PLACE TO PULL FROM. Drawing the same pick rows
+                   again here — the byOrder fold's own reason `buildWalk` and `OrderLineRow`
+                   share the same `aimOf`/`copiesOf` machinery — would put two Pull buttons on
+                   screen for one copy. Suppressed only when the walk exists to cover it; a
+                   buyer with nothing walkable still gets the full per-line breakdown, because
+                   it is all there is. */
+                hidePicks={hasWalk}
+              />
+            </div>
+          ))}
+    </div>
   )
 
   const body = (
     <>
       {hasWalk ? (
         <section className="orders-buyer-walk" aria-label="This buyer's copies, in one pass">
-          <WalkGroups groups={walk.groups} store={store} claims={claims} busy={busy} onPull={onPull} />
+          <WalkGroups groups={walk.groups} busy={busy} onPull={onPull} />
         </section>
       ) : null}
       {byOrder}
@@ -4315,68 +4302,6 @@ function CopyMapView({
   )
 }
 
-/* ------------------------------------------------------------------------- the walk plan */
-
-/** The whole order in one pass: the boxes ranked by how much of it each satisfies. Additive —
- *  every line's own map is unchanged by what this says. */
-function WalkPlan({ answer }: { readonly answer: ResolvedOrder }) {
-  const plan = useMemo(() => buildWalkPlan(answer), [answer])
-  /* A SINGLE-LINE ORDER GETS THE PLAN TOO (the owner's own report, 2026-09-17: "I always
-     thought there's a button like walk this order" — asked of an order the old `lines.length
-     < 2` gate hid it from, because it had exactly one line). The gate that remains is about
-     whether the plan has anything to say, never about how many lines the order carries: one
-     stop holding one card at one copy is the row beneath it, restated, and earns nothing by
-     repeating itself under a heading. Two stops, two cards in one stop, or more than one copy
-     of the one card in the one stop all clear it. */
-  const onlyStop = plan.stops.length === 1 ? (plan.stops[0] ?? null) : null
-  const onlyCard = onlyStop !== null && onlyStop.cardsHere.length === 1 ? (onlyStop.cardsHere[0] ?? null) : null
-  const trivial = onlyCard !== null && onlyCard.count === 1
-  if (plan.stops.length === 0 || trivial) return null
-  return (
-    <section className="orders-plan" aria-label="Walk plan for this order">
-      <header className="orders-plan-head">
-        <span className="bn-label">Walk plan</span>
-        <span className="orders-plan-note">
-          {plan.stops.length === 1 ? 'One box holds this whole order.' : `${plan.stops.length} boxes, fullest first — one pass does it.`}
-        </span>
-      </header>
-      <ol className="orders-plan-stops bn-stagger">
-        {plan.stops.map((stop, at) => (
-          <li key={stop.key} className="orders-plan-stop" data-lead={at === 0 ? 'true' : undefined} style={{ '--i': at } as CSSProperties}>
-            <span className="orders-plan-rank" aria-hidden="true">
-              {at + 1}
-            </span>
-            <span className="orders-plan-text">
-              <span className="orders-plan-name">
-                <b>{stop.title}</b>
-                {stop.name === null ? null : <em>{stop.name}</em>}
-              </span>
-              {stop.pooled ? null : (
-                <span className="orders-plan-sect">
-                  {stop.sections.length === 1 ? 'Section' : 'Sections'} {stop.sections.join(', ')}
-                </span>
-              )}
-              {/* PER-STOP, NEVER PER-ORDER. Each figure here is `cardCounts` off THIS stop's own
-                 picks (`buildWalkPlan`, same source `buildCopyMap` reads) — how many of that
-                 card sit in this drawer, not how many the buyer ordered. A stop can hold eight
-                 of a card the line owes two of; this says eight. */}
-              <ul className="orders-plan-cards">
-                {stop.cardsHere.map((card) => (
-                  <li key={card.sku} className="orders-plan-card">
-                    <b>{card.count}</b> of{' '}
-                    <span className="orders-plan-card-name" title={card.name}>
-                      {card.name}
-                    </span>
-                  </li>
-                ))}
-              </ul>
-            </span>
-          </li>
-        ))}
-      </ol>
-    </section>
-  )
-}
 
 /* ============================================================================== a copy */
 
@@ -4509,261 +4434,24 @@ function PickLine({
   )
 }
 
-/* ============================================================================ the walk */
 
-function WalkView({
-  walk,
-  walkable,
-  walkKeys,
-  store,
-  claims,
-  busy,
-  onPull,
-}: {
-  readonly walk: Walk
-  /** Every order `ownsAWalkableBody` RIGHT NOW — the fresh answer, re-read every time this
-   *  renders, never frozen (unlike `walkKeys`, the pass's own snapshot). Feeds the head figure
-   *  and the empty state the same way it feeds `PullStage`'s `buildWalk` call, so the number at
-   *  the top of the walk and the rows under it can never name a different scope than each
-   *  other. */
-  readonly walkable: OrderRow[]
-  readonly walkKeys: ReadonlySet<string> | null
-  readonly store: StoreCopies | null
-  readonly claims: Claims
-  readonly busy: string | null
-  readonly onPull: PullHandler
-}) {
-  /* `passComplete` below reads a `walkKeys` member's ABSENCE from this set as "no longer owes",
-   *  which is what lets a terminal-but-owing order count as finished only once its own copies
-   *  are actually recorded, rather than the instant the pass opens. */
-  const walkableKeys = useMemo(() => new Set(walkable.map((order) => order.key)), [walkable])
-  const wanted = walkable.reduce((sum, order) => sum + order.wanted, 0)
-  const recorded = walkable.reduce((sum, order) => sum + order.recorded, 0)
-  const pct = wanted > 0 ? Math.min(100, Math.round((recorded / wanted) * 100)) : 0
-  /* THE SECOND FIGURE IS IN THE OTHER UNIT, and that is the whole reason it is here. The
-     figure above counts CARDS and a card is what the walk hands you; what you pack is an
-     ENVELOPE, and an order two copies short is as unpackable as one nothing has been pulled
-     for. So the walk also says how many orders are whole.
-
-     IT IS COUNTED OVER `done` AND NOT OVER `open`, WHICH IS NOT A DETAIL. `open` is the
-     ledger's answer to "does this still owe copies" (`server/capture_server.py:_order_row`,
-     which refuses to read the feed's `status` string for it), so the moment an order's last
-     copy is pulled it LEAVES `open` — a count of finished orders taken over `open` is zero
-     by construction, always, and the walk is where that is least visible because the rows
-     vanish with it. Measured on this store: pulling the one copy of order A47CCC-13B33
-     moved the page header from `20 open orders` to `19 open orders and 1 done`.
-
-     AND THERE IS NO DENOMINATOR AT ALL ANY MORE (D96, amended 2026-09-04). It was `open + done`
-     — the pair the page header prints, chosen so the two could not disagree — and `done` is
-     every order the ledger has EVER completed, with no window and nothing pruned
-     (`capture_server.do_orders` sorts the whole of `ledger.orders`). Correct on the day it was
-     measured, at 20 open and 0 done, and wrong for ever after: a store with 200 completed and
-     3 open read `200 of 203` on a three-order walk, a lifetime statistic wearing a progress
-     figure's clothes.
-
-     FREEZING THE DENOMINATOR TO THIS PASS FIXED THAT AND BOUGHT A WORSE STATE. Orders arrive
-     while you walk — the screen re-reads after every pull — so a pass over {A, B} with both
-     pulled draws `2 of 2 orders fully pulled` beside a head reading `3 still to pull across 1
-     open order`. A fraction that has reached its own denominator says FINISHED, over a screen
-     with work on it, and no wording rescues that: the figure is complete and the work is not.
-
-     SO IT IS A COUNT. `2 orders complete in this pass` cannot claim completion, because it never
-     had a total to reach. `walkKeys` is still what makes `in this pass` mean anything — the set
-     frozen when the walk began — and the count is its members that have LEFT `walkableKeys`,
-     which starts at 0 and only rises, and is therefore NOT the zero-by-construction figure this
-     comment rejects above.
-
-     LEFT `walkableKeys`, NOT LEFT `open` — the walk now opens over `ownsAWalkableBody`, which is
-     true for an open order AND for a terminal-but-owing one, so "finished" has to be read off
-     the SAME predicate the freeze used, re-evaluated against what the store says right now. A
-     terminal-but-owing order sits in `walkKeys` from the moment the pass opens, and it is ALSO
-     in `walkableKeys` at that instant — reading completion off `done` (which a terminal order
-     already belongs to before a single copy is pulled) would have counted it complete on
-     arrival, the exact zero-by-construction shape one paragraph up. It only leaves
-     `walkableKeys` once its own copies actually close the gap.
-
-     `complete` AND NOT `fully pulled`, WHICH IS WHAT IT SAID. An order reaches `done` by any
-     route — a sale marked on `#/inventory`, an ingest, another device — and this screen sees
-     none of them. The old verb claimed presses the figure cannot account for.
-
-     WHAT IS GIVEN UP IS NAMED: the walk's figure and the page's headline can now disagree, and
-     that agreement is what the old denominator was bought for. It is the right trade because
-     they answer different questions — the headline is about the ledger, this is about the
-     sitting you are in. A `null` set draws nothing rather than falling back to the lifetime
-     figure: a fallback that silently restores it is how it would come back. */
-  const passComplete = walkKeys === null ? 0 : [...walkKeys].filter((key) => !walkableKeys.has(key)).length
-  const next = walk.rows[0] ?? null
-
-  if (walk.rows.length === 0) {
-    return (
-      <div className="bn-panel">
-        <EmptyState
-          icon="check"
-          title="Nothing left to walk"
-          body={walkable.length === 0 ? 'Every order has its copies.' : 'No unfulfilled order has a copy to pull here; each order says why.'}
-        />
-      </div>
-    )
-  }
-
-  return (
-    <div className="orders-walk">
-      <div className="orders-walk-head">
-        <div className="orders-walk-progress">
-          {/* THE SAME REGISTER AS A LINE'S FIGURE: what is left to fetch, with what has already
-              gone kept quiet beside it. */}
-          <p className="orders-walk-figure">
-            <strong>{Math.max(0, wanted - recorded)}</strong>
-            <span>
-              still to pull across {walkable.length} unfulfilled order{walkable.length === 1 ? '' : 's'}
-              {recorded === 0 ? '' : ` · ${recorded} already pulled`}
-            </span>
-            {/* Drawn only once one is whole, by the bar's own rule beside it: none finished is
-                the state every walk starts in, and a figure that reads 0 on arrival is not one
-                anybody acts on. It says `orders` in the label because the figure it sits next
-                to counts cards. */}
-            {passComplete === 0 ? null : (
-              <Pill size="sm" icon="check">
-                {passComplete} order{passComplete === 1 ? '' : 's'} complete in this pass
-              </Pill>
-            )}
-          </p>
-          {/* The same rule as an order's own meter: nothing pulled yet is a figure, not a track. */}
-          {recorded === 0 ? null : (
-            <span
-              className={`bn-progress orders-walk-bar${recorded >= wanted ? ' bn-progress-ok' : ''}`}
-              role="progressbar"
-              aria-valuenow={recorded}
-              aria-valuemin={0}
-              aria-valuemax={wanted}
-              aria-label="Copies pulled"
-            >
-              <span style={{ width: `${pct}%` }} />
-            </span>
-          )}
-        </div>
-        {next === null ? null : (
-          <div className="orders-walk-next">
-            <span className="orders-walk-next-label">Next</span>
-            <span className="orders-walk-next-place">
-              {next.pick.place.label ?? (text(next.pick.place.game_display) ? `${next.pick.place.game_display} · pooled` : 'Pooled')}
-            </span>
-            <span className="orders-walk-next-card">
-              {next.pick.card_name ?? next.line.line.name ?? next.line.sku}
-              {next.pick.condition === null ? '' : ` · ${next.pick.condition}`}
-            </span>
-          </div>
-        )}
-      </div>
-
-      <WalkGroups groups={walk.groups} store={store} claims={claims} busy={busy} onPull={onPull} />
-    </div>
-  )
-}
-
-/** Every distinct (order, sku) with a row somewhere in this walk, in first-seen order — the
- *  cards the merged walk is actually about, deduped the same way `group.rows` already is.
- *  `WalkGroups` groups by BOX, so one card's copies routinely span more than one group; this is
- *  what lets its own "Pull N — N on hand across N boxes" sentence be said ONCE, above every
- *  group, rather than once per box where "across N boxes" would repeat a number that group alone
- *  never explains. */
-function walkCardsOf(groups: readonly WalkGroup[]): { key: string; order: OrderRow; line: ResolvedLine }[] {
-  const seen = new Map<string, { key: string; order: OrderRow; line: ResolvedLine }>()
-  for (const group of groups) {
-    for (const row of group.rows) {
-      const key = `${row.order.key}/${row.line.sku}`
-      if (!seen.has(key)) seen.set(key, { key, order: row.order, line: row.line })
-    }
-  }
-  return [...seen.values()]
-}
-
-/** One line per card, above the boxes — `pullLedeOf`, the SAME function `CopyMapView` calls, so
- *  the wording can never fork between the two places it renders (the owner's own screen, this
- *  one, and the state `CopyMapView` covers when the merged walk does not: every candidate copy
- *  already claimed elsewhere). Built from `buildCopyMap(line, store, claims)` — the identical
- *  computation `OrderLineRow` already runs, not a second aggregation over `group.rows`, which
- *  would answer for only the copies THIS walk happened to draw rather than every copy on hand
- *  (D212: the resolver's own picks are not always the whole story).
- *
- *  ONE BUYER, POSSIBLY TWO ORDERS FOR THE SAME CARD (`showOrder` on `PickLine` is why the merged
- *  walk names the order per row at all). Each line here is `(order, sku)` — never merged across
- *  orders — so "Pull N" is always one order's own remaining count. Disambiguated by the order's
- *  number, said only where more than one line shares a card, so the ordinary one-order case
- *  reads exactly as `CopyMapView`'s own sentence does. */
-function WalkCards({
-  groups,
-  store,
-  claims,
-}: {
-  readonly groups: readonly WalkGroup[]
-  readonly store: StoreCopies | null
-  readonly claims: Claims
-}) {
-  const cards = walkCardsOf(groups)
-  const bySku = new Map<string, number>()
-  for (const card of cards) bySku.set(card.line.sku, (bySku.get(card.line.sku) ?? 0) + 1)
-  return (
-    <ul className="orders-walk-cards">
-      {cards.map((card) => {
-        const map = buildCopyMap(card.line, store, claims)
-        const whole = map.total >= card.line.on_hand
-        const figure = figureOf(card.order, card.line)
-        const ambiguous = (bySku.get(card.line.sku) ?? 0) > 1
-        /* TRIVIAL IS SKIPPED, THE SAME GATE `WalkPlan` ALREADY DRAWS: one order wants one copy,
-           the store holds exactly one, it sits in one box — nothing here for the sentence to
-           resolve that the box header and the row beneath it do not already say. Built off
-           `figure.wanted`/`map.total`/`map.stops.length`, none of which move when a copy is
-           pulled, so a line that starts trivial stays trivial across the walk (D118) — this
-           never hides a sentence a press would otherwise have left in place. */
-        const trivial = !ambiguous && figure.wanted <= 1 && map.total <= 1 && map.stops.length <= 1
-        if (trivial) return null
-        const lede = pullLedeOf(figure, map, whole, card.line.on_hand)
-        const name = headlineOf(card.line).name
-        return (
-          <li key={card.key} className="orders-map-lede">
-            <Icon name="layers" size={13} />
-            <span>
-              <b>{name}</b>
-              {ambiguous ? <span className="orders-walk-cards-order"> · {card.order.number}</span> : null}
-              {' — '}
-              {lede}
-            </span>
-          </li>
-        )
-      })}
-    </ul>
-  )
-}
-
-/** The box→section renderer shared by "Walk the boxes" and a buyer's merged walk
- *  (`D193`) — extracted so a buyer with several open orders gets the
- *  same one-pass grouping the whole-store walk draws, rather than a second copy of it.
- *
- *  `store`/`claims` reach here so `WalkCards` above can build the SAME `buildCopyMap` every
- *  other screen builds — not so the group header below can: that count is deliberately read off
- *  `group.rows` alone. The owner's own report, 2026-09-17: a box holding three copies of one
- *  card drew "3 cards" — several different cards where there was one, because `group.rows` is
- *  one row per COPY and the header read its length as a card count. D212 is why this was never
- *  wrong before: dropping the exclusive claim means a box can now hold several copies of the
- *  SAME card, which a per-copy row count never distinguished from several different cards. Fixed
- *  below by counting distinct SKUs separately from rows. */
+/** The box→section renderer shared by `By buyer`'s merged walk (`D193`) — extracted so a
+ *  buyer with several open orders gets the same one-pass grouping `buildWalk` produces,
+ *  rather than a second copy of it. `Walk the boxes` no longer calls this: it renders the
+ *  solver's own plan through `OrdersWalk.tsx` instead (`docs/specs/order-walk-plan.md` §8-9).
+ *  The sentence block this component used to lead with (`WalkCards`) is deleted with it —
+ *  finding 4, the owner's own "Horrible." */
 function WalkGroups({
   groups,
-  store,
-  claims,
   busy,
   onPull,
 }: {
   readonly groups: readonly WalkGroup[]
-  readonly store: StoreCopies | null
-  readonly claims: Claims
   readonly busy: string | null
   readonly onPull: PullHandler
 }) {
   return (
     <>
-      <WalkCards groups={groups} store={store} claims={claims} />
       {groups.map((group) => {
         const skus = new Set(group.rows.map((row) => row.line.sku))
         const copies = group.rows.length

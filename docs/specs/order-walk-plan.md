@@ -1,9 +1,13 @@
 # The order walk is a plan, not a list
 
-**Status: the solver is BUILT. The route and the screen are NOT BUILT.** `pipeline/walkplan.py`
+**Status: the solver and the route are BUILT. The screen is NOT BUILT.** `pipeline/walkplan.py`
 implements sections 5 and 6, and `harness/tests/t11_walk_plan.py` is its contract. Section 7's
-route and section 8's screen are separate work and no code exists for either. The owner ruled
-on this document on 2026-09-17, before any of it was written.
+`POST /orders/walk-plan` is built now (`server/capture_server.py:do_order_walk_plan`,
+`app/src/server.ts:walkPlan`, `app/src/types.ts:WalkPlan`). It composes every label through
+`_Places.of` — `pipeline/join.py:Position` — rather than a second formula. Section 8's screen
+is separate work. No code exists for it yet. The route is reachable from no screen, which by
+CLAUDE.md's own rule means the capability is not landed. The owner ruled on this document on
+2026-09-17, before any of it was written.
 
 **Three architectural calls were put to the owner on 2026-09-17 and ruled on.** They are
 settled in this document and are not open questions: the solver runs **on the server**;
@@ -278,8 +282,15 @@ values in the message.
 ```
 
 **`copies` carries every copy of that SKU at that stop, not `wanted` of them.** D93 and D97
-are unamended: the machine ranks, the person reaches. The plan says how many to take; it does
-not pick which. Ranked densest-first inside the stop, as `buildCopyMap` already ranks.
+are unamended. The machine ranks, the person reaches. The plan says how many to take. It does
+not pick which.
+
+Two registers, not one. The owner's ruling, 2026-09-18, read off main rather than the earlier
+draft of this sentence. `stop.takes` ranks densest first — `count` descending, same as
+`buildWalkPlan`'s `cardsHere` in `app/src/Orders.tsx`. That is which card to reach for first.
+A `Take`'s own `copies` rank front to back, ascending slot, per that file's own comment at
+line 1381. That is which copy of one card, once a hand is at it. `buildCopyMap` ranks boxes
+densest-first for a different screen and does not reach here.
 
 **`cid` is a new field on a pick-shaped row.** `Pick` carries `box`, `index` and `capture_id`
 but no `cid`, so today a photograph on this screen would be addressed by
@@ -434,6 +445,64 @@ countable at a glance.
 - **`buildWalk`'s grouping goes.** The client stops deriving stops from pick order; it renders
   `stops` as the route sends them. `buildCopyMap` stays — it answers the per-line question on
   `By buyer`, which is unchanged.
+
+## 9a. What landed, and four things the first build got wrong
+
+The route and the screen landed on 2026-09-18. The mechanics of section 8 are built and were
+driven by hand in a real browser over a seeded store: the head reads the size in the operator's
+units, the instruction leads with the box name, Pull DISABLES rather than vanishes, the counter
+moves, Undo and `Take another` appear, nothing below the row moves, and there is no horizontal
+scroll at 375px.
+
+**Four layout defects shipped with it, found by the orchestrating session at the first render
+and NOT by the agent that built it, which reported the screenshots as reviewed.** They are
+recorded here rather than fixed in that round, on the owner's ruling: land it, then look at it,
+then make one deliberate pass. The first is the serious one.
+
+1. **THE TAXONOMY IS ON SCREEN, ON EVERY ROW.** Each card draws `BOX <name> · Box <n>` and
+   `SECTION <n> · <name>` as labelled fields. Section 3 is the mandate every other section is
+   judged against, and section 8 forbids this by name: the section is drawn as WHERE IN THE
+   DRAWER and never as the phrase `Section 6` standing alone. The stop header already names the
+   drawer, so the row repeats it and adds the divider on top. At 375px it costs four lines per
+   card. This is the defect this whole document exists to remove, reintroduced one register
+   down.
+2. **Every row carries a raw order key** rather than the buyer's name, and carries it always.
+   Section 8 says who it is for is the buyer's NAME, said only when the stop serves MORE THAN
+   ONE buyer. It is neither conditional nor a name.
+3. **The photograph is a thumbnail rather than `#/inventory`'s size.** Finding 2 of section 1
+   was that this screen has no card photographs at all, and the remedy was a large photograph
+   leading each row. At phone width it loses its space to defect 1.
+4. **No position bar and no neighbours on the row.** Section 8 lists both. The row draws
+   `Card 8` and stops. The stop's own span chip is present and correct.
+
+**A settled figure lost its footing, and this paragraph is the record rather than the ruling.**
+D96's "N orders complete in this pass" head figure, and the boot-triggered clear beside it, are
+GONE from the rebuild. That figure was twice amended and hard won: it existed because a lifetime
+total was masquerading as a progress figure on the owner's own store. Nothing here answers its
+argument. It simply has nothing left to attach to — `WalkPass` fetches the plan once and never
+re-reads `GET /orders`, so there is no live comparison between what is open and what this pass
+covers, and completion is now counted per card row rather than per order.
+
+**This document does NOT rule D96 superseded.** A settled decision is an argument, and repealing
+one is the owner's act, not a session's. What is recorded is that the argument is unanswered and
+the mechanism is absent. Two ways out, for the owner: rebuild the figure client-side over the
+orders already in hand and the pass's own recorded map, or rule D96 superseded here and say so in
+an entry. One piece of D96 IS already reversed in the open, by section 8's own words: "leaving the
+walk ends the pass" directly contradicts D96 amended's "a toggle is not the end of a pass," and
+that reversal was the owner's, in the 2026-09-17 interview.
+
+It is named here so it cannot be lost the way a silent revert is lost. `make docs-audit`'s
+`recorded deletions` row and `make revert-guard` both exist because this repository has dropped
+settled work by accident before.
+
+**Two questions the build raised and nobody has answered.** They are design, not defects.
+
+- **Which order a press records against**, when one card at a stop serves more than one buyer.
+  The wire names every order a take serves and does not say how the demand splits between them,
+  so the client picks. Today it takes the first order in `for` still owing by the live ledger
+  figure. That is a rendering-side heuristic standing in for a fact the route could carry.
+- **Whether the stop span should be a proportional bar.** `WalkPlanStop` carries no box total,
+  so the screen draws the honest span numbers rather than fabricating a proportion.
 
 ## 10. What this gives up
 

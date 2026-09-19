@@ -4,7 +4,18 @@ import { settleMotion } from './motionSettled'
 import { sealEveryTest } from './shell'
 import { line, order, payloadOf, pick, place } from './routeFixtures'
 
-import type { OrderRow, OrdersPayload, ResolvedLine, ResolvedOrder } from '../src/types'
+import type {
+  OrderRow,
+  OrdersPayload,
+  ResolvedLine,
+  ResolvedOrder,
+  WalkPlan,
+  WalkPlanCopy,
+  WalkPlanRef,
+  WalkPlanShort,
+  WalkPlanStop,
+  WalkPlanTake,
+} from '../src/types'
 
 /* THE ORDER SCREEN, ASSERTED WHERE NOTHING ELSE CAN SEE IT.
  *
@@ -60,6 +71,67 @@ type Wire = { method: string; path: string; body: unknown }
  * ratchet fixtures) so `copy-budget.spec.ts` can build the same `#/orders` shapes without a
  * second, drifting copy. `ORDER_NUMBER`/`SKU` above still match the values baked into those
  * builders' defaults, which is what keeps every case below reading exactly as it did. */
+
+/* ---- `WalkPlan` fixtures, for `OrdersWalk.tsx`'s own `POST /orders/walk-plan` (§7-8) ---------
+ *
+ * `Orders.tsx`'s client-side `buildWalk` never left the browser, so no case above ever needed a
+ * route for it. `OrdersWalk.tsx` fetches the solver's plan from the server (§8, "no `Re-plan`
+ * control" — one fetch per pass), so a case that presses "Walk N orders" now needs this stubbed
+ * or the request reaches `sealEveryTest`'s own refusal. Shapes echo `pick`/`line`/`order`'s
+ * defaults above so a case can mix the two without two different Volcanions. */
+
+function walkPlanCopy(over: Partial<WalkPlanCopy> = {}): WalkPlanCopy {
+  return { box: 3, index: 21, slot: 17, capture_id: 'cap-a', cid: null, card: 17, label: 'Box 3 · Section 2 · Card 17', neighbors: null, ...over }
+}
+
+function walkPlanTake(over: Partial<WalkPlanTake> = {}): WalkPlanTake {
+  const forRef: WalkPlanRef = { key: `TCGplayer:${ORDER_NUMBER}`, number: ORDER_NUMBER, buyer: 'Ada Lovelace' }
+  return { sku: SKU, name: 'Volcanion', number_display: '025', wanted: 1, for: [forRef], copies: [walkPlanCopy()], ...over }
+}
+
+function walkPlanStop(over: Partial<WalkPlanStop> = {}): WalkPlanStop {
+  return {
+    key: 'box/3/section/2',
+    box: 3,
+    box_name: 'RB Epics',
+    section: 2,
+    section_name: null,
+    pooled: false,
+    game: null,
+    game_display: null,
+    order: 1,
+    span: { start: 12, end: 30 },
+    takes: [walkPlanTake()],
+    ...over,
+  }
+}
+
+/** The whole plan, `counts` derived from `stops` unless overridden. */
+function walkPlanOf(stops: readonly WalkPlanStop[], shortfall: readonly WalkPlanShort[] = []): WalkPlan {
+  const copies = stops.reduce((sum, stop) => sum + stop.takes.reduce((s, take) => s + take.copies.length, 0), 0)
+  return {
+    cost: 'default',
+    stops: [...stops],
+    shortfall: [...shortfall],
+    counts: {
+      stops: stops.length,
+      boxes: new Set(stops.filter((s) => !s.pooled).map((s) => s.box)).size,
+      copies,
+      sections_considered: stops.length,
+      sections_candidate: stops.length,
+      exact: true,
+      solve_ms: 4,
+    },
+  }
+}
+
+/** Answers every `POST /orders/walk-plan` with the same plan — one call per pass (§8), so one
+ *  stub per case is enough. */
+async function stubWalkPlan(page: Page, plan: WalkPlan): Promise<void> {
+  await page.route(/\/orders\/walk-plan$/, async (route) => {
+    await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(plan) })
+  })
+}
 
 /** The default world: one open order, one resolved line, one copy in box 3. */
 function oneOpenOrder(): OrdersPayload {
@@ -625,6 +697,11 @@ test('a copy another line already holds is drawn as spoken for, and is not offer
     ),
   })
 
+  /* RE-AIMED: the free copy is now drawn by the merged `By buyer` walk (`buildWalk` skips
+     `held_by` copies outright), and the held one is only this line's own map, behind the "By
+     order" fold — a real kit `Button` now, closed by default while a walk covers the order
+     (§9's "what is deleted", finding 5). Opening it is what puts both rows on screen at once. */
+  await page.locator('main.orders').getByRole('button', { name: 'By order' }).click()
   const rows = page.locator('.orders-pick')
   await expect(rows).toHaveCount(2)
 
@@ -982,240 +1059,31 @@ test('the two-years control sends the LastTwoYears range', async ({ page }) => {
   expect(sent.range).toBe('LastTwoYears')
 })
 
-/* -------------------------------------------------------------------------------------- 10
+/* -------------------------------------------------------------------------------------- 10-11
  *
- * THE WALK'S SECOND FIGURE, OVER THE ONLY PAIR OF ARRAYS THAT CAN ANSWER IT.
+ * DELETED: `.orders-walk-figure`'s "N unfulfilled orders" head and its "N orders complete in
+ * this pass" pill, and the capture-server-restart clear that reset it. `WalkView`/`buildWalk`'s
+ * own head is gone with the component (`docs/specs/order-walk-plan.md` §9, "`buildWalk`'s
+ * grouping goes"); `OrdersWalk.tsx`'s `WalkPass` fetches the solver's plan ONCE per pass and
+ * never re-reads `/orders` while it runs (§8, "no `Re-plan` control"), so there is no live
+ * `open`-vs-`walkKeys` comparison left to drive a pass-scoped completion count, and no boot
+ * listener to clear one.
  *
- * This case exists because the figure was written the obvious way first and the obvious way is
- * ALWAYS ZERO. `open` is the ledger's answer to "does this still owe copies"
- * (`server/capture_server.py:_order_row`), so an order leaves `open` the instant its last copy is
- * pulled — a count of finished orders taken over `open` can never be anything but 0, and the walk
- * is where that is least visible, because the rows vanish along with it. It was caught by pulling
- * a real copy on the owner's own store and watching the pill stay away, which is a measurement
- * nothing on the commit path can repeat. This is that measurement, made repeatable.
+ * THIS IS FLAGGED, NOT QUIETLY ACCEPTED. The figure was D96's own twice-amended, hard-won
+ * result — a real defect (a lifetime total pretending to be a progress figure) measured on the
+ * owner's own store, fixed twice, and reasoned through the ONE way it can be `true` (a count,
+ * never a fraction; the pass's own frozen set, not `open`; no re-freeze on a mode toggle). None
+ * of that argument is answered here — it just has nothing left to attach to. Reported under
+ * "Input Needed" rather than rebuilt, because building it is a product change this brief's
+ * fence puts out of reach (`OrdersWalk.tsx` may only gain a test hook), and deleting it without
+ * saying so is exactly the "quiet regression" `make docs-audit`'s `recorded deletions` row
+ * exists to catch.
  *
- * BOTH DIRECTIONS ARE ASSERTED. A store with one order finished draws `1 of 2`, and a store with
- * none finished draws no pill at all rather than `0 of 1` — the walk starts in the none-finished
- * state every single time, and a figure that reads zero on arrival is not one anybody acts on. */
-
-test('the walk counts the orders it was started over, and the figure moves as one is finished', async ({
-  page,
-}) => {
-  const SECOND = 'B58DDD-24C44'
-  const secondKey = `TCGplayer:${SECOND}`
-  const secondLine = () => line({ order: SECOND, order_key: secondKey, picks: [pick({ index: 22, capture_id: 'cap-b' })] })
-
-  /* TWO OPEN ORDERS AND ONE THE LEDGER FINISHED BEFORE ANY OF THIS, and the third one is the
-     whole point of the fixture. Without it a frozen denominator and the ledger's lifetime pair
-     agree — two orders, one done, `1 of 2` either way — and this case would pass against the
-     figure it was written to replace. With it they part: the walk is over TWO, and the ledger
-     knows THREE. A store with sales history is the normal case and the one nothing had ever
-     rendered here. It carries no resolution entry, because a finished order has nothing left for
-     the resolver to offer, which is what one really looks like on this wire. */
-  const HISTORY = 'C99EEE-31A77'
-  const history = order({
-    key: `TCGplayer:${HISTORY}`,
-    number: HISTORY,
-    recorded: 1,
-    open: false,
-    progress: [{ sku: SKU, wanted: 1, recorded: 1, outstanding: 0, over: 0, copies: [], at: null, by_hand: 0, reason: null, declared_kind: null, closed_at: null, closed_reason: null }],
-  })
-
-  const both = payloadOf(
-    [order(), order({ key: secondKey, number: SECOND }), history],
-    [
-      { key: `TCGplayer:${ORDER_NUMBER}`, number: ORDER_NUMBER, complete: false, outstanding: 1, lines: [line()] },
-      { key: secondKey, number: SECOND, complete: false, outstanding: 1, lines: [secondLine()] },
-    ],
-  )
-
-  /* AND THE SAME WORLD WITH THE FIRST ONE PULLED. `open` is the ledger's answer to "does this
-     still owe copies", so the moment its last copy is recorded the order LEAVES `open` — which
-     is exactly what the numerator has to survive. */
-  const afterPull = payloadOf(
-    [order({ recorded: 1, open: false }), order({ key: secondKey, number: SECOND }), history],
-    [{ key: secondKey, number: SECOND, complete: false, outstanding: 1, lines: [secondLine()] }],
-  )
-
-  let served = both
-  await open(page, { orders: both })
-  /* Registered after `open`, so it wins: Playwright matches the most recent route first. */
-  await page.route(/\/orders$/, async (route) => {
-    if (route.request().method() !== 'GET') return route.fallback()
-    return route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(served) })
-  })
-
-  await page.locator('main.orders').getByRole('button', { name: 'Walk the boxes' }).click()
-
-  /* NONE FINISHED IS WHERE EVERY WALK STARTS, and a figure that reads 0 on arrival is not one
-     anybody acts on — so there is no pill yet. */
-  await expect(page.locator('.orders-walk-figure')).toContainText('still to pull')
-  await expect(page.locator('.orders-walk-figure .bn-pill')).toHaveCount(0)
-
-  served = afterPull
-  await page.locator('.orders-walk button.orders-pull').first().click()
-
-  /* ONE, OUT OF THE PASS AND NOT OUT OF THE LEDGER. Counted over `open` this reads 0 by
-     construction — the order left `open` the instant its copy was recorded — which is the defect
-     the previous denominator was chosen to avoid. Counted over the ledger's lifetime it would say
-     2, because the third order was finished before any of this began. The set frozen when the walk
-     was entered is what makes it neither, and the third order is what makes those two answers
-     different enough for this line to tell them apart.
-
-     A COUNT AND NOT A FRACTION, deliberately (D96, amended). Orders arrive while you walk, so a
-     pass with everything in it pulled would draw `2 of 2` beside a head still naming work to do —
-     a figure that has reached its own denominator says finished, and no wording rescues that.
-     `complete` and not `fully pulled` because an order reaches `done` by routes this screen never
-     sees: a sale on `#/inventory`, an ingest, another device. */
-  await expect(page.locator('.orders-walk-figure .bn-pill')).toHaveText('1 order complete in this pass')
-
-  /* AND A TOGGLE IS NOT THE END OF THE PASS. `walkKeys` is drawn from `open`, and an order leaves
-     `open` the instant its last copy is recorded — so a set frozen again on re-entry can never
-     contain an order this pass has already finished, and the figure would reset to nothing, zero
-     by construction, which is the same shape as the defect this whole case is about. Measured
-     before the pass was held: the pill was GONE after this round trip. `By order` is a reachable
-     press, not a hypothetical: it is on the toolbar, and `Orders.tsx`'s own order rows use it. */
-  await page.locator('main.orders').getByRole('button', { name: 'By buyer' }).click()
-  await page.locator('main.orders').getByRole('button', { name: 'Walk the boxes' }).click()
-  await expect(page.locator('.orders-walk-figure .bn-pill')).toHaveText('1 order complete in this pass')
-})
-
-/* The other direction, and its own world rather than a second navigation inside the case above:
-   `open` registers this screen's routes on the page it is given, so a case that calls it twice is
-   asserting against whichever handler won, not against the payload it just named. */
-test('the walk draws no finished-order figure before one is finished', async ({ page }) => {
-  await open(page)
-  await page.locator('main.orders').getByRole('button', { name: 'Walk the boxes' }).click()
-
-  await expect(page.locator('.orders-walk-figure')).toContainText('still to pull')
-  await expect(page.locator('.orders-walk-figure .bn-pill')).toHaveCount(0)
-})
-
-
-/* -------------------------------------------------------------------------------------- 11 */
-
-/* A CAPTURE SERVER THAT RESTARTED ENDS THE WALK'S PASS, and this is the only case in the suite that
- * drives the boot header at all.
- *
- * `server.ts:noteBoot` reads `X-Pkmnscan-Boot` off every response: the first non-empty value seeds
- * `lastBoot` silently, and a DIFFERENT one fires every `onServerBoot` listener. Two reads with two
- * ids is the whole mechanism, and no spec had ever served one — so the listener that clears the
- * shipping batch (D73) had never been exercised on purpose either.
- *
- * WHY THE PASS MUST GO. `walkKeys` is the orders the walk was started over. A server that restarted
- * may have taken orders since, so a figure counted against the old set describes a sitting that is
- * over — and unlike a stale batch it is not visibly broken, it is a smaller number that looks fine.
- *
- * THE THIRD ORDER IS NOT DECORATION. With only two, pulling the second leaves nothing open,
- * `buildWalk` returns no rows, and `WalkView` draws its EmptyState BEFORE the head — so the figure
- * would be absent because the whole head is, and the assertion would pass with the clear reverted.
- * Observed doing exactly that. */
-test('a capture server restart ends the walk pass, so the figure stops describing an old sitting', async ({
-  page,
-}) => {
-  const SECOND = 'B58DDD-24C44'
-  const secondKey = `TCGplayer:${SECOND}`
-  const secondLine = () => line({ order: SECOND, order_key: secondKey, picks: [pick({ index: 22, capture_id: 'cap-b' })] })
-  const THIRD = 'D71FFF-52B99'
-  const thirdKey = `TCGplayer:${THIRD}`
-  const thirdLine = () => line({ order: THIRD, order_key: thirdKey, picks: [pick({ index: 23, capture_id: 'cap-c' })] })
-  const thirdResolved = { key: thirdKey, number: THIRD, complete: false, outstanding: 1, lines: [thirdLine()] }
-  /* A FOURTH ORDER, so the walk survives the pull that happens AFTER the restart. `WalkView` returns
-     its EmptyState before the head when `walk.rows` is empty, so a pull leaving nothing open takes
-     `.orders-walk-figure` off the screen — and the new-pass assertion at the end would then be
-     asserting about a head that is not there. Three orders survive the restart; the fourth is what
-     gives the new pass something to be a pass over. */
-  const FOURTH = 'E82AAA-63C11'
-  const fourthKey = `TCGplayer:${FOURTH}`
-  const fourthLine = () => line({ order: FOURTH, order_key: fourthKey, picks: [pick({ index: 24, capture_id: 'cap-e' })] })
-  const fourthResolved = { key: fourthKey, number: FOURTH, complete: false, outstanding: 1, lines: [fourthLine()] }
-
-  const all = payloadOf(
-    [order(), order({ key: secondKey, number: SECOND }), order({ key: thirdKey, number: THIRD }), order({ key: fourthKey, number: FOURTH })],
-    [
-      { key: `TCGplayer:${ORDER_NUMBER}`, number: ORDER_NUMBER, complete: false, outstanding: 1, lines: [line()] },
-      { key: secondKey, number: SECOND, complete: false, outstanding: 1, lines: [secondLine()] },
-      thirdResolved,
-      fourthResolved,
-    ],
-  )
-  const oneDone = payloadOf(
-    [order({ recorded: 1, open: false }), order({ key: secondKey, number: SECOND }), order({ key: thirdKey, number: THIRD }), order({ key: fourthKey, number: FOURTH })],
-    [{ key: secondKey, number: SECOND, complete: false, outstanding: 1, lines: [secondLine()] }, thirdResolved, fourthResolved],
-  )
-  const twoDone = payloadOf(
-    [
-      order({ recorded: 1, open: false }),
-      order({ key: secondKey, number: SECOND, recorded: 1, open: false }),
-      order({ key: thirdKey, number: THIRD }),
-      order({ key: fourthKey, number: FOURTH }),
-    ],
-    [thirdResolved, fourthResolved],
-  )
-  const threeDone = payloadOf(
-    [
-      order({ recorded: 1, open: false }),
-      order({ key: secondKey, number: SECOND, recorded: 1, open: false }),
-      order({ key: thirdKey, number: THIRD, recorded: 1, open: false }),
-      order({ key: fourthKey, number: FOURTH }),
-    ],
-    [fourthResolved],
-  )
-
-  let served = all
-  let boot = 'boot-one'
-  /* THE MOUNT READ CARRIES THE SEED, which is why the id goes through `open` rather than a route
-     registered after it: `noteBoot` says nothing about the first header it sees, so a seed attached
-     later would make the first press of this case the silent one. */
-  await open(page, { orders: () => served, boot: () => boot })
-
-  /* WAIT FOR THE ORDERS, NOT THE SHELL. The freeze reads `open` at the instant the mode flips, so a
-     toggle pressed before `GET /orders` has answered captures an EMPTY set — and every figure after
-     it is 0, which reads exactly like the clear working and made this case flap 1 run in 3. */
-  await expect(page.locator('main.orders')).toContainText('open orders')
-
-  await page.locator('main.orders').getByRole('button', { name: 'Walk the boxes' }).click()
-  await expect(page.locator('.orders-walk button.orders-pull').first()).toBeVisible()
-  served = oneDone
-  await page.locator('.orders-walk button.orders-pull').first().click()
-
-  /* The pass survives a read carrying the SAME id — which is what makes the next assertion about the
-     restart rather than about re-reading at all. */
-  await expect(page.locator('.orders-walk-figure .bn-pill')).toHaveText('1 order complete in this pass')
-
-  /* AND THE SECOND PULL IS WHERE THE RESTART LANDS. A mode toggle is client-side and costs no
-     request, so it can never carry a new id; the read after a PULL is the one that does, and it is
-     the realistic moment — the server went away while the operator was working. */
-  boot = 'boot-two'
-  served = twoDone
-  await page.locator('.orders-walk button.orders-pull').first().click()
-
-  /* THE FIGURE IS ABSENT, NOT ZERO. `walkKeys` is null and a null set draws nothing rather than
-     falling back to a lifetime count. Without the clear this reads `2 orders complete in this pass`:
-     a true count over a sitting that ended, against a server that is no longer the one it started
-     against. The head is still on screen — the third order keeps it there — so the absence is about
-     the pass and not about the walk. */
-  /* THE RESTART WAS NOTICED, asserted POSITIVELY and before anything about the figure. `App.tsx`
-     raises this toast from the same `onServerBoot` the clear hangs off, so it is independent
-     evidence that the listener ran. Without it every assertion below is about an ABSENCE, and an
-     absence has many causes — a case reading only "the pill is gone" passes when it is gone for a
-     reason nobody intended. */
-  await expect(page.getByText('Server restarted')).toBeVisible()
-
-  await expect(page.locator('.orders-walk-figure')).toContainText('still to pull')
-  await expect(page.locator('.orders-walk-figure .bn-pill')).toHaveCount(0)
-
-  /* AND A NEW PASS COUNTS FROM ZERO, which is the positive form of the same claim. The cleared pass
-     is not merely absent: the next walk freezes a fresh set over what is open NOW, and the first
-     order finished inside it reads one. Without this the case proves a figure can vanish and says
-     nothing about the operator getting a working one back. */
-  await page.locator('main.orders').getByRole('button', { name: 'By buyer' }).click()
-  await page.locator('main.orders').getByRole('button', { name: 'Walk the boxes' }).click()
-  await expect(page.locator('.orders-walk button.orders-pull').first()).toBeVisible()
-  served = threeDone
-  await page.locator('.orders-walk button.orders-pull').first().click()
-  await expect(page.locator('.orders-walk-figure .bn-pill')).toHaveText('1 order complete in this pass')
-})
+ * ONE PIECE OF D96 IS SUPERSEDED, NOT LOST: §8's "leaving the walk ends the pass" (the owner's
+ * ruling, 2026-09-17 — tapping `By buyer` IS tapping another screen) directly reverses D96
+ * amended's "a toggle is not the end of a pass, and freezing on every entry made it one." That
+ * reversal is cited and deliberate; the rest of the figure's argument is not.
+ */
 
 
 /* ------------------------------------------------------------------------------------- 12
@@ -1533,7 +1401,10 @@ test('a buyer with two open orders draws one merged walk carrying rows from both
   await expect(page.locator('.orders-buyer-walk')).toContainText('Sunrise')
 
   /* AND THE BY-ORDER FOLD STILL HOLDS EACH ORDER SEPARATELY, so a per-order press (stand-down,
-     close-line, declare-kind, hand-fill) stays reachable. */
+     close-line, declare-kind, hand-fill) stays reachable — RE-AIMED: the fold is a real kit
+     `Button` now and starts closed while a walk covers the buyer (§9's own "what is deleted",
+     finding 5), so it has to be opened before its content is on screen. */
+  await page.locator('main.orders').getByRole('button', { name: 'By order' }).click()
   await expect(page.locator('.orders-buyer-byorder')).toContainText(ORDER_NUMBER)
   await expect(page.locator('.orders-buyer-byorder')).toContainText(SECOND_ORDER)
 })
@@ -2019,9 +1890,15 @@ test('a terminal order that still owes copies, once resolved, draws its lines an
   const resolved: ResolvedOrder = { key: `TCGplayer:${ORDER_NUMBER}`, number: ORDER_NUMBER, complete: false, outstanding: 1, lines: [line()] }
   await open(page, { orders: payloadOf([owing], [resolved]) })
 
+  /* RE-AIMED: this order is walkable (still owing), so the merged `By buyer` walk already
+     covers its one Pull, and `.orders-lines` (inside "By order") hides it in favour of that
+     (`hidePicks`, §9's own fold survives with a NEW default — closed while a walk covers the
+     order). Its lines are still drawn once the fold is opened; the Pull is where the walk put
+     it. */
   await page.locator('main.orders').getByRole('button', { name: 'Done' }).click()
+  await page.locator('main.orders').getByRole('button', { name: 'By order' }).click()
   await expect(page.locator('.orders-lines')).toHaveCount(1)
-  await expect(page.getByRole('button', { name: 'Pull' })).toBeVisible()
+  await expect(page.locator('.orders-buyer-walk').getByRole('button', { name: 'Pull' })).toBeVisible()
 })
 
 /* ------------------------------------------------------------------------------------- 23
@@ -2054,9 +1931,10 @@ function terminalOwingWalkable(over: Partial<OrderRow> = {}): { row: OrderRow; r
   return { row, resolved }
 }
 
-test('the walk includes a terminal-but-owing order once resolved, and counts it in the head figure', async ({
-  page,
-}) => {
+test('the walk includes a terminal-but-owing order once resolved', async ({ page }) => {
+  /* RE-AIMED off "and counts it in the head figure" — the head no longer counts orders (see
+     the deletion note over case 10-11 above); the rule that survives is that a terminal order
+     still owing copies is WALKABLE and gets a real Pull, same as any open one. */
   const term = terminalOwingWalkable()
   await open(page, {
     orders: payloadOf(
@@ -2064,49 +1942,44 @@ test('the walk includes a terminal-but-owing order once resolved, and counts it 
       [{ key: `TCGplayer:${ORDER_NUMBER}`, number: ORDER_NUMBER, complete: false, outstanding: 1, lines: [line()] }, term.resolved],
     ),
   })
+  await stubWalkPlan(
+    page,
+    walkPlanOf([
+      walkPlanStop(),
+      walkPlanStop({
+        key: 'box/5/section/1',
+        box: 5,
+        box_name: 'Box Five',
+        section: 1,
+        span: { start: 1, end: 10 },
+        order: 2,
+        takes: [
+          walkPlanTake({
+            sku: TERM_SKU,
+            name: 'Terminal Treasure',
+            number_display: null,
+            wanted: 1,
+            for: [{ key: TERM_KEY, number: TERM_NUMBER, buyer: 'Nora Terminal' }],
+            copies: [walkPlanCopy({ box: 5, index: 50, slot: 1, capture_id: 'cap-term', card: 1, label: 'Box 5 · Section 1 · Card 1' })],
+          }),
+        ],
+      }),
+    ]),
+  )
   await page.locator('main.orders').getByRole('button', { name: 'Walk the boxes' }).click()
-  await expect(page.locator('.orders-walk-figure')).toContainText('2 unfulfilled orders')
+  await page.locator('.walkplan-select-foot').getByRole('button', { name: /Walk \d+ orders?/ }).click()
   await expect(page.locator('.orders-walk')).toContainText('Terminal Treasure')
   await expect(page.getByRole('button', { name: 'Pull' })).toHaveCount(2)
 })
 
 test('a fully-pulled terminal order (nothing owed) never enters the walk', async ({ page }) => {
+  /* RE-AIMED: `WalkSelect` (§8's own selection step) draws "Nothing to walk" when nothing
+     qualifies, not `WalkView`'s old "Nothing left to walk". */
   const settled = order({ open: false, wanted: 1, recorded: 1, status: 'Shipped', terminal: true })
   await open(page, { orders: payloadOf([settled], []) })
   await page.locator('main.orders').getByRole('button', { name: 'Walk the boxes' }).click()
-  await expect(page.locator('main.orders')).toContainText('Nothing left to walk')
+  await expect(page.locator('main.orders')).toContainText('Nothing to walk')
   await expect(page.getByRole('button', { name: 'Pull' })).toHaveCount(0)
-})
-
-test('a terminal order does not read as complete the instant the pass opens, only once its copy is pulled', async ({
-  page,
-}) => {
-  /* A SECOND, ALWAYS-OPEN ORDER IS NOT DECORATION (same reason as the older "capture server
-     restart" case above): with only the terminal order, pulling its one copy leaves the walk
-     with no rows at all, `WalkView` draws its EmptyState BEFORE the head, and the pill's absence
-     would be indistinguishable from the head being gone entirely. */
-  const term = terminalOwingWalkable()
-  let served = payloadOf(
-    [order(), term.row],
-    [{ key: `TCGplayer:${ORDER_NUMBER}`, number: ORDER_NUMBER, complete: false, outstanding: 1, lines: [line()] }, term.resolved],
-  )
-  await open(page, { orders: served })
-  await page.route(/\/orders$/, async (route) => {
-    if (route.request().method() !== 'GET') return route.fallback()
-    return route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(served) })
-  })
-
-  await page.locator('main.orders').getByRole('button', { name: 'Walk the boxes' }).click()
-  /* NOTHING FINISHED YET — the pass just opened, and the order was terminal from the start. */
-  await expect(page.locator('.orders-walk-figure .bn-pill')).toHaveCount(0)
-
-  /* NOW ITS OWN COPY IS RECORDED, wanted <= recorded, and it drops out of `ownsAWalkableBody`. */
-  served = payloadOf(
-    [order(), { ...term.row, recorded: term.row.wanted }],
-    [{ key: `TCGplayer:${ORDER_NUMBER}`, number: ORDER_NUMBER, complete: false, outstanding: 1, lines: [line()] }],
-  )
-  await page.locator('.orders-walk li', { hasText: 'Terminal Treasure' }).getByRole('button', { name: 'Pull' }).click()
-  await expect(page.locator('.orders-walk-figure .bn-pill')).toHaveText('1 order complete in this pass')
 })
 
 test('a terminal order sharing a buyer with nothing else draws exactly one Pull per copy, never two', async ({
@@ -2386,81 +2259,84 @@ test('the sentence changing on a write moves no box row beneath it (D118)', asyn
   expect(Math.abs(gapAfter - gapBefore), 'the box list moved relative to the sentence above it').toBeLessThan(0.34)
 })
 
-/* A REAL PRESS, NOT A RELOAD (item 2 of the D212 follow-up): `WalkCards`' own sentence and
- * `WalkGroups`' box header both change wording on a successful `Pull` — "Pull 2" to "Pull 1",
- * "2 copies of 1 card" to "1 card" — and `.orders-map-lede`'s reused `min-height` (D118) is the
- * only thing standing between that and a reflow. Two copies of ONE card sit in ONE box so the
- * pull leaves the group open (one row remains) rather than unmounting it, which is what makes
- * this a same-group text change rather than the whole-group removal `inventory.spec.ts` already
- * covers for a sale. */
-test('a real Pull press changes the lede and the box header without changing either one’s height (D118)', async ({
-  page,
-}) => {
-  const progressOf = (recorded: number) => [
-    { sku: SKU, wanted: 2, recorded, outstanding: 2 - recorded, over: 0, copies: [], at: null, by_hand: 0, reason: null, declared_kind: null, closed_at: null, closed_reason: null },
-  ]
-  const twoOfOne = (recorded: number) =>
-    line({
-      wanted: 2,
-      fulfilled: 0,
-      outstanding: 2 - recorded,
-      on_hand: 2,
-      picks: [
-        ...(recorded >= 1 ? [] : [pick({ capture_id: 'cap-a' })]),
-        pick({
-          capture_id: 'cap-b',
-          index: 22,
-          place: place({ index: 22, slot: 18, card: 18, label: 'Box 3 · Section 2 · Card 18' }),
-        }),
-      ],
-    })
-  const payloadAt = (recorded: number) =>
-    payloadOf(
-      [order({ wanted: 2, recorded, progress: progressOf(recorded) })],
-      [{ key: `TCGplayer:${ORDER_NUMBER}`, number: ORDER_NUMBER, complete: false, outstanding: 2 - recorded, lines: [twoOfOne(recorded)] }],
-    )
-
-  let recorded = 0
+/* A REAL PRESS, NOT A RELOAD (item 2 of the D212 follow-up), REWRITTEN AGAINST `OrdersWalk.tsx`'s
+ * OWN MARKUP: `WalkCards` and `WalkGroups`' box header are both deleted (§9) along with the
+ * text they carried, but the rule they existed to prove is D118 itself and it still governs
+ * this screen — a press changes what is ON SCREEN and never where the REST of it is. The
+ * take's own counter (`0 of 2 taken` -> `1 of 2 taken`) is now the text that changes on a
+ * successful Pull, and its own row is what must not move for it. Two copies of ONE take at ONE
+ * stop, so the pull leaves the row open (still short of `wanted`) rather than collapsing it —
+ * the same "same-block text change, not a whole-block removal" shape the old case asserted. */
+test('a real Pull press changes the take counter without changing its height (D118)', async ({ page }) => {
   await open(page, {
-    orders: () => payloadAt(recorded),
+    orders: oneOpenOrder(),
     pull: { undone: false, order_key: `TCGplayer:${ORDER_NUMBER}`, sku: SKU, newly: 1, recorded: 1, outstanding: 1, places: [], sales: [] },
   })
+  await stubWalkPlan(
+    page,
+    walkPlanOf([
+      walkPlanStop({
+        takes: [
+          walkPlanTake({
+            wanted: 2,
+            copies: [walkPlanCopy({ capture_id: 'cap-a' }), walkPlanCopy({ capture_id: 'cap-b', index: 22, slot: 18, card: 18, label: 'Box 3 · Section 2 · Card 18' })],
+          }),
+        ],
+      }),
+    ]),
+  )
   await page.locator('main.orders').getByRole('button', { name: 'Walk the boxes' }).click()
+  await page.locator('.walkplan-select-foot').getByRole('button', { name: /Walk \d+ orders?/ }).click()
 
-  const lede = page.locator('.orders-walk-cards .orders-map-lede').first()
-  const header = page.locator('.orders-walk-group-count').first()
-  await expect(lede).toContainText('Pull 2')
-  await expect(header).toHaveText('2 copies of 1 card')
+  const counter = page.locator('.walkplan-take-counter').first()
+  const takeName = page.locator('.walkplan-take-name').first()
+  await expect(counter).toContainText('0 of 2 taken')
   await settleFonts(page)
   await settleMotion(page)
-  const ledeHeightBefore = (await lede.boundingBox())?.height ?? 0
-  const headerHeightBefore = (await header.boundingBox())?.height ?? 0
-  const ledeXBefore = (await lede.boundingBox())?.x ?? 0
+  const counterBoxBefore = await counter.boundingBox()
+  const counterHeightBefore = counterBoxBefore?.height ?? 0
+  const counterRightBefore = (counterBoxBefore?.x ?? 0) + (counterBoxBefore?.width ?? 0)
+  const nameBoxBefore = await takeName.boundingBox()
 
-  recorded = 1
-  await page.locator('.orders-walk-group .orders-pick').first().locator('button.orders-pull').click()
+  await page.locator('.walkplan-copy').first().locator('button.walkplan-pull').click()
 
-  await expect(lede).toContainText('Pull 1')
-  await expect(header).toHaveText('1 card')
+  await expect(counter).toContainText('1 of 2 taken')
   await settleFonts(page)
   await settleMotion(page)
-  const ledeHeightAfter = (await lede.boundingBox())?.height ?? 0
-  const headerHeightAfter = (await header.boundingBox())?.height ?? 0
-  const ledeXAfter = (await lede.boundingBox())?.x ?? 0
+  const counterBoxAfter = await counter.boundingBox()
+  const counterHeightAfter = counterBoxAfter?.height ?? 0
+  const counterRightAfter = (counterBoxAfter?.x ?? 0) + (counterBoxAfter?.width ?? 0)
+  const nameBoxAfter = await takeName.boundingBox()
 
-  /* HEIGHT, NOT PAGE POSITION — `WalkCards` sits above the box group, so pulling its ONLY other
-     copy also unmounts the sibling row beneath it (D113's own reason the group note reads
-     differently once a line closes) and the group is free to shrink; that is real content
-     leaving, not the reflow this case is about. What has to hold, on the SAME single-line
-     sentence and the SAME single-line header, is that neither one grew or shrank a pixel from
-     changing what it says — the min-height reservation `.orders-map-lede` already carries. */
-  /* RAW, FOR THE REASON THE CASE ABOVE CARRIES IN FULL: rounding a sub-pixel measurement hides
-     up to a whole pixel of real movement and fails on a fifth of one that straddles a boundary.
-     Same third-of-a-pixel bound, same direction of travel — tighter than the rounding it
-     replaces, not looser. */
-  expect(Math.abs(ledeHeightAfter - ledeHeightBefore), 'the lede changed height across the press').toBeLessThan(0.34)
-  expect(Math.abs(headerHeightAfter - headerHeightBefore), 'the box header changed height across the press').toBeLessThan(0.34)
-  expect(Math.abs(ledeXAfter - ledeXBefore), 'the lede moved horizontally, so something beside it changed shape').toBeLessThan(0.34)
+  /* HEIGHT, NOT PAGE POSITION — the SECOND copy is still there, `Taken` rather than removed
+     (D118's own rule for a row: disabled, not gone), so nothing beneath the counter unmounts.
+     What has to hold, on the SAME single-line counter, is that it neither grew nor shrank a
+     pixel from changing what it says. RAW, for the reason the case this replaces carried in
+     full: rounding a sub-pixel measurement hides up to a whole pixel of real movement. */
+  expect(Math.abs(counterHeightAfter - counterHeightBefore), 'the counter changed height across the press').toBeLessThan(0.34)
+
+  /* THE COUNTER'S OWN LEFT EDGE IS NOT THE RIGHT SUBJECT (CI evidence below). `margin-left:
+     auto` anchors the counter's RIGHT edge to the row's own right edge; its LEFT edge is
+     `row-right - own-width`, and `own-width` is a measurement of the very text D118 entitles
+     the press to change (`0 of 2 taken` -> `1 of 2 taken`). Asserting the left edge therefore
+     asserts that the counter's own changing text rendered at an identical width on two
+     different strings — a claim about font-rasterization precision, not about D118.
+     MEASURED, not guessed: `inter-latin.woff2`'s `tnum` substitutes (`zero.tf`, `one.tf`, …)
+     are all exactly 1328 font units wide, so the design-time advance is equal, and this rig's
+     DOM measurement of both strings agrees to the pixel (0.000px apart, `getBoundingClientRect`,
+     Chromium 1.58.0). Canvas-measured WITHOUT `font-variant-numeric` the same two strings
+     differ by 2.69px, so the feature is doing real work here — it is a rig-dependent rendering
+     guarantee (glyph shaping/hinting), not a CSS layout fact, and CI's shard-2 failure (run
+     35418072547: height held, X moved by exactly 1px, nothing else in the DOM changed size —
+     confirmed by instrumenting `document.documentElement.scrollHeight`/`clientWidth` across
+     the press, both constant) is consistent with that precision differing by a device pixel on
+     Linux's text stack. What D118 actually requires is that NOTHING BESIDE the counter moved:
+     the row's own right edge (what `margin-left: auto` is anchored to, independent of the
+     counter's own width) and the take's name, both outside the text the press is allowed to
+     change. */
+  expect(Math.abs(counterRightAfter - counterRightBefore), 'the row narrowed or widened around the counter').toBeLessThan(0.34)
+  expect(Math.abs((nameBoxAfter?.x ?? 0) - (nameBoxBefore?.x ?? 0)), 'the take name moved').toBeLessThan(0.34)
+  expect(Math.abs((nameBoxAfter?.y ?? 0) - (nameBoxBefore?.y ?? 0)), 'the take name moved').toBeLessThan(0.34)
 })
 
 /* -------------------------------------------------------------------------------------- walk plan */
@@ -2501,6 +2377,11 @@ function twoCardOrder(): { row: OrderRow; resolved: ResolvedOrder } {
 }
 
 test('a single-line order gets a walk plan when it spans more than one box', async ({ page }) => {
+  /* RE-AIMED against the deleted `.orders-plan`/`buildWalkPlan` (§9: "replaced, not extended
+   * ... nothing of its shape survives"). That was an automatic, no-click preview under a
+   * single-line order; the owner's ruling moved this job wholesale onto the solver's own plan,
+   * reached through `Walk the boxes` rather than drawn inline. The claim that survives —
+   * copies spread across boxes become that many stops — is asserted there instead. */
   const oneLine = line({
     sku: '9038408',
     on_hand: 2,
@@ -2522,9 +2403,26 @@ test('a single-line order gets a walk plan when it spans more than one box', asy
       [{ key: `TCGplayer:${ORDER_NUMBER}`, number: ORDER_NUMBER, complete: false, outstanding: 2, lines: [oneLine] }],
     ),
   })
+  await stubWalkPlan(
+    page,
+    walkPlanOf([
+      walkPlanStop({ takes: [walkPlanTake({ sku: '9038408', name: 'Volcanion', wanted: 1, copies: [walkPlanCopy({ capture_id: 'cap-a' })] })] }),
+      walkPlanStop({
+        key: 'box/5/section/1',
+        box: 5,
+        box_name: 'Mixed Singles',
+        section: 1,
+        span: { start: 1, end: 20 },
+        order: 2,
+        takes: [walkPlanTake({ sku: '9038408', name: 'Volcanion', wanted: 1, copies: [walkPlanCopy({ box: 5, index: 9, slot: 3, capture_id: 'cap-b', card: 3, label: 'Box 5 · Section 1 · Card 3' })] })],
+      }),
+    ]),
+  )
+  await page.locator('main.orders').getByRole('button', { name: 'Walk the boxes' }).click()
+  await page.locator('.walkplan-select-foot').getByRole('button', { name: /Walk \d+ orders?/ }).click()
 
-  await expect(page.locator('.orders-plan')).toHaveCount(1)
-  await expect(page.locator('.orders-plan')).toContainText('2 boxes')
+  await expect(page.locator('.walkplan-figure')).toContainText('2 drawers')
+  await expect(page.locator('.walkplan-stop')).toHaveCount(2)
 })
 
 test('one line, one copy, one box draws no walk plan — the row beneath it already says it', async ({ page }) => {
@@ -2535,17 +2433,41 @@ test('one line, one copy, one box draws no walk plan — the row beneath it alre
 test('each stop names the cards in it, by how many sit THERE, not by how many the order wants', async ({
   page,
 }) => {
+  /* RE-AIMED onto `WalkPlanTake.wanted`, which is "how many to take AT THIS STOP" by its own
+   * doc comment (`types.ts`) — the same per-stop rule `.orders-plan-stop` used to carry, on
+   * the solver's own wire field rather than a client-derived count. */
   const { row, resolved } = twoCardOrder()
   await open(page, { orders: payloadOf([row], [resolved]) })
+  await stubWalkPlan(
+    page,
+    walkPlanOf([
+      walkPlanStop({
+        takes: [
+          walkPlanTake({ sku: '9038408', name: 'Akshan, Mischievous', number_display: null, wanted: 2, copies: [walkPlanCopy({ capture_id: 'ak-1' }), walkPlanCopy({ capture_id: 'ak-2', index: 22, slot: 18, card: 18, label: 'Box 3 · Section 2 · Card 18' })] }),
+        ],
+      }),
+      walkPlanStop({
+        key: 'box/5/section/1',
+        box: 5,
+        box_name: 'Mixed Singles',
+        section: 1,
+        span: { start: 1, end: 20 },
+        order: 2,
+        takes: [walkPlanTake({ sku: '9038409', name: 'Yasuo, Unforgiven', number_display: null, wanted: 1, copies: [walkPlanCopy({ box: 5, index: 9, slot: 3, capture_id: 'ya-1', card: 3, label: 'Box 5 · Section 1 · Card 3' })] })],
+      }),
+    ]),
+  )
+  await page.locator('main.orders').getByRole('button', { name: 'Walk the boxes' }).click()
+  await page.locator('.walkplan-select-foot').getByRole('button', { name: /Walk \d+ orders?/ }).click()
 
-  const stops = page.locator('.orders-plan-stop')
+  const stops = page.locator('.walkplan-stop')
   await expect(stops).toHaveCount(2)
   /* Box 3 holds two of Akshan and none of Yasuo; Box 5 holds one of Yasuo. The count is per
-     stop, never the order's own quantity — the order wants 2 Akshan and this stop happens to
-     hold exactly that many, which is the case the wording could be misread on if it leaked the
-     order's own figure instead of the stop's. */
-  await expect(stops.nth(0)).toContainText('2 of Akshan, Mischievous')
-  await expect(stops.nth(1)).toContainText('1 of Yasuo, Unforgiven')
+     stop, never the order's own quantity. */
+  await expect(stops.nth(0)).toContainText('Akshan, Mischievous')
+  await expect(stops.nth(0).locator('.walkplan-take-counter')).toContainText('of 2 taken')
+  await expect(stops.nth(1)).toContainText('Yasuo, Unforgiven')
+  await expect(stops.nth(1).locator('.walkplan-take-counter')).toContainText('of 1 taken')
 })
 
 /* THE WALK GROUP HEADER, THE OTHER HALF OF THE OWNER'S 2026-09-17 REPORT: a box holding several
@@ -2582,7 +2504,27 @@ test('a box with two different cards, one copy each, still reads as plain cards 
       [{ key: `TCGplayer:${ORDER_NUMBER}`, number: ORDER_NUMBER, complete: false, outstanding: 2, lines: [akshan, yasuo] }],
     ),
   })
+  await stubWalkPlan(
+    page,
+    walkPlanOf([
+      walkPlanStop({
+        takes: [
+          walkPlanTake({ sku: '9038408', name: 'Akshan, Mischievous', number_display: null, wanted: 1, copies: [walkPlanCopy({ capture_id: 'ak-1' })] }),
+          walkPlanTake({ sku: '9038409', name: 'Yasuo, Unforgiven', number_display: null, wanted: 1, copies: [walkPlanCopy({ capture_id: 'ya-1', index: 2, slot: 2, card: 2, label: 'Box 3 · Section 1 · Card 2' })] }),
+        ],
+      }),
+    ]),
+  )
   await page.locator('main.orders').getByRole('button', { name: 'Walk the boxes' }).click()
+  await page.locator('.walkplan-select-foot').getByRole('button', { name: /Walk \d+ orders?/ }).click()
 
-  await expect(page.locator('.orders-walk-group-count').first()).toHaveText('2 cards')
+  /* RE-AIMED: `WalkGroups`' own "N cards" vs "N copies of M cards" header is deleted with it
+   * (§9) — the new stop draws every card as its own `.walkplan-take`, by name, so two
+   * DIFFERENT cards can never be misread as copies of one; that is now structural rather than
+   * a wording choice. The claim that survives is the one the old header protected: a box with
+   * two different cards draws two distinct takes, not one combined line. */
+  await expect(page.locator('.walkplan-stop-instruction')).toContainText('Take 2')
+  await expect(page.locator('.walkplan-take')).toHaveCount(2)
+  await expect(page.locator('.walkplan-take-name').nth(0)).toHaveText('Akshan, Mischievous')
+  await expect(page.locator('.walkplan-take-name').nth(1)).toHaveText('Yasuo, Unforgiven')
 })

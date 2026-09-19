@@ -893,8 +893,9 @@ adopting some and deferring others (D99 sits where it does because main took D90
   into `make up`.
 - `docs/specs/store-scaling.md` — BUILT 2026-09-13, all eight items, three phases.
 - `docs/specs/order-walk-plan.md` — the ticked-order walk as the fewest drawers to open.
-  The SOLVER is BUILT (`pipeline/walkplan.py`, T11). The route (its section 7) and the screen
-  (section 8) are NOT BUILT.
+  The SOLVER is BUILT (`pipeline/walkplan.py`, T11). The route is BUILT (`POST
+  /orders/walk-plan`, its section 7 — `server/capture_server.py:do_order_walk_plan`,
+  `app/src/server.ts:walkPlan`). The screen (section 8) is NOT BUILT.
 - `docs/specs/stable-card-id.md` — SPECIFIED, NOT BUILT (D172). No store carries `cards.cid`
   yet. The measurement — 2,535 of 2,535 digests match — is real.
 - `docs/specs/capture-app.md` — step 7. 7a and 7b are both built. Gate B ran them 2026-08-22.
