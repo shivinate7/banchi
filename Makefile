@@ -181,7 +181,9 @@ help:
 	@echo "                    Leaves the verdict in .serve/design-check.json — read that,"
 	@echo "                    never a \`tail\` pipe, which buffers the whole run."
 	@echo "                    PW_ARGS=<flags> reaches Playwright itself (--shard, one spec);"
-	@echo "                    ARGS never does. CI shards it three ways this way (D136)."
+	@echo "                    ARGS never does. CI shards it six ways, two workers each (D136,"
+	@echo "                    amended 2026-09-19), and narrows the spec list on a partial"
+	@echo "                    pull request (scripts/browser-scope.py specs)."
 	@echo "  make design-check-quiet  the same run without the per-test progress stream."
 	@echo
 	@echo "  make demo         seed a demo store and record the wire into a fixture bundle."
@@ -1208,13 +1210,18 @@ screenshot:
 # `ARGS` REACHES THE LOCK AND `PW_ARGS` REACHES PLAYWRIGHT, and the two are kept apart by the
 # `--` on each side (D136). Until 2026-09-11 nothing here could hand Playwright a flag at all,
 # and the one that mattered was `--shard`: `.github/workflows/check.yml` runs this suite as
-# three shards on three 2-vCPU runners — `PW_ARGS="--shard=1/3 --workers=1"` — because one
-# runner ran all 481 cases on ONE worker in 15 minutes, against 89-175s for the rig's seven.
-# Sharding splits the CASES and leaves the worker count alone, which is the half that matters:
-# docs/DEBTS.md section 8 measured a one-in-thirteen red whose only known mechanism is "the
-# suite around it", and more workers on one box is more suite around it. On the rig `PW_ARGS`
-# is for a session that wants one spec — `PW_ARGS=tests/brand.spec.ts` — and nothing else.
-# Each shard leaves its own `.serve/design-check.json`; on a runner that is one file per job.
+# SIX shards on 4-vCPU runners — `PW_ARGS="--shard=1/6 --workers=2"` — widened from three
+# shards of one worker on the owner's word, 2026-09-19 (D136 amended, see
+# `docs/decisions/D-browser-spec-allow-list.md`): the original one-worker figure argued from
+# "ubuntu-latest is 2 vCPU on a private repo", which went false when the repo went public on
+# 2026-09-11 — the runner is 4 vCPU / 15GB (measured on run 35420998424). Two workers per
+# 4-vCPU runner keeps D136's one-worker-per-two-cores ratio; docs/DEBTS.md section 8's
+# one-in-thirteen red is still the reason the ratio is not raised further. A PARTIAL run also
+# narrows which spec FILES a shard even loads — `scripts/browser-scope.py specs` derives that
+# list from the branch's diff (`the browser-scope entry in docs/DECISIONS.md`), never a
+# hand-typed one, and fails open to every spec. On the rig `PW_ARGS` is for a session that
+# wants one spec — `PW_ARGS=tests/brand.spec.ts` — and nothing else. Each shard leaves its own
+# `.serve/design-check.json`; on a runner that is one file per job.
 design-check:
 	$(NPM_GUARD)
 	@rm -f .serve/design-check.json
