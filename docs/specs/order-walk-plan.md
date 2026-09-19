@@ -537,12 +537,17 @@ that feedback has arrived is working against an explicit hold. What it might bec
 so the ask is cheap: slot only for a copy in this drawer, slot plus box name for one elsewhere,
 the section's name never on a row.
 
-**Which order a press banks to is SETTLED, by D212, and is not a question.** No order claims a
-copy. The press names an order still owing by the pass's own tally, `record_pull` refuses a full
-line, the row marks itself on refusal. There is nothing for the wire to carry and nothing for
-the operator to choose. §9a's open question on this is CLOSED here. It was put to the owner
-three times on 2026-09-19 after D212 had already answered it, and the owner's last word was that
-the question itself was misconstrued. Do not raise it again.
+**Which order a press banks to — what is fact, what is built, and what the owner actually
+said.** FACT, D212: no order claims a copy; the write is the only refusal. BUILT: the press names
+the first order in the take's `for` that this pass's own tally has not filled, `record_pull`
+refuses a full line, the row marks itself on refusal; nothing on the wire carries a split. THE
+OWNER: asked three times on 2026-09-19 — once as "decide at Start / keep live / ask at the
+press", once after D212 was read, once more as "is the heuristic the answer" — the owner
+selected no option and said the question itself was misconstrued and they were tired of it. That
+is not a ruling that the heuristic is right, and it is not a ruling that the topic is closed for
+ever. It is a rejection of the question AS FRAMED. A session that wants to change this behaviour
+should first say what the previous framing got wrong, in one sentence, and should not put the
+same three options to the owner again.
 
 ### The shortfall block
 
@@ -676,10 +681,10 @@ settled work by accident before.
 
 **Two questions the build raised and nobody has answered.** They are design, not defects.
 
-- **Which order a press records against** — CLOSED 2026-09-19 under D212, see §8 "The stop,
-  rebuilt". Kept here only so the closure is findable: every copy is fungible, no order claims
-  one, the press names an owing order by the pass's own tally and the write refuses. Not a
-  question.
+- **Which order a press records against** — see §8 "The stop, rebuilt" for what is fact
+  (D212), what is built (the pass-tally heuristic), and what the owner said on 2026-09-19 when
+  asked three times: that the question as framed was misconstrued. No ruling on the heuristic
+  was given. Not closed; not to be re-asked in the same shape.
 - **Whether the stop span should be a proportional bar.** `WalkPlanStop` carries no box total,
   so the screen draws the honest span numbers rather than fabricating a proportion.
 
