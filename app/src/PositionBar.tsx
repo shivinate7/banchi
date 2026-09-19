@@ -58,6 +58,13 @@ export type PositionBarProps = {
    *  ruler too, which is what `docs/DESIGN.md` has claimed since it was written and the old
    *  `spans.length > 1` gate always prevented. */
   sectionDepth?: boolean
+
+  /** Defaults to `true`, which is byte-identical to every caller before this prop existed. Set
+   *  `false` only where the box's own denominator is not "still filling" — the walk, mid-pull
+   *  (`docs/specs/order-walk-plan.md` §8's "The stop, rebuilt" ruling, owner, 2026-09-19: the
+   *  copy's bar reads `#8 of 34`, never `#8 of 34 so far`). `#/capture` and `#/inventory` never
+   *  pass it. */
+  soFar?: boolean
 }
 
 export function PositionBar({
@@ -65,9 +72,10 @@ export function PositionBar({
   persona = 'owner',
   sections,
   sectionDepth = false,
+  soFar = true,
 }: PositionBarProps) {
   const spans = spansOf(place, sections)
-  const sentence = sentenceOf(place, persona)
+  const sentence = sentenceOf(place, persona, soFar)
   /* TWO SEPARATE FACTS, AND THE SECOND ONE DOES NOT DECIDE THE SHAPE. `sectionDepth` says the
      ruler is drawn; `depth` says what can be painted in it. The old single expression folded
      them together and took 44px out of the row in every state the arithmetic declined to
