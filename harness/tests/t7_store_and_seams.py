@@ -5690,14 +5690,14 @@ def check_mark_sold(checks: Checks) -> None:
 
 
 def check_mark_sold_releases_ledger(checks: Checks) -> None:
-    """The sale undo's ledger half — `docs/specs/undo.md` §4, its sharpest finding.
+    """The sale undo's ledger half — `docs/specs/undo.md` §4.
 
-    THE DIVERGENCE THIS CLOSES, IN ONE WALK: pull a copy for an order (the ledger records it
-    against a line), mark it sold from `#/inventory`, then reverse the sale from the SAME
-    place. Before this fix, `do_mark_sold` never consulted `Ledger.holder_of` — the card went
-    back on the shelf as `identified`, live and offered to the next buyer, while the order's
-    line still counted that copy fulfilled. That is the double-shipment `record_pull`'s
-    `capture_id` requirement exists to prevent, reached from the other end.
+    THE INVARIANT, IN ONE WALK: pull a copy for an order (the ledger records it against a
+    line), mark it sold from `#/inventory`, then reverse the sale from the SAME place. The
+    reversal must release that ledger line in the same write, or the card is back on the
+    shelf as `identified`, live and offered to the next buyer, while the order's line still
+    counts that copy fulfilled — the double-shipment `record_pull`'s `capture_id`
+    requirement exists to prevent, reached from the other end.
 
     A MUTATION-TESTED GUARD ONLY IF IT CAN GO RED ON THAT EXACT BUG. Comment out the
     `holder`/`forget_pull` block in `do_mark_sold` (or move it into `_sell`, which would
