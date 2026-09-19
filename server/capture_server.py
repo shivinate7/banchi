@@ -8002,7 +8002,7 @@ def do_mark_sold(box: int, index: int, payload: dict) -> dict:
     exact the first time a check changes.
 
     THE UNDO DIRECTION ALSO REVERSES THE LEDGER, WHERE THE LEDGER HOLDS THE COPY —
-    `docs/specs/undo.md` §4, the sharpest finding in that file. `do_order_pull` is the other
+    `docs/specs/undo.md` §4. `do_order_pull` is the other
     caller of `_sell`, and it already reverses `Ledger.holder_of` itself before calling
     `_sell`, inside its own `Store.write()` — so `_sell`'s own body must never touch the
     ledger, or a pull's undo would reverse it twice. This route is the ONLY OTHER caller,

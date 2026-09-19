@@ -873,9 +873,7 @@ adopting some and deferring others (D99 sits where it does because main took D90
 - `docs/specs/stale-listings.md` — SPECIFIED and BUILT, NOT VALIDATED. No file has ever
   reached TCGplayer.
 - `docs/specs/undo.md` — BUILT 2026-09-17, all four sections. Undo as one concept: two
-  mechanisms by ruling, no clock anywhere, and one LIVE DIVERGENCE the file records under
-  `What it writes` — the sale undo does not consult `holder_of`. Read it before touching a
-  reversal.
+  mechanisms by ruling, and no clock is a limit anywhere. Read it before touching a reversal.
 - `docs/specs/corpus-pruning.md` — RECORDED, NOT BUILT (D177). Pruning may never be
   automatic; 430 answers examined, 0 safe to auto-prune.
 - `docs/specs/batch-script.md` — the four commands, storage, routing, pricing. Built.
