@@ -310,11 +310,22 @@ prevent. On the owner's store today it has never fired.
 
 ### Selecting
 
-The buyer list gains a tick per walkable order and one `Walk N orders` button. The default
-tick is every currently open order — the set `Walk the boxes` already flattens — so the
-default press is the same press it is today. The plan covers exactly the ticked set, and the
-head says so in the operator's units: **"Six drawers. Forty-one cards."** Not sections, not
-boxes, not SKUs.
+**SUPERSEDED 2026-09-18 by the owner, after looking at the built screen. The replacement is
+section 12. Read that, not this paragraph.** What this paragraph specified — a second list,
+behind a mode tab, with a tick per row — was built exactly and is wrong. The owner's words:
+*"I imagined an integrated screen, no separate tabs for By Buyer and Walk the boxes, just an
+order screen, and in that screen I can be seeing the buyers and if I want tick next to their
+names and then 'start the walk' rather than clicking a new tab, then operate a UI, then click
+start."*
+
+The original text, kept because section 12 is an argument against it: the buyer list gains a
+tick per walkable order and one `Walk N orders` button. The default tick is every currently
+open order, so the default press is the same press it is today. The plan covers exactly the
+ticked set, and the head says so in the operator's units: **"Six drawers. Forty-one cards."**
+Not sections, not boxes, not SKUs.
+
+**The head's sentence survives section 12 unchanged.** It is the one part of this paragraph the
+owner did not overturn.
 
 ### A stop
 
@@ -597,3 +608,91 @@ settled work by accident before.
 - **Sections stop fragmenting.** The whole objective assumes sections are finer than boxes. On
   this store they are — 50 sections over 5 boxes — and a store that stops sectioning makes the
   cost function equal to counting boxes.
+
+## 12. One screen, and the list that is already there
+
+**Ruled by the owner on 2026-09-18, looking at the built screen.** This section replaces
+section 8's "Selecting" and makes finding 5 in section 9a moot rather than fixed. It is the
+next piece of work and nothing in sections 1 to 7 changes.
+
+### What is wrong with what was built
+
+Three presses stand between the operator and a drawer: click a tab they were not on, work a
+list they have never seen, press start. The middle list is a SECOND list of the same orders,
+with none of the controls the first one has — no search, no status chips, no sort, no tick all,
+no untick all. Everything arrives ticked. On the owner's store that is 275 rows.
+
+**The second list should not be narrowed. It should not exist.** The screen already draws a
+list of these orders, with every control, and the operator is already reading it. That list is
+the selection.
+
+### The shape
+
+`#/orders` takes `#/inventory`'s frame. That frame is `.browse-body` in `app/src/BoxBrowse.css`:
+
+```
+grid-template-columns: 300px minmax(0, 1fr);     /* the rail, then the work */
+[data-rail='collapsed']  52px  minmax(0, 1fr)
+<= 1100px-ish            268px minmax(0, 1fr)
+phone                    minmax(0, 1fr)          /* one column, stacked */
+```
+
+- **The left column is the orders**, the list that exists today, with every control it has
+  today, and a tick per walkable row.
+- **The main column is the walk**, the stops and their cards.
+- **No mode strip and no `PullMode`.** `By buyer` and `Walk the boxes` stop being two modes of
+  one screen and become one screen. The strip at `app/src/Orders.tsx:3127` goes, and so does
+  `PullMode` in `app/src/OrdersHubStore.ts:21` and both branches on `mode === 'walk'` at
+  `Orders.tsx:3156` and `:3256`.
+- **`WalkSelect` in `app/src/OrdersWalk.tsx` is DELETED**, not improved. It is the second list.
+- **One press starts the walk**, from the list the operator was already reading.
+
+### What this settles, and what it does not
+
+**Settled.** The filters and the search are the ones already on the screen, because there is
+only one list now. A filter narrows what the press covers, because the list and the selection
+are the same thing — the question section 9a raised about that answers itself here.
+
+**NOT settled, and needing the owner before anyone builds:**
+
+1. **Does the tick survive a filter that hides the row?** Tick a buyer, then filter to `Short`
+   and they vanish from view. Are they still in the walk. Saying yes means the press covers
+   rows nobody can see; saying no means a filter silently unticks. Neither is obviously right.
+2. **What does the left column do DURING a pass?** Section 8 rules that leaving `#/orders` ends
+   the pass and that nothing re-ranks inside one. A list that keeps filtering and re-sorting
+   beside a frozen walk is two clocks on one screen.
+3. **Does the default stay every open order ticked?** It was deliberate, so the first press
+   matched the press before the walk existed. That argument is weaker now that the press starts
+   from the list itself.
+
+### Sequencing
+
+1. Answer the three questions above. All three change the build and none is mine to answer.
+2. Build the frame and move the list into it. This is the whole of the layout change and it
+   touches `Orders.tsx`, `OrdersWalk.tsx`, their sheets and `OrdersHubStore.ts`.
+3. Delete `WalkSelect`, the mode strip and `PullMode` in the same change. A half-removed mode is
+   worse than either state.
+4. Findings 1 through 4 in section 9a, deferred behind this on the owner's word. They are the
+   ROW read with a hand already in a drawer. This section is about reaching a drawer at all.
+
+### What the next session must not repeat
+
+**`make check` DOES NOT RUN THE BROWSER SUITE.** `make design-check` is deliberately outside it
+(DEBT16). The agent that built section 8's screen ran `make check`, got exit 0, and reported the
+screen verified. Thirteen tests in `app/tests/orders.spec.ts` were red on CI, all of them
+asserting the walk section 9 had deleted. Run `make design-check` before claiming a screen
+works, and check the verdict's own `counts.total` — a `PW_ARGS` `--grep` containing spaces
+silently becomes a file filter and runs other tests green.
+
+**The suite is the only thing that reads these screens, and it asserts the OLD walk in places.**
+Removing the mode strip will break tests that click it. Rewrite them against the rule they were
+protecting, re-aim them if the subject moved, and delete only with the claim named — section 9a
+records what a quiet deletion cost this document already.
+
+**Render it against a store with real volume.** Finding 5 passed a render because the demo store
+holds seven orders. The defect only appears at the owner's 275. A screen that looks right on the
+fixture is not verified.
+
+**Never `git stash` in any worktree of this clone.** The stack is per-clone, not per-worktree, so
+another session's pop takes it. Commit to set work aside. `git show <rev>:<path>` or a `.bak`
+copy to read a baseline.
