@@ -805,11 +805,16 @@ export function BoxBrowse({
   onQuery,
 }: BoxBrowseProps) {
   const [rows, setRows] = useState<Row[] | null>(null)
-  /** Which shelf `rows` currently answers for (D192, item 2). A ref rather than
-   *  state: it exists only so the cross-box jump effect can tell a stale, pre-switch `rows`
-   *  from a freshly-landed one for the shelf it just switched to, and reading it never needs
-   *  to schedule a render of its own. */
-  const rowsShelf = useRef<number | null>(null)
+  /** Which shelf `rows` currently answers for (D192, item 2).
+   *
+   *  STATE RATHER THAN A REF SINCE 2026-09-19, and the reason is the whole of this file's
+   *  half of the copies-panel blanking defect. It was a ref because only the cross-box jump
+   *  effect read it, and an effect reads a ref at the right moment by construction. The
+   *  RENDER needs the same fact now — `selectedRow` below must tell "the walk has no row"
+   *  from "the box the walk just moved to has not answered yet", and only this says which.
+   *  It is written in the same batch as `setRows`, so the two can never disagree in a
+   *  committed render. */
+  const [rowsShelf, setRowsShelf] = useState<number | null>(null)
   const [failure, setFailure] = useState<Failure | null>(null)
   const [selected, setSelected] = useState<string | null>(null)
 
@@ -1214,7 +1219,7 @@ export function BoxBrowse({
          * without this, a jump that just switched shelves reads the stale `rows` on the very
          * next render (`shelf` alone changing re-runs that effect too) and gives up before
          * the new box's cards ever arrive. */
-        rowsShelf.current = shelf
+        setRowsShelf(shelf)
         const held = inventory.listings ?? NO_LISTINGS
         setListings(held)
         onListings?.(held)
@@ -1355,21 +1360,18 @@ export function BoxBrowse({
      on every fresh answer, not only when the old selection fell out of the filter. */
   const answered = useRef<string | null>(null)
   useEffect(() => {
-    /* `fresh`/`answered.current` are settled BEFORE the `visible.length === 0` guard below,
-       on purpose (2026-09-19, the owner's "fix the product" ruling). `visible` can go empty
-       for a render or two while `shelf` is still catching up to a just-landed answer — the
-       shelf-picking effect above runs first in the same commit, and its own `pool` can pick a
-       different box for one tick before settling back. Returning early WITHOUT recording the
-       query left `answered.current` holding a stale value, so the next render — the same
-       repeat answer to the same query text, `visible` populated again — read as `fresh` all
-       over again and re-landed `selected` on the fullest section even though nothing about
-       the query had changed. That is what made `CopiesPanel`'s row prop change under a
-       search already answered, which is D118-class: the copies panel blanked to its skeleton
-       for the length of one re-ask. See D118's amendment below. */
+    /* THE EMPTY TICK IS RETURNED ON, AND THE QUERY IS NOT RECORDED WHILE IT IS. `visible` is
+       empty while the box a fresh answer moved the walk to has not answered yet, and D132's
+       rule is that a fresh answer lands in the fullest section — which cannot happen until the
+       rows it would land in exist. Recording the query on that empty tick would spend `fresh`
+       on a render that landed nothing, and the answer would never land at all. (A 2026-09-19
+       fix moved these three lines above this guard; it was reverted the same day. It could not
+       reach the blanking it was aimed at — the copies column was being torn down by a `key`
+       further down this file, not re-pointed — and it put D132's landing at risk.) */
+    if (visible.length === 0) return
     const query = filtered ? (results?.query ?? null) : null
     const fresh = query !== null && query !== answered.current
     answered.current = query
-    if (visible.length === 0) return
     setSelected((prev) => {
       if (!fresh && prev !== null && visible.some((row) => row.key === prev)) return prev
       return (filtered ? landingInFullest(visible) : landingOf(visible))?.key ?? null
@@ -1512,10 +1514,43 @@ export function BoxBrowse({
     listRef.current?.focus(FOCUS)
   }
 
-  const selectedRow = useMemo(
+  /* THE ROW THE WALK STANDS ON — AND IT DOES NOT BLINK OUT WHILE THE NEXT BOX IS FETCHING
+   * (2026-09-19, the owner's "fix the product" ruling; D118's fourth floor).
+   *
+   * `visible` is `rows` — ONE BOX'S cards since D192 — narrowed to `shelf`. A fresh search
+   * answer can move `shelf` to another box, and `rows` still holds the box before it until
+   * that box's own `GET /inventory/<box>` lands. In that window `visible` is EMPTY, this
+   * found nothing, `onSelect(null)` reached `Inventory.tsx`, and its `detail` — the whole
+   * copies column — was UNMOUNTED and then mounted again when the rows arrived. A remounted
+   * `CopiesPanel` has no search answer and no memory of one, so it drew its skeleton for a
+   * debounce plus a fetch: six copy rows to none and back, under the hand, with no press.
+   * Measured on the rig with that box read delayed 400ms at 6x CPU throttle: the column was
+   * gone for 679ms and came back as the skeleton (see D118's amendment).
+   *
+   * So a row is only really gone once the box it would be in has ANSWERED. Until then the
+   * walk keeps the row it was standing on. `held` is written after the commit that found
+   * one, so the render that finds none reads the row before it, which is the row the
+   * operator is still looking at. This moves no selection and re-ranks nothing: `selected`
+   * itself is untouched, and the landing effect above still decides where a fresh answer
+   * lands once the rows it would land in exist (D181, D132). */
+  const found = useMemo(
     () => visible.find((row) => row.key === selected) ?? null,
     [visible, selected],
   )
+  const held = useRef<Row | null>(null)
+  useEffect(() => {
+    if (found !== null) held.current = found
+  }, [found])
+  const awaitingRows = typeof shelf === 'number' && rowsShelf !== shelf
+  /* THE WALK HAS NOTHING TO STAND ON ONLY WHEN THERE IS NOTHING THERE AND THE BOX HAS SAID SO.
+   * Two different gaps close here and both of them used to unmount the copies column. The box
+   * the walk moved to has not answered yet (`awaitingRows`, `visible` empty). Or its rows HAVE
+   * landed and `selected` is still the key from the box before — `visible` is full, this finds
+   * nothing, and the landing effect above re-points `selected` in the very next effect pass. A
+   * single render of `null` is enough to destroy `CopiesPanel` and its answer, so neither gap
+   * may produce one. Null is reserved for the honest case: the shelf has answered and holds no
+   * row to walk. */
+  const selectedRow = found ?? (visible.length === 0 && !awaitingRows ? null : held.current)
 
   /* What a bulk write would reach: the ticked rows in the box being walked, as indices. */
   const pickedIndices = useMemo(() => {
@@ -1639,7 +1674,7 @@ export function BoxBrowse({
        * PREVIOUS shelf's stale data — the fetch for the new shelf has not landed yet. Without
        * this check the jump was abandoned right there, before the box it just switched to had
        * any chance to answer. */
-      if (rowsShelf.current !== shelf) return
+      if (rowsShelf !== shelf) return
       setJump(null)
       return
     }
@@ -1661,7 +1696,7 @@ export function BoxBrowse({
     setSelected(jump)
     listRef.current?.focus(FOCUS)
     setJump(null)
-  }, [jump, rows, inQuery, searching, setQuery, shelf])
+  }, [jump, rows, rowsShelf, inQuery, searching, setQuery, shelf])
 
   useEffect(() => {
     onSelect?.(selectedRow)
@@ -2382,7 +2417,22 @@ export function BoxBrowse({
                 </div>
               ) : (
                 <>
-                  <section className="bn-panel browse-card" key={selectedRow.key}>
+                  {/* NO `key` ON THIS SECTION (2026-09-19, the owner's "fix the product"
+                      ruling). It carried `key={selectedRow.key}` from the rebuild (D94-D99)
+                      so `.browse-card`'s `bn-page-in` entrance replayed on every card. The
+                      copies column — `{detail}`, which is `Inventory.tsx`'s `CopiesPanel` —
+                      is INSIDE this section, so that key tore it down and built it again on
+                      every change of selection. A rebuilt `CopiesPanel` has no search answer
+                      and no memory of one, so it drew its skeleton for a debounce plus a
+                      fetch: the copies list went from six rows to none and back, under the
+                      hand, with no press (D118). Measured on the rig at 6x CPU throttle with
+                      the box read delayed: 400ms of skeleton per selection change.
+                      `CopiesPanel`'s own D118 guard — keep the group found in the still-old
+                      `results` while the re-read runs — assumes it survives a row change, and
+                      this key is why it had never once run. The entrance now plays when the panel appears,
+                      which is what an entrance is for. `CardOps` below keeps its own key:
+                      that one resets a MENU, not a fetch. */}
+                  <section className="bn-panel browse-card">
                     <div className="browse-hero-head">
                       <div className="browse-hero-text">
                         <h2 className={nameOf(selectedRow.card) === null ? 'browse-hero-name is-unnamed' : 'browse-hero-name'}>

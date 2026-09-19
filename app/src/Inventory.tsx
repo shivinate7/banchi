@@ -734,26 +734,6 @@ function CopiesPanel({
 
   const settled = results !== null && results.query === (handle ?? '')
 
-  /* THE LAST ANSWER FOR THIS HANDLE, KEPT ACROSS A ROW CHANGE (D118 amendment, 2026-09-19).
-   * D118's own guard below already keeps `group` standing through a re-read of the SAME
-   * card, because `group` is found by key in the still-old `results`. It goes blind the
-   * moment `row` itself changes to a copy the stale `results` has not answered for yet —
-   * a re-land onto another copy of the same card, still under the same SKU or name — where
-   * `group` reads null and the panel fell to the skeleton for the length of the debounce
-   * plus the fetch, even though an answer for exactly this handle was already on screen.
-   * That is never a first load; it is a re-ask, and the skeleton is for a first load only.
-   * Recorded only when `group` is non-null, so an actual first load (nothing to stand on
-   * yet) is untouched. */
-  const lastGroupRef = useRef<{ handle: string; group: SearchGroup } | null>(null)
-  useEffect(() => {
-    if (handle !== null && group !== null) lastGroupRef.current = { handle, group }
-  }, [handle, group])
-  const staleGroup =
-    group === null && handle !== null && lastGroupRef.current !== null && lastGroupRef.current.handle === handle
-      ? lastGroupRef.current.group
-      : null
-  const displayGroup = group ?? staleGroup
-
   /* The copy the walk is pointing at, as the search knows it — or the lone copy when the
      search cannot reach it. */
   const lone = useMemo(() => (handle === null ? loneCopy(row) : null), [handle, row])
@@ -815,39 +795,34 @@ function CopiesPanel({
     <section className="inventory-copies">
       {failure === null ? null : <Notice tone="danger" title={failure.message} code={failure.code} />}
 
-      {/* D118, amended 2026-09-19: a press changes what is on screen, never where the rest of
-          it is, and neither does a re-land onto another copy of a card already answered for.
-          A re-read after `Mark sold` (`doSell`'s `setReloads`) keeps `group` standing from the
-          old `results` while `useSearch` sets `loading` — measured at 1440 with `/search`
-          delayed 800ms: drawing this skeleton on every `loading`/`!settled` pushed
-          `CardLocations` from y=79 to y=181 and back on an ~93ms answer. `displayGroup` widens
-          the same guard to a `row` CHANGE under an unchanged handle — `BoxBrowse`'s own D132
-          re-land can point the walk at a different copy of the same SKU while this card's
-          search is still catching up, and `group` (found by `row.key` in the still-old
-          `results`) reads null even though an answer for this handle is already on screen.
-          `staleGroup` is that last answer, kept only for the handle it belongs to. Draw the
-          skeleton only when there is nothing at all to stand on — a genuinely new handle this
-          panel has never resolved, or the very first read. */}
-      {displayGroup === null && (loading || !settled) ? (
+      {/* D118: a press changes what is on screen, never where the rest of it is. A re-read
+          after `Mark sold` (`doSell`'s `setReloads`) keeps `group` standing from the old
+          `results` while `useSearch` sets `loading` — measured at 1440 with `/search` delayed
+          800ms: drawing this skeleton on every `loading`/`!settled` pushed `CardLocations` from
+          y=79 to y=181 and back on an ~93ms answer. Draw it only when there is nothing to stand
+          on — a fresh card on the walk (`group` is null because `row.key` is not in the still-
+          old `results`) or the very first read. A re-read of the SAME card keeps its `group`
+          (found by key in the stale `results`) and the list stays put while the fetch runs. */}
+      {group === null && (loading || !settled) ? (
         <div className="inventory-looking">
           <span className="bn-skeleton" style={{ width: 140, height: 14 }} />
           <span className="bn-skeleton" style={{ width: '100%', height: 64 }} />
         </div>
       ) : null}
 
-      {displayGroup === null && settled && !loading ? (
+      {group === null && settled && !loading ? (
         <Notice tone="warn" title="The search did not return this card's own row." code={`key ${row.key} · query ${query}`}>
           That should not happen; a reload usually settles it.
         </Notice>
       ) : null}
 
-      {displayGroup === null ? null : (
+      {group === null ? null : (
         <CardLocations
-          group={displayGroup}
+          group={group}
           persona="owner"
           sections={layouts}
           currentKey={row.key}
-          listedAt={displayGroup.sku === null ? null : (listings[displayGroup.sku]?.live_as_of ?? null)}
+          listedAt={group.sku === null ? null : (listings[group.sku]?.live_as_of ?? null)}
           claims={wanted}
           onGoTo={onGoTo}
           onSell={onSell}

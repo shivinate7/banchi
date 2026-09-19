@@ -103,40 +103,61 @@ press that makes the order stale, inside a band whose height is fixed, so its sl
 whether or not it is occupied — the same bargain `.browse-row-slotghost` makes in the amendment
 above, paid once at render rather than at the moment of the sale.
 
-### A re-land onto a copy already answered for is a press too (2026-09-19)
+### The copies column may not be torn down and built again (2026-09-19)
 
-**The owner ruled on a CI flake, 2026-09-19.** His word was "fix the product."
+**The owner ruled on a CI flake, 2026-09-19.** His word was "fix the product." He had been
+watching the same thing on the real rig for weeks.
 `inventory.spec.ts`'s "a new search takes a new order" case failed on CI. It failed in 3 of 20
-runs, at 2 workers. Always the same way. `toHaveCount(6)` passed. A later, non-retrying read of
+runs, at 2 workers, always the same way. `toHaveCount(6)` passed. A later, non-retrying read of
 the same rows then came back `[]`. No press was involved. The operator had only typed a second
-query into the same box. The trace showed three `GET /search?q=8937370` requests, for one text.
-That is the tell. Something re-asked without the text changing.
+query into the same box.
 
-**The cause was in `BoxBrowse.tsx`'s landing effect, not in `CopiesPanel`.** That effect is
-D132's rule: a fresh answer goes to the fullest section. `visible` can read empty for a render or
-two. This happens while `shelf` is still catching up to a just-landed answer. The shelf-picking
-effect runs first, in the same commit. Its own pool can name a different box for one tick. It
-settles back after. The selection effect returned early on that empty `visible`. It did so
-without recording the query it had just seen. Its own `answered` ref then kept a stale value. The
-next render carried the SAME repeat answer, for the SAME query text. `visible` was populated
-again. It read as `fresh` a second time. It re-landed `selected` on the fullest section, as if a
-new question had been asked. Nothing about the query had changed. Only the ref's own bookkeeping
-had fallen behind it. The fix settles `fresh` and writes the ref before the early return. A
-repeat answer now reads as one, even across an empty tick.
+**An earlier amendment of the same day is withdrawn.** It named the landing effect's
+`answered` ref. It was reasoned from the trace. It was never reproduced. Both of its changes were
+mutation-tested on 2026-09-19, under an ordering that does reproduce the defect. Both passed with
+the defect fully present. Neither could reach it. The `BoxBrowse.tsx` half was also a hazard.
+Recording a query on a render whose `visible` is empty spends `fresh` on a landing that never
+happened, which is D132's rule failing to fire. Both are reverted. What follows was measured.
 
-**This is the same sentence as D181's amendment, on a second axis D181 could not see.** D181
-found that a rank recompute reshuffles rows, without moving a pixel. This is a rank recompute
-that never should have happened. The query had not changed. Its symptom was not a reshuffle. It
-was `CopiesPanel`'s `row` prop, pointing at a copy its own still-loading search had not answered
-for yet. That fell through to the skeleton. `Inventory.tsx`'s own comment there once read: draw
-it only when there is nothing to stand on. A stale-selection bounce, onto another copy of the
-SAME card, is exactly the case that guard did not name. `CopiesPanel` now keeps the last non-null
-group it drew, for a given handle — SKU or name. It stands on that group while its `row` changes.
-This holds only while a fetch for that same handle is still in flight. The skeleton stays for a
-handle this panel has never resolved. It is never drawn again for a re-ask of a handle it already
-has an answer for.
+**IT WAS NEVER A RE-POINT. THE COLUMN WAS DESTROYED AND BUILT AGAIN FROM NOTHING.**
+`CopiesPanel` owns a `useSearch()`. Rebuilding it throws away the answer on screen. It then
+starts a 200ms debounce and a fetch. What the operator sees is six copy rows, then a skeleton,
+then six rows again, with no press. Two separate mechanisms rebuilt it.
 
-**Guarded by `inventory.spec.ts`'s own case, sampling frames after the new answer lands.**
-A single retrying `toHaveCount` cannot see this. It
-stops retrying the moment it is true. So it cannot see a state that was true and then was not.
-Same reasoning as D181's row-identity proof, for not trusting geometry alone.
+**One: the walk's row read null while the drawer it moved to was still in flight.** Since D192
+`rows` holds ONE drawer's cards, and `visible` is `rows` narrowed to `shelf`. A fresh answer can
+move `shelf` to another drawer. Until that drawer's own `GET /inventory/<box>` lands, `visible`
+holds nothing for it. `selectedRow` was `visible.find(...) ?? null`. So it read null,
+`Inventory.tsx`'s `detail` became null, and the whole column was unmounted. The fix says a row is
+gone only when the drawer it would be in has ANSWERED. `rowsShelf` becomes state, so the render
+can read it. The walk keeps the row it was standing on across that window. Null is kept for the
+honest case: the shelf has answered and holds no row to walk. One render of null destroys the
+column. So the render where the rows land, while `selected` is still the previous drawer's key,
+is covered by the same rule.
+
+**Two: `.browse-card` carried `key={selectedRow.key}`.** It came in with the rebuild (D94-D99),
+so the panel's `bn-page-in` entrance replayed on every card. `{detail}` is the copies column, and
+it is inside that section. The key therefore rebuilt the column on EVERY change of selection,
+including the one a fresh answer makes. Every guard `CopiesPanel` carries for a row change
+assumes it survives one. This key is why none of them had ever run. The key is gone. The entrance
+now plays when the panel appears, which is what an entrance is for. `CardOps` keeps its own key.
+That one resets a menu, not a fetch.
+
+**Measured on the rig,** with every box read delayed 400ms and the CPU throttled 6x, which is
+D128's lever. The column was absent for 679ms. It returned as the skeleton for 400ms more. With
+both fixes the copies list holds six rows on every animation frame, from the keystroke to the
+settled new order.
+
+**Guarded by a frame watch rather than a poll.** Every `expect(locator)` retries until it is true
+and then stops asking. A list that empties and fills between two polls is invisible to all of
+them. That is how this shipped. `installCopiesWatch` samples `requestAnimationFrame`. It records
+three numbers per frame: the copy rows, whether `.inventory-detail` exists at all, and whether a
+skeleton is inside it. The first says what the operator counts. The second catches a tear-down.
+The third catches a rebuild. Telling those apart is what sends the next session to the right
+file.
+
+**And the ordering is forced rather than hoped for.** `the copies list holds while a new answer
+moves the walk to another drawer` delays the drawer read by 400ms. The hard ordering is then
+certain on any machine. A delay cannot make a passing build fail. It holds open a window the
+product must survive. Both fixes are mutation-tested against it. Restoring the key draws
+`column=1 skeleton=2`. Dropping the held row draws `column=0`.
