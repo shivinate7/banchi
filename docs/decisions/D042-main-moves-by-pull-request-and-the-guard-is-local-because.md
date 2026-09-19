@@ -162,4 +162,8 @@ At `prepared` the hook asks `git merge-base --is-ancestor "$new" refs/remotes/or
 
 **What would reopen this: GitHub Pro, or the repository going public.** Either makes rulesets available, and the honest response is to add one requiring a pull request on main and keep both hooks — the server gate for what reaches the repository, these for what reaches this clone's main. Not either/or: the two incidents were one of each.
 
+**Amended 2026-09-19.** The premise here — "the server-side guard is not for sale" — went false, twice over. Both are done rather than hypothetical. Branch protection has required `check` and `revert-guard` since 2026-09-11 (D148's amendment). And `gh api /repos/shivinate7/banchi` answers `"private": false`. The repository is public, on the owner's own separate decision. The subscription this entry's opening measurement paid to avoid is no longer the question. Server-side rulesets exist and are required now.
+
+What this protected — main moving from inside this clone, unreviewed — is caught remotely too. A required check on a PR is the server-side gate this entry once could not buy. **What the two local hooks still cover is the one thing a required check cannot see: a local ref move that never goes through `git push`.** `reference-transaction` catches a fast-forward, a rebase, or a `branch -f` of `refs/heads/main`, before any network call exists to gate. `pre-push` is now the redundant one. A direct push it refuses would also fail remotely. It stays, because a local guard costs nothing to keep. The local guard's ground is narrower now: not "the only gate there is," but "the one gate a `git update-ref` never reaches."
+
 ---
