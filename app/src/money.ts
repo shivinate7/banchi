@@ -22,6 +22,18 @@ export function money(value: number | null | undefined): string {
   return typeof value === 'number' ? `$${value.toFixed(2)}` : '—'
 }
 
+/** `$66,334.71`, or `—` where there is no figure — `money()`'s own grouped sibling, never a
+ *  replacement for it. A card's price is one glance at three or four digits and a thousands
+ *  separator there would be noise; a STORE-WIDE TOTAL is a headline read at five or six
+ *  figures, where the same comma is the difference between reading it and counting zeros.
+ *  `toLocaleString` is locale-aware by design — this repo has one owner and one locale, and
+ *  the day that stops being true is the day this earns an explicit `en-US`. */
+export function moneyGrouped(value: number | null | undefined): string {
+  if (typeof value !== 'number') return '—'
+  const [whole, cents = '00'] = value.toFixed(2).split('.')
+  return `$${Number(whole).toLocaleString()}.${cents}`
+}
+
 /** True where a figure is REAL MONEY and still rounds to `$0.00`.
  *
  *  IT IS A FACT ABOUT `toFixed(2)` AND THAT IS WHY IT LIVES HERE RATHER THAN IN PYTHON. A run

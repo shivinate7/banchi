@@ -245,9 +245,10 @@ the browser. No second store. No auth. `app/src/server.ts` is the only client-ca
 
 ### The screens
 
-**The app has twelve screens and twelve routes — eleven the owner's, one the Fulfiller's.**
-`app/src/App.tsx`'s `ROUTES` table is the count. Recount from the table, never a sentence
-(see "the census" below).
+**The app has thirteen screens and thirteen routes — twelve the owner's, one the Fulfiller's.**
+Two routes are off-nav (the `aside` group — Kit and Cards to pull), so the nav itself draws
+eleven rows. `app/src/App.tsx`'s `ROUTES` table is the count. Recount from the table, never a
+sentence (see "the census" below).
 
 ```
 #/             Home           one ranked sentence of what the store is waiting on (D121),
@@ -262,6 +263,11 @@ the browser. No second store. No auth. `app/src/server.ts` is the only client-ca
                               `?band=top|bottom` (D159): what is worth pulling, read-only
 #/orders       Orders         grouped by buyer (D193), one walk per person over open orders
 #/shipping     Shipping       shipping export routed into three lanes
+#/revenue      Sales          gross-revenue retrospective (D214):
+                              verdict, month strip, by-name search. Canceled excluded, gross
+                              only, never profit. AN ELEVENTH NAV ROW ON PURPOSE — the owner
+                              was shown the 37px-past-the-fold cost at 390x754 and chose the
+                              sidebar tab anyway, 2026-09-19
 #/inventory    Inventory      box walk: search, copies, box operations (Manage box sheet).
                               SOLD IS HIDDEN BY DEFAULT (D132). Order under a search is frozen
                               once taken. A sale may not re-rank it (D181, D118)
@@ -352,7 +358,7 @@ read off a declared class.
 
 ### The shell
 
-`App.tsx` is a hand-written hash router and the shell: twelve hash routes, no routing
+`App.tsx` is a hand-written hash router and the shell: thirteen hash routes, no routing
 library, one table. It renders for every screen except the Fulfiller's (`persona: 'fulfiller'`,
 not rendered — not focusable, not reachable by a screen reader).
 
@@ -854,6 +860,7 @@ D210 `pkmnscan rescue` is reached from a press, and its report is never shown ve
 D211 The Rig panel folds once the setup is already known, and stays open until it is
 D212 Every copy is fungible, so no order claims one, and the write is the only refusal left
 D213 The set is a stored fact, and the hint was never one
+D214 A gross-revenue retrospective is its own route, and it never claims to be profit
 ```
 
 D116-D118: D117 exists and slots between them — a third branch's number, resolved on merge.

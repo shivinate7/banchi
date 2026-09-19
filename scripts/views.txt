@@ -203,6 +203,11 @@ pricing       http://localhost:5173/#/pricing  .pricing,.pricing-title
 orders        http://localhost:5173/#/orders  .orders,.orders-tabs
 shipping      http://localhost:5173/#/shipping  .shipping,.orders-tabs
 
+# The gross-revenue retrospective, routed 2026-09-19. Rendered with an empty store, which is
+# every worktree's own correct state (D43) — the empty state IS the render worth looking at,
+# the same reasoning `orders` and `shipping` above give for theirs.
+revenue       http://localhost:5173/#/revenue  .revenue,.bn-title
+
 # The Fulfiller's, and the one render where the absence of something is the point: no nav
 # strip above it. app/tests/fulfillment.spec.ts asserts that in a browser, so this render is
 # not what enforces it — it is what lets a person see the view the assertions describe, at the

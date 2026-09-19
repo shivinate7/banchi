@@ -20,6 +20,7 @@ import { Pricing } from './Pricing'
 import { Orders } from './Orders'
 import { Shipping } from './Shipping'
 import { Codes } from './Codes'
+import { Revenue } from './Revenue'
 import { Fulfillment } from './Fulfillment'
 import { Gallery } from './Gallery'
 import './App.css'
@@ -57,6 +58,7 @@ export const ROUTES: readonly Route[] = [
   { path: '/pricing', label: 'Pricing', icon: 'tag', view: Pricing, persona: 'owner', group: 'work', hotkey: 'p', nav: true, keywords: 'price hold write files emit worklist markdown stale reprice live listings mark down' },
   { path: '/orders', label: 'Orders', icon: 'cart', view: Orders, persona: 'owner', group: 'sell', hotkey: 'o', nav: true, tab: true, keywords: 'pull sell fetch orders paste ledger' },
   { path: '/shipping', label: 'Shipping', icon: 'truck', view: Shipping, persona: 'owner', group: 'sell', hotkey: 's', nav: true, keywords: 'ship lanes envelope parcel export' },
+  { path: '/revenue', label: 'Sales', icon: 'dollar', view: Revenue, persona: 'owner', group: 'sell', hotkey: 'v', nav: true, keywords: 'revenue sold gross money history search by name retrospective' },
   /* THE STALE-LISTING MARKDOWN IS NOT A ROW HERE, AND IT MOVED SCREENS RATHER THAN GAINING ONE.
    *
    * D100 wanted `#/markdown` on D49's precedent — a worklist the operator sits in is what earned
@@ -620,6 +622,7 @@ const SHORTCUTS: readonly KeyGroup[] = [
       { keys: [',P'], does: 'Pricing' },
       { keys: [',O'], does: 'Orders' },
       { keys: [',S'], does: 'Shipping' },
+      { keys: [',V'], does: 'Sales' },
       { keys: [',I'], does: 'Inventory' },
       { keys: [',G'], does: 'Graveyard' },
       { keys: [',D'], does: 'Codes' },
@@ -764,6 +767,14 @@ const SHORTCUTS: readonly KeyGroup[] = [
     at: '/codes',
     where: 'Only while Codes is open.',
     rows: [{ keys: ['Esc'], does: 'Close the open sheet' }],
+  },
+  {
+    id: 'revenue',
+    title: 'Sales',
+    icon: 'dollar',
+    at: '/revenue',
+    where: 'Only while Sales is open.',
+    rows: [{ keys: ['/'], does: 'Jump into the product search field' }],
   },
   {
     id: 'fulfillment',
