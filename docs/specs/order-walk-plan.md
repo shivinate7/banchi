@@ -733,3 +733,30 @@ fixture is not verified.
 **Never `git stash` in any worktree of this clone.** The stack is per-clone, not per-worktree, so
 another session's pop takes it. Commit to set work aside. `git show <rev>:<path>` or a `.bak`
 copy to read a baseline.
+
+### What landed, 2026-09-19
+
+**BUILT.** `#/orders` is one screen. The buyer list holds a tick per walkable buyer, and
+`Tick all` and `Untick all` act on the rows in view. Start is absent over an empty selection
+and while a pass runs. The walk fills the column beside the list. The mode strip, `PullMode`,
+`HubState.mode` and `WalkSelect` are deleted.
+
+**Two things this section left to the build, settled here.**
+
+- **What the ticks look like during a pass: they stay.** Section 8 already ruled it — "leaving
+  the walk ends the pass ... The buyer list keeps the ticks." They are simply not read again
+  once the pass is frozen, so ending a pass finds the selection as the operator left it.
+- **How a pass ENDS, ruled by the owner on 2026-09-19.** Deleting the mode strip deleted the
+  thing that used to end one (tapping `By buyer`). The replacement is an explicit `End walk` in
+  the walk's own header. Nothing else ends a pass: not a filter, not a sort, not a tick, not
+  clicking a buyer. Leaving `#/orders` still does, through the unmount cleanup that already
+  existed. The owner also ruled the left list stays live during a pass. Clicking a buyer
+  selects it, and the main column keeps the walk.
+
+**The tick is pruned, not intersected.** A tick does not survive a filter that hides its row
+(answer 1), and the stored set is what loses the member. A render-time `ticked` against
+`visible` would hand the tick back the moment the filter was cleared. Answer 1 forbids that in
+as many words. `app/tests/orders.spec.ts` asserts both directions, and that case was proved red
+against the intersection build before it was kept.
+
+**Findings 1 to 4 of section 9a are still open**, deferred behind this on the owner's ruling.

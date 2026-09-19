@@ -37,7 +37,7 @@
  * renders both arrays exactly as sent and contains no `.sort()` over either.
  */
 
-import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 
 import { Button, EmptyState, Icon, Pill } from './kit'
 import { PositionLabel } from './PositionLabel'
@@ -154,73 +154,6 @@ const EMPTY_ROW: RowState = { taken: [], gone: new Set(), overpull: false, satis
 
 function rowKeyOf(stop: WalkPlanStop, take: WalkPlanTake): string {
   return `${stop.key}/${take.sku}`
-}
-
-/* ============================================================================ the selection */
-
-/** The tick list before Start — every walkable order, defaulted ticked, so the first press of
- *  `Walk N orders` covers exactly what `Walk the boxes` already flattened (§8). `unticked` is
- *  a blacklist rather than a whitelist so an order that arrives mid-selection is ticked by
- *  default too, matching "the default tick is every currently open order". */
-function WalkSelect({
-  walkable,
-  unticked,
-  onToggle,
-  onStart,
-}: {
-  readonly walkable: readonly OrderRow[]
-  readonly unticked: ReadonlySet<string>
-  readonly onToggle: (key: string) => void
-  readonly onStart: (keys: ReadonlySet<string>) => void
-}) {
-  const ticked = walkable.filter((order) => !unticked.has(order.key))
-  const cards = ticked.reduce((sum, order) => sum + Math.max(0, order.wanted - order.recorded), 0)
-
-  if (walkable.length === 0) {
-    return (
-      <div className="bn-panel">
-        <EmptyState icon="check" title="Nothing to walk" body="Every order has its copies." />
-      </div>
-    )
-  }
-
-  return (
-    <div className="bn-panel walkplan-select" aria-label="Choose which orders to walk">
-      <header className="walkplan-select-head">
-        <span className="bn-section-title">
-          <Icon name="box" size={16} /> Walk the boxes
-        </span>
-        <p className="walkplan-select-note">Tick which orders this pass covers. Every open order starts ticked.</p>
-      </header>
-      <ol className="walkplan-select-list">
-        {walkable.map((order) => {
-          const owed = Math.max(0, order.wanted - order.recorded)
-          return (
-            <li key={order.key} className="walkplan-select-row">
-              <label>
-                <input type="checkbox" checked={!unticked.has(order.key)} onChange={() => onToggle(order.key)} />
-                <span className="walkplan-select-name">{order.buyer ?? `No name · #${order.number}`}</span>
-                <span className="bn-mono walkplan-select-number">{order.number}</span>
-                <span className="walkplan-select-owed">
-                  {owed} {owed === 1 ? 'card' : 'cards'}
-                </span>
-              </label>
-            </li>
-          )
-        })}
-      </ol>
-      <div className="walkplan-select-foot">
-        <Button variant="primary" size="lg" icon="box" disabled={ticked.length === 0} onClick={() => onStart(new Set(ticked.map((o) => o.key)))}>
-          Walk {ticked.length} order{ticked.length === 1 ? '' : 's'}
-        </Button>
-        {ticked.length === 0 ? null : (
-          <span className="walkplan-select-preview">
-            {cards} {cards === 1 ? 'card' : 'cards'} to pull
-          </span>
-        )}
-      </div>
-    </div>
-  )
 }
 
 /* ============================================================================== a copy row */
@@ -507,18 +440,30 @@ function ShortfallBlock({ rows }: { readonly rows: readonly WalkPlanShort[] }) {
 
 /* ============================================================================== the pass */
 
-function WalkPass({
+/** THE PASS ITSELF, AND THE ONLY THING THIS FILE EXPORTS AS A VIEW.
+ *
+ *  `WalkSelect` and the `OrdersWalk` wrapper around it are GONE (§12). The selection is the
+ *  buyer list on `#/orders` itself, so there is no second list to choose between and no
+ *  wrapper left to choose with: `Orders.tsx` draws this component directly the moment
+ *  `hub.walkKeys` is set, in the column beside that list.
+ *
+ *  `onEnd` is how a pass stops. Deleting the mode strip deleted the thing that used to end one
+ *  (tapping `By buyer`), so the header below carries the replacement — the owner's ruling,
+ *  2026-09-19. Leaving `#/orders` still ends it, through `Orders.tsx`'s own unmount cleanup. */
+export function WalkPass({
   walkKeys,
   ordersByKey,
   busy,
   onPull,
   onUndo,
+  onEnd,
 }: {
   readonly walkKeys: ReadonlySet<string>
   readonly ordersByKey: ReadonlyMap<string, OrderRow>
   readonly busy: string | null
   readonly onPull: WalkPullFn
   readonly onUndo: WalkUndoFn
+  readonly onEnd: () => void
 }) {
   const keysSig = useMemo(() => [...walkKeys].sort().join('\u0000'), [walkKeys])
   const [plan, setPlan] = useState<WalkPlan | null>(null)
@@ -681,6 +626,13 @@ function WalkPass({
             </Pill>
           </span>
         )}
+        {/* THE ONE WAY OUT OF A PASS THAT IS NOT LEAVING THE SCREEN (§12, the owner's ruling
+            2026-09-19). Nothing else ends a pass: not a filter, not a sort, not a tick, not
+            clicking a buyer in the list beside this. It sits in the head rather than at the
+            foot so it is reachable on a phone without scrolling the whole walk. */}
+        <Button className="walkplan-end" icon="x" onClick={onEnd}>
+          End walk
+        </Button>
       </header>
 
       {plan.stops.length === 0 ? (
@@ -707,33 +659,4 @@ function WalkPass({
       <ShortfallBlock rows={plan.shortfall} />
     </div>
   )
-}
-
-/* ============================================================================== the export */
-
-export function OrdersWalk({
-  walkable,
-  ordersByKey,
-  walkKeys,
-  unticked,
-  onToggleTick,
-  onStart,
-  busy,
-  onPull,
-  onUndo,
-}: {
-  readonly walkable: readonly OrderRow[]
-  readonly ordersByKey: ReadonlyMap<string, OrderRow>
-  readonly walkKeys: ReadonlySet<string> | null
-  readonly unticked: ReadonlySet<string>
-  readonly onToggleTick: (key: string) => void
-  readonly onStart: (keys: ReadonlySet<string>) => void
-  readonly busy: string | null
-  readonly onPull: WalkPullFn
-  readonly onUndo: WalkUndoFn
-}): ReactNode {
-  if (walkKeys === null) {
-    return <WalkSelect walkable={walkable} unticked={unticked} onToggle={onToggleTick} onStart={onStart} />
-  }
-  return <WalkPass walkKeys={walkKeys} ordersByKey={ordersByKey} busy={busy} onPull={onPull} onUndo={onUndo} />
 }

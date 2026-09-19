@@ -16,9 +16,6 @@ import type { OrderLineReason, OrdersPayload, PullTarget, ShippingBatch, Shippin
 
 export type Stage = 'pull' | 'ship'
 export type PullFilter = 'all' | 'done' | OrderLineReason
-/** How the Pull stage is worked: one order at a time, or every open order's copies in one pass
- *  through the boxes. */
-export type PullMode = 'orders' | 'walk'
 
 /** The lanes, in the order the columns draw them and `pipeline/shipping.py:LANES` declares
  *  them: envelope first because most orders land there, unjudged last because it is the pile
@@ -32,7 +29,6 @@ export type HubState = {
   readonly arriving: boolean | null
   readonly paste: string
   readonly filter: PullFilter
-  readonly mode: PullMode
   /** THE ORDERS THIS WALK WAS STARTED OVER — `OrderRow.key`s, frozen when the walk is entered
    *  and cleared when it is left. `null` outside a walk.
    *
@@ -72,7 +68,6 @@ let state: HubState = {
   arriving: null,
   paste: '',
   filter: 'all',
-  mode: 'orders',
   walkKeys: null,
   selected: null,
   batch: null,

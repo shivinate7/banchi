@@ -133,6 +133,14 @@ async function stubWalkPlan(page: Page, plan: WalkPlan): Promise<void> {
   })
 }
 
+/** TICK EVERY WALKABLE ROW IN VIEW AND PRESS START — the two presses §12 replaced three with.
+ *  Six cases in this file used to click the `Walk the boxes` tab and then `WalkSelect`'s own
+ *  foot; both are deleted, and the buyer list they sat beside IS the selection now. */
+async function startWalk(page: Page): Promise<void> {
+  await page.locator('main.orders').getByRole('button', { name: 'Tick all', exact: true }).click()
+  await page.locator('.orders-start-slot').getByRole('button', { name: /Walk \d+ orders?/ }).click()
+}
+
 /** The default world: one open order, one resolved line, one copy in box 3. */
 function oneOpenOrder(): OrdersPayload {
   return payloadOf(
@@ -1966,19 +1974,24 @@ test('the walk includes a terminal-but-owing order once resolved', async ({ page
       }),
     ]),
   )
-  await page.locator('main.orders').getByRole('button', { name: 'Walk the boxes' }).click()
-  await page.locator('.walkplan-select-foot').getByRole('button', { name: /Walk \d+ orders?/ }).click()
+  await startWalk(page)
   await expect(page.locator('.orders-walk')).toContainText('Terminal Treasure')
   await expect(page.getByRole('button', { name: 'Pull' })).toHaveCount(2)
 })
 
 test('a fully-pulled terminal order (nothing owed) never enters the walk', async ({ page }) => {
-  /* RE-AIMED: `WalkSelect` (§8's own selection step) draws "Nothing to walk" when nothing
-     qualifies, not `WalkView`'s old "Nothing left to walk". */
+  /* RE-AIMED TWICE, and the claim is the same one both times: an order that owes nothing is not
+     walkable. `WalkView`'s "Nothing left to walk" became `WalkSelect`'s "Nothing to walk", and
+     §12 deleted `WalkSelect` along with the second list it was — so the claim now lands where
+     the selection itself lives. A row with no walkable order draws NO TICK (not a disabled one),
+     which leaves nothing to tick, nothing for `Tick all` to act on, and no Start. */
   const settled = order({ open: false, wanted: 1, recorded: 1, status: 'Shipped', terminal: true })
   await open(page, { orders: payloadOf([settled], []) })
-  await page.locator('main.orders').getByRole('button', { name: 'Walk the boxes' }).click()
-  await expect(page.locator('main.orders')).toContainText('Nothing to walk')
+  await page.locator('main.orders').getByRole('button', { name: 'Done' }).click()
+  await expect(page.locator('main.orders')).toContainText('Ada Lovelace')
+  await expect(page.locator('.orders-index-tick')).toHaveCount(0)
+  await expect(page.locator('main.orders').getByRole('button', { name: 'Tick all', exact: true })).toBeDisabled()
+  await expect(page.getByRole('button', { name: /Walk \d+ orders?/ })).toHaveCount(0)
   await expect(page.getByRole('button', { name: 'Pull' })).toHaveCount(0)
 })
 
@@ -2285,8 +2298,7 @@ test('a real Pull press changes the take counter without changing its height (D1
       }),
     ]),
   )
-  await page.locator('main.orders').getByRole('button', { name: 'Walk the boxes' }).click()
-  await page.locator('.walkplan-select-foot').getByRole('button', { name: /Walk \d+ orders?/ }).click()
+  await startWalk(page)
 
   const counter = page.locator('.walkplan-take-counter').first()
   const takeName = page.locator('.walkplan-take-name').first()
@@ -2418,8 +2430,7 @@ test('a single-line order gets a walk plan when it spans more than one box', asy
       }),
     ]),
   )
-  await page.locator('main.orders').getByRole('button', { name: 'Walk the boxes' }).click()
-  await page.locator('.walkplan-select-foot').getByRole('button', { name: /Walk \d+ orders?/ }).click()
+  await startWalk(page)
 
   await expect(page.locator('.walkplan-figure')).toContainText('2 drawers')
   await expect(page.locator('.walkplan-stop')).toHaveCount(2)
@@ -2457,8 +2468,7 @@ test('each stop names the cards in it, by how many sit THERE, not by how many th
       }),
     ]),
   )
-  await page.locator('main.orders').getByRole('button', { name: 'Walk the boxes' }).click()
-  await page.locator('.walkplan-select-foot').getByRole('button', { name: /Walk \d+ orders?/ }).click()
+  await startWalk(page)
 
   const stops = page.locator('.walkplan-stop')
   await expect(stops).toHaveCount(2)
@@ -2515,8 +2525,7 @@ test('a box with two different cards, one copy each, still reads as plain cards 
       }),
     ]),
   )
-  await page.locator('main.orders').getByRole('button', { name: 'Walk the boxes' }).click()
-  await page.locator('.walkplan-select-foot').getByRole('button', { name: /Walk \d+ orders?/ }).click()
+  await startWalk(page)
 
   /* RE-AIMED: `WalkGroups`' own "N cards" vs "N copies of M cards" header is deleted with it
    * (§9) — the new stop draws every card as its own `.walkplan-take`, by name, so two
@@ -2527,4 +2536,216 @@ test('a box with two different cards, one copy each, still reads as plain cards 
   await expect(page.locator('.walkplan-take')).toHaveCount(2)
   await expect(page.locator('.walkplan-take-name').nth(0)).toHaveText('Akshan, Mischievous')
   await expect(page.locator('.walkplan-take-name').nth(1)).toHaveText('Yasuo, Unforgiven')
+})
+
+/* ------------------------------------------------------------------------------------- 14
+ *
+ * ONE SCREEN: THE LIST THE OPERATOR IS READING IS THE SELECTION
+ * (`docs/specs/order-walk-plan.md` §12, the owner's rulings of 2026-09-18 and 2026-09-19).
+ *
+ * The mode strip, `PullMode` and `WalkSelect` are all deleted in the same change, so the cases
+ * above that used to reach the walk through a tab now go through `startWalk`. What follows is
+ * the set of rules that change ONLY existed once there was one list — each of them written
+ * against the built code and then mutation-proved by breaking the code it names.
+ *
+ * THE ONE MOST LIKELY TO BE BUILT WRONG AND LOOK RIGHT is the prune. A render-time
+ * `ticked ∩ visible` passes every assertion about a tick disappearing under a filter and fails
+ * only the one below about it NOT coming back — which is the half the owner's answer 1 is
+ * actually about ("filtering back does not bring it back"). It is asserted in both directions
+ * here for that reason.
+ */
+
+/** Alice, Bob and Carol are all open, so all three are walkable and all three draw a tick. */
+const WALK_SELECTION_WORLD = () => ({ orders: threeBuyerPayload() })
+
+test('nothing is ticked at first render, and Start is absent rather than disabled', async ({ page }) => {
+  await open(page, WALK_SELECTION_WORLD())
+  await expect(page.locator('.orders-index-tick')).toHaveCount(3)
+  await expect(page.locator('.orders-index-tick input:checked')).toHaveCount(0)
+  /* ABSENT, NOT DISABLED (§12 answer 3). `toHaveCount(0)` is the whole assertion — a disabled
+     button would satisfy "cannot be pressed" and pass a weaker one. */
+  await expect(page.getByRole('button', { name: /Walk \d+ orders?/ })).toHaveCount(0)
+  /* The slot it will appear in is drawn all the same, so its arrival moves nothing (D118). */
+  await expect(page.locator('.orders-start-slot')).toHaveCount(1)
+})
+
+test('a tick dies with the row a filter hides, and filtering back does not bring it back', async ({ page }) => {
+  await open(page, WALK_SELECTION_WORLD())
+  await page.getByRole('checkbox', { name: 'Walk Bob' }).check()
+  await expect(page.getByRole('button', { name: 'Walk 1 order' })).toBeVisible()
+
+  /* Narrow to a list Bob is not in. The stored set must LOSE him, not merely stop drawing him. */
+  await page.locator('.orders-search-input').fill('Alice')
+  await expect(page.locator('.orders-index-row')).toHaveCount(1)
+  await expect(page.getByRole('button', { name: /Walk \d+ orders?/ })).toHaveCount(0)
+
+  /* AND HE COMES BACK UNTICKED. This is the assertion a render-time intersection fails: it
+     would still be holding Bob behind the filter and would hand the tick straight back here. */
+  await page.locator('.orders-search-clear').click()
+  await expect(page.locator('.orders-index-row')).toHaveCount(3)
+  await expect(page.getByRole('checkbox', { name: 'Walk Bob' })).not.toBeChecked()
+  await expect(page.getByRole('button', { name: /Walk \d+ orders?/ })).toHaveCount(0)
+})
+
+test('Tick all ticks the rows in view and only those', async ({ page }) => {
+  await open(page, WALK_SELECTION_WORLD())
+  await page.locator('.orders-search-input').fill('Alice')
+  await expect(page.locator('.orders-index-row')).toHaveCount(1)
+  await page.locator('main.orders').getByRole('button', { name: 'Tick all', exact: true }).click()
+  await expect(page.getByRole('button', { name: 'Walk 1 order' })).toBeVisible()
+
+  /* Widening the list again does not widen what was ticked — the press was over the rows in
+     view at the time, which is the only set that could hold a tick (§12 answer 1). */
+  await page.locator('.orders-search-clear').click()
+  await expect(page.locator('.orders-index-row')).toHaveCount(3)
+  await expect(page.getByRole('button', { name: 'Walk 1 order' })).toBeVisible()
+  await expect(page.getByRole('checkbox', { name: 'Walk Bob' })).not.toBeChecked()
+  await expect(page.getByRole('checkbox', { name: 'Walk Alice' })).toBeChecked()
+})
+
+test('Untick all clears the rows in view', async ({ page }) => {
+  await open(page, WALK_SELECTION_WORLD())
+  await page.locator('main.orders').getByRole('button', { name: 'Tick all', exact: true }).click()
+  await expect(page.getByRole('button', { name: 'Walk 3 orders' })).toBeVisible()
+  await page.locator('main.orders').getByRole('button', { name: 'Untick all' }).click()
+  await expect(page.locator('.orders-index-tick input:checked')).toHaveCount(0)
+  await expect(page.getByRole('button', { name: /Walk \d+ orders?/ })).toHaveCount(0)
+})
+
+/** WHERE A BOX SITS IN THE DOCUMENT, not in the viewport.
+ *
+ *  `boundingBox()` is viewport-relative, and Playwright scrolls a target into view before it
+ *  clicks it — a press near the foot of a column scrolls the page by a few pixels and every
+ *  rect on the screen reads as moved. That is the scroll, not the layout, and D118 is about the
+ *  layout. Measured: the press below scrolled by exactly 4px and nothing had moved at all. */
+async function pageRect(page: Page, selector: string): Promise<{ top: number; left: number; width: number; height: number }> {
+  return page.evaluate((sel) => {
+    const el = document.querySelector(sel)
+    if (el === null) throw new Error(`no ${sel}`)
+    const box = el.getBoundingClientRect()
+    return { top: box.top + window.scrollY, left: box.left + window.scrollX, width: box.width, height: box.height }
+  }, selector)
+}
+
+test('pressing Start moves nothing in the buyer list (D118)', async ({ page }) => {
+  await open(page, WALK_SELECTION_WORLD())
+  await stubWalkPlan(page, walkPlanOf([walkPlanStop({})]))
+  await settleFonts(page)
+  await settleMotion(page)
+
+  const before = await pageRect(page, '.orders-index-row')
+
+  /* TWO PRESSES, BOTH OF WHICH ADD OR REMOVE A CONTROL IN THIS COLUMN: the tick makes Start
+     appear, and Start makes it go again. Neither may move the row the hand is over. The slot
+     Start lives in reserves its own tallest state so that neither press can. */
+  await page.locator('main.orders').getByRole('button', { name: 'Tick all', exact: true }).click()
+  await expect(page.getByRole('button', { name: 'Walk 3 orders' })).toBeVisible()
+  await settleMotion(page)
+  expect(await pageRect(page, '.orders-index-row')).toEqual(before)
+
+  await page.locator('.orders-start-slot').getByRole('button', { name: 'Walk 3 orders' }).click()
+  await expect(page.locator('.orders-walk')).toBeVisible()
+  await settleMotion(page)
+  expect(await pageRect(page, '.orders-index-row')).toEqual(before)
+})
+
+test('at phone width, Start appearing moves nothing in the list beneath it (D118)', async ({ page }) => {
+  /* THE RESERVED SLOT'S REAL SUBJECT IS THIS WIDTH. In the wide frame the slot is the last
+     thing in the left column and nothing sits under it to be moved; at 390 the column is one
+     stack and the slot is ABOVE the whole buyer list, so Start arriving would push every row
+     down by its own height. That is what `.orders-start-slot`'s `min-height` reserves, and this
+     is the case that goes red without it.
+     THE START PRESS ITSELF IS NOT ASSERTED HERE, deliberately: at this width the walk is drawn
+     above the list and the list moves by the walk's height. That displacement is the screen
+     changing what it is for, said out loud in `Orders.tsx`, not a control shifting its own
+     surroundings. */
+  await page.setViewportSize({ width: 390, height: 780 })
+  await open(page, WALK_SELECTION_WORLD())
+  await settleFonts(page)
+  await settleMotion(page)
+
+  const before = await pageRect(page, '.orders-list .orders-index-row')
+  await page.getByRole('checkbox', { name: 'Walk Bob' }).check()
+  await expect(page.getByRole('button', { name: 'Walk 1 order' })).toBeVisible()
+  await settleMotion(page)
+  expect(await pageRect(page, '.orders-list .orders-index-row')).toEqual(before)
+
+  /* No horizontal scroll at this width, with the tick and the two selection buttons added. */
+  const overflow = await page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth)
+  expect(overflow).toBeLessThanOrEqual(0)
+})
+
+test('the filters stay on screen while a pass is running, and Start does not', async ({ page }) => {
+  await open(page, WALK_SELECTION_WORLD())
+  await stubWalkPlan(page, walkPlanOf([walkPlanStop({})]))
+  await startWalk(page)
+  await expect(page.locator('.orders-walk')).toBeVisible()
+
+  /* THE LINE THIS WHOLE SECTION EXISTS TO REMOVE was `mode === 'walk' ? null : …` around these.
+     The owner's answer 1 makes them the SELECTING tool, so they may never be hidden by a pass. */
+  await expect(page.locator('.orders-chips')).toBeVisible()
+  await expect(page.locator('.orders-view-controls')).toBeVisible()
+  await expect(page.locator('.orders-search-input')).toBeVisible()
+  await expect(page.locator('.orders-status-select')).toBeVisible()
+  await expect(page.locator('main.orders').getByRole('button', { name: 'Tick all', exact: true })).toBeEnabled()
+
+  /* START IS NOT OFFERED WHILE A PASS RUNS, so a stray press cannot discard the plan the hand
+     is working. `End walk` first, then Start. */
+  await expect(page.getByRole('button', { name: /Walk \d+ orders?/ })).toHaveCount(0)
+})
+
+test('clicking a buyer during a pass keeps the walk in the main column', async ({ page }) => {
+  await open(page, WALK_SELECTION_WORLD())
+  await stubWalkPlan(page, walkPlanOf([walkPlanStop({})]))
+  await startWalk(page)
+  await expect(page.locator('.orders-walk')).toBeVisible()
+
+  /* The left list stays live and fully interactive (the owner's ruling, 2026-09-19) — but the
+     detail does NOT open over the walk, and the pass is not ended. */
+  await page.locator('.orders-index-row').filter({ hasText: 'Bob' }).click()
+  await expect(page.locator('.orders-walk')).toBeVisible()
+  await expect(page.locator('.orders-buyer-detail')).toHaveCount(0)
+  await page.getByRole('checkbox', { name: 'Walk Bob' }).uncheck()
+  await expect(page.locator('.orders-walk')).toBeVisible()
+})
+
+test('End walk returns the main column to the buyer detail, and nothing else ends a pass', async ({ page }) => {
+  await open(page, WALK_SELECTION_WORLD())
+  await stubWalkPlan(page, walkPlanOf([walkPlanStop({})]))
+  await startWalk(page)
+  await expect(page.locator('.orders-walk')).toBeVisible()
+
+  /* A filter, a search and a tick all leave the pass alone — deleting the mode strip deleted the
+     only thing that used to end one, and `End walk` is its whole replacement. */
+  await page.locator('.orders-search-input').fill('Alice')
+  await expect(page.locator('.orders-walk')).toBeVisible()
+  await page.locator('.orders-search-clear').click()
+  await page.locator('main.orders').getByRole('button', { name: 'Untick all' }).click()
+  await expect(page.locator('.orders-walk')).toBeVisible()
+
+  await page.locator('main.orders').getByRole('button', { name: 'End walk' }).click()
+  await expect(page.locator('.orders-walk')).toHaveCount(0)
+  await expect(page.locator('.orders-buyer-detail')).toBeVisible()
+})
+
+test('leaving #/orders ends the pass', async ({ page }) => {
+  /* RE-AIMED. The case this replaces toggled the mode strip back to `By buyer` and asserted the
+     pass was over — §8's "leaving the walk ends the pass", read through the two tabs finding 3
+     named. §12 deletes the tabs, so the claim moves to the other half of that same ruling,
+     which the unmount cleanup in `PullStage` has always carried: "tap another screen, close the
+     tab, come back an hour later — that walk is over." */
+  await open(page, WALK_SELECTION_WORLD())
+  await stubWalkPlan(page, walkPlanOf([walkPlanStop({})]))
+  await startWalk(page)
+  await expect(page.locator('.orders-walk')).toBeVisible()
+
+  /* IN-APP, THROUGH THE SHELL'S OWN NAV — never `page.goto('#/shipping')`, which reloads the
+     tab and takes the whole hub's memory with it. A reload would pass this case against a
+     `PullStage` that had no cleanup at all (measured: it does), so it would be asserting the
+     browser rather than the screen. */
+  await page.locator('.bn-side .app-nav-link').filter({ hasText: 'Shipping' }).click()
+  await expect(page.locator('.orders-walk')).toHaveCount(0)
+  await page.locator('.bn-side .app-nav-link').filter({ hasText: 'Orders' }).click()
+  await expect(page.locator('.orders-index-row').first()).toBeVisible()
+  await expect(page.locator('.orders-walk')).toHaveCount(0)
 })

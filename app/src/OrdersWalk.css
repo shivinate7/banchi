@@ -2,32 +2,14 @@
  * repo's one rule for color). `.orders-walk` is `Orders.css`'s own wrapper, kept so this
  * screen sits in the same rhythm as the rest of the Pull stage; everything below it is new. */
 
-.walkplan-select { display: flex; flex-direction: column; gap: var(--bn-4); }
-.walkplan-select-head { display: flex; flex-direction: column; gap: 4px; }
-.walkplan-select-note { font-size: var(--bn-fs-sm); color: var(--bn-ink-3); margin: 0; }
-
-.walkplan-select-list { display: flex; flex-direction: column; gap: 2px; list-style: none; padding: 0; margin: 0; }
-.walkplan-select-row label {
-  display: flex;
-  align-items: center;
-  gap: var(--bn-3);
-  padding: var(--bn-2) var(--bn-3);
-  border-radius: var(--bn-r-sm);
-  cursor: pointer;
-  transition: background-color var(--bn-t-fast) var(--bn-ease);
-}
-.walkplan-select-row label:hover { background: var(--bn-hover); }
-.walkplan-select-row input[type='checkbox'] { width: 18px; height: 18px; flex: none; accent-color: var(--bn-accent); }
-.walkplan-select-name { flex: 1; min-width: 0; overflow-wrap: anywhere; }
-.walkplan-select-number { color: var(--bn-ink-3); font-size: var(--bn-fs-sm); }
-.walkplan-select-owed { color: var(--bn-ink-2); font-size: var(--bn-fs-sm); font-variant-numeric: tabular-nums; white-space: nowrap; }
-
-.walkplan-select-foot { display: flex; align-items: center; gap: var(--bn-3); padding-top: var(--bn-2); border-top: 1px solid var(--bn-line); }
-.walkplan-select-preview { color: var(--bn-ink-3); font-size: var(--bn-fs-sm); font-variant-numeric: tabular-nums; }
-
 /* ---- the pass head -------------------------------------------------------------------------- */
 
+/* `.walkplan-select*` IS GONE with `WalkSelect` (`docs/specs/order-walk-plan.md` §12): the
+   second list it styled does not exist, and the buyer list on `#/orders` is the selection. */
 .walkplan-head { display: flex; align-items: center; gap: var(--bn-3); flex-wrap: wrap; }
+/* `End walk` sits at the far end of the head — the one way out of a pass short of leaving the
+   screen, and the first thing drawn so a phone reaches it without scrolling the walk. */
+.walkplan-end { margin-left: auto; }
 .walkplan-figure { margin: 0; font-size: var(--bn-fs-lg); font-weight: 600; color: var(--bn-ink); }
 .walkplan-figure strong { font-variant-numeric: tabular-nums; }
 

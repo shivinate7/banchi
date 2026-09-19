@@ -6255,12 +6255,18 @@ COMPONENTS = [
                                        "join by order number with nothing written across the "
                                        "seam — including the buyer's name, which "
                                        "OrdersShipStage.tsx still does not draw.",
-                               "governed_by": ["D7", "D10", "D24", "D27", "D28", "D36", "D39", "D51", "D57", "D58", "D61", "D63", "D66", "D69", "D91", "D96", "D103", "D113", "D114", "D118", "D159", "D181", "D192", "D193", "D203", "D209", "D212"]},
+                               "governed_by": ["D7", "D10", "D24", "D27", "D28", "D36", "D39",
+                                               "D51", "D57", "D58", "D61", "D63", "D66", "D69",
+                                               "D91", "D93", "D96", "D97", "D103", "D113", "D114",
+                                               "D118", "D159", "D181", "D192", "D193", "D203",
+                                               "D209", "D212"]},
             "src/Orders.css": {"does": "the order screen at owner density: the line, its reason "
                                        "and remedy, and the pick rows under it. A copy already "
                                        "spoken for by another line is drawn as spoken for "
                                        "rather than offered twice.",
-                               "governed_by": ["D5", "D24", "D40", "D41", "D50", "D63", "D69", "D113", "D114", "D117", "D118", "D193", "D203"]},
+                               "governed_by": ["D5", "D24", "D40", "D41", "D50", "D63", "D69",
+                                               "D113", "D114", "D117", "D118", "D193", "D195",
+                                               "D203"]},
             "src/OrdersHubStore.ts": {"does": "THE HUB'S MEMORY ACROSS A STAGE SWITCH. "
                                               "`#/orders` and `#/shipping` are one screen with "
                                               "two stages, and the shell keys its view on the "
