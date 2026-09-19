@@ -22,7 +22,9 @@
 .orders-handoff .bn-icon:last-child { color: var(--bn-ink-4); }
 .orders-failure-code { font-size: var(--bn-fs-sm); color: var(--bn-ink-3); }
 
-/* ---- toolbar: the mode and the filter chips ---------------------------------- */
+/* ---- toolbar: the filter chips and the view controls -------------------------- */
+/* `.orders-mode` IS GONE with the mode strip it styled (`docs/specs/order-walk-plan.md` §12).
+   `#/orders` is one screen, so there is nothing left to switch between. */
 .orders-toolbar {
   display: flex;
   align-items: center;
@@ -30,7 +32,6 @@
   gap: var(--bn-3);
   flex-wrap: wrap;
 }
-.orders-mode .bn-seg-item { min-height: var(--bn-control-h-sm); }
 .orders-toolbar-note { font-size: var(--bn-fs-sm); color: var(--bn-ink-3); }
 
 /* ---- the buyer list's own view: search, status, sort, hide-unknown ------------ */
@@ -123,15 +124,27 @@
 }
 .orders-chip[aria-pressed='true'] .orders-chip-count { background: var(--bn-accent-tint-2); color: inherit; }
 
-/* ---- layout: the list beside the open order ----------------------------------- */
+/* ---- layout: the buyer list beside the walk (or the open buyer) ---------------- */
+/* THE LADDER IS `.browse-body`'s, DELIBERATELY — `#/inventory` and `#/orders` are the two
+   screens that put a long index beside the work, and §12 rules that they read as one system.
+   `300px` / `268px` / one stacked column are that sheet's own numbers, adopted here rather
+   than approximated.
+
+   WHAT IS NOT COPIED IS `.browse-body[data-rail='collapsed']`'s 52px column. That is
+   `BoxBrowse.tsx`'s OWN inner box-rail, set from its local `railCollapsed` — a control this
+   screen has no equivalent of. Importing the sheet wholesale would give `#/orders` a column
+   state it can never enter, so the numbers are shared and the state is not. */
 .orders-layout {
   display: grid;
-  grid-template-columns: minmax(260px, 320px) minmax(0, 1fr);
+  grid-template-columns: 300px minmax(0, 1fr);
   gap: var(--bn-5);
   align-items: start;
 }
 @media (max-width: 1279px) {
-  .orders-layout { grid-template-columns: minmax(240px, 280px) minmax(0, 1fr); gap: var(--bn-4); }
+  .orders-layout { grid-template-columns: 268px minmax(0, 1fr); gap: var(--bn-4); }
+}
+@media (max-width: 767px) {
+  .orders-layout { grid-template-columns: minmax(0, 1fr); }
 }
 .orders-index-pane {
   position: sticky;
@@ -166,6 +179,61 @@
   margin: -3px;
 }
 .orders-index > li { animation: bn-page-in var(--bn-t) var(--bn-ease-out) backwards; }
+/* THE TICK SITS BESIDE THE ROW, NOT INSIDE IT — `BuyerRow` is a `<button>` and a checkbox
+   nested in one is invalid markup. The `<li>` is the flex row that holds both, and the row
+   itself still takes every pixel the tick does not. */
+.orders-index-item { display: flex; align-items: center; gap: var(--bn-1); min-width: 0; }
+.orders-index-item > .orders-index-row { flex: 1 1 auto; min-width: 0; }
+/* THE THUMB FLOOR IS MET BY THE LABEL, NOT THE BOX (the kit's own argument for `.bn-check`:
+   a checkbox grown to 40px is a different drawing). The label is the target and carries the
+   size; the box inside it stays the system's 16px. */
+.orders-index-tick {
+  flex: none;
+  min-width: var(--bn-control-h-sm);
+  min-height: var(--bn-control-h-sm);
+  justify-content: center;
+  border-radius: var(--bn-r);
+  transition: background-color var(--bn-t-fast) var(--bn-ease);
+}
+.orders-index-tick:hover { background: var(--bn-hover); }
+/* The accordion head at narrow width is the same pairing, minus the index pane's own gaps. */
+.orders-acc-head { display: flex; align-items: center; gap: var(--bn-1); min-width: 0; padding-left: var(--bn-2); }
+.orders-acc-head > .orders-index-row { flex: 1 1 auto; min-width: 0; }
+
+/* ---- choosing who the walk is for (`docs/specs/order-walk-plan.md` §12) -------- */
+/* D195: two buttons of the same role in one sector share a width, so the
+   sector is a two-track grid rather than a flex row that would size each to its own label. */
+.orders-select-bar {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: var(--bn-2);
+  padding-bottom: var(--bn-1);
+}
+/* THE SLOT IS ALWAYS DRAWN AND ALWAYS THIS TALL (D118). Start appears the moment something is
+   ticked and goes again when the pass begins; reserving the height here is what keeps those
+   two presses from moving the list they were made on. `--bn-control-h-lg` is the size the
+   button inside it is drawn at. */
+/* THE SELECTION SECTOR IS THE HEAD OF THE COLUMN, AND THE RULE UNDER IT IS WHAT SEPARATES IT
+   FROM THE LIST. Start sat at the foot of the sticky pane first; over 250 buyers that foot is
+   at y=1449 on a 900px viewport and the press that fills it is at the head, so the answer to
+   `Tick all` was off the screen. */
+.orders-start-slot {
+  display: flex;
+  align-items: center;
+  /* THE BUTTON'S OWN HEIGHT PLUS THIS BOX'S PADDING AND RULE. `min-height` is a BORDER-box
+     figure here, so naming `--bn-control-h-lg` alone reserved 40px for a box that is 49px tall
+     with the button in it — measured, and the list under it moved by the 9px difference. The
+     arithmetic tracks the token, which grows to 46px under a coarse pointer. */
+  min-height: calc(var(--bn-control-h-lg) + var(--bn-2) + 1px);
+  padding-bottom: var(--bn-2);
+  border-bottom: 1px solid var(--bn-line);
+}
+/* THE HEIGHT IS RESERVED; THE RULE IS NOT. With Start absent the slot draws as a line floating
+   over a gap, which reads as a divider somebody forgot to fill. `:empty` is exact here — this
+   box holds the button or nothing at all — and it changes only what is painted, never the
+   layout the reservation above exists to hold still. */
+.orders-start-slot:empty { border-bottom-color: transparent; }
+.orders-start { width: 100%; }
 .orders-index-hint { display: flex; align-items: center; gap: 4px; padding: 0 var(--bn-2); font-size: var(--bn-fs-xs); color: var(--bn-ink-4); }
 .orders-index-hint .bn-kbd { margin-right: 2px; }
 
@@ -973,8 +1041,6 @@
      item's max-content, which made the segmented (496px) and the chip row (528px) push the
      document 138px wider than a 390px phone. */
   .orders-toolbar { flex-direction: column; align-items: stretch; flex-wrap: nowrap; gap: var(--bn-2); min-width: 0; }
-  .orders-mode { display: flex; min-width: 0; }
-  .orders-mode .bn-seg-item { flex: 1 1 0; min-width: 0; }
   /* One row of chips that scrolls sideways, each one thumb-sized. */
   .orders-chips { flex-wrap: nowrap; overflow-x: auto; scrollbar-width: none; margin: 0 calc(-1 * var(--bn-4)); padding: 2px var(--bn-4); }
   .orders-chips::-webkit-scrollbar { display: none; }

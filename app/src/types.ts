@@ -3053,10 +3053,17 @@ export type ResolvedOrder = {
  *  different cards. */
 export type WalkPlanRef = { key: string; number: string; buyer: string | null }
 
-/** One copy of a `WalkPlanTake`, as a pick-shaped row. `label`, `card` and `neighbors` are
- *  composed by the server's one renderer (`pipeline/join.py:Position`), exactly as
- *  `PickRow.place` is — `_Places.for_keys` scoping, so `neighbors` is always null here,
- *  the same degraded-but-typed state a pick row already carries. */
+/** One copy of a `WalkPlanTake`, as a pick-shaped row. `label`, `card`, `neighbors` and the
+ *  box's own three numbers are composed by the server's one renderer
+ *  (`pipeline/join.py:Position`), exactly as `PickRow.place` is.
+ *
+ *  `neighbors` IS REAL HERE SINCE 2026-09-19 and used to be null always. The route dropped
+ *  `_Places.for_keys` — a scoping borrowed from the polled `GET /orders`, where a pick set
+ *  spans most of the store — for the ordinary renderer, which is already scoped by being
+ *  lazy per box. The walk fires once per pass over the few drawers the solver picked, so the
+ *  cost is a per-box walk of those drawers and nothing else. The degraded null is still
+ *  reachable (a record in the store whose position will not read) and still renders as no
+ *  sentence. */
 export type WalkPlanCopy = {
   box: number
   index: number
@@ -3069,6 +3076,15 @@ export type WalkPlanCopy = {
   card: number | null
   label: string | null
   neighbors: { prev: PlaceNeighbor | null; next: PlaceNeighbor | null } | null
+  /** THE BOX'S OWN THREE, so the walk's position bar is a ruler and not a blank track.
+   *  Exactly `Place.box_total`/`box_closed`/`fraction` and read by the same rules: the
+   *  total is how many cards the box holds and `box_closed` says whether that is final,
+   *  and `fraction` is null rather than zero where the server cannot divide. Zero and null
+   *  are the honest degraded pair — a pooled card (D24) and a box the walk could not count
+   *  both answer them — and neither may be coerced into a drawn proportion. */
+  box_total: number
+  box_closed: boolean
+  fraction: number | null
 }
 
 /** One SKU at one stop: how many to take, and every copy standing there.
@@ -3350,6 +3366,11 @@ export type OrdersFetched = {
  *  physical card sits at a slot) and the WHOLE of the lookup on the way back. */
 export type PullTarget = { box: number; index: number; capture_id: string }
 
+/** A position the caller is still DRAWING and is not pulling — `POST /orders/pull`'s own
+ *  `refresh` list. No `capture_id`: nothing is aimed at and nothing is written, so an aim
+ *  check on a card nobody is touching would only refuse a re-description over a re-shoot. */
+export type PullRefresh = { box: number; index: number }
+
 /** What a pull or its undo did.
  *
  *  `places` ARE THE LABELS AS THEY WERE BEFORE THE WRITE, one per target in request order.
@@ -3364,6 +3385,14 @@ export type PullResult = {
   recorded: number
   outstanding: number
   places: Place[]
+  /** THE OTHER DIRECTION IN TIME, AND IT IS NOT A SECOND RECEIPT. One `Place` for each
+   *  `refresh` position the press actually touched the box of, composed AFTER the write.
+   *  The write is what made those cards' description wrong — a pull renumbers everything
+   *  behind it in the drawer (D58) — so this is how a screen still holding them says where
+   *  they sit now. Empty when nothing asked, and a position in an untouched box is left out
+   *  rather than answered (`docs/specs/order-walk-plan.md` §8's ruling of 2026-09-19).
+   *  Optional because an older server omits it. */
+  refreshed?: Place[]
   sales: SaleResult[]
 }
 

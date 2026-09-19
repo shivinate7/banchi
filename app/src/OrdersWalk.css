@@ -2,32 +2,14 @@
  * repo's one rule for color). `.orders-walk` is `Orders.css`'s own wrapper, kept so this
  * screen sits in the same rhythm as the rest of the Pull stage; everything below it is new. */
 
-.walkplan-select { display: flex; flex-direction: column; gap: var(--bn-4); }
-.walkplan-select-head { display: flex; flex-direction: column; gap: 4px; }
-.walkplan-select-note { font-size: var(--bn-fs-sm); color: var(--bn-ink-3); margin: 0; }
-
-.walkplan-select-list { display: flex; flex-direction: column; gap: 2px; list-style: none; padding: 0; margin: 0; }
-.walkplan-select-row label {
-  display: flex;
-  align-items: center;
-  gap: var(--bn-3);
-  padding: var(--bn-2) var(--bn-3);
-  border-radius: var(--bn-r-sm);
-  cursor: pointer;
-  transition: background-color var(--bn-t-fast) var(--bn-ease);
-}
-.walkplan-select-row label:hover { background: var(--bn-hover); }
-.walkplan-select-row input[type='checkbox'] { width: 18px; height: 18px; flex: none; accent-color: var(--bn-accent); }
-.walkplan-select-name { flex: 1; min-width: 0; overflow-wrap: anywhere; }
-.walkplan-select-number { color: var(--bn-ink-3); font-size: var(--bn-fs-sm); }
-.walkplan-select-owed { color: var(--bn-ink-2); font-size: var(--bn-fs-sm); font-variant-numeric: tabular-nums; white-space: nowrap; }
-
-.walkplan-select-foot { display: flex; align-items: center; gap: var(--bn-3); padding-top: var(--bn-2); border-top: 1px solid var(--bn-line); }
-.walkplan-select-preview { color: var(--bn-ink-3); font-size: var(--bn-fs-sm); font-variant-numeric: tabular-nums; }
-
 /* ---- the pass head -------------------------------------------------------------------------- */
 
+/* `.walkplan-select*` IS GONE with `WalkSelect` (`docs/specs/order-walk-plan.md` §12): the
+   second list it styled does not exist, and the buyer list on `#/orders` is the selection. */
 .walkplan-head { display: flex; align-items: center; gap: var(--bn-3); flex-wrap: wrap; }
+/* `End walk` sits at the far end of the head — the one way out of a pass short of leaving the
+   screen, and the first thing drawn so a phone reaches it without scrolling the walk. */
+.walkplan-end { margin-left: auto; }
 .walkplan-figure { margin: 0; font-size: var(--bn-fs-lg); font-weight: 600; color: var(--bn-ink); }
 .walkplan-figure strong { font-variant-numeric: tabular-nums; }
 
@@ -136,16 +118,36 @@
 .walkplan-copy[data-state='taken'] { opacity: 0.6; }
 .walkplan-copy[data-state='gone'] { opacity: 0.5; }
 
+/* §9a finding 3: `#/inventory`'s OWN size for a photograph — `BoxBrowse.css`'s `.browse-shot`/
+ * `.browse-photo-frame` (a content-sized column, 220-300px, at the card's own aspect ratio),
+ * not the 84px thumbnail this screen shipped with. Same numbers, same ratio; this screen has
+ * no grid band to size a percentage against, so the column is expressed as a clamp instead of
+ * `BoxBrowse`'s `minmax(220px, 34%)`. */
 .walkplan-copy-photo {
-  width: 84px;
+  width: min(220px, 100%);
+  max-width: 300px;
   aspect-ratio: 63 / 88;
   flex: none;
 }
 .walkplan-copy-photo img { object-fit: cover; }
 .walkplan-copy-photo-blank { display: flex; align-items: center; justify-content: center; color: var(--bn-ink-4); }
 
-.walkplan-copy-body { display: flex; flex-direction: column; gap: 2px; min-width: 0; flex: 1; }
-.walkplan-copy-neighbors { margin: 0; font-size: var(--bn-fs-xs); color: var(--bn-ink-3); overflow-wrap: anywhere; }
+.walkplan-copy-body { display: flex; flex-direction: column; gap: var(--bn-2); min-width: 0; flex: 1; padding-top: 2px; }
+
+/* THE LADDER'S SLOT RESERVES THE TALLEST STATE IT CAN TAKE (D118, and
+ * `docs/specs/order-walk-plan.md` §8's ruling of 2026-09-19). A pull re-describes the OTHER
+ * rows in the same drawer — a `skipped` line can appear where there was none, a side can lose
+ * its last named landmark, and a row the press found already gone blanks the block entirely —
+ * so the slot has to hold still through all of that or another row's press moves the Pull
+ * button under this one.
+ *
+ * DERIVED FROM `PlaceNeighbors.css`, NOT GUESSED: two `.nb-row`s, each a `--nb-name` line at
+ * its 1.35 line-height plus the `--nb-skip` line at its 1.4, and the block's own 2px gap. At
+ * 560px and up the 220px photograph is the taller column and this costs nothing at all; below
+ * it the row stacks and this is the whole of why the stack does not breathe. */
+.walkplan-copy-neighbors {
+  min-height: calc(2 * (var(--nb-name, 13px) * 1.35 + var(--nb-skip, 11px) * 1.4) + 2px);
+}
 
 .walkplan-copy-taken,
 .walkplan-copy-gone {
@@ -178,8 +180,17 @@
 .walkplan-shortfall-figure { font-size: var(--bn-fs-sm); color: var(--bn-ink-2); font-variant-numeric: tabular-nums; }
 .walkplan-shortfall-for { font-size: var(--bn-fs-sm); color: var(--bn-ink-3); margin-left: auto; }
 
+/* A 220-300px photograph, a position bar and neighbours cannot sit beside each other under
+ * ~560px (`BoxBrowse.css`'s own `@container pane (min-width: 560px)`, the point its hero photo
+ * stops sharing a row with its details) — so the copy row stacks the same way, photo first. */
+@media (max-width: 559px) {
+  .walkplan-copy { flex-direction: column; align-items: stretch; }
+  .walkplan-copy-photo { width: 100%; max-width: 260px; margin: 0 auto; }
+  .walkplan-copy-taken,
+  .walkplan-copy-gone,
+  .walkplan-pull { align-self: flex-end; }
+}
+
 @media (max-width: 479px) {
-  .walkplan-copy { flex-wrap: wrap; }
-  .walkplan-pull { margin-left: auto; }
   .walkplan-shortfall-for { margin-left: 0; }
 }
