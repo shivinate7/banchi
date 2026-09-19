@@ -6633,7 +6633,25 @@ test('a press to another drawer dims its predecessor’s rows rather than drawin
      right after the click and before anything awaits the network. */
   const snap = await page.evaluate(() => {
     const list = document.querySelector('.browse-list')
-    const card = document.querySelector('.browse-card')
+    const card = document.querySelector('.browse-card') as (HTMLElement & { inert: boolean }) | null
+    /* REVIEW OF PR #407, FINDING 1 (HIGH): `pointer-events: none` blocks the mouse alone.
+       Tab still reached CardOps' "Card actions" button and Enter opened its menu on
+       `held.current` — box 2's card, live, under the Box 7 header — the a4f3594b
+       regression again, by keyboard. `inert` (BoxBrowse.tsx) is meant to remove the whole
+       dimmed section from the tab order AND refuse activation. Proved here by calling
+       `.focus()` on the button directly: an `inert` subtree refuses that call by spec, so
+       `document.activeElement` stays put and this reads false. A real Tab walk would prove
+       the same fact more slowly and no more certainly — `inert` governs both paths by one
+       mechanism. */
+    const cardActionsBtn = card === null
+      ? null
+      : [...card.querySelectorAll('button')].find((b) => b.textContent?.trim() === 'Card actions') ?? null
+    const before = document.activeElement
+    cardActionsBtn?.focus()
+    const cardActionsFocused = cardActionsBtn !== null && document.activeElement === cardActionsBtn
+    if (document.activeElement !== before && document.activeElement instanceof HTMLElement) {
+      document.activeElement.blur()
+    }
     return {
       current: document.querySelector('.browse-boxcell[aria-current="true"]')?.getAttribute('aria-label') ?? null,
       /* `.browse-card` is now HELD DIMMED rather than absent — box 2's rows are still ITS
@@ -6644,11 +6662,23 @@ test('a press to another drawer dims its predecessor’s rows rather than drawin
       cardAriaBusy: card?.getAttribute('aria-busy') ?? null,
       cardOpacity: card === null ? null : Number.parseFloat(getComputedStyle(card).opacity),
       cardPointerEvents: card === null ? null : getComputedStyle(card).pointerEvents,
+      cardInert: card === null ? null : card.inert,
+      cardActionsPresent: cardActionsBtn !== null,
+      cardActionsFocusable: cardActionsFocused,
       /* Box 2's own photograph is still drawn (held, dimmed) — it is what proves the
          panel is showing the PREVIOUS drawer's card rather than nothing, and the
          aria-busy/opacity pair above is what proves it is marked as stale rather than
          claimed as box 7's. */
       box2Photo: document.querySelectorAll('img[alt*="Box 2 ·"]').length,
+      /* REVIEW OF PR #407, FINDING 2 (MEDIUM): `panelDetail` must still be the HELD
+         `{detail}` — `Inventory.tsx`'s `CopiesPanel` — not the live one (which is `null`
+         while `dimPanel`, drawing nothing) and not some invented stand-in. `.browse-under`
+         is `{panelDetail}`'s own wrapper; `.card-locations-owner` is `CopiesPanel`'s own
+         top-level class (CardLocations.tsx) and `.card-locations-row` is one row of real
+         copy data, so both counts prove the copies column is drawing REAL, HELD content,
+         not an empty div. */
+      underOwnerCount: document.querySelectorAll('.browse-under .card-locations-owner').length,
+      underRowCount: document.querySelectorAll('.browse-under .card-locations-row').length,
       rowCount: document.querySelectorAll('.browse-row').length,
       listAriaBusy: list?.getAttribute('aria-busy') ?? null,
       listOpacity: list === null ? null : Number.parseFloat(getComputedStyle(list).opacity),
@@ -6667,7 +6697,12 @@ test('a press to another drawer dims its predecessor’s rows rather than drawin
   expect(snap.cardAriaBusy, '.browse-card aria-busy').toBe('true')
   expect(snap.cardOpacity, '.browse-card computed opacity').toBeLessThan(1)
   expect(snap.cardPointerEvents, '.browse-card computed pointer-events').toBe('none')
+  expect(snap.cardInert, '.browse-card is inert while dimmed').toBe(true)
+  expect(snap.cardActionsPresent, '"Card actions" button exists in the dimmed panel').toBe(true)
+  expect(snap.cardActionsFocusable, '"Card actions" is NOT focusable while the panel is inert').toBe(false)
   expect(snap.box2Photo, "box 2's photo alt count, held dimmed").toBe(1)
+  expect(snap.underOwnerCount, '.browse-under draws the held CopiesPanel, not nothing').toBe(1)
+  expect(snap.underRowCount, '.browse-under draws real held copy rows, not an empty panel').toBeGreaterThan(0)
   expect(snap.rowCount, '.browse-row count, held dimmed').toBe(rowsBefore)
   expect(snap.listAriaBusy, '.browse-list aria-busy').toBe('true')
   expect(snap.listOpacity, '.browse-list computed opacity').toBeLessThan(1)

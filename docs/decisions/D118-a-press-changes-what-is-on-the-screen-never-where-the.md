@@ -253,3 +253,32 @@ rows rather than drawing them as the new box's, or drawing nothing`) keeps the o
 box, same content, held through the wait — the one comparison that isolates the fix.
 Box 2's row count and photograph are still drawn while held. The false-claim and
 `.browse-empty` checks stand: dimmed never lies about what box holds what.
+
+### Review found a keyboard path around pointer-events, and an untested column (2026-09-19)
+
+**Finding 1, HIGH.** `pointer-events: none` blocks the mouse alone. Tab still reached
+`CardOps`' "Card actions" button. Enter opened its menu on `held.current` — box 2's card,
+live, under the Box 7 header. The same regression a4f3594b named, reached by keyboard.
+
+**Fixed with `inert`.** The dimmed `<section className="browse-card">` carries
+`inert={dimPanel}` (React 19 supports `inert` as a boolean prop). `inert` removes the
+whole subtree from the tab order. It refuses activation too, by the same mechanism. The
+list keeps its own narrower fix (`tabIndex={-1}`, `onKeyDown={undefined}`). It is not
+`panelRow`/`panelDetail`'s own subtree, and it carries interactive rows of its own that a
+blanket `inert` would also have to cover.
+
+**Guarded by calling `.focus()` on the button directly**, in the same one-shot snapshot,
+rather than a real Tab walk. An `inert` subtree refuses a programmatic `.focus()` call, by
+the same spec clause that drops it from the tab order. This reads the fact faster, and no
+less certainly. `cardInert` and `cardActionsFocusable` are both asserted.
+
+**Finding 2, MEDIUM.** Mutating `panelDetail` back to the live `detail` left the case
+green. Nothing had ever read `.browse-under`'s own content — only `.browse-card`'s outer
+`aria-busy` and opacity. `underOwnerCount` and `underRowCount` now read
+`.card-locations-owner` and `.card-locations-row` inside `.browse-under`. Both are
+`CopiesPanel`'s own classes (`CardLocations.tsx`). The case now fails if the copies column
+ever draws nothing, or anything invented, in place of the held card's real copies.
+
+**Both mutation-tested** (`.bak` copies, restored, never `git checkout <path>`, never
+`git stash`). Reverting `inert={dimPanel}` to `inert={false}` draws `cardInert` false.
+Reading the live `detail` instead of `heldDetail.current` draws `underOwnerCount` 0.

@@ -2551,6 +2551,14 @@ export function BoxBrowse({
                     className="bn-panel browse-card"
                     aria-busy={dimPanel ? 'true' : undefined}
                     data-dimmed={dimPanel ? 'true' : undefined}
+                    /* REVIEW, PR #407: `pointer-events: none` (BoxBrowse.css) blocks the
+                     * mouse alone. Tab still reached `CardOps`' "Card actions" button and
+                     * Enter opened its menu on `held.current` — the previous box's card,
+                     * under the new box's header, live — which is the a4f3594b regression
+                     * again, by keyboard. `inert` removes the whole subtree from the tab
+                     * order AND refuses activation, so neither path reaches a stale
+                     * control while `dimPanel` is true. */
+                    inert={dimPanel}
                   >
                     <div className="browse-hero-head">
                       <div className="browse-hero-text">
