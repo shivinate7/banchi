@@ -1580,6 +1580,35 @@ export function BoxBrowse({
   }, [found])
   const awaitingRows = typeof shelf === 'number' && rowsShelf !== shelf
   const searchReRank = shelfSource.current === 'search'
+  /* THE OWNER'S RULING, 2026-09-19: THE PREVIOUS DRAWER STAYS ON SCREEN, DIMMED, WHILE THE NEW
+   * ONE IS IN FLIGHT — NEVER BLANK. Before this, `awaitingRows` on a PRESS or a walk-to (never
+   * a search re-rank, which already holds via `searchReRank` above) drew nothing at all: no
+   * sentence, no spinner, in both the walk list and the copies column. Blank was itself a
+   * regression risk — an empty pane invites a second press — and it cost a layout jump when
+   * the real rows finally landed and the pane reappeared at its full height.
+   *
+   * `heldSections` and `heldDetail` are this file's OWN memory of the last box that actually
+   * answered, kept beside `held` (the row) above — all three write only when the render is
+   * NOT awaiting (this box's rows are its own), so none of them can ever be primed with a
+   * partial or in-flight answer. They read as the DISPLAYED content during the wait, never as
+   * a claim about the box the header now names — a4f3594b's regression was exactly that claim
+   * (box 2's card drawn live under a `Box 7` header), so the dimmed render below is marked
+   * `aria-busy` and stripped of every pointer and keyboard path to it (`.browse-list[aria-busy]`
+   * / `.browse-card[aria-busy]` in BoxBrowse.css), on top of being visually dimmed to
+   * `--bn-disabled`. It is a transition, not a claim. */
+  const heldSections = useRef<readonly Section[]>([])
+  useEffect(() => {
+    if (!awaitingRows) heldSections.current = sections
+  }, [sections, awaitingRows])
+  const heldDetail = useRef<ReactNode>(null)
+  useEffect(() => {
+    if (found !== null) heldDetail.current = detail
+  }, [found, detail])
+  /* THE WALK LIST'S OWN DISPLAYED CONTENT — the last box that answered, while this one has
+   * not. `sections` itself goes empty the instant `shelf` moves (D192: `rows` is one box's
+   * cards, and `onShelf` narrows by the NEW `shelf` before the new box's own read lands), so
+   * reading `sections` straight through the wait is what drew nothing at all. */
+  const displaySections = awaitingRows ? heldSections.current : sections
   /* THE WALK HAS NOTHING TO STAND ON ONLY WHEN THERE IS NOTHING THERE AND THE BOX HAS SAID SO.
    * Two different gaps close here and both of them used to unmount the copies column, and
    * both are scoped to `searchReRank` for the reason above. The box the walk moved to has
@@ -1591,6 +1620,15 @@ export function BoxBrowse({
    * honest case: the shelf has answered and holds no row to walk, or the shelf changed by
    * a press or a walk-to and the panel is honestly between cards. */
   const selectedRow = found ?? (visible.length === 0 && !awaitingRows ? null : searchReRank ? held.current : null)
+  /* THE CARD PANEL'S OWN DISPLAYED ROW AND DETAIL (owner's ruling, 2026-09-19), scoped to the
+   * one case `searchReRank` does not already cover — a search re-rank still holds via
+   * `selectedRow` itself, above. A press or a walk-to falls straight to `null` there on
+   * purpose (the a4f3594b fix), so this is the one place that stands the previous row back
+   * up — DIMMED, never as a claim about the box now named — while that box's own rows are in
+   * flight. */
+  const dimPanel = awaitingRows && selectedRow === null && held.current !== null
+  const panelRow = dimPanel ? held.current : selectedRow
+  const panelDetail = dimPanel ? heldDetail.current : detail
 
   /* What a bulk write would reach: the ticked rows in the box being walked, as indices. */
   const pickedIndices = useMemo(() => {
@@ -1784,7 +1822,7 @@ export function BoxBrowse({
     if (phone) setRailOpen(false)
   }
 
-  const selectedLabel = selectedRow === null ? null : positionLabel(selectedRow.card)
+  const selectedLabel = panelRow === null ? null : positionLabel(panelRow.card)
   const at = visible.findIndex((row) => row.key === selected)
   const boxMap = useMemo(() => new Map(boxRecords.map((record) => [record.box, record])), [boxRecords])
 
@@ -2123,16 +2161,27 @@ export function BoxBrowse({
             </div>
           ) : null}
 
-          {visible.length === 0 ? null : (
+          {displaySections.length === 0 ? null : (
             <ul
               className="browse-list"
               ref={listRef}
-              tabIndex={0}
+              tabIndex={awaitingRows ? -1 : 0}
               aria-label="Captured cards, in box-walk order"
               aria-keyshortcuts="ArrowLeft ArrowRight PageUp PageDown Home End X"
-              onKeyDown={onListKeys}
+              onKeyDown={awaitingRows ? undefined : onListKeys}
+              aria-busy={awaitingRows ? 'true' : undefined}
+              data-dimmed={awaitingRows ? 'true' : undefined}
             >
-              {sections.map((section) => {
+              {/* OWNER'S RULING, 2026-09-19: while `awaitingRows`, `displaySections` is
+                  `heldSections` — the last box that answered — never the live (empty)
+                  `sections`. Every row below still comes off the SAME `Row` objects the
+                  live walk would use once they exist; nothing here is invented. The
+                  `aria-busy`/`data-dimmed` pair above and `tabIndex={-1}` /
+                  `onKeyDown={undefined}` close the one path a stale row could still act
+                  on: BoxBrowse.css's `[aria-busy='true']` rule dims it and drops
+                  `pointer-events`, so a click cannot land, and the list drops out of the
+                  tab order so a key cannot either — a transition is drawn, never acted on. */}
+              {displaySections.map((section) => {
                 const open = isOpen(section)
                 const ticked = section.rows.filter((row) => picked.includes(row.key)).length
                 /* The pill counts what the title's range counts — the cards on hand. A
@@ -2308,8 +2357,8 @@ export function BoxBrowse({
 
   // ---------------------------------------------------------------------------- the pane
 
-  const open = selectedRow === null ? null : openQuestion(queued, selectedRow)
-  const game = selectedRow === null ? null : gameWord(selectedRow.card)
+  const open = panelRow === null ? null : openQuestion(queued, panelRow)
+  const game = panelRow === null ? null : gameWord(panelRow.card)
 
   /* THE ZERO-BOX STORE (D192, this item). `shelf` never leaves `null` here: the shelf
    * effect above returns the instant `shelves.length === 0`, so the box-scoped rows fetch
@@ -2440,7 +2489,7 @@ export function BoxBrowse({
             {phone ? null : railCollapsed ? miniRail : rail}
 
             <div className="browse-side">
-              {selectedRow === null ? (
+              {panelRow === null ? (
                 <div className="bn-panel">
                   {chooserActive && searchGroups !== null ? (
                     <VariantChooser
@@ -2452,7 +2501,12 @@ export function BoxBrowse({
                       `selectedRow` on null while the shelf it moved to is still fetching, and
                       "Nothing in box N yet" is exactly as false here as it was in the list
                       above — the box the header already names can hold cards this panel has
-                      not seen yet. Nothing is drawn until the shelf answers. */ : filtered ? (
+                      not seen yet. Nothing is drawn until the shelf answers UNLESS `held`
+                      already has a previous row to stand on, in which case `panelRow` is
+                      already non-null and this branch does not run at all (owner's ruling,
+                      2026-09-19: dimmed, not blank — see `dimPanel` above). This branch is
+                      left for the one case `held` cannot cover: the very first box a session
+                      opens, where there is no previous row to dim. */ : filtered ? (
                     <EmptyState
                       icon="search"
                       title={`Nothing matches “${query.trim()}”`}
@@ -2493,24 +2547,36 @@ export function BoxBrowse({
                       this key is why it had never once run. The entrance now plays when the panel appears,
                       which is what an entrance is for. `CardOps` below keeps its own key:
                       that one resets a MENU, not a fetch. */}
-                  <section className="bn-panel browse-card">
+                  <section
+                    className="bn-panel browse-card"
+                    aria-busy={dimPanel ? 'true' : undefined}
+                    data-dimmed={dimPanel ? 'true' : undefined}
+                    /* REVIEW, PR #407: `pointer-events: none` (BoxBrowse.css) blocks the
+                     * mouse alone. Tab still reached `CardOps`' "Card actions" button and
+                     * Enter opened its menu on `held.current` — the previous box's card,
+                     * under the new box's header, live — which is the a4f3594b regression
+                     * again, by keyboard. `inert` removes the whole subtree from the tab
+                     * order AND refuses activation, so neither path reaches a stale
+                     * control while `dimPanel` is true. */
+                    inert={dimPanel}
+                  >
                     <div className="browse-hero-head">
                       <div className="browse-hero-text">
-                        <h2 className={nameOf(selectedRow.card) === null ? 'browse-hero-name is-unnamed' : 'browse-hero-name'}>
-                          {nameOf(selectedRow.card) ?? 'Not identified yet'}
+                        <h2 className={nameOf(panelRow.card) === null ? 'browse-hero-name is-unnamed' : 'browse-hero-name'}>
+                          {nameOf(panelRow.card) ?? 'Not identified yet'}
                         </h2>
                         <p className="browse-hero-sub">
-                          {[numberCell(selectedRow.card) === 'none' ? null : numberCell(selectedRow.card), selectedRow.card.set_hint, game]
+                          {[numberCell(panelRow.card) === 'none' ? null : numberCell(panelRow.card), panelRow.card.set_hint, game]
                             .filter((part): part is string => typeof part === 'string' && part !== '')
                             .map((part, i) => (
-                              <span key={`${part}-${i}`} className={i === 0 && numberCell(selectedRow.card) !== 'none' ? 'browse-hero-number' : undefined}>
+                              <span key={`${part}-${i}`} className={i === 0 && numberCell(panelRow.card) !== 'none' ? 'browse-hero-number' : undefined}>
                                 {part}
                               </span>
                             ))}
                         </p>
                         <div className="browse-hero-chips">
                           {/* No `chooserActive` check needed here: while the chooser shows,
-                              `selectedRow` is null and this whole branch does not render, so
+                              `panelRow` is null and this whole branch does not render, so
                               nothing here can bypass it. This chip is reachable only once a
                               printing is picked (or the search always had one), and it is
                               what gets an operator back to the chooser after the walk has
@@ -2520,16 +2586,16 @@ export function BoxBrowse({
                               {searchGroups.length} printings · change
                             </Chip>
                           ) : null}
-                          {claimList(selectedRow.card.metadata_finish).map((finish) => (
+                          {claimList(panelRow.card.metadata_finish).map((finish) => (
                             <Pill key={`f-${finish}`} icon="sparkles">
                               {titleCase(finish)}
                             </Pill>
                           ))}
-                          {claimList(selectedRow.card.rarity_claim).map((rarity) => (
+                          {claimList(panelRow.card.rarity_claim).map((rarity) => (
                             <Pill key={`r-${rarity}`}>{titleCase(rarity)}</Pill>
                           ))}
-                          <Pill tone={stateTone(selectedRow.card.state)} outline={selectedRow.card.state === 'identified'}>
-                            {stateLabel(selectedRow.card.state)}
+                          <Pill tone={stateTone(panelRow.card.state)} outline={panelRow.card.state === 'identified'}>
+                            {stateLabel(panelRow.card.state)}
                           </Pill>
                           {open === null ? null : (
                             <a className="bn-pill bn-pill-warn browse-queuechip" href="#/review">
@@ -2540,19 +2606,19 @@ export function BoxBrowse({
                         </div>
                       </div>
                       <CardOps
-                        key={selectedRow.key}
-                        row={selectedRow}
+                        key={panelRow.key}
+                        row={panelRow}
                         onChanged={() => setReloads((n) => n + 1)}
                         reshoot={
                           <ReshootControl
-                            row={selectedRow}
-                            busy={reshootBusy === selectedRow.key}
+                            row={panelRow}
+                            busy={reshootBusy === panelRow.key}
                             failure={
-                              reshootFailure !== null && reshootFailure.key === selectedRow.key
+                              reshootFailure !== null && reshootFailure.key === panelRow.key
                                 ? reshootFailure.failure
                                 : null
                             }
-                            onPick={(file) => beginReshoot(selectedRow, file)}
+                            onPick={(file) => beginReshoot(panelRow, file)}
                           />
                         }
                       />
@@ -2573,27 +2639,27 @@ export function BoxBrowse({
                     <div className="browse-band">
                       <div className="browse-shot">
                         <PhotoPanel
-                          row={selectedRow}
+                          row={panelRow}
                           label={selectedLabel}
-                          absent={photoAbsent === selectedRow.key}
-                          onAbsent={() => setPhotoAbsent(selectedRow.key)}
-                          nonce={reshot[selectedRow.key] ?? null}
+                          absent={photoAbsent === panelRow.key}
+                          onAbsent={() => setPhotoAbsent(panelRow.key)}
+                          nonce={reshot[panelRow.key] ?? null}
                           onZoom={() => setZoomed(true)}
                           reshoot={
                             <ReshootControl
-                              row={selectedRow}
-                              busy={reshootBusy === selectedRow.key}
+                              row={panelRow}
+                              busy={reshootBusy === panelRow.key}
                               failure={
-                                reshootFailure !== null && reshootFailure.key === selectedRow.key
+                                reshootFailure !== null && reshootFailure.key === panelRow.key
                                   ? reshootFailure.failure
                                   : null
                               }
-                              onPick={(file) => beginReshoot(selectedRow, file)}
+                              onPick={(file) => beginReshoot(panelRow, file)}
                             />
                           }
                         />
                       </div>
-                      <div className="browse-under">{detail}</div>
+                      <div className="browse-under">{panelDetail}</div>
                     </div>
                   </section>
 
@@ -2609,8 +2675,8 @@ export function BoxBrowse({
                     </summary>
                     <div className="browse-about">
                       {factGroupsOf(
-                        selectedRow.card,
-                        selectedRow.card.run === null ? undefined : priced[selectedRow.card.run],
+                        panelRow.card,
+                        panelRow.card.run === null ? undefined : priced[panelRow.card.run],
                         listings,
                       ).map((group) => (
                         <div className="browse-factgroup" key={group.title}>
