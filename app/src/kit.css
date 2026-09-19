@@ -536,6 +536,13 @@ a.bn-btn, a.bn-btn:hover, a.bn-pill, a.bn-pill:hover, a.bn-chip, a.bn-chip:hover
 }
 .bn-stat-label { font-size: var(--bn-fs-sm); color: var(--bn-ink-3); }
 
+/* A ROW OF STATS, THE LAYOUT HALF OF THE SAME PRIMITIVE (D41's census-triad). Wraps rather
+   than truncates, because a rail that can no longer fit every figure on one line should stack
+   them, not clip one. Shared by `#/inventory`'s card pane (`.card-locations-stats`) and its
+   box panel (`.boxops-stats`) so the two owner-side census blocks read one rule for the part
+   that is not per-screen skin. */
+.bn-stat-row { display: flex; flex-wrap: wrap; align-items: flex-start; gap: var(--bn-3) var(--bn-6); }
+
 /* ---- table ------------------------------------------------------------------- */
 .bn-table { width: 100%; border-collapse: collapse; font-size: var(--bn-fs-md); }
 .bn-table th {

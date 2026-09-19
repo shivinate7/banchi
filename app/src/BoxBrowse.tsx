@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import type { CSSProperties, KeyboardEvent as ReactKeyboardEvent, ReactNode } from 'react'
 
 import { isEditableTarget } from './keys'
@@ -1604,6 +1604,30 @@ export function BoxBrowse({
   useEffect(() => {
     if (found !== null) heldDetail.current = detail
   }, [found, detail])
+  /* THE LIST'S OWN HEIGHT, HELD THROUGH THE SAME WINDOW (this collision's fix, found merging
+   * against a27c811f/b8bd679b, 2026-09-19). `heldSections` above keeps the CONTENT identical
+   * through a press — the same three rows, dimmed — but the list's rendered HEIGHT still
+   * depends on `.browse-box-head` and `.browse-status` above it in the SAME viewport-capped
+   * flex column (`.browse-map`'s `max-height`), and those differ BY BOX for reasons that have
+   * nothing to do with the list: a census with more figures, a name that wraps, more sections,
+   * a ticked selection, a taller status line. When the outgoing box's own head+status needed
+   * more of that shared budget than the incoming box's does, `.browse-list`'s `flex: 0 1 auto`
+   * gives up the difference and its min-height floor absorbs the rest — so the SAME held rows
+   * render shorter under the old box and spring back to their natural height the instant the
+   * header switches to the new one, before a single new row has landed. Held content at a
+   * height that moves for a reason unrelated to the content is the same regression a27c811f
+   * fixed one layer up, so it gets the same medicine: `heldListHeight` is the list's own last
+   * MEASURED height while it was still answering for ITS OWN box, PINNED as an explicit
+   * `height` (not `minHeight` — the new box's own budget can be LARGER too, and the point is
+   * that the held rows render at the SAME height either way) for exactly the `awaitingRows`
+   * window, and released the instant the new box's rows land, so the new box's own steady
+   * state is never constrained by the old one's. */
+  const heldListHeight = useRef<number | null>(null)
+  useLayoutEffect(() => {
+    if (!awaitingRows) heldListHeight.current = listRef.current?.getBoundingClientRect().height ?? null
+  })
+  const listHoldStyle: CSSProperties | undefined =
+    awaitingRows && heldListHeight.current !== null ? { height: heldListHeight.current } : undefined
   /* THE WALK LIST'S OWN DISPLAYED CONTENT — the last box that answered, while this one has
    * not. `sections` itself goes empty the instant `shelf` moves (D192: `rows` is one box's
    * cards, and `onShelf` narrows by the NEW `shelf` before the new box's own read lands), so
@@ -2165,6 +2189,7 @@ export function BoxBrowse({
             <ul
               className="browse-list"
               ref={listRef}
+              style={listHoldStyle}
               tabIndex={awaitingRows ? -1 : 0}
               aria-label="Captured cards, in box-walk order"
               aria-keyshortcuts="ArrowLeft ArrowRight PageUp PageDown Home End X"
