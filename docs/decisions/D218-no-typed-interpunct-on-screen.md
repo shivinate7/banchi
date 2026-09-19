@@ -1,4 +1,4 @@
-## D-no-typed-interpunct-on-screen — A typed dot is a defect wherever it is typed, and the reader is the mechanism this time, not the sweep
+## D218 — A typed dot is a defect wherever it is typed, and the reader is the mechanism this time, not the sweep
 
 **The owner's ruling, 2026-09-19: "this typed dot needs to be removed everywhere it exists."**
 
