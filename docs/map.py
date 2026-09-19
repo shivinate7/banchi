@@ -3364,7 +3364,7 @@ COMPONENTS = [
                         "the writer and the gate cannot disagree about what a file cites. "
                         "Stdlib, and it splices with `ast` so the hand-written prose around "
                         "each list survives untouched.",
-                "governed_by": ["D16", "D17", "D18", "D173"],
+                "governed_by": ["D16", "D17", "D18", "D140", "D173"],
                 "note": "IT ONLY EVER ADDS. An id in `governed_by` that the file does not "
                         "cite is invisible to the `repo map` row and to this alike, because "
                         "that check is one-directional — so removing one stays a person's "

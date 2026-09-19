@@ -61,8 +61,33 @@ def _cited_decisions():
     return audit.cited_decisions
 
 
+def _rank(value: str) -> Tuple[int, int, str]:
+    """Where one id sorts: a number by its number, a slug after every number.
+
+    THE SAME SHAPE `scripts/decisions_corpus.py:_rank` USES, and for the same reason. A plain
+    string sort puts a slug FIRST, because `-` is 0x2D and `0` is 0x30, and an unclaimed id is
+    by definition the newest thing in the tree.
+    """
+    digits = value[1:]
+    return (0, int(digits), value) if digits.isdigit() else (1, 0, value)
+
+
 def _sort_ids(ids) -> List[str]:
-    return sorted(ids, key=lambda value: int(value[1:]))
+    """Numeric ids by their number, then slug ids, alphabetically.
+
+    AN ID IS A SLUG WHILE THE BRANCH THAT WRITES IT IS OPEN (D140). The row's own reader
+    matches a number OR a slug, so a file on an open branch hands this an id whose tail is not
+    a number, and the numeric key this used to be raised `ValueError` rather than proposing
+    the addition. That is the state the generator is MOST likely to be reached in: a branch
+    adding a decision entry is a branch adding citations of it, which is exactly what makes
+    the row refuse the commit that sends an operator here.
+
+    A SLUG SORTS WHERE ITS NUMBER WILL. `scripts/claim-ids.py` allocates `max + 1`, never the
+    lowest free id, so the id a slug becomes lands after every number already in the list —
+    the list is sorted before the claim and after it, and the claim's exhaustive text
+    substitution never has to reorder anything.
+    """
+    return sorted(ids, key=_rank)
 
 
 def _render(ids: List[str], column: int) -> str:
@@ -209,6 +234,14 @@ def selftest() -> int:
     def d(number: int) -> str:
         return "D" + str(number)
 
+    # AND A SLUG IS COMPOSED FOR A SECOND REASON ON TOP OF THAT ONE. `scripts/claim-ids.py`
+    # substitutes a slug by exhaustive text replacement, so a fixture that spells a live one
+    # is rewritten into an assertion about a number the moment that branch merges — the trap
+    # `claim-ids.py`'s own vocabulary block records paying twice. Composed, the token occurs
+    # nowhere on disk and no claim can reach it.
+    def slug(*segments: str) -> str:
+        return "D-" + "-".join(segments)
+
     def check(label: str, got, want) -> None:
         nonlocal ok
         if got == want:
@@ -226,6 +259,12 @@ def selftest() -> int:
           list(range(1, 30)))
     check("ids sort numerically, not lexically",
           _sort_ids({d(9), d(100), d(21)}), [d(9), d(21), d(100)])
+    check("an unclaimed slug sorts after every number, not before them",
+          _sort_ids({slug("zulu", "thing"), d(9), slug("alpha", "thing"), d(100)}),
+          [d(9), d(100), slug("alpha", "thing"), slug("zulu", "thing")])
+    check("a slug renders like any other id",
+          _render([d(9), slug("alpha", "thing")], 30),
+          f'["{d(9)}", "{slug("alpha", "thing")}"]')
 
     with tempfile.TemporaryDirectory() as tmp:
         tree = Path(tmp)
@@ -258,6 +297,19 @@ def selftest() -> int:
         (tree / "pkg" / "one.py").write_text(f"# governed by {d(1)} alone\n")
         check("an id the component already governs is not added",
               plan(map_path=fake, root=tree), [])
+
+        # THE REGRESSION ITSELF, END TO END: a file citing an id whose NUMBER DOES NOT EXIST
+        # YET. This raised `ValueError: invalid literal for int()` out of `_sort_ids` instead
+        # of proposing the addition, and it did so on the one branch shape that reaches this
+        # command at all — a branch adding a decision entry, which cites its own slug.
+        pending = slug("unclaimed", "example", "entry")
+        (tree / "pkg" / "one.py").write_text(f"# governed by {d(7)} and {pending}\n")
+        work = plan(map_path=fake, root=tree)
+        check("an unclaimed slug is proposed, not a crash",
+              [(path, name, missing) for path, name, _full, missing in work],
+              [("pkg/", "one.py", [pending])])
+        check("the splice adds the slug, after the number",
+              f'"governed_by": ["{d(7)}", "{pending}"]' in apply(work, map_path=fake), True)
 
     print("\nPASS" if ok else "\nFAIL")
     return 0 if ok else 1
