@@ -11752,6 +11752,19 @@ def _read_typed_interpunct_pin() -> Optional[int]:
     return count if isinstance(count, int) and count >= 0 else None
 
 
+def _typed_interpunct_verdict(count: int, pin: Optional[int]) -> str:
+    """`"unpinned"` | `"rose"` | `"ok"` — the ratchet's own three-way arithmetic, isolated
+    from I/O and from message text so `--self-test` can drive it with plain integers rather
+    than a real pin file and a real extraction. `"ok"` covers count == pin AND count < pin —
+    a lower count is accepted exactly as silently as an equal one, per the ratchet's own rule.
+    """
+    if pin is None:
+        return "unpinned"
+    if count > pin:
+        return "rose"
+    return "ok"
+
+
 def check_typed_interpunct(report: Report) -> None:
     """No user-visible string may TYPE a middle dot or bullet as a separator (D41's own
     ruling, generalised repo-wide 2026-09-19). See D-no-typed-interpunct-on-screen.
@@ -11811,8 +11824,9 @@ def check_typed_interpunct(report: Report) -> None:
     hits = _typed_interpunct_hits(strings)
     count = len(hits)
     pin = _read_typed_interpunct_pin()
+    verdict = _typed_interpunct_verdict(count, pin)
 
-    if pin is None:
+    if verdict == "unpinned":
         report.add(
             "typed interpunct", MECHANICAL,
             [
@@ -11827,7 +11841,7 @@ def check_typed_interpunct(report: Report) -> None:
         )
         return
 
-    if count > pin:
+    if verdict == "rose":
         findings = [
             Finding(
                 rel(TYPED_INTERPUNCT_PIN),
@@ -17921,6 +17935,93 @@ def self_test() -> int:
     ok(frozenset({"Gallery.tsx"}) == NO_MECHANISM_EXEMPT_FILES,
        "the no-mechanism-on-screen exemption is pinned to exactly one file, `Gallery.tsx`",
        f"got: {sorted(NO_MECHANISM_EXEMPT_FILES)}")
+
+    print("\ntyped interpunct: the two extractor widenings, and the ratchet's own arithmetic")
+    with tempfile.TemporaryDirectory() as tmp_name:
+        fixture_dir = Path(tmp_name)
+
+        def written(name: str, body: str) -> Path:
+            path = fixture_dir / name
+            path.write_text(body)
+            return path
+
+        written(
+            "PlainDot.tsx",
+            "export function PlainDot() {\n"
+            "  return <p>Box 2 · Section 1</p>\n"
+            "}\n",
+        )
+        written(
+            "NoticeCodeDot.tsx",
+            "export function NoticeCodeDot() {\n"
+            '  return <Notice code="reason · code">Held back.</Notice>\n'
+            "}\n",
+        )
+        written(
+            "JoinLiteral.tsx",
+            "import type { ReactNode } from 'react'\n"
+            "const whole = (body: string): ReactNode => <>{body}</>\n"
+            "export function JoinLiteral() {\n"
+            "  const parts = ['Box 2', 'Section 1']\n"
+            "  return whole(parts.join(' · '))\n"
+            "}\n",
+        )
+        written(
+            "CommaJoin.tsx",
+            "export function CommaJoin() {\n"
+            "  const parts = ['a', 'b']\n"
+            "  return <p>{parts.join(', ')}</p>\n"
+            "}\n",
+        )
+
+        # THE DEFAULT CALL — no widening flags, exactly what `no mechanism on screen` uses —
+        # proves the two new channels stay OFF unless a caller asks for them, which is the
+        # whole argument for why widening them does not touch that row's own fixtures above.
+        default_strings = _run_user_strings(["--dir", str(fixture_dir)])
+        ok(default_strings is not None, "the extractor runs, unwidened, over the fixture tree")
+        if default_strings is not None:
+            default_hits = {f.where.split(":")[0].split("/")[-1] for f in _typed_interpunct_hits(default_strings)}
+            ok("PlainDot.tsx" in default_hits,
+               "a middle dot in plain JSX text is caught with NO widening at all")
+            ok("NoticeCodeDot.tsx" not in default_hits,
+               "`Notice`'s `code` prop is NOT caught without `--include-code-attr` — the "
+               "widening is opt-in, so `no mechanism on screen`'s own call is untouched")
+            ok("JoinLiteral.tsx" not in default_hits,
+               "a `.join(' · ')` call is NOT caught without `--join-literals` — the same "
+               "opt-in argument, for the other widening")
+
+        # THE ROW'S OWN CALL — `TYPED_INTERPUNCT_EXTRACT_ARGS`, both widenings together,
+        # exactly what `check_typed_interpunct` passes in production.
+        widened_strings = _run_user_strings(["--dir", str(fixture_dir), *TYPED_INTERPUNCT_EXTRACT_ARGS])
+        ok(widened_strings is not None, "the extractor runs, widened, over the fixture tree")
+        if widened_strings is not None:
+            widened_hits = {f.where.split(":")[0].split("/")[-1] for f in _typed_interpunct_hits(widened_strings)}
+            ok("PlainDot.tsx" in widened_hits,
+               "plain JSX text is still caught once widened")
+            ok("NoticeCodeDot.tsx" in widened_hits,
+               "`--include-code-attr` catches a typed dot inside `Notice`'s own `code` prop — "
+               "extractor addition (a)")
+            ok("JoinLiteral.tsx" in widened_hits,
+               "`--join-literals` catches `parts.join(' · ')` fed to a local helper "
+               "(`PositionLabel.tsx`'s `whole()` shape) — extractor addition (b)/(c), the "
+               "direct-literal check for a call the AST walk cannot see through by reference")
+            ok("CommaJoin.tsx" not in widened_hits,
+               "a `.join(', ')` call is extracted (the literal argument reaches the walk) but "
+               "carries no interpunct character, so it is not a HIT — the widening reads every "
+               "`.join(<literal>)` separator, and the character test is what decides a finding")
+
+    # THE RATCHET'S OWN ARITHMETIC, isolated from the extraction and the pin file: three
+    # cases, driven with plain integers. A rewrite that starts blocking an equal count, or
+    # that stops blocking a real rise, fails here before it ever reaches the real pin.
+    ok(_typed_interpunct_verdict(200, 200) == "ok",
+       "count == pin is accepted — the ratchet's floor, not its trigger")
+    ok(_typed_interpunct_verdict(199, 200) == "ok",
+       "count < pin is accepted SILENTLY — a fall is never a question")
+    ok(_typed_interpunct_verdict(201, 200) == "rose",
+       "count > pin is a `rose` verdict — never quiet, one hit over the line is enough")
+    ok(_typed_interpunct_verdict(5, None) == "unpinned",
+       "no pin at all is `unpinned`, not `ok` over zero — the same non-vacuity argument "
+       "`HARD_RULE_FLOOR` makes for `rule enforcement`")
 
     # ------------------------------------------------------- code-side agreements
     #
