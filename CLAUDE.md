@@ -895,7 +895,12 @@ adopting some and deferring others (D99 sits where it does because main took D90
 - `docs/specs/order-walk-plan.md` — the ticked-order walk as the fewest drawers to open.
   The SOLVER is BUILT (`pipeline/walkplan.py`, T11). The route is BUILT (`POST
   /orders/walk-plan`, its section 7 — `server/capture_server.py:do_order_walk_plan`,
-  `app/src/server.ts:walkPlan`). The screen (section 8) is NOT BUILT.
+  `app/src/server.ts:walkPlan`). The SCREEN is BUILT — section 8's stop and row, section 12's
+  one screen (the orders list IS the selection, no mode strip, no `PullMode`, no `WalkSelect`),
+  and section 9a's findings 1-4. The walk carries real positional facts and refreshes them on a
+  pull, §8's 2026-09-19 ruling: RANKING is frozen for the pass, where a card physically sits is
+  not. STILL OPEN, all recorded in the spec: the filter strip's place at 390, D96's lost pass
+  figure, and which order a press records against when one card serves several buyers.
 - `docs/specs/stable-card-id.md` — SPECIFIED, NOT BUILT (D172). No store carries `cards.cid`
   yet. The measurement — 2,535 of 2,535 digests match — is real.
 - `docs/specs/capture-app.md` — step 7. 7a and 7b are both built. Gate B ran them 2026-08-22.
