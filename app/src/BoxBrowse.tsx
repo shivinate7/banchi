@@ -985,7 +985,14 @@ export function BoxBrowse({
    * unreachable while `shelves` is empty, so nothing downstream can act as if a printing were
    * picked — this is the one line that also has to say so out loud. */
   useEffect(() => {
-    if (chooserActive) setShelf(null)
+    if (chooserActive) {
+      /* NOT A RE-RANK: `shelf` is going to `null`, never to another box, so `awaitingRows`
+       * can never read true off this move — but every `setShelf` call marks `shelfSource`
+       * on the same convention, so a later reader never has to know which sites happen to
+       * be safe today for a reason of their own. */
+      shelfSource.current = 'manual'
+      setShelf(null)
+    }
   }, [chooserActive])
 
   const matched = useMemo(() => {
