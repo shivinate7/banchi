@@ -20,8 +20,18 @@ statements were false and the entry is corrected; what follows is what was measu
 
   infinite-api.tcgplayer.com/price/history/<productId>/detailed?range=<r>
 
-is public. No key, no cookie, no `Referer`, no session — HTTP 200 to a bare `curl`. It
-answers one result per skuId (variant x condition) carrying that RANGE's own totals and a
+WAS public with no key, no cookie, no `Referer`, no session — HTTP 200 to a bare `curl` —
+MEASURED 2026-08-30 (D62). THAT PREMISE ROTTED (see D216):
+measured again 2026-09-19, the same honest `USER_AGENT` below now answers HTTP 403 on this
+host, while a browser User-Agent still answers 200 with no cookie, no `Referer` and no
+session — the request signature alone decides it. `AGENT_ENV` below is the escape hatch,
+read the way `server/tcg_export.py` already reads its own copy of the same key (D64); a
+checkout with no override still presents the honest string and is told by name (`Blocked`)
+rather than folded into `Unreachable`, whose whole meaning is that nothing is wrong with the
+run. tcgcsv.com answers either User-Agent, measured the same day, so one knob covers both
+hosts.
+
+It answers one result per skuId (variant x condition) carrying that RANGE's own totals and a
 list of buckets of {marketPrice, quantitySold, lowSalePrice, highSalePrice,
 transactionCount, bucketStartDate}. The totals are per range and not lifetime — measured on
 Vilemaw, 642 over `month`, 1,763 over `quarter`, 2,977 over `semiannual` — and `annual`
@@ -179,8 +189,23 @@ HISTORY_HOST = "https://infinite-api.tcgplayer.com"
 
 # Sent to both hosts. tcgcsv refuses the `urllib` default with a 401 (see the header); this
 # host is polite rather than anonymous, because a free public mirror is entitled to know who
-# is hammering it and to block us by name rather than by guessing.
+# is hammering it and to block us by name rather than by guessing. IT IS ALSO THE VALUE
+# INFINITE-API NOW ANSWERS 403 TO (D216, measured 2026-09-19)
+# — kept as the DEFAULT so a checkout with no override behaves exactly as it always has and
+# fails the same honest way, rather than reaching for a disguise nobody asked this module to
+# wear.
 USER_AGENT = "pkmnscan/1.0 (+private single-operator inventory tool)"
+
+# THE ESCAPE HATCH'S NAME, NOT ITS VALUE — a string only, and never read from `.env` here.
+# `pipeline/` imports nothing outside itself and the stdlib (see `Market`'s header below), so
+# this module cannot ask `envfile` for anything; the caller that already may (D64's own
+# `server/tcg_export.py`, and `server/pipeline_routes.py` beside it) resolves the value and
+# hands it to `fetch_json`/`Market` the same way it already hands `Market` a cache directory
+# — passed in, never discovered. Spelled here as a literal, identical to
+# `server/tcg_export.py:AGENT_ENV`, ON PURPOSE: reused rather than a second knob, because it
+# already means "the User-Agent to present to TCGplayer" and tcgcsv answers either value
+# (measured 2026-09-19) — see D216 for the argument.
+AGENT_ENV = "PKMNSCAN_TCG_USER_AGENT"
 
 # The four the endpoint accepts. A closed tuple rather than a passed-through string: every
 # other spelling answers HTTP 400, and a range that silently returned nothing would read as
@@ -236,6 +261,19 @@ class NotResolvable(PriceHistoryError):
 
 class Unreachable(PriceHistoryError):
     """The network refused, timed out, or answered something that is not JSON."""
+
+
+class Blocked(PriceHistoryError):
+    """A host answered HTTP 403 to a request it once answered — a client refused BY NAME.
+
+    A SIBLING OF `Unreachable`, NOT A SUBCLASS. `history_unreachable`'s whole meaning (D62)
+    is that nothing is wrong with the run and a public mirror simply did not answer; that is
+    the wrong sentence for a 403, which says the client presenting itself is the thing being
+    declined, and the honest remedy is `AGENT_ENV` rather than "try again"
+    (D216). A caller that catches `Unreachable` and not this
+    is left exactly as unhandled as one that catches neither — on purpose, so the omission
+    is loud.
+    """
 
 
 # ------------------------------------------------------------------------------- readings
@@ -794,18 +832,27 @@ def index_by_name(rows: Iterable[Dict], key: str = "name") -> Dict[str, object]:
 # -------------------------------------------------------------------------- the network
 
 
-def fetch_json(url: str, timeout: float = REQUEST_TIMEOUT_SECONDS) -> Dict:
+def fetch_json(
+    url: str, timeout: float = REQUEST_TIMEOUT_SECONDS, user_agent: str = USER_AGENT
+) -> Dict:
     """GET a URL and parse JSON. THE ONLY IMPURE FUNCTION IN THIS MODULE.
 
     Everything above is a pure function of a payload and everything below takes this as an
     argument, so the harness reaches all of it with a committed fixture and never a socket.
 
+    `user_agent` DEFAULTS TO THE HONEST STRING AND IS OTHERWISE PASSED IN, NEVER DISCOVERED
+    — `Market`'s own rule for `cache_dir`, applied here for the reason `AGENT_ENV` above
+    gives: this module may not read `.env`. A checkout with nothing configured sends exactly
+    what it always sent.
+
     A NON-200 IS RAISED RATHER THAN RETURNED. `Unreachable` carries the status and the first
     of the body, because both hosts explain themselves in it — the endpoint answers HTTP 400
     with a validation message for a bad range, and tcgcsv answers 401 for a User-Agent it
     does not like, which is a refusal that reads as an authentication requirement and is not.
+    A 403 IS `Blocked` INSTEAD, NEVER `Unreachable` — see that class for why the two must not
+    share a name, and D216 for what is now answering it.
     """
-    request = urllib.request.Request(url, headers={"User-Agent": USER_AGENT})
+    request = urllib.request.Request(url, headers={"User-Agent": user_agent})
     try:
         with urllib.request.urlopen(request, timeout=timeout) as response:
             body = response.read()
@@ -813,6 +860,16 @@ def fetch_json(url: str, timeout: float = REQUEST_TIMEOUT_SECONDS) -> Dict:
         detail = ""
         with contextlib.suppress(Exception):  # a body we cannot read is not the interesting fault
             detail = exc.read().decode("utf-8", "replace")[:200]
+        if exc.code == 403:
+            # NEVER THE VALUE, ONLY THE NAME OF THE KNOB — D171's rule that a refusal must
+            # name its remedy, and CLAUDE.md's rule that no message here ever carries the
+            # user agent string itself.
+            raise Blocked(
+                f"{url} answered HTTP 403. That is either an authorization change at the "
+                f"host or its own defenses declining this client by its request signature — "
+                f"set {AGENT_ENV} in .env to the User-Agent your browser sends and try "
+                f"again."
+            ) from exc
         raise Unreachable(f"{url} answered HTTP {exc.code}: {detail}") from exc
     except (urllib.error.URLError, OSError, TimeoutError) as exc:
         raise Unreachable(f"{url} could not be reached: {exc}") from exc
@@ -858,6 +915,13 @@ class Market:
     caller wants and what the harness uses when it is asserting the walk rather than the
     disk.
 
+    `user_agent` IS THE SAME STORY AS `cache_dir`, ONE PARAGRAPH LATER THAN IT WAS TRUE.
+    This module cannot read `.env` (see `AGENT_ENV` above), so a caller that can — today
+    `server/pipeline_routes.py`, the way it already resolves a cache directory — resolves
+    the value and hands it in. It reaches `fetch_json` only when no `fetcher` is given; a
+    caller supplying its own fetcher (every harness test) is supplying its own transport and
+    this argument does nothing for it, which is the existing rule for `courtesy_delay` too.
+
     NOTHING WRITES INSIDE THE REPO TODAY AND THE FIRST CALLER HAS TO THINK ABOUT THAT. There
     is no caller, so there is no directory, so there is no `.gitignore` line — and the moment
     a command passes `files.home() / <something>` the derived cache lands in the checkout and
@@ -868,12 +932,15 @@ class Market:
     def __init__(
         self,
         cache_dir: Optional[Path] = None,
-        fetcher: Fetcher = fetch_json,
+        fetcher: Optional[Fetcher] = None,
         courtesy_delay: float = COURTESY_DELAY_SECONDS,
         now: Callable[[], float] = time.time,
+        user_agent: str = USER_AGENT,
     ) -> None:
         self.cache_dir = Path(cache_dir) if cache_dir else None
-        self._fetch = fetcher
+        self._fetch = fetcher if fetcher is not None else (
+            lambda url: fetch_json(url, user_agent=user_agent)
+        )
         self._courtesy_delay = courtesy_delay
         self._now = now
         self._memory: Dict[str, Tuple[float, Dict]] = {}

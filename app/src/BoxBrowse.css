@@ -246,6 +246,21 @@
   -webkit-mask-image: linear-gradient(to bottom, currentColor calc(100% - 18px), transparent);
 }
 .browse-list:focus-visible { outline: 2px solid var(--bn-accent); outline-offset: -2px; }
+
+/* THE PREVIOUS DRAWER, DIMMED, WHILE THE NEW ONE IS IN FLIGHT (owner's ruling, 2026-09-19).
+ * `--bn-disabled` is the one opacity token this file already has for "on screen but not the
+ * live answer" (a disabled pressable). `pointer-events: none` is load-bearing, not cosmetic:
+ * `BoxBrowse.tsx` keeps drawing the PREVIOUS box's own rows here rather than blank, and a
+ * press landing on one of them would act on a card that is no longer where the header says
+ * it is (the a4f3594b regression, this time reached through a click instead of a stale
+ * hold). `prefers-reduced-motion` needs nothing extra: `base.css`'s global floor already
+ * collapses every `transition-duration` to near-zero. */
+.browse-list[aria-busy='true'],
+.browse-card[aria-busy='true'] {
+  opacity: var(--bn-disabled);
+  pointer-events: none;
+  transition: opacity var(--bn-t-fast) var(--bn-ease);
+}
 .browse-group,
 .browse-group-rows { list-style: none; }
 

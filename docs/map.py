@@ -1141,6 +1141,11 @@ COMPONENTS = [
             # the only things in the product that want a trend and have none. D22 because the
             # `Product Line` cell it resolves a category by is that entry's to author. D35 for
             # the number-then-name shape the join borrows, D25 for the per-game partition.
+            # D216 because infinite-api stopped answering the
+            # honest `USER_AGENT` on 2026-09-19 (D62's own premise measured 2026-08-30), and
+            # this is the entry that reuses D64's `AGENT_ENV` and names a 403 `Blocked`
+            # rather than folding it into `history_unreachable`. D171 because that refusal
+            # names its remedy — a refusal that reaches nobody did not happen.
             "pricehistory.py": {"does": "what a SKU has been selling for: the public "
                                         "infinite-api price-history endpoint, reached through a "
                                         "LOCAL sku -> productId join against tcgcsv.com's mirror "
@@ -1150,7 +1155,9 @@ COMPONENTS = [
                                         "transaction and within-bucket dispersion. It also reads "
                                         "that mirror's current /prices, which are per product per "
                                         "PRINTING and never per SKU.",
-                                "governed_by": ["D8", "D16", "D22", "D25", "D35", "D47", "D49"],
+                                "governed_by": ["D8", "D16", "D22", "D25", "D35", "D47", "D49",
+                                                "D62", "D64", "D171",
+                                                "D216"],
                                 "tested_by": ["T7"],
                                 "note": "REACHABLE AS OF 2026-08-30 (D62) — this entry read "
                                         "RECORDED RATHER THAN BUILT for one day, and the whole "
@@ -1176,7 +1183,20 @@ COMPONENTS = [
                                         "which is why `Bound` names both denominators rather "
                                         "than reporting one percentage. The join was measured "
                                         "at 3,588 distinct products across all four committed "
-                                        "exports, 100% resolved, zero ambiguous."},
+                                        "exports, 100% resolved, zero ambiguous. "
+                                        "D62's OWN MEASUREMENT THAT infinite-api TOOK A BARE "
+                                        "`curl` — NO KEY, NO COOKIE, NO USER-AGENT THAT "
+                                        "MATTERED — ROTTED ON 2026-09-19: it now answers this "
+                                        "project's honest default with HTTP 403 while a "
+                                        "browser's still answers 200 "
+                                        "(D216). `fetch_json` and "
+                                        "`Market` take an explicit `user_agent`, defaulting to "
+                                        "the unchanged honest string; `server/pipeline_routes.py` "
+                                        "resolves D64's `AGENT_ENV` (`PKMNSCAN_TCG_USER_AGENT`, "
+                                        "reused rather than a second knob) and passes it in. A "
+                                        "403 is now `Blocked`, a sibling of `Unreachable`, and "
+                                        "the route answers it as `history_blocked` rather than "
+                                        "folding it into `history_unreachable`."},
         },
     },
     {
@@ -3364,7 +3384,7 @@ COMPONENTS = [
                         "the writer and the gate cannot disagree about what a file cites. "
                         "Stdlib, and it splices with `ast` so the hand-written prose around "
                         "each list survives untouched.",
-                "governed_by": ["D16", "D17", "D18", "D173"],
+                "governed_by": ["D16", "D17", "D18", "D140", "D173"],
                 "note": "IT ONLY EVER ADDS. An id in `governed_by` that the file does not "
                         "cite is invisible to the `repo map` row and to this alike, because "
                         "that check is one-directional — so removing one stays a person's "
@@ -4041,7 +4061,7 @@ COMPONENTS = [
                                 "D79", "D86", "D87", "D88", "D89", "D100", "D103", "D105",
                                 "D134", "D137", "D145", "D147", "D156", "D159", "D163",
                                 "D165", "D166", "D168", "D170", "D172", "D174", "D180",
-                                "D188", "D189"],
+                                "D188", "D189", "D216"],
                 "tested_by": ["T7"],
             },
             "shipping_routes.py": {
