@@ -116,14 +116,6 @@ forced rather than chosen. If the card comes back on the shelf while the line st
 fulfilled, the order claims a shipment that did not happen and the card is offered to the next
 buyer. The receipt says the order moved. The operator does not have to go anywhere.
 
-**THIS REPAIRS A LIVE DEFECT, AND IT IS THE SHARPEST FINDING IN THIS FILE.** The sale route's
-undo does not consult `holder_of` today — that index is called in exactly three places in
-`server/capture_server.py`, and the sale route is none of them. So, today: pull a copy, let the
-toast die, open the fold on `#/inventory`, press `Undo`. The card returns to the shelf as
-`identified`, live, while the order still reads that copy fulfilled. That is the
-double-shipment `record_pull`'s `capture_id` requirement exists to prevent, reached from the
-other end. The slow path closes it by making the one write do both halves.
-
 ## 5. The order record keeps the fact and drops the position
 
 **The owner's ruling, and it is the shape of the whole thing:** *"if I were to look at this
