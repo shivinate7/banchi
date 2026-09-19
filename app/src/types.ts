@@ -3053,45 +3053,39 @@ export type ResolvedOrder = {
  *  different cards. */
 export type WalkPlanRef = { key: string; number: string; buyer: string | null }
 
-/** One copy of a `WalkPlanTake`, as a pick-shaped row. `label`, `card`, `neighbors` and the
- *  box's own three numbers are composed by the server's one renderer
- *  (`pipeline/join.py:Position`), exactly as `PickRow.place` is.
- *
- *  `neighbors` IS REAL HERE SINCE 2026-09-19 and used to be null always. The route dropped
- *  `_Places.for_keys` — a scoping borrowed from the polled `GET /orders`, where a pick set
- *  spans most of the store — for the ordinary renderer, which is already scoped by being
- *  lazy per box. The walk fires once per pass over the few drawers the solver picked, so the
- *  cost is a per-box walk of those drawers and nothing else. The degraded null is still
- *  reachable (a record in the store whose position will not read) and still renders as no
- *  sentence. */
+/** One physical copy of a take's card, anywhere in the store — REBUILT 2026-09-19 (`docs/
+ *  specs/order-walk-plan.md` §8, "The stop, rebuilt"). The flat fields the first build carried
+ *  (`box`, `index`, `slot`, `card`, `label`, `neighbors`, `box_total`, `box_closed`,
+ *  `fraction`) are GONE — every one of them now lives inside `place`, which is the full block
+ *  `_Places.of` composes, the same dict `do_search` sends. The client composes NOTHING from
+ *  the stop any more; the old `neighborShim`/`placeOf` reconstruction is deleted with them. */
 export type WalkPlanCopy = {
-  box: number
-  index: number
-  slot: number | null
+  /** `SearchCopy.key`, `"<box>/<index>"`. The identity a press sends and a refresh names. */
+  key: string
+  /** `SearchCopy.state`. */
+  state: string
+  has_photo: boolean
   capture_id: string | null
   /** The card's own name (D172, D183) — what lets this screen address the photograph the
    *  way `#/inventory` and `#/fulfillment` do, rather than by `photoUrl(box, index)`. Null
    *  for a copy recorded before the field existed. */
   cid: string | null
-  card: number | null
-  label: string | null
-  neighbors: { prev: PlaceNeighbor | null; next: PlaceNeighbor | null } | null
-  /** THE BOX'S OWN THREE, so the walk's position bar is a ruler and not a blank track.
-   *  Exactly `Place.box_total`/`box_closed`/`fraction` and read by the same rules: the
-   *  total is how many cards the box holds and `box_closed` says whether that is final,
-   *  and `fraction` is null rather than zero where the server cannot divide. Zero and null
-   *  are the honest degraded pair — a pooled card (D24) and a box the walk could not count
-   *  both answer them — and neither may be coerced into a drawn proportion. */
-  box_total: number
-  box_closed: boolean
-  fraction: number | null
+  /** The full place, exactly what `SearchCopy.place` carries. Includes `box_name`, `section`,
+   *  `section_name`, `section_start`, `section_end`, `box_total`, `box_closed`, `fraction`,
+   *  `neighbors`, `label`, `slot`, `card`. */
+  place: Place
+  /** True when this copy stands at THIS stop (same box and section) — the solver's reach. */
+  here: boolean
 }
 
-/** One SKU at one stop: how many to take, and every copy standing there.
+/** One SKU at one stop: how many to take, and EVERY on-hand copy of this SKU in the whole
+ *  store (D93, D97, D212 — widened 2026-09-19, "every copy of the card in the store is drawn,
+ *  this drawer's first, all pressable"), not only this stop's own picks. Capping the list at
+ *  `wanted`, or at this stop's own copies, would put an address back on a fungible copy.
  *
- *  `copies` IS LONGER THAN `wanted` ON PURPOSE (D93, D97): the machine ranks every copy of
- *  this SKU at this stop, densest-first; the person reaches. Capping the list at `wanted`
- *  would put an address back on a fungible copy. */
+ *  `copies` ORDER IS LOAD-BEARING AND THE CLIENT MUST NOT RE-SORT: (1) copies with `here: true`,
+ *  in the solver's own order (densest first, as before); (2) every other copy, ascending
+ *  (box, index). D212: all of them are pressable. D93: none is hidden. */
 export type WalkPlanTake = {
   sku: string
   /** The identified card's own name, off its first ranked copy — null where the store holds
@@ -3099,6 +3093,10 @@ export type WalkPlanTake = {
   name: string | null
   /** `198/219`, `pipeline/join.py:display_number` — null where the card has no number. */
   number_display: string | null
+  /** For the take header, nullable exactly as `SearchGroup` carries them. */
+  set: string | null
+  rarity: string | null
+  condition: string | null
   wanted: number
   for: WalkPlanRef[]
   copies: WalkPlanCopy[]
@@ -3121,6 +3119,11 @@ export type WalkPlanStop = {
   order: number
   /** This stop's section bounds, in D58's slot space — null for a pooled stop. */
   span: { start: number; end: number | null } | null
+  /** THE BOX'S OWN TOTAL, so the stop's span chip can read `#242–284 of 987` rather than the
+   *  bare span (§8's 2026-09-19 ruling). Optional and null-shaped by omission: an older server
+   *  sends none, and the client draws the honest span numbers alone rather than a fabricated
+   *  proportion. Null for a pooled stop, same as `span`. */
+  box_total?: number | null
   takes: WalkPlanTake[]
 }
 
