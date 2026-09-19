@@ -157,6 +157,10 @@ pricing        the hand-pricing worklist across runs, one row per SKU, and D49's
 orders         which copies this buyer gets and where they are, ranked by how many of them
                sit in one box, pulled one copy at a time
 shipping       which envelope an order goes in, out of TCGplayer's own shipping export
+revenue        the gross-revenue retrospective: a verdict, a month strip, and every sold
+               name TCGplayer's own Orders page cannot be searched by. Gross only — no
+               fees, no cost basis, no profit. An eleventh nav row on purpose: the owner
+               saw the phone-drawer cost and chose the sidebar tab anyway, 2026-09-19
 inventory      the box walk, and everything that hangs off it: search, a card's copies
                and its sale, and the box's own operations — and, since D90, an ORDER
                driving that same walk stop by stop, writing nothing per card and
@@ -167,10 +171,6 @@ codes          the code-card track: read a box's QRs into the ledger, the two la
                pile is tiered into, and a lane handed to a buyer against a named order
 cards to pull  the Fulfiller's whole product: pull, photo-confirm, mark sold
 kit            the component sheet, rendered by the build so it cannot go stale
-revenue        OFF-NAV, the owner's ruling — an eleventh nav row ran 37px past the fold on
-               a short phone. The gross-revenue retrospective: a verdict, a month strip,
-               and every sold name TCGplayer's own Orders page cannot be searched by.
-               Gross only. Reached from the command palette and a link on `#/orders`
 ```
 
 **This list is counted off `app/src/App.tsx`'s `ROUTES` table and never incremented.** The

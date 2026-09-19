@@ -64,18 +64,28 @@ See also: D69 (a screen earns a route on its job, not its data source), D86/D103
 unread here — this screen never draws a name, an address or a payment detail).
 
 
-### Off-nav, on the owner's own word — the route stays, the nav row does not
+### Two rulings on the nav row, same day — the second one stands
 
-The screen shipped with a nav row and a hotkey. The owner ruled it off after being shown the
-measurement: an eleventh nav row runs the phone drawer's rows 37px past the fold at 390x754,
-on the 40px thumb floor CLAUDE.md already sets, with no lower step to give. `app/src/App.css`'s
-own short-screen comment had already named this day — a future row would cost one more swipe,
-never reachability — but the owner chose the whole drawer over the row instead of the swipe.
+The screen shipped with a nav row and a hotkey. Shown the measurement — an eleventh nav row
+runs the phone drawer's rows 37px past the fold at 390x754, on the 40px thumb floor CLAUDE.md
+already sets, with no lower step to give — the owner first ruled it off: keep the drawer
+whole, reach the screen from the command palette and a link on `#/orders` instead.
 
-**Only the NAV ROW was the cost, never the screen.** `#/revenue` keeps its own route, its own
-file, its own decision entry. It moved to App.tsx's `aside` group, beside the component kit
-and the Fulfiller's screen — reached from the command palette, and from one plain link on
-`#/orders` (`Sales`, beside the Fulfiller hand-off). Nothing about the screen's job, its gross-
-only register, or its exclusion of Canceled orders changed. This is the same shape D105 argues
-for kinship of implementation versus kinship of job, one level up: a screen's ROUTE answers to
-its job, and a nav ROW is a cost that job does not have to pay to exist.
+**That ruling did not survive contact with what it actually meant.** The owner's own words,
+relayed back once the off-nav shape was built: *"I thought we're just making it a tab in the
+sidebar not inserting it into other screens."* The off-nav version had done the opposite of
+that expectation on both halves — no sidebar tab, and a new control grafted onto `#/orders`
+(and, because `OrdersHub` renders both stages from one component, onto `#/shipping` too,
+un-asked-for on that screen specifically). The owner reversed the ruling the same day: Sales
+is a sidebar tab, plainly, and nothing is added to any other screen for it.
+
+**So `#/revenue` is an eleventh nav row ON PURPOSE, the 37px cost accepted knowingly.**
+`app/tests/brand.spec.ts`'s two drawer-fit cases carry the arithmetic and the citation. What
+they give up is a TEST'S OWN stricter promise — every row on screen with
+nothing to scroll to reach it — never a decision: D204 already rules that the phone drawer's
+nav scrolls in the space above its foot for any row count, so full-fit-without-scrolling was
+never a floor this product promises past this row. The Orders/Shipping detour is fully
+reverted — `app/src/Orders.tsx` is byte-for-byte main's again — and is kept here as the
+record of why a shared-component screen (`OrdersHub` draws two routes) is the wrong place to
+graft a workaround onto: one intended change became two, on two different screens, because
+the two routes are one component.

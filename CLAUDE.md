@@ -246,9 +246,9 @@ the browser. No second store. No auth. `app/src/server.ts` is the only client-ca
 ### The screens
 
 **The app has thirteen screens and thirteen routes — twelve the owner's, one the Fulfiller's.**
-Three routes are off-nav (the `aside` group — Kit, Cards to pull, and Sales), so the nav
-itself draws ten rows. `app/src/App.tsx`'s `ROUTES` table is the count. Recount from the
-table, never a sentence (see "the census" below).
+Two routes are off-nav (the `aside` group — Kit and Cards to pull), so the nav itself draws
+eleven rows. `app/src/App.tsx`'s `ROUTES` table is the count. Recount from the table, never a
+sentence (see "the census" below).
 
 ```
 #/             Home           one ranked sentence of what the store is waiting on (D121),
@@ -263,6 +263,11 @@ table, never a sentence (see "the census" below).
                               `?band=top|bottom` (D159): what is worth pulling, read-only
 #/orders       Orders         grouped by buyer (D193), one walk per person over open orders
 #/shipping     Shipping       shipping export routed into three lanes
+#/revenue      Sales          gross-revenue retrospective (D-gross-sales-retrospective):
+                              verdict, month strip, by-name search. Canceled excluded, gross
+                              only, never profit. AN ELEVENTH NAV ROW ON PURPOSE — the owner
+                              was shown the 37px-past-the-fold cost at 390x754 and chose the
+                              sidebar tab anyway, 2026-09-19
 #/inventory    Inventory      box walk: search, copies, box operations (Manage box sheet).
                               SOLD IS HIDDEN BY DEFAULT (D132). Order under a search is frozen
                               once taken. A sale may not re-rank it (D181, D118)
@@ -270,11 +275,6 @@ table, never a sentence (see "the census" below).
 #/codes        Codes          code-card track: QR ledger, lanes, hand-off
 #/fulfillment  Cards to pull  the Fulfiller's whole product. NO shell (D5)
 #/gallery      Kit            the component sheet, rendered by the build
-#/revenue      Sales          OFF-NAV (owner's ruling, 2026-09-19: an eleventh nav row ran
-                              37px past the fold at 390x754). Gross-revenue retrospective
-                              (D-gross-sales-retrospective): verdict, month strip, by-name
-                              search. Canceled excluded. Reached from the command palette
-                              and a link on `#/orders`
 ```
 
 **`#/orders` and `#/shipping` are two stages of one screen and two routes.** `OrdersHub` with a
