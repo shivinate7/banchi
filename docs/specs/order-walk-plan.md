@@ -523,6 +523,10 @@ then make one deliberate pass. The first is the serious one.
    twelve is what survived the filter. A control that changes the list without changing the press
    is a control that lies about what the press will do.
 
+   **AMENDED 2026-09-18, by the owner: nothing is ticked by default.** Section 12 carries the
+   ruling. The button still says what it covers, and over an empty selection it is not offered
+   at all.
+
    Findings 1 through 4 are deferred behind this one, on the owner's ruling. They are about the
    row read with a hand already in a drawer. This one is about reaching a drawer at all.
 
@@ -647,27 +651,49 @@ phone                    minmax(0, 1fr)          /* one column, stacked */
 - **`WalkSelect` in `app/src/OrdersWalk.tsx` is DELETED**, not improved. It is the second list.
 - **One press starts the walk**, from the list the operator was already reading.
 
-### What this settles, and what it does not
+### What this settles, and what is left to the build
 
-**Settled.** The filters and the search are the ones already on the screen, because there is
+**Settled by the shape itself.** The filters and the search are the ones already on the screen, because there is
 only one list now. A filter narrows what the press covers, because the list and the selection
 are the same thing — the question section 9a raised about that answers itself here.
 
-**NOT settled, and needing the owner before anyone builds:**
+**Settled by the owner on 2026-09-18, answering this section's own three questions.**
 
-1. **Does the tick survive a filter that hides the row?** Tick a buyer, then filter to `Short`
-   and they vanish from view. Are they still in the walk. Saying yes means the press covers
-   rows nobody can see; saying no means a filter silently unticks. Neither is obviously right.
-2. **What does the left column do DURING a pass?** Section 8 rules that leaving `#/orders` ends
-   the pass and that nothing re-ranks inside one. A list that keeps filtering and re-sorting
-   beside a frozen walk is two clocks on one screen.
-3. **Does the default stay every open order ticked?** It was deliberate, so the first press
-   matched the press before the walk existed. That argument is weaker now that the press starts
-   from the list itself.
+**1. A tick does NOT survive a filter that hides its row.** Filter to `Short` and every buyer
+who falls out of view loses the tick. Filtering back does not bring it back. The tick is a
+property of the list as drawn, not a set held behind it.
+
+This makes the filter a selecting tool rather than a view. The flow is: narrow the list, tick
+what is left, press Start. Tick all and untick all act on the rows in view, because those are
+the only rows that can hold a tick.
+
+**3. Nothing is ticked by default.** The first draft ticked every open order so that the first
+press matched the press before the walk existed. That argument is retired. The operator says
+who the walk is for, every time, and an empty selection means Start is not offered.
+
+**2 was not a question the owner could answer as asked, because "a frozen pass" was this
+document's word and not defined here.** It is defined in section 8: from the press of Start to
+the end of that walk, the plan is computed once and does not move. A new order does not join
+it. A copy that goes elsewhere marks its own row and moves nothing around it. The freeze covers
+the WALK, in the main column.
+
+The left column is the orders list, and that list is live. It re-sorts on Ready to Ship (D209).
+Rows change status under the hand. So one screen would hold a frozen walk beside a moving list.
+
+**The answers above resolve it, and the resolution needs the owner's word.** The walk covers the
+set that was ticked AT THE PRESS. Once Start is pressed the list is no longer the walk's input,
+so the list may keep filtering, sorting and unticking without touching the walk. The two clocks
+do not collide, because only one of them is read.
+
+What that leaves open is what the ticks LOOK LIKE during a pass, and it is small enough to
+decide at build time with the owner watching: the ticks stay as the operator left them and are
+simply not read again, or the press clears them, which says plainly that the walk is now its own
+thing.
 
 ### Sequencing
 
-1. Answer the three questions above. All three change the build and none is mine to answer.
+1. The three questions above are answered. What the ticks look like during a pass is decided
+   at build time, in front of the owner.
 2. Build the frame and move the list into it. This is the whole of the layout change and it
    touches `Orders.tsx`, `OrdersWalk.tsx`, their sheets and `OrdersHubStore.ts`.
 3. Delete `WalkSelect`, the mode strip and `PullMode` in the same change. A half-removed mode is
