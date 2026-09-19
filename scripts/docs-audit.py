@@ -17283,10 +17283,15 @@ def self_test() -> int:
        "a criterion with no comparison is unreadable rather than guessed at")
 
     print("\nevery published harness count is the length of TESTS")
-    ok(not _harness_claim_findings({f"T{n}" for n in range(1, 10)}),
-       "nine registered against a tree that publishes nine")
-    ok(any("registers 10" in m for _, m in _harness_claim_findings({f"T{n}" for n in range(1, 11)})),
-       "ten registered is a finding against every one of the published counts")
+    # THE AGREEING SET IS THE REGISTERED ONE AND IT HAS A HOLE IN IT. T10 belongs to the
+    # shelved IMB encoder (DEBT26) and this repo renumbers its own ids and never another
+    # branch's, so `TESTS` runs T1-T9 and T11 — ten registered, highest 11. Spelling the set
+    # as a contiguous range would quietly assert a contiguity the tree does not have, and
+    # this arm is exactly where that assumption would hide.
+    ok(not _harness_claim_findings({f"T{n}" for n in list(range(1, 10)) + [11]}),
+       "ten registered, highest eleven, against a tree that publishes both")
+    ok(any("registers 9" in m for _, m in _harness_claim_findings({f"T{n}" for n in range(1, 10)})),
+       "nine registered is a finding against every one of the published counts")
     ok(not _harness_claim_findings(set()),
        "and an unreadable TESTS yields nothing here — `harness tests` own legs say so instead")
 

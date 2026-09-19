@@ -14,6 +14,7 @@
     "contract/T7-inventory-store-capture-server-and-the-command-seams.md",
     "contract/T8-code-cards-qr-decode-product-tier-ledger-and-the-channel.md",
     "contract/T9-motion-trigger-against-twenty-recorded-rig-sessions.md",
+    "contract/T11-the-order-walk-plan.md",
     "gate-runs/_gates.md",
     "gate-runs/GateA-tcgplayer-seam-passed-2026-07-26.md",
     "gate-runs/GateB-20-card-end-to-end-smoke-test-passed-2026-08-22.md",
@@ -55,7 +56,8 @@
     "T6",
     "T7",
     "T8",
-    "T9"
+    "T9",
+    "T11"
   ],
   "runs": [
     "GateA",

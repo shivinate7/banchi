@@ -69,8 +69,10 @@ make map-fix        # THE ONE GENERATOR (D18, amended). Adds the decision ids a 
                     #   refuses you; the row is still what says you are right. Previews.
                     #   ARGS=--write applies. It only ever ADDS. `make map-fix-selftest`
                     #   proves it, deliberately NOT in `make check`.
-make harness        # all NINE verification tests (T1-T9); the Stop hook runs it at turn end.
-                    #   RECOUNT from harness/run.py's TESTS list.
+make harness        # all TEN verification tests (T1-T9 and T11); the Stop hook runs it at
+                    #   turn end. RECOUNT from harness/run.py's TESTS list. THERE IS NO T10:
+                    #   that id belongs to the shelved IMB encoder (DEBT26), and this repo
+                    #   renumbers its own ids and never another branch's.
 make up             # THE server, detached — ONE PROCESS (D138). Serves app/dist/ and the API
                     #   on one port. Reloads Python on edit. Rebuilds the app on edit (build
                     #   ~1.2s; the old bundle answers throughout; a failed build changes
@@ -860,7 +862,7 @@ Renumber your own, never another's. D90-D93 are main's. D96 and D99 carry the re
 adopting some and deferring others (D99 sits where it does because main took D90 first).
 
 - `docs/GATES.md` — a stub and an index. The records are one file each under `docs/gates/`,
-  in three kinds: `contract/` (T1-T9), `gate-runs/` (Gate A, B, C), `steps/` (the build
+  in three kinds: `contract/` (T1-T9 and T11), `gate-runs/` (Gate A, B, C), `steps/` (the build
   order's shipped and open lists, D80). `make gates-selftest` proves the set is complete.
 - `docs/DEBTS.md` — a stub and an index. The findings are one file each under `docs/debts/`,
   cited as `DEBT<n>` and never by path. Known gaps in the verification tooling, deliberately
@@ -890,6 +892,9 @@ adopting some and deferring others (D99 sits where it does because main took D90
 - `docs/specs/one-process.md` — D138's plan. SPECIFIED, NOT BUILT as its own target — folded
   into `make up`.
 - `docs/specs/store-scaling.md` — BUILT 2026-09-13, all eight items, three phases.
+- `docs/specs/order-walk-plan.md` — the ticked-order walk as the fewest drawers to open.
+  The SOLVER is BUILT (`pipeline/walkplan.py`, T11). The route (its section 7) and the screen
+  (section 8) are NOT BUILT.
 - `docs/specs/stable-card-id.md` — SPECIFIED, NOT BUILT (D172). No store carries `cards.cid`
   yet. The measurement — 2,535 of 2,535 digests match — is real.
 - `docs/specs/capture-app.md` — step 7. 7a and 7b are both built. Gate B ran them 2026-08-22.

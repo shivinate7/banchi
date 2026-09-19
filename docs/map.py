@@ -819,6 +819,55 @@ COMPONENTS = [
                                   "IT IS A LIBRARY AND NOT A FEATURE — no route, no client function "
                                   "and no screen reaches it, which by CLAUDE.md's own rule means it "
                                   "is not landed and must not be reported as such."},
+            # THE SECOND MODULE IN THIS PACKAGE THAT IMPORTS `store`, and it does it for the
+            # same reason orders.py does and with the same one-way edge. It reads the sellable
+            # set through `Inventory.copies_on_hand` (D26's terminal-state rule, one
+            # definition) and the demand through `Ledger.outstanding`, rather than spelling
+            # either subtraction out a second time.
+            "walkplan.py": {"does": "the order walk as a PLAN: the fewest SECTIONS a hand must "
+                                    "open to fill a ticked set of orders. Takes an `Inventory`, a "
+                                    "`Ledger` and a set of order keys, and returns stops, a "
+                                    "shortfall and counts. A minimum-cardinality set MULTICOVER, "
+                                    "never plain set cover — a section holding one copy of a card "
+                                    "the walk wants two of does not cover it, and a solver that "
+                                    "says otherwise sends a hand to a drawer for a copy that is "
+                                    "not there. Exact branch and bound, pure Python, no new "
+                                    "dependency: restrict and clip to the demand, drop "
+                                    "componentwise-dominated sections, take greedy as the "
+                                    "incumbent, then branch on the SCARCEST demanded SKU rather "
+                                    "than on section index, banning already-tried siblings. That "
+                                    "branch rule is a MEASUREMENT and not a preference — the naive "
+                                    "formulation did not finish the owner's 275-order instance in "
+                                    "30 seconds and this one solves it in 27.9 ms. The demand is "
+                                    "capped at availability BEFORE the solve, because 23 of the 59 "
+                                    "SKUs the owner's 40 open orders want cannot be filled at all "
+                                    "and leaving them in the constraints makes every real instance "
+                                    "infeasible; `solve` refuses an uncapped one by name "
+                                    "(`Uncoverable`) rather than returning a partial cover shaped "
+                                    "like a plan. The cost function is a NAMED entry in a table "
+                                    "and exactly one name is legal today, `sections`, cost 1 per "
+                                    "section (the owner's ruling: sections counted flat, boxes "
+                                    "free). A pooled game (D24) is one synthetic stop per game, "
+                                    "cost 1, always last, and never a section. The solver takes a "
+                                    "wall-clock budget and returns an `exact` flag; on exhaustion "
+                                    "it returns the greedy incumbent flagged, because a silent "
+                                    "fall back to greedy is the failure mode that flag exists to "
+                                    "prevent.",
+                            # D212 is the entry it could not have been written before: the
+                            # exclusive per-line draw was the choice space this minimises over,
+                            # and removing it is what created one. D93/D97 because a stop says
+                            # how many to take and lists every copy, never `wanted` of them.
+                            "governed_by": ["D10", "D21", "D24", "D26", "D36", "D58", "D63", "D93",
+                                            "D97", "D172", "D183", "D212"],
+                            "tested_by": ["T11"],
+                            "note": "IT TOUCHES NO WIRE AND NO BROWSER. The route in "
+                                    "`docs/specs/order-walk-plan.md` section 7 is a CALLER that "
+                                    "composes labels over this answer; a label formula here would "
+                                    "be a second spelling of `pipeline/join.py:Position`, which is "
+                                    "the only one in this repo. IT IS A LIBRARY AND NOT A FEATURE "
+                                    "— no route, no client function and no screen reaches it, "
+                                    "which by CLAUDE.md's own rule means it is not landed and must "
+                                    "not be reported as such."},
             # THE ONE-WAY EDGE INSIDE THIS PACKAGE: shipping.py imports pirateship.py and
             # never the reverse, so the Pirate Ship format knows nothing about TCGplayer and
             # can be fed by the Bridge without being touched. Same direction store/ and
