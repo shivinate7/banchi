@@ -1,0 +1,185 @@
+/* app/src/OrdersWalk.css — `Walk the boxes`, the plan screen. `--bn-*` tokens only (the
+ * repo's one rule for color). `.orders-walk` is `Orders.css`'s own wrapper, kept so this
+ * screen sits in the same rhythm as the rest of the Pull stage; everything below it is new. */
+
+.walkplan-select { display: flex; flex-direction: column; gap: var(--bn-4); }
+.walkplan-select-head { display: flex; flex-direction: column; gap: 4px; }
+.walkplan-select-note { font-size: var(--bn-fs-sm); color: var(--bn-ink-3); margin: 0; }
+
+.walkplan-select-list { display: flex; flex-direction: column; gap: 2px; list-style: none; padding: 0; margin: 0; }
+.walkplan-select-row label {
+  display: flex;
+  align-items: center;
+  gap: var(--bn-3);
+  padding: var(--bn-2) var(--bn-3);
+  border-radius: var(--bn-r-sm);
+  cursor: pointer;
+  transition: background-color var(--bn-t-fast) var(--bn-ease);
+}
+.walkplan-select-row label:hover { background: var(--bn-hover); }
+.walkplan-select-row input[type='checkbox'] { width: 18px; height: 18px; flex: none; accent-color: var(--bn-accent); }
+.walkplan-select-name { flex: 1; min-width: 0; overflow-wrap: anywhere; }
+.walkplan-select-number { color: var(--bn-ink-3); font-size: var(--bn-fs-sm); }
+.walkplan-select-owed { color: var(--bn-ink-2); font-size: var(--bn-fs-sm); font-variant-numeric: tabular-nums; white-space: nowrap; }
+
+.walkplan-select-foot { display: flex; align-items: center; gap: var(--bn-3); padding-top: var(--bn-2); border-top: 1px solid var(--bn-line); }
+.walkplan-select-preview { color: var(--bn-ink-3); font-size: var(--bn-fs-sm); font-variant-numeric: tabular-nums; }
+
+/* ---- the pass head -------------------------------------------------------------------------- */
+
+.walkplan-head { display: flex; align-items: center; gap: var(--bn-3); flex-wrap: wrap; }
+.walkplan-figure { margin: 0; font-size: var(--bn-fs-lg); font-weight: 600; color: var(--bn-ink); }
+.walkplan-figure strong { font-variant-numeric: tabular-nums; }
+
+/* ---- a stop (a drawer) ------------------------------------------------------------------------ */
+
+.walkplan-stop { display: flex; flex-direction: column; gap: var(--bn-3); }
+.walkplan-stop-head { display: flex; align-items: baseline; justify-content: space-between; gap: var(--bn-3); flex-wrap: wrap; }
+.walkplan-stop-instruction { margin: 0; font-size: var(--bn-fs-lg); font-weight: 600; color: var(--bn-ink); }
+.walkplan-stop-span,
+.walkplan-stop-pooled {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  font-size: var(--bn-fs-sm);
+  font-family: var(--bn-font-mono);
+  color: var(--bn-ink-3);
+  white-space: nowrap;
+}
+
+/* ---- a take (a card ordered, with its counter) ------------------------------------------------ */
+
+.walkplan-take { display: flex; flex-direction: column; gap: var(--bn-2); padding: var(--bn-3) 0; border-top: 1px solid var(--bn-line); }
+.walkplan-stop > .walkplan-take:first-of-type { border-top: 0; padding-top: 0; }
+
+.walkplan-take-head { display: flex; align-items: center; gap: var(--bn-2); flex-wrap: wrap; }
+.walkplan-take-name { font-weight: 600; color: var(--bn-ink); overflow-wrap: anywhere; }
+.walkplan-take-number { font-family: var(--bn-font-mono); color: var(--bn-ink-3); font-size: var(--bn-fs-sm); }
+.walkplan-take-for { color: var(--bn-ink-3); font-size: var(--bn-fs-sm); }
+.walkplan-take-counter {
+  margin-left: auto;
+  font-size: var(--bn-fs-sm);
+  color: var(--bn-ink-2);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+.walkplan-take-counter b { color: var(--bn-ink); }
+
+.walkplan-take-done-row {
+  display: flex;
+  align-items: center;
+  gap: var(--bn-2);
+  padding: var(--bn-2) var(--bn-3);
+  border-radius: var(--bn-r-sm);
+  background: var(--bn-ok-tint);
+  color: var(--bn-ok);
+  font-size: var(--bn-fs-sm);
+  font-weight: 500;
+}
+.walkplan-take-done-row .bn-icon { flex: none; }
+.walkplan-take-undo,
+.walkplan-take-again {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  margin-left: auto;
+  padding: 4px 10px;
+  border: 0;
+  border-radius: var(--bn-r-sm);
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background-color var(--bn-t-fast) var(--bn-ease);
+}
+.walkplan-take-undo:hover,
+.walkplan-take-again:hover { background: rgba(0, 0, 0, 0.06); }
+.walkplan-take-again { margin-left: var(--bn-2); }
+.walkplan-take-undo + .walkplan-take-again { margin-left: 0; }
+
+/* A collapsed row reserves nothing taller than the open one it replaces (D118): it is a single
+   40px-tall line, well under any state this take draws while open, so the collapse can never
+   grow the page — only shrink it. */
+.walkplan-take-collapsed { padding: 4px 0; }
+.walkplan-take-summary {
+  display: flex;
+  align-items: center;
+  gap: var(--bn-2);
+  width: 100%;
+  min-height: 40px;
+  padding: var(--bn-2) var(--bn-3);
+  border: 0;
+  border-radius: var(--bn-r-sm);
+  background: transparent;
+  color: var(--bn-ink-2);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+  transition: background-color var(--bn-t-fast) var(--bn-ease);
+}
+.walkplan-take-summary:hover { background: var(--bn-hover); color: var(--bn-ink); }
+.walkplan-take-summary .bn-icon { flex: none; color: var(--bn-ink-4); }
+.walkplan-take-summary-count { margin-left: auto; font-size: var(--bn-fs-sm); font-variant-numeric: tabular-nums; }
+
+/* ---- the copies beneath a take ------------------------------------------------------------- */
+
+.walkplan-copies { display: flex; flex-direction: column; gap: var(--bn-3); list-style: none; padding: 0; margin: 0; }
+.walkplan-copy {
+  display: flex;
+  align-items: center;
+  gap: var(--bn-3);
+  padding: var(--bn-2);
+  border-radius: var(--bn-r-lg);
+  box-shadow: inset 0 0 0 1px var(--bn-line);
+}
+.walkplan-copy[data-state='taken'] { opacity: 0.6; }
+.walkplan-copy[data-state='gone'] { opacity: 0.5; }
+
+.walkplan-copy-photo {
+  width: 84px;
+  aspect-ratio: 63 / 88;
+  flex: none;
+}
+.walkplan-copy-photo img { object-fit: cover; }
+.walkplan-copy-photo-blank { display: flex; align-items: center; justify-content: center; color: var(--bn-ink-4); }
+
+.walkplan-copy-body { display: flex; flex-direction: column; gap: 2px; min-width: 0; flex: 1; }
+.walkplan-copy-neighbors { margin: 0; font-size: var(--bn-fs-xs); color: var(--bn-ink-3); overflow-wrap: anywhere; }
+
+.walkplan-copy-taken,
+.walkplan-copy-gone {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  font-size: var(--bn-fs-sm);
+  color: var(--bn-ink-3);
+  white-space: nowrap;
+  flex: none;
+}
+.walkplan-copy-taken .bn-icon { color: var(--bn-ok); }
+.walkplan-copy-gone .bn-icon { color: var(--bn-ink-4); }
+.walkplan-pull { flex: none; }
+
+/* ---- the shortfall block, at the foot -------------------------------------------------------- */
+
+.walkplan-shortfall-head { display: flex; align-items: center; gap: var(--bn-2); color: var(--bn-warn); }
+.walkplan-shortfall-list { display: flex; flex-direction: column; gap: var(--bn-2); list-style: none; padding: 0; margin: var(--bn-3) 0 0; }
+.walkplan-shortfall-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: var(--bn-2) var(--bn-3);
+  padding: var(--bn-2) 0;
+  border-top: 1px solid var(--bn-line);
+}
+.walkplan-shortfall-row:first-child { border-top: 0; padding-top: 0; }
+.walkplan-shortfall-name { font-weight: 500; }
+.walkplan-shortfall-figure { font-size: var(--bn-fs-sm); color: var(--bn-ink-2); font-variant-numeric: tabular-nums; }
+.walkplan-shortfall-for { font-size: var(--bn-fs-sm); color: var(--bn-ink-3); margin-left: auto; }
+
+@media (max-width: 479px) {
+  .walkplan-copy { flex-wrap: wrap; }
+  .walkplan-pull { margin-left: auto; }
+  .walkplan-shortfall-for { margin-left: 0; }
+}
