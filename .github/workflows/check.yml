@@ -252,6 +252,8 @@ jobs:
     runs-on: ubuntu-latest
     outputs:
       run: ${{ steps.scope.outputs.run }}
+      specs: ${{ steps.spec-selection.outputs.specs }}
+      partial: ${{ steps.spec-selection.outputs.partial }}
     steps:
       - uses: actions/checkout@v4
         with:
@@ -260,6 +262,23 @@ jobs:
       - name: Does the change reach what a browser draws?
         id: scope
         run: python3 scripts/browser-scope.py classify
+
+      # WHICH SPECS DOES A PARTIAL RUN NEED? Asked only on a pull request, same argument as
+      # `classify` above one level down: on a push or a dispatch every spec runs, full stop —
+      # a push to main is the tree D136's pass record answers for, never a candidate for a
+      # narrower run, and a dispatch is a person asking for the whole thing. `specs` derives
+      # its own map from the checked-out tree (D141 amended); it never widens what `classify`
+      # already decided, it only says which files load once the matrix is already going.
+      - name: Which specs does a partial run need?
+        id: spec-selection
+        run: |
+          if [ "${GITHUB_EVENT_NAME}" = "pull_request" ]; then
+            python3 scripts/browser-scope.py specs --base "origin/${GITHUB_BASE_REF}"
+          else
+            echo "non-pull_request event (${GITHUB_EVENT_NAME}) — every spec runs, unconditionally."
+            echo "specs=all" >> "$GITHUB_OUTPUT"
+            echo "partial=false" >> "$GITHUB_OUTPUT"
+          fi
 
   # The browser half. Same tree, different question: what a person actually sees.
   #
@@ -316,8 +335,16 @@ jobs:
       # serving on a fresh runner, which is exactly the state it is written for. The port comes
       # from `app/devPort.ts`, which vite.config.ts and playwright.config.ts both import so they
       # cannot disagree — on a runner this is the main-tree 5173.
+      # `specs` is `all` (no filter) or a space-separated list of `app/tests/*.spec.ts`
+      # paths — `browser-scope.py specs` never emits a path carrying whitespace, so a plain
+      # `make` word-split is safe here. A PARTIAL selection is narrower cases, never
+      # different ones: the fence in the brief this landed against forbids changing what a
+      # spec asserts or which cases a FULL matrix runs, and this only chooses which files a
+      # given run loads.
       - name: make design-check
-        run: make design-check PW_ARGS="--shard=${{ matrix.shard }}/6 --workers=2"
+        run: >-
+          make design-check
+          PW_ARGS="--shard=${{ matrix.shard }}/6 --workers=2${{ needs.browser-scope.outputs.specs != 'all' && format(' {0}', needs.browser-scope.outputs.specs) || '' }}"
 
       # WHAT A RED RUN LEAVES BEHIND, because until 2026-09-11 it left four lines. The config turns
       # `trace: retain-on-failure` on under CI, so a failing case has its DOM before and after every
@@ -341,9 +368,16 @@ jobs:
   # never the writer, and a record it left would only ever answer itself. Thirty days is the
   # window: a PR that passed longer ago than that and then merges gets the full matrix, which
   # is the conservative side of the bargain.
+  #
+  # NEVER ON A PARTIAL RUN. A pass record names a TREE, and D136's `already-passed` treats its
+  # existence as "this tree was tested" — full stop, no mention of which specs. A partial PR
+  # run that left a record would let main's push skip a matrix that never loaded every spec.
+  # So `needs.browser-scope.outputs.partial` gates this job the same way `github.event_name`
+  # already does: a full run on a doc-shaped PR still writes the record it always did, and a
+  # narrowed run leaves nothing, so main's own push finds no record and runs the full matrix.
   design-check-passed:
-    needs: design-check
-    if: github.event_name != 'push'
+    needs: [design-check, browser-scope]
+    if: github.event_name != 'push' && needs.browser-scope.outputs.partial != 'true'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
