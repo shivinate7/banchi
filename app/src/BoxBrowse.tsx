@@ -1312,6 +1312,18 @@ export function BoxBrowse({
      which is what lets the late-arriving box win the shelf it was asked for; once closed the
      rule is the old one and a stale hash can never yank a walk somebody has moved. */
   const shelfAnswered = useRef<string | null>(null)
+  /* WHY THE SHELF LAST CHANGED, so the row-hold below (D118's fourth floor) can tell a
+   * fresh SEARCH ANSWER re-ranking the walk apart from a PRESS choosing a different
+   * drawer on purpose (2026-09-19, the review that caught PR #404's regression).
+   *
+   * Both produce the exact same shape — `shelf` changes, `rows` still answers for the
+   * box before it — but only one of them may hold the old row on screen. A press to
+   * another drawer, or a walk-to a specific copy elsewhere, is the operator asking for a
+   * DIFFERENT card; holding `selectedRow` there drew box 2's Thievul under a `Box 7`
+   * header with `CardOps` live against it, while the walk list said "Nothing in box 7
+   * yet" — an operator could act on the wrong box's card. Defaults to `'manual'`, so an
+   * unmarked transition (a filter change, a reload) never holds either. */
+  const shelfSource = useRef<'search' | 'manual'>('manual')
   useEffect(() => {
     if (shelves.length === 0) return
     const askedFor = wanted.current
@@ -1347,8 +1359,18 @@ export function BoxBrowse({
     const fresh = query !== null && query !== shelfAnswered.current
     shelfAnswered.current = query
     setShelf((prev) => {
+      /* THE HASH'S BOX IS A DIRECTED NAVIGATION, NOT A RE-RANK — same reasoning as a press:
+       * the operator (or a deep link) named a specific drawer, so a stale row from the one
+       * before it must not linger under the new header. Set before the early returns so
+       * every branch this effect can take leaves a correct answer, never a stale one from
+       * whichever branch ran last time. */
+      shelfSource.current = 'manual'
       if (honorable) return askedFor
       if (!fresh && prev !== null && pool.includes(prev)) return prev
+      /* THE ONE BRANCH THAT IS A SEARCH RE-RANK: a fresh answer moves the walk to the
+       * fullest box on its own, with no press behind it (D132). This is the case D118's
+       * row-hold below exists for. */
+      shelfSource.current = 'search'
       return pool[0] ?? null
     })
   }, [shelves, boxesAnswered, filtered, results, activeGroups, frozen])
@@ -1478,6 +1500,10 @@ export function BoxBrowse({
    * what lets the row highlight and the copies list update the instant the press lands,
    * without waiting for that fetch first. */
   const selectShelf = (next: Shelf) => {
+    /* A PRESS NAMES THE DRAWER; IT IS NEVER A RE-RANK (D118, the review that caught PR
+     * #404's regression). Marked before `setShelf` so the row-hold below never stands on
+     * the box the operator just left. */
+    shelfSource.current = 'manual'
     setShelf(next)
     if (typeof next === 'number') setRecency(touchBox(next))
     let landingKey: string | undefined
@@ -1514,25 +1540,29 @@ export function BoxBrowse({
     listRef.current?.focus(FOCUS)
   }
 
-  /* THE ROW THE WALK STANDS ON — AND IT DOES NOT BLINK OUT WHILE THE NEXT BOX IS FETCHING
-   * (2026-09-19, the owner's "fix the product" ruling; D118's fourth floor).
+  /* THE ROW THE WALK STANDS ON — AND IT DOES NOT BLINK OUT WHILE A SEARCH RE-RANK IS
+   * FETCHING THE BOX IT MOVED TO (2026-09-19, the owner's "fix the product" ruling;
+   * amended the same day by the review that caught PR #404's regression; D118's fourth
+   * floor).
    *
-   * `visible` is `rows` — ONE BOX'S cards since D192 — narrowed to `shelf`. A fresh search
-   * answer can move `shelf` to another box, and `rows` still holds the box before it until
-   * that box's own `GET /inventory/<box>` lands. In that window `visible` is EMPTY, this
-   * found nothing, `onSelect(null)` reached `Inventory.tsx`, and its `detail` — the whole
-   * copies column — was UNMOUNTED and then mounted again when the rows arrived. A remounted
-   * `CopiesPanel` has no search answer and no memory of one, so it drew its skeleton for a
-   * debounce plus a fetch: six copy rows to none and back, under the hand, with no press.
-   * Measured on the rig with that box read delayed 400ms at 6x CPU throttle: the column was
-   * gone for 679ms and came back as the skeleton (see D118's amendment).
+   * `visible` is `rows` — ONE BOX'S cards since D192 — narrowed to `shelf`. A fresh
+   * search answer can move `shelf` to another box on its own (D132), with no press
+   * behind it, and `rows` still holds the box before it until that box's own
+   * `GET /inventory/<box>` lands. In that window `visible` is EMPTY, this found nothing,
+   * `onSelect(null)` reached `Inventory.tsx`, and its `detail` — the whole copies column
+   * — was UNMOUNTED and then mounted again when the rows arrived. Measured on the rig
+   * with that box read delayed 400ms at 6x CPU throttle: the column was gone for 679ms
+   * and came back as the skeleton (see D118's amendment).
    *
-   * So a row is only really gone once the box it would be in has ANSWERED. Until then the
-   * walk keeps the row it was standing on. `held` is written after the commit that found
-   * one, so the render that finds none reads the row before it, which is the row the
-   * operator is still looking at. This moves no selection and re-ranks nothing: `selected`
-   * itself is untouched, and the landing effect above still decides where a fresh answer
-   * lands once the rows it would land in exist (D181, D132). */
+   * THE FIRST FIX HELD THE ROW ACROSS EVERY SHELF CHANGE, AND THAT WAS THE REGRESSION. A
+   * PRESS to another drawer, or a walk-to a specific copy elsewhere, produces the exact
+   * same shape — `shelf` changes, `rows` lags — but the operator is asking for a
+   * DIFFERENT card on purpose. Holding then drew box 2's card under a `Box 7` header
+   * with `CardOps` live against it, while the list said "Nothing in box 7 yet" — false,
+   * and an operator could act on the wrong box's card. `shelfSource` (declared above,
+   * beside `shelfAnswered`) says WHY `shelf` last moved, and only a search re-rank may
+   * hold. A press or a walk-to falls straight to `null`, which is the pre-fix behaviour:
+   * the detail column blanks rather than lying about whose card it shows. */
   const found = useMemo(
     () => visible.find((row) => row.key === selected) ?? null,
     [visible, selected],
@@ -1542,15 +1572,18 @@ export function BoxBrowse({
     if (found !== null) held.current = found
   }, [found])
   const awaitingRows = typeof shelf === 'number' && rowsShelf !== shelf
+  const searchReRank = shelfSource.current === 'search'
   /* THE WALK HAS NOTHING TO STAND ON ONLY WHEN THERE IS NOTHING THERE AND THE BOX HAS SAID SO.
-   * Two different gaps close here and both of them used to unmount the copies column. The box
-   * the walk moved to has not answered yet (`awaitingRows`, `visible` empty). Or its rows HAVE
-   * landed and `selected` is still the key from the box before — `visible` is full, this finds
-   * nothing, and the landing effect above re-points `selected` in the very next effect pass. A
-   * single render of `null` is enough to destroy `CopiesPanel` and its answer, so neither gap
-   * may produce one. Null is reserved for the honest case: the shelf has answered and holds no
-   * row to walk. */
-  const selectedRow = found ?? (visible.length === 0 && !awaitingRows ? null : held.current)
+   * Two different gaps close here and both of them used to unmount the copies column, and
+   * both are scoped to `searchReRank` for the reason above. The box the walk moved to has
+   * not answered yet (`awaitingRows`, `visible` empty). Or its rows HAVE landed and
+   * `selected` is still the key from the box before — `visible` is full, this finds
+   * nothing, and the landing effect above re-points `selected` in the very next effect
+   * pass. A single render of `null` is enough to destroy `CopiesPanel` and its answer, so
+   * neither gap may produce one WHILE THE MOVE WAS A RE-RANK. Null is reserved for the
+   * honest case: the shelf has answered and holds no row to walk, or the shelf changed by
+   * a press or a walk-to and the panel is honestly between cards. */
+  const selectedRow = found ?? (visible.length === 0 && !awaitingRows ? null : searchReRank ? held.current : null)
 
   /* What a bulk write would reach: the ticked rows in the box being walked, as indices. */
   const pickedIndices = useMemo(() => {
@@ -1666,6 +1699,9 @@ export function BoxBrowse({
     if (row === undefined) {
       const landing = jumpBox.current
       if (typeof landing === 'number' && landing !== shelf) {
+        /* A WALK-TO NAMES ONE CARD, NEVER A RE-RANK — same reasoning as `selectShelf`
+         * (D118, the review that caught PR #404's regression). */
+        shelfSource.current = 'manual'
         setShelf(landing)
         return
       }
@@ -1690,6 +1726,12 @@ export function BoxBrowse({
     if (holding !== undefined) {
       setOpened((held) => (held.includes(holding.key) ? held : [...held, holding.key]))
     }
+    /* This `landing` is already the current shelf in the ordinary case — `row` came from
+     * `rows`, which is box-scoped (D192) — so this rarely moves `shelf` at all. Marked
+     * `'manual'` anyway for the one path where it can (a target found through `inQuery`
+     * on a shelf the box-scoped fetch has not caught up to): a walk-to is always a named
+     * card, never a re-rank, and the row-hold below must not stand on a superseded box. */
+    shelfSource.current = 'manual'
     setShelf(landing)
     if (typeof landing === 'number') setRecency(touchBox(landing))
     jumpRef.current = jump
@@ -2019,7 +2061,14 @@ export function BoxBrowse({
             )}
           </div>
 
-          {visible.length === 0 && !filtered && !facetActive && shelfBox !== null ? (
+          {/* EVERY EMPTY STATE BELOW IS GATED ON `!awaitingRows` TOO (the review that caught
+              PR #404's regression). `visible.length === 0` is also true for the length of a
+              shelf switch — a press, a walk-to, OR a search re-rank — because `rows` still
+              answers for the box before it (D192). Without the gate a press from box 2 to
+              box 7 drew "Nothing in box 7 yet" while box 7 held three cards, which is a
+              false sentence an operator could act on. Nothing is drawn while `awaitingRows`
+              is true; the honest empty state waits for the shelf to actually answer. */}
+          {visible.length === 0 && !awaitingRows && !filtered && !facetActive && shelfBox !== null ? (
             <div className="browse-empty">
               <EmptyState
                 icon="box"
@@ -2034,7 +2083,7 @@ export function BoxBrowse({
             </div>
           ) : null}
 
-          {visible.length === 0 && filtered ? (
+          {visible.length === 0 && !awaitingRows && filtered ? (
             <div className="browse-empty">
               <EmptyState
                 icon="search"
@@ -2052,7 +2101,7 @@ export function BoxBrowse({
           {/* D213: the filter narrowed this box to nothing, told apart from a search's own
               empty state above — clearing the filter is a different action from clearing
               the search box, so the two never share one button. */}
-          {visible.length === 0 && !filtered && facetActive ? (
+          {visible.length === 0 && !awaitingRows && !filtered && facetActive ? (
             <div className="browse-empty">
               <EmptyState
                 icon="filter"
@@ -2391,7 +2440,12 @@ export function BoxBrowse({
                       groups={searchGroups}
                       onPick={(index) => setChosenVariant({ query, index })}
                     />
-                  ) : filtered ? (
+                  ) : awaitingRows ? null /* THE SAME FALSE CLAIM, A SECOND PLACE (the review
+                      that caught PR #404's regression): a press or a walk-to can land
+                      `selectedRow` on null while the shelf it moved to is still fetching, and
+                      "Nothing in box N yet" is exactly as false here as it was in the list
+                      above — the box the header already names can hold cards this panel has
+                      not seen yet. Nothing is drawn until the shelf answers. */ : filtered ? (
                     <EmptyState
                       icon="search"
                       title={`Nothing matches “${query.trim()}”`}

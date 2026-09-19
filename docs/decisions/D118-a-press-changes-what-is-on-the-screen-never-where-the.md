@@ -161,3 +161,51 @@ moves the walk to another drawer` delays the drawer read by 400ms. The hard orde
 certain on any machine. A delay cannot make a passing build fail. It holds open a window the
 product must survive. Both fixes are mutation-tested against it. Restoring the key draws
 `column=1 skeleton=2`. Dropping the held row draws `column=0`.
+
+
+### The hold was too wide: a press is not a re-rank (2026-09-19)
+
+**Review caught this before it merged.** The fix above holds `selectedRow` across the window
+where a shelf's rows are still fetching, so the copies column never gets torn down. It held
+across EVERY shelf change. That is wider than the case it was built for.
+
+A fresh search answer can move the walk to another drawer on its own (D132), with no press
+behind it. That is the one case the hold exists for. A PRESS to a different drawer, or a
+walk-to a specific copy elsewhere, produces the exact same shape. `shelf` changes, and `rows`
+still answers for the box before it. The operator asked for a DIFFERENT card on purpose.
+Holding then drew box 2's card under a `Box 7` header, with `CardOps` live against it. The
+list said "Nothing in box 7 yet" — false, the box held three cards. An operator could act on
+the wrong box's card.
+
+**Proved live.** Box 2 to box 7, `/inventory/7` delayed 1500ms. The header said Box 7. The
+list claimed the box was empty. The detail column kept drawing box 2's Thievul.
+
+**`shelfSource` says WHY `shelf` last moved**, a ref beside `shelfAnswered`. A press
+(`selectShelf`) and a walk-to (both `setShelf` calls in the jump effect) mark it `'manual'`
+before they move the shelf. The one effect that re-ranks the walk under a fresh search
+answer marks it `'search'`, and only there. `selectedRow`'s hold now reads this. It stands
+on the old row only when the move was a search re-rank. A press or a walk-to falls straight
+to `null`. That is the behaviour from before the first fix existed. The panel blanks rather
+than lying about whose card it shows.
+
+**The same false claim lived in two more places, both fixed the same way.** The walk list's
+own "Nothing in box N yet" and the detail column's matching empty state both read
+`visible.length === 0` with no regard for WHY it was zero. Both are now also gated on
+`awaitingRows` — the shelf's own rows have not landed. This holds regardless of the move's
+source, because an honest "nothing here" claim needs the shelf to have actually answered,
+not merely to have gone stale.
+
+**Guarded by a one-shot in-page snapshot, not a retrying `expect`.** A `toHaveCount`
+assertion polls until it is true or times out. A false claim that clears itself the moment
+the delayed `GET /inventory/7` lands would let the assertion settle AFTER the fact. That
+proves the DOM healed. It never proves the false state was drawn at all — the identical
+trap D118's frame-watch above exists to avoid.
+
+`inventory.spec.ts`'s `a press to another drawer never draws its predecessor's card while
+the fetch is in flight` takes one `page.evaluate`. It is called right after the click, before
+anything awaits the network. It reads the box-cell's `aria-current` and `.browse-card`'s
+count. It also reads box 2's photo alt text, the false-claim sentence in both
+capitalisations, and `.browse-empty`'s count. All five come off that single snapshot.
+
+**Mutation-tested.** Reverting the `shelfSource` gate draws `.browse-card` count 1: box 2's
+card, under the Box 7 header. Reverting either empty-state gate draws the false claim `true`.

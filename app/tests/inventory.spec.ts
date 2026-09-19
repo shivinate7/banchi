@@ -6572,6 +6572,77 @@ test('the copies list holds while a new answer moves the walk to another drawer'
   await expect(page.locator('.card-locations-row .position-parts')).toHaveCount(6)
   await expectCopiesHeld(page)
 })
+test('a press to another drawer never draws its predecessor’s card while the fetch is in flight', async ({ page }) => {
+  /* THE REGRESSION PR #404 SHIPPED, caught in review before it merged. The fix above holds
+     the walk's row across a fresh SEARCH answer that re-ranks the drawers on its own — but
+     the code it changed could not tell that case apart from a PRESS to a different drawer,
+     and a manual press produces the identical shape: `shelf` changes, `rows` still answers
+     for the box before it, `visible` reads empty for the length of the fetch.
+
+     PROVED LIVE (the review's own reproduction): box 2 to box 7, `/inventory/7` delayed
+     1500ms. The box header said Box 7. The walk list said "Nothing in box 7 yet" — false,
+     it holds three cards. The detail column still drew box 2's Thievul, with `CardOps` live
+     against it. An operator acting on that panel would sell or retire box 2's card while
+     believing they stood in box 7.
+
+     THIS CASE FORCES THAT ORDERING RATHER THAN HOPING FOR IT: `/inventory/7` is delayed, and
+     every assertion below runs in the window the delay holds open, before waiting on the
+     answer. `shelfSource` (BoxBrowse.tsx, beside `shelfAnswered`) is what tells this press
+     apart from D132's own re-rank — only a fresh search answer may hold the outgoing row;
+     a press or a walk-to must resolve to null, same as before the D118 fix existed. */
+  const cards: Cards = stackedThievul()
+  const store: Store = { cards, search: (query) => searchAnswer(query, cards) }
+  await open(page, STACKED_BOXES, store, () => PRICING, SALE, {
+    route: '/#/inventory?box=2',
+  })
+  await expect(page.locator('.browse-boxcell[aria-current="true"]')).toHaveAttribute('aria-label', /^Box 2/)
+  await expect(page.locator('.browse-card')).toContainText('Thievul')
+
+  /* Registered AFTER `open`, matched first, and narrowed to box 7 alone — box 2's own
+     fetches (the initial load) are not slowed, only the box the press moves to. 800ms
+     gives the one-shot snapshot below comfortable room over CI's own latency. */
+  await page.route(/\/inventory\/7$/, async (route) => {
+    if (route.request().method() !== 'GET') return route.fallback()
+    await new Promise((resolve) => setTimeout(resolve, 800))
+    return route.fallback()
+  })
+
+  await page.locator('.browse-boxcell[aria-label^="Box 7"]').click()
+
+  /* THE WINDOW: box 7's own rows have not landed. A RETRYING `expect(locator)` CANNOT SEE
+     IT — every one of them polls until it is true (or times out) and would happily settle
+     AFTER the 800ms delay clears and the false state has healed on its own, which is
+     precisely how this shipped once already (D118's frame-watch note applies just as much
+     here). This reads the whole subject in ONE synchronous in-page snapshot instead, taken
+     right after the click and before anything awaits the network. */
+  const snap = await page.evaluate(() => ({
+    current: document.querySelector('.browse-boxcell[aria-current="true"]')?.getAttribute('aria-label') ?? null,
+    /* `.browse-card` ONLY RENDERS WHEN `selectedRow` IS NOT NULL — the strongest check
+       available, since both boxes' cards happen to share the name "Thievul" and a
+       name-based check could not tell them apart. Its absence is what proves box 2's
+       card is not being drawn under the Box 7 header. */
+    cardCount: document.querySelectorAll('.browse-card').length,
+    /* Its photograph carries the position and confirms it a second way. */
+    box2Photo: document.querySelectorAll('img[alt*="Box 2 ·"]').length,
+    /* Both spellings: the list's own EmptyState reads "Nothing in box 7 yet", the detail
+       column's reads "Nothing in Box 7 yet" — same false claim, two capitalisations. */
+    falseClaim: document.body.innerText.includes('Nothing in box 7 yet') || document.body.innerText.includes('Nothing in Box 7 yet'),
+    emptyCount: document.querySelectorAll('.browse-empty').length,
+  }))
+  expect(snap.current, 'box-cell aria-current').toMatch(/^Box 7/)
+  expect(snap.cardCount, '.browse-card count').toBe(0)
+  expect(snap.box2Photo, "box 2's photo alt count").toBe(0)
+  expect(snap.falseClaim, '"Nothing in box 7 yet" shown before the answer').toBe(false)
+  expect(snap.emptyCount, '.browse-empty count').toBe(0)
+
+  /* AND ONCE THE ANSWER LANDS: the honest state, box 7's own three rows, and the walk
+     settling on one of them — never a false claim, never a stale card. */
+  await expect(page.locator('.browse-row')).toHaveCount(3)
+  await expect(page.locator('.browse-card')).toBeVisible()
+  await expect(page.locator('.browse-card')).toContainText('Thievul')
+  await expect(page.locator('.browse-boxcell[aria-current="true"]')).toHaveAttribute('aria-label', /^Box 7/)
+})
+
 test('a box whose last live match departs keeps the walk, rather than handing it to another box', async ({ page }) => {
   /* THE SHELF POOL, which is the third thing D132's rule ranks and the one a sale can empty.
      `holdsLive` drops a box from the pool the moment it holds no LIVE match of the answer, and
