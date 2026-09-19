@@ -1355,10 +1355,21 @@ export function BoxBrowse({
      on every fresh answer, not only when the old selection fell out of the filter. */
   const answered = useRef<string | null>(null)
   useEffect(() => {
-    if (visible.length === 0) return
+    /* `fresh`/`answered.current` are settled BEFORE the `visible.length === 0` guard below,
+       on purpose (2026-09-19, the owner's "fix the product" ruling). `visible` can go empty
+       for a render or two while `shelf` is still catching up to a just-landed answer — the
+       shelf-picking effect above runs first in the same commit, and its own `pool` can pick a
+       different box for one tick before settling back. Returning early WITHOUT recording the
+       query left `answered.current` holding a stale value, so the next render — the same
+       repeat answer to the same query text, `visible` populated again — read as `fresh` all
+       over again and re-landed `selected` on the fullest section even though nothing about
+       the query had changed. That is what made `CopiesPanel`'s row prop change under a
+       search already answered, which is D118-class: the copies panel blanked to its skeleton
+       for the length of one re-ask. See D118's amendment below. */
     const query = filtered ? (results?.query ?? null) : null
     const fresh = query !== null && query !== answered.current
     answered.current = query
+    if (visible.length === 0) return
     setSelected((prev) => {
       if (!fresh && prev !== null && visible.some((row) => row.key === prev)) return prev
       return (filtered ? landingInFullest(visible) : landingOf(visible))?.key ?? null

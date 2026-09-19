@@ -6431,6 +6431,28 @@ test('a new search takes a new order, so the staleness never carries across answ
   )
   await expect(page.locator('.card-locations-row .position-parts')).toHaveCount(6)
   await expect(page.locator('.card-locations-rerank')).toHaveCount(0)
+  /* A GUARD THAT SEES ITS SUBJECT (D118 amended, 2026-09-19). The `toHaveCount(6)` above
+     retries on Playwright's own interval and can settle AFTER a same-tick blank-and-restore
+     has already happened and healed — which is exactly what let this defect through on CI in
+     3 of 20 runs, always here. `BoxBrowse`'s landing effect could re-pick `selected` on a
+     repeat answer to a query already on screen, which pointed `CopiesPanel` at a row its own
+     stale search had not answered for yet and dropped it to the skeleton for the length of a
+     debounce plus a fetch — six rows to zero and back, under the hand, with no press. Sampled
+     over two animation frames rather than once, because a single read after the fact proves
+     only that the DOM healed, never that it held. */
+  const framesAfterLanding = await page.evaluate(
+    () =>
+      new Promise<number[]>((resolve) => {
+        const seen: number[] = []
+        const sample = () => {
+          seen.push(document.querySelectorAll('.card-locations-row .position-parts').length)
+          if (seen.length < 2) requestAnimationFrame(sample)
+          else resolve(seen)
+        }
+        requestAnimationFrame(sample)
+      }),
+  )
+  expect(Math.min(...framesAfterLanding), `rows across frames: ${framesAfterLanding.join(', ')}`).toBeGreaterThan(0)
   /* And the order is the one a fresh answer computes: box 7 is down to two live copies, which
      ties box 2 section 2, so box 2's pair leads — the reshuffle that the freeze was holding off
      and that a new search is entitled to make. */
