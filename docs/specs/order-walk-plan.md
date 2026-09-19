@@ -742,6 +742,61 @@ settled work by accident before.
   this store they are — 50 sections over 5 boxes — and a store that stops sectioning makes the
   cost function equal to counting boxes.
 
+## 13. The walk IS the inventory screen — RULED 2026-09-19, superseding sections 8 and 12's stop
+
+**The owner, looking at the third build on their real store, in their own words:** *"Walking an
+order should just be a tweaked way of routing inventory — an order walk is a tailored prompt
+that still uses the inventory engine, except the left portion of the inventory screen turns
+into orders and the sort is by density. It's that simple."* And: *"D90 was the closest we'd
+gotten to good. It wasn't perfect, but a million times better than what you've done so far."*
+
+**D90 already said this** — *an order drives the walk as a mode of the inventory screen* — and
+was BUILT on 2026-09-02 at `71c6dcb5`: `app/src/orderWalk.ts`, `app/src/OrderWalkBanner.tsx`,
+716 lines on `Inventory.tsx`, entry at `#/inventory?order=<key>`. The D96 rebuild DELETED it at
+`84be07ed` ("the envelope walk is deleted rather than built") and built a separate walk on
+`#/orders`. Three builds since — sections 8, 9a and 12, and the "stop, rebuilt" — took
+inventory's FRAME and never its ENGINE. Every one of them drew a walk-specific stop, a
+walk-specific row, a walk-specific reservation. That is the whole failure, and it was the
+orchestrating session's.
+
+**The owner's word today overrules D96's deletion of D90's mode.** A settled decision is an
+argument; the owner has heard it and ruled against it on the evidence of three screens.
+
+### What the walk is
+
+- **The main column of `#/orders` is `#/inventory`'s card pane, unchanged.** The photograph,
+  D155's section ruler with the box as the margin note, the copies panel (`CardLocations`)
+  with every copy of the card in the store — exactly as `#/inventory` draws that card when you
+  land on it. Not a component that reuses inventory's parts. Inventory's pane.
+- **The left column is section 12's orders list**, ticks per buyer, `Tick all` / `Untick all`,
+  Start, `End walk`. That part stands.
+- **The plan is only the ORDER the cards come in.** `POST /orders/walk-plan` ranks by section
+  density (§5-6, unchanged); the walk steps through the plan's copies in that order, landing
+  the inventory pane on each one the way D90's arrow stepped. Frozen for the pass (§8's
+  ruling). A copy's position refreshes on a pull (§8's 2026-09-19 ruling).
+- **Pull is where Mark sold is**, per copy, recording against an owing order (D212, §8). Not
+  D90's one-press envelope — the owner said D90 was not perfect, and per-copy Pull is what
+  every ruling since has built on.
+- **Nothing walk-specific is drawn that inventory does not draw.** No `Identified` pill, no
+  walk row, no walk reservation, no `StopBlock`, no `TakeBlock`, no `CopyAddress`, no
+  `StopSpanBar`. If the walk needs something inventory lacks, it is added to INVENTORY and
+  both screens get it.
+
+### What this supersedes
+
+Section 8 "A stop" and "How a row closes" as a component design — the mechanics they rule
+(nothing re-ranks, a press moves nothing, a pulled copy's Undo, the refresh) survive as rules
+over inventory's pane. Section 9a's findings 1-4 as fixes to a walk row — there is no walk
+row. Section 12's main-column description. The "stop, rebuilt" subsection in full. The
+`OrdersWalk.tsx` built at `d1f3cb28` and merged in #406 is to be DELETED, not adapted.
+
+### What must not happen a fourth time
+
+Do not design a stop. Do not design a row. Open `71c6dcb5`, read what D90 built on
+`Inventory.tsx`, and restore that shape over today's engine with the plan as its order. The
+wire built in #406 (`WalkPlanCopy` with `key`, `place`, `here`) already carries what the
+inventory pane needs to land on a copy.
+
 ## 12. One screen, and the list that is already there
 
 **Ruled by the owner on 2026-09-18, looking at the built screen.** This section replaces
