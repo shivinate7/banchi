@@ -213,6 +213,10 @@
    ticked and goes again when the pass begins; reserving the height here is what keeps those
    two presses from moving the list they were made on. `--bn-control-h-lg` is the size the
    button inside it is drawn at. */
+/* THE SELECTION SECTOR IS THE HEAD OF THE COLUMN, AND THE RULE UNDER IT IS WHAT SEPARATES IT
+   FROM THE LIST. Start sat at the foot of the sticky pane first; over 250 buyers that foot is
+   at y=1449 on a 900px viewport and the press that fills it is at the head, so the answer to
+   `Tick all` was off the screen. */
 .orders-start-slot {
   display: flex;
   align-items: center;
@@ -221,9 +225,14 @@
      with the button in it — measured, and the list under it moved by the 9px difference. The
      arithmetic tracks the token, which grows to 46px under a coarse pointer. */
   min-height: calc(var(--bn-control-h-lg) + var(--bn-2) + 1px);
-  padding-top: var(--bn-2);
-  border-top: 1px solid var(--bn-line);
+  padding-bottom: var(--bn-2);
+  border-bottom: 1px solid var(--bn-line);
 }
+/* THE HEIGHT IS RESERVED; THE RULE IS NOT. With Start absent the slot draws as a line floating
+   over a gap, which reads as a divider somebody forgot to fill. `:empty` is exact here — this
+   box holds the button or nothing at all — and it changes only what is painted, never the
+   layout the reservation above exists to hold still. */
+.orders-start-slot:empty { border-bottom-color: transparent; }
 .orders-start { width: 100%; }
 .orders-index-hint { display: flex; align-items: center; gap: 4px; padding: 0 var(--bn-2); font-size: var(--bn-fs-xs); color: var(--bn-ink-4); }
 .orders-index-hint .bn-kbd { margin-right: 2px; }

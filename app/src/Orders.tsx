@@ -3189,6 +3189,14 @@ function PullStage({
 
   /** START, AND THE SLOT IT LIVES IN.
    *
+   *  AT THE HEAD OF THE COLUMN, NOT ITS FOOT. The foot is where this was built first, on the
+   *  reasoning that `.orders-index-pane` is sticky and so its foot is always in view. MEASURED
+   *  OVER 250 BUYERS AND THAT IS FALSE BEFORE THE FIRST SCROLL: the two backlog panels push the
+   *  pane's top to y=613 on a 900px viewport, the pane is then capped at `100vh` of height, and
+   *  its foot sits at y=1449. `Tick all` is at the head, so the operator could tick every buyer
+   *  on the screen and get no answer at all about what the press would cover. At the head it is
+   *  in view at every scroll position, before the pane sticks and after.
+   *
    *  OVER AN EMPTY SELECTION IT IS NOT OFFERED AT ALL — absent, not disabled (§12 answer 3).
    *  It is also not offered while a pass runs, so a stray press cannot throw away the plan the
    *  hand is working: `End walk` first, then Start.
@@ -3368,6 +3376,7 @@ function PullStage({
         <div className="orders-layout">
           <nav className="orders-index-pane" aria-label="Buyers">
             {selectBar}
+            {startSlot}
             {shownGroups.length === 0 && earlierGroups.length === 0 ? (
               nothingShown
             ) : (
@@ -3411,7 +3420,6 @@ function PullStage({
                 </p>
               </>
             )}
-            {startSlot}
           </nav>
           <div className="orders-detail">
             {passRunning ? walkView : selectedGroup === null ? null : detailOf(selectedGroup, 'panel')}
