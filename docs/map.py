@@ -7186,8 +7186,11 @@ COMPONENTS = [
                                              "asserts NOTHING about the order walk; that is "
                                              "app/tests/order-walk.spec.ts. Not a harness test — "
                                              "it starts a browser; `make design-check` runs it.",
-                                     "governed_by": ["D24", "D27", "D28", "D36", "D49", "D58", "D63", "D69", "D73", "D90", "D91", "D96", "D103", "D113", "D114", "D118", "D123", "D132",
-                                                     "D181", "D193", "D194", "D203", "D209", "D212"]},
+                                     "governed_by": ["D20", "D24", "D27", "D28", "D36", "D49",
+                                                     "D58", "D63", "D69", "D73", "D90", "D91",
+                                                     "D96", "D103", "D113", "D114", "D118", "D123",
+                                                     "D132", "D181", "D193", "D194", "D203", "D209",
+                                                     "D212"]},
             "tests/shipping.spec.ts": {"does": "the shipping screen in a browser, and its "
                                                "strongest cases are ABSENCES: no buyer name, "
                                                "address, city or postcode appears anywhere on "

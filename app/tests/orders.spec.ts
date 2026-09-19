@@ -2581,10 +2581,14 @@ test('the buyer for a card is named only on a stop with more than one buyer, and
             for: [{ key: `TCGplayer:${ORDER_NUMBER}`, number: ORDER_NUMBER, buyer: 'Ada Lovelace' }],
             copies: [walkPlanCopy({ capture_id: 'cap-two-a' })],
           }),
+          /* THE MUTATION THIS CASE PROVES: a ref with no buyer name at all — D20's optional
+           * field, on an order the feed never named — is exactly what turned "conditional and
+           * a name" into "always, and a raw key" on the shipped screen: `?? b.number` fell
+           * back to this order's own key the moment `buyer` was null. */
           walkPlanTake({
             sku: '9038409',
             name: 'Yasuo, Unforgiven',
-            for: [{ key: `TCGplayer:${OTHER_ORDER}`, number: OTHER_ORDER, buyer: 'Grace Hopper' }],
+            for: [{ key: `TCGplayer:${OTHER_ORDER}`, number: OTHER_ORDER, buyer: null }],
             copies: [walkPlanCopy({ capture_id: 'cap-two-b', index: 40 })],
           }),
         ],
@@ -2598,12 +2602,11 @@ test('the buyer for a card is named only on a stop with more than one buyer, and
   await expect(stops).toHaveCount(2)
   await expect(stops.nth(0).locator('.walkplan-take-for')).toHaveCount(0)
 
+  /* The named take says so, by name. The nameless one says nothing — never `ref.number`. */
   const multiBuyerFors = stops.nth(1).locator('.walkplan-take-for')
-  await expect(multiBuyerFors).toHaveCount(2)
-  await expect(multiBuyerFors.nth(0)).toHaveText('for Ada Lovelace')
-  await expect(multiBuyerFors.nth(1)).toHaveText('for Grace Hopper')
-  await expect(multiBuyerFors.nth(0)).not.toContainText(ORDER_NUMBER)
-  await expect(multiBuyerFors.nth(1)).not.toContainText(OTHER_ORDER)
+  await expect(multiBuyerFors).toHaveCount(1)
+  await expect(multiBuyerFors.first()).toHaveText('for Ada Lovelace')
+  await expect(stops.nth(1)).not.toContainText(OTHER_ORDER)
 })
 
 test('the photograph on a walk row is drawn at #/inventory\'s own size, not a thumbnail (finding 3)', async ({ page }) => {
