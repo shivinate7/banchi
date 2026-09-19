@@ -589,6 +589,17 @@ an entry. One piece of D96 IS already reversed in the open, by section 8's own w
 walk ends the pass" directly contradicts D96 amended's "a toggle is not the end of a pass," and
 that reversal was the owner's, in the 2026-09-17 interview.
 
+**DEFERRED ON THE OWNER'S WORD, 2026-09-19.** Asked directly, with both ways out on the table,
+the owner's answer was: *"we don't really need it right now so leave that as it is."* So this
+paragraph stays exactly what it is — a record that the argument is unanswered and the mechanism
+absent. D96 is NOT superseded and the figure is NOT being rebuilt. A later session should not
+re-raise this as an open question; it was raised and held.
+
+Worth noting for whoever does pick it up: the mechanism got cheaper after this was written. The
+pull now answers with post-write facts (§8's 2026-09-19 ruling), so the moment an order's last
+copy is recorded is something the screen already sees. The figure could be counted off the
+pass's own presses rather than by re-reading the ledger.
+
 It is named here so it cannot be lost the way a silent revert is lost. `make docs-audit`'s
 `recorded deletions` row and `make revert-guard` both exist because this repository has dropped
 settled work by accident before.
