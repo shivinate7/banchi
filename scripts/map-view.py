@@ -65,15 +65,37 @@ def literals(path: Path) -> Dict[str, object]:
     return out
 
 
-def gists() -> Dict[str, Tuple[str, List[str]]]:
-    """Decision titles and rulings, lifted by the hook's own parser."""
-    path = ROOT / "scripts" / "decision-context.py"
+def sibling(name: str):
+    """A script under scripts/ as a module, or None.
+
+    Two views need one: `gists()` wants decision-context.py's parser, `entry_path()` wants
+    decisions_corpus.py's resolver. The dance is four lines of importlib because the
+    filenames carry hyphens, and a second hand-rolled copy of it is the drift this repo
+    already caught once — scripts/docs-audit.py carries the same helper, under the same
+    name, for the same reason.
+
+    None on any failure, and every caller falls back rather than raising. A renderer that
+    cannot be read is a renderer nobody runs, so a broken sibling costs its own view and
+    never the whole page.
+    """
+    path = ROOT / "scripts" / name
     if not path.exists():
-        return {}
+        return None
     try:
-        spec = importlib.util.spec_from_file_location("decision_context", path)
+        spec = importlib.util.spec_from_file_location(name.replace("-", "_")[:-3], path)
         module = importlib.util.module_from_spec(spec)  # type: ignore[arg-type]
         spec.loader.exec_module(module)  # type: ignore[union-attr]
+        return module
+    except Exception:  # noqa: BLE001 - a broken sibling must not take the renderer down
+        return None
+
+
+def gists() -> Dict[str, Tuple[str, List[str]]]:
+    """Decision titles and rulings, lifted by the hook's own parser."""
+    module = sibling("decision-context.py")
+    if module is None:
+        return {}
+    try:
         return module.decision_gists()
     except Exception:  # noqa: BLE001 - a broken hook must not take the renderer down
         return {}
@@ -102,13 +124,10 @@ def entry_path(name: str) -> Optional[Path]:
 
     None for the codes track, whose entries are sections of one file rather than files.
     """
-    path = ROOT / "scripts" / "decisions_corpus.py"
-    if not path.exists():
+    module = sibling("decisions_corpus.py")
+    if module is None:
         return None
     try:
-        spec = importlib.util.spec_from_file_location("decisions_corpus", path)
-        module = importlib.util.module_from_spec(spec)  # type: ignore[arg-type]
-        spec.loader.exec_module(module)  # type: ignore[union-attr]
         return module.path_for(name)
     except Exception:  # noqa: BLE001 - same rule as gists(): a reader never takes this down
         return None
