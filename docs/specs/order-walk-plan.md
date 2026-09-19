@@ -474,6 +474,81 @@ This is D181's rule (the order is taken once, and a sale may not retake it) appl
 and D118's (a press changes what is on the screen, never where the rest of it is) applied to
 the list the press sits in.
 
+### The stop, rebuilt — RULED 2026-09-19, after the owner saw the merged screen
+
+**What shipped was wrong in its unit.** The row was drawn per COPY: a 220px photograph on every
+copy, so two copies of one card drew the same photograph twice, and the photograph's height
+set a ~307px row around ~90px of content. The copies shown were only the ones the solver chose
+at this stop, so the operator could not see where the rest of the card's copies were. Three
+independent reviews reached the same cause: the walk hand-rolled a row that `#/inventory`'s
+copies panel (`CardLocations`, D93's "picker") already is.
+
+**The photograph belongs to the CARD, once, at the take header.** 76×106 at every width. Every
+copy under a take is the same card.
+
+**Each copy is the copies panel's own row**, `CardLocations`'s owner-dense row through
+`renderAction`, with Pull where `#/inventory` puts Mark sold. Nothing hand-rolled beside it.
+
+**Every copy of the card in the store is drawn, this drawer's first, all pressable.** D212 (every
+copy is fungible, no order claims one, the write is the only refusal) and D93 (the picker draws
+every copy and hides none) answer this directly, and D212 records the owner widening it to this
+very screen. The solver ranked this drawer densest; that is the ORDER the copies are drawn in,
+not a filter over which are drawn. A copy in another drawer offers Pull like any other. The
+store-wide copies come over the walk wire from the snapshot the route already holds — never
+from a `search()` per card, which on a 41-card walk is 41 whole-store reads through four
+request slots.
+
+**The ranking does not move.** The copies panel re-sorts by fullest section on every render.
+On the walk it may not. The rows are drawn in the order the wire sends them, this stop's copies
+leading, and a pull does not re-sort. `FrozenRank` from `#/inventory` (D181) keeps a departed
+copy in place.
+
+**A position bar on every copy, AND the span bar at the stop.** The owner's word. §9a finding 4
+read literally. The stop's bar is the section's span, `#242–284 of 987`; the copy's bar is its
+own place in the box. Both are real now that `box_total` is on the wire.
+
+**Undo is per copy, not per take.** The shipped build gated Undo on the whole take being
+satisfied, so at `1 of 2 taken` there was none. Each pulled copy's row draws its own Undo for
+the window, in place, at the row's own height.
+
+**A pulled copy is not excluded from the refresh — it collapses.** The shipped build kept the
+pulled copy's pre-write facts at full size while the rows ahead refreshed, so one drawer read
+`of 616` on one row and `of 615` on the next. A card in the hand has no position. Its row
+collapses to one line: `#4 · taken · Undo`. That is the whole of what it draws.
+
+**A stop whose every take is closed collapses to its instruction line and one summary line per
+take.** Section 8 asked for this and nothing was built.
+
+**Which order a press banks to is decided by the PASS'S OWN TALLY, never the live ledger.** D212:
+no order claims a copy, so there is no assignment to make at Start and no choice to offer at the
+press. The client names the first order in the take's `for` that this pass's own recorded map
+says still owes, and `record_pull` refuses if the line is already full. The shipped build read
+`order.recorded` off a live re-read after every pull, so the answer could move mid-pass.
+
+**The pull receipt speaks in sentences** (D196). The shipped toast printed the raw order key.
+
+**The copy's bar reads `#8 of 34`, never `#8 of 34 so far`** (owner, 2026-09-19). `so far` is
+`PositionBar`'s own caption for a box still being filled — true on `#/capture` and `#/inventory`,
+meaningless in the middle of a pull. The walk drops the two words; every other screen keeps them.
+
+**The row's address stays as built — `#8 RB Origins Commons` — until the owner has walked with
+it.** The owner's word: leave it, and ask again after real use. A session that changes it before
+that feedback has arrived is working against an explicit hold. What it might become is recorded
+so the ask is cheap: slot only for a copy in this drawer, slot plus box name for one elsewhere,
+the section's name never on a row.
+
+**Which order a press banks to — what is fact, what is built, and what the owner actually
+said.** FACT, D212: no order claims a copy; the write is the only refusal. BUILT: the press names
+the first order in the take's `for` that this pass's own tally has not filled, `record_pull`
+refuses a full line, the row marks itself on refusal; nothing on the wire carries a split. THE
+OWNER: asked three times on 2026-09-19 — once as "decide at Start / keep live / ask at the
+press", once after D212 was read, once more as "is the heuristic the answer" — the owner
+selected no option and said the question itself was misconstrued and they were tired of it. That
+is not a ruling that the heuristic is right, and it is not a ruling that the topic is closed for
+ever. It is a rejection of the question AS FRAMED. A session that wants to change this behaviour
+should first say what the previous framing got wrong, in one sentence, and should not put the
+same three options to the owner again.
+
 ### The shortfall block
 
 The plan cannot fill every SKU, and on this store it misses 23 of 59. One block, at the foot,
@@ -606,10 +681,10 @@ settled work by accident before.
 
 **Two questions the build raised and nobody has answered.** They are design, not defects.
 
-- **Which order a press records against**, when one card at a stop serves more than one buyer.
-  The wire names every order a take serves and does not say how the demand splits between them,
-  so the client picks. Today it takes the first order in `for` still owing by the live ledger
-  figure. That is a rendering-side heuristic standing in for a fact the route could carry.
+- **Which order a press records against** — see §8 "The stop, rebuilt" for what is fact
+  (D212), what is built (the pass-tally heuristic), and what the owner said on 2026-09-19 when
+  asked three times: that the question as framed was misconstrued. No ruling on the heuristic
+  was given. Not closed; not to be re-asked in the same shape.
 - **Whether the stop span should be a proportional bar.** `WalkPlanStop` carries no box total,
   so the screen draws the honest span numbers rather than fabricating a proportion.
 

@@ -4780,7 +4780,7 @@ COMPONENTS = [
                                              "D91", "D92", "D93", "D97", "D100", "D103", "D104",
                                              "D113", "D114", "D115", "D116", "D132", "D134", "D142",
                                              "D145", "D147", "D156", "D159", "D165", "D166", "D168",
-                                             "D172", "D174", "D180", "D183", "D193", "D213"]},
+                                             "D172", "D174", "D180", "D183", "D193", "D212", "D213"]},
             "src/deviceMemory.ts": {"does": "every `localStorage` key the shell owns — the "
                                             "theme, the rail, which order statuses this "
                                             "device bothers fetching (D114), whether the "
@@ -6286,8 +6286,8 @@ COMPONENTS = [
                                "governed_by": ["D7", "D10", "D24", "D27", "D28", "D36", "D39",
                                                "D51", "D57", "D58", "D61", "D63", "D66", "D69",
                                                "D91", "D93", "D96", "D97", "D103", "D113", "D114",
-                                               "D118", "D159", "D181", "D192", "D193", "D203",
-                                               "D209", "D212"]},
+                                               "D118", "D159", "D181", "D192", "D193", "D196",
+                                               "D203", "D209", "D212"]},
             "src/Orders.css": {"does": "the order screen at owner density: the line, its reason "
                                        "and remedy, and the pick rows under it. A copy already "
                                        "spoken for by another line is drawn as spoken for "
@@ -7253,9 +7253,9 @@ COMPONENTS = [
                                              "it starts a browser; `make design-check` runs it.",
                                      "governed_by": ["D20", "D24", "D27", "D28", "D36", "D49",
                                                      "D58", "D63", "D69", "D73", "D90", "D91",
-                                                     "D96", "D103", "D113", "D114", "D118", "D123",
-                                                     "D132", "D181", "D193", "D194", "D203", "D209",
-                                                     "D212"]},
+                                                     "D93", "D96", "D103", "D113", "D114", "D118",
+                                                     "D123", "D132", "D181", "D193", "D194", "D196",
+                                                     "D203", "D209", "D212"]},
             "tests/shipping.spec.ts": {"does": "the shipping screen in a browser, and its "
                                                "strongest cases are ABSENCES: no buyer name, "
                                                "address, city or postcode appears anywhere on "

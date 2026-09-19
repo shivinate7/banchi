@@ -93,8 +93,15 @@ export function spansOf(place: Place, sections?: readonly SectionDetail[]): Span
  *
  * The Fulfiller's form carries neither: "so far" is a pipeline notion and a percentage is not
  * a thing read at arm's length. He gets `Card 53 of 65`, in words.
+ *
+ * `soFar` (default `true`) is the caption's own opt-out, not a persona and not a route: an
+ * open box's denominator is only "so far" while the box is still being FILLED, and the walk
+ * reads the same numbers in the middle of a PULL, where growth is not the fact on screen
+ * (`docs/specs/order-walk-plan.md` §8's "The stop, rebuilt" ruling, owner, 2026-09-19 — "the
+ * copy's bar reads `#8 of 34`, never `#8 of 34 so far`"). Every other caller leaves it at the
+ * default and keeps the two words exactly as before.
  */
-export function sentenceOf(place: Place, persona: Persona = 'owner'): string {
+export function sentenceOf(place: Place, persona: Persona = 'owner', soFar: boolean = true): string {
   const { slot, box_total, box_closed, fraction } = place
   if (isDeparted(place)) return persona === 'fulfiller' ? 'No longer in the box' : 'no longer in the box'
   if (slot === null) {
@@ -109,7 +116,7 @@ export function sentenceOf(place: Place, persona: Persona = 'owner'): string {
   }
   if (persona === 'fulfiller') return `Card ${slot} of ${box_total}`
   if (box_closed) return `#${slot} of ${box_total} · ${Math.round(fraction * 100)}% in`
-  return `#${slot} of ${box_total} so far`
+  return soFar ? `#${slot} of ${box_total} so far` : `#${slot} of ${box_total}`
 }
 
 /** The second scale: how far into its own SECTION a card sits. Null when there is no honest

@@ -10126,36 +10126,29 @@ def do_order_picks(payload: dict) -> dict:
     return {"orders": answered}
 
 
-def _walk_plan_copy(places: _Places, copy: "walkplan.Copy") -> dict:
-    """One copy of a `Take`, as a pick-shaped row (`docs/specs/order-walk-plan.md` §7).
+def _walk_plan_copy(places: _Places, card: master.Card, *, here: bool) -> dict:
+    """One physical copy of a take's SKU, exactly as `/search` renders that same card, plus
+    `here` — whether it is standing at the stop asking for it (RULED 2026-09-19, "The stop,
+    rebuilt", `docs/specs/order-walk-plan.md` §8).
 
-    `places.of` IS THE ONLY LABEL FORMULA, exactly as `_pick_row` calls it for `POST
-    /orders/picks` — `slot`, `card`, `label` and `neighbors` all come from that one call
-    rather than a second composition of `pipeline/join.py:Position` here. `capture_id` and
-    `cid` travel on `walkplan.Copy` itself (the solver's own snapshot), never re-derived.
+    EVERY ON-HAND COPY OF THE SKU RIDES THE WIRE NOW, NOT ONLY THE SOLVER'S REACH. D212
+    (every copy is fungible, no order claims one) and D93 (the copies panel draws every
+    copy and hides none) both already ruled this for the resolver and for `/search`; the
+    shipped walk drew only the copies `pipeline/walkplan.py` picked for THIS stop, so a card
+    the store held four of could draw one, with no way to see where the rest were.
+    `_walk_plan_take`, one call up, builds the store-wide list; this is the one row
+    composer for a member of it.
 
-    THE BOX'S OWN THREE NUMBERS RIDE ALONG SINCE 2026-09-19, and they are what make the
-    walk's position bar a ruler rather than a blank track. `box_total`, `box_closed` and
-    `fraction` are already in the block `places.of` just built; leaving them off cost the
-    client its denominator, so `app/src/OrdersWalk.tsx:neighborShim` passed `box_total: 0`
-    and `PositionBar` drew its honest "a box the server could not size" state — a blank
-    track and one sentence — on EVERY row, for ever (§9a finding 4). Nothing extra is read
-    to send them: this is the same dict, three keys wider.
+    `_copy_row` IS REUSED WHOLE, NOT RE-COMPOSED (the brief's own instruction, and the same
+    rule its own docstring states for `/search`'s `state`/`has_photo`/`place`): one composer
+    of this dict, not two describing the same physical card differently depending on which
+    route asked. The flat fields the old `WalkPlanCopy` carried (`box`, `index`, `slot`,
+    `card`, `label`, `neighbors`, `box_total`, `box_closed`, `fraction`) are GONE — they all
+    live inside `place` now, exactly as `SearchCopy.place` already carries them.
     """
-    place = places.of(copy.box, copy.index)
-    return {
-        "box": copy.box,
-        "index": copy.index,
-        "slot": place["slot"],
-        "capture_id": copy.capture_id,
-        "cid": copy.cid,
-        "card": place["card"],
-        "label": place["label"],
-        "neighbors": place["neighbors"],
-        "box_total": place["box_total"],
-        "box_closed": place["box_closed"],
-        "fraction": place["fraction"],
-    }
+    row = _copy_row(places, card)
+    row["here"] = here
+    return row
 
 
 def _walk_plan_sort_key(copy: "walkplan.Copy", places: _Places) -> Tuple[int, int]:
@@ -10220,15 +10213,53 @@ def _walk_plan_take(
     places: _Places,
     take: "walkplan.Take",
 ) -> dict:
-    copies = sorted(take.copies, key=lambda copy: _walk_plan_sort_key(copy, places))
-    name, number_display = _walk_plan_sku_display(inventory, copies)
+    """One SKU at one stop — D212 and D93 reaching the walk's own row (RULED 2026-09-19).
+
+    `take.copies` IS THE SOLVER'S OWN REACH, this stop's copies and no others, in the order
+    `pipeline/walkplan.py` chose them (densest-first, D58's slot). It is no longer the whole
+    list. `inventory.copies_on_hand(take.sku)` is the SAME accessor `do_search`'s `on_hand`
+    count already reads, over the SAME snapshot `do_order_walk_plan` already holds — never a
+    second `Store().read()`, and never `search()` per card, which on a 41-card walk would be
+    41 whole-store reads through four request slots (`docs/specs/order-walk-plan.md` §8).
+
+    ORDER IS LOAD-BEARING (the wire contract's own words) and fixed HERE, not left to the
+    client to sort: this stop's copies first, in the solver's densest-first order, then
+    every other on-hand copy ascending by (box, index) — the same order `copies_on_hand`
+    (`positions_for_sku`, sorted `(box, index)`) already returns, so the remainder needs no
+    second sort, only the stop's own copies filtered back out of it.
+    """
+    here = sorted(take.copies, key=lambda copy: _walk_plan_sort_key(copy, places))
+    name, number_display = _walk_plan_sku_display(inventory, here)
+
+    here_keys = {master.position_key(copy.box, copy.index) for copy in here}
+    rows: List[dict] = []
+    for copy in here:
+        card = inventory.cards.get(master.position_key(copy.box, copy.index))
+        if card is not None:
+            rows.append(_walk_plan_copy(places, card, here=True))
+    for card in inventory.copies_on_hand(take.sku):
+        if card.key in here_keys:
+            continue
+        rows.append(_walk_plan_copy(places, card, here=False))
+
+    # `set`/`rarity`/`condition` FOR THE TAKE HEADER, EXACTLY AS `do_search` COMPOSES THEM
+    # FOR A `SearchGroup` — over the SKU's WHOLE position history (`positions_for_sku`), the
+    # same field `do_search` folds these over, not only the on-hand copies above, so a
+    # variant fact does not flicker depending on which copies happen to still be on the
+    # shelf. `condition` falls back to the listing's own recorded condition the same way.
+    positions = inventory.positions_for_sku(take.sku)
+    listing = inventory.listings.get(take.sku)
     return {
         "sku": take.sku,
         "name": name,
         "number_display": number_display,
+        "set": _agreed(record.set_name for record in positions),
+        "rarity": _agreed(record.rarity for record in positions),
+        "condition": _agreed(record.condition for record in positions)
+        or (listing.condition if listing is not None else None),
         "wanted": take.wanted,
         "for": _walk_plan_refs(ledger, take.orders),
-        "copies": [_walk_plan_copy(places, copy) for copy in copies],
+        "copies": rows,
     }
 
 
@@ -10240,6 +10271,13 @@ def _walk_plan_stop(
 ) -> dict:
     takes = [_walk_plan_take(inventory, ledger, places, take) for take in stop.takes]
     span: Optional[dict] = None
+    # `box_total` RIDES BESIDE THE SPAN, off the SAME `.of()` call and for the SAME reason
+    # (§8's 2026-09-19 ruling, "the stop's bar is the section's span... both are real now
+    # that `box_total` is on the wire"). Every copy at this stop already carries its own
+    # `place.box_total` (via `_walk_plan_copy` -> `_copy_row`); this is the DENOMINATOR for
+    # the stop's own span bar (`#242–284 of 987`), which draws once per stop and has no
+    # single copy to read it off when a stop's every take has gone.
+    box_total: Optional[int] = None
     if not stop.pooled:
         # ONE `.of()` CALL FOR THE SPAN, off the first take's first copy — every copy at one
         # stop shares one box and one section by construction (`StopKey`), so its
@@ -10251,6 +10289,7 @@ def _walk_plan_stop(
                 span = {"start": sample["section_start"], "end": sample["section_end"]}
                 box_name = sample["box_name"]
                 section_name = sample["section_name"]
+                box_total = sample["box_total"]
                 break
         else:
             box_name = None
@@ -10269,6 +10308,7 @@ def _walk_plan_stop(
         "game_display": stop.game_display,
         "order": stop.order,
         "span": span,
+        "box_total": box_total,
         "takes": takes,
     }
 
@@ -10322,6 +10362,30 @@ def do_order_walk_plan(payload: dict) -> dict:
     The delta is the per-box `records_in` walk — a fixed cost of the drawers the plan
     reaches, not of the copies in it, and paid once per press. D116 is what it buys: a card
     nobody has named is not a landmark, and the distance is what keeps the skip honest.
+
+    WIDENED TO EVERY ON-HAND COPY OF EACH SKU, STORE-WIDE, RULED 2026-09-19 ("The stop,
+    rebuilt") — D212 (every copy is fungible, no order claims one) and D93 (the copies
+    panel draws every copy and hides none) reaching this wire. `_walk_plan_take` now calls
+    `inventory.copies_on_hand(sku)` once per take, the same accessor `do_search`'s
+    `on_hand` count already reads, over the SAME snapshot — never a second
+    `Store().read()` and never `search()` per card (41 whole-store reads on a 41-card
+    walk). MEASURED AGAIN THE SAME DAY, over a second synthetic store built for this
+    change (2,560 cards, 8 drawers, roughly one duplicate copy for every seven SKUs
+    spread across boxes), timing the WHOLE route end to end this time — `do_order_walk_plan`
+    itself, not only the `_Places`-and-render slice the paragraph above isolates:
+
+        40 open orders    6.8 ms -> 9.0 ms  (median of 5 runs)
+        275 walkable     19.6 ms -> 34.9 ms (median of 5 runs)
+
+    The added cost is one `copies_on_hand` read per take (a `cards.where(sku=…)` scan,
+    already paid once by the solver's own `supply()` build one layer down —
+    `pipeline/walkplan.py:supply` — and paid again here because the route composes the
+    wire independently of the solver's internal state) plus building the wider `copies`
+    list itself. Single-digit-to-low-double-digit milliseconds, once per press and never
+    polled — the same shape the paragraph above argues, carried one step further. A
+    duplication-heavier store would cost more; this fixture's ~14% duplicate rate is a
+    guess at a plausible shape, not a measurement of the owner's own store, and is named
+    as such.
 
     AN UNKNOWN `cost` IS REFUSED BY NAME, WITH THE LEGAL VALUES IN THE MESSAGE, and it is
     `pipeline/walkplan.py:UnknownCostFunction` that decides what "unknown" means — surfaced
