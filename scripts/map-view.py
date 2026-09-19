@@ -14,6 +14,7 @@ Four views, because four questions get asked of this file:
     make map ARGS=app/          one package: what it does, what governs it, its modules
     make map ARGS=store/master.py   one module, in full, with its decisions resolved
     make map ARGS=D17           every entry D17 governs, and the entry's own title
+    make map ARGS="D17 --full"  that entry, in full, straight out of docs/decisions/
     make map ARGS=--stale       entries whose FILE has moved since the prose about it did
 
 `--stale` is the one view that reports something no other check in this repo can. The
@@ -78,6 +79,41 @@ def gists() -> Dict[str, Tuple[str, List[str]]]:
         return {}
 
 
+def entry_path(name: str) -> Optional[Path]:
+    """The file holding one entry, or None.
+
+    `decisions_corpus.path_for` is the authority and it reads the `## D<id>` heading rather
+    than the filename, which is why this defers to it rather than composing a name. THE
+    FILENAMES ARE ZERO-PADDED — D42 is stored as `D042-main-moves-by-pull-request.md` — so a
+    glob typed straight from a citation, `docs/decisions/D42-*`, matches nothing and says
+    nothing. It does not error. It returns empty, and the reader concludes the entry is
+    missing. Printing the real path is the cheapest thing that stops the padding being
+    secret knowledge, and it is why this view prints a path at all.
+
+    The padding itself is not the defect and is deliberately not being removed: `ls` sorts
+    text and not numbers, so an unpadded directory would list the hundreds in among the
+    tens and put the twos last. No code reads an id off a filename, so a rename would only
+    trade a working listing order for a working glob.
+
+    That sentence deliberately spells no id. Written out, the four ids an unpadded sort
+    mangles read to `make docs-audit`'s `repo map` row as four citations this file does not
+    have, and the row is right to say so — an illustration is not a citation and no checker
+    can tell them apart.
+
+    None for the codes track, whose entries are sections of one file rather than files.
+    """
+    path = ROOT / "scripts" / "decisions_corpus.py"
+    if not path.exists():
+        return None
+    try:
+        spec = importlib.util.spec_from_file_location("decisions_corpus", path)
+        module = importlib.util.module_from_spec(spec)  # type: ignore[arg-type]
+        spec.loader.exec_module(module)  # type: ignore[union-attr]
+        return module.path_for(name)
+    except Exception:  # noqa: BLE001 - same rule as gists(): a reader never takes this down
+        return None
+
+
 def modules_of(component: Dict[str, object]) -> Dict[str, Dict[str, object]]:
     return dict(component.get("modules") or {})  # type: ignore[arg-type]
 
@@ -121,7 +157,8 @@ def decisions(ids: Sequence[str], resolved: Dict[str, Tuple[str, List[str]]],
 
 def shape(data: Dict[str, object], resolved: Dict[str, Tuple[str, List[str]]]) -> List[str]:
     out: List[str] = [f"docs/map.py — {len(MAP.read_text(encoding='utf-8').splitlines())} lines, "
-                      f"rendered. `make map ARGS=<package|path|D<n>|--stale>` for one thing."]
+                      f"rendered. `make map ARGS=<package|path|D<n>|--stale>` for one thing.",
+                      '`make map ARGS="D<n> --full"` prints that entry in full.']
 
     tracks = data.get("TRACKS") or []
     out += rule("TRACKS")
@@ -188,11 +225,34 @@ def module(path: str, component: Dict[str, object], entry: Dict[str, object],
 
 
 def by_decision(name: str, data: Dict[str, object],
-                resolved: Dict[str, Tuple[str, List[str]]]) -> List[str]:
+                resolved: Dict[str, Tuple[str, List[str]]],
+                full: bool = False) -> List[str]:
+    """One entry: its title, its rulings, where to read it, and what it governs.
+
+    `full` prints the entry itself instead. That is the step this view was missing: the
+    three views above it answer "what does D42 govern", and the answer to "what does D42
+    actually SAY" was a glob a reader had to know the padding for (see `entry_path`).
+    Nothing is summarised here that the file does not already say — the whole file goes out
+    verbatim, because an entry is the argument and a rendered digest of an argument is the
+    thing D60 already refuses.
+    """
+    path = entry_path(name)
+    if full:
+        if path is None:
+            return rule(f"{name} — no file") + wrap(
+                "No entry file holds this id. The codes track (`C<n>`) lives in "
+                "docs/CODES-DECISIONS.md as sections of one file, so it has no file to "
+                "print. Read it there. For a `D<n>`, check that the id exists at all.", 2)
+        return path.read_text(encoding="utf-8").rstrip("\n").split("\n")
+
     title, said = resolved.get(name, ("(no entry in docs/DECISIONS.md)", []))
     out = rule(f"{name} — {title}")
     for one in said[:3]:
         out += wrap(one, 2)
+    if path is not None:
+        out += ["", "  read it in full",
+                f"    {path.relative_to(ROOT)}",
+                f"    make map ARGS=\"{name} --full\""]
     hits: List[str] = []
     for component in data.get("COMPONENTS") or []:  # type: ignore[union-attr]
         if name in (component.get("governed_by") or []):
@@ -314,13 +374,13 @@ def main(argv: Sequence[str]) -> int:
     elif query in ("--stale", "stale"):
         lines = stale(data)
     elif re.fullmatch(r"[CD]\d+", query.upper()):
-        lines = by_decision(query.upper(), data, resolved)
+        lines = by_decision(query.upper(), data, resolved, full="--full" in argv[1:])
     else:
         hit = find(data, query)
         if hit is None:
             print(f"no entry in docs/map.py for {query!r}.\n"
                   f"Try a package (`app/`), a path (`store/master.py`), a decision "
-                  f"(`D17`), or `--stale`.", file=sys.stderr)
+                  f"(`D17`, or `\"D17 --full\"`), or `--stale`.", file=sys.stderr)
             return 1
         path, component, entry = hit
         lines = package(component, resolved) if entry is None else module(path, component, entry, resolved)
