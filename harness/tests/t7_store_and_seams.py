@@ -26080,6 +26080,12 @@ def check_order_screen(checks: Checks) -> None:
                 {
                     "source": "TCGplayer", "number": "A-1", "sku": "9191486",
                     "targets": [target(3, 1, "p1")],
+                    # `docs/specs/order-walk-plan.md` §8's ruling of 2026-09-19: the cards
+                    # the caller is STILL DRAWING and is not pulling. 3/2 and 3/3 stay in
+                    # the drawer and are renumbered by this write (D58); box 9 is a drawer
+                    # this press never opened and must be skipped rather than answered.
+                    "refresh": [{"box": 3, "index": 2}, {"box": 3, "index": 3},
+                                {"box": 9, "index": 1}],
                 }
             ),
             "POST /orders/pull records one copy against the line and sells it",
@@ -26142,6 +26148,62 @@ def check_order_screen(checks: Checks) -> None:
                 "POSITION. The two differ, and the response carries the FIRST: a sale moves "
                 "the box's occupancy (D58), so a receipt composed afterwards would name "
                 "where the box has closed up to rather than the slot the card came out of",
+            )
+            # ---------------------------------------------------- `refreshed`, the other way in time
+            #
+            # THE SAME RESPONSE CARRIES BOTH DIRECTIONS AND THEY MUST NOT BE FOLDED TOGETHER.
+            # `places` above is the RECEIPT and is pre-write on purpose. `refreshed` is the
+            # answer to the request's own `refresh` list — cards the caller is still DRAWING
+            # and did not touch — and is post-write on purpose, because the write is what made
+            # their description wrong. `docs/specs/order-walk-plan.md` §8, ruled 2026-09-19.
+            #
+            # The case is the walk's own: the solver packs a pass into the fewest drawers, so
+            # the next card in the list is LIKELY to be the next card in the drawer, and D58
+            # renumbers it the moment the one in front of it leaves.
+            checks.equal(
+                [(row["box"], row["index"]) for row in pulled["refreshed"]],
+                [(3, 2), (3, 3)],
+                "SCOPED TO THE DRAWER THIS PRESS OPENED. Box 9 was asked for and is not "
+                "answered — nothing moved in it, so re-describing it would be a re-read "
+                "dressed as a consequence. The order is the caller's own, unsorted",
+            )
+            checks.equal(
+                [row["slot"] for row in pulled["refreshed"]],
+                [1, 2],
+                "AND THE NUMBERS ARE THE POST-WRITE ONES. Card 2 of the drawer became card "
+                "1 and card 3 became card 2, because the copy in front of them left (D58). "
+                "Pre-write they read 2 and 3, which is what a `refreshed` computed beside "
+                "the receipt would have answered — the exact defect this field exists to "
+                "remove, and the reason phase three builds its own `_Places`",
+            )
+            checks.equal(
+                pulled["places"][0]["slot"],
+                1,
+                "and the RECEIPT in the same body still reads the pre-write slot, so one "
+                "response carries both times without either overwriting the other",
+            )
+            refused_refresh = _refusal_text(
+                lambda: capture_server.do_order_pull(
+                    {
+                        "source": "TCGplayer", "number": "A-1", "sku": "9191486",
+                        "targets": [target(3, 2, "p2")],
+                        "refresh": [{"box": 3, "index": 3, "capture_id": "p3"}],
+                    }
+                )
+            )
+            checks.ok(
+                "capture_id" in " ".join(refused_refresh or ()),
+                "A REFRESH IS NOT A TARGET, AND THE FIELD LIST SAYS SO. Nothing is aimed at "
+                "and nothing is written, so an aim check on a card nobody is touching would "
+                "only refuse a re-description over a re-shoot. `_reject_unknown` names the "
+                "field rather than ignoring it, and the whole pull refuses — so this press "
+                f"wrote nothing either. Said: {refused_refresh!r}",
+            )
+            checks.equal(
+                Store().read().ledger.recorded(key, "9191486").fulfilled,
+                1,
+                "and the refusal above cost the line nothing, which is the half of "
+                "`_reject_unknown`-before-anything that matters",
             )
 
         after_screen = answers(
@@ -26473,6 +26535,111 @@ def check_order_screen(checks: Checks) -> None:
             "AND THE CARD IS NOT UN-SOLD BY IT: a refusal in phase two discards every state "
             "change queued behind it, because `Store.write()` commits only on a clean exit",
         )
+
+
+def check_order_walk_plan_route(checks: Checks) -> None:
+    """`POST /orders/walk-plan` composes a REAL position for every copy it offers.
+
+    `pipeline/walkplan.py` is proved by T11 and renders no labels on purpose. This is the
+    route above it, and the thing it gets wrong is silent: it shipped on 2026-09-18 using
+    `_Places.for_keys`, so every copy answered `neighbors: null` and — because `WalkPlanCopy`
+    carried no box total at all — `app/src/OrdersWalk.tsx` drew `PositionBar`'s honest "a box
+    the server could not size" blank track on every row, for ever (§9a finding 4).
+
+    THE SCOPING WAS BORROWED FROM A DIFFERENT CALLER AND THE PREMISE DID NOT REACH HERE.
+    `for_keys` exists for `do_orders` — "the route the Orders and Shipping screens poll" —
+    whose picks span most of the store's boxes. The walk fires ONCE per pass (§8: computed
+    once, no `Re-plan` control) over the few drawers the solver picked, and the ordinary
+    `_Places` is already scoped by being lazy per box. Measured 2026-09-19 at the owner's own
+    scale (2,560 cards, 8 drawers, 275 walkable orders): 4.5 ms -> 18.5 ms for 40 open
+    orders, 24.1 ms -> 32.2 ms for all 275. The delta is the per-box walk of the drawers the
+    plan reaches, paid once per press.
+
+    WHY THIS IS A ROUTE TEST AND NOT A SCREEN TEST. `app/tests/orders.spec.ts` stubs the
+    wire, so it proves the screen draws what it is handed and can prove nothing about what
+    the server hands it. A null `neighbors` here reads as a legal degraded state all the way
+    up, which is exactly how it survived a review.
+    """
+    checks.note("")
+    checks.note("WALK PLAN ROUTE — POST /orders/walk-plan (order-walk-plan.md §7-8)")
+
+    with isolated_home():
+        for at in range(1, 13):
+            capture_server.do_capture(capture_payload(3, capture_id=f"w{at}", set_hint="sv9"))
+        with Store().write() as snapshot:
+            for at in range(1, 13):
+                # EVERY CARD NAMED, because D116 walks PAST a card nobody has named: a box
+                # straight off the feeder draws no ladder at all, and a fixture like that
+                # would make a null `neighbors` look correct.
+                snapshot.inventory.record_identification(
+                    f"3/{at}", name=f"Landmark {at}", number=f"{at:03d}/219",
+                    printed_total="219", confidence="high",
+                )
+                snapshot.inventory.cards[f"3/{at}"].sku = "9191486" if at in (4, 5) else f"91914{at:02d}"
+
+        answers(
+            checks,
+            lambda: capture_server.do_order_ingest(
+                {"orders": [{
+                    "source": "TCGplayer", "number": "W-1",
+                    "placed_at": "2026-09-18T10:00:00.000+00:00",
+                    "lines": [{"sku": "9191486", "quantity": 1, "name": "Landmark 4"}],
+                }]}
+            ),
+            "an order for a card sitting mid-box ingests",
+        )
+
+        plan = answers(
+            checks,
+            lambda: capture_server.do_order_walk_plan({"keys": ["tcgplayer:w-1"]}),
+            "POST /orders/walk-plan answers a plan over that order",
+        )
+        if plan is not None:
+            copies = [
+                copy
+                for stop in plan["stops"]
+                for take in stop["takes"]
+                for copy in take["copies"]
+            ]
+            checks.equal(
+                sorted(copy["index"] for copy in copies),
+                [4, 5],
+                "both copies of the ordered SKU are offered, not one (D93, D97 — the "
+                "machine ranks and the person reaches)",
+            )
+            checks.equal(
+                [copy["box_total"] for copy in copies],
+                [12, 12],
+                "AND EVERY COPY CARRIES THE BOX'S OWN TOTAL. Zero is `PositionBar`'s "
+                "documented shape for a box the server could not size, so a wire that "
+                "omitted this made every walk row draw a blank track and the sentence "
+                "\"where this sits in the box is not known yet\" — honest, and wrong on "
+                "every row of a box the server can size perfectly well",
+            )
+            checks.equal(
+                [copy["fraction"] is not None for copy in copies],
+                [True, True],
+                "and the fraction beside it, so the mark on the track has somewhere to be",
+            )
+            named = [
+                (copy["neighbors"] or {}).get("prev", {}) or {}
+                for copy in copies
+            ]
+            checks.equal(
+                [side.get("name") for side in named],
+                ["Landmark 3", "Landmark 4"],
+                "AND D30's LADDER IS REAL, WHICH IS THE WHOLE OF THIS BLOCK. `for_keys` "
+                "answered null here for every copy on every walk — a legal degraded state "
+                "that reads as correct all the way to the screen. D116 is what it buys: a "
+                "card nobody has named is not a landmark, and the ladder is what makes "
+                "`Card 4` countable by hand once the section has holes",
+            )
+            checks.equal(
+                [copy["slot"] for copy in copies],
+                [4, 5],
+                "and the slot is D58's count, composed by the one renderer rather than "
+                "read off the store index beside it",
+            )
 
 
 def check_order_places_scoped(checks: Checks) -> None:
@@ -30556,6 +30723,7 @@ def run() -> Result:
     check_order_ledger(checks)
     check_order_reconcile_backlog(checks)
     check_order_screen(checks)
+    check_order_walk_plan_route(checks)
     check_order_places_scoped(checks)
     check_order_picks_tier(checks)
     check_inventory_copies_route(checks)

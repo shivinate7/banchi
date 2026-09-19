@@ -5,8 +5,10 @@ import { sealEveryTest } from './shell'
 import { line, order, payloadOf, pick, place } from './routeFixtures'
 
 import type {
+  OrderLineProgress,
   OrderRow,
   OrdersPayload,
+  Place,
   ResolvedLine,
   ResolvedOrder,
   WalkPlan,
@@ -81,7 +83,24 @@ type Wire = { method: string; path: string; body: unknown }
  * defaults above so a case can mix the two without two different Volcanions. */
 
 function walkPlanCopy(over: Partial<WalkPlanCopy> = {}): WalkPlanCopy {
-  return { box: 3, index: 21, slot: 17, capture_id: 'cap-a', cid: null, card: 17, label: 'Box 3 · Section 2 · Card 17', neighbors: null, ...over }
+  return {
+    box: 3,
+    index: 21,
+    slot: 17,
+    capture_id: 'cap-a',
+    cid: null,
+    card: 17,
+    label: 'Box 3 · Section 2 · Card 17',
+    neighbors: null,
+    /* THE BOX'S OWN THREE, real since 2026-09-19 (§8's ruling). A copy used to carry none of
+       them and `PositionBar` drew its "a box the server could not size" blank track on every
+       row for ever (§9a finding 4). A fixture that kept sending 0 would make that defect
+       untestable, so the default is a real drawer. */
+    box_total: 133,
+    box_closed: false,
+    fraction: 0.12,
+    ...over,
+  }
 }
 
 function walkPlanTake(over: Partial<WalkPlanTake> = {}): WalkPlanTake {
@@ -126,11 +145,17 @@ function walkPlanOf(stops: readonly WalkPlanStop[], shortfall: readonly WalkPlan
 }
 
 /** Answers every `POST /orders/walk-plan` with the same plan — one call per pass (§8), so one
- *  stub per case is enough. */
-async function stubWalkPlan(page: Page, plan: WalkPlan): Promise<void> {
+ *  stub per case is enough.
+ *
+ *  IT COUNTS THE CALLS, because "the plan is fetched once per pass" is a rule and not a habit:
+ *  a press that re-solved would still LOOK right in a stub that answers the same plan twice. */
+async function stubWalkPlan(page: Page, plan: WalkPlan): Promise<{ readonly calls: () => number }> {
+  let calls = 0
   await page.route(/\/orders\/walk-plan$/, async (route) => {
+    calls += 1
     await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(plan) })
   })
+  return { calls: () => calls }
 }
 
 /** TICK EVERY WALKABLE ROW IN VIEW AND PRESS START — the two presses §12 replaced three with.
@@ -158,7 +183,13 @@ async function open(
   page: Page,
   options: {
     orders?: OrdersPayload | (() => OrdersPayload)
-    pull?: unknown
+    /* A FUNCTION SEES THE REQUEST, WHICH IS WHAT `refreshed` NEEDS. The pull's post-write
+       blocks are an answer to the body's own `refresh` list, so a case proving the walk
+       re-describes its other rows has to compose the answer from what was asked. A static
+       object still works and is what every older case passes.
+       Mutating a stub AFTER the click is the race this repo has recorded (DEBTS 23) — this
+       is the stub answering the press it is handed, which is not that. */
+    pull?: unknown | ((body: unknown, call: number) => unknown)
     preview?: unknown
     fetched?: unknown
     /* THE ALL-STATUSES, SKIP-KNOWN BODY (`D193`) — the ordinary press on
@@ -182,17 +213,19 @@ async function open(
 ): Promise<Wire[]> {
   const wire: Wire[] = []
 
+  let pullCalls = 0
   await page.route(/\/orders\/pull$/, async (route) => {
+    const body = route.request().postDataJSON()
     wire.push({
       method: route.request().method(),
       path: new URL(route.request().url()).pathname,
-      body: route.request().postDataJSON(),
+      body,
     })
-    await route.fulfill({
-      status: 200,
-      contentType: 'application/json',
-      body: JSON.stringify(options.pull ?? { undone: false, order_key: '', sku: '', newly: 1, recorded: 1, outstanding: 0, places: [], sales: [] }),
-    })
+    const answer =
+      typeof options.pull === 'function'
+        ? (options.pull as (body: unknown, call: number) => unknown)(body, pullCalls++)
+        : (options.pull ?? { undone: false, order_key: '', sku: '', newly: 1, recorded: 1, outstanding: 0, places: [], sales: [] })
+    await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(answer) })
   })
 
   /* THE FETCH ROUTE, IN THREE BODIES (D91, and `all_statuses` since `D193`).
@@ -2877,4 +2910,387 @@ test('a walk row draws the copy\'s own position bar and its physical neighbours 
   await expect(row.locator('.nb')).toContainText('Evelynn')
   /* The stop's own span chip is untouched and not duplicated onto the row. */
   await expect(page.locator('.walkplan-stop-span')).toHaveCount(1)
+})
+
+/* ------------------------------------------------------------------------------------- 25
+ *
+ * THE WALK'S POSITIONAL FACTS ARE REAL, AND THEY REFRESH ON A PULL.
+ * `docs/specs/order-walk-plan.md` §8, "What the freeze covers, and what it does not — RULED
+ * 2026-09-19". The owner's ruling, answering a case that document had not considered.
+ *
+ * THE CASE IS THE WALK'S OWN NORMAL OPERATION, NOT AN OUTSIDE SALE. The solver packs a pass
+ * into the fewest drawers, so two cards at one stop are LIKELY to be physical neighbours.
+ * Pull the first and D58 renumbers the drawer behind it: the second card's `#18` becomes
+ * `#17`, and its neighbour line names a card that has just left.
+ *
+ * WHAT IS FROZEN AND WHAT IS NOT. Frozen: which drawers, which cards, the stop order, the row
+ * order and the copy order. Refreshed: neighbours, the card's own number and the position bar
+ * — the DESCRIPTION of a card that is still the same card, at the same stop, in the same
+ * place in the list. The last case in this block is the fence: a pull re-orders nothing and
+ * re-solves nothing.
+ *
+ * MUTATED PER ASSERTION, per this repo's rule that a guard must see its subject. Sending
+ * `box_total: 0` again turns A red; dropping `refresh` from the request, or `refreshed` from
+ * the answer, turns B red; widening the refresh past the touched box turns C red; deleting
+ * `.walkplan-copy-neighbors`' reservation turns D red; dropping the `gone` blanking turns E
+ * red; dropping `refresh` from the undo turns F red; and re-fetching the plan on a press
+ * turns F2 red.
+ */
+
+const NEAR_SKU = '9191999'
+
+/** Two cards in one drawer, physically adjacent, plus one card in a second drawer. The shape
+ *  the solver produces on most walks, and the shape the ruling is about. */
+function twoInOneDrawer(): OrdersPayload {
+  const first = line()
+  const second = line({
+    sku: NEAR_SKU,
+    line: { ...line().line, sku: NEAR_SKU, name: 'Sunrise' },
+    picks: [
+      pick({
+        index: 22,
+        capture_id: 'cap-b',
+        card_name: 'Sunrise',
+        place: place({ index: 22, slot: 18, card: 18, label: 'Box 3 · Section 2 · Card 18' }),
+      }),
+    ],
+  })
+  const owing = (sku: string): OrderLineProgress => ({
+    sku,
+    wanted: 1,
+    recorded: 0,
+    outstanding: 1,
+    over: 0,
+    copies: [],
+    at: null,
+    by_hand: 0,
+    reason: null,
+    declared_kind: null,
+    closed_at: null,
+    closed_reason: null,
+  })
+  const row = order({ wanted: 2, lines: [first.line, second.line], progress: [owing(SKU), owing(NEAR_SKU)] })
+  return payloadOf(
+    [row],
+    [{ key: `TCGplayer:${ORDER_NUMBER}`, number: ORDER_NUMBER, complete: false, outstanding: 2, lines: [first, second] }],
+  )
+}
+
+/** The plan over that world: one stop holding both neighbours, and a second stop in box 5
+ *  whose only job is to be somewhere the press must NOT reach. */
+function twoDrawerPlan(): WalkPlan {
+  return walkPlanOf([
+    walkPlanStop({
+      takes: [
+        walkPlanTake({
+          copies: [walkPlanCopy({ neighbors: { prev: null, next: { name: 'Sunrise', slot: 18, index: 22, skipped: 0 } } })],
+        }),
+        walkPlanTake({
+          sku: NEAR_SKU,
+          name: 'Sunrise',
+          number_display: '026',
+          copies: [
+            walkPlanCopy({
+              index: 22,
+              slot: 18,
+              card: 18,
+              capture_id: 'cap-b',
+              label: 'Box 3 · Section 2 · Card 18',
+              neighbors: { prev: { name: 'Volcanion', slot: 17, index: 21, skipped: 0 }, next: null },
+            }),
+          ],
+        }),
+      ],
+    }),
+    walkPlanStop({
+      key: 'box/5/section/1',
+      box: 5,
+      box_name: 'Box Five',
+      section: 1,
+      span: { start: 1, end: 10 },
+      order: 2,
+      takes: [
+        walkPlanTake({
+          sku: TERM_SKU,
+          name: 'Terminal Treasure',
+          number_display: null,
+          for: [{ key: TERM_KEY, number: TERM_NUMBER, buyer: 'Nora Terminal' }],
+          copies: [
+            walkPlanCopy({
+              box: 5,
+              index: 50,
+              slot: 1,
+              card: 1,
+              capture_id: 'cap-term',
+              label: 'Box 5 · Section 1 · Card 1',
+              box_total: 40,
+              fraction: 0,
+              neighbors: { prev: null, next: { name: 'Far Away', slot: 2, index: 51, skipped: 0 } },
+            }),
+          ],
+        }),
+      ],
+    }),
+  ])
+}
+
+/** What the server answers when the press hands it `refresh`. The drawer has closed up by one,
+ *  so the card behind takes the departed card's number and new landmarks. `skipped: 2` on both
+ *  sides is deliberate: it is the TALLEST the ladder gets, and case D is about that. */
+function refreshedSunrise(): Place {
+  return place({
+    index: 22,
+    slot: 17,
+    card: 17,
+    label: 'Box 3 · Section 2 · Card 17',
+    box_total: 132,
+    neighbors: {
+      prev: { name: 'Galio, Indefatigable', slot: 16, index: 19, skipped: 2 },
+      next: { name: 'Evelynn, Entrancing', slot: 18, index: 25, skipped: 2 },
+    },
+  })
+}
+
+function pullAnswer(refreshed: readonly Place[], over: Record<string, unknown> = {}): Record<string, unknown> {
+  return {
+    undone: false,
+    order_key: `TCGplayer:${ORDER_NUMBER}`,
+    sku: SKU,
+    newly: 1,
+    recorded: 1,
+    outstanding: 0,
+    places: [place()],
+    refreshed: [...refreshed],
+    sales: [],
+    ...over,
+  }
+}
+
+/** The stop order, the row order inside each stop and the copy order inside each row, as one
+ *  string. The fence's own reading: a pull may move none of it. */
+async function shapeOf(page: Page): Promise<string> {
+  return page.evaluate(() =>
+    [...document.querySelectorAll('.walkplan-stop')]
+      .map((stop) =>
+        [
+          stop.getAttribute('aria-label') ?? '',
+          ...[...stop.querySelectorAll('.walkplan-take')].map((take) =>
+            [
+              take.querySelector('.walkplan-take-name')?.textContent ?? '',
+              ...[...take.querySelectorAll('.walkplan-copy')].map((copy) => copy.getAttribute('data-capture-id') ?? ''),
+            ].join('>'),
+          ),
+        ].join('|'),
+      )
+      .join('//'),
+  )
+}
+
+/** Press the Pull inside the row whose card is `name`. */
+async function pullRowNamed(page: Page, name: string): Promise<void> {
+  await page
+    .locator('.walkplan-take')
+    .filter({ has: page.locator('.walkplan-take-name', { hasText: name }) })
+    .getByRole('button', { name: 'Pull' })
+    .click()
+}
+
+/** The copy row for one capture id, whichever stop it sits in. */
+function copyRow(page: Page, captureId: string) {
+  return page.locator(`.walkplan-copy[data-capture-id="${captureId}"]`)
+}
+
+test('the walk row draws a real proportion, not the "box we could not size" blank track', async ({ page }) => {
+  await open(page, { orders: oneOpenOrder() })
+  await stubWalkPlan(page, walkPlanOf([walkPlanStop()]))
+  await startWalk(page)
+
+  /* `PositionBar`'s accessible name IS `position.ts:sentenceOf`. With a real `box_total` the
+     owner's form reads `#17 of 133 so far`; with the `box_total: 0` this screen shipped with
+     it reads "where this sits in the box is not known yet", on every row, for ever. The two
+     are different sentences, so asserting the first is a guard the second cannot pass — and
+     it is D194's own direction of travel too, the real one being the shorter. */
+  const bar = copyRow(page, 'cap-a').getByRole('img').first()
+  await expect(bar).toHaveAttribute('aria-label', '#17 of 133 so far')
+  /* And the track is real segments rather than the honest blank one. */
+  await expect(copyRow(page, 'cap-a').locator('.position-bar-segment-blank')).toHaveCount(0)
+})
+
+test('a pull re-describes the row still ahead in the same drawer', async ({ page }) => {
+  const wire = await open(page, { orders: twoInOneDrawer(), pull: () => pullAnswer([refreshedSunrise()]) })
+  await stubWalkPlan(page, twoDrawerPlan())
+  await startWalk(page)
+
+  const sunrise = copyRow(page, 'cap-b')
+  await expect(sunrise.getByRole('img').first()).toHaveAttribute('aria-label', '#18 of 133 so far')
+  await expect(sunrise.locator('.nb')).toContainText('Volcanion')
+
+  await pullRowNamed(page, 'Volcanion')
+
+  /* THE REQUEST NAMED THE CARD IT WAS NOT TOUCHING. `targets` is the card coming out of the
+     drawer; `refresh` is the card staying in it. Two lists, one press, never overlapping. */
+  const sent = wire.filter((one) => one.path.endsWith('/orders/pull')).at(-1)?.body as {
+    targets: { box: number; index: number; capture_id: string }[]
+    refresh: { box: number; index: number }[]
+  }
+  expect(sent.targets).toEqual([{ box: 3, index: 21, capture_id: 'cap-a' }])
+  expect(sent.refresh).toEqual([{ box: 3, index: 22 }])
+
+  /* AND THE ROW SAYS THE NEW THING. The drawer closed up, so Sunrise is card 17 of 132 now and
+     the landmark it used to sit behind has gone. */
+  await expect(sunrise.getByRole('img').first()).toHaveAttribute('aria-label', '#17 of 132 so far')
+  await expect(sunrise.locator('.nb')).not.toContainText('Volcanion')
+  await expect(sunrise.locator('.nb')).toContainText('Galio')
+})
+
+test('a pull re-describes nothing in a drawer it never opened', async ({ page }) => {
+  const wire = await open(page, { orders: twoInOneDrawer(), pull: () => pullAnswer([refreshedSunrise()]) })
+  await stubWalkPlan(page, twoDrawerPlan())
+  await startWalk(page)
+
+  const far = copyRow(page, 'cap-term')
+  const before = await far.getByRole('img').first().getAttribute('aria-label')
+  const farLadder = await far.locator('.nb').textContent()
+
+  await pullRowNamed(page, 'Volcanion')
+  await expect(copyRow(page, 'cap-b').getByRole('img').first()).toHaveAttribute('aria-label', '#17 of 132 so far')
+
+  /* The box-5 copy was never named in `refresh` — nothing moved in that drawer — and it says
+     exactly what it said before. */
+  const sent = wire.filter((one) => one.path.endsWith('/orders/pull')).at(-1)?.body as { refresh: { box: number }[] }
+  expect(sent.refresh.every((one) => one.box === 3)).toBe(true)
+  await expect(far.getByRole('img').first()).toHaveAttribute('aria-label', before ?? '')
+  expect(await far.locator('.nb').textContent()).toBe(farLadder)
+})
+
+test('the re-description moves nothing: the row keeps its height and its Pull stays put', async ({ page }) => {
+  /* AT PHONE WIDTH, AND THAT IS THE WHOLE OF WHETHER THIS CASE CAN SEE ITS SUBJECT. Above
+     560px `OrdersWalk.css` lays the copy row out as a flex ROW and the 220px photograph — 307px
+     tall at the card's aspect — is the taller column, so the ladder can grow two lines and the
+     row does not move whatever the reservation says. Below it the row stacks, the body drives
+     the height, and `.walkplan-copy-neighbors`' `min-height` is load-bearing. Proved by
+     mutation: deleting that rule leaves this case GREEN at 1440 and turns it red here. */
+  await page.setViewportSize({ width: 390, height: 900 })
+  await open(page, { orders: twoInOneDrawer(), pull: () => pullAnswer([refreshedSunrise()]) })
+  await stubWalkPlan(page, twoDrawerPlan())
+  await startWalk(page)
+
+  const sunrise = copyRow(page, 'cap-b')
+  const pullButton = sunrise.getByRole('button', { name: 'Pull' })
+
+  /* D118, READ AS A RECT-DIFF, the way `inventory.spec.ts` reads it for Mark sold. The row is
+     BELOW the one being pressed, so its TOP moves as that row opens its own done state — that
+     is the press's own doing and is not what this asserts. What may not change is this row's
+     OWN geometry: its height, and where its control sits inside it. Before the refresh the
+     ladder is one line a side; after it, `skipped: 2` puts a second line under each name — the
+     tallest state the block can take — and `.walkplan-copy-neighbors`' reservation is the only
+     reason that costs nothing. Delete that rule and this case goes red. */
+  const geometry = async () => {
+    const row = await sunrise.boundingBox()
+    const button = await pullButton.boundingBox()
+    return { height: Math.round(row?.height ?? 0), offset: Math.round((button?.y ?? 0) - (row?.y ?? 0)) }
+  }
+  const before = await geometry()
+
+  await pullRowNamed(page, 'Volcanion')
+  await expect(sunrise.locator('.nb')).toContainText('Galio')
+  await expect(sunrise.locator('.nb-skip').first()).toBeVisible()
+
+  expect(await geometry()).toEqual(before)
+})
+
+test('a row the press found already gone blanks its own neighbour line', async ({ page }) => {
+  await open(page, { orders: twoInOneDrawer() })
+  await stubWalkPlan(page, twoDrawerPlan())
+  await startWalk(page)
+
+  const volcanion = copyRow(page, 'cap-a')
+  await expect(volcanion.locator('.nb')).toContainText('Sunrise')
+
+  /* The press loses the race: this copy went somewhere else. `OrdersWalk.tsx` marks that row
+     `gone` in place (D118 — nothing is removed), and the ladder it is still holding names
+     cards around a card that is not there. Blank is the honest answer, and the reserved slot
+     is why blanking moves nothing. Registered here rather than through `open`'s own `pull`
+     option because this one answers a REFUSAL, not a body. */
+  await page.route(/\/orders\/pull$/, async (route) => {
+    /* THE ENVELOPE IS `{error: {code, message}}` — `server.ts:errorEnvelope`'s own shape. A
+       bare `{code, message}` reads as a refusal from something that is not this server and
+       arrives as `http_error`, which no row branches on. */
+    await route.fulfill({
+      status: 409,
+      contentType: 'application/json',
+      body: JSON.stringify({ error: { code: 'copy_already_pulled', message: 'That copy has already been pulled.' } }),
+    })
+  })
+  await pullRowNamed(page, 'Volcanion')
+
+  await expect(volcanion).toHaveAttribute('data-state', 'gone')
+  await expect(volcanion.locator('.nb')).toHaveCount(0)
+  await expect(volcanion.locator('.walkplan-copy-neighbors')).toBeAttached()
+})
+
+test('an undo inside the window puts the description back with the card', async ({ page }) => {
+  const wire = await open(page, {
+    orders: twoInOneDrawer(),
+    pull: (body: unknown) => {
+      /* The undo answers the card's OLD description, because the drawer has opened back up. */
+      const sent = body as { undo?: boolean }
+      return sent.undo === true
+        ? pullAnswer([place({ index: 22, slot: 18, card: 18, label: 'Box 3 · Section 2 · Card 18', box_total: 133 })], {
+            undone: true,
+            newly: 0,
+            recorded: 0,
+            outstanding: 1,
+          })
+        : pullAnswer([refreshedSunrise()])
+    },
+  })
+  await stubWalkPlan(page, twoDrawerPlan())
+  await startWalk(page)
+
+  await pullRowNamed(page, 'Volcanion')
+  const sunrise = copyRow(page, 'cap-b')
+  await expect(sunrise.getByRole('img').first()).toHaveAttribute('aria-label', '#17 of 132 so far')
+
+  await page
+    .locator('.walkplan-take')
+    .filter({ has: page.locator('.walkplan-take-name', { hasText: 'Volcanion' }) })
+    .getByRole('button', { name: 'Undo' })
+    .click()
+
+  /* The reversal named the same cards the pull did, and the row is back at card 18 of 133. */
+  await expect(sunrise.getByRole('img').first()).toHaveAttribute('aria-label', '#18 of 133 so far')
+  const undone = wire.filter((one) => one.path.endsWith('/orders/pull')).at(-1)?.body as {
+    undo: boolean
+    refresh: { box: number; index: number }[]
+  }
+  expect(undone.undo).toBe(true)
+  expect(undone.refresh).toEqual([{ box: 3, index: 22 }])
+})
+
+test('THE FENCE: a pull re-orders no stop, no row and no copy, and re-solves nothing', async ({ page }) => {
+  await open(page, { orders: twoInOneDrawer(), pull: () => pullAnswer([refreshedSunrise()]) })
+  const planned = await stubWalkPlan(page, twoDrawerPlan())
+  await startWalk(page)
+
+  /* THE WHOLE POINT OF THE PASS (§8, D181, D118). The plan is solved once. A press may change
+     what a row SAYS and may never change which drawers the walk visits, which cards it asks
+     for, the order of the stops, the order of the rows in a stop, or the order of the copies
+     in a row. This reads all four as one string and asserts the press left it alone.
+     The call count is the other half: re-fetching the plan after a write is the obvious wrong
+     fix for the staleness this feature removes, and it would pass every assertion above.
+
+     IT IS A DELTA AND NOT AN ABSOLUTE, because this suite runs the DEV build and `main.tsx`
+     wraps the app in `StrictMode`, whose deliberate double-invoke of every effect makes the
+     one fetch per pass arrive as two. Pinning `1` would assert a fact about the build rather
+     than about the press. What the ruling is actually about is whether a PRESS re-solves, and
+     that is the difference across the click. */
+  const before = await shapeOf(page)
+  const planCalls = planned.calls()
+
+  await pullRowNamed(page, 'Volcanion')
+  await expect(copyRow(page, 'cap-b').getByRole('img').first()).toHaveAttribute('aria-label', '#17 of 132 so far')
+
+  expect(await shapeOf(page)).toBe(before)
+  expect(planned.calls()).toBe(planCalls)
 })

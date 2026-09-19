@@ -6339,8 +6339,8 @@ COMPONENTS = [
                                            "`buildWalk` stay in `Orders.tsx` — `By buyer`'s "
                                            "merged walk is a different job (D193, D209) and "
                                            "this file does not touch it.",
-                                   "governed_by": ["D93", "D96", "D97", "D116", "D118", "D181",
-                                                   "D193", "D209", "D212"]},
+                                   "governed_by": ["D58", "D93", "D96", "D97", "D116", "D118",
+                                                   "D181", "D193", "D209", "D212"]},
             "src/OrdersWalk.css": {"does": "`Walk the boxes`' own stylesheet — the selection "
                                            "list, the stop/take/copy hierarchy, the shortfall "
                                            "block. `--bn-*` tokens only, the repo's one color "

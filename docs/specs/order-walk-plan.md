@@ -274,6 +274,7 @@ values in the message.
           "copies": [
             { "box": 3, "index": 271, "slot": 244, "capture_id": "...", "cid": "...",
               "card": 244, "label": "Box 3 · Section 6 · Card 244",
+              "box_total": 987, "box_closed": false, "fraction": 0.246,
               "neighbors": { "prev": {...}, "next": {...} } } ] } ] } ],
   "shortfall": [ { "sku": "...", "name": "...", "wanted": 3, "on_hand": 1, "short": 2,
                    "for": [ ... ] } ],
@@ -802,3 +803,42 @@ as many words. `app/tests/orders.spec.ts` asserts both directions, and that case
 against the intersection build before it was kept.
 
 **Findings 1 to 4 of section 9a are still open**, deferred behind this on the owner's ruling.
+
+### The positional facts, built 2026-09-19
+
+**BUILT.** The half of §9a finding 4 that was fixed in form and not in substance, plus the
+freeze ruling above it.
+
+- **`WalkPlanCopy` carries the box's own numbers** — `box_total`, `box_closed` and `fraction`,
+  the same three `Place` carries. `_walk_plan_copy` already held them in the block `_Places.of`
+  composed. They were simply not on the wire, so `neighborShim` passed `box_total: 0` and
+  `PositionBar` drew its honest "a box the server could not size" state on every row. That
+  state is a blank track and one sentence. The shim is now `placeOf` and the 0 is gone.
+- **`neighbors` is real.** `POST /orders/walk-plan` dropped `_Places.for_keys` for the ordinary
+  `_Places`, which is already scoped by being lazy per box. That constructor's restriction was
+  argued for `do_orders`, whose picks span most of the store. This route fires once per pass
+  over the few drawers the solver picked.
+  **Measured 2026-09-19**, synthetic store at the owner's own scale (2,560 cards, 8 drawers,
+  275 walkable orders), timing the `_Places` build plus the whole stop rendering:
+  **4.5 ms → 18.5 ms** for 40 open orders, **24.1 ms → 32.2 ms** for all 275. The delta is the
+  per-box walk of the drawers the plan reaches, not of the copies in it. It is paid once per
+  press.
+- **`POST /orders/pull` takes `refresh` and answers `refreshed`, in both directions.**
+  `refresh` is a list of `{box, index}` the caller is still DRAWING and is not pulling. It
+  carries no `capture_id`, because nothing is aimed at. `refreshed` is one post-write `Place`
+  per position the press actually touched the box of. A position in any other drawer is
+  skipped rather than answered. The route's phase one is untouched: `places` is still the
+  pre-write receipt, and phase three builds its own `_Places` so it cannot read the pre-write
+  walk.
+- **`WalkPass` holds a `facts` map** keyed by position, folds `refreshed` into it, and passes it
+  down to `CopyRow`. Nothing else reads it. The plan is still fetched once per pass.
+  `app/tests/orders.spec.ts` asserts the call count beside a string of every stop, row and
+  copy id before and after a press.
+- **A gone row blanks its own ladder**, and `.walkplan-copy-neighbors` reserves the ladder's
+  tallest state. Blanking it, or a `skipped` line appearing, therefore moves nothing (D118).
+  The reservation is derived from `PlaceNeighbors.css`'s own two line heights rather than
+  typed.
+
+**Unchanged, and asserted so:** the drawers, the cards, the stop order, the row order and the
+copy order. The rule that packed sections rank higher is untouched. `pipeline/walkplan.py` is
+not edited by this work.

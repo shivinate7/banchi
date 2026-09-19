@@ -1869,12 +1869,16 @@ export function OrdersHub({ stage }: { readonly stage: Stage }) {
      type the plan does not fill honestly (`OrdersWalk.tsx`'s own header has the argument).
      Returns the outcome rather than throwing, because a walk row needs to know a `gone` copy
      from a real failure to draw `gone, skip` without ending the whole pass over it. */
-  const onWalkPull: WalkPullFn = async ({ order, sku, name, target, place }) => {
+  const onWalkPull: WalkPullFn = async ({ order, sku, name, target, place, refresh }) => {
     const busyKey = `walk/${sku}/${target.capture_id}`
     setBusy(busyKey)
     setFailure(null)
     try {
-      const done = await pullCopy({ source: order.source, number: order.number, sku }, [target])
+      /* `refresh` NAMES CARDS THIS PRESS DOES NOT TOUCH — the walk's other rows in the same
+         drawer, whose numbers and neighbours this write moves (D58). It reaches the same
+         route in the same request, and `refreshed` comes back POST-write. `places` below is
+         still the PRE-write receipt and the two are never confused. */
+      const done = await pullCopy({ source: order.source, number: order.number, sku }, [target], refresh)
       if (!live.current) return { ok: false, failure: { code: 'unmounted', message: '' } }
       const resolvedPlace = done.places[0]?.label ?? place ?? `box ${target.box}, index ${target.index}`
       toast({
@@ -1887,7 +1891,7 @@ export function OrdersHub({ stage }: { readonly stage: Stage }) {
       })
       setHub({ lastPull: { target, place: resolvedPlace, name, until: Date.now() + UNDO_WINDOW_MS } })
       await Promise.all([reread(), rereadStore()])
-      return { ok: true, place: resolvedPlace }
+      return { ok: true, place: resolvedPlace, refreshed: done.refreshed ?? [] }
     } catch (err) {
       const trouble = describeFailure(err)
       if (live.current) setFailure(trouble)
@@ -1900,17 +1904,19 @@ export function OrdersHub({ stage }: { readonly stage: Stage }) {
   /** The walk row's own inline Undo (§8's 20s window) — a direct call rather than
    *  `undoFromToast`, because a row needs to know whether it succeeded to put its own copy
    *  back into the pressable state; `undoFromToast` only ever reports through a toast. */
-  const onWalkUndo: WalkUndoFn = async (target, place, name) => {
+  const onWalkUndo: WalkUndoFn = async (target, place, name, refresh) => {
     setHub({ busy: `undo/${target.capture_id}` })
     try {
-      await undoPull([target])
+      /* The copy goes back in the drawer, so the rows still ahead of it take their old
+         numbers back too — the same `refresh` list the pull sent, answered the other way. */
+      const done = await undoPull([target], refresh)
       toast({ kind: 'ok', icon: 'undo', title: `Put ${name} back`, body: `${place} holds it again.` })
       await Promise.all([reread(), rereadStore()])
-      return true
+      return { ok: true, refreshed: done.refreshed ?? [] }
     } catch (err) {
       const trouble = describeFailure(err)
       toast({ kind: 'refusal', title: 'The card was not put back', body: `${trouble.message} · ${trouble.code}` })
-      return false
+      return { ok: false }
     } finally {
       setHub((current) => ({ busy: null, lastPull: current.lastPull?.target.capture_id === target.capture_id ? null : current.lastPull }))
       touchHub()
