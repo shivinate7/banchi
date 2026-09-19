@@ -1,7 +1,7 @@
 # Sales — the gross-revenue retrospective
 
 `#/revenue`. Routed 2026-09-19, an eleventh nav row on purpose — tried off-nav the same day
-and reversed the same day on the owner's own word. See D-gross-sales-retrospective for why
+and reversed the same day on the owner's own word. See D214 for why
 this is its own route, why it is gross-only, and the full account of both rulings.
 
 ## What it answers

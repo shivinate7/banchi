@@ -4147,7 +4147,7 @@ COMPONENTS = [
                 "the gross-revenue retrospective at `#/revenue`, routed 2026-09-19 — an "
                 "eleventh nav row ON PURPOSE: tried off-nav the same day, reversed the same "
                 "day on the owner's own word, having been shown the phone-drawer cost "
-                "(D-gross-sales-retrospective); one inventory view (D31 folded the box walk "
+                "(D214); one inventory view (D31 folded the box walk "
                 "and the pull preview into it); "
                 "`#/graveyard`, where a departed card is read whether its box still stands or "
                 "was deleted out from under it (D134); the code-card screen D70 gave its own "
@@ -6376,7 +6376,7 @@ COMPONENTS = [
                                         "off-nav on 2026-09-19, reversed the same day on the "
                                         "owner's own word, having been shown the phone-drawer "
                                         "cost `brand.spec.ts` measures (see "
-                                        "D-gross-sales-retrospective). A pure reshaping of "
+                                        "D214). A pure reshaping of "
                                         "`GET /orders`, "
                                         "already fetched by `#/orders` — no new server route, "
                                         "no change to order parsing or the ledger. Three "
@@ -6395,7 +6395,7 @@ COMPONENTS = [
                                         "split — `OrderLineWire.kind` is null on nearly every "
                                         "line and CLAUDE.md refuses guessing one from a name.",
                                 "governed_by": ["D69", "D86", "D103", "D105", "D193",
-                                                 "D-gross-sales-retrospective"]},
+                                                 "D214"]},
             "src/Revenue.css": {"does": "the verdict, the month strip and the product table's "
                                         "own layout, `--bn-*` only. The sparkline's polyline "
                                         "reuses `--bn-accent` rather than naming a color; the "
@@ -6996,7 +6996,7 @@ COMPONENTS = [
                         "`#/gallery` shows at 64 and above, all six locked palettes are drawn "
                         "and differ, and the mark does not invert with the theme.",
                 "governed_by": ["D94", "D102", "D134", "D136",
-                                "D152", "D204", "D-gross-sales-retrospective"],
+                                "D152", "D204", "D214"],
                 "note": "IT EXISTS BECAUSE NOTHING IN app/tests MENTIONED THE MARK AT ALL. No "
                         "snapshot, no brand assertion, no reference to `Logo` — the mark could "
                         "have stopped rendering in all six of its call sites with `make check` "

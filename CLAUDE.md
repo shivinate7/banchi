@@ -263,7 +263,7 @@ sentence (see "the census" below).
                               `?band=top|bottom` (D159): what is worth pulling, read-only
 #/orders       Orders         grouped by buyer (D193), one walk per person over open orders
 #/shipping     Shipping       shipping export routed into three lanes
-#/revenue      Sales          gross-revenue retrospective (D-gross-sales-retrospective):
+#/revenue      Sales          gross-revenue retrospective (D214):
                               verdict, month strip, by-name search. Canceled excluded, gross
                               only, never profit. AN ELEVENTH NAV ROW ON PURPOSE — the owner
                               was shown the 37px-past-the-fold cost at 390x754 and chose the
@@ -860,6 +860,7 @@ D210 `pkmnscan rescue` is reached from a press, and its report is never shown ve
 D211 The Rig panel folds once the setup is already known, and stays open until it is
 D212 Every copy is fungible, so no order claims one, and the write is the only refusal left
 D213 The set is a stored fact, and the hint was never one
+D214 A gross-revenue retrospective is its own route, and it never claims to be profit
 ```
 
 D116-D118: D117 exists and slots between them — a third branch's number, resolved on merge.

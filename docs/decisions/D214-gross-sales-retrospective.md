@@ -1,4 +1,4 @@
-## D-gross-sales-retrospective — A gross-revenue retrospective is its own route, and it never claims to be profit
+## D214 — A gross-revenue retrospective is its own route, and it never claims to be profit
 
 **The problem this closes.** TCGplayer's own seller Orders page indexes orders, not line
 items. There is no way to ask it "how much have I made selling one named card". This store's
