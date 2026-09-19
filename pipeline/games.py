@@ -409,7 +409,7 @@ GAMES = (
         # THIS IS THE EVIDENCE FOR THE FIELD BELOW AND IT IS AUDITED TO TRAVEL WITH IT.
         # `export_needs_hint` is a judgement about a number, so the number is written down
         # beside it rather than left in a commit message; `scripts/docs-audit.py`'s
-        # `games registry` row refuses the boolean on an entry that names no measurement.
+        # `game vocabulary` row refuses the boolean on an entry that names no measurement.
         "export_category_bytes": 32629598,
         # D76 SAID A WIDENING IS ALWAYS SAFE. For this category it is 903 KB from a refusal,
         # so "safe" has a measured boundary now and this is where that boundary is written
@@ -923,7 +923,7 @@ def export_category_bytes(key: str) -> Optional[int]:
     THE EVIDENCE FOR `export_needs_hint`, AND IT IS A SEPARATE FIELD ON PURPOSE. The
     boolean is a judgement about this number; keeping the number beside it means the
     judgement can be re-made by somebody reading the entry rather than archaeology through
-    a commit message. `scripts/docs-audit.py`'s `games registry` row refuses the boolean on
+    a commit message. `scripts/docs-audit.py`'s `game vocabulary` row refuses the boolean on
     an entry that names no measurement, so the two cannot come apart.
 
     NULL IS "NOBODY HAS WEIGHED IT", never zero. Three of the four catalogued entries are

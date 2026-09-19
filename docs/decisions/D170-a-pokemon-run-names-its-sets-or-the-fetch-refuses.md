@@ -36,7 +36,7 @@ Three options were put to the owner about the Pokemon catalogue fetch sitting at
 
 **So the cliff stays reachable on the code-card track, and that is a named gap rather than an oversight.** What covers it is what covered it before: the width is drawn on the preview before the press, and `_too_large_sentence` says the scope is why if the download is ever refused. Closing it needs a narrower transport — a paged or streamed fetch — not a claim the operator cannot make.
 
-**`export_needs_hint` may not be `False` where it would be a lie, and may not be authored where it could never fire.** `scripts/docs-audit.py`'s `games registry` row refuses the boolean on an entry naming no `export_category_bytes`, on one naming no `tcgplayer_category_id`, and on one whose `export_scope` is `category` — that last would be a rule that can never run, since such a game widens by policy and never reaches the cards.
+**`export_needs_hint` may not be `False` where it would be a lie, and may not be authored where it could never fire.** `scripts/docs-audit.py`'s `game vocabulary` row refuses the boolean on an entry naming no `export_category_bytes`, on one naming no `tcgplayer_category_id`, and on one whose `export_scope` is `category` — that last would be a rule that can never run, since such a game widens by policy and never reaches the cards.
 
 ### `chosen_by == "cards"` is the whole predicate, and nothing is ever stranded
 

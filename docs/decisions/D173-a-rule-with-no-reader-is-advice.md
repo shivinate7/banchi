@@ -27,7 +27,9 @@ matched its
   from its RECORDED table, **while sitting on no `make` target** — and the plain
   `screen-freshness` beside it passed and printed *"classification has moved since it was
   recorded — run --self-test"*. The check told the operator to run the check that was red, and
-  nothing made them.
+  nothing made them. It was `2 FAILED` on main at the time, and gating `--self-test` itself
+  (`make screen-freshness-selftest`, added to `make check` afterward) had to wait for PR #307
+  to fill the eighteen missing exports first — a guard cannot be turned on red.
 
 **Against all of that, the mechanised rows have a clean record.** `raw color`, `storage keys`,
 `route census`, `check census`, `codex hooks`, `id claims` and `shell substitution` have not

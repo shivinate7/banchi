@@ -587,10 +587,30 @@ def claims_pending(root: str, ref: str = "origin/main") -> List[str]:
 # FAILED when a shard is red. So the expensive half is this wait's alone. The other half is
 # register: a refusal here names the check and the minutes, where the server gate names a
 # merge state. See the entry above for the measurement and the finding.
+#
+# AMENDED 2026-09-19, OWNER'S WORD: "Wait on required checks only." Waiting for every check
+# run made every merge pay for the three `design-check` shards even though branch protection
+# never required them — measured at ~8.7 of the ~8-9 minutes a merge cost. This wait now reads
+# `main`'s required contexts from GitHub AT RUN TIME (`required_contexts`, never a typed
+# list — a typed one goes stale the moment protection changes and nobody notices) and asks
+# only whether THOSE are complete, green, non-empty, no smaller than the parent's OWN count of
+# required contexts, and unchanged twice running — D148's four-part reading, narrowed to the
+# required subset rather than loosened. A run that is not required but is ALREADY VISIBLE and
+# RED still refuses: this is a narrower WAIT, never a blindfold, and a known red is not
+# something to merge past. Reading the roster fails closed: an unreadable protection endpoint
+# or an EMPTY `contexts` list both fall back to the old behaviour — wait for everything — and
+# say so, because "required" cannot be told apart from "everything" on either answer, and D148's
+# own non-vacuity rule (an empty roster is never a pass) applies to this roster too. At the
+# moment a required-only wait goes green, the merge NAMES every non-required run still in
+# progress and prints the fixed sentence: the browser matrix is not required and was not
+# waited for; a red there lands on main's own run and is fixed forward. That push-triggered
+# run is D136's own mechanism — it runs the full matrix on main whenever no pass record exists
+# — so a browser-matrix red that slipped through is caught there, not silently.
 
 # THE PAGE SIZE IS IN THE QUERY STRING AND NEVER IN A `-f`: gh switches the method to
 # POST the moment a field is given, and this endpoint does not answer a POST at all.
 CHECK_ENDPOINT = "repos/{owner}/{repo}/commits/%s/check-runs?per_page=100"
+REQUIRED_CONTEXTS_ENDPOINT = "repos/{owner}/{repo}/branches/main/protection/required_status_checks"
 CHECK_POLL_SECONDS = 10
 CHECK_SETTLE_READS = 2
 CHECK_DEADLINE_SECONDS = 45 * 60
@@ -644,8 +664,37 @@ def read_check_runs(sha: str) -> Reading:
     return Reading(True, runs, "")
 
 
-def attached_count(sha: str, read=None) -> int:
-    """How many check runs `sha` carries, or 0 when that cannot be established.
+def required_contexts(read_gh=None) -> Optional[Tuple[str, ...]]:
+    """`main`'s required status check contexts, read at run time, or `None` to fail closed.
+
+    `None` means "wait for everything" — this function's caller's own fallback, kept
+    unchanged since before this existed. It is returned, never guessed at, whenever the
+    answer would not actually narrow anything: the API call failed, it did not come back as
+    JSON, or it named an object with no `contexts`. AN EMPTY LIST IS TREATED THE SAME AS AN
+    UNREADABLE ANSWER (D148's own rule applied to this roster): "required" cannot be told
+    apart from "everything" off an empty roster, and a typed constant here would go stale
+    the moment protection changes, which is why this asks GitHub rather than assuming
+    `check` and `revert-guard` the way the comment above has since 2026-09-12.
+    """
+    ask = read_gh or (lambda: run(["gh", "api", REQUIRED_CONTEXTS_ENDPOINT]))
+    got = ask()
+    if not got.ok:
+        return None
+    try:
+        body = json.loads(got.out)
+    except ValueError:
+        return None
+    if not isinstance(body, dict):
+        return None
+    contexts = body.get("contexts")
+    if not isinstance(contexts, list) or not contexts:
+        return None
+    names = [str(c) for c in contexts if isinstance(c, str) and c]
+    return tuple(names) if names else None
+
+
+def attached_count(sha: str, read=None, required: Optional[Sequence[str]] = None) -> int:
+    """How many (required, when given) check runs `sha` carries, or 0 when unreadable.
 
     0 is the honest answer to an unreadable parent: it makes the floor inert and leaves the
     non-empty rule and the settle carrying the wait, which is a weaker guard and never a
@@ -653,7 +702,12 @@ def attached_count(sha: str, read=None) -> int:
     rebuilt one function along.
     """
     got = (read or read_check_runs)(sha)
-    return len(got.runs) if got.ok else 0
+    if not got.ok:
+        return 0
+    if required:
+        names = {name for name, _, _ in got.runs}
+        return len(names & set(required))
+    return len(got.runs)
 
 
 def _roster(runs: Sequence[Tuple[str, str, str]]) -> List[str]:
@@ -662,8 +716,16 @@ def _roster(runs: Sequence[Tuple[str, str, str]]) -> List[str]:
 
 
 def wait_for_checks(sha: str, number: int, floor: int = 0,
-                    read=None, sleep=None, now=None) -> Tuple[bool, List[str]]:
-    """Poll ONE COMMIT's check runs until they are complete — or say why they never were.
+                    read=None, sleep=None, now=None,
+                    required: Optional[Sequence[str]] = None) -> Tuple[bool, List[str]]:
+    """Poll ONE COMMIT's check runs until the SUBJECT set is complete — or say why not.
+
+    The subject is every check run when `required` is `None` (the old, unnarrowed
+    behaviour — the fallback `required_contexts` returns when the roster cannot be told
+    apart from "everything"), or only the runs named in `required` otherwise. EITHER WAY, A
+    RUN THAT IS ALREADY VISIBLE AND RED REFUSES, required or not: narrowing what is WAITED
+    FOR is not the same as narrowing what is WATCHED FOR, and a known red is never something
+    to merge past.
 
     Returns (green, lines to print). Never raises, and never reports green off a reading it
     could not make, could not fill, or has not seen twice.
@@ -671,6 +733,7 @@ def wait_for_checks(sha: str, number: int, floor: int = 0,
     read = read or read_check_runs
     sleep = sleep or time.sleep
     now = now or time.monotonic
+    required_set = set(required) if required else None
 
     started = now()
     spoke = started
@@ -688,6 +751,9 @@ def wait_for_checks(sha: str, number: int, floor: int = 0,
                 unreadable, spoke = got.err, now()
             waiting = "the check runs cannot be read"
         else:
+            # A RED RUN REFUSES UNCONDITIONALLY, over the WHOLE roster, never only the
+            # required slice — a required-only wait narrows what is waited FOR, not what
+            # is watched for.
             failed = [one for one in got.runs if one[2] in CHECK_FAILED]
             if failed:
                 return False, ["  {0} of {1} check runs did not pass:".format(
@@ -699,18 +765,31 @@ def wait_for_checks(sha: str, number: int, floor: int = 0,
                     len(got.runs), "" if len(got.runs) == 1 else "s", sha[:9]))
                 say(*_roster(got.runs))
                 spoke = now()
-            pending = [one for one in got.runs if one[1] != "completed"]
+
+            if required_set is None:
+                subject = got.runs
+                subject_count = len(got.runs)
+                missing = []
+            else:
+                subject = [one for one in got.runs if one[0] in required_set]
+                subject_count = len(subject)
+                missing = sorted(required_set - {one[0] for one in got.runs})
+            pending = [one for one in subject if one[1] != "completed"]
+            label = "required check" if required_set is not None else "check run"
 
             if not got.runs:
                 # ABSENCE IS NOT A PASS. Nothing is attached YET is what this reads as, and
                 # the only other thing it could read as is the defect that made this rewrite.
                 waiting, stable = "no check run is attached to this commit yet", 0
+            elif missing:
+                waiting, stable = "waiting on the required check{0} not yet attached: {1}".format(
+                    "" if len(missing) == 1 else "s", ", ".join(missing)), 0
             elif pending:
-                waiting, stable = "{0} of {1} still running".format(
-                    len(pending), len(got.runs)), 0
-            elif len(got.runs) < floor:
+                waiting, stable = "{0} of {1} {2}{3} still running".format(
+                    len(pending), subject_count, label, "" if len(pending) == 1 else "s"), 0
+            elif subject_count < floor:
                 waiting, stable = "{0} attached, and the parent commit carried {1}".format(
-                    len(got.runs), floor), 0
+                    subject_count, floor), 0
             elif got.runs == seen:
                 stable += 1
                 waiting = "complete, and unchanged since the last read"
@@ -719,8 +798,18 @@ def wait_for_checks(sha: str, number: int, floor: int = 0,
                 waiting = "complete; reading once more in case another arrives"
             seen = got.runs
             if stable >= CHECK_SETTLE_READS:
-                return True, ["  all {0} check runs on {1} passed.".format(
-                    len(got.runs), sha[:9])]
+                lines = ["  all {0} {1}{2} on {3} passed.".format(
+                    subject_count, label, "" if subject_count == 1 else "s", sha[:9])]
+                if required_set is not None:
+                    still = sorted(one[0] for one in got.runs
+                                   if one[0] not in required_set and one[1] != "completed")
+                    lines.append("  still in progress, not required: {0}".format(
+                        ", ".join(still) if still else "none"))
+                    lines.append(
+                        "  the browser matrix is not required and was not waited for; a red "
+                        "there lands on main's own run and is fixed forward (owner's ruling "
+                        "2026-09-19).")
+                return True, lines
 
         spent = now() - started
         if spent >= CHECK_DEADLINE_SECONDS:
@@ -840,12 +929,25 @@ def claim_half(root: str, number: int, branch: str, confirm: bool) -> int:
         "  no CI run has seen. The subject is the COMMIT — {0} — and".format(sha[:9]),
         "  never the pull request, whose checks answer out of the PREVIOUS",
         "  head until GitHub attaches runs to this one.", "")
-    floor = attached_count(parent) if parent else 0
+
+    # OWNER'S WORD, 2026-09-19: wait on required checks only. Read at run time, never a
+    # typed list, and `None` fails CLOSED to the old behaviour — wait for everything —
+    # whenever the roster cannot be told apart from "everything" (unreadable, or empty).
+    required = required_contexts()
+    if required is None:
+        say("  main's required status checks could not be read (or none are named), so",
+            "  this waits for every check run, as it did before 2026-09-19.", "")
+    else:
+        say("  main requires: {0}".format(", ".join(required)),
+            "  everything else may still be running when this returns green.", "")
+
+    floor = attached_count(parent, required=required) if parent else 0
     if floor:
-        say("  its parent {0} carries {1} check runs, so fewer than that".format(parent[:9], floor),
+        say("  its parent {0} carries {1} {2}, so fewer than that".format(
+                parent[:9], floor, "required check runs" if required else "check runs"),
             "  on this commit means GitHub is still attaching them.", "")
 
-    green, lines = wait_for_checks(sha, number, floor)
+    green, lines = wait_for_checks(sha, number, floor, required=required)
     say(*lines)
     if not green:
         return refuse(

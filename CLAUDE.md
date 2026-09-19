@@ -46,6 +46,10 @@ make worktree-setup # in a fresh worktree, FIRST: venv, T1's cache, this checkou
                     #   Browser-pane port (D43).
 make status         # where you are: next step, T1 score, branch.
 make map            # docs/map.py RENDERED (D80). ARGS=<package|path|D<n>|--stale>.
+                    #   ARGS="D<n> --full" prints that ENTRY in full, verbatim. The
+                    #   default view also names the entry's path. The filenames are
+                    #   zero-padded (D42 is `D042-...md`), so a glob typed from a
+                    #   citation matches nothing and says nothing.
 make serve-scope    # what `make serve-selftest` reads, and whether this branch touches it.
                     #   ARGS=list, or ARGS="classify --base <rev>". Derived from the
                     #   self-test's own CARRY, reconciled by `make docs-audit`'s `serve scope`
@@ -115,21 +119,16 @@ make design-check   # DESIGN.md's Fulfillment floors, in a browser. TAKES A MACH
 make design-check-quiet  # same run, no progress stream, same lock.
 make suite-lock-selftest # the lock, proved by violating it, including a holder killed -9.
                     #   In `check`.
-make demo           # seed a demo store and record the wire, a fixture bundle. ONE request
-                    #   seam (`server.ts:request`), ONE `photoUrl`. A demo differs from real
-                    #   by DATA alone, not a fork.
-                    #   Real: catalogue, whole pipeline after `identify`. Invented: box
-                    #   contents, sales, shipments. Synthetic: photographs.
+make demo           # seed a demo store and record the wire, a fixture bundle.
+                    #   `docs/specs/demo.md` IS THE ARGUMENT FOR THIS WHOLE FAMILY — why it
+                    #   is not a fork, what is real and what is invented, why VITE_DEMO is
+                    #   build-time, what the published page refuses, and why no secret can
+                    #   reach it. READ IT BEFORE CHANGING ANY demo-* TARGET.
 make demo-seed      # the store alone. Deterministic. Refuses with PKMNSCAN_HOME unset.
 make demo-record    # the bundle alone, on its own throwaway server and port.
-make demo-static    # both above, then a static build to dist-demo/. VITE_DEMO=1 is
-                    #   build-time only. DEMO_BASE=<path> is where it is served (GitHub Pages:
-                    #   `/<repo>/`).
+make demo-static    # both above, then a static build to dist-demo/.
 make demo-preview   # serve dist-demo/ as a static host would.
 make demo-freshness # whether the bundle matches its recording. No gate: CI rebuilds fresh.
-                    #   Writes are real within reason (sale, price, rename). A paid API call,
-                    #   an authenticated fetch and capture are refused BY NAME. No API key
-                    #   reaches the build; only `VITE_`-prefixed vars are inlined.
 make check          # harness + docs-audit + claim-stale + revert-guard +
                     #   port-agreement + set-hint-agreement + readiness-agreement +
                     #   screen-freshness +
@@ -877,18 +876,13 @@ adopting some and deferring others (D99 sits where it does because main took D90
   product claim BUILT, channel decision RECORDED and not executed.
 - `docs/specs/stale-listings.md` — SPECIFIED and BUILT, NOT VALIDATED. No file has ever
   reached TCGplayer.
-- `docs/specs/undo.md` — BUILT 2026-09-17, all four sections. Undo as one concept, interviewed
-  the same day.
-  Two mechanisms by ruling: `U` and the receipt for the press just made, and a menu on the
-  sunk row on `#/inventory` for a mistake found later. No clock is a limit anywhere — three
-  built reversals (the sale, the retirement, the pull) are reachable only from a
-  twenty-second toast. A past order keeps the fact and drops the position (D212). The
-  capture strip gets mid-sitting granularity from the remove route it already has. The file
-  also records a live divergence: the sale undo does not consult `holder_of`, so it can put
-  a pulled card back on the shelf while the order still reads it fulfilled.
+- `docs/specs/undo.md` — BUILT 2026-09-17, all four sections. Undo as one concept: two
+  mechanisms by ruling, and no clock is a limit anywhere. Read it before touching a reversal.
 - `docs/specs/corpus-pruning.md` — RECORDED, NOT BUILT (D177). Pruning may never be
   automatic; 430 answers examined, 0 safe to auto-prune.
 - `docs/specs/batch-script.md` — the four commands, storage, routing, pricing. Built.
+- `docs/specs/demo.md` — the public demo, BUILT and LIVE. Why it is not a fork, what is
+  real and what is invented, what the published page refuses, and why no secret reaches it.
 - `docs/specs/one-process.md` — D138's plan. SPECIFIED, NOT BUILT as its own target — folded
   into `make up`.
 - `docs/specs/store-scaling.md` — BUILT 2026-09-13, all eight items, three phases.

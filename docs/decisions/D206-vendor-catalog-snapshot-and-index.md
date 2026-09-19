@@ -75,3 +75,9 @@ D15 (this step exists and is scoped by it), D18 (both generators write and neith
 D112 (T1's own labels-vs-images split, which is why fixtures.py is untouched here), D25
 (the join partitions by game — `pipeline/catalog.py` deliberately does not, because the
 vendored catalog is pokemon-only and carries no `Product Line`).
+
+**Amended 2026-09-19.** Piece 1's premise was "private, single-operator use, no redistribution." That premise is false now. The repository went public on 2026-09-11. `gh api /repos/shivinate7/banchi` answers `"private": false`. The 176 tracked files under `vendor/pokemon-tcg-data/` total 26,520,219 bytes. They now reach the public the moment a clone or a fork reads them. Upstream published no license file. The bytes are redistributed anyway.
+
+**Owner's ruling, 2026-09-19: record the risk and keep it.** The snapshot stays vendored. No license text is invented to paper over the gap. The bytes are public, and the risk is named here so nobody reads the line above and believes otherwise.
+
+**What would reopen this: an upstream license appearing on `PokemonTCG/pokemon-tcg-data`, or a takedown.** Either forces a real decision. Adopt the license's terms, or remove the vendored copy and fetch instead. Neither has happened yet. This paragraph is the record that the risk was seen and kept open on purpose.
