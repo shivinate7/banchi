@@ -1,4 +1,4 @@
-## D-tcg-price-history-user-agent-block — The price history's honest agent stopped answering, and D64's escape hatch already fit it
+## D216 — The price history's honest agent stopped answering, and D64's escape hatch already fit it
 
 **A repair, not a redesign. D62 built `pipeline/pricehistory.py`'s reader, its cache, its ranges and its panel; none of that moved.** What moved is one fact D62 measured and printed as true: `pipeline/pricehistory.py`'s own header states, of `infinite-api.tcgplayer.com/price/history/<productId>/detailed?range=<r>`, *"is public. No key, no cookie, no `Referer`, no session — HTTP 200 to a bare `curl`."* — measured 2026-08-30, the day D62 landed. That premise has rotted.
 

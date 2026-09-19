@@ -24407,7 +24407,7 @@ def check_history_route(checks: Checks) -> None:
 
 def check_history_blocked_route(checks: Checks) -> None:
     """A 403 refuses as `history_blocked`, and `PKMNSCAN_TCG_USER_AGENT` reaches the wire
-    (D-tcg-price-history-user-agent-block).
+    (D216).
 
     ITS OWN RUN, ITS OWN ENVIRONMENT ISOLATION — `check_export_fetch`'s reason applies again:
     a stray real `.env` on this machine must never leak into what this block asserts, and
@@ -24428,7 +24428,7 @@ def check_history_blocked_route(checks: Checks) -> None:
     checks.note("")
     checks.note(
         "HISTORY ROUTE BLOCKED — a 403 is `history_blocked`, and the override reaches the "
-        "wire (D-tcg-price-history-user-agent-block)"
+        "wire (D216)"
     )
 
     keys = ("PKMNSCAN_TCG_USER_AGENT", envfile.FROM_FILE_ENV)

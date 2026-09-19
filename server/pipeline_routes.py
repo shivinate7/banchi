@@ -5195,7 +5195,7 @@ def _history_user_agent() -> str:
     """The User-Agent `pipeline/pricehistory.py` presents to tcgcsv and infinite-api.
 
     REUSES `server/tcg_export.py`'s OWN KEY (`AGENT_ENV`), NOT A SECOND ONE
-    (D-tcg-price-history-user-agent-block). It already means "the User-Agent to present to
+    (D216). It already means "the User-Agent to present to
     TCGplayer", it is already documented in `.env.example`, and tcgcsv answers either value
     — measured 2026-09-19, the same day infinite-api stopped answering the honest default.
     One knob, because there is no argument for wanting two different browsers' worth of
@@ -5351,7 +5351,7 @@ def do_pipeline_history(name: str, sku: str) -> dict:
     table, or no such SKU (`_history_row`). The card is not one a catalogue covers
     (`not_catalogued`). The walk found no single product (`history_unresolved`). A host did
     not answer (`history_unreachable`). A host answered and refused this client BY NAME
-    (`history_blocked`, D-tcg-price-history-user-agent-block) — its own code and never
+    (`history_blocked`, D216) — its own code and never
     folded into the one above, because "nothing is wrong with the run" is the wrong sentence
     for a 403 and its remedy is an environment variable rather than "try again". Each names
     what to do next, because a panel that said only "failed" would send the operator to the

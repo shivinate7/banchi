@@ -21,7 +21,7 @@ statements were false and the entry is corrected; what follows is what was measu
   infinite-api.tcgplayer.com/price/history/<productId>/detailed?range=<r>
 
 WAS public with no key, no cookie, no `Referer`, no session — HTTP 200 to a bare `curl` —
-MEASURED 2026-08-30 (D62). THAT PREMISE ROTTED (see D-tcg-price-history-user-agent-block):
+MEASURED 2026-08-30 (D62). THAT PREMISE ROTTED (see D216):
 measured again 2026-09-19, the same honest `USER_AGENT` below now answers HTTP 403 on this
 host, while a browser User-Agent still answers 200 with no cookie, no `Referer` and no
 session — the request signature alone decides it. `AGENT_ENV` below is the escape hatch,
@@ -190,7 +190,7 @@ HISTORY_HOST = "https://infinite-api.tcgplayer.com"
 # Sent to both hosts. tcgcsv refuses the `urllib` default with a 401 (see the header); this
 # host is polite rather than anonymous, because a free public mirror is entitled to know who
 # is hammering it and to block us by name rather than by guessing. IT IS ALSO THE VALUE
-# INFINITE-API NOW ANSWERS 403 TO (D-tcg-price-history-user-agent-block, measured 2026-09-19)
+# INFINITE-API NOW ANSWERS 403 TO (D216, measured 2026-09-19)
 # — kept as the DEFAULT so a checkout with no override behaves exactly as it always has and
 # fails the same honest way, rather than reaching for a disguise nobody asked this module to
 # wear.
@@ -204,7 +204,7 @@ USER_AGENT = "pkmnscan/1.0 (+private single-operator inventory tool)"
 # — passed in, never discovered. Spelled here as a literal, identical to
 # `server/tcg_export.py:AGENT_ENV`, ON PURPOSE: reused rather than a second knob, because it
 # already means "the User-Agent to present to TCGplayer" and tcgcsv answers either value
-# (measured 2026-09-19) — see D-tcg-price-history-user-agent-block for the argument.
+# (measured 2026-09-19) — see D216 for the argument.
 AGENT_ENV = "PKMNSCAN_TCG_USER_AGENT"
 
 # The four the endpoint accepts. A closed tuple rather than a passed-through string: every
@@ -270,7 +270,7 @@ class Blocked(PriceHistoryError):
     is that nothing is wrong with the run and a public mirror simply did not answer; that is
     the wrong sentence for a 403, which says the client presenting itself is the thing being
     declined, and the honest remedy is `AGENT_ENV` rather than "try again"
-    (D-tcg-price-history-user-agent-block). A caller that catches `Unreachable` and not this
+    (D216). A caller that catches `Unreachable` and not this
     is left exactly as unhandled as one that catches neither — on purpose, so the omission
     is loud.
     """
@@ -850,7 +850,7 @@ def fetch_json(
     with a validation message for a bad range, and tcgcsv answers 401 for a User-Agent it
     does not like, which is a refusal that reads as an authentication requirement and is not.
     A 403 IS `Blocked` INSTEAD, NEVER `Unreachable` — see that class for why the two must not
-    share a name, and D-tcg-price-history-user-agent-block for what is now answering it.
+    share a name, and D216 for what is now answering it.
     """
     request = urllib.request.Request(url, headers={"User-Agent": user_agent})
     try:

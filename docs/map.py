@@ -1141,7 +1141,7 @@ COMPONENTS = [
             # the only things in the product that want a trend and have none. D22 because the
             # `Product Line` cell it resolves a category by is that entry's to author. D35 for
             # the number-then-name shape the join borrows, D25 for the per-game partition.
-            # D-tcg-price-history-user-agent-block because infinite-api stopped answering the
+            # D216 because infinite-api stopped answering the
             # honest `USER_AGENT` on 2026-09-19 (D62's own premise measured 2026-08-30), and
             # this is the entry that reuses D64's `AGENT_ENV` and names a 403 `Blocked`
             # rather than folding it into `history_unreachable`. D171 because that refusal
@@ -1157,7 +1157,7 @@ COMPONENTS = [
                                         "PRINTING and never per SKU.",
                                 "governed_by": ["D8", "D16", "D22", "D25", "D35", "D47", "D49",
                                                 "D62", "D64", "D171",
-                                                "D-tcg-price-history-user-agent-block"],
+                                                "D216"],
                                 "tested_by": ["T7"],
                                 "note": "REACHABLE AS OF 2026-08-30 (D62) — this entry read "
                                         "RECORDED RATHER THAN BUILT for one day, and the whole "
@@ -1189,7 +1189,7 @@ COMPONENTS = [
                                         "MATTERED — ROTTED ON 2026-09-19: it now answers this "
                                         "project's honest default with HTTP 403 while a "
                                         "browser's still answers 200 "
-                                        "(D-tcg-price-history-user-agent-block). `fetch_json` and "
+                                        "(D216). `fetch_json` and "
                                         "`Market` take an explicit `user_agent`, defaulting to "
                                         "the unchanged honest string; `server/pipeline_routes.py` "
                                         "resolves D64's `AGENT_ENV` (`PKMNSCAN_TCG_USER_AGENT`, "
@@ -4061,7 +4061,7 @@ COMPONENTS = [
                                 "D79", "D86", "D87", "D88", "D89", "D100", "D103", "D105",
                                 "D134", "D137", "D145", "D147", "D156", "D159", "D163",
                                 "D165", "D166", "D168", "D170", "D172", "D174", "D180",
-                                "D188", "D189", "D-tcg-price-history-user-agent-block"],
+                                "D188", "D189", "D216"],
                 "tested_by": ["T7"],
             },
             "shipping_routes.py": {
