@@ -115,21 +115,16 @@ make design-check   # DESIGN.md's Fulfillment floors, in a browser. TAKES A MACH
 make design-check-quiet  # same run, no progress stream, same lock.
 make suite-lock-selftest # the lock, proved by violating it, including a holder killed -9.
                     #   In `check`.
-make demo           # seed a demo store and record the wire, a fixture bundle. ONE request
-                    #   seam (`server.ts:request`), ONE `photoUrl`. A demo differs from real
-                    #   by DATA alone, not a fork.
-                    #   Real: catalogue, whole pipeline after `identify`. Invented: box
-                    #   contents, sales, shipments. Synthetic: photographs.
+make demo           # seed a demo store and record the wire, a fixture bundle.
+                    #   `docs/specs/demo.md` IS THE ARGUMENT FOR THIS WHOLE FAMILY — why it
+                    #   is not a fork, what is real and what is invented, why VITE_DEMO is
+                    #   build-time, what the published page refuses, and why no secret can
+                    #   reach it. READ IT BEFORE CHANGING ANY demo-* TARGET.
 make demo-seed      # the store alone. Deterministic. Refuses with PKMNSCAN_HOME unset.
 make demo-record    # the bundle alone, on its own throwaway server and port.
-make demo-static    # both above, then a static build to dist-demo/. VITE_DEMO=1 is
-                    #   build-time only. DEMO_BASE=<path> is where it is served (GitHub Pages:
-                    #   `/<repo>/`).
+make demo-static    # both above, then a static build to dist-demo/.
 make demo-preview   # serve dist-demo/ as a static host would.
 make demo-freshness # whether the bundle matches its recording. No gate: CI rebuilds fresh.
-                    #   Writes are real within reason (sale, price, rename). A paid API call,
-                    #   an authenticated fetch and capture are refused BY NAME. No API key
-                    #   reaches the build; only `VITE_`-prefixed vars are inlined.
 make check          # harness + docs-audit + claim-stale + revert-guard +
                     #   port-agreement + set-hint-agreement + readiness-agreement +
                     #   screen-freshness +
@@ -889,6 +884,8 @@ adopting some and deferring others (D99 sits where it does because main took D90
 - `docs/specs/corpus-pruning.md` — RECORDED, NOT BUILT (D177). Pruning may never be
   automatic; 430 answers examined, 0 safe to auto-prune.
 - `docs/specs/batch-script.md` — the four commands, storage, routing, pricing. Built.
+- `docs/specs/demo.md` — the public demo, BUILT and LIVE. Why it is not a fork, what is
+  real and what is invented, what the published page refuses, and why no secret reaches it.
 - `docs/specs/one-process.md` — D138's plan. SPECIFIED, NOT BUILT as its own target — folded
   into `make up`.
 - `docs/specs/store-scaling.md` — BUILT 2026-09-13, all eight items, three phases.
