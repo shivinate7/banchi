@@ -38,14 +38,33 @@
   display: flex;
   flex-wrap: wrap;
   align-items: center;
-  gap: 4px var(--bn-2);
+  gap: var(--bn-2) var(--bn-4);
   font-size: var(--bn-fs-sm);
   color: var(--bn-ink-3);
   font-variant-numeric: tabular-nums;
 }
 .boxops-identity-line .bn-pill { height: 20px; }
-.boxops-identity-fill { color: var(--bn-ink); font-weight: 600; }
-.boxops-identity-part::before { content: '·'; margin-right: var(--bn-2); color: var(--bn-ink-4); }
+/* `fill unread` and `sealed at N` are not counts of what the box holds — the census figures
+   beside them are — so they stay plain text rather than a `bn-stat`. */
+.boxops-identity-note { color: var(--bn-ink); font-weight: 600; }
+
+/* THE CENSUS TRIAD (D41), BROUGHT TO THIS PANEL. `CardLocations`' three figures — copies, in
+   the boxes, live on TCGplayer — are `bn-stat` tiles at `--bn-fs-2xl`, an 11px 600-weight
+   label above no separator (`CardLocations.css`'s `.card-locations-owner .card-locations-stat`
+   skin). This is the SAME skin, so the two owner-side census blocks on this screen read one
+   size and one weight rather than each screen inventing its own — the layout row itself is
+   `.bn-stat-row` (kit.css), shared rather than duplicated. */
+.boxops-stat .bn-stat-value {
+  font-size: var(--bn-fs-2xl);
+  line-height: 1.05;
+}
+.boxops-stat .bn-stat-label {
+  font-size: var(--bn-fs-xs);
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  color: var(--bn-ink-3);
+  white-space: nowrap;
+}
 
 /* The track: the box as a run of sections, each as wide as the cards it holds. */
 .boxops-track {

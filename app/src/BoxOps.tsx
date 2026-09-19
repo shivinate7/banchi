@@ -32,7 +32,7 @@ import {
 import { spansOf } from './position'
 import { ReadingAge } from './CardLocations'
 import { readingAgo } from './cardState'
-import { Button, Icon, Notice, Pill, type IconName } from './kit'
+import { Button, Icon, Notice, Pill, Stat, type IconName } from './kit'
 import { toast } from './kit/toast'
 import { Overlay } from './InventoryOverlay'
 import './BoxOps.css'
@@ -310,13 +310,22 @@ export function BoxIdentity({
      beside it carries the state, so no count is ever called sealed. The captured figure is
      dropped only where it would repeat the seal. */
   const sealedAt = sealed && record.capacity !== null ? record.capacity : null
-  const census: string[] = []
-  census.push(holds === null ? 'fill unread' : `${holds} on hand`)
-  if (record.sold > 0) census.push(`${record.sold} sold`)
-  if (record.retired > 0) census.push(`${record.retired} retired`)
-  if (record.moved > 0) census.push(`${record.moved} moved`)
-  if (sealedAt !== record.cards) census.push(`${record.cards} captured`)
-  if (sealedAt !== null) census.push(`sealed at ${sealedAt}`)
+
+  /* THE CENSUS TRIAD (D41), BROUGHT TO THIS PANEL. `CardLocations`' own three figures — copies,
+     in the boxes, live on TCGplayer — are `bn-stat` tiles: a big tabular-nums value over a
+     muted label, no separators. This panel's facts are the same shape now, one `bn-stat` per
+     field. `fill unread` and `sealed at N` are not counts of what is in the box — the first is
+     an unread state, the second is D20's frozen capacity, a denominator rather than a fourth
+     thing IN the box — so both stay plain text, after the figures. */
+  const censusStats: { key: string; value: number; label: string }[] = []
+  const censusNotes: string[] = []
+  if (holds === null) censusNotes.push('fill unread')
+  else censusStats.push({ key: 'on-hand', value: holds, label: 'on hand' })
+  if (record.sold > 0) censusStats.push({ key: 'sold', value: record.sold, label: 'sold' })
+  if (record.retired > 0) censusStats.push({ key: 'retired', value: record.retired, label: 'retired' })
+  if (record.moved > 0) censusStats.push({ key: 'moved', value: record.moved, label: 'moved' })
+  if (sealedAt !== record.cards) censusStats.push({ key: 'captured', value: record.cards, label: 'captured' })
+  if (sealedAt !== null) censusNotes.push(`sealed at ${sealedAt}`)
 
   return (
     <div className="boxops-identity">
@@ -328,7 +337,7 @@ export function BoxIdentity({
         {actions}
       </div>
 
-      <p className="boxops-identity-line">
+      <div className="boxops-identity-line">
         <Pill
           tone={sealed ? 'default' : 'ok'}
           icon={sealed ? 'lock' : 'unlock'}
@@ -336,13 +345,19 @@ export function BoxIdentity({
         >
           {sealed ? 'sealed' : 'open'}
         </Pill>
-        <span className="boxops-identity-fill">{census[0]}</span>
-        {census.slice(1).map((part) => (
-          <span key={part} className="boxops-identity-part">
-            {part}
+        {censusStats.length === 0 ? null : (
+          <div className="boxops-stats bn-stat-row">
+            {censusStats.map((stat) => (
+              <Stat key={stat.key} value={stat.value} label={stat.label} className="boxops-stat" />
+            ))}
+          </div>
+        )}
+        {censusNotes.map((note) => (
+          <span key={note} className="boxops-identity-note">
+            {note}
           </span>
         ))}
-      </p>
+      </div>
 
       {/* The track is the box: one segment per section, as wide as the cards it holds, with the
           selected card's marker from the server's own `fraction`. */}
