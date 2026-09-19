@@ -53,3 +53,5 @@
 ---
 
 
+
+**AMENDED 2026-09-19, on the owner's word.** "The suite is sharded and never widened" rested on `ubuntu-latest` being 2 vCPU on a private repo, so `workers=1` was the deliberate half of D136's "each proven before the next." The repo went public 2026-09-11 and the hosted runner measured on it (run 35420998424) is 4 vCPU / 15 GB, not 2 — the premise the "never widened" clause stood on went false eight days before anyone looked. Owner's ruling, quoted: "Both" (raise the worker count and build a per-PR spec allow-list) and "Why not make more than 3 shards? ... more shards are wanted." `.github/workflows/check.yml` now runs six shards of `--workers=2`. This is a widening BY THE OWNER'S WORD, not a session's repeal — the twenty-run proof this amendment is conditioned on, and the DEBT8 flake-rate table kept as its ongoing reader, land in a decision entry of their own in a later commit of the same task.
