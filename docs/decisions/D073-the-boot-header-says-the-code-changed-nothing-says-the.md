@@ -64,6 +64,10 @@ The mechanism is adopted rather than re-argued. Every rule the notice's own head
 
 **What would reopen this: a second pair of hands.** Every narrowing above rests on one operator moving between two devices. A real Fulfiller working `#/fulfillment` while the owner sells from `#/inventory` is two people writing at once, and the return-to-screen shape is too slow for it.
 
+**Amended 2026-09-19.** "Why not a live connection" rested on one sentence: *"the objection is not capacity: `server/capture_server.py:8583` is a `ThreadingHTTPServer` with one thread per connection and no pool, so a stream starves nothing."* That sentence is false today. `server/capture_server.py` now bounds executing requests with `REQUEST_SLOTS = 4`, behind a `ThreadPoolExecutor(REQUEST_SLOTS)`. Fixed 2026-09-04, DEBT11. A pool exists now, and it is small on purpose. The sizing sweep found 4 keeps 82% of peak throughput, at the burst count that once killed the server.
+
+**The restriction stands, and the ground moved under it.** A held streaming connection today pins one of only four slots. The old server handed out one thread per client, and ran out only at hundreds of them. The drain argument later in this entry is unchanged: every save funnels through `_dispatch`, and a stream inside it never leaves. That argument is now the stronger reason, not a backup one. A persistent connection was a bad first build against unlimited threads. Against four slots it is worse: one open stream now holds a quarter of the server's whole capacity, for as long as it is held.
+
 ---
 
 

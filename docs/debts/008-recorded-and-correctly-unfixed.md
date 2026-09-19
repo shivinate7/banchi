@@ -69,6 +69,8 @@ code, silently, because the line is real and the file is right. Grep the TITLE i
 reporter prints that too and it is exact. Nothing to fix at 1.55.1; the remedy is to stop
 writing the number down.
 
+**Amended 2026-09-19.** D129 closed the code half. It read the same shape one register lower: an ESM spec's `test.location` reported short under Node 23 and later. `@playwright/test` moved to 1.58.0, the first release D129 measured to count it right, proven on the full suite under Node 25. `app/package.json` pins 1.58.0 today. Grep the title, not the number, still stands for a citation written before the fix, and for any tool that still strips source maps. The line the reporter prints is trustworthy again on this pin.
+
 **The same shape in the docs, and `doc hygiene` sees only its provable half.** Docs carry 52
 resolvable `path:line` citations. D74's row catches one failure — a number past the end of its
 file — and there are none today. **The common case is invisible**: a citation whose file is
