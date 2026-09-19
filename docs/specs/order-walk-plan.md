@@ -527,6 +527,23 @@ says still owes, and `record_pull` refuses if the line is already full. The ship
 
 **The pull receipt speaks in sentences** (D196). The shipped toast printed the raw order key.
 
+**The copy's bar reads `#8 of 34`, never `#8 of 34 so far`** (owner, 2026-09-19). `so far` is
+`PositionBar`'s own caption for a box still being filled — true on `#/capture` and `#/inventory`,
+meaningless in the middle of a pull. The walk drops the two words; every other screen keeps them.
+
+**The row's address stays as built — `#8 RB Origins Commons` — until the owner has walked with
+it.** The owner's word: leave it, and ask again after real use. A session that changes it before
+that feedback has arrived is working against an explicit hold. What it might become is recorded
+so the ask is cheap: slot only for a copy in this drawer, slot plus box name for one elsewhere,
+the section's name never on a row.
+
+**Which order a press banks to is SETTLED, by D212, and is not a question.** No order claims a
+copy. The press names an order still owing by the pass's own tally, `record_pull` refuses a full
+line, the row marks itself on refusal. There is nothing for the wire to carry and nothing for
+the operator to choose. §9a's open question on this is CLOSED here. It was put to the owner
+three times on 2026-09-19 after D212 had already answered it, and the owner's last word was that
+the question itself was misconstrued. Do not raise it again.
+
 ### The shortfall block
 
 The plan cannot fill every SKU, and on this store it misses 23 of 59. One block, at the foot,
@@ -659,10 +676,10 @@ settled work by accident before.
 
 **Two questions the build raised and nobody has answered.** They are design, not defects.
 
-- **Which order a press records against**, when one card at a stop serves more than one buyer.
-  The wire names every order a take serves and does not say how the demand splits between them,
-  so the client picks. Today it takes the first order in `for` still owing by the live ledger
-  figure. That is a rendering-side heuristic standing in for a fact the route could carry.
+- **Which order a press records against** — CLOSED 2026-09-19 under D212, see §8 "The stop,
+  rebuilt". Kept here only so the closure is findable: every copy is fungible, no order claims
+  one, the press names an owing order by the pass's own tally and the write refuses. Not a
+  question.
 - **Whether the stop span should be a proportional bar.** `WalkPlanStop` carries no box total,
   so the screen draws the honest span numbers rather than fabricating a proportion.
 
