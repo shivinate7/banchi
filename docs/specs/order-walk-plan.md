@@ -282,8 +282,15 @@ values in the message.
 ```
 
 **`copies` carries every copy of that SKU at that stop, not `wanted` of them.** D93 and D97
-are unamended: the machine ranks, the person reaches. The plan says how many to take; it does
-not pick which. Ranked densest-first inside the stop, as `buildCopyMap` already ranks.
+are unamended. The machine ranks, the person reaches. The plan says how many to take. It does
+not pick which.
+
+Two registers, not one. The owner's ruling, 2026-09-18, read off main rather than the earlier
+draft of this sentence. `stop.takes` ranks densest first — `count` descending, same as
+`buildWalkPlan`'s `cardsHere` in `app/src/Orders.tsx`. That is which card to reach for first.
+A `Take`'s own `copies` rank front to back, ascending slot, per that file's own comment at
+line 1381. That is which copy of one card, once a hand is at it. `buildCopyMap` ranks boxes
+densest-first for a different screen and does not reach here.
 
 **`cid` is a new field on a pick-shaped row.** `Pick` carries `box`, `index` and `capture_id`
 but no `cid`, so today a photograph on this screen would be addressed by

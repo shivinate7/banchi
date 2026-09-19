@@ -140,6 +140,7 @@ def run() -> Result:
     _stood_down(c)
     _exact(c)
     _cost_name(c)
+    _take_order(c)
 
     return c.result()
 
@@ -428,3 +429,52 @@ def _cost_name(c: Checks) -> None:
     c.equal(unknown.counts.stops, named.counts.stops,
             "an order key the ledger has never ingested contributes nothing and raises "
             "nothing")
+
+
+def _take_order(c: Checks) -> None:
+    """A stop's `takes` rank DENSEST FIRST — the owner's ruling, 2026-09-18, read off main
+    rather than the earlier draft of the spec. `buildWalkPlan`'s `cardsHere` in
+    `app/src/Orders.tsx` does the same thing one level up: `count` descending, tie broken on
+    something stable. `Take` carries no name, so the tie here is `sku` ascending instead.
+
+    One stop, three SKUs, deliberately picked so that ALPHABETICAL AND DENSEST-FIRST GIVE
+    DIFFERENT ANSWERS — a fixture where they agree would go green over the regression this
+    check exists to catch:
+
+        A   wanted 1
+        M   wanted 2
+        Z   wanted 2
+
+    Alphabetical (the defect): A, M, Z. Densest first with the sku tie-break: M, Z, A — M
+    and Z tie at two and M sorts first; A is last on one. Getting M ahead of Z on the tie
+    proves the tie-break is really `sku` and not, say, insertion order.
+    """
+    inventory = _store([1], ["A", "M", "M", "Z", "Z"])
+    ledger = _ledger({"A": 1, "M": 2, "Z": 2})
+
+    plan = walkplan.plan(inventory, ledger, ["tcg:1"])
+
+    c.equal(plan.counts.stops, 1, "one section holds every copy, so the walk is one stop")
+    stop = plan.stops[0]
+    c.equal(
+        [take.sku for take in stop.takes],
+        ["M", "Z", "A"],
+        "densest first (M and Z, both wanted twice) then the singleton (A) — never the "
+        "alphabetical A, M, Z a plain `sorted(take_counts)` would produce",
+    )
+    c.equal(
+        [take.wanted for take in stop.takes],
+        [2, 2, 1],
+        "and the counts fall with the order: 2, 2, 1",
+    )
+
+    # THE PLAN DOES NOT RESHUFFLE ON A SECOND READ. Same snapshot, same ledger, computed
+    # again: an operator who reopens the screen must see the same order, not a coin flip
+    # `sorted` on a dict would not even risk — this is what makes the tie-break MEANINGFUL
+    # rather than merely present.
+    again = walkplan.plan(inventory, ledger, ["tcg:1"])
+    c.equal(
+        [take.sku for take in again.stops[0].takes],
+        [take.sku for take in stop.takes],
+        "a plan asked for twice over the same snapshot does not reshuffle",
+    )
