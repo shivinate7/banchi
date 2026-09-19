@@ -965,9 +965,7 @@ export type SaleResult = {
    *  and this is the state it goes back to. */
   restores_to: string | null
 
-  /** The order line a REVERSAL released, or null (`docs/specs/undo.md` §4). A copy pulled
-   *  for an order and then sold carries a ledger entry the forward sale never touches, so
-   *  the undo releases it in the SAME write. Always null on a sale — recording
+  /** The order line a REVERSAL released, or null (`docs/specs/undo.md` §4). Always null on a sale — recording
    *  a pull is `POST /orders/pull`'s job, already done before a card reaches this route sold —
    *  and null on a reversal that held no order line. Additive: every field above this one is
    *  unmoved. */

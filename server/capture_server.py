@@ -8006,11 +8006,7 @@ def do_mark_sold(box: int, index: int, payload: dict) -> dict:
     caller of `_sell`, and it already reverses `Ledger.holder_of` itself before calling
     `_sell`, inside its own `Store.write()` — so `_sell`'s own body must never touch the
     ledger, or a pull's undo would reverse it twice. This route is the ONLY OTHER caller, so
-    it consults `holder_of` here. Without that read, a copy pulled for an order, marked sold
-    from `#/inventory`, then reversed from the row would go back on the shelf as
-    `identified` — live, and offered to the next buyer — while the order still read that
-    copy fulfilled: the double-shipment `record_pull`'s `capture_id` requirement exists to
-    prevent, reached from the other end.
+    it consults `holder_of` here.
 
     Read inside the SAME lock, before `_sell` writes: `holder_of` answers which line (if
     any) holds this capture id. `_sell` itself never changes a card's `capture_id`, so
