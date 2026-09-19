@@ -102,3 +102,110 @@ directions, with a fixture built so a frozen order and a recomputed one give dif
 press that makes the order stale, inside a band whose height is fixed, so its slot is reserved
 whether or not it is occupied — the same bargain `.browse-row-slotghost` makes in the amendment
 above, paid once at render rather than at the moment of the sale.
+
+### The copies column may not be torn down and built again (2026-09-19)
+
+**The owner ruled on a CI flake, 2026-09-19.** His word was "fix the product." He had been
+watching the same thing on the real rig for weeks.
+`inventory.spec.ts`'s "a new search takes a new order" case failed on CI. It failed in 3 of 20
+runs, at 2 workers, always the same way. `toHaveCount(6)` passed. A later, non-retrying read of
+the same rows then came back `[]`. No press was involved. The operator had only typed a second
+query into the same box.
+
+**An earlier amendment of the same day is withdrawn.** It named the landing effect's
+`answered` ref. It was reasoned from the trace. It was never reproduced. Both of its changes were
+mutation-tested on 2026-09-19, under an ordering that does reproduce the defect. Both passed with
+the defect fully present. Neither could reach it. The `BoxBrowse.tsx` half was also a hazard.
+Recording a query on a render whose `visible` is empty spends `fresh` on a landing that never
+happened, which is D132's rule failing to fire. Both are reverted. What follows was measured.
+
+**IT WAS NEVER A RE-POINT. THE COLUMN WAS DESTROYED AND BUILT AGAIN FROM NOTHING.**
+`CopiesPanel` owns a `useSearch()`. Rebuilding it throws away the answer on screen. It then
+starts a 200ms debounce and a fetch. What the operator sees is six copy rows, then a skeleton,
+then six rows again, with no press. Two separate mechanisms rebuilt it.
+
+**One: the walk's row read null while the drawer it moved to was still in flight.** Since D192
+`rows` holds ONE drawer's cards, and `visible` is `rows` narrowed to `shelf`. A fresh answer can
+move `shelf` to another drawer. Until that drawer's own `GET /inventory/<box>` lands, `visible`
+holds nothing for it. `selectedRow` was `visible.find(...) ?? null`. So it read null,
+`Inventory.tsx`'s `detail` became null, and the whole column was unmounted. The fix says a row is
+gone only when the drawer it would be in has ANSWERED. `rowsShelf` becomes state, so the render
+can read it. The walk keeps the row it was standing on across that window. Null is kept for the
+honest case: the shelf has answered and holds no row to walk. One render of null destroys the
+column. So the render where the rows land, while `selected` is still the previous drawer's key,
+is covered by the same rule.
+
+**Two: `.browse-card` carried `key={selectedRow.key}`.** It came in with the rebuild (D94-D99),
+so the panel's `bn-page-in` entrance replayed on every card. `{detail}` is the copies column, and
+it is inside that section. The key therefore rebuilt the column on EVERY change of selection,
+including the one a fresh answer makes. Every guard `CopiesPanel` carries for a row change
+assumes it survives one. This key is why none of them had ever run. The key is gone. The entrance
+now plays when the panel appears, which is what an entrance is for. `CardOps` keeps its own key.
+That one resets a menu, not a fetch.
+
+**Measured on the rig,** with every box read delayed 400ms and the CPU throttled 6x, which is
+D128's lever. The column was absent for 679ms. It returned as the skeleton for 400ms more. With
+both fixes the copies list holds six rows on every animation frame, from the keystroke to the
+settled new order.
+
+**Guarded by a frame watch rather than a poll.** Every `expect(locator)` retries until it is true
+and then stops asking. A list that empties and fills between two polls is invisible to all of
+them. That is how this shipped. `installCopiesWatch` samples `requestAnimationFrame`. It records
+three numbers per frame: the copy rows, whether `.inventory-detail` exists at all, and whether a
+skeleton is inside it. The first says what the operator counts. The second catches a tear-down.
+The third catches a rebuild. Telling those apart is what sends the next session to the right
+file.
+
+**And the ordering is forced rather than hoped for.** `the copies list holds while a new answer
+moves the walk to another drawer` delays the drawer read by 400ms. The hard ordering is then
+certain on any machine. A delay cannot make a passing build fail. It holds open a window the
+product must survive. Both fixes are mutation-tested against it. Restoring the key draws
+`column=1 skeleton=2`. Dropping the held row draws `column=0`.
+
+
+### The hold was too wide: a press is not a re-rank (2026-09-19)
+
+**Review caught this before it merged.** The fix above holds `selectedRow` across the window
+where a shelf's rows are still fetching, so the copies column never gets torn down. It held
+across EVERY shelf change. That is wider than the case it was built for.
+
+A fresh search answer can move the walk to another drawer on its own (D132), with no press
+behind it. That is the one case the hold exists for. A PRESS to a different drawer, or a
+walk-to a specific copy elsewhere, produces the exact same shape. `shelf` changes, and `rows`
+still answers for the box before it. The operator asked for a DIFFERENT card on purpose.
+Holding then drew box 2's card under a `Box 7` header, with `CardOps` live against it. The
+list said "Nothing in box 7 yet" — false, the box held three cards. An operator could act on
+the wrong box's card.
+
+**Proved live.** Box 2 to box 7, `/inventory/7` delayed 1500ms. The header said Box 7. The
+list claimed the box was empty. The detail column kept drawing box 2's Thievul.
+
+**`shelfSource` says WHY `shelf` last moved**, a ref beside `shelfAnswered`. A press
+(`selectShelf`) and a walk-to (both `setShelf` calls in the jump effect) mark it `'manual'`
+before they move the shelf. The one effect that re-ranks the walk under a fresh search
+answer marks it `'search'`, and only there. `selectedRow`'s hold now reads this. It stands
+on the old row only when the move was a search re-rank. A press or a walk-to falls straight
+to `null`. That is the behaviour from before the first fix existed. The panel blanks rather
+than lying about whose card it shows.
+
+**The same false claim lived in two more places, both fixed the same way.** The walk list's
+own "Nothing in box N yet" and the detail column's matching empty state both read
+`visible.length === 0` with no regard for WHY it was zero. Both are now also gated on
+`awaitingRows` — the shelf's own rows have not landed. This holds regardless of the move's
+source, because an honest "nothing here" claim needs the shelf to have actually answered,
+not merely to have gone stale.
+
+**Guarded by a one-shot in-page snapshot, not a retrying `expect`.** A `toHaveCount`
+assertion polls until it is true or times out. A false claim that clears itself the moment
+the delayed `GET /inventory/7` lands would let the assertion settle AFTER the fact. That
+proves the DOM healed. It never proves the false state was drawn at all — the identical
+trap D118's frame-watch above exists to avoid.
+
+`inventory.spec.ts`'s `a press to another drawer never draws its predecessor's card while
+the fetch is in flight` takes one `page.evaluate`. It is called right after the click, before
+anything awaits the network. It reads the box-cell's `aria-current` and `.browse-card`'s
+count. It also reads box 2's photo alt text, the false-claim sentence in both
+capitalisations, and `.browse-empty`'s count. All five come off that single snapshot.
+
+**Mutation-tested.** Reverting the `shelfSource` gate draws `.browse-card` count 1: box 2's
+card, under the Box 7 header. Reverting either empty-state gate draws the false claim `true`.

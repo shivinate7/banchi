@@ -1878,7 +1878,7 @@ COMPONENTS = [
                         "the tree was tested.",
                 # D136 is the gate this composes with, D18 is why it writes nothing, D16 is
                 # why the list has a reader before it has a filter.
-                "governed_by": ["D16", "D18", "D136", "D141"],
+                "governed_by": ["D16", "D18", "D136", "D141", "D215"],
                 "note": "THE LIST IS DERIVED AND HAS A READER: `make docs-audit`'s `browser "
                         "scope` row reconciles SCOPE against Playwright's config, Vite's "
                         "config, every code string in app/tests and app/src naming a tracked "
@@ -2709,7 +2709,8 @@ COMPONENTS = [
                                 "D113", "D119", "D122", "D127", "D132", "D134", "D135", "D136",
                                 "D138", "D140", "D141", "D142", "D143", "D144", "D149", "D155",
                                 "D159", "D160", "D161", "D173", "D174", "D178", "D181", "D182",
-                                "D185", "D191", "D192", "D196", "D210", "D213"],
+                                "D185", "D191", "D192", "D196", "D210", "D213",
+                                "D215"],
             },
             "claim-ids.py": {
                 "does": "allocate the numbers this branch's SLUG ids will take, and "
@@ -3434,7 +3435,8 @@ COMPONENTS = [
                 "governed_by": ["D7", "D16", "D17", "D18", "D26", "D42", "D43", "D44", "D47", "D48", "D53",
                                 "D54", "D58", "D60", "D65", "D68", "D74", "D76", "D80", "D82", "D83", "D86", "D88",
                                 "D89", "D92", "D111", "D122", "D127", "D129", "D133", "D138", "D139", "D140",
-                                "D141", "D149", "D158", "D160", "D171", "D172", "D173", "D176", "D189"],
+                                "D141", "D149", "D158", "D160", "D171", "D172", "D173", "D176", "D189",
+                                "D215"],
                 "note": "IT DECLARES THE SUITE AND DELIBERATELY DOES NOT DRIVE IT, which is "
                         "the whole shape. A registry that drove `make check` could not "
                         "disagree with the recipe — and could silently stop running a check, "
@@ -5141,7 +5143,11 @@ COMPONENTS = [
             # D90 is main's order-driven mode, whose two props this file no longer carries; the
             # citation stays so a session reading main's history knows they were removed on
             # purpose rather than lost.
-            "governed_by": ["D6", "D8", "D9", "D10", "D16", "D19", "D20", "D21", "D22", "D23", "D24", "D26", "D27", "D30", "D31", "D33", "D35", "D38", "D39", "D41", "D45", "D46", "D49", "D52", "D58", "D65", "D67", "D68", "D89", "D90", "D92", "D118", "D125", "D132", "D119", "D172", "D181", "D192", "D213"]},
+            "governed_by": ["D6", "D8", "D9", "D10", "D16", "D19", "D20", "D21", "D22", "D23",
+                            "D24", "D26", "D27", "D30", "D31", "D33", "D35", "D38", "D39", "D41",
+                            "D45", "D46", "D49", "D52", "D58", "D65", "D67", "D68", "D89", "D90",
+                            "D92", "D94", "D99", "D118", "D119", "D125", "D132", "D172", "D181",
+                            "D192", "D213"]},
             "src/BoxBrowse.css": {"does": "its layout, and why no accent appears anywhere in it. Its list keeps an "
                                   "INSET focus ring and says so — it clips its own overflow, which is the "
                                   "case base.css's standing ring cannot serve. D38's band lives here: the "

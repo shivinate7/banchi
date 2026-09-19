@@ -252,6 +252,8 @@ jobs:
     runs-on: ubuntu-latest
     outputs:
       run: ${{ steps.scope.outputs.run }}
+      specs: ${{ steps.specs.outputs.specs }}
+      partial: ${{ steps.specs.outputs.partial }}
     steps:
       - uses: actions/checkout@v4
         with:
@@ -261,17 +263,31 @@ jobs:
         id: scope
         run: python3 scripts/browser-scope.py classify
 
+      # THE SECOND LEVER (D-browser-spec-allow-list), asked regardless of the RUN/SKIP
+      # answer above so the mechanism is exercised on every run — `design-check`'s own `if:`
+      # is what actually skips the matrix. Never a typed list: `scripts/browser-scope.py`
+      # derives which `app/tests/*.spec.ts` files the change can reach and fails open, in
+      # every direction, to every spec.
+      - name: Which specs can the change reach?
+        id: specs
+        run: python3 scripts/browser-scope.py specs --base "origin/${{ github.base_ref || 'main' }}"
+
   # The browser half. Same tree, different question: what a person actually sees.
   #
-  # THREE SHARDS, ONE WORKER EACH, AND THE WORKER COUNT IS THE DELIBERATE HALF (D136). One
-  # runner ran every case on ONE worker — `ubuntu-latest` is 2 vCPU on a private repo and
-  # Playwright's default of half the cores floors to one — in 15.2 minutes, measured across
-  # 56 jobs since this job landed. `--shard=N/3` splits the CASES three ways and each shard
-  # still runs one worker: the one-in-thirteen red docs/DEBTS.md section 8 records has "the
-  # suite around it" as its only known mechanism, and more workers on one box is more suite
-  # around it. Three shards is the same ~15 runner-minutes plus a chromium install per extra
-  # shard; wall-clock is a third. `fail-fast: false` because a red shard is a claim about
-  # its own cases and the other two are still worth their verdict.
+  # SIX SHARDS, TWO WORKERS EACH — WIDENED ON THE OWNER'S WORD, 2026-09-19 ("both": raise the
+  # worker count AND build the spec allow-list). D136 SAID "the suite is sharded and never
+  # widened" on the premise that `ubuntu-latest` was 2 vCPU on a PRIVATE repo, so half-of-cores
+  # floored to one and more workers meant more of DEBT8's one-in-thirteen red. THAT PREMISE WENT
+  # FALSE ON 2026-09-11: the repository went public, and the hosted runner measured on this repo
+  # (run 35420998424) is 4 vCPU / 15 GB, not 2. A local one-worker run of the full 668-case suite
+  # takes 11.7 minutes; `--workers=2` fits the runner's real core count. The clause is amended,
+  # not repealed — D136's own file records the amendment and the reason. Proof lives at
+  # a twenty-dispatch table (at most 1 red run in 20) landing in a decision
+  # entry of its own in a later commit of the same task; this comment is not the ongoing reader. Six shards over two runners'
+  # worth of CPU is the same total runner-minutes as three ever were, spread thinner; wall-clock
+  # per shard drops further and a chromium install is paid once per shard either way.
+  # `fail-fast: false` because a red shard is a claim about its own cases and the other five are
+  # still worth their verdict.
   design-check:
     needs: [already-passed, browser-scope]
     # TWO GATES, EACH SKIPPING ONLY ON ITS OWN EXPLICIT ANSWER. `!cancelled()` replaces the
@@ -283,7 +299,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        shard: [1, 2, 3]
+        shard: [1, 2, 3, 4, 5, 6]
     steps:
       - uses: actions/checkout@v4
 
@@ -314,8 +330,13 @@ jobs:
       # serving on a fresh runner, which is exactly the state it is written for. The port comes
       # from `app/devPort.ts`, which vite.config.ts and playwright.config.ts both import so they
       # cannot disagree — on a runner this is the main-tree 5173.
+      # THE SPEC ALLOW-LIST (D-browser-spec-allow-list): `browser-scope`'s `specs` output is
+      # `all` (nothing appended, so `make design-check` runs Playwright's own `testDir`) or a
+      # space-separated list of `app/tests/*.spec.ts` paths. `make` word-splits `PW_ARGS`, so
+      # a path with a space would silently become two filters — the reason the classifier
+      # answers "every spec" rather than name one.
       - name: make design-check
-        run: make design-check PW_ARGS="--shard=${{ matrix.shard }}/3 --workers=1"
+        run: make design-check PW_ARGS="--shard=${{ matrix.shard }}/6 --workers=2 ${{ needs.browser-scope.outputs.specs != 'all' && needs.browser-scope.outputs.specs || '' }}"
 
       # WHAT A RED RUN LEAVES BEHIND, because until 2026-09-11 it left four lines. The config turns
       # `trace: retain-on-failure` on under CI, so a failing case has its DOM before and after every
@@ -339,9 +360,14 @@ jobs:
   # never the writer, and a record it left would only ever answer itself. Thirty days is the
   # window: a PR that passed longer ago than that and then merges gets the full matrix, which
   # is the conservative side of the bargain.
+  # `needs.browser-scope.outputs.partial != 'true'` is D-browser-spec-allow-list's own
+  # condition: a PARTIAL run — a narrowed spec list — never writes a pass record, because a
+  # later push to main reading that record as "this tree was fully tested" would be wrong.
+  # A full run (the ordinary case: most branches touch a shared surface or an unmapped file)
+  # still writes it exactly as before this landed.
   design-check-passed:
-    needs: design-check
-    if: github.event_name != 'push'
+    needs: [design-check, browser-scope]
+    if: github.event_name != 'push' && needs.browser-scope.outputs.partial != 'true'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
