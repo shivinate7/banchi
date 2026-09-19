@@ -755,9 +755,11 @@ const SHORTCUTS: readonly KeyGroup[] = [
     at: '/orders',
     where: 'Only while Orders is open, in the two-pane layout on a wide window.',
     rows: [
-      { keys: ['J', '↓'], does: 'Select the next order' },
-      { keys: ['K', '↑'], does: 'Select the order before it' },
-      { keys: ['U'], does: 'Undo the newest pull', when: 'on the Pull stage' },
+      { keys: ['↓'], does: 'Select the next buyer' },
+      { keys: ['↑'], does: 'Select the buyer before it' },
+      { keys: ['J'], does: 'Step to the next card in the walk' },
+      { keys: ['K'], does: 'Step to the card before it in the walk' },
+      { keys: ['U'], does: 'Undo the newest sale', when: 'on the Pull stage' },
     ],
   },
   {

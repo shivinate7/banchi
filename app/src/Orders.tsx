@@ -47,7 +47,10 @@ import {
 } from './server'
 import type { Failure } from './server'
 import { ShipStage } from './OrdersShipStage'
-import { WalkPass, type WalkPullFn, type WalkUndoFn } from './OrdersWalk'
+import { useOrderWalk, WalkList, WalkMainPane, type WalkPullFn, type WalkUndoFn } from './OrdersWalkPane'
+import { Overlay } from './InventoryOverlay'
+import './BoxBrowse.css'
+import './BoxOps.css'
 import type {
   IngestResult,
   Inventory,
@@ -1028,69 +1031,6 @@ function useMediaQuery(query: string): boolean {
   return matches
 }
 
-/* ---- the walk: every open order's copies, in the order the boxes hold them ------------------ */
-
-type WalkRow = {
-  readonly key: string
-  readonly order: OrderRow
-  readonly line: ResolvedLine
-  readonly pick: PickRow
-  readonly target: PullTarget
-}
-
-type WalkGroup = { readonly key: string; readonly title: string; readonly note: string | null; readonly rows: WalkRow[] }
-
-type Walk = { readonly groups: WalkGroup[]; readonly rows: WalkRow[] }
-
-/** Pure UI over the resolution already on the client: the picks that can be pulled, deduped on
- *  the copy (two orders offered one card keep the first), sorted box → index, pooled copies last,
- *  and grouped under the box and section a person walks to. */
-function buildWalk(open: OrderRow[], answers: Map<string, ResolvedOrder>): Walk {
-  const rows: WalkRow[] = []
-  const seen = new Set<string>()
-  for (const order of open) {
-    const answer = answers.get(order.key)
-    if (answer === undefined) continue
-    for (const line of answer.lines) {
-      for (const pick of line.picks) {
-        if (pick.held_by !== null) continue
-        const target = aimOf(line, pick)
-        if (target === null) continue
-        const key = pick.capture_id ?? `${pick.box}/${pick.index}`
-        if (seen.has(key)) continue
-        seen.add(key)
-        rows.push({ key, order, line, pick, target })
-      }
-    }
-  }
-  rows.sort((a, b) => {
-    const pooledA = a.pick.place.label === null
-    const pooledB = b.pick.place.label === null
-    if (pooledA !== pooledB) return pooledA ? 1 : -1
-    return a.pick.box - b.pick.box || a.pick.index - b.pick.index
-  })
-  const groups: WalkGroup[] = []
-  for (const row of rows) {
-    const place = row.pick.place
-    const pooled = place.label === null
-    const key = pooled ? `pooled/${place.game ?? ''}` : `${place.box}/${place.section ?? 0}`
-    let group = groups[groups.length - 1]
-    if (group === undefined || group.key !== key) {
-      group = {
-        key,
-        title: pooled ? (text(place.game_display) ? place.game_display : 'Pooled') : `Box ${place.box}`,
-        note: pooled
-          ? 'Pooled · no position'
-          : [place.box_name, place.section === null ? null : `Section ${place.section}`].filter(text).join(' · ') || null,
-        rows: [],
-      }
-      groups.push(group)
-    }
-    group.rows.push(row)
-  }
-  return { groups, rows }
-}
-
 /* ---- the copy map: where a card's copies are, ranked by density ---------------------------- */
 
 /* THE MAP RANKS, IT NEVER PICKS (the owner's ruling, 2026-09-03).
@@ -1539,11 +1479,6 @@ export function OrdersHub({ stage }: { readonly stage: Stage }) {
       setDropped([])
       setReceipt(null)
       setContinuingInS(null)
-      /* AND THE WALK'S PASS ENDS HERE. Orders arriving off TCGplayer are a new sitting, and it is
-         the only boundary the operator actually draws — a stage switch is not one, and neither is
-         a toggle (see the mode control). Without this the frozen set would outlive the work it
-         describes for as long as the tab is open. */
-      setHub({ walkKeys: null })
       /* Read the previous check BEFORE this one is written, and hold it: it is what "new since"
          is measured against. */
       const previous = readLastCheck()
@@ -1842,7 +1777,7 @@ export function OrdersHub({ stage }: { readonly stage: Stage }) {
         toast({
           kind: 'receipt',
           icon: 'hand',
-          title: `Pulled ${name}`,
+          title: `Marked sold: ${name}`,
           body: `from ${place} · order ${order.number}`,
           ttlMs: UNDO_WINDOW_MS,
           action: { label: 'Undo', onPress: () => void undoFromToast(target, place, name) },
@@ -1890,7 +1825,7 @@ export function OrdersHub({ stage }: { readonly stage: Stage }) {
       toast({
         kind: 'receipt',
         icon: 'hand',
-        title: `Pulled ${name}`,
+        title: `Marked sold: ${name}`,
         body: buyer ? `from ${resolvedPlace} · for ${buyer}` : `from ${resolvedPlace}`,
         ttlMs: UNDO_WINDOW_MS,
         action: { label: 'Undo', onPress: () => void undoFromToast(target, resolvedPlace, name) },
@@ -2146,7 +2081,6 @@ export function OrdersHub({ stage }: { readonly stage: Stage }) {
   const orders = payload?.orders ?? []
   const open = orders.filter((one) => one.open)
   const done = orders.filter((one) => !one.open)
-  const arriving = hub.arriving === true
   const counts = payload?.resolution.counts ?? null
   const populated = payload !== null && orders.length > 0
 
@@ -2291,13 +2225,6 @@ export function OrdersHub({ stage }: { readonly stage: Stage }) {
         actions={
           stage === 'pull' && populated ? (
             <>
-              <Button
-                icon={arriving ? 'x' : 'plus'}
-                aria-expanded={arriving}
-                onClick={() => setHub((was) => ({ arriving: was.arriving !== true }))}
-              >
-                {arriving ? 'Hide' : 'Add orders'}
-              </Button>
               {/* The hand-off the sidebar makes, made here too: the Fulfiller's page, in its own tab. */}
               <a className="bn-btn orders-handoff" href="#/fulfillment" target="_blank" rel="noopener">
                 <Icon name="hand" size={16} />
@@ -2324,7 +2251,6 @@ export function OrdersHub({ stage }: { readonly stage: Stage }) {
           filter={hub.filter}
           selected={hub.selected}
           wide={wide}
-          arriving={arriving}
           well={wellOf(true)}
           emptyWell={wellOf(false)}
           /* The empty state draws its own primary Fetch, so it needs the narrowing beside it —
@@ -2527,7 +2453,6 @@ function PullStage({
   filter,
   selected,
   wide,
-  arriving,
   well,
   emptyWell,
   receipt,
@@ -2555,7 +2480,6 @@ function PullStage({
   readonly filter: PullFilter
   readonly selected: string | null
   readonly wide: boolean
-  readonly arriving: boolean
   readonly well: ReactNode
   readonly emptyWell: ReactNode
   /** The last fetch's receipt, or null before one has been pressed. */
@@ -2807,6 +2731,18 @@ function PullStage({
    *  Local state rather than the hub: it must not outlive the tab the way `hub.walkKeys` (the
    *  frozen PASS) must not either. */
   const [walkTicked, setWalkTicked] = useState<ReadonlySet<string>>(new Set())
+
+  /** THE ORDER PANEL'S OWN `Manage` SHEET (§13) — the one place left for the fetch/paste well,
+   *  the fetch receipt, the status picker and both stand-down prompts once the mode strip that
+   *  used to hold them at the top of the screen is gone. `BoxOps.tsx`'s own Manage sheet is the
+   *  precedent: box-level operations reached from the box panel because the skeleton has no
+   *  other slot for them; this is the same move for the ledger. */
+  const [manageOpen, setManageOpen] = useState(false)
+
+  /** Hide sold (D132's own control, restated here): transient, unlike `#/inventory`'s own
+   *  device-remembered chip — a walk's own sold copies are this sitting's business, not a
+   *  standing preference `banchi.inventory.hide-sold` was never meant to answer for. */
+  const [hideSold, setHideSold] = useState(false)
   const toggleWalkTick = (key: string) =>
     setWalkTicked((prev) => {
       const next = new Set(prev)
@@ -2866,15 +2802,6 @@ function PullStage({
     })
   }, [tickableKeys])
 
-  /** The ORDERS the ticked buyers cover — what Start freezes into `hub.walkKeys`, and what the
-   *  button counts. Orders and not buyers, because a pass is over orders (§8) and a buyer may
-   *  own more than one. */
-  const tickedOrderKeys = useMemo(() => {
-    const out = new Set<string>()
-    for (const key of walkTicked) for (const order of walkableOf.get(key) ?? []) out.add(order.key)
-    return out
-  }, [walkTicked, walkableOf])
-
   const statusOptions = useMemo(() => statusVocabulary(payload?.orders ?? []), [payload])
 
   /** A control narrowed the shown set: retake immediately (D181 — "a changed filter is an
@@ -2919,31 +2846,31 @@ function PullStage({
     fetchMissingPicks(keys)
   }, [selectedGroup, fetchMissingPicks])
 
-  /* `docs/specs/order-walk-plan.md` §8 REPLACES THE WALK'S OWN FETCH. `WalkPass` calls
-   *  `POST /orders/walk-plan` itself once a pass starts, which already answers with every
-   *  copy's photograph key, position and neighbours — there is nothing left for
-   *  `fetchOrderPicks` to add here, and the old per-order-picks fetch this effect ran is gone
-   *  with it. */
-
-  /* LEAVING THE WALK ENDS THE PASS (§8, the owner's ruling, 2026-09-17): "tap another screen,
-   *  close the tab, come back an hour later — that walk is over." THE MODE HALF OF THAT IS
-   *  GONE BECAUSE THE MODE IS GONE (§12): there is no longer a `By buyer` tab to tap, so the
-   *  two ways out are `End walk` in the walk's own header and leaving `#/orders`, which is
-   *  what this unmount cleanup covers. Nothing else ends a pass — not a filter, not a sort,
-   *  not a tick, not clicking a buyer (§12, the owner's ruling 2026-09-19). The ticks are NOT
-   *  cleared by either: §8 already rules it — "leaving the walk ends the pass … The buyer list
-   *  keeps the ticks." */
-  useEffect(() => {
-    return () => {
-      if (hubState().walkKeys !== null) setHub({ walkKeys: null })
-    }
-  }, [])
+  /* `docs/specs/order-walk-plan.md` §13 REPLACES THE WALK'S OWN FETCH AND ITS FREEZE. There is
+   *  no more "Start" and no more frozen pass (§8/§12, superseded): selecting an order starts
+   *  its walk at once, the same as clicking a box opens it — `useOrderWalk` below re-fetches
+   *  `POST /orders/walk-plan` whenever the WALKED SET changes, and that is the whole of it.
+   *  Nothing "ends" a walk any more than clicking away from a box "ends" looking at it; the
+   *  hook's own state resets itself the moment the set changes, and unmounting `#/orders`
+   *  unmounts it same as everything else on the screen. */
 
   const ordersByKey = useMemo(() => {
     const out = new Map<string, OrderRow>()
     for (const order of payload?.orders ?? []) out.set(order.key, order)
     return out
   }, [payload])
+
+  /** THE WALKED SET (§13): the selected order's own walkable orders, plus every ticked buyer's.
+   *  Selecting a buyer starts a walk over their own orders at once — a buyer with nothing
+   *  walkable contributes nothing, so viewing a done buyer alone never opens an empty walk. */
+  const walkedKeys = useMemo(() => {
+    const out = new Set<string>()
+    if (selectedGroup !== null) for (const order of walkableOf.get(selectedGroup.key) ?? []) out.add(order.key)
+    for (const key of walkTicked) for (const order of walkableOf.get(key) ?? []) out.add(order.key)
+    return out
+  }, [selectedGroup, walkableOf, walkTicked])
+
+  const walk = useOrderWalk({ walkedKeys, ordersByKey, onPull: onWalkPull, onUndo: onWalkUndo })
 
   /* THE HASH NAMES A BUYER, OR — FOR AN OLD LINK — AN ORDER RESOLVED TO ITS BUYER, ONCE THE
      LEDGER HAS ACTUALLY ANSWERED; from then on the store leads and the hash follows. `?buyer=`
@@ -2977,15 +2904,20 @@ function PullStage({
     if (selectedKey !== null) mirrorBuyerParam(selectedKey)
   }, [selectedKey])
 
-  /* j / k and the arrows step the list of BUYERS where there is a list beside the detail. Never
-     with a modifier (Cmd-arrow is the shell's, D51) and never out of a field. */
+  /* THE ARROWS STEP THE LIST OF BUYERS where there is a list beside the detail. Never with a
+   *  modifier (Cmd-arrow is the shell's, D51) and never out of a field.
+   *
+   *  `J`/`K` ARE THE WALK'S OWN KEYS NOW (§13, "Stepping"), not the buyer list's — a walk is
+   *  always showing beside the buyer list once one is selected, and the two lists cannot both
+   *  answer to the same bare letters. `↑`/`↓` keep doing what `J`/`K` used to for buyers; the
+   *  reference sheet (`App.tsx`'s `SHORTCUTS`) says so. */
   useEffect(() => {
     if (!wide || shownGroups.length === 0) return
     const onKey = (event: KeyboardEvent) => {
       if (event.metaKey || event.ctrlKey || event.altKey) return
       const target = event.target as HTMLElement | null
       if (target !== null && (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA' || target.tagName === 'SELECT' || target.isContentEditable)) return
-      const step = event.key === 'j' || event.key === 'ArrowDown' ? 1 : event.key === 'k' || event.key === 'ArrowUp' ? -1 : 0
+      const step = event.key === 'ArrowDown' ? 1 : event.key === 'ArrowUp' ? -1 : 0
       if (step === 0) return
       const at = shownGroups.findIndex((one) => one.key === selectedKey)
       const next = shownGroups[Math.min(shownGroups.length - 1, Math.max(0, (at === -1 ? 0 : at) + step))]
@@ -2996,6 +2928,22 @@ function PullStage({
     window.addEventListener('keydown', onKey)
     return () => window.removeEventListener('keydown', onKey)
   }, [wide, shownGroups, selectedKey])
+
+  /* `J`/`K` STEP THE WALK LIST (§13). Same guard rules as the buyer list's own arrows. */
+  useEffect(() => {
+    if (walk.rows.length === 0) return
+    const onKey = (event: KeyboardEvent) => {
+      if (event.metaKey || event.ctrlKey || event.altKey) return
+      const target = event.target as HTMLElement | null
+      if (target !== null && (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA' || target.tagName === 'SELECT' || target.isContentEditable)) return
+      const step = event.key === 'j' || event.key === 'J' ? 1 : event.key === 'k' || event.key === 'K' ? -1 : 0
+      if (step === 0) return
+      event.preventDefault()
+      walk.step(step)
+    }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  }, [walk])
 
   const setFilter = (next: PullFilter) => setHub({ filter: next })
   const select = (key: string) => setHub({ selected: key })
@@ -3132,26 +3080,6 @@ function PullStage({
 
   /* ----------------------------------------------------------------- the walk, on one screen */
 
-  /** A PASS IS RUNNING. The single condition §12 turns on: it decides what the main column
-   *  draws and whether Start is offered, and nothing else reads a second copy of it. */
-  const passRunning = hub.walkKeys !== null
-
-  const walkView =
-    hub.walkKeys === null ? null : (
-      <WalkPass
-        walkKeys={hub.walkKeys}
-        ordersByKey={ordersByKey}
-        busy={busy}
-        onPull={onWalkPull}
-        onUndo={onWalkUndo}
-        /* THE ONLY WAY OUT SHORT OF LEAVING THE SCREEN (§12, the owner's ruling 2026-09-19).
-           The ticks are deliberately untouched: §8 — "leaving the walk ends the pass … The
-           buyer list keeps the ticks." They were never read again once the pass began, so
-           returning to the list finds the selection exactly as it was left. */
-        onEnd={() => setHub({ walkKeys: null })}
-      />
-    )
-
   /** THE TICK, BESIDE THE ROW AND NEVER INSIDE IT. `BuyerRow` is a `<button>`; a checkbox
    *  nested in one is invalid, and a screen reader would have two controls where the markup
    *  claims one. The `<li>` is the flex row and carries both.
@@ -3199,180 +3127,154 @@ function PullStage({
     </div>
   )
 
-  /** START, AND THE SLOT IT LIVES IN.
-   *
-   *  AT THE HEAD OF THE COLUMN, NOT ITS FOOT. The foot is where this was built first, on the
-   *  reasoning that `.orders-index-pane` is sticky and so its foot is always in view. MEASURED
-   *  OVER 250 BUYERS AND THAT IS FALSE BEFORE THE FIRST SCROLL: the two backlog panels push the
-   *  pane's top to y=613 on a 900px viewport, the pane is then capped at `100vh` of height, and
-   *  its foot sits at y=1449. `Tick all` is at the head, so the operator could tick every buyer
-   *  on the screen and get no answer at all about what the press would cover. At the head it is
-   *  in view at every scroll position, before the pane sticks and after.
-   *
-   *  OVER AN EMPTY SELECTION IT IS NOT OFFERED AT ALL — absent, not disabled (§12 answer 3).
-   *  It is also not offered while a pass runs, so a stray press cannot throw away the plan the
-   *  hand is working: `End walk` first, then Start.
-   *
-   *  THE SLOT IS ALWAYS RENDERED AND RESERVES ITS OWN HEIGHT (D118), the same answer
-   *  `.orders-resort-slot` above already gives for the same shape of problem — a control that
-   *  appears on a press is a row that did not exist a frame ago, and everything sharing its
-   *  column moves by its height at the moment the operator's hand is on that column. */
-  const startSlot = (
-    <div className="orders-start-slot">
-      {passRunning || tickedOrderKeys.size === 0 ? null : (
-        <Button
-          variant="primary"
-          size="lg"
-          icon="box"
-          className="orders-start"
-          onClick={() => setHub({ walkKeys: new Set(tickedOrderKeys) })}
+  /** THE RAIL'S SEARCH/STATUS/SORT SLOT (§13, point 1) — exactly section 12's own controls,
+   *  restated as a fragment so both the wide rail and the phone layout below draw the same
+   *  markup rather than two hand-kept copies. */
+  const searchSlot = (
+    <div className="orders-toolbar orders-rail-toolbar">
+      {chips}
+      <div className="orders-view-controls" role="group" aria-label="Sort and narrow the buyer list">
+        <div className="bn-input-wrap orders-search">
+          <Icon name="search" size={16} />
+          <input
+            type="search"
+            className="bn-input orders-search-input"
+            aria-label="Search buyers by name or order number"
+            placeholder="Search buyers or order #"
+            autoComplete="off"
+            value={query}
+            onChange={(event) => onQueryChange(event.target.value)}
+          />
+          {query === '' ? null : (
+            <button type="button" className="orders-search-clear" aria-label="Clear search" onClick={() => onQueryChange('')}>
+              <Icon name="x" size={12} />
+            </button>
+          )}
+        </div>
+        <select
+          className="bn-select orders-status-select"
+          aria-label="Filter by status"
+          value={view.status ?? ''}
+          onChange={(event) => onStatusChange(event.target.value === '' ? null : event.target.value)}
         >
-          Walk {tickedOrderKeys.size} {plural(tickedOrderKeys.size, 'order', 'orders')}
-        </Button>
-      )}
+          <option value="">All</option>
+          {statusOptions.map((option) => (
+            <option key={option.status} value={option.status}>
+              {option.status} ({option.count})
+            </option>
+          ))}
+        </select>
+        <Segmented<OrderSort>
+          className="orders-sort"
+          value={view.sort}
+          label="Sort"
+          options={[
+            { value: 'newest', label: 'Newest' },
+            { value: 'oldest', label: 'Oldest' },
+          ]}
+          onChange={onSortChange}
+        />
+        <label className="orders-hide-unknown">
+          <input type="checkbox" checked={view.hideUnknown} onChange={(event) => onHideUnknownChange(event.target.checked)} />
+          Hide unknown SKUs
+        </label>
+        <span className="orders-resort-slot">
+          {staleSentence === null ? null : (
+            <Chip icon="refresh" className="orders-resort" title="Sorted before this changed." onClick={onReSort}>
+              {staleSentence} · re-sort
+            </Chip>
+          )}
+        </span>
+      </div>
     </div>
   )
 
-  const detailOf = (group: BuyerGroup, variant: 'panel' | 'inline') => (
-    <BuyerDetail
-      key={group.key}
-      group={group}
-      answers={answers}
-      lanesByOrder={lanesByOrder}
-      store={store}
-      claims={claims}
-      busy={busy}
-      onPull={onPull}
-      onFill={onFill}
-      onDeclareKind={onDeclareKind}
-      onCloseLine={onCloseLine}
-      onReread={onReread}
-      variant={variant}
-    />
+  /** THE ORDERS LIST, EXACTLY BUYERROW'S SHAPE — `.browse-boxes.bn-panel`, where inventory
+   *  lists its boxes (§13, point 2). */
+  const ordersList =
+    shownGroups.length === 0 && earlierGroups.length === 0 ? (
+      nothingShown
+    ) : (
+      <>
+        <ol className="orders-index bn-stagger">
+          {shownGroups.map((group, at) => (
+            <li key={group.key} className="orders-index-item" style={{ '--i': at } as CSSProperties}>
+              {tickFor(group)}
+              <BuyerRow group={group} answers={answers} selected={group.key === selectedKey} onSelect={() => select(group.key)} />
+            </li>
+          ))}
+        </ol>
+        {earlierGroups.length === 0 ? null : (
+          <details className="orders-earlier">
+            <summary>
+              Earlier · {earlierGroups.length} {plural(earlierGroups.length, 'buyer', 'buyers')}
+            </summary>
+            <ol className="orders-index">
+              {earlierGroups.map((group) => (
+                <li key={group.key} className="orders-index-item">
+                  {tickFor(group)}
+                  <BuyerRow group={group} answers={answers} selected={group.key === selectedKey} onSelect={() => select(group.key)} />
+                </li>
+              ))}
+            </ol>
+          </details>
+        )}
+        <p className="orders-index-hint">
+          <Kbd>↑</Kbd>
+          <Kbd>↓</Kbd> step through the buyers
+        </p>
+      </>
+    )
+
+  /** WHERE INVENTORY SHOWS THE BOX PANEL AND ITS SECTION LIST (§13, points 3-5): the selected
+   *  order's panel (mock A), the strip, and the walk. `.browse-walk.bn-panel`. */
+  const railWalkPanel = (
+    <div className="browse-walk bn-panel">
+      <div className="browse-box-head">
+        {selectedGroup === null ? (
+          <div className="browse-shelfnote">
+            <span className="boxops-identity-num">No buyer selected</span>
+            <p>Choose a buyer on the left.</p>
+          </div>
+        ) : (
+          <OrderPanel group={selectedGroup} answers={answers} onManage={() => setManageOpen(true)} />
+        )}
+      </div>
+
+      <div className="browse-status">
+        <span className="browse-status-text">
+          {walk.sections.length} {plural(walk.sections.length, 'section', 'sections')}
+        </span>
+        <span className="bn-spacer" />
+        <Chip pressed={hideSold} className="browse-hidesold" onClick={() => setHideSold((held) => !held)}>
+          Hide sold
+        </Chip>
+      </div>
+
+      <WalkList walk={walk} hideSold={hideSold} />
+
+      {walk.rows.length === 0 ? null : (
+        <p className="browse-listkeys">
+          <span>
+            <Kbd>J</Kbd>
+            <Kbd>K</Kbd> card
+          </span>
+        </p>
+      )}
+    </div>
   )
 
   return (
     <div className="orders-stage">
       {failure === null ? null : <Notice tone="danger" title={failure.message} code={failure.code} />}
 
-      {arriving ? (
-        <section className="bn-panel orders-arrive" aria-label="Add orders">
-          <div className="bn-panel-head">
-            <span className="bn-section-title">
-              <Icon name="plus" size={16} /> Add orders
-            </span>
-            <span className="bn-muted orders-arrive-note">paste, or fetch</span>
-          </div>
-          <div className="bn-panel-body">{well}</div>
-        </section>
-      ) : null}
-
-      {receipt}
-
-      {/* D113. IT LEADS, ABOVE THE TOOLBAR AND THE LIST, because what it is about is the list
-          being wrong — an already-shipped order sitting open takes copies from one that still
-          needs picking, so a prompt tucked below the rows would be advice arriving after the
-          walk it should have changed. It draws nothing when there is nothing to propose. */}
-      <BacklogPrompt open={open} busy={busy} onStandDown={onStandDown} />
-
-      {/* D203. Below the status-driven prompt above and still ahead of
-          the toolbar: this is the OTHER backlog, the one `is_terminal_status` cannot see —
-          `Completed - Paid` orders TCGplayer settled two years before this screen existed. */}
-      <ReconcileBacklogPanel orders={open} busy={busy} onPress={onReconcileBacklog} />
-
-      {/* THE FILTERS ARE ALWAYS ON SCREEN (§12 answer 1). They used to be wrapped in
-          `mode === 'walk' ? null : …`, which hid every one of them the moment a walk began —
-          and the owner's ruling makes them the SELECTING tool, so that branch was not
-          incidental cleanup but the line that stopped the operator saying who a pass is for.
-          There is one list now, so the list's own controls are the walk's controls. */}
-      <div className="orders-toolbar">
-        {chips}
-        {/* STATUS / SORT / HIDE-UNKNOWN — the owner's ruling read as an ORDERING, never a
-            hiding: Ready to Ship leads by default, newest first within a group, everything
-            else stays reachable behind the status select rather than dropped (D103's shape).
-            They compose with the reason chips above; sort applies last (`orderView.ts`). */}
-        <div className="orders-view-controls" role="group" aria-label="Sort and narrow the buyer list">
-          {/* THE BUYER SEARCH. Composes as an AND with everything else in this group and
-              with the reason chips above (`filteredGroups`/`earlierGroups`) — never a
-              second gate. Folded the same way `orderBuyers.ts:buyerKeyOf` folds a name, so
-              a name this screen already treats as one buyer is found by any spelling of it.
-              Transient: cleared on navigation, never remembered (see the state above). */}
-          <div className="bn-input-wrap orders-search">
-            <Icon name="search" size={16} />
-            <input
-              type="search"
-              className="bn-input orders-search-input"
-              aria-label="Search buyers by name or order number"
-              placeholder="Search buyers or order #"
-              autoComplete="off"
-              value={query}
-              onChange={(event) => onQueryChange(event.target.value)}
-            />
-            {query === '' ? null : (
-              <button
-                type="button"
-                className="orders-search-clear"
-                aria-label="Clear search"
-                onClick={() => onQueryChange('')}
-              >
-                <Icon name="x" size={12} />
-              </button>
-            )}
-          </div>
-          <select
-            className="bn-select orders-status-select"
-            aria-label="Filter by status"
-            value={view.status ?? ''}
-            onChange={(event) => onStatusChange(event.target.value === '' ? null : event.target.value)}
-          >
-            <option value="">All</option>
-            {statusOptions.map((option) => (
-              <option key={option.status} value={option.status}>
-                {option.status} ({option.count})
-              </option>
-            ))}
-          </select>
-          <Segmented<OrderSort>
-            className="orders-sort"
-            value={view.sort}
-            label="Sort"
-            options={[
-              { value: 'newest', label: 'Newest' },
-              { value: 'oldest', label: 'Oldest' },
-            ]}
-            onChange={onSortChange}
-          />
-          <label className="orders-hide-unknown">
-            <input
-              type="checkbox"
-              checked={view.hideUnknown}
-              onChange={(event) => onHideUnknownChange(event.target.checked)}
-            />
-            Hide unknown SKUs
-          </label>
-          {/* THE SLOT IS ALWAYS RENDERED (D118) — a control that appears on a press is a
-              row of this strip that did not exist a frame ago, and the list beneath it
-              would move by its height at the moment sort changed underneath the operator's
-              hand. */}
-          <span className="orders-resort-slot">
-            {staleSentence === null ? null : (
-              <Chip icon="refresh" className="orders-resort" title="Sorted before this changed." onClick={onReSort}>
-                {staleSentence} · re-sort
-              </Chip>
-            )}
-          </span>
-        </div>
-      </div>
-
       {/* THE DEGRADED MAP, SAID ONCE. Every line is narrower when the card map did not answer, so
           the sentence belongs here and not repeated down eighty lines. Nothing else is affected:
-          the ledger answered, the copies it offered are drawn, and every Pull still works. */}
+          the ledger answered, the copies it offered are drawn, and every Mark sold still works. */}
       {storeFailed ? (
         <p className="orders-store-note" role="status">
           <Icon name="info" size={14} />
-          <span>
-            Showing only the copies this order was offered — not every copy in the store.
-          </span>
+          <span>Showing only the copies this order was offered — not every copy in the store.</span>
           <button type="button" className="orders-fold-btn" onClick={onRereadStore}>
             <Icon name="refresh" size={13} />
             Read it again
@@ -3380,126 +3282,84 @@ function PullStage({
         </p>
       ) : null}
 
-      {/* ONE SCREEN (§12): the list the operator is already reading IS the selection, and the
-          walk fills the column beside it. `hub.walkKeys !== null` is THE condition — one
-          legible test in one place rather than a behaviour smeared over five handlers, which
-          is what the owner asked for when they ruled on what a press does mid-pass. */}
+      {/* `#/orders` TAKES INVENTORY'S EXACT SKELETON (§13): `.browse-body`'s rail and pane, the
+          same widths and breakpoints `BoxBrowse.css` already gives `#/inventory`. The rail is
+          orders where inventory has boxes; the pane is the selected card's `CardLocations`,
+          reused rather than rebuilt (`OrdersWalkPane.tsx`). */}
       {wide ? (
-        <div className="orders-layout">
-          <nav className="orders-index-pane" aria-label="Buyers">
-            {selectBar}
-            {startSlot}
-            {shownGroups.length === 0 && earlierGroups.length === 0 ? (
-              nothingShown
-            ) : (
-              <>
-                <ol className="orders-index bn-stagger">
-                  {shownGroups.map((group, at) => (
-                    <li key={group.key} className="orders-index-item" style={{ '--i': at } as CSSProperties}>
-                      {tickFor(group)}
-                      <BuyerRow
-                        group={group}
-                        answers={answers}
-                        selected={group.key === selectedKey}
-                        onSelect={() => select(group.key)}
-                      />
-                    </li>
-                  ))}
-                </ol>
-                {earlierGroups.length === 0 ? null : (
-                  <details className="orders-earlier">
-                    <summary>
-                      Earlier · {earlierGroups.length} {plural(earlierGroups.length, 'buyer', 'buyers')}
-                    </summary>
-                    <ol className="orders-index">
-                      {earlierGroups.map((group) => (
-                        <li key={group.key} className="orders-index-item">
-                          {tickFor(group)}
-                          <BuyerRow
-                            group={group}
-                            answers={answers}
-                            selected={group.key === selectedKey}
-                            onSelect={() => select(group.key)}
-                          />
-                        </li>
-                      ))}
-                    </ol>
-                  </details>
-                )}
-                <p className="orders-index-hint">
-                  <Kbd>J</Kbd>
-                  <Kbd>K</Kbd> step through the buyers
-                </p>
-              </>
-            )}
-          </nav>
-          <div className="orders-detail">
-            {passRunning ? walkView : selectedGroup === null ? null : detailOf(selectedGroup, 'panel')}
-            {passRunning ? null : why}
+        <div className="browse-body">
+          <div className="browse-map">
+            {searchSlot}
+            <div className="browse-boxes bn-panel" role="group" aria-label="Choose an order to walk">
+              {selectBar}
+              {ordersList}
+            </div>
+            {railWalkPanel}
+          </div>
+          <div className="browse-side">
+            <WalkMainPane walk={walk} />
+            {why}
           </div>
         </div>
       ) : (
         <>
-          {/* THE WALK LEADS AT NARROW WIDTH. The operator is at the boxes with the phone in one
-              hand, so the stop is what the screen is for and the list stays reachable by
-              scrolling. `End walk` rides in the walk's own head, which is the first thing
-              drawn — no scrolling past the whole walk to get out of it. */}
-          {passRunning ? walkView : null}
-          {selectBar}
-          {startSlot}
-          {shownGroups.length === 0 && earlierGroups.length === 0 ? (
-            nothingShown
-          ) : (
-            <>
-              <ol className="orders-list">
-                {shownGroups.map((group, at) => {
-                  const opened = group.key === selectedKey
-                  return (
-                    <li
-                      key={group.key}
-                      className={`bn-panel orders-acc${opened ? ' orders-acc-open' : ''}`}
-                      style={{ '--delay': `${Math.min(at, 8) * 40}ms` } as CSSProperties}
-                    >
-                      <div className="orders-acc-head">
-                        {tickFor(group)}
-                        <BuyerRow
-                          group={group}
-                          answers={answers}
-                          selected={opened}
-                          expanded
-                          onSelect={() => select(group.key)}
-                        />
-                      </div>
-                      {opened ? <div className="orders-acc-body">{detailOf(group, 'inline')}</div> : null}
-                    </li>
-                  )
-                })}
-              </ol>
-              {earlierGroups.length === 0 ? null : (
-                <details className="orders-earlier">
-                  <summary>
-                    Earlier · {earlierGroups.length} {plural(earlierGroups.length, 'buyer', 'buyers')}
-                  </summary>
-                  <ol className="orders-list">
-                    {earlierGroups.map((group) => {
-                      const opened = group.key === selectedKey
-                      return (
-                        <li key={group.key} className={`bn-panel orders-acc${opened ? ' orders-acc-open' : ''}`}>
-                          <div className="orders-acc-head">
-                            {tickFor(group)}
-                            <BuyerRow group={group} answers={answers} selected={opened} expanded onSelect={() => select(group.key)} />
-                          </div>
-                          {opened ? <div className="orders-acc-body">{detailOf(group, 'inline')}</div> : null}
-                        </li>
-                      )
-                    })}
-                  </ol>
-                </details>
-              )}
-            </>
-          )}
-          {passRunning ? null : why}
+          {searchSlot}
+          <div className="browse-boxes bn-panel" role="group" aria-label="Choose an order to walk">
+            {selectBar}
+            {ordersList}
+          </div>
+          {railWalkPanel}
+          <WalkMainPane walk={walk} />
+          {why}
         </>
+      )}
+
+      {!manageOpen ? null : (
+        <Overlay kind="sheet" label="Manage orders" onClose={() => setManageOpen(false)} className="orders-manage-sheet">
+          <section className="bn-panel-body">
+            <div className="bn-panel-head">
+              <span className="bn-section-title">
+                <Icon name="plus" size={16} /> Add orders
+              </span>
+            </div>
+            {well}
+          </section>
+          {receipt}
+          <div className="orders-manage-status">
+            {statusControl}
+            {statusPanel}
+          </div>
+          <BacklogPrompt open={open} busy={busy} onStandDown={onStandDown} />
+          <ReconcileBacklogPanel orders={open} busy={busy} onPress={onReconcileBacklog} />
+
+          {/* THE SELECTED BUYER'S OWN ORDERS — stand-down, close-line, declare-kind and
+              hand-fill, still reachable per order (§13: "nothing lost"). `hidePicks`: the walk
+              beside this sheet is the one place to Mark sold from, so this never draws a second
+              set of pressable copy rows for the same card. */}
+          {selectedGroup === null ? null : (
+            <div className="orders-manage-orders">
+              <span className="bn-section-title">{selectedGroup.name ?? `No name · #${selectedGroup.number}`}'s orders</span>
+              {selectedGroup.orders.map((order) => (
+                <OrderDetail
+                  key={order.key}
+                  order={order}
+                  answer={answers.get(order.key) ?? null}
+                  lane={lanesByOrder.get(order.number) ?? null}
+                  store={store}
+                  claims={claims}
+                  busy={busy}
+                  onPull={onPull}
+                  onFill={onFill}
+                  onDeclareKind={onDeclareKind}
+                  onCloseLine={onCloseLine}
+                  onReread={onReread}
+                  variant="panel"
+                  hidePicks
+                />
+              ))}
+            </div>
+          )}
+        </Overlay>
       )}
     </div>
   )
@@ -3617,7 +3477,7 @@ function BuyerRow({
       </span>
       <span className="orders-index-side">
         <span className="orders-index-figure">
-          {group.wanted === 0 ? 'nothing open' : group.recorded >= group.wanted ? 'all pulled' : (
+          {group.wanted === 0 ? 'nothing open' : group.recorded >= group.wanted ? 'all sold' : (
             <>
               <b>{group.wanted - group.recorded}</b> left
             </>
@@ -3629,13 +3489,97 @@ function BuyerRow({
           aria-valuenow={group.recorded}
           aria-valuemin={0}
           aria-valuemax={group.wanted}
-          aria-label="Copies pulled"
+          aria-label="Copies sold"
         >
           <span style={{ width: `${pct}%` }} />
         </span>
       </span>
       {expanded === true ? <Icon name="chevronDown" size={16} className="orders-index-chev" /> : null}
     </button>
+  )
+}
+
+/* ============================================================== the selected order's panel */
+
+/** WHERE INVENTORY SHOWS THE BOX PANEL, ORDERS SHOWS THIS (§13, mock A): `BoxOps.tsx`'s own
+ *  `.boxops-identity` SHAPE — the small-caps label, the title, `Manage` top-right, the status
+ *  pill — with the dotted `.boxops-identity-line` replaced by the kit's `bn-stat` triad, the
+ *  same one `CardLocations.tsx`'s "Every copy of this card" draws (owed/sold/short in place of
+ *  copies/on-hand/live). Classes only, never `BoxOps.tsx` itself — a second builder owns that
+ *  file's own line on a separate branch. */
+function OrderPanel({
+  group,
+  answers,
+  onManage,
+}: {
+  readonly group: BuyerGroup
+  readonly answers: ReadonlyMap<string, ResolvedOrder>
+  readonly onManage: () => void
+}) {
+  const status = worstStatus(group, answers)
+  const pill = STATUS_PILL[status]
+  const owed = Math.max(0, group.wanted - group.recorded)
+  const short = group.orders.reduce((sum, order) => {
+    const lines = answers.get(order.key)?.lines ?? []
+    return sum + lines.filter((line) => line.reason === 'short').reduce((s, line) => s + line.owed, 0)
+  }, 0)
+  const placed = whenLabel(group.latest)
+  const pct = group.wanted > 0 ? Math.min(100, Math.round((group.recorded / group.wanted) * 100)) : 0
+  const label = group.orders.length === 1 ? `ORDER ${group.orders[0]!.number}` : `${group.orders.length} ORDERS`
+
+  return (
+    <div className="boxops-identity">
+      <div className="boxops-identity-top">
+        <div className="boxops-identity-text">
+          <span className="boxops-identity-num">{label}</span>
+          <h2 className="boxops-identity-name">{group.name ?? `No name · #${group.number}`}</h2>
+        </div>
+        <Button variant="quiet" size="sm" icon="settings" className="browse-manage" aria-haspopup="dialog" onClick={onManage}>
+          Manage
+        </Button>
+      </div>
+
+      <p className="boxops-identity-line">
+        <Pill tone={pill.tone} icon={pill.icon}>
+          {pill.label}
+        </Pill>
+      </p>
+
+      <div className="card-locations-stats">
+        <div className="bn-stat card-locations-stat">
+          <span className="bn-stat-value">{owed}</span>
+          <span className="bn-stat-label">owed</span>
+        </div>
+        <div className="bn-stat card-locations-stat">
+          <span className="bn-stat-value">{group.recorded}</span>
+          <span className="bn-stat-label">sold</span>
+        </div>
+        <div className="bn-stat card-locations-stat">
+          <span className="bn-stat-value">{short}</span>
+          <span className="bn-stat-label">short</span>
+        </div>
+      </div>
+
+      {group.wanted === 0 ? null : (
+        <div
+          className="bn-progress"
+          role="progressbar"
+          aria-valuenow={group.recorded}
+          aria-valuemin={0}
+          aria-valuemax={group.wanted}
+          aria-label="Copies sold"
+        >
+          <span style={{ width: `${pct}%` }} />
+        </div>
+      )}
+
+      {placed === null ? null : (
+        <div className="boxruns">
+          <span className="bn-dot" aria-hidden="true" />
+          <p className="boxruns-said">placed {placed}</p>
+        </div>
+      )}
+    </div>
   )
 }
 
@@ -3778,11 +3722,11 @@ function OrderDetail({
       <div className="orders-order-progress">
         <span className="orders-order-figure">
           {order.recorded >= order.wanted ? (
-            <>All {order.wanted} pulled</>
+            <>All {order.wanted} sold</>
           ) : (
             <>
-              <b>{order.wanted - order.recorded}</b> {order.wanted - order.recorded === 1 ? 'copy' : 'copies'} still to pull
-              {order.recorded === 0 ? null : <i>{order.recorded} already pulled</i>}
+              <b>{order.wanted - order.recorded}</b> {order.wanted - order.recorded === 1 ? 'copy' : 'copies'} still to sell
+              {order.recorded === 0 ? null : <i>{order.recorded} already sold</i>}
             </>
           )}
         </span>
@@ -3793,172 +3737,13 @@ function OrderDetail({
             aria-valuenow={order.recorded}
             aria-valuemin={0}
             aria-valuemax={order.wanted}
-            aria-label="Copies pulled"
+            aria-label="Copies sold"
           >
             <span style={{ width: `${pctOf(order)}%` }} />
           </span>
         )}
       </div>
 
-      {body}
-    </article>
-  )
-}
-
-/* ============================================================================ a buyer, opened */
-
-/** The buyer's detail panel — replaces `detailOf`'s direct use of `OrderDetail`
- *  (`D193`). Header: the name (or "No name · #<number>") and one chip
- *  per order, so a two-order buyer's second order is never invisible. Body: ONE merged walk
- *  over every open order's copies — `buildWalk` already takes a list, so the algorithm is not
- *  new, only what it is called with — and, below it, a "By order" fold holding each order's own
- *  `OrderDetail` so stand-down, close-line, declare-kind and hand-fill stay reachable per
- *  order. A buyer with nothing open draws the fold alone, opened, since there is no walk to
- *  lead with. */
-function BuyerDetail({
-  group,
-  answers,
-  lanesByOrder,
-  store,
-  claims,
-  busy,
-  onPull,
-  onFill,
-  onDeclareKind,
-  onCloseLine,
-  onReread,
-  variant,
-}: {
-  readonly group: BuyerGroup
-  readonly answers: ReadonlyMap<string, ResolvedOrder>
-  readonly lanesByOrder: ReadonlyMap<string, ShippingLane>
-  readonly store: StoreCopies | null
-  readonly claims: Claims
-  readonly busy: string | null
-  readonly onPull: PullHandler
-  readonly onFill: FillHandler
-  readonly onDeclareKind: KindHandler
-  readonly onCloseLine: CloseLineHandler
-  readonly onReread: () => void
-  readonly variant: 'panel' | 'inline'
-}) {
-  const heading = group.name ?? `No name · #${group.number}`
-  /* THE SAME WIDENING AS THE GLOBAL WALK, ONE BUYER AT A TIME: every order this group holds
-     that `ownsAWalkableBody`, never `group.open` alone — a buyer whose only order is
-     terminal-but-owing gets a merged walk too, not just a "By order" fold with a lone Pull
-     button in it. */
-  const groupWalkable = useMemo(() => group.orders.filter(ownsAWalkableBody), [group])
-  const walk = useMemo(() => buildWalk(groupWalkable, answers as Map<string, ResolvedOrder>), [groupWalkable, answers])
-  /* WHETHER THE MERGED WALK ACTUALLY DREW SOMETHING — never merely "is anything open" (or, now,
-     anything walkable). An order whose only lines are `sku_unseen` or `no_copies_on_hand` has
-     nothing `buildWalk` can aim at, so a buyer in that state gets no walk section at all and the
-     "By order" fold is where the whole answer lives; defaulting it closed there would hide the
-     only controls this buyer has. */
-  const hasWalk = walk.rows.length > 0
-
-  const chips = group.orders.map((order) => {
-    const answer = answers.get(order.key) ?? null
-    const status = statusOf(order, answer)
-    const pill = STATUS_PILL[status]
-    const pct = pctOf(order)
-    return (
-      <span key={order.key} className="orders-buyer-chip">
-        <span className="orders-buyer-chip-number bn-mono">{order.number}</span>
-        <Pill size="sm" tone={pill.tone} icon={pill.icon}>
-          {pill.label}
-        </Pill>
-        {order.recorded === 0 ? null : (
-          <span
-            className="bn-progress orders-buyer-chip-bar"
-            role="progressbar"
-            aria-valuenow={order.recorded}
-            aria-valuemin={0}
-            aria-valuemax={order.wanted}
-            aria-label={`Copies pulled for order ${order.number}`}
-          >
-            <span style={{ width: `${pct}%` }} />
-          </span>
-        )}
-      </span>
-    )
-  })
-
-  /* THE FOLD IS A REAL KIT BUTTON NOW, NOT AN UNSTYLED `<summary>` (§9's "what is deleted",
-   *  finding 5 — the owner found the walk plan "by hunting" behind exactly this control).
-   *  Section 8's own plan replaced what was hidden BEHIND this toggle at the whole-store
-   *  level; this is the one place the fold itself survives, because `By buyer` still needs a
-   *  way to reach stand-down/close-line/declare-kind per order. `null` follows the default
-   *  (`!hasWalk`) until the operator presses it once, the same "manual wins until the default
-   *  itself changes" rule `<details open>` gave for free. */
-  const [byOrderOpen, setByOrderOpen] = useState<boolean | null>(null)
-  const byOrderIsOpen = byOrderOpen ?? !hasWalk
-  const byOrder = (
-    <div className="orders-buyer-byorder">
-      <Button
-        variant="quiet"
-        size="sm"
-        iconRight={byOrderIsOpen ? 'chevronUp' : 'chevronDown'}
-        aria-expanded={byOrderIsOpen}
-        onClick={() => setByOrderOpen(!byOrderIsOpen)}
-      >
-        By order
-      </Button>
-      {!byOrderIsOpen
-        ? null
-        : group.orders.map((order) => (
-            <div key={order.key} className="orders-buyer-order">
-              <OrderDetail
-                order={order}
-                answer={answers.get(order.key) ?? null}
-                lane={lanesByOrder.get(order.number) ?? null}
-                store={store}
-                claims={claims}
-                busy={busy}
-                onPull={onPull}
-                onFill={onFill}
-                onDeclareKind={onDeclareKind}
-                onCloseLine={onCloseLine}
-                onReread={onReread}
-                variant="panel"
-                /* THE MERGED WALK IS THE ONE PLACE TO PULL FROM. Drawing the same pick rows
-                   again here — the byOrder fold's own reason `buildWalk` and `OrderLineRow`
-                   share the same `aimOf`/`copiesOf` machinery — would put two Pull buttons on
-                   screen for one copy. Suppressed only when the walk exists to cover it; a
-                   buyer with nothing walkable still gets the full per-line breakdown, because
-                   it is all there is. */
-                hidePicks={hasWalk}
-              />
-            </div>
-          ))}
-    </div>
-  )
-
-  const body = (
-    <>
-      {hasWalk ? (
-        <section className="orders-buyer-walk" aria-label="This buyer's copies, in one pass">
-          <WalkGroups groups={walk.groups} busy={busy} onPull={onPull} />
-        </section>
-      ) : null}
-      {byOrder}
-    </>
-  )
-
-  if (variant === 'inline') {
-    return (
-      <>
-        <div className="orders-buyer-chips">{chips}</div>
-        {body}
-      </>
-    )
-  }
-
-  return (
-    <article className="bn-panel orders-buyer-detail" aria-label={heading}>
-      <header className="orders-buyer-detail-head">
-        <h2 className="orders-buyer-detail-name">{heading}</h2>
-        <div className="orders-buyer-chips">{chips}</div>
-      </header>
       {body}
     </article>
   )
@@ -4310,7 +4095,7 @@ function OrderLineRow({
           {figure.pulled === 0 ? null : (
             <li className="orders-pulled-note">
               <Icon name="check" size={13} />
-              {figure.pulled} {figure.pulled === 1 ? 'copy has' : 'copies have'} already been pulled for this order and left
+              {figure.pulled} {figure.pulled === 1 ? 'copy has' : 'copies have'} already been sold for this order and left
               the box.
             </li>
           )}
@@ -4329,7 +4114,7 @@ function LineFigureView({ figure }: { readonly figure: LineFigure }) {
     return (
       <span className="orders-line-figure orders-line-figure-done">
         <Pill tone="ok" icon="check">
-          All {figure.wanted} pulled
+          All {figure.wanted} sold
         </Pill>
       </span>
     )
@@ -4339,7 +4124,7 @@ function LineFigureView({ figure }: { readonly figure: LineFigure }) {
       <span className="orders-line-remaining">
         <b>{figure.remaining}</b> remaining
       </span>
-      {figure.pulled === 0 ? null : <span className="orders-line-pulled">{figure.pulled} already pulled</span>}
+      {figure.pulled === 0 ? null : <span className="orders-line-pulled">{figure.pulled} already sold</span>}
     </span>
   )
 }
@@ -4368,14 +4153,14 @@ function pullLedeOf(figure: LineFigure, map: CopyMap, whole: boolean, onHand: nu
   const total = whole ? onHand : map.total
   const drawers = map.stops.length
   const held = `${total} on hand`
-  if (figure.remaining === 0) return `All ${figure.wanted} pulled — ${held}.`
-  const pulled = `Pull ${figure.remaining}`
+  if (figure.remaining === 0) return `All ${figure.wanted} sold — ${held}.`
+  const toSell = `${figure.remaining} to sell`
   if (drawers === 1) {
     const only = map.stops[0]
-    if (only?.pooled) return `${pulled} — ${held}, pooled.`
-    return `${pulled} — ${held}, 1 box.`
+    if (only?.pooled) return `${toSell} — ${held}, pooled.`
+    return `${toSell} — ${held}, 1 box.`
   }
-  return `${pulled} — ${held} across ${drawers} boxes.`
+  return `${toSell} — ${held} across ${drawers} boxes.`
 }
 
 function CopyMapView({
@@ -4422,7 +4207,7 @@ function CopyMapView({
           >
             {at === 0 && !stop.pooled ? (
               <>
-                <span className="bn-sr">{runnerUp === null ? 'The drawer to walk to. ' : 'Most copies here. '}</span>
+                <span className="bn-sr">{runnerUp === null ? 'The box to walk to. ' : 'Most copies here. '}</span>
                 <Icon name="pin" size={13} className="orders-map-pin" />
               </>
             ) : null}
@@ -4581,7 +4366,7 @@ function PickLine({
       ) : target === null ? (
         <span className="orders-pick-held">
           <Icon name="info" size={13} />
-          {pick.capture_id === null ? 'This copy has no capture record, so it cannot be pulled from here.' : 'Not offered for this reason.'}
+          {pick.capture_id === null ? 'This copy has no capture record, so it cannot be marked sold from here.' : 'Not offered for this reason.'}
         </span>
       ) : (
         <Button
@@ -4598,70 +4383,10 @@ function PickLine({
           busy={pressing}
           disabled={busy !== null && !pressing}
         >
-          Pull
+          Mark sold
         </Button>
       )}
     </li>
   )
 }
 
-
-/** The box→section renderer shared by `By buyer`'s merged walk (`D193`) — extracted so a
- *  buyer with several open orders gets the same one-pass grouping `buildWalk` produces,
- *  rather than a second copy of it. `Walk the boxes` no longer calls this: it renders the
- *  solver's own plan through `OrdersWalk.tsx` instead (`docs/specs/order-walk-plan.md` §8-9).
- *  The sentence block this component used to lead with (`WalkCards`) is deleted with it —
- *  finding 4, the owner's own "Horrible." */
-function WalkGroups({
-  groups,
-  busy,
-  onPull,
-}: {
-  readonly groups: readonly WalkGroup[]
-  readonly busy: string | null
-  readonly onPull: PullHandler
-}) {
-  return (
-    <>
-      {groups.map((group) => {
-        const skus = new Set(group.rows.map((row) => row.line.sku))
-        const copies = group.rows.length
-        const cardCount = skus.size
-        /* ONE WORD FOR THE ORDINARY DRAWER, TWO WHERE IT MATTERS. `copies === cardCount` means
-           every row is a distinct card — the plain "N cards" the header always said is already
-           correct there, and saying "of N cards" beside it would only repeat the number. The
-           longer, disambiguating form is spent only where `group.rows.length` and a real card
-           count actually disagree — several copies of the SAME card sharing a box, the shape
-           D212 made possible and the shape the old count got wrong. */
-        const label =
-          copies === cardCount
-            ? `${cardCount} ${cardCount === 1 ? 'card' : 'cards'}`
-            : `${copies} ${copies === 1 ? 'copy' : 'copies'} of ${cardCount} ${cardCount === 1 ? 'card' : 'cards'}`
-        return (
-        <section key={group.key} className="bn-panel orders-walk-group" aria-label={group.title}>
-          <header className="orders-walk-group-head">
-            <span className="orders-walk-group-title">{group.title}</span>
-            {group.note === null ? null : <span className="orders-walk-group-note">{group.note}</span>}
-            <span className="orders-walk-group-count">{label}</span>
-          </header>
-          <ol className="orders-picks orders-walk-list">
-            {group.rows.map((row, at) => (
-              <PickLine
-                key={row.key}
-                order={row.order}
-                line={row.line}
-                pick={row.pick}
-                busy={busy}
-                onPull={onPull}
-                name={row.pick.card_name ?? row.line.line.name ?? row.line.sku}
-                showOrder
-                delay={Math.min(at, 12) * 30}
-              />
-            ))}
-          </ol>
-        </section>
-        )
-      })}
-    </>
-  )
-}

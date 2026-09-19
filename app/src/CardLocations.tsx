@@ -187,30 +187,6 @@ export type CardLocationsProps = {
    *  `OrdersWalk.tsx`). Omitted, every existing caller ranks exactly as it always has. */
   preserveOrder?: boolean
 
-  /** SUPPRESS THE PANEL'S OWN HEADER — the title, the three stats and the SKU/condition line,
-   *  every one of them a fact about ONE SKU's LISTING. A caller synthesizing a group per unit
-   *  of its own (the walk's per-take group) has no listing to report and would otherwise be
-   *  forced to feed it zeros that read as real ("Pushed 0 · Staged 0 · Room for 1 more live" on
-   *  a card that has no SKU to list at all) — the panel's own header would lie. That caller
-   *  draws its own header and wants the rows alone. */
-  hideHeader?: boolean
-
-  /** REPLACE ONE COPY'S ENTIRE ROW — used for a state none of this panel's own densities draw:
-   *  the walk's own collapse of a copy it has just pulled to one line (`docs/specs/
-   *  order-walk-plan.md` §8's 2026-09-19 ruling: "a card in the hand has no position... that is
-   *  the whole of what it draws"). Returning a node draws THAT in place of the row's usual
-   *  place/bar/state/action cells, inside the same `<li>` so the stagger animation and the
-   *  reserved row height (`.card-locations-row-override`, `CardLocations.css`) still apply;
-   *  returning `undefined` draws the row exactly as every other caller gets it. Omitted, no
-   *  row is ever overridden. */
-  rowOverride?: (copy: SearchCopy) => ReactNode | undefined
-
-  /** EXTRA `data-*` ATTRIBUTES for one copy's `<li>`, keyed by attribute name (no leading
-   *  `data-`) — a seam for a caller that needs to find or describe a specific row without a
-   *  second row component. The walk uses it for `state` (open/taken/gone) and `capture-id`.
-   *  Omitted, no row carries anything beyond what this panel already puts there. */
-  rowAttrs?: (copy: SearchCopy) => Record<string, string | undefined>
-
   /** An extra class on the outer `<section>` — a CSS seam so a caller's own stylesheet can
    *  scope a rule to its usage (the walk's row `min-height`, D118) without it reaching
    *  `#/inventory` or `#/fulfillment`. Omitted, the section carries its usual two classes only. */
@@ -275,9 +251,6 @@ function OwnerRows({
   frozen = RANK_IS_CURRENT,
   onRerank,
   preserveOrder = false,
-  hideHeader = false,
-  rowOverride,
-  rowAttrs,
   className,
 }: Omit<CardLocationsProps, 'persona'>) {
   const number = collectorNumber(group)
@@ -388,7 +361,6 @@ function OwnerRows({
 
   return (
     <section className={['card-locations', 'card-locations-owner', className ?? ''].filter(Boolean).join(' ')}>
-      {hideHeader ? null : (
       <header className="card-locations-head">
         <h3 className="bn-section-title card-locations-title">Every copy of this card</h3>
         {/* THE ONE THING THAT RESHUFFLES THIS LIST, and it is a press rather than a consequence.
@@ -466,35 +438,12 @@ function OwnerRows({
           </p>
         ) : null}
       </header>
-      )}
 
       <ul
         className="card-locations-rows bn-stagger"
         style={{ ['--pos-slot-digits']: slotDigits } as CSSProperties}
       >
         {drawn.map((copy, i) => {
-          const extraAttrs = rowAttrs?.(copy) ?? {}
-          const dataAttrs = Object.fromEntries(
-            Object.entries(extraAttrs).map(([attr, value]) => [`data-${attr}`, value]),
-          )
-          /* A CALLER'S OWN COLLAPSE, WHOLESALE — the walk's one-line "taken" row (§8's
-             2026-09-19 ruling), which none of this panel's own densities draw. The `<li>`
-             wrapper, its key and the stagger index stay so the caller's row still animates in
-             and reserves the height `CardLocations.css`'s `.card-locations-row-override` sets;
-             everything below this branch is what every other caller still gets. */
-          const override = rowOverride?.(copy)
-          if (override !== undefined) {
-            return (
-              <li
-                className="card-locations-row card-locations-row-override"
-                key={copy.key}
-                style={{ ['--i' as string]: i }}
-                {...dataAttrs}
-              >
-                {override}
-              </li>
-            )
-          }
           const sold = isSold(copy, soldKeys)
           const pooled = isPooled(copy)
           const departed = isDeparted(copy.place)
@@ -535,7 +484,6 @@ function OwnerRows({
               key={copy.key}
               style={{ ['--i' as string]: i }}
               aria-current={current ? 'true' : undefined}
-              {...dataAttrs}
             >
               <span className="card-locations-place">
                 {pooled ? (
