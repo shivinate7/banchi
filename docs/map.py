@@ -3413,7 +3413,7 @@ COMPONENTS = [
                 # allowlisted away.
                 "governed_by": ["D7", "D16", "D17", "D18", "D26", "D42", "D43", "D44", "D47", "D48", "D53",
                                 "D54", "D58", "D60", "D65", "D68", "D74", "D76", "D80", "D82", "D83", "D86", "D88",
-                                "D89", "D92", "D111", "D122", "D127", "D129", "D133", "D138", "D139", "D140",
+                                "D89", "D92", "D111", "D122", "D127", "D129", "D133", "D136", "D138", "D139", "D140",
                                 "D141", "D149", "D158", "D160", "D171", "D172", "D173", "D176", "D189"],
                 "note": "IT DECLARES THE SUITE AND DELIBERATELY DOES NOT DRIVE IT, which is "
                         "the whole shape. A registry that drove `make check` could not "

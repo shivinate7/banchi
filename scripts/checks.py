@@ -702,6 +702,26 @@ CHECKS = (
         "governed_by": ("D18", "D43", "D122"),
     },
     {
+        "target": "browser-scope-selftest",
+        "runs": "python3 scripts/browser-scope.py selftest",
+        "asserts": "scripts/browser-scope.py's matcher, the Makefile recipe narrowing, and "
+                   "the spec allow-list's own fixture cases (D141 amended, 2026-09-19): a "
+                   "shared path under app/src/kit/ selects every spec, app/src/Inventory.tsx "
+                   "selects inventory.spec.ts and the routesFromNav( sweeping specs and never "
+                   "review.spec.ts, an unknown app/ path and a whitespace path both fail open "
+                   "to every spec, and PKMNSCAN_BROWSER_SCOPE=off does too. The docs-audit "
+                   "`spec map` row reconciles the map's structure against the tree; this row "
+                   "is what actually exercises it.",
+        "needs": ("python3",),
+        "writes": "",
+        "commit_path": False,
+        "why_off_commit_path": "It reads the real app/ tree to derive the spec map, which is "
+                               "slower than the commit path's other checks and belongs beside "
+                               "the other selftests rather than ahead of them.",
+        "gates": True,
+        "governed_by": ("D18", "D136", "D141"),
+    },
+    {
         "target": "serve-selftest",
         "runs": "python3 scripts/serve-selftest.py",
         "asserts": "the supervisor's build job (D138), against a throwaway checkout whose "

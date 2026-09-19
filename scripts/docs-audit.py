@@ -13861,6 +13861,95 @@ def check_browser_scope(report: Report) -> None:
                scanned=len(scope))
 
 
+def check_spec_map(report: Report) -> None:
+    """`scripts/browser-scope.py`'s spec allow-list, both ways (D141 amended, 2026-09-19).
+
+    MECHANICAL, on `browser scope`'s own reasoning one level down: `specs_for_changed_paths`
+    is the mechanism a PARTIAL run trusts to choose which spec files load, so its map is
+    checked the same two ways every derived list here is — every spec reaches at least one
+    real file, and every file the map names still exists. The shared-surface literals
+    (`playwright.config.ts`, `devPort.ts`, `design-check-reporter.ts`) are reconciled against
+    what `app/playwright.config.ts` and `app/vite.config.ts` actually import, DERIVED by
+    reading those two files rather than trusted by name — the same argument `browser scope`
+    makes about the Makefile recipe it narrows to.
+    """
+    module = _sibling("browser-scope.py")
+    if module is None or not exists(BROWSER_SCOPE_SCRIPT):
+        report.add("spec map", MECHANICAL, [Finding(
+            rel(BROWSER_SCOPE_SCRIPT), "does not import, so the spec allow-list cannot be read.")])
+        return
+
+    app_dir = ROOT / "app"
+    findings: List[Finding] = []
+
+    try:
+        routes = module.route_map(app_dir)
+        closures = module.spec_closures(app_dir, routes)
+        shared = module.shared_surface(app_dir, routes)
+    except Exception as exc:  # noqa: BLE001 - a broken map must read as a finding, not a crash
+        report.add("spec map", MECHANICAL, [Finding(
+            rel(BROWSER_SCOPE_SCRIPT), f"the spec map raised {exc!r} while deriving.")])
+        return
+
+    on_disk = sorted(str(p.relative_to(ROOT)) for p in module.spec_files(app_dir))
+    if not on_disk:
+        findings.append(Finding(rel(app_dir / "tests"),
+                                 "no `*.spec.ts` files found — the map has nothing to reach."))
+
+    for spec_path in closures:
+        rel_spec = rel(spec_path)
+        reached = closures[spec_path]
+        if not reached:
+            findings.append(Finding(rel_spec, "the derived map reaches no file for this spec."))
+        missing = [f for f in reached if not f.is_file()]
+        if missing:
+            findings.append(Finding(rel_spec, (
+                f"the derived closure names {len(missing)} file(s) that do not exist on "
+                f"disk — first: `{rel(missing[0])}`.")))
+
+    shared_missing = [f for f in shared if not f.is_file()]
+    if shared_missing:
+        findings.append(Finding(rel(BROWSER_SCOPE_SCRIPT), (
+            f"`shared_surface` names {len(shared_missing)} file(s) that do not exist — "
+            f"first: `{rel(shared_missing[0])}`.")))
+
+    # THE SHARED LITERALS, RECONCILED AGAINST WHAT THE REAL CONFIGS READ, not trusted by name.
+    playwright_config = app_dir / "playwright.config.ts"
+    vite_config = app_dir / "vite.config.ts"
+    if playwright_config.is_file():
+        text = read(playwright_config)
+        if "devPort" not in text:
+            findings.append(Finding(rel(BROWSER_SCOPE_SCRIPT), (
+                "`shared_surface` names `devPort.ts` as a shared dependency, and "
+                "app/playwright.config.ts no longer imports it — the reason has moved.")))
+        if "design-check-reporter" not in text:
+            findings.append(Finding(rel(BROWSER_SCOPE_SCRIPT), (
+                "`shared_surface` names `design-check-reporter.ts` as a shared dependency, "
+                "and app/playwright.config.ts no longer reads it as a reporter.")))
+        test_dir_match = re.search(r"testDir:\s*'([^']+)'", text)
+        if test_dir_match is None or test_dir_match.group(1).strip("./") != "tests":
+            findings.append(Finding(rel(playwright_config), (
+                "`testDir` is not the plain `'./tests'` the spec map assumes when it globs "
+                "`app/tests/*.spec.ts` — the map and the config have drifted.")))
+    else:
+        findings.append(Finding(rel(playwright_config), "does not exist, and the spec map "
+                                 "assumes its `testDir` is `app/tests/`."))
+    if vite_config.is_file():
+        if "devPort" not in read(vite_config):
+            findings.append(Finding(rel(BROWSER_SCOPE_SCRIPT), (
+                "`shared_surface` names `devPort.ts` as a shared dependency, and "
+                "app/vite.config.ts no longer imports it — the reason has moved.")))
+    else:
+        findings.append(Finding(rel(vite_config), "does not exist, and the spec map treats "
+                                 "Vite's config as read-only reference for devPort.ts."))
+
+    reached_total = len(on_disk)
+    report.add("spec map", MECHANICAL, findings,
+               f"{reached_total} specs mapped, {len(shared)} shared-surface files, "
+               f"reconciled against playwright.config.ts and vite.config.ts",
+               scanned=reached_total)
+
+
 def check_serve_scope(report: Report) -> None:
     """`scripts/serve-scope.py:SCOPE` against `serve-selftest.py:CARRY`, both ways.
 
@@ -18018,6 +18107,7 @@ def audit(staged_only: bool) -> Report:
     check_no_mechanism_on_screen(report)
     check_suite_lock(report)
     check_browser_scope(report)
+    check_spec_map(report)
     check_serve_scope(report)
     check_positional_references(report, docs)
     check_audit_invocation(report)

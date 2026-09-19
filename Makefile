@@ -4,7 +4,7 @@
 # the project would be built on top of — `make check` green means every check ran.
 
 .DEFAULT_GOAL := help
-.PHONY: help status map explain harness check cid-selftest cid-audit ignore-check docs-audit map-fix map-fix-selftest orient orient-selftest serve-scope serve-scope-selftest vale audit-self-test verdict-selftest githooks-selftest merge merge-selftest revert-guard revert-selftest claim-ids claim-stale claim-selftest decisions-selftest debts-selftest gates-selftest port-agreement set-hint-agreement readiness-agreement mutate-anchors mutate-guards screen-freshness screen-freshness-selftest sigil-check suite-lock-selftest icloud-sweep audit-history dev server screenshot design-check design-check-quiet lint typecheck venv launch-config worktree-setup hooks up down launch-agent demo demo-photos demo-seed demo-record demo-static demo-preview demo-freshness catalog-refresh catalog-index catalog-index-selftest catalog-mirror
+.PHONY: help status map explain harness check cid-selftest cid-audit ignore-check docs-audit map-fix map-fix-selftest orient orient-selftest serve-scope serve-scope-selftest vale audit-self-test verdict-selftest githooks-selftest merge merge-selftest revert-guard revert-selftest claim-ids claim-stale claim-selftest decisions-selftest debts-selftest gates-selftest port-agreement set-hint-agreement readiness-agreement mutate-anchors mutate-guards screen-freshness screen-freshness-selftest sigil-check suite-lock-selftest browser-scope-selftest icloud-sweep audit-history dev server screenshot design-check design-check-quiet lint typecheck venv launch-config worktree-setup hooks up down launch-agent demo demo-photos demo-seed demo-record demo-static demo-preview demo-freshness catalog-refresh catalog-index catalog-index-selftest catalog-mirror
 
 # Prefer the venv if it exists, so `make harness` works without anyone remembering to
 # activate anything. Falls back to system python3, which still runs T2-T5 — T1 needs the
@@ -111,6 +111,8 @@ help:
 	@echo "                    another checkout, a nested symlink, a pattern that is not a process."
 	@echo "  make coordinator-selftest  the merge-queue verdict rules. No network."
 	@echo "  make suite-lock-selftest  one browser fleet at a time, proved by violating it."
+	@echo "  make browser-scope-selftest  the spec allow-list's own fixture cases, proved"
+	@echo "                    against the real app/ tree (D141 amended)."
 	@echo "  make verdict-selftest  the design-check verdict reporter, run for real. No browser."
 	@echo "  make serve-selftest  the supervisor's build job, against a throwaway tree. No node."
 	@echo "                    PATH GATED (the only one): skipped when nothing in the branch"
@@ -156,6 +158,7 @@ help:
 	@echo "                    janitor-selftest + reap-selftest + silent-write-selftest +"
 	@echo "                    guard-shell-selftest +"
 	@echo "                    coordinator-selftest + suite-lock-selftest +"
+	@echo "                    browser-scope-selftest +"
 	@echo "                    serve-selftest + sync-selftest + verdict-selftest"
 	@echo
 	@echo "  ./pkmnscan identify <capture-dir>                 submit, wait, collect. COSTS MONEY."
@@ -510,6 +513,7 @@ check:
 	@$(MAKE) --no-print-directory guard-shell-selftest
 	@$(MAKE) --no-print-directory coordinator-selftest
 	@$(MAKE) --no-print-directory suite-lock-selftest
+	@$(MAKE) --no-print-directory browser-scope-selftest
 	@$(MAKE) --no-print-directory serve-selftest
 	@$(MAKE) --no-print-directory sync-selftest
 	@$(MAKE) --no-print-directory verdict-selftest
@@ -556,6 +560,7 @@ ci-check:
 	@$(MAKE) --no-print-directory guard-shell-selftest
 	@$(MAKE) --no-print-directory coordinator-selftest
 	@$(MAKE) --no-print-directory suite-lock-selftest
+	@$(MAKE) --no-print-directory browser-scope-selftest
 	@$(MAKE) --no-print-directory serve-selftest
 	@$(MAKE) --no-print-directory sync-selftest
 	@$(MAKE) --no-print-directory verdict-selftest
@@ -1233,6 +1238,16 @@ design-check:
 # standing as janitor-selftest, merge-selftest and githooks-selftest.
 suite-lock-selftest:
 	@python3 scripts/suite-lock.py selftest
+
+# THE SPEC ALLOW-LIST, PROVED BY ITS OWN SELFTEST (D141 amended, 2026-09-19). Until this
+# landed, `scripts/browser-scope.py selftest` was a script anyone could run by hand and
+# nothing in `make check` ever did — the docs-audit `spec map` row reconciles the map's
+# STRUCTURE against the tree, but never runs the matcher over the fixture cases the file's
+# own `selftest()` proves (a kit/ path selects every spec, Inventory.tsx narrows correctly and
+# never selects review.spec.ts, an unknown path and a whitespace path both fail open). In
+# `check`, never the git hook: `python3`, no writes, cheap.
+browser-scope-selftest:
+	@python3 scripts/browser-scope.py selftest
 
 # The same run with the 450-line progress stream dropped — same tests, same assertions,
 # same `.serve/design-check.json`. The progress is only useful to a human watching live,
