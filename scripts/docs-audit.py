@@ -13863,7 +13863,7 @@ def check_browser_scope(report: Report) -> None:
 
 def check_spec_map(report: Report) -> None:
     """`scripts/browser-scope.py`'s spec map (`specs`), against `app/tests/` and the shared
-    surfaces it names, both ways (D-browser-spec-allow-list).
+    surfaces it names, both ways (D215).
 
     MECHANICAL, `browser scope`'s reasoning one level down. Four things, none of them
     "a spec reaches its own file" — every spec's own closure trivially contains its own

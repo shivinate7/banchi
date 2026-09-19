@@ -119,14 +119,14 @@ make design-check   # DESIGN.md's Fulfillment floors, in a browser. TAKES A MACH
                     #   audited by `make docs-audit`'s `browser scope` row both directions.
                     #   `server/` is deliberately out of scope (sealEveryTest). WHICH SPECS
                     #   LOAD is a second, narrower question: `browser-scope.py specs`
-                    #   (D-browser-spec-allow-list), a derived allow-list over `app/tests/*`.
+                    #   (D215), a derived allow-list over `app/tests/*`.
                     #   It fails open to every spec. `make docs-audit`'s `spec map` row checks
                     #   both ways. A partial spec run never writes D136's pass record.
 make design-check-quiet  # same run, no progress stream, same lock.
 make suite-lock-selftest # the lock, proved by violating it, including a holder killed -9.
                     #   In `check`.
 make browser-scope-selftest # the browser-matrix classifier's spec map, on fixtures and the
-                    #   real tree (D-browser-spec-allow-list). In `check`.
+                    #   real tree (D215). In `check`.
 make demo           # seed a demo store and record the wire, a fixture bundle.
                     #   `docs/specs/demo.md` IS THE ARGUMENT FOR THIS WHOLE FAMILY — why it
                     #   is not a fork, what is real and what is invented, why VITE_DEMO is
@@ -870,6 +870,7 @@ D211 The Rig panel folds once the setup is already known, and stays open until i
 D212 Every copy is fungible, so no order claims one, and the write is the only refusal left
 D213 The set is a stored fact, and the hint was never one
 D214 A gross-revenue retrospective is its own route, and it never claims to be profit
+D215 Both: the worker count is raised, and the spec allow-list is built
 ```
 
 D116-D118: D117 exists and slots between them — a third branch's number, resolved on merge.

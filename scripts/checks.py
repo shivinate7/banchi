@@ -704,7 +704,7 @@ CHECKS = (
     {
         "target": "browser-scope-selftest",
         "runs": "python3 scripts/browser-scope.py selftest",
-        "asserts": "the browser-matrix classifier's spec map (D-browser-spec-allow-list), on "
+        "asserts": "the browser-matrix classifier's spec map (D215), on "
                    "fixtures and on the real tree: `app/src/kit/` narrows nothing, a real "
                    "screen (`Inventory.tsx`) reaches its own spec and every `routesFromNav(` "
                    "spec but not an unrelated one, an unknown `app/` path and a path carrying "

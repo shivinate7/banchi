@@ -49,7 +49,7 @@ regardless — D136's pass record is the only thing that skips the matrix on mai
         The verdict for each of main's last N first-parent commits, which is how the
         measurement in D141 was taken and how it is re-taken.
     scripts/browser-scope.py specs [--base REV] [--head REV]
-        THE SECOND LEVER (D-browser-spec-allow-list). Once the matrix is going to RUN, which
+        THE SECOND LEVER (D215). Once the matrix is going to RUN, which
         `app/tests/*.spec.ts` files can the change actually reach? Writes
         `specs=<space-separated paths|all>` and `partial=true|false` to GITHUB_OUTPUT, and a
         one-line summary to GITHUB_STEP_SUMMARY when that is set. NEVER a typed list: for
@@ -469,7 +469,7 @@ def selftest() -> int:
     ok(recipe is not None and "NPM_GUARD" in recipe and "app/node_modules" in recipe,
        "`$(NPM_GUARD)` is expanded one level into the text compared")
 
-    print("\nthe spec map (D-browser-spec-allow-list), over the real tree")
+    print("\nthe spec map (D215), over the real tree")
     inventory_verdict = classify_specs(["app/src/Inventory.tsx"])
     ok("app/tests/inventory.spec.ts" in inventory_verdict.specs,
        "`app/src/Inventory.tsx` reaches `inventory.spec.ts`")
@@ -546,7 +546,7 @@ def selftest() -> int:
 
 # --------------------------------------------------------------------------- the spec map
 #
-# THE SECOND LEVER (D-browser-spec-allow-list). Once `classify` above has decided the matrix
+# THE SECOND LEVER (D215). Once `classify` above has decided the matrix
 # RUNS, this answers a narrower question: which `app/tests/*.spec.ts` files can the change
 # actually reach? DERIVED, never typed, on the same argument SCOPE makes for itself: a
 # filter too narrow silently stops testing something, so every direction this cannot resolve

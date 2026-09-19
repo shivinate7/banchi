@@ -1,4 +1,4 @@
-## D-browser-spec-allow-list — Both: the worker count is raised, and the spec allow-list is built
+## D215 — Both: the worker count is raised, and the spec allow-list is built
 
 **The owner's ruling, 2026-09-19: "Both — raise the worker count AND build the spec allow-list."**
 D136 is amended in its own file for the worker-count half. This entry settles

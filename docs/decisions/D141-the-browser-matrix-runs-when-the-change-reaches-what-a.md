@@ -53,7 +53,7 @@
 ---
 
 **AMENDED 2026-09-19, on the owner's word ("Both").** This entry decided whether the matrix
-runs at all. `D-browser-spec-allow-list` adds the level below: which `app/tests/*.spec.ts`
+runs at all. `D215` adds the level below: which `app/tests/*.spec.ts`
 files a running matrix actually loads, derived the same way and failing open the same way.
 The scope this entry settled — `SCOPE`, the classifier, the wiring — is unchanged.
 
