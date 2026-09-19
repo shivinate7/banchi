@@ -11677,6 +11677,195 @@ def check_no_mechanism_on_screen(report: Report) -> None:
     )
 
 
+# ------------------------------------------------------------- typed interpunct (D218)
+#
+# The owner's ruling, 2026-09-19: "this typed dot needs to be removed everywhere it exists."
+# D41 deleted the dot-joined address string from the screen on 2026-08-29 and moved the
+# separator into CSS (`.boxops-identity-part::before { content: '·' }` and its siblings) —
+# the separator is a STYLE now, drawn beside a fact, never typed INTO one. A survey the same
+# day found roughly 200 typed middle dots still reaching the screen across every route, and
+# two mechanisms that re-type the position address specifically at the root: `whole()` in
+# `app/src/PositionLabel.tsx` and the `about` field built in `app/src/Fulfillment.tsx`'s
+# `sellable()`/`pickSellable()`. See docs/decisions/D218.md for the
+# full argument; this row is that entry's mechanism.
+
+# U+00B7 MIDDLE DOT and U+2022 BULLET — the two characters the survey named. Kept as a fixed
+# two-code-point class rather than a longer punctuation list on purpose: this row polices ONE
+# typed separator shape, not general typography, and a longer list would need the same
+# argument D196's own word list already carries for what does and does not belong on it.
+_INTERPUNCT_RE = re.compile("[·•]")
+_INTERPUNCT_NAME = {"·": "middle dot (U+00B7)", "•": "bullet (U+2022)"}
+
+# THE TWO EXTRACTOR WIDENINGS THIS ROW OPTS INTO, AND NO OTHER ROW DOES. Kept as one constant
+# so the row and its own self-test call `_run_user_strings` with the identical argument list —
+# see `scripts/user-strings.mjs`'s header for what each flag does and why the no-mechanism-
+# on-screen row above stays on the default (unflagged) extraction: widening ITS fixtures'
+# behaviour retroactively over a different rule's citation would be exactly the silent-scope-
+# creep D196's own exemption comment (`Notice`'s `code` prop, kept OFF by default) warns against.
+TYPED_INTERPUNCT_EXTRACT_ARGS: Tuple[str, ...] = ("--join-literals", "--include-code-attr")
+
+TYPED_INTERPUNCT_PIN = ROOT / "scripts" / "typed-interpunct.json"
+
+
+def _typed_interpunct_hits(strings: List[Dict[str, object]]) -> List[Finding]:
+    """One Finding per visible string carrying a typed middle dot or bullet.
+
+    Returned regardless of the ratchet — `check_typed_interpunct` below decides whether they
+    block, by comparing `len(...)` against the pinned ceiling. Kept as a separate function
+    (rather than inlined) so the row's own `--self-test` fixtures can call it directly, the
+    same split `_no_mechanism_findings` uses one section up.
+    """
+    hits: List[Finding] = []
+    for item in strings:
+        text = str(item["text"])
+        match = _INTERPUNCT_RE.search(text)
+        if match is None:
+            continue
+        where = f"{item['file']}:{item['line']}"
+        shown = text if len(text) <= 100 else text[:97] + "..."
+        hits.append(
+            Finding(
+                where,
+                f"types a {_INTERPUNCT_NAME[match.group(0)]} where a person reads it: {shown!r}\n"
+                "  D41 moved the position separator into CSS "
+                "(`::before { content: '·' }`) — a screen may SHOW a separator, "
+                "never TYPE one into a string.",
+            )
+        )
+    return hits
+
+
+def _read_typed_interpunct_pin() -> Optional[int]:
+    """The ratchet's pinned ceiling, or None when it cannot be read at all.
+
+    `None` and `0` are different answers on purpose: `0` is a real, achievable pin (the sweep
+    finished), `None` means the file is missing or unreadable — a state this row must refuse
+    rather than silently treat as "nothing is pinned yet, so nothing is a violation".
+    """
+    if not exists(TYPED_INTERPUNCT_PIN):
+        return None
+    try:
+        data = json.loads(read(TYPED_INTERPUNCT_PIN))
+    except (json.JSONDecodeError, ValueError):
+        return None
+    count = data.get("count") if isinstance(data, dict) else None
+    return count if isinstance(count, int) and count >= 0 else None
+
+
+def _typed_interpunct_verdict(count: int, pin: Optional[int]) -> str:
+    """`"unpinned"` | `"rose"` | `"ok"` — the ratchet's own three-way arithmetic, isolated
+    from I/O and from message text so `--self-test` can drive it with plain integers rather
+    than a real pin file and a real extraction. `"ok"` covers count == pin AND count < pin —
+    a lower count is accepted exactly as silently as an equal one, per the ratchet's own rule.
+    """
+    if pin is None:
+        return "unpinned"
+    if count > pin:
+        return "rose"
+    return "ok"
+
+
+def check_typed_interpunct(report: Report) -> None:
+    """No user-visible string may TYPE a middle dot or bullet as a separator (D41's own
+    ruling, generalised repo-wide 2026-09-19). See D218.
+
+    THE EXTRACTION IS THE SAME AST WALK `no mechanism on screen` USES, `scripts/user-
+    strings.mjs`, run with `TYPED_INTERPUNCT_EXTRACT_ARGS` — two widenings that row's own
+    fixtures prove stay OFF by default, so this row's broader notion of "visible" never
+    reaches D196's citation policy: `--include-code-attr` (`Notice`'s own `code` prop, which
+    DOES render, on hover and in the run log) and `--join-literals` (the literal separator
+    argument of any `<expr>.join(<literal>)` call, wherever the call's return value ends up —
+    a local helper's parameter, an object field read back elsewhere — which is exactly how
+    `PositionLabel.tsx`'s `whole()` and `Fulfillment.tsx`'s `sellable()`/`pickSellable()`
+    re-type the position address today; see `scripts/user-strings.mjs`'s header for the full
+    argument and why this is scoped to `.join()` rather than every call expression in the tree).
+
+    WHAT THIS STILL CANNOT SEE, and it is a real gap, not a filtered one: a helper that builds
+    a separator WITHOUT `.join` — a `const` assembled by string concatenation or a template
+    literal, returned by a named function, and interpolated elsewhere by reference
+    (`{formatThing(x)}`) — is the same data-flow gap `no mechanism on screen`'s own docstring
+    names, one call shape narrower. CSS `content:` properties are never read at all — this
+    walks `.tsx` only — so `ReviewQueue.css:772`'s `content: 'Parked · under the threshold'`
+    (a whole SENTENCE typed into CSS, not a bare separator) is invisible here and recorded
+    instead in the decision entry's scoreboard for the sweep to find by hand. Four server-side
+    strings in `pipeline/join.py` (`Position.label`, `pooled_label`, `departed_label`,
+    `place_text`) are Python, a different language this walk never reaches at all — D41 keeps
+    them as the accessible name a screen reader announces; the rule is that a CLIENT stops
+    rendering them verbatim, which is a front-end fact this row can and does check.
+
+    A RATCHET, NOT A CLIFF (D194's own discipline, mirrored). Today's count is real and the
+    sweep that would zero it is a separate task (per the owner's ruling) that has not run yet,
+    so this row would be permanently red on day one without one. `scripts/typed-interpunct.json`
+    pins the count `node scripts/typed-interpunct-pin.mjs --pin` last measured — mirroring
+    `scripts/copy-budget.mjs`'s own discipline exactly: this row only READS the pin (D18: it
+    may never write, being on the commit path), a lower count is accepted SILENTLY (printed in
+    the summary, never a finding), and only a RISE past the pin is a failure — because a
+    ratchet padded "for safety" is headroom a later session spends without being asked, the
+    same argument `copy-budget.spec.ts`'s own header makes for D194. No pin file at all is
+    ALSO a failure: an unpinned budget could not otherwise be told apart from "nothing to pin
+    yet", which is the same non-vacuity argument `HARD_RULE_FLOOR` makes for `rule enforcement`.
+    """
+    strings = _run_user_strings(list(TYPED_INTERPUNCT_EXTRACT_ARGS))
+    if strings is None:
+        report.add(
+            "typed interpunct", MECHANICAL,
+            [
+                Finding(
+                    rel(USER_STRINGS_SCRIPT),
+                    "could not run — `node` or `app/node_modules/typescript` is missing. "
+                    "`npm install` in app/ first; this row needs the same toolchain "
+                    "`make lint`, `make typecheck` and `no mechanism on screen` already require.",
+                )
+            ],
+            "toolchain unavailable, so nothing was read", scanned=0,
+        )
+        return
+
+    hits = _typed_interpunct_hits(strings)
+    count = len(hits)
+    pin = _read_typed_interpunct_pin()
+    verdict = _typed_interpunct_verdict(count, pin)
+
+    if verdict == "unpinned":
+        report.add(
+            "typed interpunct", MECHANICAL,
+            [
+                Finding(
+                    rel(TYPED_INTERPUNCT_PIN),
+                    f"no ceiling pinned — {count} typed interpunct hits found. Run "
+                    "`node scripts/typed-interpunct-pin.mjs --pin` first, on purpose, once — "
+                    "never quietly.",
+                )
+            ],
+            "no pin — cannot tell a rise from a fall", scanned=len(strings),
+        )
+        return
+
+    if verdict == "rose":
+        findings = [
+            Finding(
+                rel(TYPED_INTERPUNCT_PIN),
+                f"typed interpunct count ROSE: {pin} pinned, {count} found now "
+                f"(+{count - pin}). A rise is never quiet — fix the new hit(s) named below, "
+                "or, if the addition is deliberately accepted, run "
+                "`node scripts/typed-interpunct-pin.mjs --pin` and say why in the commit.",
+            )
+        ] + hits
+        report.add(
+            "typed interpunct", MECHANICAL, findings,
+            f"{count} of {pin} pinned — rose by {count - pin}", scanned=len(strings),
+        )
+        return
+
+    report.add(
+        "typed interpunct", MECHANICAL, [],
+        (
+            f"{count} typed interpunct hits (ratchet pinned at {pin}"
+            + (f", {pin - count} below it" if count < pin else "")
+            + ")"
+        ),
+        scanned=len(strings),
+    )
 
 
 def check_views_opsec(report: Report) -> None:
@@ -17747,6 +17936,93 @@ def self_test() -> int:
        "the no-mechanism-on-screen exemption is pinned to exactly one file, `Gallery.tsx`",
        f"got: {sorted(NO_MECHANISM_EXEMPT_FILES)}")
 
+    print("\ntyped interpunct: the two extractor widenings, and the ratchet's own arithmetic")
+    with tempfile.TemporaryDirectory() as tmp_name:
+        fixture_dir = Path(tmp_name)
+
+        def written(name: str, body: str) -> Path:
+            path = fixture_dir / name
+            path.write_text(body)
+            return path
+
+        written(
+            "PlainDot.tsx",
+            "export function PlainDot() {\n"
+            "  return <p>Box 2 · Section 1</p>\n"
+            "}\n",
+        )
+        written(
+            "NoticeCodeDot.tsx",
+            "export function NoticeCodeDot() {\n"
+            '  return <Notice code="reason · code">Held back.</Notice>\n'
+            "}\n",
+        )
+        written(
+            "JoinLiteral.tsx",
+            "import type { ReactNode } from 'react'\n"
+            "const whole = (body: string): ReactNode => <>{body}</>\n"
+            "export function JoinLiteral() {\n"
+            "  const parts = ['Box 2', 'Section 1']\n"
+            "  return whole(parts.join(' · '))\n"
+            "}\n",
+        )
+        written(
+            "CommaJoin.tsx",
+            "export function CommaJoin() {\n"
+            "  const parts = ['a', 'b']\n"
+            "  return <p>{parts.join(', ')}</p>\n"
+            "}\n",
+        )
+
+        # THE DEFAULT CALL — no widening flags, exactly what `no mechanism on screen` uses —
+        # proves the two new channels stay OFF unless a caller asks for them, which is the
+        # whole argument for why widening them does not touch that row's own fixtures above.
+        default_strings = _run_user_strings(["--dir", str(fixture_dir)])
+        ok(default_strings is not None, "the extractor runs, unwidened, over the fixture tree")
+        if default_strings is not None:
+            default_hits = {f.where.split(":")[0].split("/")[-1] for f in _typed_interpunct_hits(default_strings)}
+            ok("PlainDot.tsx" in default_hits,
+               "a middle dot in plain JSX text is caught with NO widening at all")
+            ok("NoticeCodeDot.tsx" not in default_hits,
+               "`Notice`'s `code` prop is NOT caught without `--include-code-attr` — the "
+               "widening is opt-in, so `no mechanism on screen`'s own call is untouched")
+            ok("JoinLiteral.tsx" not in default_hits,
+               "a `.join(' · ')` call is NOT caught without `--join-literals` — the same "
+               "opt-in argument, for the other widening")
+
+        # THE ROW'S OWN CALL — `TYPED_INTERPUNCT_EXTRACT_ARGS`, both widenings together,
+        # exactly what `check_typed_interpunct` passes in production.
+        widened_strings = _run_user_strings(["--dir", str(fixture_dir), *TYPED_INTERPUNCT_EXTRACT_ARGS])
+        ok(widened_strings is not None, "the extractor runs, widened, over the fixture tree")
+        if widened_strings is not None:
+            widened_hits = {f.where.split(":")[0].split("/")[-1] for f in _typed_interpunct_hits(widened_strings)}
+            ok("PlainDot.tsx" in widened_hits,
+               "plain JSX text is still caught once widened")
+            ok("NoticeCodeDot.tsx" in widened_hits,
+               "`--include-code-attr` catches a typed dot inside `Notice`'s own `code` prop — "
+               "extractor addition (a)")
+            ok("JoinLiteral.tsx" in widened_hits,
+               "`--join-literals` catches `parts.join(' · ')` fed to a local helper "
+               "(`PositionLabel.tsx`'s `whole()` shape) — extractor addition (b)/(c), the "
+               "direct-literal check for a call the AST walk cannot see through by reference")
+            ok("CommaJoin.tsx" not in widened_hits,
+               "a `.join(', ')` call is extracted (the literal argument reaches the walk) but "
+               "carries no interpunct character, so it is not a HIT — the widening reads every "
+               "`.join(<literal>)` separator, and the character test is what decides a finding")
+
+    # THE RATCHET'S OWN ARITHMETIC, isolated from the extraction and the pin file: three
+    # cases, driven with plain integers. A rewrite that starts blocking an equal count, or
+    # that stops blocking a real rise, fails here before it ever reaches the real pin.
+    ok(_typed_interpunct_verdict(200, 200) == "ok",
+       "count == pin is accepted — the ratchet's floor, not its trigger")
+    ok(_typed_interpunct_verdict(199, 200) == "ok",
+       "count < pin is accepted SILENTLY — a fall is never a question")
+    ok(_typed_interpunct_verdict(201, 200) == "rose",
+       "count > pin is a `rose` verdict — never quiet, one hit over the line is enough")
+    ok(_typed_interpunct_verdict(5, None) == "unpinned",
+       "no pin at all is `unpinned`, not `ok` over zero — the same non-vacuity argument "
+       "`HARD_RULE_FLOOR` makes for `rule enforcement`")
+
     # ------------------------------------------------------- code-side agreements
     #
     # Seven arms, each patching its row's own path constant (or, for the table-driven row,
@@ -18115,6 +18391,7 @@ def audit(staged_only: bool) -> Report:
     check_commit_path(report)
     check_check_census(report)
     check_no_mechanism_on_screen(report)
+    check_typed_interpunct(report)
     check_suite_lock(report)
     check_browser_scope(report)
     check_spec_map(report)
