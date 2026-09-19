@@ -9,6 +9,7 @@ import type {
   OrderRow,
   OrdersPayload,
   Place,
+  PlaceNeighbor,
   ResolvedLine,
   ResolvedOrder,
   WalkPlan,
@@ -82,30 +83,81 @@ type Wire = { method: string; path: string; body: unknown }
  * or the request reaches `sealEveryTest`'s own refusal. Shapes echo `pick`/`line`/`order`'s
  * defaults above so a case can mix the two without two different Volcanions. */
 
-function walkPlanCopy(over: Partial<WalkPlanCopy> = {}): WalkPlanCopy {
-  return {
-    box: 3,
-    index: 21,
-    slot: 17,
-    capture_id: 'cap-a',
-    cid: null,
-    card: 17,
-    label: 'Box 3 · Section 2 · Card 17',
-    neighbors: null,
+/** The convenience shape every case in this file already writes — the flat fields the FIRST
+ *  build's `WalkPlanCopy` carried, kept here as the FIXTURE's own vocabulary even though the
+ *  real wire type dropped them 2026-09-19 (§8, "the stop, rebuilt"): every one of them now
+ *  lives inside `place`, the same block `place()` below already builds for `pick()`. Composing
+ *  it here, once, is what let every existing `walkPlanCopy({ box: 5, index: 50, slot: 1, ... })`
+ *  call in this file go on reading exactly as it did rather than rewriting ~30 call sites by
+ *  hand for a shape the tests never needed to see. `over.place` is the escape hatch for a case
+ *  that needs a field this convenience shape does not name. */
+type WalkPlanCopyInput = {
+  box?: number
+  index?: number
+  slot?: number | null
+  capture_id?: string | null
+  cid?: string | null
+  card?: number | null
+  label?: string | null
+  neighbors?: { prev: PlaceNeighbor | null; next: PlaceNeighbor | null } | null
+  box_total?: number
+  box_closed?: boolean
+  fraction?: number | null
+  state?: string
+  has_photo?: boolean
+  here?: boolean
+  key?: string
+  place?: Partial<Place>
+}
+
+function walkPlanCopy(over: WalkPlanCopyInput = {}): WalkPlanCopy {
+  const box = over.box ?? 3
+  const index = over.index ?? 21
+  const builtPlace = place({
+    box,
+    index,
+    slot: over.slot === undefined ? 17 : over.slot,
+    card: over.card === undefined ? 17 : over.card,
+    label: over.label === undefined ? 'Box 3 · Section 2 · Card 17' : over.label,
+    section: 2,
+    box_name: 'RB Epics',
+    section_start: 12,
+    section_end: null,
     /* THE BOX'S OWN THREE, real since 2026-09-19 (§8's ruling). A copy used to carry none of
        them and `PositionBar` drew its "a box the server could not size" blank track on every
        row for ever (§9a finding 4). A fixture that kept sending 0 would make that defect
        untestable, so the default is a real drawer. */
-    box_total: 133,
-    box_closed: false,
-    fraction: 0.12,
-    ...over,
+    box_total: over.box_total ?? 133,
+    box_closed: over.box_closed ?? false,
+    fraction: over.fraction === undefined ? 0.12 : over.fraction,
+    neighbors: over.neighbors === undefined ? null : over.neighbors,
+    ...over.place,
+  })
+  return {
+    key: over.key ?? `${box}/${index}`,
+    state: over.state ?? 'identified',
+    has_photo: over.has_photo ?? false,
+    capture_id: over.capture_id === undefined ? 'cap-a' : over.capture_id,
+    cid: over.cid === undefined ? null : over.cid,
+    place: builtPlace,
+    here: over.here ?? true,
   }
 }
 
 function walkPlanTake(over: Partial<WalkPlanTake> = {}): WalkPlanTake {
   const forRef: WalkPlanRef = { key: `TCGplayer:${ORDER_NUMBER}`, number: ORDER_NUMBER, buyer: 'Ada Lovelace' }
-  return { sku: SKU, name: 'Volcanion', number_display: '025', wanted: 1, for: [forRef], copies: [walkPlanCopy()], ...over }
+  return {
+    sku: SKU,
+    name: 'Volcanion',
+    number_display: '025',
+    set: null,
+    rarity: null,
+    condition: 'Near Mint',
+    wanted: 1,
+    for: [forRef],
+    copies: [walkPlanCopy()],
+    ...over,
+  }
 }
 
 function walkPlanStop(over: Partial<WalkPlanStop> = {}): WalkPlanStop {
@@ -2343,7 +2395,7 @@ test('a real Pull press changes the take counter without changing its height (D1
   const counterRightBefore = (counterBoxBefore?.x ?? 0) + (counterBoxBefore?.width ?? 0)
   const nameBoxBefore = await takeName.boundingBox()
 
-  await page.locator('.walkplan-copy').first().locator('button.walkplan-pull').click()
+  await page.locator('.card-locations-row').first().locator('button.walkplan-pull').click()
 
   await expect(counter).toContainText('1 of 2 taken')
   await settleFonts(page)
@@ -2799,12 +2851,15 @@ test('a walk row names neither the box nor the section as a labelled field (find
   )
   await startWalk(page)
 
-  const row = page.locator('.walkplan-copy').first()
+  const row = page.locator('.card-locations-row').first()
   await expect(row).toBeVisible()
-  /* `PositionLabel` is what draws `BOX <name> · Box <n>` and `SECTION <n> · <name>` as
-   * key/value fields (`.position-path`) — its absence here is the assertion, not a class name
-   * chosen to dodge the words: the stop header already carries the drawer's name and section
-   * span once, and a row repeating it is exactly this finding. */
+  /* `PositionLabel`'s own `lead='slot'` stack is what draws `BOX <name> · Box <n>` and
+   * `SECTION <n> · <name>` as key/value fields (`.position-path`) — reusing it verbatim on the
+   * walk is exactly how this finding came back once already (2026-09-19, over `CardLocations`'s
+   * default row). `CopyAddress` (`OrdersWalk.tsx`) draws the same two facts as one plain line —
+   * its absence here is the assertion, not a class name chosen to dodge the words: the stop
+   * header already carries the drawer's name and section span once, and a row repeating it is
+   * exactly this finding. */
   await expect(row.locator('.position-path')).toHaveCount(0)
   await expect(row).not.toContainText('SECTION')
   await expect(row).not.toContainText(/\bBOX\b/)
@@ -2861,19 +2916,36 @@ test('the buyer for a card is named only on a stop with more than one buyer, and
   await expect(stops.nth(1)).not.toContainText(OTHER_ORDER)
 })
 
-test('the photograph on a walk row is drawn at #/inventory\'s own size, not a thumbnail (finding 3)', async ({ page }) => {
+/* SUPERSEDED 2026-09-19 BY §8's "the stop, rebuilt" ruling — finding 3's own fix (a 220px
+ * photograph on every copy row) turned out to BE the next defect: two copies of one card drew
+ * the same photograph twice, and the photograph's height set a ~307px row around ~90px of
+ * content. The ruling's own words: "the photograph belongs to the CARD, once, at the take
+ * header." This case asserts that replacement rather than the finding-3 fix it replaces. */
+test('the photograph is drawn once per take, at the take header, never per copy', async ({ page }) => {
   await open(page, { orders: oneOpenOrder() })
-  await stubWalkPlan(page, walkPlanOf([walkPlanStop()]))
+  await stubWalkPlan(
+    page,
+    walkPlanOf([
+      walkPlanStop({
+        takes: [walkPlanTake({ copies: [walkPlanCopy({ capture_id: 'cap-a' }), walkPlanCopy({ capture_id: 'cap-b', index: 22, slot: 18, card: 18 })] })],
+      }),
+    ]),
+  )
   await startWalk(page)
 
-  const photo = page.locator('.walkplan-copy-photo').first()
+  /* ONE PHOTO FOR THE TAKE, NOT ONE PER COPY — two copies under this take, one `.walkplan-take-
+     photo`. */
+  await expect(page.locator('.walkplan-take-photo')).toHaveCount(1)
+  const photo = page.locator('.walkplan-take-photo').first()
   await expect(photo).toBeVisible()
   const box = await photo.boundingBox()
-  /* `BoxBrowse.css`'s own floor for the same photograph, `.browse-shot`/`.browse-photo-frame`:
-   * `minmax(220px, 34%)`. 84px (this screen's shipped thumbnail) fails this by a wide margin;
-   * asserting the floor rather than the exact clamp keeps this case honest about what it
-   * checks — the SIZE CLASS, not a pixel-perfect match to a value duplicated by hand. */
-  expect(box?.width ?? 0).toBeGreaterThanOrEqual(200)
+  /* 76×106, every width (§8's ruling) — never `#/inventory`'s 220px hero, which is what the
+   * card this replaces asked for and is exactly the defect the owner reported. */
+  expect(Math.round(box?.width ?? 0)).toBe(76)
+  /* AND NO ROW DRAWS ITS OWN PHOTOGRAPH — the copy row's own place is `CardLocations`'s row,
+     which never composes a photo element for this caller (no `photoSrc`, and the walk's own
+     `rowOverride` draws none either). */
+  await expect(page.locator('.card-locations-row img')).toHaveCount(0)
 })
 
 test('a walk row draws the copy\'s own position bar and its physical neighbours (finding 4)', async ({ page }) => {
@@ -2899,7 +2971,7 @@ test('a walk row draws the copy\'s own position bar and its physical neighbours 
   )
   await startWalk(page)
 
-  const row = page.locator('.walkplan-copy').first()
+  const row = page.locator('.card-locations-row').first()
   /* The position bar — the kit's own `PositionBar`, reused rather than the bare `Card 8` this
    * finding named. `role="img"` is `PositionBar`'s own accessible shape. */
   await expect(row.getByRole('img').first()).toBeVisible()
@@ -2910,6 +2982,131 @@ test('a walk row draws the copy\'s own position bar and its physical neighbours 
   await expect(row.locator('.nb')).toContainText('Evelynn')
   /* The stop's own span chip is untouched and not duplicated onto the row. */
   await expect(page.locator('.walkplan-stop-span')).toHaveCount(1)
+})
+
+/* D212 (every copy is fungible, no order claims one) widened to this very screen, 2026-09-19:
+ * every on-hand copy of the take's SKU is drawn, this stop's own copies first, then every
+ * other ascending (box, index) — the wire's own load-bearing order (`types.ts:WalkPlanTake`).
+ * D93: none is hidden. */
+test('every on-hand copy is drawn, this stop leading, and every one offers Pull (D212, D93)', async ({ page }) => {
+  await open(page, { orders: oneOpenOrder() })
+  await stubWalkPlan(
+    page,
+    walkPlanOf([
+      walkPlanStop({
+        takes: [
+          walkPlanTake({
+            wanted: 1,
+            copies: [
+              walkPlanCopy({ capture_id: 'cap-here-1', here: true }),
+              walkPlanCopy({ capture_id: 'cap-here-2', index: 22, slot: 18, card: 18, here: true }),
+              walkPlanCopy({ capture_id: 'cap-else-1', box: 5, index: 9, slot: 3, card: 3, here: false, key: '5/9' }),
+              walkPlanCopy({ capture_id: 'cap-else-2', box: 6, index: 1, slot: 1, card: 1, here: false, key: '6/1' }),
+            ],
+          }),
+        ],
+      }),
+    ]),
+  )
+  await startWalk(page)
+
+  const rows = page.locator('.card-locations-row')
+  await expect(rows).toHaveCount(4)
+  await expect(page.getByRole('button', { name: 'Pull' })).toHaveCount(4)
+  /* THE ORDER IS THE WIRE'S, NEVER RE-SORTED: this stop's two copies first, in the order sent,
+     then the other two, ascending. */
+  const ids = await rows.evaluateAll((els) => els.map((el) => el.getAttribute('data-capture-id')))
+  expect(ids).toEqual(['cap-here-1', 'cap-here-2', 'cap-else-1', 'cap-else-2'])
+})
+
+/* §8's 2026-09-19 ruling: "Undo is per copy, not per take." A take at `1 of 2` — still open,
+ * still short of `wanted` — draws its first pulled copy's own Undo. The shipped build gated
+ * Undo on the WHOLE TAKE being satisfied, so at `1 of 2` there was none. */
+test('Undo appears on a pulled copy at 1 of 2 taken, before the take is satisfied', async ({ page }) => {
+  await open(page, { orders: oneOpenOrder(), pull: { undone: false, order_key: `TCGplayer:${ORDER_NUMBER}`, sku: SKU, newly: 1, recorded: 1, outstanding: 1, places: [], sales: [] } })
+  await stubWalkPlan(
+    page,
+    walkPlanOf([
+      walkPlanStop({
+        takes: [walkPlanTake({ wanted: 2, copies: [walkPlanCopy({ capture_id: 'cap-a' }), walkPlanCopy({ capture_id: 'cap-b', index: 22, slot: 18, card: 18 })] })],
+      }),
+    ]),
+  )
+  await startWalk(page)
+
+  await page.locator('.card-locations-row').first().getByRole('button', { name: 'Pull' }).click()
+  await expect(page.locator('.walkplan-take-counter')).toContainText('1 of 2 taken')
+  /* The take is NOT satisfied (1 of 2), so it never reaches the met-take strip — the copy list
+     stays open, and the pulled copy's own row carries its own Undo. */
+  await expect(page.locator('.walkplan-take-done-row')).toHaveCount(0)
+  await expect(page.locator('.walkplan-taken-line').getByRole('button', { name: 'Undo' })).toBeVisible()
+  /* The other copy is untouched and still offers Pull. */
+  await expect(page.getByRole('button', { name: 'Pull' })).toHaveCount(1)
+})
+
+/* D196: no user-visible string may name a decision, a repository path, or a pipeline-internal
+ * noun — and an order's own KEY (`TCGplayer:A2FFC195-0000F4-006AC`) or NUMBER
+ * (`A2FFC195-0000F4-006AC`) is exactly that register, never a fact a buyer would read.
+ * `Orders.tsx`'s walk receipt shipped printing the raw number; this asserts the sentence names
+ * the buyer instead. */
+test('the pull receipt names the buyer, never the order\'s own key or number', async ({ page }) => {
+  await open(page, { orders: oneOpenOrder(), pull: { undone: false, order_key: `TCGplayer:${ORDER_NUMBER}`, sku: SKU, newly: 1, recorded: 1, outstanding: 0, places: [place()], sales: [] } })
+  await stubWalkPlan(page, walkPlanOf([walkPlanStop()]))
+  await startWalk(page)
+
+  await page.getByRole('button', { name: 'Pull' }).first().click()
+  const toast = page.locator('.bn-toast', { hasText: 'Pulled' })
+  await expect(toast).toBeVisible()
+  await expect(toast).toContainText('Ada Lovelace')
+  await expect(toast).not.toContainText(ORDER_NUMBER)
+  await expect(toast).not.toContainText(`TCGplayer:${ORDER_NUMBER}`)
+})
+
+/* §8's 2026-09-19 ruling: "a stop whose every take is closed collapses to its instruction line
+ * and one summary line per take." Naturally true once every take's own collapse fires — this
+ * proves the STOP draws nothing else once that happens, rather than asserting the mechanism a
+ * second time. */
+test('a stop whose every take is closed draws the instruction line and one summary per take', async ({ page }) => {
+  await open(page, {
+    orders: payloadOf(
+      [order(), order({ key: 'TCGplayer:B31A0C7D-0001A2-00311', number: 'B31A0C7D-0001A2-00311', buyer: 'Tom K.' })],
+      [
+        { key: `TCGplayer:${ORDER_NUMBER}`, number: ORDER_NUMBER, complete: false, outstanding: 1, lines: [line()] },
+        { key: 'TCGplayer:B31A0C7D-0001A2-00311', number: 'B31A0C7D-0001A2-00311', complete: false, outstanding: 1, lines: [line()] },
+      ],
+    ),
+    pull: { undone: false, order_key: `TCGplayer:${ORDER_NUMBER}`, sku: SKU, newly: 1, recorded: 1, outstanding: 0, places: [], sales: [] },
+  })
+  await stubWalkPlan(
+    page,
+    walkPlanOf([
+      walkPlanStop({
+        takes: [
+          walkPlanTake({ wanted: 1, copies: [walkPlanCopy({ capture_id: 'cap-a' })] }),
+          walkPlanTake({
+            sku: '9038409',
+            name: 'Yasuo, Unforgiven',
+            wanted: 1,
+            for: [{ key: 'TCGplayer:B31A0C7D-0001A2-00311', number: 'B31A0C7D-0001A2-00311', buyer: 'Tom K.' }],
+            copies: [walkPlanCopy({ capture_id: 'cap-b', index: 30, slot: 25, card: 25 })],
+          }),
+        ],
+      }),
+    ]),
+  )
+  await startWalk(page)
+
+  await page.getByRole('button', { name: 'Pull' }).first().click()
+  await expect(page.locator('.walkplan-take-counter').first()).toContainText('1 of 1 taken')
+  await page.getByRole('button', { name: 'Pull' }).first().click()
+
+  // past both undo windows
+  await page.waitForTimeout(20_500)
+
+  await expect(page.locator('.walkplan-stop-instruction')).toBeVisible()
+  await expect(page.locator('.walkplan-take-collapsed')).toHaveCount(2)
+  await expect(page.locator('.card-locations-row')).toHaveCount(0)
+  await expect(page.locator('.walkplan-take-done-row')).toHaveCount(0)
 })
 
 /* ------------------------------------------------------------------------------------- 25
@@ -2932,9 +3129,9 @@ test('a walk row draws the copy\'s own position bar and its physical neighbours 
  * MUTATED PER ASSERTION, per this repo's rule that a guard must see its subject. Sending
  * `box_total: 0` again turns A red; dropping `refresh` from the request, or `refreshed` from
  * the answer, turns B red; widening the refresh past the touched box turns C red; deleting
- * `.walkplan-copy-neighbors`' reservation turns D red; dropping the `gone` blanking turns E
- * red; dropping `refresh` from the undo turns F red; and re-fetching the plan on a press
- * turns F2 red.
+ * `.card-locations-row-override`'s `min-height` reservation (`OrdersWalk.css`) turns D red;
+ * dropping the `gone` blanking turns E red; dropping `refresh` from the undo turns F red; and
+ * re-fetching the plan on a press turns F2 red.
  */
 
 const NEAR_SKU = '9191999'
@@ -2977,12 +3174,21 @@ function twoInOneDrawer(): OrdersPayload {
 }
 
 /** The plan over that world: one stop holding both neighbours, and a second stop in box 5
- *  whose only job is to be somewhere the press must NOT reach. */
-function twoDrawerPlan(): WalkPlan {
+ *  whose only job is to be somewhere the press must NOT reach.
+ *
+ *  `volcanionWanted` DEFAULTS TO 1, which every case but the fence wants: one pull satisfies
+ *  the take, and that is what puts it into its own met-take strip (§8's 2026-09-19 ruling) —
+ *  exactly the state several cases below are about. The fence test alone passes `2`, because
+ *  its own claim is that a pull re-orders nothing in a list that is STILL OPEN; the take
+ *  reaching satisfied and folding into a strip is a real, on-purpose CONTENT change (a state
+ *  transition), never a reordering, and conflating the two would make the fence assert
+ *  something this rebuild deliberately does. */
+function twoDrawerPlan(volcanionWanted = 1): WalkPlan {
   return walkPlanOf([
     walkPlanStop({
       takes: [
         walkPlanTake({
+          wanted: volcanionWanted,
           copies: [walkPlanCopy({ neighbors: { prev: null, next: { name: 'Sunrise', slot: 18, index: 22, skipped: 0 } } })],
         }),
         walkPlanTake({
@@ -3077,7 +3283,7 @@ async function shapeOf(page: Page): Promise<string> {
           ...[...stop.querySelectorAll('.walkplan-take')].map((take) =>
             [
               take.querySelector('.walkplan-take-name')?.textContent ?? '',
-              ...[...take.querySelectorAll('.walkplan-copy')].map((copy) => copy.getAttribute('data-capture-id') ?? ''),
+              ...[...take.querySelectorAll('.card-locations-row')].map((copy) => copy.getAttribute('data-capture-id') ?? ''),
             ].join('>'),
           ),
         ].join('|'),
@@ -3095,9 +3301,11 @@ async function pullRowNamed(page: Page, name: string): Promise<void> {
     .click()
 }
 
-/** The copy row for one capture id, whichever stop it sits in. */
+/** The copy row for one capture id, whichever stop it sits in — `CardLocations`'s own row,
+ *  reused (`docs/specs/order-walk-plan.md` §8's 2026-09-19 "the stop, rebuilt" ruling), never
+ *  the walk's own hand-rolled `.walkplan-copy` any more. */
 function copyRow(page: Page, captureId: string) {
-  return page.locator(`.walkplan-copy[data-capture-id="${captureId}"]`)
+  return page.locator(`.card-locations-row[data-capture-id="${captureId}"]`)
 }
 
 test('the walk row draws a real proportion, not the "box we could not size" blank track', async ({ page }) => {
@@ -3164,12 +3372,13 @@ test('a pull re-describes nothing in a drawer it never opened', async ({ page })
 })
 
 test('the re-description moves nothing: the row keeps its height and its Pull stays put', async ({ page }) => {
-  /* AT PHONE WIDTH, AND THAT IS THE WHOLE OF WHETHER THIS CASE CAN SEE ITS SUBJECT. Above
-     560px `OrdersWalk.css` lays the copy row out as a flex ROW and the 220px photograph — 307px
-     tall at the card's aspect — is the taller column, so the ladder can grow two lines and the
-     row does not move whatever the reservation says. Below it the row stacks, the body drives
-     the height, and `.walkplan-copy-neighbors`' `min-height` is load-bearing. Proved by
-     mutation: deleting that rule leaves this case GREEN at 1440 and turns it red here. */
+  /* AT PHONE WIDTH, WHERE THE ROW'S OWN GRID STACKS (`OrdersWalk.css`'s `@container copies
+     (max-width: 619px)`) rather than the desktop's three-column place/state/action row. The
+     photograph is gone from the row entirely since §8's 2026-09-19 rebuild — it is the take's
+     own header now, once — so what is left to reserve is the address, the ladder and the bar,
+     and `.card-locations-row-override`'s `min-height` is what holds them still. Proved by
+     mutation: deleting that rule leaves this case GREEN at 1440 (the grid has slack) and turns
+     it red here, where the stacked column has none. */
   await page.setViewportSize({ width: 390, height: 900 })
   await open(page, { orders: twoInOneDrawer(), pull: () => pullAnswer([refreshedSunrise()]) })
   await stubWalkPlan(page, twoDrawerPlan())
@@ -3183,8 +3392,8 @@ test('the re-description moves nothing: the row keeps its height and its Pull st
      is the press's own doing and is not what this asserts. What may not change is this row's
      OWN geometry: its height, and where its control sits inside it. Before the refresh the
      ladder is one line a side; after it, `skipped: 2` puts a second line under each name — the
-     tallest state the block can take — and `.walkplan-copy-neighbors`' reservation is the only
-     reason that costs nothing. Delete that rule and this case goes red. */
+     tallest state the block can take — and `.card-locations-row-override`'s reservation is the
+     only reason that costs nothing. Delete that rule and this case goes red. */
   const geometry = async () => {
     const row = await sunrise.boundingBox()
     const button = await pullButton.boundingBox()
@@ -3196,7 +3405,15 @@ test('the re-description moves nothing: the row keeps its height and its Pull st
   await expect(sunrise.locator('.nb')).toContainText('Galio')
   await expect(sunrise.locator('.nb-skip').first()).toBeVisible()
 
-  expect(await geometry()).toEqual(before)
+  /* WITHIN 1px, NOT EXACT, for the reason `orders.spec.ts`'s own D118 case two rows up carries
+     in full: two font-shaping passes over two different strings ("one line a side" against
+     "two, with a skip caption") can round a sub-pixel baseline a device-pixel apart, measured
+     here across five repeats — 1px on one of five, 0px on the rest. The structural failure this
+     case exists to catch is the ROW GROWING (measured before this fix: 168px -> 217px, and the
+     button's offset with it, 63px -> 112px) — a whole reservation missing, not a hinting jitter. */
+  const after = await geometry()
+  expect(after.height, 'the row changed height across the refresh').toBe(before.height)
+  expect(Math.abs(after.offset - before.offset), 'the Pull button moved inside its own row').toBeLessThanOrEqual(1)
 })
 
 test('a row the press found already gone blanks its own neighbour line', async ({ page }) => {
@@ -3226,7 +3443,11 @@ test('a row the press found already gone blanks its own neighbour line', async (
 
   await expect(volcanion).toHaveAttribute('data-state', 'gone')
   await expect(volcanion.locator('.nb')).toHaveCount(0)
-  await expect(volcanion.locator('.walkplan-copy-neighbors')).toBeAttached()
+  /* THE ROW'S OWN HEIGHT IS THE RESERVATION NOW (`.card-locations-row-override`'s `min-height`,
+     `OrdersWalk.css`) — there is no second, dedicated wrapper to assert is still attached. A
+     blanked ladder must not shrink the row below the reservation any live row also gets. */
+  const height = await volcanion.evaluate((el) => el.getBoundingClientRect().height)
+  expect(height).toBeGreaterThanOrEqual(90)
 })
 
 test('an undo inside the window puts the description back with the card', async ({ page }) => {
@@ -3269,8 +3490,11 @@ test('an undo inside the window puts the description back with the card', async 
 })
 
 test('THE FENCE: a pull re-orders no stop, no row and no copy, and re-solves nothing', async ({ page }) => {
+  /* `volcanionWanted: 2` keeps the take OPEN across the one pull below — the fence is about
+     ordering, not about the met-take strip a satisfied take deliberately becomes (see
+     `twoDrawerPlan`'s own comment). */
   await open(page, { orders: twoInOneDrawer(), pull: () => pullAnswer([refreshedSunrise()]) })
-  const planned = await stubWalkPlan(page, twoDrawerPlan())
+  const planned = await stubWalkPlan(page, twoDrawerPlan(2))
   await startWalk(page)
 
   /* THE WHOLE POINT OF THE PASS (§8, D181, D118). The plan is solved once. A press may change

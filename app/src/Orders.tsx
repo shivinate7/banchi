@@ -1881,11 +1881,17 @@ export function OrdersHub({ stage }: { readonly stage: Stage }) {
       const done = await pullCopy({ source: order.source, number: order.number, sku }, [target], refresh)
       if (!live.current) return { ok: false, failure: { code: 'unmounted', message: '' } }
       const resolvedPlace = done.places[0]?.label ?? place ?? `box ${target.box}, index ${target.index}`
+      /* D196: NO RAW ORDER KEY ON SCREEN. `order.number` is a machine string
+         (`A2FFC195-0000F4-006AC`) — `TakeBlock`'s own `for <buyer>` line, five lines away,
+         already refuses to say a nameless order's own key, and the receipt owes the same
+         refusal. The buyer's name, when the order carries one; nothing beyond the place when
+         it does not. */
+      const buyer = order.buyer?.trim()
       toast({
         kind: 'receipt',
         icon: 'hand',
         title: `Pulled ${name}`,
-        body: `from ${resolvedPlace} · order ${order.number}`,
+        body: buyer ? `from ${resolvedPlace} · for ${buyer}` : `from ${resolvedPlace}`,
         ttlMs: UNDO_WINDOW_MS,
         action: { label: 'Undo', onPress: () => void undoFromToast(target, resolvedPlace, name) },
       })

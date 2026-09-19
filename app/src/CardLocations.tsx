@@ -178,6 +178,43 @@ export type CardLocationsProps = {
    *  A SEAM, NOT A POLICY: it may not become the way a screen points at a second photo
    *  service. The default below is the product's answer. */
   photoSrc?: (copy: SearchCopy) => string
+
+  /** DRAW `group.copies` IN EXACTLY THE ORDER GIVEN — no fullest-section rank, no sold-copy
+   *  fold or sink. `hideSold`/`frozen`/`onRerank` are irrelevant under it and nothing is
+   *  hidden. For a caller whose own order is already load-bearing and answers a question this
+   *  ranking would only re-ask — the walk's solver order, "this stop's copies first, then
+   *  ascending (box, index)" (`docs/specs/order-walk-plan.md` §8's 2026-09-19 ruling,
+   *  `OrdersWalk.tsx`). Omitted, every existing caller ranks exactly as it always has. */
+  preserveOrder?: boolean
+
+  /** SUPPRESS THE PANEL'S OWN HEADER — the title, the three stats and the SKU/condition line,
+   *  every one of them a fact about ONE SKU's LISTING. A caller synthesizing a group per unit
+   *  of its own (the walk's per-take group) has no listing to report and would otherwise be
+   *  forced to feed it zeros that read as real ("Pushed 0 · Staged 0 · Room for 1 more live" on
+   *  a card that has no SKU to list at all) — the panel's own header would lie. That caller
+   *  draws its own header and wants the rows alone. */
+  hideHeader?: boolean
+
+  /** REPLACE ONE COPY'S ENTIRE ROW — used for a state none of this panel's own densities draw:
+   *  the walk's own collapse of a copy it has just pulled to one line (`docs/specs/
+   *  order-walk-plan.md` §8's 2026-09-19 ruling: "a card in the hand has no position... that is
+   *  the whole of what it draws"). Returning a node draws THAT in place of the row's usual
+   *  place/bar/state/action cells, inside the same `<li>` so the stagger animation and the
+   *  reserved row height (`.card-locations-row-override`, `CardLocations.css`) still apply;
+   *  returning `undefined` draws the row exactly as every other caller gets it. Omitted, no
+   *  row is ever overridden. */
+  rowOverride?: (copy: SearchCopy) => ReactNode | undefined
+
+  /** EXTRA `data-*` ATTRIBUTES for one copy's `<li>`, keyed by attribute name (no leading
+   *  `data-`) — a seam for a caller that needs to find or describe a specific row without a
+   *  second row component. The walk uses it for `state` (open/taken/gone) and `capture-id`.
+   *  Omitted, no row carries anything beyond what this panel already puts there. */
+  rowAttrs?: (copy: SearchCopy) => Record<string, string | undefined>
+
+  /** An extra class on the outer `<section>` — a CSS seam so a caller's own stylesheet can
+   *  scope a rule to its usage (the walk's row `min-height`, D118) without it reaching
+   *  `#/inventory` or `#/fulfillment`. Omitted, the section carries its usual two classes only. */
+  className?: string
 }
 
 export function CardLocations(props: CardLocationsProps) {
@@ -237,6 +274,11 @@ function OwnerRows({
   hideSold = false,
   frozen = RANK_IS_CURRENT,
   onRerank,
+  preserveOrder = false,
+  hideHeader = false,
+  rowOverride,
+  rowAttrs,
+  className,
 }: Omit<CardLocationsProps, 'persona'>) {
   const number = collectorNumber(group)
 
@@ -281,8 +323,17 @@ function OwnerRows({
   const byFullest = (a: SearchCopy, b: SearchCopy) =>
     (counts.get(sectionOf(b)) ?? 0) - (counts.get(sectionOf(a)) ?? 0)
   const standing = group.copies.filter((copy) => !sinks(copy) && (!hideSold || !isSold(copy, soldKeys) || kept.includes(copy)))
-  const drawn = [...[...standing].sort(byFullest), ...(hideSold ? [] : group.copies.filter(sinks))]
-  const hidden = gone.length - kept.length
+  /* `preserveOrder` BYPASSES ALL OF THE ABOVE, RATHER THAN FEEDING IT `frozen`. The panel's own
+     re-rank is a question about which section to reach into first, and a caller whose copies
+     already arrive in a load-bearing order (the walk's solver order) is not asking that
+     question at all — freezing the SORT'S INPUTS still runs the sort, and the sort still leads
+     with the fullest section rather than with the caller's own first entry. Bypassing it is
+     the smaller and the more honest fix. Nothing is hidden or sunk under it either: `hideSold`
+     is a fold this caller never asked for. */
+  const drawn = preserveOrder
+    ? group.copies
+    : [...[...standing].sort(byFullest), ...(hideSold ? [] : group.copies.filter(sinks))]
+  const hidden = preserveOrder ? 0 : gone.length - kept.length
   /* HOW STALE THE ORDER IS, counted over the copies THIS LIST draws. `frozen` is the screen's —
      one press makes the box rail stale too — and a sentence saying `3 copies stale` over a list
      that holds one of them would be counting somebody else's cards. */
@@ -336,7 +387,8 @@ function OwnerRows({
         ]
 
   return (
-    <section className="card-locations card-locations-owner">
+    <section className={['card-locations', 'card-locations-owner', className ?? ''].filter(Boolean).join(' ')}>
+      {hideHeader ? null : (
       <header className="card-locations-head">
         <h3 className="bn-section-title card-locations-title">Every copy of this card</h3>
         {/* THE ONE THING THAT RESHUFFLES THIS LIST, and it is a press rather than a consequence.
@@ -414,12 +466,35 @@ function OwnerRows({
           </p>
         ) : null}
       </header>
+      )}
 
       <ul
         className="card-locations-rows bn-stagger"
         style={{ ['--pos-slot-digits']: slotDigits } as CSSProperties}
       >
         {drawn.map((copy, i) => {
+          const extraAttrs = rowAttrs?.(copy) ?? {}
+          const dataAttrs = Object.fromEntries(
+            Object.entries(extraAttrs).map(([attr, value]) => [`data-${attr}`, value]),
+          )
+          /* A CALLER'S OWN COLLAPSE, WHOLESALE — the walk's one-line "taken" row (§8's
+             2026-09-19 ruling), which none of this panel's own densities draw. The `<li>`
+             wrapper, its key and the stagger index stay so the caller's row still animates in
+             and reserves the height `CardLocations.css`'s `.card-locations-row-override` sets;
+             everything below this branch is what every other caller still gets. */
+          const override = rowOverride?.(copy)
+          if (override !== undefined) {
+            return (
+              <li
+                className="card-locations-row card-locations-row-override"
+                key={copy.key}
+                style={{ ['--i' as string]: i }}
+                {...dataAttrs}
+              >
+                {override}
+              </li>
+            )
+          }
           const sold = isSold(copy, soldKeys)
           const pooled = isPooled(copy)
           const departed = isDeparted(copy.place)
@@ -460,6 +535,7 @@ function OwnerRows({
               key={copy.key}
               style={{ ['--i' as string]: i }}
               aria-current={current ? 'true' : undefined}
+              {...dataAttrs}
             >
               <span className="card-locations-place">
                 {pooled ? (
