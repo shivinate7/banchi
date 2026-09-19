@@ -51,8 +51,10 @@ and nothing that writes may run on the path that decides whether a commit procee
 SELF-TEST gates, and does not write outside a temp directory. `make status` reports the count,
 which is where a fact you should know but need not act on belongs.
 
-    scripts/janitor.py                     preview this repo. Presses nothing — and since
-                                           2026-09-19 that is true: tier 1 used to run here.
+    scripts/janitor.py                     preview this repo. IT PRESSES TIER 1 — the orphan,
+                                           the registration, the husk. See `sweep` for why
+                                           this line and status.py's both say otherwise, and
+                                           why that is the owner's call and not this file's.
     scripts/janitor.py --confirm           reap tier 2 as well as tier 1.
     scripts/janitor.py --tier1             the provably-dead only, no prompt. What a hook runs.
     scripts/janitor.py --root PATH         another checkout. Repo-agnostic on purpose.
@@ -931,20 +933,18 @@ def sweep(root: str, sessions_dir: Path, confirm: bool, tier1: bool,
     one in it must not fail — the first build returned 1 there and made `make janitor` print
     `Error 1` on a repo with nothing wrong with it.
 
-    A BARE RUN PRESSES NOTHING, WHICH IS WHAT IT HAS ALWAYS CLAIMED AND DID NOT DO. The header
-    above says "preview this repo. Presses nothing" and `status.py:janitor()` says "`make
-    status` must never be a thing that changes the tree" — and until 2026-09-19 the tier 1
-    block ran before `confirm` was ever consulted, so the bare run SIGTERMed orphans, ran `git
-    worktree prune` and `rmtree`'d husks at the head of every session. Two documents stating
-    one contract and the code keeping another is not a decision anybody made; it is a drift.
-    Tier 1 is still pressed with no prompt by whatever asks for it BY NAME — `--tier1`, which
-    is what `session-teardown.sh` runs — and by `--confirm`. Nothing is lost and the word
-    PREVIEW means what it says.
-
-    TIER 1'S PREVIEW IS `reported` AND NEVER `pending`, because `pending` is the count of work
-    waiting on a HUMAN word and tier 1 waits on no word at all: the session-end hook presses it
-    unattended. Counting it would make `make status` ask the operator for a press that another
-    hook is about to make on its own.
+    A BARE RUN PRESSES TIER 1, AND TWO DOCUMENTS SAY IT DOES NOT. OPEN, AWAITING THE OWNER'S
+    WORD — NOT FIXED HERE. The header above says "preview this repo. Presses nothing" and
+    `status.py:janitor()` says "`make status` must never be a thing that changes the tree", and
+    neither is true: the tier 1 block below runs before `confirm` is consulted at all, so a
+    bare run SIGTERMs orphans, runs `git worktree prune` and `rmtree`s husks — at the head of
+    every session, because `make status` runs it. The comment ahead of `loose_processes` is
+    written in full knowledge of this ("`sweep` reaps tier 1 before it looks at `confirm` at
+    all"), so the behaviour is deliberate somewhere and the two contracts are stale. WHICH of
+    the three is wrong is the owner's call, not this file's: gating tier 1 on `--tier1` or
+    `--confirm` would cost nothing operationally, since `session-teardown.sh` already passes
+    `--tier1` at every session end, but it is a change to what a command DOES and no session
+    gets to make one of those on the strength of a docstring.
     """
     mine = os.getpid()
     oracle = live_sessions(sessions_dir)
@@ -967,29 +967,23 @@ def sweep(root: str, sessions_dir: Path, confirm: bool, tier1: bool,
     family.add(mine)
 
     reaped = reported = pending = 0
-    press = confirm or tier1
-    verb1 = "reaped   " if press else "would reap"
 
     # ---------------------------------------------------------------- tier 1: the dead
     for server in dead_rooted_servers(mine, confine, table):
-        say("  {0} pid {1} — its own {2} is gone".format(
-            verb1, server.pid, Path(server.missing).name))
+        say("  reaped    pid {0} — its own {1} is gone".format(
+            server.pid, Path(server.missing).name))
         say("            {0}".format(server.missing))
-        if not press:
-            reported += 1
-            continue
         if _stop(server.pid):
             reaped += 1
         else:
             say("            NOT STOPPED — the signal was refused")
             reported += 1
 
-    pruned = run(["git", "worktree", "prune", "-v"] + ([] if press else ["--dry-run"]), cwd=root)
+    pruned = run(["git", "worktree", "prune", "-v"], cwd=root)
     for line in pruned.out.splitlines():
         if line.strip():
-            say("  {0} registration — {1}".format(verb1, line.strip()))
-            reaped += bool(press)
-            reported += not press
+            say("  reaped    registration — {0}".format(line.strip()))
+            reaped += 1
 
     # A husk is removed only once nothing is running under it — they regenerate otherwise.
     for husk in husks(root, live_roots):
@@ -1008,11 +1002,6 @@ def sweep(root: str, sessions_dir: Path, confirm: bool, tier1: bool,
         if servers_under(husk, family, table, dirs):
             say("  KEPT      {0}".format(_relative(husk, root)))
             say("            a process is still running under it; it would come back")
-            reported += 1
-            continue
-        if not press:
-            say("  {0} {1}  (husk — no registration, no source)".format(
-                verb1, _relative(husk, root)))
             reported += 1
             continue
         shutil.rmtree(husk, ignore_errors=True)
