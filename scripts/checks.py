@@ -702,6 +702,23 @@ CHECKS = (
         "governed_by": ("D18", "D43", "D122"),
     },
     {
+        "target": "browser-scope-selftest",
+        "runs": "python3 scripts/browser-scope.py selftest",
+        "asserts": "the browser-matrix classifier's spec map (D-browser-spec-allow-list), on "
+                   "fixtures and on the real tree: `app/src/kit/` narrows nothing, a real "
+                   "screen (`Inventory.tsx`) reaches its own spec and every `routesFromNav(` "
+                   "spec but not an unrelated one, an unknown `app/` path and a path carrying "
+                   "whitespace both select every spec rather than a guess, and "
+                   "`PKMNSCAN_BROWSER_SCOPE=off` does too.",
+        "needs": ("python3",),
+        "writes": "",
+        "commit_path": False,
+        "why_off_commit_path": "D16 — it is a self-test rather than a doc check, and it "
+                               "belongs beside the other selftests at the end of `check`.",
+        "gates": True,
+        "governed_by": ("D141", "D18", "D173"),
+    },
+    {
         "target": "serve-selftest",
         "runs": "python3 scripts/serve-selftest.py",
         "asserts": "the supervisor's build job (D138), against a throwaway checkout whose "

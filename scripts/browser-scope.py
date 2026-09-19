@@ -48,6 +48,22 @@ regardless — D136's pass record is the only thing that skips the matrix on mai
     scripts/browser-scope.py history [N]
         The verdict for each of main's last N first-parent commits, which is how the
         measurement in D141 was taken and how it is re-taken.
+    scripts/browser-scope.py specs [--base REV] [--head REV]
+        THE SECOND LEVER (D-browser-spec-allow-list). Once the matrix is going to RUN, which
+        `app/tests/*.spec.ts` files can the change actually reach? Writes
+        `specs=<space-separated paths|all>` and `partial=true|false` to GITHUB_OUTPUT, and a
+        one-line summary to GITHUB_STEP_SUMMARY when that is set. NEVER a typed list: for
+        each spec, its own relative import closure, plus the closure of every screen whose
+        route hash the spec's body names (comments stripped first, matched against
+        `app/src/App.tsx`'s own `ROUTES`), plus every screen when the spec calls
+        `routesFromNav(`. A shared surface (`app/src/kit/**`, `tokens.css`, `base.css`,
+        `App.tsx`, `main.tsx`, `index.html`, `app/public/**`, a non-spec `app/tests/*`, a
+        config or package file, or anything already in the top-level `SCOPE` outside
+        `app/**`) selects every spec. So does an unmapped `app/**` path, an empty or
+        unreadable diff, no merge-base, a path carrying whitespace (`PW_ARGS` is word-split
+        by `make`), or `PKMNSCAN_BROWSER_SCOPE=off` — printed by name on every such skip.
+        `partial=true` only when the run is genuinely narrowed, so `design-check-passed`
+        never records a tree as fully tested on a partial run.
     scripts/browser-scope.py list
     scripts/browser-scope.py selftest
 
@@ -63,7 +79,7 @@ import re
 import subprocess
 import sys
 from pathlib import Path
-from typing import Callable, Dict, List, NamedTuple, Optional, Sequence
+from typing import Callable, Dict, List, NamedTuple, Optional, Sequence, Set
 
 ROOT = Path(__file__).resolve().parent.parent
 
@@ -453,12 +469,345 @@ def selftest() -> int:
     ok(recipe is not None and "NPM_GUARD" in recipe and "app/node_modules" in recipe,
        "`$(NPM_GUARD)` is expanded one level into the text compared")
 
+    print("\nthe spec map (D-browser-spec-allow-list), over the real tree")
+    inventory_verdict = classify_specs(["app/src/Inventory.tsx"])
+    ok("app/tests/inventory.spec.ts" in inventory_verdict.specs,
+       "`app/src/Inventory.tsx` reaches `inventory.spec.ts`")
+    ok("app/tests/cursor.spec.ts" in inventory_verdict.specs,
+       "`app/src/Inventory.tsx` reaches a `routesFromNav(` spec (`cursor.spec.ts`)")
+    ok("app/tests/review.spec.ts" not in inventory_verdict.specs,
+       "`app/src/Inventory.tsx` does not reach `review.spec.ts`")
+    ok(inventory_verdict.partial, "a real screen file narrows the run")
+
+    kit_verdict = classify_specs(["app/src/kit/Icon.tsx"])
+    ok(kit_verdict.specs == set(all_specs()) and not kit_verdict.partial,
+       "a path under `app/src/kit/` selects every spec")
+
+    unknown_verdict = classify_specs(["app/src/NoSuchScreenEver.tsx"])
+    ok(unknown_verdict.specs == set(all_specs()) and not unknown_verdict.partial,
+       "an unknown `app/` path selects every spec — an unmapped file is a gap, not a skip")
+
+    space_verdict = classify_specs(["app/src/My File.tsx"])
+    ok(space_verdict.specs == set(all_specs()) and not space_verdict.partial,
+       "a path carrying whitespace selects every spec")
+
+    old = os.environ.get("PKMNSCAN_BROWSER_SCOPE")
+    os.environ["PKMNSCAN_BROWSER_SCOPE"] = "off"
+    try:
+        off_verdict = classify_specs(["app/src/Inventory.tsx"])
+    finally:
+        if old is None:
+            os.environ.pop("PKMNSCAN_BROWSER_SCOPE", None)
+        else:
+            os.environ["PKMNSCAN_BROWSER_SCOPE"] = old
+    ok(off_verdict.specs == set(all_specs()) and not off_verdict.partial,
+       "PKMNSCAN_BROWSER_SCOPE=off selects every spec")
+
     print()
     if failures:
         print(f"{len(failures)} failed")
         return 1
     print("clean")
     return 0
+
+
+# --------------------------------------------------------------------------- the spec map
+#
+# THE SECOND LEVER (D-browser-spec-allow-list). Once `classify` above has decided the matrix
+# RUNS, this answers a narrower question: which `app/tests/*.spec.ts` files can the change
+# actually reach? DERIVED, never typed, on the same argument SCOPE makes for itself: a
+# filter too narrow silently stops testing something, so every direction this cannot resolve
+# answers "every spec" rather than a guess.
+
+
+class SpecVerdict(NamedTuple):
+    specs: Set[str]
+    partial: bool
+    lines: List[str]
+
+
+APP_SRC = "app/src"
+APP_TESTS = "app/tests"
+
+_BLOCK_COMMENT_RE = re.compile(r"/\*.*?\*/", re.DOTALL)
+_LINE_COMMENT_RE = re.compile(r"//[^\n]*")
+
+
+def strip_comments(text: str) -> str:
+    """`/* */` first, then `//` to end of line. A `//` inside a string or URL is stripped
+    along with it, but that only ever REMOVES a hash mention this reads — it cannot manufacture
+    one — so this direction never opens a gap; a literal `'/#/review'` in real code survives."""
+    return _LINE_COMMENT_RE.sub("", _BLOCK_COMMENT_RE.sub("", text))
+
+
+_IMPORT_RE = re.compile(
+    r"""(?:import|export)\s+(?:type\s+)?(?:[\w*${},\s]+\s+from\s+)?['"](\.[^'"]+)['"]""")
+_CSS_IMPORT_RE = re.compile(r"""@import\s+['"](\.[^'"]+)['"]""")
+_RELATIVE_EXTENSIONS = ("", ".tsx", ".ts", ".css", ".jsx", ".js", "/index.tsx", "/index.ts")
+
+
+def resolve_relative(from_path: str, module: str) -> Optional[str]:
+    """A relative import (`./Foo`, `../kit`) resolved to a tracked repo-relative path."""
+    base = (ROOT / from_path).parent
+    for ext in _RELATIVE_EXTENSIONS:
+        candidate = (base / (module + ext)).resolve()
+        try:
+            candidate_rel = candidate.relative_to(ROOT).as_posix()
+        except ValueError:
+            continue
+        if candidate.is_file():
+            return candidate_rel
+    return None
+
+
+def file_imports(path: str) -> List[str]:
+    """Every relative import in one tracked file (JS/TS `from`, side-effect `import '...'`,
+    CSS `@import`), resolved. A bare package import (`react`, `@playwright/test`) is ignored:
+    it never leads back into `app/**`."""
+    full = ROOT / path
+    if not full.is_file():
+        return []
+    try:
+        text = strip_comments(full.read_text(encoding="utf-8", errors="replace"))
+    except OSError:
+        return []
+    modules = _IMPORT_RE.findall(text)
+    if path.endswith(".css"):
+        modules = modules + _CSS_IMPORT_RE.findall(text)
+    out: List[str] = []
+    for module in modules:
+        resolved = resolve_relative(path, module)
+        if resolved is not None:
+            out.append(resolved)
+    return out
+
+
+def import_closure(start: Sequence[str]) -> Set[str]:
+    """Every file `start` reaches by relative import, transitively, `start` itself included."""
+    seen: Set[str] = set()
+    queue = list(start)
+    while queue:
+        path = queue.pop()
+        if path in seen:
+            continue
+        seen.add(path)
+        queue.extend(file_imports(path))
+    return seen
+
+
+_ROUTE_RE = re.compile(r"path:\s*'([^']+)'.*?view:\s*(\w+)")
+_ROUTE_IMPORT_RE = re.compile(r"import\s*\{\s*([^}]+?)\s*\}\s*from\s*'(\.[^']+)'")
+
+
+def route_views(app_tsx: str = "app/src/App.tsx") -> Dict[str, str]:
+    """`ROUTES` read out of `app/src/App.tsx` itself, as `{route path: view's repo file}` —
+    the same table `make orient` reads one screen at a time, read here for all of them."""
+    full = ROOT / app_tsx
+    if not full.is_file():
+        return {}
+    text = full.read_text(encoding="utf-8", errors="replace")
+    names: Dict[str, str] = {}
+    for group, module in _ROUTE_IMPORT_RE.findall(text):
+        resolved = resolve_relative(app_tsx, module)
+        if resolved is None:
+            continue
+        for name in (n.strip().split()[-1] for n in group.split(",") if n.strip()):
+            names[name] = resolved
+    out: Dict[str, str] = {}
+    for route_path, view in _ROUTE_RE.findall(text):
+        if view in names:
+            out[route_path] = names[view]
+    return out
+
+
+_ROUTE_HASH_RE = re.compile(r"#(/[a-z][a-z0-9-]*)")
+
+
+def spec_reach(spec_path: str, routes: Dict[str, str]) -> Set[str]:
+    """One spec's own footprint: its own import closure, plus the closure of every screen
+    whose route hash its (comment-stripped) body names, plus every screen when it calls
+    `routesFromNav(` — a sweep that visits whatever the nav currently draws."""
+    full = ROOT / spec_path
+    text = full.read_text(encoding="utf-8", errors="replace") if full.is_file() else ""
+    stripped = strip_comments(text)
+    starts = [spec_path]
+    if "routesFromNav(" in stripped:
+        starts.extend(routes.values())
+    else:
+        for hash_path in sorted(set(_ROUTE_HASH_RE.findall(stripped))):
+            view = routes.get(hash_path)
+            if view is not None:
+                starts.append(view)
+    return import_closure(starts)
+
+
+def all_specs() -> List[str]:
+    tests_dir = ROOT / APP_TESTS
+    if not tests_dir.is_dir():
+        return []
+    return sorted(f"{APP_TESTS}/{p.name}" for p in tests_dir.iterdir()
+                 if p.name.endswith(".spec.ts"))
+
+
+_SHARED_PREFIXES = ("app/src/kit/", "app/public/")
+_SHARED_EXACT = {
+    "app/src/tokens.css", "app/src/base.css", "app/src/App.tsx", "app/src/App.css",
+    "app/src/main.tsx", "app/index.html",
+}
+_SHARED_APP_FILES = {
+    "app/playwright.config.ts", "app/vite.config.ts", "app/devPort.ts",
+    "app/design-check-reporter.ts", "app/eslint.config.js",
+}
+
+
+_shell_closure_cache: Optional[Set[str]] = None
+
+
+def shell_closure() -> Set[str]:
+    """`App.tsx` and `main.tsx`'s own support files, CUT OFF AT THE SCREEN BOUNDARY: a BFS
+    from the shell's two files that never expands past a route's own view file, so a
+    screen's private imports are never swept in, but everything the shell needs to run at
+    all — `deviceMemory.ts`, `keys.ts`, `server.ts`, `usePoll.ts`, the kit, the tokens — is.
+    Cached at module scope: this reads the tree once, and every caller in one process asks
+    the same question of the same commit."""
+    global _shell_closure_cache
+    if _shell_closure_cache is not None:
+        return _shell_closure_cache
+    view_files = set(route_views().values())
+    seen: Set[str] = set()
+    queue = ["app/src/App.tsx", "app/src/main.tsx"]
+    while queue:
+        path = queue.pop()
+        if path in seen:
+            continue
+        seen.add(path)
+        if path in view_files:
+            continue
+        queue.extend(file_imports(path))
+    _shell_closure_cache = seen - view_files
+    return _shell_closure_cache
+
+
+def is_shared_surface(path: str) -> bool:
+    """A path that selects every spec on its own: the shell's own closure (`App.tsx`,
+    `main.tsx` and everything they need that is not a screen's own view file), the kit, the
+    tokens, a non-spec test helper or fixture, and the config/package files `app/**` carries
+    beside the screens (Playwright, Vite, tsconfig, package files, the lint config that rides
+    along in D141's own SCOPE entry)."""
+    if any(path.startswith(prefix) for prefix in _SHARED_PREFIXES):
+        return True
+    if path in _SHARED_EXACT or path in _SHARED_APP_FILES:
+        return True
+    if path in shell_closure():
+        return True
+    if path.startswith(APP_TESTS + "/") and not path.endswith(".spec.ts"):
+        return True
+    return path.startswith("app/") and (
+        path.endswith(("package.json", "package-lock.json")) or
+        re.search(r"tsconfig[^/]*\.json$", path) is not None
+    )
+
+
+def build_reverse_map() -> Dict[str, Set[str]]:
+    """Every tracked file's reachers: the specs whose own `spec_reach` closure covers it."""
+    routes = route_views()
+    reverse: Dict[str, Set[str]] = {}
+    for spec in all_specs():
+        for path in spec_reach(spec, routes):
+            reverse.setdefault(path, set()).add(spec)
+    return reverse
+
+
+def classify_specs(paths: Sequence[str]) -> SpecVerdict:
+    """Which specs `paths` can reach, or every spec, and whether that is a genuine narrowing.
+
+    NEVER A BLOCK-LIST: every direction this cannot resolve — an unmapped `app/**` path, a
+    shared surface, a path outside `app/**` that is already top-level SCOPE, a path with
+    whitespace (`PW_ARGS` is word-split by `make`), an empty diff, or the escape hatch —
+    answers "every spec", printed by name.
+    """
+    everyone = set(all_specs())
+    if os.environ.get("PKMNSCAN_BROWSER_SCOPE") == "off":
+        return SpecVerdict(everyone, False,
+                           ["PKMNSCAN_BROWSER_SCOPE=off — every spec runs."])
+    if not paths:
+        return SpecVerdict(everyone, False, [
+            "no changed files were found. That is more likely a wrong base than an empty "
+            "change, so every spec runs."])
+    reverse = build_reverse_map()
+    lines: List[str] = []
+    result: Set[str] = set()
+    narrowed_any = False
+    forced_all = False
+    for path in paths:
+        if re.search(r"\s", path):
+            lines.append(f"  ALL   {path}  (whitespace in a path cannot be named to "
+                         "PW_ARGS, which `make` word-splits)")
+            forced_all = True
+            continue
+        if not path.startswith("app/"):
+            hit = next((entry for entry in SCOPE if matches(entry["path"], path)), None)
+            if hit is not None:
+                lines.append(f"  ALL   {path}  (outside `app/**`, already in the top-level "
+                             f"SCOPE — {hit['path']})")
+                forced_all = True
+            else:
+                lines.append(f"  --    {path}  (outside `app/**`, not in SCOPE either — no "
+                             "spec's concern)")
+            continue
+        if is_shared_surface(path):
+            lines.append(f"  ALL   {path}  (a shared surface)")
+            forced_all = True
+            continue
+        reachers = reverse.get(path)
+        if not reachers:
+            lines.append(f"  ALL   {path}  (no spec's derived closure reaches it — an "
+                         "unmapped file is a gap in the map, never a license to skip it)")
+            forced_all = True
+            continue
+        narrowed_any = True
+        result |= reachers
+        lines.append(f"  {len(reachers)} spec(s)  {path}")
+    if forced_all or not narrowed_any:
+        lines.append("every spec runs")
+        return SpecVerdict(everyone, False, lines)
+    partial = result != everyone
+    lines.append(f"{len(result)} of {len(everyone)} spec(s) reached" +
+                 (" — a genuine narrowing" if partial else " — every spec, derived rather "
+                  "than forced"))
+    return SpecVerdict(result, partial, lines)
+
+
+def write_spec_output(verdict: SpecVerdict) -> None:
+    text = "all" if verdict.specs == set(all_specs()) and not verdict.partial \
+        else " ".join(sorted(verdict.specs))
+    target = os.environ.get("GITHUB_OUTPUT")
+    if target:
+        with open(target, "a", encoding="utf-8") as handle:
+            handle.write(f"specs={text}\n")
+            handle.write(f"partial={'true' if verdict.partial else 'false'}\n")
+    summary = os.environ.get("GITHUB_STEP_SUMMARY")
+    if summary:
+        with open(summary, "a", encoding="utf-8") as handle:
+            if verdict.partial:
+                handle.write(f"partial: {len(verdict.specs)} of {len(all_specs())} specs\n")
+            else:
+                handle.write("partial: false — every spec runs\n")
+
+
+def classify_specs_revisions(base: str, head: str) -> SpecVerdict:
+    start = landing_base(base, head)
+    if start is None:
+        return SpecVerdict(set(all_specs()), False,
+                           [f"no merge-base between {base} and {head} — every spec runs."])
+    paths = changed_paths(start, head)
+    if paths is None:
+        return SpecVerdict(set(all_specs()), False,
+                           [f"`git diff {start[:12]} {head}` failed — every spec runs."])
+    verdict = classify_specs(paths)
+    return SpecVerdict(verdict.specs, verdict.partial,
+                       [f"{len(paths)} changed path(s) from {start[:12]} to {head}:"]
+                       + verdict.lines)
 
 
 # ----------------------------------------------------------------------------------- main
@@ -473,6 +822,9 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
     classify.add_argument("--event", default=os.environ.get("GITHUB_EVENT_NAME", "pull_request"))
     hist = sub.add_parser("history", help="the verdict over main's last N first-parent commits")
     hist.add_argument("count", nargs="?", type=int, default=20)
+    specs = sub.add_parser("specs", help="which app/tests/*.spec.ts files the change reaches")
+    specs.add_argument("--base", help="a revision; the merge-base against --head is the start")
+    specs.add_argument("--head", default="HEAD")
     sub.add_parser("list", help="the scope, with each entry's reason")
     sub.add_parser("selftest", help="prove the matcher and the narrowing")
     args = parser.parse_args(argv)
@@ -486,6 +838,20 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
         return history(args.count)
     if args.command == "selftest":
         return selftest()
+    if args.command == "specs":
+        base = args.base
+        if base is None:
+            base_ref = os.environ.get("GITHUB_BASE_REF", "")
+            base = f"origin/{base_ref}" if base_ref else None
+        if base is None:
+            spec_verdict = SpecVerdict(set(all_specs()), False,
+                                       ["no base to diff against — every spec runs."])
+        else:
+            spec_verdict = classify_specs_revisions(base, args.head)
+        for line in spec_verdict.lines:
+            print(line)
+        write_spec_output(spec_verdict)
+        return 0
 
     verdict = classify_event(args.event, args.base, args.head)
     for line in verdict.lines:
