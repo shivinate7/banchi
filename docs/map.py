@@ -1862,13 +1862,17 @@ COMPONENTS = [
                 "does": "does a change reach what a browser draws? The list of every path "
                         "`make design-check` loads, each with the reason it is there, and the "
                         "classifier `.github/workflows/check.yml`'s `browser-scope` job runs "
-                        "on a pull request to decide whether the three-shard browser matrix "
-                        "runs at all (D141). `classify` diffs what the branch would LAND from "
+                        "on a pull request to decide whether the browser matrix runs at all "
+                        "(D141). `classify` diffs what the branch would LAND from "
                         "the merge-base; `history N` replays main's last N merges, which is "
                         "how D141's measurement was taken; `selftest` proves the matcher and "
                         "the Makefile narrowing. Never acts on a push to main — there it "
                         "prints its answer and the matrix runs unless D136's pass record says "
-                        "the tree was tested.",
+                        "the tree was tested. `specs` answers the narrower question once "
+                        "`classify` already says RUN: which spec files does a PARTIAL run "
+                        "need, derived from each spec's import closure and the route hashes "
+                        "it names against `App.tsx`'s own `ROUTES` table — never typed, and "
+                        "fail-open to every spec on anything it cannot resolve.",
                 # D136 is the gate this composes with, D18 is why it writes nothing, D16 is
                 # why the list has a reader before it has a filter.
                 "governed_by": ["D16", "D18", "D136", "D141"],

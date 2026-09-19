@@ -101,7 +101,10 @@ make design-check   # DESIGN.md's Fulfillment floors, in a browser. TAKES A MACH
                     #   `PKMNSCAN_SUITE_LOCK=off` overrides. NOT in `make harness` or
                     #   `make check` (DEBT16).
                     #   `PW_ARGS=<flags>` reaches Playwright. `ARGS` never does (D136). CI runs
-                    #   3 shards of 1 worker each. NEVER RAISE THE WORKER COUNT (DEBT8).
+                    #   6 shards of 2 workers each, widened on the owner's word, 2026-09-19
+                    #   (D136 amended). DEBT8 measured "never raise the worker count" against
+                    #   a 2-vCPU runner. The repo is a 4-vCPU one since 2026-09-11. The 20-run
+                    #   proof for this change is filed as its own decision entry.
                     #   Backgrounds itself. Read `.serve/design-check.json` ONCE when the run
                     #   lands. It says `"running"` until it finishes, so a stale `running`
                     #   after exit means the run died. No file at all means it never reached
@@ -111,7 +114,10 @@ make design-check   # DESIGN.md's Fulfillment floors, in a browser. TAKES A MACH
                     #   No browser, no dev server: in `check` and `ci-check`, no lock.
                     #   ON CI, GATED TO WHAT A BROWSER DRAWS (D141) by scripts/browser-scope.py,
                     #   audited by `make docs-audit`'s `browser scope` row both directions.
-                    #   `server/` is deliberately out of scope (sealEveryTest).
+                    #   `server/` is deliberately out of scope (sealEveryTest). A PARTIAL PR run
+                    #   also narrows which specs load. `scripts/browser-scope.py specs`
+                    #   derives that list (D141 amended). It fails open to every spec.
+                    #   `PKMNSCAN_BROWSER_SCOPE=off` selects every spec. Every skip prints it.
 make design-check-quiet  # same run, no progress stream, same lock.
 make suite-lock-selftest # the lock, proved by violating it, including a holder killed -9.
                     #   In `check`.

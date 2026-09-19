@@ -49,6 +49,11 @@ regardless — D136's pass record is the only thing that skips the matrix on mai
         The verdict for each of main's last N first-parent commits, which is how the
         measurement in D141 was taken and how it is re-taken.
     scripts/browser-scope.py list
+    scripts/browser-scope.py specs [--base REV] [--head REV]
+        The narrower question, asked only once `classify` has already answered RUN: WHICH
+        spec files does a partial run need? Writes `specs=<paths or "all">` and
+        `partial=true|false` to GITHUB_OUTPUT. Never widens what `classify` already decided —
+        see the header above the `specs_for_changed_paths` function.
     scripts/browser-scope.py selftest
 
 Stdlib only, and `git` — it runs on a bare runner before anything is installed (D18).
@@ -389,6 +394,323 @@ def history(count: int) -> int:
     return 0
 
 
+# --------------------------------------------------------------------------- spec allow-list
+#
+# `classify` answers ONE question — does the matrix run at all? `specs` answers a narrower
+# one, asked only once the matrix is already going to run: WHICH spec files does it need to
+# load? Owner's ruling, 2026-09-19: raise the worker count (the real lever, `check.yml`'s
+# matrix) AND build this — a derived spec→file map over the last 30 PRs narrows 6 of 30,
+# median saving 0, so it is the secondary lever, never the reason to skip the primary one.
+#
+# THE MAP IS DERIVED FROM THE CHECKED-OUT TREE, NEVER TYPED, THE SAME ARGUMENT `SCOPE` MAKES
+# ABOVE ONE LEVEL UP. For each `app/tests/*.spec.ts`: its own relative import closure (`.ts`,
+# `.tsx`, `.css`, and a `.css` file's own `@import`s) union the closure of every screen whose
+# route hash the spec body names (comments stripped first, `#/xxx` matched against `ROUTES` in
+# `app/src/App.tsx`, read the same way — `import { Name } from './File'` beside `path: '/xxx',
+# ... view: Name` on one line), and a spec that calls `routesFromNav(` gets EVERY screen's
+# closure, because it already sweeps every route the nav renders.
+#
+# SHARED SURFACES SELECT EVERY SPEC: `App.tsx`'s own closure with the screen imports cut off
+# (so `main.tsx` -> `App.tsx` does not silently pull every screen back in), `main.tsx`'s own
+# closure with `App.tsx` cut off for the same reason, everything under `app/src/kit/`,
+# `tokens.css`, `base.css`, `index.html`, everything under `app/public/`, every
+# `app/tests/*` file that is not itself a spec (`.ts` helpers and `.json` fixtures),
+# `playwright.config.ts`, `devPort.ts`, `design-check-reporter.ts`, the package files, the
+# tsconfigs, and — outside `app/**` — anything already in `SCOPE` above (`check.yml`, this
+# file, `suite-lock.py`, the `design-check` Makefile recipe, narrowed the same way `classify`
+# narrows it).
+#
+# IT FAILS OPEN, IN EVERY DIRECTION THE HEADER ABOVE ALREADY ARGUES FOR `classify`: no
+# merge-base, an unreadable diff, an EMPTY diff, a changed path under `app/**` that no spec's
+# derived closure reaches (an unmapped file is a gap in the map, never a license to skip it),
+# a changed path outside `app/**` that IS in `SCOPE`, and a changed path carrying whitespace
+# (`PW_ARGS` is word-split by `make`, so a path with a space cannot be named to it at all) —
+# every one of these answers "every spec", same as `classify` answers RUN. NEVER a
+# block-list: docs/debts records what a guessed one let through once already.
+# `PKMNSCAN_BROWSER_SCOPE=off` selects every spec too, and says so by name — the same escape
+# hatch `classify`'s caller in `check.yml` already prints.
+
+SELECT_ALL = "all"
+
+_COMMENT_RE = re.compile(r"//[^\n]*|/\*.*?\*/", re.DOTALL)
+_IMPORT_FROM_RE = re.compile(
+    r"import\s+(?:type\s+)?[^;'\"]*?from\s*['\"]([^'\"]+)['\"]", re.MULTILINE)
+_BARE_IMPORT_RE = re.compile(r"(?<!from )import\s*['\"]([^'\"]+)['\"]")
+_CSS_IMPORT_RE = re.compile(r"@import\s+(?:url\(\s*)?['\"]?([^'\"()\s;]+)['\"]?\)?")
+_NAMED_IMPORT_RE = re.compile(r"import\s*\{\s*(\w+)\s*\}\s*from\s*['\"](\.[^'\"]+)['\"]")
+_ROUTE_ROW_RE = re.compile(r"path:\s*'([^']*)'[^\n]*?view:\s*(\w+)")
+_HASH_RE = re.compile(r"#(/[a-z-]*)")
+
+_SOURCE_EXTS = (".tsx", ".ts", ".css", ".jsx", ".js")
+
+
+def strip_comments(text: str) -> str:
+    return _COMMENT_RE.sub(" ", text)
+
+
+def resolve_relative_import(from_file: Path, spec: str) -> Optional[Path]:
+    """A relative import spec, resolved to a file on disk, or None.
+
+    Non-relative specs (`react`, `@playwright/test`, an alias) resolve to None on purpose —
+    this map is only ever about files this checkout can change."""
+    if not spec.startswith("."):
+        return None
+    target = (from_file.parent / spec)
+    guesses: List[Path] = []
+    if target.suffix:
+        guesses.append(target)
+    else:
+        guesses.extend(Path(str(target) + ext) for ext in _SOURCE_EXTS)
+        guesses.extend(target / f"index{ext}" for ext in (".tsx", ".ts"))
+    for guess in guesses:
+        if guess.is_file():
+            return guess.resolve()
+    return None
+
+
+def file_imports(path: Path) -> List[str]:
+    try:
+        text = path.read_text(encoding="utf-8")
+    except OSError:
+        return []
+    text = strip_comments(text)
+    specs = [m.group(1) for m in _IMPORT_FROM_RE.finditer(text)]
+    specs += [m.group(1) for m in _BARE_IMPORT_RE.finditer(text)]
+    if path.suffix == ".css":
+        specs += [m.group(1) for m in _CSS_IMPORT_RE.finditer(text)]
+    return specs
+
+
+def import_closure(entry: Path, exclude: frozenset = frozenset()) -> set:
+    """Every file `entry` reaches through relative imports, `entry` included.
+
+    `exclude` is skipped entirely — neither counted nor recursed into — which is how a
+    shared-surface closure is cut off at a screen boundary without walking the whole app."""
+    seen: set = set()
+    stack = [entry.resolve()]
+    while stack:
+        current = stack.pop()
+        if current in seen or current in exclude or not current.is_file():
+            continue
+        seen.add(current)
+        for spec in file_imports(current):
+            resolved = resolve_relative_import(current, spec)
+            if resolved is not None and resolved not in seen and resolved not in exclude:
+                stack.append(resolved)
+    return seen
+
+
+def route_map(app_dir: Path) -> Dict[str, Path]:
+    """`{hash path: screen file}`, read off `app/src/App.tsx`'s own `ROUTES` table and the
+    imports beside it — the same table `app/tests/routes.ts` derives its roster from."""
+    app_tsx = app_dir / "src" / "App.tsx"
+    if not app_tsx.is_file():
+        return {}
+    text = strip_comments(app_tsx.read_text(encoding="utf-8"))
+    component_file: Dict[str, Path] = {}
+    for match in _NAMED_IMPORT_RE.finditer(text):
+        name, spec = match.group(1), match.group(2)
+        resolved = resolve_relative_import(app_tsx, spec)
+        if resolved is not None:
+            component_file[name] = resolved
+    routes: Dict[str, Path] = {}
+    for match in _ROUTE_ROW_RE.finditer(text):
+        hash_path, component = match.group(1), match.group(2)
+        if component in component_file:
+            key = "/" if hash_path in ("", "/") else "/" + hash_path.strip("/")
+            routes[key] = component_file[component]
+    return routes
+
+
+def hash_paths_named(text: str) -> set:
+    return {(m.group(1) or "/") for m in _HASH_RE.finditer(text)}
+
+
+def spec_files(app_dir: Path) -> List[Path]:
+    tests_dir = app_dir / "tests"
+    if not tests_dir.is_dir():
+        return []
+    return sorted(tests_dir.glob("*.spec.ts"))
+
+
+def spec_closures(app_dir: Path, routes: Dict[str, Path]) -> Dict[Path, set]:
+    all_screens = frozenset(routes.values())
+    closures: Dict[Path, set] = {}
+    for spec in spec_files(app_dir):
+        own = import_closure(spec)
+        text = strip_comments(spec.read_text(encoding="utf-8"))
+        if "routesFromNav(" in text:
+            for screen in all_screens:
+                own |= import_closure(screen)
+        else:
+            for hash_path in hash_paths_named(text):
+                screen = routes.get(hash_path)
+                if screen is not None:
+                    own |= import_closure(screen)
+        closures[spec.resolve()] = own
+    return closures
+
+
+def shared_surface(app_dir: Path, routes: Dict[str, Path]) -> set:
+    """Files that, touched, mean every spec — see the header above for the derivation."""
+    src = app_dir / "src"
+    shared: set = set()
+    all_screens = frozenset(routes.values())
+    app_tsx = src / "App.tsx"
+    main_tsx = src / "main.tsx"
+    if app_tsx.is_file():
+        shared |= import_closure(app_tsx, exclude=all_screens)
+    if main_tsx.is_file():
+        shared |= import_closure(main_tsx, exclude=frozenset({app_tsx.resolve()}))
+    kit_dir = src / "kit"
+    if kit_dir.is_dir():
+        shared |= {p.resolve() for p in kit_dir.rglob("*") if p.is_file()}
+    for name in ("tokens.css", "base.css"):
+        candidate = src / name
+        if candidate.is_file():
+            shared.add(candidate.resolve())
+    index_html = app_dir / "index.html"
+    if index_html.is_file():
+        shared.add(index_html.resolve())
+    public_dir = app_dir / "public"
+    if public_dir.is_dir():
+        shared |= {p.resolve() for p in public_dir.rglob("*") if p.is_file()}
+    tests_dir = app_dir / "tests"
+    if tests_dir.is_dir():
+        for candidate in tests_dir.iterdir():
+            if candidate.is_file() and not candidate.name.endswith(".spec.ts"):
+                shared.add(candidate.resolve())
+    for name in ("playwright.config.ts", "design-check-reporter.ts", "devPort.ts"):
+        candidate = app_dir / name
+        if candidate.is_file():
+            shared.add(candidate.resolve())
+    for name in ("package.json", "package-lock.json"):
+        candidate = app_dir / name
+        if candidate.is_file():
+            shared.add(candidate.resolve())
+    if app_dir.is_dir():
+        shared |= {p.resolve() for p in app_dir.glob("tsconfig*.json")}
+    return shared
+
+
+# `SCOPE` entries outside `app/**` — anything a spec allow-list narrows within `app/**` still
+# has to answer to the suite's OTHER dependencies, which `SCOPE` already lists.
+_NON_APP_SCOPE = tuple(entry for entry in SCOPE if entry["path"] != "app/**")
+
+
+def _touches_non_app_scope(changed: Sequence[str]) -> Optional[str]:
+    outside = [p for p in changed if not matches("app/**", p)]
+    if not outside:
+        return None
+    verdict = classify_paths(outside, lambda side, path: None, scope=_NON_APP_SCOPE,
+                              subject="a shared, non-`app/` dependency", noun="the selection")
+    return None if not verdict.run else "a changed path outside app/** is in SCOPE"
+
+
+class SpecVerdict(NamedTuple):
+    specs: List[str]  # relative paths under app/tests/, or [] when `all` is meant
+    all_specs: bool
+    lines: List[str]
+
+
+def specs_for_changed_paths(changed: Sequence[str], root: Path = ROOT) -> SpecVerdict:
+    app_dir = root / "app"
+    lines: List[str] = []
+
+    if os.environ.get("PKMNSCAN_BROWSER_SCOPE") == "off":
+        return SpecVerdict([], True, ["PKMNSCAN_BROWSER_SCOPE=off — every spec selected."])
+
+    if not changed:
+        return SpecVerdict([], True, [
+            "no changed files were found. That is more likely a wrong base than an empty "
+            "change, so every spec is selected."])
+
+    whitespace_hit = next((p for p in changed if any(ch.isspace() for ch in p)), None)
+    if whitespace_hit is not None:
+        return SpecVerdict([], True, [
+            f"{whitespace_hit!r} carries whitespace — PW_ARGS is word-split by make, so it "
+            "cannot be named to it. Every spec is selected."])
+
+    non_app_reason = _touches_non_app_scope(changed)
+    if non_app_reason is not None:
+        return SpecVerdict([], True, [non_app_reason + " — every spec is selected."])
+
+    routes = route_map(app_dir)
+    closures = spec_closures(app_dir, routes)
+    shared = shared_surface(app_dir, routes)
+
+    all_specs = sorted(str(p.relative_to(root)) for p in closures)
+    selected: set = set()
+    reached_by_none: List[str] = []
+    for changed_path in changed:
+        if not matches("app/**", changed_path):
+            continue  # already covered by _touches_non_app_scope above
+        resolved = (root / changed_path).resolve()
+        if resolved in shared:
+            lines.append(f"  ALL   {changed_path}  (a shared surface)")
+            return SpecVerdict([], True, lines + ["a shared surface changed — every spec is "
+                                                   "selected."])
+        hit_any = False
+        for spec, files in closures.items():
+            if resolved in files:
+                selected.add(str(spec.relative_to(root)))
+                hit_any = True
+        if hit_any:
+            lines.append(f"  some  {changed_path}")
+        else:
+            reached_by_none.append(changed_path)
+            lines.append(f"  ???   {changed_path}  (no spec's derived closure reaches this)")
+
+    if reached_by_none:
+        return SpecVerdict([], True, lines + [
+            f"{len(reached_by_none)} changed path(s) under app/** reach no spec's derived "
+            "closure — the map is a gap, never a license to skip. Every spec is selected."])
+
+    ordered = sorted(selected)
+    lines.append(f"{len(ordered)} of {len(all_specs)} specs reached: " +
+                 (", ".join(ordered) if ordered else "(none)"))
+    return SpecVerdict(ordered, False, lines)
+
+
+def write_specs_output(verdict: SpecVerdict) -> None:
+    target = os.environ.get("GITHUB_OUTPUT")
+    value = SELECT_ALL if verdict.all_specs else " ".join(verdict.specs)
+    partial = "false" if verdict.all_specs else "true"
+    if not target:
+        return
+    with open(target, "a", encoding="utf-8") as handle:
+        handle.write(f"specs={value}\n")
+        handle.write(f"partial={partial}\n")
+
+
+def specs_command(base: Optional[str], head: str) -> int:
+    if base is None:
+        base = "origin/main"
+    start = landing_base(base, head)
+    if start is None:
+        verdict = SpecVerdict([], True, [f"no merge-base between {base} and {head} — every "
+                                          "spec is selected."])
+    else:
+        paths = changed_paths(start, head)
+        if paths is None:
+            verdict = SpecVerdict([], True, [f"`git diff {start[:12]} {head}` failed — every "
+                                              "spec is selected."])
+        else:
+            verdict = specs_for_changed_paths(paths)
+    for line in verdict.lines:
+        print(line)
+    write_specs_output(verdict)
+    summary = os.environ.get("GITHUB_STEP_SUMMARY")
+    if summary:
+        with open(summary, "a", encoding="utf-8") as handle:
+            if verdict.all_specs:
+                handle.write("partial: false (every spec)\n")
+            else:
+                handle.write(f"partial: {len(verdict.specs)} of "
+                             f"{len(spec_files(ROOT / 'app'))} specs\n")
+    return 0
+
+
 # ------------------------------------------------------------------------------ selftest
 
 
@@ -453,6 +775,46 @@ def selftest() -> int:
     ok(recipe is not None and "NPM_GUARD" in recipe and "app/node_modules" in recipe,
        "`$(NPM_GUARD)` is expanded one level into the text compared")
 
+    print("\nthe spec allow-list, over the real tree")
+    kit_case = specs_for_changed_paths(["app/src/kit/Icon.tsx"])
+    ok(kit_case.all_specs, "a shared path under app/src/kit/ selects every spec")
+
+    inv_case = specs_for_changed_paths(["app/src/Inventory.tsx"])
+    ok(not inv_case.all_specs, "app/src/Inventory.tsx narrows rather than selecting every spec")
+    ok("app/tests/inventory.spec.ts" in inv_case.specs,
+       "app/src/Inventory.tsx selects inventory.spec.ts")
+    ok(any(s in inv_case.specs for s in
+           ("app/tests/cursor.spec.ts", "app/tests/page-edge.spec.ts",
+            "app/tests/wide.spec.ts", "app/tests/copy-budget.spec.ts",
+            "app/tests/button-stack.spec.ts")),
+       "app/src/Inventory.tsx selects the routesFromNav( sweeping specs")
+    ok("app/tests/review.spec.ts" not in inv_case.specs,
+       "app/src/Inventory.tsx does NOT select review.spec.ts")
+
+    unknown_case = specs_for_changed_paths(["app/src/no-such-file-ever.tsx"])
+    ok(unknown_case.all_specs, "an unknown app/ path selects every spec")
+
+    os.environ["PKMNSCAN_BROWSER_SCOPE"] = "off"
+    try:
+        off_case = specs_for_changed_paths(["app/src/Inventory.tsx"])
+    finally:
+        del os.environ["PKMNSCAN_BROWSER_SCOPE"]
+    ok(off_case.all_specs, "PKMNSCAN_BROWSER_SCOPE=off selects every spec")
+
+    space_case = specs_for_changed_paths(["app/src/Inventory .tsx"])
+    ok(space_case.all_specs, "a path with whitespace selects every spec")
+
+    empty_case = specs_for_changed_paths([])
+    ok(empty_case.all_specs, "an empty diff selects every spec")
+
+    nonapp_case = specs_for_changed_paths(["Makefile"])
+    ok(nonapp_case.all_specs,
+       "a non-app/ path already in SCOPE (the Makefile) selects every spec")
+
+    docs_case = specs_for_changed_paths(["docs/DECISIONS.md"])
+    ok(not docs_case.all_specs and docs_case.specs == [],
+       "a docs-only path outside app/ and outside SCOPE selects no spec")
+
     print()
     if failures:
         print(f"{len(failures)} failed")
@@ -474,6 +836,9 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
     hist = sub.add_parser("history", help="the verdict over main's last N first-parent commits")
     hist.add_argument("count", nargs="?", type=int, default=20)
     sub.add_parser("list", help="the scope, with each entry's reason")
+    specs_p = sub.add_parser("specs", help="which spec files a partial run needs")
+    specs_p.add_argument("--base", help="a revision; the merge-base against --head is the start")
+    specs_p.add_argument("--head", default="HEAD")
     sub.add_parser("selftest", help="prove the matcher and the narrowing")
     args = parser.parse_args(argv)
 
@@ -484,6 +849,8 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
         return 0
     if args.command == "history":
         return history(args.count)
+    if args.command == "specs":
+        return specs_command(args.base, args.head)
     if args.command == "selftest":
         return selftest()
 
