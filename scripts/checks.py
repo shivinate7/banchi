@@ -820,6 +820,32 @@ CHECKS = (
         "gates": True,
         "governed_by": ("D18", "D123", "D173"),
     },
+    {
+        "target": "subagent-override-selftest",
+        "runs": "python3 scripts/subagent-override-selftest.py",
+        "asserts": "`make docs-audit`'s `subagent override` row, by violating it in a real "
+                   "throwaway git repository with a real nested worktree (the shape "
+                   "`.claude/worktrees/<name>/` is, and the exact place a 2026-09-19 "
+                   "forgotten subagent-model override sat): a clean tree is green; the "
+                   "override in the checkout's own settings.local.json is red and named; "
+                   "the same override in the NESTED WORKTREE's own settings.local.json is "
+                   "red and named by its own path — the case a root-only reader would miss; "
+                   "an expiry already past is red; an expiry inside the 24-hour lookahead "
+                   "ceiling is GREEN, proving this is not a bare forbid; an expiry past the "
+                   "ceiling is red again; and the override in the TRACKED settings.json is "
+                   "red regardless of expiry, because no expiry excuses committing it.",
+        "needs": ("python3", "git"),
+        "writes": "a temporary git repository and a real nested worktree under "
+                  "`mktemp -d`, removed at the end of the run — never the real repo's own "
+                  "`.claude/` or `.claude/worktrees/`.",
+        "commit_path": False,
+        "why_off_commit_path": "D18 — it writes a temporary git repository and worktree. "
+                               "The row it proves runs on every commit regardless, in "
+                               "`check_subagent_override` inside docs-audit.py's own "
+                               "unconditional (never `--staged`-narrowed) call list.",
+        "gates": True,
+        "governed_by": ("D18", "D135", "D173", "D178"),
+    },
 )
 
 
