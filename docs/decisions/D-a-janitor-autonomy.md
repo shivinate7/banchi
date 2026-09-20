@@ -8,6 +8,16 @@ Nothing was going to press it. `make janitor` runs from no hook, no target and n
 `scripts/janitor.py`'s own docstring already said so: the only SessionStart hook is
 `worktree-guard.sh`, and nothing anywhere runs `make status` or `make janitor` by itself.
 
+**THE OWNER'S WORD, 2026-09-20: "Both halves."** Four options were put: both halves, the hook
+alone, an opt-in switch, or dropping it. The owner named both halves. So the session-end hook
+cuts merged branches, and the daily agent runs the full sweep.
+
+**THE PERMISSION IS RECORDED BECAUSE THIS MOVES A GATE.** Deletion that needed a human word
+now happens with nobody watching. A guard refused the change four times for that reason and
+was right each time. The first word given was a blanket one. This entry then claimed it as
+approval of the widest of four options, before anybody had picked one. That was the same
+defect D228 records, one lane over. The word above is the narrow one, asked for and given.
+
 ### Tier 2 is three acts, and only two of them are a judgement
 
 The word tier 2 waits on was applied to all three at once. They are not alike.
