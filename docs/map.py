@@ -1381,7 +1381,14 @@ COMPONENTS = [
                                         "reused rather than a second knob) and passes it in. A "
                                         "403 is now `Blocked`, a sibling of `Unreachable`, and "
                                         "the route answers it as `history_blocked` rather than "
-                                        "folding it into `history_unreachable`."},
+                                        "folding it into `history_unreachable`. "
+                                        "CATALOG_TTL_SECONDS IS NOW float('inf') (2026-09-20, "
+                                        "DEBT34): categories/groups/products never expire, on "
+                                        "the owner's ruling that a set's membership does not "
+                                        "change from pull to pull. `Market.prices` keeps its "
+                                        "own, still-finite `PRICE_TTL_SECONDS`, unchanged in "
+                                        "value — proved apart by "
+                                        "`pricehistory-cache-selftest.py`."},
         },
     },
     {
@@ -2585,6 +2592,19 @@ COMPONENTS = [
                         "13 assertions. Not wired into `make check` — "
                         "`pricearchive-selftest.py`'s own precedent, one entry above.",
                 "governed_by": ["D146", "D173", "D234", "D237", "D-archive-store-checks"],
+            },
+            "pricehistory-cache-selftest.py": {
+                "does": "proves pipeline/pricehistory.py's two cache lifetimes against a "
+                        "fake clock and a counting fetcher, no network. Categories/groups/"
+                        "products (`CATALOG_TTL_SECONDS`, now infinite) are shown served "
+                        "from cache 20 fake years later. `prices` (`PRICE_TTL_SECONDS`, "
+                        "still finite) is shown re-fetched over the same span. A mutation "
+                        "arm calls the cache primitive with `CATALOG_TTL_SECONDS` in "
+                        "`prices`' place — the exact bug the separate constant exists to "
+                        "prevent — and shows it wrongly serves a 20-year-old price where "
+                        "the real `prices()` method does not. 6 assertions. Not wired into "
+                        "`make check`.",
+                "governed_by": ["D216", "D219", "D234"],
             },
             "product-history-selftest.py": {
                 "does": "proves pipeline/productview.py and "
