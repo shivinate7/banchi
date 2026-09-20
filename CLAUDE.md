@@ -611,7 +611,7 @@ not rendered — not focusable, not reachable by a screen reader).
   redirected away). `make guard-shell-selftest` proves each one by committing its mistake in
   a throwaway repository.
   **The ninth clause NAMES its subjects instead of resolving them, alone among the nine.**
-  D-merge-hang-two-causes argues why. No reader can say before a command runs whether it
+  D234 argues why. No reader can say before a command runs whether it
   blocks and narrates. A clause firing on every pipe into `tail` would be spent on day one.
   So the roster is short and per-incident. It is also reconciled. The self-test asserts every
   command it names still carries a heartbeat constant in the file that runs it. A preview
@@ -948,6 +948,7 @@ D230 The sweep's own resume window is six days, not one hour
 D231 The subject list widens to the order ledger, and sealed product joins it
 D232 The lossless half of the cleanup needs no word, and the schedule is the backstop for the events that miss
 D233 A card row that refuses retries the ledger's own row
+D234 The heartbeat is refused a pipe, and the wait learns the other half of its own question
 ```
 
 D116-D118: D117 exists and slots between them — a third branch's number, resolved on merge.
