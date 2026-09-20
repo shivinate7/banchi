@@ -382,7 +382,7 @@ COMPONENTS = [
                             "governed_by": ["D1", "D3", "D9", "D21", "D25", "D36", "D48", "D86",
                                             "D87", "D100", "D145", "D172", "D180",
                                             "D189", "D210",
-                                            "D213", "D219"],
+                                            "D213", "D219", "D-archive-store-checks"],
                             "tested_by": ["T7"]},
             "cmd_scan.py": {"does": "read the QR codes off a directory of code-card photos into "
                                     "the ledger. FREE — no model call, no network, no money gate "
@@ -456,12 +456,14 @@ COMPONENTS = [
                                         "the table and writes nothing.",
                                 "governed_by": ["D189", "D86"],
                                 "tested_by": ["T7"]},
-            "cmd_cards.py": {"does": "`pkmnscan cards <name|audit|photos>` — the card's "
-                                     "stable name (D172). `name` previews what the naming "
-                                     "sees and would do, `audit` asks whether every card's "
-                                     "name still resolves to its photograph, and `photos` "
+            "cmd_cards.py": {"does": "`pkmnscan cards <name|audit|checks|photos|variants>` "
+                                     "— the card's stable name (D172). `name` previews what "
+                                     "the naming sees and would do, `audit` asks whether "
+                                     "every card's name still resolves to its photograph, "
+                                     "`checks` runs the four stored-data identification "
+                                     "checks (D-archive-store-checks), and `photos` "
                                      "moves the corpus off the legacy `(box, index)` address "
-                                     "onto the card's own name. TWO OF THE THREE WRITE "
+                                     "onto the card's own name. THREE OF THE FIVE WRITE "
                                      "NOTHING EVER and neither may call `db.connect`: that "
                                      "function is the single entry to the store and always "
                                      "calls `_ensure_schema`, so a preview routed through it "
@@ -471,7 +473,7 @@ COMPONENTS = [
                                      "cannot be re-taken",
                              "governed_by": ["D172", "D183",
                                              "D26", "D88", "D89",
-                                             "D213"],
+                                             "D213", "D-archive-store-checks"],
                              "tested_by": ["T7"]},
             # THE PRESS `pkmnscan archive sweep` RUNS (D219,
             # D224, D223, D222).
@@ -743,6 +745,28 @@ COMPONENTS = [
                                  "condition map from the `pokemon` entry and is the proof the "
                                  "entry is right — the values are byte-identical to the literals "
                                  "it replaced."},
+            # THE FOUR STORED-DATA CHECKS `D-archive-store-checks` BUILDS. Pure functions
+            # over plain `CardRecord`s, no store import — `cli/cmd_cards.py`'s `checks`
+            # subcommand is the one caller, reading the real store read-only.
+            "identity_checks.py": {"does": "Four review-signal checks over already-stored "
+                                           "card fields, no catalogue, no network: a name "
+                                           "too long to be a name, a denominator or digit "
+                                           "count that disagrees with its set's own "
+                                           "dominant reading, and a name one edit from a "
+                                           "different name this store holds in the same "
+                                           "set. Never a repair — every flag routes to a "
+                                           "human. Reused by nothing else; the SKU "
+                                           "self-contradiction check is a separate, "
+                                           "sibling build kept apart on the owner's ruling.",
+                                    "governed_by": ["D146", "D173", "D234",
+                                                    "D-archive-store-checks"],
+                                    "note": "PROVED BY `scripts/identity-checks-selftest.py`: "
+                                            "13 arms, including a mutation arm over the "
+                                            "denominator check's dominant-vs-first-seen "
+                                            "choice. Not wired into `make check`, matching "
+                                            "`pricearchive.py`'s own precedent — its one "
+                                            "caller is a CLI subcommand, not tested_by any "
+                                            "harness id."},
             # D10's label formula lives here, and as of 2026-08-29 it assumes NO divider size:
             # `Position.layout` falls back to `(1,)`, so an undeclared box is one section and
             # `CARDS_PER_SECTION` is deleted rather than defaulted.
@@ -2546,6 +2570,21 @@ COMPONENTS = [
                         "entry and lose its first_seen. Not wired into `make check` — "
                         "`make pricearchive-selftest`'s own precedent.",
                 "governed_by": ["D167", "D219", "D233", "D234", "D238"],
+            },
+            "identity-checks-selftest.py": {
+                "does": "proves pipeline/identity_checks.py against literal CardRecord "
+                        "fixtures, no store, no network (D-archive-store-checks). One "
+                        "positive and one negative arm per check, built from the exact "
+                        "subjects the cited analysis measured. A case proving the "
+                        "denominator and digit-count checks flag a genuine rare print "
+                        "honestly, rather than hiding it. A case reproducing the "
+                        "analysis's own Draven, Glorious Executioner finding. A mutation "
+                        "arm: a denominator check comparing against the first-seen value "
+                        "instead of the dominant one is shown to blame the wrong card "
+                        "before the real function is shown to survive the same fixture. "
+                        "13 assertions. Not wired into `make check` — "
+                        "`pricearchive-selftest.py`'s own precedent, one entry above.",
+                "governed_by": ["D146", "D173", "D234", "D-archive-store-checks"],
             },
             "product-history-selftest.py": {
                 "does": "proves pipeline/productview.py and "

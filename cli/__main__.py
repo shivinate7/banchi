@@ -266,7 +266,9 @@ def build_parser() -> argparse.ArgumentParser:
         "cards",
         help="the card's stable name: preview it, audit it, move the photographs.",
     )
-    cards_sub = cards.add_subparsers(dest="cards_action", metavar="<name|audit|photos|variants>")
+    cards_sub = cards.add_subparsers(
+        dest="cards_action", metavar="<name|audit|checks|photos|variants>"
+    )
     cards_sub.add_parser(
         "name",
         help="what the naming sees and what it would do. Read-only, writes nothing.",
@@ -280,6 +282,18 @@ def build_parser() -> argparse.ArgumentParser:
         "--verbose",
         action="store_true",
         help="list the excused cards as well as counting them.",
+    )
+    cards_checks = cards_sub.add_parser(
+        "checks",
+        help="four stored-data identification checks (D-archive-store-checks): a name too "
+        "long to be a name, a denominator that disagrees with its set, more digits than "
+        "the set has cards, a name one edit from a sibling in the same set. Read-only "
+        "review signals, never repairs, never a catalogue call.",
+    )
+    cards_checks.add_argument(
+        "--verbose",
+        action="store_true",
+        help="list every flagged card as well as counting them.",
     )
     cards_photos = cards_sub.add_parser(
         "photos",
