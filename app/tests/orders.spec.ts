@@ -1774,7 +1774,7 @@ test('a buyer with nothing open and closed long ago sits under the Earlier fold'
   })
   await open(page, { orders: payloadOf([order(), stale], [{ key: `TCGplayer:${ORDER_NUMBER}`, number: ORDER_NUMBER, complete: false, outstanding: 1, lines: [line()] }]) })
 
-  await page.locator('main.orders').getByRole('button', { name: 'Done' }).click()
+  await page.locator('main.orders').locator('.orders-filter-select').selectOption('done')
   const earlier = page.locator('.orders-earlier')
   await expect(earlier).toBeVisible()
   await expect(earlier).toContainText('Grace Hopper')
@@ -1890,6 +1890,52 @@ test('each control narrows; they compose', async ({ page }) => {
   await select.selectOption('Ready to Ship')
   await expect(page.locator('.orders-index-row')).toHaveCount(1)
   await expect(page.locator('.orders-index-row')).toContainText('Alice')
+})
+
+/* THE REASON FILTER IS A DROPDOWN, NOT PILLS (owner's ruling, 2026-09-19: "make this a
+ *  dropdown not pills"). `.orders-filter-select` replaced the six `.orders-chip` buttons;
+ *  this proves the select narrows exactly as each removed chip used to, option by option, and
+ *  clears the 40px thumb floor at phone width. */
+test('the filter select carries the same options and labels the removed chips drew', async ({ page }) => {
+  await open(page, { orders: threeBuyerPayload() })
+  const options = page.locator('.orders-filter-select option')
+  await expect(options).toHaveCount(5)
+  await expect(options).toContainText(['All open (3)', 'Every copy found (1)', 'Short (1)', 'Never seen (1)', 'Done (0)'])
+})
+
+test('each filter option narrows the buyer list exactly as the chip it replaced did', async ({ page }) => {
+  await open(page, { orders: threeBuyerPayload() })
+  const select = page.locator('.orders-filter-select')
+  await expect(select).toHaveValue('all')
+  expect(await buyerOrder(page)).toEqual(['Carol', 'Alice', 'Bob'])
+
+  await select.selectOption('resolved')
+  await expect(page.locator('.orders-index-row')).toHaveCount(1)
+  await expect(page.locator('.orders-index-row')).toContainText('Alice')
+
+  await select.selectOption('short')
+  await expect(page.locator('.orders-index-row')).toHaveCount(1)
+  await expect(page.locator('.orders-index-row')).toContainText('Bob')
+
+  await select.selectOption('sku_unseen')
+  await expect(page.locator('.orders-index-row')).toHaveCount(1)
+  await expect(page.locator('.orders-index-row')).toContainText('Carol')
+
+  /* NONE OF THE THREE IS DONE — the empty state under `done` is the one no chip's count ever
+     showed on this fixture, and it is the same sentence the chip's empty state used to draw. */
+  await select.selectOption('done')
+  await expect(page.locator('.orders-index-row')).toHaveCount(0)
+  await expect(page.locator('main.orders')).toContainText('Nothing fulfilled yet')
+
+  await select.selectOption('all')
+  expect(await buyerOrder(page)).toEqual(['Carol', 'Alice', 'Bob'])
+})
+
+test('the filter select clears the 40px thumb floor at phone width', async ({ page }) => {
+  await page.setViewportSize({ width: 390, height: 900 })
+  await open(page, { orders: threeBuyerPayload() })
+  const box = await page.locator('.orders-filter-select').boundingBox()
+  expect(box?.height ?? 0).toBeGreaterThanOrEqual(40)
 })
 
 test('a changed filter reorders immediately', async ({ page }) => {
@@ -2112,7 +2158,7 @@ test('the search reaches the Earlier fold, so a Done buyer past the 7-day cut is
   })
   await open(page, { orders: payloadOf([order(), stale], [{ key: `TCGplayer:${ORDER_NUMBER}`, number: ORDER_NUMBER, complete: false, outstanding: 1, lines: [line()] }]) })
 
-  await page.locator('main.orders').getByRole('button', { name: 'Done' }).click()
+  await page.locator('main.orders').locator('.orders-filter-select').selectOption('done')
   await page.locator('.orders-search-input').fill('hopper')
   const earlier = page.locator('.orders-earlier')
   await expect(earlier).toBeVisible()
@@ -2153,7 +2199,7 @@ function terminalOwingOrder(over: Partial<OrderRow> = {}): OrderRow {
 test('a done order with nothing owed still draws nothing — unchanged from before this fix', async ({ page }) => {
   const closed = order({ open: false, wanted: 1, recorded: 1, status: 'Shipped', terminal: true })
   await open(page, { orders: payloadOf([closed], []) })
-  await page.locator('main.orders').getByRole('button', { name: 'Done' }).click()
+  await page.locator('main.orders').locator('.orders-filter-select').selectOption('done')
   await expect(page.locator('main.orders')).toContainText('Done')
   await expect(page.locator('.orders-lines')).toHaveCount(0)
   await expect(page.getByRole('button', { name: 'Pull' })).toHaveCount(0)
@@ -2164,7 +2210,7 @@ test('a terminal order that still owes copies, with no answer yet, shows a way t
 }) => {
   const owing = terminalOwingOrder()
   await open(page, { orders: payloadOf([owing], []) })
-  await page.locator('main.orders').getByRole('button', { name: 'Done' }).click()
+  await page.locator('main.orders').locator('.orders-filter-select').selectOption('done')
   /* RE-AIMED: `OrderDetail`'s own body — where this sentence lives — moved into the Manage
      sheet with the rest of the per-order controls (§13). */
   await openManage(page)
