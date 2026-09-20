@@ -327,7 +327,12 @@ first paint, cross-faded as one mechanism. A screen not looked at in dark is not
 
 **Type has three roles**: `--bn-font-display` (Manrope, headings), `--bn-font-ui` (Inter,
 everything), `--bn-font-mono` (JetBrains Mono, machine strings only — SKUs, run names, reason
-codes, key caps, card numbers). Numbers in tables are Inter tabular-nums, not mono. Body is 14px.
+codes, key caps, card numbers). Numbers in tables are Inter tabular-nums, not mono, except
+money: a dollar figure takes the mono face through `.bn-money`, never a hand-rolled
+declaration (D-money-stays-mono). **NOT MECHANIZED:** a machine cannot tell a dollar figure
+from another tabular machine string by its CSS alone. Mono, 600-weight and tabular-nums
+already mark SKUs, run ids and card numbers throughout `app/src`. Which face a span deserves
+is read from what it holds, never from its declaration. Body is 14px.
 
 **The kit is `app/src/kit/` and `app/src/kit.css`.** `#/gallery` renders all of it. Reach for
 the kit before writing a primitive. A fourth hand-rolled button is how a design system dies.
