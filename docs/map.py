@@ -2227,8 +2227,7 @@ COMPONENTS = [
                 # two targets here that can delete a file. D53 is what it must not undo — the
                 # main checkout's supervisor is the product and is never touched. D42 is why a
                 # branch is judged by ancestry rather than by `git branch -d`.
-                "governed_by": ["D18", "D42", "D44", "D53", "D111", "D127",
-                                "D175"],
+                "governed_by": ["D18", "D42", "D44", "D47", "D53", "D111", "D127", "D175"],
             },
             "serve-selftest.py": {
                 "does": "THE SUPERVISOR'S BUILD JOB, PROVED AGAINST A THROWAWAY TREE (D138). "

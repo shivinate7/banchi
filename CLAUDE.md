@@ -87,6 +87,16 @@ make up             # THE server, detached — ONE PROCESS (D138). Serves app/di
                     #   WILL NOT SERVE A PRIMARY CHECKOUT OFF MAIN (D158, D53).
                     #   `PKMNSCAN_SERVE_MAIN=off` overrides, printed in every refusal.
                     #   Silent on any branch in a LINKED WORKTREE (D43).
+make janitor        # what a finished session left behind. PREVIEWS both tiers, presses
+                    #   nothing. ARGS=--confirm reaps tier 2: worktrees, loose processes and
+                    #   branches. Runs from no hook and no schedule.
+make janitor-agent  # that sweep DAILY and unattended, as a launch agent, with
+                    #   `.serve/janitor.log` as its receipt. MAIN TREE ONLY — a plist naming a
+                    #   worktree outlives the worktree. ARGS=--remove. The backstop for the two
+                    #   events that already run the cheap half and are both known to miss.
+                    #   `janitor.py --branches` is the one part of tier 2 that destroys
+                    #   nothing, so the session-end hook runs it with no word: a branch reaches
+                    #   it only when main already carries every commit on it.
 make launch-agent   # start at login. MAIN TREE ONLY: its plist would outlive a worktree.
                     #   ARGS=--remove. The Dock app is a CLIENT of this, via Chrome's
                     #   "Install page as app" (D108), never a second copy. No `make` target
@@ -927,6 +937,7 @@ D228 The claim is spent only on a merge that can happen, and the loser of a race
 D229 The prose ratchet is pinned per file, because a repo-wide number is one every merge takes from somebody
 D230 The sweep's own resume window is six days, not one hour
 D231 The subject list widens to the order ledger, and sealed product joins it
+D232 The lossless half of the cleanup needs no word, and the schedule is the backstop for the events that miss
 ```
 
 D116-D118: D117 exists and slots between them — a third branch's number, resolved on merge.

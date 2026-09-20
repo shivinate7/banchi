@@ -4,7 +4,7 @@
 # the project would be built on top of — `make check` green means every check ran.
 
 .DEFAULT_GOAL := help
-.PHONY: help status map explain harness check cid-selftest cid-audit ignore-check docs-audit map-fix map-fix-selftest orient orient-selftest serve-scope serve-scope-selftest vale audit-self-test verdict-selftest githooks-selftest merge merge-selftest revert-guard revert-selftest claim-ids claim-stale claim-selftest decisions-selftest debts-selftest gates-selftest port-agreement set-hint-agreement readiness-agreement mutate-anchors mutate-guards screen-freshness screen-freshness-selftest sigil-check suite-lock-selftest browser-scope-selftest js-breakpoints-selftest icloud-sweep audit-history dev server screenshot design-check design-check-quiet lint typecheck venv launch-config worktree-setup hooks up down launch-agent demo demo-photos demo-seed demo-record demo-static demo-preview demo-freshness catalog-refresh catalog-index catalog-index-selftest catalog-mirror
+.PHONY: help status map explain harness check cid-selftest cid-audit ignore-check docs-audit map-fix map-fix-selftest orient orient-selftest serve-scope serve-scope-selftest vale audit-self-test verdict-selftest githooks-selftest merge merge-selftest revert-guard revert-selftest claim-ids claim-stale claim-selftest decisions-selftest debts-selftest gates-selftest port-agreement set-hint-agreement readiness-agreement mutate-anchors mutate-guards screen-freshness screen-freshness-selftest sigil-check suite-lock-selftest browser-scope-selftest js-breakpoints-selftest janitor-agent icloud-sweep audit-history dev server screenshot design-check design-check-quiet lint typecheck venv launch-config worktree-setup hooks up down launch-agent demo demo-photos demo-seed demo-record demo-static demo-preview demo-freshness catalog-refresh catalog-index catalog-index-selftest catalog-mirror
 
 # Prefer the venv if it exists, so `make harness` works without anyone remembering to
 # activate anything. Falls back to system python3, which still runs T2-T5 — T1 needs the
@@ -137,6 +137,8 @@ help:
 	@echo "  make ignore-check  every path a worktree provisions is gitignored, link or not (D47)."
 	@echo "  make icloud-sweep  list iCloud conflict copies. ARGS=--delete removes the identical ones."
 	@echo "  make janitor      what a finished session left behind. ARGS=--confirm reaps tier 2."
+	@echo "  make janitor-agent  run that sweep daily, unattended, with a log as its receipt."
+	@echo "                    MAIN TREE ONLY. ARGS=--remove takes it away."
 	@echo "  make reap         stop what THIS session started, and nothing else. Previews;"
 	@echo "                    ARGS=--confirm presses. ARGS=\"port:5484 --confirm\" for one port."
 	@echo "  make ci-check     what a fresh clone can prove: everything in check but vale."
@@ -857,6 +859,14 @@ icloud-sweep:
 # The code itself is kept because a scheduled caller wants to know whether there is work.
 janitor:
 	@python3 scripts/janitor.py $(ARGS); s=$$?; [ $$s -le 1 ] || exit $$s
+
+# THE SWEEP ON A SCHEDULE, because the two events that run it are both known to miss. A tree
+# abandoned by a session that died is removed by nobody, so `WorktreeRemove` never fires for
+# it, and `.claude/settings.json` already calls `SessionEnd` unreliable at app quit and machine
+# sleep. Writes to ~/Library and so is on no hook and in no check, exactly as `launch-agent` is
+# (D18). Main checkout only: a plist naming a worktree outlives the worktree.
+janitor-agent:
+	@python3 scripts/janitor.py --install-agent $(ARGS)
 
 # In `check`, never in the git hook: it writes a temp tree and signals the processes it spawned
 # there, which is D18's line. Same standing as merge-selftest and githooks-selftest.
