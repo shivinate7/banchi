@@ -1633,10 +1633,12 @@ test('a buyer with two open orders walks both at once — one selection, one pla
       { key: secondOrderKey, number: SECOND_ORDER, complete: false, outstanding: 1, lines: [secondLine()] },
     ],
   )
-  await open(page, { orders: both })
-  await stubWalkPlan(
-    page,
-    walkPlanOf([
+  /* `open()`'s OWN `walkPlan`, not `stubWalkPlan` after it: the sole buyer selects itself on
+     landing (§13) and the plan is fetched before a later stub can register — CI lost that race
+     on 2026-09-20 (`.browse-list` never drew), the same race `open()`'s option exists for. */
+  await open(page, {
+    orders: both,
+    walkPlan: walkPlanOf([
       walkPlanStop(),
       walkPlanStop({
         key: 'box/5/section/1',
@@ -1656,7 +1658,7 @@ test('a buyer with two open orders walks both at once — one selection, one pla
         ],
       }),
     ]),
-  )
+  })
   await page.locator('.orders-index-row').first().click()
 
   /* BOTH CARDS ARE IN ONE WALK LIST — the plan built from the union of the buyer's open
