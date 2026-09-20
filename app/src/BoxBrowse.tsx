@@ -2488,7 +2488,7 @@ export function BoxBrowse({
 
                     {open === null ? null : (
                       <div className="browse-queued">
-                        <Notice tone="warn" title={`Waiting in the ${open.queue} queue — ${reasonLabel(open.entry.reason)}.`} code={`${open.entry.reason}, ${open.queue} queue, ${open.entry.candidates.length} candidates`}>
+                        <Notice tone="warn" title={`Waiting in the ${open.queue} queue — ${reasonLabel(open.entry.reason)}.`} code={`${open.entry.reason}, ${open.queue}, ${open.entry.candidates.length} candidates`}>
                           {waitingFor(open.entry.first_seen)}.{' '}
                           {open.entry.candidates.length > 0
                             ? `${open.entry.candidates.length} candidate row${open.entry.candidates.length === 1 ? '' : 's'} on Review.`

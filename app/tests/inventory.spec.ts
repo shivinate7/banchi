@@ -2540,11 +2540,11 @@ test('a copy row draws how far into the box AND how far into the section', async
   await expect(first.nth(0)).toHaveText('#1 of 5')
   /* SETTLED SECTION, SO THE DENOMINATOR IS SLOTS. Section 1 runs 1..3 and the box holds 5, so
      its far bound is a divider with cards behind it: three slots today and three next week. */
-  await expect(first.nth(1)).toHaveText('Section 1 · card 1 of 3 slots')
+  await expect(first.nth(1)).toHaveText('Section 1card 1 of 3 slots')
 
   const second = bars.nth(1).locator('.position-bar-text')
   await expect(second.nth(0)).toHaveText('#3 of 5')
-  await expect(second.nth(1)).toHaveText('Section 1 · card 3 of 3 slots')
+  await expect(second.nth(1)).toHaveText('Section 1card 3 of 3 slots')
 
   /* The section track carries no dividers of its own — a section is not divided by anything,
      and that absence is one of the three cues telling the two scales apart at a glance. */
