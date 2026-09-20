@@ -2744,6 +2744,49 @@ COMPONENTS = [
                         "interpunct` row only reads it, since that row sits on the commit "
                         "path (D18).",
                 "governed_by": ["D18", "D194", "D218"]},
+            "ste/ste_lint.py": {
+                "does": "the STE ratchet's linter, VENDORED verbatim from $HOME/.claude/"
+                        "lint/ste_lint.py (MIT, LICENSE-ste_lint beside it) on 2026-09-19 — a "
+                        "COPY, never a symlink (D47): a fresh clone, a CI runner and this "
+                        "repo's own git history all lack $HOME/.claude, so a gate here cannot "
+                        "point at a path outside its own tree. Stdlib-only Python, unlike "
+                        "Vale's third-party Go binary, so the bare-`python3` pre-commit hook "
+                        "can run it with nothing new installed. Its rules are not edited — "
+                        "only a provenance header was added on top of the vendored file.",
+                "governed_by": ["D18", "D47", "D-a-ste-ratchet"]},
+            "ste/LICENSE-ste_lint": {
+                "does": "the vendored linter's MIT license and notice, copied unmodified "
+                        "beside it — the license's one condition for reuse.",
+                "governed_by": ["D-a-ste-ratchet"]},
+            "ste_measure.py": {
+                "does": "the STE ratchet's ONE measurer, called by both "
+                        "`scripts/docs-audit.py`'s `ste ratchet` row (read-only) and "
+                        "`scripts/ste-ratchet-pin.py --pin` (the writer, D18) — no counting "
+                        "logic is duplicated between them. Runs the vendored linter's four "
+                        "ERROR-severity rules over caller-supplied (path, text) pairs, drops "
+                        "findings a named `EXEMPTIONS` recognizer proves are an artifact of "
+                        "the text's shape (a table cell, a verbatim quotation, a decision "
+                        "citation, the literal \"VS Code\") rather than its prose, and reports "
+                        "the total, the per-code counts, and errors-per-1,000-PLAIN-words "
+                        "(matching `wc -w`, not `ste_lint.py`'s own STE-adjusted count) per "
+                        "directory bucket and repo-wide. Never touches disk itself.",
+                "governed_by": ["D18", "D218", "D-a-ste-ratchet"]},
+            "ste-ratchet-pin.py": {
+                "does": "`python3 scripts/ste-ratchet-pin.py --pin` re-measures every tracked "
+                        "markdown file via `ste_measure.py:measure()` — the same function the "
+                        "row itself calls — and rewrites `scripts/ste-ratchet.json`. Contains "
+                        "no counting logic of its own. D18: a generator may write, on no "
+                        "`make` target and no hook; `git diff scripts/ste-ratchet.json` is "
+                        "the receipt, mirroring `copy-budget.mjs` and "
+                        "`typed-interpunct-pin.mjs`'s own discipline exactly.",
+                "governed_by": ["D18", "D194", "D218", "D-a-ste-ratchet"]},
+            "ste-ratchet.json": {
+                "does": "the ratchet's pinned ceiling: `total`, `by_code` (the four "
+                        "ERROR-severity rule counts, post-exemption), and "
+                        "`ratio_per_1k_words` (per bucket and repo-wide). Written only by "
+                        "`ste-ratchet-pin.py --pin`; `scripts/docs-audit.py`'s `ste ratchet` "
+                        "row only reads it, since that row sits on the commit path (D18).",
+                "governed_by": ["D18", "D-a-ste-ratchet"]},
             "docs-audit.py": {
                 "does": "D16's layers 1 and 2: every mechanical check, plus the coupling "
                         "question under `--staged`. `--json` is the machine surface "
@@ -2819,7 +2862,7 @@ COMPONENTS = [
                                 "D138", "D140", "D141", "D142", "D143", "D144", "D149", "D155",
                                 "D159", "D160", "D161", "D173", "D174", "D178", "D181", "D182",
                                 "D185", "D191", "D192", "D194", "D196", "D210", "D213",
-                                "D215", "D218"],
+                                "D215", "D218", "D-a-ste-ratchet"],
             },
             "claim-ids.py": {
                 "does": "allocate the numbers this branch's SLUG ids will take, and "
