@@ -352,9 +352,11 @@ hand-typed hash list.
 §9). It is generated, never hand-edited, reconciled by `make docs-audit`'s `logo parity` row
 both ways. Every token is `--bn-*`. **Write new CSS with `--bn-*`.**
 
-**The legacy aliases at the foot of tokens.css are dead.** Measured across all 137 files under
-`app/src`: none read the twenty-four old names, against 296 uses of `var(--bn-ink)` alone.
-Kept by design. A new rule may not read one.
+**The legacy aliases at the foot of tokens.css are dead.** Measured across all
+137<!-- derived:app_src_file_count --> files under `app/src`: none read the
+25<!-- derived:tokens_css_legacy_alias_count --> old names, against
+296<!-- derived:bn_ink_var_uses --> uses of `var(--bn-ink)` alone. Kept by design. A new
+rule may not read one.
 
 **Both themes are real.** `:root[data-theme='dark']` redefines every surface, applied before
 first paint, cross-faded as one mechanism. A screen not looked at in dark is not verified.

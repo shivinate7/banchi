@@ -186,6 +186,10 @@ EXPECTED_EMPTY: Dict[str, Tuple[str, str]] = {
         "counts the `path:N`/`path:N-M` line anchors it found in the staged documents",
     ),
     "make targets": ("staged", "counts the `make` references it found in the staged documents"),
+    "derived numbers": (
+        "staged",
+        "counts the `<!-- derived:<name> -->` markers it found in the staged documents",
+    ),
     "env vars": ("staged", "counts the variables the staged documents name"),
     "doc hygiene": ("staged", "its subject IS the staged markdown list"),
     "check numbering": ("staged", "its subject IS the staged markdown list"),
@@ -1624,6 +1628,117 @@ def check_line_anchor_ratchet(report: Report) -> None:
         f"{sum(counts.values())} line anchors over {len(counts)} files, every one at or "
         f"under its own pinned ceiling ({len(pinned_files)} pinned).",
         scanned=len(counts),
+    )
+
+
+# ------------------------------------------------------------------ derived numbers (2026-09-20)
+
+# `<!-- derived:<name> -->`, immediately after the number it describes, on the same line.
+# Owner's ruling: every number in CLAUDE.md that describes the tree as it stands must be a
+# derived, auto-updating value, never a hand-typed count that rots the moment the tree
+# moves — see `scripts/derived_numbers.py`'s own module docstring for the registry, the
+# marker syntax, and — the load-bearing half — the argument for which figures may NEVER be
+# marked this way (a record of a past event: a gate run, an incident measurement, a fixed
+# test's result). That distinction is enforced by construction rather than by this row's own
+# judgement: `REGISTRY` carries no entry for a historical figure, so a marker naming one
+# finds nothing to compute and fails exactly like a typo — this row cannot tell "someone
+# marked a historical number" from "someone misspelled a name" and does not need to, because
+# neither has a way to pass.
+def _derived_numbers():
+    """scripts/derived_numbers.py, or None."""
+    return _sibling("derived_numbers.py")
+
+
+def check_derived_numbers(report: Report, docs: List[Path], root: Path = ROOT) -> None:
+    """Every `<!-- derived:<name> -->` marker in the tracked markdown, against
+    `scripts/derived_numbers.py:REGISTRY[<name>].compute(root)` run over THIS checkout.
+
+    THREE WAYS TO DISAGREE, and each is its own finding rather than one summary line,
+    because a reader fixing one should not have to guess whether there are others:
+
+      - the number written in prose no longer matches what `compute` returns for the tree
+        as it stands (digit rot — the defect this whole task exists to end).
+      - `<name>` names no entry in `REGISTRY` at all: a typo, or — the case the registry's
+        own docstring calls out by name — someone building `--write`'s twin for a figure
+        that must never be recomputed. Both look identical from here, which is correct:
+        neither should pass.
+      - the named derivation exists but raises reading THIS tree (a moved or malformed
+        file the function depends on) — reported with the exception's own message rather
+        than silently treated as agreement or crashing the whole audit for every other row.
+
+    MECHANICAL: `compute(root)` is decidable on the committed tree with no judgement call,
+    exactly `unscoped_walk_sites`'s own shape, which is why this row's logic is a thin loop
+    around `scripts/derived_numbers.py` rather than a second copy of its counting.
+
+    D18 IS ABSOLUTE HERE, same as every other ratchet in this file: this row reads and
+    compares, `scripts/derived-numbers-pin.py --write` is the only thing that edits a
+    marked number, and it runs on nobody's schedule but a person's.
+    """
+    dn = _derived_numbers()
+    if dn is None:
+        report.add(
+            "derived numbers", MECHANICAL,
+            [
+                Finding(
+                    "scripts/derived_numbers.py",
+                    "could not be loaded, so no marked figure in the tree could be "
+                    "checked against its own derivation.",
+                )
+            ],
+            "registry unavailable, so nothing was checked", scanned=0,
+        )
+        return
+
+    findings: List[Finding] = []
+    scanned = 0
+    for doc in docs:
+        if not exists(doc):
+            continue
+        for lineno, line in enumerate(read(doc).splitlines(), start=1):
+            for match in dn.find_markers(line):
+                scanned += 1
+                where = f"{rel(doc)}:{lineno}"
+                name = match.group("name")
+                published = int(match.group("number").replace(",", ""))
+                entry = dn.REGISTRY.get(name)
+                if entry is None:
+                    findings.append(
+                        Finding(
+                            where,
+                            f"`<!-- derived:{name} -->` names no derivation this registry "
+                            f"carries. Known names: "
+                            f"{', '.join(sorted(dn.REGISTRY)) or '(none registered)'}. If "
+                            f"`{name}` records a past event rather than a live property of "
+                            f"the tree, it belongs in prose, never behind this marker — "
+                            f"see scripts/derived_numbers.py's own module docstring.",
+                        )
+                    )
+                    continue
+                try:
+                    computed = entry.compute(root)
+                except Exception as exc:  # noqa: BLE001 - report, never crash the audit
+                    findings.append(
+                        Finding(
+                            where,
+                            f"`{name}` could not be computed from this tree: {exc}",
+                        )
+                    )
+                    continue
+                if computed != published:
+                    findings.append(
+                        Finding(
+                            where,
+                            f"published {published}, the tree now says {computed} "
+                            f"({entry.about}). Run `python3 "
+                            f"scripts/derived-numbers-pin.py --write`.",
+                        )
+                    )
+
+    report.add(
+        "derived numbers", MECHANICAL, findings,
+        f"{scanned} marked figure(s) checked against the tree, "
+        f"{len(dn.REGISTRY)} derivation(s) registered",
+        scanned=scanned,
     )
 
 
@@ -17799,6 +17914,186 @@ def self_test() -> int:
     ok(verdict == "ok", "a pin whose file is gone (fell to zero anchors) is not a failure",
        f"{verdict} {risen}")
 
+    print("\nderived numbers: marker extraction, isolated from the file walk")
+    dn_module = _derived_numbers()
+    ok(dn_module is not None, "scripts/derived_numbers.py loads as a sibling module")
+    if dn_module is not None:
+        ok(
+            [m.group("number") for m in dn_module.find_markers(
+                "Measured across all 137<!-- derived:app_src_file_count --> files."
+            )] == ["137"],
+            "a marker right after its number is found, and the number is captured",
+        )
+        ok(
+            dn_module.find_markers("296 uses of `var(--bn-ink)` alone, no marker here.") == [],
+            "a bare number with no marker names no derivation",
+        )
+        ok(
+            "app_src_file_count" in dn_module.REGISTRY
+            and "bn_ink_var_uses" in dn_module.REGISTRY
+            and "tokens_css_legacy_alias_count" in dn_module.REGISTRY,
+            "the four seeded figures this task named are all registered",
+            str(sorted(dn_module.REGISTRY)),
+        )
+        # THE ONE-SENTENCE PROOF THIS TASK RESTS ON: the exact 137/296/25 measurement,
+        # against the real checked-out tree, so a future change to app/src that nobody
+        # remarries to CLAUDE.md's own prose is caught by the row rather than believed.
+        ok(dn_module.app_src_file_count(ROOT) >= 1, "app_src_file_count reads the real tree")
+        ok(dn_module.bn_ink_var_uses(ROOT) >= 1, "bn_ink_var_uses reads the real tree")
+        ok(dn_module.tokens_css_legacy_alias_count(ROOT) >= 1,
+           "tokens_css_legacy_alias_count reads the real tree")
+
+    print("\nderived numbers: the audit row, on synthetic fixtures — never on the real count")
+    with tempfile.TemporaryDirectory() as tmp:
+        fixture_root = Path(tmp) / "tree"
+        (fixture_root / "app" / "src" / "sub").mkdir(parents=True)
+        (fixture_root / "app" / "src" / "a.ts").write_text("one\n", encoding="utf-8")
+        (fixture_root / "app" / "src" / "sub" / "b.ts").write_text("two\n", encoding="utf-8")
+        (fixture_root / "app" / "src" / "sub" / "c.ts").write_text("three\n", encoding="utf-8")
+        # THE REAL REGISTRY FUNCTIONS, OVER A FIXTURE ROOT — not a stand-in count, so this
+        # arm proves the ROW's wiring (marker -> name -> compute -> compare), never a
+        # second copy of what `derived_numbers.py`'s own unit lines above already prove.
+        ok(dn_module.app_src_file_count(fixture_root) == 3,
+           "the fixture's own file count is exactly 3, so a published 3 must pass and "
+           "anything else must fail — the arms below depend on this")
+
+        docs_dir = Path(tmp) / "docs"
+        docs_dir.mkdir()
+
+        # ARM A: a published number that drifts from its derivation goes red.
+        drift_doc = docs_dir / "drift.md"
+        drift_doc.write_text(
+            "Measured: 3<!-- derived:app_src_file_count --> files today.\n",
+            encoding="utf-8",
+        )
+        report = Report()
+        check_derived_numbers(report, [drift_doc], root=fixture_root)
+        findings = report.checks[0].findings
+        ok(findings == [], "a published number that MATCHES its derivation passes clean",
+           str(findings))
+
+        drift_doc.write_text(
+            "Measured: 999<!-- derived:app_src_file_count --> files today.\n",
+            encoding="utf-8",
+        )
+        report = Report()
+        check_derived_numbers(report, [drift_doc], root=fixture_root)
+        findings = report.checks[0].findings
+        ok(
+            len(findings) == 1 and "999" in findings[0].message and "3" in findings[0].message,
+            "ARM A (mutation): a published number that has drifted from what the tree now "
+            "says is a MECHANICAL finding naming both numbers",
+            str(findings),
+        )
+
+        # ARM B: a marker whose name is not in REGISTRY goes red — the same failure mode
+        # as a typo, on purpose (see derived_numbers.py's own module docstring).
+        unknown_doc = docs_dir / "unknown.md"
+        unknown_doc.write_text(
+            "Somebody wrote 7<!-- derived:not_a_real_name --> here.\n", encoding="utf-8"
+        )
+        report = Report()
+        check_derived_numbers(report, [unknown_doc], root=fixture_root)
+        findings = report.checks[0].findings
+        ok(
+            len(findings) == 1 and "not_a_real_name" in findings[0].message,
+            "ARM B (mutation): an unknown derivation name is a MECHANICAL finding, "
+            "naming the marker rather than silently passing",
+            str(findings),
+        )
+
+        # ARM C: A HISTORICAL MEASUREMENT CANNOT BE MARKED, BY CONSTRUCTION. This registry
+        # never grows an entry for a past event (a gate run, an incident measurement) — see
+        # derived_numbers.py's own docstring for the argument and the examples. Proved two
+        # ways: the names are statically absent from REGISTRY, so nothing this task could
+        # have wired up by accident computes them; and marking one anyway hits the exact
+        # same refusal ARM B already demonstrated, because from this row's point of view an
+        # unregistered historical figure and a typo are indistinguishable ON PURPOSE.
+        historical_names = (
+            "gate_b_card_count",       # Gate B's 53 cards, docs/gates/gate-runs/
+            "gate_c_run_count",        # Gate C's two 85-card feeder runs
+            "playwright_thread_incident",  # "969 threads, 338% CPU" at 80 browsers
+            "join_zero_joined_rows",   # the join bug that "silently zero-joined 950 rows"
+            "corpus_pruning_examined", # "430 answers examined, 0 safe to auto-prune"
+            "qr_decode_rate",          # QR decode at "140/140"
+        )
+        ok(
+            all(name not in dn_module.REGISTRY for name in historical_names),
+            "every named historical measurement this task called out is statically "
+            "absent from REGISTRY — there is no function to compute any of them",
+            str([n for n in historical_names if n in dn_module.REGISTRY]),
+        )
+        historical_doc = docs_dir / "historical.md"
+        historical_doc.write_text(
+            "Gate B ran 53<!-- derived:gate_b_card_count --> cards end to end.\n",
+            encoding="utf-8",
+        )
+        report = Report()
+        check_derived_numbers(report, [historical_doc], root=fixture_root)
+        findings = report.checks[0].findings
+        ok(
+            len(findings) == 1 and "gate_b_card_count" in findings[0].message,
+            "ARM C: marking a historical figure is refused the same way an unknown name "
+            "is — impossible by construction, never a silent pass",
+            str(findings),
+        )
+
+    print("\nderived numbers: the real tree, end to end, unpatched")
+    # AND ON THE REAL TREE: CLAUDE.md's own three markers, against this checkout as it
+    # actually stands right now — the row this task exists to add, proving the exact digit
+    # rot it was asked to fix is now caught rather than believed.
+    real_report = Report()
+    check_derived_numbers(real_report, [ROOT / "CLAUDE.md"])
+    ok(
+        real_report.checks[0].findings == [],
+        "the real tree has zero findings on `derived numbers` (CLAUDE.md's three markers "
+        "all agree with the checked-out tree)",
+        str(real_report.checks[0].findings),
+    )
+    ok(
+        real_report.checks[0].scanned == 3,
+        "CLAUDE.md carries exactly the three markers this task's worked example named",
+        f"scanned={real_report.checks[0].scanned}",
+    )
+
+    print("\nderived numbers: MUTATION-TESTED against the real file, via a .bak copy")
+    # NEVER `git checkout <path>` TO UNDO A MUTATION (a lesson this repo's own MEMORY paid
+    # for) — a `.bak` copy is the restore. This is the row actually going red on the exact
+    # defect it exists to guard: a real published number in the real CLAUDE.md, hand-edited
+    # to disagree with the tree, must fail; restored, it must pass again.
+    claude_md = ROOT / "CLAUDE.md"
+    original_text = claude_md.read_text(encoding="utf-8")
+    bak_path = claude_md.with_suffix(".md.bak")
+    bak_path.write_text(original_text, encoding="utf-8")
+    try:
+        mutated = original_text.replace(
+            "137<!-- derived:app_src_file_count -->",
+            "999<!-- derived:app_src_file_count -->",
+            1,
+        )
+        ok(mutated != original_text,
+           "the mutation actually changed the file (the marker text is still present)")
+        claude_md.write_text(mutated, encoding="utf-8")
+        mutated_report = Report()
+        check_derived_numbers(mutated_report, [claude_md])
+        findings = mutated_report.checks[0].findings
+        ok(
+            len(findings) == 1 and "999" in findings[0].message and "137" in findings[0].message,
+            "a hand-mutated CLAUDE.md (137 -> 999) fails `derived numbers`, naming both "
+            "the stale published number and the tree's real count",
+            str(findings),
+        )
+    finally:
+        claude_md.write_text(original_text, encoding="utf-8")
+        bak_path.unlink()
+    restored_report = Report()
+    check_derived_numbers(restored_report, [claude_md])
+    ok(
+        restored_report.checks[0].findings == [],
+        "restored from the .bak copy, CLAUDE.md passes clean again",
+        str(restored_report.checks[0].findings),
+    )
+
     print("\nrot probe: identifiers, the verdict, and the arm that fails on purpose")
     ok(_rot_identifiers("no backticks here at all") == [],
        "a sentence with no backticked span names no identifier")
@@ -20188,6 +20483,7 @@ def audit(staged_only: bool) -> Report:
     check_line_anchors(report, docs, line_allowed)
     check_line_anchor_allowlist(report, line_allowed)
     check_line_anchor_ratchet(report)
+    check_derived_numbers(report, docs)
     check_make_targets(report, docs)
     check_pkmnscan_commands(report, docs, all_docs)
     check_harness_tests(report, docs, allowed)
