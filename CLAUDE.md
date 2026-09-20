@@ -723,10 +723,10 @@ that evening than every verification target combined (`docs/specs/verification-c
   before editing under `app/`, `server/`, `pipeline/`, `identify/`, `store/`, `geometry/` or
   `cli/`. Audited by `make docs-audit` — a file added with no entry fails the commit.
   `make map` is how you look at it (D80). The file is
-  724,760<!-- derived:docs_map_byte_count --> bytes across
-  8,174<!-- derived:docs_map_line_count --> lines. Reading it whole costs roughly 181,000
-  tokens at four bytes per token, an approximation, never a measured count. Reading it whole
-  spends most of a context window. `make docs-audit`'s `map sections` row fails a commit
+  720,000<!-- derived:docs_map_byte_count --> bytes across
+  8173<!-- derived:docs_map_line_count --> lines. Reading it whole spends most of a
+  context window. Its token cost is about a quarter of that byte count, at roughly four
+  bytes per token. That ratio is an approximation and never a measured count. `make docs-audit`'s `map sections` row fails a commit
   adding a section with no reader.
   **The build order is two lists, `SHIPPED` and `OPEN`, not a numbered sequence** (D80).
   `OPEN` has no `next`. Ranking two open items is yours. `n` is a stable id, never renumbered.
@@ -738,9 +738,10 @@ that evening than every verification target combined (`docs/specs/verification-c
   reconciles both files, in both directions.
 - `docs/decisions/` — settled decisions and why, one file per entry, indexed by
   `scripts/decisions_corpus.py`. Read before redesigning. **Not `@`-loaded** (D60): the
-  directory is 2,157,517<!-- derived:docs_decisions_byte_count --> bytes across
-  242<!-- derived:docs_decisions_file_count --> files. Loading it all costs roughly 539,000
-  tokens at four bytes per token, an approximation, never a measured count, before any work.
+  directory is 2,200,000<!-- derived:docs_decisions_byte_count --> bytes across
+  243<!-- derived:docs_decisions_file_count --> files. Loading it all costs about a quarter
+  of that byte count in tokens, before any work. That ratio is an approximation and never a
+  measured count.
   `scripts/decision-context.py` names the governing decisions before an edit under a mapped
   directory. The index below is a table of contents, never a substitute for the entry's own
   argument.

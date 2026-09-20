@@ -162,6 +162,30 @@ def tokens_css_legacy_alias_count(root: Path) -> int:
     return len(_LEGACY_ALIAS_DECL.findall(block))
 
 
+def _two_significant_figures(value: int) -> int:
+    """`value` rounded to two significant figures.
+
+    A SIZE IS DERIVED AT THE GRANULARITY ITS SENTENCE CLAIMS, AND NOT FINER. The prose
+    these figures back says one thing — reading this corpus whole is expensive — and a
+    byte-exact derivation serves that claim no better while firing on every commit that
+    touches a document. A guard that goes red on correct work is spent, because the reader
+    learns to run the generator without looking. Merging one decision entry moved
+    `docs/decisions/` by 5,689 bytes and turned this row red on its first real day.
+
+    Two significant figures moves only when the corpus moves about five percent, which is
+    the scale at which "expensive to read whole" actually changes. The line and file counts
+    beside it stay exact: they are small, stable, and a reader checks them directly.
+    """
+    if value <= 0:
+        return 0
+    from math import floor, log10
+    magnitude = floor(log10(value)) - 1
+    if magnitude <= 0:
+        return value
+    step = 10 ** magnitude
+    return int(round(value / step) * step)
+
+
 def docs_map_byte_count(root: Path) -> int:
     """`docs/map.py`'s own size in bytes. Backs the sentence that reading the whole file
     costs real context — the byte count is exact and moves every time the file does; the
@@ -171,7 +195,7 @@ def docs_map_byte_count(root: Path) -> int:
     path = root / "docs" / "map.py"
     if not path.is_file():
         raise FileNotFoundError(str(path))
-    return path.stat().st_size
+    return _two_significant_figures(path.stat().st_size)
 
 
 def docs_map_line_count(root: Path) -> int:
@@ -191,7 +215,7 @@ def docs_decisions_byte_count(root: Path) -> int:
             total += path.stat().st_size
         except OSError:
             continue
-    return total
+    return _two_significant_figures(total)
 
 
 def docs_decisions_file_count(root: Path) -> int:

@@ -89,12 +89,18 @@ def main(argv=None) -> int:
                     continue
                 if str(computed) == published.replace(",", ""):
                     continue
+                # KEEP THE SEPARATOR THE PROSE ALREADY USES. A figure a person reads in a
+                # sentence is grouped — `720,000`, never `720000` — and a generator that
+                # strips the commas makes every rewrite a readability regression the author
+                # then fixes by hand, which is how a generated field stops being generated.
+                # `MARKER_RE` accepts `\d[\d,]*`, so the grouped form round-trips.
+                rendered = f"{computed:,}" if "," in published else str(computed)
                 start, end = match.span("number")
                 new_line = (
-                    new_line[: start + offset] + str(computed) + new_line[end + offset :]
+                    new_line[: start + offset] + rendered + new_line[end + offset :]
                 )
-                offset += len(str(computed)) - (end - start)
-                print(f"{name}:{i + 1}: {derivation_name} {published} -> {computed}")
+                offset += len(rendered) - (end - start)
+                print(f"{name}:{i + 1}: {derivation_name} {published} -> {rendered}")
                 changed += 1
             if new_line != line:
                 lines[i] = new_line
