@@ -10235,6 +10235,86 @@ def check_breakpoint_columns(report: Report) -> None:
                scanned=len(sheets))
 
 
+JS_BREAKPOINTS_SCRIPT = ROOT / "scripts" / "js-breakpoints.py"
+
+
+def check_js_breakpoints(report: Report) -> None:
+    """A JS media query's viewport width, against what a stylesheet under app/src declares
+    (D123): a responsive breakpoint belongs in the stylesheet, and where a screen genuinely
+    needs one in JavaScript its value must match one the stylesheets already declare, so the
+    two can never quietly disagree.
+
+    MECHANICAL, unlike `breakpoint columns` above: whether a `min-width` in CSS is asking the
+    wrong thing is a matter of intent this row's sibling cannot see. Whether a JS breakpoint's
+    value has a CSS counterpart at all is not — it either does or it does not.
+
+    THE EXTRACTION AND COMPARISON LIVE IN `scripts/js-breakpoints.py`, imported rather than
+    reimplemented (this file already owns one CSS-width reader in `read_widths`; a second
+    copy here would be the drift this whole file exists to catch). This row does the
+    filesystem half itself instead of calling that script's own `scan()`, because `read()`
+    honors staged-commit mode and a sibling script reading straight off disk does not — the
+    same reason `breakpoint_subject` above reads its own stylesheets rather than delegating
+    that too.
+
+    THE COMPARISON IS GLOBAL ACROSS `app/src`, NOT PER-SCREEN, ON PURPOSE — see the sibling
+    script's own module docstring for why a per-screen version would have to guess a pairing
+    this repo's own rule warns against inventing.
+
+    CONTAINER QUERIES CARRY NO JS SIDE and never enter the CSS set that feeds this row; a
+    `@container` width is `breakpoint columns`' and `breakpoints`' question, not this one's.
+
+    FAILS OPEN: a missing sibling script, or a subject that reads zero JS breakpoints and
+    zero CSS breakpoints, is a finding and never a silent pass — the same posture
+    `breakpoint_subject` takes for its own two rows.
+    """
+    if not exists(APP_STYLES):
+        report.add("js breakpoints", MECHANICAL, [Finding(
+            rel(APP_STYLES),
+            "does not exist, so no JS breakpoint can be compared against anything.")])
+        return
+    module = _sibling("js-breakpoints.py")
+    if module is None:
+        report.add("js breakpoints", MECHANICAL, [Finding(
+            rel(JS_BREAKPOINTS_SCRIPT),
+            "does not exist or does not import, so no JS breakpoint can be read at all.")])
+        return
+
+    js_by_file: Dict[str, List[Tuple[str, int, int]]] = {}
+    for path in module.js_files(APP_STYLES):
+        widths = module.read_js_widths(read(path))
+        if widths:
+            js_by_file[rel(path)] = widths
+    css_widths: List[Tuple[str, int, int]] = []
+    for path in module.css_files(APP_STYLES):
+        css_widths.extend(module.read_css_widths(read(path)))
+
+    if not js_by_file and not css_widths:
+        report.add("js breakpoints", MECHANICAL, [Finding(
+            rel(APP_STYLES),
+            "read 0 JS breakpoints and 0 CSS breakpoints. A side that parses to nothing "
+            "compares nothing.")])
+        return
+
+    mismatches = module.find_mismatches(js_by_file, css_widths)
+    findings: List[Finding] = [
+        Finding(f"{m.path}:{m.line}", (
+            f"opens a whole layout regime in JavaScript at `{m.side}-width: {m.value}px`, "
+            f"and no `@media` block in any stylesheet under app/src declares that "
+            f"breakpoint.\n"
+            f"  D123: a responsive breakpoint belongs in the stylesheet. Where a screen "
+            f"genuinely needs one in code, its value must match one the stylesheets already "
+            f"declare — the way `app/src/BoxBrowse.tsx:704` matches "
+            f"`app/src/BoxBrowse.css`'s own `max-width: 767px` — so the screen's script and "
+            f"its CSS can never quietly disagree."))
+        for m in mismatches
+    ]
+    total_js = sum(len(v) for v in js_by_file.values())
+    report.add("js breakpoints", MECHANICAL, findings,
+               f"{total_js} JS breakpoints in {len(js_by_file)} files, against "
+               f"{len(css_widths)} CSS breakpoints",
+               scanned=total_js)
+
+
 # ------------------------------------------------------------------ the mark (D102)
 
 LOGO_SPEC = ROOT / "docs" / "specs" / "logo.md"
@@ -18923,6 +19003,7 @@ def audit(staged_only: bool) -> Report:
     check_raw_color(report)
     check_breakpoints(report)
     check_breakpoint_columns(report)
+    check_js_breakpoints(report)
     check_storage_keys(report)
     check_views_opsec(report)
     check_doc_hygiene(report, docs)

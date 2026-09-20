@@ -1996,6 +1996,33 @@ COMPONENTS = [
                         "and the fixture asserts its own arming. Same lesson githooks-selftest "
                         "records about git's own refusals scoring as the hook's.",
             },
+            "js-breakpoints.py": {
+                "does": "the pure extraction and comparison behind `make docs-audit`'s `js "
+                        "breakpoints` row (D123): every `(min|max)-width: NNNpx)` a "
+                        "`.ts`/`.tsx` file under app/src spells inside a media-query string, "
+                        "against every one an `@media` block in a stylesheet under app/src "
+                        "declares — never `@container`, which answers a pane's width and not "
+                        "the window's. Sides are canonicalized (`min-width: V` and "
+                        "`max-width: V-1` are one regime boundary) so an off-by-one pairing is "
+                        "never a false positive. `docs-audit.py`'s row imports this module and "
+                        "reads the tree itself (its `read()` honors staged-commit mode); "
+                        "`check` and `selftest` are this script's own CLI, reading straight "
+                        "from disk. `selftest` proves the row by violating it (a JS "
+                        "breakpoint no stylesheet declares) and then by fixing it.",
+                "governed_by": ["D16", "D18", "D123", "D173"],
+                "note": "THE COMPARISON IS GLOBAL, NOT PER-SCREEN, ON PURPOSE: a per-screen "
+                        "version (a `X.tsx` breakpoint must appear in `X.css` itself) would "
+                        "catch more but has to guess which stylesheet a `.tsx` file with no "
+                        "sibling CSS belongs to (`RunsComposer.tsx`, `RunsDrop.tsx`, "
+                        "`RunsLog.tsx`, `RunsStage.tsx`, `CardHero.tsx` have none), and a "
+                        "guessed pairing is an invented primitive this repo's own rule warns "
+                        "against. `app/src/Orders.tsx` carried a `min-width: 1024px` layout "
+                        "switch its own stylesheet never declared (RunPanel.css did) — this "
+                        "row's global form can be green on that exact case while a stricter, "
+                        "per-screen row would not be; the two are different questions and this "
+                        "one answers only D123's, that a JS breakpoint is never a number no "
+                        "stylesheet in the product uses at all.",
+            },
             "browser-scope.py": {
                 "does": "does a change reach what a browser draws? The list of every path "
                         "`make design-check` loads, each with the reason it is there, and the "
@@ -2939,15 +2966,15 @@ COMPONENTS = [
                 # link this repo's own history ever produced.
                 "governed_by": ["D1", "D2", "D3", "D6", "D7", "D8", "D9", "D10", "D11", "D12",
                                 "D16", "D17", "D18", "D22", "D23", "D24", "D26", "D27", "D31",
-                                "D33", "D39", "D41", "D43", "D44", "D47", "D49", "D50", "D51", "D53",
-                                "D60", "D63", "D64", "D65", "D67", "D69", "D70", "D72", "D74",
-                                "D75", "D76", "D80", "D81", "D83", "D84", "D86", "D87", "D88",
-                                "D90", "D92", "D94", "D96", "D101", "D102", "D104", "D110", "D111",
-                                "D113", "D119", "D122", "D127", "D132", "D134", "D135", "D136",
-                                "D138", "D140", "D141", "D142", "D143", "D144", "D149", "D155",
-                                "D159", "D160", "D161", "D173", "D174", "D178", "D181", "D182",
-                                "D185", "D191", "D192", "D194", "D196", "D210", "D213",
-                                "D215", "D218", "D226"],
+                                "D33", "D39", "D41", "D43", "D44", "D47", "D49", "D50", "D51",
+                                "D53", "D60", "D63", "D64", "D65", "D67", "D69", "D70", "D72",
+                                "D74", "D75", "D76", "D80", "D81", "D83", "D84", "D86", "D87",
+                                "D88", "D90", "D92", "D94", "D96", "D101", "D102", "D104", "D110",
+                                "D111", "D113", "D119", "D122", "D123", "D127", "D132", "D134",
+                                "D135", "D136", "D138", "D140", "D141", "D142", "D143", "D144",
+                                "D149", "D155", "D159", "D160", "D161", "D173", "D174", "D178",
+                                "D181", "D182", "D185", "D191", "D192", "D194", "D196", "D210",
+                                "D213", "D215", "D218", "D226"],
             },
             "claim-ids.py": {
                 "does": "allocate the numbers this branch's SLUG ids will take, and "
@@ -3669,11 +3696,11 @@ COMPONENTS = [
                 # for vale. Change one and the entry describing that check goes stale with it,
                 # which is exactly what `governed_by` is for — so they are listed rather than
                 # allowlisted away.
-                "governed_by": ["D7", "D16", "D17", "D18", "D26", "D42", "D43", "D44", "D47", "D48", "D53",
-                                "D54", "D58", "D60", "D65", "D68", "D74", "D76", "D80", "D82", "D83", "D86", "D88",
-                                "D89", "D92", "D111", "D122", "D127", "D129", "D133", "D138", "D139", "D140",
-                                "D141", "D149", "D158", "D160", "D171", "D172", "D173", "D176", "D189",
-                                "D215"],
+                "governed_by": ["D7", "D16", "D17", "D18", "D26", "D42", "D43", "D44", "D47", "D48",
+                                "D53", "D54", "D58", "D60", "D65", "D68", "D74", "D76", "D80",
+                                "D82", "D83", "D86", "D88", "D89", "D92", "D111", "D122", "D123",
+                                "D127", "D129", "D133", "D138", "D139", "D140", "D141", "D149",
+                                "D158", "D160", "D171", "D172", "D173", "D176", "D189", "D215"],
                 "note": "IT DECLARES THE SUITE AND DELIBERATELY DOES NOT DRIVE IT, which is "
                         "the whole shape. A registry that drove `make check` could not "
                         "disagree with the recipe — and could silently stop running a check, "
