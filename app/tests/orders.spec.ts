@@ -1,6 +1,7 @@
 import { test, expect, type Page, type Route } from '@playwright/test'
 import { sealEveryTest } from './shell'
 import { line, order, payloadOf, pick, place } from './routeFixtures'
+import { settleMotion } from './motionSettled'
 
 import type {
   InventoryCard,
@@ -1675,12 +1676,26 @@ test('two unnamed buyers with different placed dates draw different name-slot la
   })
 
   /* Default sort is newest first, and both fixtures share the default Ready-to-ship status
-     (D209), so the newer of the two (07-15) leads. */
+     (D209), so the newer of the two (07-15) leads.
+
+     THE EXPECTED DATE IS DERIVED, NOT TYPED. The label reads the LOCAL clock, because the
+     same row draws its placed date through `toLocaleDateString` and one row may not state
+     two different days for one event. A typed `07-15-26` would therefore pass only in a
+     zone at or east of UTC, and these fixtures sit at midnight. Compose the expectation the
+     way the product composes it, so this case asserts the FORMAT and the DISTINCTNESS
+     rather than the runner's timezone. */
+  const localLabel = (iso: string): string => {
+    const at = new Date(iso)
+    const mm = String(at.getMonth() + 1).padStart(2, '0')
+    const dd = String(at.getDate()).padStart(2, '0')
+    const yy = String(at.getFullYear() % 100).padStart(2, '0')
+    return `${mm}-${dd}-${yy}`
+  }
   const rows = page.locator('.orders-index-row')
   await expect(rows).toHaveCount(2)
   const texts = await rows.allTextContents()
-  expect(texts[0]).toContain('07-15-26_00002')
-  expect(texts[1]).toContain('07-01-26_00001')
+  expect(texts[0]).toContain(`${localLabel('2026-07-15T00:00:00+00:00')}_00002`)
+  expect(texts[1]).toContain(`${localLabel('2026-07-01T00:00:00+00:00')}_00001`)
   expect(texts[0]).not.toEqual(texts[1])
   for (const text of texts) {
     expect(text).not.toContain(firstNumber)
@@ -2166,7 +2181,14 @@ test('the filter select clears the 40px thumb floor at phone width', async ({ pa
    * rail — below 768px the rail is the chip's bottom sheet, not the inline column this case
    * used to read directly. Open it the same way an operator would. */
   await page.locator('.browse-boxchip').click()
-  const box = await page.locator('.browse-railsheet .orders-filter-select').boundingBox()
+  /* THE SHEET SLIDES IN, SO ITS HEIGHT IS NOT ITS HEIGHT YET. Measuring straight after the
+   * press read a mid-transition box and failed about one run in two. Wait for the control to
+   * exist and for every clock-driven animation on the page to finish, the way `settleMotion`
+   * already does for the rest of this suite, THEN measure. */
+  const select = page.locator('.browse-railsheet .orders-filter-select')
+  await expect(select).toBeVisible()
+  await settleMotion(page)
+  const box = await select.boundingBox()
   expect(box?.height ?? 0).toBeGreaterThanOrEqual(40)
 })
 
