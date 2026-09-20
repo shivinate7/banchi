@@ -255,8 +255,19 @@ class Report:
         # session greps instead of reading ~100 rows, so the distinction between "examined
         # everything" and "examined nothing" has to be an integer on this surface and not
         # a word in the render.
+        # A SUMMARY IS A CLEAN VERDICT AND IS WITHHELD WHEN THE ROW HAS FINDINGS.
+        # `render()` above already does this — it prints the summary only in the `not
+        # findings` branch, and a tag plus a count otherwise. This surface did not, and
+        # emitted both, so the row contradicted itself in the one place a session greps.
+        # Measured 2026-09-20: `views exposure` published "no manifest view can draw a
+        # stored photo" beside 7 findings each naming a view that can, and `doc hygiene`
+        # published "373 markdown files well-formed as documents" beside 10 saying they
+        # are not. Most rows compose the summary unconditionally, so this is the shape of
+        # every row and not a typo in two — which is why it is fixed here, once, rather
+        # than in 200-odd `report.add` call sites.
         rows = [
-            {"label": row.check, "severity": row.severity, "summary": row.summary,
+            {"label": row.check, "severity": row.severity,
+             "summary": row.summary if not row.findings else None,
              "scanned": row.scanned, "vacuous": row.scanned == 0,
              "findings": [finding._asdict() for finding in row.findings]}
             for row in self.checks
