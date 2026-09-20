@@ -473,19 +473,35 @@ COMPONENTS = [
                                              "D26", "D88", "D89",
                                              "D213"],
                              "tested_by": ["T7"]},
-            # THE PRESS `pkmnscan archive sweep` RUNS (D219). Argument
-            # parsing and the preview/--write/show split; the walk itself is
+            # THE PRESS `pkmnscan archive sweep` RUNS (D219,
+            # D224, D223, D222).
+            # Argument parsing, the network-free preview, the chunked commit-as-you-go
+            # write, and the throttle backoff; the walk itself is
             # `pipeline/pricearchive.py`, proved independently by `make pricearchive-selftest`.
-            "cmd_pricearchive.py": {"does": "`pkmnscan archive sweep` runs "
-                                            "`pipeline/pricearchive.py:sweep` over "
-                                            "`rows_from_store()` and folds the result into "
-                                            "`price_history` with `PriceArchive.upsert()` — "
-                                            "which NEVER clears a row a pass did not mention, "
-                                            "unlike `readings adopt`'s full replace. Previews "
-                                            "by default. `archive show [--sku]` reads the "
-                                            "table and writes nothing.",
-                                    "governed_by": ["D219", "D62", "D86",
-                                                    "D43"],
+            "cmd_pricearchive.py": {"does": "`archive sweep` reads `rows_from_store()` "
+                                            "(sold value first) and previews with NO "
+                                            "network call: subject count, what the archive "
+                                            "already holds, what is fresh enough to skip. "
+                                            "`--write` splits the subject list into chunks "
+                                            "of `pipeline.pricearchive.CHUNK_SKUS`, skips "
+                                            "any already fresh, and commits each chunk's "
+                                            "buckets in its own `Store().write()` — an "
+                                            "interrupt loses at most one chunk, never the "
+                                            "whole pass. `PriceArchive.upsert()` never clears "
+                                            "a row a pass did not mention, unlike `readings "
+                                            "adopt`'s full replace. A 403 following an "
+                                            "earlier success this pass is reclassified as a "
+                                            "throttle rather than left as `Blocked`'s "
+                                            "authorization message; the press backs off once "
+                                            "to a measured pace and stops cleanly if still "
+                                            "blocked, persisting the measurement for the next "
+                                            "press. `archive show [--sku]` reads the table "
+                                            "and writes nothing.",
+                                    "governed_by": ["D219",
+                                                    "D224",
+                                                    "D223",
+                                                    "D222",
+                                                    "D62", "D86", "D43", "D88"],
                                     "tested_by": []},
             "cmd_rescue.py": {"does": "`pkmnscan rescue <run>` re-addresses a STRANDED run's "
                                       "cards to the positions their photographs are at now and "
@@ -1002,28 +1018,48 @@ COMPONENTS = [
                                     "directly, so `tested_by` is empty rather than a "
                                     "citation nothing backs — `check_readings_adopt_cli` in "
                                     "T7 exercises it only through the CLI dispatch."},
-            # THE SWEEP `pkmnscan archive sweep` RUNS (D219). Reads
-            # `pipeline/pricehistory.py`'s live endpoint for every SKU `rows_from_store` names
-            # and hands `store/pricearchive.py` what came back, keyed so D62's overlapping
-            # ranges never collide.
+            # THE SWEEP `pkmnscan archive sweep` RUNS (D219,
+            # D224, D223, D222).
+            # Reads `pipeline/pricehistory.py`'s live endpoint for every SKU
+            # `rows_from_store` names and hands `store/pricearchive.py` what came back,
+            # keyed so D62's overlapping ranges never collide.
             "pricearchive.py": {"does": "`rows_from_store` reads only the `cards` table for "
-                                        "every distinct, non-empty SKU and builds one "
+                                        "every distinct, non-empty SKU, builds one "
                                         "export-shaped row per SKU (Product Line resolved "
-                                        "through `pipeline/games.py`). `sweep` takes those "
-                                        "rows and anything shaped like "
-                                        "`pipeline/pricehistory.py:Market` and turns every "
-                                        "range's buckets into `store/pricearchive.py:Bucket` "
-                                        "rows, keyed `(sku, range, start)` — never "
-                                        "`width_days`, because `semiannual` and `annual` are "
-                                        "both seven-day buckets and a width-only key would "
-                                        "collide them. Reports refusals by SKU, never drops "
-                                        "one.",
-                                "governed_by": ["D62", "D26", "D134", "D219"],
+                                        "through `pipeline/games.py`), and orders them by "
+                                        "`rank_by_revenue` over `revenue_by_sku` — sold "
+                                        "value first, canceled orders excluded, ties broken "
+                                        "on the SKU string. `sweep` takes a subject dict and "
+                                        "anything shaped like `pipeline/pricehistory.py:"
+                                        "Market` and turns every range's buckets into "
+                                        "`store/pricearchive.py:Bucket` rows, keyed `(sku, "
+                                        "range, start)` — never `width_days`, because "
+                                        "`semiannual` and `annual` are both seven-day "
+                                        "buckets and a width-only key would collide them. "
+                                        "Reports refusals by SKU, never drops one. "
+                                        "`freshness_index`/`split_by_freshness` read the "
+                                        "archive to answer which subjects a resumed pass can "
+                                        "skip; `chunk_rows` splits an already-ranked subject "
+                                        "dict into commit-sized, order-preserving pieces; "
+                                        "`classify_refusals` rewrites a 403 that follows "
+                                        "earlier success this pass into a throttle rather "
+                                        "than `Blocked`'s authorization message; "
+                                        "`measured_pace`/`load_pace`/`save_pace` turn a "
+                                        "measured requests-before-block count into the next "
+                                        "press's pace, persisted on disk.",
+                                "governed_by": ["D62", "D26", "D134", "D9", "D214", "D216",
+                                                "D219",
+                                                "D224",
+                                                "D223",
+                                                "D222"],
                                 "note": "PROVED BY `make pricearchive-selftest`, not in "
-                                        "`make check` — no network call, a FakeMarket stand-in, "
-                                        "17 assertions including the D62 collision arm run both "
-                                        "ways (the real key keeps two rows, a width-only key "
-                                        "collapses them to one)."},
+                                        "`make check` — no network call. A FakeMarket and a "
+                                        "RecordingMarket stand in for the network; 48 "
+                                        "assertions, including the D62 collision arm run "
+                                        "both ways, an interrupted one-shot sweep proven to "
+                                        "lose everything BEFORE the chunked fix is proven to "
+                                        "keep what it already committed, and a resumed pass "
+                                        "proven to never re-ask for an already-fresh SKU."},
             "livecheck.py": {"does": "the whole store against one live TCGplayer export "
                                      "(My Pricing), both directions. D87: `cli/cmd_reconcile.py` "
                                      "scopes its diff to one run's emitted_skus while "
@@ -2325,15 +2361,28 @@ COMPONENTS = [
                 "does": "proves store/pricearchive.py and pipeline/pricearchive.py against a "
                         "throwaway store, no network (D219). A "
                         "FakeMarket duck-types `Market.readings_for_rows` over canned "
-                        "pipeline/pricehistory.py objects. Proves the D62 key argument both "
-                        "ways: the real (sku, range, start) key keeps two rows for the same "
-                        "calendar day read from `semiannual` and `annual`, and a width-only "
-                        "key is shown, in the same run, to collapse them into one. Proves "
-                        "the never-delete rule: a later sweep over a narrower selection, or "
-                        "one that resolves nothing, never removes an earlier pass's rows. "
-                        "Seventeen assertions, all passing. Not wired into `make check` — "
+                        "pipeline/pricehistory.py objects; a RecordingMarket adds an "
+                        "assertable list of every SKU it was asked about and can raise on a "
+                        "named one, standing in for a dropped connection. Proves the D62 key "
+                        "argument both ways: the real (sku, range, start) key keeps two rows "
+                        "for the same calendar day read from `semiannual` and `annual`, and "
+                        "a width-only key is shown, in the same run, to collapse them into "
+                        "one. Proves the never-delete rule. Proves ranking "
+                        "(D223): `revenue_by_sku` excludes canceled "
+                        "orders, `rank_by_revenue` sorts sold value first. Proves resume "
+                        "(D224): `freshness_index`/`split_by_freshness` "
+                        "skip a fresh SKU, and — proven to fail FIRST — a one-shot `sweep()` "
+                        "over every row loses everything to a mid-pass exception while a "
+                        "chunked, commit-per-chunk walk keeps every chunk read before the "
+                        "drop and a resumed pass never re-asks for what survived. Proves "
+                        "pacing (D222): `classify_refusals` rewrites a 403 "
+                        "only with evidence of an earlier success this pass, and "
+                        "`measured_pace`/`load_pace`/`save_pace` are exercised directly. "
+                        "Forty-eight assertions, all passing. Not wired into `make check` — "
                         "`make catalog-index-selftest`'s own precedent.",
-                "governed_by": ["D219", "D62", "D18"],
+                "governed_by": ["D219", "D224",
+                                "D223", "D222",
+                                "D62", "D18"],
             },
             "reap-selftest.sh": {
                 "does": "proves reap.py by pointing it at processes it must not kill. A "
