@@ -1956,6 +1956,36 @@ test('at 390, the buyer picker is reachable through the chip and its bottom shee
   await expect(page.locator('.browse-boxchip-text')).toContainText('Bob')
 })
 
+/* THE AMENDED BRIEF'S OWN CASE: the sheet is the RAIL, not the buyer list alone. Before this
+ * fix the sheet's markup was a second, hand-kept copy of `searchSlot`/`selectBar`/`ordersList`
+ * that left `railWalkPanel` (the selected buyer's own walk — `OrderPanel` plus `WalkList`'s
+ * `.browse-row`s) out of it, so a phone buyer with more than one card in the walk had no touch
+ * way to see the second card — only `WalkMainPane`'s single current-card view survived the
+ * width. Ticking a second buyer into the walk, the same union `bothPlan()`'s own case (`J
+ * steps to the next card...`) proves, is what makes this observable: one row is not enough to
+ * tell "the walk panel is missing" from "the walk panel drew its one card". */
+test('at 390, the sheet exposes the selected buyer\'s walk rows, not only the buyer list', async ({ page }) => {
+  await page.setViewportSize({ width: 390, height: 900 })
+  await open(page, { orders: secondBuyerPayload().payload })
+  await stubWalkPlan(page, bothPlan())
+
+  await page.locator('.browse-boxchip').click()
+  await page.locator('.browse-railsheet .orders-index-row').first().click()
+
+  /* Selecting a buyer closes the sheet (§13's own `pickRow` echo) — reopen it to tick the
+   * second buyer into the walk from inside it, the same control the rail always carried. */
+  await page.locator('.browse-boxchip').click()
+  await page
+    .locator('.browse-railsheet .orders-index-item', { hasText: 'Nora Second' })
+    .locator('.orders-index-tick input')
+    .check()
+
+  const sheet = page.locator('.browse-railsheet')
+  await expect(sheet.locator('.browse-row')).toHaveCount(2)
+  await expect(sheet).toContainText('Volcanion')
+  await expect(sheet).toContainText('Sunrise')
+})
+
 test('the status options are built from the payload, with counts, including a status this file never hardcodes', async ({ page }) => {
   await open(page, { orders: threeBuyerPayload() })
   const options = page.locator('.orders-status-select option')

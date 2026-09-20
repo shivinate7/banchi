@@ -3297,6 +3297,26 @@ function PullStage({
     </div>
   )
 
+  /** THE RAIL, BUILT ONCE (`BoxBrowse.tsx:1707`'s own `const rail = (...)`) — the search slot,
+   *  the buyer-list panel and the selected buyer's own walk panel, exactly what `.browse-map`
+   *  held before the phone sheet existed. Rendered in `.browse-map` OR inside the phone's
+   *  `Overlay`, never both: the two are mutually exclusive on `phone` below, so this single
+   *  React element is only ever mounted in one place at a time. Writing this out twice (this
+   *  file's own first draft of the fix) put a second `role="group"` with the identical
+   *  `aria-label`, and every id and aria-label inside `searchSlot`, into the SAME document
+   *  whenever the phone sheet was open — `.browse-map`'s copy is CSS-hidden, not unmounted, so
+   *  a hidden duplicate was still in the DOM beside the sheet's own. One value closes that. */
+  const rail = (
+    <>
+      {searchSlot}
+      <div className="browse-boxes bn-panel" role="group" aria-label="Choose an order to walk">
+        {selectBar}
+        {ordersList}
+      </div>
+      {railWalkPanel}
+    </>
+  )
+
   return (
     <div className="orders-stage">
       {failure === null ? null : <Notice tone="danger" title={failure.message} code={failure.code} />}
@@ -3347,14 +3367,12 @@ function PullStage({
       ) : null}
 
       <div className="browse-body">
-        <div className="browse-map">
-          {searchSlot}
-          <div className="browse-boxes bn-panel" role="group" aria-label="Choose an order to walk">
-            {selectBar}
-            {ordersList}
-          </div>
-          {railWalkPanel}
-        </div>
+        {/* ONE VALUE, RENDERED IN EXACTLY ONE PLACE AT A TIME (see `rail`'s own comment above):
+            `phone` picks between here and the `Overlay` below, the same way `BoxBrowse.tsx`
+            picks between its rail and `miniRail`/`null`. Below 768px this slot draws nothing —
+            `.browse-body > .browse-map`'s own CSS already hides it, and now there is nothing
+            duplicated underneath for that CSS to be hiding. */}
+        <div className="browse-map">{phone ? null : rail}</div>
         <div className="browse-side">
           <WalkMainPane walk={walk} phone={phone} />
           {why}
@@ -3363,11 +3381,7 @@ function PullStage({
 
       {phone && railOpen ? (
         <Overlay kind="bottom" label="Choose a buyer" onClose={() => setRailOpen(false)} passKeys className="browse-railsheet">
-          {searchSlot}
-          <div className="browse-boxes bn-panel" role="group" aria-label="Choose an order to walk">
-            {selectBar}
-            {ordersList}
-          </div>
+          {rail}
         </Overlay>
       ) : null}
 
