@@ -1060,7 +1060,7 @@ COMPONENTS = [
                                         "lose everything BEFORE the chunked fix is proven to "
                                         "keep what it already committed, and a resumed pass "
                                         "proven to never re-ask for an already-fresh SKU."},
-            # THE PER-PRODUCT VIEW'S OWN READ (D226). Archive-first,
+            # THE PER-PRODUCT VIEW'S OWN READ (D-a-product-price-view). Archive-first,
             # live-fallback only when `store/pricearchive.py` has never seen the SKU at all.
             # Never writes — a sweep is still a press, never this route.
             "productview.py": {"does": "`row_for_sku` looks up one SKU's export-shaped row "
@@ -1074,7 +1074,7 @@ COMPONENTS = [
                                        "chart states its own history starts from, off the "
                                        "buckets actually read, never the 357-day constant.",
                                 "governed_by": ["D62", "D219",
-                                                "D226"],
+                                                "D-a-product-price-view"],
                                 "note": "Exercised by `server/pipeline_routes.py:do_product_history` "
                                         "and by `app/tests/product-history.spec.ts`. No "
                                         "network call in the archive-hit path."},
@@ -2405,7 +2405,7 @@ COMPONENTS = [
             "product-history-selftest.py": {
                 "does": "proves pipeline/productview.py and "
                         "server/pipeline_routes.py:do_product_history against a throwaway "
-                        "store (D226). Three arms, each broken to prove "
+                        "store (D-a-product-price-view). Three arms, each broken to prove "
                         "the guard first: an unknown SKU refuses `sku_unknown`; a `misc` SKU "
                         "refuses `not_catalogued`; a SKU the archive has already swept "
                         "answers `source: archive` with per-bucket spread carried through, "
@@ -2414,7 +2414,7 @@ COMPONENTS = [
                         "`FakeMarket` and answers `source: live`. Nine assertions, all "
                         "passing. Not wired into `make check` — the same precedent this "
                         "file's own sibling above sets.",
-                "governed_by": ["D226", "D62", "D18", "D22"],
+                "governed_by": ["D-a-product-price-view", "D62", "D18", "D22"],
             },
             "reap-selftest.sh": {
                 "does": "proves reap.py by pointing it at processes it must not kill. A "
@@ -2709,7 +2709,7 @@ COMPONENTS = [
                 "governed_by": ["D13", "D14", "D18", "D58", "D62", "D76", "D79", "D83", "D86",
                                 "D87", "D89", "D96", "D100", "D103", "D104", "D106", "D113", "D134",
                                 "D159", "D165", "D167", "D168", "D174", "D189", "D192", "D193",
-                                "D203", "D210", "D225", "D226"],
+                                "D203", "D210", "D225", "D-a-product-price-view"],
             },
             "verdict-selftest.py": {"does": "PROVES `app/design-check-reporter.ts` STILL WRITES A "
                                             "VERDICT, BY RUNNING IT. `make docs-audit`'s "
@@ -2825,6 +2825,49 @@ COMPONENTS = [
                         "interpunct` row only reads it, since that row sits on the commit "
                         "path (D18).",
                 "governed_by": ["D18", "D194", "D218"]},
+            "ste/ste_lint.py": {
+                "does": "the STE ratchet's linter, VENDORED verbatim from $HOME/.claude/"
+                        "lint/ste_lint.py (MIT, LICENSE-ste_lint beside it) on 2026-09-19 — a "
+                        "COPY, never a symlink (D47): a fresh clone, a CI runner and this "
+                        "repo's own git history all lack $HOME/.claude, so a gate here cannot "
+                        "point at a path outside its own tree. Stdlib-only Python, unlike "
+                        "Vale's third-party Go binary, so the bare-`python3` pre-commit hook "
+                        "can run it with nothing new installed. Its rules are not edited — "
+                        "only a provenance header was added on top of the vendored file.",
+                "governed_by": ["D18", "D47", "D226"]},
+            "ste/LICENSE-ste_lint": {
+                "does": "the vendored linter's MIT license and notice, copied unmodified "
+                        "beside it — the license's one condition for reuse.",
+                "governed_by": ["D226"]},
+            "ste_measure.py": {
+                "does": "the STE ratchet's ONE measurer, called by both "
+                        "`scripts/docs-audit.py`'s `ste ratchet` row (read-only) and "
+                        "`scripts/ste-ratchet-pin.py --pin` (the writer, D18) — no counting "
+                        "logic is duplicated between them. Runs the vendored linter's four "
+                        "ERROR-severity rules over caller-supplied (path, text) pairs, drops "
+                        "findings a named `EXEMPTIONS` recognizer proves are an artifact of "
+                        "the text's shape (a table cell, a verbatim quotation, a decision "
+                        "citation, the literal \"VS Code\") rather than its prose, and reports "
+                        "the total, the per-code counts, and errors-per-1,000-PLAIN-words "
+                        "(matching `wc -w`, not `ste_lint.py`'s own STE-adjusted count) per "
+                        "directory bucket and repo-wide. Never touches disk itself.",
+                "governed_by": ["D18", "D218", "D226"]},
+            "ste-ratchet-pin.py": {
+                "does": "`python3 scripts/ste-ratchet-pin.py --pin` re-measures every tracked "
+                        "markdown file via `ste_measure.py:measure()` — the same function the "
+                        "row itself calls — and rewrites `scripts/ste-ratchet.json`. Contains "
+                        "no counting logic of its own. D18: a generator may write, on no "
+                        "`make` target and no hook; `git diff scripts/ste-ratchet.json` is "
+                        "the receipt, mirroring `copy-budget.mjs` and "
+                        "`typed-interpunct-pin.mjs`'s own discipline exactly.",
+                "governed_by": ["D18", "D194", "D218", "D226"]},
+            "ste-ratchet.json": {
+                "does": "the ratchet's pinned ceiling: `total`, `by_code` (the four "
+                        "ERROR-severity rule counts, post-exemption), and "
+                        "`ratio_per_1k_words` (per bucket and repo-wide). Written only by "
+                        "`ste-ratchet-pin.py --pin`; `scripts/docs-audit.py`'s `ste ratchet` "
+                        "row only reads it, since that row sits on the commit path (D18).",
+                "governed_by": ["D18", "D226"]},
             "docs-audit.py": {
                 "does": "D16's layers 1 and 2: every mechanical check, plus the coupling "
                         "question under `--staged`. `--json` is the machine surface "
@@ -2900,7 +2943,7 @@ COMPONENTS = [
                                 "D138", "D140", "D141", "D142", "D143", "D144", "D149", "D155",
                                 "D159", "D160", "D161", "D173", "D174", "D178", "D181", "D182",
                                 "D185", "D191", "D192", "D194", "D196", "D210", "D213",
-                                "D215", "D218"],
+                                "D215", "D218", "D226"],
             },
             "claim-ids.py": {
                 "does": "allocate the numbers this branch's SLUG ids will take, and "
@@ -3915,7 +3958,7 @@ COMPONENTS = [
                 # corpus made that screen's default the full cross-run worklist, and the
                 # paragraph beside it still described a run picker that draws nothing.
                 "governed_by": ["D5", "D13", "D24", "D31", "D39", "D43", "D49", "D63", "D69", "D86",
-                                "D226"],
+                                "D-a-product-price-view"],
             },
         },
     },
@@ -4066,7 +4109,7 @@ COMPONENTS = [
                                 "D115", "D116", "D132", "D134", "D137", "D138", "D145", "D159",
                                 "D165", "D168", "D172", "D174", "D183", "D189", "D191", "D192",
                                 "D193", "D203", "D212", "D213", "D219",
-                                "D225", "D226"],
+                                "D225", "D-a-product-price-view"],
                 "tested_by": ["T7"],
             },
             "tcg_import.py": {"does": "THE OUTBOUND WRITE to the seller admin, and the only "
@@ -4232,7 +4275,7 @@ COMPONENTS = [
                                 "D89", "D100", "D103", "D105", "D134", "D137", "D145", "D147",
                                 "D156", "D159", "D163", "D165", "D166", "D168", "D170", "D172",
                                 "D174", "D180", "D188", "D189", "D216", "D219",
-                                "D225", "D226"],
+                                "D225", "D-a-product-price-view"],
                 "tested_by": ["T7"],
             },
             "shipping_routes.py": {
@@ -4773,7 +4816,7 @@ COMPONENTS = [
                                             "D28", "D31", "D33", "D39", "D49", "D51", "D53",
                                             "D57", "D61", "D63", "D66", "D69", "D70", "D94",
                                             "D95", "D100", "D105", "D109", "D120", "D134",
-                                            "D159", "D207", "D226"]},
+                                            "D159", "D207", "D-a-product-price-view"]},
             "src/Codes.tsx": {"does": "the code-card screen: read a box's QRs into the ledger, "
                                       "see the two lanes C11 tiers the pile into, and hand a "
                                       "lane's codes to a buyer against a named order. The "
@@ -4882,7 +4925,7 @@ COMPONENTS = [
                                               "D104", "D113", "D116", "D132", "D134", "D159",
                                               "D165", "D168", "D172", "D174", "D180", "D189",
                                               "D192", "D193", "D203", "D207", "D213", "D219",
-                                              "D225", "D226"]},
+                                              "D225", "D-a-product-price-view"]},
             "src/usePoll.ts": {"does": "ONE POLLING PRIMITIVE, WHERE FIVE HAND-ROLLED TIMERS "
                                        "USED TO STAND (D207). `RunPanel.tsx` (the run "
                                        "list and, separately, an open run's own detail), "
@@ -4975,7 +5018,7 @@ COMPONENTS = [
                                              "D113", "D114", "D115", "D116", "D132", "D134", "D142",
                                              "D145", "D147", "D156", "D159", "D165", "D166", "D168",
                                              "D172", "D174", "D180", "D183", "D193", "D212", "D213",
-                                             "D226"]},
+                                             "D-a-product-price-view"]},
             "src/deviceMemory.ts": {"does": "every `localStorage` key the shell owns — the "
                                             "theme, the rail, which order statuses this "
                                             "device bothers fetching (D114), whether the "
@@ -6275,7 +6318,7 @@ COMPONENTS = [
                                             "(D85) — read by three declarations and set by "
                                             "nothing from D54 until then.",
                                      "governed_by": ["D5", "D41", "D45", "D49", "D50", "D54", "D62", "D85"]},
-            # THE PER-PRODUCT VIEW (D226). Off-nav, deep-linked by SKU. Never
+            # THE PER-PRODUCT VIEW (D-a-product-price-view). Off-nav, deep-linked by SKU. Never
             # links from #/revenue -- that file was being edited by another branch when this
             # route was built, and the decision entry argues the deferral in full.
             "src/ProductHistory.tsx": {"does": "`#/product`: one product's market history, "
@@ -6293,7 +6336,7 @@ COMPONENTS = [
                                                "data starts; a fill older than that is listed "
                                                "separately as having no market data at all, "
                                                "never plotted.",
-                                       "governed_by": ["D226", "D62",
+                                       "governed_by": ["D-a-product-price-view", "D62",
                                                        "D219", "D212",
                                                        "D196", "D50"],
                                        "note": "No harness test -- a Playwright spec would be "
@@ -6306,7 +6349,7 @@ COMPONENTS = [
                                                "screen that is a fact rather than a reading, "
                                                "and never a color standing in for beat-or-miss "
                                                "(D62: direction is a sign and a word).",
-                                       "governed_by": ["D226", "D62", "D94",
+                                       "governed_by": ["D-a-product-price-view", "D62", "D94",
                                                        "D41", "D218"]},
             # D79 is the batched half of D62, and D62 is why this file is separate from
             # PriceHistory.tsx rather than a mode of it: the panel draws every figure a reading
@@ -7099,7 +7142,7 @@ COMPONENTS = [
             "tests/routes.ts": {
                 "does": "one helper, `routesFromNav`, which harvests the owner's route roster "
                         "off `.bn-side a.bn-nav-link` and names `#/gallery` beside it, joined "
-                        "by `#/product` for the identical reason (D226): "
+                        "by `#/product` for the identical reason (D-a-product-price-view): "
                         "off-nav, so undiscoverable, but still an owner screen D194's ratchet "
                         "must reach. Moved "
                         "out of `cursor.spec.ts` on 2026-09-07 when `wide.spec.ts` needed the "
@@ -7112,7 +7155,7 @@ COMPONENTS = [
                         "cannot run below 768: the sidebar is `display: none` there, which is "
                         "why the phone sweep harvests its own.",
                 "governed_by": ["D31", "D50", "D69", "D70", "D95", "D123", "D194",
-                                "D226"]},
+                                "D-a-product-price-view"]},
             "tests/wide.spec.ts": {
                 "does": "the owner's screens ABOVE the desk, which nothing in this suite had "
                         "ever rendered. Of twenty-one specs, ten cases set 1440x900 and none "
@@ -7609,7 +7652,7 @@ COMPONENTS = [
                                 "D217", "D225"],
             },
             "tests/product-history.spec.ts": {
-                "does": "`#/product`'s own hard rule (D226): the market "
+                "does": "`#/product`'s own hard rule (D-a-product-price-view): the market "
                         "series and the owner's own fills draw as two different SVG shapes, "
                         "never one line — counted by class name, a `<polyline>` for a market "
                         "run and a `<path>` for a fill. Proved to fail: relabelling a fill's "
@@ -7619,7 +7662,7 @@ COMPONENTS = [
                         "requests are intercepted (the product history and the orders "
                         "payload); no real request is made and no store is touched. Not a "
                         "harness test; `make design-check` runs it.",
-                "governed_by": ["D226", "D62", "D212",
+                "governed_by": ["D-a-product-price-view", "D62", "D212",
                                  "D219"],
             },
             "tests/live-reconcile.spec.ts": {

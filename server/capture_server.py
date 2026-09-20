@@ -67,7 +67,7 @@
     GET    /pipeline/products/<sku>/history   one product's market history, addressed by the
                                            SKU rather than by a run — archive-first, live only
                                            when the archive has never swept this SKU
-                                           (D226)
+                                           (D-a-product-price-view)
     POST   /pipeline/runs/<name>/<step>    join | emit | reconcile. Free, run in the request
     GET    /pipeline/markdowns             every stale-listing markdown, newest first (D100)
     POST   /pipeline/markdowns             which live listings are not selling, and what each
@@ -635,7 +635,7 @@ _RUN_HISTORY_RE = re.compile(r"^/pipeline/runs/([A-Za-z0-9._-]+)/history$")
 # a reading has and the strip needs a shape and a sign, and a shared handler would send the
 # panel's payload forty-six times to draw the strip's.
 _RUN_TRENDS_RE = re.compile(r"^/pipeline/runs/([A-Za-z0-9._-]+)/trends$")
-# The per-product view's own read (D226), addressed by SKU rather than by a
+# The per-product view's own read (D-a-product-price-view), addressed by SKU rather than by a
 # run — the same character class a SKU is elsewhere validated against (`_wanted_sku` strips
 # and requires non-empty; this pattern is a coarser first filter, same as every other ID
 # pattern in this file).
@@ -12704,7 +12704,7 @@ class CaptureHandler(BaseHTTPRequestHandler):
             if match:
                 # ONE PRODUCT'S OWN ADDRESS, NOT A RUN'S. Archive-first: this reaches out to
                 # a public host only when `store/pricearchive.py` has never swept this SKU
-                # (D226). Never writes.
+                # (D-a-product-price-view). Never writes.
                 return self._json(
                     HTTPStatus.OK,
                     pipeline_routes.do_product_history(match.group(1)),

@@ -214,7 +214,7 @@ revenue       http://localhost:5173/#/revenue  .revenue,.bn-title
 # 1280px viewport `scripts/screenshot.sh` fixes. The spec measures it at 375px too.
 fulfillment   http://localhost:5173/#/fulfillment  .ff,.ff-title
 
-# The per-product view, routed 2026-09-19 (D226). Off-nav, reached by
+# The per-product view, routed 2026-09-19 (D-a-product-price-view). Off-nav, reached by
 # `?sku=`. Rendered with no query string, which is its own correct empty state: the SKU
 # field and nothing else, since a bare render cannot know which product to ask about and
 # must not guess one.

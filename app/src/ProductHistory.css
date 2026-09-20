@@ -1,4 +1,4 @@
-/* `#/product` — the per-product view (D226). Every color is a `--bn-*`
+/* `#/product` — the per-product view (D-a-product-price-view). Every color is a `--bn-*`
    token; the market series and the owner's own fills are drawn with deliberately different
    marks (a line versus a diamond), never a shared color standing in for the distinction. */
 
