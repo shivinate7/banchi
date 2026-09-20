@@ -64,7 +64,19 @@
   height: 2px;
   background: var(--bn-ink-2);
 }
-.producthistory-legend-diamond { color: var(--bn-accent); transform: rotate(45deg); }
+/* `Icon name="dot"` (`kit/Icon.tsx`) is a circle, and rotating a circle 45° draws nothing —
+ * confirmed against its own path, `M12 9a3 3 0 1 0 0 6 3 3 0 0 0 0-6z`. The legend swatch was
+ * a circle next to the chart's own diamond sale marks (`diamond()` above), and a `dot` icon
+ * has no diamond sibling to switch to (`kit/Icon.tsx` is not this file's to add one in). A
+ * plain filled square, rotated 45°, is a real diamond rather than a rotated circle (defect
+ * fix, UX review 2026-09-20). */
+.producthistory-legend-diamond {
+  display: inline-block;
+  width: 7px;
+  height: 7px;
+  background: var(--bn-accent);
+  transform: rotate(45deg);
+}
 
 .producthistory-range {
   display: flex;
@@ -89,11 +101,19 @@
   color: var(--bn-ink);
   margin: 0;
 }
+/* THE WRAPPER NOW CARRIES THE LAYOUT ITS SIBLING'S `margin-left` ASSUMED (defect fix, UX
+ * review 2026-09-20). An unstyled `<div>` shrink-wraps to its widest LINE inside a flex row —
+ * here, the block-level `<h3>`'s own line — leaving no room on that line for the mono span,
+ * which wrapped to a cramped second line 5px below instead of sitting beside it. */
+.producthistory-range-title {
+  display: flex;
+  align-items: baseline;
+  gap: var(--bn-2);
+}
 .producthistory-machine {
   font-family: var(--bn-font-mono);
   font-size: var(--bn-fs-xs);
   color: var(--bn-ink-3);
-  margin-left: var(--bn-2);
 }
 .producthistory-span {
   font-size: var(--bn-fs-xs);

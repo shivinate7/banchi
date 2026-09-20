@@ -227,6 +227,14 @@ function formatShort(iso: string): string {
   return d === null ? iso : d.toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' })
 }
 
+/** `Sep 9, 2026` for a sale date, reusing `formatShort`'s own padded convention rather than
+ *  a bare `toLocaleDateString()` (defect fix, UX review 2026-09-20). The un-padded form
+ *  (`5/2/2026` vs `12/13/2026`) was the only date treatment in this screen, and this slice,
+ *  not expressed through a shared formatter — its column width jittered row to row for it. */
+function formatLastSold(d: Date): string {
+  return formatShort(isoDate(d))
+}
+
 function sum(sales: readonly Sale[]): number {
   return sales.reduce((total, sale) => total + sale.gross, 0)
 }
@@ -853,7 +861,7 @@ export function Revenue() {
                     </Pill>
                   ) : null}
                 </span>
-                <span className="bn-money">{moneyGrouped(b.gross)}</span>
+                <span className="bn-money revenue-month-gross">{moneyGrouped(b.gross)}</span>
                 <span className="revenue-month-orders">{`${b.orders.toLocaleString()} ${b.orders === 1 ? 'order' : 'orders'}`}</span>
               </button>
             ))}
@@ -958,13 +966,15 @@ export function Revenue() {
                       </td>
                       <td>{row.nameIsSku ? <span className="bn-mono">{row.name}</span> : row.name}</td>
                       <td className="num">{row.copies.toLocaleString()}</td>
-                      {/* PLAIN, NOT GROUPED — a per-product row reads at three or four digits,
-                          the same size `money()` is already right for everywhere else it is used,
-                          and a comma here would be the only one in a column of otherwise-plain
-                          figures. Grouping is for the two headline totals, not every number on
-                          the screen. */}
-                      <td className="num"><span className="bn-money">{money(row.gross)}</span></td>
-                      <td>{row.last.toLocaleDateString()}</td>
+                      {/* GROUPED, LIKE THE COPIES CELL BESIDE IT (defect fix, UX review
+                          2026-09-20). The un-grouped form was argued as "three or four digits,"
+                          but a real product in this store's own data already reads
+                          `$4411.80` — four digits before the decimal, no different from the
+                          five- or six-figure case `moneyGrouped()`'s own comment names as the
+                          comma's reason to exist. Left plain, this cell disagreed with the
+                          Copies column on the same row about whether a big number gets one. */}
+                      <td className="num"><span className="bn-money">{moneyGrouped(row.gross)}</span></td>
+                      <td>{formatLastSold(row.last)}</td>
                       {prices === null ? null : (
                         <td className="revenue-market">
                           {compare === null ? (
@@ -996,7 +1006,7 @@ export function Revenue() {
                             <tbody>
                               {lines.map((s, i) => (
                                 <tr key={`${s.order}-${i}`}>
-                                  <td>{s.at.toLocaleDateString()}</td>
+                                  <td>{formatLastSold(s.at)}</td>
                                   <td><span className="bn-mono">{s.orderNumber}</span></td>
                                   <td className="num">{s.quantity.toLocaleString()}</td>
                                   <td className="num"><span className="bn-money">{money(s.unitPrice)}</span></td>

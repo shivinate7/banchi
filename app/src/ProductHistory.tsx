@@ -31,7 +31,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import { describeFailure, getOrders, getProductHistory, type Failure } from './server'
 import type { OrderLineWire, OrderRow, ProductHistoryPayload, ProductHistoryRange } from './types'
-import { Button, EmptyState, Icon, Notice, PageHeader, Pill } from './kit'
+import { Button, EmptyState, Notice, PageHeader, Pill } from './kit'
 import { money } from './money'
 import { sparkSegments } from './PriceHistory'
 import './ProductHistory.css'
@@ -204,7 +204,7 @@ function RangeSection({ range, fills }: { range: ProductHistoryRange; fills: rea
   return (
     <section className="producthistory-range">
       <header className="producthistory-range-head">
-        <div>
+        <div className="producthistory-range-title">
           <h3>{label}</h3>
           <span className="producthistory-machine">{range.range}</span>
         </div>
@@ -229,7 +229,7 @@ function Legend() {
   return (
     <div className="producthistory-legend">
       <span><span className="producthistory-legend-line" /> Market bucket (aggregate — many transactions this store never saw)</span>
-      <span><Icon name="dot" size={10} className="producthistory-legend-diamond" /> Your sale (exact — one order, one price)</span>
+      <span><span className="producthistory-legend-diamond" aria-hidden="true" /> Your sale (exact — one order, one price)</span>
     </div>
   )
 }
