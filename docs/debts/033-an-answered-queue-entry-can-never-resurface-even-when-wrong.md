@@ -1,6 +1,6 @@
 ## 33 — An answered queue entry can never resurface, even when it is wrong
 
-Found while measuring PR #444's archive-refusal-mechanization analysis, its own 15
+Found while measuring D237, its own 15
 subjects, against the real
 store, and named again here on the owner's ruling: *"mark this gap known but do not address
 right now."*
@@ -41,6 +41,6 @@ contradicted. That check is the very capability this entry says does not exist y
 future build that closes this gap should add its own guard beside whichever fix it picks.
 
 Cites D167 (the queue's refusal to re-ask an answered entry) and D28 (the undo window
-this gap does not widen). Cites PR #444's archive-refusal-mechanization analysis, where
+this gap does not widen). Cites D237, where
 the 16 cards were counted, and the sku-number-contradictions build, whose findings have
 nowhere to go while this gap stands.

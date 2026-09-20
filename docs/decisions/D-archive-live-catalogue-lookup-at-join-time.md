@@ -1,6 +1,6 @@
 ## D-archive-live-catalogue-lookup-at-join-time — Recorded, not built: ask the catalogue earlier than the archive does
 
-**What this records.** the archive-refusal-mechanization analysis (PR #444, unmerged) measured a gap. 8 of 15
+**What this records.** D237 measured a gap. 8 of 15
 identification errors behind the archive's own 16 refusals cannot be caught from stored
 data by any rule. This store carries no independent source of truth for a set's real card
 list. D15 vendors the Pokemon catalogue locally. Riftbound and the newest Pokemon sets have
@@ -33,5 +33,5 @@ the same box does not re-ask the same question. None of these is answered here. 
 this is future work, gated on the owner's word.
 
 Cites D1 (why capture stays offline), D15 (the vendored catalogue's own limits), D222 (the
-archive's measured throttle), and PR #444's archive-refusal-mechanization analysis (the
+archive's measured throttle), and D237 (the
 8-of-15 measurement this entry answers).

@@ -1,6 +1,6 @@
-## D-archive-store-checks — Four stored-data checks, built whole, from the archive-refusal-mechanization analysis (PR #444, unmerged)
+## D-archive-store-checks — Four stored-data checks, built whole, from D237
 
-**What this builds.** The four checks the archive-refusal-mechanization analysis (PR #444, unmerged) named. Each is
+**What this builds.** The four checks D237 named. Each is
 mechanizable from stored data, with no catalogue and no network. The owner took all four.
 `pipeline/identity_checks.py` holds the pure logic. `pkmnscan cards checks` is the one
 reachable place a human runs them, read-only, beside `cards name` and `cards audit`.
@@ -46,7 +46,7 @@ function still finds the minority.
 owner's store. It stays tight enough to still catch a single glued letter
 (`Shadbow`/`Shadow`). It stays loose enough to register a champion's short title beside its
 own full name (`Grandmaster at Arms`/`Jax, Grandmaster at Arms`). That second shape is the
-one the archive-refusal-mechanization analysis (PR #444, unmerged) names as `Draven, Glorious Executioner`, "resolved
+one D237 names as `Draven, Glorious Executioner`, "resolved
 fine."
 
 ### Measured against the owner's real store, read-only, 2026-09-20
@@ -91,4 +91,4 @@ dominant reading" logic survives it. Not wired into `make check`. This follows
 subcommand, rather than a pipeline step under harness coverage.
 
 Governs `pipeline/identity_checks.py`, `cli/cmd_cards.py`'s `checks` subcommand, and
-`cli/__main__.py`'s `cards checks` parser. Cites D146, D173, D234, and PR #444's archive-refusal-mechanization analysis (unmerged).
+`cli/__main__.py`'s `cards checks` parser. Cites D146, D173, D234, and D237.

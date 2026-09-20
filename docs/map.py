@@ -758,7 +758,7 @@ COMPONENTS = [
                                            "human. Reused by nothing else; the SKU "
                                            "self-contradiction check is a separate, "
                                            "sibling build kept apart on the owner's ruling.",
-                                    "governed_by": ["D146", "D173", "D234",
+                                    "governed_by": ["D146", "D173", "D234", "D237",
                                                     "D-archive-store-checks"],
                                     "note": "PROVED BY `scripts/identity-checks-selftest.py`: "
                                             "13 arms, including a mutation arm over the "
@@ -2584,7 +2584,7 @@ COMPONENTS = [
                         "before the real function is shown to survive the same fixture. "
                         "13 assertions. Not wired into `make check` — "
                         "`pricearchive-selftest.py`'s own precedent, one entry above.",
-                "governed_by": ["D146", "D173", "D234", "D-archive-store-checks"],
+                "governed_by": ["D146", "D173", "D234", "D237", "D-archive-store-checks"],
             },
             "product-history-selftest.py": {
                 "does": "proves pipeline/productview.py and "

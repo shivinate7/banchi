@@ -195,7 +195,7 @@ def test_near_duplicate_name():
 
 def test_near_duplicate_name_measured_case():
     print("class 4 — the doc's own resolved-fine case is flagged too, honestly")
-    # the archive-refusal-mechanization analysis names this pair as a real catch, and separately notes
+    # D237 names this pair as a real catch, and separately notes
     # the short title "resolved fine" on its own two other copies — the check cannot tell
     # the two apart from stored data alone, which is exactly why it routes to a human.
     cards = [
