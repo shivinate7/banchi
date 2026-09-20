@@ -27444,6 +27444,57 @@ def check_price_history(checks: Checks) -> None:
         "the name is consulted before the refusal rather than only after it",
     )
 
+    # THE GLUED-SET-CODE REPAIR, REACHED ON A MISS BEFORE THE NAME RUNG
+    # (D-archive-number-composition). `pipeline/join.py:_walk` has always tried
+    # `_repair_set_code` before falling to the name rung; `ProductIndex.find` did not, so a
+    # Riftbound read glued a set code onto the front of (`SFD • 013/221`,
+    # `SPD 208/221`) refused here even though the SAME shape resolves cleanly in the real
+    # listing join. Both separator shapes D55/D67 cover, over a constructed group that
+    # mirrors the real refusal (`Blast Cadet` `013/221` in `Spiritforged`).
+    # TWO products, and the query's NAME MATCHES NEITHER — so the name rung (which would
+    # otherwise resolve a single-product index by name alone, hiding whether the number
+    # repair ever ran) answers empty, and only the repaired NUMBER can find the row.
+    spiritforged = pricehistory.ProductIndex.build([
+        {"productId": 701, "name": "Blast Cadet",
+         "extendedData": [{"name": "Number", "value": "013/221"}]},
+        {"productId": 703, "name": "Warden's Bulwark",
+         "extendedData": [{"name": "Number", "value": "099/221"}]},
+    ])
+    checks.equal(
+        spiritforged.find("SFD • 013/221", "No Such Name"),
+        701,
+        "a dot-glued set code (`SFD • 013/221`) is repaired and resolves off the NUMBER "
+        "alone, with a name that matches nothing in the index — the real refused shape from "
+        "the 2026-09-20 archive sweep, and proof the name rung is not what answered it",
+    )
+    checks.equal(
+        spiritforged.find("SPD 999/221", "No Such Name"),
+        None,
+        "a space-glued set code against a group that does not carry 999/221 still refuses — "
+        "the repair tries the stripped key, it does not manufacture a row",
+    )
+    checks.equal(
+        pricehistory.ProductIndex.build([
+            {"productId": 702, "name": "Forge of the Flint",
+             "extendedData": [{"name": "Number", "value": "208/221"}]},
+            {"productId": 704, "name": "Another Card",
+             "extendedData": [{"name": "Number", "value": "017/221"}]},
+        ]).find("SPD 208/221", "No Such Name"),
+        702,
+        "and the SAME space-glued shape resolves off the number once the group actually "
+        "carries 208/221 — the other real refused shape from that sweep, a plain space with "
+        "no punctuation at all, which `store/numbers.py:_SET_CODE_PREFIX` did not match "
+        "before this widening",
+    )
+    checks.equal(
+        pricehistory.ProductIndex.build([
+            {"productId": 1, "name": "Alpha", "extendedData": [{"name": "Number", "value": "013/221"}]},
+        ]).find("013/221", "Alpha"),
+        1,
+        "MUTATION GUARD: a number that already matches is never handed to the repair — an "
+        "unglued number behaves exactly as before",
+    )
+
     # ---------------------------------------------------------------- the parse, on real bytes
     #
     # THE ORDER ASSERTION IS THE POINT OF COMMITTING THIS FILE. Both halves, so a change

@@ -124,7 +124,10 @@ class _MarketLike(Protocol):
         ...
 
 
-def _export_row(sku: str, name: str, number: str, set_name: str, condition: str, game: str) -> dict:
+def _export_row(
+    sku: str, name: str, number: str, set_name: str, condition: str, game: str,
+    number_key: str = "",
+) -> dict:
     """One card's own last-known facts, shaped exactly like a real export row.
 
     `game` IS RESOLVED THROUGH `pipeline/games.py`, NEVER STORED AS `Product Line` DIRECTLY —
@@ -132,13 +135,36 @@ def _export_row(sku: str, name: str, number: str, set_name: str, condition: str,
     wants the human-facing product line string that claim maps to. A card whose claim is
     empty falls back through `games.DEFAULT_GAME` the same way every other reader in this
     repo backfills an unset `game` (`store/master.py:Card.game`'s own docstring).
+
+    THE NUMBER CELL PREFERS THE STORE'S OWN `number_key` OVER THE BARE `number`
+    (D-archive-number-composition), AND THE PRIMITIVE ALREADY EXISTED — it was never
+    called from here. `cards.number` is stored bare by design (measured: 542 of 542
+    Pokemon cards with a SKU carry a number with no `/` in it), but `store/master.py`'s
+    own write path (`_card_columns`, store-scaling item 8) already composes and STORES
+    `join_key(card.number, card.printed_total)` as `number_key` on every write, for the
+    FTS5 search index to read without re-deriving the rule. A real TCGplayer export's own
+    `Number` cell carries exactly that composed `zfill(3)(number) + "/" + printedTotal`
+    form, which is what `pipeline/pricehistory.py:ProductIndex` and
+    `pipeline/join.py:Catalog` are both keyed from. A synthetic row built from the bare
+    `number` alone is missing the one column the number index can match on, so it can
+    only ever be found by NAME — and the name rung refuses on any card whose name is
+    ambiguous (`ME01: Mega Evolution`'s secret rares above its own printed total:
+    `Bulbasaur - 001/132` AND `Bulbasaur - 133/132` both fold to `BULBASAUR`).
+
+    `number_key` IS EMPTY BY DESIGN FOR A GAME WITH NO DENOMINATOR (`store/master.py`'s
+    own guard: `if (card.number and card.printed_total) else ""`) — Riftbound and One
+    Piece print their identifier as ONE string with no `printed_total` to compose, so
+    `number_key` is always `""` for them and this falls back to the bare `number`
+    unchanged, which already matches the export's `Number` cell verbatim for those games.
+    No `pipeline/games.py` lookup is needed here: the store already decided, per card, at
+    write time.
     """
     registry = games.get(game or games.DEFAULT_GAME)
     line = registry.get("product_line")
     return {
         tcgcsv.PRODUCT_LINE_COLUMN: line if line is not None else "",
         tcgcsv.SET_COLUMN: set_name or "",
-        tcgcsv.NUMBER_COLUMN: number or "",
+        tcgcsv.NUMBER_COLUMN: number_key or number or "",
         tcgcsv.NAME_COLUMN: name or "",
         tcgcsv.SKU_COLUMN: sku,
         tcgcsv.CONDITION_COLUMN: condition or "",
@@ -463,13 +489,13 @@ def rows_from_store(
     """
     snapshot = snapshot if snapshot is not None else Store().read()
     unranked: Dict[str, dict] = {}
-    columns = ("sku", "name", "number", "set_name", "condition", "game")
+    columns = ("sku", "name", "number", "set_name", "condition", "game", "number_key")
     for _, values in snapshot.inventory.cards.select(columns):
-        sku, name, number, set_name, condition, game = values
+        sku, name, number, set_name, condition, game, number_key = values
         sku = str(sku or "").strip()
         if not sku:
             continue
-        unranked[sku] = _export_row(sku, name, number, set_name, condition, game)
+        unranked[sku] = _export_row(sku, name, number, set_name, condition, game, number_key)
     card_skus = set(unranked.keys())
 
     if market is not None:

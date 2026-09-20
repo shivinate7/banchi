@@ -714,9 +714,24 @@ class ProductIndex:
         on beats a plausible wrong answer it cannot see. Measured at zero ambiguous across
         all four committed exports, which is a fact about those exports and not a promise
         about the next one.
+
+        A NUMBER-KEY MISS GETS ONE REPAIR BEFORE THE NAME RUNG, THE SAME ORDER
+        `pipeline/join.py:_walk` ALREADY USES FOR THE REAL LISTING JOIN
+        (D-archive-number-composition). D55's `strip_set_code` removes a set code the model glued onto the
+        front of a Riftbound read (`SFD • 013/221` -> `013/221`) — the mechanism was
+        never broken, it was simply never REACHED here: this accessor folded the raw
+        `number` through `number_index_key` and fell straight to the ambiguity-prone name
+        rung on a miss, never trying the stripped form the way `_walk`'s own `repair` step
+        does before giving up on a number. Asked only on a miss, exactly like `_walk`'s own
+        repair — a number that already matched is never rewritten.
         """
         key = join.number_index_key(number)
         hits = self.by_number.get(key, ()) if key else ()
+        if not hits:
+            repaired = join.strip_set_code(number)
+            if repaired and repaired != str(number or "").strip():
+                repaired_key = join.number_index_key(repaired)
+                hits = self.by_number.get(repaired_key, ()) if repaired_key else hits
         if len(hits) > 1:
             narrowed = tuple(
                 pid for pid in hits if pid in self.by_name.get(join.name_index_key(name), ())
