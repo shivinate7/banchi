@@ -376,6 +376,66 @@ allows  "a redirect to /dev/null"                  "$WT" "make harness > /dev/nu
 allows  "a redirect into a temp directory"         "$WT" "echo x > $tmp/scratch/out.log"
 allows  "a redirect through an unexpanded variable" "$WT" "echo x > \$tmp/out.log"
 
+# ------------------------------------------- 2b. the quoted script that was read as a write
+#
+# 2026-09-19: a multi-line `node -e '…'` was refused by this clause. The middle line of the
+# script, `const hits=s.filter(i=>/[·•]/.test(String(i.text)));`, is quoted as far as the
+# shell is concerned, but the tokenizer fed shlex one LINE at a time, so that line read as a
+# command with a `>` in it and `/[·•]/.test` became a redirection target. A regular expression
+# literal is not a path. The parent's `split_segments` carries quote state across the newline
+# and is what the reader now uses; these arms pin the shape, and the arms after them pin that
+# the real writes the clause exists for are still refused — so the next edit cannot trade one
+# for the other.
+allows "the 2026-09-19 false positive: a multi-line \`node -e\` with a regex literal in it" "$WT" "node -e '
+const s = require(\"./out.json\");
+const hits=s.filter(i=>/[·•]/.test(String(i.text)));
+console.log(hits.length);
+' out.json"
+allows "the same script on one line"  "$WT" "node -e 'const hits=s.filter(i=>/[·•]/.test(String(i.text)));' out.json"
+allows "a multi-line \`python3 -c\` with a \`>\` in it" "$WT" "python3 -c \"
+import sys
+print(1 > 0, file=sys.stderr)
+\""
+allows "a quoted string that NAMES the other checkout" "$WT" "echo 'cd $tmp/main && echo x > notes.md' > note.txt"
+allows "a \`#\` comment holding an apostrophe, then a write inside this tree" "$WT" "# the driver's shape
+echo x > notes.txt"
+
+# THE INCIDENT'S OWN SPELLING WAS A `cd`, AND EVERY WRITE AFTER IT WAS RELATIVE. Until
+# 2026-09-19 a relative target resolved against the SESSION's cwd, so `cd <main> && echo x >
+# notes.md` — the 2026-09-06 shape, minus nothing — passed. The stages are now walked in
+# order and a `cd` moves the directory the targets after it resolve against; and the `cd`
+# itself is refused as an act, because the Bash tool's cwd persists between calls and
+# `npm run build` writes with no `>` for a redirect reader to see.
+refuses "the 2026-09-06 shape: \`cd <main> && echo x > notes.md\`" "$WT" "cd $tmp/main && echo x > notes.md"
+refuses "\`cd <main>; … | tee notes.md\`"                          "$WT" "cd $tmp/main; echo x | tee notes.md"
+refuses "\`cd <main> && npm run build\` — a write with no \`>\`"     "$WT" "cd $tmp/main && npm run build"
+refuses "a bare \`cd <main>\` — the tool's cwd persists"           "$WT" "cd $tmp/main"
+judge "$WT" "cd $tmp/main && npm run build"
+case "$out" in *"stand in another checkout"*) ok "the \`cd\` refusal says what the act is" ;;
+  *) bad "the cd refusal does not name the act" ;; esac
+case "$out" in *"PKMNSCAN_TREE=off"*) ok "…and prints the same hatch" ;;
+  *) bad "the cd refusal does not name PKMNSCAN_TREE=off" ;; esac
+allows  "\`cd\` into a temp directory that is no checkout"          "$WT" "cd $tmp/scratch && echo x > out.log"
+allows  "\`cd\` inside this checkout, then a relative write"         "$WT" "cd app && echo x > f"
+allows  "\`cd -\`, which this parse cannot place — no opinion"       "$WT" "cd - && echo x > f"
+allows  "\`cd\` through an unexpanded variable — no opinion"         "$WT" "cd \$OTHER && echo x > f"
+allows  "\`git -C <main> log\` — the read-only form the refusal recommends" "$WT" "git -C $tmp/main log -1"
+allows  "a heredoc body that quotes the \`cd\` shape"               "$WT" "git commit -F - <<'MSG'
+cd $tmp/main && echo x > notes.md
+MSG"
+
+# WRAPPERS, KEYWORDS AND INTERPRETER HEREDOCS SHARED THE BLIND SPOT. `strip_prefixes` stopped
+# at a wrapper's own flag, so `env -i tee <path>` resolved to `-i` and no clause saw the tee;
+# `if` was not a prefix at all; and a heredoc fed to `bash` had its body stripped as prose.
+# All three were measured ALLOWED on 2026-09-19 before the parent's `resolve_command` and
+# `strip_heredoc_bodies` were lifted in.
+refuses "\`env -i tee <main>/…\` — a wrapper's flag no longer hides the tee"  "$WT" "env -i tee $tmp/main/work.py"
+refuses "\`xargs tee <main>/…\`"                                            "$WT" "xargs tee $tmp/main/work.py"
+refuses "\`if tee <main>/…; then\` — a keyword is not a command"             "$WT" "if tee $tmp/main/work.py; then :; fi"
+refuses "a \`bash <<EOF\` heredoc whose body writes into the other checkout" "$WT" "bash <<'EOF'
+echo x > $tmp/main/work.py
+EOF"
+
 echo ""
 echo "  3. \`gh api\` with a field and no method"
 

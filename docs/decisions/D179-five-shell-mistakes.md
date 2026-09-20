@@ -306,6 +306,59 @@ genuinely disagreed would tell the two mutants apart, and none built here does.
 That replaces the "six arms, five caught" figure `CLAUDE.md` published for this clause before
 the amendment, which described only the colon-check half.
 
+### AMENDED 2026-09-19 — a quoted script is not a command, and the parent's reader is lifted rather than re-derived
+
+**Clause 2 refused this, from a real session:**
+
+```
+node -e '
+const hits=s.filter(i=>/[·•]/.test(String(i.text)));
+' out.json
+```
+
+It named `/[·•]/.test` as a write target. That is a regular expression literal inside a
+single-quoted script. The command writes nothing. The cause was in the shared reader.
+`shell_parse.tokenize` fed shlex one LINE at a time. The middle line of a multi-line quoted
+argument is balanced as far as that line can tell. So it tokenized as a command with a `>`
+in it. The parent's CLAUDE.md says why this matters more than one blocked command. A guard that
+goes red when nothing is wrong is spent. This refusal prints its own hatch.
+
+**The fix is at the resolution point, and it is the parent's.**
+`~/Developer/claude-settings/hooks/guard.py` had solved exactly this in three functions.
+`split_segments` carries quote state across the newline. `resolve_command` finds the real
+command word, past assignments, wrappers with their flags, and loop keywords.
+`strip_heredoc_bodies` treats a body as data unless an interpreter will run it. All three are
+copied into `scripts/shell_parse.py` and marked as lifted. The parent's
+`a-gates-allow-list-is-the-constant.md`, pattern 1, is the reason not to re-derive. A
+hand-rolled piece of the same resolver there fixed the false positive and produced a false
+negative on `git -C <dir> commit`. Two things are this repo's own, each named in the code. The
+splitter takes the set of delimiters it cuts on, because the second reader needs the pipe
+kept. And it carries the shell's comment rule. The parent's loop reads the `'` in
+`# the driver's shape` as opening a quote. That was measured on this guard's own
+runaway-driver fixture, which went from refused to allowed the moment the parent's loop
+replaced the per-line reader. That blind spot is the parent's to fix first.
+
+**Every clause shared the blind spot, because every clause reads the one parse.** Four shapes
+were measured ALLOWED before the lift and refused after it. `env -i tee <other>/f` and
+`xargs tee <other>/f`, because `strip_prefixes` stopped at a wrapper's own flag.
+`if tee <other>/f; then`, because a keyword was not a prefix. `bash <<'EOF' … echo x >
+<other>/f … EOF`, because an interpreter's body was stripped as prose. And `sudo -n git stash`
+for clause 7. One shape is still allowed, and it is the parent's limit too. A wrapper flag
+that takes a VALUE, as in `sudo -u root tee f` or `nice -n 10 tee f`, resolves to the value.
+
+**The incident's own spelling was never refused.** 2026-09-06 was `cd <main checkout> && …`
+with every write after it relative. A relative target resolved against the session's cwd. The
+stages are now walked in order. A `cd` moves the directory the targets after it resolve
+against. The `cd` into another checkout is refused as an act as well. The Bash tool's cwd
+persists between calls, and `npm run build` writes with no `>` for a redirect reader to see.
+The predicate is resolution, `git rev-parse` at the target. A temp directory, `~/.claude`, a
+plain directory and this checkout's own subdirectories pass. `cd -` and `cd $VAR` are no
+opinion. Only a DIFFERENT checkout is refused. The read-only forms the refusal already
+recommended never needed the `cd`. `git -C <other> <write verb>` remains a declared gap.
+
+`scripts/guard-shell-selftest.sh` pins the false positive in four spellings and each real write
+above, so the next edit cannot trade one for the other.
+
 ### Standing
 
 **BUILT and self-tested**: six clauses, `scripts/guard-shell-selftest.sh` with five
