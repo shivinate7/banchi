@@ -243,15 +243,14 @@ function ValueRow({ row }: { readonly row: ValueCopy }) {
       <span className="value-identity">
         <span className="value-name">{row.name ?? 'Nobody has named this one'}</span>
         <span className="value-meta">
-          {meta.join(' · ')}
+          {meta.map((part, i) => (
+            <span key={i}>{part}</span>
+          ))}
           {row.live === 0 ? null : (
-            <>
-              {meta.length === 0 ? null : ' · '}
-              <span className="value-live">
-                <span className="bn-dot bn-dot-live" />
-                {`${row.live} listed`}
-              </span>
-            </>
+            <span className="value-live">
+              <span className="bn-dot bn-dot-live" />
+              {`${row.live} listed`}
+            </span>
           )}
         </span>
       </span>
