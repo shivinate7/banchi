@@ -50,35 +50,100 @@ everything else tracked markdown reaches. A sixth, `repo`, is every file combine
 ### Exemptions are a named, mechanical, proven class, or they do not exist
 
 A sampled, hand-classified survey of 265 findings (`scratchpad/lane2-falsepositives.md`)
-found four classes a machine can tell apart from ordinary prose without guessing:
+found three classes a machine can tell apart from ordinary prose without guessing:
 
 - **Table row.** A `|`-delimited cell. The linter already exempts this shape from its
   sentence-level rules. It never extended the exemption to the word-level ones this ratchet
   tracks.
-- **Verbatim quotation.** A blockquote line, or this repo's own `*"…"*` convention for a
-  quoted spoken line. Ninety-three percent of the sampled contraction findings sat here. A
-  contraction inside a quotation cannot be fixed without misquoting the speaker.
 - **Decision-citation shorthand.** `(D<n>; …)`. The semicolon there separates an id from
   its gloss, not one clause from another.
 - **The literal `VS Code`.** A false match on the abbreviation pattern, not the
   abbreviation itself.
 
+A fourth class, `via`, is exempt too, on a different basis. See "Ruling one" below.
+
 A fifth class, an enumeration collapsed into one paragraph, is named and left unbuilt. The
 survey's own rule calls it a proxy. Three or more semicolons look like an enumeration. Some
 genuinely long ones should become real bullet lists instead, so this class stays unbuilt.
 
-Bare `via` and `vs` in ordinary prose stay counted for the same reason. Over half the
-sampled Latin-abbreviation findings were this shape. Whether swapping the word reads better
-is a style call, not a mechanical one.
+A sixth class, verbatim quotation, was built and then removed. See "Ruling two" below.
+
+`vs` in ordinary prose stays counted. Over half the sampled Latin-abbreviation findings were
+this shape. Whether swapping the word reads better is a style call, not a mechanical one.
 
 ### The floor this leaves, named rather than hidden
 
-The survey's own extrapolated floor, judging every borderline case against the writer, is
-roughly 2.7 errors per 1,000 words, combined across the four rules. This repo's built,
-MECHANICAL exemptions reach a smaller floor than that, by design. They remove only what a
-machine can prove, not what a person's judgment would also excuse. The gap between the two
-numbers is real prose debt. This ratchet does not hide that gap. It is also not a defect in
-the ratchet. A ratchet that guessed at judgment calls could not be trusted.
+The survey's own extrapolated floor, judging every borderline case against the writer, was
+roughly 2.7 errors per 1,000 words, combined across the four rules. That figure predates the
+rulings below. It is kept here as the survey's own number, not restated against today's pin.
+
+This repo's built, MECHANICAL exemptions do not chase that floor. They remove two things
+only: what a machine can prove, and what the owner has ruled by argument. They never remove
+what a person's judgment would merely excuse. A ratchet that guessed at judgment calls could
+not be trusted.
+
+### The owner's rulings, 2026-09-19
+
+Four questions went to the owner. Each answer below is a ruling, not a recommendation.
+
+**Ruling one, on `via` and `vs`.** `via` is exempt. `vs` stays a real finding. The literal
+`VS Code` stays exempt, as already built.
+
+The rule's own stated reason for STE007 is that a Latin abbreviation reads differently to
+different readers, and that machine translation handles it badly. That reason holds for the
+rule's true abbreviations: the ones with a full stop, and the two-word Latin phrases. It
+does not hold for `via`. `via` is not an abbreviation. It is an ordinary English
+preposition. Every reader reads it the same way. It sits in the rule's table by category
+error, not because it behaves like one. Plain-word style guides do prefer `through` or `by`
+over `via`. A writer may still choose the plainer word on that ground. A gate is the wrong
+instrument for a preference.
+
+`vs` is the opposite case. It is a real abbreviation, of `versus`. The rule's own
+replacement for it is `compared with`. It stays a finding.
+
+**What could not be verified.** The published standard's own dictionary is not freely
+available in full. Two searches did not settle whether `via` carries a specific entry
+there. The argument above rests on the rule's own stated reason, and on the shape of its
+word table, read directly. It does not rest on the standard's own text. This is recorded as
+unmeasured, not as a settled fact.
+
+**Ruling two, on verbatim quotation.** There is no exemption for a verbatim quotation. The
+owner chose to rewrite around a quoted line that trips a rule, rather than exempt it.
+
+The cost is named plainly, because the owner chose it with the cost in view. The
+contraction rule measured 93.3% artifact in the survey. Almost all of that was verbatim
+quotations of the owner's own words. Those findings now stay in the count. They come out
+only when a document paraphrases the owner, rather than quoting the owner.
+
+The pin below carries the count before and after this ruling.
+
+**Ruling three, on the size reader.** `ENTRY_BUDGET` and the `entry budget` row stay. The
+owner wants the constant re-derived against today's corpus of 219 entries. The owner also
+wants its label corrected. The constant counts characters. Its own name and comment say
+bytes. That work is its own pull request and its own reviewer. It is not built here. Every
+line of `ENTRY_BUDGET` and the `entry budget` row is exactly as this entry found it.
+
+**Ruling four, on the claim step.** A defect in the claim step is its own pull request. A
+separate lane is taking it. Nothing about it is built or argued here.
+
+### The pin, before and after every change on this branch
+
+First pin, this branch's opening measurement, with all four exemption classes as first
+built:
+
+- Total 11,029. STE001 8,047. STE006 2,767. STE007 124. STE008 91.
+
+After ruling two removed the verbatim-quotation class, before ruling one added `via`:
+
+- Total 11,175. STE001 8,104. STE006 2,790. STE007 127. STE008 154.
+
+After ruling one added the `via` exemption, the branch's current pin:
+
+- Total 11,117. STE001 8,104. STE006 2,790. STE007 69. STE008 154.
+
+STE001 and STE006 answer only to ruling two. They moved once, from the first pin to the
+second. STE007 and STE008 moved on both rulings. The net move against the first pin is
++88, on the total.
 
 ### The ratchet, mirroring D194 and D218
 

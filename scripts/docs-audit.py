@@ -11910,15 +11910,24 @@ def check_typed_interpunct(report: Report) -> None:
 # count (plain, matching `wc -w`) and why it is not `ste_lint.py`'s own STE-adjusted count.
 #
 # EXEMPTIONS ARE A NAMED, MECHANICAL, PROVEN CLASS OR THEY DO NOT EXIST. Four are built —
-# table row, verbatim quotation, the `(D<n>; …)` citation shorthand, and the literal "VS
-# Code" — each measured against a hand-classified sample in `scratchpad/lane2-
-# falsepositives.md` before being written, and each testable alone in `--self-test`. A fifth,
-# "an enumeration collapsed into one paragraph", is named in `scripts/ste_measure.py` and left
-# UNBUILT: the sample's own classification rule calls it a proxy ("3 or more semicolons... very
-# likely an enumeration"), not a recognition, and a class this row cannot tell apart from
-# ordinary prose without guessing does not get to exempt anything. The bare `via`/`vs`
-# BORDERLINE findings — 53.8% of the whole STE007 sample — stay counted for the same reason:
-# whether swapping them reads better is a style call this row is not positioned to make.
+# table row, the `(D<n>; …)` citation shorthand, the literal "VS Code", and `via` — three
+# measured against a hand-classified sample in `scratchpad/lane2-falsepositives.md` before
+# being written, `via` exempt by the OWNER'S ARGUMENT instead (D-a-ste-ratchet, ruling
+# three): STE007's own stated reason for the rule — different readers read a Latin
+# abbreviation differently, and machine translation handles it badly — does not hold for an
+# ordinary English preposition every reader reads the same way. `vs`/`vs.` IS a real
+# abbreviation, of "versus", and stays a finding. Each class is testable alone in
+# `--self-test`.
+#
+# A FIFTH, VERBATIM QUOTATION, WAS BUILT AND REMOVED ON THE OWNER'S RULING (ruling two): the
+# owner chose to rewrite around a quotation that trips a rule, not to exempt it. Most of the
+# cost lands on STE008 (contraction), whose sample was 93.3% this shape — the decision entry
+# names the count before and after.
+#
+# A SIXTH, "an enumeration collapsed into one paragraph", is named in `scripts/ste_measure.py`
+# and left UNBUILT: the sample's own classification rule calls it a proxy ("3 or more
+# semicolons... very likely an enumeration"), not a recognition, and a class this row cannot
+# tell apart from ordinary prose without guessing does not get to exempt anything.
 
 
 STE_RATCHET_PIN = ROOT / "scripts" / "ste-ratchet.json"
@@ -18293,21 +18302,9 @@ def self_test() -> int:
         ok(not ste_measure._table_row(_finding("STE006", 2, 2), table_lines),
            "the same character, one line down and outside any `|`, is NOT exempted")
 
-        quote_lines = [
-            "> it's the owner's own line, quoted",
-            'Ordinary prose says *"don\'t stop now"* and then keeps going, don\'t it',
-        ]
-        ok(ste_measure._verbatim_quotation(_finding("STE008", 1, 4), quote_lines),
-           "a contraction inside a blockquote line is exempted")
-        quote_col = quote_lines[1].index("don't stop") + 2  # inside *"…"*
-        ok(ste_measure._verbatim_quotation(_finding("STE008", 2, quote_col + 1), quote_lines),
-           "a contraction INSIDE the *\"…\"* span is exempted",
-           f"line: {quote_lines[1]!r}, col tested: {quote_col + 1}")
-        trailing_col = quote_lines[1].rindex("don't it") + 1
-        ok(not ste_measure._verbatim_quotation(_finding("STE008", 2, trailing_col), quote_lines),
-           "the SAME line's trailing contraction, OUTSIDE the quoted span, is NOT exempted — "
-           "the recogniser reads the column, not merely 'this line has a quote somewhere'",
-           f"line: {quote_lines[1]!r}, col tested: {trailing_col}")
+        ok(not hasattr(ste_measure, "_verbatim_quotation"),
+           "the verbatim-quotation exemption stays REMOVED (owner's ruling, D-a-ste-ratchet) "
+           "— a contraction or semicolon inside a quotation counts, same as anywhere else")
 
         cite_line = "Duplicates aggregate by SKU (D7; amended 2026-09-07) at join time."
         cite_col = cite_line.index(";") + 1
@@ -18328,6 +18325,17 @@ def self_test() -> int:
         ok(not ste_measure._vs_code(_finding("STE001", 1, vs_code_col), [vs_code_line]),
            "the class is scoped to STE007 only — a different code at the identical "
            "position is left alone")
+
+        ok(ste_measure._via(_finding("STE007", 1, 1, excerpt="via"), []),
+           "`via` is exempt by the owner's argument, not by a measured sample — the line "
+           "is not even consulted")
+        ok(ste_measure._via(_finding("STE007", 1, 1, excerpt="Via"), []),
+           "the excerpt is matched case-insensitively — a sentence-initial `Via` exempts too")
+        ok(not ste_measure._via(_finding("STE007", 1, 1, excerpt="vs"), []),
+           "`vs` stays a real finding — the ruling names it as the opposite case, a true "
+           "abbreviation of \"versus\"")
+        ok(not ste_measure._via(_finding("STE001", 1, 1, excerpt="via"), []),
+           "the class is scoped to STE007 only, the same guard `VS Code` uses")
 
         print("\nste ratchet: measure() end to end over a tiny synthetic corpus")
         synthetic = [

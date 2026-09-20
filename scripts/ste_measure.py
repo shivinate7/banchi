@@ -110,13 +110,24 @@ def plain_word_count(text: str) -> int:
 # does not have, so a class that cannot be told apart at that granularity is named below and
 # left unbuilt rather than approximated.
 #
-# THE FOUR CLASSES HERE ARE FROM A MEASURED SAMPLE, NOT A GUESS: `scratchpad/lane2-
-# falsepositives.md`, a stratified sample of 265 findings (STE007's 130 taken whole) hand-
-# classified GENUINE / ARTIFACT / BORDERLINE against a rule stated before judging. Only
-# ARTIFACT classes with a class-level MECHANICAL recognition rule are built; BORDERLINE
-# classes (bare `via`/`vs` in ordinary prose — no abbreviation is happening, whether swapping
-# them reads better is a style call) are never exempted, because the class itself concedes it
-# needs a person's judgment, which is exactly what an exemption must not need.
+# THREE OF THE FOUR CLASSES BUILT HERE ARE FROM A MEASURED SAMPLE, NOT A GUESS:
+# `scratchpad/lane2-falsepositives.md`, a stratified sample of 265 findings (STE007's 130
+# taken whole) hand-classified GENUINE / ARTIFACT / BORDERLINE against a rule stated before
+# judging. Only ARTIFACT classes with a class-level MECHANICAL recognition rule are built.
+#
+# THE FOURTH, `via`, IS EXEMPT BY ARGUMENT RATHER THAN BY ARTIFACT RATE (owner's ruling,
+# D-a-ste-ratchet): STE007's own stated reason — different readers read a Latin abbreviation
+# differently, and machine translation handles it badly — does not hold for an ordinary
+# English preposition every reader reads the same way. `vs`/`vs.` IS a real abbreviation (of
+# "versus") and stays a finding; a BORDERLINE class that concedes it needs a person's
+# judgment — the sample's `via`/`vs` classification before this ruling — is not exempted for
+# that reason alone, which is why this one exemption is argued rather than measured.
+#
+# A FIFTH CLASS, "verbatim quotation" (a blockquote or a `*"…"*` quoted line), WAS BUILT AND
+# WAS REMOVED ON THE OWNER'S RULING (D-a-ste-ratchet): the owner chose to rewrite around a
+# quotation that trips a rule rather than exempt it. The cost is named where the pin is
+# generated and in the decision entry — most of it lands on STE008 (contraction), whose
+# sample was 93.3% this shape. Do not re-add this class without a new ruling.
 
 
 @dataclass(frozen=True)
@@ -159,27 +170,6 @@ def _table_row(finding: Finding, lines: Sequence[str]) -> bool:
     return bool(ste_lint.TABLE_ROW.match(_line_of(finding, lines)))
 
 
-_ITALIC_QUOTE = re.compile(r'\*"[^"]*"\*')
-
-
-def _verbatim_quotation(finding: Finding, lines: Sequence[str]) -> bool:
-    """A verbatim quotation of someone's own words: a markdown blockquote line (`ste_lint`'s
-    own `BLOCKQUOTE` regex, reused) or this repo's own convention for a quoted spoken line,
-    `*"…"*` (a run of decision entries quote the product owner this way). Rewriting a
-    contraction, a semicolon or an abbreviation INSIDE a quotation misquotes the speaker
-    rather than improving the prose — the STE008 sample was 93.3% this class alone
-    (`scratchpad/lane2-falsepositives.md` §2, §4.2)."""
-    ste_lint = load_ste_lint()
-    line = _line_of(finding, lines)
-    if ste_lint.BLOCKQUOTE.match(line):
-        return True
-    idx = finding.col - 1
-    for match in _ITALIC_QUOTE.finditer(line):
-        if match.start() <= idx < match.end():
-            return True
-    return False
-
-
 _DECISION_CITATION = re.compile(r"\(D\d+[,;]")
 
 
@@ -215,11 +205,26 @@ def _vs_code(finding: Finding, lines: Sequence[str]) -> bool:
     return any(match.start() <= idx < match.end() for match in _VS_CODE.finditer(line))
 
 
+def _via(finding: Finding, lines: Sequence[str]) -> bool:
+    """The word "via" itself, on the OWNER'S RULING (D-a-ste-ratchet), by argument rather
+    than by a measured artifact rate. STE007's own stated reason for flagging a Latin
+    abbreviation is that different readers read it differently, and that machine translation
+    handles it badly — true of the rule's genuine abbreviations (a full stop, or a two-word
+    Latin phrase), false of "via", an ordinary English preposition every reader reads the
+    same way. It sits in the rule's word table by category error, not because it behaves like
+    one. `vs`/`vs.` is the opposite case — a real abbreviation, of "versus", with the rule's
+    own replacement ("compared with") — and stays a finding. No line context is needed: the
+    excerpt alone says whether the match was this word."""
+    if finding.code != "STE007":
+        return False
+    return (finding.excerpt or "").lower() == "via"
+
+
 EXEMPTIONS: Tuple[Exemption, ...] = (
     Exemption("table row", "a markdown `|` table cell", _table_row),
-    Exemption("verbatim quotation", "a blockquote or *\"…\"* quoted line", _verbatim_quotation),
     Exemption("decision citation", "a `(D<n>; …)` shorthand", _decision_citation),
     Exemption("VS Code", "the editor's proper noun, not the abbreviation `vs.`", _vs_code),
+    Exemption("via", "an ordinary preposition, not a Latin abbreviation", _via),
 )
 
 # NAMED, NOT BUILT: "enumeration collapsed into one paragraph" (a semicolon-joined checklist,
