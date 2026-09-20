@@ -49,7 +49,7 @@ everything else tracked markdown reaches. A sixth, `repo`, is every file combine
 
 ### Exemptions are a named, mechanical, proven class, or they do not exist
 
-A sampled, hand-classified survey of 265 findings (`scratchpad/lane2-falsepositives.md`)
+A sampled, hand-classified survey of 265 findings (`docs/specs/ste-false-positives.md`)
 found three classes a machine can tell apart from ordinary prose without guessing:
 
 - **Table row.** A `|`-delimited cell. The linter already exempts this shape from its

@@ -19,7 +19,7 @@ and tables and folds numbers/quotes/parens into single tokens for its own senten
 budget. The two would read as different rulers over the same text and disagree for a reason
 that has nothing to do with prose tightness; a plain count is also independently
 reproducible with no dependency on the vendored linter's internals, and it is the ruler
-`scratchpad/lane2-falsepositives.md`'s corpus survey already used, so the two are the same
+`docs/specs/ste-false-positives.md`'s corpus survey already used, so the two are the same
 unit rather than two numbers a reader has to reconcile by hand.
 
 CALLERS BUILD THE FILE LIST; THIS MODULE NEVER TOUCHES DISK. `measure()` takes
@@ -111,7 +111,7 @@ def plain_word_count(text: str) -> int:
 # left unbuilt rather than approximated.
 #
 # THREE OF THE FOUR CLASSES BUILT HERE ARE FROM A MEASURED SAMPLE, NOT A GUESS:
-# `scratchpad/lane2-falsepositives.md`, a stratified sample of 265 findings (STE007's 130
+# `docs/specs/ste-false-positives.md`, a stratified sample of 265 findings (STE007's 130
 # taken whole) hand-classified GENUINE / ARTIFACT / BORDERLINE against a rule stated before
 # judging. Only ARTIFACT classes with a class-level MECHANICAL recognition rule are built.
 #
@@ -165,7 +165,7 @@ def _table_row(finding: Finding, lines: Sequence[str]) -> bool:
     (STE006 semicolon, STE007 Latin abbreviation, STE008 contraction), which still fire
     inside a `|`-delimited cell exactly as in prose. 11 of 130 STE007 sample findings (all of
     STE007's population — the sample was a census) and 1 of 45 STE008 findings sat in a table
-    row (`scratchpad/lane2-falsepositives.md` §4.1)."""
+    row (`docs/specs/ste-false-positives.md` §4.1)."""
     ste_lint = load_ste_lint()
     return bool(ste_lint.TABLE_ROW.match(_line_of(finding, lines)))
 
@@ -177,7 +177,7 @@ def _decision_citation(finding: Finding, lines: Sequence[str]) -> bool:
     """The decision-citation shorthand, `(D<n>; gloss)` or `(D<n>, amended)` — the semicolon
     or comma there separates an id from its gloss, not one clause from another. Recognised by
     the same anchored pattern for every occurrence on the line that contains the finding
-    (`scratchpad/lane2-falsepositives.md` §4.3)."""
+    (`docs/specs/ste-false-positives.md` §4.3)."""
     line = _line_of(finding, lines)
     for match in _DECISION_CITATION.finditer(line):
         # The finding sits inside this citation's parenthetical if it starts at or after the
@@ -197,7 +197,7 @@ _VS_CODE = re.compile(r"\bvs\s+Code\b", re.I)
 def _vs_code(finding: Finding, lines: Sequence[str]) -> bool:
     """The literal proper noun "VS Code" (the editor), a false match on STE007's `vs`/`vs.`
     pattern rather than the comparator or the abbreviation. 4 of 130 STE007 sample/population
-    findings (`scratchpad/lane2-falsepositives.md` §4.5)."""
+    findings (`docs/specs/ste-false-positives.md` §4.5)."""
     if finding.code != "STE007":
         return False
     line = _line_of(finding, lines)
@@ -231,13 +231,13 @@ EXEMPTIONS: Tuple[Exemption, ...] = (
 # or a parenthetical list of file/spec names run into prose). The lane's own sample rule
 # concedes this is a PROXY ("3 or more semicolons... very likely an enumeration"), not a
 # recognition — "flag rather than auto-exempt, since some genuinely long enumerations should
-# still be turned into real bullet lists" (`scratchpad/lane2-falsepositives.md` §4.4). This
+# still be turned into real bullet lists" (`docs/specs/ste-false-positives.md` §4.4). This
 # ratchet exempts only what it can tell apart from ordinary prose without guessing, so this
 # class stays a named gap rather than an approximated exemption. It accounted for 4 of 45
 # STE006 and 2 of 45 STE001 sample findings.
 #
 # TWO MORE SHAPES THE SAMPLE NAMED, ALSO NOT BUILT. Both are ARTIFACT calls in the sample
-# (`scratchpad/lane2-falsepositives.md`), and neither gets a recogniser here because neither
+# (`docs/specs/ste-false-positives.md`), and neither gets a recogniser here because neither
 # has one this file's own bar calls obvious:
 #
 # - An UNDER-FENCED SHELL EXAMPLE, where the semicolons are shell syntax leaking out of a

@@ -1,17 +1,17 @@
 {
   "by_code": {
-    "STE001": 8112,
-    "STE006": 2799,
-    "STE007": 69,
+    "STE001": 8127,
+    "STE006": 2812,
+    "STE007": 72,
     "STE008": 155
   },
   "ratio_per_1k_words": {
     "docs/debts": 16.271,
     "docs/decisions": 17.578,
     "docs/gates": 19.449,
-    "docs/specs": 14.685,
+    "docs/specs": 14.263,
     "other": 8.772,
-    "repo": 15.896
+    "repo": 15.72
   },
-  "total": 11135
+  "total": 11166
 }

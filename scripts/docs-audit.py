@@ -11911,7 +11911,7 @@ def check_typed_interpunct(report: Report) -> None:
 #
 # EXEMPTIONS ARE A NAMED, MECHANICAL, PROVEN CLASS OR THEY DO NOT EXIST. Four are built —
 # table row, the `(D<n>; …)` citation shorthand, the literal "VS Code", and `via` — three
-# measured against a hand-classified sample in `scratchpad/lane2-falsepositives.md` before
+# measured against a hand-classified sample in `docs/specs/ste-false-positives.md` before
 # being written, `via` exempt by the OWNER'S ARGUMENT instead (D-a-ste-ratchet, ruling
 # three): STE007's own stated reason for the rule — different readers read a Latin
 # abbreviation differently, and machine translation handles it badly — does not hold for an
@@ -11930,7 +11930,7 @@ def check_typed_interpunct(report: Report) -> None:
 # tell apart from ordinary prose without guessing does not get to exempt anything.
 
 
-# THE SURVEY'S OWN FLOOR (`scratchpad/lane2-falsepositives.md`), PRINTED BESIDE EVERY COUNT
+# THE SURVEY'S OWN FLOOR (`docs/specs/ste-false-positives.md`), PRINTED BESIDE EVERY COUNT
 # THIS ROW REPORTS — never gated on, because it is an estimate, not a measurement this file
 # can re-derive. Without it, a bare count reads as work nobody did; a reader who does not
 # also see the floor cannot tell the closeable backlog from the residue no rewrite reaches.
@@ -12061,7 +12061,7 @@ def check_ste_ratchet(report: Report) -> None:
     floor_note = (
         f"repo ratio {repo_ratio}/1,000 words against the survey's own floor of "
         f"~{STE_RATCHET_SURVEY_FLOOR_PER_1K_WORDS}/1,000 words "
-        "(scratchpad/lane2-falsepositives.md) — the residue below that floor is not this "
+        "(docs/specs/ste-false-positives.md) — the residue below that floor is not this "
         "ratchet's backlog to close."
     )
 
