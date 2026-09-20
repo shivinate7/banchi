@@ -11874,7 +11874,7 @@ def check_typed_interpunct(report: Report) -> None:
     )
 
 
-# --------------------------------------------------------------- ste ratchet (D-a-ste-ratchet)
+# --------------------------------------------------------------- ste ratchet (D226)
 #
 # THE OWNER BELIEVED THIS REPO ALREADY MECHANIZED PROSE CONCISION. It did not: `make vale`
 # carries two style rules and gates nothing (D18, D74 — D74 widened its FILE SCOPE to every
@@ -11912,7 +11912,7 @@ def check_typed_interpunct(report: Report) -> None:
 # EXEMPTIONS ARE A NAMED, MECHANICAL, PROVEN CLASS OR THEY DO NOT EXIST. Four are built —
 # table row, the `(D<n>; …)` citation shorthand, the literal "VS Code", and `via` — three
 # measured against a hand-classified sample in `docs/specs/ste-false-positives.md` before
-# being written, `via` exempt by the OWNER'S ARGUMENT instead (D-a-ste-ratchet, ruling
+# being written, `via` exempt by the OWNER'S ARGUMENT instead (D226, ruling
 # three): STE007's own stated reason for the rule — different readers read a Latin
 # abbreviation differently, and machine translation handles it badly — does not hold for an
 # ordinary English preposition every reader reads the same way. `vs`/`vs.` IS a real
@@ -12014,7 +12014,7 @@ def _ste_ratchet_verdict(
 
 
 def check_ste_ratchet(report: Report) -> None:
-    """No user-visible prose regression on the STE floor, ratcheted (D-a-ste-ratchet). See
+    """No user-visible prose regression on the STE floor, ratcheted (D226). See
     the section header above this function for the whole argument; this docstring is the
     row's own mechanics.
 
@@ -18332,7 +18332,7 @@ def self_test() -> int:
            "the same character, one line down and outside any `|`, is NOT exempted")
 
         ok(not hasattr(ste_measure, "_verbatim_quotation"),
-           "the verbatim-quotation exemption stays REMOVED (owner's ruling, D-a-ste-ratchet) "
+           "the verbatim-quotation exemption stays REMOVED (owner's ruling, D226) "
            "— a contraction or semicolon inside a quotation counts, same as anywhere else")
 
         cite_line = "Duplicates aggregate by SKU (D7; amended 2026-09-07) at join time."

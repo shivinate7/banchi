@@ -20,7 +20,7 @@ target-version = "py39"
 select = ["E4", "E7", "E9", "F", "B", "SIM"]
 
 # scripts/ste/ste_lint.py is VENDORED, byte-for-byte, from $HOME/.claude/lint/ste_lint.py
-# (D-a-ste-ratchet). Its rules are not edited by this repo, so a finding inside it is not
+# (D226). Its rules are not edited by this repo, so a finding inside it is not
 # this repo's to fix — B033 flags two duplicate items in its own IRREGULAR_PARTICIPLES set,
 # upstream, unrelated to anything this repo authored. Excluded here rather than silenced by
 # a `noqa` this repo would then own inside a file it does not edit.

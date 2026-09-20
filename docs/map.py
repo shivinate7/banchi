@@ -2802,11 +2802,11 @@ COMPONENTS = [
                         "Vale's third-party Go binary, so the bare-`python3` pre-commit hook "
                         "can run it with nothing new installed. Its rules are not edited — "
                         "only a provenance header was added on top of the vendored file.",
-                "governed_by": ["D18", "D47", "D-a-ste-ratchet"]},
+                "governed_by": ["D18", "D47", "D226"]},
             "ste/LICENSE-ste_lint": {
                 "does": "the vendored linter's MIT license and notice, copied unmodified "
                         "beside it — the license's one condition for reuse.",
-                "governed_by": ["D-a-ste-ratchet"]},
+                "governed_by": ["D226"]},
             "ste_measure.py": {
                 "does": "the STE ratchet's ONE measurer, called by both "
                         "`scripts/docs-audit.py`'s `ste ratchet` row (read-only) and "
@@ -2819,7 +2819,7 @@ COMPONENTS = [
                         "the total, the per-code counts, and errors-per-1,000-PLAIN-words "
                         "(matching `wc -w`, not `ste_lint.py`'s own STE-adjusted count) per "
                         "directory bucket and repo-wide. Never touches disk itself.",
-                "governed_by": ["D18", "D218", "D-a-ste-ratchet"]},
+                "governed_by": ["D18", "D218", "D226"]},
             "ste-ratchet-pin.py": {
                 "does": "`python3 scripts/ste-ratchet-pin.py --pin` re-measures every tracked "
                         "markdown file via `ste_measure.py:measure()` — the same function the "
@@ -2828,14 +2828,14 @@ COMPONENTS = [
                         "`make` target and no hook; `git diff scripts/ste-ratchet.json` is "
                         "the receipt, mirroring `copy-budget.mjs` and "
                         "`typed-interpunct-pin.mjs`'s own discipline exactly.",
-                "governed_by": ["D18", "D194", "D218", "D-a-ste-ratchet"]},
+                "governed_by": ["D18", "D194", "D218", "D226"]},
             "ste-ratchet.json": {
                 "does": "the ratchet's pinned ceiling: `total`, `by_code` (the four "
                         "ERROR-severity rule counts, post-exemption), and "
                         "`ratio_per_1k_words` (per bucket and repo-wide). Written only by "
                         "`ste-ratchet-pin.py --pin`; `scripts/docs-audit.py`'s `ste ratchet` "
                         "row only reads it, since that row sits on the commit path (D18).",
-                "governed_by": ["D18", "D-a-ste-ratchet"]},
+                "governed_by": ["D18", "D226"]},
             "docs-audit.py": {
                 "does": "D16's layers 1 and 2: every mechanical check, plus the coupling "
                         "question under `--staged`. `--json` is the machine surface "
@@ -2911,7 +2911,7 @@ COMPONENTS = [
                                 "D138", "D140", "D141", "D142", "D143", "D144", "D149", "D155",
                                 "D159", "D160", "D161", "D173", "D174", "D178", "D181", "D182",
                                 "D185", "D191", "D192", "D194", "D196", "D210", "D213",
-                                "D215", "D218", "D-a-ste-ratchet"],
+                                "D215", "D218", "D226"],
             },
             "claim-ids.py": {
                 "does": "allocate the numbers this branch's SLUG ids will take, and "

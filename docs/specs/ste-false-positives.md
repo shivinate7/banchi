@@ -1,6 +1,6 @@
 # STE false-positive survey: what the ratchet's exemptions rest on
 
-**STATUS: EVIDENCE, RECORDED.** This is the survey `docs/decisions/D-a-ste-ratchet.md`
+**STATUS: EVIDENCE, RECORDED.** This is the survey D226
 cites for every exemption class and for the printed floor. It classifies a stratified
 sample of the vendored linter's own findings over this repo's real corpus, by hand,
 against a rule stated before judging. Moved here from a session scratchpad on

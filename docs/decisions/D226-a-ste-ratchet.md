@@ -1,4 +1,4 @@
-## D-a-ste-ratchet — A prose ratchet gets a reader, and bytes are not the ruler
+## D226 — A prose ratchet gets a reader, and bytes are not the ruler
 
 The owner believed this repo already mechanized prose concision. It did not. `make vale`
 carries two style rules. It gates nothing (D74, D18). `entry budget` counts characters. That

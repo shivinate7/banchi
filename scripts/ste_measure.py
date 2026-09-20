@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""The STE ratchet's one measurer (D-a-ste-ratchet). Read by two callers and reimplemented by
+"""The STE ratchet's one measurer (D226). Read by two callers and reimplemented by
 neither: `scripts/docs-audit.py`'s `ste ratchet` row (read-only, the commit path) and
 `scripts/ste-ratchet-pin.py --pin` (the generator, D18, on no hook). Both language sides are
 Python here, unlike D218's typed-interpunct pair, which had to duplicate one regex across a
@@ -116,7 +116,7 @@ def plain_word_count(text: str) -> int:
 # judging. Only ARTIFACT classes with a class-level MECHANICAL recognition rule are built.
 #
 # THE FOURTH, `via`, IS EXEMPT BY ARGUMENT RATHER THAN BY ARTIFACT RATE (owner's ruling,
-# D-a-ste-ratchet): STE007's own stated reason — different readers read a Latin abbreviation
+# D226): STE007's own stated reason — different readers read a Latin abbreviation
 # differently, and machine translation handles it badly — does not hold for an ordinary
 # English preposition every reader reads the same way. `vs`/`vs.` IS a real abbreviation (of
 # "versus") and stays a finding; a BORDERLINE class that concedes it needs a person's
@@ -124,7 +124,7 @@ def plain_word_count(text: str) -> int:
 # that reason alone, which is why this one exemption is argued rather than measured.
 #
 # A FIFTH CLASS, "verbatim quotation" (a blockquote or a `*"…"*` quoted line), WAS BUILT AND
-# WAS REMOVED ON THE OWNER'S RULING (D-a-ste-ratchet): the owner chose to rewrite around a
+# WAS REMOVED ON THE OWNER'S RULING (D226): the owner chose to rewrite around a
 # quotation that trips a rule rather than exempt it. The cost is named where the pin is
 # generated and in the decision entry — most of it lands on STE008 (contraction), whose
 # sample was 93.3% this shape. Do not re-add this class without a new ruling.
@@ -206,7 +206,7 @@ def _vs_code(finding: Finding, lines: Sequence[str]) -> bool:
 
 
 def _via(finding: Finding, lines: Sequence[str]) -> bool:
-    """The word "via" itself, on the OWNER'S RULING (D-a-ste-ratchet), by argument rather
+    """The word "via" itself, on the OWNER'S RULING (D226), by argument rather
     than by a measured artifact rate. STE007's own stated reason for flagging a Latin
     abbreviation is that different readers read it differently, and that machine translation
     handles it badly — true of the rule's genuine abbreviations (a full stop, or a two-word
