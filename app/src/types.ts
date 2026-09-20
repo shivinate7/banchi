@@ -1798,7 +1798,7 @@ export type PriceHistoryPayload = {
   never_sold: boolean
 }
 
-/** ONE RANGE OF ONE SKU, AS THE PER-PRODUCT VIEW READS IT (`#/product`, D-a-product-price-view).
+/** ONE RANGE OF ONE SKU, AS THE PER-PRODUCT VIEW READS IT (`#/product`, D226).
  *
  *  NOT `HistoryRange` REUSED, ON PURPOSE. The archive-hit path (`source: "archive"`) has no
  *  `Series` object behind it — only the raw buckets `store/pricearchive.py` stored — so it
@@ -1823,7 +1823,7 @@ export type ProductHistoryRange = {
 }
 
 /** One product's market history, addressed by SKU rather than by a run
- *  (`GET /pipeline/products/<sku>/history`, D-a-product-price-view).
+ *  (`GET /pipeline/products/<sku>/history`, D226).
  *
  *  `source` IS THE ONE FIELD A READER MUST BRANCH ON. `"archive"` means every figure came off
  *  `store/pricearchive.py` with no network reached at all. `"live"` means the archive had

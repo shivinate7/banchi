@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """`pipeline/productview.py` and `server/pipeline_routes.py:do_product_history`, proved
-against a throwaway store (D-a-product-price-view).
+against a throwaway store (D226).
 
 NO NETWORK CALL for the archive-hit arm — the whole reason this route may answer without
 leaving the machine. The live-fallback arm is exercised with a `FakeMarket`, modelled on

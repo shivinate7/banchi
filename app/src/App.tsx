@@ -92,7 +92,7 @@ export const ROUTES: readonly Route[] = [
   { path: '/codes', label: 'Codes', icon: 'qr', view: Codes, persona: 'owner', group: 'library', hotkey: 'd', nav: true, keywords: 'code cards qr redeem read a box' },
   { path: '/fulfillment', label: 'Cards to pull', icon: 'hand', view: Fulfillment, persona: 'fulfiller', group: 'aside' },
   { path: '/gallery', label: 'Kit', icon: 'grid', view: Gallery, persona: 'owner', group: 'aside' },
-  /* THE PER-PRODUCT VIEW IS OFF-NAV ON PURPOSE (D-a-product-price-view). It is a deep link,
+  /* THE PER-PRODUCT VIEW IS OFF-NAV ON PURPOSE (D226). It is a deep link,
    * not a destination anyone browses to cold — reached from a SKU typed or pasted into its
    * own search field, or from a link another screen builds. `app/src/Revenue.tsx` is being
    * edited by another branch at the moment this route was added, so this table carries NO

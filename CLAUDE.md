@@ -276,7 +276,7 @@ the browser. No second store. No auth. `app/src/server.ts` is the only client-ca
 
 **The app has fourteen screens and fourteen routes — thirteen the owner's, one the Fulfiller's.**
 Three routes are off-nav (the `aside` group — Kit, Cards to pull, and the per-product view
-D-a-product-price-view added), so the nav itself draws eleven rows. `app/src/App.tsx`'s
+D226 added), so the nav itself draws eleven rows. `app/src/App.tsx`'s
 `ROUTES` table is the count. Recount from the table, never a sentence (see "the census"
 below).
 
@@ -306,7 +306,7 @@ below).
 #/fulfillment  Cards to pull  the Fulfiller's whole product. NO shell (D5)
 #/gallery      Kit            the component sheet, rendered by the build
 #/product      Product history one product's market history and the owner's own sales on
-                              it, by SKU. Off-nav, deep-linked (D-a-product-price-view)
+                              it, by SKU. Off-nav, deep-linked (D226)
 ```
 
 **`#/orders` and `#/shipping` are two stages of one screen and two routes.** `OrdersHub` with a
@@ -317,7 +317,7 @@ stages, not two unrelated views.
 not routes. Box operations live in its Manage box sheet.
 
 **Three routes are deliberately off-nav** (`OFF_NAV` in App.tsx): the Fulfiller's screen, the
-kit, and `#/product`, the per-product view (D-a-product-price-view). It is a deep link reached
+kit, and `#/product`, the per-product view (D226). It is a deep link reached
 by SKU, never a destination anyone browses to cold. All three stay registered routes,
 reachable from elsewhere.
 
@@ -920,6 +920,7 @@ D222 The press paces itself on a measurement, and names a throttle
 D223 Sold value goes first, and sealed product is a named gap
 D224 The preview costs nothing, and the press commits as it goes
 D225 Sales stops counting a refund as revenue, and a shortfall against today's market is not a loss
+D226 A route, not a lens, and never one line for two kinds of observation
 ```
 
 D116-D118: D117 exists and slots between them — a third branch's number, resolved on merge.

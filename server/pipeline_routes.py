@@ -5437,7 +5437,7 @@ def do_pipeline_history(name: str, sku: str) -> dict:
 
 def do_product_history(sku: str) -> dict:
     """`GET /pipeline/products/<sku>/history` — one SKU's market history, addressed by the
-    product rather than by a run (D-a-product-price-view).
+    product rather than by a run (D226).
 
     ARCHIVE FIRST. `pipeline/productview.py:archive_payload` reads `store/pricearchive.py`
     for every range this store has ever swept for this SKU. When it has anything at all, that

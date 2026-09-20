@@ -2645,7 +2645,7 @@ export async function getPriceHistory(
 
 /**
  * One product's market history, addressed by SKU — the per-product view's own read
- * (`#/product`, D-a-product-price-view).
+ * (`#/product`, D226).
  *
  * ARCHIVE FIRST, LIVE ONLY WHEN THE ARCHIVE HAS NEVER SWEPT THIS SKU. Unlike
  * `getPriceHistory` above, this call does NOT always leave the machine — read the answer's

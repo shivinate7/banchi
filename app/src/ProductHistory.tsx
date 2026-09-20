@@ -1,6 +1,6 @@
 /**
  * `#/product` — one product's own page: what it has been selling for, with the owner's own
- * sales marked on it (D-a-product-price-view, `docs/specs/revenue-plan.md` section 3).
+ * sales marked on it (D226, `docs/specs/revenue-plan.md` section 3).
  *
  * TWO KINDS OF OBSERVATION, NEVER ONE LINE. The market series is an aggregate of many
  * transactions this store never saw. The owner's own fills — from `GET /orders`, the same
