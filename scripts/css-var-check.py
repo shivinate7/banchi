@@ -132,14 +132,92 @@ def strip_css_comments(source: str) -> str:
 
 
 def strip_ts_comments(source: str) -> str:
-    """Blank `//` and `/* ... */` comments in a TS/TSX file, same reasoning as the CSS half."""
-
-    def blank(match: re.Match) -> str:
-        return re.sub(r"[^\n]", " ", match.group(0))
-
-    source = re.sub(r"/\*.*?\*/", blank, source, flags=re.DOTALL)
-    source = re.sub(r"//[^\n]*", blank, source)
-    return source
+    """Blank `//` and `/* ... */` comments in a TS/TSX file — STRING-AWARE, on
+    `_style_span_end`'s idea: a `//` inside a `'...'`, `"..."` or `` `...` `` literal is not a
+    comment, and a regex that blanked one anyway truncated `'http://localhost:8000'` at the
+    slashes and blanked everything after it on the line. LIVE in this tree before this fix:
+    `app/src/Gallery.tsx:193`, `app/src/server.ts:157` and `app/src/useCamera.ts:314` each
+    carry `http://` inside a string, and each got its tail blanked — the scan still read 0
+    findings only because none of those tails happened to hold a `var()` or a definition key,
+    which is luck and not a property this tool could claim. A `${...}` interpolation inside a
+    template literal is real code, so a comment written inside one (`` `${/* i */ n}` ``) is
+    still stripped, the same interpolation-is-code idea `_style_span_end` uses."""
+    out = list(source)
+    n = len(source)
+    i = 0
+    # Frames: ("code",) — the base, and every interpolation; ("squote",)/("dquote",); and
+    # ("template",). An interpolation is ("interp", depth), depth counting its OWN braces so
+    # a `{` inside it does not end it early.
+    frames: List[Tuple[str, ...]] = [("code",)]
+    while i < n:
+        kind = frames[-1][0]
+        ch = source[i]
+        if kind in ("squote", "dquote"):
+            quote = "'" if kind == "squote" else '"'
+            if ch == "\\" and i + 1 < n:
+                i += 2
+                continue
+            if ch == quote:
+                frames.pop()
+            i += 1
+            continue
+        if kind == "template":
+            if ch == "\\" and i + 1 < n:
+                i += 2
+                continue
+            if ch == "`":
+                frames.pop()
+                i += 1
+                continue
+            if ch == "$" and i + 1 < n and source[i + 1] == "{":
+                frames.append(("interp", 1))
+                i += 2
+                continue
+            i += 1
+            continue
+        # kind is "code" or "interp" — both are real code, where comments are stripped.
+        if ch == "'":
+            frames.append(("squote",))
+            i += 1
+            continue
+        if ch == '"':
+            frames.append(("dquote",))
+            i += 1
+            continue
+        if ch == "`":
+            frames.append(("template",))
+            i += 1
+            continue
+        if ch == "/" and i + 1 < n and source[i + 1] == "/":
+            j = i
+            while j < n and source[j] != "\n":
+                out[j] = " "
+                j += 1
+            i = j
+            continue
+        if ch == "/" and i + 1 < n and source[i + 1] == "*":
+            close = source.find("*/", i + 2)
+            end = close + 2 if close != -1 else n
+            for k in range(i, end):
+                if source[k] != "\n":
+                    out[k] = " "
+            i = end
+            continue
+        if kind == "interp":
+            if ch == "{":
+                frames[-1] = ("interp", frames[-1][1] + 1)
+                i += 1
+                continue
+            if ch == "}":
+                depth = frames[-1][1] - 1
+                if depth == 0:
+                    frames.pop()
+                else:
+                    frames[-1] = ("interp", depth)
+                i += 1
+                continue
+        i += 1
+    return "".join(out)
 
 
 def css_definitions(cleaned: str) -> Iterable[str]:
@@ -459,6 +537,22 @@ SELF_TEST: Tuple[SelfCase, ...] = (
         "correctly — the interpolation's braces are real code and must be counted",
         [("f.css", ".x { color: var(--bn-nope); }")],
         [("f.tsx", "<div style={{ ['--bn-nope' as string]: `${n}px` }} />")],
+        0,
+    ),
+    (
+        "an undefined var() AFTER an http:// string on the same line is still found — the "
+        "line-comment strip used to treat that `//` as a comment marker and blank the rest "
+        "of the line, hiding a reference after it (live on Gallery.tsx, server.ts and "
+        "useCamera.ts before this fix)",
+        [],
+        [("f.tsx", "const u = 'http://x'; const c = 'var(--bn-hidden)'")],
+        1,
+    ),
+    (
+        "a REAL trailing // comment is still stripped — a var() written only inside it is "
+        "not a finding, even on a line that also carries an http:// string earlier",
+        [],
+        [("f.tsx", "const u = 'http://x' // was var(--bn-in-comment)")],
         0,
     ),
 )
