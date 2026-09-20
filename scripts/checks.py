@@ -325,14 +325,14 @@ CHECKS = (
         "target": "mutate-anchors",
         "runs": "python3 scripts/mutate-guards.py --verify-anchors",
         "asserts": "Every mutation in `scripts/mutate-guards.py` still has its anchor text "
-                   "present exactly once in the guard it targets. 28 arms over 5 guards, in "
+                   "present exactly once in the guard it targets. 35 arms over 6 guards, in "
                    "0.03s. THE ROT CHECK AND NOT THE PROOF: `make mutate-guards` is what runs "
                    "the mutations, at 190s, and is off every list for that reason. This is the "
                    "half that catches a guard reworded past its own mutation — the corpus goes "
                    "on reporting a count while proving nothing, which is precisely how the "
                    "PROSE arm counts rotted (the sentence at :378 in this file says its own "
                    "number was wrong once). A behaviour-preserving reword of one anchored line "
-                   "takes this from 28 verified to `1 of 28 stale`, exit 1.",
+                   "takes this from 35 verified to `1 of 35 stale`, exit 1.",
         "needs": ("python3",),
         "writes": "",
         "commit_path": False,
@@ -405,7 +405,15 @@ CHECKS = (
                    "arm found a real bug in the unmutated code — `\\b` fires between a letter "
                    "and a hyphen, so one slug was substituted inside another that extended "
                    "it; the staleness arms found a second, that reading the baseline from the "
-                   "REF rather than the merge base makes every collision cancel itself out.",
+                   "REF rather than the merge base makes every collision cancel itself out. "
+                   "SINCE 2026-09-20 IT ALSO COVERS THE WAIT'S SECOND QUESTION: whether the "
+                   "pull request can still merge while the wait is happening. A branch that "
+                   "goes CONFLICTING under it ends the wait early and says main moved, and "
+                   "`UNKNOWN` — which GitHub answers routinely while it computes — never "
+                   "does. Every no-news arm runs over a roster that NEVER COMPLETES, because "
+                   "one that goes green in two reads never reaches the mergeability reader at "
+                   "all and passes whatever it answers. That defect was live here until a "
+                   "mutation survived it.",
         "needs": ("python3", "git"),
         "writes": "a temporary directory it makes and removes.",
         "commit_path": False,
@@ -646,9 +654,18 @@ CHECKS = (
                    "a pid wait, a bounded retry, the ordinary first push of a new branch, an "
                    "upstream already matching its own name, and every `git`/`gh`/`ln` line "
                    "swept out of "
-                   "this repo's own tooling. Each of the six hatches is scored in both of "
-                   "its forms, and the clause table is READ rather than retyped, so a seventh "
-                   "clause with no hatch fails here instead of shipping unescapable.",
+                   "this repo's own tooling. Each hatch is scored in both of "
+                   "its forms, and the clause table is READ rather than retyped, so a new "
+                   "clause with no hatch fails here instead of shipping unescapable. "
+                   "A NINTH CLAUSE LANDED 2026-09-20 and is the one that names its subjects "
+                   "rather than resolving them: a command that waits for minutes while "
+                   "narrating, piped into a truncating filter or redirected away. Its "
+                   "incident is performed here too — a real narrator, a real pipe and a real "
+                   "`tail`, measured at 0 bytes delivered mid-run and 2 of 5 lines kept — and "
+                   "its named roster is RECONCILED against the heartbeat constant in the file "
+                   "that runs each command it names. Thirteen must-never-refuse cases carry "
+                   "that clause, because a general form of it would fire on honest work every "
+                   "day.",
         "needs": ("python3", "bash", "git"),
         "writes": "a git repository, a linked worktree, two commits, a symlink and one "
                   "short-lived decoy process, all under `mktemp -d`. It signals only what it "

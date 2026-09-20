@@ -1964,12 +1964,8 @@ COMPONENTS = [
                 # amends. D18 governs its shape — the preview is the read-only mode, and the
                 # act is behind a flag rather than a default. D33 is the instrument the two-step
                 # is borrowed from, one register down from a route that can spend money.
-                "governed_by": ["D18", "D33", "D42", "D72", "D111", "D136", "D139", "D140",
-                                "D141", "D143", "D148",
-                                "D151", "D158", "D176",
-                                # Unclaimed at this branch's own claim — the stale_claim
-                                # refusal now names `--unclaim` by its real command.
-                                "D190"],
+                "governed_by": ["D18", "D33", "D42", "D72", "D111", "D136", "D139", "D140", "D141",
+                                "D143", "D148", "D151", "D158", "D176", "D190", "D228"],
                 "note": "IT NEVER SETS PKMNSCAN_MAIN AND NO REFUSAL IT PRINTS SUGGESTS IT. D42 "
                         "is explicit that a session reaching for that variable has left the "
                         "amendment behind; this needs no hatch because allow rule 3 already "
