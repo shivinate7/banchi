@@ -6557,7 +6557,34 @@ test('a new search takes a new order, so the staleness never carries across answ
   await expectCopiesHeld(page)
 })
 
-test('the copies list holds while a new answer moves the walk to another drawer', async ({ page }) => {
+/* SHELVED 2026-09-19, ON THE OWNER'S EXPLICIT WORD. THIS IS A STANDING STATE THE OWNER
+   CHOSE, NOT AN ACCIDENT LEFT ON. THE OWNER WILL REVISIT IT, NO DATE SET.
+   THE OWNER'S OWN WORDS: "Turn the guard off for now on the repo. I give you explicit
+   authority."
+   THE DEFECT IT WAS CATCHING, IN ONE SENTENCE: during a deliberately delayed box fetch, on a
+   search-driven re-rank from box 7 to box 2, the copies panel stayed on screen but its rows
+   blanked to skeleton placeholders for 14 consecutive animation frames (about 230ms) before
+   recovering, so the final page reads clean and only frame sampling can see the flash.
+   THE MEASUREMENT: this test and its sibling below (`a press to another drawer dims…`) failed
+   6 of the last 10 completed runs on main, always the same shard, always these two tests. It
+   predates the most recent merge. Full record: DEBT30.
+   WHAT MUST BE TRUE TO TURN IT BACK ON: `docs/debts/030-…md` names the condition. Do not
+   delete this test and do not loosen `expectCopiesHeld`'s assertion or widen a timeout to make
+   it pass — either hides the finding instead of shelving it. */
+test.skip(
+  'the copies list holds while a new answer moves the walk to another drawer',
+  {
+    annotation: {
+      type: 'skip',
+      description:
+        'Shelved 2026-09-19 on the owner\'s explicit authority. Standing state, not temporary. ' +
+        'Defect: the copies panel stayed on screen but its rows blanked to skeleton for 14 ' +
+        'consecutive frames (about 230ms) during a delayed re-rank across drawers. Failed 6 of ' +
+        '10 recent runs on main. See DEBT30 for the measurements and the condition to turn ' +
+        'this back on.',
+    },
+  },
+  async ({ page }) => {
   /* D118's FOURTH FLOOR OVER THE SLOWEST MOMENT THIS SCREEN HAS, AND THE ORDERING IS FORCED
      RATHER THAN HOPED FOR.
      The case above asserts the same continuity on whatever ordering the machine happens to
@@ -6621,7 +6648,19 @@ test('the copies list holds while a new answer moves the walk to another drawer'
   await expect(page.locator('.card-locations-row .position-parts')).toHaveCount(6)
   await expectCopiesHeld(page)
 })
-test('a press to another drawer dims its predecessor’s rows rather than drawing them as the new box’s, or drawing nothing', async ({ page }) => {
+test.skip(
+  'a press to another drawer dims its predecessor’s rows rather than drawing them as the new box’s, or drawing nothing',
+  {
+    annotation: {
+      type: 'skip',
+      description:
+        'Shelved 2026-09-19 on the owner\'s explicit authority. Standing state, not temporary. ' +
+        'Guards the same mechanism as its sibling above, through the shared helper ' +
+        'expectCopiesHeld. Same defect, same measurement: 14 consecutive frames of blanked ' +
+        'copies rows, 6 of 10 recent runs on main. See DEBT30.',
+    },
+  },
+  async ({ page }) => {
   /* THE REGRESSION PR #404 SHIPPED, caught in review before it merged, and the OWNER'S
      RULING THAT FOLLOWED IT, 2026-09-19. The fix in the review holds the walk's row across a
      fresh SEARCH answer that re-ranks the drawers on its own — but the code it changed could
