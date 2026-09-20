@@ -18052,17 +18052,28 @@ def self_test() -> int:
         "all agree with the checked-out tree)",
         str(real_report.checks[0].findings),
     )
-    # A FLOOR, NOT A COUNT, and the distinction is the point. An exact pin here says
-    # nothing true about the mechanism — it only records how many derivations happened to
-    # exist the day it was written, and it goes red on an honest eighth one. That is a
-    # guard which cries wolf on correct work, and this file's own rule is that such a
-    # guard is spent. What this arm must prove is NON-VACUITY: that the row read the real
-    # file and found real markers, so a `derived numbers` reporting zero cannot pass as
-    # clean. `HARD_RULE_FLOOR` is the same shape for the same reason.
+    # DERIVE THE EXPECTATION, NEVER TYPE IT — the rule this row exists to enforce, turned
+    # on its own self-test. A pinned `scanned == 7` records how many derivations existed
+    # the day it was written and goes red on an honest eighth, so it cries wolf on correct
+    # work. A bare `scanned >= 1` is the opposite failure: it passes while six of the seven
+    # derivations are dead, which is the vacuity this file refuses everywhere else.
+    #
+    # The property that is both true and stable: EVERY REGISTERED DERIVATION IS ACTUALLY
+    # REFERENCED BY A MARKER, and every marker resolves to a registered derivation. That
+    # catches a registry entry nothing reads — dead code whose rot no row would report —
+    # and it grows by itself as derivations are added.
+    _dn = _derived_numbers()
+    _used = {
+        name
+        for doc in markdown_files()
+        if exists(doc)
+        for name in (m.group("name") for m in _dn.MARKER_RE.finditer(read(doc)))
+    }
     ok(
-        real_report.checks[0].scanned >= 1,
-        "CLAUDE.md carries at least one registered marker — the row is not vacuous",
-        f"scanned={real_report.checks[0].scanned}",
+        _used == set(_dn.REGISTRY),
+        "every registered derivation is referenced by a marker, and every marker resolves",
+        f"registered but unused: {sorted(set(_dn.REGISTRY) - _used)}; "
+        f"marked but unregistered: {sorted(_used - set(_dn.REGISTRY))}",
     )
 
     print("\nderived numbers: MUTATION-TESTED against the real file, via a .bak copy")
