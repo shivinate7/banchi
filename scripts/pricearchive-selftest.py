@@ -35,7 +35,10 @@ from typing import Dict
 ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT))
 
+from pipeline import join as join_module  # noqa: E402
 from pipeline import pricearchive as archive_walk  # noqa: E402
+from pipeline import pricehistory  # noqa: E402
+from pipeline import tcgcsv as tcgcsv_module  # noqa: E402
 from pipeline.pricehistory import Bucket as HistoryBucket  # noqa: E402
 from pipeline.pricehistory import Reading as HistoryReading  # noqa: E402
 from pipeline.pricehistory import Series  # noqa: E402
@@ -216,6 +219,109 @@ def main() -> int:
     ok(set(payload) == {"month", "annual"},
        "a pass over one range never erases another range's own accounting row", payload)
 
+    # ---------------------------------------------- pipeline: parse_ledger_name (sealed subjects)
+    print("\n-- pipeline/pricearchive.py: parse_ledger_name, pure, no store, no network --")
+
+    def _groups(*names: str) -> Dict[str, dict]:
+        return {
+            join_module.normalize_set(n): {"name": n, "groupId": i}
+            for i, n in enumerate(names)
+        }
+
+    POKEMON_GROUPS = _groups("SV09: Journey Together", "SV08: Surging Sparks", "Celebrations")
+    ONE_PIECE_GROUPS = _groups("The Azure Sea's Seven")
+    RIFTBOUND_GROUPS = _groups("Origins")
+
+    fixture_table = [
+        # (label, name, groups, expected (line, set, product_name, number, condition) or None)
+        (
+            "Pokemon single",
+            "Pokemon - SV09: Journey Together: Wailord - 162/159 - #162/159 - "
+            "Near Mint Holofoil",
+            POKEMON_GROUPS,
+            ("Pokemon", "SV09: Journey Together", "Wailord - 162/159", "162/159",
+             "Near Mint Holofoil"),
+        ),
+        (
+            "Pokemon sealed (no number)",
+            "Pokemon - SV08: Surging Sparks: Surging Sparks Booster Box - Unopened",
+            POKEMON_GROUPS,
+            ("Pokemon", "SV08: Surging Sparks", "Surging Sparks Booster Box", "", "Unopened"),
+        ),
+        (
+            "One Piece single",
+            "One Piece Card Game - The Azure Sea's Seven: Gecko Moria - OP14-104 - "
+            "#OP14-104 - Near Mint Foil",
+            ONE_PIECE_GROUPS,
+            ("One Piece Card Game", "The Azure Sea's Seven", "Gecko Moria - OP14-104",
+             "OP14-104", "Near Mint Foil"),
+        ),
+        (
+            "Riftbound single",
+            "Riftbound League of Legends Trading Card Game - Origins: Nocturne, "
+            "Horrifying - #194/298 - Near Mint Foil",
+            RIFTBOUND_GROUPS,
+            ("Riftbound League of Legends Trading Card Game", "Origins",
+             "Nocturne, Horrifying", "194/298", "Near Mint Foil"),
+        ),
+        (
+            "sealed name with a bracket",
+            "Pokemon - Celebrations: Celebrations Mini Tin [Hoenn] - Unopened",
+            POKEMON_GROUPS,
+            ("Pokemon", "Celebrations", "Celebrations Mini Tin [Hoenn]", "", "Unopened"),
+        ),
+        (
+            "REFUSED: unknown, uncatalogued product line",
+            "Magic: The Gathering - Foundations: Some Card - Near Mint",
+            POKEMON_GROUPS,
+            None,
+        ),
+        (
+            "REFUSED: product line known, group not in the mirror's list",
+            "Pokemon - NotARealSet: Some Card - Near Mint",
+            POKEMON_GROUPS,
+            None,
+        ),
+        (
+            "REFUSED: no ' - ' separator at all",
+            "Pokemon SV09 Wailord Near Mint",
+            POKEMON_GROUPS,
+            None,
+        ),
+    ]
+
+    for label, name, groups, expected in fixture_table:
+        try:
+            row = archive_walk.parse_ledger_name(name, groups)
+        except archive_walk.UnresolvedLedgerName as exc:
+            ok(expected is None, f"{label}: refused ({exc})", (name, exc))
+            continue
+        ok(expected is not None, f"{label}: resolved when it should have been refused", row)
+        if expected is not None:
+            line, set_name, product_name, number, condition = expected
+            got = (
+                row[tcgcsv_module.PRODUCT_LINE_COLUMN], row[tcgcsv_module.SET_COLUMN],
+                row[tcgcsv_module.NAME_COLUMN], row[tcgcsv_module.NUMBER_COLUMN],
+                row[tcgcsv_module.CONDITION_COLUMN],
+            )
+            ok(got == expected, f"{label}: parses to the right five cells", (got, expected))
+
+    # THE GUARD, PROVEN TO FAIL ON THE DEFECT IT GUARDS. A naive first-`": "`-split reads
+    # "SV09" alone for the group name, which is not in the mirror's own group list — the
+    # longest-prefix match is what makes the colon-bearing group name resolve at all.
+    naive_candidate = "SV09"
+    naive_key = join_module.normalize_set(naive_candidate)
+    ok(naive_key not in POKEMON_GROUPS,
+       "mutation check: the naive first-colon split's candidate is NOT a real group — "
+       "confirms the longest-prefix match, not the naive split, is what resolves "
+       "'SV09: Journey Together'", naive_key)
+    correct = archive_walk._longest_group_prefix(
+        "SV09: Journey Together: Wailord - 162/159 - #162/159 - Near Mint Holofoil",
+        POKEMON_GROUPS,
+    )
+    ok(correct is not None and correct[0] == "SV09: Journey Together",
+       "the real (longest-prefix) match resolves the colon-bearing group name", correct)
+
     # ---------------------------------------------------------------- pipeline: rows_from_store
     print("\n-- pipeline/pricearchive.py: rows_from_store reads only the store --")
     previous = os.environ.get(files.HOME_ENV)
@@ -239,6 +345,79 @@ def main() -> int:
         ok(rows["444"]["Product Line"] == "Pokemon" and rows["444"]["Product Name"] == "Pikachu",
            "the export-shaped row carries the card's own name and resolved product line",
            rows["444"])
+
+        # ------------------------------------------ ledger widening: sealed subjects
+        print("\n-- pipeline/pricearchive.py: rows_from_store widened to the order ledger "
+              "(sealed product) --")
+
+        class GroupMarket:
+            """A `_MarketLike` stand-in for `category_id`/`groups` alone — the two hops
+            `ledger_subject_rows` calls, no network, no `readings_for_rows`."""
+
+            def __init__(self, category_id: int, groups: Dict[str, dict]):
+                self._category_id = category_id
+                self._groups = groups
+                self.category_id_calls = 0
+
+            def category_id(self, product_line: str) -> int:
+                self.category_id_calls += 1
+                if product_line != "Pokemon":
+                    raise ValueError(f"no category for {product_line!r}")
+                return self._category_id
+
+            def groups(self, category_id: int) -> Dict[str, dict]:
+                return self._groups
+
+            def readings_for_rows(self, rows, ranges=()):  # unused by this arm
+                return {}, {}
+
+        with Store().write() as snapshot:
+            # "777" is sealed: no `cards` row, only an order line. "444" is asked for by
+            # BOTH a card and an order line with a DIFFERENT name — cards must win.
+            snapshot.ledger.orders["ebay:sealed"] = OrderRecord(
+                source="ebay", number="sealed", status="Open",
+                lines=[
+                    OrderLine(
+                        sku="777", quantity=1, unit_price="40.00",
+                        name="Pokemon - SV08: Surging Sparks: Surging Sparks Booster Box - "
+                             "Unopened",
+                    ),
+                    OrderLine(
+                        sku="444", quantity=1, unit_price="9.99",
+                        name="Pokemon - SV08: Surging Sparks: A Ledger Name Cards Overrules "
+                             "- Near Mint",
+                    ),
+                    # a sku the grammar cannot parse — reported, never dropped.
+                    OrderLine(sku="888", quantity=1, unit_price="5.00", name="junk"),
+                ],
+            )
+        group_market = GroupMarket(3, POKEMON_GROUPS)
+        widened_refusals: Dict[str, str] = {}
+        widened = archive_walk.rows_from_store(
+            Store().read(), market=group_market, refusals=widened_refusals
+        )
+        ok("777" in widened and widened["777"][tcgcsv_module.NAME_COLUMN] ==
+           "Surging Sparks Booster Box",
+           "a sealed sku with no `cards` row is resolved from the ledger's own name",
+           widened.get("777"))
+        ok(widened["444"][tcgcsv_module.NAME_COLUMN] == "Pikachu",
+           "a sku `cards` already answers for keeps the CARDS row, even though the ledger "
+           "named it too, under a different name", widened["444"])
+        ok("888" in widened_refusals,
+           "a ledger sku the grammar cannot parse is reported by sku, never silently "
+           "dropped", widened_refusals)
+        ok(group_market.category_id_calls == 1,
+           "Market.category_id/.groups is called once per distinct PRODUCT LINE seen, "
+           "never once per sku", group_market.category_id_calls)
+        no_market_rows = archive_walk.rows_from_store(Store().read())
+        ok("777" not in no_market_rows,
+           "with no market given, the subject set is exactly D219's original — cards only",
+           no_market_rows)
+        # This arm's own order is removed again — later sections in this same run (the
+        # revenue/ranking arm below) share this one throwaway store and assert exact
+        # totals for "444" that this order would otherwise silently change.
+        with Store().write() as snapshot:
+            del snapshot.ledger.orders["ebay:sealed"]
 
         # -------------------------------------------------------- pipeline: sweep (no network)
         print("\n-- pipeline/pricearchive.py: sweep, against a FakeMarket, both directions --")
@@ -353,6 +532,61 @@ def main() -> int:
            "order is preserved from the caller's own ranking, not re-sorted here", needs)
 
         # -------------------------------------------------------------- chunk_rows
+        # ------------------------------------------- resume window (D230)
+        print("\n-- pipeline/pricearchive.py: RESUME_TTL_SECONDS, mutation-tested --")
+        five_hours_ago = 100_000 - 5 * 3600
+        resume_window_existing = [
+            Bucket(sku="RRR", product_id=9, range="month", width_days=1,
+                   start="2026-01-01", market="1.00", quantity=1, transactions=1,
+                   low="1.00", high="1.00", at=five_hours_ago),
+        ]
+        resume_window_index = archive_walk.freshness_index(resume_window_existing)
+        resume_window_rows = {"RRR": {}}
+
+        # THE MUTATION: at the OLD window (`pipeline/pricehistory.py:HISTORY_TTL_SECONDS`,
+        # one hour), a SKU read 5 hours ago is stale and goes back to be re-read — this IS
+        # the defect this constant fixes, proven to fail before the fix is proven to work.
+        needs_old, fresh_old = archive_walk.split_by_freshness(
+            resume_window_rows, resume_window_index, ranges=("month",), now=100_000,
+            ttl_seconds=pricehistory.HISTORY_TTL_SECONDS,
+        )
+        ok(fresh_old == [] and list(needs_old) == ["RRR"],
+           "mutation check: at the OLD one-hour window, a sku read 5 hours ago is stale "
+           "and is sent back to be re-read", (needs_old, fresh_old))
+
+        needs_new, fresh_new = archive_walk.split_by_freshness(
+            resume_window_rows, resume_window_index, ranges=("month",), now=100_000,
+            ttl_seconds=archive_walk.RESUME_TTL_SECONDS,
+        )
+        ok(fresh_new == ["RRR"] and not needs_new,
+           "at the NEW six-day window, the same sku read 5 hours ago is fresh and is "
+           "skipped — a weekly press advances instead of restarting from the top",
+           (needs_new, fresh_new))
+
+        # A sku read outside even the new, wider window still needs a fresh read.
+        seven_days_ago = 100_000 - 7 * 24 * 3600
+        stale_beyond_new_window = archive_walk.freshness_index([
+            Bucket(sku="SSS", product_id=9, range="month", width_days=1,
+                   start="2026-01-01", market="1.00", quantity=1, transactions=1,
+                   low="1.00", high="1.00", at=seven_days_ago),
+        ])
+        needs_stale, fresh_stale = archive_walk.split_by_freshness(
+            {"SSS": {}}, stale_beyond_new_window, ranges=("month",), now=100_000,
+            ttl_seconds=archive_walk.RESUME_TTL_SECONDS,
+        )
+        ok(fresh_stale == [] and list(needs_stale) == ["SSS"],
+           "a sku read 7 days ago is stale even under the new, wider window", needs_stale)
+
+        # The printed window string, at the actual multi-day value this constant holds —
+        # `cli/cmd_pricearchive.py:_format_window` must never print "8640 minute(s)".
+        from cli import cmd_pricearchive as cmd_module  # noqa: E402
+        ok(cmd_module._format_window(archive_walk.RESUME_TTL_SECONDS) == "6 day(s)",
+           "the resume window prints as days, never a four-figure minute count",
+           cmd_module._format_window(archive_walk.RESUME_TTL_SECONDS))
+        ok(cmd_module._format_window(pricehistory.HISTORY_TTL_SECONDS) == "1 hour(s)",
+           "the live-screen ttl still prints in its own honest unit",
+           cmd_module._format_window(pricehistory.HISTORY_TTL_SECONDS))
+
         print("\n-- pipeline/pricearchive.py: chunk_rows preserves order --")
         five = {str(i): {} for i in range(5)}
         chunks = archive_walk.chunk_rows(five, 2)
