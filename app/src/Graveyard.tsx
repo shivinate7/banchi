@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useState, type ReactNode } from 'react'
 
 import { describeFailure, getGraveyard, type Failure } from './server'
 import type { DepartedCard } from './types'
@@ -44,12 +44,18 @@ function gameLabel(game: string | null): string | null {
   return spaced.charAt(0).toUpperCase() + spaced.slice(1)
 }
 
-function howIt(row: DepartedCard): string {
+function howIt(row: DepartedCard): ReactNode {
   if (row.how === 'moved') {
     return row.moved_to === null ? 'Moved' : `Moved to ${positionOf(row.moved_to)}`
   }
   if (row.how === 'retired' && row.retire_reason) {
-    return `Retired · ${row.retire_reason}`
+    // D218: the reason is its own span; the seam is CSS.
+    return (
+      <>
+        <span>Retired</span>
+        <span className="graveyard-reason">{row.retire_reason}</span>
+      </>
+    )
   }
   return stateLabel(row.how)
 }
@@ -241,8 +247,10 @@ export function Graveyard() {
                         </td>
                         <td data-th="Where">
                           <span className="graveyard-where">
-                            {row.box_name !== null ? `${row.box_name} · ` : ''}
-                            {storeKeyText(row.box, row.index)}
+                            <span className="graveyard-where-parts">
+                              {row.box_name !== null ? <span>{row.box_name}</span> : null}
+                              <span>{storeKeyText(row.box, row.index)}</span>
+                            </span>
                             {row.buried ? <Pill tone="default" outline>Buried</Pill> : null}
                           </span>
                         </td>

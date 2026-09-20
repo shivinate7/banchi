@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react'
 import { createPortal } from 'react-dom'
 
 import {
@@ -75,7 +75,7 @@ const REPORT = 'report.txt'
  *  Absent keys are simply left out rather than defaulted — a markdown written before a flag
  *  existed did not ask for that flag's default, it asked for nothing.
  */
-function askedWords(entry: MarkdownSummary): string {
+function askedWords(entry: MarkdownSummary): ReactNode {
   const asked = entry.asked ?? {}
   const parts: string[] = []
   const days = asked.days
@@ -107,7 +107,21 @@ function askedWords(entry: MarkdownSummary): string {
     when === null || Number.isNaN(when.getTime())
       ? null
       : when.toLocaleDateString(undefined, { month: 'short', day: 'numeric' })
-  return [day, parts.join(' · ')].filter((part) => part !== null && part !== '').join(' — ')
+  const partsLine =
+    parts.length === 0 ? null : (
+      <span className="bn-dotline">
+        {parts.map((part, i) => (
+          <span key={i}>{part}</span>
+        ))}
+      </span>
+    )
+  if (day === null) return partsLine
+  if (partsLine === null) return day
+  return (
+    <>
+      {day} — {partsLine}
+    </>
+  )
 }
 
 export function Markdown({
@@ -549,7 +563,10 @@ export function Markdown({
       >
         <header className="markdown-top">
           <div className="markdown-heading">
-            <span className="bn-eyebrow">Store-wide · free</span>
+            <span className="bn-eyebrow bn-dotline">
+              <span>Store-wide</span>
+              <span>free</span>
+            </span>
             <h2 className="markdown-head" id="markdown-head">
               Mark down what is not selling
             </h2>
@@ -586,8 +603,9 @@ export function Markdown({
           </p>
 
           <section className="markdown-step" aria-labelledby="markdown-ask">
-            <h3 className="bn-section-title" id="markdown-ask">
-              1 · What counts as stale
+            <h3 className="bn-section-title bn-dotline" id="markdown-ask">
+              <span>1</span>
+              <span>What counts as stale</span>
             </h3>
             <div className="markdown-fields">
               <label className="bn-field">
@@ -705,7 +723,15 @@ export function Markdown({
               </span>
             </div>
             {fetched === null ? null : (
-              <Notice tone="ok" title={`${fetched.live_rows} listings live · ${fetched.live_copies} copies`}>
+              <Notice
+                tone="ok"
+                title={
+                  <span className="bn-dotline">
+                    <span>{fetched.live_rows} listings live</span>{' '}
+                    <span>{fetched.live_copies} copies</span>
+                  </span>
+                }
+              >
                 Read just now, across every product line.
                 {/* NO CAVEAT, AND THAT IS A PROPERTY OF THE REQUEST RATHER THAN AN OMISSION.
                     `Export From Live` takes no scope at all, so there is nothing it could have
@@ -766,7 +792,10 @@ export function Markdown({
 
               <section className="markdown-step" aria-labelledby="markdown-worklist">
                 <h3 className="bn-section-title" id="markdown-worklist">
-                  2 · The worklist
+                  <span className="bn-dotline">
+                    <span>2</span>
+                    <span>The worklist</span>
+                  </span>
                 </h3>
                 {stamp === null ? (
                   <p className="markdown-says">
@@ -812,8 +841,9 @@ export function Markdown({
 
           {stamp === null ? null : (
             <section className="markdown-step" aria-labelledby="markdown-apply">
-              <h3 className="bn-section-title" id="markdown-apply">
-                3 · The upload
+              <h3 className="bn-section-title bn-dotline" id="markdown-apply">
+                <span>3</span>
+                <span>The upload</span>
               </h3>
               <div className="markdown-row">
                 <FileButton
@@ -890,7 +920,10 @@ export function Markdown({
               what caught it. */}
               {pushed === null ? null : (
                 <div className="markdown-publish">
-                  <h3 className="bn-section-title">4 · Go live</h3>
+                  <h3 className="bn-section-title bn-dotline">
+                    <span>4</span>
+                    <span>Go live</span>
+                  </h3>
                   {pushed.published_at ? (
                     <Notice tone="ok" title="Live at TCGplayer">
                       {pushed.accepted} price{pushed.accepted === 1 ? '' : 's'} moved live at{' '}

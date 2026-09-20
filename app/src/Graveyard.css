@@ -93,8 +93,13 @@
 
 .graveyard-mono { font-family: var(--bn-font-mono); font-size: var(--bn-fs-sm); color: var(--bn-ink-2); }
 .graveyard-condition { display: block; font-family: var(--bn-font-ui); font-size: var(--bn-fs-xs); color: var(--bn-ink-4); }
+/* D218: `.bn-pill` is already `inline-flex; gap: 5px`, so the gap alone spaces the reason from
+   "Retired"; the dot needs only a trailing margin to clear the reason after it. */
+.graveyard-reason::before { content: '·'; margin-right: 5px; }
 
 .graveyard-where { display: inline-flex; align-items: center; gap: var(--bn-2); font-size: var(--bn-fs-sm); color: var(--bn-ink-2); }
+/* D218: the box's name and the store key are sibling spans; the seam is CSS. */
+.graveyard-where-parts > span:not(:first-child)::before { content: '·'; margin: 0 6px; color: var(--bn-ink-4); }
 
 /* ---- phones: the ledger becomes cards -------------------------------------------- */
 @media (max-width: 639px) {

@@ -828,7 +828,7 @@ test('the run picker leads with the box, and the directory is what tells two run
      the whole headline rather than with `toContainText`, because that is the half a
      `Box 2 · —` regression would still satisfy. The day is appended by the chip, so the
      assertion names it. */
-  await expect(chips.nth(3).locator('.pricing-run-name')).toHaveText('Box 2 · Aug 23')
+  await expect(chips.nth(3).locator('.pricing-run-name')).toHaveText('Box 2 Aug 23')
 
   /* WHAT IS LEFT, WHICH THE CHIP COULD NOT SAY BEFORE D86. `counts.skus` is the SIZE of a job
      and never the job: box 2's 108 SKUs are one `floor` press. This fixture's runs have not
@@ -876,7 +876,7 @@ test('an emitted run with copies still unsent stays open, and the chip counts th
   await expect(chips).toHaveCount(2)
   await expect(chips.nth(1).locator('.pricing-run-owes')).toHaveText('148 unsent')
   await expect(chips.nth(0).locator('.pricing-run-owes')).toHaveText('All sent')
-  await expect(page.locator('.pricing-runs-count')).toHaveText('1 with work left · showing all of them')
+  await expect(page.locator('.pricing-runs-count')).toHaveText('Showing all 1 with work left')
 
   /* WHAT THE LIST CANNOT SEND IS NAMED ON THE DECK, each figure a door — AND THE FIGURE IS
      CARDS. The two zero-card husks and the zero-card reallocated run are withholding nothing,
@@ -1255,7 +1255,7 @@ test('a held row says so, in both registers, and has no price field', async ({ p
      can still be read. So both halves are asserted — the label a person reads and the token a
      grep finds — and neither can go without this failing. */
   const state = page.locator('.pricing-state')
-  await expect(state).toHaveText('Held · Bullish')
+  await expect(state).toHaveText('Held, Bullish')
   await expect(state).toHaveAttribute('title', 'withheld: bullish')
   await expect(page.locator('.pricing-row-note')).toContainText('waiting on rotation')
   await expect(field(page)).toHaveCount(0)
@@ -1326,13 +1326,14 @@ test('the caption draws the label the server composed on THIS read, including wh
   await expect(page.locator('.pricing-photo-caption')).toContainText('Box 7 · departed · B7 #1')
   await expect(page.locator('.pricing-photo-caption')).toContainText('1 of 3')
 
-  /* `no label · <key>` IS `BoxBrowse`'s OWN FALLBACK, one vocabulary with it and for its reason:
-     the server answers null where it will not name a place — a box its walk could not count, or
-     one no located record names any more — and `7/2` bare reads like a position and is not one.
-     Drawing nothing here would leave a dangling separator in front of `2 of 3`, which reads as a
-     fault rather than as an answer. */
+  /* `No label <key>` REUSES `storeKey.ts:storeKeyText`, the one composer of a record's store
+     key (D68, D92) — this used to type its own `no label · 7/2`, a second, disagreeing
+     spelling of the same fact `BoxBrowse.tsx`'s own fallback already had a name for. The
+     server answers null where it will not name a place — a box its walk could not count, or
+     one no located record names any more. Drawing nothing here would leave a dangling
+     separator in front of `2 of 3`, which reads as a fault rather than as an answer. */
   await page.getByRole('button', { name: 'Next copy' }).click()
-  await expect(page.locator('.pricing-photo-caption')).toContainText('no label · 7/2')
+  await expect(page.locator('.pricing-photo-caption')).toContainText('No label B7 #2')
   await expect(page.locator('.pricing-photo-caption')).toContainText('2 of 3')
 
   await page.getByRole('button', { name: 'Next copy' }).click()
@@ -2093,6 +2094,19 @@ async function hold(page: Page, at = 0) {
 /** THE PIN, which is the `T` button's click and — since the key became a hold — nothing else. */
 const pin = (page: Page, at = 0) =>
   page.getByRole('button', { name: /Price history for/ }).nth(at).click()
+
+/* NO TYPED MIDDLE DOT OR BULLET REACHES THE PRICE-HISTORY PANEL (D218). `.pricehistory-bound`'s
+ * range/spread join is two sibling spans now, dot-drawn by CSS, never a string with a `·`
+ * typed between the two figures. */
+test('no typed middle dot or bullet reaches the price-history panel (D218)', async ({ page }) => {
+  await open(page)
+  await hold(page)
+
+  const panel = panelOf(page)
+  await expect(panel).toBeVisible()
+  const text = await panel.innerText()
+  expect(text).not.toMatch(/[·•]/)
+})
 
 test('holding `t` over a row reads it, and draws the average as the anchor', async ({
   page,
@@ -2926,7 +2940,7 @@ test('a card in two drawers says where it is once Compare is on, and a card in o
   /* THE BOXES AND NOT THE RUN NAMES, ONCE ASKED FOR. A person owns drawers, not directories;
      the runs are on the chips above. Deduped and ascending, which is the order the shelf is
      in. */
-  await expect(rows.nth(0).locator('.pricing-span-where')).toHaveText('Boxes 3, 4 · 2 runs')
+  await expect(rows.nth(0).locator('.pricing-span-where')).toHaveText('Boxes 3, 4 2 runs')
 
   /* THE ABSENCE, WHICH IS THE HALF A MARKER-ON-EVERY-ROW REGRESSION WOULD STILL SATISFY —
      Compare being on draws nothing for a card in one drawer, because there is nothing to
@@ -2945,13 +2959,26 @@ test('the over-cap warning is visible with Compare off, and the toggle does not 
      click at all. */
   await expect(page.locator('.pricing-row').nth(0).locator('.pricing-span-cap')).toBeVisible()
   await expect(page.locator('.pricing-row').nth(0).locator('.pricing-span-cap')).toHaveText(
-    'Runs claim 4 · 3 can go',
+    'Runs claim 4 3 can go',
   )
 
   /* AND IT STAYS AFTER THE TOGGLE, TOO — Compare only ever ADDS context, it never removes a
      warning. */
   await page.getByRole('button', { name: 'Compare' }).first().click()
   await expect(page.locator('.pricing-row').nth(0).locator('.pricing-span-cap')).toBeVisible()
+})
+
+/* NO TYPED MIDDLE DOT OR BULLET REACHES THE SCREEN (D218). A separator here is drawn by CSS
+ * (`::after` content on `.bn-dotline` and its scoped siblings), never typed into a string a
+ * component renders. `SPAN` plus Compare exercises the box/run join, the over-cap badge, the
+ * run picker's own name/day and owes chip, and the header's progress legend — the sites this
+ * sweep touched. */
+test('no typed middle dot or bullet reaches the pricing worklist (D218)', async ({ page }) => {
+  await open(page, { worklist: SPAN })
+  await page.getByRole('button', { name: 'Compare' }).first().click()
+
+  const text = await page.locator(VIEW).innerText()
+  expect(text).not.toMatch(/[·•]/)
 })
 
 test('Compare toggle is one control per section, off by default', async ({ page }) => {
@@ -3047,7 +3074,7 @@ test('the cap is what can go, and the row says the runs disagree with it', async
   await expect(qty.locator('.pricing-qty-input')).toHaveAttribute('placeholder', '3')
   await expect(qty).toContainText('of 3')
   await expect(page.locator('.pricing-row').nth(0).locator('.pricing-span-cap')).toHaveText(
-    'Runs claim 4 · 3 can go',
+    'Runs claim 4 3 can go',
   )
 })
 
@@ -3290,7 +3317,7 @@ test('typing a cut-off moves rows across the sections, at the figure emit will u
 
   const cut = page.getByLabel("Store default")
   await expect(cut).toHaveValue('0.40')
-  await expect(page.locator('.pricing-cheap-count')).toContainText('2 under · 1 above')
+  await expect(page.locator('.pricing-cheap-count')).toContainText('2 under 1 above')
 
   /* RAISING THE LINE MOVES A ROW, WITHOUT A RELOAD. `GET /pipeline/pricing` reports a `bucket`
      frozen into `pricing.json` by the join that wrote it; `emit` does not read that cell — it
@@ -3300,7 +3327,7 @@ test('typing a cut-off moves rows across the sections, at the figure emit will u
      to $1.25, while the truth was 1 and 10. */
   await cut.fill('0.45')
   await cut.press('Enter')
-  await expect(page.locator('.pricing-cheap-count')).toContainText('3 under · 0 above')
+  await expect(page.locator('.pricing-cheap-count')).toContainText('3 under 0 above')
   await expect(page.locator('.pricing-section[data-bucket="listable"]')).toHaveCount(0)
   await expect(page.locator('.pricing-section[data-bucket="sub_threshold"] .pricing-section-count')).toContainText('3')
 
@@ -3308,7 +3335,7 @@ test('typing a cut-off moves rows across the sections, at the figure emit will u
      figure and the Market cell, never of the order the figures were typed in. */
   await cut.fill('0.20')
   await cut.press('Enter')
-  await expect(page.locator('.pricing-cheap-count')).toContainText('1 under · 2 above')
+  await expect(page.locator('.pricing-cheap-count')).toContainText('1 under 2 above')
 })
 
 test('the cut-off panel is drawn even when nothing is under the line', async ({ page }) => {
@@ -3324,7 +3351,7 @@ test('the cut-off panel is drawn even when nothing is under the line', async ({ 
      be no way back to the number that had just been moved. */
   await expect(page.locator('.pricing-cheap')).toBeVisible()
   await expect(page.getByLabel("Store default")).toBeVisible()
-  await expect(page.locator('.pricing-cheap-count')).toContainText('0 under · 1 above')
+  await expect(page.locator('.pricing-cheap-count')).toContainText('0 under 1 above')
 })
 
 test('a store still holding two figures says so, and one press makes them agree', async ({
@@ -3650,6 +3677,23 @@ test('what the clear leaves alone is on the screen, not in a tooltip', async ({ 
   await expect(spares).toContainText('2')
   await expect(spares).toContainText('held back on purpose')
   await expect(spares).toContainText('no catalogue price')
+})
+
+/* NO TYPED MIDDLE DOT OR BULLET REACHES THE MASS-CLEAR SHEET (D218). The eyebrow, both
+ * numbered steps and the Segmented control's own two option labels are drawn by CSS now. */
+test('no typed middle dot or bullet reaches the mass-clear sheet (D218)', async ({ page }) => {
+  /* SEVERAL RUNS, ON PURPOSE. Over one run this sheet's `worklistName` reuses `scopeName`,
+     which composes through `runScope.ts:boxLabel` — `Box 7 · Riftbound epics` — a typed dot
+     in a file outside this sweep's lane; see the sweep's own report. Over several runs
+     `worklistName` falls to "N runs" instead, which keeps this case about the sites this lane
+     fixed rather than about that one. */
+  await open(page, { worklist: SPAN, clearable: CLEARABLE })
+  await page.getByRole('button', { name: 'Clear typed prices in bulk' }).click()
+
+  const sheet = page.locator('.clearprices')
+  await expect(sheet).toBeVisible()
+  const text = await sheet.innerText()
+  expect(text).not.toMatch(/[·•]/)
 })
 
 test('an age window narrows the label, and never takes an undated answer', async ({ page }) => {

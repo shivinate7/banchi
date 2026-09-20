@@ -9,6 +9,19 @@ script is on no `make` target and no git hook — a person runs it, on purpose, 
 `scripts/copy-budget.mjs` and `scripts/typed-interpunct-pin.mjs` already keep for their own
 ratchets (D194, D218).
 
+THE PIN IS PER FILE (D226, amended). One entry per tracked markdown file, holding that
+file's own ratio, error count and word count. The repo-wide total, the four per-code counts
+and the six bucket ratios are still MEASURED and printed below, and they pin nothing: a
+scalar every branch has to write is a scalar every merge takes from somebody. Measured on
+2026-09-19, three re-pins in one evening, none caused by the branch's own prose.
+
+A RE-PIN IS NOW A SMALL DIFF, WHICH IS THE POINT OF THE RECEIPT. `git diff
+scripts/ste-ratchet.json` used to move one total and ten derived numbers for any prose change
+anywhere. It now moves the lines of the files that actually changed, so the receipt names the
+work rather than summarising the repo.
+
+IT PRUNES. A pin whose file is gone is dropped here, never by the row, which is read-only.
+
 THIS SCRIPT CONTAINS NO COUNTING LOGIC OF ITS OWN. It calls `scripts/ste_measure.py:measure()`
 — the SAME function `scripts/docs-audit.py`'s `ste ratchet` row calls to assert — over the
 same tracked-markdown list `git ls-files` gives the row (there is no `--staged` reading here
@@ -53,12 +66,18 @@ def main(argv=None) -> int:
     paths = tracked_markdown()
     measurement = ste_measure.measure(paths)
 
-    PIN_PATH.write_text(json.dumps(measurement.to_pin(), indent=2, sort_keys=True) + "\n")
+    pinned = measurement.to_pin()
+    PIN_PATH.write_text(json.dumps(pinned, indent=2, sort_keys=True) + "\n")
 
+    ratios = measurement.ratio_per_1k_words
     print(
-        f"ste-ratchet-pin: pinned at {measurement.total} error-severity findings "
-        f"across {measurement.scanned_files} files "
+        f"ste-ratchet-pin: pinned {len(pinned['files'])} files, "
+        f"{measurement.total} error-severity findings in total "
         f"({measurement.exempted_total} exempted: {measurement.exempted_by_class}).\n"
+        f"ste-ratchet-pin: repo-wide ratio {ratios.get('repo')}/1,000 words, measured and "
+        f"NOT pinned — a repo-wide number is what every merge moved.\n"
+        f"ste-ratchet-pin: by bucket {dict(sorted(ratios.items()))}.\n"
+        f"ste-ratchet-pin: by code {dict(sorted(measurement.by_code.items()))}.\n"
         f"ste-ratchet-pin: `git diff scripts/ste-ratchet.json` shows what moved."
     )
     return 0

@@ -487,6 +487,9 @@
 /* The mid-dots are drawn, and drawn TRAILING: a wrap then leaves the dot at the end of the
    line it belongs to, rather than starting the next line with what reads as a bullet. */
 .run-receipt-head > *:not(:last-child)::after { content: '·'; margin-left: var(--bn-2); color: var(--bn-ink-4); }
+/* The step's cost pill can carry two short facts (D218); the pill is already flex with its own
+   gap, so only the leading space needs adding here. */
+.runs-cost-pill > *:not(:last-child)::after { content: '·'; margin-left: var(--bn-2); color: var(--bn-ink-4); }
 .run-receipt-what { font-weight: 650; color: var(--bn-ink); }
 .run-receipt-rows {
   font-family: var(--bn-font-display);

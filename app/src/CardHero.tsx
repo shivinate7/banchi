@@ -83,7 +83,7 @@ function isCode(text: string): boolean {
 /** A set-valued claim, rendered — a bare string reads as a one-member set. */
 export function claimText(claim: string | string[] | null, word: (member: string) => string = (member) => member): string {
   const members = claimList(claim).map(word)
-  return members.length === 0 ? 'none recorded' : members.join(' · ')
+  return members.length === 0 ? 'none recorded' : members.join(', ')
 }
 
 export function claimList(claim: string | string[] | null): string[] {
@@ -316,9 +316,14 @@ export function PhotoPanel({ row, label, absent, onAbsent, nonce, onZoom, reshoo
       <div className="bn-photo browse-absent">
         <Icon name="check" size={28} />
         <p>Photograph reclaimed after the sale — deleted on purpose, record kept.</p>
-        <span className="browse-machine">
-          reclaimed {row.card.photo_reclaimed_at}
-          {row.card.photo_sha256 ? ` · sha256 ${row.card.photo_sha256.slice(0, 16)}…` : ''}
+        <span className="browse-machine bn-facts">
+          <span>reclaimed {row.card.photo_reclaimed_at}</span>
+          {row.card.photo_sha256 ? (
+            <>
+              {' '}
+              <span>sha256 {row.card.photo_sha256.slice(0, 16)}…</span>
+            </>
+          ) : null}
         </span>
       </div>
     )
@@ -376,7 +381,9 @@ export function CardDetailsSection({
       <summary className="browse-details-summary">
         <Icon name="chevronRight" size={14} className="browse-details-chev" />
         <span className="bn-section-title">Details</span>
-        <span className="browse-details-hint">identity · claims · provenance</span>
+        <span className="browse-details-hint bn-facts">
+          <span>identity</span> <span>claims</span> <span>provenance</span>
+        </span>
       </summary>
       <div className="browse-about">
         {factGroupsOf(card, market, listings).map((group) => (

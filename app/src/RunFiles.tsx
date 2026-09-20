@@ -62,7 +62,8 @@ export function RunFiles({
                   {file.name}
                 </span>
                 <span className="run-file-meta">
-                  {kind.label} · <span className="run-file-size">{sizeOf(file.bytes)}</span>
+                  <span>{kind.label}</span>
+                  <span className="run-file-size">{sizeOf(file.bytes)}</span>
                 </span>
               </span>
               <Icon name="download" size={16} className="run-file-arrow" />

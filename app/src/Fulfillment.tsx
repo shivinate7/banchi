@@ -132,8 +132,10 @@ type Sellable = {
   index: number
   place: string
   name: string
-  /** `Near Mint · 181/219` — what is printed on the card, drawn beside the name. */
-  about: string | null
+  /** `Near Mint`, `181/219` — what is printed on the card, drawn beside the name as sibling
+   *  facts (D218): the seam between them is CSS, `.ff-card-about`'s own rule, never a typed
+   *  `' · '` in the string. */
+  about: readonly string[] | null
   /** The place block, for the bar and the "between" sentence. */
   where: Place | null
   /** THE CARD'S OWN NAME FOR ITS PHOTOGRAPH (D172), or null where the row it was built from
@@ -179,7 +181,7 @@ function sellable(key: string, card: InventoryCard): Sellable | null {
     index: card.index,
     place,
     name: card.name ?? NO_NAME,
-    about: about.length === 0 ? null : about.join(' · '),
+    about: about.length === 0 ? null : about,
     where: card.place ?? null,
     // The inventory row's own name for its photograph (D172). Raw here — `photoUrl` is what
     // refuses a `moved:` or `nophoto:` name, so this passes on whatever the store said.
@@ -220,7 +222,7 @@ function pickSellable(order: OrderRow, line: ResolvedLine, pick: PickRow): Sella
     index: pick.index,
     place: label,
     name: pick.card_name ?? NO_NAME,
-    about: about.length === 0 ? null : about.join(' · '),
+    about: about.length === 0 ? null : about,
     where: pick.place,
     // THE SLOT ROUTE FOR AN ORDER PICK, BECAUSE `PickRow` CARRIES NO NAME. The order
     // resolver's row is built for aiming a WRITE — `capture_id` is what `POST /orders/pull`
@@ -375,18 +377,19 @@ function count(n: number, one: string, many: string): string {
   return `${n.toLocaleString()} ${n === 1 ? one : many}`
 }
 
-/** `Box 3 · Section 1 · Card 17` with the figures ranked above the words. The text content is
- *  the server's string character for character; only the weight changes. Each ` · ` is its own
- *  span so a narrow screen can stack the parts on purpose, breaking before `Card N` with the
- *  separator hidden rather than left dangling at the end of a line. */
+/** `Box 3`, `Section 1`, `Card 17`, the figures ranked above the words. The text content of each
+ *  part is the server's string character for character; only the weight changes. Each part is
+ *  its own span (D218) so a narrow screen can stack them on purpose, breaking before `Card N`
+ *  with the seam drawn by CSS (`.ff-place-elem:not(:first-child)::before`) rather than typed —
+ *  which is also what lets it disappear on the stacked line without a dangling character left
+ *  behind, `Fulfillment.css`'s narrow-width rule below. */
 function PlaceText({ label }: { label: string }): ReactNode {
   return label.split(' · ').map((part, at) => {
     const seam = part.lastIndexOf(' ')
     const value = seam < 1 ? '' : part.slice(seam + 1)
     const numeric = /^\d+$/.test(value)
     return (
-      <span key={at}>
-        {at === 0 ? null : <span className="ff-place-sep"> · </span>}
+      <span className="ff-place-elem" key={at}>
         <span className="ff-place-part">
           {numeric ? (
             <>
@@ -818,19 +821,16 @@ export function Fulfillment() {
               <p className="fulfillment-say ff-receipt-said">{sale.said}</p>
               <p className="fulfillment-say ff-receipt-what">
                 <span className="ff-receipt-name">{sale.card.name}</span>
-                <span className="ff-receipt-sep" aria-hidden="true">
-                  {' '}
-                  ·{' '}
+                {/* D218: found beyond the reader's own list — `sale.card.place` is the
+                    server's raw label off a variable, so the reader's plain-string scan never
+                    saw the dot in it. Same string, same register; the seam is CSS now. */}
+                <span className="ff-receipt-place">
+                  {sale.card.place.split(' · ').map((part, at) => (
+                    <span key={at}>{part}</span>
+                  ))}
                 </span>
-                <span className="ff-receipt-place">{sale.card.place}</span>
                 {sale.card.order === null ? null : (
-                  <>
-                    <span className="ff-receipt-sep" aria-hidden="true">
-                      {' '}
-                      ·{' '}
-                    </span>
-                    <span className="ff-receipt-order">Order {sale.card.order.number}</span>
-                  </>
+                  <span className="ff-receipt-order">Order {sale.card.order.number}</span>
                 )}
               </p>
               {sale.note === null ? null : (
@@ -998,10 +998,6 @@ export function Fulfillment() {
                 <span className="ff-card-step">
                   Pull {walkAt + 1} of {walk.length}
                 </span>
-                <span className="ff-card-eyebrow-sep" aria-hidden="true">
-                  {' '}
-                  ·{' '}
-                </span>
                 <span className="ff-card-order">
                   For <b>{orderLabel(forOrder.buyer, forOrder.number).primary}</b>{' '}
                   <span className="ff-card-order-id">
@@ -1012,7 +1008,11 @@ export function Fulfillment() {
             )}
             <h2 className="fulfillment-name ff-card-name">{chosen.name}</h2>
             {chosen.about === null ? null : (
-              <p className="fulfillment-say ff-card-about">{chosen.about}</p>
+              <p className="fulfillment-say ff-card-about">
+                {chosen.about.map((part, at) => (
+                  <span key={at}>{part}</span>
+                ))}
+              </p>
             )}
           </header>
 
@@ -1254,7 +1254,15 @@ export function Fulfillment() {
                   {done.map((row) => (
                     <li className="ff-done-row" key={row.key}>
                       <span className="fulfillment-say ff-done-name">{row.name}</span>
-                      <span className="fulfillment-say ff-done-place">{row.place}</span>
+                      {/* D218: found beyond the reader's own list — `row.place` is the
+                          server's raw label off a variable, so the reader's plain-string scan
+                          never saw the dot in it. Same string, same register; the seam is CSS
+                          now. */}
+                      <span className="fulfillment-say ff-done-place">
+                        {row.place.split(' · ').map((part, at) => (
+                          <span key={at}>{part}</span>
+                        ))}
+                      </span>
                       {row.order === null ? null : (
                         <span className="fulfillment-say ff-done-order">Order {row.order}</span>
                       )}
@@ -1292,9 +1300,12 @@ export function Fulfillment() {
                           </span>
                           <span className="fulfillment-say ff-order-count">
                             {count(group.cards.length, 'card', 'cards')} to pull
-                            {group.elsewhere === 0
-                              ? ''
-                              : ` · ${count(group.elsewhere, 'thing', 'things')} on this order ${group.elsewhere === 1 ? 'is' : 'are'} not in the boxes yet — tell the owner before you seal this one`}
+                            {group.elsewhere === 0 ? null : (
+                              <span className="ff-order-elsewhere">
+                                {count(group.elsewhere, 'thing', 'things')} on this order {group.elsewhere === 1 ? 'is' : 'are'} not in
+                                the boxes yet — tell the owner before you seal this one
+                              </span>
+                            )}
                           </span>
                         </span>
                       </header>
@@ -1366,7 +1377,7 @@ export function Fulfillment() {
                           <span className="ff-box-text">
                             <span className="fulfillment-say ff-box-name">
                               Box {group.box}
-                              {group.name === null ? '' : ` · ${group.name}`}
+                              {group.name === null ? null : <span className="ff-box-namepart">{group.name}</span>}
                             </span>
                             <span className="fulfillment-say ff-box-count">
                               {count(group.cards.length, 'card', 'cards')}

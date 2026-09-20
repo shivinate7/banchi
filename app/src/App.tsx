@@ -1202,7 +1202,7 @@ function Sidebar({
           <span className={`bn-dot ${server === 'online' ? 'bn-dot-ok' : server === 'offline' ? 'bn-dot-danger' : ''}`} />
           <span className="bn-side-foot-text">
             {server === 'online' ? 'Server online' : server === 'offline' ? 'Server offline' : 'Checking server…'}
-            {server === 'online' && cards !== null ? <span className="bn-server-detail"> · {cards.toLocaleString()} cards</span> : null}
+            {server === 'online' && cards !== null ? <span className="bn-server-detail">{cards.toLocaleString()} cards</span> : null}
           </span>
         </div>
       </div>
@@ -1333,7 +1333,7 @@ function Drawer({ open, path, onClose, theme, onToggleTheme, server, cards }: { 
           <div className="bn-server" data-state={server}>
             <span className={`bn-dot ${server === 'online' ? 'bn-dot-ok' : server === 'offline' ? 'bn-dot-danger' : ''}`} />
             {server === 'online' ? 'Server online' : server === 'offline' ? 'Server offline' : 'Checking server…'}
-            {server === 'online' && cards !== null ? <span className="bn-server-detail"> · {cards.toLocaleString()} cards</span> : null}
+            {server === 'online' && cards !== null ? <span className="bn-server-detail">{cards.toLocaleString()} cards</span> : null}
           </div>
         </div>
       </div>

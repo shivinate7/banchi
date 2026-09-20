@@ -178,14 +178,14 @@ type Sent = { method: string; url: string; body: unknown }
 
 /** Opens the screen with every route it calls intercepted. Returns the writes it attempted,
  *  which is the strongest thing a browser test can say about a route it must not call. */
-async function open(page: Page, review = REVIEW): Promise<Sent[]> {
+async function open(page: Page, review = REVIEW, parked: Entry[] = []): Promise<Sent[]> {
   const sent: Sent[] = []
 
   await page.route(/\/queues$/, async (route) => {
     await route.fulfill({
       status: 200,
       contentType: 'application/json',
-      body: JSON.stringify({ review, parked: [] }),
+      body: JSON.stringify({ review, parked }),
     })
   })
 
@@ -997,4 +997,36 @@ test('a disputed name is never swept into a group, even a uniform one', async ({
   const disputed = (index: number): Entry => ({ ...NAME_DISPUTED[0]!, position: `2/${index}`, index })
   await open(page, [disputed(1), disputed(2), disputed(3)])
   await expect(page.getByRole('button', { name: /Answer all/i })).toHaveCount(0)
+})
+
+/* ------------------------------------------------------------- D218: no typed interpunct */
+
+/* THE DOT SWEEP (D218), MUTATION-PROVED. `scripts/user-strings.mjs` cannot see a component's
+ * own render decisions — it reads literals, not what `ReviewQueue.tsx` decides to draw from
+ * them — so these three read `.bn-view`'s own rendered text and assert directly against the
+ * two characters a screen may never type. Each covers a state the sweep actually touched:
+ * a card with a question (the "Next" preview, the shared-candidate meta, the rarity chip),
+ * the parked rail (the divider label that used to be one CSS string, `'Parked · under the
+ * threshold'`, now two elements), and the group-answer confirmation (the session tally). */
+test('a card with a question types no interpunct anywhere on the view', async ({ page }) => {
+  await open(page, REVIEW)
+  const text = await page.locator('.bn-view').innerText()
+  expect(text).not.toMatch(/[·•]/)
+})
+
+test('the parked rail types no interpunct, including its own divider label', async ({ page }) => {
+  const parkedEntry = entry(30, 'low_confidence', '0.30', [candidate(0, '0.30')])
+  await open(page, REVIEW, [parkedEntry])
+  await page.getByRole('button', { name: /^Queue/ }).click()
+  await expect(page.locator('.review-row-parked-label')).toBeVisible()
+  const text = await page.locator('.bn-view').innerText()
+  expect(text).not.toMatch(/[·•]/)
+})
+
+test('the group-answer confirmation types no interpunct', async ({ page }) => {
+  await open(page, [uniform(1), uniform(2), uniform(3)])
+  await page.getByRole('button', { name: /Answer all 3 together/i }).click()
+  await expect(page.locator('.review-group')).toBeVisible()
+  const text = await page.locator('.bn-view').innerText()
+  expect(text).not.toMatch(/[·•]/)
 })

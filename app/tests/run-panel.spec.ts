@@ -554,7 +554,7 @@ async function pickBox(page: Page, box = 9) {
 
 /** Forward from the boxes stage to the reading stage. */
 async function toReading(page: Page) {
-  await page.getByRole('button', { name: /^Next · how they are read$/ }).click()
+  await page.getByRole('button', { name: /^Continue to the reading$/ }).click()
   await expect(page.locator('.run-readings').first()).toBeVisible()
 }
 
@@ -725,9 +725,9 @@ test('which steps cost money is on the heading line, not buried in the prose', a
   const costs = await page.locator('.runs-step .runs-step-cost').allTextContents()
   expect(costs).toEqual([
     'Cost $0.15',
-    'Free · re-runnable',
-    'Free · re-runnable',
-    'Free · re-runnable',
+    'Freere-runnable',
+    'Freere-runnable',
+    'Freere-runnable',
   ])
 })
 
@@ -773,7 +773,7 @@ test('the cost is beside the tokens too, which is where a phone still sees it', 
      from four grid columns to three, so the head's figure is gone on a phone and this row is
      what remains. */
   const row = page.locator('.runs-step').first().locator('.runs-kv-row')
-  await expect(row).toContainText('290,470 tokens in · 3,761 out')
+  await expect(row).toContainText('290,470 tokens in and 3,761 out')
   await expect(row).toContainText('Cost $0.15')
 })
 
@@ -1541,9 +1541,9 @@ test('a drawer is untickable, and the last one out leaves nothing to price', asy
      reached by unticking, and is the state this asserts. */
   /* Box 9 is still ticked at this point — the untick above took 12 out — so the way forward is
      enabled, and taking the LAST drawer out is what disables it. */
-  await expect(page.getByRole('button', { name: /^Next · how they are read$/ })).toBeEnabled()
+  await expect(page.getByRole('button', { name: /^Continue to the reading$/ })).toBeEnabled()
   await pickBox(page, 9)
-  await expect(page.getByRole('button', { name: /^Next · how they are read$/ })).toBeDisabled()
+  await expect(page.getByRole('button', { name: /^Continue to the reading$/ })).toBeDisabled()
 })
 
 test('a box the send could not start is named, not swallowed', async ({ page }) => {
@@ -1592,7 +1592,7 @@ test('no DRAWER is picked for the operator, and the default start is a state rat
      own case above. */
   await openComposer(page)
   await expect(page.locator('.runs-composer-note')).toContainText('Every card waiting to be identified')
-  const next = page.getByRole('button', { name: /^Next · how they are read$/ })
+  const next = page.getByRole('button', { name: /^Continue to the reading$/ })
   await expect(next).toBeEnabled()
 
   /* AND NO DRAWER IS TICKED — the half of the old rule that still binds. Choosing `Drawers`
@@ -2835,7 +2835,7 @@ test('rebind: the sheet previews on open, and Apply is absent until it answers',
      encodes, asserted here rather than assumed because a sheet that opens with the write
      button already drawn is one press from spending nothing on a stale reading. */
   await expect(sheet.getByRole('button', { name: 'Rebind these cards' })).toBeVisible()
-  await expect(sheet).toContainText('Box 3 · RB Epics')
+  await expect(sheet).toContainText('RB Epics (Box 3)')
   await expect(sheet).toContainText('2')
 
   /* NOTHING ON SCREEN NAMES A COMMAND, A PATH OR A DECISION NUMBER (D196/no mechanism on
@@ -2914,4 +2914,59 @@ test('rebind: a refusal draws a sentence, never the CLI reason code', async ({ p
   const text = (await sheet.innerText()).toLowerCase()
   expect(text).not.toContain('none_on_shelf')
   expect(sheet.getByRole('button', { name: 'Rebind these cards' })).toHaveCount(0)
+})
+
+// ------------------------------------------------------------------ no typed interpunct (D218)
+
+/** NO TYPED MIDDLE DOT OR BULLET ANYWHERE ON `#/runs`, across the states most likely to carry
+ *  one: the run panel's eyebrow, its tokens/batch/cost figures and files list, a fetched
+ *  export's receipt, the rescue sheet, and the composer's own eyebrow, quote line and claim
+ *  notice. A CSS-drawn separator (`::before`/`::after`) never reaches `innerText`, so this
+ *  proves the string itself carries none — never that a dot is merely invisible.
+ *
+ *  PROVED RED: copying the pre-sweep `RunPanel.tsx`, `RunsComposer.tsx` and `runScope.ts`'s
+ *  `destinationLabel`/eyebrow markup back in over this file failed this assertion, over
+ *  `290,470 tokens in · 3,761 out`, `Free · re-runnable` and `Box 3 · RB Epics` alike. */
+test('no typed interpunct reaches the runs screen', async ({ page }) => {
+  const wire = await open(page, {
+    detail: { box_former: true, box_bid: 1 },
+    claimed: {
+      cards: 3,
+      receipts: ['sub-7f3a'],
+      runs: ['2026-08-24-box9-01'],
+      sentence: 'Run 2026-08-24-box9-01 is already paying to read 3 of these cards (9/1, 9/2, 9/3)',
+    },
+  })
+  await routeFetch(page, wire, { status: 200, body: fetchedBody() })
+  await openRun(page)
+  await fetchButton(page).click()
+  await expect(page.locator('.run-receipt')).toContainText('153')
+
+  await rescueStub(page, wire, [
+    {
+      ok: true,
+      exit_code: 0,
+      wrote: false,
+      run: '2026-08-24-box9-01',
+      reason: null,
+      counts: { records: 2, rebound: 2, not_on_shelf: 0, ambiguous: 0 },
+      destination: { box: 3, box_name: 'RB Epics' },
+      already_rescued: null,
+      new_run: null,
+      log: '2026-08-24-box9-01/logs/rescue-20260913-000000.log',
+    },
+  ])
+  await page.getByRole('button', { name: 'Rebind' }).click()
+  const sheet = page.locator('.rescue-sheet')
+  await expect(sheet).toContainText('RB Epics (Box 3)')
+  const sheetText = await sheet.innerText()
+  expect(sheetText).not.toMatch(/[·•]/)
+  await page.keyboard.press('Escape')
+
+  await atReading(page)
+  await checkCost(page)
+  await expect(page.locator('.run-quote')).toContainText('already paying to read 3 of these cards')
+
+  const text = await page.locator(VIEW).innerText()
+  expect(text).not.toMatch(/[·•]/)
 })

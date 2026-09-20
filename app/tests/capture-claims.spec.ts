@@ -674,8 +674,10 @@ test('S puts a divider in front of the next card, and sends no index', async ({ 
      `sections_detail`, never off `sections.length`, which is the section arithmetic D10
      keeps out of the app. */
   await expect(page.locator('.capture-section p')).toContainText('New section')
+  /* THE DOT IS CSS NOW, NOT TYPED TEXT (D218) — `.capture-list-part + .capture-list-part::before`
+     draws it, so the two facts' own text runs together with no separator character. */
   await expect(page.locator('.capture-section .capture-inline-label')).toHaveText(
-    'Section 2 · from card 41',
+    'Section 2from card 41',
   )
 
   /* THE BODY IS EMPTY, and that is the contract rather than a detail. The divider goes
@@ -1543,4 +1545,58 @@ test('the same blank field on a game that needs no hint reads Optional, and is n
   await page.keyboard.press('Escape')
   const row = page.locator('.capture-row').filter({ hasText: /Set hint/ })
   await expect(row.locator('.capture-sub')).toHaveCount(0)
+})
+
+/* ==========================================================================================
+   D218: NO TYPED MIDDLE DOT OR BULLET REACHES THIS SCREEN. `CaptureScreen.tsx`, `PositionBar.tsx`
+   and `position.ts` built several captions by joining facts with a literal `' · '` — the
+   section receipt, the rarity and finish claims, the odometer's verdict and its drawer split,
+   the tuning summary, the Rig fold and the Trigger meta. Every one of those now draws its
+   facts as sibling elements and lets CSS paint the separator, so none of them can put U+00B7
+   or U+2022 into the DOM text a screen reader or a copy-paste sees. This exercises as many of
+   those captions as one flow can reach and reads the WHOLE screen's visible text once, rather
+   than asserting each site — a fix that moved the dot two pixels left would still pass a
+   per-site assertion; only reading the rendered screen proves none of it typed the character.
+   ========================================================================================== */
+test('no typed middle dot or bullet reaches the capture screen', async ({ page }) => {
+  await openWithBox(page)
+
+  // The section receipt (`capture-inline-label`: "Section N" + "from card N").
+  await page.keyboard.press('s')
+  await expect(page.locator('.capture-section p')).toContainText('New section')
+
+  // The Rarity claim, two members (the joined-list case), FIRST — narrowing the Finish claim
+  // afterwards would clear a mid-selection state the union has not caught up to yet.
+  // `openRarity` waits for a rarity from the thirteen-member fixture other cases use; this one
+  // opens the field directly against `GAMES`'s own three (Common, Uncommon, Rare).
+  await page.keyboard.press('r')
+  await expect(rarityOpt(page, 'Rare')).toBeVisible()
+  await page.keyboard.press('1')
+  await page.keyboard.press('2')
+  await page.keyboard.press('Escape')
+
+  // The Finish claim, two members (the joined-list case) — both are in the union
+  // `finish_by_rarity` offers for Common + Uncommon.
+  await openFinish(page)
+  await finishCell(page, 'normal').click()
+  await finishCell(page, 'reverse_holo').click()
+  await page.keyboard.press('Escape')
+
+  // The Rig folds itself once a box is picked (D211). Unfold it so its own three-part
+  // summary line is in the DOM, then reach the Trigger row inside it.
+  const rigSummary = page.locator('.capture-rig-summary')
+  if ((await rigSummary.getAttribute('aria-expanded')) === 'false') await rigSummary.click()
+
+  // Arm the motion trigger: the mode lamp ("Armed" / "no signal") and the Tuning summary
+  // ("armed" / "no frames yet") both read from `motionDiag === null`.
+  await page.getByRole('button', { name: /Trigger/ }).click()
+  await page.getByRole('button', { name: 'motion', exact: true }).click()
+  await expect(page.locator('.capture-trigger')).toHaveText('motion')
+  await page.keyboard.press('Escape')
+
+  const view = page.locator('.bn-view')
+  await expect(view).toBeVisible()
+  const text = await view.innerText()
+  expect(text).not.toContain('·')
+  expect(text).not.toContain('•')
 })

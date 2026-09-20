@@ -606,6 +606,15 @@ button.runs-stage:hover { background: var(--bn-hover); color: var(--bn-ink); }
 }
 .runs-quote-line { font-size: var(--bn-fs-md); color: var(--bn-ink-3); }
 .runs-quote-line strong { color: var(--bn-ink); font-weight: 600; }
+/* Several counts on one line, each a sibling span; CSS draws the separator between them
+   rather than one being typed into a string (D218). Shared by the failure and claim codes
+   below, which carry the same shape. */
+.runs-quote-line > *:not(:last-child)::after,
+.runs-code-parts > *:not(:last-child)::after {
+  content: '·';
+  margin: 0 var(--bn-2);
+  color: var(--bn-ink-4);
+}
 .run-legs {
   display: flex;
   flex-direction: column;

@@ -384,7 +384,8 @@ function OwnerRows({
               title="Ranked before these copies left."
               onClick={onRerank}
             >
-              {stale} · re-rank
+              <span>{stale}</span>
+              <span className="card-locations-rerank-go">re-rank</span>
             </Chip>
           )}
         </div>
@@ -415,7 +416,8 @@ function OwnerRows({
               <ReadingAge at={listedAt} />
               {group.sold_here > 0 ? (
                 <span className="card-locations-since">
-                  {group.listed.live} when read · {group.sold_here} sold here since
+                  <span>{group.listed.live} when read</span>
+                  <span>{group.sold_here} sold here since</span>
                 </span>
               ) : null}
             </div>
@@ -423,7 +425,11 @@ function OwnerRows({
         </div>
 
         <p className="card-locations-meta">
-          <span className="card-locations-meta-mono">{meta.join(' · ')}</span>
+          <span className="card-locations-meta-mono">
+            {meta.map((part, at) => (
+              <span key={at}>{part}</span>
+            ))}
+          </span>
           {group.condition === null ? null : (
             <span className="card-locations-cond">{group.condition}</span>
           )}
@@ -434,7 +440,9 @@ function OwnerRows({
             Headroom is the honest form of the same fact. */}
         {listing ? (
           <p className="card-locations-counts">
-            Pushed {group.listed.pushed} · Staged {group.listed.staged} · {headroom(group)}
+            <span>Pushed {group.listed.pushed}</span>
+            <span>Staged {group.listed.staged}</span>
+            <span>{headroom(group)}</span>
           </p>
         ) : null}
       </header>
@@ -491,7 +499,10 @@ function OwnerRows({
                     <span className="card-locations-label">
                       {copy.place.game_display ?? 'Pooled'}
                     </span>
-                    <span className="card-locations-boxname">pooled · {copy.key}</span>
+                    <span className="card-locations-boxname">
+                      <span>pooled</span>
+                      <span>{copy.key}</span>
+                    </span>
                   </>
                 ) : (
                   <>
@@ -620,16 +631,24 @@ function FulfillerCard({
         <h2 className="card-locations-name">
           {group.names.length === 0 ? 'This card has no name yet' : group.names.join(' / ')}
         </h2>
-        {about.length === 0 ? null : <p className="card-locations-say">{about.join(' · ')}</p>}
+        {about.length === 0 ? null : (
+          <p className="card-locations-say">
+            {about.map((part, at) => (
+              <span key={at}>{part}</span>
+            ))}
+          </p>
+        )}
         {/* HIS LIVE COUNT CARRIES ITS AGE TOO, in his words rather than in the pipeline's —
             "for sale" reads as a fact about the shop when it is a fact about the last time
             this store looked. Drawn only when the caller hands over the stamp, because
             "not read yet" is a sentence about plumbing and he is owed none of those.
             `Fulfillment.tsx` has to pass `listedAt` for this half to appear. */}
         <p className="card-locations-say">
-          {count(group.on_hand, 'copy here', 'copies here')} ·{' '}
-          {forSale(group.listed.live, group.sold_here)} for sale
-          {readingAgo(listedAt) === null ? '' : `, counted ${readingAgo(listedAt)}`}
+          <span>{count(group.on_hand, 'copy here', 'copies here')}</span>
+          <span>
+            {forSale(group.listed.live, group.sold_here)} for sale
+            {readingAgo(listedAt) === null ? '' : `, counted ${readingAgo(listedAt)}`}
+          </span>
         </p>
         {/* AND WHY IT MOVED, IN HIS WORDS (D115, and the owner's ruling that BOTH figures are
             drawn everywhere — I argued for the estimate alone here and was overruled). The

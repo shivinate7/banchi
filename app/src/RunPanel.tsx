@@ -155,19 +155,20 @@ function scopeWords(asked: ExportAsked): string {
 function previousLine(fetched: ExportFetched, display: (game: string) => string): string {
   const was = Object.entries(fetched.previous ?? {})
   if (was.length === 0) return 'The first export this run has fetched — nothing earlier to set beside it.'
-  return `Last time: ${was
-    .map(
-      ([game, held]) =>
-        `${display(game)} ${held.rows.toLocaleString()} rows / ${held.skus.toLocaleString()} SKUs (${held.file})`,
-    )
-    .join(' · ')} · this one: ${fetched.rows.toLocaleString()} / ${fetched.skus.toLocaleString()}`
+  const games = was.map(
+    ([game, held]) =>
+      `${display(game)} ${held.rows.toLocaleString()} rows / ${held.skus.toLocaleString()} SKUs (${held.file})`,
+  )
+  const list =
+    games.length === 1 ? (games[0] as string) : `${games.slice(0, -1).join(', ')} and ${games[games.length - 1] as string}`
+  return `Last time: ${list}. This one: ${fetched.rows.toLocaleString()} / ${fetched.skus.toLocaleString()}.`
 }
 
 /** What a run was over, in the fewest words that are true. */
 function scopeOf(row: RunSummary): string {
   const label = runBoxLabel(row)
   if (label === null) return '—'
-  if (row.scope != null && !row.scope.whole_box) return `${label} · ${row.scope.cards ?? '?'} cards`
+  if (row.scope != null && !row.scope.whole_box) return `${label} (${row.scope.cards ?? '?'} cards)`
   return label
 }
 
@@ -644,7 +645,7 @@ export function RunPanel({ drawers, openRun, onOpenRun, reloadTick, onIdentify, 
         return 'Reads every photograph with the model'
       case 'join':
         if (st === 'done')
-          return `${count(detail.counts.skus)} SKUs · ${count(detail.counts.queued_main)} to review · ${count(
+          return `${count(detail.counts.skus)} SKUs, ${count(detail.counts.queued_main)} to review and ${count(
             detail.counts.queued_parked,
           )} parked`
         if (st === 'current') return 'Resolve each card against a TCGplayer export'
@@ -804,14 +805,15 @@ export function RunPanel({ drawers, openRun, onOpenRun, reloadTick, onIdentify, 
               </Button>
               <div className="runs-detail-title">
                 <span className="bn-eyebrow">
-                  {detail.scope != null && !detail.scope.whole_box
-                    ? `${count(detail.scope.cards)} ticked cards`
-                    : 'Whole box'}
-                  {' · '}
-                  {whenLabel(detail.updated_at ?? detail.created_at)}
-                  {detail.started_by
-                    ? ` · started from ${STARTER[detail.started_by] ?? capitalize(detail.started_by)}`
-                    : ''}
+                  <span>
+                    {detail.scope != null && !detail.scope.whole_box
+                      ? `${count(detail.scope.cards)} ticked cards`
+                      : 'Whole box'}
+                  </span>
+                  <span>{whenLabel(detail.updated_at ?? detail.created_at)}</span>
+                  {detail.started_by ? (
+                    <span>{`started from ${STARTER[detail.started_by] ?? capitalize(detail.started_by)}`}</span>
+                  ) : null}
                 </span>
                 <h2 className="runs-detail-h">{runBoxLabel(detail) ?? detail.run}</h2>
                 <span className="runs-detail-name">{detail.run}</span>
@@ -932,8 +934,8 @@ export function RunPanel({ drawers, openRun, onOpenRun, reloadTick, onIdentify, 
                 <div className="runs-kv-row">
                   {detail.usage.input_tokens != null ? (
                     <span className="bn-muted">
-                      {detail.usage.input_tokens.toLocaleString()} tokens in · {(detail.usage.output_tokens ?? 0).toLocaleString()}{' '}
-                      out
+                      {detail.usage.input_tokens.toLocaleString()} tokens in and{' '}
+                      {(detail.usage.output_tokens ?? 0).toLocaleString()} out
                     </span>
                   ) : null}
                   {/* THE FIGURE SURVIVES THE PHONE HERE AND NOWHERE ELSE. `.runs-step-cost` is
@@ -953,7 +955,7 @@ export function RunPanel({ drawers, openRun, onOpenRun, reloadTick, onIdentify, 
                     </span>
                   ) : null}
                   {detail.batch_ids.length > 0 ? (
-                    <span className="bn-mono runs-batch">{detail.batch_ids.join(' · ')}</span>
+                    <span className="bn-mono runs-batch">{detail.batch_ids.join(', ')}</span>
                   ) : null}
                 </div>
                 {detail.live ? (
@@ -974,7 +976,7 @@ export function RunPanel({ drawers, openRun, onOpenRun, reloadTick, onIdentify, 
                 title={TITLES.join}
                 state={stepState('join')}
                 summary={summaryOf('join')}
-                cost={<Pill>Free · re-runnable</Pill>}
+                cost={<Pill className="runs-cost-pill"><span>Free</span><span>re-runnable</span></Pill>}
                 open={openStep === 'join'}
                 onToggle={() => toggleStep('join')}
               >
@@ -1119,7 +1121,7 @@ export function RunPanel({ drawers, openRun, onOpenRun, reloadTick, onIdentify, 
                               <option value="">Pick one…</option>
                               {scopeInfo.games.map((row) => (
                                 <option key={row.game} value={row.game}>
-                                  {row.display} · {row.cards} card{row.cards === 1 ? '' : 's'}
+                                  {row.display} ({row.cards} card{row.cards === 1 ? '' : 's'})
                                 </option>
                               ))}
                             </select>
@@ -1230,8 +1232,8 @@ export function RunPanel({ drawers, openRun, onOpenRun, reloadTick, onIdentify, 
                           on the sentence that precedes the press — saying it twice in 200px reads
                           as a defence of the figure rather than a receipt for it. */}
                       <p className="run-receipt-fine">
-                        {fetched.skus.toLocaleString()} SKUs · {fetched.sets.length} set
-                        {fetched.sets.length === 1 ? '' : 's'} · {fetched.conditions.length} condition
+                        {fetched.skus.toLocaleString()} SKUs, {fetched.sets.length} set
+                        {fetched.sets.length === 1 ? '' : 's'} and {fetched.conditions.length} condition
                         {fetched.conditions.length === 1 ? '' : 's'}
                       </p>
                       {fetched.asked.unresolved_hints.length === 0 ? null : (
@@ -1267,7 +1269,7 @@ export function RunPanel({ drawers, openRun, onOpenRun, reloadTick, onIdentify, 
                 title={TITLES.emit}
                 state={stepState('emit')}
                 summary={summaryOf('emit')}
-                cost={<Pill>Free · re-runnable</Pill>}
+                cost={<Pill className="runs-cost-pill"><span>Free</span><span>re-runnable</span></Pill>}
                 open={openStep === 'emit'}
                 onToggle={() => toggleStep('emit')}
               >
@@ -1300,7 +1302,7 @@ export function RunPanel({ drawers, openRun, onOpenRun, reloadTick, onIdentify, 
                 title={TITLES.reconcile}
                 state={stepState('reconcile')}
                 summary={summaryOf('reconcile')}
-                cost={<Pill>Free · re-runnable</Pill>}
+                cost={<Pill className="runs-cost-pill"><span>Free</span><span>re-runnable</span></Pill>}
                 open={openStep === 'reconcile'}
                 onToggle={() => toggleStep('reconcile')}
               >

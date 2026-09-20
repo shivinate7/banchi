@@ -629,7 +629,9 @@ test('the odometer counts the sitting and says which drawers it went to', async 
 
   await shootInto(page, 4, 1, 2)
   await expect(captured).toHaveText('5')
-  await expect(page.locator('.capture-odo-split')).toHaveText('Box 3 3 · Box 4 2')
+  /* THE DOT IS CSS NOW, NOT TYPED TEXT (D218) — `.capture-odo-drawer + .capture-odo-drawer::before`
+     draws it, so the two drawers' own text runs together with no separator character. */
+  await expect(page.locator('.capture-odo-split')).toHaveText('Box 3 3Box 4 2')
 
   /* THE SPAN STAYS IN ONE DRAWER'S INDEX SPACE, because two drawers do not share one. `1–2`
      is box 4's; a sitting-wide span would read `1–3` and mean nothing. */

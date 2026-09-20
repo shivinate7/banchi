@@ -279,6 +279,25 @@ test('one SKU in three slots draws three rows, and each says which copy it is', 
   await expect(page.locator('.value-meta').nth(2)).toContainText('copy 3 of 3')
 })
 
+/* NO TYPED MIDDLE DOT OR BULLET REACHES THE LENS (D218). `.value-meta`'s set/condition/copy
+ * join and the live badge's own separator are drawn by CSS now (`.value-meta > span::after`),
+ * never typed into the row's text. */
+test('no typed middle dot or bullet reaches the value lens (D218)', async ({ page }) => {
+  await open(
+    page,
+    table({
+      copies: [copy({ index: 61, live: 3 }), copy({ index: 102 }), copy({ index: 163 })],
+      boxes: [drawer()],
+      totals: { cards: 3, valued: 3, value: '142.71', at_or_over: 3 },
+    }),
+  )
+  await everyCard(page)
+  await expect(page.locator('.value-row')).toHaveCount(3)
+
+  const text = await page.locator(VIEW).innerText()
+  expect(text).not.toMatch(/[·•]/)
+})
+
 test('a card with no price is counted, named and never ranked', async ({ page }) => {
   /* 390 of 2,245 cards on the owner's store carry no market price. This case is the no-silent-
      drop rule: they are out of the ranking, they are IN the count, and each of the three causes

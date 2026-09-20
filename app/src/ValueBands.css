@@ -190,6 +190,7 @@
   text-overflow: ellipsis;
   white-space: nowrap;
 }
+.value-meta > span:not(:last-child)::after { content: '·'; margin-left: 4px; color: var(--bn-ink-4); }
 /* A LISTED CARD GETS NO DISTINCTION, on the owner's ruling — 70% of the cards under their
    cut-off are live, so dimming or badging them would grey out most of the cheap band. The
    count is a fact in the meta sentence and nothing filters on it. */

@@ -32,6 +32,8 @@
   white-space: nowrap;
   font-variant-numeric: tabular-nums;
 }
+/* D218: the two figures are sibling spans; the seam between them is CSS, never typed. */
+.card-locations-since > span:not(:first-child)::before { content: '·'; margin: 0 6px; color: var(--bn-ink-4); }
 
 /* ---------------------------------------------------------------- the owner: dense ---- */
 
@@ -61,6 +63,9 @@
    40px under 767px and on any coarse pointer, so the thumb floor is met by the kit rather than
    by a number typed here. `align-self: center` because the row's other cell is a heading on a
    baseline and a chip has no baseline worth sharing. */
+/* D218: `.bn-chip` is already `inline-flex; gap: 6px`, so the gap alone spaces the two spans
+   apart; the dot needs only a margin on its own trailing side to clear the label after it. */
+.card-locations-owner .card-locations-rerank-go::before { content: '·'; margin-right: 6px; color: var(--bn-ink-4); }
 .card-locations-owner .card-locations-rerank-slot {
   grid-area: rerank;
   align-self: center;
@@ -118,6 +123,8 @@
 }
 /* SKU, set code and number are machine strings; the condition is a phrase. */
 .card-locations-owner .card-locations-meta-mono { font-family: var(--bn-font-mono); }
+/* D218: SKU, set hint and number are sibling spans now, not a joined string. */
+.card-locations-owner .card-locations-meta-mono > span:not(:first-child)::before { content: '·'; margin: 0 6px; color: var(--bn-ink-4); }
 .card-locations-owner .card-locations-cond { font-family: var(--bn-font-ui); }
 .card-locations-owner .card-locations-cond::before { content: '·'; margin: 0 6px; color: var(--bn-ink-4); }
 /* The stages: figures in Inter, tabular. Only the SKU line above is a machine string.
@@ -131,6 +138,8 @@
   color: var(--bn-ink-3);
   white-space: nowrap;
 }
+/* D218: pushed, staged and headroom are sibling spans; the seam is CSS. */
+.card-locations-owner .card-locations-counts > span:not(:first-child)::before { content: '·'; margin: 0 6px; color: var(--bn-ink-4); }
 /* Narrow: the identity keeps every character and the stage triple drops under it, rather than
    the SKU line being cut to fit the least useful three numbers on the row. */
 @container copies (max-width: 479px) {
@@ -399,6 +408,8 @@
   color: var(--bn-ink-3);
   overflow-wrap: anywhere;
 }
+/* D218: "pooled" and the pool's own key are sibling spans; the seam is CSS. */
+.card-locations-owner .card-locations-boxname > span:not(:first-child)::before { content: '·'; margin: 0 6px; color: var(--bn-ink-4); }
 
 /* The walk-to: a transparent wrapper around the label, with an arrow that says the address is
    the target. */
@@ -484,6 +495,9 @@
   line-height: 1.45;
   color: var(--bn-ink);
 }
+/* D218: harmless on a plain sentence (no span children); joins sibling facts where there are
+   some — `about` (condition, number) and the "on hand · for sale" line. */
+.card-locations-fulfiller .card-locations-say > span:not(:first-child)::before { content: '·'; margin: 0 6px; color: var(--bn-ink-4); }
 
 .card-locations-fulfiller .card-locations-copies {
   display: flex;

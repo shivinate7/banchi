@@ -72,6 +72,7 @@
 .pricehistory-listed-note .pricehistory-machine { margin-left: 6px; }
 /* the export figure is a reading, and a reading is dated — never drawn as a fact about today */
 .pricehistory-listed-age { margin-left: 5px; color: var(--bn-ink-4); }
+.pricehistory-listed-age::before { content: '·'; margin-right: 4px; }
 
 .pricehistory-ranges { display: flex; flex-direction: column; gap: var(--bn-3); }
 
@@ -154,6 +155,7 @@
 
 /* THE SANITY CHECK. Muted, small, directly under the anchor. */
 .pricehistory-bound { font-size: var(--bn-fs-xs); color: var(--bn-ink-3); font-variant-numeric: tabular-nums; }
+.pricehistory-bound > span:not(:last-child)::after { content: '·'; margin-left: 4px; color: var(--bn-ink-4); }
 
 .pricehistory-facts {
   display: grid;

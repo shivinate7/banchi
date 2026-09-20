@@ -145,18 +145,31 @@ export function PositionLabel({
      `Box 3 · departed · B3 #36` USED TO TAKE IT AND NO LONGER DOES (D71). That label names a real
      box and is ranked below; drawing it here put the pre-D41 plain string back on two screens —
      44px and wrapped in the walk panel, the loudest row in the copies list — which is what a
-     person saw the moment they marked a card sold. */
-  const whole = (body: string): ReactNode =>
-    storeKey === null ? (
-      <>{body}</>
+     person saw the moment they marked a card sold.
+
+     D218: THE SERVER'S OWN JOIN IS NEVER RETYPED ON SCREEN. Each part its own span, the seam
+     drawn by CSS on every part but the first (`PositionLabel.css`'s `.position-plain-parts`), so
+     the same rule that ranks a label also renders the one it cannot. `aria-label` still carries
+     the server's `' · '` verbatim, because that is the accessible name and D41 kept it there. */
+  const whole = (parts: readonly string[]): ReactNode => {
+    const body = (
+      <span className="position-plain-parts">
+        {parts.map((part, at) => (
+          <span key={at}>{part}</span>
+        ))}
+      </span>
+    )
+    return storeKey === null ? (
+      body
     ) : (
       <span className="position-plain" role="group" aria-label={label}>
         {body}
         <span className="position-storekey">{storeKey}</span>
       </span>
     )
+  }
 
-  if (parts.length < 2) return whole(parts.join(' · '))
+  if (parts.length < 2) return whole(parts)
 
   const split = parts.map(seam)
 
@@ -164,7 +177,7 @@ export function PositionLabel({
      index is what keeps a two-part or four-part label honest: whatever the formula ends with is
      the finest thing said, and that is what the slot column answers with. */
   const terminal = split[split.length - 1]
-  if (terminal === undefined) return whole(parts.join(' · '))
+  if (terminal === undefined) return whole(parts)
 
   const coarse = split.slice(0, -1)
 
@@ -210,7 +223,7 @@ export function PositionLabel({
   const stated =
     !numbered && STATE.test(terminal.value) && coarse.every((part) => NUMBER.test(part.value))
 
-  if (!numbered && !stated) return whole(parts.join(' · '))
+  if (!numbered && !stated) return whole(parts)
 
   const ranked = stated ? [...coarse, { key: terminal.value, value: storeKey ?? '' }] : coarse
   const slot = numbered ? terminal : null

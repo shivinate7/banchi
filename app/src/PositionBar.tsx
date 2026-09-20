@@ -7,6 +7,7 @@ import {
   sectionBlankSentence,
   sectionDepthOf,
   sentenceOf,
+  sentencePartsOf,
   spansOf,
 } from './position'
 import { isDeparted } from './server'
@@ -67,7 +68,11 @@ export function PositionBar({
   sectionDepth = false,
 }: PositionBarProps) {
   const spans = spansOf(place, sections)
+  /* `sentence` stays the joined form for the accessible name only (D41 kept its dot on
+     purpose). `parts` is what gets drawn — a caller-side split so no typed `·` reaches the
+     screen from this string (D218). */
   const sentence = sentenceOf(place, persona)
+  const parts = sentencePartsOf(place, persona)
   /* TWO SEPARATE FACTS, AND THE SECOND ONE DOES NOT DECIDE THE SHAPE. `sectionDepth` says the
      ruler is drawn; `depth` says what can be painted in it. The old single expression folded
      them together and took 44px out of the row in every state the arithmetic declined to
@@ -111,7 +116,12 @@ export function PositionBar({
           class too — only document order makes that selector return this one. The inversion is
           done entirely with CSS `order`. Reorder this JSX and that assertion silently measures
           the wrong element and goes green over nothing. */}
-      <p className="position-bar-text position-bar-text-box">{sentence}</p>
+      <p className="position-bar-text position-bar-text-box">
+        {parts.main}
+        {parts.detail === null ? null : (
+          <span className="position-bar-text-detail">{parts.detail}</span>
+        )}
+      </p>
       <div className="position-bar-track">
         {spans.length === 0 ? (
           /* A BOX THE SERVER COULD NOT SIZE STILL GETS AN OBJECT, not a void. `spansOf` returns
@@ -176,13 +186,26 @@ export function PositionBar({
             {depth === null ? (
               sectionSentence
             ) : (
-              /* TWO SPANS, AND THE STRING IS NEVER SPLIT TO GET THEM. D132 lets the owner name a
-                 section and nothing forbids a name containing ` · `, so a caption built by
-                 splitting `sentence` cuts a name in half. The parts come out of `sectionDepthOf`
-                 as fields; concatenated they are byte-identical to it. */
+              /* TWO GROUPS OF SPANS, AND NO STRING IS EVER SPLIT TO GET THEM. D132 lets the
+                 owner name a section and nothing forbids a name containing a dot, so a caption
+                 built by splitting a joined string cuts a name in half. `head` and `tail` come
+                 out of `sectionDepthOf` as lists of facts (D218); each fact is its own element
+                 and the separator between them is drawn by CSS, never typed into a string. */
               <>
-                <span className="position-bar-cap-head">{depth.head}</span>
-                <span className="position-bar-cap-tail">{depth.tail}</span>
+                <span className="position-bar-cap-head">
+                  {depth.head.map((fact, i) => (
+                    <span key={i} className="position-bar-cap-fact">
+                      {fact}
+                    </span>
+                  ))}
+                </span>
+                <span className="position-bar-cap-tail">
+                  {depth.tail.map((fact, i) => (
+                    <span key={i} className="position-bar-cap-fact">
+                      {fact}
+                    </span>
+                  ))}
+                </span>
               </>
             )}
           </p>

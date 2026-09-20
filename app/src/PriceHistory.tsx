@@ -156,10 +156,10 @@ function Range({ range }: { range: HistoryRange }) {
       </div>
       {range.bound === null ? null : (
         <p className="pricehistory-bound">
-          could be ${range.bound.low}–${range.bound.high}
-          {percent(range.bound.width_of_vwap) === null
-            ? null
-            : ` · ±${((Number(range.bound.width_of_vwap) / 2) * 100).toFixed(0)}%`}
+          <span>could be ${range.bound.low}–${range.bound.high}</span>
+          {percent(range.bound.width_of_vwap) === null ? null : (
+            <span>±{((Number(range.bound.width_of_vwap) / 2) * 100).toFixed(0)}%</span>
+          )}
         </p>
       )}
 
@@ -273,7 +273,7 @@ export function PriceHistoryPanel({
                 <>
                   what the card is priced against
                   {readAge === null || readAge === undefined ? null : (
-                    <span className="pricehistory-listed-age">· read {readAge}</span>
+                    <span className="pricehistory-listed-age">read {readAge}</span>
                   )}
                 </>
               )}

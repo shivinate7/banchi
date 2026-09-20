@@ -263,14 +263,32 @@ class Measurement:
     scanned_files: int
     words_by_bucket: Dict[str, int] = field(default_factory=dict)
     errors_by_bucket: Dict[str, int] = field(default_factory=dict)
+    by_file: Dict[str, Dict[str, float]] = field(default_factory=dict)
 
     def to_pin(self) -> Dict[str, object]:
-        """The shape written to `scripts/ste-ratchet.json` — no slack, no extra fields."""
-        return {
-            "total": self.total,
-            "by_code": dict(sorted(self.by_code.items())),
-            "ratio_per_1k_words": dict(sorted(self.ratio_per_1k_words.items())),
-        }
+        """The shape written to `scripts/ste-ratchet.json` — no slack, no extra fields.
+
+        ONE ENTRY PER FILE, AND NOTHING REPO-WIDE (D226, amended). The pin used to carry
+        `total`, `by_code` and a ratio per BUCKET. Every one of those is a whole-repo scalar,
+        so any merge that touched markdown anywhere moved a number every branch in flight was
+        also pinning. Measured on 2026-09-19: three re-pins in one evening, every one caused
+        by an unrelated merge rather than by the branch's own prose.
+
+        A SUM CAN BE CUT INTO PIECES, AND THAT IS THE WHOLE FIX. A decision id has to be
+        unique across the repo, so its answer is global and the merge is the only place that
+        can know it. A prose ratio is not like that. Each file's ratio is a pure function of
+        that file's own text. Two branches editing different files now pin different keys and
+        never meet. Two branches editing the SAME file collide on that file's own line, which
+        is a conflict git already makes a person resolve, in the file they were already in.
+
+        `errors` AND `words` RIDE ALONG AS RECEIPTS AND ARE NOT GATED. The ruler stays the
+        ratio, exactly as D226 settled it, because a raw count is a size proxy (r = 0.898
+        against entry size, against r = 0.0020 for the ratio). A file that grows by a well
+        written section adds words and no errors, so its ratio falls and the ratchet is
+        silent. The two figures beside it say why it moved.
+        """
+        return {"files": {path: dict(figures)
+                          for path, figures in sorted(self.by_file.items())}}
 
 
 def measure(paths: Sequence[Tuple[str, str]]) -> Measurement:
@@ -288,10 +306,12 @@ def measure(paths: Sequence[Tuple[str, str]]) -> Measurement:
     exempted_by_class: Dict[str, int] = {ex.name: 0 for ex in EXEMPTIONS}
     words_by_bucket: Dict[str, int] = {}
     errors_by_bucket: Dict[str, int] = {}
+    by_file: Dict[str, Dict[str, float]] = {}
 
     for relpath, text in paths:
         bucket = bucket_for(relpath)
         words = plain_word_count(text)
+        file_errors = 0
         words_by_bucket[bucket] = words_by_bucket.get(bucket, 0) + words
         words_by_bucket[REPO_BUCKET] = words_by_bucket.get(REPO_BUCKET, 0) + words
 
@@ -309,8 +329,20 @@ def measure(paths: Sequence[Tuple[str, str]]) -> Measurement:
                 exempted_by_class[exempted_class] += 1
                 continue
             by_code[raw.code] = by_code.get(raw.code, 0) + 1
+            file_errors += 1
             errors_by_bucket[bucket] = errors_by_bucket.get(bucket, 0) + 1
             errors_by_bucket[REPO_BUCKET] = errors_by_bucket.get(REPO_BUCKET, 0) + 1
+
+        # A FILE WITH NO WORDS HAS NO RATIO, AND GETS ONE ANYWAY, AT ZERO. Dividing by its
+        # word count is the only thing that cannot happen here. An empty or code-only file
+        # carries no prose to be tight or loose about, so 0.0 is the honest reading and it
+        # ratchets like any other: the file may not acquire prose errors later without
+        # somebody re-pinning it.
+        by_file[relpath] = {
+            "errors": file_errors,
+            "words": words,
+            "ratio_per_1k_words": round(file_errors / words * 1000.0, 3) if words else 0.0,
+        }
 
     total = sum(by_code.values())
     exempted_total = sum(exempted_by_class.values())
@@ -328,4 +360,5 @@ def measure(paths: Sequence[Tuple[str, str]]) -> Measurement:
         scanned_files=len(paths),
         words_by_bucket=words_by_bucket,
         errors_by_bucket=errors_by_bucket,
+        by_file=by_file,
     )

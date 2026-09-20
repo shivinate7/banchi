@@ -445,6 +445,8 @@
 }
 .ff-done-name { font-weight: 700; }
 .ff-done-place { color: var(--bn-ink-2); font-variant-numeric: tabular-nums; }
+/* D218: the server's own parts, kept apart by CSS. */
+.ff-done-place > span:not(:first-child)::before { content: '·'; margin: 0 6px; color: var(--bn-ink-4); }
 /* The order number is the string on his packing slip and is matched character by character,
    so it is set in the machine face — the one place a machine string reaches this screen. */
 .ff-done-order,
@@ -498,6 +500,8 @@
 .ff-order-title { color: var(--bn-ink-2); line-height: 1.3; overflow-wrap: anywhere; }
 .ff-order-title b { color: var(--bn-ink); }
 .ff-order-count { color: var(--bn-ink-2); line-height: 1.35; }
+/* D218: the shortfall clause is its own element now, the seam CSS rather than typed. */
+.ff-order-elsewhere::before { content: '·'; margin: 0 6px; color: var(--bn-ink-4); }
 .ff-order-cards { padding: var(--bn-3); }
 .ff-orders-more { margin-top: var(--bn-4); }
 @media (max-width: 479px) {
@@ -545,6 +549,8 @@
 }
 .ff-box-text { flex: 1 1 auto; min-width: 0; display: flex; flex-direction: column; gap: 0; }
 .ff-box-name { font-weight: 700; font-size: 22px; line-height: 1.3; overflow-wrap: anywhere; }
+/* D218: the box's own name is its own span; the seam is CSS. */
+.ff-box-namepart::before { content: '·'; margin: 0 6px; color: var(--bn-ink-4); }
 .ff-box-count { color: var(--bn-ink-2); line-height: 1.3; }
 .ff-box-chev { flex: none; color: var(--bn-ink-2); transition: transform var(--bn-t) var(--bn-ease-spring); }
 .ff-box-head[aria-expanded='true'] .ff-box-chev { transform: rotate(180deg); }
@@ -615,6 +621,9 @@
 .ff-place-part { white-space: nowrap; }
 .ff-place-key { font-weight: 600; color: var(--bn-ink-2); }
 .ff-place-num { font-weight: 800; color: var(--bn-ink); }
+/* D218: the server's `' · '` is never retyped. `PlaceText` hands one `.ff-place-elem` per part;
+   the seam is drawn here, on every part but the first. */
+.ff-place-elem:not(:first-child)::before { content: '·'; margin: 0 6px; color: var(--bn-ink-4); }
 
 /* ---- the card ------------------------------------------------------------------------------ */
 /* Back on the left, the next card in the walk on the right — the two ways off this card. */
@@ -651,6 +660,8 @@
   overflow-wrap: anywhere;
 }
 .ff-card-about { color: var(--bn-ink-2); font-variant-numeric: tabular-nums; }
+/* D218: condition and number are sibling spans; the seam is CSS. */
+.ff-card-about > span:not(:first-child)::before { content: '·'; margin: 0 6px; color: var(--bn-ink-4); }
 /* Where he is in the walk, and which order this card is for. */
 .ff-card-eyebrow {
   color: var(--bn-ink-2);
@@ -659,6 +670,8 @@
 }
 .ff-card-step { font-weight: 700; color: var(--bn-ink); font-variant-numeric: tabular-nums; }
 .ff-card-order b { color: var(--bn-ink); }
+/* D218: the walk position and the order are sibling spans; the seam is CSS. */
+.ff-card-order::before { content: '·'; margin: 0 6px; color: var(--bn-ink-4); }
 
 .ff-photo-wrap { display: flex; flex-direction: column; gap: var(--bn-3); min-width: 0; }
 .ff-photo-btn {
@@ -1121,8 +1134,8 @@
 @media (max-width: 639px) {
   .ff-row-place > span:last-child,
   .ff-place > span:last-child { display: block; }
-  .ff-row-place > span:last-child .ff-place-sep,
-  .ff-place > span:last-child .ff-place-sep { display: none; }
+  .ff-row-place > span:last-child::before,
+  .ff-place > span:last-child::before { content: none; }
 }
 
 /* ---- the receipt sheet ------------------------------------------------------------------ */
@@ -1188,6 +1201,13 @@
 }
 .ff-receipt-what { color: var(--bn-ink-2); font-variant-numeric: tabular-nums; }
 .ff-receipt-name { color: var(--bn-ink); font-weight: 600; }
+/* D218: the name, the place and the order are sibling spans; the seam is CSS on each after the
+   first, drawn twice so an order line and a placeless line both read right. */
+.ff-receipt-place::before,
+.ff-receipt-order::before { content: '·'; margin: 0 6px; color: var(--bn-ink-4); }
+/* D218: `.ff-receipt-place`'s OWN parts (the place label, split the same way `PlaceText`
+   splits it) get the same seam, one level in. */
+.ff-receipt-place > span:not(:first-child)::before { content: '·'; margin: 0 6px; color: var(--bn-ink-4); }
 .ff-receipt-note { margin-top: var(--bn-1); }
 .ff-undo {
   grid-area: undo;

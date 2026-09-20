@@ -7,7 +7,7 @@ import './Runs.css'
  *
  * The server's `phase` says which of the four commands a run is WAITING FOR (`ready`,
  * `identifying`, `identify`, `join`, `emit`, `reconcile`, `done`). The screen draws that as
- * six stages — identify · join · review · price · emit · reconcile — because review and
+ * six stages — identify, join, review, price, emit and reconcile — because review and
  * pricing are the two things a run waits on between join and emit, and a bar that skipped
  * them would jump from a third to five sixths. */
 
@@ -64,7 +64,8 @@ export function stageOf(row: RunSummary): Stage {
 }
 
 /** The six, in the order the bar draws them — the bar's one tooltip teaches them. */
-const STAGE_WORDS = STAGES.map((name) => name.toLowerCase()).join(' · ')
+const STAGE_NAMES = STAGES.map((name) => name.toLowerCase())
+const STAGE_WORDS = `${STAGE_NAMES.slice(0, -1).join(', ')} and ${STAGE_NAMES[STAGE_NAMES.length - 1]}`
 
 /** When something happened, in the words a person uses for it. */
 export function whenLabel(iso: string | null | undefined): string {
@@ -86,13 +87,13 @@ export function whenLabel(iso: string | null | undefined): string {
 /** The six-segment stage bar. */
 export function StageBar({ stage, className }: { readonly stage: Stage; readonly className?: string }) {
   const done = stage.filled >= STAGES.length
-  const says = `${Math.min(stage.filled, STAGES.length)} of ${STAGES.length} stages done · ${stage.label}`
+  const says = `${stage.label} (${Math.min(stage.filled, STAGES.length)} of ${STAGES.length} stages done)`
   return (
     <span
       className={['runs-stagebar', done ? 'runs-stagebar-done' : '', className ?? ''].filter(Boolean).join(' ')}
       role="img"
       aria-label={says}
-      title={`${says} (${STAGE_WORDS})`}
+      title={`${says}. Stages: ${STAGE_WORDS}.`}
     >
       {STAGES.map((name, i) => (
         <span

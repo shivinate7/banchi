@@ -49,7 +49,7 @@ export function BoxRuns({ box, indices }: BoxRunsProps) {
       ? 'Pick a box.'
       : here.length === 0
         ? 'Nothing running'
-        : here.map((row) => runningFor(row)).join(' · ')
+        : here.map((row) => runningFor(row)).join(', ')
 
   return (
     <div className="boxruns" data-live={here.length > 0 ? 'true' : undefined}>

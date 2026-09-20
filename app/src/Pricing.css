@@ -108,12 +108,14 @@
 .pricing-run-on .pricing-run-check { background: var(--bn-accent); border-color: var(--bn-accent); color: var(--bn-on-accent); }
 .pricing-run-text { display: flex; flex-direction: column; gap: 1px; min-width: 0; }
 .pricing-run-name { font-size: var(--bn-fs-md); font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.pricing-run-day::before { content: '·'; margin: 0 4px; color: var(--bn-ink-4); font-weight: 500; }
 .pricing-run-meta { display: flex; gap: var(--bn-2); font-size: var(--bn-fs-xs); color: var(--bn-ink-3); min-width: 0; }
 .pricing-run-id { font-family: var(--bn-font-mono); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .pricing-run-owes { max-width: 200px; overflow: hidden; text-overflow: ellipsis; display: inline-block; line-height: 22px; }
 
 .pricing-notice { max-width: 72ch; }
 .pricing-machine { font-family: var(--bn-font-mono); font-size: var(--bn-fs-xs); color: var(--bn-ink-3); }
+.pricing-machine > span:not(:last-child)::after { content: '·'; margin-left: 4px; color: var(--bn-ink-4); }
 .pricing-empty-code { display: block; margin-top: var(--bn-2); }
 
 /* THE KIT HIDES A BUSY BUTTON'S LABEL UNDER ITS RING. Here the label IS the progress — "Reading 3 of
@@ -378,6 +380,7 @@
 .pricing-cheap-says { font-size: var(--bn-fs-base); font-weight: 600; color: var(--bn-ink-2); }
 .pricing-cheap[data-override='true'] .pricing-cheap-says { color: var(--bn-accent); }
 .pricing-cheap-count { font-size: var(--bn-fs-sm); color: var(--bn-ink-3); }
+.pricing-cheap-count > span:not(:last-child)::after { content: '·'; margin-left: 4px; color: var(--bn-ink-4); }
 
 .pricing-cheap-set { display: flex; flex-direction: column; gap: var(--bn-2); }
 .pricing-cheap-key { color: var(--bn-ink-3); }
@@ -592,6 +595,7 @@
 .pricing-live[data-none='true'] { color: var(--bn-ink-3); font-weight: 500; }
 .pricing-live[data-none='true'] .bn-dot { background: var(--bn-ink-4); box-shadow: none; animation: none; }
 .pricing-live-age { font-weight: 500; color: var(--bn-ink-3); }
+.pricing-live-age::before { content: '·'; margin-right: 4px; color: var(--bn-ink-4); }
 
 /* ---- the caption and the grid --------------------------------------------------------------- */
 .pricing-caption,
@@ -709,7 +713,12 @@
 }
 .pricing-meta > span { flex: none; }
 .pricing-meta .bn-mono { font-size: var(--bn-fs-xs); }
-.pricing-meta-sep { color: var(--bn-ink-4); }
+/* THE DOT IS CSS NOW, NOT A TYPED CHILD (D218): each fact is a direct child of `.pricing-meta`
+   (a plain span, or one of the two wrapper spans below), and the SAME 5px flex gap this row
+   already had reappears as the ::after's own margin, so the dot sits exactly where the typed
+   `pricing-meta-sep` span used to draw it — 5px off the text before it, then the row's own
+   flex gap before the next fact. */
+.pricing-meta > *:not(:last-child)::after { content: '·'; margin-left: 5px; color: var(--bn-ink-4); }
 /* a condition and a set every row of the section shares: kept for the reader, dimmed for the eye */
 .pricing-meta-same { color: var(--bn-ink-4); }
 .pricing-row-span,

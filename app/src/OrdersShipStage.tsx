@@ -132,7 +132,9 @@ export function ShipStage({ payload }: { readonly payload: OrdersPayload | null 
         kind: 'ok',
         icon: 'truck',
         title: 'Export read',
-        body: `${answer.shipments} order${answer.shipments === 1 ? '' : 's'} · ${answer.name}`,
+        // D218: `toast.body` is a plain string, so this is a sentence rather than two elements
+        // joined by a typed dot.
+        body: `Read ${answer.shipments} order${answer.shipments === 1 ? '' : 's'} from ${answer.name}.`,
       })
     } catch (err) {
       setFailure(describeFailure(err))
@@ -402,8 +404,11 @@ export function ShipStage({ payload }: { readonly payload: OrdersPayload | null 
               {batch.name}
             </span>
             <span className="shipping-file-meta">
-              {batch.shipments} order{batch.shipments === 1 ? '' : 's'} · held in memory for about {minutesOf(batch.expires_in)} · nothing
-              written to disk
+              <span>
+                {batch.shipments} order{batch.shipments === 1 ? '' : 's'}
+              </span>
+              <span>held in memory for about {minutesOf(batch.expires_in)}</span>
+              <span>nothing written to disk</span>
             </span>
           </div>
           <div className="shipping-file-actions">
@@ -473,7 +478,10 @@ export function ShipStage({ payload }: { readonly payload: OrdersPayload | null 
                 download={batch.file.name}
               >
                 <Icon name="download" size={16} />
-                Download · {batch.parcel_count} order{batch.parcel_count === 1 ? '' : 's'}
+                <span>Download</span>
+                <span className="shipping-download-count">
+                  {batch.parcel_count} order{batch.parcel_count === 1 ? '' : 's'}
+                </span>
               </a>
             </div>
           </section>
