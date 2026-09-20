@@ -152,6 +152,7 @@ from server import tcg_import  # noqa: E402
 # the handler for exactly that reason: D32 puts the imports inside `crop-preview`
 # because Pillow may genuinely be absent, and there is no equivalent risk here.
 from pipeline import pricehistory  # noqa: E402
+from pipeline import productview  # noqa: E402
 # THE SAME RULE, AND IT IS WHY THE RATES MOVED OUT OF `cli/cmd_identify.py`. `identify/cost.py`
 # reaches `decimal` and nothing else, and `identify/__init__.py` is a docstring with no imports
 # in it, so this costs one stdlib module. The command module could not be imported for them:
@@ -3100,6 +3101,77 @@ def _readings() -> Tuple[Dict[str, _Reading], List[dict]]:
     return found, sources
 
 
+def _bucket_at(start: str) -> int:
+    """A `price_history` bucket's own `start` (an ISO date, "YYYY-MM-DD") as a Unix second at
+    that day's UTC midnight — the same unit `readings.Reading.at` already uses, so a caller
+    on the other side of `do_pipeline_price_now` reads one field regardless of which table
+    answered. `0` for anything that will not parse, matching `store/readings.py:_parse_reading`'s
+    own skip-rather-than-raise rule."""
+    try:
+        return int(datetime.strptime(start, "%Y-%m-%d").replace(tzinfo=timezone.utc).timestamp())
+    except ValueError:
+        return 0
+
+
+def do_pipeline_price_now(skus: Sequence[str]) -> dict:
+    """`GET /pipeline/price-now?sku=...` — for each named SKU, the closest thing this store
+    has to "what the market says today": the price-history archive's own newest `month`
+    bucket (D219) where one exists, and the `readings` table (D189)
+    where it does not.
+
+    **THIS ROUTE REPLACES AN EARLIER, NARROWER ONE.** `#/revenue`'s first cut read `readings`
+    alone. Measured against the owner's real store: 93 of 539 sold names had a `readings`
+    entry, covering $606 of $66,335 gross (0.9%), and NONE of those 93 were sealed product —
+    which is 93% of the owner's money. `readings` is a cache built for `#/pricing`'s own
+    on-hand walk; a sold copy is routinely both gone from inventory AND never priced by that
+    walk in the first place, so leaning on it here was answering for under one percent of
+    what this feature was built to cover.
+
+    THE ARCHIVE IS TRIED FIRST AND `readings` IS THE FALLBACK, never the reverse and never
+    merged into one average. `pkmnscan archive sweep` (D219) walks every
+    SKU this store has ever recorded, sold or held, across four ranges — sealed product
+    included, because unlike `readings` it is not filtered through on-hand inventory or
+    `#/pricing`'s own live-export walk. `month` is the finest range the archive keeps, so its
+    newest bucket is the closest thing to a live quote the archive can offer; a bucket with no
+    `market` (a real day the endpoint answered with nothing) is skipped in favor of an older
+    one that has a price, rather than counted as this SKU's answer.
+
+    A SKU NEITHER SOURCE HAS EVER PRICED IS SIMPLY ABSENT FROM THE RESULT, never a null or a
+    zero — D159's `no_reading` shape, which every reader of either table now inherits rather
+    than each inventing its own. `source` says which table answered (`archive` or `live`) —
+    carried through rather than discarded, because the two ages mean different things: an
+    archived bucket's `at` is the calendar day the bucket covers, and a `readings` row's `at`
+    is the moment something last fetched or joined it.
+
+    A PLAIN READ, LIKE ITS PREDECESSOR: no socket, no run, no on-hand inventory anywhere in
+    the walk. Still gated behind a press and not a mount, for the reason `#/revenue`'s own
+    ruling gave that route: both tables are caches, however cheap the read is, and a screen
+    that fetched on every visit would draw a number that looks live and is not.
+    """
+    try:
+        snapshot = Store().read()
+    except (files.StoreError, OSError, ValueError, TypeError):
+        snapshot = None
+    found, _sources = _readings()
+    out: Dict[str, dict] = {}
+    for sku in skus:
+        sku = str(sku)
+        if snapshot is not None:
+            month_buckets = [
+                b for b in snapshot.archive.for_sku(sku)
+                if b.range == "month" and b.market
+            ]
+            if month_buckets:
+                latest = max(month_buckets, key=lambda b: b.start)
+                out[sku] = {"market": latest.market, "at": _bucket_at(latest.start), "source": "archive"}
+                continue
+        reading = found.get(sku)
+        if reading is None:
+            continue
+        out[sku] = {"market": reading.market, "at": reading.at, "source": "live"}
+    return {"prices": out}
+
+
 #: Why a card on hand carries no market price. Three causes, three remedies, and a screen
 #: that collapsed them would be telling the operator to do one thing for three problems.
 _NEVER_IDENTIFIED = "never_identified"
@@ -5361,6 +5433,97 @@ def do_pipeline_history(name: str, sku: str) -> dict:
     directory = _open_run(name)
     wanted = _wanted_sku(sku)
     return _history_for_entry(_history_row(directory, wanted), wanted, {"run": directory.name})
+
+
+def do_product_history(sku: str) -> dict:
+    """`GET /pipeline/products/<sku>/history` — one SKU's market history, addressed by the
+    product rather than by a run (D227).
+
+    ARCHIVE FIRST. `pipeline/productview.py:archive_payload` reads `store/pricearchive.py`
+    for every range this store has ever swept for this SKU. When it has anything at all, that
+    is the whole answer and NOTHING LEAVES THIS MACHINE — the archive never deletes a row
+    (`store/pricearchive.py`'s own docstring), so a SKU already swept needs no live read to
+    answer this route.
+
+    LIVE, ONLY WHEN THE ARCHIVE HAS NEVER SEEN THIS SKU. Then this reaches
+    `pipeline/pricehistory.py:Market` exactly the way `_history_for_entry` already does for
+    `#/pricing`'s panel — same cache, same refusal vocabulary — and answers a `Series`-shaped
+    payload with the vwap/bound/momentum that live reading actually carries. NEITHER PATH
+    EVER WRITES: not to the archive, not to the corpus. `pkmnscan archive sweep` is the one
+    press that folds a live read back into the table, and it stays a press.
+
+    `not_catalogued` is refused before either path runs — the same D22 permanent state
+    `_history_for_entry` already names for `misc`.
+    """
+    wanted = _wanted_sku(sku)
+    snapshot = Store().read()
+    try:
+        row = productview.row_for_sku(snapshot, wanted)
+    except productview.ProductNotFound:
+        raise PipelineRefusal(
+            HTTPStatus.NOT_FOUND,
+            "sku_unknown",
+            f"No card in this store has ever carried SKU {wanted}.",
+        ) from None
+
+    if not pricehistory.catalogued_row(row):
+        raise PipelineRefusal(
+            HTTPStatus.CONFLICT,
+            "not_catalogued",
+            f"{row.get(tcgcsv.NAME_COLUMN) or wanted} is not in a catalogued product line, "
+            f"so there is no product to look a history up by. D22 makes that the permanent "
+            f"state for `misc` rather than a missing export.",
+        )
+
+    base = {
+        "sku": wanted,
+        "product_id": None,
+        "name": row.get(tcgcsv.NAME_COLUMN),
+        "set_name": row.get(tcgcsv.SET_COLUMN),
+        "condition": row.get(tcgcsv.CONDITION_COLUMN),
+    }
+
+    archived = productview.archive_payload(snapshot.archive, wanted)
+    if archived is not None:
+        return {
+            **base,
+            "source": "archive",
+            "ranges": archived,
+            "history_begins": productview.history_begins(archived),
+            "never_sold": all(r["buckets"] == 0 for r in archived),
+        }
+
+    # THE ARCHIVE HAS NEVER SWEPT THIS SKU — the one case this route reaches out for itself.
+    market = pricehistory.Market(cache_dir=market_cache_dir(), user_agent=_history_user_agent())
+    try:
+        reading = market.reading_for_row(row)
+    except pricehistory.Blocked as exc:
+        raise PipelineRefusal(HTTPStatus.BAD_GATEWAY, "history_blocked", str(exc)) from None
+    except pricehistory.Unreachable as exc:
+        raise PipelineRefusal(
+            HTTPStatus.BAD_GATEWAY,
+            "history_unreachable",
+            f"{exc} Nothing is wrong with this card — a public mirror did not answer, and "
+            f"the reading is the only thing lost. Try again.",
+        ) from None
+    except pricehistory.NotResolvable as exc:
+        raise PipelineRefusal(HTTPStatus.CONFLICT, "history_unresolved", str(exc)) from None
+
+    ranges = [
+        _history_series(reading.series[r])
+        for r in pricehistory.DEFAULT_RANGES
+        if r in reading.series
+    ]
+    return {
+        **base,
+        "product_id": reading.product_id,
+        "source": "live",
+        "ranges": ranges,
+        "history_begins": productview.history_begins(
+            [{"from": r["from"]} for r in ranges]
+        ),
+        "never_sold": not reading.series,
+    }
 
 
 def _wanted_sku(sku: str) -> str:

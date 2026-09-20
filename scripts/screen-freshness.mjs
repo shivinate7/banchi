@@ -207,9 +207,18 @@ const RECORDED = {
     // The claims panel's free count (D174): what a live send is holding.
     // It is the step that comes BEFORE the release below, which is why it is a read at all.
     'getSubmissions',
+    // `#/revenue`'s "then against now" (D225): the price-history archive first,
+    // `readings` (D189) as its fallback, no run and no on-hand inventory in the walk — a
+    // plain read, unlike `getPriceHistory`/`getPriceTrends` above, so its "no boot
+    // subscription needed" answer is the same read-only shape as every other entry here.
+    'getSoldPrices',
     // D192 (store-scaling item 2): the per-box read replacing the whole-store
     // `getInventory` on `#/inventory`, and the lean top-K deck read for Home's hero.
     'getInventoryBox', 'getRecentCards',
+    // The per-product view's own read (D227): archive-first, live
+    // fallback only for a SKU the archive has never swept. Read-only, like every other
+    // entry in this list.
+    'getProductHistory',
   ],
   writes: [
     'capture', 'updateCard', 'undoCapture', 'reshootPhoto', 'answerReview', 'standDown',

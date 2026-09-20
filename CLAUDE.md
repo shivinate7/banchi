@@ -221,10 +221,21 @@ make catalog-mirror # STEP 9 PIECE 3, DRY RUN ONLY as shipped. ARGS=--dry-run HE
 ./pkmnscan archive  sweep [--write] # THE PRICE-HISTORY ARCHIVE (D219).
                                    #   The source's 357-day window slides. This press reads
                                    #   every range for every sku this store has sold or holds,
-                                   #   and keeps a copy past that ceiling. Previews. UNLIKE
-                                   #   `readings adopt`, `--write` NEVER clears a row a pass
-                                   #   did not mention. A bucket that ages out of the source
-                                   #   is never deleted here. No timer runs this. It is a press.
+                                   #   sold value first (D223), and
+                                   #   keeps a copy past that ceiling. PREVIEWS WITH NO NETWORK
+                                   #   CALL (D224): subject count, what the
+                                   #   archive already holds, what is fresh enough to skip.
+                                   #   `--write` commits in small chunks as it reads, never
+                                   #   once at the end, so an interrupt loses at most one
+                                   #   chunk. A resumed pass never re-reads a sku it already
+                                   #   holds fresh from this same pass. UNLIKE `readings
+                                   #   adopt`, `--write` NEVER clears a row a pass did not
+                                   #   mention. A bucket that ages out of the source is never
+                                   #   deleted here. The press paces itself on a MEASURED
+                                   #   interval and backs off once on a throttle
+                                   #   (D222), naming it correctly rather
+                                   #   than as an authorization problem. No timer runs this.
+                                   #   It is a press.
 ./pkmnscan archive  show [--sku ID] # what the archive holds, and which ranges were last
                                    #   swept. `--sku` also prints one sku's own buckets.
 ./pkmnscan queue    refresh [--export <file.csv>] [--write]
@@ -263,10 +274,11 @@ the browser. No second store. No auth. `app/src/server.ts` is the only client-ca
 
 ### The screens
 
-**The app has thirteen screens and thirteen routes — twelve the owner's, one the Fulfiller's.**
-Two routes are off-nav (the `aside` group — Kit and Cards to pull), so the nav itself draws
-eleven rows. `app/src/App.tsx`'s `ROUTES` table is the count. Recount from the table, never a
-sentence (see "the census" below).
+**The app has fourteen screens and fourteen routes — thirteen the owner's, one the Fulfiller's.**
+Three routes are off-nav (the `aside` group — Kit, Cards to pull, and the per-product view
+D226 added), so the nav itself draws eleven rows. `app/src/App.tsx`'s
+`ROUTES` table is the count. Recount from the table, never a sentence (see "the census"
+below).
 
 ```
 #/             Home           one ranked sentence of what the store is waiting on (D121),
@@ -293,6 +305,8 @@ sentence (see "the census" below).
 #/codes        Codes          code-card track: QR ledger, lanes, hand-off
 #/fulfillment  Cards to pull  the Fulfiller's whole product. NO shell (D5)
 #/gallery      Kit            the component sheet, rendered by the build
+#/product      Product history one product's market history and the owner's own sales on
+                              it, by SKU. Off-nav, deep-linked (D226)
 ```
 
 **`#/orders` and `#/shipping` are two stages of one screen and two routes.** `OrdersHub` with a
@@ -302,8 +316,10 @@ stages, not two unrelated views.
 **`#/inventory` is the one owner-side view of stored cards** (D31). `#/boxes` and `#/pull` are
 not routes. Box operations live in its Manage box sheet.
 
-**Two routes are deliberately off-nav** (`OFF_NAV` in App.tsx): the Fulfiller's screen and the
-kit. Both stay registered routes, reachable from elsewhere.
+**Three routes are deliberately off-nav** (`OFF_NAV` in App.tsx): the Fulfiller's screen, the
+kit, and `#/product`, the per-product view (D226). It is a deep link reached
+by SKU, never a destination anyone browses to cold. All three stay registered routes,
+reachable from elsewhere.
 
 **The census.** Every route or screen count in this file, README.md and docs/map.py is
 reconciled against `ROUTES` by `make docs-audit`'s `route census` row, and every spec's pinned
@@ -381,7 +397,7 @@ read off a declared class.
 
 ### The shell
 
-`App.tsx` is a hand-written hash router and the shell: thirteen hash routes, no routing
+`App.tsx` is a hand-written hash router and the shell: fourteen hash routes, no routing
 library, one table. It renders for every screen except the Fulfiller's (`persona: 'fulfiller'`,
 not rendered — not focusable, not reachable by a screen reader).
 
@@ -900,6 +916,12 @@ D218 A typed dot is a defect wherever it is typed, and the reader is the mechani
 D219 The archive key carries the range, and the archive never deletes
 D220 Orders is inventory's screen with orders in the rail, and the walk is a mode of it
 D221 Money stays mono, and the rule is amended to match
+D222 The press paces itself on a measurement, and names a throttle
+D223 Sold value goes first, and sealed product is a named gap
+D224 The preview costs nothing, and the press commits as it goes
+D225 Sales stops counting a refund as revenue, and a shortfall against today's market is not a loss
+D226 A prose ratchet gets a reader, and bytes are not the ruler
+D227 A route, not a lens, and never one line for two kinds of observation
 ```
 
 D116-D118: D117 exists and slots between them — a third branch's number, resolved on merge.

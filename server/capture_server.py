@@ -64,6 +64,10 @@
     POST   /pipeline/runs/<name>/export   fetch this run's Filtered Export from TCGplayer
     GET    /pipeline/runs/<name>/history   what one SKU has been selling for. Public hosts
     GET    /pipeline/runs/<name>/trends    many SKUs' shape at once, for the row strip
+    GET    /pipeline/products/<sku>/history   one product's market history, addressed by the
+                                           SKU rather than by a run — archive-first, live only
+                                           when the archive has never swept this SKU
+                                           (D227)
     POST   /pipeline/runs/<name>/<step>    join | emit | reconcile. Free, run in the request
     GET    /pipeline/markdowns             every stale-listing markdown, newest first (D100)
     POST   /pipeline/markdowns             which live listings are not selling, and what each
@@ -631,6 +635,11 @@ _RUN_HISTORY_RE = re.compile(r"^/pipeline/runs/([A-Za-z0-9._-]+)/history$")
 # a reading has and the strip needs a shape and a sign, and a shared handler would send the
 # panel's payload forty-six times to draw the strip's.
 _RUN_TRENDS_RE = re.compile(r"^/pipeline/runs/([A-Za-z0-9._-]+)/trends$")
+# The per-product view's own read (D227), addressed by SKU rather than by a
+# run — the same character class a SKU is elsewhere validated against (`_wanted_sku` strips
+# and requires non-empty; this pattern is a coarser first filter, same as every other ID
+# pattern in this file).
+_PRODUCT_HISTORY_RE = re.compile(r"^/pipeline/products/([A-Za-z0-9._-]+)/history$")
 # What a fetch WOULD ask TCGplayer for, before one is pressed (D76). Same hazard as the
 # three above and the same remedy: `scope` is `[a-z]+`, so `_RUN_STEP_RE` would answer it
 # `no_such_step` if this were declared after it. GET only — it presses nothing.
@@ -12586,6 +12595,19 @@ class CaptureHandler(BaseHTTPRequestHandler):
                         band=band, box=box, after=after, limit=limit
                     ),
                 )
+            if path == "/pipeline/price-now":
+                # NAMED SKUs, THE ARCHIVE FIRST AND `readings` AS ITS FALLBACK
+                # (D219, D189) — `#/revenue`'s sold-cards comparison
+                # (D225) over a SKU that has long since left the store, which
+                # `/pipeline/value`'s on-hand filter would silently drop, and which
+                # `readings` ALONE answered for under 1% of the owner's real gross. A plain
+                # read, costs nothing, reaches no public mirror — see
+                # `do_pipeline_price_now`'s own header for why the screen still gates it
+                # behind a press rather than a mount.
+                asked = parse_qs(parsed.query, keep_blank_values=True).get("sku") or []
+                return self._json(
+                    HTTPStatus.OK, pipeline_routes.do_pipeline_price_now(asked)
+                )
             if path == "/pipeline/submissions":
                 # WHAT IS CLAIMED RIGHT NOW (D174). Free, reads the store and
                 # holds nothing — the count that has to be on screen before the control that
@@ -12677,6 +12699,15 @@ class CaptureHandler(BaseHTTPRequestHandler):
                 return self._json(
                     HTTPStatus.OK,
                     pipeline_routes.do_pipeline_trends(match.group(1), asked),
+                )
+            match = _PRODUCT_HISTORY_RE.match(path)
+            if match:
+                # ONE PRODUCT'S OWN ADDRESS, NOT A RUN'S. Archive-first: this reaches out to
+                # a public host only when `store/pricearchive.py` has never swept this SKU
+                # (D227). Never writes.
+                return self._json(
+                    HTTPStatus.OK,
+                    pipeline_routes.do_product_history(match.group(1)),
                 )
             match = _RUN_SCOPE_RE.match(path)
             if match:
