@@ -532,7 +532,9 @@ says still owes, and `record_pull` refuses if the line is already full. The ship
 meaningless in the middle of a pull. The walk drops the two words; every other screen keeps them.
 **Superseded the same evening, once §13 made the pane one component:** the owner ruled *drop it
 everywhere*, `#/inventory` included, rather than carry a flag that makes the shared pane differ
-by two words. `#8 of 34` is the whole caption on every screen.
+by two words. `#8 of 34` is the whole caption on every screen. **And the section line too**
+(owner, later the same evening, asked by name): D20's growing-section caption reads
+`card 7 of 14`, never `card 7 of 14 so far`; a settled section still reads `card 7 of 14 slots`.
 
 **The row's address stays as built — `#8 RB Origins Commons` — until the owner has walked with
 it.** The owner's word: leave it, and ask again after real use. A session that changes it before
