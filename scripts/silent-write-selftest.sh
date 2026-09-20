@@ -326,6 +326,25 @@ allows "an npm install"                         "npm --prefix app ci >/dev/null 
 allows "the audit itself"                       "python3 scripts/docs-audit.py >/dev/null 2>&1"
 
 echo ""
+echo "  the two guards must not contradict each other"
+# ADDED 2026-09-20 WITH `guard-shell.py`'s NINTH CLAUSE. That clause refuses a pipe into
+# `tail` over a command that BLOCKS and narrates — `make merge ARGS="<n> --confirm"` is the
+# one entry in its roster — and `make merge` is also in THIS guard's write roster. So the
+# advice printed here for that verb may not be the command the neighbouring guard refuses one
+# call later. A session handed a refusal whose remedy is itself refused concludes the guards
+# are noise, and the next thing it reaches for is the hatch.
+
+out="$(python3 "$GUARD" --explain 'make merge ARGS="437 --confirm" >/dev/null 2>&1' 2>&1)"
+case "$out" in *"| tail"*) bad "the advice for a BLOCKING, narrating verb spells out a pipe the other guard refuses" ;;
+  *) ok "the advice for \`make merge\` never spells a pipe into \`tail\`" ;; esac
+case "$out" in *"waits for MINUTES"*) ok "…and says why: it waits and narrates, so a pipe hides the heartbeat" ;;
+  *) bad "the advice does not say why a pipe is wrong for this verb" ;; esac
+
+out="$(python3 "$GUARD" --explain 'git commit -m x >/dev/null 2>&1' 2>&1)"
+case "$out" in *"| tail -40"*) ok "and a git write, which does NOT block, still gets the keep-it-and-read-it pipe" ;;
+  *) bad "the ordinary advice was lost — a git write does not block and the pipe is right for it" ;; esac
+
+echo ""
 echo "  the escape hatch, in both of PKMNSCAN_KILL's two forms"
 
 allows "inline in the command"  "PKMNSCAN_SILENT=off git commit -m x >/dev/null 2>&1"

@@ -150,6 +150,18 @@ if argv[:2] == ["pr", "checks"]:
     print("All checks were successful")
     sys.exit(0)
 
+# `gh pr view <n> --json ...` — what the WAIT asks to learn whether the branch can still
+# merge. Answered MERGEABLE unless the fixture wrote `mergeable.txt`, because a fake that
+# could not answer at all would leave every claim-half arm exercising the reader's
+# unreadable path and nothing else.
+if argv[:2] == ["pr", "view"]:
+    book = os.path.join(home, "mergeable.txt")
+    state = open(book).read().strip() if os.path.exists(book) else "MERGEABLE"
+    print(json.dumps({"number": 1, "title": "t", "url": "u", "state": "OPEN",
+                      "mergeable": state, "mergeStateStatus": "CLEAN",
+                      "headRefName": "feature", "mergeCommit": None}))
+    sys.exit(0)
+
 if argv[:1] == ["api"]:
     found = re.search(r"commits/([^/?]+)/check-runs", " ".join(argv))
     if not found:
@@ -966,6 +978,139 @@ def main() -> int:
            "the first complete reading was not concluded from, because the next one was "
            "bigger — the settle is what catches a workflow GitHub dispatches late",
            str(len(eyes.asked)))
+
+        # ------------------- and whether it can still merge, watched WHILE it waits
+        # OBSERVED ON PR #436, 2026-09-20. The wait watched check runs and nothing else, so a
+        # branch that went DIRTY under it — another session merged first — kept it sitting
+        # while `gh pr view 436` said OPEN / DIRTY. The claim commit's checks are unaffected
+        # by somebody else's merge, so they go on passing and the 45-minute deadline is the
+        # only thing that ends it.
+        #
+        # THE `UNKNOWN` ARM IS THE ONE THAT MATTERS MOST and it is mutation-proved below:
+        # GitHub answers `UNKNOWN` routinely while it computes, so reading that as a conflict
+        # would abort every merge this repo makes. Only the word `CONFLICTING` ends the wait.
+
+        class Answers:
+            """A mergeability reader answering from a list, holding the last, counting."""
+
+            def __init__(self, *states) -> None:
+                self.states = list(states)
+                self.asked = 0
+
+            def __call__(self) -> str:
+                self.asked += 1
+                return self.states[min(self.asked - 1, len(self.states) - 1)]
+
+        print("\n  -- a branch that goes CONFLICTING under the wait ends it at once --")
+        eyes = Scripted(reading(module, done("check"), running("design-check (1)")))
+        watch = Clock()
+        mergeable = Answers("MERGEABLE", "CONFLICTING")
+        green, lines = quietly(module.wait_for_checks, "abc1234", 436, 0, eyes, watch.sleep,
+                               watch.now, None, mergeable)
+        joined = "\n".join(lines)
+        ok(not green and "CONFLICTING" in joined,
+           "PR #436's shape: the checks are still running and green, and the wait ends "
+           "anyway because the merge can no longer happen", joined)
+        ok("Main moved underneath the branch" in joined and "origin/main" in joined,
+           "and it says WHY and what to do — main moved, bring it in and resolve — rather "
+           "than reporting a timeout for a merge that was never going to succeed", joined)
+        ok(watch.now() < module.CHECK_DEADLINE_SECONDS,
+           "and it ends EARLY: the whole defect was spending the full deadline on this",
+           str(watch.now()))
+
+        print("\n  -- `UNKNOWN` is never read as conflicted --")
+        # A roster that never completes, so the ONLY thing that could end this wait before
+        # the deadline is the mergeability arm. It answers UNKNOWN forever.
+        eyes = Scripted(reading(module, running("check")))
+        watch = Clock()
+        mergeable = Answers("UNKNOWN")
+        green, lines = quietly(module.wait_for_checks, "abc1234", 99, 0, eyes, watch.sleep,
+                               watch.now, None, mergeable)
+        joined = "\n".join(lines)
+        ok(not green and "gave up" in joined and "CONFLICTING" not in joined,
+           "GitHub computes mergeability asynchronously and says `UNKNOWN` while it does. "
+           "Reading that as a conflict would abort EVERY merge, so the wait runs to its own "
+           "deadline on the checks instead — the mergeability arm says nothing", joined)
+        ok(mergeable.asked > 1,
+           "and it really was asked, repeatedly — an arm that is never reached would pass "
+           "this for the wrong reason", str(mergeable.asked))
+
+        print("\n  -- an unreadable answer, and a reader that throws, are both no news --")
+        # A ROSTER THAT NEVER COMPLETES, for the same reason the `UNKNOWN` arm uses one: a
+        # wait whose checks go green in two reads has spent two seconds of the fake clock and
+        # has NOT ASKED about mergeability at all, so it would pass this whatever the reader
+        # answered. That is the shape `a-guard-must-see-its-subject` names, and it survived a
+        # mutation here before this comment existed.
+        class Throwing:
+            def __init__(self) -> None:
+                self.asked = 0
+
+            def __call__(self) -> str:
+                self.asked += 1
+                raise RuntimeError("the network went away")
+
+        for label, answers in (("an empty answer", Answers("")),
+                               ("a word this guard does not know", Answers("BLOCKED")),
+                               ("a reader that RAISES", Throwing())):
+            eyes = Scripted(reading(module, running("check")))
+            watch = Clock()
+            green, lines = quietly(module.wait_for_checks, "abc1234", 99, 0, eyes,
+                                   watch.sleep, watch.now, None, answers)
+            joined = "\n".join(lines)
+            ok(not green and "gave up" in joined and "CONFLICTING" not in joined,
+               "{0} does not end the wait — absence is not evidence here either, and the "
+               "checks are what decide".format(label), joined)
+            ok(answers.asked > 1,
+               "and it was really asked — a wait whose checks go green in two reads never "
+               "reaches this arm at all, and would pass it for the wrong reason",
+               str(answers.asked))
+
+        print("\n  -- it is asked no oftener than the check poll, and far less --")
+        # THE SHIPPED CONSTANTS, not this fixture's: `waitable()` sets the poll to 0 so the
+        # fake clock can spend a deadline in a blink, and comparing against that would be an
+        # assertion about the fixture.
+        shipped = merge_pr_module()
+        ok(shipped.MERGEABILITY_RECHECK_SECONDS >= shipped.CHECK_POLL_SECONDS,
+           "the recheck interval is never shorter than the check poll — every reading is a "
+           "`gh pr view` against somebody's rate limit",
+           "{0} vs {1}".format(shipped.MERGEABILITY_RECHECK_SECONDS,
+                               shipped.CHECK_POLL_SECONDS))
+        eyes = Scripted(reading(module, running("check")))
+        watch = Clock()
+        counted = Answers("MERGEABLE")
+        quietly(module.wait_for_checks, "abc1234", 99, 0, eyes, watch.sleep, watch.now,
+                None, counted)
+        rounds = len(eyes.asked)
+        ok(counted.asked < rounds,
+           "over one whole deadline it was asked fewer times than the checks were — the "
+           "interval is real and not a poll-per-round",
+           "{0} mergeability reads against {1} check reads".format(counted.asked, rounds))
+
+        print("\n  -- and with no reader at all, nothing is asked --")
+        eyes = Scripted(reading(module, done("check"), done("revert-guard")))
+        watch = Clock()
+        green, _ = quietly(module.wait_for_checks, "abc1234", 99, 0, eyes, watch.sleep,
+                           watch.now)
+        ok(green, "`mergeability=None` is the old behaviour exactly — the arithmetic above "
+                  "is untouched by this")
+
+        print("\n  -- the reader itself: what it makes of each answer gh can give --")
+        ok(module.mergeability_reader(99, lambda n: ({"mergeable": "CONFLICTING"}, ""))()
+           == "CONFLICTING", "a conflicting pull request reads as CONFLICTING")
+        ok(module.mergeability_reader(99, lambda n: ({"mergeable": "MERGEABLE"}, ""))()
+           == "MERGEABLE", "a mergeable one reads as MERGEABLE")
+        ok(module.mergeability_reader(99, lambda n: ({"mergeable": None}, ""))() == "UNKNOWN",
+           "a null `mergeable` is UNKNOWN — gh's own answer while GitHub computes it, and "
+           "NEVER a conflict")
+        ok(module.mergeability_reader(99, lambda n: (None, "gh: HTTP 502"))() == "",
+           "a read that FAILED is empty, which is no news and never a conflict")
+
+        def boom(number):
+            raise RuntimeError("gh is not on PATH")
+
+        ok(module.mergeability_reader(99, boom)() == "",
+           "and a reader that raises answers empty rather than propagating — the wait must "
+           "not die of a network blip")
 
         print("\n  -- the deadline refuses, and names the commit --")
         eyes = Scripted(reading(module, running("check")))
