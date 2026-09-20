@@ -151,7 +151,7 @@
   padding: 2px 6px 2px;
   border: none;
   background: none;
-  border-radius: var(--bn-r-md);
+  border-radius: var(--bn-r);
   color: inherit;
   font: inherit;
   cursor: pointer;

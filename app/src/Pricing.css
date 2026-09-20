@@ -832,8 +832,8 @@
   height: 38px;
   padding: 0 var(--bn-3);
   border-radius: var(--bn-r-lg);
-  background: var(--bn-well);
-  color: var(--bn-muted);
+  background: var(--bn-surface-2);
+  color: var(--bn-ink-3);
   font-size: var(--bn-fs-sm);
   white-space: nowrap;
   overflow: hidden;

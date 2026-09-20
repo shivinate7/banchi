@@ -248,6 +248,44 @@ CHECKS = (
         "governed_by": ("D58", "D68", "D92"),
     },
     {
+        "target": "css-var-check",
+        "runs": "python3 scripts/css-var-check.py",
+        "asserts": "A `var(--x)` with no fallback, where `--x` is defined nowhere — the whole "
+                   "declaration drops silently, with no console warning. Five of these "
+                   "accumulated across four screens (2026-09-20 UX review, Tier 1 item 1): two "
+                   "misspellings of a real token, three reaching for a token never defined. A "
+                   "definition is collected from a `.css` declaration or from TS/TSX runtime "
+                   "sets (`style={{ '--x': ... }}`, a bracket computed key, "
+                   "`.setProperty('--x', ...)`), measured across the tree before those three "
+                   "shapes were chosen. `var(--x, fallback)` is never a finding — the fallback "
+                   "IS the definition.",
+        "needs": ("python3",),
+        "writes": "",
+        "commit_path": False,
+        "why_off_commit_path": "not armed in scripts/githooks/pre-commit — `make check` is "
+                               "where it runs today. Nothing here stops it joining the hook "
+                               "the way sigil-check.py did; it simply has not been asked.",
+        "gates": True,
+        "governed_by": ("D18", "D173"),
+    },
+    {
+        "target": "css-var-check-selftest",
+        "runs": "python3 scripts/css-var-check.py --self-test",
+        "asserts": "the guard sees its own subject before it is trusted: a genuinely undefined "
+                   "`var()` fails, one with a fallback passes, one defined only from TSX "
+                   "passes, a reference or definition written only in a comment is ignored, "
+                   "an `@media` block is scanned like anywhere else, and the two real "
+                   "misspellings this check was built to catch (`--bn-r-md`, "
+                   "`--bn-radius-md`) are caught.",
+        "needs": ("python3",),
+        "writes": "",
+        "commit_path": False,
+        "why_off_commit_path": "css-var-check's reason exactly — not armed in "
+                               "scripts/githooks/pre-commit, `make check` only.",
+        "gates": True,
+        "governed_by": ("D18", "D173"),
+    },
+    {
         "target": "ignore-check",
         "runs": "sh scripts/ignore-check.sh",
         "asserts": "Every path a worktree provisions is gitignored — as a file, as a directory "
